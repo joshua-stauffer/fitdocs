@@ -1455,9 +1455,9 @@ written literally below is one of those.
   - _Depends: 7.2, 7.5, 7.7_
   - _Boundary: ValidationGate, ProvenanceRecord_
 
-- [ ] 8. Execution: the one-shot history replacement, solo on main
+- [x] 8. Execution: the one-shot history replacement, solo on main
 
-- [ ] 8.1 Certify the tip
+- [x] 8.1 Certify the tip
   - Preconditions, not assumptions: every peer branch landed, every extra
     worktree gone, nothing uncommitted anywhere — the state the gate will
     demand — and the forbidden-string source present and loadable
@@ -1491,7 +1491,7 @@ written literally below is one of those.
   - _Depends: 7.8_
   - _Boundary: ValidationGate_
 
-- [ ] 8.2 Run the gated replacement through the swap
+- [x] 8.2 Run the gated replacement through the swap
   - One driver invocation on `main` in the primary worktree. If the gate
     halts, it reports exactly what it found, leaves the repository in the
     state it held before the check, and records the halt and its cause in the
@@ -1528,7 +1528,7 @@ written literally below is one of those.
   - _Depends: 8.1_
   - _Boundary: QuiescenceGate, HistoryReplacement_
 
-- [ ] 8.3 Verify the replaced repository by inspection, and treat any red as swap-back
+- [x] 8.3 Verify the replaced repository by inspection, and treat any red as swap-back
   - Run every post-swap row against the working repository with the source
     supplied: a single reachable commit; the root tree identical to the
     certified tip tree id; the single default head and nothing under the
@@ -1562,7 +1562,7 @@ written literally below is one of those.
   - _Depends: 8.2_
   - _Boundary: ReplacementVerification_
 
-- [ ] 8.4 Push the renamed remote, then measure what both remotes serve
+- [x] 8.4 Push the renamed remote, then measure what both remotes serve
   - *(Amendment 2, 2026-08-22; `design.md`'s section of that name. Not
     training-load's Amendment 2, which this spec's prose also cites.)*
     Decision 6 assumed a delete-and-recreate
