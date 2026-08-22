@@ -1,0 +1,86 @@
+[project]
+name = "fitdocs"
+version = "0.1.0"
+description = "Decode .fit files into a typed activity model with derived metrics (pure library layer)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "garmin-fit-sdk>=21.208.0",
+    "typer>=0.12",
+    "rich>=13",
+    "pyyaml>=6.0",
+    "tomli-w>=1.0",
+]
+
+[project.scripts]
+fitdocs = "fitdocs.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fitdocs"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.9",
+    "mypy>=1.13",
+    "types-PyYAML>=6.0",
+    "markdown-it-py>=3.0",
+]
+
+[tool.ruff]
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+# Every module holding a LoadCalculator- or TileSource-shaped stub is in scope,
+# so a Protocol signature change in src/ reddens every stub that did not move
+# with it. That perimeter is the point: training-load task 3.3 took `compute`
+# from four parameters to five and every stub was migrated by hand with the
+# suite staying green throughout, because nothing type-checked them. When this
+# was first measured, six stubs had already drifted -- `required_athlete_fields`
+# returning `tuple[object, ...]`, which does not satisfy
+# `tuple[AthleteField, ...]` because return types are covariant. (Sibling
+# `activity: object` / `profile: object` parameters on the same stubs are legal:
+# parameter types are contravariant, so `object` always conforms. Do not use
+# `object` to verify this guard -- it will not fail. Change a stub's
+# `context: LoadContext` to `context: str` instead.)
+#
+# Add a module here and fix its errors in the same change: adding it first makes
+# the Definition of Done red for every other change in flight.
+files = [
+    "src",
+    "scripts",
+    "tests/purge",
+    "tests/_content_oracle.py",
+    "tests/_content_fingerprints.py",
+    "tests/_forbidden_strings.py",
+    "tests/test_forbidden_strings.py",
+    "tests/test_forbidden_strings_source.py",
+    "tests/test_citation.py",
+    "tests/load/conftest.py",
+    "tests/load/test_types.py",
+    "tests/load/test_arbitrate.py",
+    "tests/test_contributing_calculators_doc.py",
+    "tests/test_docs_guarantees.py",
+    "tests/load/test_engine.py",
+    "tests/load/test_arbitration_e2e.py",
+    "tests/load/test_registry.py",
+    "tests/test_cli.py",
+    "tests/test_plugin_regression.py",
+    "tests/metrics/test_sources.py",
+    "tests/metrics/test_constant_guard.py",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

@@ -1,0 +1,570 @@
+# History rewrites — provenance record for the encumbered-content-purge, part one of two
+
+**2026-08-03.** This is the durable record of what `encumbered-content-purge`
+removed from the fitdocs repository, why, and what removing it cost the
+repository's own ability to check itself. Once this spec's history rewrite
+lands, this document plus a forthcoming commit map are what a later session
+has to go on for anything the rewrite touched. Once that rewrite completes,
+nothing below can be checked against the files it describes, because those
+files will no longer exist reachable from any ref. Before that rewrite
+completes, the writeup, both tables, and the deleted rewrite map remain
+checkable against the blobs still reachable in this repository's history;
+§4 states exactly which checks that covers. Part one, below, is written
+before that rewrite runs. Part
+two is appended in the post-rewrite commit, once the rewrite's own record,
+the remaining stated positions, and the remote measurement exist. The counts
+below were measured on 2026-08-01, not on the tip.
+
+## 1. What was removed, when, why, and by which spec
+
+On 2026-08-01, task 3.1 deleted the writeup, both extracted tables, and the
+map recording the 2026-07-26 email rewrite (§2) from the working tree. The
+methodology they described was evaluated inside `training-load` and
+withdrawn from it on 2026-07-25, recorded there as Amendment 2. The
+withdrawal's stated reason was that the methodology's redistribution terms
+required the author's permission. That permission was never obtained. The
+writeup, both tables, and their packaging entries were retained afterward as
+a research record. This purge reverses that retention, per Requirement 4.
+Retention was reversed because publishing the repository would publish the
+material. The methodology's operative content also survives in symbolic
+form inside a `training-load` planning document. No table-value scan
+reaches that document. Redacting those sites, and erasing the third party's
+identity elsewhere in the tree and in history, is separate work inside this
+spec, under Requirements 1.2, 1.4, 1.6 and 11. That work was not complete
+when this document was first committed; see the classified inventory below.
+
+## 2. The 2026-07-26 email rewrite
+
+On 2026-07-26, a separate history rewrite corrected every commit's author
+and committer address across this repository's history, replacing personal
+addresses with a non-personal one. That rewrite left backup refs under
+`refs/original/`, pointing at the pre-rewrite tips. Leaving those refs
+behind is the rewrite tool's default behavior. Those refs preserved the only
+surviving copies of two implementation branches, `impl/athlete-benchmarks`
+and `impl/training-load`. Neither branch's tip was an ancestor of `main`'s
+tip at the time of that rewrite, measured directly against the pre-rewrite
+commit identifiers the deleted map's own header recorded. Both branches'
+commits later landed on `main` by rebase, under different commit
+identifiers carrying the same subjects. Those backup refs were deleted
+during this spec's design phase, before Major 3 began. Task 7.1 asserts
+their absence again rather than relying on that prior deletion, per
+Requirement 7.2. Deleting a ref does not delete the commit objects it
+pointed at, and objects from both branches remained unreachable in this
+repository's object database until 2026-08-09, when an unrelated accident
+pruned every unreachable object in it — recorded in
+`.kiro/queue/2026-08-09-shared-object-database-pruned-during-6-4-remediation.md`.
+They are gone now, by that accident rather than by design. Neither the ref deletion nor task 7.1's
+assertion would have removed them; the `--no-local` clone made in task 7.2
+does, because that kind of clone copies only reachable objects — so the
+purge's own outcome is unchanged either way, and this paragraph records the
+distinction only because the reasoning above depends on which mechanism did
+it. That
+earlier rewrite also produced a row-per-commit map from
+pre-rewrite to post-rewrite commit identifiers, tracked in the working tree
+until task 3.1 deleted it. This document replaces that map as the durable
+record of the 2026-07-26 rewrite, per Requirement 5.4. The map's prose
+header stated the maintainer's personal address in order to explain the
+rewrite. This document does not restate it. The map's data rows, without
+that header, are preserved outside the repository. They will join a
+forthcoming commit map covering both rewrites, per Requirement 9.3. The map
+file no longer exists in the working tree, per Requirement 9.7.
+
+(§3 — this rewrite's own record — is appended in the post-rewrite commit.)
+
+## 4. What is no longer verifiable
+
+Once task 3.1 deleted the material, and once Major 7's rewrite runs, several
+things this repository could previously check become permanently
+unverifiable from inside it. The guards' detection data — the value
+matcher's digest set and window lengths — was generated from the real files
+described in §1. That data can never again be checked against those files
+once the rewrite completes, because they will not exist reachable from any
+ref. The evasion-acceptance run recorded below, from task 2.4, is the last
+time this check is recorded against the real files. The check itself
+remains possible today, run directly against the pre-deletion blobs still
+reachable in this repository's history, until Major 7 makes them
+unreachable. The purge's own probe sets, the history rewrite's spec files,
+and the mailmap are scratch artifacts kept outside this repository. They
+are destroyed with the material rather than retained. The out-of-repository
+forbidden-string match-data file is not among them. It is retained
+indefinitely. Its retention is what makes the opt-in detection §5 describes
+possible at all.
+
+## 5. What detection was given up
+
+This section states losses that land when Major 4 merges, not the detection
+posture at this commit. Once task 4.3's standing guard is built, an
+ordinary `uv run pytest` run will no longer detect an identifying token by
+default. It will skip instead. Detection will run only when the maintainer
+supplies the out-of-repository match-data file, through a dedicated
+environment variable. Once Major 4 merges, the contributor-documentation
+banned-word loop and the two CLI-output token checks are retired entirely,
+not re-based. Their subject is a calculator that no longer exists in any
+form. The registry that would have listed it is provably empty on a fresh
+import -- before any plugin discovery has run. For the contributor-doc
+retirement that closes the gap: the standing guard (task 4.3) scans the same
+corpus, the guide's tracked file content, and re-introducing either retired
+needle there is caught. The CLI-output retirement is narrower and this is
+stated rather than argued away: `fitdocs plugins` renders `discover()`'s
+report, which reads installed distributions' entry points and, when a data
+root resolves, local plugin files -- channels independent of what is
+registered at import, and untouched by the fresh-import measurement above.
+No guard in this repository scans rendered CLI output. An installed
+third-party distribution's entry point can put any string, including an
+identifying token, into that listing, and that surface -- a process's
+captured stdout, never a tracked file, a tracked path name, or a built-
+artifact member -- is outside every one of the standing guard's four scanned
+surfaces. This is the loss the CLI-output retirement accepts. Once Major 4
+merges, the guard that catches the withdrawn
+calculator's class symbol, module path, and package name is retired in
+favor of the standing token guard. The standing guard matches literal
+strings only. The same code, reintroduced under a neutral name, will then
+pass every guard this spec builds or retains, undetected. That gap already
+exists for renamed re-introduction in general. This erasure widens it. A
+separate initialism, whose expansion contains the third party's surname,
+survives this purge. It is not one of the three identifying tokens
+`requirements.md`'s Naming convention defines. No task in this spec's
+Major 3 or Major 4 targets it for removal. This is a stated, deliberate
+gap.
+
+## 6. Stated positions (part two adds the remainder)
+
+Most of this section is appended in the post-rewrite commit, once a commit
+map exists to state positions against: repaired pins, resolved prose
+references, the fixture filename's position, the one unresolvable pin, the
+changed queue ids, and the count of abbreviated commit references the
+rewrite could not translate. What can be stated now is the position on two
+pieces of untracked state that carry an identifying token across this
+purge, per Requirement 11.13.
+
+The gitignored source workbooks at the repository root have filenames that
+carry a token. Their position is accepted, recorded. Requirement 1.7
+requires they stay on disk and out of the repository. The ignore rule that
+excludes them carries no token of its own. They are never published.
+Renaming a file the repository is forbidden to contain would buy nothing.
+
+The shared agent log, kept under the repository's common git directory, is
+never tracked or shipped. Its content carries tokens across several
+historical entries. Its position is accepted, with a named hazard. It is
+the append-only, multi-session record every session must read first and
+coordinate through. Rewriting it would falsify what earlier sessions
+actually recorded. The root symlink to this log is an sdist member that
+extracts dangling today. Its content is therefore not currently archived by
+a build. A future packaging change that follows symlinks could turn that
+into a leak. This hazard is flagged here to the `distribution` spec.
+
+## Evasion-acceptance results (task 2.4)
+
+On 2026-08-01, before task 3.1 deleted the material, the purge ran a
+one-shot acceptance pass testing the value matcher against the real files.
+The run generated a non-empty digest set of 434 fingerprints and a
+non-empty set of 14 window lengths. It recorded nine catalogued probes.
+All nine passed. Three planted-source probes and one negative control
+confirmed the matcher flags a planted match and does not flag a clean
+control file. A verbatim re-add, a renamed and reformatted re-add, a table
+pasted as language literals into an allowlisted module, and a copy under a
+different file extension were each flagged. A single-constant paste,
+reusing the value `test_packaging.py`'s own docstring names as its
+positive-detection evidence, was correctly reported not flagged. That
+value's roughly 19.9 bits of entropy cannot clear the matcher's 96-bit
+floor. No window exists to fingerprint it under any salt.
+
+## Classified sweep inventory (task 3.2)
+
+On 2026-08-01, after the material's removal, the purge swept every tracked
+file — the universe was `git ls-files`, not only `docs/reference/` —
+through six passes: a combined token-and-path-name matcher over the
+identifying-token and removed-path literals from task 2.3, the value
+matcher, a stale-pointer search (the independent `git grep -lF` re-run of
+those same path literals), a symbolic-reproduction probe set, a
+personal-identifier probe set, and a bare-basename probe set. That sweep
+recorded 322 hits across 77 tracked files, per Requirements 1.3 and 2.3.
+The value matcher found nothing in the swept tree. That is a true
+negative, not a pass that never ran. The same fingerprint set, run against
+the pre-deletion blobs still reachable in this repository's history, flags
+all three of the removed source files. One tracked file's content, a
+binary golden fixture, could not be read as UTF-8 by either of the two
+content-reading passes. Both passes independently reported it. The
+inventory therefore carries two unreadable entries for that single path.
+That file's path-name surface was still scanned. Every hit was classified
+by disposition, as measured on 2026-08-01, before the redaction tasks later
+in this spec's Major 3 ran:
+
+| Disposition | Count |
+|---|---:|
+| identity pending erasure | 129 |
+| stale pointer | 76 |
+| the sweep tooling's own self-reference | 38 |
+| guard | 22 |
+| judged not a reproduction | 18 |
+| retained historical subject (Requirement 2.5) | 18 |
+| public or placeholder identity | 13 |
+| reproduction pending redaction | 6 |
+| ignore-rule stale pointer | 2 |
+
+This count is a shape, not a budget. It is expected to fall toward zero as
+the remaining tasks in this spec's Major 3 redact, rename, or retire what
+it still finds. The inventory is reproducible on demand from the tracked
+tree, given the out-of-repository match-data file the sweep also requires.
+Unlike the evasion-acceptance run above, it is not a one-shot artifact.
+
+## Guard re-basing: mutation evidence (tasks 4.1-4.3)
+
+Each of the three re-based or newly-built guards recorded its own mutation
+evidence in the commit that landed it, per Requirement 3.5. Task 6.1 located
+all three and confirmed each mutation was run through `uv run pytest` rather
+than a bare interpreter. One line per commit, summarising what the commit
+message already states in full, with bullet counts counted directly against
+each commit's `MUTATION EVIDENCE` block by this task (not carried over from
+a prior round):
+
+- **`221d60a` — the sdist guard re-based onto the value oracle.** Eight
+  mutation bullets against `tests/load/test_packaging.py` (eleven if the
+  compound `FINGERPRINTS`/`WINDOW_LENGTHS` bullet — run once in the source
+  scan and again in the sdist scan — is unpacked into its four sub-cases),
+  each run through `uv run pytest`, observed red, reverted, observed green;
+  the commit message states each as a sole failure except the wheel-allowlist
+  emptying, which is named as reddening every real module by design (a
+  preserved control, not a vacuous one). "Nine" appears in this commit's own
+  text only as the count of *covered requirement sections* ("six of nine
+  requirements are pinned"), a different quantity from the mutation count —
+  an earlier round of this record transplanted that numeral onto the mutation
+  bullets, which this correction undoes.
+- **`f1dad15` — the documentation guard re-based onto a synthetic corpus.**
+  Nine mutations against `tests/test_docs_guarantees.py`, each run through
+  `uv run pytest`, observed red, reverted. Seven are named sole failures. The
+  eighth (the pairing condition inverted) is explicitly reported as reddening
+  two tests rather than one, with the reason stated (both steering documents
+  already record a withdrawal) rather than mis-claimed as sole. The ninth is
+  the real-tree escape the commit runs and records as **not** caught (a
+  plain-language description naming no one) — it reddens nothing by design,
+  which is why Req 11.9 carries a stated loss for this guard rather than a
+  ninth sole failure.
+- **`7f447da` — the standing forbidden-string guard stood up.** Six mutation
+  groups against `tests/test_forbidden_strings.py`, each run through
+  `uv run pytest`, observed red, reverted. Five of the six are named sole
+  failures, including the third (sdist members filtered to a single
+  extension), which needed a second anchor of a different extension precisely
+  because the first anchor could not detect that filter alone — a
+  discrimination gap found and closed in the same commit, not a surviving
+  cascade. The sixth bullet is the end-to-end check (a tracked file whose
+  NAME carries a token, with the exempted set widened from the other module,
+  still caught); the commit reports it caught rather than naming it a sole
+  failure in those words.
+
+No guard record was missing or ambiguous. `221d60a` states, at every site,
+whether a named mutation reddens only the assertion it pins or is a preserved
+control that reddens many by design (the wheel-allowlist emptying, named as
+such rather than mis-claimed as sole). `7f447da` states it at four of its six
+sites: "The path-only exemption keying: red." and the end-to-end
+token-in-filename bullet's "still caught" leave the blast radius
+unquantified. Both are in fact sole failures -- the surface-gate removal was
+re-run for this record and reddened only
+`test_reviewed_exemption_never_exempts_a_path_surface_hit` -- so the records
+understate their own evidence rather than overstating it. `f1dad15`'s ninth item goes further than either: it is
+not a mutation that reddens anything, sole or cascading, but a recorded
+escape the commit states plainly rather than disguises — the same posture
+Req 11.9's stated loss depends on. All three
+state their commit-message act discharges Req 3.5 itself ("Req 3.5 is a
+commit-message act and is UNPINNED; this message is the act" — `7f447da`),
+which task 6.1 accepts: Req 3.5 asks the purge to *record* the mutation, not
+to make the act of recording itself independently testable.
+
+## Classification of all 82 requirement criteria (tasks 6.1, 7.8)
+
+Task 6.1's own text in `tasks.md` records that incremental review does not
+terminate at this spec's size — the failure mode task 5.4 hit
+five times over, closing each round with "the bounded remainder" and each
+being wrong, per `tasks.md`'s Implementation Notes. This section is the mechanical,
+exhaustive sweep task 6.1 ran instead: every criterion in `requirements.md`,
+enumerated from that document directly, in its own numbering, and assigned
+one of three labels, plus the one declared exception below that splits a
+single criterion across two of them.
+
+**Corrected in place 2026-08-18 (task 7.8), then corrected again 2026-08-19
+(task 7.8 remediation) because the first correction's own account of
+Amendment 1's scope was itself false.** The 2026-08-18 text said Amendment 1
+"rewrote three criteria inside requirements this section already covered
+(9.3, 9.4, 9.8) plus one more (10.3)". Running
+`git diff 40eb36e 19bd786 -- .kiro/specs/encumbered-content-purge/requirements.md`
+shows that enumeration was false: Amendment 1's regeneration substituted
+"replacement"/"replaced" for "rewrite"/"rewritten" across most of
+Requirements 6 through 10 — a vocabulary change carrying no change in what
+evidence a row needs — but it also reworded the *obligation itself*, not
+only its vocabulary, in **six** criteria, not four: 8.1 (the purge now
+establishes what the remote serves "after the chosen reconciliation action",
+not only "after a forced update"), 8.4 (reconciles "by whatever further
+means the measurement shows to be sufficient" rather than naming deletion
+and recreation as a ceiling), 9.3 (a complete pre-to-post commit map → a
+single stated permanent-unresolvability position), 9.4 (a commit-for-commit
+mapping → one documented convention applied uniformly), 9.8 (a per-pin
+unresolvable-fallback rule → a uniform substitution ban covering pins,
+documents and the provenance record alike), and 10.3 (a
+differ-only-in-enumerated-files comparison → tree identity).
+
+Four further criteria changed by the vocabulary substitution alone and are
+listed separately here because their rows needed correcting anyway, for
+quoting the superseded wording or citing a retired anchor — not because the
+obligation moved: 9.2 ("this rewrite" → "the history replacement"), 9.6
+("pre-rewrite commit" → "pre-replacement commit"), 10.1 ("the rewritten
+tree" → "the replacement root's tree") and 10.5 ("treat the rewrite as
+incomplete" → "treat the replacement as incomplete"). The distinction is
+drawn deliberately, and the decisive pair is checkable in the diff: 9.6's
+change is character-for-character the substitution also applied to Req 7.3
+("reference no pre-rewrite commit" → "reference no pre-replacement
+commit"), and 7.3 is in neither list because nothing in its row needed
+correcting. Neither list is a count of every criterion Amendment 1 touched;
+the substitution reached most of Requirements 6 through 10, and the diff,
+not this paragraph, is the authority on its extent.
+
+This remediation round re-verifies all ten of those rows against the current
+tree, not only the four the 2026-08-18 correction named, and corrects two
+further rows (7.1, 7.2) that were separately false against the current tree
+rather than against Amendment 1's text. 9.3 named `docs/reference/commit-map.tsv` as a
+forthcoming Major 8 artifact, but Decision 6 and the Amendment 1 rewrite of
+Req 9.3 mean no commit map can exist by construction — nothing produces one,
+and the mechanism that once compared against one
+(`check_commit_map_complete`) was deleted from `scripts/purge/verify.py` at
+task 7.4, re-confirmed this round by
+`grep -rn "commit-map\|commit_map\|CommitMap" scripts/ tests/`, which finds
+only prose describing the retirement, no live code path. 8.4's row cited
+"tasks.md's own naming-convention note" for the fact that the retired plan's
+8.1-8.5 were replaced before any ran; that fact is stated in tasks.md's
+**execution rules** ("Amendment 1 (2026-08-17) regenerated Majors 7–8 in
+place. The retired plan's tasks 7.2–7.4 and 8.1–8.5 ... were replaced before
+any of them ran"), not in the naming-convention note, which is a vocabulary
+list naming no task number — the current plan's task 8.4 ("Push the
+renamed remote, then measure what both remotes serve" — retitled twice on
+2026-08-22: by Amendment 2, when the remote turned out to be renamed rather
+than deleted-and-recreated, and by Amendment 3, when the old repository was
+retained rather than deleted so that both remotes remain to be measured) is
+the one task tagged
+`_Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7_` and covers this criterion.
+*(Amendment 3 added criterion 8.8, a recording duty tagged on task 9.2 rather
+than 8.4, so 8.4 no longer covers all of Req 8 on its own.)*
+
+This round corrects ten rows against the current tree — 7.1, 7.2, 8.4, 9.6,
+9.8, 10.1, 10.3, 10.5, plus 5.1 and 8.6's vocabulary only — the same scoped
+discipline `## Scope of the 2026-08-08 prose-correction sweep` below already
+establishes: **zero residual false claims is not claimed.** Of the criteria
+the corrected preamble above names, this round re-ran
+fresh mutation evidence only for 9.8 (the new guard-clause mutation) and
+re-confirmed 9.3's citation by re-running its `grep`; 9.4, 8.1 and 8.3's
+existing rows were read and found still accurate against the current tree
+but their mutations were not re-run this round. This round did not touch
+9.2, whose row already used "both rewrites" loosely but was not found
+false. A later reviewer applying the same mutation-based scrutiny to a row
+neither this round nor the 2026-08-08 sweep re-ran may still find one.
+
+**PINNED** — a named test dies on a named single-line production mutation,
+run through `uv run pytest` in this task or in the task that landed the
+assertion. **PRESERVED-ONLY** — a pre-existing regression test covers the
+criterion, confirmed by watching it go red on a real mutation rather than
+inferred. **UNPINNED** — stated explicitly, with the mutation this task or a
+prior task ran to establish that nothing in the suite catches a violation.
+An UNPINNED criterion is not a gap in this purge's testing discipline; most
+of the criteria concerning the history rewrite's completion — design.md's
+"Major 2 — the gated pipeline" — describe a state ("when the history rewrite
+is complete...") that is true only after `tasks.md`'s Major 7 and Major 8
+run, which this task's own boundary forbids doing. (`tasks.md`'s own Major 2,
+"Detection: the oracles...", is a different section under the same number and
+is mostly PINNED; this paragraph names the design.md section deliberately to
+avoid conflating the two.)
+
+Two things this table does not claim. It does not claim every UNPINNED
+criterion is false today — most are simply not yet true, because the event
+they describe (the one-shot rewrite, the remote reconciliation) has not
+happened. And a PINNED or PRESERVED-ONLY label pins the *mechanism* a named
+test exercises, not the truth of every clause of a compound requirement
+sentence; where a requirement's scope exceeds what any test reaches (for
+example, the at-any-commit half of Req 11.1 and 11.2, unreachable before
+Major 7), the label reflects the working-tree-today subset a standing test
+can actually reach, and that limit is named in the row.
+
+| Req | Label | Test / mutation |
+|---|---|---|
+| 1.1 | PINNED | `tests/purge/test_tree_removal.py::test_removed_paths_are_absent_from_git_ls_files`, with its own positive control (`test_removed_paths_actually_existed_before_the_deletion`) proving the needle set is real |
+| 1.2 | UNPINNED | No tree-wide guard catches an arbitrary new reproduction outside `src/`+the built artifact. Named sites carry a narrow pin instead — re-confirmed this task: planting one sentence naming the third party into `.kiro/specs/training-load/research.md` reds three tests, not one: `tests/purge/test_sweep.py::test_research_log_redaction_site_is_scanned_and_clean` plus `tests/test_forbidden_strings.py::test_standing_guard_scans_tracked_content_and_path_names` and `::test_standing_guard_scans_sdist_members_content_and_names`. With `FITDOCS_FORBIDDEN_STRINGS` unset the plant reds nothing at all -- 2853 passed, 21 skipped, zero failures, all three tests skipping at `tests/_forbidden_strings.py`'s guard -- so no configuration makes this a sole failure; the earlier claim that it was sole with the variable unset was measured false and removed. Reverted, confirmed green |
+| 1.3 | PINNED | `tests/purge/test_sweep.py::test_tracked_files_raises_rather_than_silently_return_an_empty_universe` (non-vacuous walk) plus the `_MODIFIED_FILES_TABLE_SAMPLE` superset check. That tuple holds two entries, both under `.kiro/specs/`, evaluated from the source rather than read off the comment block above it, which names deliberately-excluded paths and is not the tuple's contents |
+| 1.4 | UNPINNED | "Redact and retain the surrounding record" is a prose-shape obligation; no assertion distinguishes a redaction that kept the record from one that deleted it whole |
+| 1.5 | UNPINNED | Declared in `bfe0ddf`: "the retained record itself is not [pinned]: deleting the entire licensing bullet leaves the suite green" |
+| 1.6 | UNPINNED | Prose restatement obligation; `3099d92` lists it among the provenance record's unreached propositions |
+| 1.7 | PINNED | `tests/purge/test_adopt.py`, per `e40f6ec`: "Reqs 1.7 and 5.3 are pinned here" |
+| 2.1 | PINNED | `tests/purge/test_tree_removal.py::test_pyproject_has_no_sdist_build_target_section` |
+| 2.2 | UNPINNED | No test reads `CLAUDE.md`'s Key References section |
+| 2.3 | PINNED | Not preserved-only: `tests/test_forbidden_strings.py`'s standing guard was built by this spec in `7f447da`, not pre-existing. `test_standing_guard_scans_tracked_content_and_path_names` — re-confirmed this task: planting one of the removed-path `path`-category fragments from the out-of-repository match-data file, token-free, into a tracked doc reds this test plus `test_standing_guard_scans_sdist_members_content_and_names` (2 tests), reverted, confirmed green |
+| 2.4 | UNPINNED | Confirmed in tasks.md's own Implementation Notes: "The ignore rule's survival is verifiable only mechanically... no test covers it" |
+| 2.5 | UNPINNED | The exemption table's *existence* is pinned by `7f447da`'s reconciliation count, but "retained in a form carrying no identifying token, and not presented as present" is a semantic judgement no assertion reaches |
+| 3.1 | PINNED | `221d60a`: "assert FINGERPRINTS -> frozenset(): sole failure. Same for WINDOW_LENGTHS" |
+| 3.2 | PINNED | `221d60a`: "not offenders -> scan(...) or True: sole failure, full offender list" |
+| 3.3 | PINNED | `221d60a` synthetic-control mutations plus `7f447da`'s two positive controls, each a sole failure |
+| 3.4 | PINNED | Same synthetic-control evidence — invented values, no dependency on a removed file |
+| 3.5 | UNPINNED | Declared by design: `7f447da` — "Req 3.5 is a commit-message act and is UNPINNED; this message is the act" |
+| 3.6 | UNPINNED | `221d60a`: "Req 3.5, 3.6 and 11.9 are UNPINNED and say so: deleting every character of the loss statements leaves the suite green" |
+| 3.7 | PINNED | `tests/purge/test_content_fingerprints_shape.py` and `tests/purge/test_fingerprints.py`, both scoped to Req 3.2 and 3.7 in their own docstrings |
+| 4.1 | UNPINNED | `f1ef31b`'s own guard comment: "a token-free retention instruction still passes" |
+| 4.2 | UNPINNED | Prose ("retained-then-reversed-on-2026-07-30 and why"); no assertion reaches it |
+| 4.3 | UNPINNED | Cross-boundary-correction recording is prose; no assertion reaches it |
+| 4.4 | UNPINNED | `tests/purge/test_manifest.py` pins the *capture* of the spec-status baseline, not a before/after comparison — that comparison is task 8.3's, unrun |
+| 4.5 | UNPINNED | Framing obligation ("not as if never present, not as an error of judgement"); prose, no assertion reaches it |
+| 5.1 | UNPINNED | At-any-commit-reachable-from-any-ref; the history replacement that would make this true has not run |
+| 5.2 | UNPINNED | Same reasoning as 5.1 |
+| 5.3 | PINNED | `tests/purge/test_adopt.py`, per `e40f6ec`: "Reqs 1.7 and 5.3 are pinned here" |
+| 5.4 | UNPINNED | `3099d92`: "5.4 ... are prose obligations no assertion reaches" |
+| 5.5 | UNPINNED | Redaction of example data in `distribution/design.md`; no test |
+| 5.6 | UNPINNED | `3099d92`: "5.6 ... [is a] prose obligation no assertion reaches" |
+| 6.1 | PINNED | Re-verified this task: reverting `Quiescence.quiet` to drop `extra_branches` from the check reds five tests, not four scoped to one module — `test_inspect_reports_every_branch_other_than_main`, `test_gate_halts_on_extra_branch_and_names_it`, `test_gate_appends_to_a_nonempty_log_without_truncating_it_on_halt` and `test_gate_does_not_rewrite_any_ref_on_halt` (4 of `tests/purge/test_preflight.py`'s own 26 tests) plus `tests/purge/test_rewrite_gate.py::test_a_failing_gate_emits_zero_commands`; the rest of the full 2873-test suite stayed green; reverted, confirmed green |
+| 6.2 | PINNED | Same mutation as 6.1 — the halt-and-report path is what the five reddened tests pin |
+| 6.3 | PINNED | `975e5bc`: "a test snapshots every byte of ref and reflog state before and after and requires them identical. Injecting a single ref write into the inspection reds that test alone" |
+| 6.4 | PINNED | `975e5bc`: "both abandonment halt causes emptied: the tests asserted only that a HALT line existed... A halt whose cause is blank is the useless line this task exists to prevent" |
+| 6.5 | PINNED | `tests/purge/test_rewrite_gate.py`, scoped to Req 6.5 in its own docstring; ordering pinned by the spy assertion that the gate is called first and a non-zero result emits nothing |
+| 6.6 | PINNED | `975e5bc`'s abandonment-obligation mutations: empty tuple refused, blank-after-stripping entries refused |
+| 7.1 | UNPINNED | Corrected in place: the prior row's claim that "Major 7 has not run" was false — tasks 7.1-7.7 are all `[x]` on this branch. Req 7.1 is carried by task 7.7 (`_Requirements: 7.1, 7.3, 10.3_`), done as a rehearsal against a throwaway repository, and by task 8.2 (`_Requirements: ..., 7.1, 7.7, ...`), the real swap against the working repository, which is `[ ]` and unrun. The criterion names a property of the completed replacement on the actual repository — Major 8's event, not Major 7's — so the label stays UNPINNED |
+| 7.2 | UNPINNED | Corrected in place: the prior row's claim that "Major 7's own re-assertion (task 7.1) has not executed" was false. Task 7.1 is `[x]` and tasks.md's execution rules state "Task 7.1 stands as landed work: it ran on 2026-08-16 and its outcomes are durable"; `git for-each-ref refs/original` returns empty on this tree, confirmed this round. Req 7.2 is carried by task 7.1 (`_Requirements: ..., 7.2_`, done) and by task 8.3 (`_Requirements: 5.3, 7.2, ...`, unrun). The criterion still names a property of the completed history replacement, which is Major 8's event; today's empty `refs/original/` is the design-phase deletion and task 7.1's re-assertion holding coincidentally, not the criterion's own event, so the label stays UNPINNED |
+| 7.3 | PINNED | Not preserved-only: `scripts/purge/verify.py` is production code, not a test. Re-run this task against the current tree (task 7.7 remediation; the row's mechanism changed under that fix, so this instruction and its count are re-measured, not carried over): mutating `check_reflog_and_unreachable_gone`'s `passed = not disallowed and fsck_clean` to `passed = True` reds 11 tests in `tests/purge/test_verify.py` plus `test_replace_rehearsal.py` unaffected -- every `test_check_reflog_and_unreachable_gone_*` test that asserts the row FAILS, which is 10 of the 14 in the module; the other four assert a pass or a raise and are unaffected (`..._fails_on_a_disallowed_commit_id`, `..._fails_on_a_reflog_id_whose_object_is_absent`, `..._fails_via_the_scan_alone_on_an_absent_id`, `..._fails_on_a_dangling_unreachable_object`, `..._scans_the_remotes_logs_subtree`, `..._scans_the_stash_log`, `..._fails_for_a_stale_reflog_on_a_second_branch`, `..._does_not_crash_on_non_utf8_committer_bytes`, `..._fails_on_a_zero_padded_filemode_warning`, `..._catches_a_64_hex_id`) plus `test_deliberately_incomplete_fixture_repository_fails_the_rows_it_should`; reverted, confirmed green (101 passed across both files) |
+| 7.4 | PINNED | `tests/purge/test_verify.py`, scoped to Req 7.4 in its own docstring; `7d49c84`'s six-planted-defect fixture must fail the rows it should while passing the rest |
+| 7.5 | PINNED | `7d49c84`: "The clone flag that makes a fresh clone evidence at all was unpinned... It is now pinned through the function" |
+| 7.6 | PINNED | `tests/purge/test_verify.py`, scoped to Req 7.6 in its own docstring |
+| 7.7 | PINNED | `tests/purge/test_verify.py`, scoped to Req 7.7 in its own docstring |
+| 8.1 | PINNED | Re-run this task: `tests/purge/test_verify.py::test_probe_identifier_raises_on_unrecognised_status_not_reporting_gone` — collapsing `scripts/purge/verify.py::probe_identifier`'s non-200/non-404 branch into `served = False` (treating any unrecognised status as "gone") reds this test as the sole failure, reverted, confirmed green |
+| 8.2 | UNPINNED | Remote reconciliation has not run |
+| 8.3 | PINNED | Same test and mutation as 8.1 — `test_probe_identifier_raises_on_unrecognised_status_not_reporting_gone` is what pins that an unrecognised status is refused rather than silently classified |
+| 8.4 | UNPINNED | Corrected in place (task 7.8): named the retired plan's task 8.5, replaced before it ran; the reconciliation action is current task 8.4 ("Push the renamed remote, then measure what both remotes serve", `_Depends: 8.3_`; retitled twice on 2026-08-22 — by Amendment 2, the remote is renamed rather than deleted-and-recreated; by Amendment 3, the old repository is RETAINED rather than deleted, so Requirement 8 was AMENDED TEXTUALLY -- its subject narrowed to the canonical repository, criterion 8.4 given an explicit exemption for the retained one, 8.7 widened to both and a new 8.8 added for the standing privacy duty. Not a scoping: an exemption, recorded as one), unrun — no module implements it yet. Re-corrected this round: the fact that the retired 8.1-8.5 were replaced before any ran is stated in tasks.md's execution rules ("The retired plan's tasks 7.2–7.4 and 8.1–8.5 ... were replaced before any of them ran"), not in the naming-convention note, which lists vocabulary and names no task number |
+| 8.5 | PINNED | Re-run this task: emptying `scripts/purge/verify.py::compare_refs`'s `remote_only` computation to `()` reds six tests: `test_compare_refs_fails_when_the_remote_carries_a_ref_not_local`, `test_compare_refs_fails_on_both_directions_simultaneously_with_distinct_names`, `test_compare_refs_sorts_both_missing_from_remote_and_remote_only`, `test_check_remote_refs_match_fails_when_a_remote_only_ref_is_present_in_a_fixture`, `test_check_remote_refs_match_fails_when_refs_original_survives_on_the_remote`, `test_check_remote_refs_match_fails_when_a_pre_rewrite_tag_survives_on_the_remote`; reverted, confirmed green |
+| 8.6 | UNPINNED | Recording the measurement is part two of this record, appended post-replacement |
+| 8.7 | UNPINNED | *(widened by Amendment 3, 2026-08-22, to "neither the canonical repository nor the retained `fitdocs_oss`".)* True by the absence of any code path that publishes either repository, but that absence has not been asserted by a test |
+| 8.8 | UNPINNED | *(added by Amendment 3, 2026-08-22.)* A recording duty — that `fitdocs_oss` must remain private for as long as it exists, and why — discharged by task 9.2 into the provenance record, which has not run. No test asserts the record's content (the same posture as 9.2's row below), and no test could assert the maintainer's future conduct the duty binds |
+| 9.1 | PINNED | `tests/purge/test_provenance_record.py`, per `3099d92`: "Req 9.1 was otherwise wholly unpinned: before this test the document could be deleted entirely with the suite green" |
+| 9.2 | UNPINNED | The document's existence and headings are pinned (9.1); whether its content is *true and complete* for both rewrites, and carries no address/material/token, is not |
+| 9.3 | UNPINNED | Corrected in place (task 7.8): the prior row cited `docs/reference/commit-map.tsv` as a forthcoming Major 8 artifact. Amendment 1 rewrote this criterion — no pre-to-post commit map can exist by construction (Decision 6), and no module produces one: `check_commit_map_complete` was deleted from `scripts/purge/verify.py` at task 7.4 (its own docstring: "Four rows are deleted with the mechanism whose subject no longer exists"), confirmed this task by `grep -rn "commit-map\|commit_map\|CommitMap" scripts/ tests/`, which returns only prose describing the retirement and zero live code paths. The provenance record's history-replacement section (`design.md` `ProvenanceRecord`) that states this is written by task 9.2, after Major 8 runs; nothing exists yet to assert against |
+| 9.4 | PINNED | Re-verified this task (evidence count corrected — the prior row's "two tests" was stale against the current suite): replacing `scripts/purge/pins.py::verify_rewrite`'s mismatch check (`if actual != expected:`) with `if False:` (never raising `PinRepairVerificationError`) reds five tests in `tests/purge/test_pins.py`, run scoped to that module: `test_verify_rewrite_raises_when_the_line_on_disk_does_not_match_the_outcome`, `test_verify_rewrite_catches_a_stale_value_that_is_not_the_first_line`, `test_verify_rewrite_catches_a_pin_on_disk_the_outcomes_do_not_account_for`, `test_apply_repair_verifies_every_pin_through_its_real_write_path`, `test_apply_repair_actually_calls_verify_rewrite_against_the_real_write`; the other 27 tests in the module stayed green; reverted, confirmed green (32 passed) |
+| 9.5 | UNPINNED | Re-run this task: keeping this document's `## 6. Stated positions` heading and replacing its entire body with the sentence "No position is stated on any of these matters." leaves the suite green (2873 passed, 1 skipped) — only Req 9.1's heading/non-empty-body tests reach this section, and 9.5's own position is not appended until the post-rewrite commit, same reasoning as 9.6 |
+| 9.6 | UNPINNED | Corrected in place: the prior row cited design.md `ProvenanceRecord`'s "Ordering detail that bites" heading, which exists only in the pre-amendment document (`git show 40eb36e:.kiro/specs/encumbered-content-purge/design.md`) and deferred a pointer to a commit map Decision 6 makes impossible. The regenerated `#### ProvenanceRecord` states instead: "The drain-report fixture's planned one-line pointer to the commit map is **cancelled** — there is no map for it to point at. The fixture's note instead records that its abbreviated commit id is a pre-replacement identifier and permanently unresolvable, written in the aftermath commit alongside the other Req 9 positions." That note is still unwritten today — it lands in the aftermath commit, after Major 9 — so the criterion (a stated position on the fixture) remains UNPINNED, but for the corrected reason: nothing forthcoming points at a map, because no map exists |
+| 9.7 | PINNED | `tests/purge/test_tree_removal.py` and `tests/purge/test_rewrite_map_extraction.py`, both scoped to Req 9.7 |
+| 9.8 | PINNED | Corrected in place (task 7.8): the prior row's mutation targeted `scripts/purge/pins.py::_looks_like_commit_id` and its four named tests, none of which exist any longer — task 7.5 re-scoped `pins.py` to the epoch convention (module docstring: "there is no map-driven path left anywhere in this module"), which deleted the per-item unresolvable/mapped distinction entirely. Re-corrected this round: the 2026-08-18 row's own re-measurement (`resolved=epoch` → `resolved=original`) reds 17 tests, and claimed no narrower sole-failure mutation exists because "`resolved=epoch` is the single line both 9.4 and 9.8 pin" — that claim is false. `resolve_pin`'s docstring itself states the rule this criterion needs: "a value that merely happens to be a prefix of `epoch` (or vice versa) is a different value and must still be rewritten". Mutating the *adjacent* line, the guard clause, from `if original == epoch:` to `if epoch.startswith(original):`, reds `test_resolve_pin_never_substitutes_a_plausible_alternative_for_the_epoch` alone — the test's `"9f00aaa"` originals entry, "a genuine PREFIX of EPOCH, still not equal to it", is misclassified as `already_current` (`resolved=None`) instead of being repaired to the epoch — while the rest of `tests/purge` (1749 passed, 1 failed) and the module (`tests/purge/test_pins.py`, 31 passed, 1 failed) stay green. Reverted (sha `e08fc838...cde16198` before and after, confirmed via `shasum -a 256`), confirmed green (32 passed). Both mutations are genuine and are kept: the wide-cascade one (`resolved=epoch`→`resolved=original`, 17 tests) pins that a repair always resolves to the epoch; the narrower one (the guard-clause prefix mutation, 1 test) pins the exact clause this criterion names — no plausible alternative is ever substituted, including one that is merely a prefix or superstring of the epoch |
+| 10.1 | UNPINNED | Corrected in place: Amendment 1 reworded this criterion from "the rewritten tree" to "the replacement root's tree", matching the closing paragraph's "history replacement" vocabulary. Property of the replacement root's tree, which does not exist yet; the current tree's suite/ruff/format/mypy state is validated separately by task 6.2, not this criterion |
+| 10.2 | PRESERVED-ONLY | `92a7566`: "Req 10.2 is PRESERVED-ONLY by the existing golden tests" |
+| 10.3 | UNPINNED | Corrected in place (task 7.8): the prior row described the retired mechanism (an M0/M1 manifest diff across the rewrite). Amendment 1 rewrote this criterion to a tree-IDENTITY comparison with the certified pre-replacement tip, and `scripts/purge/verify.py::check_tree_identity` is the current implementation (`git rev-parse HEAD^{tree}` compared to the tree id captured at certification). Its mechanism is PINNED — mutating `passed = out == certified_tree_id` to `passed = True` reds exactly `tests/purge/test_verify.py::test_check_tree_identity_fails_when_the_recorded_tree_id_differs` and `::test_check_fresh_clone_reds_when_the_certified_tree_id_is_wrong`, and no other test in `test_verify.py` or `test_replace_rehearsal.py` (99 passed, 2 failed of 101; reverted, confirmed green, 101 passed) — but the criterion itself, a comparison against the replacement root the one-shot replacement has not yet produced, has not run: Major 8 (the replacement) is unrun, so this stays UNPINNED as a property of a completed replacement, the same posture 7.1/7.2 already state for their own Major-8-dependent criteria (corrected this round: Req 7.1 is carried by task 8.2 and Req 7.2 by task 8.3, both unrun — Major 8, not Major 7) |
+| 10.4 | PINNED | `tests/purge/test_tree_removal.py`'s built-sdist check plus the same standing guard named at 2.3/11.1 (`tests/test_forbidden_strings.py`'s sdist/wheel member scans, opt-in) — one guard, one label across all three rows |
+| 10.5 | UNPINNED | Corrected in place: the prior row quoted the superseded criterion verbatim ("treat the rewrite as incomplete... no push"). The amended text reads "If validation fails on the replacement root's tree, then the purge shall treat the replacement as incomplete and shall not push to the remote until validation is green." Procedural; no assertion reaches it directly, though 7.7's ordering is the closest analogue |
+| 11.1 | PINNED | Not preserved-only: the standing guard was built by this spec in `7f447da`. Same guard as 2.3/10.4. Re-confirmed this task: planting the identity token into README.md reds three tests — `test_standing_guard_scans_tracked_content_and_path_names` plus the sdist- and wheel-member scans — reverted, confirmed green; scoped to the working tree today, the at-any-commit-in-history half is unreached before Major 7 |
+| 11.2 | UNPINNED | `7f447da`: "Req 11.2's at-any-commit clause is beyond a working-tree test and stays with the history tasks" |
+| 11.3 | UNPINNED | Commit-message rewriting is a Major 7 transform; has not run |
+| 11.4 | UNPINNED | `tests/purge/test_tree_removal.py` pins the working-tree-today subset (no notice in `pyproject.toml`); the at-any-commit claim over all of history is unreached before Major 7 |
+| 11.5 | UNPINNED | `bfe0ddf`: "11.5 and 11.6 are UNPINNED, established by mutation rather than by inference" |
+| 11.6 | UNPINNED | Same as 11.5 |
+| 11.7 | PINNED, with a declared UNPINNED carve-out | `79197c7`: "Req 11.7 is pinned for the documentation corpus and for re-introduction into both retired files, and UNPINNED for rendered CLI output by accepted and recorded decision" |
+| 11.8 | PINNED | `tests/_forbidden_strings.py`'s meta-tests: `require()` with the variable unset must raise pytest's skip exception, not return; `load()` must raise (not return `None`) for each of the four broken-source cases |
+| 11.9 | UNPINNED | `221d60a` and `f1dad15` both declare it prose/unpinned; it is discharged by this record's §5, not by an assertion |
+| 11.10 | UNPINNED | No test scans configuration keys or environment-variable names for token-freeness; `FITDOCS_FORBIDDEN_STRINGS` is neutral by construction, unasserted |
+| 11.11 | UNPINNED | `92a7566`: "Req 11.1, 11.11 and 11.12 are UNPINNED" |
+| 11.12 | UNPINNED | Same as 11.11; the vocabulary table (`9612d28`) is not tested for the absence of an invented proper noun |
+| 11.13 | UNPINNED | `e40f6ec`: "Req 11.13 is UNPINNED and declared, not claimed: deleting design.md's stated position leaves the suite green" |
+| 12.1 | UNPINNED | *(added by Amendment 1; task 7.8)* Property of a completed retirement; `tasks.md` task 9.3 ("Retire the machinery", `_Requirements: 12.1, 12.3, 12.4, 12.5_`, `_Boundary: MachineryRetirement_`) is where the purge scripts package is deleted and has not run. Every one-shot module this criterion would retire — `scripts/purge/plan.py`, `rewrite.py`, `adopt.py`, `preflight.py`, and the replacement-only rows of `verify.py` — is still present in the tree today, confirmed by `ls scripts/purge/` this task |
+| 12.2 | UNPINNED | *(added by Amendment 1; task 7.8)* Property of a completed retirement; `tasks.md` task 9.4 ("Prove every surviving guard still fails, then destroy the scratch", `_Requirements: 3.5, 12.2_`, `_Depends: 9.3_`) is where every surviving guard's mutation is re-run on the post-retirement tree and has not run. Today's guards do execute and are demonstrably able to fail (the same standing guard pinned at 2.3/10.4/11.1, plus 3.1-3.4), but that is evidence of the pre-retirement state, not the post-retirement claim this criterion makes |
+| 12.3 | UNPINNED | *(added by Amendment 1; task 7.8)* Property of a completed retirement; task 9.3 is where the retirement's own deletion list is produced and has not run. The provenance record and Req 4/Req 9's recorded evidence exist today (this document, this section) but nothing yet asserts they survive the retirement step, which is exactly what this criterion requires |
+| 12.4 | UNPINNED | *(added by Amendment 1; task 7.8)* Prose restatement obligation, same shape as 3.5/3.6/11.9's loss-statement criteria: no section stating what the retirement gave up exists yet, because task 9.3 — "Write provenance section 8: what machinery was removed, what each surviving guard still detects, and what verification capability was given up" — has not run |
+| 12.5 | UNPINNED | *(added by Amendment 1; task 7.8)* Ordering constraint on when the retirement runs, not a runtime assertion; no code path checks "not yet public" before running it, the same absence-of-a-test posture already declared at 8.7 for "shall not make the repository public". `tasks.md` states the ordering in task 9.3's own body ("After the replacement is verified and before the repository is made public") and encodes the *sequencing* half mechanically — task 9.1 (Major 9's first task) is `_Depends: 8.4_` (Major 8's last task), so Major 9 cannot start before Major 8 finishes by task-dependency construction — but that dependency graph is plan discipline, not an assertion a mutation can red |
+
+**Totals: 33 PINNED, 1 PRESERVED-ONLY, 48 UNPINNED — 82 of 82 criteria
+classified.** *(Was 47 UNPINNED and 81 of 81 until Amendment 3 added criterion
+8.8 on 2026-08-22; the new criterion is UNPINNED, and this total is the count
+this section's exhaustiveness claim below refers to. An amendment that adds a
+criterion must move these numbers with it — the claim is exhaustive or it is
+false, and nothing mechanical guards it.)* The 33 PINNED figure folds in the one row labelled `PINNED,
+with a declared UNPINNED carve-out` (11.7) alongside the 32 rows labelled
+`PINNED` outright; that row is the spec's one declared exception to "one of
+three labels" named in this section's opening paragraph, not a fourth
+category. No criterion is left unclassified.
+
+Of the 47 UNPINNED rows, 5 state an observed mutation (1.2, 1.5, 3.6, 9.5,
+11.13), 2 cite a mutation a prior task ran without restating it (11.5, 11.6),
+5 are declared by design in a commit message (3.5, 4.1, 11.9, 11.11, 11.12),
+and the remaining 35 carry neither — unpinned because the event they
+describe has not occurred or the obligation is prose no assertion reaches,
+and there is no production line to mutate: 1.4, 1.6, 2.2, 2.4, 2.5, 4.2, 4.3,
+4.4, 4.5, 5.1, 5.2, 5.4, 5.5, 5.6, 7.1, 7.2, 8.2, 8.4, 8.6, 8.7, 9.2, 9.3,
+9.6, 10.1, 10.3, 10.5, 11.2, 11.3, 11.4, 11.10, 12.1, 12.2, 12.3, 12.4, 12.5.
+Task 6.1 ran three of the five observed-mutation rows fresh — 1.2 and 9.5,
+both UNPINNED, plus the same mutation pinning 6.1 and 6.2 (both PINNED, not
+UNPINNED, named here only to record that task re-verified them) — through
+`uv run pytest`, with `scripts/purge/__pycache__` cleared first, observed
+red, then reverted and confirmed green. The other rows re-run by task 6.1
+(2.3, 7.3, 8.1, 8.3, 8.5, 9.4, 9.8, 11.1 — all PINNED) were listed in their
+own rows with the tests and mutations that task ran for each.
+
+Task 7.8 re-verified 9.4, 9.8 and 10.3's mechanism fresh through
+`uv run pytest`, with `scripts/purge/__pycache__` cleared first, each
+observed red then reverted and confirmed green — recorded in each row above,
+because task 7.5's re-scope of `pins.py` to the epoch convention and task
+7.4's re-scope of `verify.py` to the fresh-root shape changed what the prior
+evidence described without changing the label. It corrected 9.3's and 8.4's
+rows in place (a withdrawn artifact and a retired task number respectively;
+no re-classification, no mutation applicable) and added the five Req 12 rows
+new at Amendment 1, all UNPINNED with a stated procedure, none of which has
+a production line to mutate today because the machinery they describe has
+not been built.
+
+The 2026-08-19 remediation round corrected nine further rows in place —
+7.1, 7.2, 8.4 (citation only), 9.6, 10.1 and 10.5 (vocabulary or
+verbatim-quote corrections), 10.3 (its "Major-7-dependent" cross-reference),
+and 5.1/8.6 (vocabulary only, outside both preamble lists) — none of
+which changed a label, re-verified 9.3 unchanged as part of the
+ten-criterion re-verification above, and re-ran 9.8's mutation evidence
+fresh, adding a second, narrower sole-failure mutation (the `resolve_pin`
+guard-clause prefix mutation) beside the pre-existing wide-cascade one; 9.8
+stays PINNED. It also deleted two sentences the 2026-08-18 correction had
+left in place — "Every other row below is unchanged from task 6.1's sweep"
+and "no row in this table cites a withdrawn artifact as forthcoming after
+this edit" — both false at the time they were written: 9.6 cited exactly
+such a withdrawn artifact (design.md's pre-amendment "Ordering detail that
+bites" heading) until this round's fix, and 7.3's own row already said its
+mechanism was re-run and re-measured under "task 7.7 remediation", "not
+carried over" from task 6.1 — that remediation landed at `831aa5c`, the
+commit this branch's `HEAD` was at when this round began (confirmed via
+`git log --oneline -5`), the commit immediately preceding this one.
+
+This table is a snapshot at this task's commit. Every requirement whose label
+depends on the history replacement having run (most of 5.x, 7.x, 8.x, all of
+12.x, and the at-any-commit halves of 9.x and 11.x) is expected to move once
+Major 8 and Major 9 land; re-run this sweep after the replacement rather than
+trusting this table across that boundary.
+
+## Scope of the 2026-08-08 prose-correction sweep
+
+A rejection round on this record found seven false factual claims: three
+transplanted numerals in the guard-record summaries above, a mislabelled row
+(9.5) contradicting its own sibling (9.6), four rows citing "per prior
+review" with neither a test name nor a mutation, three PRESERVED-ONLY rows
+attributed to a guard this spec itself built or to production code rather
+than a pre-existing test, two mutations whose reported blast radius was
+narrower than what re-running them produced, and two citations that did not
+resolve against the documents they named. This task fixed the nine sites the
+review identified, re-running every mutation named at those nine sites
+against the current tree (documented in each corrected row and in the
+`## Status Report` this task ends with) rather than transcribing a number
+from the rejection into the row. It additionally spot-checked, rather than
+exhaustively re-ran, two adjacent claims this correction depends on: the
+`bfe0ddf` and `3099d92` quotes underlying rows 1.5, 5.4 and 5.6 were
+re-checked with `git log -1 --format=%B` against the literal fragments used
+in this table (both resolve, allowing for the mid-sentence line wrap and
+editorial `[pinned]` bracket already present in 1.5's row before this task).
+The totals in this section were recomputed from a fresh `grep -c` count
+against the table's own label column rather than carried forward by
+arithmetic.
+
+What this sweep did **not** do: re-run every mutation cited from a commit
+message that neither this task nor the fix list above touched — the bulk of
+the 30 rows in the "neither" bucket, and every PINNED row this task's rejection
+did not name, whose evidence remains exactly what a prior task's
+`grep -F`-verbatim check against its landing commit already established.
+This task re-ran, itself, only the mutations named in the nine corrected
+sites: 1.2, 2.3, 6.1/6.2, 7.3, 8.1/8.3, 8.5, 9.4, 9.5, 9.8, and the
+tracked-README/removed-path-fragment plants underlying 2.3 and 11.1. Every
+other row's evidence is carried forward, unexamined by this task, from the
+prior round's own verification. **Zero residual false claims is not
+claimed.** The rejection round that produced this sweep found seven false
+sentences plus two rows that contradicted each other on inspection alone
+(9.5 against 9.6, and 2.3/11.1 against 10.4); this task corrected all nine
+sites the rejection named. A later reviewer applying the same mutation-based
+scrutiny to a row this sweep did not itself re-run may still find one.

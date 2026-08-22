@@ -1,0 +1,23 @@
+{
+  "feature_name": "plugin-api",
+  "created_at": "2026-07-21T07:47:13Z",
+  "updated_at": "2026-07-27T00:00:00Z",
+  "language": "en",
+  "phase": "tasks-generated",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  },
+  "ready_for_implementation": true,
+  "phase_note": "2026-07-26 (queue sweep): task 4.4 (reconcile design.md's public-surface enumeration against the shipped training-load contract, including correctly resolving design.md's own withdrawn-Protocol-`supports` follow-up item) was added to tasks.md post-approval. This is additive follow-up recording work design.md's own RECORDED FOLLOW-UP note already called for -- not a re-spec -- so no approval flag was changed; the human-approved tasks list gains one leaf task rather than being re-approved wholesale. 2026-07-27: task 4.4 completed -- design.md's public-surface enumeration (~line 806) reconciled against fitdocs.load.__all__/fitdocs.__all__ (NotConfirmed->NotComputed, plus LoadContext, LoadSettings, LoadSettingsError, DEFAULT_LOAD_SETTINGS, NonSelectedValue, QualityFlag, supports_activity added; registry deliberately excluded, matching docs/plugins.md's own precedent), and its RECORDED FOLLOW-UP (2026-07-25) note replaced with a RESOLVED note recording what changed. All 12 leaf tasks now checked; still not a re-spec, no approval flag changed. 2026-07-29 (queue-driven, no new task -- mirroring task 4.4's own precedent of recording additive corrections here rather than inventing a leaf task): closed queue items `2026-07-27-design-md-enumeration-unguarded` and `2026-07-27-plugin-api-enumeration-restaled-by-benchmarks`'s underlying work (closing the queue items themselves remains the maintainer's call). Added a bidirectional mechanical guard on design.md's public-surface enumeration (`tests/test_docs_guarantees.py::test_design_doc_public_surface_list_names_actually_import` and `::test_every_fitdocs_load_export_appears_in_the_design_doc_surface_list`), mirroring the existing docs/plugins.md guards; added the five benchmark exports (`Benchmark`, `BenchmarkKind`, `BenchmarkRef`, `BenchmarkAge`, `benchmark_age`) that athlete-benchmarks introduced to fitdocs.load.__all__ the same day task 4.4 closed, re-staling the enumeration a fifth time; and expanded the root `fitdocs` list's \"decode errors\" prose gloss to its three named errors (`FitDecodeError`, `NotFitFileError`, `FitIntegrityError`), which the task-4.4 RESOLVED note's sentence \"the `fitdocs` root list ... required no change\" predates -- that sentence describes 2026-07-27 only, corrected in place at design.md:841-843 rather than rewritten wholesale. Not a re-spec; requirements, other tasks and approvals unchanged."
+}

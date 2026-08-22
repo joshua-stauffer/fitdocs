@@ -1,0 +1,22 @@
+{
+  "feature_name": "distribution",
+  "created_at": "2026-07-21T08:14:49Z",
+  "updated_at": "2026-07-21T11:20:00Z",
+  "language": "en",
+  "phase": "tasks-generated",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  },
+  "ready_for_implementation": true
+}

@@ -1,0 +1,36 @@
+{
+  "feature_name": "wiki-contract",
+  "created_at": "2026-07-21T07:56:54Z",
+  "updated_at": "2026-07-22T00:00:00Z",
+  "language": "en",
+  "phase": "tasks-generated",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  },
+  "ready_for_implementation": true,
+  "amendments": [
+    {
+      "date": "2026-07-22",
+      "requirement": "3.2 / new 3.2a",
+      "reason": "Req 3.2 read literally mandated a false claim for fit-archive/ (re-derivability). Task 4.1 was rejected three times on emitted-text falsehoods rooted in this. Human-ratified carve-out: 3.2's re-derivability and user-owned-region elements apply only to directories holding generated documents; 3.3 governs the archive.",
+      "also": "Task 4.1 emitted prose reduced to the mandated 6+1 claims; long-form editing guidance deferred to task 7.1's published contract."
+    },
+    {
+      "date": "2026-07-22",
+      "requirement": "5.5 / 5.8 (LoadEngine version gate) and structural (docio.py)",
+      "reason": "Task 7.2 found sync and the load engine each carrying its own local frontmatter read, functionally identical to each other and BOTH lacking the symlink refusal that audit._read_document already had -- so a symlinked workouts/*.md was refused by `check` and followed by every writer, letting a write escape the data root (Req 7.5, 7.6). The two were collapsed into src/fitdocs/docio.py, one enforcement point; deleting its refusal now fails five tests where it previously failed none. Separately, the document-format version gate was duplicated into load/engine.py because the training-load pass is itself a writer, so Req 5.5's 'left unchanged' guarantee held for the engine functions but not for the CLI commands that run that pass afterwards.",
+      "also": "design.md's File Structure Plan (New Files) now lists docio.py; the LoadEngine component section now states the version-gate duplication and its requirement coverage; a fourth cross-spec integration obligation records that a writing entry point must read through docio.read_frontmatter and run the once-per-run symlink scan beside refresh_declarations; tests/test_public_api.py now pins docio's exported surface alongside contract, declaration, and audit."
+    }
+  ]
+}

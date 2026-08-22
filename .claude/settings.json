@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit|MultiEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/change-guard.py\"",
+            "timeout": 10,
+            "statusMessage": "Checking the change protocol"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/queue-guard.py\"",
+            "timeout": 10,
+            "statusMessage": "Checking the follow-up queue"
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/change-guard.py\"",
+            "timeout": 10,
+            "statusMessage": "Checking the change protocol"
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/log-guard.py\"",
+            "timeout": 10,
+            "statusMessage": "Checking the shared agent log"
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/queue-commit-guard.py\"",
+            "timeout": 10,
+            "statusMessage": "Checking for uncommitted queue items"
+          }
+        ]
+      }
+    ]
+  }
+}

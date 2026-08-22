@@ -1,0 +1,171 @@
+{
+  "activity": {
+    "schema_version": "1.0",
+    "provenance": {
+      "sha256": "41f7b7a3161b321b3ef05b7178f9f241392d94701660499c20d037a0c893cbb6",
+      "source_path": null,
+      "decode_errors": []
+    },
+    "sport": "Workout",
+    "modality": "other",
+    "is_indoor": false,
+    "start_time": "2021-09-08T01:46:40+00:00",
+    "summary": {
+      "sport": null,
+      "sub_sport": null,
+      "start_time": null,
+      "total_elapsed_time_s": null,
+      "total_timer_time_s": null,
+      "total_distance_m": null,
+      "total_calories_kcal": null,
+      "total_ascent_m": null,
+      "total_descent_m": null,
+      "avg_heart_rate_bpm": null,
+      "max_heart_rate_bpm": null,
+      "avg_power_w": null,
+      "max_power_w": null,
+      "avg_cadence_rpm": null,
+      "max_cadence_rpm": null,
+      "avg_speed_mps": null,
+      "max_speed_mps": null
+    },
+    "laps": [],
+    "samples": {
+      "time_s": [
+        0.0,
+        1.0,
+        2.0,
+        3.0
+      ],
+      "heart_rate_bpm": [
+        100,
+        101,
+        102,
+        103
+      ],
+      "power_w": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "cadence_rpm": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "speed_mps": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "distance_m": [
+        0.0,
+        1.0,
+        2.0,
+        3.0
+      ],
+      "altitude_m": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "latitude_deg": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "longitude_deg": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "temperature_c": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "sets": [],
+    "devices": [],
+    "developer_fields": {},
+    "developer_fields_declared_scale": []
+  },
+  "metrics_no_athlete": {
+    "moving_time_s": 3.0,
+    "elapsed_time_s": 3.0,
+    "distance_m": 3.0,
+    "avg_speed_mps": null,
+    "max_speed_mps": null,
+    "avg_pace_s_per_km": 1000.0,
+    "avg_heart_rate_bpm": 101.5,
+    "max_heart_rate_bpm": 103,
+    "avg_power_w": null,
+    "max_power_w": null,
+    "avg_cadence_rpm": null,
+    "max_cadence_rpm": null,
+    "normalized_power_w": null,
+    "intensity_factor": null,
+    "variability_index": null,
+    "efficiency_factor": null,
+    "decoupling_pct": null,
+    "elevation_gain_m": null,
+    "elevation_loss_m": null,
+    "min_altitude_m": null,
+    "max_altitude_m": null,
+    "min_temperature_c": null,
+    "max_temperature_c": null,
+    "avg_temperature_c": null,
+    "hr_time_in_zone_s": null,
+    "power_time_in_zone_s": null,
+    "pace_time_in_zone_s": null,
+    "trimp": null,
+    "trimp_weighting": null,
+    "power_tss": null,
+    "calories_kcal": null
+  },
+  "metrics_with_athlete": {
+    "moving_time_s": 3.0,
+    "elapsed_time_s": 3.0,
+    "distance_m": 3.0,
+    "avg_speed_mps": null,
+    "max_speed_mps": null,
+    "avg_pace_s_per_km": 1000.0,
+    "avg_heart_rate_bpm": 101.5,
+    "max_heart_rate_bpm": 103,
+    "avg_power_w": null,
+    "max_power_w": null,
+    "avg_cadence_rpm": null,
+    "max_cadence_rpm": null,
+    "normalized_power_w": null,
+    "intensity_factor": null,
+    "variability_index": null,
+    "efficiency_factor": null,
+    "decoupling_pct": null,
+    "elevation_gain_m": null,
+    "elevation_loss_m": null,
+    "min_altitude_m": null,
+    "max_altitude_m": null,
+    "min_temperature_c": null,
+    "max_temperature_c": null,
+    "avg_temperature_c": null,
+    "hr_time_in_zone_s": [
+      3.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "power_time_in_zone_s": null,
+    "pace_time_in_zone_s": null,
+    "trimp": 0.02759600761648672,
+    "trimp_weighting": "banister_male",
+    "power_tss": null,
+    "calories_kcal": null
+  }
+}

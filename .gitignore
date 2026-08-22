@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# OS / IDE
+.DS_Store
+.idea/
+
+# Machine-local config (mirrors pkm's data-root contract)
+.fitdocs/data-root
+
+# Personal fitness data never lives in the repo (hard rule; see CLAUDE.md /
+# tech.md data-root contract). Local .fit/.gpx exports kept for real-data
+# verification stay on disk but are never committed.
+data/
+*.fit
+*.gpx
+
+# Source spreadsheets for the withdrawn methodology, kept out of the repo
+# pending redistribution permission from the third party.
+*.xlsx
+
+# Copyrighted third-party reference texts, read to source the training-load
+# formulas and never redistributable: page scans of Banister (1991), "Modeling
+# Elite Athletic Performance", ch. 9 of Physiological Testing of the
+# High-Performance Athlete, and the publisher PDF of Morton, Fitz-Clarke &
+# Banister (1990), J Appl Physiol 69(3):1171-1177 (© American Physiological
+# Society). They stay on disk for verification, like the source workbooks above,
+# but are committed nowhere — and these rules are also what keeps them out of
+# the sdist, which ships untracked files that git does not ignore. What was
+# extracted from them: docs/reference/banister-trimp-primary-sources.md.
+bannister_physiological_testing_of_the_high_performance_athlete/
+Morton*Modeling*human*performance*in*running*.pdf

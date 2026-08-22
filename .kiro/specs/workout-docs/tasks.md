@@ -1,0 +1,169 @@
+# Implementation Plan
+
+> Sequencing precondition: this plan builds on the implemented fit-ingest
+> spec — the package skeleton, `parse_fit` / `compute_metrics` public API,
+> fixture builder, and the additive session developer-fields amendment must
+> be complete before these tasks start.
+
+- [x] 1. Foundation: packaging, configuration, and leaf services
+- [x] 1.1 Wire the installable CLI entry point and new dependencies
+  - Extend the existing project manifest (owned by fit-ingest) with the console entry point exposing the `fitdocs` executable and the CLI/terminal-output/YAML runtime dependencies; keep the dependency set minimal per steering
+  - Provide a minimal command shell so version and help respond before feature commands land
+  - Observable: from a fresh checkout, dependency sync succeeds and invoking the tool with version/help flags prints the installed version and usage
+  - _Requirements: 14.1, 14.2, 14.3_
+- [x] 1.2 (P) Implement data-root resolution with loud failure
+  - Precedence: explicit output flag, then environment variable, then pointer file discovered in the starting directory or its ancestors (relative pointer targets resolve against the pointer's location)
+  - No implicit fallback of any kind: unresolvable or non-existent root fails with an instructive error naming the failing source and all three configuration options
+  - Observable: unit tests cover each precedence level, ancestor discovery, relative resolution, and every failure mode with nothing written
+  - _Requirements: 2.1, 2.2, 2.3_
+  - _Boundary: DataRootResolver_
+- [x] 1.3 (P) Implement the read-only athlete-inputs reader
+  - Optional athlete file mapped onto fit-ingest athlete inputs: thresholds plus ascending zone dividers; unknown keys ignored for forward compatibility
+  - Absent file yields no inputs (not an error); malformed content or non-ascending dividers fail loudly as configuration errors; the reader can never write or prompt
+  - Observable: unit tests cover absent, partial, complete, and malformed files
+  - _Requirements: 8.3_
+  - _Boundary: AthleteInputsReader_
+- [x] 1.4 (P) Implement layout, activity identity, and document naming
+  - Data-root layout constants (documents, assets, archive areas) and path helpers, including data-root-relative source references and doc-relative asset paths
+  - Activity identity: canonical session identifier from the recorded developer field when present and well-formed, else the content hash
+  - Date-prefixed kebab-case stems from local start time; undated fallback stems carry an identity prefix instead of a fabricated date; deterministic collision suffixing that never reuses another activity's name
+  - Observable: unit tests cover timed/undated stems, strength vs sport slugs, 16-byte identifier formatting with hash fallback, and collision determinism
+  - _Requirements: 2.4, 2.5, 2.6, 2.7, 3.1, 3.6, 5.6_
+  - _Boundary: DataRootLayout_
+- [x] 1.5 (P) Implement the region marker contract and safe merge
+  - Marker grammar around the notes, workout, and load regions; regions non-nesting and unique per document
+  - Extraction detects unbalanced, duplicated, or out-of-order markers; merge carries every preserved region's content verbatim (including tool-filled load content) into a fresh render and fully replaces generated content outside regions
+  - A document whose markers are damaged, or that contains regions the fresh render lacks, produces a conflict error instead of any overwrite
+  - Observable: unit tests cover round-trip merge, verbatim load carry-over, damage detection, and conflict behavior
+  - _Requirements: 10.1, 10.2, 10.3, 10.4, 11.3_
+  - _Boundary: RegionMerger_
+- [x] 1.6 (P) Extend the synthetic fixture builder with real-shaped variants
+  - Building on fit-ingest's fixture builder: run with native power and sparse HR coverage, outdoor run without GPS/altitude, ride without power, strength session with HR-only records and no set messages, session-scoped developer fields including a 16-byte session UUID, and a re-export pair (same session UUID, different bytes)
+  - Observable: pytest fixtures hand these `.fit` byte variants to any test deterministically
+  - _Requirements: 4.1_
+  - _Boundary: FixtureBuilder extensions (fit-ingest test support)_
+
+- [x] 2. Chart generation: plain series in, deterministic SVG out
+- [x] 2.1 (P) Implement chart series preparation math
+  - Null-skipping symmetric boxcar smoothing (default 11-sample window); per-series min/max band normalization with flat series pinned to the band midpoint; gap segmentation that splits lines at missing runs
+  - Missing samples are never interpolated or filled — sparse real-world streams (observed 62% HR coverage) stay honest
+  - Observable: unit tests match hand-computed smoothing, normalization (including the flat-series pin), and segmentation over gappy series
+  - _Requirements: 7.4, 7.5_
+  - _Boundary: ChartSeriesPrep_
+- [x] 2.2 (P) Implement the deterministic SVG builder and documented palette
+  - Minimal portable element subset with presentation attributes only, fixed numeric precision, and stable attribute ordering — no timestamps or generated ids
+  - Series colors as sRGB hex constants documented against their reference oklch sources; a documented cool-to-hot zone ramp
+  - Observable: identical inputs produce byte-identical SVG text; every palette constant carries its oklch source
+  - _Requirements: 4.1, 7.4_
+  - _Boundary: SvgBuilder, ChartPalette_
+- [x] 2.3 Render the hero chart
+  - Overlaid band-normalized series over a distance or time axis with the faint elevation backdrop band; reference line styling; axis tick rules (y ticks only for a single active series); in-SVG legend replacing hover identification
+  - Gaps render as separated line segments; charts accept plain series plus style parameters only
+  - Observable: golden SVGs for two-series, single-series, sparse-HR, and backdrop-less cases render correctly and deterministically
+  - _Requirements: 7.1, 7.4, 7.5_
+  - _Boundary: HeroChart_
+- [x] 2.4 (P) Render the HR-zone strip
+  - Proportional stacked bands with zone label, duration, and percentage; zero-time bands keep labels without width
+  - The strip module receives computed zone times only — it contains no zone boundaries and no defaults of any kind
+  - Observable: golden SVG for a five-zone example; unit test proves no output exists without supplied zone times
+  - _Requirements: 8.1, 8.2_
+  - _Boundary: ZoneStrip_
+  - _Depends: 2.2_
+
+- [x] 3. Document rendering
+- [x] 3.1 Define the render contracts, value formatting, and absence rules
+  - Shared render contracts: immutable render context (activity, metrics, athlete inputs, document stem, append-ordered source references, timezone) and the rendered-document result carrying markdown plus doc-relative assets — the types every group-3 task consumes
+  - Pace, duration, speed, distance, and unit formatting; absent values omit at block level and render an absence marker inside tables; recorded zeros always format as genuine values
+  - Observable: contracts pass strict type checking and unit tests cover each format plus absence and true-zero behavior
+  - _Requirements: 13.1, 13.3_
+  - _Boundary: RenderDispatcher (contract types), ValueFormatting_
+- [x] 3.2 (P) Build the frontmatter schema with deterministic emission
+  - Fixed key order carrying title, document type, document version, session identity, local date and start time, sport, modality, indoor flag, key metrics, and the source references rendered verbatim from the context (append-ordered, last = current render source)
+  - Keys without values are omitted entirely — never null, zero, or placeholder; single emission path keeps output deterministic
+  - Observable: unit tests verify schema, key omission, identity inclusion, and byte-stable output
+  - _Requirements: 5.1, 5.2, 5.6, 3.4_
+  - _Boundary: FrontmatterBuilder_
+  - _Depends: 1.1, 3.1_
+- [x] 3.3 (P) Build the shared document sections and telemetry selection
+  - Hero key-stats in reference order with sport-aware entries and sub-values, rows omitted when absent; telemetry chips with per-series averages plus threshold-dependent metrics only when athlete inputs enable them
+  - Telemetry selection per design: series precedence (HR + power default, documented fallbacks, at most two series), x-axis choice (distance km, else elapsed minutes), chart omitted without plottable series, zone strip included only when computed zone times exist — never from default boundaries
+  - Recognized supplemental session values (estimated RPE, humidity, average METs) rendered when recorded, unknown developer fields ignored silently
+  - Devices/data-quality: display name prefers product name (real files decode manufacturer as a literal placeholder), battery flags, per-channel coverage rows only for channels with data, decode errors surfaced
+  - Training-load placeholder emitting the marked load region with a graceful not-computed state — this layer computes no load of any kind; notes region emission with instructive placeholder
+  - Observable: unit tests verify section content and omission behavior, series fallback for a powerless ride, time-axis fallback without distance, and that the load region contains no fabricated numbers
+  - _Requirements: 6.2, 6.6, 6.7, 7.2, 7.3, 7.6, 8.1, 8.2, 8.4, 11.1, 11.2, 11.4, 13.2_
+  - _Boundary: SharedSections_
+  - _Depends: 1.5, 2.3, 2.4, 3.1_
+- [x] 3.4 (P) Implement splits computation and rendering
+  - Device-lap table straight from recorded lap fields; 1 km re-slice cut from cumulative distance over the sample stream with per-slice display aggregates from non-missing samples
+  - Sport-aware columns (pace for runs, speed and power for rides); fastest/slowest labels; totals row; each variant omitted independently when laps or distance are absent
+  - Observable: unit tests match hand-computed slices and verify variant omission
+  - _Requirements: 6.3, 6.4, 6.5_
+  - _Boundary: SplitsRenderer_
+  - _Depends: 3.1_
+- [x] 3.5 (P) Implement strength set grouping and rendering
+  - Consecutive active sets grouped per resolved exercise; following rest set attributed to the preceding active set's rest column; unresolved names grouped under an unknown heading without guessing
+  - Unrecorded cells blank; recorded zeros (bodyweight) rendered as genuine loads; when no sets exist the sets section is omitted entirely — never an empty scaffold
+  - Observable: unit tests cover grouping, rest attribution, blanks vs zeros, and the no-sets omission
+  - _Requirements: 9.2, 9.3, 9.4, 9.6, 13.3_
+  - _Boundary: StrengthRenderer_
+  - _Depends: 3.1_
+- [x] 3.6 Integrate the render layer: per-modality views and total dispatch
+  - Explicit render-layer integration task: assemble sections, splits, strength tables, frontmatter, and chart assets into complete documents per modality — run/ride, strength, generic — with dispatch total over modality, never failing on unrecognized sports; pure, deterministic assembly
+  - Section orders per design including notes and load regions in every document and the workout region in strength documents; strength telemetry renders the HR chart when plottable series exist; assets linked with doc-relative image paths
+  - Output stays plugin-free markdown: frontmatter and HTML-comment markers are the only PKM affordances
+  - Observable: rendering one activity of each modality yields complete documents with correct section order, regions, and asset links; an unrecognized sport renders the generic view
+  - _Requirements: 2.7, 5.3, 5.4, 5.5, 6.1, 9.1, 9.5, 10.5, 12.1, 12.2_
+  - _Boundary: RenderDispatcher, DocViews_
+
+- [x] 4. Sync engine and CLI integration
+- [x] 4.1 Implement document lookup and activity-identity resolution
+  - Scan the documents area for workout documents, matching an activity by session identity first, then by source reference; return the matched document's path and its existing source-reference history for context assembly
+  - User-renamed documents and timezone changes resolve to the same document; no match yields a fresh-document decision
+  - Observable: unit tests over temp document trees cover identity match, source-ref match, rename survival, and no-match
+  - _Requirements: 3.6_
+  - _Boundary: SyncEngine_
+- [x] 4.2 Implement the sync per-file pipeline with failure isolation
+  - Recursive case-insensitive discovery in deterministic order; content hashing; skip when already archived unless forced; parse and metrics via the fit-ingest API; source-history assembly (existing document's references plus the new ref, last = current)
+  - Existing documents update in place with preserved regions — re-exports (same identity, new bytes) converge on one document with the new source appended; write order per file: assets, document, archive last (archive presence = committed); output directories created on demand; source directory never modified, moved, or deleted; archived files never rewritten
+  - Decode failures, region conflicts, and unexpected per-file errors recorded as failures without aborting the batch
+  - Observable: an engine run over synthetic fixtures in a temp data root produces one document plus assets per activity and a populated archive; a corrupt file is reported while the rest complete; a re-export converges on one updated document
+  - _Requirements: 1.1, 1.2, 1.3, 1.6, 2.8, 3.1, 3.2, 3.3, 3.5, 3.6, 4.2_
+  - _Boundary: SyncEngine_
+- [x] 4.3 Implement regeneration from the archive alone
+  - Every document re-renders from its current (last) source reference; archived files referenced by no document render fresh; preserved regions carried over per the merge contract
+  - Observable: after deleting the original source directory and editing notes/workout/load regions, regeneration rebuilds documents with generated content refreshed and all three regions intact
+  - _Requirements: 4.3, 4.4, 10.2_
+  - _Boundary: SyncEngine_
+- [x] 4.4 Wire the CLI commands, reporting, and exit codes
+  - Extends the minimal shell from 1.1: sync command (source directory, output flag, force flag) and regen command (output flag); data-root resolution and athlete-input loading before any processing; local timezone threaded explicitly into the engine
+  - End-of-run summary of written, skipped, and failed files with reasons; exit status zero on success (including all-skipped), non-zero when any file failed, distinct status for configuration errors; no network access anywhere
+  - Observable: end-to-end CLI runs show the summary table and correct exit codes for success, partial failure, and configuration-error scenarios
+  - _Requirements: 1.3, 1.4, 1.5, 2.1, 2.2, 14.2, 14.4_
+  - _Boundary: CliApp_
+
+- [x] 5. Validation: golden files, idempotency, and quality gates
+- [x] 5.1 (P) Golden document suite over real-shaped fixtures
+  - Synthetic fixtures shaped after the verified real corpus: run with native power and sparse HR, run without GPS/altitude, ride without power, strength with HR-only records and no set messages, minimal file — rendered with pinned timezone and athlete inputs
+  - Committed markdown and SVG snapshots asserted byte-identical; snapshots verified to contain no fabricated zeros, no default zones, and correct per-modality sections; own test module and snapshot directory, fully disjoint from 5.2's files
+  - Observable: golden tests pass for every fixture; the strength golden shows telemetry plus workout section and no sets table; the powerless-ride golden shows the HR + speed fallback; the GPS-less run golden omits climb and uses the time axis
+  - _Requirements: 4.1, 6.1, 6.5, 7.2, 7.3, 7.6, 9.1, 9.6, 12.1, 13.1, 13.2_
+  - _Boundary: GoldenRenderSuite (render-layer golden tests)_
+  - _Depends: 1.6, 3.6_
+- [x] 5.2 (P) Idempotency, dedup, re-export, and preservation end-to-end
+  - Double sync run leaves the data root byte-identical with everything skipped; a renamed byte-identical file produces no second document; a re-export fixture (same session identity, different bytes) updates the same document in place, preserves regions, and appends its source
+  - Damaged markers leave that document untouched with a reported conflict while others proceed; with an athlete file the zone strip and threshold chips appear, without it they are absent with no defaults; own test module over temp data roots, fully disjoint from 5.1's files
+  - Observable: all listed end-to-end assertions pass in temp data roots
+  - _Requirements: 3.2, 3.3, 3.6, 4.1, 4.2, 8.1, 8.2, 8.4, 10.2, 10.3_
+  - _Boundary: SyncE2ESuite (sync end-to-end tests)_
+  - _Depends: 1.6, 4.2, 4.3, 4.4_
+- [x] 5.3 Packaging smoke test, portability assertions, and quality gates
+  - Tool-install smoke: installing from a clean checkout exposes the executable; version and help respond (Python 3.11+ floor declared)
+  - Automated portability assertions over goldens: valid frontmatter block, exactly one top-level heading, only relative asset links that resolve, no plugin-dependent syntax beyond frontmatter and comment markers
+  - Full test suite, lint, and strict type check green from a clean checkout
+  - Observable: install smoke, portability assertions, and all quality gates pass
+  - _Requirements: 5.3, 5.5, 14.1, 14.2, 14.3, 14.4_
+
+## Implementation Notes
+- pyyaml ships no type stubs; `types-PyYAML` is a dev dependency (added during 3.2) so `mypy --strict` type-checks the single `yaml.safe_dump` call in `render/frontmatter.py`. Do NOT re-add a `# type: ignore[import-untyped]` on `import yaml` — with the stub installed, `warn_unused_ignores` (strict) would flag it.
+- `render/frontmatter.py::_session_uuid` intentionally re-derives the 16-byte SESSION-UUID → canonical-string logic (also in `layout.py::_format_session_uuid`) so the render layer stays independent of `layout`; frontmatter needs the None-when-absent variant (no sha256 fallback), whereas `layout.activity_uid` falls back to sha256.
