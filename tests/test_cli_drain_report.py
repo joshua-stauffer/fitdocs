@@ -41,6 +41,13 @@ from fitdocs.sync import DocWarning, DrainReport, FileFailure, SyncReport
 # ``actions/checkout`` at ``fetch-depth: 1``) does not carry this object, and
 # a test that shells out to ``git show`` for it would fail with a
 # missing-object error instead of reporting the drift it exists to catch.
+#
+# ``faa6d09`` is a pre-replacement commit identifier (encumbered-content-purge,
+# ``docs/reference/history-rewrites.md`` Sec 3, 2026-08-22): it is retained
+# here as historical fact, permanently unresolvable in this repository, not a
+# live pointer. The retired plan would have had this note point to a
+# forthcoming commit map instead; that pointer is cancelled -- no map exists
+# or ever will, by construction.
 _PRE_TASK_CLI_COMMIT = "faa6d09"
 _BASELINE_FIXTURE = (
     pathlib.Path(__file__).resolve().parent / "fixtures" / "report_baseline_faa6d09.py"

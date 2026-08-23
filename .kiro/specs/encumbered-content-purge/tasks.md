@@ -71,6 +71,17 @@ written literally below is one of those.
   rewritten, and `design.md`'s "stand as written" is Req 12.3's retention
   rule, not a bar on correcting a promise of an artifact Amendment 1
   withdrew.
+- **This plan also carries one declared correction to `requirements.md`,
+  applied in place by task 9.2.** Req 9.3's "permanently unresolvable" is
+  scoped to "in the fitdocs repository and its canonical remote", adopting
+  option (a) of
+  `.kiro/queue/2026-08-22-retention-falsifies-the-only-copy-and-unresolvable-claims-across-the-spec.md`
+  for that queue item's family (b) only — the narrowing Amendment 3 applied
+  to Requirement 8 on 2026-08-22 did not extend to Req 9.3 at the time. No
+  other criterion's meaning moves. The correction does not close the queue
+  item and does not reach family (a), the "only copy anywhere" sentences in
+  `design.md` and `research.md`, which stays open as separate, un-scoped
+  work.
 - **It still carries one declared in-place deliverable**: task 3.3 wrote the
   neutral vocabulary into the `IdentityErasure` component of `design.md`
   rather than into a file of its own. The Component → file map gives
@@ -1729,7 +1740,7 @@ written literally below is one of those.
   - _Depends: 8.4_
   - _Boundary: ReferenceRepair_
 
-- [ ] 9.2 Complete the provenance record's part two
+- [x] 9.2 Complete the provenance record's part two
   - Section 3, the history replacement: the mechanism — a fresh root of the
     certified tip by a `.git` swap, the old `.git` archived, the remote
     **renamed** rather than deleted-and-recreated *(Amendment 2, 2026-08-22)*

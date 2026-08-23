@@ -3,8 +3,14 @@
 **2026-08-03.** This is the durable record of what `encumbered-content-purge`
 removed from the fitdocs repository, why, and what removing it cost the
 repository's own ability to check itself. Once this spec's history rewrite
-lands, this document plus a forthcoming commit map are what a later session
-has to go on for anything the rewrite touched. Once that rewrite completes,
+lands, this document is what a later session has to go on for anything the
+rewrite touched. *(In-place correction, task 9.2: this sentence originally
+promised a forthcoming commit map alongside this document. Decision 6,
+Amendment 1, 2026-08-17, retired the mechanism that would have produced
+one; §3 states, once, that no such map exists or ever will, by
+construction. The promise is cancelled here rather than left standing. §2's
+own forthcoming-map promise, a separate clause, carries its own note where
+it stood.)* Once that rewrite completes,
 nothing below can be checked against the files it describes, because those
 files will no longer exist reachable from any ref. Before that rewrite
 completes, the writeup, both tables, and the deleted rewrite map remain
@@ -54,38 +60,115 @@ repository's object database until 2026-08-09, when an unrelated accident
 pruned every unreachable object in it — recorded in
 `.kiro/queue/2026-08-09-shared-object-database-pruned-during-6-4-remediation.md`.
 They are gone now, by that accident rather than by design. Neither the ref deletion nor task 7.1's
-assertion would have removed them; the `--no-local` clone made in task 7.2
+assertion would have removed them; the `--no-local` clone made in task 8.2
 does, because that kind of clone copies only reachable objects — so the
 purge's own outcome is unchanged either way, and this paragraph records the
 distinction only because the reasoning above depends on which mechanism did
-it. That
+it. *(In-place correction, task 9.2: this sentence originally named "task
+7.2" for that clone. The retired plan's task 7.2 was the one-shot in-place
+history rewrite, which made its own clone; Amendment 1 replaced it before it
+ran, and under the regenerated plan the reachable-only clone is made inside
+task 8.2, the actual swap. Named by the
+current task number so a later reader can locate the step that ran.)* That
 earlier rewrite also produced a row-per-commit map from
 pre-rewrite to post-rewrite commit identifiers, tracked in the working tree
 until task 3.1 deleted it. This document replaces that map as the durable
 record of the 2026-07-26 rewrite, per Requirement 5.4. The map's prose
 header stated the maintainer's personal address in order to explain the
 rewrite. This document does not restate it. The map's data rows, without
-that header, are preserved outside the repository. They will join a
-forthcoming commit map covering both rewrites, per Requirement 9.3. The map
+that header, are preserved outside the repository, as scratch evidence only.
+*(In-place correction, task 9.2: the sentence originally here promised these
+rows would join a forthcoming commit map covering both rewrites. Decision 6
+(Amendment 1, 2026-08-17) means no such map can exist for the second
+rewrite, so there is nothing for these rows to join; they remain scratch
+evidence, cited but never a tracked file. See §3.)* The map
 file no longer exists in the working tree, per Requirement 9.7.
 
-(§3 — this rewrite's own record — is appended in the post-rewrite commit.)
+## 3. The history replacement
+
+On 2026-08-22, task 8.2 replaced this repository's history with a fresh,
+parentless root commit, `c3d22016e3ca55fefa8b1da25a2e4f51d892e91e`. That
+commit's tree, `bb5bab6d80c4fc275360600b8b1fb67c067d2061`, is identical to
+the certified pre-replacement tip's tree — the tip was
+`310f930b381892cd07acbf77f3179e369524c121`, certified clean by every guard
+and oracle this spec built, at task 8.1. The mechanism carried forward no
+existing commit: the fresh commit was forged directly from the certified
+tree, a fresh `.git` was populated by a reachable-only clone of that single
+commit, and the old `.git` — carrying every pre-replacement commit,
+including the old root `32aed726eba17aaa517e56ab9e4717e7518c86c9` — was
+moved out, whole, to an archive outside the working tree, never deleted
+(Decision 7; the grounds for the mechanism itself are recorded in
+`.kiro/specs/encumbered-content-purge/brief.md`'s amendment decision).
+
+Two further rulings, taken after Decision 6 and before certification,
+changed what the remote step does. Task 8.4 re-pointed `origin` at
+`git@github.com:joshua-stauffer/fitdocs.git`, a repository the maintainer
+supplied and that was measured that day as already existing and empty,
+standing beside the still-live `fitdocs_oss` — so there was nothing to
+recreate (Amendment 2, 2026-08-22). Amendment 2 calls this a
+**rename**, `fitdocs_oss` → `fitdocs`, and that word is kept here for
+continuity with the plan's naming, but it is inexact and stays inexact
+throughout this record: nothing was renamed. Two repositories existed
+side by side before the push, and both still do; "rename" describes which
+URL the project now publishes under, not an operation performed on any
+repository. `fitdocs_oss`, the repository `origin` no longer points at, was
+**retained** rather than deleted (Amendment 3, same date). §7 records the
+retention ruling and what it costs.
+
+No pre-replacement commit is an ancestor of the fresh root, and nothing
+maps a pre-replacement commit identifier to a post-replacement one, because
+the fresh root was forged from a tree rather than derived commit-by-commit
+from what came before (Decision 6, Amendment 1, 2026-08-17). Stated once:
+every pre-replacement commit identifier is thereafter permanently
+unresolvable in the fitdocs repository and its canonical remote, there
+being no mapping by construction. That statement is scoped deliberately —
+it is not a claim that no copy of the pre-replacement history exists
+anywhere. The retained `fitdocs_oss` resolves those same identifiers
+indefinitely, to anyone with access; §7 records that position rather than
+letting this section's statement stand unqualified beside it.
 
 ## 4. What is no longer verifiable
 
-Once task 3.1 deleted the material, and once Major 7's rewrite runs, several
+Once task 3.1 deleted the material, and once the history replacement runs
+(Major 8), several
 things this repository could previously check become permanently
-unverifiable from inside it. The guards' detection data — the value
+unverifiable from inside it. *(In-place correction, task 9.2: this sentence
+and the one below originally said "Major 7" — the retired plan's rewrite
+major. Under the regenerated plan Major 7 builds the machinery and Major 8
+runs it; the property described here belongs to the completed replacement,
+Major 8's event, not Major 7's.)* The guards' detection data — the value
 matcher's digest set and window lengths — was generated from the real files
 described in §1. That data can never again be checked against those files
-once the rewrite completes, because they will not exist reachable from any
+once the replacement completes, because they will not exist reachable from any
 ref. The evasion-acceptance run recorded below, from task 2.4, is the last
 time this check is recorded against the real files. The check itself
 remains possible today, run directly against the pre-deletion blobs still
-reachable in this repository's history, until Major 7 makes them
-unreachable. The purge's own probe sets, the history rewrite's spec files,
-and the mailmap are scratch artifacts kept outside this repository. They
-are destroyed with the material rather than retained. The out-of-repository
+reachable in this repository's history, until the history replacement makes
+them unreachable. The purge's own probe sets, the certification and
+identifier evidence gathered for the replacement (Major 8, task 8.1) —
+`~/.fitdocs-purge/certification-8-1.txt` and
+`~/.fitdocs-purge/identifiers-8-1.json` — and the retired in-place-rewrite
+mechanism's own spec files — `~/.fitdocs-purge/plan-paths.tsv`
+and `~/.fitdocs-purge/plan-content.tsv`, task 5.2's redaction plan output in
+the `PathMatch`/content-match shape that module defines, and
+`~/.fitdocs-purge/rules.json`, the retired task 7.2's `--replace-text` rule
+set — are scratch artifacts kept outside this repository. *(In-place
+correction, task 9.2: an earlier draft of this
+sentence read the spec files as hypothetical — files the retired mechanism
+"would have needed" — and struck them from the enumeration on that ground.
+They are not hypothetical: Decision 6 (Amendment 1, 2026-08-17) retired the
+mechanism before it *ran*, but the plan and rule files were already written
+and still exist at the paths above, verified this task. No mailmap was ever
+written for either mechanism — that half of the earlier draft's correction
+was accurate and stands. A second draft of this sentence attributed an
+evasion-acceptance artifact to Major 8 and pointed it at §7; that was also
+wrong and is corrected here rather than repeated: the evasion-acceptance run
+is task 2.4's, part of Major 2, dated 2026-08-01 — see the section below,
+not §7. §7 names only the two task 8.4 identifier-probe artifacts,
+`remote-8-4.txt` and `identifier-probes-8-4.tsv`; Major 8's certification
+evidence is named directly above, not in §7.)* They
+are destroyed with the material rather than retained (task 9.4, unrun as of
+this commit). The out-of-repository
 forbidden-string match-data file is not among them. It is retained
 indefinitely. Its retention is what makes the opt-in detection §5 describes
 possible at all.
@@ -129,13 +212,18 @@ gap.
 
 ## 6. Stated positions (part two adds the remainder)
 
-Most of this section is appended in the post-rewrite commit, once a commit
-map exists to state positions against: repaired pins, resolved prose
-references, the fixture filename's position, the one unresolvable pin, the
-changed queue ids, and the count of abbreviated commit references the
-rewrite could not translate. What can be stated now is the position on two
-pieces of untracked state that carry an identifying token across this
-purge, per Requirement 11.13.
+*(In-place correction, task 9.2: this section's opening paragraph originally
+promised the remainder would be appended "once a commit map exists to state
+positions against," naming "the one unresolvable pin" — the retired
+per-pin scheme Decision 3 planned. Decision 6 (Amendment 1, 2026-08-17)
+means no commit map ever exists, and Amendment 1 also replaced the per-pin
+scheme with the uniform epoch convention every open pin now carries
+identically. The remainder below states that convention's actual shape
+rather than the retired one.)*
+
+Two pieces of untracked state carry an identifying token across this purge,
+per Requirement 11.13; their position was stated when this document was
+first committed and is unchanged by the replacement:
 
 The gitignored source workbooks at the repository root have filenames that
 carry a token. Their position is accepted, recorded. Requirement 1.7
@@ -152,6 +240,182 @@ actually recorded. The root symlink to this log is an sdist member that
 extracts dangling today. Its content is therefore not currently archived by
 a build. A future packaging change that follows symlinks could turn that
 into a leak. This hazard is flagged here to the `distribution` spec.
+
+**The pin convention (task 9.1, 2026-08-23) and its README documentation.**
+Every open queue item's `pinned_at:` field was set to `c3d2201`, the
+replacement root's short commit id, applied uniformly with no per-item
+judgement (`scripts/purge/pins.py`; per Req 9.4 and 9.8, Amendment 1 — a
+single documented convention, not a mapping). `.kiro/queue/README.md` §"The
+epoch pin convention" documents it: a pin equal to `c3d2201` records that
+the item's evidence predates the replacement and that its original pin is
+permanently unresolvable in this repository, never a claim that `c3d2201`
+is that original pin's post-replacement counterpart. Measured this task:
+`c3d2201` resolves (`git cat-file -e c3d2201`) and `git log --oneline
+c3d2201..HEAD` resolves against it — the property `/kiro-queue` depends on.
+190 open items carry this pin; 188 were repaired to it and 2 were already
+current, having been created after the replacement.
+
+**Closed items' declared staleness (Req 9.5).** The 69 items under
+`.kiro/queue/closed/` were left untouched rather than repaired. Their
+`pinned_at:` fields record what was true when each item's evidence was
+gathered, and closed items are outside `/kiro-queue`'s ranking scope, so
+repairing them would falsify the record for no consumer that reads it. A
+closed item's `pinned_at:` may therefore still name a pre-replacement
+commit identifier, and that identifier is permanently unresolvable in this
+repository. Measured at task 9.1: all 69 were checked against the replaced
+repository and none resolves. The queue schema documentation's example pin
+(`.kiro/queue/README.md`'s item-format block) carries the convention value,
+`c3d2201`, rather than an invented or stale example.
+
+**The tracked fixture filename (Req 9.6).** `tests/fixtures/report_baseline_faa6d09.py`
+and the `_PRE_TASK_CLI_COMMIT = "faa6d09"` constant in
+`tests/test_cli_drain_report.py` name a pre-replacement commit abbreviation
+in a tracked filename and a tracked identifier. Both are retained, as
+historical fact rather than a live pointer: the fixture records what
+`src/fitdocs/cli.py::_report` looked like at that commit, immediately
+before the inbox spec's task that added `_report_drain` changed it, and
+renaming the file would not make the identifier it names resolvable. The
+design's retired plan would have
+had this fixture point to a forthcoming commit map; that pointer is
+**cancelled**, because no map exists or ever will (§3). In its place,
+`tests/test_cli_drain_report.py` now carries a one-line comment recording
+that `faa6d09` is a pre-replacement identifier, permanently unresolvable in
+this repository, retained as historical fact rather than a resolvable
+pointer — the same position this paragraph states. The comment carries no
+assertion, so nothing in the suite enforces that the two stay in agreement;
+either could be edited without the other reddening.
+
+**The unrepaired SHA-shaped token count (Req 9.5, 9.1).** Task 9.1 found 268
+SHA-shaped prose tokens across 138 of the 190 open queue items that its
+mechanical pin repair does not touch, because they sit inside prose,
+evidence sections and resume commands that record what was true at a
+moment — rewriting them would falsify the record rather than repair it.
+Re-measured this task, via `scripts/purge/pins.py::count_other_identifier_tokens`
+run over `.kiro/queue/*.md` minus `README.md`: the same figures, 268 tokens
+across 138 files. This count is a shape, not a budget, per `tasks.md`'s
+execution rules — it is expected to change as queue items close or are
+written, and a later reader should re-run the same measurement rather than
+trust this figure across time.
+
+**The `.git` archive (Decision 7).** The pre-replacement `.git` directory
+was moved, whole, to a location outside the working tree, described here by
+role and never by its literal on-disk path — an expanded home-directory path
+(`/Users/<name>/...`) is adjacent to the identity this record must not
+carry, and unlike the tilde-form artifact locators this record uses
+elsewhere (`~/.fitdocs-purge/...`, which names no user), the archive's actual
+path is never given in either form, because naming it buys a reader nothing
+the role description does not already say. It is retained, never published, and
+its eventual deletion is a maintainer act outside this spec (`design.md`
+Out of Boundary). It is not scratch: task 9.4's scratch-directory
+destruction does not reach it.
+
+**The carried untracked states (Req 11.13).** The two positions stated
+above — the gitignored source workbooks and the shared agent log — are
+unchanged by the replacement. Decision 7 guarantees the working directory
+and its untracked material are never moved and never deleted by the swap,
+and both were confirmed present, unmoved, after task 8.2's swap ran.
+
+## 7. The remote
+
+Task 8.4 re-pointed `origin` from `git@github.com:joshua-stauffer/fitdocs_oss.git`
+to `git@github.com:joshua-stauffer/fitdocs.git` on 2026-08-22 and pushed the
+single replacement commit. **Neither a deletion-and-recreation nor a
+deletion occurred, and nothing was renamed.** Decision 6 originally planned
+deletion and recreation; two later rulings each removed one half before task
+8.4 ran. Amendment 2 (2026-08-22) found there was nothing to recreate: the
+maintainer supplied `git@github.com:joshua-stauffer/fitdocs.git`, and it was
+measured that day as already existing and empty, standing beside the
+still-live `fitdocs_oss`. Amendment 2 calls re-pointing `origin` at that
+pre-existing destination a **rename**, `fitdocs_oss` → `fitdocs`; the word is
+kept here for continuity with the plan's naming, but `design.md`'s Amendment
+3 makes it inexact and that caution travels with it here: two repositories
+existed side by side before the push and both still do, so no rename
+operation was performed on any repository — "rename" names which URL the
+project now publishes under, nothing more. Amendment 3
+(2026-08-22, after
+Amendment 2, before task 8.1 certified anything) settled that `fitdocs_oss`,
+the repository `origin` no longer points at, would be
+**retained** rather than deleted, which made deletion moot. So: the
+reconciliation action task 8.1 through 8.4 actually **required** was
+re-pointing `origin` at the pre-existing, empty `fitdocs` and pushing to it,
+measured rather than assumed (Req 8.1); deletion and
+recreation were never required once those two rulings landed, and this
+record does not name them as steps that ran.
+
+**Retention's grounds and what it costs.** The only ground this record has
+for the retention itself is the maintainer's ruling (Amendment 3): `design.md`
+and `brief.md` state that `fitdocs_oss` is retained, not deleted, and
+`fitdocs` becomes the canonical repository, without giving a further reason
+the retention was chosen — this section states that plainly rather than
+implying a rationale that is not on record. That retention keeps `fitdocs_oss` serving the removed
+material, in full, at every pre-replacement commit, indefinitely — this is
+what Amendment 3 narrowed Requirement 8's subject to exclude, not what it
+achieves. Requirement 8's amended preamble states the exemption in full:
+**"the remote" in Requirement 8's criteria means the canonical repository
+only**, because after task 8.4 re-points `origin`, `fitdocs_oss` is no
+repository's remote at all and the criteria never reach it. What that
+exemption excludes is stated with it, not left implied: Requirement 8's
+objective — removal holding "on GitHub and not only on my machine" — is met
+for the canonical repository and **not** for GitHub as a whole, and the
+honest completion claim is **"Requirement 8 is satisfied with respect to the
+canonical repository"**, never a bare "the remote no longer serves it."
+
+**Measured positions, dated 2026-08-22, task 8.4 (`~/.fitdocs-purge/remote-8-4.txt`,
+`~/.fitdocs-purge/identifier-probes-8-4.tsv`).** Before the push: `fitdocs_oss`
+was private, not a fork, 0 forks, 0 open PRs, 0 open issues. `fitdocs` (the
+push destination) was private, not a fork, 0 forks, 0 open PRs, 0 open
+issues, and carried 0 refs. After the push: a fresh clone taken from
+`fitdocs` carries exactly one commit, root `c3d22016e3ca55fefa8b1da25a2e4f51d892e91e`,
+tree `bb5bab6d80c4fc275360600b8b1fb67c067d2061` — identical to the certified
+tip's tree. Every local ref matches the remote's at the same commit id in
+both directions, and no ref exists on the remote that is not local.
+
+Per-identifier probes, both repositories, both from `remote-8-4.txt` and the
+full table at `~/.fitdocs-purge/identifier-probes-8-4.tsv`: a liveness
+control confirmed the probe method live (the new root returned HTTP 200 on
+`fitdocs` before any negative result was trusted). Against the **canonical**
+repository, `fitdocs`: 0 of 19 pre-replacement identifiers served — the 7
+sampled pre-replacement commits, including the old root
+`32aed726eba17aaa517e56ab9e4717e7518c86c9` and the old tip
+`310f930b381892cd07acbf77f3179e369524c121`, each returned HTTP 422
+(unrecognised object id), and the 12 sampled blobs each returned HTTP 404.
+Against the **retained** repository, `fitdocs_oss`: 7 of 8 sampled
+identifiers were still served, HTTP 200 — expected and accepted under
+Amendment 3, recorded here as measured fact rather than a reconciliation
+failure. The eighth, the certified tip `310f930b381892cd07acbf77f3179e369524c121`,
+returned 422 against `fitdocs_oss` for an unrelated reason stated in the
+same evidence file: that commit was never pushed there, because
+`fitdocs_oss`'s `origin/main` had already fallen behind local `main` before
+this spec's history replacement ran.
+
+**Stated plainly, so a later auditor does not have to infer it**: the
+retained repository still serves the removed material, in full, and
+Requirement 8 is satisfied with respect to the canonical repository — the
+honest form of the completion claim, checkable against the probe table
+above. Both repositories were measured private after the push (Req 8.7):
+neither has been made public by this purge.
+
+**The standing duty (Req 8.8), recorded as an obligation, not a
+measurement.** `fitdocs_oss` must remain private for as long as it exists.
+This is not discharged by the dated observation above that it *was* private
+at the time of measurement — a future maintainer reading this record must
+find the obligation, not only evidence that it once held. The reason: it
+holds the removed material in full, and its privacy is the only thing
+keeping that material unpublished; §3's "permanently unresolvable" statement
+holds only inside the fitdocs repository and its canonical remote precisely
+because `fitdocs_oss` is not covered by it. Any fork of `fitdocs_oss` would
+be a second permanent copy of the removed material, held in another
+account. GitHub's own documentation
+(<https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/about-forks>,
+fetched 2026-08-22 per `design.md`'s Amendment 3, which quotes it) states
+that a private repository's forks are private and cannot be made public
+independently of it, and that a private repository's forks are deleted when
+the repository itself is deleted — a table row this document does not
+restate verbatim. GitHub places the residual duty on the account holder:
+"You are responsible for ensuring that people who have lost access to a
+repository delete any confidential information or intellectual property."
+Requirement 8 covers no fork case; this paragraph, not a criterion, is where
+that duty is recorded.
 
 ## Evasion-acceptance results (task 2.4)
 
@@ -333,12 +597,14 @@ only prose describing the retirement, no live code path. 8.4's row cited
 **execution rules** ("Amendment 1 (2026-08-17) regenerated Majors 7–8 in
 place. The retired plan's tasks 7.2–7.4 and 8.1–8.5 ... were replaced before
 any of them ran"), not in the naming-convention note, which is a vocabulary
-list naming no task number — the current plan's task 8.4 ("Push the
-renamed remote, then measure what both remotes serve" — retitled twice on
-2026-08-22: by Amendment 2, when the remote turned out to be renamed rather
-than deleted-and-recreated, and by Amendment 3, when the old repository was
-retained rather than deleted so that both remotes remain to be measured) is
-the one task tagged
+list naming no task number — the current plan's task 8.4 (titled "Push the
+renamed remote, then measure what both remotes serve" — that title's "renamed"
+is Amendment 2's word for re-pointing `origin` at a pre-existing empty
+destination, not a claim that any repository was renamed; see §3 and §7 —
+retitled twice on 2026-08-22: by Amendment 2, when recreating a destination
+turned out to be unnecessary because one already existed, and by Amendment 3,
+when the old repository was retained rather than deleted so that both
+remotes remain to be measured) is the one task tagged
 `_Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7_` and covers this criterion.
 *(Amendment 3 added criterion 8.8, a recording duty tagged on task 9.2 rather
 than 8.4, so 8.4 no longer covers all of Req 8 on its own.)*
@@ -429,7 +695,7 @@ can actually reach, and that limit is named in the row.
 | 8.1 | PINNED | Re-run this task: `tests/purge/test_verify.py::test_probe_identifier_raises_on_unrecognised_status_not_reporting_gone` — collapsing `scripts/purge/verify.py::probe_identifier`'s non-200/non-404 branch into `served = False` (treating any unrecognised status as "gone") reds this test as the sole failure, reverted, confirmed green |
 | 8.2 | UNPINNED | Remote reconciliation has not run |
 | 8.3 | PINNED | Same test and mutation as 8.1 — `test_probe_identifier_raises_on_unrecognised_status_not_reporting_gone` is what pins that an unrecognised status is refused rather than silently classified |
-| 8.4 | UNPINNED | Corrected in place (task 7.8): named the retired plan's task 8.5, replaced before it ran; the reconciliation action is current task 8.4 ("Push the renamed remote, then measure what both remotes serve", `_Depends: 8.3_`; retitled twice on 2026-08-22 — by Amendment 2, the remote is renamed rather than deleted-and-recreated; by Amendment 3, the old repository is RETAINED rather than deleted, so Requirement 8 was AMENDED TEXTUALLY -- its subject narrowed to the canonical repository, criterion 8.4 given an explicit exemption for the retained one, 8.7 widened to both and a new 8.8 added for the standing privacy duty. Not a scoping: an exemption, recorded as one), unrun — no module implements it yet. Re-corrected this round: the fact that the retired 8.1-8.5 were replaced before any ran is stated in tasks.md's execution rules ("The retired plan's tasks 7.2–7.4 and 8.1–8.5 ... were replaced before any of them ran"), not in the naming-convention note, which lists vocabulary and names no task number |
+| 8.4 | UNPINNED | Corrected in place (task 7.8): named the retired plan's task 8.5, replaced before it ran; the reconciliation action is current task 8.4 (titled "Push the renamed remote, then measure what both remotes serve" — "renamed" is Amendment 2's word for re-pointing `origin` at a pre-existing empty destination, not a claim that a repository was renamed; see §3 and §7 — `_Depends: 8.3_`; retitled twice on 2026-08-22 — by Amendment 2, once recreating a destination turned out to be unnecessary because one already existed; by Amendment 3, the old repository is RETAINED rather than deleted, so Requirement 8 was AMENDED TEXTUALLY -- its subject narrowed to the canonical repository, criterion 8.4 given an explicit exemption for the retained one, 8.7 widened to both and a new 8.8 added for the standing privacy duty. Not a scoping: an exemption, recorded as one), unrun — no module implements it yet. Re-corrected this round: the fact that the retired 8.1-8.5 were replaced before any ran is stated in tasks.md's execution rules ("The retired plan's tasks 7.2–7.4 and 8.1–8.5 ... were replaced before any of them ran"), not in the naming-convention note, which lists vocabulary and names no task number |
 | 8.5 | PINNED | Re-run this task: emptying `scripts/purge/verify.py::compare_refs`'s `remote_only` computation to `()` reds six tests: `test_compare_refs_fails_when_the_remote_carries_a_ref_not_local`, `test_compare_refs_fails_on_both_directions_simultaneously_with_distinct_names`, `test_compare_refs_sorts_both_missing_from_remote_and_remote_only`, `test_check_remote_refs_match_fails_when_a_remote_only_ref_is_present_in_a_fixture`, `test_check_remote_refs_match_fails_when_refs_original_survives_on_the_remote`, `test_check_remote_refs_match_fails_when_a_pre_rewrite_tag_survives_on_the_remote`; reverted, confirmed green |
 | 8.6 | UNPINNED | Recording the measurement is part two of this record, appended post-replacement |
 | 8.7 | UNPINNED | *(widened by Amendment 3, 2026-08-22, to "neither the canonical repository nor the retained `fitdocs_oss`".)* True by the absence of any code path that publishes either repository, but that absence has not been asserted by a test |

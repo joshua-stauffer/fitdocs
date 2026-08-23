@@ -612,8 +612,24 @@ purge does not silently invalidate the repository's own audit trail.
 3. The provenance record shall state that the history replacement preserved no
    pre-replacement commit, shall name the root commit it produced, and shall
    state once that every pre-replacement commit identifier is thereafter
-   permanently unresolvable, there being no mapping by construction.
-   *(Amendment 1; formerly a complete pre-to-post commit map.)*
+   permanently unresolvable **in the fitdocs repository and its canonical
+   remote**, there being no mapping by construction.
+   *(Amendment 1; formerly a complete pre-to-post commit map. In-place
+   correction, task 9.2, 2026-08-23: this criterion is scoped in place,
+   adopting option (a) of
+   `.kiro/queue/2026-08-22-retention-falsifies-the-only-copy-and-unresolvable-claims-across-the-spec.md`
+   for its family (b) — the narrowing Amendment 3 applied to Requirement 8
+   on 2026-08-22 did not extend here at the time. The retained `fitdocs_oss`
+   resolves every pre-replacement identifier indefinitely, to anyone with
+   access; that fact does not satisfy this criterion and is not this
+   criterion's subject — it is recorded under Requirement 8's Amendment 3
+   exemption, and the provenance record states both positions side by side
+   rather than letting the unqualified absolute contradict the retention it
+   also records. This correction resolves the queue item's family (b) only.
+   It does not close the item and does not touch family (a) — the "only
+   copy anywhere" sentences in `design.md` and `research.md` — which the
+   queue item's own boundary note leaves for separate work; the item stays
+   open.)*
 4. When the purge is complete, no open queue item's `pinned_at:` field shall
    present a pre-replacement commit identifier as resolvable, and every open
    item shall be repaired to a single documented convention rather than by
