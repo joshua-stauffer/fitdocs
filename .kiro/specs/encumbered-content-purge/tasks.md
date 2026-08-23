@@ -1720,7 +1720,7 @@ written literally below is one of those.
   - _Depends: 8.3_
   - _Boundary: RemoteRecreation_
 
-- [ ] 9. Aftermath: references, record part two, and retirement
+- [x] 9. Aftermath: references, record part two, and retirement
 
 - [x] 9.1 Repair every open pin and document the epoch convention
   - On a short-lived branch created on the new history — the ordinary
@@ -1825,7 +1825,7 @@ written literally below is one of those.
   - _Depends: 9.2_
   - _Boundary: MachineryRetirement_
 
-- [ ] 9.4 Prove every surviving guard still fails, then destroy the scratch
+- [x] 9.4 Prove every surviving guard still fails, then destroy the scratch
   - On the post-retirement tree, re-run every surviving guard's recorded
     single-line mutation through `uv run pytest`: observed red, reverted,
     observed green. Revert from a snapshot copy taken before the first

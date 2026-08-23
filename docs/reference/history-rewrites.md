@@ -570,8 +570,115 @@ single-line mutation against their subject module after the move —
 `ENTROPY_FLOOR_BITS` mutation above — observed red, then reverted and
 confirmed green. Re-running every other surviving guard's own recorded
 mutation on the post-retirement tree, per guard, is task 9.4's job (`tasks.md`,
-"Prove every surviving guard still fails, then destroy the scratch") and has
-not run as of this commit.
+"Prove every surviving guard still fails, then destroy the scratch"); the
+ledger below is that job, run on this same post-retirement tree.
+
+**Task 9.4 ledger: every surviving guard's recorded mutation re-run on the
+post-retirement tree (Req 3.5, 12.2).** Every mutation below was applied to a
+file first copied to a snapshot outside the working tree, run through
+`uv run pytest` and observed red, then restored from that snapshot copy (never
+`git checkout`) and confirmed byte-identical and green. Three survivors —
+`tests/_content_oracle.py`, `tests/_content_fingerprints.py`,
+`tests/test_provenance_record.py` — are not repeated here: task 9.3's own
+re-run of each is recorded above, on this same tree, not this task's. The
+first two are in the paragraph immediately above, beginning "This task
+re-ran the two Req 12.2 relocated modules' own recorded single-line
+mutation" (that "this task" is also 9.3, writing section 8 as task 9.3's own
+Observable). `tests/test_provenance_record.py`'s re-run is three paragraphs
+earlier, in the paragraph beginning "All three relocated modules were
+re-run after the move with a recorded single-line mutation to their
+subject." Re-running any of the three a second time here would add nothing.
+
+- **`tests/load/test_packaging.py`, `test_sdist_contains_no_withdrawn_research_record`
+  (guard re-based at `221d60a`).** Anchor `content = fileobj.read()` matched
+  exactly once (expected once). Mutated to `content = fileobj.read(0)` — the
+  exact partial-read failure mode the guard's own docstring names (lines
+  532–546: "`bytes_inspected == expected_bytes` asserts the *total number of
+  bytes actually read* ... This is the assertion that catches a partial
+  read: `fileobj.read(0)` in place of `fileobj.read()` ... reads zero bytes
+  ... which is why the check is an exact equality"), and the same failure
+  mode the assertion message itself names at lines 626–632 ("a partial read
+  (e.g. `fileobj.read(N)` for some N, ...) leaves `scanned > 0` satisfied
+  while a value occurring after the read cutoff ... is never seen"). Observed
+  red: `bytes_inspected == expected_bytes` failed (`0 == <expected_bytes>`),
+  the sole failure in the module (1 failed, 6 passed). The absolute byte
+  figure is not recorded here: it is a built-sdist size that includes this
+  document's own bytes, so it shifts by this ledger entry's own length every
+  time the entry is edited and is not stable evidence. Reverted from the
+  pre-mutation snapshot, confirmed byte-identical, then green (7 passed).
+- **`tests/load/test_packaging.py`, `test_wheel_contains_no_stray_data_or_module_under_load`
+  (guard re-based at `221d60a`).** This is a separate detection capability
+  from the sdist entry above, per this record's own Req 12.2 enumeration: it
+  inspects wheel member *names* and asserts the `fitdocs/load/` module
+  allowlist by equality, rather than scanning content for a reproduced
+  value. Anchor `_LOAD_MODULE_ALLOWLIST = frozenset(` (the fourteen-name
+  allowlist definition) matched exactly once (expected once). Mutated to
+  `_LOAD_MODULE_ALLOWLIST = frozenset()` — the allowlist-emptying mutation
+  `221d60a` itself records, there named as a **preserved control** that
+  reddens every real module by design rather than a single named offender
+  (see the guard re-basing section below). Observed red: the `unexpected`
+  assertion failed, listing all fourteen real `fitdocs/load/` modules as not
+  in the (now-empty) allowlist, the sole failure in the module (1 failed, 6
+  passed). Reverted from the pre-mutation snapshot, confirmed byte-identical,
+  then green (7 passed). The guard's own docstring also names a second,
+  narrower failure mode — a phantom allowlist entry with no module behind it
+  — that this ledger entry does not separately re-run, because the
+  allowlist-emptying mutation above is the one `221d60a` itself recorded.
+- **`tests/test_docs_guarantees.py`, `_steering_pairing_violations`, pinned by
+  `test_every_steering_file_mentioning_the_withdrawn_methodology_also_records_its_withdrawal`
+  and `test_synthetic_steering_tree_with_an_unpaired_evaluation_mention_reds_the_pairing_check`
+  (guard re-based at `f1dad15`).** Anchor
+  `if mentions_evaluation and "withdraw" not in text:` matched exactly once
+  (expected once). Mutated by dropping `not` — the exact mutation the second
+  test's own docstring names ("dropping the `not` from `\"withdraw\" not in
+  text`", lines 343–352) and states reddens both tests, not one, because the
+  real `.kiro/steering/` tree's two mentioning files already contain the word
+  "withdraw". Observed red: both named tests failed, exactly as recorded (2
+  failed, 12 passed). Reverted from the pre-mutation snapshot, confirmed
+  byte-identical, then green (14 passed).
+- **`tests/test_forbidden_strings.py`, `test_standing_guard_scans_sdist_members_content_and_names`
+  (guard stood up at `7f447da`).** Anchor `if not member.isfile():` matched
+  exactly once (expected once). Mutated to
+  `if not member.isfile() or not member.name.endswith(".py"):` — the exact
+  `.py`-only narrowing the test's own comment names (lines 1142–1147: "a
+  `.py`-only filter reds this second assertion"). Run with
+  `FITDOCS_FORBIDDEN_STRINGS` set (this guard is gated). Observed red: the
+  `"README.md" in scanned_names` assertion failed, the sole failure (1
+  failed, 41 deselected). Reverted from the pre-mutation snapshot, confirmed
+  byte-identical, then green (1 passed, 41 deselected).
+- **The notice/mark tip guard,
+  `tests/test_forbidden_strings.py::test_the_notice_phrase_and_mark_are_absent_from_every_tracked_file`,
+  paired with `tests/_forbidden_strings.py::_count_notice_phrase` (built at
+  task 6.5, re-homed to these modules at task 7.2).** No recorded single-line
+  mutation for this guard exists anywhere in the post-retirement tree to
+  re-run. Task 7.2's own text in `tasks.md` states the act was performed
+  ("Re-run each moved guard's recorded single-line mutation at its new home,
+  through `uv run pytest`, observed red then green on revert") and task 7.2
+  is marked complete, but neither this document's guard-re-basing section
+  above (scoped to the three tasks 4.1–4.3 commits, none of which cover a
+  guard built at task 6.5) nor this section's own task-9.3 paragraph (which
+  names only the two relocated modules) nor the guard's own docstring records
+  what that mutation was or what it reddened. This is the finding this task's
+  own framing anticipates: a survivor with no recorded mutation, stated
+  rather than skipped. As a supplementary probe only — not a re-run of a
+  recorded mutation, since none exists to re-run, and not a discharge of Req
+  3.5's record requirement for this guard — this task constructed and ran one:
+  anchor `for index in range(len(chunks) - span + 1):` in
+  `tests/_forbidden_strings.py::_count_notice_phrase` matched exactly once
+  (expected once), mutated to `for index in range(0):`. Observed red: the
+  guard's own planted positive control failed
+  (`_count_notice_phrase(planted_flat) == 1`), the sole failure (1 failed, 41
+  deselected). Reverted from the pre-mutation snapshot, confirmed
+  byte-identical, then green (1 passed, 41 deselected). This shows the guard
+  is not dead; it does not supply the missing Req 3.5 record, which remains
+  open.
+
+Full-suite validation after every mutation was reverted, on the tree left by
+this task: `uv run pytest` — 2453 passed, 5 skipped; with
+`FITDOCS_FORBIDDEN_STRINGS` set to the maintainer's source — 2458 passed;
+`uv run ruff check .` and `uv run ruff format --check .` — clean;
+`uv run mypy` — 83 files, no issues. All four match the pre-task baseline
+exactly, so this task's mutate/revert cycles left no trace.
 
 **Verification capability given up (Req 12.4), stated rather than left
 implicit.** This retirement removes the fitdocs repository's own ability to:
