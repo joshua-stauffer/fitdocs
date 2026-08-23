@@ -541,3 +541,79 @@ def test_missing_data_paths_never_raise() -> None:
     )
     assert stress.power_tss(None, None, None) is None
     assert stress.power_tss(0.0, 0.0, 0.0) is None
+
+
+# --- Non-monotonic time: the skip-the-interval convention -------------------
+#
+# Queue 2026-07-31-non-monotonic-time-unspecified-in-coverage-and-trimp.
+# `trimp` documents that "pairs whose earlier heart rate is None or whose dt is
+# not positive are skipped", and implements it, but nothing exercised the dt
+# half: deleting the non-positive-dt guard left the full suite green (2350
+# passed at the time it was measured). The sibling accumulator,
+# `fitdocs.load.channels.sufficiency.stream_coverage`, shares the convention
+# and is pinned by the matching tests in tests/load/channels/test_sufficiency.py.
+
+
+def test_non_monotonic_time_intervals_are_skipped_by_trimp() -> None:
+    """A backwards step contributes no impulse, and does not subtract one.
+
+    ``time_s = (0, 60, 30, 90)`` has deltas ``+60``, ``-30``, ``+60``. With
+    the heart rate held constant, each qualifying pair contributes an
+    identical per-minute impulse, so the shipped rule gives exactly twice a
+    single positive interval's contribution.
+
+    That equality is asserted against a *separately computed* two-interval
+    reference -- ``time_s = (0, 60, 120)``, monotonic, same heart rate -- not
+    against a transcribed float. Summing raw deltas instead would give 1.5x
+    the reference and ``abs(dt)`` would give 2.5x, so the assertion separates
+    the shipped rule from both alternatives.
+
+    Mutation evidence, measured on this branch: deleting the non-positive-
+    ``dt`` guard from ``trimp`` reds this test and its sibling below. Before
+    these two tests existed the same deletion left every *behavioural* test
+    green -- the queue item recorded 2350 passed.
+
+    It does also red the two exemption-table guards in
+    ``tests/metrics/test_constant_guard.py``, but only because deleting the
+    guard removes a numeric literal from the module and so orphans its
+    exemption entry. That is a structural detector firing on the shape of the
+    edit, not coverage of the behaviour -- the distinction queue item
+    2026-07-29-collection-error-red-not-an-anti-pattern exists to keep. It
+    would fire identically for a deletion that changed no behaviour at all, so
+    it is not evidence that the rule is pinned. These two tests are.
+    """
+    hr: tuple[int | None, ...] = (150, 150, 150, 150)
+    backwards = stress.trimp(
+        _samples((0.0, 60.0, 30.0, 90.0), heart_rate_bpm=hr),
+        resting_hr=60,
+        max_hr=200,
+        weighting=_MALE_PAIR,
+    )
+    monotonic = stress.trimp(
+        _samples((0.0, 60.0, 120.0), heart_rate_bpm=(150, 150, 150)),
+        resting_hr=60,
+        max_hr=200,
+        weighting=_MALE_PAIR,
+    )
+    assert backwards is not None
+    assert monotonic is not None
+    assert backwards.value == pytest.approx(monotonic.value)
+
+
+def test_a_series_of_only_backwards_steps_yields_no_trimp() -> None:
+    """When no pair has a positive ``dt``, no pair contributes.
+
+    The result is ``None`` -- the absent-data contract (Req 12.2) -- not a
+    fabricated ``0.0``, even though the heart-rate channel is fully recorded.
+    This pins that the ``contributed`` flag tracks *qualifying* pairs rather
+    than merely the presence of heart-rate data.
+    """
+    assert (
+        stress.trimp(
+            _samples((90.0, 60.0, 30.0), heart_rate_bpm=(150, 150, 150)),
+            resting_hr=60,
+            max_hr=200,
+            weighting=_MALE_PAIR,
+        )
+        is None
+    )

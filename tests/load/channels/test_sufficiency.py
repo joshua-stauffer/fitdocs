@@ -502,3 +502,73 @@ def test_gate_never_raises_across_all_degenerate_inputs() -> None:
             settings=_SETTINGS,
         )
         assert isinstance(result, (StreamCoverage, ChannelInsufficient))
+
+
+# --- Non-monotonic time: the skip-the-interval convention -------------------
+#
+# Queue 2026-07-31-non-monotonic-time-unspecified-in-coverage-and-trimp.
+# `stream_coverage` skips any pair whose `dt` is not positive, and its
+# docstring says so, but nothing exercised it: the task 1.3 reviewer measured
+# that deleting `if dt <= 0: continue` outright left tests/load at 496 passed
+# and the full suite green. The guard was load-bearing in production and
+# invisible to the suite.
+#
+# This is NOT the zero-total-span case, which is specified by Req 2.9 and
+# already pinned. This is a *negative* dt between two consecutive samples --
+# time running backwards mid-activity -- which neither requirement nor design
+# spoke to.
+#
+# The convention these tests fix as contract: a non-positive interval
+# contributes to neither `total_s` nor `covered_s`, and the surrounding
+# positive intervals are unaffected. `fitdocs.metrics.stress.trimp` documents
+# and implements the same rule and is pinned by the sibling test in
+# tests/metrics/test_stress.py; load-channels task 2.2's per-interval gradient
+# derivation is the third accumulator over this sample domain and should adopt
+# it rather than invent a third answer.
+
+
+def test_non_monotonic_time_intervals_are_skipped_by_coverage() -> None:
+    """A backwards step contributes to neither total nor covered span.
+
+    ``time_s = (0, 10, 5, 15)`` has inter-sample deltas ``+10``, ``-5``,
+    ``+10``. Skipping the negative pair gives ``total_s == 20``; summing the
+    raw deltas instead would give ``15``, and taking ``abs(dt)`` would give
+    ``25``. All three values are distinct, so this assertion separates the
+    shipped rule from both plausible alternatives rather than merely
+    confirming it.
+
+    Every ``values`` entry is present, so ``covered_s`` tracks ``total_s``
+    exactly -- which also means the negative pair's *earlier* sample is
+    non-``None`` and would have been counted as covered had the guard not
+    fired.
+
+    Mutation evidence: deleting ``if dt <= 0: continue`` from
+    ``stream_coverage`` reds this test on both assertions (measured on this
+    branch); before it existed, the same deletion left the suite green.
+    """
+    coverage = stream_coverage(
+        _samples((0.0, 10.0, 5.0, 15.0)),
+        (1, 1, 1, 1),
+        stream="heart_rate",
+    )
+    assert coverage is not None
+    assert coverage.total_s == 20.0
+    assert coverage.covered_s == 20.0
+
+
+def test_a_series_of_only_backwards_steps_has_no_measurable_span() -> None:
+    """When every interval is non-positive there is no span to measure.
+
+    ``total_s`` never leaves zero, so the Req 2.9 ``total_s <= 0`` gate
+    returns ``None`` rather than constructing a ``StreamCoverage`` with a
+    zero or negative total. This pins the interaction between the two guards:
+    the skip rule feeds the zero-span rule instead of bypassing it.
+    """
+    assert (
+        stream_coverage(
+            _samples((30.0, 20.0, 10.0)),
+            (1, 1, 1),
+            stream="heart_rate",
+        )
+        is None
+    )
