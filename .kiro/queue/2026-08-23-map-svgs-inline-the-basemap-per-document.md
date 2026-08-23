@@ -36,10 +36,10 @@ shared tile assets instead.
 ## Why it matters
 
 Output size scales with document count instead of with distinct route coverage.
-Measured on a real archive mid-render (below): 288 mapped documents already
-weigh 150 MB of map SVGs, backed by only 20 MB of distinct cached tiles — a
-~7.5x multiplication that keeps growing linearly. Extrapolated across the
-~1500 GPS-era activities in this archive, maps alone approach 800 MB.
+Measured on a real archive (below): 1235 mapped documents weigh 725 MB of
+assets, backed by only 40 MB of distinct cached tiles — an ~18x multiplication
+of the same imagery. The finished wiki is 939 MB, rendered from an 81 MB
+source archive.
 
 fitdocs is designed to plug into a markdown PKM (`CLAUDE.md`, reference
 `joshua-stauffer/pkm`). A wiki path that adds hundreds of megabytes of
@@ -56,22 +56,24 @@ one `<image>` per tile with the bytes inlined:
 313:                    "href": f"data:image/png;base64,{encoded}",
 ```
 
-Measured 2026-08-23 in `~/code/fitdocs-demo` **while the render was still in
-flight** (~1220 of 2478 documents written, so every figure below is a lower
-bound, not a total):
+Measured 2026-08-23 in `~/code/fitdocs-demo`, against the **completed** render
+of all 2478 documents (`fitdocs sync inbox --no-prompt`: 2478 written, 0 failed,
+0 warnings):
 
 ```
-$ ls wiki/workouts/assets/*-map.svg | wc -l
-     288
-$ du -ch wiki/workouts/assets/*-map.svg | tail -1
-150M	total
+$ grep -l "^## Map" wiki/workouts/*.md | wc -l
+    1235
+$ du -sh wiki wiki/workouts/assets wiki/.cache
+939M	wiki
+725M	wiki/workouts/assets
+ 40M	wiki/.cache
 $ ls -S wiki/workouts/assets/*-map.svg | head -1 | xargs du -h
 1.0M	wiki/workouts/assets/2023-03-12-run-2026-map.svg
-$ find wiki/.cache -type f | wc -l
-     863
-$ du -sh wiki/.cache
- 20M	wiki/.cache
 ```
+
+1235 mapped documents produce 725 MB of assets against a 40 MB shared tile
+cache -- an ~18x multiplication of the distinct imagery, and the wiki as a
+whole is 939 MB for a 81 MB source archive.
 
 `grep -c base64 wiki/workouts/assets/<a-map>.svg` returns a single composed
 payload per file, confirming the imagery is embedded rather than referenced.

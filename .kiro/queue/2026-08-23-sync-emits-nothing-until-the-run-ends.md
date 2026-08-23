@@ -32,12 +32,12 @@ archive scale it means hours of total silence.
 
 ## Why it matters
 
-A drain of a real personal archive takes hours (measured: ~0.3 documents/second,
-so 2478 files is roughly two hours). For that entire window the operator cannot
-distinguish a working run from a wedged one — a stalled network fetch, an
-`.fit` file the parser is spinning on, or a completed run whose shell died.
-The only available signal is manually counting files in `wiki/workouts/`,
-which is what this session had to do.
+A drain of a real personal archive runs for tens of minutes (measured: 2478
+files in 27:58 wall clock, ~1.5 documents/second). For that entire window the
+operator cannot distinguish a working run from a wedged one — a stalled network
+fetch, an `.fit` file the parser is spinning on, or a completed run whose shell
+died. The only available signal is manually counting files in `wiki/workouts/`,
+which is what this session had to do, repeatedly, for 28 minutes.
 
 This also weakens the quarantine story: a file that fails is reported only in
 the final summary, so an operator who kills a seemingly-hung run loses the
@@ -61,8 +61,10 @@ $ grep -rn "rich.progress\|Progress(" src/fitdocs
 ```
 
 Observed 2026-08-23, `~/code/fitdocs-demo`, `fitdocs sync inbox --no-prompt`
-over 2478 files with stdout redirected to a file. After ~70 minutes and
-1220+ documents written, the redirected log was still empty:
+over 2478 files with stdout redirected to a file. Seven minutes in, with 1220+
+documents already written to `wiki/workouts/`, the redirected log was still
+empty — and stayed empty until the run ended at 27:58, when the whole summary
+appeared at once:
 
 ```
 $ wc -c < sync.log
