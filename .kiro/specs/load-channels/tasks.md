@@ -259,7 +259,7 @@ is what makes them safe to run concurrently despite overlapping names.
 
 - [ ] 3. The three channels
 
-- [ ] 3.1 (P) Implement the power channel
+- [x] 3.1 (P) Implement the power channel
   - Compose the shipped normalized power, the shipped moving time and the
     shipped power-load formula rather than restating the rolling-average window,
     the gap handling or the load arithmetic
@@ -735,3 +735,34 @@ is what makes them safe to run concurrently despite overlapping names.
   a mutation gated on `settings_file.exists()` is invisible when the fixture
   path never exists on disk — the `exists()` call short-circuits before the
   patched read. Give such a test a path that genuinely exists.
+- **"There is no code to mutate away" is not evidence — and the error runs
+  both ways.** Task 3.1 declared Reqs 1.7, 4.2 and half of 4.7 PRESERVED-ONLY
+  on the reasoning that no alternate-threshold path, no modality branch and no
+  mutable state existed to remove. All three declarations were wrong. 4.2 was
+  PINNED all along (a hardcoded default FTP reds 5, an estimate from the
+  supplied benchmark reds 8); 1.7 was PINNED all along (a memo keyed on nothing
+  reds 25); and 4.7's genuinely unpinned half was one the task never flagged.
+  A declared gap that is actually covered is as wrong as a hidden one — it
+  sends the next session hunting for coverage that already exists. Add the
+  thing the requirement forbids and watch, in both directions.
+- **Ask of every assertion: what plausible wrong implementation produces this
+  same value on this fixture?** Task 3.1's module documents that the anchoring
+  discipline comes from the benchmark, "not decided by the activity's own
+  modality" — but the fixture set `sport=Sport.RUN` alongside `discipline=
+  Sport.RUN`, and `Sport.RUN.value == "Run"` is the asserted string, so reading
+  the activity's modality instead left the whole suite green. The docstring
+  asserted exactly the property its own fixture could not see. That one
+  question also finds tied `detail` strings, a 100%-covered fixture that cannot
+  distinguish reported coverage from fabricated, and a settings argument no
+  fixture ever varies.
+- **A fixture at the identity point pins less than it appears to.** At exactly
+  threshold, intensity is 1.0, so squaring, not squaring, and several other
+  wrong implementations all agree. `intensity**2 → **3` reds *only* the
+  sub-threshold fixture; the threshold one stays green in both directions. Any
+  channel asserting the shared semantic needs a fixture away from 1.0, which is
+  why Req 8.7 demands agreement at more than one point.
+- **Prefer a symbol import to a docstring mention when pinning provenance.**
+  Task 3.1 first pinned Req 4.8's "recorded with their source" by asserting the
+  citation key appeared in test prose — scrubbing every mention stayed green.
+  Importing `COGGAN_TSS` and asserting `COGGAN_TSS.key` makes a rename break
+  collection with `ImportError` at the earliest possible point instead.
