@@ -417,6 +417,241 @@ repository delete any confidential information or intellectual property."
 Requirement 8 covers no fork case; this paragraph, not a criterion, is where
 that duty is recorded.
 
+## 8. Retirement of the replacement machinery
+
+**What was removed.** On 2026-08-23, task 9.3 deleted `scripts/` in its
+entirety — sixteen tracked files, measured this task by `git rm -r scripts/`:
+the fourteen one-shot modules this task's own deletion list names
+(`design.md` `#### MachineryRetirement` counts them as fourteen, without
+naming them, and the enumerated deletion list in the tasks phase is itself
+the Req 12.1 position): `scripts/purge/__init__.py`, `adopt.py`,
+`build_sweep_inventory.py`, `fingerprints.py`, `manifest.py`, `pins.py`,
+`plan.py`, `preflight.py`, `replace.py`, `replacements.py`,
+`rewrite_map.py`, `rewrite.py`, `sweep.py`, `verify.py`), the CLI entry point
+`scripts/purge/__main__.py`, and the parent package's own
+`scripts/__init__.py`, whose docstring's subject was the sdist/wheel
+packaging claim that `scripts/purge/` is excluded from both build targets
+(now moot, since `scripts/` no longer exists to exclude); the module also
+held a bare `from __future__ import annotations` import, nothing else.
+Every one of those sixteen files had planning, executing, or verifying this
+spec's history operation as its only purpose (Req 12.1): each module either
+built or ran a step of the retired in-place rewrite or the fresh-root
+replacement, was pure infrastructure (the two `__init__.py` files, the CLI
+dispatcher) with no purpose independent of the modules it hosted, or was a
+one-shot generator whose output is a retained guard's data and whose own
+generating logic is irreproducible after task 3.1 deleted the source
+material it read (`scripts/purge/fingerprints.py`, `design.md`'s Component →
+file map: "generator; retired"), which is the authority its deletion rests on.
+
+The same task deleted `tests/purge/` less three relocations — fifteen
+further tracked files, measured by `git rm -r tests/purge/`:
+`tests/purge/__init__.py` and fourteen test modules (`test_adopt.py`,
+`test_cli.py`, `test_fingerprints.py`, `test_manifest.py`, `test_pins.py`,
+`test_plan.py`, `test_preflight.py`, `test_replace_rehearsal.py`,
+`test_replacements.py`, `test_rewrite_gate.py`,
+`test_rewrite_map_extraction.py`, `test_sweep.py`, `test_tree_removal.py`,
+`test_verify.py`). Each pinned a module or a step deleted alongside it in
+this same change, so each had verifying the history operation as its only
+purpose (Req 12.1).
+
+`tests/purge/test_content_oracle.py`, `tests/purge/test_content_fingerprints_shape.py`
+— `design.md` `#### MachineryRetirement` Phase R1's two named relocations —
+and `tests/purge/test_provenance_record.py`, a third relocation this task
+identified beyond the two `design.md` names, moved to `tests/test_content_oracle.py`,
+`tests/test_content_fingerprints_shape.py` and `tests/test_provenance_record.py`
+by `git mv` in this same task. The first two move because their subjects,
+`tests/_content_oracle.py` and `tests/_content_fingerprints.py`, are
+retained guards (Req 12.2) with no remaining tie to the deleted machinery.
+The third moves for the same reason under a different name: its subject is
+this document's own required-heading-and-body skeleton, and this document's
+survival is commanded, not merely convenient — Req 12.3 ("the retirement
+shall retain the provenance record ... and shall remove no record
+Requirement 4 or Requirement 9 requires") and Req 9.1 (the repository shall
+contain it). `tests/purge/test_provenance_record.py` was not in `design.md`'s
+named relocation pair and is not named in `tasks.md`'s deletion list either;
+it was never in either list's field of view. Deleting it alongside
+`tests/purge/` — as an earlier version of this task did — would have removed
+the repository's only automated pin over a document Req 12.3 requires kept,
+which Req 12.1's "every deleted module has planning, executing or verifying
+the history operation as its only purpose" does not license, because
+verifying a permanently-retained deliverable is not verifying the history
+operation. All three relocated modules were re-run after the move with a
+recorded single-line mutation to their subject — `tests/_content_oracle.py`'s
+`tokens()` body replaced with `return []`, `tests/_content_fingerprints.py`'s
+`ENTROPY_FLOOR_BITS` changed from `96.0` to `50.0`, and
+`docs/reference/history-rewrites.md` itself truncated to 0 bytes — observed
+red, then reverted and confirmed green, so the move did not silence any of
+the three. The extended `_REQUIRED_HEADINGS` tuple in the relocated
+`tests/test_provenance_record.py` (§1 through §8, now including this
+section) is task 9.3's own mechanical pin over its own Observable ("section
+8 is populated"); deleting only this section's heading, leaving the
+document otherwise intact, was also re-run and observed red, then reverted
+and confirmed green.
+
+`tests/test_forbidden_strings_source.py` — the source-liveness test module —
+is also deleted by this task. Its deletion is not authorized by any
+delegation in `tasks.md`'s execution rules (there is none); the source is
+`design.md`, which states "the enumerated deletion list in the tasks phase
+**is** the 12.1 position", and, for this module specifically, task 7.2's own
+body: "The source-liveness module sits outside the Component → file map's
+lists; it is claimed here and deleted at 9.3 under the deletion list the
+design delegates to this plan" — task 7.2 re-scoped the module's era signal
+and claimed its eventual deletion at the same time. Its subject was
+verifying, via `git log --all -S<value>`, that this repository's own history
+still carried each `token`-category match-data value before the
+replacement, and that no such value could be found in history after the
+replacement (the module's own docstring, before deletion, stated this as the
+"liveness check for task 2.3's real, assembled source"). That subject cannot
+exist after the replacement: the replacement produced a repository carrying
+exactly one commit, and every commit since descends from that root, so
+`git log --all -S<value>` has, by construction, no pre-replacement tree to
+search, and the module's own pre-replacement/post-replacement
+posture distinction — the entire reason it existed — has nothing left to
+distinguish. The loss this retirement declares (Req 12.4) is stated in full
+below, not left to be inferred from the deletion.
+
+Two modules' *contents* — not the modules themselves — moved into surviving
+guards before this task ran, at task 7.2 (`design.md`
+`#### MachineryRetirement` Phase R0): the `_whitespace_tolerant_pattern`
+helper and the notice/mark tip guard — its word-tuple constants, its
+wrap-tolerant separator pattern, and its independent survivor counter —
+moved out of `scripts/purge/replacements.py` and
+`tests/purge/test_replacements.py` into `tests/_forbidden_strings.py` and
+`tests/test_forbidden_strings.py` before `replacements.py` and
+`test_replacements.py` were deleted here. Both source modules — the
+retiring rules module and its test module — are themselves counted in this
+task's own deletion count above: task 7.2 moved only these two named pieces
+out of them, and everything each module still held afterward (the
+six-invariant rule generator and its adjacency oracles, among the rest) was
+this task's to delete, not to re-home.
+
+**What each surviving guard still detects (Req 12.2).** `tests/_forbidden_strings.py`
+paired with `tests/test_forbidden_strings.py` scans every tracked file's
+working-tree content and path name for a supplied match-data value (token or
+removed-path fragment), detecting a returning identifying token or a
+returning removed-path fragment, opt-in through `FITDOCS_FORBIDDEN_STRINGS` —
+gated on the maintainer supplying the match-data source, and skipped, named,
+when it is not. The notice/mark tip guard re-homed into the same modules at
+task 7.2 is a separate, **ungated** test: measured directly
+(`uv run pytest tests/test_forbidden_strings.py::test_the_notice_phrase_and_mark_are_absent_from_every_tracked_file`
+with `FITDOCS_FORBIDDEN_STRINGS` unset), it passes rather than skips,
+detecting a returning copyright-notice/trademark phrase anywhere in the
+tracked tree regardless of whether the maintainer has supplied anything —
+ungatedness is one of the three properties `design.md`'s Phase R0 named as
+having to survive the move intact, and this is that survival, measured
+fresh on the post-retirement tree. `tests/_content_oracle.py`
+paired with the relocated `tests/test_content_oracle.py` still tokenises,
+canonicalises, windows, salted-digests, and scans arbitrary text for a
+reproduced numeric value, independent of any purge module. `tests/_content_fingerprints.py`
+paired with the relocated `tests/test_content_fingerprints_shape.py` still
+pins that the one-shot-generated fingerprint and window-length data has not
+been truncated or emptied. `tests/load/test_packaging.py` still runs the
+value oracle over two real surfaces — every shipped `.py` source under
+`src/fitdocs`, and the content of every regular member of the built sdist —
+detecting a reproduced numeric table shipped in a package artifact. The
+**wheel** is guarded differently, and this record states the difference rather
+than implying a scan that does not run: `test_wheel_contains_no_stray_data_or_module_under_load`
+inspects member *names* and asserts the `fitdocs/load/` module allowlist by
+equality, detecting a reintroduced methodology module under any name. It runs
+no oracle content scan over wheel members, and that module's own docstring
+records the wheel content scan as retired. `tests/test_docs_guarantees.py` still
+pins two shipped-documentation guarantee sentences against the concatenated
+markdown corpus, independent of the purge — this module's own docstring
+identifies them as the *inbox* spec's Req 6.6 (no configuration ever
+deletes an inbox file) and Req 8.2 (fitdocs performs no watching or
+scheduling of any kind); the bare numbers belong to that spec, not to
+`encumbered-content-purge`, whose own Req 6.6 and Req 8.2 are unrelated
+(quiescence and the fresh-clone criterion, respectively), and are qualified
+here to keep this durable record from resolving to the wrong requirements.
+This task re-ran the two Req 12.2 relocated modules' own recorded
+single-line mutation against their subject module after the move —
+`tests/_content_oracle.py`'s
+`tokens()` mutation above, and `tests/_content_fingerprints.py`'s
+`ENTROPY_FLOOR_BITS` mutation above — observed red, then reverted and
+confirmed green. Re-running every other surviving guard's own recorded
+mutation on the post-retirement tree, per guard, is task 9.4's job (`tasks.md`,
+"Prove every surviving guard still fails, then destroy the scratch") and has
+not run as of this commit.
+
+**Verification capability given up (Req 12.4), stated rather than left
+implicit.** This retirement removes the fitdocs repository's own ability to:
+
+- Scan the full reachable history — every blob and path across every ref
+  (`scripts/purge/plan.py::enumerate_blob_ids`, walking
+  `git rev-list --objects --all`, and `scripts/purge/replacements.py`'s own
+  `(blob_id, path)` enumeration over the same command) and every commit
+  message (`scripts/purge/verify.py`, via `git log --all --format=%B`) — for
+  a returning token, value, or removed path. No surviving module reads
+  unreachable or historical blob or commit-message content; every surviving
+  guard is scoped to the current tracked working tree.
+- Halt a purge run when the working tree or the object database is not
+  quiescent (`scripts/purge/preflight.py`'s quiescence gate). No surviving
+  module checks for a peer branch, a peer worktree, or an in-progress git
+  operation before anything runs, because nothing in the surviving guard set
+  performs a destructive operation that quiescence exists to protect.
+- Build or compare a tree manifest, or compare the repository's state against
+  a captured spec-status baseline, across a rewrite or replacement
+  (`scripts/purge/manifest.py`). The tree-identity check that superseded it
+  (`scripts/purge/verify.py::check_tree_identity`) is itself deleted with the
+  rest of `verify.py`; no surviving module re-derives or re-checks that
+  identity after this task lands.
+- Probe a remote's identifier surface — whether a given commit or blob id
+  still resolves against a named repository over the network
+  (`scripts/purge/verify.py::probe_identifier`, `compare_refs`, and the
+  retention-probe callers in `scripts/purge/verify.py`). Requirement 8's
+  "standing duty" (§7 above) that `fitdocs_oss` remain private is now an
+  obligation this document records, not a capability this repository can
+  re-check by running anything.
+- Repair a stale SHA-shaped prose pin to the replacement's epoch value, or
+  verify that a repair was applied correctly and completely
+  (`scripts/purge/pins.py`). A future stale pin — one written or missed after
+  this retirement — has no remaining tool to find or fix it mechanically.
+- Generate a `--replace-text` rule set from the six identity-erasure
+  invariants and their adjacency oracles (`scripts/purge/replacements.py::build_rules`
+  and the invariant-checking functions `tests/purge/test_replacements.py`
+  pinned). The rules a rule set of that shape would need to guard against
+  cannot be regenerated or re-validated against those invariants; only the
+  narrower notice/mark tip guard re-homed at task 7.2 (see above) survives
+  from that module.
+- Confirm, from inside this repository, that a specific match-data value was
+  ever actually present in this repository's history before the replacement,
+  or that it is genuinely absent from history after the replacement —
+  `tests/test_forbidden_strings_source.py`'s subject, deleted above. What the
+  surviving guards check instead is narrower: that the *supplied* match-data
+  source is non-empty at all (`tests/_forbidden_strings.py`'s
+  `ForbiddenStrings.__post_init__`, which rejects an empty `values` tuple with
+  no notion of category), and that the *current tracked tree* is clean of
+  it. Neither surviving check says anything about this repository's history,
+  reachable or not.
+- Confirm the supplied match-data source still holds a non-empty `token`
+  category *and* a non-empty `path` category separately, each above a
+  recorded count floor — `tests/test_forbidden_strings_source.py`'s own
+  `test_forbidden_string_source_is_live_when_supplied`, built on that
+  module's private `_categorized_entries`, was the only check that *asserted*
+  the source's `<category><TAB><value>` structure.
+  `tests/_forbidden_strings.py`'s
+  loader (`_parse`, used by every surviving guard) discards the category
+  prefix on read and never reconstructs it, so no surviving module can tell
+  a source that has silently lost every `path`-category entry, while keeping
+  enough `token`-category entries to stay non-empty overall, from one that
+  has not.
+
+Each of these was a capability built for an operation — the in-place rewrite
+or the fresh-root replacement — that can no longer recur: the replacement
+already ran (§3 above), and Decision 7 forbids repeating it in place.
+Retaining tooling to re-verify an operation that cannot happen again would be
+exactly the false confidence Requirement 12 exists to prevent.
+
+**Type-checking perimeter.** `pyproject.toml`'s `[tool.mypy].files` list drops
+`"scripts"` and `"tests/purge"` in this same change and gains
+`"tests/test_content_oracle.py"`, `"tests/test_content_fingerprints_shape.py"`
+and `"tests/test_provenance_record.py"` at their new paths, so all three
+relocated modules stay in the checked perimeter; `"tests/test_forbidden_strings_source.py"`
+is removed with the module it named. Every other entry in that list is
+unchanged. Measured this task: the checked perimeter drops from 115 files
+to 82 immediately after the deletion, then rises to 83 once
+`"tests/test_provenance_record.py"` is added back for the relocation.
+
 ## Evasion-acceptance results (task 2.4)
 
 On 2026-08-01, before task 3.1 deleted the material, the purge ran a

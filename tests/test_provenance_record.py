@@ -13,16 +13,32 @@ proposition, not per sentence"), because no mechanical check can decide the
 truth of prose. A later reader must not mistake a green run of this module
 for a content guarantee.
 
+Relocated from `tests/purge/test_provenance_record.py` to `tests/` at task
+9.3, alongside the two named relocations design.md `#### MachineryRetirement`
+Phase R1 lists. This module's subject -- the provenance record itself -- is
+not that named pair, but its survival is commanded independently of them:
+Req 12.3 ("the retirement shall retain the provenance record ... and shall
+remove no record Requirement 4 or Requirement 9 requires") and Req 9.1 (the
+fitdocs repository shall contain it). Task 9.3's delegation to `tasks.md`'s
+enumerated deletion list is conditional, not blanket -- "every deleted
+module has planning, executing or verifying the history operation as its
+only purpose" -- and this module's only purpose is verifying a
+permanently-retained deliverable, which fails that condition. This module is
+not named in either `design.md` or `tasks.md`'s deletion or relocation
+lists; it was never in the deletion set's field of view, not a deliberate
+omission from it.
+
 The required headings enumerated below are exactly `design.md`'s
-`ProvenanceRecord` section list, minus §8: §1, §2, §3, §4, §5, §6 and §7. §3 (the
-history replacement's own record) and §7 (the remote measurement) are new in
-this tuple: neither heading existed in the document, or in this tuple,
-before task 9.2 (2026-08-23) wrote them. §6 (the remaining stated positions)
-was already present, both as a heading in the document and in this tuple --
-task 9.2 completed its body, which the document's first commit left for
-"part two adds the remainder"; the heading itself is unchanged. §8 (the
-retirement) is task 9.3's, still absent from this tuple because that task
-has not run. The task's
+`ProvenanceRecord` section list, all eight: §1 through §8. §3 (the
+history replacement's own record) and §7 (the remote measurement) became
+required in this tuple before §8: neither heading existed in the document,
+or in this tuple, before task 9.2 (2026-08-23) wrote them. §6 (the remaining
+stated positions) was already present, both as a heading in the document and
+in this tuple -- task 9.2 completed its body, which the document's first
+commit left for "part two adds the remainder"; the heading itself is
+unchanged. §8 (the retirement) is task 9.3's own Observable ("section 8 is
+populated") and is now required in this tuple, because that task has run.
+The task's
 own `_Boundary: ProvenanceRecord_` covers a document with no module in the
 Component-to-file map, so this test -- not a script under `scripts/purge/`
 -- is the only tooling that owns it.
@@ -46,7 +62,7 @@ from pathlib import Path
 
 from markdown_it import MarkdownIt
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = Path(__file__).resolve().parents[1]
 _DOC_PATH = _REPO_ROOT / "docs" / "reference" / "history-rewrites.md"
 
 _REQUIRED_HEADINGS = (
@@ -57,6 +73,7 @@ _REQUIRED_HEADINGS = (
     "## 5. What detection was given up",
     "## 6. Stated positions (part two adds the remainder)",
     "## 7. The remote",
+    "## 8. Retirement of the replacement machinery",
 )
 
 _MD = MarkdownIt("commonmark")
@@ -111,11 +128,11 @@ def test_provenance_record_exists() -> None:
 
 
 def test_provenance_record_has_every_required_section_heading() -> None:
-    """`design.md`'s `ProvenanceRecord` section list, minus §8 (the
-    retirement, task 9.3's, not yet written): §1 through §7 must each be
-    present as a literal Markdown H2 heading outside any fenced code block.
-    §3, §6 and §7 were added or completed by task 9.2 (2026-08-23); §1, §2,
-    §4 and §5 stood since the document's first commit.
+    """`design.md`'s `ProvenanceRecord` section list, all eight: §1 through
+    §8 must each be present as a literal Markdown H2 heading outside any
+    fenced code block. §3, §6 and §7 were added or completed by task 9.2
+    (2026-08-23); §8 was added by task 9.3 (2026-08-23); §1, §2, §4 and §5
+    stood since the document's first commit.
     """
     text = _DOC_PATH.read_text(encoding="utf-8")
     found_headings = _h2_headings(text)
@@ -130,11 +147,12 @@ def test_provenance_record_has_every_required_section_heading() -> None:
 
 def test_required_sections_have_body_content() -> None:
     """`tasks.md`'s observable for task 9.2 ("the three sections are
-    populated") is pinned here alongside the original four: each of the
-    seven required sections must have some non-whitespace text between its
-    heading and the next literal heading.
+    populated") and task 9.3 ("section 8 is populated") are pinned here
+    alongside the original four: each of the eight required sections must
+    have some non-whitespace text between its heading and the next literal
+    heading.
 
-    A document reduced to the seven bare headings with every body deleted
+    A document reduced to the eight bare headings with every body deleted
     would still pass the heading-presence check above; this assertion is
     what reds on that mutation.
     """
@@ -183,17 +201,16 @@ def test_required_headings_tuple_is_non_empty() -> None:
     This assertion is what keeps that mutation visible -- it reds directly
     on an emptied tuple rather than relying on a loop above to notice.
     """
-    assert len(_REQUIRED_HEADINGS) == 7
+    assert len(_REQUIRED_HEADINGS) == 8
 
 
-def test_required_headings_tuple_has_the_seven_distinct_headings() -> None:
-    """Cardinality alone (`len(...) == 7`) does not pin identity: a tuple of
-    seven copies of the same heading also has length 7, and would make the
-    walk above check §1 seven times while never checking §2 through §7.
-    This compares the tuple's actual contents against the seven literal
-    headings design.md's ProvenanceRecord section list names (less §8, not
-    yet written), so that degenerate case reds here instead of passing
-    silently.
+def test_required_headings_tuple_has_the_eight_distinct_headings() -> None:
+    """Cardinality alone (`len(...) == 8`) does not pin identity: a tuple of
+    eight copies of the same heading also has length 8, and would make the
+    walk above check §1 eight times while never checking §2 through §8.
+    This compares the tuple's actual contents against the eight literal
+    headings design.md's ProvenanceRecord section list names, so that
+    degenerate case reds here instead of passing silently.
     """
     assert _REQUIRED_HEADINGS == (
         "## 1. What was removed, when, why, and by which spec",
@@ -203,6 +220,7 @@ def test_required_headings_tuple_has_the_seven_distinct_headings() -> None:
         "## 5. What detection was given up",
         "## 6. Stated positions (part two adds the remainder)",
         "## 7. The remote",
+        "## 8. Retirement of the replacement machinery",
     )
 
 

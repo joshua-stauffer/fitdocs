@@ -1795,7 +1795,7 @@ written literally below is one of those.
   - _Depends: 9.1_
   - _Boundary: ProvenanceRecord_
 
-- [ ] 9.3 Retire the machinery
+- [x] 9.3 Retire the machinery
   - After the replacement is verified and before the repository is made
     public, as its own ritual change on the new history — never riding the
     replacement itself

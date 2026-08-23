@@ -1041,16 +1041,29 @@ def test_standing_guard_scans_tracked_content_and_path_names() -> None:
     # ls-files -z ... src` (dropping .kiro/ -- the Implementation Notes'
     # own load-bearing case) or `[...][:1]` (one file) both leave `files`
     # non-empty, so `assert files` alone does not catch a narrowed walk.
-    # `.kiro/` and `tests/purge/` are both real, permanently-tracked
+    # `.kiro/`, `src/` and `tests/` are all real, permanently-tracked
     # directories independent of anything this task's own diff touches.
+    # `tests/purge/` served the third role until encumbered-content-purge
+    # task 9.3 deleted it (design.md `#### MachineryRetirement`); `tests/`
+    # itself replaces it here as the third coverage pin, because a walk
+    # that narrows away the entire `tests/` tree -- `git ls-files -z src
+    # .kiro docs` -- leaves this guard's own helpers and match-data loader
+    # unscanned and would report a false clean about the guards' own home;
+    # `src/` alone does not defeat that narrowing.
     assert any(rel.startswith(".kiro/") for rel in scanned_relative), (
         "the tracked-file walk covers no .kiro/ path -- this repository's "
         "token-bearing prose lives there (Implementation Notes), so a walk "
         "that silently narrowed away from it would report a false clean"
     )
-    assert any(rel.startswith("tests/purge/") for rel in scanned_relative), (
-        "the tracked-file walk covers no tests/purge/ path -- a narrowed "
-        "walk excluding it would report a false clean"
+    assert any(rel.startswith("src/") for rel in scanned_relative), (
+        "the tracked-file walk covers no src/ path -- a narrowed walk "
+        "excluding it would report a false clean"
+    )
+    assert any(rel.startswith("tests/") for rel in scanned_relative), (
+        "the tracked-file walk covers no tests/ path -- this guard's own "
+        "helpers and match-data loader live there, so a walk that "
+        "narrowed away the entire tests/ tree would report a false clean "
+        "about the guards' own home"
     )
 
     hits, unreadable = _scan_content_and_path(files, repo_root, forbidden_strings)

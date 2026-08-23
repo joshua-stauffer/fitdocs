@@ -59,13 +59,13 @@ strict = true
 # the Definition of Done red for every other change in flight.
 files = [
     "src",
-    "scripts",
-    "tests/purge",
     "tests/_content_oracle.py",
     "tests/_content_fingerprints.py",
+    "tests/test_content_oracle.py",
+    "tests/test_content_fingerprints_shape.py",
+    "tests/test_provenance_record.py",
     "tests/_forbidden_strings.py",
     "tests/test_forbidden_strings.py",
-    "tests/test_forbidden_strings_source.py",
     "tests/test_citation.py",
     "tests/load/conftest.py",
     "tests/load/test_types.py",
