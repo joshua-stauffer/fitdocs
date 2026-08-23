@@ -88,16 +88,17 @@ notice, the reserved-rights phrase, or the trademark sentence survived the
 rewrite with only the identity redacted. The maintainer's 2026-08-12 decision
 was that the notice text itself had to go, not merely the name inside it.
 
-It went. Measured on `HEAD` at triage time:
+It went. Measured on `HEAD` at triage time, driving the search from the
+notice's own wording rather than reproducing it here (Req 11.4 binds this file
+too, and the standing guard
+`tests/test_forbidden_strings.py::test_the_notice_phrase_and_mark_are_absent_from_every_tracked_file`
+reds on a tracked file that spells it out):
 
-```
-$ git grep -In -i "all rights reserved" -- .
-(no output, exit 1)
-
-$ git grep -In -i "trademarks of" -- .
-(hits only inside .kiro/queue/*.md, which describe the problem in generic
- terms and name nobody)
-```
+- a case-insensitive `git grep` for the notice's reserved-rights phrase over
+  all tracked files returned **no hits** (exit 1)
+- the same search for the trademark sentence returned hits only inside
+  `.kiro/queue/*.md`, which describe the problem in generic terms and name
+  nobody
 
 Zero surviving notice sites, zero surviving reserved-rights fragments, zero
 surviving trademark sentences in tracked files. The 42 notice sites and 16
