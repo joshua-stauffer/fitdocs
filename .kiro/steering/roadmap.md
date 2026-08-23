@@ -895,7 +895,30 @@ the encumbered blobs, which is the thing this phase exists to prevent).
 
 #### Specs (dependency order)
 
-- [ ] encumbered-content-purge — delete the withdrawn methodology's writeup
+- [x] encumbered-content-purge — **done 2026-08-23** (all 57 checklist items;
+  merged to `main` at `87ce085`). The history was replaced rather than pruned
+  in place: a fresh root commit, `c3d2201`, now carries the certified tree, and
+  no pre-replacement commit identifier resolves against it or ever will — there
+  is no mapping by construction. The durable account is
+  `docs/reference/history-rewrites.md`; the epoch-pin convention it forces on
+  queue items is documented in `.kiro/queue/README.md`.
+
+  **What a later session must know.** The one-shot tooling (`scripts/purge/`
+  entire, `tests/purge/` less three relocations) was deleted at task 9.3 and
+  the operation is **not repeatable** — do not file or act on defects in it.
+  Three guards survive and are live: `tests/_forbidden_strings.py`,
+  `tests/test_forbidden_strings.py` and `tests/_content_oracle.py` (with their
+  test modules). Req 11.4 is verified satisfied on the tip: a case-insensitive
+  search for the notice's reserved-rights phrase over all tracked files returns
+  no hits. Two release gates remain open and belong to `distribution`, not
+  here: the sdist member allowlist and the `agent-log` symlink that ships in
+  the sdist.
+
+  Post-completion queue triage on 2026-08-23 closed 56 of the 85
+  purge-related items (199 open -> 141) — see
+  `.kiro/queue/closed/2026-08-23-forty-five-queue-items-cite-the-retired-purge-machinery.md`.
+
+  Original scope: delete the withdrawn methodology's writeup
   and its two extracted tables from the working tree and from git history;
   erase the third party's identity from the tracked record; re-base the two
   guards that read them onto an oracle that outlives them; move the retention

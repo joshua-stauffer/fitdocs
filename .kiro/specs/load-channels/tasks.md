@@ -416,6 +416,17 @@ is what makes them safe to run concurrently despite overlapping names.
   - Reproduce the published training-impulse worked example through the shipped
     metric the heart-rate channel consumes, and the published pace-load
     formulation, each recording its source
+  - **TRAP — do not pin B91's printed worked examples as vectors.** Banister
+    1991 prints three worked training-impulse examples in the Fig. 9.5 / 9.6
+    captions (pp. 409-410). **None of the three satisfies the equation printed
+    one page earlier**, and the third is not even internally consistent with
+    itself. Quoting them produces a test that disagrees with the shipped metric
+    by 8% to 370% depending on the row — with an impeccable citation, so review
+    by reading will pass it. `docs/reference/banister-trimp-primary-sources.md`
+    § D4 carries the full table and the standing ruling: *any worked example
+    fitdocs ships must be computed from the formula and labelled as such*, never
+    transcribed from a caption. Queue item
+    `2026-07-27-banister-figure-captions-unusable-as-vectors`
   - Assert the threshold identity across all three channels in one place: one
     hour held exactly at threshold scores exactly 100 for each, with an
     intensity of exactly 1.0. This is deliberately only half the scale

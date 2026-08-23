@@ -1,5 +1,32 @@
 # Brief: threshold-load
 
+> **Amendment 1 (2026-08-23) — the withdrawn calculator no longer exists.**
+> This brief was written while a second built-in calculator was registered
+> alongside `threshold`. training-load Amendment 2 withdrew that methodology
+> and `6386361` deleted its package outright; `src/fitdocs/load/registry.py:15`
+> now states that importing `fitdocs.load` "registers no built-in calculator of
+> its own (Req 13.2)", and a full-archive run on 2026-08-23 reported training
+> load `Unsupported` for all 2478 documents because **zero** calculators are
+> registered.
+>
+> `threshold` is therefore the first and only built-in calculator, not the
+> second. Four consequences for anyone implementing this spec:
+>
+> 1. There is no arbitration contest to win. The registration-order accident
+>    described under *Current State* was real when written and was fixed by the
+>    training-load contract update; with one calculator it cannot arise at all.
+> 2. Nothing is "registered alongside" anything. Registration is this spec's
+>    own single `register()` call.
+> 3. The `threshold` vs `withdrawn` choice under *Out of Boundary* has no
+>    second operand. Engine arbitration still owns calculator selection, and
+>    still matters for future plugins — it is simply not exercised today.
+> 4. Shipping `threshold` is what makes training load computable at all. Until
+>    it lands, every rendered document honestly reports unsupported.
+>
+> The claims below are left as written, per the retain-the-record convention;
+> read them against this note. Corrected under queue item
+> `2026-08-04-present-tense-claims-about-removed-material-survive-redaction`.
+
 ## Problem
 
 fitdocs needs one training-load number per activity that means the same thing
@@ -27,7 +54,7 @@ channel you hardcode, real activities exist that it cannot score.
 Protocol, an id-addressed registry with validation and per-plugin failure
 isolation, an athlete profile with a declaration-driven prompt flow, an engine
 that walks documents and writes results, and the withdrawn methodology's
-implementation.
+implementation. *(Amendment 1: that implementation is deleted.)*
 
 Two things block a multi-channel calculator. `LoadResult` carries exactly one
 `points` value with no room for the non-selected channels or their reasons.
@@ -63,7 +90,9 @@ research found the fixed `Power > Pace > HR` ordering was only a 1-2 split
 vote. Fallback walks the configured order and takes the first channel that
 cleared its sufficiency gate.
 
-The withdrawn calculator stays registered and untouched. Which calculator runs is settled by the
+The withdrawn calculator stays registered and untouched. *(Amendment 1: it does
+not — it is deleted, and `threshold` is the only calculator.)* Which calculator
+runs is settled by the
 configured default plus `--calculator`, per the arbitration decision — not by
 this spec.
 
@@ -73,7 +102,7 @@ this spec.
   its validation; the fallback walk; assembling the selected value plus
   diagnostics into the widened result; declared `AthleteField`s for the
   benchmarks it needs; the modality support set; registration alongside the
-  withdrawn calculator.
+  withdrawn calculator *(Amendment 1: plain registration; there is no sibling)*.
 - **Out**: the channel math itself (load-channels); the result contract, the
   document payload and rendering (the training-load update); the benchmark
   store (athlete-benchmarks); the QA flags (activity-qa-flags); any fusion,
@@ -105,10 +134,10 @@ this spec.
 ## Existing Spec Touchpoints
 
 - **Extends**: training-load — registers a second built-in calculator into its
-  registry and consumes its redefined contract. The withdrawn calculator is not
-  replaced or deprecated; it is expected to be *adapted* to the new result
-  shape as the single-channel case of it, which is that spec's work, not this
-  one's.
+  registry and consumes its redefined contract. *(Amendment 1: the paragraph that followed
+  said the withdrawn calculator would be adapted to the new result shape rather
+  than replaced or deprecated. It was deleted instead, so no adaptation is owed
+  by any spec.)*
 - **Adjacent**: plugin-api — `threshold` is a built-in, so `fitdocs plugins`
   must report its version as the fitdocs version, and it must pass the same
   `validate_calculator` gate as any third-party plugin. It should not need
