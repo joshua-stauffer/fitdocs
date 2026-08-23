@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, scripts/purge/rewrite.py
 created: 2026-08-09
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.2 rule generation, after 6.3 landed)
-pinned_at: 3cfe28e
+pinned_at: c3d2201
 resume_command: "do: Build the 7.2 replacement-rule generator as a tested module with the six invariants below as its acceptance tests, then regenerate the rules and bring the table for approval. Do not hand-edit rules.json -- that is what oscillated."
 context:
   - .kiro/specs/encumbered-content-purge/tasks.md

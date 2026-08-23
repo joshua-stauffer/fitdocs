@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge
 created: 2026-08-03
 surfaced_by: /kiro-impl encumbered-content-purge (task 3.4, reviewer rounds 3-6)
-pinned_at: 9d8ef1c
+pinned_at: c3d2201
 resume_command: "/kiro-spec-design encumbered-content-purge [queue: .kiro/queue/2026-08-03-purge-design-provenance-section-stale.md] Reconcile design.md's ProvenanceRecord and destroyed-artifact enumerations with tasks.md's 2026-08-03 corrections"
 context:
   - .kiro/specs/encumbered-content-purge/design.md

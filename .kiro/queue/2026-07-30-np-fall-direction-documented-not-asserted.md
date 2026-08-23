@@ -9,7 +9,7 @@ kind: gap
 area: fit-ingest, tests/metrics/test_power.py
 created: 2026-07-30
 surfaced_by: adversarial review of spec/fit-ingest-np-window-criterion (queue-tier1 batch)
-pinned_at: 9004329
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-30-np-fall-direction-documented-not-asserted.md] Assert the falling NP direction in test_normalized_power_exact_value_pins_fourth_power_exponent by recomputing the partial-window value live, matching _pre_amendment_partial_window_np"
 context:
   - tests/metrics/test_power.py

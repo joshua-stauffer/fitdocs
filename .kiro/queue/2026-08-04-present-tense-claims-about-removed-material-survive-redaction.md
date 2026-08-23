@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge, distribution, threshold-load
 created: 2026-08-04
 surfaced_by: /kiro-impl encumbered-content-purge (tasks 3.6-3.8 reviews)
-pinned_at: 34b4164
+pinned_at: c3d2201
 resume_command: "/kiro-impl encumbered-content-purge [queue: .kiro/queue/2026-08-04-present-tense-claims-about-removed-material-survive-redaction.md] Past-tense the surviving claims about the removed material"
 context:
   - .kiro/specs/encumbered-content-purge/brief.md

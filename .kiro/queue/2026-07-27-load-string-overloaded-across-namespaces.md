@@ -9,7 +9,7 @@ kind: inconsistency
 area: training-load, src/fitdocs/contract.py, src/fitdocs/cli.py, tests/load/test_settings.py
 created: 2026-07-27
 surfaced_by: adversarial review of impl/load-second-reader (queue sweep 2026-07-27)
-pinned_at: 80cc5c5
+pinned_at: c3d2201
 resume_command: "do: decide whether the three `load` namespaces need distinguishable spellings — the `[load]` settings table (src/fitdocs/load/settings.py:57 LOAD_TABLE), the rendered document region (src/fitdocs/contract.py:284 LOAD_REGION) and the CLI command (src/fitdocs/cli.py:376) — or whether the literal-key guards in tests/load/test_settings.py must instead resolve which namespace a literal belongs to [queue: .kiro/queue/2026-07-27-load-string-overloaded-across-namespaces.md]"
 context:
   - src/fitdocs/contract.py

@@ -9,7 +9,7 @@ kind: gap
 area: training-load, load-channels, threshold-load, activity-qa-flags, tests/
 created: 2026-07-26
 surfaced_by: /kiro-validate-impl training-load
-pinned_at: 3121bb6
+pinned_at: c3d2201
 resume_command: "do: Audit the repo for Protocol-purity guards built on dir() and switch each to the union of dir() and __annotations__ walked over __mro__, as tests/load/test_types.py now does"
 context:
   - tests/load/test_types.py

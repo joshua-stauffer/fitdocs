@@ -9,7 +9,7 @@ kind: docs
 area: athlete-benchmarks, docs/, tests/test_contributing_calculators_doc.py
 created: 2026-07-26
 surfaced_by: /kiro-impl athlete-benchmarks (task 4.1 round-2 reviewer, control mutation)
-pinned_at: 9a22c87
+pinned_at: c3d2201
 resume_command: "do: extend the contributing guide's worked calculator example to consume ProfileView.benchmark and .has_benchmark, so tests/test_contributing_calculators_doc.py type-checks both new members [queue: .kiro/queue/2026-07-26-contributing-example-omits-benchmark-queries.md]"
 context:
   - tests/test_contributing_calculators_doc.py

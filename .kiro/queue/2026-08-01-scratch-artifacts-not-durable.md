@@ -9,7 +9,7 @@ kind: risk
 area: encumbered-content-purge, scripts/purge
 created: 2026-08-01
 surfaced_by: /kiro-impl encumbered-content-purge (tasks 1 and 2.3 review)
-pinned_at: d835b7b
+pinned_at: c3d2201
 resume_command: "do: relocate the encumbered-content-purge scratch artifacts from $TMPDIR to a durable path outside the repository, and update the agent-log NOTE recording their location"
 context:
   - .kiro/specs/encumbered-content-purge/tasks.md

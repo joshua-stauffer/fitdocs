@@ -9,7 +9,7 @@ kind: gap
 area: fit-ingest, tests/metrics/test_aggregates.py, src/fitdocs/metrics/aggregates.py
 created: 2026-07-30
 surfaced_by: /kiro-impl fit-ingest (task 12.2, reviewer follow-up round 1)
-pinned_at: 2d69443
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-30-moving-time-two-sample-minimum-untested.md] Add a behavioural test for the two-sample minimum in _derive_moving_time_s"
 context:
   - src/fitdocs/metrics/aggregates.py

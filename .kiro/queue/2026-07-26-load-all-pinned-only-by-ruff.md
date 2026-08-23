@@ -9,7 +9,7 @@ kind: gap
 area: plugin-api, tests/test_public_api.py, src/fitdocs/load/__init__.py
 created: 2026-07-26
 surfaced_by: /kiro-impl athlete-benchmarks (task 4.1, both review rounds independently)
-pinned_at: 9a22c87
+pinned_at: c3d2201
 resume_command: "do: decide whether tests/test_public_api.py should assert fitdocs.load.__all__ membership for the enumerated plugin-surface names, rather than leaving it to ruff F401 [queue: .kiro/queue/2026-07-26-load-all-pinned-only-by-ruff.md]"
 context:
   - tests/test_public_api.py

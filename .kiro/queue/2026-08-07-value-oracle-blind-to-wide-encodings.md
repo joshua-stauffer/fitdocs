@@ -9,7 +9,7 @@ kind: gap
 area: tests/_content_oracle.py, encumbered-content-purge
 created: 2026-08-07
 surfaced_by: /kiro-impl encumbered-content-purge (task 4.1 review)
-pinned_at: 7d49c84
+pinned_at: c3d2201
 resume_command: "do: Decide whether the value oracle should decode candidate blobs from wide encodings before fingerprinting, or whether that evasion is accepted and stated at the oracle site."
 context:
   - tests/_content_oracle.py

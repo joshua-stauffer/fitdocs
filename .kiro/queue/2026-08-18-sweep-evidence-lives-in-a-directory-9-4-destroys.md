@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, docs/reference/history-rewrites.md
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.2)
-pinned_at: dac1a7a
+pinned_at: c3d2201
 resume_command: "do: decide whether task 7.2's sweep-7-2-era-signal.md is evidence Req 12.3 retains or scratch 9.4 destroys, and either fold its conclusions into the provenance record or state explicitly that it is scratch"
 context:
   - .kiro/specs/encumbered-content-purge/tasks.md

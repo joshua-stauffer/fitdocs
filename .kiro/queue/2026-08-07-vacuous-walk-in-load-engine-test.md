@@ -9,7 +9,7 @@ kind: bug
 area: tests/load/test_engine.py
 created: 2026-08-07
 surfaced_by: /kiro-impl encumbered-content-purge (task 3.11 review)
-pinned_at: 7d49c84
+pinned_at: c3d2201
 resume_command: "do: Fix the zero-iteration loop in tests/load/test_engine.py's superseded-result test so its two assertions execute, then confirm each can fail by mutation."
 context:
   - tests/load/test_engine.py

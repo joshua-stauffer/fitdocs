@@ -9,7 +9,7 @@ kind: gap
 area: steering, conftest.py, .kiro/steering/change-protocol.md
 created: 2026-08-07
 surfaced_by: /kiro-impl encumbered-content-purge (task 5.1 review)
-pinned_at: 7d49c84
+pinned_at: c3d2201
 resume_command: "do: Extend the root conftest.py's bytecode cache-proofing to cover scripts/ as well as src/, then confirm a single-character mutation under scripts/purge/ takes effect on a same-second revert without clearing __pycache__ by hand."
 context:
   - conftest.py

@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge, .kiro/specs/encumbered-content-purge/design.md
 created: 2026-08-07
 surfaced_by: /kiro-impl encumbered-content-purge (tasks 4.2, 5.2, 5.4 reviews)
-pinned_at: 7d49c84
+pinned_at: c3d2201
 resume_command: "do: Reconcile the four drifted design statements with what Majors 4 and 5 actually built -- the documentation guard's self-contradiction, the redaction plan's safe-to-retain claim, the Component-to-file map's omissions, and the provenance record's dangling citation."
 context:
   - .kiro/specs/encumbered-content-purge/design.md

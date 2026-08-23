@@ -9,7 +9,7 @@ kind: gap
 area: .kiro/steering/change-protocol.md, encumbered-content-purge
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.2, debug pass)
-pinned_at: dac1a7a
+pinned_at: c3d2201
 resume_command: "do: add the double-assertion anti-pattern to .kiro/steering/change-protocol.md's Fixture Discrimination named-anti-pattern list -- a test that installs a double must assert the double is in effect via an observation the undoubled call could not produce -- and cite the task 7.2 instance as the worked example"
 context:
   - .kiro/steering/change-protocol.md

@@ -9,7 +9,7 @@ kind: research
 area: tooling, .kiro/steering/change-protocol.md, tests/
 created: 2026-07-26
 surfaced_by: /kiro-queue — implementing 2026-07-26-stale-pyc-can-falsify-mutation-evidence
-pinned_at: 1727b0b
+pinned_at: c3d2201
 resume_command: "do: re-verify the subset of recorded discrimination evidence the stale-pyc hazard could have falsified — only claims whose mutation was SAME-SIZE and whose recorded result was 'stayed green' / 'does not discriminate', since that is the direction that yields a wrong conclusion rather than a visible failure. Re-run each under the now-cache-proof pytest and record the outcome [queue: .kiro/queue/2026-07-26-prior-mutation-evidence-predates-the-cache-fix.md]"
 context:
   - .kiro/steering/change-protocol.md

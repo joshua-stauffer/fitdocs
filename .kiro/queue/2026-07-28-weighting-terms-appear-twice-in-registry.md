@@ -9,7 +9,7 @@ kind: inconsistency
 area: fit-ingest, .kiro/specs/fit-ingest/design.md
 created: 2026-07-28
 surfaced_by: /kiro-spec-tasks fit-ingest -y
-pinned_at: 737550a
+pinned_at: c3d2201
 resume_command: "/kiro-validate-design fit-ingest [queue: .kiro/queue/2026-07-28-weighting-terms-appear-twice-in-registry.md] Reconcile the CONSTANT_SOURCES completeness assertion with the per-curve multiplicity of the weighting terms"
 context:
   - .kiro/specs/fit-ingest/design.md

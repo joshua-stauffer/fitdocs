@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, tests/purge/test_sweep.py
 created: 2026-08-09
 surfaced_by: /kiro-impl encumbered-content-purge (task 6.1 review, round 2)
-pinned_at: d6fe28f
+pinned_at: c3d2201
 resume_command: "do: Decide whether _MODIFIED_FILES_TABLE_SAMPLE in tests/purge/test_sweep.py should be re-populated with live token-bearing paths, replaced by a different coverage assertion, or retired with its weakness recorded."
 context:
   - tests/purge/test_sweep.py

@@ -37,7 +37,7 @@ kind: inconsistency
 area: fit-ingest, src/fitdocs/metrics/stress.py
 created: 2026-07-25
 surfaced_by: /kiro-validate-impl training-load
-pinned_at: 2a01dfd
+pinned_at: c3d2201
 resume_command: "/kiro-spec-requirements fit-ingest [queue: .kiro/queue/2026-07-25-trimp-coefficients.md] Re-source the Banister TRIMP coefficients from primary literature"
 context:
   - .kiro/specs/fit-ingest/design.md
@@ -74,10 +74,33 @@ first, what to check, what "done" looks like.>
 | `kind` | `bug` `inconsistency` `gap` `chore` `research` `docs` `spec-work` | |
 | `area` | spec name and/or paths | Comma-separated |
 | `surfaced_by` | command or short phrase | What was running when this was noticed |
-| `pinned_at` | short commit SHA | HEAD when the evidence was gathered |
+| `pinned_at` | short commit SHA | HEAD when the evidence was gathered, or the epoch value below |
 | `resume_command` | slash command + queue directive, or `do: <instruction>` | Never empty. See below |
 | `context` | list of repo-relative paths | Live paths — always resolve to latest |
 | `blocked_by` | list of queue ids / spec names | `[]` when unblocked |
+
+### The epoch pin convention (history replacement, 2026-08-22)
+
+This repository's history was replaced on 2026-08-22 (`docs/reference/history-rewrites.md`):
+a fresh root commit, `c3d2201` (short form), now carries the certified tree,
+and no pre-replacement commit identifier resolves against it or ever will —
+there is no mapping by construction. Every **open** item whose `pinned_at`
+was gathered before that date has its field set to `c3d2201`, the
+replacement root's short commit id, applied uniformly with no per-item
+judgement (`scripts/purge/pins.py`).
+
+**This is a documented epoch marker, not a substitution.** A pin equal to
+`c3d2201` means the item's evidence predates the replacement and its
+original pin is permanently unresolvable — never a claim that `c3d2201` is
+that original pin's post-replacement counterpart. `/kiro-queue`'s `git log
+--oneline <pinned_at>..HEAD` still resolves against it, which is the
+property the convention exists to preserve.
+
+**Closed items are untouched.** Their pins recorded what was true when the
+evidence was gathered and `closed/` is out of `/kiro-queue`'s ranking scope,
+so rewriting them would falsify the record for no consumer. A closed item's
+`pinned_at` may therefore still name a pre-replacement identifier, and that
+identifier is permanently unresolvable.
 
 ### Resume commands
 

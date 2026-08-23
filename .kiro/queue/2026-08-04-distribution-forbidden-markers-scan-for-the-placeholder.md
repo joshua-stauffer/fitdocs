@@ -9,7 +9,7 @@ kind: inconsistency
 area: distribution, .kiro/specs/distribution/design.md
 created: 2026-08-04
 surfaced_by: /kiro-impl encumbered-content-purge (task 3.8 review, rounds 1 and 2)
-pinned_at: 34b4164
+pinned_at: c3d2201
 resume_command: "/kiro-spec-design distribution [queue: .kiro/queue/2026-08-04-distribution-forbidden-markers-scan-for-the-placeholder.md] Re-base the forbidden-markers gate onto an out-of-repository source"
 context:
   - .kiro/specs/distribution/design.md

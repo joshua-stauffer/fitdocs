@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, tests/purge/test_verify.py
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.4 review round 3)
-pinned_at: b7c5a3d
+pinned_at: c3d2201
 resume_command: "do: change the design-table body-row filter in tests/purge/test_verify.py from line.startswith('|') to '|' in line.strip(), so a GFM-legal row without a leading pipe or indented by up to three spaces still counts"
 context:
   - tests/purge/test_verify.py

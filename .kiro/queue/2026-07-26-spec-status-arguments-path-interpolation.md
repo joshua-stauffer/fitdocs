@@ -9,7 +9,7 @@ kind: bug
 area: .claude/skills/kiro-spec-status
 created: 2026-07-26
 surfaced_by: /kiro-queue resume-command work (chore/queue-resume)
-pinned_at: ec4ee03
+pinned_at: c3d2201
 resume_command: "do: change kiro-spec-status's Step 1 to take the feature name from the first whitespace-separated token of $ARGUMENTS rather than all of it, and ignore the remainder"
 context:
   - .claude/skills/kiro-spec-status/SKILL.md

@@ -9,7 +9,7 @@ kind: gap
 area: training-load, athlete-benchmarks, tests/load/test_settings.py, src/fitdocs/settings.py
 created: 2026-07-26
 surfaced_by: kiro-impl remediation round 1, queue/2026-07-26-second-load-reader-spellings-escape-guards
-pinned_at: 7f692ec
+pinned_at: c3d2201
 resume_command: "/kiro-spec-requirements training-load [queue: .kiro/queue/2026-07-26-load-table-read-bypasses-settings-reader.md] Close the tomllib.load bypass of the [load]-table reader guards"
 context:
   - tests/load/test_settings.py

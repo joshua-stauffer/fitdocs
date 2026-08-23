@@ -9,7 +9,7 @@ kind: gap
 area: steering, .kiro/steering/change-protocol.md, .claude/skills/kiro-impl/templates, .claude/skills/kiro-review
 created: 2026-07-29
 surfaced_by: adversarial review of the branch that added the sdist exclusion for the withdrawn methodology's tables (queue-top7 batch)
-pinned_at: 0080811
+pinned_at: c3d2201
 resume_command: "do: add a named anti-pattern to .kiro/steering/change-protocol.md § Fixture Discrimination for a mutation whose red is a collection/import error rather than the pinned assertion failing, and require the evidence to name WHICH assertion failed rather than only that the suite went red [queue: .kiro/queue/2026-07-29-collection-error-red-not-an-anti-pattern.md]"
 context:
   - .kiro/steering/change-protocol.md

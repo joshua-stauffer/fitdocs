@@ -9,7 +9,7 @@ kind: gap
 area: athlete-benchmarks, tests/test_benchmarks.py, tests/load/test_profile.py
 created: 2026-07-26
 surfaced_by: /kiro-impl athlete-benchmarks (task 3.2, rounds 2-3 review + debug pass)
-pinned_at: 84e5e56
+pinned_at: c3d2201
 resume_command: "/kiro-impl athlete-benchmarks [queue: .kiro/queue/2026-07-26-benchmark-region-roundtrip-untested.md] Add a parse->serialize->parse idempotence property test over hand-edited benchmark region variants"
 context:
   - .kiro/specs/athlete-benchmarks/requirements.md

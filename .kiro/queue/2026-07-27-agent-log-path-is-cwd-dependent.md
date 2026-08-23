@@ -9,7 +9,7 @@ kind: gap
 area: .kiro/steering/concurrency.md, .gitignore, CLAUDE.md
 created: 2026-07-27
 surfaced_by: deleting the symlink by mistake during the Banister steering sync, then restoring it
-pinned_at: ec44cb6
+pinned_at: c3d2201
 resume_command: "do: record that the root agent-log symlink is intentional and protect it from being committed, and make the documented --git-common-dir log path cwd-independent [queue: .kiro/queue/2026-07-27-agent-log-path-is-cwd-dependent.md]"
 context:
   - .kiro/steering/concurrency.md

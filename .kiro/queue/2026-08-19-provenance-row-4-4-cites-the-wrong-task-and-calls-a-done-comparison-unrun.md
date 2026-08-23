@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge, docs/reference/history-rewrites.md
 created: 2026-08-19
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.8 classification; implementer flagged it as out of its Req 6-10/12 boundary, parent measured it)
-pinned_at: 831aa5c
+pinned_at: c3d2201
 resume_command: "do: re-measure Req 4.4's classification against task 6.2's completed spec-status comparison and correct the row, checking the other Req 1-5 rows for the same class of staleness"
 context:
   - docs/reference/history-rewrites.md

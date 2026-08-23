@@ -9,7 +9,7 @@ kind: chore
 area: encumbered-content-purge, .kiro/queue/
 created: 2026-08-17
 surfaced_by: encumbered-content-purge Amendment 1 (spec/purge-fresh-root)
-pinned_at: 19bd786
+pinned_at: c3d2201
 resume_command: "do: read .kiro/specs/encumbered-content-purge/requirements.md Decision 6 and Req 12, then classify every open queue item matching grep -l 'encumbered-content-purge' .kiro/queue/*.md as moot-under-replacement (close as dropped with a one-line reason), folds-into-Req-12-retirement (note it in the item and mark blocked_by the design regeneration), or still-live (tip-guard and record-keeping items; leave open)"
 context:
   - .kiro/specs/encumbered-content-purge/requirements.md

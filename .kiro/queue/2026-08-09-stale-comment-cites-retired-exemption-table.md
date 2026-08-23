@@ -9,7 +9,7 @@ kind: docs
 area: tests/test_contributing_calculators_doc.py, tests/test_forbidden_strings.py
 created: 2026-08-09
 surfaced_by: encumbered-content-purge task 6.3 (retiring `_CONTENT_EXEMPT_VALUES` and its four pinning tests)
-pinned_at: f79622a
+pinned_at: c3d2201
 resume_command: "do: reword the historical comment block in tests/test_contributing_calculators_doc.py (around the paragraph beginning \"A second, narrower gap existed briefly during this repair\") so it describes the same task-4.4 event without naming `_CONTENT_EXEMPT_VALUES` or `test_reviewed_exemption_rejects_a_different_value_in_the_same_file` by identifier -- both were removed by encumbered-content-purge task 6.3, which retired the reviewed-exemption mechanism entirely once the tracked tree carried zero forbidden values [queue: .kiro/queue/2026-08-09-stale-comment-cites-retired-exemption-table.md]"
 context:
   - tests/test_contributing_calculators_doc.py

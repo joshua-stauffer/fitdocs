@@ -9,7 +9,7 @@ kind: gap
 area: fit-ingest, tests/metrics/test_constant_guard.py
 created: 2026-07-30
 surfaced_by: /kiro-impl fit-ingest (task 12.2, reviewer follow-up round 1)
-pinned_at: 2d69443
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-30-exemption-list-cannot-detect-a-duplicate-entry.md] Make the exemption list reject duplicate entries, not only unused ones"
 context:
   - tests/metrics/test_constant_guard.py

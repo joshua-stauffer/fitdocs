@@ -9,7 +9,7 @@ kind: docs
 area: distribution, pyproject.toml
 created: 2026-07-30
 surfaced_by: Phase 5 discovery (going public) — publish-readiness audit of the package manifest
-pinned_at: 22b4adf
+pinned_at: c3d2201
 resume_command: "do: Rewrite pyproject.toml:4's description to cover what fitdocs actually is — .fit files to one markdown document per workout, with charts and pluggable training-load — rather than the decoding layer alone. Keep it to one line; it is the PyPI summary."
 context:
   - pyproject.toml

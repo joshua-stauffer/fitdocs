@@ -9,7 +9,7 @@ kind: gap
 area: training-load, tests/load/test_packaging.py
 created: 2026-07-26
 surfaced_by: /kiro-validate-impl training-load
-pinned_at: 3121bb6
+pinned_at: c3d2201
 resume_command: "do: Widen the withdrawal guards in tests/load/test_packaging.py -- check for any non-.py data file under src/fitdocs/load/, and consider a directory-level allowlist instead of the name-keyed _WITHDRAWN_SYMBOLS list"
 context:
   - tests/load/test_packaging.py

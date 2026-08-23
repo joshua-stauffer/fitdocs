@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, tests/test_forbidden_strings_source.py
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.2 review round 3)
-pinned_at: dac1a7a
+pinned_at: c3d2201
 resume_command: "do: pin _history_contains' returncode guard in tests/test_forbidden_strings_source.py with a monkeypatched subprocess.run returning nonzero-with-populated-stdout, asserting the double is in effect, the way the four sibling helpers now do"
 context:
   - tests/test_forbidden_strings_source.py

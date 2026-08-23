@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge, scripts/purge/verify.py
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.4 review round 2)
-pinned_at: b7c5a3d
+pinned_at: c3d2201
 resume_command: "do: at task 7.6, decide whether ROW_NAMES' 'fresh clone clean' entry gains a producing RowResult or is dropped from the tuple, so a driver enumerating rows finds a producer for every name"
 context:
   - scripts/purge/verify.py

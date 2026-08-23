@@ -9,7 +9,7 @@ kind: gap
 area: athlete-benchmarks, tests/test_benchmarks.py, src/fitdocs/benchmarks.py
 created: 2026-07-26
 surfaced_by: /kiro-impl athlete-benchmarks (task 3.2, rounds 2-3 review)
-pinned_at: 84e5e56
+pinned_at: c3d2201
 resume_command: "/kiro-impl athlete-benchmarks [queue: .kiro/queue/2026-07-26-benchmarks-serializer-sort-confounded.md] Make the serializer's own sort test discriminate date-sort from value-sort"
 context:
   - .kiro/specs/athlete-benchmarks/requirements.md

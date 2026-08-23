@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, .kiro/specs/encumbered-content-purge/tasks.md
 created: 2026-08-09
 surfaced_by: reviewer subagent during /kiro-impl encumbered-content-purge (review of the artifact reconstruction and task 7.1)
-pinned_at: 8391e47
+pinned_at: c3d2201
 resume_command: "do: Decide where Major 7's checkboxes get ticked. They cannot be committed during 7.1-7.3 (a commit then is carried into the 7.2 clone mid-rewrite) and task 8.3 never mentions checkboxes, so add the instruction to 8.3 or to a successor task."
 context:
   - .kiro/specs/encumbered-content-purge/tasks.md

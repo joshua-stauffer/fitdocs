@@ -9,7 +9,7 @@ kind: research
 area: workout-docs, src/fitdocs/render/sections.py
 created: 2026-07-25
 surfaced_by: /kiro-validate-design on the Avg METs scale defect
-pinned_at: 2a01dfd
+pinned_at: c3d2201
 resume_command: 'do: Re-scan the HealthFit corpus for WORKOUT RPE ESTIMATED values outside {0,1}; if any exist it is a value, not a flag — re-add it to _SUPPLEMENTALS with the confirmed scale.'
 context:
   - src/fitdocs/render/sections.py

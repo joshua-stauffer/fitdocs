@@ -9,7 +9,7 @@ kind: decision
 area: encumbered-content-purge, scripts/purge/replacements.py
 created: 2026-08-16
 surfaced_by: /kiro-impl encumbered-content-purge 6.5
-pinned_at: 061f9ab
+pinned_at: c3d2201
 resume_command: "/kiro-impl encumbered-content-purge [queue: .kiro/queue/2026-08-16-a-redacted-trademark-sentence-survives-the-rewrite.md] Decide whether the redacted trademark sentence is in Req 11.4's scope before 7.2"
 context:
   - .kiro/specs/encumbered-content-purge/requirements.md

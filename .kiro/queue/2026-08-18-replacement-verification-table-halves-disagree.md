@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge, .kiro/specs/encumbered-content-purge/design.md
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.4 review)
-pinned_at: b7c5a3d
+pinned_at: c3d2201
 resume_command: "do: reconcile design.md's ReplacementVerification fresh-clone row (re-run the rows above) against the per-row Run-against column, which marks only one of those rows as C"
 context:
   - .kiro/specs/encumbered-content-purge/design.md

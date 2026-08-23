@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, scripts/purge/rewrite.py
 created: 2026-08-09
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.2 preparation, building the replacement table)
-pinned_at: 5d2ee8b
+pinned_at: c3d2201
 resume_command: "do: Decide how task 7.2 preserves the sanctioned token and path values that 21 tracked files at HEAD deliberately carry, given that git filter-repo's --replace-text applies to every blob and cannot be scoped by path. Do not run the rewrite until this is settled."
 context:
   - .kiro/specs/encumbered-content-purge/design.md

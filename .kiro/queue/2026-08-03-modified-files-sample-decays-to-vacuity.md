@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, tests/purge/test_sweep.py
 created: 2026-08-03
 surfaced_by: /kiro-impl encumbered-content-purge (task 3.5 review)
-pinned_at: 9d8ef1c
+pinned_at: c3d2201
 resume_command: "do: re-base _MODIFIED_FILES_TABLE_SAMPLE in tests/purge/test_sweep.py onto files the purge intends to keep hitting (the retained Req 2.5 historical-mention class) instead of files tasks 3.6-3.12 are scheduled to redact, and confirm by mutation that the superset check still reds"
 context:
   - tests/purge/test_sweep.py

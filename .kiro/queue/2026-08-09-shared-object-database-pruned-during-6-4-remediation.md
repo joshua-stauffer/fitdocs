@@ -16,7 +16,7 @@ created: 2026-08-09
 surfaced_by: implementer subagent, task 6.4 reachability-defect remediation
   (worktree /Users/josh/code/fitdocs-replacement-rules, branch
   impl/replacement-rules)
-pinned_at: 62aead8
+pinned_at: c3d2201
 resume_command: "Decide whether to restore /Users/josh/code/fitdocs_oss/.git's object database from a filesystem backup taken before 2026-08-09 23:44 local time, or accept the loss and record its consequence for task 7.2 before that task runs."
 context:
   - scripts/purge/replacements.py

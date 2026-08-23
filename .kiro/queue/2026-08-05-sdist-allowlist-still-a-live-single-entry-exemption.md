@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, tests/load/test_packaging.py
 created: 2026-08-05
 surfaced_by: reviewer of encumbered-content-purge task 4.1, repair round 1
-pinned_at: 9747eb7
+pinned_at: c3d2201
 resume_command: "do: add a control that proves _SDIST_WITHDRAWN_ALLOWLIST cannot be widened to exempt a genuinely present value -- e.g. assert the allowlist stays empty by default with a dedicated non-empty-is-suspicious review note, or require an allowlist entry to also appear in a small, separately-reviewed audit list checked by a second guard -- so the exemption a maintainer reaches for under guard-failure pressure cannot itself become the evasion [queue: .kiro/queue/2026-08-05-sdist-allowlist-still-a-live-single-entry-exemption.md]"
 context:
   - tests/load/test_packaging.py

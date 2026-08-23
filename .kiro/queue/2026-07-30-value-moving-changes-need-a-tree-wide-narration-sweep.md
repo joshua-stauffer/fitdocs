@@ -9,7 +9,7 @@ kind: gap
 area: tooling, .kiro/steering/change-protocol.md, .claude/hooks
 created: 2026-07-30
 surfaced_by: adversarial review of spec/fit-ingest-np-window-criterion, round 3 (queue-tier1 batch)
-pinned_at: e04af78
+pinned_at: c3d2201
 resume_command: "do: design a tree-wide narration sweep for value-moving changes -- enumerate every file that describes a metric's behaviour (steering, specs, src docstrings, docs/, queue) so a change that moves a number can be checked against all of them at once, and consider whether change-guard.py can enforce it mechanically [queue: .kiro/queue/2026-07-30-value-moving-changes-need-a-tree-wide-narration-sweep.md]"
 context:
   - .kiro/steering/change-protocol.md

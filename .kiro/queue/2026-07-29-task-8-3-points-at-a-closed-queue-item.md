@@ -9,7 +9,7 @@ kind: docs
 area: fit-ingest, .kiro/specs/fit-ingest/tasks.md
 created: 2026-07-29
 surfaced_by: /kiro-impl fit-ingest (task 10.1 run, peer session queue-top7 closed the item mid-run)
-pinned_at: 4449d3e
+pinned_at: c3d2201
 resume_command: "do: Repoint fit-ingest tasks.md task 8.3 at spec.json's design_revision_open_decisions as the live flag for the TrimpWeighting member naming, since the queue item it names is now closed"
 context:
   - .kiro/specs/fit-ingest/tasks.md

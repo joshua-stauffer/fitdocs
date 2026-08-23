@@ -9,7 +9,7 @@ kind: gap
 area: .claude/skills/kiro-impl, .kiro/steering/change-protocol.md
 created: 2026-07-29
 surfaced_by: adversarial reviews of chore/plugin-api-surface-guard and chore/banister-resource-and-note-backstops (queue-top7 batch)
-pinned_at: 13acd83
+pinned_at: c3d2201
 resume_command: "do: put the no-destructive-reset rule where implementers actually read — .claude/skills/kiro-impl/templates/implementer-prompt.md and the Fixture Discrimination gate in .kiro/steering/change-protocol.md — rather than only kiro-impl/SKILL.md's Critical Constraints, and state the consequence that makes it matter: evidence gathered before a reset was gathered against a file that no longer exists [queue: .kiro/queue/2026-07-29-destructive-reset-reaches-implementers-nowhere.md]"
 context:
   - .claude/skills/kiro-impl/SKILL.md

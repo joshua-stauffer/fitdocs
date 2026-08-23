@@ -9,7 +9,7 @@ kind: inconsistency
 area: athlete-benchmarks, src/fitdocs/benchmarks.py, .kiro/specs/athlete-benchmarks/design.md
 created: 2026-07-26
 surfaced_by: /kiro-impl athlete-benchmarks (task 3.2, round-2 review)
-pinned_at: 84e5e56
+pinned_at: c3d2201
 resume_command: "/kiro-impl athlete-benchmarks [queue: .kiro/queue/2026-07-26-benchmark-entry-toml-spelling.md] Decide the on-disk benchmark entry spelling and align writer and design"
 context:
   - .kiro/specs/athlete-benchmarks/design.md

@@ -14,7 +14,7 @@ kind: gap
 area: fitdocs.metrics.stress, fitdocs.load.channels.sufficiency
 created: 2026-07-31
 surfaced_by: /kiro-impl load-channels (task 1.3 adversarial review, rounds 1-3)
-pinned_at: b06256b
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-31-non-monotonic-time-unspecified-in-coverage-and-trimp.md] Specify and pin the non-monotonic time_s contract shared by trimp and stream_coverage"
 context:
   - src/fitdocs/metrics/stress.py

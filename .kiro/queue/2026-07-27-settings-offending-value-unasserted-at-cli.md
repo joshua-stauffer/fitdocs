@@ -9,7 +9,7 @@ kind: gap
 area: athlete-benchmarks, tests/test_cli.py, src/fitdocs/load/settings.py
 created: 2026-07-27
 surfaced_by: /kiro-impl athlete-benchmarks (task 5.3 review, round 3)
-pinned_at: bb5ab9d
+pinned_at: c3d2201
 resume_command: "do: assert the offending value in the CLI configuration-error output, closing Req 5.3's third clause at the user-visible surface [queue: .kiro/queue/2026-07-27-settings-offending-value-unasserted-at-cli.md]"
 context:
   - .kiro/specs/athlete-benchmarks/requirements.md

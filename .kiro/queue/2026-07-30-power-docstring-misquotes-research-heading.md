@@ -9,7 +9,7 @@ kind: docs
 area: fit-ingest, src/fitdocs/metrics/power.py, tests/metrics/test_constant_guard.py
 created: 2026-07-30
 surfaced_by: /kiro-impl fit-ingest (task 12.2, reviewer follow-up round 1)
-pinned_at: 2d69443
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-30-power-docstring-misquotes-research-heading.md] Correct the quoted research.md heading in power.py and the test that copied it"
 context:
   - src/fitdocs/metrics/power.py

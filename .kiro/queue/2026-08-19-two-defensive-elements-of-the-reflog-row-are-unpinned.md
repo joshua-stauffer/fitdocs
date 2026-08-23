@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, scripts/purge/verify.py
 created: 2026-08-19
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.7 remediation review, reviewer mutations R4 and R9; both re-measured by the parent)
-pinned_at: 8d922a3
+pinned_at: c3d2201
 resume_command: "do: pin or declare the sha256 all-zeros placeholder and the fsck returncode conjunct in check_reflog_and_unreachable_gone"
 context:
   - scripts/purge/verify.py

@@ -9,7 +9,7 @@ kind: inconsistency
 area: fit-ingest, src/fitdocs/metrics/sources.py
 created: 2026-07-30
 surfaced_by: /kiro-impl fit-ingest (task 12.2, round-5 review follow-up)
-pinned_at: ab1038d
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-30-fourth-choice-search-basis-not-web-remediated.md] Decide whether POWER_ABSENT_SAMPLE_CHOICE's search basis needs a live literature search like its two remediated siblings"
 context:
   - src/fitdocs/metrics/sources.py

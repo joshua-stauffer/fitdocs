@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, scripts/purge/verify.py
 created: 2026-08-19
 surfaced_by: /kiro-impl encumbered-content-purge (reflog row defect fix)
-pinned_at: 8d922a3
+pinned_at: c3d2201
 resume_command: "do: decide whether check_reflog_and_unreachable_gone should be added back to check_fresh_clone's re-run set now that its reflog half is no longer a guaranteed-red hazard against C, and update check_fresh_clone's docstring/return tuple together with the sibling table-halves-disagree item"
 context:
   - scripts/purge/verify.py

@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge, tests/purge/test_replace_rehearsal.py, scripts/purge/verify.py
 created: 2026-08-19
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.7 remediation, an independent review's rejection of the check_reflog_and_unreachable_gone defect fix)
-pinned_at: 8d922a3
+pinned_at: c3d2201
 resume_command: "do: decide whether tests/purge/test_replace_rehearsal.py should call scripts.purge.verify.check_reflog_and_unreachable_gone directly (dropping _assert_reflog_references_only) now that the task 7.7 remediation's declared correction makes that row pass the real run_replace-produced state -- reflog half only; the fsck half is a separate, already-duplicated command shape in the same module and would need its own decision"
 context:
   - tests/purge/test_replace_rehearsal.py

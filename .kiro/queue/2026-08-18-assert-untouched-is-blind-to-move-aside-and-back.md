@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, tests/purge/test_replace_rehearsal.py
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.7, parent-run mutation probe after five reviewer dispatches died on API 529)
-pinned_at: aeabf8e
+pinned_at: c3d2201
 resume_command: "do: close the move-aside-and-back blind spot in test_replace_rehearsal.py::_assert_untouched, or state the exemption with the measurement that justifies it"
 context:
   - tests/purge/test_replace_rehearsal.py

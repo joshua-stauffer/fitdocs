@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge, tests/_content_oracle.py
 created: 2026-08-01
 surfaced_by: /kiro-impl encumbered-content-purge (task 2.1 review)
-pinned_at: d835b7b
+pinned_at: c3d2201
 resume_command: "/kiro-spec-design encumbered-content-purge [queue: .kiro/queue/2026-08-01-oracle-comma-decimal-vs-thousands.md] Declare which reading of a comma the value matcher implements"
 context:
   - .kiro/specs/encumbered-content-purge/design.md

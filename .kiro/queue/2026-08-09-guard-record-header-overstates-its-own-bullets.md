@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge, docs/reference/history-rewrites.md
 created: 2026-08-09
 surfaced_by: /kiro-impl encumbered-content-purge (task 6.1 review, rounds 1 and 2)
-pinned_at: d6fe28f
+pinned_at: c3d2201
 resume_command: "do: Decide whether docs/reference/history-rewrites.md should state that f1dad15's mutation-evidence header overstates its own bullets, since the commit message cannot be edited and Req 3.5 rests on these records."
 context:
   - docs/reference/history-rewrites.md

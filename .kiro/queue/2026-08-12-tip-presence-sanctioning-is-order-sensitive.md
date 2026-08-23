@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, scripts/purge/replacements.py
 created: 2026-08-12
 surfaced_by: /kiro-impl encumbered-content-purge (task 6.4 remediation, the unsatisfiable-guard fix)
-pinned_at: eeab771
+pinned_at: c3d2201
 resume_command: "do: Decide whether identity_leak_addresses should treat a candidate that is absent from the tip but was present at an earlier reachable commit differently from one that was never at the tip, or whether task 7.1's quiescence gate should additionally freeze the tip against which 7.2's rules are generated. Read scripts/purge/replacements.py's identity_leak_addresses docstring first, then tasks.md 7.1 and 7.2."
 context:
   - scripts/purge/replacements.py

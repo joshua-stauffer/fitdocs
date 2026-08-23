@@ -9,7 +9,7 @@ kind: inconsistency
 area: athlete-benchmarks, .kiro/specs/athlete-benchmarks/design.md
 created: 2026-07-26
 surfaced_by: /kiro-impl athlete-benchmarks (task 4.1 round-2 reviewer)
-pinned_at: 9a22c87
+pinned_at: c3d2201
 resume_command: "do: correct the PublicSurfacePin component in athlete-benchmarks/design.md to name tests/load/test_types.py as the home of the ProfileView member-set assertions, keeping tests/test_public_api.py for the re-export identity pin [queue: .kiro/queue/2026-07-26-publicsurfacepin-names-wrong-test-module.md]"
 context:
   - .kiro/specs/athlete-benchmarks/design.md

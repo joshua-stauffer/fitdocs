@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge
 created: 2026-08-09
 surfaced_by: reviewer subagent during /kiro-impl encumbered-content-purge (review of the artifact reconstruction and task 7.1)
-pinned_at: 8391e47
+pinned_at: c3d2201
 resume_command: "do: Decide the disposition of the two sweep inventories and the evasion-acceptance record after the rewrite lands -- destroy them with the material as history-rewrites.md says probe sets are, or state explicitly why they are retained and for how long."
 context:
   - scripts/purge/adopt.py

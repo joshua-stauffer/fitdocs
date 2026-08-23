@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, .kiro/specs/encumbered-content-purge/requirements.md
 created: 2026-08-04
 surfaced_by: /kiro-impl encumbered-content-purge (task 3.8 review, rounds 1-3)
-pinned_at: 34b4164
+pinned_at: c3d2201
 resume_command: "/kiro-impl encumbered-content-purge [queue: .kiro/queue/2026-08-04-purge-own-requirements-unowned-by-any-task.md] Redact the purge spec's own requirements.md before Major 7"
 context:
   - .kiro/specs/encumbered-content-purge/requirements.md

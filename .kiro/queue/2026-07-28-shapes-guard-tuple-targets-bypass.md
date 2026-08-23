@@ -9,7 +9,7 @@ kind: gap
 area: fit-ingest, tests/test_citation.py
 created: 2026-07-28
 surfaced_by: /kiro-impl fit-ingest (task 8.1 review, round 4 — reviewer's own mutations)
-pinned_at: 8e3cb05
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-28-shapes-guard-tuple-targets-bypass.md] Close the tuple/starred-target bypass in the shapes-only AST guard"
 context:
   - tests/test_citation.py

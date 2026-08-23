@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge, tests/test_forbidden_strings.py, tests/purge/test_replacements.py
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.2 review round 3)
-pinned_at: dac1a7a
+pinned_at: c3d2201
 resume_command: "do: reconcile the two unreadable-file accounting policies before task 9.3 deletes tests/purge/test_replacements.py, so the surviving suffix allowlist is a decision rather than a leftover"
 context:
   - tests/test_forbidden_strings.py

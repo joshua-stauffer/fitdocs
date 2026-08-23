@@ -9,7 +9,7 @@ kind: docs
 area: fit-ingest, tests/load/channels/test_sources_citation_reexport.py, src/fitdocs/load/channels/sources.py
 created: 2026-07-28
 surfaced_by: /kiro-impl fit-ingest (task 8.2 review — found by reading docstrings sentence-by-sentence, all three outside the prose-claim grep vocabulary)
-pinned_at: 067a30e
+pinned_at: c3d2201
 resume_command: "do: Fix the three accuracy defects in tests/load/channels/test_sources_citation_reexport.py and sources.py:99 named in this item — drop 'top-level', remove or use the dead `module` parameter, and correct the unused-imports half of the alias rationale"
 context:
   - tests/load/channels/test_sources_citation_reexport.py

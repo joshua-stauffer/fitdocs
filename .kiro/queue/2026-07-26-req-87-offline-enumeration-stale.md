@@ -9,7 +9,7 @@ kind: inconsistency
 area: training-load, .kiro/specs/training-load/requirements.md
 created: 2026-07-26
 surfaced_by: /kiro-impl training-load (task 4.1, exhaustive requirement sweep)
-pinned_at: 1b40c02
+pinned_at: c3d2201
 resume_command: "do: extend requirements.md criterion 8.7's enumeration to include the resolved [load] configuration, which Amendment 3 moved into the load pass via Req 14.4, and confirm no other criterion enumerates the pass's reads"
 context:
   - .kiro/specs/training-load/requirements.md

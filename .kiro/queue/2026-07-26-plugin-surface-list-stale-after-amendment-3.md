@@ -9,7 +9,7 @@ kind: inconsistency
 area: plugin-api, training-load, docs/plugins.md
 created: 2026-07-26
 surfaced_by: /kiro-impl training-load (task 5.2, review and confirmatory review)
-pinned_at: fe5d5f7
+pinned_at: c3d2201
 resume_command: "do: docs/plugins.md's surface list, prose, and worked example are already reconciled and mechanically guarded (queue sweep, 2026-07-26) — the only remaining work is plugin-api task 4.4, reconciling .kiro/specs/plugin-api/design.md's own public-surface enumeration (~line 806) and its RECORDED FOLLOW-UP note (design.md:815-837) against the shipped training-load contract; see .kiro/specs/plugin-api/tasks.md task 4.4 for the full scope"
 context:
   - docs/plugins.md

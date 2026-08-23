@@ -9,7 +9,7 @@ kind: docs
 area: fit-ingest, tests/test_citation.py
 created: 2026-07-28
 surfaced_by: /kiro-impl fit-ingest (task 8.1 review, round 4 — found by reading, outside the prose-claim grep vocabulary)
-pinned_at: 8e3cb05
+pinned_at: c3d2201
 resume_command: "do: Correct the inverted vars(instance) sentence in _assert_field_contract's docstring in tests/test_citation.py, keeping the (correct) conclusion that hasattr/dir would be vacuous"
 context:
   - tests/test_citation.py

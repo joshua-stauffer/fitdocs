@@ -9,7 +9,7 @@ kind: gap
 area: README.md, tests/test_tiles.py, route-maps
 created: 2026-08-22
 surfaced_by: kiro-review of chore/repo-rename (reviewer designed mutations the implementer had not)
-pinned_at: 29604fc
+pinned_at: c3d2201
 resume_command: "do: pin README.md's documented User-Agent example against fitdocs.tiles.USER_AGENT so the two cannot drift, and prove it with a mutation to each side"
 context:
   - README.md

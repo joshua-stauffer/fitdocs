@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, scripts/purge/adopt.py
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.3 implementation and review)
-pinned_at: dac1a7a
+pinned_at: c3d2201
 resume_command: "do: record the disposition of .git/sha-rewrite-map-2026-07-26.tsv (leave it in the archive, never carried) in the provenance record's stated-positions section, so task 8.2's carry-over halt has a written answer before it fires"
 context:
   - scripts/purge/adopt.py

@@ -9,7 +9,7 @@ kind: chore
 area: tests/test_cli.py
 created: 2026-07-27
 surfaced_by: /kiro-impl athlete-benchmarks (task 5.3 review, round 1)
-pinned_at: bb5ab9d
+pinned_at: c3d2201
 resume_command: "do: make the workout-document pick deterministic in tests/test_cli.py by sorting and filtering the declaration file, reusing the _docs() helper [queue: .kiro/queue/2026-07-27-cli-test-doc-pick-unordered-glob.md]"
 context:
   - tests/test_cli.py

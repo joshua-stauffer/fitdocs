@@ -9,7 +9,7 @@ kind: inconsistency
 area: fit-ingest, .kiro/specs/fit-ingest/design.md
 created: 2026-07-28
 surfaced_by: /kiro-impl fit-ingest (task 9.1 review — reviewer checked the cross-reference the implementer had copied)
-pinned_at: 8e72bfc
+pinned_at: c3d2201
 resume_command: "/kiro-spec-design fit-ingest [queue: .kiro/queue/2026-07-28-design-coggan-cross-reference-line-stale.md] Replace the line-numbered COGGAN_TSS cross-reference with a symbol reference"
 context:
   - .kiro/specs/fit-ingest/design.md

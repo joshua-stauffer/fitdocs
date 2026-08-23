@@ -9,7 +9,7 @@ kind: gap
 area: pyproject.toml, tests/test_docs_guarantees.py, fit-ingest
 created: 2026-07-28
 surfaced_by: /kiro-impl fit-ingest (task 8.1 review, round 1 FOLLOW_UPS; re-confirmed by paired probe in round 4)
-pinned_at: 8e3cb05
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-28-mypy-perimeter-membership-unguarded.md] Guard that every test module carrying a type-level observable stays inside the mypy perimeter"
 context:
   - pyproject.toml

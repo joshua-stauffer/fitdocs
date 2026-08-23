@@ -9,7 +9,7 @@ kind: inconsistency
 area: distribution, .kiro/specs/distribution/requirements.md, .kiro/specs/distribution/tasks.md
 created: 2026-07-30
 surfaced_by: roadmap sync after fit-ingest Amendment 1 landed — checking whether distribution was parallel-safe against load-channels
-pinned_at: ec1ec73
+pinned_at: c3d2201
 resume_command: "/kiro-spec-requirements distribution [queue: .kiro/queue/2026-07-30-distribution-req6-assumes-a-bundled-calculator.md] Amend Requirement 6 to separate the still-live encumbered-content release gate from the now-vacuous bundled-calculator packaging, then regenerate design and tasks against it"
 context:
   - .kiro/specs/distribution/requirements.md

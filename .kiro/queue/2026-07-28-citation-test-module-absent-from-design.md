@@ -9,7 +9,7 @@ kind: inconsistency
 area: fit-ingest, .kiro/specs/fit-ingest/design.md
 created: 2026-07-28
 surfaced_by: /kiro-impl fit-ingest (task 8.1 review, round 2 FOLLOW_UPS)
-pinned_at: 8e3cb05
+pinned_at: c3d2201
 resume_command: "/kiro-spec-design fit-ingest [queue: .kiro/queue/2026-07-28-citation-test-module-absent-from-design.md] Add tests/test_citation.py to the File Structure Plan's Amendment 1 test listing"
 context:
   - .kiro/specs/fit-ingest/design.md

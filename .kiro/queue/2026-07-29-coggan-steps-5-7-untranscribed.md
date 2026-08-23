@@ -9,7 +9,7 @@ kind: gap
 area: fit-ingest, src/fitdocs/metrics/sources.py
 created: 2026-07-29
 surfaced_by: /kiro-impl fit-ingest (task 10.2, review rounds 2-3)
-pinned_at: 373405a
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-29-coggan-steps-5-7-untranscribed.md] Either transcribe Coggan 2003's steps 5-7 into the COGGAN_2003 record next time the text is open, or state in the note that their omission is deliberate"
 context:
   - src/fitdocs/metrics/sources.py

@@ -9,7 +9,7 @@ kind: chore
 area: training-load, src/fitdocs/load/engine.py
 created: 2026-07-26
 surfaced_by: /kiro-impl athlete-benchmarks (task 5.2 review, own mutation M7a)
-pinned_at: 18cfc07
+pinned_at: c3d2201
 resume_command: "do: decide whether _CONFIG_ERRORS should list ProfileError explicitly for documentation value or drop it as covered by its AthleteFileError base, and comment whichever way it goes [queue: .kiro/queue/2026-07-26-profileerror-redundant-in-config-errors.md]"
 context:
   - src/fitdocs/load/engine.py

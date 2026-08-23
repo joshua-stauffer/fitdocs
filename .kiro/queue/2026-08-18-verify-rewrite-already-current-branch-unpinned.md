@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, scripts/purge/pins.py
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.5 review round 3)
-pinned_at: 9a006f0
+pinned_at: c3d2201
 resume_command: "do: add a verify_rewrite fixture mixing a repaired outcome with an already_current one, so dropping the `else outcome.original` branch from the expected-tuple construction reds"
 context:
   - scripts/purge/pins.py

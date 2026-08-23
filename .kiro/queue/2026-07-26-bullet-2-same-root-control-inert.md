@@ -9,7 +9,7 @@ kind: inconsistency
 area: training-load, .kiro/specs/training-load/tasks.md
 created: 2026-07-26
 surfaced_by: /kiro-validate-impl training-load
-pinned_at: 3121bb6
+pinned_at: c3d2201
 resume_command: "do: Amend task 6.1's bullet 2 in .kiro/specs/training-load/tasks.md to describe the two-root design that was implemented, and record why the same-root form cannot discriminate"
 context:
   - .kiro/specs/training-load/tasks.md

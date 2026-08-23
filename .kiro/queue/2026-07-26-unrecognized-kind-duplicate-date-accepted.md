@@ -9,7 +9,7 @@ kind: inconsistency
 area: athlete-benchmarks, src/fitdocs/benchmarks.py
 created: 2026-07-26
 surfaced_by: /kiro-impl athlete-benchmarks (task 3.2, round-3 review)
-pinned_at: 84e5e56
+pinned_at: c3d2201
 resume_command: "/kiro-impl athlete-benchmarks [queue: .kiro/queue/2026-07-26-unrecognized-kind-duplicate-date-accepted.md] Decide whether Req 2.7's duplicate rule reaches unrecognized quantities, and align parser and docs"
 context:
   - .kiro/specs/athlete-benchmarks/requirements.md

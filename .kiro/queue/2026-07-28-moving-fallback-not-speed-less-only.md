@@ -9,7 +9,7 @@ kind: inconsistency
 area: fit-ingest, src/fitdocs/metrics/aggregates.py
 created: 2026-07-28
 surfaced_by: /kiro-impl fit-ingest (task 9.2, round-3 reviewer)
-pinned_at: 03221ca
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest 10.1 [queue: .kiro/queue/2026-07-28-moving-fallback-not-speed-less-only.md] Reconcile the moving-time distance fallback's scope with MOVING_THRESHOLD_CHOICE's stated rationale"
 context:
   - src/fitdocs/metrics/aggregates.py

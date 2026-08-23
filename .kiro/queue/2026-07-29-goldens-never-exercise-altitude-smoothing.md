@@ -9,7 +9,7 @@ kind: gap
 area: fit-ingest, tests/golden/, src/fitdocs/metrics/aggregates.py
 created: 2026-07-29
 surfaced_by: /kiro-impl fit-ingest (task 10.1, review round 1)
-pinned_at: 4449d3e
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-29-goldens-never-exercise-altitude-smoothing.md] Add a golden fixture whose elevation is derived from the altitude channel rather than read from session totals"
 context:
   - tests/golden/run.json

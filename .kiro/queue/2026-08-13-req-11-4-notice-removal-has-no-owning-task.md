@@ -8,7 +8,7 @@ effort: M
 kind: gap
 area: encumbered-content-purge, scripts/purge/replacements.py
 created: 2026-08-13
-pinned_at: df8910b
+pinned_at: c3d2201
 resume_command: "do: Add a task to .kiro/specs/encumbered-content-purge/tasks.md, between 6.4 and 7.2, that extends build_rules with copyright-notice and trademark-mark replacement rules per the maintainer's 2026-08-12 Req 11.4 decision, then implement it. Read requirements.md Requirement 11 criterion 4 and criterion 6 first, then scripts/purge/replacements.py's module docstring on case handling."
 context:
   - .kiro/specs/encumbered-content-purge/requirements.md

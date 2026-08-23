@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge, docs/reference/history-rewrites.md
 created: 2026-08-19
 surfaced_by: /kiro-impl encumbered-content-purge 7.8 (remediation round for a REJECTED classification half)
-pinned_at: 831aa5c
+pinned_at: c3d2201
 resume_command: "/kiro-impl encumbered-content-purge 7.8 [queue: .kiro/queue/2026-08-19-classification-rows-11-1-11-3-11-4-still-attribute-the-swap-to-major-7.md] Re-attribute rows 11.1, 11.3 and 11.4 from Major 7 to Major 8, matching the 7.1/7.2/10.3 correction pattern"
 context:
   - docs/reference/history-rewrites.md

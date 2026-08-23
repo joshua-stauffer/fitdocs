@@ -9,7 +9,7 @@ kind: gap
 area: fit-ingest, tests/metrics/test_constant_guard.py
 created: 2026-07-30
 surfaced_by: /kiro-impl fit-ingest (task 12.2, round-5 review follow-up)
-pinned_at: ab1038d
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-30-sourced-names-tuple-goes-stale.md] Derive sourced_names from the metric modules' ASTs instead of hardcoding seven names"
 context:
   - tests/metrics/test_constant_guard.py

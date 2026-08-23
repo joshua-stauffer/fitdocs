@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, tests/test_forbidden_strings.py
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.2 review round 1)
-pinned_at: dac1a7a
+pinned_at: c3d2201
 resume_command: "do: replace the bare `len(texts) > 100` anchor in tests/test_forbidden_strings.py's notice/mark guard with the two-non-adjacent-different-kind-members shape already used by test_standing_guard_scans_tracked_content_and_path_names"
 context:
   - tests/test_forbidden_strings.py

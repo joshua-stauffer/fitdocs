@@ -9,7 +9,7 @@ kind: gap
 area: training-load, tests/load/test_packaging.py
 created: 2026-07-27
 surfaced_by: adversarial review of chore/withdrawal-guards-widen (queue sweep 2026-07-27)
-pinned_at: 80cc5c5
+pinned_at: c3d2201
 resume_command: "do: decide whether the withdrawal guards should watch the whole package rather than `fitdocs/load/`, and whether the zone-pace and race-equivalent tables need constant coverage — the reviewer's suggested shape-keyed alternative (an AST scan for any class matching the LoadCalculator member set) fires once instead of 21 times as sibling specs land [queue: .kiro/queue/2026-07-27-withdrawal-evasions-one-level-up.md]"
 context:
   - tests/load/test_packaging.py

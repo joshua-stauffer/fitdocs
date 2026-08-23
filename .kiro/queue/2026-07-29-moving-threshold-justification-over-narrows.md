@@ -9,7 +9,7 @@ kind: bug
 area: fit-ingest, src/fitdocs/metrics/sources.py, tests/metrics/test_sources.py
 created: 2026-07-29
 surfaced_by: /kiro-impl fit-ingest (task 10.1, review rounds 1-2)
-pinned_at: 4449d3e
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-29-moving-threshold-justification-over-narrows.md] Correct MOVING_THRESHOLD_CHOICE's justification so the distance fallback is not described as speed-less-only, and move its backstop with it"
 context:
   - src/fitdocs/metrics/sources.py

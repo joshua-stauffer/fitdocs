@@ -9,7 +9,7 @@ kind: gap
 area: fit-ingest, tests/metrics/test_aggregates.py
 created: 2026-07-29
 surfaced_by: /kiro-impl fit-ingest (task 10.1, review round 3)
-pinned_at: 4449d3e
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-29-altitude-record-swap-restoration-unpinned.md] Assert the altitude record-swap test's restoration inside the test itself, mirroring the moving-time half"
 context:
   - tests/metrics/test_aggregates.py

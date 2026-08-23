@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, tests/purge/test_replace_rehearsal.py
 created: 2026-08-19
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.7 remediation review, reviewer FOLLOW_UPS 2 and 3)
-pinned_at: 7da5ce3
+pinned_at: c3d2201
 resume_command: "do: widen tests/purge/test_replace_rehearsal.py's own _REFLOG_HEX_ID_RE to 64-hex to match scripts/purge/verify.py::check_reflog_and_unreachable_gone's now-widened pattern (item 1, partially resolved below), and decide whether the rehearsal's safety net should stat the shared common object DB (item 2, still fully open)"
 context:
   - tests/purge/test_replace_rehearsal.py

@@ -9,7 +9,7 @@ kind: gap
 area: fit-ingest, .kiro/specs/fit-ingest/requirements.md
 created: 2026-07-27
 surfaced_by: adversarial review of chore/citation-vocabulary-unify (queue sweep 2026-07-27)
-pinned_at: 189ea70
+pinned_at: c3d2201
 resume_command: "do: classify the TSS scale (100), the normalized-power rolling-window width (30 s) and the normalized-power averaging exponent (4) against Coggan 2003 in fit-ingest's Amendment 1 record — the manuscript is at https://www.ipmultisport.com/ref_lib/Coggan_Power_Meter.pdf, section 3, printed pages 8-11, and its PDF metadata authenticates it (Author: Andrew Coggan, Subject: IF/TSS, CreationDate 2003-06-06); note the NP averaging exponent is still an inline literal at metrics/power.py:126-127 with no named constant [queue: .kiro/queue/2026-07-27-coggan-2003-sources-three-amendment-1-constants.md]"
 context:
   - .kiro/specs/fit-ingest/requirements.md

@@ -9,7 +9,7 @@ kind: bug
 area: scripts/purge
 created: 2026-08-09
 surfaced_by: reviewer subagent during /kiro-impl encumbered-content-purge (review of the artifact reconstruction and task 7.1)
-pinned_at: 8391e47
+pinned_at: c3d2201
 resume_command: "do: Change build_sweep_inventory.py's default --out root from $TMPDIR/fitdocs-purge/ to the durable scratch root ~/.fitdocs-purge/ that adopt.py already records, so a caller who omits --out cannot write a one-shot artifact somewhere the OS temp cleaner reaches."
 context:
   - scripts/purge/build_sweep_inventory.py

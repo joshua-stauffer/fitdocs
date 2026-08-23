@@ -9,7 +9,7 @@ kind: inconsistency
 area: threshold-load, .kiro/specs/threshold-load/research.md
 created: 2026-07-27
 surfaced_by: /kiro-queue close 2026-07-26-citation-vocabulary-diverges-across-layers
-pinned_at: 4a5c838
+pinned_at: c3d2201
 resume_command: "do: correct .kiro/specs/threshold-load/research.md:108 — Minetti's walking polynomial WAS obtained (Fig. 1's caption in the read primary text gives both regressions); the walking form is unimplemented by scope choice, not unavailability. Apply the same dated 'Superseded 2026-07-27' amendment parenthetical already used in load-channels' requirements.md:252, tasks.md and research.md [queue: .kiro/queue/2026-07-27-threshold-load-research-walking-form-stale.md]"
 context:
   - .kiro/specs/threshold-load/research.md

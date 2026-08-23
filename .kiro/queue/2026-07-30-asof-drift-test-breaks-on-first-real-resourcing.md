@@ -9,7 +9,7 @@ kind: gap
 area: fit-ingest, tests/metrics/test_sources.py
 created: 2026-07-30
 surfaced_by: /kiro-impl fit-ingest (task 13.2, round-4 review follow-up)
-pinned_at: 7b82aff
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-30-asof-drift-test-breaks-on-first-real-resourcing.md] Give the ASOF drift test a synthetic clean registry so it survives the first real re-sourcing"
 context:
   - tests/metrics/test_sources.py

@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, scripts/purge/replace.py
 created: 2026-08-19
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.7 remediation review; reproduced independently by the parent)
-pinned_at: 7da5ce3
+pinned_at: c3d2201
 resume_command: "do: decide whether the post-swap .git/logs identity lines are in scope for the purge, and if so how they are cleared, before task 8.2 swaps .git"
 context:
   - scripts/purge/replace.py

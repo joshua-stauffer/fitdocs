@@ -9,7 +9,7 @@ kind: inconsistency
 area: training-load, tests/load/test_render.py, src/fitdocs/load/render.py
 created: 2026-07-30
 surfaced_by: /kiro-impl fit-ingest (task 13.2 — the tripwire fired as designed and the maintainer ruled on the pair)
-pinned_at: 7a0d35e
+pinned_at: c3d2201
 resume_command: "/kiro-impl training-load [queue: .kiro/queue/2026-07-30-version-pair-tripwire-asserts-a-biconditional.md] Correct the version-pair tripwire's failure message to state Req 11.5's one-directional implication"
 context:
   - tests/load/test_render.py

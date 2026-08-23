@@ -9,7 +9,7 @@ kind: gap
 area: fit-ingest, src/fitdocs/metrics/stress.py, tests/metrics/test_stress.py
 created: 2026-07-30
 surfaced_by: /kiro-impl fit-ingest (task 13.4 review — found by mutation)
-pinned_at: 224de66
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-30-trimpresult-frozenness-unpinned.md] Add the missing is-frozen test for TrimpResult, matching its three sibling record types"
 context:
   - src/fitdocs/metrics/stress.py

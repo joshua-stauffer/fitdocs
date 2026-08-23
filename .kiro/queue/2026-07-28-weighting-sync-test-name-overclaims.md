@@ -9,7 +9,7 @@ kind: coverage-gap
 area: fit-ingest, tests/metrics/test_sources.py
 created: 2026-07-28
 surfaced_by: /kiro-impl fit-ingest (task 9.3 verification pass)
-pinned_at: 001aa91
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest 12.2 [queue: .kiro/queue/2026-07-28-weighting-sync-test-name-overclaims.md] Rename or extend the weighting module-sync test so its name matches what it checks"
 context:
   - tests/metrics/test_sources.py

@@ -9,7 +9,7 @@ kind: gap
 area: .kiro/queue/, .claude/skills/kiro-queue/, .claude/hooks/queue-commit-guard.py
 created: 2026-07-31
 surfaced_by: /kiro-spec-design encumbered-content-purge (inventorying the 163 pinned_at fields for the rewrite's reference-repair design)
-pinned_at: ca1d876
+pinned_at: c3d2201
 resume_command: "do: add a validator over .kiro/queue/**/*.md frontmatter — at minimum that pinned_at resolves as a commit and that kind is one of the seven values README.md documents — then fix the two violations in .kiro/queue/closed/2026-07-26-citation-vocabulary-diverges-across-layers.md [queue: .kiro/queue/2026-07-31-queue-frontmatter-values-unvalidated.md]"
 context:
   - .kiro/queue/README.md

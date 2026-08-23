@@ -9,7 +9,7 @@ kind: gap
 area: tooling, pyproject.toml, .kiro/steering/change-protocol.md
 created: 2026-07-29
 surfaced_by: /kiro-impl fit-ingest (task 10.1, review rounds 2-3)
-pinned_at: 4449d3e
+pinned_at: c3d2201
 resume_command: "do: Evaluate adding a test-order randomization plugin (e.g. pytest-randomly) to the dev group and decide whether it runs by default or on demand; if adopted, name the order-dependence anti-pattern in change-protocol.md's table"
 context:
   - pyproject.toml

@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge, scripts/purge/sweep.py
 created: 2026-08-02
 surfaced_by: /kiro-impl encumbered-content-purge (task 3.2, reviewer round 3)
-pinned_at: 9612d28
+pinned_at: c3d2201
 resume_command: "do: read scripts/purge/sweep.py lines 314-318 and 448-452, decide whether run_identity_probe_sweep can share _git_grep_files without changing that helper's -l -z contract, and either factor the exit-code split into one helper both call or add a comment at each site naming the other"
 context:
   - scripts/purge/sweep.py

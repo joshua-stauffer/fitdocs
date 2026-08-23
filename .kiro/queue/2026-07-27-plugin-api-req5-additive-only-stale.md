@@ -9,7 +9,7 @@ kind: inconsistency
 area: plugin-api, .kiro/specs/plugin-api/requirements.md
 created: 2026-07-27
 surfaced_by: adversarial review of impl/plugin-api-surface (queue sweep 2026-07-27)
-pinned_at: d8888b6
+pinned_at: c3d2201
 resume_command: "do: reconcile plugin-api requirements.md Req 5 acceptance criteria 4-6 ('shall introduce contract changes only additively' within 0.x) with the unstable-pre-1.0 statement the roadmap ratified and docs/plugins.md:291-300 now carries — this is a criterion change to an approved spec, so record it as a proper amendment rather than an in-place edit [queue: .kiro/queue/2026-07-27-plugin-api-req5-additive-only-stale.md]"
 context:
   - .kiro/specs/plugin-api/requirements.md

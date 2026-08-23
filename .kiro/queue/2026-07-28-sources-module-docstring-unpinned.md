@@ -9,7 +9,7 @@ kind: coverage-gap
 area: fit-ingest, src/fitdocs/metrics/sources.py
 created: 2026-07-28
 surfaced_by: /kiro-impl fit-ingest (task 9.2, round-3 reviewer)
-pinned_at: 03221ca
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest 12.1 [queue: .kiro/queue/2026-07-28-sources-module-docstring-unpinned.md] Pin the sources.py module docstring's restated citation claims the way the records themselves are pinned"
 context:
   - src/fitdocs/metrics/sources.py

@@ -9,7 +9,7 @@ kind: chore
 area: training-load, tests/load/
 created: 2026-07-26
 surfaced_by: /kiro-validate-impl training-load
-pinned_at: 3121bb6
+pinned_at: c3d2201
 resume_command: "do: Extract the duplicated _build_data_root / _docs_of / _write_load_settings / _RecordingSession / _table_count helpers in tests/load/ into a shared non-test module, and adopt isolated_registry in the two 6.x e2e modules"
 context:
   - tests/load/test_engine.py

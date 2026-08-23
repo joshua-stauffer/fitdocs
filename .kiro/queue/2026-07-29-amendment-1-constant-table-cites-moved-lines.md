@@ -9,7 +9,7 @@ kind: docs
 area: fit-ingest, .kiro/specs/fit-ingest/requirements.md
 created: 2026-07-29
 surfaced_by: /kiro-impl fit-ingest (task 10.1, review round 2)
-pinned_at: 4449d3e
+pinned_at: c3d2201
 resume_command: "do: Decide whether the Amendment 1 constant table in fit-ingest requirements.md is a historical record or a description of current code, then either date-stamp it or refresh its sites — do not renumber the lines"
 context:
   - .kiro/specs/fit-ingest/requirements.md

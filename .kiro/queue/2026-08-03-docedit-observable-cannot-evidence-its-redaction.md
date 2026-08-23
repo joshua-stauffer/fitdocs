@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge, src/fitdocs/load/docedit.py
 created: 2026-08-03
 surfaced_by: /kiro-impl encumbered-content-purge (task 3.5 review)
-pinned_at: 9d8ef1c
+pinned_at: c3d2201
 resume_command: "do: correct task 3.5's observable in tasks.md to name a check that can actually fail for src/fitdocs/load/docedit.py -- the erased zone label's presence in the pre-deletion writeup and extracted table -- and sweep the other Major 3 tasks for observables whose probe returns the same answer before and after the edit"
 context:
   - .kiro/specs/encumbered-content-purge/tasks.md

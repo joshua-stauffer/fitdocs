@@ -9,7 +9,7 @@ kind: gap
 area: athlete-benchmarks, src/fitdocs/load/types.py, tests/load/test_types.py
 created: 2026-07-26
 surfaced_by: /kiro-impl athlete-benchmarks (task 4.1 round-2 reviewer, own mutation sweep)
-pinned_at: 9a22c87
+pinned_at: c3d2201
 resume_command: "do: pin the declared return annotations of ProfileView.benchmark and .has_benchmark in tests/load/test_types.py's signature test, then verify by re-running the surviving mutation [queue: .kiro/queue/2026-07-26-protocol-return-annotations-unpinned.md]"
 context:
   - src/fitdocs/load/types.py

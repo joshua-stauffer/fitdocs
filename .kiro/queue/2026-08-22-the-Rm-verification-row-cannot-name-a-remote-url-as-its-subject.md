@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge, scripts/purge
 created: 2026-08-22
 surfaced_by: kiro-review round 2 of chore/repo-rename
-pinned_at: 1618b33
+pinned_at: c3d2201
 resume_command: "do: decide how the Rm verification row names its subject remote now that two URLs may resolve at once — widen RowResult.subject beyond Path, or state explicitly that Rm is reported by the RemoteReconciliation result types and not by RowResult"
 context:
   - scripts/purge/verify.py

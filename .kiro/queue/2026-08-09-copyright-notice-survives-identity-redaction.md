@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, Req 11.4
 created: 2026-08-09
 surfaced_by: reviewer subagent during /kiro-impl encumbered-content-purge (task 6.4 review, measured in a genuinely rewritten clone)
-pinned_at: ad7a592
+pinned_at: c3d2201
 resume_command: "do: Decide whether Req 11.4 is satisfied by redacting the name inside the copyright and trademark notices, or whether the notice text itself must be removed from history, and record the decision before task 7.2 runs."
 context:
   - .kiro/specs/encumbered-content-purge/requirements.md

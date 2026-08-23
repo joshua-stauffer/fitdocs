@@ -9,7 +9,7 @@ kind: inconsistency
 area: training-load, .kiro/specs/training-load
 created: 2026-07-26
 surfaced_by: /kiro-queue — closing 2026-07-26-phase4-specs-pin-withdrawn-supports-member
-pinned_at: 1efd0a4
+pinned_at: c3d2201
 resume_command: "do: repin training-load's own three remaining `LoadCalculator.supports` references onto the module-level supports_activity — design.md:292 (a revalidation trigger), design.md:682 (Req 1.14's traceability row) and tasks.md:34 — leaving design.md:812-820's ruling and design.md:479's historical diagram comment as they are [queue: .kiro/queue/2026-07-26-training-load-own-supports-references-not-repinned.md]"
 context:
   - .kiro/specs/training-load/design.md

@@ -9,7 +9,7 @@ kind: gap
 area: .claude/skills/kiro-spec-batch, .claude/skills/kiro-validate-impl, .claude/skills/kiro-queue, .kiro/steering/concurrency.md
 created: 2026-07-26
 surfaced_by: /kiro-steering making the agent log a first-class session artifact (95bb6a1)
-pinned_at: 95bb6a1
+pinned_at: c3d2201
 resume_command: "do: Add the shared-log read/write points to the session-level kiro skills that lack them — start with kiro-spec-batch (parallel wave dispatch), then kiro-validate-impl and kiro-queue. Mirror the preflight read+claim and merge-back MERGED/RELEASE pattern already in .claude/skills/kiro-impl/SKILL.md; contract in .kiro/steering/concurrency.md."
 context:
   - .kiro/steering/concurrency.md

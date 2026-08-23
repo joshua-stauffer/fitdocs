@@ -9,7 +9,7 @@ kind: gap
 area: athlete-benchmarks, src/fitdocs/load/profile.py, tests/load/test_profile.py
 created: 2026-07-26
 surfaced_by: /kiro-impl athlete-benchmarks (task 3.2, rounds 4-5 review)
-pinned_at: 84e5e56
+pinned_at: c3d2201
 resume_command: "/kiro-impl athlete-benchmarks [queue: .kiro/queue/2026-07-26-store-profileerror-paths-undocumented.md] Document with_benchmark's ProfileError path and pin the save refusal message"
 context:
   - .kiro/specs/athlete-benchmarks/design.md

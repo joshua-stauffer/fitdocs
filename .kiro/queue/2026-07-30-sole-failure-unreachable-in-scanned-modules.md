@@ -9,7 +9,7 @@ kind: docs
 area: .kiro/steering/change-protocol.md, .claude/skills/kiro-review, tests/metrics/test_constant_guard.py
 created: 2026-07-30
 surfaced_by: /kiro-impl fit-ingest (task 13.1 review)
-pinned_at: 99f098c
+pinned_at: c3d2201
 resume_command: "do: add a note to change-protocol.md's Fixture Discrimination section (and kiro-review's mutation step) that the 12.2 literal guard reds as collateral on any line- or literal-shifting mutation to aggregates.py/power.py/stress.py, so sole-failure there means sole outside that guard [queue: .kiro/queue/2026-07-30-sole-failure-unreachable-in-scanned-modules.md]"
 context:
   - .kiro/steering/change-protocol.md

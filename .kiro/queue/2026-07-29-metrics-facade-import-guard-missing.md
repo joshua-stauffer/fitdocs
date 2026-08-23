@@ -9,7 +9,7 @@ kind: gap
 area: fit-ingest, src/fitdocs/metrics/__init__.py, tests/metrics/
 created: 2026-07-29
 surfaced_by: /kiro-impl fit-ingest task 11 (two independent verify-gate passes)
-pinned_at: 0ae83aa
+pinned_at: c3d2201
 resume_command: "do: add an import-restriction guard for src/fitdocs/metrics/__init__.py to tests/metrics/, mirroring the sibling modules' test_module_imports_from_metrics_package, so Req 17.3 gains a mechanical pin"
 context:
   - src/fitdocs/metrics/__init__.py

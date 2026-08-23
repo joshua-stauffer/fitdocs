@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, tests/purge/test_replacements.py
 created: 2026-08-17
 surfaced_by: "/kiro-impl encumbered-content-purge [queue: 2026-08-16-forbidden-string-matcher-is-blind-to-a-wrapped-token]"
-pinned_at: 89b06b8
+pinned_at: c3d2201
 resume_command: "do: give tests/purge/test_replacements.py::test_invariant_2_zero_identifying_tokens_in_commit_messages an injectable commit-message population (as invariant 1 has via _applied_content) and add the counterfactual that reds when its survivor check is reverted to a flat substring test"
 context:
   - tests/purge/test_replacements.py

@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, tests/test_forbidden_strings_source.py
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.2 review round 4)
-pinned_at: dac1a7a
+pinned_at: c3d2201
 resume_command: "do: pin the capture idiom in _root_commit_ids (tests/test_forbidden_strings_source.py) so swapping capture_output=True for stdout=PIPE, stderr=STDOUT reds, or record it as a declared-unpinned row"
 context:
   - tests/test_forbidden_strings_source.py

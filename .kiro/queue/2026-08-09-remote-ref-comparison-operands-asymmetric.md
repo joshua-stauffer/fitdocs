@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge, .kiro/specs/encumbered-content-purge/design.md, scripts/purge/verify.py
 created: 2026-08-09
 surfaced_by: /kiro-impl encumbered-content-purge (task 5.7 review, round 1)
-pinned_at: d6fe28f
+pinned_at: c3d2201
 resume_command: "do: Record in design.md's RemoteReconciliation section why an unfiltered remote operand compared against a heads-only local operand is correct for this purge, or make the two operands symmetric."
 context:
   - .kiro/specs/encumbered-content-purge/design.md

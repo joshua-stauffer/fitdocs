@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, tests/purge/test_rewrite_map_extraction.py, scripts/purge/sweep.py
 created: 2026-08-02
 surfaced_by: /kiro-impl encumbered-content-purge (tasks 3.1 and 3.2, reviewer rounds 3)
-pinned_at: 9612d28
+pinned_at: c3d2201
 resume_command: "do: close the three surviving mutations recorded in this item's Evidence -- assert UnreadableFile.reason is non-empty and specific, pin run_full_sweep's unreadable composition per-source, and give _PRIOR_MAP_PATH a typo-resistant check -- re-running each named mutation to confirm it now reds"
 context:
   - tests/purge/test_rewrite_map_extraction.py

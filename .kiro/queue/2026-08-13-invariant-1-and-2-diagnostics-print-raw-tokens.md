@@ -8,7 +8,7 @@ effort: S
 kind: gap
 area: encumbered-content-purge, tests/purge
 created: 2026-08-13
-pinned_at: 439b38c
+pinned_at: c3d2201
 resume_command: "do: Mask the survivor diagnostics in test_invariant_1_zero_identifying_tokens_in_surviving_blob_content and test_invariant_2_zero_identifying_tokens_in_commit_messages so a failure reports blob/commit ids and masked token tags rather than the raw matched tokens, following _masked_address's pattern in scripts/purge/replacements.py."
 context:
   - tests/purge/test_replacements.py

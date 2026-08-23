@@ -9,7 +9,7 @@ kind: gap
 area: load-channels, src/fitdocs/citation.py, src/fitdocs/load/channels/sources.py, tests/load/channels/test_sources.py
 created: 2026-07-30
 surfaced_by: adversarial review of chore/citation-locator-backstops (queue-tier1 batch)
-pinned_at: e2d2c40
+pinned_at: c3d2201
 resume_command: "do: decide whether Citation gets a whole-RECORD backstop rather than accumulating per-field ones, then pin authors/year/work accordingly in tests/load/channels/test_sources.py -- the per-field approach has now been applied twice (notes, then locators) and each round leaves the next field undefended [queue: .kiro/queue/2026-07-30-citation-authors-year-work-unpinned.md]"
 context:
   - src/fitdocs/load/channels/sources.py

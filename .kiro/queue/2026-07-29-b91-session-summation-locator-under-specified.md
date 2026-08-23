@@ -9,7 +9,7 @@ kind: inconsistency
 area: fit-ingest, docs/reference/banister-trimp-primary-sources.md, src/fitdocs/metrics/sources.py
 created: 2026-07-29
 surfaced_by: /kiro-impl fit-ingest (task 9.4 review rounds 1 and 3)
-pinned_at: bf588a5
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest 12.3 [queue: .kiro/queue/2026-07-29-b91-session-summation-locator-under-specified.md] Reconcile the B91 session-summation locator across the extraction doc and the integration departure"
 context:
   - docs/reference/banister-trimp-primary-sources.md

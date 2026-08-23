@@ -9,7 +9,7 @@ kind: bug
 area: conftest.py, .kiro/steering/change-protocol.md
 created: 2026-08-09
 surfaced_by: reviewer subagent during /kiro-impl encumbered-content-purge (task 6.4 review)
-pinned_at: ad7a592
+pinned_at: c3d2201
 resume_command: "do: Extend conftest.py's bytecode cache-proofing to cover scripts/ as well as src/, so mutation runs against scripts/purge/ cannot silently fail to apply, and drop the remembered `rm -rf scripts/purge/__pycache__` step from the task briefs that currently carry it."
 context:
   - conftest.py

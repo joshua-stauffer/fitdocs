@@ -9,7 +9,7 @@ kind: docs
 area: athlete-benchmarks, tests/test_benchmarks.py
 created: 2026-07-26
 surfaced_by: /kiro-impl athlete-benchmarks (task 1.3 final reviewer FOLLOW_UPS)
-pinned_at: 03e0f38
+pinned_at: c3d2201
 resume_command: "do: delete the counterfactual claim in tests/test_benchmarks.py's unrecognized_discipline_table case so it states only what the case asserts, not what it would detect [queue: .kiro/queue/2026-07-26-counterfactual-prose-task-1-2.md]"
 context:
   - tests/test_benchmarks.py

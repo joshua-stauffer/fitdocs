@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, scripts/purge/adopt.py
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.3 review)
-pinned_at: 0a6535d
+pinned_at: c3d2201
 resume_command: "do: state the top-level-only scope of build_checklist's .git enumeration in the provenance record as a known limit, or extend the enumeration to the nested cases (custom hooks, non-default info/exclude)"
 context:
   - scripts/purge/adopt.py

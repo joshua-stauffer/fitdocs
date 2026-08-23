@@ -9,7 +9,7 @@ kind: inconsistency
 area: athlete-benchmarks, src/fitdocs/benchmarks.py, src/fitdocs/load/profile.py
 created: 2026-07-26
 surfaced_by: /kiro-impl athlete-benchmarks (task 3.2, debug pass + rounds 3-5 review)
-pinned_at: 84e5e56
+pinned_at: c3d2201
 resume_command: "/kiro-impl athlete-benchmarks [queue: .kiro/queue/2026-07-26-scope-canonicalisation-duplicated.md] Give fitdocs.benchmarks a public scope-canonicalisation helper and have the profile store consume it"
 context:
   - .kiro/specs/athlete-benchmarks/design.md

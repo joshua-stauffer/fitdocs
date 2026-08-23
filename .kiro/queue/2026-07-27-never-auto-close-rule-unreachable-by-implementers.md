@@ -9,7 +9,7 @@ kind: gap
 area: .claude/skills/, .kiro/queue/README.md
 created: 2026-07-27
 surfaced_by: /kiro-queue sweep of the top ten items (2026-07-27)
-pinned_at: 92a8003
+pinned_at: c3d2201
 resume_command: "do: put the never-auto-close rule where implementers actually read — .kiro/queue/README.md's item format section and the resume_command contract — rather than only .claude/skills/kiro-queue/SKILL.md:157 and :62, and consider whether queue-guard.py can detect a session that git mv'd an item into .kiro/queue/closed/ without the human having asked [queue: .kiro/queue/2026-07-27-never-auto-close-rule-unreachable-by-implementers.md]"
 context:
   - .claude/skills/kiro-queue/SKILL.md

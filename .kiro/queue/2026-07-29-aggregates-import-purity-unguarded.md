@@ -9,7 +9,7 @@ kind: gap
 area: fit-ingest, tests/metrics/test_aggregates.py, tests/metrics/test_power.py
 created: 2026-07-29
 surfaced_by: /kiro-impl fit-ingest (task 10.1 review round 3; escalated by task 10.2 review rounds 1-2)
-pinned_at: 4449d3e
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-29-aggregates-import-purity-unguarded.md] Add import-purity guards for aggregates.py and power.py mirroring test_stress.py's, asserting the docstring enumeration matches the real import set"
 context:
   - src/fitdocs/metrics/aggregates.py

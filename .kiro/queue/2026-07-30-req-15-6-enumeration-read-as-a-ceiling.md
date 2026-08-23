@@ -9,7 +9,7 @@ kind: docs
 area: fit-ingest, .kiro/specs/fit-ingest/requirements.md
 created: 2026-07-30
 surfaced_by: /kiro-impl fit-ingest (task 12.2, round-5 review follow-up)
-pinned_at: ab1038d
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-30-req-15-6-enumeration-read-as-a-ceiling.md] Make Req 15.6 say whether its enumeration is a floor or a closed set"
 context:
   - .kiro/specs/fit-ingest/requirements.md

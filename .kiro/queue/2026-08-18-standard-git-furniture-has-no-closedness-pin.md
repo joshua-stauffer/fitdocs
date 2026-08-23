@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, scripts/purge/adopt.py
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.3 review)
-pinned_at: 0a6535d
+pinned_at: c3d2201
 resume_command: "do: pin _STANDARD_GIT_FURNITURE's closed-ness in tests/purge/test_adopt.py the way _PINNED_ATTRS is pinned -- as a symmetric difference, so a spurious addition reds -- before Major 8 runs the halt for real"
 context:
   - scripts/purge/adopt.py

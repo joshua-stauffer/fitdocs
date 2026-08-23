@@ -9,7 +9,7 @@ kind: gap
 area: load-channels, fit-ingest, src/fitdocs/citation.py, src/fitdocs/load/channels/sources.py, src/fitdocs/metrics/sources.py
 created: 2026-07-29
 surfaced_by: adversarial review of chore/banister-resource-and-note-backstops (queue-top7 batch)
-pinned_at: 421c075
+pinned_at: c3d2201
 resume_command: "do: decide whether VerificationStatus needs terms for (a) primary text read but a companion primary work disagrees, and (b) content primary-attested while a bibliographic field rests on a catalogue record — then either add them or record the ruling that PRIMARY_TEXT plus a disclosing note is the answer [queue: .kiro/queue/2026-07-29-verificationstatus-lacks-two-needed-terms.md]"
 context:
   - src/fitdocs/load/channels/sources.py

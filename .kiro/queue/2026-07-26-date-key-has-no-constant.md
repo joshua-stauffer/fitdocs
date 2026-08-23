@@ -9,7 +9,7 @@ kind: inconsistency
 area: wiki-contract, src/fitdocs/contract.py, src/fitdocs/render/frontmatter.py
 created: 2026-07-26
 surfaced_by: /kiro-impl athlete-benchmarks (task 5.1 completion verification)
-pinned_at: c5ce672
+pinned_at: c3d2201
 resume_command: "do: add a DATE_KEY Final[str] constant to contract.py alongside its siblings and route MANAGED_KEYS, document_date and the renderer's write through it [queue: .kiro/queue/2026-07-26-date-key-has-no-constant.md]"
 context:
   - src/fitdocs/contract.py

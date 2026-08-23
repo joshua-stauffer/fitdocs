@@ -9,7 +9,7 @@ kind: gap
 area: .kiro/specs/, .kiro/queue/, tests/test_docs_guarantees.py
 created: 2026-07-30
 surfaced_by: adversarial review of spec/fit-ingest-np-window-criterion (queue-tier1 batch)
-pinned_at: 9004329
+pinned_at: c3d2201
 resume_command: "do: add a guard that every .kiro/queue/ path cited in .kiro/specs/** resolves to an existing file, then repair the nine dangling fit-ingest paths -- and settle whether closing an item should rewrite its citations or whether specs should cite an id rather than a path [queue: .kiro/queue/2026-07-30-closed-queue-paths-dangle-across-specs.md]"
 context:
   - .kiro/specs/fit-ingest/design.md

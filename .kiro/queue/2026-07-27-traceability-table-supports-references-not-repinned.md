@@ -17,7 +17,7 @@ created: 2026-07-27
 surfaced_by: review of chore/training-load-spec-repin (queue item
   2026-07-26-training-load-own-supports-references-not-repinned, whose
   "three sites" scope this item falls outside of)
-pinned_at: 54a9799
+pinned_at: c3d2201
 resume_command: "do: repin the four remaining bare `supports` references in
   .kiro/specs/training-load/design.md to `supports_activity` (or to
   `supports_activity(calculator, activity)` where a full call is named),

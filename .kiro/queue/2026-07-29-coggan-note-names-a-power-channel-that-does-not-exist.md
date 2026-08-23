@@ -9,7 +9,7 @@ kind: inconsistency
 area: load-channels, src/fitdocs/load/channels/sources.py, tests/load/channels/test_sources.py
 created: 2026-07-29
 surfaced_by: adversarial review of chore/banister-resource-and-note-backstops (queue-top7 batch)
-pinned_at: 421c075
+pinned_at: c3d2201
 resume_command: "do: correct COGGAN_TSS.note's claim that the TSS formula is what 'this package's power channel already implements' — there is no power channel; it ships in src/fitdocs/metrics/stress.py:119 power_tss — and move BACKSTOP_COGGAN_TSS_NOTE in the same commit [queue: .kiro/queue/2026-07-29-coggan-note-names-a-power-channel-that-does-not-exist.md]"
 context:
   - src/fitdocs/load/channels/sources.py

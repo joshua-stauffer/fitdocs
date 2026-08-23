@@ -9,7 +9,7 @@ kind: docs
 area: fit-ingest, tests/metrics/test_worked_examples.py
 created: 2026-07-30
 surfaced_by: /kiro-impl fit-ingest (task 12.3, review follow-up)
-pinned_at: ab1038d
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-30-committed-test-cites-a-gitignored-scan-path.md] Cite the Banister pages by number rather than by gitignored screenshot filename"
 context:
   - tests/metrics/test_worked_examples.py

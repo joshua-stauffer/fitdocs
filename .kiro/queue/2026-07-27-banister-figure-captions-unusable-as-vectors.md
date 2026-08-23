@@ -9,7 +9,7 @@ kind: trap
 area: load-channels, tests, docs/reference/banister-trimp-primary-sources.md
 created: 2026-07-27
 surfaced_by: recomputing every worked example in the primary text (docs/reference/banister-trimp-primary-sources.md §5 D4)
-pinned_at: 4a5c838
+pinned_at: c3d2201
 resume_command: "do: when writing the heart-rate channel's worked TRIMP example, compute it from the formula rather than quoting Banister's figure captions — see the arithmetic in the queue item [queue: .kiro/queue/2026-07-27-banister-figure-captions-unusable-as-vectors.md]"
 context:
   - docs/reference/banister-trimp-primary-sources.md

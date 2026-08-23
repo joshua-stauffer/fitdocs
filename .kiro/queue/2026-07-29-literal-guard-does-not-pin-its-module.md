@@ -9,7 +9,7 @@ kind: gap
 area: fit-ingest, tests/metrics/test_aggregates.py
 created: 2026-07-29
 surfaced_by: /kiro-impl fit-ingest (task 10.1, review rounds 2-3)
-pinned_at: 4449d3e
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-29-literal-guard-does-not-pin-its-module.md] Assert the literal-scan guard scans the module it names, and fold the check into task 12.1's ConstantGuard if that has landed"
 context:
   - tests/metrics/test_aggregates.py

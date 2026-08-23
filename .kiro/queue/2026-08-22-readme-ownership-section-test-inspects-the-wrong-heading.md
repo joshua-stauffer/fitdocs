@@ -9,7 +9,7 @@ kind: bug
 area: tests/test_ownership_contract.py, wiki-contract
 created: 2026-08-22
 surfaced_by: kiro-review of chore/repo-rename (reviewer designed mutations the implementer had not)
-pinned_at: 29604fc
+pinned_at: c3d2201
 resume_command: "do: fix tests/test_ownership_contract.py's section lookup so it matches the `## Ownership` heading rather than the `### Ownership of the locations the inbox uses` subsection, then pin both README contract links independently"
 context:
   - tests/test_ownership_contract.py

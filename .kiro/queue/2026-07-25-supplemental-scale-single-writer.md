@@ -9,7 +9,7 @@ kind: gap
 area: workout-docs, src/fitdocs/render/sections.py
 created: 2026-07-25
 surfaced_by: /kiro-validate-design on the Avg METs scale defect
-pinned_at: 2a01dfd
+pinned_at: c3d2201
 resume_command: 'do: Decide whether _SUPPLEMENTALS needs a plausibility guard or per-writer scale resolution, once a second FIT writer emitting these keys actually exists.'
 context:
   - src/fitdocs/render/sections.py

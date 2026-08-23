@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge
 created: 2026-08-22
 surfaced_by: kiro-review of Amendment 3 (chore/retain-old-remote)
-pinned_at: cbe0efa
+pinned_at: c3d2201
 resume_command: "do: reconcile Req 9.3's 'permanently unresolvable' claim and the surviving 'archive is the only copy anywhere' sentences with Amendment 3's retention, before task 9.2 writes the provenance record"
 context:
   - .kiro/specs/encumbered-content-purge/requirements.md

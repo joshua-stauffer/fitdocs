@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge, .kiro/specs/encumbered-content-purge/design.md
 created: 2026-08-07
 surfaced_by: /kiro-impl encumbered-content-purge (tasks 4.1, 5.2 reviews)
-pinned_at: 7d49c84
+pinned_at: c3d2201
 resume_command: "do: Reconcile design.md's IdentityErasure vocabulary table with what task 4.1 actually did -- the two table-value constants were deleted, not renamed -- and correct the citation sites that now name identifiers existing at no commit."
 context:
   - .kiro/specs/encumbered-content-purge/design.md

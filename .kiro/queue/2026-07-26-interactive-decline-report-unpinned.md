@@ -9,7 +9,7 @@ kind: gap
 area: training-load, src/fitdocs/load/engine.py, tests/load/
 created: 2026-07-26
 surfaced_by: /kiro-validate-impl training-load
-pinned_at: 3121bb6
+pinned_at: c3d2201
 resume_command: "/kiro-impl training-load [queue: .kiro/queue/2026-07-26-interactive-decline-report-unpinned.md] Pin the interactive-decline path through to the report bucket"
 context:
   - .kiro/specs/training-load/requirements.md

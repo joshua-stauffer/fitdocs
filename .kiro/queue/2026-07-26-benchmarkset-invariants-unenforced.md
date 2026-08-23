@@ -9,7 +9,7 @@ kind: inconsistency
 area: athlete-benchmarks, src/fitdocs/benchmarks.py
 created: 2026-07-26
 surfaced_by: /kiro-impl athlete-benchmarks (task 1.3 reviewer FOLLOW_UPS)
-pinned_at: e50522c
+pinned_at: c3d2201
 resume_command: "do: reconcile design.md's BenchmarkSelection/BenchmarkVocabulary invariants with what src/fitdocs/benchmarks.py actually enforces -- either add the __post_init__ uniqueness check and establish a canonical order, or correct the design text to state both are parser-boundary guarantees [queue: .kiro/queue/2026-07-26-benchmarkset-invariants-unenforced.md]"
 context:
   - src/fitdocs/benchmarks.py

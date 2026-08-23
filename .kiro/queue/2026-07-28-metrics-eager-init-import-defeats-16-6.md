@@ -9,7 +9,7 @@ kind: gap
 area: fit-ingest, src/fitdocs/metrics/__init__.py, src/fitdocs/metrics/sources.py
 created: 2026-07-28
 surfaced_by: /kiro-impl fit-ingest (task 9.1 — implementer CONCERN, independently confirmed by the reviewer)
-pinned_at: 8e72bfc
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-28-metrics-eager-init-import-defeats-16-6.md] Decide whether Req 16.6's import-isolation is a real requirement and, if so, make metrics/__init__.py lazy"
 context:
   - src/fitdocs/metrics/__init__.py

@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, tests/purge, .kiro/specs/encumbered-content-purge/tasks.md
 created: 2026-08-07
 surfaced_by: /kiro-impl encumbered-content-purge (tasks 3.11, 4.3 reviews)
-pinned_at: 7d49c84
+pinned_at: c3d2201
 resume_command: "do: Decide an owner for the token-literal detections in tests/purge/test_tree_removal.py and the bare token in tests/test_forbidden_strings_source.py's docstring, then land the change before Major 7 runs."
 context:
   - tests/purge/test_tree_removal.py

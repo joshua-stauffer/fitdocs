@@ -9,7 +9,7 @@ kind: inconsistency
 area: fit-ingest, src/fitdocs/metrics/power.py, src/fitdocs/metrics/sources.py
 created: 2026-07-30
 surfaced_by: /kiro-impl fit-ingest (task 13.1 review, restated by the follow-on correction review)
-pinned_at: 7a0d35e
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-30-np-rolling-window-named-in-seconds-used-as-samples.md] Resolve the seconds-vs-samples naming of the NP rolling-window constant"
 context:
   - src/fitdocs/metrics/power.py

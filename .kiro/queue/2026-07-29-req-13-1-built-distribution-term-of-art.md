@@ -9,7 +9,7 @@ kind: inconsistency
 area: training-load, .kiro/specs/training-load/requirements.md
 created: 2026-07-29
 surfaced_by: adversarial review of the branch that added the sdist exclusion for the withdrawn methodology's tables (queue-top7 batch)
-pinned_at: 0080811
+pinned_at: c3d2201
 resume_command: "do: amend training-load requirements.md criterion 13.1 so its distribution clause names both artifacts `uv build` produces rather than the PyPA term of art \"built distribution\", which excludes sdists — recording it as a proper amendment to an approved spec [queue: .kiro/queue/2026-07-29-req-13-1-built-distribution-term-of-art.md]"
 context:
   - .kiro/specs/training-load/requirements.md

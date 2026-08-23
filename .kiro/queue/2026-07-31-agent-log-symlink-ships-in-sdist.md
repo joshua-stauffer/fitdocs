@@ -9,7 +9,7 @@ kind: gap
 area: distribution, encumbered-content-purge, pyproject.toml, tests/load/test_packaging.py
 created: 2026-07-31
 surfaced_by: /kiro-spec-design encumbered-content-purge
-pinned_at: ff52586
+pinned_at: c3d2201
 resume_command: "/kiro-spec-requirements distribution [queue: .kiro/queue/2026-07-31-agent-log-symlink-ships-in-sdist.md] Decide whether the root agent-log symlink is excluded from the sdist or asserted absent"
 context:
   - .kiro/specs/distribution/design.md

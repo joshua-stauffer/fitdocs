@@ -9,7 +9,7 @@ kind: gap
 area: fit-ingest, .kiro/specs/fit-ingest/tasks.md
 created: 2026-07-29
 surfaced_by: /kiro-impl fit-ingest (task 10.2, review round 1)
-pinned_at: 373405a
+pinned_at: c3d2201
 resume_command: "do: Update fit-ingest tasks.md task 13.1's migration-surface note to name all four exact-value NP sites that task 10.2 left behind, with the recomputed complete-window values"
 context:
   - .kiro/specs/fit-ingest/tasks.md

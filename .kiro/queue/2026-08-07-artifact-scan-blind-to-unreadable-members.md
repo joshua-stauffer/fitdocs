@@ -9,7 +9,7 @@ kind: gap
 area: distribution, scripts/purge/verify.py, tests/load/test_packaging.py
 created: 2026-08-07
 surfaced_by: /kiro-impl encumbered-content-purge (task 5.4 review)
-pinned_at: 7d49c84
+pinned_at: c3d2201
 resume_command: "do: Decide how a dangling symlink member in the built sdist should be scanned for Req 10.4, then apply that decision to both the packaging guard and the purge's artifacts verification row."
 context:
   - scripts/purge/verify.py

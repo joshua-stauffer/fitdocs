@@ -9,7 +9,7 @@ kind: bug
 area: fit-ingest, src/fitdocs/metrics/power.py
 created: 2026-07-30
 surfaced_by: adversarial review of chore/power-absent-sample-fill, round 2 (queue-tier1 batch)
-pinned_at: dd10f9f
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-30-min-span-guard-bypassable-by-a-leading-dropout.md] Decide whether NP_MIN_SPAN_S governs the overall sample span or the retained power grid, and make the guard measure whichever it is"
 context:
   - src/fitdocs/metrics/power.py

@@ -9,7 +9,7 @@ kind: gap
 area: training-load, tests/load/test_settings.py
 created: 2026-07-26
 surfaced_by: /kiro-impl training-load (round 3 review of queue/2026-07-26-second-load-reader-spellings-escape-guards)
-pinned_at: 7f692ec
+pinned_at: c3d2201
 resume_command: "/kiro-impl training-load [queue: .kiro/queue/2026-07-26-class-scoped-second-reader-bindings.md] Decide whether to descend into class objects in the reader-spy sweep or formally accept class-scoped bindings as an open residual"
 context:
   - tests/load/test_settings.py

@@ -9,7 +9,7 @@ kind: inconsistency
 area: training-load, src/fitdocs/load/engine.py
 created: 2026-07-27
 surfaced_by: /kiro-impl athlete-benchmarks (task 6.1 review, rounds 1 and 2, independently)
-pinned_at: 1b43caa
+pinned_at: c3d2201
 resume_command: "do: decide whether the recompute-time strip at src/fitdocs/load/engine.py:402-403 is redundant with apply_frontmatter_load's own filter — remove it and correct the docstring, or add the test that makes it observable [queue: .kiro/queue/2026-07-27-recompute-strip-inert.md]"
 context:
   - src/fitdocs/load/engine.py

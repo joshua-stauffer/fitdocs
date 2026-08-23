@@ -9,7 +9,7 @@ kind: chore
 area: tooling, tests/load/test_engine.py, tests/load/test_arbitration_e2e.py, tests/test_confinement.py, .kiro/steering/change-protocol.md
 created: 2026-07-26
 surfaced_by: /kiro-impl athlete-benchmarks (task 4.2 review, Finding 2 + FOLLOW_UPS)
-pinned_at: f7bdf97
+pinned_at: c3d2201
 resume_command: "do: decide the convention for referring to production code from a test docstring -- stable anchors (function/symbol names) rather than line numbers, or a check that validates the citations -- then convert the 15 existing engine.py:NNN hits [queue: .kiro/queue/2026-07-26-line-number-citations-in-tests-go-stale.md]"
 context:
   - tests/load/test_engine.py

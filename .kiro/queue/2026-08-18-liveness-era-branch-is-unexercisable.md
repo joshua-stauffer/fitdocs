@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, tests/test_forbidden_strings_source.py
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.2 review rounds 2 and 3)
-pinned_at: dac1a7a
+pinned_at: c3d2201
 resume_command: "do: at task 8.3, verify by hand that the source-liveness test reports its named post-replacement skip on the replaced repository, and record the observation -- no suite test can drive that branch"
 context:
   - tests/test_forbidden_strings_source.py

@@ -1711,7 +1711,7 @@ written literally below is one of those.
 
 - [ ] 9. Aftermath: references, record part two, and retirement
 
-- [ ] 9.1 Repair every open pin and document the epoch convention
+- [x] 9.1 Repair every open pin and document the epoch convention
   - On a short-lived branch created on the new history — the ordinary
     protocol is back — run the pin repair with the replacement root's short
     id across every open queue item

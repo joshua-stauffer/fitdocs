@@ -9,7 +9,7 @@ kind: gap
 area: fit-ingest, src/fitdocs/metrics/sources.py
 created: 2026-07-30
 surfaced_by: /kiro-impl fit-ingest (task 12.2, reviewer follow-up round 2)
-pinned_at: 2d69443
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-30-constant-sources-has-no-production-consumer.md] Decide whether Req 16.6 wants a real consumer of CONSTANT_SOURCES or is satisfied by the registry alone"
 context:
   - src/fitdocs/metrics/sources.py

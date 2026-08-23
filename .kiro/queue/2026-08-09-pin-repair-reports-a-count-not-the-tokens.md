@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, scripts/purge/pins.py
 created: 2026-08-09
 surfaced_by: /kiro-impl encumbered-content-purge (task 5.6 review, round 1)
-pinned_at: d6fe28f
+pinned_at: c3d2201
 resume_command: "do: Decide before task 8.1 runs whether ReferenceRepair should return the unrepaired identifier-shaped tokens themselves rather than only their count, since 8.2's provenance record is written after the pre-rewrite repository is gone."
 context:
   - scripts/purge/pins.py

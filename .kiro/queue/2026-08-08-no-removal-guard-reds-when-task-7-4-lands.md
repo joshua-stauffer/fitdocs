@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge, tests/purge/test_adopt.py, scripts/purge/adopt.py
 created: 2026-08-08
 surfaced_by: /kiro-impl encumbered-content-purge (task 5.5, debug escalation and rounds 3-5 review)
-pinned_at: e40f6ec
+pinned_at: c3d2201
 resume_command: "do: Before implementing task 7.4 of encumbered-content-purge, read this item -- 7.4 must NARROW the pins in tests/purge/test_adopt.py so destruction exists but is gated on verification, and must not delete test_module_source_contains_no_directory_removal_call."
 context:
   - tests/purge/test_adopt.py

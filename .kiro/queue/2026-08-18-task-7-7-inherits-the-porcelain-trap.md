@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge, .kiro/specs/encumbered-content-purge/tasks.md
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.4 review)
-pinned_at: b7c5a3d
+pinned_at: c3d2201
 resume_command: "do: decide whether task 7.7's rehearsal asserts a tracked-files-scoped porcelain or omits the root symlink from the scratch working tree, before 7.7 is implemented"
 context:
   - .kiro/specs/encumbered-content-purge/tasks.md

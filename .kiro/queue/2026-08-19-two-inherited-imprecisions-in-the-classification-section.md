@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge, docs/reference/history-rewrites.md
 created: 2026-08-19
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.8 classification, final review FOLLOW_UPS 1 and 2)
-pinned_at: 831aa5c
+pinned_at: c3d2201
 resume_command: "do: correct the 'three of the five observed-mutation rows' numeral and row 7.3's misplaced parenthetical in the classification section, both inherited from earlier rounds"
 context:
   - docs/reference/history-rewrites.md

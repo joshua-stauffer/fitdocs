@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge, scripts/purge/replacements.py, .kiro/queue
 created: 2026-08-17
 surfaced_by: /kiro-impl encumbered-content-purge (rewrite-preconditions, verifying the 2026-08-13 build_rules clone-instruction item)
-pinned_at: 89b06b8
+pinned_at: c3d2201
 resume_command: "do: Re-measure _orphaned_commit_identity_addresses and the unreachable-object population against the current working repository, then correct the three stale claims listed in the Evidence section -- the two in scripts/purge/replacements.py's docstrings and the two in .kiro/queue/2026-08-09-shared-object-database-pruned-during-6-4-remediation.md's front matter and body."
 context:
   - scripts/purge/replacements.py

@@ -9,7 +9,7 @@ kind: docs
 area: fit-ingest, tests/metrics/test_sources.py
 created: 2026-07-29
 surfaced_by: /kiro-impl fit-ingest (task 10.1, review round 3)
-pinned_at: 4449d3e
+pinned_at: c3d2201
 resume_command: "do: Simplify the tests/metrics/test_sources.py module docstring's description of the constant sync test, since all seven constants are now read the same way"
 context:
   - tests/metrics/test_sources.py

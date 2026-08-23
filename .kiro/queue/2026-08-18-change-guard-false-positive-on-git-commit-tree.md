@@ -9,7 +9,7 @@ kind: inconsistency
 area: .claude/hooks/change-guard.py
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.7, parent session reproducing the post-swap reflog state by hand)
-pinned_at: aeabf8e
+pinned_at: c3d2201
 resume_command: "do: make change-guard.py's GIT_COMMIT regex not match `git commit-tree` (and check `git commit-graph` too), then pin both with a test"
 context:
   - .claude/hooks/change-guard.py

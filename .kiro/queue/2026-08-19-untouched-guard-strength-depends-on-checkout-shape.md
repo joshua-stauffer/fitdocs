@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, tests/purge/test_replace_rehearsal.py
 created: 2026-08-19
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.7, final review FOLLOW_UPS 1 and 2)
-pinned_at: 7da5ce3
+pinned_at: c3d2201
 resume_command: "do: tighten the _assert_untouched docstring's HEAD-arm clause to the measured general rule, and decide whether the rehearsal should pin its checkout shape"
 context:
   - tests/purge/test_replace_rehearsal.py

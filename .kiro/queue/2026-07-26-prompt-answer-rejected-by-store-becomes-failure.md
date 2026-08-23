@@ -9,7 +9,7 @@ kind: gap
 area: athlete-benchmarks, src/fitdocs/load/prompts.py, .kiro/specs/athlete-benchmarks/design.md
 created: 2026-07-26
 surfaced_by: /kiro-impl athlete-benchmarks (task 4.2 reviewer FOLLOW_UPS)
-pinned_at: f7bdf97
+pinned_at: c3d2201
 resume_command: "do: decide how collect_missing_fields should handle a value the session accepted but the store rejects -- re-ask, decline, or propagate -- and record the decision in athlete-benchmarks design.md's PromptFlowIntegration before implementing [queue: .kiro/queue/2026-07-26-prompt-answer-rejected-by-store-becomes-failure.md]"
 context:
   - src/fitdocs/load/prompts.py

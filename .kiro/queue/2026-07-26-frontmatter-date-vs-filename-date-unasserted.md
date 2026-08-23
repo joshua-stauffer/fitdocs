@@ -9,7 +9,7 @@ kind: gap
 area: wiki-contract, athlete-benchmarks, src/fitdocs/render/frontmatter.py, src/fitdocs/layout.py
 created: 2026-07-26
 surfaced_by: /kiro-impl athlete-benchmarks (task 5.1 completion verification)
-pinned_at: c5ce672
+pinned_at: c3d2201
 resume_command: "do: add a test asserting a rendered document's frontmatter date equals the date component of its own filename, so the two independent f-string sites cannot drift [queue: .kiro/queue/2026-07-26-frontmatter-date-vs-filename-date-unasserted.md]"
 context:
   - src/fitdocs/render/frontmatter.py

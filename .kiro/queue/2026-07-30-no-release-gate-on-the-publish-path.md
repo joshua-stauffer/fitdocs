@@ -9,7 +9,7 @@ kind: gap
 area: distribution, tests/load/test_packaging.py, pyproject.toml
 created: 2026-07-30
 surfaced_by: adversarial review of chore/sdist-content-keyed-guard (queue-tier1 batch)
-pinned_at: 9e508e1
+pinned_at: c3d2201
 resume_command: "/kiro-impl distribution [queue: .kiro/queue/2026-07-30-no-release-gate-on-the-publish-path.md] Implement the licensing gate that inspects built artifacts and refuses to publish encumbered material, which distribution/design.md already specifies"
 context:
   - .kiro/specs/distribution/design.md

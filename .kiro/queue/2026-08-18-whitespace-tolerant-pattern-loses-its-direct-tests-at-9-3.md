@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, tests/purge/test_replacements.py, tests/_forbidden_strings.py
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.2 review round 1)
-pinned_at: dac1a7a
+pinned_at: c3d2201
 resume_command: "do: at task 9.3, relocate test_whitespace_tolerant_pattern_joins_words_with_flexible_whitespace and test_whitespace_tolerant_pattern_matches_across_a_line_wrap out of tests/purge/test_replacements.py before deleting it, or record that the helper is pinned only indirectly through matches()"
 context:
   - tests/purge/test_replacements.py

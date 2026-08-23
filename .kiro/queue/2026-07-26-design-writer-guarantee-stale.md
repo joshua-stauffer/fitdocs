@@ -9,7 +9,7 @@ kind: inconsistency
 area: athlete-benchmarks, .kiro/specs/athlete-benchmarks/design.md
 created: 2026-07-26
 surfaced_by: /kiro-impl athlete-benchmarks (task 3.2, rounds 2-5 review)
-pinned_at: 84e5e56
+pinned_at: c3d2201
 resume_command: "/kiro-spec-design athlete-benchmarks [queue: .kiro/queue/2026-07-26-design-writer-guarantee-stale.md] Amend the BenchmarkStore writer/reader shape guarantee to name the canonicaliser and the re-parse"
 context:
   - .kiro/specs/athlete-benchmarks/design.md

@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, scripts/purge/adopt.py, .kiro/specs/encumbered-content-purge/design.md
 created: 2026-08-08
 surfaced_by: /kiro-impl encumbered-content-purge (task 5.5 review, round 1)
-pinned_at: e40f6ec
+pinned_at: c3d2201
 resume_command: "do: Decide whether the CloneAdoption identity precondition must also assert the absence of GIT_AUTHOR_EMAIL / GIT_COMMITTER_EMAIL / EMAIL in the environment, and amend design.md's `#### CloneAdoption` 'Asserted precondition, not luck' subsection before changing scripts/purge/adopt.py -- the current narrow check matches what the design prescribes, so this is a design-level gap, not an implementation defect."
 context:
   - scripts/purge/adopt.py

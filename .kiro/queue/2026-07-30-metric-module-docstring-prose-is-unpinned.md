@@ -9,7 +9,7 @@ kind: gap
 area: fit-ingest, tests/metrics/test_constant_guard.py, src/fitdocs/metrics/power.py
 created: 2026-07-30
 surfaced_by: /kiro-impl fit-ingest (task 13.1 and its follow-on correction, reviewer follow-up)
-pinned_at: 7a0d35e
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest [queue: .kiro/queue/2026-07-30-metric-module-docstring-prose-is-unpinned.md] Decide how metric-module docstring claims get pinned, given records get whole-value backstops and modules get nothing"
 context:
   - src/fitdocs/metrics/power.py

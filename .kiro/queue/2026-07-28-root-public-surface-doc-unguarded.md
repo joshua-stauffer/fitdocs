@@ -9,7 +9,7 @@ kind: gap
 area: docs/plugins.md, tests/test_docs_guarantees.py
 created: 2026-07-28
 surfaced_by: independent task-graph review during /kiro-spec-tasks fit-ingest
-pinned_at: 9df1d7b
+pinned_at: c3d2201
 resume_command: "do: add a test to tests/test_docs_guarantees.py asserting the fitdocs root surface list in docs/plugins.md matches fitdocs.__all__, mirroring the existing fitdocs.load guard"
 context:
   - docs/plugins.md

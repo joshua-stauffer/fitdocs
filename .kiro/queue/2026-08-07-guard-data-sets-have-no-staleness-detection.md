@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, tests/test_forbidden_strings.py, scripts/purge/sweep.py
 created: 2026-08-07
 surfaced_by: /kiro-impl encumbered-content-purge (tasks 4.4, 5.2, 5.4 reviews)
-pinned_at: 7d49c84
+pinned_at: c3d2201
 resume_command: "do: Add a reconciliation test that the standing guard's exemption table matches a live scan with no stale and no uncovered entries, and give the sweep's probe set a count anchor in its own module's tests."
 context:
   - tests/test_forbidden_strings.py

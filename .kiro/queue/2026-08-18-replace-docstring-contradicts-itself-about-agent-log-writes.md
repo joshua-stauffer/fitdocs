@@ -9,7 +9,7 @@ kind: inconsistency
 area: encumbered-content-purge, scripts/purge/replace.py
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.6 review round 4)
-pinned_at: 78af42b
+pinned_at: c3d2201
 resume_command: "do: settle whether run_replace's `log` parameter is deliberately decoupled from old_git_dir/agent-log, then correct whichever of replace.py's two sibling docstring sentences is false under that answer"
 context:
   - scripts/purge/replace.py

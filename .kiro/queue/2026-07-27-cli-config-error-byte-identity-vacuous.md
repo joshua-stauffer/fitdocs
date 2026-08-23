@@ -9,7 +9,7 @@ kind: gap
 area: tests/test_cli.py, training-load
 created: 2026-07-27
 surfaced_by: /kiro-impl athlete-benchmarks (task 5.3 review, rounds 1 and 2)
-pinned_at: bb5ab9d
+pinned_at: c3d2201
 resume_command: "do: give tests/test_cli.py:324's config-error test the registered-stub fixture so its byte-identity assertion can fail, or state plainly that the clause is unpinned there [queue: .kiro/queue/2026-07-27-cli-config-error-byte-identity-vacuous.md]"
 context:
   - tests/test_cli.py

@@ -9,7 +9,7 @@ kind: chore
 area: repo history, .kiro/queue/
 created: 2026-07-26
 surfaced_by: pushing the repo to GitHub after the author-email history rewrite
-pinned_at: b58cf81
+pinned_at: c3d2201
 resume_command: "do: decide where the 2026-07-26 old->new commit SHA map lives durably -- commit it under docs/reference/ (or attach it to a git note/tag) rather than leaving it at .git/sha-rewrite-map-2026-07-26.tsv, and record whether refs/original/ may be expired once it is safe [queue: .kiro/queue/2026-07-26-rewrite-map-not-durable.md]"
 context:
   - .kiro/queue/closed/

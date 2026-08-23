@@ -9,7 +9,7 @@ kind: gap
 area: training-load, tests/load/test_settings.py
 created: 2026-07-27
 surfaced_by: /kiro-queue close 2026-07-26-second-load-reader-spellings-escape-guards
-pinned_at: 56012ca
+pinned_at: c3d2201
 resume_command: "/kiro-impl training-load [queue: .kiro/queue/2026-07-27-getitem-setdefault-residuals-undocumented.md] Name __getitem__ and setdefault in the literal-key walk's residual accounting, or close them"
 context:
   - tests/load/test_settings.py

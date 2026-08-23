@@ -9,7 +9,7 @@ kind: inconsistency
 area: .kiro/queue, encumbered-content-purge
 created: 2026-08-07
 surfaced_by: /kiro-impl encumbered-content-purge (task 4.3 review)
-pinned_at: 7d49c84
+pinned_at: c3d2201
 resume_command: "do: Correct .kiro/queue/2026-07-26-rewrite-map-not-durable.md's refs/original paragraph to what the commands decide -- the directory is empty -- and remove the do-not-expire-them-yet instruction, which names a safety net that no longer exists."
 context:
   - .kiro/queue/2026-07-26-rewrite-map-not-durable.md

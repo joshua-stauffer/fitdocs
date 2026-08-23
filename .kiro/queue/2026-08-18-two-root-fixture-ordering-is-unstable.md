@@ -9,7 +9,7 @@ kind: bug
 area: encumbered-content-purge, tests/test_forbidden_strings_source.py
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.2 review round 3)
-pinned_at: dac1a7a
+pinned_at: c3d2201
 resume_command: "do: make the two-root fixtures in tests/test_forbidden_strings_source.py order-independent, or give their roots distinct commit timestamps, and delete the docstring sentence stating the ordering as measured"
 context:
   - tests/test_forbidden_strings_source.py

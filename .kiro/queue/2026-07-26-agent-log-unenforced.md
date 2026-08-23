@@ -9,7 +9,7 @@ kind: gap
 area: .claude/hooks, .kiro/steering/concurrency.md, CLAUDE.md
 created: 2026-07-26
 surfaced_by: /kiro-steering making the agent log a first-class session artifact (95bb6a1)
-pinned_at: 95bb6a1
+pinned_at: c3d2201
 resume_command: "do: Add a Stop-hook check (.claude/hooks/log-guard.py, or a branch inside the existing change-guard.py) that nudges when a session committed to a branch or merged to main without appending to $(git rev-parse --git-common-dir)/agent-log. Advisory only — never gate on claims; read .kiro/steering/concurrency.md 'What the log is not' first."
 context:
   - .kiro/steering/concurrency.md

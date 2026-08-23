@@ -9,7 +9,7 @@ kind: gap
 area: encumbered-content-purge, scripts/purge/pins.py
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.5 review round 4)
-pinned_at: 9a006f0
+pinned_at: c3d2201
 resume_command: "do: add an apply_repair fixture whose write_text double writes content with no pinned_at line, assert PinRepairVerificationError plus the double's effect, and verify `if actual and actual != expected:` reds it"
 context:
   - scripts/purge/pins.py

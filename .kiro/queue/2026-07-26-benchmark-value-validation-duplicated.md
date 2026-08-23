@@ -9,7 +9,7 @@ kind: inconsistency
 area: athlete-benchmarks, src/fitdocs/load/profile.py, src/fitdocs/benchmarks.py
 created: 2026-07-26
 surfaced_by: /kiro-impl athlete-benchmarks (task 3.2, round-1 review)
-pinned_at: 84e5e56
+pinned_at: c3d2201
 resume_command: "/kiro-impl athlete-benchmarks [queue: .kiro/queue/2026-07-26-benchmark-value-validation-duplicated.md] Bind the store's and the parser's benchmark value rules with a test quantified over BenchmarkKind"
 context:
   - src/fitdocs/load/profile.py

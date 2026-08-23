@@ -9,7 +9,7 @@ kind: inconsistency
 area: fit-ingest, .kiro/specs/fit-ingest/design.md, .kiro/specs/fit-ingest/tasks.md
 created: 2026-07-30
 surfaced_by: /kiro-impl fit-ingest (task 12.3 — implementer finding, independently verified by the parent session)
-pinned_at: ab1038d
+pinned_at: c3d2201
 resume_command: "/kiro-spec-design fit-ingest [queue: .kiro/queue/2026-07-30-design-md-invents-a-coggan-worked-example.md] Remove the invented Coggan worked example from design.md and correct task 12.3's Observable clause"
 context:
   - .kiro/specs/fit-ingest/design.md

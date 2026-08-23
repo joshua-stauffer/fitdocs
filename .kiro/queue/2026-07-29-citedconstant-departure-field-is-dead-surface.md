@@ -9,7 +9,7 @@ kind: gap
 area: fit-ingest, src/fitdocs/citation.py, src/fitdocs/metrics/sources.py
 created: 2026-07-29
 surfaced_by: /kiro-impl fit-ingest (task 9.4 review round 1)
-pinned_at: bf588a5
+pinned_at: c3d2201
 resume_command: "/kiro-impl fit-ingest 12.1 [queue: .kiro/queue/2026-07-29-citedconstant-departure-field-is-dead-surface.md] Link each Departure to the constant it governs, or record why the field stays unused"
 context:
   - src/fitdocs/citation.py
