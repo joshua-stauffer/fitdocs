@@ -96,6 +96,13 @@ coefficients move the shipped metric and this layer's heart-rate load together.
 - `fitdocs.model` (`Activity`, `Modality`, `Samples`), `fitdocs.metrics`
   (`DerivedMetrics`, `power.normalized_power`, `stress.power_tss`,
   `stress.trimp`), `fitdocs.benchmarks` (`Benchmark`, `BenchmarkKind`).
+- `fitdocs.metrics.sources.weighting_for` (task 2.1, `weighting.py`): forced
+  by `stress.trimp`'s caller-resolved `weighting: WeightingPair` parameter --
+  the seam must obtain a `WeightingPair` to pass in, and `weighting_for` is
+  how the metrics layer's own default (Req 17.2) is resolved. `weighting.py`
+  calls it with `None` unconditionally (no athlete input reaches the seam),
+  so this dependency is read-only lookup, not a second source of arithmetic;
+  it is declared here because it was previously assumed rather than named.
 - Dependency direction, strictly one way and enforced by review:
 
   ```
@@ -765,7 +772,7 @@ def evaluate(
 
 **Dependencies**
 
-- Outbound: `fitdocs.metrics.stress.trimp` (P0), `fitdocs.model.Samples` (P0).
+- Outbound: `fitdocs.metrics.stress.trimp` (P0), `fitdocs.metrics.sources.weighting_for` (P0, called with `None` unconditionally), `fitdocs.model.Samples` (P0).
 - Inbound: HeartRateChannel (P0).
 
 **Contracts**: Service [x]

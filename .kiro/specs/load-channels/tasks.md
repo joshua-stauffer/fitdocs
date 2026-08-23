@@ -172,7 +172,7 @@ is what makes them safe to run concurrently despite overlapping names.
 
 - [ ] 2. The model units: weighting, terrain, configuration
 
-- [ ] 2.1 (P) Build the substitutable heart-rate weighting seam
+- [x] 2.1 (P) Build the substitutable heart-rate weighting seam
   - Define the weighting seam as a protocol exposing an activity impulse and the
     impulse of one hour held at a given heart rate, and ship exactly one
     implementation of it — no second implementation, no registry, no
@@ -637,3 +637,36 @@ is what makes them safe to run concurrently despite overlapping names.
   any production symbol. Extract the relation from the module source and
   evaluate *that*, so `** 2` → `** 3` reds the value; and assert the extraction
   matched, or a regex that finds nothing is a vacuous walk in new clothing.
+- **A value-equality assertion does not pin a delegation contract.** Task 2.1's
+  whole reason to exist (Req 5.4) is that two training-impulse computations
+  cannot coexist in the tool, yet `assert seam_value == trimp(...)` was
+  satisfied *by construction* by a duplicate implementation: the reviewer
+  replaced one method with a restated closed form and the other with a full
+  independent integration loop — neither calling `trimp` — and both left the
+  suite green. Rescaling the shipped coefficient and watching both outputs move
+  proves the arithmetic is wired, not that the call path is the shipped one.
+  Pin the path: monkeypatch the shipped function with a recording double,
+  assert it was called once with the caller's exact object by `is` identity,
+  and that its `.value` came back unmodified. Verify the patch is not a no-op
+  by rebinding production to a locally-imported alias. Tasks 3.1/3.2/3.3
+  delegate to `normalized_power`/`trimp`/pace the same way and inherit this.
+- **Re-run the old guard's mutations before deleting it.** Task 2.1 replaced a
+  substring literal scan with a strictly better AST scan — which then could not
+  see comments or docstrings, silently regressing two round-1 catches to green,
+  one of them the module's own written promise to restate the coefficients
+  "not even in prose". Neither guard subsumes the other (`.64` is AST-visible
+  and textually absent; a comment is textual and AST-invisible), so both ship.
+  A replacement that improves one axis and vacates another reads as progress
+  and is the oscillation shape § 5.6 warns does not terminate.
+- **A helper shared by two guards is a single point of failure across both.**
+  The paired scans read their values off `WEIGHTING_PAIRS` via one helper; if
+  it resolved empty, both would pass blind. It carries
+  `assert len(disputed_values) >= 4` so it fails loudly instead — the
+  vacuous-walk rule applied one level up, at the fixture source rather than the
+  walk.
+- **A line-range pointer into a spec doc breaks on any edit above it.** Task
+  2.1 amended `design.md` and invalidated, inside its own diff, the one pointer
+  that indexed `design.md` by line — the repo's most-repeated defect species,
+  self-inflicted in a single change. Cite the section heading; if a range is
+  kept, re-verify both boundary lines with `sed -n '<a>p;<b>p'` after any edit
+  to that file.
