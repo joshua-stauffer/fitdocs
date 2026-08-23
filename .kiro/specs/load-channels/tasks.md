@@ -287,7 +287,7 @@ is what makes them safe to run concurrently despite overlapping names.
   - _Boundary: PowerChannel_
   - _Depends: 1.3_
 
-- [ ] 3.2 (P) Implement the heart-rate channel
+- [x] 3.2 (P) Implement the heart-rate channel
   - Compute the load as the activity's impulse divided by the impulse of one
     hour held at the threshold heart rate, times one hundred, taking both terms
     from the injected weighting seam and never from the derived-metric field
@@ -766,3 +766,36 @@ is what makes them safe to run concurrently despite overlapping names.
   citation key appeared in test prose — scrubbing every mention stayed green.
   Importing `COGGAN_TSS` and asserting `COGGAN_TSS.key` makes a rename break
   collection with `ImportError` at the earliest possible point instead.
+- **A spec bullet can be stale, and following it faithfully ships a defect.**
+  Task 3.2's bullet (2026-07-25) required documenting that intervals.icu
+  "computes the heart-rate load the same way and requires the same three
+  inputs", an interop match. `INTERVALS_ICU_HRSS`'s note was corrected
+  2026-07-26 to say the read text establishes no such thing, the claim was
+  rolled back from the docstring and the DIVERGENCES entry, and
+  `test_sources.py:1089` is a standing guard against its return. The task text
+  was never updated, so the implementer wrote the overclaim one file over from
+  where the guard reaches. When a task bullet and a citation disagree, the
+  citation wins — and the stale bullet is a queue item, not something the task
+  may edit. Queued at `2026-08-24-task-3-2-bullet-demands-a-retired-intervals-icu-claim`.
+- **`assert a != b != c` chains and never compares `a` with `c`.** Task 3.2
+  used it for "pairwise-distinct" insufficiency details; fully swapping the two
+  outer texts passed 657 tests. Write explicit pairwise comparisons across
+  every site, assert each value's own content, and verify by swapping *and* by
+  emptying each.
+- **At the identity point a square root is invisible.** The heart-rate
+  channel's whole amendment is that intensity is `sqrt(impulse_ratio)`, not the
+  bare ratio — but at threshold both are exactly 1.0, so the headline
+  observable pins nothing about it. Deleting `sqrt` reds *only* the
+  sub-threshold fixture (ratio 0.5608 vs root 0.7489). Any assertion about a
+  transform must be made where the transform does something.
+- **A negative guard catches the spelling it retired, not the claim.** Two
+  literals in 3.2's overclaim guard were checked; one had never appeared in the
+  retired text at all and was inert. Non-verbatim restatements ("computes it
+  identically") and *additive* overclaims that keep the exculpating phrases
+  still pass. That is the accepted terminal limit of substring guards in this
+  spec — record it, do not re-engineer it a fourth time.
+- **Queue items committed to `main` are invisible from a spec branch.** A
+  reviewer correctly reported a docstring's "queued for a maintainer ruling"
+  claim as unbacked, because the branch is based on an older `main`. The claim
+  was true in the repo. Verify such a reference against `main`, not the
+  worktree, and expect it to resolve only after the pre-merge rebase.
