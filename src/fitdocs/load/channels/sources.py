@@ -143,8 +143,16 @@ COGGAN_TSS: Final[Citation] = Citation(
     "power-dependent intensity weighting factor\", computed in the text's "
     "own steps 6-8 as normalized work (NP x duration in seconds) x IF, "
     "divided by (threshold power x 3600) x 100 -- i.e. "
-    "TSS = duration_s * NP * IF / (FTP * 3600) * 100, matching the "
-    "formula this package's power channel already implements. The text "
+    "TSS = duration_s * NP * IF / (FTP * 3600) * 100, which is the "
+    "formula this package ships as fitdocs.metrics.stress.power_tss. "
+    "(Corrected 2026-08-23, queue "
+    "2026-07-29-coggan-note-names-a-power-channel-that-does-not-exist: "
+    "this sentence previously said \"this package's power channel "
+    'already implements". There is no power channel -- '
+    "fitdocs/load/channels/ holds sources.py, sufficiency.py and "
+    "types.py only, and the channel is load-channels task 3.1, not yet "
+    "written. The formula itself has shipped in metrics/stress.py "
+    "throughout.) The text "
     'also states the algorithm is derived "by analogy" to Banister\'s '
     "TRIMPS, and cites Banister, Calvert, Savage & Bach (1975) -- a "
     "different, earlier Banister paper than the one this package's "

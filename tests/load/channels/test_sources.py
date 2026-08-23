@@ -13,6 +13,7 @@ import importlib.util
 import pathlib
 import re
 import sys
+from enum import Enum
 from typing import Final
 
 import pytest
@@ -53,26 +54,33 @@ def _normalized(text: str) -> str:
 
 
 BACKSTOP_COGGAN_TSS_NOTE: Final[str] = (
-    "Re-sourced 2026-07-27 (queue "
-    "2026-07-26-citation-vocabulary-diverges-across-layers): the book's own "
-    "2nd-edition (2010) text was still not obtained, but Coggan's own earlier "
-    "chapter-length manuscript was found and opened in this session at "
-    "ipmultisport.com/ref_lib/Coggan_Power_Meter.pdf and is cited here in its "
-    "place, since it is Coggan's own primary text defining the same formulas "
-    "rather than a secondary summary of the book. It states NP is computed as: "
-    "1) a 30-second rolling average of power; 2) each value raised to the 4th "
-    "power; 3) the average of those values; 4) the 4th root of that average. IF "
-    "is defined as \"the normalized power obtained in step 4 by the individual's "
-    'power at LT". TSS is derived as "exercise duration x average power x a '
-    "power-dependent intensity weighting factor\", computed in the text's own "
-    "steps 6-8 as normalized work (NP x duration in seconds) x IF, divided by "
-    "(threshold power x 3600) x 100 -- i.e. TSS = duration_s * NP * IF / (FTP * "
-    "3600) * 100, matching the formula this package's power channel already "
-    'implements. The text also states the algorithm is derived "by analogy" to '
-    "Banister's TRIMPS, and cites Banister, Calvert, Savage & Bach (1975) -- a "
-    "different, earlier Banister paper than the one this package's "
-    "BANISTER_TRIMP citation names -- for that analogy only, not for the IF/TSS "
-    "formula itself."
+    "Re-sourced 2026-07-27 (queue 2026-07-26-citation-vocabulary-diverges-"
+    "across-layers): the book's own 2nd-edition (2010) text was still not "
+    "obtained, but Coggan's own earlier chapter-length manuscript was found "
+    "and opened in this session at "
+    "ipmultisport.com/ref_lib/Coggan_Power_Meter.pdf and is cited here in its"
+    " place, since it is Coggan's own primary text defining the same formulas"
+    " rather than a secondary summary of the book. It states NP is computed "
+    "as: 1) a 30-second rolling average of power; 2) each value raised to the"
+    " 4th power; 3) the average of those values; 4) the 4th root of that "
+    'average. IF is defined as "the normalized power obtained in step 4 by '
+    'the individual\'s power at LT". TSS is derived as "exercise duration x '
+    'average power x a power-dependent intensity weighting factor", computed '
+    "in the text's own steps 6-8 as normalized work (NP x duration in "
+    "seconds) x IF, divided by (threshold power x 3600) x 100 -- i.e. TSS = "
+    "duration_s * NP * IF / (FTP * 3600) * 100, which is the formula this "
+    "package ships as fitdocs.metrics.stress.power_tss. (Corrected "
+    "2026-08-23, queue 2026-07-29-coggan-note-names-a-power-channel-that-"
+    "does-not-exist: this sentence previously said \"this package's power "
+    'channel already implements". There is no power channel -- '
+    "fitdocs/load/channels/ holds sources.py, sufficiency.py and types.py "
+    "only, and the channel is load-channels task 3.1, not yet written. The "
+    "formula itself has shipped in metrics/stress.py throughout.) The text "
+    'also states the algorithm is derived "by analogy" to Banister\'s TRIMPS, '
+    "and cites Banister, Calvert, Savage & Bach (1975) -- a different, "
+    "earlier Banister paper than the one this package's BANISTER_TRIMP "
+    "citation names -- for that analogy only, not for the IF/TSS formula "
+    "itself."
 )
 
 BACKSTOP_BANISTER_TRIMP_NOTE: Final[str] = (
@@ -280,27 +288,149 @@ _LOCATOR_BACKSTOPS: Final[dict[str, str]] = {
     "trainingpeaks_coverage_gate": BACKSTOP_TRAININGPEAKS_COVERAGE_GATE_LOCATOR,
 }
 
-# UNDECLARED-NO-LONGER: this task (queue
-# 2026-07-29-citation-locators-unpinned-and-undeclared) pins only `note` and
-# `locator`. Each `Citation`'s `authors`, `year` and `work` fields carry no
-# whole-value backstop of their own and are guarded only by the weak
-# non-emptiness/type checks in
-# test_citations_have_nonempty_work_and_verification_status
-# (`.strip() != ""`, `.year > 0`) -- checks a falsified value satisfies just
-# as easily as a correct one. This is the same rejection-grade gap this
-# queue item closed for `locator`, transplanted one field over, and is left
-# explicitly unpinned rather than silently covered: fixing it is out of this
-# task's declared scope (tracked at
-# .kiro/queue/2026-07-30-citation-authors-year-work-unpinned.md), but
-# leaving it undeclared is not. Proof these three fields are falsifiable
-# with the suite green: mutating
-# MINETTI_2002.year from 2002 to 2003, or MINETTI_2002.authors to "Nobody,
-# X.", or MINETTI_2002.work to "Energy cost of swimming...", each leaves the
-# full suite at 2297 passed. The Open Questions section of the queue item
-# above asked whether `Citation` should get a single structural backstop over
-# every field, rather than one field pinned at a time -- that question is
-# still open; this task did not resolve it, and this comment is the
-# resolution of the item's own instruction to say so if it wasn't.
+# --- Whole-record attribution backstop (queue
+# 2026-07-30-citation-authors-year-work-unpinned) --------------------------
+#
+# `note` and `locator` are pinned field-by-field above. `authors`, `year`,
+# `work` and `verification` were not, and were falsifiable with the full suite
+# green -- mutating MINETTI_2002.year 2002 -> 2003, or .authors -> "Nobody,
+# X.", or .work -> another title, each left the suite at 2297 passed.
+#
+# That gap had been closed one field at a time twice already (`note` on
+# 2026-07-29, `locator` on 2026-07-30), and each round left the next field
+# undefended. This is deliberately NOT a third per-field dict. It pins a
+# fingerprint over **every field of `Citation` that does not already have a
+# dedicated pin**, and it computes the field list by walking
+# `dataclasses.fields(Citation)` rather than naming the fields here.
+#
+# The self-maintenance property that buys: adding a field to `Citation` changes
+# every fingerprint, so all six backstops red and the new field cannot ship
+# both unpinned and undeclared. Removing a dedicated pin has the same effect --
+# the field falls back into the fingerprint, which reds until transcribed.
+#
+# The rendering is plain values, not `repr`, so a reviewer can read a
+# fingerprint against `sources.py` directly. `verification` renders as its enum
+# `.value`, which answers the queue item's second open question: a record
+# silently downgraded from PRIMARY_TEXT now reds here.
+
+_DEDICATED_FIELD_PINS: Final[frozenset[str]] = frozenset({"note", "locator"})
+"""Fields of `Citation` pinned individually above, and so excluded from the
+whole-record fingerprint -- pinning them twice would mean every note edit had
+to be transcribed in two places, which is how a backstop falls out of date."""
+
+
+def _attribution_fingerprint(citation: Citation) -> str:
+    """Render every non-dedicated field of ``citation`` as ``name=value``.
+
+    Walks ``dataclasses.fields(Citation)`` in declaration order so the field
+    set is derived from the record type, never restated here. Enum values
+    render as their ``.value``.
+    """
+    parts: list[str] = []
+    for field in dataclasses.fields(Citation):
+        if field.name in _DEDICATED_FIELD_PINS:
+            continue
+        value = getattr(citation, field.name)
+        rendered = value.value if isinstance(value, Enum) else value
+        parts.append(f"{field.name}={rendered}")
+    return " | ".join(parts)
+
+
+# Transcribed from `sources.py`. These are literals on purpose: deriving them
+# from the module under test would make the comparison vacuous.
+_ATTRIBUTION_BACKSTOPS: Final[dict[str, str]] = {
+    "coggan_tss": (
+        "key=coggan_tss | authors=Coggan, A.R. | year=2003 | work=Training "
+        "and racing using a power meter: an introduction (USA Cycling "
+        "coaching-education chapter; the basis for, and later folded into, "
+        'Allen & Coggan\'s "Training and Racing with a Power Meter") | '
+        "verification=primary_text"
+    ),
+    "banister_trimp": (
+        "key=banister_trimp | authors=Banister, E.W. | year=1991 | "
+        "work=Modeling Elite Athletic Performance, in: Physiological "
+        "Testing of the High-Performance Athlete (2nd ed.), Human Kinetics "
+        "| verification=primary_text"
+    ),
+    "minetti_2002": (
+        "key=minetti_2002 | authors=Minetti, A.E., Moia, C., Roi, G.S., "
+        "Susta, D. & Ferretti, G. | year=2002 | work=Energy cost of walking"
+        " and running at extreme uphill and downhill slopes | "
+        "verification=primary_text"
+    ),
+    "intervals_icu_pace_load": (
+        "key=intervals_icu_pace_load | authors=intervals.icu | year=2021 | "
+        "work=Pace-based training load (gradient-adjusted pace) "
+        "announcement | verification=primary_text"
+    ),
+    "intervals_icu_hrss": (
+        "key=intervals_icu_hrss | authors=intervals.icu | year=2020 | "
+        "work=HRSS (normalized TRIMP) training load announcement | "
+        "verification=primary_text"
+    ),
+    "trainingpeaks_coverage_gate": (
+        "key=trainingpeaks_coverage_gate | authors=TrainingPeaks | "
+        "year=2016 | work=TSS Calculation Troubleshooting | "
+        "verification=primary_text"
+    ),
+}
+
+
+def test_dedicated_field_pins_name_real_citation_fields() -> None:
+    """``_DEDICATED_FIELD_PINS`` must name fields that exist.
+
+    Without this, renaming ``note`` on ``Citation`` would leave a stale
+    exclusion behind: the renamed field would enter the fingerprint (reddening
+    loudly, which is fine) but the dead entry would silently keep excluding
+    nothing, and the next reader would believe a field was pinned elsewhere
+    when it was not.
+
+    Measured mutation evidence (test-module counts, 38 tests in this file):
+    adding ``"authors"`` to ``_DEDICATED_FIELD_PINS`` passes *here* but reds
+    the fingerprint test below (1 failed) -- the two guards are complementary,
+    not redundant. Misspelling an entry as ``"notes"`` reds **both** (2
+    failed): this test on the stale name, and the fingerprint test because
+    ``note`` is no longer excluded and falls back into the fingerprint.
+    """
+    field_names = {field.name for field in dataclasses.fields(Citation)}
+    unknown = _DEDICATED_FIELD_PINS - field_names
+    assert not unknown, (
+        f"_DEDICATED_FIELD_PINS names fields Citation does not have: {sorted(unknown)}"
+    )
+
+
+def test_every_citation_attribution_is_pinned_by_a_backstop() -> None:
+    """Registry-completeness guard for the whole-record attribution pins
+    (queue 2026-07-30-citation-authors-year-work-unpinned).
+
+    Same shape as ``test_every_citation_locator_is_pinned_by_a_backstop``:
+    the registry is asserted non-empty first so the walk cannot pass having
+    scanned nothing, then set-equality in **both** directions, so a seventh
+    citation added without a backstop reds here rather than shipping unpinned.
+
+    Mutation evidence (each applied to ``MINETTI_2002`` in ``sources.py`` and
+    reverted): ``year`` 2002 -> 2003, ``authors`` -> "Nobody, X.", ``work`` ->
+    another title, and ``verification`` PRIMARY_TEXT -> any other member each
+    red the per-citation comparison. Deleting an entry from
+    ``_ATTRIBUTION_BACKSTOPS``, or adding one with no matching citation, reds
+    the set-equality assertion. Adding a field to ``Citation`` reds the
+    per-citation comparison for all six citations (1 failed test, first
+    citation reported). Downgrading ``verification`` from ``PRIMARY_TEXT``
+    reds 4 tests, this one among them.
+
+    All of the above were run and observed on this branch; none is asserted
+    from reading.
+    """
+    assert len(CITATIONS) > 0, "the walk is looking at the wrong registry"
+    citation_keys = {citation.key for citation in CITATIONS}
+    assert citation_keys == set(_ATTRIBUTION_BACKSTOPS), (
+        "a citation was added or removed in sources.py without a matching "
+        "update to _ATTRIBUTION_BACKSTOPS in this test module"
+    )
+    for citation in CITATIONS:
+        assert (
+            _attribution_fingerprint(citation) == _ATTRIBUTION_BACKSTOPS[citation.key]
+        ), citation.key
 
 
 def test_package_imports_cleanly() -> None:
