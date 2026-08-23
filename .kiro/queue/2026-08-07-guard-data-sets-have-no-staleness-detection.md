@@ -10,12 +10,10 @@ area: encumbered-content-purge, tests/test_forbidden_strings.py, scripts/purge/s
 created: 2026-08-07
 surfaced_by: /kiro-impl encumbered-content-purge (tasks 4.4, 5.2, 5.4 reviews)
 pinned_at: c3d2201
-resume_command: "do: Add a reconciliation test that the standing guard's exemption table matches a live scan with no stale and no uncovered entries, and give the sweep's probe set a count anchor in its own module's tests."
+resume_command: "do: Add a reconciliation test that the standing guard's exemption table in tests/test_forbidden_strings.py matches a live scan with no stale and no uncovered entries. The sweep-probe half of this item retired with scripts/purge/ at task 9.3; only the standing guard's data set survives."
 context:
   - tests/test_forbidden_strings.py
-  - scripts/purge/sweep.py
-  - tests/purge/test_sweep.py
-  - tests/purge/test_plan.py
+  - tests/_forbidden_strings.py
 blocked_by: []
 ---
 
@@ -66,3 +64,7 @@ stale entry in any of the three reds something.
 ## Open questions
 
 None.
+
+## Triage note (2026-08-23)
+
+Re-pointed during the post-purge queue triage. Task 9.3 deleted `scripts/purge/` entire and `tests/purge/` less three relocations, so this item's `resume_command` and `context:` named paths that no longer exist. The **subject** was checked against the tree rather than inferred from the path, per `.kiro/queue/closed/2026-08-23-forty-five-queue-items-cite-the-retired-purge-machinery.md`; it survives in the retained guards and the item still stands. Only the locators changed — the finding above is unedited.

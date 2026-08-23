@@ -10,11 +10,11 @@ area: encumbered-content-purge, scripts/purge/replace.py
 created: 2026-08-19
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.7 remediation review; reproduced independently by the parent)
 pinned_at: c3d2201
-resume_command: "do: decide whether the post-swap .git/logs identity lines are in scope for the purge, and if so how they are cleared, before task 8.2 swaps .git"
+resume_command: "do: task 8.2 has run, so the decision window closed with the swap. Inspect this repository's current .git/logs for the ambient identity and the source path, then record in docs/reference/history-rewrites.md whether they are accepted (reflogs are local-only and never reach a clone) or cleared."
 context:
-  - scripts/purge/replace.py
+  - docs/reference/history-rewrites.md
   - .kiro/specs/encumbered-content-purge/requirements.md
-  - .kiro/queue/2026-08-18-reflog-row-literal-emptiness-does-not-hold-post-swap.md
+  - .kiro/queue/closed/2026-08-18-reflog-row-literal-emptiness-does-not-hold-post-swap.md
 blocked_by: []
 ---
 
@@ -128,3 +128,7 @@ provenance record's stated positions alongside the other accepted residues.
 **Sequencing: this must be settled before 8.2 swaps `.git`.** Afterwards the
 lines are in the repository the maintainer keeps, and the only remedies left
 are destructive ones applied to a just-verified repository.
+
+## Triage note (2026-08-23)
+
+Re-pointed during the post-purge queue triage. Task 9.3 deleted `scripts/purge/` entire and `tests/purge/` less three relocations, so this item's `resume_command` and `context:` named paths that no longer exist. The **subject** was checked against the tree rather than inferred from the path, per `.kiro/queue/closed/2026-08-23-forty-five-queue-items-cite-the-retired-purge-machinery.md`; it survives in the retained guards and the item still stands. Only the locators changed — the finding above is unedited.

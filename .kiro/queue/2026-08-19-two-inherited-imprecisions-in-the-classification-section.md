@@ -13,7 +13,6 @@ pinned_at: c3d2201
 resume_command: "do: correct the 'three of the five observed-mutation rows' numeral and row 7.3's misplaced parenthetical in the classification section, both inherited from earlier rounds"
 context:
   - docs/reference/history-rewrites.md
-  - tests/purge/test_verify.py
 blocked_by: []
 ---
 
@@ -75,3 +74,7 @@ Do not re-open any row's PINNED/UNPINNED label while fixing these — the
 labels were verified by exact set equality against `requirements.md`'s 81
 criteria (33 PINNED / 1 PRESERVED-ONLY / 47 UNPINNED) across three
 independent review rounds.
+
+## Triage note (2026-08-23)
+
+Re-pointed during the post-purge queue triage. Task 9.3 deleted `scripts/purge/` entire and `tests/purge/` less three relocations, so this item's `resume_command` and `context:` named paths that no longer exist. The **subject** was checked against the tree rather than inferred from the path, per `.kiro/queue/closed/2026-08-23-forty-five-queue-items-cite-the-retired-purge-machinery.md`; it survives in the retained guards and the item still stands. Only the locators changed — the finding above is unedited.

@@ -10,10 +10,9 @@ area: encumbered-content-purge, tests/test_forbidden_strings.py, tests/purge/tes
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.2 review round 3)
 pinned_at: c3d2201
-resume_command: "do: reconcile the two unreadable-file accounting policies before task 9.3 deletes tests/purge/test_replacements.py, so the surviving suffix allowlist is a decision rather than a leftover"
+resume_command: "do: task 9.3 deleted one of the two unreadable-file accounting policies with tests/purge/. Record whether the surviving suffix allowlist in tests/test_forbidden_strings.py is the intended policy or a leftover of the pair."
 context:
   - tests/test_forbidden_strings.py
-  - tests/purge/test_replacements.py
 blocked_by: []
 ---
 
@@ -60,3 +59,7 @@ confirm they agree. Then either pin the survivor's suffix allowlist with a
 test that reds when a real unreadable file falls outside it, or state in the
 provenance record that the allowlist is the retained policy and why. Done
 when the survivor's policy is deliberate.
+
+## Triage note (2026-08-23)
+
+Re-pointed during the post-purge queue triage. Task 9.3 deleted `scripts/purge/` entire and `tests/purge/` less three relocations, so this item's `resume_command` and `context:` named paths that no longer exist. The **subject** was checked against the tree rather than inferred from the path, per `.kiro/queue/closed/2026-08-23-forty-five-queue-items-cite-the-retired-purge-machinery.md`; it survives in the retained guards and the item still stands. Only the locators changed — the finding above is unedited.

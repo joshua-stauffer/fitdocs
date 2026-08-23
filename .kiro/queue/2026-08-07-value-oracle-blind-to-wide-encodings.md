@@ -14,7 +14,6 @@ resume_command: "do: Decide whether the value oracle should decode candidate blo
 context:
   - tests/_content_oracle.py
   - tests/load/test_packaging.py
-  - scripts/purge/verify.py
 blocked_by: []
 ---
 
@@ -61,3 +60,7 @@ oracle can find the decision.
 Whether the entropy floor still holds for a wide-encoded window if decoding is
 added. That is a property of the fingerprint set and would need re-measuring,
 not assuming.
+
+## Triage note (2026-08-23)
+
+Re-pointed during the post-purge queue triage. Task 9.3 deleted `scripts/purge/` entire and `tests/purge/` less three relocations, so this item's `resume_command` and `context:` named paths that no longer exist. The **subject** was checked against the tree rather than inferred from the path, per `.kiro/queue/closed/2026-08-23-forty-five-queue-items-cite-the-retired-purge-machinery.md`; it survives in the retained guards and the item still stands. Only the locators changed — the finding above is unedited.

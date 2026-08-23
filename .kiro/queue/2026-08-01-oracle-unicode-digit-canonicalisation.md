@@ -13,7 +13,7 @@ pinned_at: c3d2201
 resume_command: "do: decide whether tests/_content_oracle.py should canonicalise Unicode decimal digits or exclude them from tokenisation, then pin the choice with a test"
 context:
   - tests/_content_oracle.py
-  - tests/purge/test_content_oracle.py
+  - tests/test_content_oracle.py
 blocked_by: []
 ---
 
@@ -62,3 +62,7 @@ against the pre-rewrite implementation.
    all; document the behaviour instead.
 
 Done means the behaviour is deliberate, documented, and mutation-pinned.
+
+## Triage note (2026-08-23)
+
+Re-pointed during the post-purge queue triage. Task 9.3 deleted `scripts/purge/` entire and `tests/purge/` less three relocations, so this item's `resume_command` and `context:` named paths that no longer exist. The **subject** was checked against the tree rather than inferred from the path, per `.kiro/queue/closed/2026-08-23-forty-five-queue-items-cite-the-retired-purge-machinery.md`; it survives in the retained guards and the item still stands. Only the locators changed — the finding above is unedited.

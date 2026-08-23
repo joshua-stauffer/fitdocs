@@ -10,9 +10,9 @@ area: encumbered-content-purge, tests/purge/test_replacements.py, tests/_forbidd
 created: 2026-08-18
 surfaced_by: /kiro-impl encumbered-content-purge (task 7.2 review round 1)
 pinned_at: c3d2201
-resume_command: "do: at task 9.3, relocate test_whitespace_tolerant_pattern_joins_words_with_flexible_whitespace and test_whitespace_tolerant_pattern_matches_across_a_line_wrap out of tests/purge/test_replacements.py before deleting it, or record that the helper is pinned only indirectly through matches()"
+resume_command: "do: task 9.3 has run and the two direct tests were NOT relocated -- _whitespace_tolerant_pattern (tests/_forbidden_strings.py:162) is now pinned only indirectly through matches(). Either write direct unit tests for it in tests/test_forbidden_strings.py, or record at the helper site that indirect pinning is the accepted state."
 context:
-  - tests/purge/test_replacements.py
+  - tests/test_forbidden_strings.py
   - tests/_forbidden_strings.py
   - .kiro/specs/encumbered-content-purge/tasks.md
 blocked_by: []
@@ -58,3 +58,7 @@ named tests to `tests/test_forbidden_strings.py` alongside the helper they
 test. If instead you judge the indirect coverage sufficient, say so in the
 provenance record's section 8 under Req 12.4's given-up-capability heading.
 Done when the helper's pinning status after retirement is explicit.
+
+## Triage note (2026-08-23)
+
+Re-pointed during the post-purge queue triage. Task 9.3 deleted `scripts/purge/` entire and `tests/purge/` less three relocations, so this item's `resume_command` and `context:` named paths that no longer exist. The **subject** was checked against the tree rather than inferred from the path, per `.kiro/queue/closed/2026-08-23-forty-five-queue-items-cite-the-retired-purge-machinery.md`; it survives in the retained guards and the item still stands. Only the locators changed — the finding above is unedited.
