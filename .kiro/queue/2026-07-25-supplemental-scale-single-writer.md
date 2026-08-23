@@ -63,6 +63,10 @@ The separating property, if a guard is ever wanted: UINT16 hundredths land at
 100–2500 for real METs, while a true-MET integer writer can only emit 1–25. The
 ranges do not overlap, so a threshold near 50 distinguishes them cleanly.
 
+**Path note (2026-08-23):** the demo project moved to
+`~/Library/Mobile Documents/com~apple~CloudDocs/fitdocs-demo`. Paths above
+name its former location, `~/code/fitdocs-demo`, which no longer exists.
+
 ## How to pick it up
 
 1. Read the `_SUPPLEMENTALS` comment block in `src/fitdocs/render/sections.py`;

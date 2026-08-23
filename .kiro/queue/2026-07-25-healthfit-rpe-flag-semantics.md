@@ -59,12 +59,17 @@ no scale is recoverable from the file.
 Before removal it rendered as `| RPE | 1 |` in 12 demo documents and
 `| RPE | 0 |` in 2.
 
+**Path note (2026-08-23):** the demo project moved to
+`~/Library/Mobile Documents/com~apple~CloudDocs/fitdocs-demo`. Paths above
+name its former location, `~/code/fitdocs-demo`, which no longer exists.
+
 ## How to pick it up
 
 1. Read the `_SUPPLEMENTALS` comment block in `src/fitdocs/render/sections.py` —
    it records the full reasoning and the numbers above.
-2. Re-run the corpus scan against the current `~/code/fitdocs-demo/inbox/` (it
-   grows as Josh exports). Done means: either a value outside `{0,1}` appears —
+2. Re-run the corpus scan against the current inbox
+   (`~/Library/Mobile Documents/com~apple~CloudDocs/fitdocs-demo/inbox/`), which
+   grows as Josh exports. Done means: either a value outside `{0,1}` appears —
    in which case it is a value, determine its scale the way `AVG METs` was
    determined and re-add it — or the range still holds and this item closes as
    `dropped` with the flag reading confirmed.

@@ -76,6 +76,10 @@ redirected), so it does not by itself prove a TTY run is equally silent. The
 code above shows the summary printers are end-of-run in both cases, but the
 TTY path was not exercised in this session.
 
+**Path note (2026-08-23):** the demo project moved to
+`~/Library/Mobile Documents/com~apple~CloudDocs/fitdocs-demo`. Paths above
+name its former location, `~/code/fitdocs-demo`, which no longer exists.
+
 ## How to pick it up
 
 1. Read `.kiro/specs/inbox/requirements.md` for what the drain is required to

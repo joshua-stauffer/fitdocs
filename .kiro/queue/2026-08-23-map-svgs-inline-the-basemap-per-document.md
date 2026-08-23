@@ -78,6 +78,10 @@ whole is 939 MB for a 81 MB source archive.
 `grep -c base64 wiki/workouts/assets/<a-map>.svg` returns a single composed
 payload per file, confirming the imagery is embedded rather than referenced.
 
+**Path note (2026-08-23):** the demo project moved to
+`~/Library/Mobile Documents/com~apple~CloudDocs/fitdocs-demo`. Paths above
+name its former location, `~/code/fitdocs-demo`, which no longer exists.
+
 ## How to pick it up
 
 1. Read `.kiro/specs/route-maps/design.md` first — specifically why the
