@@ -194,7 +194,7 @@ is what makes them safe to run concurrently despite overlapping names.
   - _Boundary: HeartRateIntensityModel_
   - _Depends: 1.1_
 
-- [ ] 2.2 (P) Implement grade adjustment as its own unit
+- [x] 2.2 (P) Implement grade adjustment as its own unit
   - Implement the published energy-cost-of-running polynomial as a ratio against
     its level-ground cost, citing the record created in task 1.1 and pinning its
     coefficients, and note in the docstring the widely-mirrored corrupted
@@ -670,3 +670,32 @@ is what makes them safe to run concurrently despite overlapping names.
   self-inflicted in a single change. Cite the section heading; if a range is
   kept, re-verify both boundary lines with `sed -n '<a>p;<b>p'` after any edit
   to that file.
+- **`is`-identity does not pin a derivation between float constants.** CPython
+  folds equal float literals within a module to one object, so
+  `assert LEVEL_COST is COEFFICIENTS[-1]` passes whether the constant is
+  derived from the tuple or retyped as `3.6` — measured on task 2.2, where it
+  was the reviewer's own proposed remediation and could not have failed. Pin
+  the *shape* instead: walk the module's AST and assert the constant's value is
+  a `Subscript` into the coefficient tuple. Same family as `hasattr` on a
+  dataclass field and `dir()` on a Protocol — the natural spelling of the
+  guard is blind in exactly the direction that matters.
+- **A guard replacement trades axes unless you re-run the old mutations.**
+  Task 2.2 needed three rounds on one documentation guard, each fix correct on
+  the axis it targeted and blind on a new one: raw substring absence passed
+  because the forbidden phrase wrapped across a line; whitespace normalisation
+  fixed that but keyed on a fixed 200-character radius, so a false claim
+  planted just after the legitimate sentence inherited its tokens; sentence
+  containment closed that and admits only same-sentence splicing, which is the
+  definitional limit and is documented rather than iterated on. Before deleting
+  a guard, run the mutations it caught against its replacement.
+- **`re.split(r"(?<=\.)\s+", ...)` splits on abbreviations and decimals.**
+  `grade.py`'s own citation prose ("Fig. 1 caption (p. 1041)") fragments under
+  it. It is safe here only because the rule requires *every* fragment holding
+  the phrase to carry the exculpating tokens, so a mis-split fails toward a
+  loud red naming the offending sentence, never toward a silent pass. Check the
+  failure *direction* of any text-fragmenting guard before trusting it.
+- **A test that reds via `TypeError` may be pinning the absence of a crash.**
+  Task 2.2's undefined-altitude guard reddened with `float - None` when
+  deleted, which proves the branch is reached but not what it contributes.
+  Assert the value the branch produces as well, or a later implementation that
+  returns a wrong number quietly passes.

@@ -169,6 +169,7 @@ _LOAD_MODULE_ALLOWLIST = frozenset(
         "fitdocs/load/settings.py",
         "fitdocs/load/types.py",
         "fitdocs/load/channels/__init__.py",
+        "fitdocs/load/channels/grade.py",
         "fitdocs/load/channels/sources.py",
         "fitdocs/load/channels/sufficiency.py",
         "fitdocs/load/channels/types.py",
