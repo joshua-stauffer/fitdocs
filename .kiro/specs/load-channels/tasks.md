@@ -220,7 +220,7 @@ is what makes them safe to run concurrently despite overlapping names.
   - _Boundary: GradeAdjustment_
   - _Depends: 1.1_
 
-- [ ] 2.3 (P) Project the sufficiency settings from the shared load table
+- [x] 2.3 (P) Project the sufficiency settings from the shared load table
   - Extend the load-settings value and reader that already live in the load
     layer's settings module — a module `training-load` owns, whose reader
     signature `(document, settings_file) -> LoadSettings`, error type and
@@ -699,3 +699,39 @@ is what makes them safe to run concurrently despite overlapping names.
   deleted, which proves the branch is reached but not what it contributes.
   Assert the value the branch produces as well, or a later implementation that
   returns a wrong number quietly passes.
+- **A guard that reds is not a guard that discriminates — check *how* it
+  failed.** Three separate instances in this spec. Task 2.2's undefined-altitude
+  test reddened via `TypeError` when its guard was deleted, pinning that the
+  branch is reached but not what it contributes. Task 2.2's Req 7.9 guard
+  reddened because the forbidden phrase happened to wrap across a line. Task
+  2.3's runtime import guard reddened because the subprocess *crashed* — its
+  stub packages carried `__path__ = []`, so every forbidden import died during
+  `exec_module` and the `assert not leaked` line was unreachable; two
+  non-violations (an unrelated sibling import, and a plain typo) failed
+  identically. Record the failure *mode* per mutant, not just red/green, and
+  prove a non-violation passes.
+- **Static and runtime import guards do not subsume each other — ship both.**
+  Measured on task 2.3 across nine spellings: a static AST walk catches a lazy
+  function-body import that a runtime guard structurally cannot (the function
+  is never called), and a runtime guard catches `importlib.import_module` and
+  `__import__` that no static walk can see by construction. An AST walk must
+  resolve relative spellings — `from ..types import X` has `node.module ==
+  "types"` and `level > 0`, and `from fitdocs.load import types` has the
+  package as `node.module` with `types` in `node.names`; matching only absolute
+  dotted names misses both, and both are real runtime imports. Use
+  `importlib.util.resolve_name` against the module's own `__package__`.
+- **`fitdocs sync` runs the load pass internally** (`cli.py::sync_command` →
+  `_run_load_pass`), so a test registering a calculator *before* syncing
+  measures sync's pass, not the later `load` invocation. Task 2.3's
+  write-suppression assertion looked vacuous for two rounds because of this:
+  register-before-sync gives `Computed 0` and zero bytes changed because the
+  work already happened; register-after-sync gives `Computed 1` and a named
+  changed file. Also note every stub in `tests/load/conftest.py` declares a
+  required field and so lands in `MissingInputs` under `--no-prompt` — use a
+  field-free calculator when a non-interactive pass must actually write.
+- **Patching `builtins.open` does not rebind `io.open`.** They are separate
+  bindings to the same function, so a no-file-access guard must patch both,
+  plus `os.open`, `Path.read_text`, `Path.read_bytes` and `Path.open`. Related:
+  a mutation gated on `settings_file.exists()` is invisible when the fixture
+  path never exists on disk — the `exists()` call short-circuits before the
+  patched read. Give such a test a path that genuinely exists.

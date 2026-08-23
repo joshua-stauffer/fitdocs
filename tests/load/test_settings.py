@@ -35,6 +35,7 @@ arbitration concern).
 from __future__ import annotations
 
 import ast
+import importlib.util
 import subprocess
 import sys
 import types
@@ -43,13 +44,31 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from fitdocs import Modality
 from fitdocs.cli import app
+from fitdocs.load import registry
 from fitdocs.load import settings as load_settings_module
+from fitdocs.load.channels.types import (
+    DEFAULT_MIN_DURATION_S,
+    DEFAULT_MIN_STREAM_COVERAGE,
+    SufficiencySettings,
+)
 from fitdocs.load.settings import (
     DEFAULT_LOAD_SETTINGS,
     LoadSettings,
     LoadSettingsError,
     load_load_settings,
+)
+from fitdocs.load.types import (
+    Activity,
+    AthleteField,
+    Computed,
+    DerivedMetrics,
+    InteractionSession,
+    LoadContext,
+    LoadOutcome,
+    LoadResult,
+    ProfileView,
 )
 from fitdocs.settings import SettingsError
 from tests.fixtures import builder
@@ -201,6 +220,500 @@ def test_negative_staleness_window_is_rejected() -> None:
     assert "-7" in body
 
 
+# --- [load.sufficiency] projection (Req 3.1-3.8, task 2.3) -------------------
+
+
+def test_default_load_settings_sufficiency_equals_keyless_sufficiency_settings() -> (
+    None
+):
+    """Pins the derivation, not a retyped literal: the default sufficiency
+    member of :data:`DEFAULT_LOAD_SETTINGS` is exactly a keyless
+    :class:`SufficiencySettings`, which in turn is built from that module's
+    own default constants -- so mutating either module's constant reddens
+    this rather than a hand-copied number here."""
+    assert DEFAULT_LOAD_SETTINGS.sufficiency == SufficiencySettings()
+    assert DEFAULT_LOAD_SETTINGS.sufficiency.min_duration_s == DEFAULT_MIN_DURATION_S
+    assert (
+        DEFAULT_LOAD_SETTINGS.sufficiency.min_stream_coverage
+        == DEFAULT_MIN_STREAM_COVERAGE
+    )
+    assert DEFAULT_LOAD_SETTINGS.sufficiency.power_min_stream_coverage is None
+    assert DEFAULT_LOAD_SETTINGS.sufficiency.hr_min_stream_coverage is None
+    assert DEFAULT_LOAD_SETTINGS.sufficiency.pace_min_stream_coverage is None
+
+
+def test_absent_sufficiency_sub_table_returns_documented_defaults() -> None:
+    """A present ``[load]`` table with no ``[load.sufficiency]`` -> defaults."""
+    document = {"load": {"default_calculator": "threshold"}}
+    result = load_load_settings(document, _SETTINGS_FILE)
+    assert result.sufficiency == SufficiencySettings()
+
+
+def test_empty_sufficiency_sub_table_returns_documented_defaults() -> None:
+    """A present, empty ``[load.sufficiency]`` table -> the same defaults."""
+    document = {"load": {"sufficiency": {}}}
+    result = load_load_settings(document, _SETTINGS_FILE)
+    assert result.sufficiency == SufficiencySettings()
+
+
+def test_shared_min_duration_and_coverage_are_read() -> None:
+    document = {
+        "load": {"sufficiency": {"min_duration_s": 120, "min_stream_coverage": 0.5}}
+    }
+    result = load_load_settings(document, _SETTINGS_FILE)
+    assert result.sufficiency == SufficiencySettings(
+        min_duration_s=120, min_stream_coverage=0.5
+    )
+
+
+def test_min_stream_coverage_accepts_value_of_exactly_one() -> None:
+    """The documented range is inclusive at its top: exactly 1.0 is valid."""
+    document = {"load": {"sufficiency": {"min_stream_coverage": 1.0}}}
+    result = load_load_settings(document, _SETTINGS_FILE)
+    assert result.sufficiency.min_stream_coverage == 1.0
+
+
+def test_three_per_channel_overrides_are_read_and_kept_distinct() -> None:
+    """Pairwise-distinct per-channel values, permuted, so a wrong-channel
+    assignment (e.g. power's value landing on hr) would redden this."""
+    document = {
+        "load": {
+            "sufficiency": {
+                "power_min_stream_coverage": 0.9,
+                "hr_min_stream_coverage": 0.6,
+                "pace_min_stream_coverage": 0.75,
+            }
+        }
+    }
+    result = load_load_settings(document, _SETTINGS_FILE)
+    assert result.sufficiency.power_min_stream_coverage == 0.9
+    assert result.sufficiency.hr_min_stream_coverage == 0.6
+    assert result.sufficiency.pace_min_stream_coverage == 0.75
+    # a permutation of the same three values would not equal this result
+    assert result.sufficiency != SufficiencySettings(
+        power_min_stream_coverage=0.6,
+        hr_min_stream_coverage=0.75,
+        pace_min_stream_coverage=0.9,
+    )
+
+
+def test_unset_per_channel_overrides_stay_none() -> None:
+    """An override absent from the sub-table stays ``None`` -- 'use the
+    shared value' -- even when the shared minimum itself is configured."""
+    document = {"load": {"sufficiency": {"min_stream_coverage": 0.65}}}
+    result = load_load_settings(document, _SETTINGS_FILE)
+    assert result.sufficiency.power_min_stream_coverage is None
+    assert result.sufficiency.hr_min_stream_coverage is None
+    assert result.sufficiency.pace_min_stream_coverage is None
+
+
+def test_unknown_key_inside_sufficiency_sub_table_parses_cleanly() -> None:
+    document = {
+        "load": {"sufficiency": {"min_duration_s": 90, "made_up_key": "ignored"}}
+    }
+    result = load_load_settings(document, _SETTINGS_FILE)
+    assert result.sufficiency == SufficiencySettings(min_duration_s=90)
+
+
+# --- [load.sufficiency] malformed values (Req 3.4, 3.5, 3.6) -----------------
+
+
+def test_non_table_sufficiency_value_is_rejected() -> None:
+    document = {"load": {"sufficiency": "not-a-table"}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    message = str(excinfo.value)
+    assert str(_SETTINGS_FILE) in message
+    assert "sufficiency" in message
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "min_stream_coverage",
+        "power_min_stream_coverage",
+        "hr_min_stream_coverage",
+        "pace_min_stream_coverage",
+    ],
+)
+def test_non_numeric_coverage_is_rejected(key: str) -> None:
+    document = {"load": {"sufficiency": {key: "high"}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert str(_SETTINGS_FILE) in str(excinfo.value)
+    assert key in body
+    assert "high" in body
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "min_stream_coverage",
+        "power_min_stream_coverage",
+        "hr_min_stream_coverage",
+        "pace_min_stream_coverage",
+    ],
+)
+def test_boolean_coverage_is_rejected(key: str) -> None:
+    """``bool`` is an ``int`` subclass in Python -- must be rejected on its own."""
+    document = {"load": {"sufficiency": {key: True}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert key in body
+    assert "True" in body
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "min_stream_coverage",
+        "power_min_stream_coverage",
+        "hr_min_stream_coverage",
+        "pace_min_stream_coverage",
+    ],
+)
+def test_zero_coverage_is_rejected(key: str) -> None:
+    """The range is above zero: 0.0 itself is out of range."""
+    document = {"load": {"sufficiency": {key: 0.0}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert key in body
+    assert "0.0" in body
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "min_stream_coverage",
+        "power_min_stream_coverage",
+        "hr_min_stream_coverage",
+        "pace_min_stream_coverage",
+    ],
+)
+def test_above_one_coverage_is_rejected(key: str) -> None:
+    """The range is at or below one: anything greater is out of range."""
+    document = {"load": {"sufficiency": {key: 1.01}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert key in body
+    assert "1.01" in body
+
+
+def test_non_integer_min_duration_s_is_rejected() -> None:
+    document = {"load": {"sufficiency": {"min_duration_s": "60"}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    assert str(_SETTINGS_FILE) in str(excinfo.value)  # Req 3.5: names the file
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert "min_duration_s" in body
+    assert "60" in body
+
+
+def test_float_min_duration_s_is_rejected() -> None:
+    document = {"load": {"sufficiency": {"min_duration_s": 60.5}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    assert str(_SETTINGS_FILE) in str(excinfo.value)  # Req 3.5: names the file
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert "min_duration_s" in body
+    assert "60.5" in body
+
+
+def test_boolean_min_duration_s_is_rejected() -> None:
+    """``bool`` is an ``int`` subclass in Python -- must be rejected on its own."""
+    document = {"load": {"sufficiency": {"min_duration_s": True}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    assert str(_SETTINGS_FILE) in str(excinfo.value)  # Req 3.5: names the file
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert "min_duration_s" in body
+    assert "True" in body
+
+
+def test_zero_min_duration_s_is_rejected() -> None:
+    document = {"load": {"sufficiency": {"min_duration_s": 0}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    assert str(_SETTINGS_FILE) in str(excinfo.value)  # Req 3.5: names the file
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert "min_duration_s" in body
+    assert "0" in body
+
+
+def test_negative_min_duration_s_is_rejected() -> None:
+    document = {"load": {"sufficiency": {"min_duration_s": -30}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    assert str(_SETTINGS_FILE) in str(excinfo.value)  # Req 3.5: names the file
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert "min_duration_s" in body
+    assert "-30" in body
+
+
+# --- Single-reader (Req 3.7) is covered by the module-wide sweeps below.
+# "Opens no file of its own" (task bullet) is NOT covered by those sweeps --
+# they pin that no *second reader of [load]* exists, which is orthogonal to
+# whether *this* projection helper itself touches the filesystem. Pinned
+# directly below instead.
+
+
+def test_setting_sufficiency_opens_no_file_of_its_own(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``_setting_sufficiency`` (and everything it calls) must not read,
+    open, or locate a settings file itself -- the task bullet says so
+    explicitly, and the enclosing reader's own docstring already claims
+    "never opens a file" for the whole of ``load_load_settings``.
+
+    Uses a settings-file path that genuinely EXISTS on disk with real
+    content, not ``_SETTINGS_FILE`` (``/vault/fitdocs.toml``, which never
+    exists here) -- an ``if settings_file.exists(): settings_file.read_text(...)``
+    inserted into the reader is a real violation of "opens no file of its
+    own" in production (where the settings file routinely exists), but is
+    invisible to a test whose path never exists: the ``exists()`` guard
+    short-circuits before the monkeypatched raise is ever reached, so
+    ``_SETTINGS_FILE`` alone cannot discriminate that mutation (measured,
+    round 1 of remediation). This makes any filesystem read a hard failure
+    by monkeypatching every read entry point this process actually has:
+    ``Path.read_text``, ``Path.read_bytes``, ``Path.open``, builtin
+    ``open`` -- and, round 2 of remediation, ``os.open`` and ``io.open``
+    too, both missed round 1: ``io.open`` is *the same function object*
+    builtin ``open`` is bound to, but ``monkeypatch.setattr("builtins.open",
+    ...)`` only rebinds the name in the ``builtins`` module's namespace, not
+    the separate, independent binding of that same object under
+    ``io.open`` -- a stray ``io.open(settings_file)`` survives patching
+    ``builtins.open`` alone. Against a settings file that is real and
+    present, this then exercises every branch of ``[load.sufficiency]`` --
+    absent, empty, populated, and malformed (caught) -- confirming none of
+    them touch the filesystem even though the file is right there to touch.
+    """
+    settings_file = tmp_path / "fitdocs.toml"
+    settings_file.write_text("[load]\n", encoding="utf-8")
+    assert settings_file.exists()  # sanity: the exists()-gate would fire here
+
+    def _forbidden(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("load_load_settings must not touch the filesystem")
+
+    monkeypatch.setattr(Path, "read_text", _forbidden)
+    monkeypatch.setattr(Path, "read_bytes", _forbidden)
+    monkeypatch.setattr(Path, "open", _forbidden)
+    monkeypatch.setattr("builtins.open", _forbidden)
+    monkeypatch.setattr("os.open", _forbidden)
+    monkeypatch.setattr("io.open", _forbidden)
+
+    assert load_load_settings({}, settings_file) == DEFAULT_LOAD_SETTINGS
+    assert (
+        load_load_settings({"load": {"sufficiency": {}}}, settings_file)
+        == LoadSettings()
+    )
+    assert load_load_settings(
+        {"load": {"sufficiency": {"min_duration_s": 90, "min_stream_coverage": 0.5}}},
+        settings_file,
+    ).sufficiency == SufficiencySettings(min_duration_s=90, min_stream_coverage=0.5)
+    with pytest.raises(LoadSettingsError):
+        load_load_settings({"load": {"sufficiency": "nope"}}, settings_file)
+
+
+def test_sufficiency_settings_dependency_runs_settings_to_channel_types() -> None:
+    """The dependency runs settings -> channel types, never the reverse
+    (design note): the settings module imports ``SufficiencySettings`` from
+    ``fitdocs.load.channels.types``, which is a plain leaf value type that
+    itself imports no settings machinery.
+
+    What this does and does not pin: the substring scan below is a coarse
+    supplementary check, not the real guard against that module acquiring a
+    settings dependency -- it is blind to e.g. ``from fitdocs import
+    settings as s`` (no ``"fitdocs.settings"`` or ``"load.settings"``
+    substring). The actual kill for that edge is task 1.2's own guard in
+    ``tests/load/channels/test_types.py``, which this module does not
+    duplicate. The vacuity assertion below at least confirms this scan is
+    reading real, non-empty module source rather than passing on an empty
+    string.
+    """
+    assert load_settings_module.SufficiencySettings is SufficiencySettings
+    import fitdocs.load.channels.types as channels_types
+
+    source = Path(channels_types.__file__).read_text(encoding="utf-8")
+    assert "class SufficiencySettings" in source  # vacuity: real source, not empty
+    assert "fitdocs.settings" not in source
+    assert "load.settings" not in source
+
+
+# --- Integration: a configuration error in [load.sufficiency] terminates the
+# load pass before any document is written (Req 3.8) -------------------------
+
+
+class _FieldFreeCalculator:
+    """A RUN-only calculator requiring no athlete input, so it reaches
+    ``Computed`` under ``CliRunner``'s non-interactive (``--no-prompt``)
+    session with no scripted answers needed -- duplicated per test module
+    from ``tests/load/test_cli_load.py``'s identical local class by this
+    suite's own established convention, rather than imported, so this module
+    stays a leaf that owns its own fixtures.
+
+    Round 2 of remediation: every stub in ``tests.load.conftest``
+    (including :class:`~tests.load.conftest.ComputingCalculator`, used here
+    in round 1) declares a required athlete field, so forcing one of those
+    under ``--no-prompt`` lands in ``MissingInputs`` and writes nothing even
+    on an otherwise-valid pass -- exactly why the round-1 version of the
+    write-suppression control below could not fail for the reason it
+    existed. This calculator requires nothing, so a ``--no-prompt`` CLI
+    invocation against a *valid* ``[load.sufficiency]`` genuinely reaches
+    ``Computed`` and writes real bytes, through the *same* CLI entry point
+    (``fitdocs load --out ... --no-prompt``) the invalid-config assertion
+    itself uses -- not a different one, closing the "different entry point"
+    gap in round 1's Half A.
+    """
+
+    calculator_id = "stub-field-free-settings"
+    display_name = "Stub Field-Free Calculator (settings module)"
+    supported_modalities = frozenset({Modality.RUN})
+
+    def required_athlete_fields(self) -> tuple[AthleteField, ...]:
+        return ()
+
+    def compute(
+        self,
+        activity: Activity,
+        metrics: DerivedMetrics,
+        profile: ProfileView,
+        session: InteractionSession,
+        context: LoadContext,
+    ) -> LoadOutcome:
+        return Computed(
+            result=LoadResult(
+                calculator_id=self.calculator_id,
+                display_name=self.display_name,
+                value=42.0,
+                basis="stub field-free basis",
+                non_selected=(),
+                flags=(),
+                inputs_used=(),
+                notes=(),
+            )
+        )
+
+
+def test_invalid_sufficiency_value_in_data_root_aborts_load_pass_before_writing(
+    isolated_registry: None,
+    tmp_path: Path,
+) -> None:
+    """An invalid ``[load.sufficiency]`` value in a real data root's
+    ``fitdocs.toml`` makes ``fitdocs load`` exit at the configuration exit
+    (2) before any document is created or modified -- exercising the same
+    upstream wiring ``apply_load`` already uses for ``benchmark_staleness_days``
+    (Req 3.8, relies on inherited engine behavior: the ``[load]`` table is
+    read and validated in full before any document is scanned).
+
+    A same-shaped *valid* config against the same fixture and calculator
+    would also exit 0 with zero bytes changed if the calculator declines or
+    is never reached -- so a naive "before == after" alone cannot
+    distinguish "terminated before writing" from "had nothing to write".
+    Half A measures the control directly: the *valid*-config run, through
+    the identical CLI invocation (``fitdocs load --out ... --no-prompt``)
+    Half B uses, registers :class:`_FieldFreeCalculator` (requires no
+    athlete input, so it reaches ``Computed`` under ``--no-prompt`` with no
+    prompting needed) and asserts bytes actually change. Half B then asserts
+    the *invalid*-config run through that same path changes nothing.
+    """
+    runner = CliRunner()
+    calc = _FieldFreeCalculator()
+    try:
+        # --- Half A: the control -- a VALID config through the same CLI
+        # path must actually write, or Half B's negative result is vacuous.
+        #
+        # Registration happens AFTER sync, deliberately: ``fitdocs sync``
+        # itself runs the load pass once as part of the sync command
+        # (``cli.py``'s ``sync_command`` calls ``_run_load_pass``). Measured:
+        # registering the calculator before ``_sync_one_run`` let *sync's
+        # own* internal load pass compute the document, so the doc was
+        # already ``COMPUTED`` before the ``load`` invocation below ever
+        # ran -- that invocation then correctly reported ``Computed 0`` and
+        # changed no bytes, for the *right* reason on the wrong statement:
+        # it was a no-op restore of an already-correct result, not evidence
+        # the ``load`` command's own path can write. Registering after sync
+        # leaves the region in the honest ``unsupported`` state sync writes
+        # with no calculator available, so the CLI ``load`` invocation is
+        # the one that actually performs the write being measured.
+        valid_root = tmp_path / "valid"
+        valid_root.mkdir()
+        _sync_one_run(tmp_path / "src_a", valid_root)
+        before_valid = {
+            p: p.read_bytes() for p in sorted(valid_root.rglob("*")) if p.is_file()
+        }
+        (valid_root / "fitdocs.toml").write_text(
+            "[load.sufficiency]\nmin_stream_coverage = 0.5\n", encoding="utf-8"
+        )
+        registry.register(calc)
+
+        valid_run = runner.invoke(
+            app, ["load", "--out", str(valid_root), "--no-prompt"]
+        )
+        assert valid_run.exit_code == 0, valid_run.output
+        assert "Computed" in valid_run.output
+        after_valid = {
+            p: p.read_bytes() for p in sorted(valid_root.rglob("*")) if p.is_file()
+        }
+        before_valid[valid_root / "fitdocs.toml"] = (
+            valid_root / "fitdocs.toml"
+        ).read_bytes()
+        assert after_valid != before_valid, (
+            "sanity: a valid-config run through this exact CLI path must "
+            "change at least one byte, or the invalid-config assertion "
+            "below cannot distinguish 'aborted before writing' from 'had "
+            "nothing to write'"
+        )
+
+        # --- Half B: the real assertion -- invalid config writes nothing --
+        # Same ordering discipline: sync first (registry empty), then
+        # register, then the config-error ``load`` invocation.
+        invalid_root = tmp_path / "invalid"
+        invalid_root.mkdir()
+        registry.unregister(calc.calculator_id)
+        _sync_one_run(tmp_path / "src_b", invalid_root)
+        before_invalid = {
+            p: p.read_bytes() for p in sorted(invalid_root.rglob("*")) if p.is_file()
+        }
+        settings_file = invalid_root / "fitdocs.toml"
+        settings_file.write_text(
+            "[load.sufficiency]\nmin_stream_coverage = 1.5\n", encoding="utf-8"
+        )
+        registry.register(calc)
+
+        invalid_run = runner.invoke(
+            app, ["load", "--out", str(invalid_root), "--no-prompt"]
+        )
+        assert invalid_run.exit_code == 2, invalid_run.output
+        after_invalid = {
+            p: p.read_bytes() for p in sorted(invalid_root.rglob("*")) if p.is_file()
+        }
+        # settings_file itself was written by this test, not by the load
+        # pass; exclude it from the "nothing changed" comparison.
+        before_invalid[settings_file] = settings_file.read_bytes()
+        assert after_invalid == before_invalid
+    finally:
+        registry.unregister(calc.calculator_id)
+
+
+def _sync_one_run(source: Path, data_root: Path) -> None:
+    """Sync a single running fixture into ``data_root`` via the real CLI
+    pipeline and assert exactly one workout document lands, for the two
+    halves of the integration test above."""
+    source.mkdir()
+    (source / "run.fit").write_bytes(builder.run_fit_bytes())
+    runner = CliRunner()
+    synced = runner.invoke(app, ["sync", str(source), "--out", str(data_root)])
+    assert synced.exit_code == 0, synced.output
+    docs = sorted(
+        p for p in (data_root / "workouts").glob("*.md") if p.stem[:4].isdigit()
+    )
+    assert len(docs) == 1, f"expected exactly one workout document, found {docs}"
+
+
 # --- Additivity: unknown keys and unknown sub-tables ignored (Req 14.3) ------
 
 
@@ -229,11 +742,16 @@ def test_two_unknown_downstream_sub_tables_parse_cleanly() -> None:
 
 
 def test_unknown_sub_table_alongside_configured_staleness_is_ignored() -> None:
-    """An unknown ``[load.*]`` sub-table does not shadow the staleness key."""
+    """An unknown ``[load.*]`` sub-table does not shadow the staleness key.
+
+    ``[load.sufficiency]`` is now a *recognized* sub-table (this task), so
+    this uses ``[load.priority]`` (``threshold-load``, not yet landed in
+    this checkout) as the genuinely-unknown one instead.
+    """
     document = {
         "load": {
             "benchmark_staleness_days": 30,
-            "sufficiency": {"min_days": 14},
+            "priority": {"channels": ["hr", "pace"]},
         }
     }
     result = load_load_settings(document, _SETTINGS_FILE)
@@ -258,41 +776,317 @@ def test_load_settings_error_is_a_settings_error() -> None:
 
 
 # --- Import direction: this module does not import types.py at runtime ------
-# (corrected 2026-07-25 by the import-direction ruling; Req 14.7)
+# (corrected 2026-07-25 by the import-direction ruling; Req 14.7. Rewritten
+# round 1 of remediation: the previous subprocess/sys.modules-isolation
+# version stopped discriminating once this task added the sanctioned
+# ``fitdocs.load.channels.types`` import -- any ``fitdocs.load.*`` submodule
+# import necessarily triggers the parent package's pre-existing eager
+# ``registry -> types`` chain, landing ``fitdocs.load.types`` in
+# ``sys.modules`` regardless of what ``settings.py`` itself does.)
+#
+# Two guards below, because neither subsumes the other:
+#
+# * A **static** AST walk (``_forbidden_load_types_imports``) resolving
+#   every import form -- absolute, relative (``from .types import X`` /
+#   ``from ..types import X``), and the "import the parent, reach the
+#   submodule as an attribute" form (``from fitdocs.load import types``) --
+#   to its fully-qualified target via ``importlib.util.resolve_name``,
+#   rather than a literal ``node.module == "fitdocs.load.types"`` string
+#   match. A literal match is exactly the defect this spec's own
+#   Implementation Notes record shipping green on task 1.2: it is blind to
+#   any spelling that does not literally write the four-token dotted name in
+#   the ``ImportFrom.module`` slot.
+# * A **runtime** guard (``test_settings_module_leaks_no_dynamic_import_of_load_types``)
+#   that pre-seeds stub packages and execs ``settings.py`` off disk, because
+#   a dynamic import (``importlib.import_module("fitdocs.load.types")``) has
+#   no distinguishing AST shape at all -- a static walk cannot see it by
+#   construction, regardless of how thorough its resolution logic is.
+
+
+def _forbidden_load_types_imports(
+    source: str, *, package: str = "fitdocs.load"
+) -> tuple[list[str], bool]:
+    """Every import in ``source`` that resolves to ``fitdocs.load.types``,
+    plus whether the source also contains the one sanctioned import this
+    task adds (``fitdocs.load.channels.types``) -- the vacuity signal that
+    proves this function inspected real content rather than trivially
+    passing on empty or unrelated source.
+
+    Resolves three static forms to their fully-qualified target:
+
+    * ``import fitdocs.load.types`` (or ``as`` any alias) -- absolute,
+      matched directly against the dotted name.
+    * ``from fitdocs.load.types import ...`` -- absolute ``ImportFrom``,
+      matched directly against ``node.module``.
+    * ``from .types import ...`` / ``from ..types import ...`` -- relative
+      ``ImportFrom`` (``node.level > 0``), resolved via
+      ``importlib.util.resolve_name`` against ``package`` (this module's own
+      ``__package__``, ``"fitdocs.load"``) exactly as the real import system
+      would resolve it at runtime.
+    * ``from fitdocs.load import types`` -- the parent package imported and
+      the submodule reached as one of its attributes/names, rather than
+      imported by its own dotted path. Caught by checking whether the
+      resolved module *is* ``"fitdocs.load"`` (or ``"fitdocs.load.channels"``
+      for the one-level-deeper sibling form) and ``"types"`` is among the
+      names imported from it.
+
+    Does **not** resolve a dynamic import (``importlib.import_module(...)``,
+    ``__import__(...)``, or any string built at runtime) -- no static walk
+    can, by construction; that is why the runtime companion guard exists
+    alongside this one.
+    """
+    tree = ast.parse(source)
+    forbidden: list[str] = []
+    saw_sanctioned_import = False
+
+    def _resolve(node: ast.ImportFrom) -> str | None:
+        if node.level == 0:
+            return node.module
+        dots = "." * node.level
+        name = dots + (node.module or "")
+        try:
+            return importlib.util.resolve_name(name, package)
+        except ImportError:
+            return None
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "fitdocs.load.types":
+                    forbidden.append(f"import fitdocs.load.types (line {node.lineno})")
+        elif isinstance(node, ast.ImportFrom):
+            resolved = _resolve(node)
+            imported_names = {alias.name for alias in node.names}
+            if resolved == "fitdocs.load.types":
+                spelling = ("." * node.level) + (node.module or "")
+                forbidden.append(
+                    f"from {spelling} import ... "
+                    f"(resolves to fitdocs.load.types, line {node.lineno})"
+                )
+            elif resolved == "fitdocs.load" and "types" in imported_names:
+                forbidden.append(f"from fitdocs.load import types (line {node.lineno})")
+            elif (
+                resolved == "fitdocs.load.channels.types"
+                and "SufficiencySettings" in imported_names
+            ):
+                saw_sanctioned_import = True
+
+    return forbidden, saw_sanctioned_import
 
 
 def test_settings_module_does_not_import_load_types_at_runtime() -> None:
-    """A fresh interpreter proves ``settings.py`` itself imports no ``load.types``.
+    """``settings.py`` never directly imports ``fitdocs.load.types`` -- the
+    one edge Req 14.7 forbids (``LoadContext.settings``'s reference back to
+    :class:`LoadSettings` must stay ``TYPE_CHECKING``-only on *that*
+    module's side, never a runtime import the other way here).
 
-    ``fitdocs.load.__init__`` already eagerly imports ``registry`` -> ``types``
-    today (pre-existing, not owned by this task), so ``import
-    fitdocs.load.settings`` alone would trigger that parent-package init and
-    pull ``fitdocs.load.types`` into ``sys.modules`` regardless of what this
-    module's own source does -- that check would not discriminate. Instead
-    this loads ``settings.py`` directly off disk via ``importlib`` under a
-    synthetic module name, bypassing ``fitdocs.load``'s package init (whose
-    own top-level imports, ``import`` and ``from __future__ import
-    annotations`` aside, are just ``fitdocs.settings`` -- a sibling package
-    that does not import ``fitdocs.load`` either), and asserts that
-    ``fitdocs.load.types`` never lands in ``sys.modules`` as a side effect of
-    executing this module's own top-level statements.
+    Uses :func:`_forbidden_load_types_imports` against ``settings.py``'s own
+    source on disk, resolving every static import form rather than matching
+    one literal spelling -- see that function's docstring and
+    :func:`test_load_types_import_detection_catches_the_four_reported_spellings`
+    for the spellings this closes and the one it structurally cannot
+    (a dynamic import, closed instead by
+    :func:`test_settings_module_leaks_no_dynamic_import_of_load_types`
+    below).
     """
     settings_path = (
         Path(__file__).resolve().parents[2] / "src" / "fitdocs" / "load" / "settings.py"
     )
-    module_name = "_isolated_load_settings"
-    script = (
-        "import sys\n"
-        "import importlib.util\n"
-        f"spec = importlib.util.spec_from_file_location({module_name!r}, "
-        f"{str(settings_path)!r})\n"
-        "module = importlib.util.module_from_spec(spec)\n"
-        "sys.modules['_isolated_load_settings'] = module\n"
-        "spec.loader.exec_module(module)\n"
-        "assert 'fitdocs.load.types' not in sys.modules, "
-        "'fitdocs.load.settings must not import fitdocs.load.types at runtime'\n"
-        "print('OK')\n"
+    source = settings_path.read_text(encoding="utf-8")
+    forbidden, saw_sanctioned_import = _forbidden_load_types_imports(source)
+    assert saw_sanctioned_import, (
+        "vacuity check failed: did not find this task's own sanctioned "
+        "'from fitdocs.load.channels.types import SufficiencySettings' -- "
+        "the scan is not inspecting settings.py's real content"
     )
+    assert forbidden == [], (
+        f"settings.py must not import fitdocs.load.types directly: {forbidden}"
+    )
+
+
+def test_load_types_import_detection_catches_the_four_reported_spellings() -> None:
+    """Fixture-discrimination companion for
+    :func:`_forbidden_load_types_imports`, run against synthetic sources
+    rather than by hand-editing and reverting the real shipped module -- the
+    same convention
+    :func:`test_literal_load_table_detection_catches_the_reported_spellings`
+    below already uses for the sibling single-reader walk.
+
+    Of the four spellings named in review round 1, **three** actually
+    escaped the previous literal-``node.module``-match version of this
+    guard: two are closed here, and the third is closed by the runtime
+    companion instead.
+
+    Closed here (static, ``ast.ImportFrom``-resolvable):
+
+    * ``from fitdocs.load import types as _lt`` (the parent-package-then-
+      attribute form)
+    * ``from .types import LoadContext as _LC`` (relative, level 1)
+
+    Closed by :func:`test_settings_module_leaks_no_dynamic_import_of_load_types`
+    instead, not this function: ``importlib.import_module("fitdocs.load.types")``
+    -- no static AST walk can see a dynamically-constructed import by
+    construction.
+
+    A fourth offender, ``import fitdocs.load.types`` (a plain
+    ``ast.Import``, not ``ast.ImportFrom``), is added here too -- not one of
+    the three that escaped review round 1 (the previous literal-match guard
+    already caught this exact spelling), but its own offender because the
+    previous version of this companion had no ``ast.Import`` fixture at
+    all, so deleting that clause from the detector left the full suite
+    green (measured, round 2 of remediation).
+
+    ``from fitdocs.load.types import LoadContext as _LC2`` is included as a
+    **positive control**: the previous literal-match guard already caught
+    this exact spelling too; it is kept here so a future edit cannot
+    silently narrow the walk back to missing it.
+
+    Two controls guard the detector's own signal integrity rather than only
+    its positive hits:
+
+    * A negative control (the real, sanctioned
+      ``from fitdocs.load.channels.types import SufficiencySettings`` alone)
+      proves a future widening of the walk cannot start flagging the
+      legitimate import.
+    * A vacuity-negative control (an offender with **no** sanctioned import
+      present at all) proves ``saw_sanctioned_import`` is a real read of the
+      source, not a value that is always ``True`` regardless of content --
+      measured: hard-coding ``saw_sanctioned_import = True`` inside
+      :func:`_forbidden_load_types_imports` leaves every *other* assertion
+      in this test suite green and is caught only by this one.
+    """
+    sanctioned_import = "from fitdocs.load.channels.types import SufficiencySettings\n"
+
+    offenders = {
+        "parent_then_attribute": (
+            sanctioned_import + "from fitdocs.load import types as _lt\n"
+        ),
+        "relative_level_1": sanctioned_import
+        + "from .types import LoadContext as _LC\n",
+        "plain_ast_import": sanctioned_import + "import fitdocs.load.types\n",
+    }
+    for label, source in offenders.items():
+        forbidden, saw_sanctioned_import = _forbidden_load_types_imports(source)
+        assert saw_sanctioned_import, f"{label}: vacuity check itself failed"
+        assert forbidden != [], f"{label}: offending import was not caught"
+
+    # positive control: the one spelling the previous literal-match guard
+    # already caught -- must still be caught after the resolver rewrite.
+    positive_control_source = (
+        sanctioned_import + "from fitdocs.load.types import LoadContext as _LC2\n"
+    )
+    positive_control_forbidden, positive_control_saw = _forbidden_load_types_imports(
+        positive_control_source
+    )
+    assert positive_control_saw
+    assert positive_control_forbidden != []
+
+    negative_control_forbidden, negative_control_saw = _forbidden_load_types_imports(
+        sanctioned_import
+    )
+    assert negative_control_saw
+    assert negative_control_forbidden == [], (
+        f"false positive on the sanctioned import alone: {negative_control_forbidden}"
+    )
+
+    # vacuity-negative control: no sanctioned import anywhere in the source,
+    # so the vacuity signal itself must read False, not always True.
+    vacuity_negative_forbidden, vacuity_negative_saw = _forbidden_load_types_imports(
+        "from fitdocs.load import types as _lt\n"
+    )
+    assert not vacuity_negative_saw, (
+        "vacuity signal is not discriminating: reported True with no "
+        "sanctioned import anywhere in the source"
+    )
+    assert vacuity_negative_forbidden != []  # still catches the real offense
+
+
+def test_settings_module_leaks_no_dynamic_import_of_load_types(
+    tmp_path: Path,
+) -> None:
+    """Runtime companion to the static walk above, closing spellings no AST
+    walk can see (a dynamic ``importlib.import_module("fitdocs.load.types")``,
+    a lazy function-body import).
+
+    Execs ``settings.py`` directly off disk under a synthetic module name in
+    a subprocess, with ``fitdocs.load`` and ``fitdocs.load.channels`` first
+    seeded in ``sys.modules`` as stub packages carrying their **real**
+    ``__path__`` (round 2 of remediation -- an empty ``__path__ = []`` made
+    every ``fitdocs.load.*`` resolution, forbidden or not, die with
+    ``ImportError``/``ModuleNotFoundError`` during ``exec_module`` itself,
+    so ``assert not leaked`` was unreachable for every violating spelling
+    and the guard's actual, sole discriminator was
+    ``completed.returncode == 0`` -- which reds identically for a genuine
+    violation, an unrelated ``fitdocs.load.*`` import, and a plain typo, so
+    it could not tell any of them apart. Measured: with the real path, a
+    forbidden module-level import resolves successfully, lands in
+    ``sys.modules``, and is caught by the actual ``assert not leaked`` this
+    docstring claims) and ``fitdocs.load.channels.types`` seeded with a
+    stand-in ``SufficiencySettings`` -- so this task's own sanctioned
+    ``from fitdocs.load.channels.types import SufficiencySettings`` resolves
+    against the stub rather than triggering the real package's own
+    ``registry -> types`` chain (which would otherwise land the real
+    ``fitdocs.load.types`` in ``sys.modules`` regardless of what
+    ``settings.py`` itself does, making this guard unable to discriminate --
+    exactly the defect the previous version of
+    :func:`test_settings_module_does_not_import_load_types_at_runtime`
+    round-tripped through). After exec, asserts ``fitdocs.load.types``
+    never landed in ``sys.modules``.
+
+    A lazy, function-body import (``def f(): from fitdocs.load.types import
+    X``) is caught by the static walk above (it inspects the whole AST, not
+    only module level) but is structurally invisible here: this guard only
+    execs the module's top level and never calls anything defined inside
+    it, so a deferred import inside a function body never runs. Measured
+    directly (not via a companion test below -- the only synthetic-source
+    companion in this module, at
+    :func:`test_literal_load_table_detection_catches_the_reported_spellings`,
+    belongs to the sibling single-reader walk, not this one): inserting such
+    a lazy import into ``settings.py`` reddens the static walk above as a
+    sole failure and leaves this runtime guard green -- the concrete case
+    proving "neither guard subsumes the other" rather than merely asserting
+    it.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    settings_path = repo_root / "src" / "fitdocs" / "load" / "settings.py"
+    load_src_dir = repo_root / "src" / "fitdocs" / "load"
+    channels_src_dir = load_src_dir / "channels"
+    script = f"""
+import sys
+import types
+import importlib.util
+
+pkg_load = types.ModuleType("fitdocs.load")
+pkg_load.__path__ = [{str(load_src_dir)!r}]
+sys.modules["fitdocs.load"] = pkg_load
+
+pkg_channels = types.ModuleType("fitdocs.load.channels")
+pkg_channels.__path__ = [{str(channels_src_dir)!r}]
+sys.modules["fitdocs.load.channels"] = pkg_channels
+
+stub_types_mod = types.ModuleType("fitdocs.load.channels.types")
+
+
+class SufficiencySettings:
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+
+stub_types_mod.SufficiencySettings = SufficiencySettings
+sys.modules["fitdocs.load.channels.types"] = stub_types_mod
+
+spec = importlib.util.spec_from_file_location(
+    "_isolated_load_settings", {str(settings_path)!r}
+)
+module = importlib.util.module_from_spec(spec)
+sys.modules["_isolated_load_settings"] = module
+spec.loader.exec_module(module)
+
+leaked = [m for m in sys.modules if m == "fitdocs.load.types"]
+assert not leaked, f"leaked={{leaked!r}}"
+print("OK")
+"""
     completed = subprocess.run(
         [sys.executable, "-c", script],
         capture_output=True,

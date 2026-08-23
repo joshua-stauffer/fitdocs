@@ -35,26 +35,31 @@ Two invariants shape the reader:
 configuration as typed sub-settings living in their own ``fitdocs.load.*``
 modules (``load/channels/types.py``, ``load/priority.py``,
 ``load/qa/types.py``), and this reader aggregates them, so it necessarily
-imports ``fitdocs.load.*``. None of those sibling modules exist yet in this
-checkout; when they land, this module gains an import of each and a
-projection of its sub-table, and nothing else about this module's signature
-changes. The one edge that must never become a runtime import is
-``fitdocs.load.types``'s reference back to :class:`LoadSettings` for
-``LoadContext.settings``'s annotation, which stays ``TYPE_CHECKING``-only on
-that module's side. This module itself imports nothing from
-``fitdocs.load.types`` or any other ``fitdocs.load.*`` module today.
+imports ``fitdocs.load.*``. ``load/channels/types.py`` is the first of the
+three to land (``load-channels``, Req 3.9): this module imports its
+:class:`~fitdocs.load.channels.types.SufficiencySettings` and projects
+``[load.sufficiency]`` onto it. ``load/priority.py`` and ``load/qa/types.py``
+do not exist yet in this checkout; when they land, this module gains an
+import of each and a projection of its own sub-table, and nothing else about
+this module's signature changes. The one edge that must never become a
+runtime import is ``fitdocs.load.types``'s reference back to
+:class:`LoadSettings` for ``LoadContext.settings``'s annotation, which stays
+``TYPE_CHECKING``-only on that module's side. This module still imports
+nothing from ``fitdocs.load.types`` itself.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final
 
+from fitdocs.load.channels.types import SufficiencySettings
 from fitdocs.settings import SettingsError
 
 LOAD_TABLE = "load"
+SUFFICIENCY_TABLE = "sufficiency"
 
 DEFAULT_STALENESS_WINDOW_DAYS: Final[int] = 84
 """12 weeks: the outer end of the researched 8-12 week range, chosen so the
@@ -73,6 +78,7 @@ class LoadSettings:
 
     default_calculator: str | None = None
     benchmark_staleness_days: int = DEFAULT_STALENESS_WINDOW_DAYS
+    sufficiency: SufficiencySettings = field(default_factory=SufficiencySettings)
 
 
 DEFAULT_LOAD_SETTINGS: Final[LoadSettings] = LoadSettings()
@@ -133,6 +139,7 @@ def load_load_settings(
         benchmark_staleness_days=_setting_benchmark_staleness_days(
             table, settings_file
         ),
+        sufficiency=_setting_sufficiency(table, settings_file),
     )
 
 
@@ -165,3 +172,105 @@ def _setting_benchmark_staleness_days(
             f"({type(value).__name__})"
         )
     return value
+
+
+def _setting_sufficiency(
+    table: dict[str, Any], settings_file: Path
+) -> SufficiencySettings:
+    """Project the ``[load.sufficiency]`` sub-table (Req 3.1-3.8).
+
+    Absent sub-table, or an absent individual key within a present one, both
+    resolve to the documented default drawn from
+    :class:`~fitdocs.load.channels.types.SufficiencySettings`'s own field
+    defaults (Req 3.3) -- never an error. A present but non-table value
+    raises, naming the ``load.sufficiency`` path (Req 3.6). Keys this reader
+    does not recognize inside the sub-table are ignored, matching the
+    ignore-unknown-keys behavior the enclosing ``[load]`` reader already has
+    (Req 3.7).
+    """
+    default = DEFAULT_LOAD_SETTINGS.sufficiency
+    if SUFFICIENCY_TABLE not in table:
+        return default
+    sub_table = table[SUFFICIENCY_TABLE]
+    if not isinstance(sub_table, dict):
+        raise LoadSettingsError(
+            f"{settings_file}: [load.sufficiency] must be a table, "
+            f"got {sub_table!r} ({type(sub_table).__name__})"
+        )
+
+    min_stream_coverage = _setting_coverage(
+        sub_table,
+        "min_stream_coverage",
+        settings_file,
+        default.min_stream_coverage,
+    )
+    assert min_stream_coverage is not None  # a non-None default always resolves
+
+    return SufficiencySettings(
+        min_duration_s=_setting_min_duration_s(sub_table, settings_file, default),
+        min_stream_coverage=min_stream_coverage,
+        power_min_stream_coverage=_setting_coverage(
+            sub_table,
+            "power_min_stream_coverage",
+            settings_file,
+            default.power_min_stream_coverage,
+        ),
+        hr_min_stream_coverage=_setting_coverage(
+            sub_table,
+            "hr_min_stream_coverage",
+            settings_file,
+            default.hr_min_stream_coverage,
+        ),
+        pace_min_stream_coverage=_setting_coverage(
+            sub_table,
+            "pace_min_stream_coverage",
+            settings_file,
+            default.pace_min_stream_coverage,
+        ),
+    )
+
+
+def _setting_min_duration_s(
+    sub_table: dict[str, Any], settings_file: Path, default: SufficiencySettings
+) -> int:
+    """Map optional ``min_duration_s``, rejecting non-positive whole seconds."""
+    if "min_duration_s" not in sub_table:
+        return default.min_duration_s
+    value = sub_table["min_duration_s"]
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise LoadSettingsError(
+            f"{settings_file}: [load.sufficiency] min_duration_s must be a "
+            f"positive whole number of seconds, got {value!r} "
+            f"({type(value).__name__})"
+        )
+    return value
+
+
+def _setting_coverage(
+    sub_table: dict[str, Any],
+    key: str,
+    settings_file: Path,
+    default: float | None,
+) -> float | None:
+    """Map an optional coverage key, rejecting anything outside ``(0, 1]``.
+
+    Shared by the shared ``min_stream_coverage`` key and the three optional
+    per-channel overrides (``power_``/``hr_``/``pace_min_stream_coverage``,
+    Req 3.2) -- an absent override resolves to ``None``, which
+    :meth:`~fitdocs.load.channels.types.SufficiencySettings.minimum_for`
+    already treats as "use the shared value".
+    """
+    if key not in sub_table:
+        return default
+    value = sub_table[key]
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not (0 < value <= 1)
+    ):
+        raise LoadSettingsError(
+            f"{settings_file}: [load.sufficiency] {key} must be a number "
+            f"above zero and at or below one, got {value!r} "
+            f"({type(value).__name__})"
+        )
+    return float(value)

@@ -474,13 +474,19 @@ def test_load_types_never_imports_load_settings_at_runtime() -> None:
     top level ever runs -- so an unconditional runtime import there is a
     ``sys.modules`` cache hit, not an ``ImportError``, and stays completely
     silent. This instead loads ``load/types.py`` directly off disk via
-    ``importlib`` under a synthetic module name -- the same technique
-    ``tests/load/test_settings.py::
-    test_settings_module_does_not_import_load_types_at_runtime`` uses for the
-    settings module -- bypassing ``fitdocs.load``'s package ``__init__``
-    entirely, and asserts ``fitdocs.load.settings`` never lands in
-    ``sys.modules`` as a side effect of executing ``types.py``'s own
-    top-level statements.
+    ``importlib`` under a synthetic module name -- the same off-disk-exec
+    technique
+    ``tests/load/test_settings.py::test_settings_module_leaks_no_dynamic_import_of_load_types``
+    uses for the settings module's own runtime-import guard (the sibling
+    ``test_settings_module_does_not_import_load_types_at_runtime`` no longer
+    shares this technique as of load-channels task 2.3 remediation round 1:
+    it moved to a static, resolution-based AST walk, because ``settings.py``
+    now has a legitimate runtime import of a different ``fitdocs.load.*``
+    submodule and the old subprocess/``sys.modules`` isolation trick could no
+    longer tell that import apart from the forbidden one) -- bypassing
+    ``fitdocs.load``'s package ``__init__`` entirely, and asserts
+    ``fitdocs.load.settings`` never lands in ``sys.modules`` as a side effect
+    of executing ``types.py``'s own top-level statements.
 
     Mutation caught: making ``types.py``'s ``TYPE_CHECKING`` guard around
     ``from fitdocs.load.settings import LoadSettings`` unconditional puts
