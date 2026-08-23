@@ -123,7 +123,7 @@ written literally below is one of those.
     inside the perimeter
   - _Requirements: 4.4, 10.3_
 
-- [ ] 2. Detection: the oracles, the match data, and the one-shot acceptance
+- [x] 2. Detection: the oracles, the match data, and the one-shot acceptance
 
 - [x] 2.1 Build the content-value matcher
   - Implement tokenisation, canonicalisation, entropy estimation, windowing,
@@ -226,7 +226,7 @@ written literally below is one of those.
   - _Depends: 2.1_
   - _Boundary: ContentOracle_
 
-- [ ] 3. Tree: removal, inventory, vocabulary, and identity erasure
+- [x] 3. Tree: removal, inventory, vocabulary, and identity erasure
 
 - [x] 3.1 Delete the encumbered material and the entries that existed only to exclude it
   - Extract the prior rewrite map's rows to a scratch artifact outside the
@@ -588,7 +588,7 @@ written literally below is one of those.
   - _Depends: 3.3, 3.5, 3.8, 3.9, 3.10_
   - _Boundary: IdentityErasure_
 
-- [ ] 4. Guards: re-base what survives, retire what cannot
+- [x] 4. Guards: re-base what survives, retire what cannot
 
 - [x] 4.1 Re-base the sdist guard onto the value oracle and retire its token-literal detections
   - **Deletions first, renames only over what survives.** These two sets overlap
@@ -729,7 +729,7 @@ written literally below is one of those.
   - _Depends: 4.3_
   - _Boundary: ReintroductionGuards_
 
-- [ ] 5. History tooling: the gated pipeline, built and tested before it runs
+- [x] 5. History tooling: the gated pipeline, built and tested before it runs
 
 - [x] 5.1 (P) Build the quiescence gate
   - Implement the read-only inspection returning every branch other than `main`,
@@ -937,7 +937,7 @@ written literally below is one of those.
   - _Depends: 5.4_
   - _Boundary: RemoteReconciliation_
 
-- [ ] 6. Evidence, validation, and landing the tree work
+- [x] 6. Evidence, validation, and landing the tree work
 
 - [x] 6.1 Classify every criterion and re-verify the claims in the changed tests
   - Run the completeness sweep, because this spec lists 76 criteria and
@@ -1223,7 +1223,7 @@ written literally below is one of those.
   - _Depends: 6.4_
   - _Boundary: HistoryRewrite_
 
-- [ ] 7. Replacement machinery: the landed gate record, and the pipeline re-scoped for the fresh root
+- [x] 7. Replacement machinery: the landed gate record, and the pipeline re-scoped for the fresh root
 
 - [x] 7.1 Run the quiescence gate, record the abandonment, and clear the backup refs
   - *(Amendment 1, 2026-08-17: this task ran on 2026-08-16 under the retired
