@@ -1,7 +1,7 @@
 ---
 id: 2026-08-18-sweep-evidence-lives-in-a-directory-9-4-destroys
 title: Task 7.2's mutation sweep is the only record of its own bound, and 9.4 destroys the directory holding it
-status: open
+status: done
 importance: medium
 importance_why: The artifact that terminated a task with three rejections is scheduled for deletion; if 7.8 or Req 12.3 needs it as retained evidence, that must be decided before Major 9.
 effort: S
@@ -15,6 +15,9 @@ context:
   - .kiro/specs/encumbered-content-purge/tasks.md
   - docs/reference/history-rewrites.md
 blocked_by: []
+closed: 2026-08-23
+closed_note: >-
+  MOOT, with the disposition ruled. The item asked whether sweep-7-2-era-signal.md was retained evidence or scratch. Task 9.4 destroyed the whole scratch directory except forbidden-strings.tsv, on the maintainer's explicit 2026-08-23 ruling to execute the task's literal text -- taking the sweep with it. The disposition is therefore SCRATCH, by maintainer ruling rather than by omission, and that is recorded here. The record's remaining dangling citations to destroyed evidence are tracked separately at 2026-08-23-provenance-record-cites-seven-destroyed-scratch-files.
 ---
 
 ## What

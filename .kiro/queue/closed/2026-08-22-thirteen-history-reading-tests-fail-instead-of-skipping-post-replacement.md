@@ -1,7 +1,7 @@
 ---
 id: 2026-08-22-thirteen-history-reading-tests-fail-instead-of-skipping-post-replacement
 title: Thirteen history-reading tests fail instead of skipping after the replacement — task 7.2's era re-scope covered one test and missed its siblings
-status: open
+status: done
 importance: high
 importance_why: They turn the post-replacement operator validation run red, which is the exact signal task 8.3 tells an operator to treat as a swap-back — so the next reader of a red suite must re-derive, under pressure, that these are expected. Task 9.3 retires them, but 9.1 and 9.2 run first and both expect a green battery.
 effort: M
@@ -16,6 +16,9 @@ context:
   - tests/purge/test_tree_removal.py
   - .kiro/specs/encumbered-content-purge/tasks.md
 blocked_by: []
+closed: 2026-08-23
+closed_note: >-
+  Resolved by RETIREMENT, not by era-scoping, at task 9.3 (commit c18ec26). All thirteen lived in tests/purge/test_replacements.py and tests/purge/test_tree_removal.py; task 9.3 deleted both modules with the rest of the machinery. Era-scoping thirteen tests two tasks before deleting them would have bought nothing, so the Major 9 run carried them as a named, enumerated exception through 9.1 and 9.2 and required 9.4's post-retirement battery to be green with no exception at all. Measured on c786326: 2453 passed / 5 skipped without the match-data source, 2458 passed with it -- zero failures in both modes, the first time since the replacement ran.
 ---
 
 ## What
