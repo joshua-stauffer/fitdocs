@@ -1,7 +1,7 @@
 ---
 id: 2026-07-29-coggan-note-names-a-power-channel-that-does-not-exist
 title: COGGAN_TSS's note credits a load-channels power channel that does not exist
-status: open
+status: done
 importance: medium
 importance_why: A citation note tells a reader where the cited formula is implemented. This one names a module that has never existed, so anyone verifying the citation looks in the wrong package. It is now frozen under a whole-note backstop, so the wrong pointer is pinned rather than merely present.
 effort: S
@@ -84,3 +84,19 @@ the round-1 truth-check had not covered in depth.
    single-clause mutation.
 5. Sweep the other four notes for the same species of claim (a pointer to
    where something is implemented) while you are in the file.
+
+## Resolution
+
+**Closed `done` 2026-08-23 at `b4ccfa4`.**
+
+`COGGAN_TSS.note` now names `fitdocs.metrics.stress.power_tss`, which is where
+the formula actually ships and always has. The sentence that claimed "this
+package's power channel already implements" is corrected in place with the
+correction stated — there is no power channel; `fitdocs/load/channels/` holds
+`sources.py`, `sufficiency.py` and `types.py`, and the channel is load-channels
+task 3.1, unwritten.
+
+The whole-note backstop `BACKSTOP_COGGAN_TSS_NOTE` redded on the edit exactly
+as the item predicted it would, and was moved in the same commit. That is the
+mechanism working: it pinned text, the text was false, and correcting it
+required a deliberate human-visible move rather than a silent drift.

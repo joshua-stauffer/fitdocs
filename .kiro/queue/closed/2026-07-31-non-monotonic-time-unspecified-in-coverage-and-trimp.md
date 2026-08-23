@@ -1,7 +1,7 @@
 ---
 id: 2026-07-31-non-monotonic-time-unspecified-in-coverage-and-trimp
 title: Non-monotonic time_s is silently skipped by both stream_coverage and trimp, and untested in either
-status: open
+status: done
 importance: low
 importance_why: >
   Not a live defect -- no shipped decoder is known to emit backwards
@@ -84,3 +84,39 @@ regenerated golden set depend on whichever behaviour each happens to have.
    a failing-on-mutation test on each side. Check whether load-channels task
    2.2's grade series (`src/fitdocs/load/channels/grade.py`) needs the same
    treatment when it lands.
+
+## Resolution
+
+**Closed `done` 2026-08-23 at `b4ccfa4` — the convention is now contract.**
+
+Rule fixed: a non-positive interval contributes to neither accumulator, and the
+surrounding positive intervals are unaffected. Four behavioural tests, two per
+module:
+
+- `tests/load/channels/test_sufficiency.py` —
+  `test_non_monotonic_time_intervals_are_skipped_by_coverage`, and a
+  backwards-only series that pins the interaction with the Req 2.9 zero-span
+  gate (the skip rule feeds it rather than bypassing it).
+- `tests/metrics/test_stress.py` — the same pair for `trimp`, asserting against
+  a separately computed monotonic reference rather than a transcribed float.
+
+The fixtures use deltas `(+10, -5, +10)` and `(+60, -30, +60)`, chosen so that
+skip, raw-sum and `abs(dt)` give three **distinct** answers. The assertions
+therefore separate the shipped rule from both plausible alternatives instead of
+merely confirming it — which matters, because the item's concern was divergence
+between accumulators, not a single wrong value.
+
+Measured: dropping `if dt <= 0: continue` from `stream_coverage` reds 1;
+dropping it from `trimp` reds both trimp tests. Both deletions were previously
+green.
+
+Recorded in the test docstring rather than glossed: the `trimp` deletion also
+reds two `test_constant_guard.py` exemption tests, but only because removing
+the guard orphans a numeric literal's exemption entry. That is a structural
+detector firing on the shape of the edit — it would fire for a deletion that
+changed no behaviour — so it is not evidence the rule is pinned. The four
+behavioural tests are.
+
+Still open for load-channels task 2.2, the third accumulator over this sample
+domain: it should adopt this convention rather than invent a third answer. The
+test comments say so at both sites.

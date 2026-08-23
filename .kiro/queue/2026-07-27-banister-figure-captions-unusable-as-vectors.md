@@ -75,3 +75,22 @@ Full analysis: `docs/reference/banister-trimp-primary-sources.md` §5 D4.
 3. Done looks like: a worked-example test whose expected value was produced by
    the formula under test's own definition, with a comment saying why the
    primary text's captions were not used.
+
+## Progress note (2026-08-23, `b4ccfa4`) — trap pinned where it will be hit; item stays open
+
+The item's own done criterion is a *test* — "a worked-example test whose
+expected value was produced by the formula under test's own definition, with a
+comment saying why the primary text's captions were not used". That test is
+load-channels task 5.1's, and load-channels has not started. So this stays
+open.
+
+What changed: the trap is now stated in the document the implementer actually
+reads. `.kiro/specs/load-channels/tasks.md` task 5.1 previously said only
+"reproduce the published training-impulse worked example", which walks a
+session straight into the Fig. 9.5 / 9.6 captions. It now carries an explicit
+**TRAP** bullet naming the 8-370% disagreement, the internally-inconsistent
+third row, the fact that the citation would be impeccable so review-by-reading
+would pass it, and the standing ruling from
+`docs/reference/banister-trimp-primary-sources.md` § D4.
+
+Close this when task 5.1 lands with the computed-not-transcribed vector.

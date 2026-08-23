@@ -114,3 +114,47 @@ Whether the year problem generalises — if a bibliographic field can be
 catalogue-sourced while content is primary-read, the same split could apply to
 edition, publisher or page numbering, which argues for a field rather than an
 enum member.
+
+## Triage note (2026-08-23, `b4ccfa4`) — RAISED IN PRIORITY, blocked on a maintainer ruling
+
+Reviewed during the post-purge queue triage as a load-channels pre-flight
+candidate. It is the right thing to do before load-channels adds a citation
+record per channel — but it is the one pre-flight item a session must not
+decide alone, so it was deliberately left rather than forgotten.
+
+**Why it needs a ruling, not an implementation.** The item's own preferred
+answer renames `FITDOCS_MEASURED` to something like `FITDOCS_CHOSEN`. That is
+not an internal tidy:
+
+- `FitdocsChoice.verification` is type-pinned as
+  `Literal[VerificationStatus.FITDOCS_MEASURED]`, so the rename changes a
+  public type, not just a name.
+- `VerificationStatus` is exported from `fitdocs.load`, so it is part of the
+  plugin surface `plugin-api` publishes and `docs/plugins.md` documents.
+- It changes what four already-shipped records *assert*, which is a provenance
+  claim about published work — the one class of change this repo's citation
+  machinery exists to make deliberate.
+
+**Why it is cheaper before load-channels than after.** load-channels adds
+citation records for three channels. Every record written under the current
+vocabulary is a record to migrate if the vocabulary changes, and the item
+already notes the pressure is increasing rather than static — task 12.2 added a
+fourth `FitdocsChoice` since it was filed.
+
+**The three decisions needed**, all answerable in one sitting:
+
+1. Rename `FITDOCS_MEASURED` -> `FITDOCS_CHOSEN`, reserving `FITDOCS_MEASURED`
+   for records that actually populate `measurement`? Or keep the name and
+   document the divergence?
+2. Add a term for "read from the cited work's primary text, but a companion
+   primary work disagrees" (the B91 / M90 case), or keep answering it in `note`
+   prose?
+3. Add a term for "content primary-attested, a bibliographic field
+   catalogue-sourced" (the 1991 / OCLC case), or the same?
+
+Partial progress that reduces the cost either way: as of `b4ccfa4`,
+`verification` is pinned by `_ATTRIBUTION_BACKSTOPS` in
+`tests/load/channels/test_sources.py` (queue
+`2026-07-30-citation-authors-year-work-unpinned`), so any change to a record's
+status now reds and cannot happen silently. Whatever is decided, the migration
+is visible.

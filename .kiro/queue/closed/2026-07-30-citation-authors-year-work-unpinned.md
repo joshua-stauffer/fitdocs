@@ -1,7 +1,7 @@
 ---
 id: 2026-07-30-citation-authors-year-work-unpinned
 title: Citation.authors, .year and .work are falsifiable with the full suite green, one field over from the locators just pinned
-status: open
+status: done
 importance: high
 importance_why: The same defect class that justified pinning all six `locator` fields is live and unguarded on three sibling fields of the same records. A wrong author or year in a citation is a false provenance claim in the artifact whose entire purpose is inspectable provenance.
 effort: S
@@ -109,3 +109,37 @@ branch, so this is a known and recorded gap rather than a silent one.
   rather than free text, so the falsification surface is narrower, but a record
   silently downgraded from `PRIMARY_TEXT` would be a provenance claim change
   that nothing catches.
+
+## Resolution
+
+**Closed `done` 2026-08-23 at `b4ccfa4`.** Fixed as a whole-record backstop, not a
+third per-field dict — the shape the item's step 2 asked for.
+
+`_ATTRIBUTION_BACKSTOPS` in `tests/load/channels/test_sources.py` pins a
+fingerprint over every field of `Citation` that has no dedicated pin, deriving
+that field list by walking `dataclasses.fields(Citation)` rather than naming
+the fields. Consequences, which is why this shape was chosen: adding a field to
+`Citation` reds all six backstops, and removing a dedicated pin drops that
+field back into the fingerprint and reds too. A field cannot ship both unpinned
+and undeclared, so the "next field left undefended" cycle this item was filed
+against cannot run a fourth time.
+
+Rendering is plain values rather than `repr`, so a reviewer can read a
+fingerprint against `sources.py` directly.
+
+The item's second open question is answered rather than deferred:
+`verification` renders as its enum `.value`, so a record silently downgraded
+from `PRIMARY_TEXT` now reds.
+
+Measured discrimination (38 tests in the module), each mutation applied and
+reverted:
+
+- `MINETTI_2002.year` 2002 -> 2003 — red (was green)
+- `MINETTI_2002.authors` -> "Nobody, X." — red (was green)
+- `MINETTI_2002.work` -> another title — red (was green)
+- `MINETTI_2002.verification` -> `SECONDARY_ATTESTATION` — reds 4
+- adding a field to `Citation` — reds 1 (all six comparisons)
+- misspelling a `_DEDICATED_FIELD_PINS` entry — reds 2
+- widening `_DEDICATED_FIELD_PINS` to include `authors` — reds 1
+
+Suite: 2459 passed, 5 skipped; ruff and mypy --strict clean.

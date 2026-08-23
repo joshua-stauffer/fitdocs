@@ -1,7 +1,7 @@
 ---
 id: 2026-07-28-moving-fallback-not-speed-less-only
 title: The moving-time distance fallback fires for present-but-slow speed samples, not only speed-less channels
-status: open
+status: done
 importance: medium
 importance_why: A stationary sample with drifting GPS distance is counted as moving, which is the noise the 0.5 m/s threshold exists to reject; moving_time_s is reported in every document.
 effort: S
@@ -100,3 +100,27 @@ the branch analysis above were independently confirmed in this session.
 Done means: the record's description and the code's behavior agree, one test
 distinguishes the present-but-slow case from the speed-less case, and a
 mutation proves that test can fail.
+
+## Resolution
+
+**Closed `done` 2026-08-23 at `b4ccfa4` — decided, not assumed.** The item asked
+which of the two was wrong, the code's scope or the record's wording.
+
+**The record.** Req 7.1 specifies "session timer, else threshold +
+distance-increase fallback" with no speed-less qualifier, which licenses what
+`aggregates.py` implements. The item itself flagged this as the cheaper reading
+to check first, and it holds. Decisively: task 10.1 had **already** corrected
+the identical wording in `aggregates.py`'s own docstring, which now reads "a
+present-but-low speed (at or below the threshold) still falls through to the
+distance check, not only a speed-less channel". Only the `sources.py` copy was
+left standing, ruled out of that task's boundary.
+
+So **no computed value moves** — `moving_time_s` is unchanged in every rendered
+document, and no regeneration is owed.
+
+Fixed together with `2026-07-29-moving-threshold-justification-over-narrows`,
+which is the same sentence in the same record; see that item's resolution for
+the mutation evidence. The consequence this item raised — that on an activity
+with a speed channel and a noisy distance channel a standing-still sample whose
+distance ticks up is counted as moving — is now written into the justification
+rather than left implied.

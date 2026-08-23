@@ -1,7 +1,7 @@
 ---
 id: 2026-07-26-protocol-purity-guards-miss-annotations
 title: Every "this Protocol exposes no X" guard using dir() is blind to annotation-only members
-status: open
+status: done
 importance: medium
 importance_why: Three downstream specs want to park per-pass state on ProfileView, and the annotation spelling is the natural one.
 effort: S
@@ -143,3 +143,34 @@ Branch `chore/protocol-purity-audit`, worktree `../fitdocs-purity-audit`
 (left unmerged and in place). Human: confirm and close with
 `/kiro-queue close 2026-07-26-protocol-purity-guards-miss-annotations`, or
 reopen further if something above still needs narrowing.
+
+## Resolution
+
+**Closed `done` 2026-08-23 at `b4ccfa4` — confirmed by re-measurement, which is
+what this item was waiting on.**
+
+The work itself landed earlier on `chore/protocol-purity-audit`; that branch
+and its worktree are gone and the code is on `main`. The item stayed open only
+because a session self-closed it improperly, an adversarial review rejected
+that on process grounds, and it was restored to `open` pending the human
+confirmation its own last paragraph asked for.
+
+Verified on `main` at `b4ccfa4` rather than taken on assertion. The reviewer's
+documented mutation — reverting `_protocol_member_names` to a single
+`getattr(protocol, "__annotations__", {})` call, dropping the `__mro__` walk —
+reds `test_dir_is_blind_to_a_bare_annotation_but_the_union_helper_is_not` as
+the **sole** failure:
+
+```
+drop the __mro__ walk -> 1 failed, 2458 passed, 5 skipped
+restored              -> 2459 passed, 5 skipped
+```
+
+So the guard that closes this item's blind spot is itself pinned, including
+against the inherited-Protocol-base half of its purpose. `_DecoyBase` /
+`_Decoy` are present on `main` (`tests/load/test_types.py:773-776`).
+
+The audit's wider claim stands as recorded: `tests/load/test_types.py` holds
+the only `dir()`-based Protocol-purity guard in the suite; the two other
+"exposes no X" guards are built on `dataclasses.fields()`, which does see
+annotation-only fields, so neither shares the blind spot.

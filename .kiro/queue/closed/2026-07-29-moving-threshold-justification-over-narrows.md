@@ -1,7 +1,7 @@
 ---
 id: 2026-07-29-moving-threshold-justification-over-narrows
 title: MOVING_THRESHOLD_CHOICE's justification describes a rule the code does not implement, and a whole-value backstop pins the false text character-for-character
-status: open
+status: done
 importance: high
 importance_why: A shipped FitdocsChoice record states, as its Req 15.8 justification, a rule the production code contradicts — and the backstop guarding it makes the falsehood harder to notice, not easier.
 effort: S
@@ -98,3 +98,23 @@ verdict the claim against evidence you ran, not against the previous wording.
 None. The maintainer has already ruled on the equivalent wording in
 `aggregates.py` by approving task 10.1; this is the same correction in the
 record that task's boundary excluded.
+
+## Resolution
+
+**Closed `done` 2026-08-23 at `b4ccfa4`.**
+
+`MOVING_THRESHOLD_CHOICE.justification` in `src/fitdocs/metrics/sources.py` no
+longer restricts the cumulative-distance fallback to a speed-less channel. It
+now describes the rule `aggregates.py` implements — a pair failing the speed
+test falls through to the distance check regardless of whether a speed sample
+was present — and states the consequence outright.
+
+Decided jointly with `2026-07-28-moving-fallback-not-speed-less-only`: the
+record drifted, the code is what Req 7.1 specifies, and no computed value
+moves.
+
+The item's own warning was borne out. `BACKSTOP_MOVING_THRESHOLD_JUSTIFICATION`
+redded the moment the false sentence was corrected — the "a whole-value
+backstop pins text, not truth" lesson, arriving exactly as predicted. It was
+moved in the same commit, and verified still discriminating: dropping a single
+"not" from the corrected text reds it (1 failed, 101 passed).

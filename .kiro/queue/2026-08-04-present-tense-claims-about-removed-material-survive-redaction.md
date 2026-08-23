@@ -94,3 +94,32 @@ this spec at all, or left to their owning specs. They are approved documents of
 other specs, and this spec's mandate over them is redaction, not revision — which
 is precisely why 3.8 left them. The conservative reading defers all three
 non-purge files to their owners and fixes only `brief.md`.
+
+## Progress note (2026-08-23, `b4ccfa4`) — narrowed to the distribution half
+
+Of the four files this item names, one is fixed and one was dropped:
+
+- **`.kiro/specs/threshold-load/brief.md` — FIXED.** It stated the withdrawn
+  calculator "stays registered and untouched". Amendment 1 now heads the file
+  and each false claim is marked in place, per retain-the-record. This mattered
+  more than the others: threshold-load is the next spec on the critical path,
+  and the brief is the first thing its implementer reads. The correction also
+  records what the deletion actually implies — `threshold` is the first and
+  **only** built-in calculator, there is no arbitration contest, and shipping it
+  is what makes training load computable at all.
+- **`.kiro/specs/encumbered-content-purge/brief.md` — no longer in scope.** That
+  spec completed 2026-08-23 and its internal documents are archival; the
+  post-purge triage dropped the sibling items against them for that reason.
+
+**Still open, both in `distribution`, which is unstarted:**
+
+- `.kiro/specs/distribution/research.md:64-65` — "`docs/` holds … the reference
+  writeup, and the extracted tables". It does not.
+- `.kiro/specs/distribution/design.md:82` — "The encumbered material is
+  committed and packaged by design."
+
+These are the two the item's own "Why it matters" singled out as dangerous — a
+session reading `design.md` to implement packaging will plan around a state
+that no longer exists. Fold them into distribution's owed amendments rather
+than fixing them in isolation; roadmap.md's Phase 5 entry already records that
+two amendments are owed and should be written once against the final state.
