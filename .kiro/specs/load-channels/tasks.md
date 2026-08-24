@@ -831,3 +831,85 @@ is what makes them safe to run concurrently despite overlapping names.
   icu's` and `task 1.1).` correctly (no whitespace after those periods), and an
   abbreviation planted inside the carrying sentence reds rather than passing.
   Check the direction, not just the split.
+
+## Session Handoff — 2026-08-24
+
+**State: tasks 1.1–3.3 are `[x]` and merged to `main`. Six leaves remain:
+4.1, 4.2, 5.1, 5.2, 5.3, 5.4.** Resume with `/kiro-impl load-channels`.
+
+### What landed this session
+
+| Task | Commit | Module |
+|---|---|---|
+| 2.1 | `e48ca61` | `channels/weighting.py` — `HeartRateIntensityModel` + `BanisterTrimpModel` |
+| 2.2 | `02c39ff` | `channels/grade.py` — Minetti cost ratio, clamped to ±45% |
+| 2.3 | `53ece33` | `load/settings.py` — one defaulted `sufficiency` field + one projection |
+| 3.1 | `4aba266` | `channels/power.py` |
+| 3.2 | `a031271` | `channels/heart_rate.py` |
+| 3.3 | `aeb3217` | `channels/pace.py` |
+
+Suite 2459 → 2667 passed / 5 skipped. `ruff check`, `ruff format --check`,
+`mypy src/` (strict, 68 files) and `fitdocs --help` green at every commit.
+Every task was reviewed by an independent adversarial reviewer; every one was
+rejected at least once. No reviewer found an arithmetic or control-flow defect
+in any production module — **every rejection was a test that could not fail, or
+prose asserting something untrue.**
+
+### What the next session must know before starting 4.1
+
+- **`importlib.reload(pace)` at `tests/load/channels/test_pace.py:867`** mutates
+  the shared module object for the rest of the session, replacing
+  `pace.compute` with a new function object. Harmless today. **Task 4.1
+  publishes `compute` through `channels/__init__.py`** — after which a
+  package-level re-export captured at import time goes stale mid-session. The
+  same pattern is at `test_grade.py:361,370`. Decide this before writing the
+  re-export, not after.
+- **The three-test delegation pattern is settled and verified hole-free** across
+  eight to eleven delegation-breaking shapes per channel: (a) identity of the
+  module attribute, (b) a structural AST walk, (c) a monkeypatch asserting the
+  call happened once with the caller's exact objects by `is` identity. All three
+  channels use it. Copy it; do not reinvent it.
+- **Task 4.2's "no constant without a citation" rule** is structural and will
+  sweep every module in the package. `weighting.py`, `grade.py`, `power.py`,
+  `heart_rate.py` and `pace.py` each already name their citation keys in their
+  module docstrings; `sufficiency.py` and `types.py` predate this session.
+- **Task 4.1's surface pin is an *existing* test to extend**, not a new module —
+  see the plan's Test File Ownership section.
+
+### Open rulings the next session cannot make alone
+
+Three queue items need a maintainer decision and are **not** blocking 4.1–5.4:
+
+1. `2026-08-24-task-3-2-bullet-demands-a-retired-intervals-icu-claim` —
+   **spec conflict.** Task 3.2's bullet requires documenting that intervals.icu
+   computes the HR load "the same way and requires the same three inputs".
+   `INTERVALS_ICU_HRSS`'s note was corrected 2026-07-26 to say the read text
+   establishes no such thing, and `test_sources.py:1089` guards against the
+   claim returning. `heart_rate.py` now claims only what the citation supports.
+   **Any session regenerating or re-running task 3.2 will reproduce the
+   overclaim.** Open question: does the matching requirement section carry the
+   retired wording too? If so this is a requirements amendment needing
+   re-approval, not a task edit.
+2. `2026-08-23-hr-weighting-seam-ignores-athlete-trimp-selection` — the seam
+   calls `weighting_for(None)` unconditionally while `metrics/__init__.py:95`
+   honours `athlete.trimp_weighting` (measured 128.77 vs 115.11). Closing it
+   means widening an approved Service Interface. Task 3.2 consumed the seam
+   as-is and did not worsen it.
+3. `2026-08-23-grade-adjustment-treats-unrecorded-altitude-as-level` — an
+   interval with no terrain contributes its raw distance with `applied=True` and
+   nothing on the result saying so. Behaviour is pinned and documented; what the
+   result *should* report is open.
+
+Also queued, no ruling needed: the stale `COGGAN_TSS` note (byte-pinned by task
+1.1's backstop, so no later task can fix it in boundary), the
+`tests/load/channels/` mypy-perimeter gap, and the `fitdocs sync` /
+calculator-registration-order trap.
+
+### Notes carried into the sweep above
+
+The `## Implementation Notes` section now records nineteen defect patterns, all
+found by mutation and none by reading. The five that recurred most: value-
+equality not pinning a delegation contract; "there is no code to mutate away"
+being wrong in *both* directions; the identity-point trap (including inside
+`inputs_used`); guard replacement vacating an axis; and prose repair introducing
+a new false claim.
