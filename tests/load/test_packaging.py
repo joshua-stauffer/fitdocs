@@ -171,6 +171,7 @@ _LOAD_MODULE_ALLOWLIST = frozenset(
         "fitdocs/load/channels/__init__.py",
         "fitdocs/load/channels/grade.py",
         "fitdocs/load/channels/heart_rate.py",
+        "fitdocs/load/channels/pace.py",
         "fitdocs/load/channels/power.py",
         "fitdocs/load/channels/sources.py",
         "fitdocs/load/channels/sufficiency.py",

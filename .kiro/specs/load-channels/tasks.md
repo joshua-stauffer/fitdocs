@@ -333,7 +333,7 @@ is what makes them safe to run concurrently despite overlapping names.
   - _Boundary: HeartRateChannel_
   - _Depends: 1.3, 2.1_
 
-- [ ] 3.3 (P) Implement the pace channel
+- [x] 3.3 (P) Implement the pace channel
   - Compute the load from mean grade-adjusted speed against the athlete's
     threshold speed over moving time, matching the published interoperability
     formulation including its use of moving rather than elapsed time, and
@@ -799,3 +799,35 @@ is what makes them safe to run concurrently despite overlapping names.
   claim as unbacked, because the branch is based on an older `main`. The claim
   was true in the repo. Verify such a reference against `main`, not the
   worktree, and expect it to resolve only after the pre-merge rebase.
+- **The identity-point trap reaches `inputs_used`, not just the load.** Task
+  3.3's only fixture asserting `threshold_speed_mps` ran *exactly at
+  threshold*, where the grade-adjusted speed equals it — so the two reported
+  speeds were freely swappable, `grade_adjusted_speed_mps` could be hardcoded
+  to `"0"`, and the field named "grade-adjusted" could report unadjusted speed,
+  all with 702 tests green. Req 6.9 exists so the number can be checked by
+  hand; every one of those made the hand check silently wrong. Any reported
+  value needs a fixture where it differs from its neighbours.
+- **A test named after a mutation is not a test of that mutation.** 3.3 shipped
+  `test_intensity_squared_to_cubed_mutation_reds_only_the_sub_threshold_test`
+  whose entire body was `assert 0.75**2 != 0.75**3` — zero `Name` nodes, zero
+  `Attribute` nodes, no production symbol at all, unfalsifiable by any change
+  to `pace.py`. The replacement extracts the exponent from the module source
+  and evaluates *that*, with an explicit `assert match is not None`.
+- **Repairing a false claim is where the next false claim gets written.** Three
+  times in this spec a prose fix landed a new defect: 2.2 twice repaired a
+  false pointer with another false pointer, and 3.3's correction of "differ
+  only in load, intensity and notes" replaced it with a list including
+  `clamped_intervals`, which is `'0'` on both paths and cannot differ on any
+  course inside the model's validated range. Re-measure the replacement
+  sentence, do not reason about it.
+- **A regex over module source reads prose as readily as code.** 3.3's exponent
+  guard is `re.search(r"intensity\*\*(\d+)", source)` while its docstring
+  claims to be anchored on the `load = ` assignment. Planting `intensity**2` in
+  the docstring and mutating the real code to `**3` leaves it green, because
+  `re.search` returns the first match. Walk the AST for the assignment, or
+  anchor the pattern on it.
+- **`re.split(r"(?<=\.)\s+", ...)` is safe only when its failure direction is
+  loud.** 3.3's sentence-containment guard was verified to fragment `intervals.
+  icu's` and `task 1.1).` correctly (no whitespace after those periods), and an
+  abbreviation planted inside the carrying sentence reds rather than passing.
+  Check the direction, not just the split.
