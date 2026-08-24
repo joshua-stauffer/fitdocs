@@ -435,19 +435,89 @@ def test_every_citation_attribution_is_pinned_by_a_backstop() -> None:
 
 def test_package_imports_cleanly() -> None:
     """The channel package's ``__init__.py`` holds no logic and no import
-    side effect: every top-level statement is a docstring or a
-    ``from __future__`` import (8.8 boundary; task 1.1 bullet)."""
+    side effect (8.8 boundary; Req 9.7): every top-level statement is a
+    docstring, a ``from __future__`` import, a plain re-export (``from
+    fitdocs.load.channels.<leaf> import X as X``), or the single ``__all__``
+    assignment listing string constants.
+
+    Widened in task 4.1 from task 1.1's original ``["Expr", "ImportFrom"]``
+    shape (a single ``from __future__ import annotations`` and nothing
+    else): task 4.1's whole job is to populate this file with the layer's
+    re-exports, which this test's original, narrower shape would now
+    permanently forbid. The widening still rejects everything a "no logic"
+    module must reject -- a ``Call``, an ``If``, a ``FunctionDef``, a
+    ``ClassDef``, or an ``Assign`` to anything other than ``__all__`` -- and
+    additionally requires every non-``__future__`` import to be an explicit
+    ``X as X`` re-export (mypy strict's own re-export spelling) sourced from
+    this package itself, so a wildcard import, a renamed import, or an
+    import of unrelated logic from elsewhere in the tree still fails it.
+    """
     spec = importlib.util.find_spec("fitdocs.load.channels")
     assert spec is not None and spec.origin is not None
     tree = ast.parse(pathlib.Path(spec.origin).read_text(), filename=spec.origin)
-    kinds = [type(node).__name__ for node in ast.iter_child_nodes(tree)]
-    assert kinds == ["Expr", "ImportFrom"]
-    for node in ast.iter_child_nodes(tree):
+    nodes = list(ast.iter_child_nodes(tree))
+    kinds = [type(node).__name__ for node in nodes]
+    assert kinds[0] == "Expr", "the module docstring must be the first statement"
+    assert set(kinds[1:]) <= {"ImportFrom", "Assign"}, (
+        f"unexpected top-level statement kind(s) in fitdocs.load.channels: "
+        f"{kinds!r} -- only ImportFrom and Assign are allowed after the "
+        "docstring"
+    )
+    assign_count = kinds.count("Assign")
+    assert assign_count == 1, (
+        f"expected exactly one top-level Assign (__all__), found {assign_count}"
+    )
+
+    saw_future_import = False
+    for node in nodes:
         if isinstance(node, ast.Expr):
             assert isinstance(node.value, ast.Constant)
             assert isinstance(node.value.value, str)
         elif isinstance(node, ast.ImportFrom):
-            assert node.module == "__future__"
+            if node.module == "__future__":
+                saw_future_import = True
+                continue
+            assert node.module is not None and node.module.startswith(
+                "fitdocs.load.channels."
+            ), (
+                f"{node.module!r} is not a fitdocs.load.channels.* leaf -- "
+                "this package re-exports only its own leaves"
+            )
+            for alias in node.names:
+                # The three ``compute`` entry points are deliberately
+                # renamed under a channel-qualified name (task 4.1's own
+                # instruction: "the three computation entry points under
+                # channel-qualified names") so all three can be imported
+                # from this one package without colliding on the bare name
+                # -- power.py, heart_rate.py and pace.py each define their
+                # own module-level ``compute`` (the package's other five
+                # leaf modules do not) -- every other name must be the
+                # mypy-strict 'X as X' re-export spelling.
+                is_qualified_compute = alias.name == "compute" and alias.asname in {
+                    "power_compute",
+                    "heart_rate_compute",
+                    "pace_compute",
+                }
+                assert alias.asname == alias.name or is_qualified_compute, (
+                    f"{alias.name!r} is imported under a different name "
+                    f"({alias.asname!r}) -- every re-export here must be "
+                    "explicit 'X as X', matching mypy strict's own "
+                    "no_implicit_reexport spelling, except the three "
+                    "channel-qualified 'compute as <channel>_compute' imports"
+                )
+        elif isinstance(node, ast.Assign):
+            assert len(node.targets) == 1
+            target = node.targets[0]
+            assert isinstance(target, ast.Name) and target.id == "__all__", (
+                "the only top-level assignment allowed is __all__"
+            )
+            assert isinstance(node.value, ast.List)
+            for element in node.value.elts:
+                assert isinstance(element, ast.Constant)
+                assert isinstance(element.value, str)
+    assert saw_future_import, (
+        "expected a 'from __future__ import annotations' among the top-level imports"
+    )
 
 
 def test_verification_status_has_all_three_members() -> None:

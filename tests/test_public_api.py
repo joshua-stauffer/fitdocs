@@ -32,10 +32,28 @@ through it, while `audit` keeps its own `_read_document` because a finding has
 to name the unreadable *cause* and reuses only docio's symlink strings. Those
 strings are what every caller's finding or warning names, so its exported
 surface is as user-visible as the other three leaves pinned here.
+
+:mod:`fitdocs.load.channels` is pinned the same way (load-channels task 4.1,
+design: ChannelSurface / PublicSurfacePin, Req 9.1-9.7): the result
+vocabulary, the three ``compute`` entry points under channel-qualified
+names, the heart-rate weighting seam with its shipped instance, and the
+provenance records are what ``threshold-load`` and ``activity-qa-flags``
+consume, so a rename or removal there is user-visible too. The three
+``*_compute`` identities are pinned in a **fresh interpreter**
+(``test_channels_compute_identities_in_a_fresh_interpreter`` below), not
+in-process: ``tests/load/channels/test_pace.py`` calls
+``importlib.reload(pace)`` mid-suite, which replaces ``pace.compute`` with a
+new function object for the rest of the process -- an in-process ``is``
+check against a package-level binding captured at import time would then
+pass or fail depending on whether this module happens to collect before or
+after that reload, which is exactly what a fresh subprocess avoids.
 """
 
 from __future__ import annotations
 
+import ast
+import dataclasses
+import importlib.util
 import subprocess
 import sys
 from pathlib import Path
@@ -49,6 +67,7 @@ import fitdocs.docio
 import fitdocs.ingest
 import fitdocs.ingest.errors
 import fitdocs.load
+import fitdocs.load.channels
 import fitdocs.load.registry
 import fitdocs.load.settings
 import fitdocs.load.types
@@ -382,6 +401,234 @@ def test_every_docio_name_is_bound_on_the_module() -> None:
 def test_docio_is_not_re_exported_from_the_package_root() -> None:
     """The docio module is a module-level surface, not a package-root name."""
     assert not set(fitdocs.__all__) & _DOCIO_SURFACE
+
+
+# Every name ``fitdocs.load.channels`` publishes (load-channels task 4.1,
+# design: ChannelSurface, Req 9.1-9.7): the channel-result vocabulary and the
+# sufficiency value it is scored against, the three computation entry points
+# under channel-qualified names, the heart-rate weighting seam with its one
+# shipped instance, and the provenance records. ``load/settings.py``'s
+# ``[load.sufficiency]`` projection (``load_load_settings``, owned by
+# ``training-load``) is deliberately absent -- this package hands out the
+# *type* the projection produces (``SufficiencySettings``), never a reader.
+_CHANNELS_SURFACE = {
+    # result vocabulary and sufficiency value (types.py)
+    "ChannelId",
+    "InsufficiencyReason",
+    "StreamCoverage",
+    "ChannelLoad",
+    "ChannelInsufficient",
+    "ChannelOutcome",
+    "SufficiencySettings",
+    "require_kind",
+    "DEFAULT_MIN_STREAM_COVERAGE",
+    "DEFAULT_MIN_DURATION_S",
+    # three computation entry points, channel-qualified
+    "power_compute",
+    "heart_rate_compute",
+    "pace_compute",
+    # heart-rate weighting seam and its one shipped instance (weighting.py)
+    "HeartRateIntensityModel",
+    "BANISTER_TRIMP_MODEL",
+    # provenance records (sources.py)
+    "Citation",
+    "VerificationStatus",
+    "Divergence",
+    "CITATIONS",
+    "DIVERGENCES",
+    "BLOCKED_CITATIONS",
+}
+
+
+def test_channels_all_lists_exactly_its_published_surface() -> None:
+    assert set(fitdocs.load.channels.__all__) == _CHANNELS_SURFACE
+    # __all__ has no duplicates.
+    assert len(fitdocs.load.channels.__all__) == len(set(fitdocs.load.channels.__all__))
+
+
+def test_channels_init_binds_exactly_its_published_surface() -> None:
+    """Task 4.1 remediation round 2: pin the names ``__init__.py`` actually
+    *binds* via re-export, not only ``__all__``. ``__all__`` and the module's
+    bound names are two independent facts about the file -- nothing forces
+    them to agree -- and ``test_channels_all_lists_exactly_its_published_
+    surface`` above checks only ``__all__``. Task 1.1's AST guard
+    (``test_package_imports_cleanly`` in ``tests/load/channels/
+    test_sources.py``) permits any number of ``X as X`` re-exports from this
+    package's own leaves, so a name added there without a matching ``__all__``
+    entry -- e.g. ``from fitdocs.load.channels.sufficiency import evaluate as
+    evaluate`` -- passes that guard, passes every canonical validation
+    command, and is invisible to every other assertion in this file, yet
+    ``fitdocs.load.channels.evaluate`` resolves and is a genuine, undeclared
+    public name. This test walks the same AST and asserts the set of bound
+    names equals the published surface directly, so an added, renamed or
+    removed re-export reds here regardless of ``__all__``'s state.
+
+    Mutation caught (verified, not inferred): adding exactly
+    ``from fitdocs.load.channels.sufficiency import evaluate as evaluate`` in
+    isort position reds this test as a sole failure (measured: ``1 failed,
+    2674 passed, 5 skipped``, failing at this test's ``bound_names ==
+    _CHANNELS_SURFACE`` assertion). Before this test existed, that same
+    mutation left ``pytest``, ``ruff check``, ``ruff format --check`` and
+    ``mypy`` all green -- that is exactly what made it invisible to the
+    round-1 surface pin.
+    """
+    spec = importlib.util.find_spec("fitdocs.load.channels")
+    assert spec is not None and spec.origin is not None
+    tree = ast.parse(Path(spec.origin).read_text(), filename=spec.origin)
+    bound_names: set[str] = set()
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, ast.ImportFrom) and node.module != "__future__":
+            for alias in node.names:
+                bound_names.add(alias.asname or alias.name)
+    assert bound_names, (
+        "the walk found no re-exported names -- wrong file or guard broken"
+    )
+    assert bound_names == _CHANNELS_SURFACE
+
+
+def test_every_channels_name_is_bound_on_the_module() -> None:
+    for name in _CHANNELS_SURFACE:
+        assert hasattr(fitdocs.load.channels, name), (
+            f"fitdocs.load.channels is missing {name}"
+        )
+
+
+def test_channels_surface_is_not_flattened_into_the_load_package_root() -> None:
+    """``fitdocs.load.__all__`` must not re-export any channel-surface name
+    directly -- a consumer reaches the channel layer through
+    ``fitdocs.load.channels``, never through a name flattened onto
+    ``fitdocs.load`` itself, the same layering ``_CONTRACT_SURFACE`` and its
+    siblings already pin one level up."""
+    assert not set(fitdocs.load.__all__) & _CHANNELS_SURFACE
+
+
+def test_channel_load_field_names_match_the_spec_through_the_package_surface() -> None:
+    """Task 4.1: extend the surface pin so the members of the computed-load
+    value cannot drift accidentally, checked through the *published* name
+    (``fitdocs.load.channels.ChannelLoad``), not only through
+    ``types.py`` directly (already pinned in
+    ``tests/load/channels/test_types.py``). ``dataclasses.fields`` is used
+    rather than ``hasattr``: a field declared *without* a default is a class
+    annotation only, and ``hasattr`` reports ``False`` for it regardless of
+    whether the field exists (measured: ``hasattr(ChannelLoad, "channel")``
+    is ``False`` even though ``channel`` is a real, required field). A field
+    declared *with* a default -- ``ChannelLoad.notes``,
+    ``ChannelInsufficient.observed`` and ``ChannelInsufficient.required``
+    below all have one -- *is* a class attribute and ``hasattr`` reports
+    ``True`` for it (also measured), so ``hasattr`` alone cannot be trusted
+    to enumerate a dataclass's fields either way; ``dataclasses.fields``
+    is the only introspection that is accurate for all of them."""
+    field_names = {
+        f.name for f in dataclasses.fields(fitdocs.load.channels.ChannelLoad)
+    }
+    assert field_names == {
+        "channel",
+        "load",
+        "intensity",
+        "anchor",
+        "scored_duration_s",
+        "coverage",
+        "inputs_used",
+        "notes",
+    }
+
+
+def test_channel_insufficient_fields_match_the_spec_through_the_package_surface() -> (
+    None
+):
+    field_names = {
+        f.name for f in dataclasses.fields(fitdocs.load.channels.ChannelInsufficient)
+    }
+    assert field_names == {"channel", "reason", "detail", "observed", "required"}
+
+
+def test_insufficiency_reason_members_match_the_spec_through_the_package_surface() -> (
+    None
+):
+    """Two assertions pin two different things: the *value set* (below) is
+    blind to an aliased member -- ``Enum.__iter__`` and set/dict comprehension
+    over the enum both skip aliases entirely, and an alias adds nothing to
+    ``len(...)`` either, so a member added as an alias of an existing value
+    (e.g. ``PROBE_ALIAS = "no_benchmark"``) would pass both the value-set
+    check and the count check silently (measured: it reds only at the
+    ``__members__`` assertion below). ``__members__`` (a ``mappingproxy``) is
+    the one view that lists every name bound on the enum, canonical or
+    aliased, so an aliased member is caught only there."""
+    assert {member.value for member in fitdocs.load.channels.InsufficiencyReason} == {
+        "no_benchmark",
+        "benchmarks_inconsistent",
+        "stream_absent",
+        "stream_coverage",
+        "too_short",
+        "model_not_defined",
+        "not_computable",
+    }
+    assert len(fitdocs.load.channels.InsufficiencyReason) == 7
+    assert set(fitdocs.load.channels.InsufficiencyReason.__members__) == {
+        "NO_BENCHMARK",
+        "BENCHMARKS_INCONSISTENT",
+        "STREAM_ABSENT",
+        "STREAM_COVERAGE",
+        "TOO_SHORT",
+        "MODEL_NOT_DEFINED",
+        "NOT_COMPUTABLE",
+    }
+
+
+def test_channels_compute_identities_in_a_fresh_interpreter() -> None:
+    """Every re-exported name in ``fitdocs.load.channels`` must be the exact
+    same object its defining leaf module exposes -- run in a fresh
+    interpreter (not in-process) so the result is independent of whether
+    ``tests/load/channels/test_pace.py``'s ``importlib.reload(pace)`` has
+    already run in this pytest session (see the module docstring above)."""
+    script = (
+        "import fitdocs.load.channels as channels\n"
+        "import fitdocs.load.channels.heart_rate as heart_rate\n"
+        "import fitdocs.load.channels.pace as pace\n"
+        "import fitdocs.load.channels.power as power\n"
+        "import fitdocs.load.channels.sources as sources\n"
+        "import fitdocs.load.channels.types as types\n"
+        "import fitdocs.load.channels.weighting as weighting\n"
+        "assert channels.power_compute is power.compute, 'power_compute'\n"
+        "assert channels.heart_rate_compute is heart_rate.compute, "
+        "'heart_rate_compute'\n"
+        "assert channels.pace_compute is pace.compute, 'pace_compute'\n"
+        "assert channels.HeartRateIntensityModel is "
+        "weighting.HeartRateIntensityModel, 'HeartRateIntensityModel'\n"
+        "assert channels.BANISTER_TRIMP_MODEL is "
+        "weighting.BANISTER_TRIMP_MODEL, 'BANISTER_TRIMP_MODEL'\n"
+        "assert channels.ChannelId is types.ChannelId, 'ChannelId'\n"
+        "assert channels.InsufficiencyReason is types.InsufficiencyReason, "
+        "'InsufficiencyReason'\n"
+        "assert channels.StreamCoverage is types.StreamCoverage, "
+        "'StreamCoverage'\n"
+        "assert channels.ChannelLoad is types.ChannelLoad, 'ChannelLoad'\n"
+        "assert channels.ChannelInsufficient is types.ChannelInsufficient, "
+        "'ChannelInsufficient'\n"
+        "assert channels.ChannelOutcome is types.ChannelOutcome, "
+        "'ChannelOutcome'\n"
+        "assert channels.SufficiencySettings is types.SufficiencySettings, "
+        "'SufficiencySettings'\n"
+        "assert channels.require_kind is types.require_kind, 'require_kind'\n"
+        "assert channels.DEFAULT_MIN_STREAM_COVERAGE is "
+        "types.DEFAULT_MIN_STREAM_COVERAGE, 'DEFAULT_MIN_STREAM_COVERAGE'\n"
+        "assert channels.DEFAULT_MIN_DURATION_S is "
+        "types.DEFAULT_MIN_DURATION_S, 'DEFAULT_MIN_DURATION_S'\n"
+        "assert channels.Citation is sources.Citation, 'Citation'\n"
+        "assert channels.VerificationStatus is sources.VerificationStatus, "
+        "'VerificationStatus'\n"
+        "assert channels.Divergence is sources.Divergence, 'Divergence'\n"
+        "assert channels.CITATIONS is sources.CITATIONS, 'CITATIONS'\n"
+        "assert channels.DIVERGENCES is sources.DIVERGENCES, 'DIVERGENCES'\n"
+        "assert channels.BLOCKED_CITATIONS is sources.BLOCKED_CITATIONS, "
+        "'BLOCKED_CITATIONS'\n"
+        "print('OK')\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0, result.stderr
+    assert "OK" in result.stdout
 
 
 def _discovered_load_subpackages() -> list[str]:

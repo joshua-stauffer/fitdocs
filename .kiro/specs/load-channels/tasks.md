@@ -371,7 +371,7 @@ is what makes them safe to run concurrently despite overlapping names.
 
 - [ ] 4. Integration: the layer's public surface and its boundary
 
-- [ ] 4.1 Publish and pin the channel layer's surface
+- [x] 4.1 Publish and pin the channel layer's surface
   - Expose the result vocabulary, the three computation entry points under
     channel-qualified names, the weighting seam with its shipped instance, and
     the provenance records as the layer's public surface, with no logic and no
@@ -857,7 +857,7 @@ prose asserting something untrue.**
 
 ### What the next session must know before starting 4.1
 
-- **`importlib.reload(pace)` at `tests/load/channels/test_pace.py:867`** mutates
+- **`importlib.reload(pace)` at `tests/load/channels/test_pace.py:1184`** mutates
   the shared module object for the rest of the session, replacing
   `pace.compute` with a new function object. Harmless today. **Task 4.1
   publishes `compute` through `channels/__init__.py`** — after which a
@@ -913,3 +913,49 @@ equality not pinning a delegation contract; "there is no code to mutate away"
 being wrong in *both* directions; the identity-point trap (including inside
 `inputs_used`); guard replacement vacating an axis; and prose repair introducing
 a new false claim.
+
+- **A closed `__all__` does not close a package's surface — the *bindings* do.**
+  Task 4.1's first pin compared only `__all__`. A reviewer inserted
+  `from fitdocs.load.channels.sufficiency import evaluate as evaluate` in isort
+  position and every canonical check stayed green — pytest, `ruff check`,
+  `ruff format --check` and `mypy` — while `channels.evaluate` became a real
+  public re-export (`X as X` is mypy strict's own `no_implicit_reexport`
+  spelling, so nothing complains). The fix is an AST walk collecting
+  `alias.asname or alias.name` for every non-`__future__` `ImportFrom`, asserted
+  equal to `set(__all__)`. Any spec publishing a package surface owes this
+  second assertion; the first one alone lets a `select_channel` or
+  `resolve_benchmark` helper in unseen.
+- **An enum value-set pin is blind to aliases; `len()` is blind to them twice
+  over.** `{m.value for m in SomeEnum}` does not iterate aliases, and an alias
+  does not change the canonical member count — so `PROBE_ALIAS = "no_benchmark"`
+  added to `InsufficiencyReason` left all 2674 tests green. Pin
+  `set(SomeEnum.__members__)` *alongside* the value set: they catch different
+  things, and measured on this task an aliased member reds only at
+  `__members__` while a canonical one reds only at the value set.
+- **A guard you had to widen is a guard whose old mutations you must re-run.**
+  Task 1.1's initializer guard asserted the AST was exactly
+  `["Expr", "ImportFrom"]` with every import from `__future__` — unsatisfiable
+  once 4.1 populates the re-exports, so widening was forced. The replacement
+  improved six axes and silently vacated the one that mattered (it no longer
+  forbade arbitrary channel-internal imports). Same species as 2.1's
+  substring→AST guard swap. Widening is fine; not re-running the old mutation
+  set is not.
+- **"There is no code to guard against yet" over-declared six requirements.**
+  4.1 first reported 9.1–9.6 UNPINNED for want of selection/flag/document code
+  to forbid. A reviewer added the forbidden thing and watched: a closed surface
+  reds as a sole failure, so the published-surface half was pinned all along.
+  Third instance on this spec of the both-directions error 3.1 recorded — and
+  the costly direction is this one, because a declared gap sends the next task
+  hunting for coverage that already exists.
+- **Prose repair oscillated three rounds on one sentence, and deletion is what
+  ended it.** Round 1 rejected a false attribution to design.md's
+  `Summary-only.` Package-surface section; round 2's repair called that same
+  section "exhaustive" (it names one symbol of 22); round 3 stopped
+  characterizing the section at all and passed. When a sentence has been wrong
+  twice, the reliable move is to delete the claim, not to reword it — and to
+  restrict what survives to what a command run *that round* observed. Fifth
+  instance of "prose repair is where the next false claim gets written".
+- **A counterfactual claim is checkable — check it.** "Before this test existed,
+  that mutation left everything green" reads unverifiable but is not: apply the
+  mutation, `--deselect` the new test, re-run. Prefer that over deleting a
+  genuinely useful counterfactual.
