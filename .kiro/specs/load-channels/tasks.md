@@ -386,7 +386,7 @@ is what makes them safe to run concurrently despite overlapping names.
   - _Boundary: ChannelSurface, PublicSurfacePin_
   - _Depends: 3.1, 3.2, 3.3_
 
-- [ ] 4.2 Prove purity and the boundary by import and by behavior
+- [x] 4.2 Prove purity and the boundary by import and by behavior
   - Assert that importing the channel layer pulls in no load engine, registry,
     profile, calculator-contract, settings, CLI or render module, so the
     dependency direction stated in the design is enforced rather than assumed
@@ -1051,3 +1051,43 @@ a new false claim.
   split byte-for-byte unchanged — both verified. An added assertion that reds the
   test for a different reason than intended is a regression wearing a fix's
   clothes.
+- **A denylist over AST spellings does not terminate; an allowlist over a
+  module's namespace does.** Task 4.2 cost SEVEN review rounds and a debug
+  escalation learning this. Rounds 1-2 enumerated forbidden spellings and each
+  review found more (`from . import X`, bare `ast.Import`, `from importlib
+  import import_module`, `from fitdocs import load`, `from fitdocs import
+  benchmarks as _bm`, `import fitdocs` then an attribute chain). The design that
+  works: a module's global namespace is exactly (a) the names it binds — via
+  imported *names*, module-level bindings in every binding form, and
+  `def`/`class` via `ast.walk` — plus (b) `__builtins__`. Pin both exhaustively,
+  and add one shape rule for dunder access, which bypasses names entirely.
+  **The completeness argument is what terminates; the spelling list never does.**
+- **Runtime instrumentation is strictly WEAKER than static analysis for reach.**
+  Measured during the debug escalation: with `sys.addaudithook` installed, a call
+  to an already-imported function and an attribute read on an already-imported
+  module emit **zero** audit events. A per-file subprocess import probe is blind
+  too, because the violation executes inside `compute`, not at import. Do not
+  reach for a runtime probe to catch what an AST walk missed.
+- **Four consecutive completeness arguments were each defeated by one line.**
+  (1) target-granularity import allowlist → `from dataclasses import sys`
+  (`dataclasses`, `enum` and `typing` all re-export `sys`; `sys.modules` is a
+  live handle to everything already imported). (2) builtin-name allowlist →
+  `__builtins__["__import__"]`, because `'__builtins__' not in dir(builtins)`
+  and the name is not an `ast.Attribute`. (3) whole-module "locally bound"
+  exemption → `[open for open in (0,)]`, which binds in one scope and unlocks
+  references in another. (4) syntactic dunder rule →
+  `"{0.__globals__[x]}".format(x)`, where the dunder lives in an `ast.Constant`
+  (f-strings ARE caught — their contents parse to real `Attribute` nodes).
+  Each was found only by executing the argument, never by reading it.
+- **Declaring a residual beats chasing it, once the chase is the failure mode.**
+  4.2 ships U1-U7, each with a proving mutation and a measured outcome. Closing
+  the `.format` and frame-introspection reaches would have meant denylisting
+  introspection spellings — restarting the exact loop that cost rounds 1-2. **A
+  guard with honestly-declared limits is shippable; one that claims more than it
+  delivers is not**, and on this task sixteen false prose claims across six
+  rounds were all of the second kind.
+- **Follow a failing guard's own remediation advice before trusting it.** 4.2's
+  builtin assertion told the reader to widen `_ALLOWED_BUILTINS`; a reviewer did
+  exactly that and the test stayed red — only `_ALLOWED_BUILTIN_SHADOWS` worked.
+  A guard whose message misdirects the next editor is a defect, and it is found
+  by obeying the message, not by reading it.
