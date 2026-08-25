@@ -426,7 +426,7 @@ is what makes them safe to run concurrently despite overlapping names.
 
 - [ ] 5. Validation
 
-- [ ] 5.1 (P) Verify every channel against published worked examples
+- [x] 5.1 (P) Verify every channel against published worked examples
   - Reproduce the published power-load worked examples — the intensity case and
     at least two complete duration-and-threshold cases — asserting the stated
     results, with the source and the input values recorded in the test
@@ -976,3 +976,31 @@ a new false claim.
   that mutation left everything green" reads unverifiable but is not: apply the
   mutation, `--deselect` the new test, re-run. Prefer that over deleting a
   genuinely useful counterfactual.
+- **A false *mechanism* sentence can waive a design-mandated observable, and
+  reading will not catch it.** Task 5.1 justified relaxing the coefficient-
+  invariance check from bit-identity to `rel=1e-9` by claiming the rescale
+  changed summation order and float addition is non-associative. Measured: both
+  runs sum the same 3600 terms in the same order, non-associativity **cancels
+  exactly**, and a power-of-two factor gives `relerr 0.0` — bit-identity was
+  achievable all along, exactly as `design.md` and this plan already required.
+  The sentence survived a full round-1 review that had *itself measured*
+  `factor 2.0` exact without connecting it. Execute the mechanism, not the
+  assertion alone.
+- **Strengthening beats tolerating, and it is measurable which.** Swapping
+  `approx(rel=1e-9)` for exact `==` at `factor = 8.0` was not cosmetic: a
+  value-preserving `exp(log(c) + k·x)` refactor of the shipped metric diverges
+  by `2.5e-16` — which `rel=1e-9` passes and `==` catches. The larger factor
+  also gained reach (a hypothetical coefficient clamp at 5.0 is invisible at
+  `0.64 × 7 = 4.48` and caught at `0.64 × 8 = 5.12`). Before accepting a
+  tolerance, ask what defect fits inside it.
+- **Cite the test, not the module you assume holds it.** 5.1 justified bypassing
+  `heart_rate.compute` by pointing at delegation tests "in `test_heart_rate.py`"
+  — a file that never imports `trimp`. They live in `test_weighting.py`. A
+  pointer naming a real file but the wrong test is the same defect one level
+  subtler, and a later editor following it finds nothing.
+- **A published figure may be transcribed as a loose anchor, never as the
+  vector.** The § D4 ruling forbids caption-derived expected values; it does not
+  forbid asserting `expected == approx(published, abs=1)` beside a
+  formula-derived expectation. Name the transcribed value distinctly
+  (`published_tss`, not `expected_*`) and never compare it against production
+  output — then the anchor records the source without becoming the test.
