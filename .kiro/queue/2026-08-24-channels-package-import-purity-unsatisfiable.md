@@ -1,16 +1,16 @@
 ---
 id: 2026-08-24-channels-package-import-purity-unsatisfiable
-title: Task 4.2's import-purity assertion is unsatisfiable as design.md words it, because the parent load package imports registry, settings and types
+title: design.md's ChannelSurface import-purity sentence is unsatisfiable as worded; task 4.2 has a ruling, the design still needs amending
 status: open
-importance: high
-importance_why: Task 4.2's first bullet asserts a property Python cannot provide; the task will block or silently weaken its own guard the moment it starts.
+importance: medium
+importance_why: Ruled for task 4.2 on 2026-08-25 so the task is unblocked; design.md still states a property Python cannot provide, which will mislead the next reader of the spec.
 effort: S
 kind: inconsistency
 area: load-channels, src/fitdocs/load/__init__.py, src/fitdocs/load/channels/__init__.py
 created: 2026-08-24
 surfaced_by: /kiro-impl load-channels (task 4.1 review round 2, reviewer FOLLOW_UPS; verified independently by the parent session)
 pinned_at: 2a1cc3b
-resume_command: "/kiro-impl load-channels [queue: .kiro/queue/2026-08-24-channels-package-import-purity-unsatisfiable.md] Rule on how task 4.2 should scope its import-purity assertion before implementing it"
+resume_command: "do: amend .kiro/specs/load-channels/design.md:1239-1241 so its import-purity sentence matches the 2026-08-25 ruling recorded on task 4.2 in tasks.md -- package-level for engine/profile/cli/render, leaf-level for all seven -- following whatever re-approval the spec phase requires"
 context:
   - .kiro/specs/load-channels/design.md
   - .kiro/specs/load-channels/tasks.md
@@ -105,27 +105,44 @@ item, on both branches.
    remaining modules (`engine`, `profile`, `cli`, `render`) really are absent
    from the leaked set — they are, so the design sentence is wrong in part,
    not in whole.
-4. Take the ruling in Open questions to the maintainer, then either amend
-   `design.md` (a spec change, needing the approval its phase requires) or
-   record the agreed scoping on task 4.2 before implementing it.
+4. Read the **Ruling** section below and the declared deviation on task 4.2 in
+   `tasks.md` (commit `bf10391`). The implementation question is settled; what
+   is left is amending `design.md` to match, as a spec change.
 
-**Done** looks like: task 4.2 can state its assertion in a form that is both
-satisfiable and meaningful, with the design document and the task agreeing on
-which import graph is under test — the package's or the leaves'.
+**Done** looks like: `design.md:1239-1241` no longer states a property Python
+cannot provide, and it agrees with the guard task 4.2 actually shipped.
+
+## Ruling (2026-08-25)
+
+The maintainer ruled on the task-4.2 half: **scope the assertion to the channel
+leaf modules**, and assert both halves —
+
+- (a) at package-import level, the four genuinely-absent names: `engine`,
+  `profile`, `cli`, `render`
+- (b) at leaf level, that no module inside `channels/` imports any
+  `fitdocs.load.*` sibling — which covers all seven names and is the
+  dependency-direction property the design is actually protecting
+
+Explicitly **not** chosen: silently dropping the three names from a
+package-level assertion (ships a guard reading as complete while covering four
+of seven), and making `fitdocs/load/__init__.py` lazy (a choke point nine specs
+cite and `training-load` owns — blast radius out of proportion to the benefit).
+
+The ruling is recorded as a declared deviation on task 4.2 in
+`.kiro/specs/load-channels/tasks.md` (commit `bf10391`), so the implementing
+session reads it in place.
+
+**What remains for this item:** `design.md:1239-1241` still asserts the
+unsatisfiable property. Amending it is a spec change needing its phase's
+re-approval, which is why it was not folded into the implementation branch.
 
 ## Open questions
 
-The ruling this needs, which a picking-up session cannot make alone:
+None on the task-4.2 half — ruled 2026-08-25, see Ruling above.
 
-- Is the intended property "importing the channel layer does not pull in the
-  load engine's machinery" (satisfiable today, if scoped to the channel leaf
-  modules' own imports — no leaf imports any `fitdocs.load.*` sibling, verified
-  by the 4.1 reviewer), or the literal package-import statement (not
-  satisfiable without restructuring `fitdocs/load/__init__.py`, which
-  `training-load` owns and nine specs cite)?
-- If the former: does `design.md` get amended, or does task 4.2 carry a
-  declared, documented deviation?
-- If the latter: is making `fitdocs/load/__init__.py` lazy actually wanted? It
-  is a choke-point module and the change would be visible to every spec that
-  imports from it — almost certainly out of proportion to the benefit, but it
-  is the maintainer's call, not an implementer's.
+Remaining for the design amendment: whether `design.md:1239-1241` should be
+rewritten to state the two-level property the ruling adopted, or simply be
+scoped to the four package-level names with the leaf-level property stated
+separately. Either matches the shipped guard; it is an editorial choice about
+how the design reads, and it needs whatever re-approval the spec's phase
+requires.
