@@ -1019,7 +1019,12 @@ a new false claim.
   invisible. The bullet asking for a gate that "passed **comfortably**" is
   asking for a margin precisely to avoid this — use 180 of 200 (0.90), not 200
   of 200. Same shape as task 3.3's `threshold_speed_mps` trap, where a fixture
-  sitting exactly at threshold made the field freely swappable.
+  sitting exactly at threshold made the field freely swappable. **NOT APPLIED as
+  of the 2026-08-25 feature validation** — `test_insufficiency.py`'s three
+  provenance fixtures still run at 200 of 200. Tracked at queue item
+  `2026-08-25-insufficiency-provenance-fixtures-sit-at-the-identity-point`; this
+  note records the lesson, not a landed change, and the validation audit read it
+  as landed, which is exactly the ambiguity this sentence now removes.
 - **Check a PRESERVED-ONLY declaration by opening the test you name.** 5.2
   declared Req 1.2's never-a-fabricated-zero clause covered by `test_types.py`;
   that module pins only the union's arity. The clause was in fact pinned by 5.2's

@@ -228,6 +228,60 @@ def test_load_formula_uses_the_square_of_intensity() -> None:
 
 
 # ---------------------------------------------------------------------------
+# 6.8 -- "including its use of moving time rather than elapsed time": the
+# load arithmetic, scored_duration_s and inputs_used must be driven by
+# ``metrics.moving_time_s`` itself, not by the distance stream's own
+# recorded span (``coverage.total_s``). No other test in this module
+# asserts the two durations apart: every other success fixture either runs
+# them equal, or (``test_distance_coverage_override_applies_to_the_
+# distance_gate``, moving time 86 s against a 100 s recorded span) asserts
+# only the outcome type. Substituting the recorded span for moving time
+# throughout ``pace.py``'s arithmetic therefore left the entire pre-change
+# suite green -- verified by mutation -- this fixture is built with the two
+# durations pairwise distinct specifically to catch that substitution.
+# ---------------------------------------------------------------------------
+
+
+def test_load_and_scored_duration_are_driven_by_moving_time_not_recorded_span() -> None:
+    # Recorded span (from time_s, fully covered so coverage.total_s ==
+    # coverage.covered_s) is 1000 s; moving_time_s is a distinct 800 s
+    # (e.g. device pauses subtracted upstream) -- the two quantities this
+    # test exists to keep un-confused.
+    threshold_s_per_km = 200.0  # threshold speed exactly 5.0 m/s
+    speed_mps = 5.0
+    n = 1000
+    time_s = tuple(float(i) for i in range(n + 1))
+    distance_m = tuple(speed_mps * i for i in range(n + 1))
+    activity = _activity(samples=_samples(time_s, distance_m))
+    metrics = _metrics(moving_time_s=800.0)
+    result = pace.compute(
+        activity,
+        metrics,
+        threshold_pace=_pace(threshold_s_per_km),
+        settings=_SETTINGS,
+    )
+    assert isinstance(result, ChannelLoad)
+
+    # Sanity: the recorded span really is 1000 s, distinct from the 800 s
+    # moving time -- otherwise this fixture would not discriminate at all.
+    assert result.coverage.total_s == pytest.approx(1000.0)
+    assert result.coverage.total_s != pytest.approx(800.0)
+
+    # gap_speed = 5000 m / 800 s = 6.25 m/s; intensity = 6.25 / 5.0 = 1.25.
+    # Using the 1000 s recorded span instead would give gap_speed = 5.0
+    # m/s and intensity == 1.0 exactly -- a different, also-plausible
+    # number, which is what makes this fixture discriminating rather than
+    # merely different.
+    assert result.intensity == pytest.approx(1.25, rel=1e-6)
+    expected_load = (800.0 / 3600.0) * 1.25**2 * 100.0
+    assert result.load == pytest.approx(expected_load, rel=1e-6)
+    assert result.scored_duration_s == pytest.approx(800.0)
+    assert result.scored_duration_s != pytest.approx(result.coverage.total_s)
+    inputs = dict(result.inputs_used)
+    assert inputs["moving_time_s"] == "800"
+
+
+# ---------------------------------------------------------------------------
 # 6.2 -- unit conversion: seconds per kilometre -> speed, pinned at a
 # non-round value so an inverted or mis-scaled conversion produces a
 # different number
@@ -968,6 +1022,44 @@ def test_successful_result_carries_channel_id_coverage_anchor_and_duration() -> 
     assert result.coverage.stream == "distance"
     assert result.scored_duration_s == 200.0
     assert result.anchor is threshold
+
+
+def test_successful_result_reports_true_coverage_not_a_fabricated_one() -> None:
+    """Every other success fixture in this module that asserts coverage is
+    100%-covered (``_level_activity`` and its siblings); the one
+    partial-coverage success fixture, ``test_distance_coverage_override_
+    applies_to_the_distance_gate``, asserts only the outcome type -- so
+    nothing in the pre-change suite could distinguish a reported
+    ``StreamCoverage`` from one fabricated as ``covered_s == total_s``,
+    the same gap ``test_power.py``'s
+    ``test_successful_result_reports_true_coverage_not_a_fabricated_one``
+    closes for the power channel. This fixture drops distance for the
+    trailing 10% of a 999 s recorded span (mirroring
+    ``test_heart_rate.py``'s
+    ``test_scored_duration_is_the_gates_covered_time_not_the_recorded_span``
+    fixture shape), and pins ``moving_time_s`` at a third, distinct value
+    so ``covered_s``, ``total_s`` and ``scored_duration_s`` are pairwise
+    distinct -- no two of the three numbers this assertion compares can be
+    swapped for one another and still pass."""
+    n = 1000
+    time_s = tuple(float(i) for i in range(n))
+    distance_m = tuple(5.0 * i if i < 900 else None for i in range(n))
+    activity = _activity(samples=_samples(time_s, distance_m))
+    metrics = _metrics(moving_time_s=950.0)
+    result = pace.compute(
+        activity, metrics, threshold_pace=_pace(200.0), settings=_SETTINGS
+    )
+    assert isinstance(result, ChannelLoad)
+    assert result.coverage.total_s == pytest.approx(999.0)
+    assert result.coverage.covered_s == pytest.approx(900.0)
+    assert result.coverage.fraction == pytest.approx(900.0 / 999.0)
+    assert result.coverage.fraction < 1.0
+    assert result.scored_duration_s == pytest.approx(950.0)
+    # Pairwise distinct: no two of these three may coincide, or a
+    # fabricated (or misrouted) coverage/duration could still pass.
+    assert result.coverage.covered_s != pytest.approx(result.coverage.total_s)
+    assert result.scored_duration_s != pytest.approx(result.coverage.total_s)
+    assert result.scored_duration_s != pytest.approx(result.coverage.covered_s)
 
 
 def test_benchmark_discipline_is_not_consulted() -> None:
