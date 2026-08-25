@@ -478,7 +478,7 @@ is what makes them safe to run concurrently despite overlapping names.
   - _Boundary: ChannelVocabulary, SufficiencyGate, PowerChannel, HeartRateChannel, PaceChannel — read-only_
   - _Depends: 3.1, 3.2, 3.3_
 
-- [ ] 5.3 (P) Prove the intensity semantic holds across channels away from threshold
+- [x] 5.3 (P) Prove the intensity semantic holds across channels away from threshold
   - Assert, per channel, that the reported load equals the scored duration in
     hours times the square of the reported intensity times one hundred, within a
     stated relative tolerance, for power, heart rate and pace alike
@@ -1026,3 +1026,28 @@ a new false claim.
   own module, so the coverage was *stronger* than declared — but the pointer was
   wrong, and a wrong pointer costs the next session the same search whichever
   direction it errs in.
+- **"The relation is how the code computes it" is not the same as "the assertion
+  cannot fail."** Task 5.3 asserts `load == hours × intensity² × 100` per
+  channel, and two of the three channels *define* one side from the other —
+  pace computes `load` from `intensity`, heart rate computes `intensity` from
+  `load`. That looks tautological and is not: the relation is only satisfied
+  while both sides share one variable, so **any edit that decouples the
+  reported field from the load formula reds it** (`pace.py` `**2`→`**3` with the
+  reported `intensity` untouched reds it as the sole failure in the module).
+  Measured, after the hypothesis was raised and tested. The genuinely
+  unguarded case is narrower — a *lockstep* rescale, where both sides move
+  together — and that is what the fixed-value anchors are for.
+- **A false claim can be weaker than the truth it displaced.** 5.3's docstring
+  said both sub-threshold deltas "comfortably exceed" `activity-qa-flags`'
+  `0.20` divergence default. Measured, they straddle it: 0.2438 above, 0.1881
+  below. The true statement is the *better* argument for the module — at 140
+  bpm the downstream flag's default would **not** have fired, so this module
+  catches a defect that flag would miss. When a repair makes the case stronger,
+  suspect the original claim was reached by reasoning rather than measurement.
+- **Adding an assertion to a test whose job is a precise red/green split needs
+  its own regression check.** 5.3's fix added a load assertion to the headline
+  sensitivity test. It discriminates (a decoupled power load reds all three
+  parametrizations at exactly that line) *and* leaves the threshold/sub-threshold
+  split byte-for-byte unchanged — both verified. An added assertion that reds the
+  test for a different reason than intended is a regression wearing a fix's
+  clothes.
