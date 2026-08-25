@@ -81,7 +81,7 @@ They are deliberately kept strictly sequential for that reason.
 - [ ] 1. Foundation: the configuration value, its reader, and the path that
       carries it to a calculator
 
-- [ ] 1.1 Create the channel-priority value with its documented defaults
+- [x] 1.1 Create the channel-priority value with its documented defaults
   - Add a leaf module holding the per-discipline channel ordering as an
     immutable, comparable value: a mapping from discipline to an ordered tuple of
     channel identifiers, with a lookup that returns the empty ordering for a

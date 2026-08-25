@@ -162,6 +162,7 @@ _LOAD_MODULE_ALLOWLIST = frozenset(
         "fitdocs/load/arbitrate.py",
         "fitdocs/load/docedit.py",
         "fitdocs/load/engine.py",
+        "fitdocs/load/priority.py",
         "fitdocs/load/profile.py",
         "fitdocs/load/prompts.py",
         "fitdocs/load/registry.py",
