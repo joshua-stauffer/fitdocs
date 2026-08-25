@@ -34,7 +34,7 @@ all three channels at once. Tasks 5.1, 5.2 and 5.3 name channel components in
 their boundaries as **read-only subjects**: none edits any source module, which
 is what makes them safe to run concurrently despite overlapping names.
 
-- [ ] 1. Foundation: package, provenance, vocabulary and the one gating rule
+- [x] 1. Foundation: package, provenance, vocabulary and the one gating rule
 
 - [x] 1.1 Create the channel package and establish its provenance record
   - Create the channel package and its mirrored test package so every later
@@ -170,7 +170,7 @@ is what makes them safe to run concurrently despite overlapping names.
   - _Requirements: 1.8, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 2.10_
   - _Boundary: SufficiencyGate_
 
-- [ ] 2. The model units: weighting, terrain, configuration
+- [x] 2. The model units: weighting, terrain, configuration
 
 - [x] 2.1 (P) Build the substitutable heart-rate weighting seam
   - Define the weighting seam as a protocol exposing an activity impulse and the
@@ -257,7 +257,7 @@ is what makes them safe to run concurrently despite overlapping names.
   - _Boundary: LoadSettingsExtension_
   - _Depends: 1.2_
 
-- [ ] 3. The three channels
+- [x] 3. The three channels
 
 - [x] 3.1 (P) Implement the power channel
   - Compose the shipped normalized power, the shipped moving time and the
@@ -369,7 +369,7 @@ is what makes them safe to run concurrently despite overlapping names.
   - _Boundary: PaceChannel_
   - _Depends: 1.3, 2.2_
 
-- [ ] 4. Integration: the layer's public surface and its boundary
+- [x] 4. Integration: the layer's public surface and its boundary
 
 - [x] 4.1 Publish and pin the channel layer's surface
   - Expose the result vocabulary, the three computation entry points under
@@ -424,7 +424,7 @@ is what makes them safe to run concurrently despite overlapping names.
   - _Boundary: ChannelSurface — read-only; whole package import graph_
   - _Depends: 4.1_
 
-- [ ] 5. Validation
+- [x] 5. Validation
 
 - [x] 5.1 (P) Verify every channel against published worked examples
   - Reproduce the published power-load worked examples — the intensity case and
@@ -509,7 +509,7 @@ is what makes them safe to run concurrently despite overlapping names.
   - _Boundary: PowerChannel, HeartRateChannel, PaceChannel, ChannelVocabulary — read-only_
   - _Depends: 3.1, 3.2, 3.3_
 
-- [ ] 5.4 Prove no shipped output moved and close the quality gates
+- [x] 5.4 Prove no shipped output moved and close the quality gates
   - Run the existing golden-file document tests unchanged and assert they still
     pass, proving that no derived metric, no rendered value and no document
     changed as a result of this feature
@@ -1091,3 +1091,25 @@ a new false claim.
   exactly that and the test stayed red — only `_ALLOWED_BUILTIN_SHADOWS` worked.
   A guard whose message misdirects the next editor is a defect, and it is found
   by obeying the message, not by reading it.
+- **"Prove nothing changed" is trivially satisfiable by asserting nothing.** Task
+  5.4's characteristic risk was vacuity, and two of its three rejections were
+  exactly that: a test named `..._reads_the_pinned_window_not_a_restated_literal`
+  that stayed **green** when the constant was restated as its own current literal
+  (the red its report claimed came from `29 != 30`, not from the decoupling), and
+  a "positive control" whose stated counterfactual was measurably backwards. Both
+  had correct *counts* and wrong *compositions* — the arithmetic in one was
+  visibly inconsistent before anything was run ("all four … plus this one" is
+  five against a stated four).
+- **Not every clause belongs in a test.** 5.4 declares the golden-file and
+  full-suite clauses **gate results, not in-suite assertions** — re-running the
+  golden suite inside the suite is recursive, and a git-history assertion breaks
+  on any rebase without content moving. Two independent reviewers endorsed that
+  split. Say which clauses are gates and which are tests; a fake in-suite test
+  that always passes is the worse outcome.
+- **A hard-coded digest is self-detecting; a recomputed one pins nothing.** 5.4's
+  source-body sha256 pins hold because the expected values are literals in the
+  test. Had they been recomputed from the same source and compared, they would be
+  this repo's *self-referential compare* — and an empty `inspect.getsource` would
+  have gone unnoticed. Pair them with a failure message that forbids pasting the
+  printed digest without reading the source diff, or a `ruff format` run reds
+  four tests and invites a refresh instead of a review.
