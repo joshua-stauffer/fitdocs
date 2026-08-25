@@ -460,7 +460,7 @@ is what makes them safe to run concurrently despite overlapping names.
   - _Boundary: PowerChannel, HeartRateChannel, PaceChannel — read-only_
   - _Depends: 3.1, 3.2, 3.3_
 
-- [ ] 5.2 (P) Prove the insufficiency matrix and channel independence
+- [x] 5.2 (P) Prove the insufficiency matrix and channel independence
   - Cover every reason in the closed set at least once per channel that can
     produce it, asserting the reason, that the explanation names what failed,
     and that observed and required values are populated for exactly the two
@@ -1004,3 +1004,25 @@ a new false claim.
   formula-derived expectation. Name the transcribed value distinctly
   (`published_tss`, not `expected_*`) and never compare it against production
   output — then the anchor records the source without becoming the test.
+- **Declaring a gap honestly is right; concluding it exists is a separate
+  claim.** Task 5.2 reported that its channel-independence comparison could not
+  be independently pinned, having failed to find a one-line mutation that reds
+  it without tripping an earlier assertion. A reviewer found one — contaminate
+  the heart-rate gate's stream *only where the power stream is present*, so the
+  earlier assertions still pass and the final comparison reds alone. **The
+  disclosure was correct practice and the conclusion was wrong in the module's
+  favour.** When you cannot find a mutation, say "I could not find one", not
+  "none exists"; and a reviewer should try before accepting it.
+- **A 100%-coverage fixture is an identity point, and it ties four quantities to
+  two.** At full coverage `covered_s == total_s == scored_duration_s` and
+  `fraction == 1.0`, so a covered/total swap and a duration-source swap are both
+  invisible. The bullet asking for a gate that "passed **comfortably**" is
+  asking for a margin precisely to avoid this — use 180 of 200 (0.90), not 200
+  of 200. Same shape as task 3.3's `threshold_speed_mps` trap, where a fixture
+  sitting exactly at threshold made the field freely swappable.
+- **Check a PRESERVED-ONLY declaration by opening the test you name.** 5.2
+  declared Req 1.2's never-a-fabricated-zero clause covered by `test_types.py`;
+  that module pins only the union's arity. The clause was in fact pinned by 5.2's
+  own module, so the coverage was *stronger* than declared — but the pointer was
+  wrong, and a wrong pointer costs the next session the same search whichever
+  direction it errs in.
