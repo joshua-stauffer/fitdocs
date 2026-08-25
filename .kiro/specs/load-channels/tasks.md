@@ -403,6 +403,23 @@ is what makes them safe to run concurrently despite overlapping names.
   - Observable: the boundary test module fails if a future edit introduces any
     of the forbidden imports, a non-deterministic result, or an uncited constant
     module
+  - _Maintainer ruling 2026-08-25, declared deviation:_ design.md:1239-1241 says
+    importing `fitdocs.load.channels` must import none of `engine`, `registry`,
+    `profile`, `types`, `settings`, `cli`, `render`. Three of those seven —
+    `registry`, `settings`, `types` — are **structurally unassertable**: Python
+    executes a parent package before any subpackage, and
+    `src/fitdocs/load/__init__.py` imports all three at module scope (lines 18,
+    28, 33). Measured identically at `main` `2a1cc3b` and on this branch, so it
+    pre-dates task 4.1 and no edit inside the channel layer can change it. This
+    task therefore asserts **both**: (a) at package-import level, that the four
+    genuinely-absent names — `engine`, `profile`, `cli`, `render` — are not
+    imported; and (b) at leaf level, that no module inside `channels/` imports
+    any `fitdocs.load.*` sibling at all, which covers all seven and is the
+    dependency-direction property the design is actually protecting. Do **not**
+    silently drop the three names from a package-level assertion — that ships a
+    guard which reads as complete while covering four of seven. Amending
+    design.md to match is tracked separately at queue item
+    `2026-08-24-channels-package-import-purity-unsatisfiable`.
   - _Requirements: 1.10, 8.3, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7_
   - _Boundary: ChannelSurface — read-only; whole package import graph_
   - _Depends: 4.1_
