@@ -138,7 +138,7 @@ They are deliberately kept strictly sequential for that reason.
 
 - [ ] 2. Policy: the tables, the walk, and benchmark resolution
 
-- [ ] 2.1 (P) Declare which activities are scored and what anchors them
+- [x] 2.1 (P) Declare which activities are scored and what anchors them
   - Add the supported-sport set — running, cycling, walking and hiking — and the
     coarser movement-modality set the calculator declares to the registry, and
     record why they differ: walking and hiking share a catch-all modality with
