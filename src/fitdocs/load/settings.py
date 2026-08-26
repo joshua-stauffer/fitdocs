@@ -38,10 +38,15 @@ modules (``load/channels/types.py``, ``load/priority.py``,
 imports ``fitdocs.load.*``. ``load/channels/types.py`` is the first of the
 three to land (``load-channels``, Req 3.9): this module imports its
 :class:`~fitdocs.load.channels.types.SufficiencySettings` and projects
-``[load.sufficiency]`` onto it. ``load/priority.py`` and ``load/qa/types.py``
-do not exist yet in this checkout; when they land, this module gains an
-import of each and a projection of its own sub-table, and nothing else about
-this module's signature changes. The one edge that must never become a
+``[load.sufficiency]`` onto it. ``load/priority.py`` is the second
+(``threshold-load``, Req 7.2): this module imports its
+:class:`~fitdocs.load.priority.ChannelPriority` and projects
+``[load.priority]`` onto it, and neither module reverses the edge --
+``load/priority.py`` stays a leaf, importing nothing under
+``fitdocs.load.settings``. ``load/qa/types.py`` does not exist yet in this
+checkout; when it lands, this module gains an import of it and a projection
+of its own sub-table, and nothing else about this module's signature
+changes. The one edge that must never become a
 runtime import is ``fitdocs.load.types``'s reference back to
 :class:`LoadSettings` for ``LoadContext.settings``'s annotation, which stays
 ``TYPE_CHECKING``-only on that module's side. This module still imports
@@ -53,13 +58,24 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Final
 
-from fitdocs.load.channels.types import SufficiencySettings
+from fitdocs.load.channels.types import ChannelId, SufficiencySettings
+from fitdocs.load.priority import DEFAULT_CHANNEL_PRIORITY, ChannelPriority
+from fitdocs.model import Sport
 from fitdocs.settings import SettingsError
 
 LOAD_TABLE = "load"
 SUFFICIENCY_TABLE = "sufficiency"
+PRIORITY_TABLE = "priority"
+
+_SUPPORTED_PRIORITY_SPORTS: Final[Mapping[str, Sport]] = MappingProxyType(
+    {sport.value.lower(): sport for sport in DEFAULT_CHANNEL_PRIORITY}
+)
+_CHANNEL_BY_TOML_VALUE: Final[Mapping[str, ChannelId]] = MappingProxyType(
+    {channel.value: channel for channel in ChannelId}
+)
 
 DEFAULT_STALENESS_WINDOW_DAYS: Final[int] = 84
 """12 weeks: the outer end of the researched 8-12 week range, chosen so the
@@ -79,6 +95,7 @@ class LoadSettings:
     default_calculator: str | None = None
     benchmark_staleness_days: int = DEFAULT_STALENESS_WINDOW_DAYS
     sufficiency: SufficiencySettings = field(default_factory=SufficiencySettings)
+    channel_priority: ChannelPriority = field(default_factory=ChannelPriority)
 
 
 DEFAULT_LOAD_SETTINGS: Final[LoadSettings] = LoadSettings()
@@ -140,6 +157,7 @@ def load_load_settings(
             table, settings_file
         ),
         sufficiency=_setting_sufficiency(table, settings_file),
+        channel_priority=_setting_channel_priority(table, settings_file),
     )
 
 
@@ -274,3 +292,99 @@ def _setting_coverage(
             f"({type(value).__name__})"
         )
     return float(value)
+
+
+def _setting_channel_priority(
+    table: dict[str, Any], settings_file: Path
+) -> ChannelPriority:
+    """Project the ``[load.priority]`` sub-table (Req 7.1-7.9).
+
+    Absent sub-table, or an absent individual discipline key within a
+    present one, both resolve to :data:`DEFAULT_CHANNEL_PRIORITY`'s order
+    for that discipline (Req 7.3) -- never an error. A configured entry
+    overrides only its own discipline; every other discipline keeps its
+    documented default (Req 7.4), so the produced value is always complete
+    over every supported discipline.
+
+    A present but non-table ``[load.priority]`` value raises (Req 7.5-7.7,
+    first form). A key that is not a lowercased supported-sport name --
+    unrecognized entirely, or a recognized :class:`~fitdocs.model.Sport`
+    this calculator does not support (``swim``, ``rowing``, ``workout``) --
+    raises naming the file, the offending key and the supported disciplines
+    (Req 7.5). A value that is not a list, that contains a non-string
+    element, an unrecognized channel name, a repeated channel, or is empty
+    each raise naming the file, the key and the offending value (Req
+    7.6-7.7).
+
+    A *valid but futile* order -- e.g. ``ride = ["pace"]``, a channel this
+    calculator never computes for cycling -- is accepted without complaint
+    (Req 7.9): this reader validates only that every named channel is one
+    of the three recognized identifiers, never whether that channel can
+    ever produce a value for the discipline it is configured under.
+    """
+    default = DEFAULT_LOAD_SETTINGS.channel_priority
+    if PRIORITY_TABLE not in table:
+        return default
+    sub_table = table[PRIORITY_TABLE]
+    if not isinstance(sub_table, dict):
+        raise LoadSettingsError(
+            f"{settings_file}: [load.priority] must be a table, "
+            f"got {sub_table!r} ({type(sub_table).__name__})"
+        )
+
+    by_discipline: dict[Sport, tuple[ChannelId, ...]] = dict(default.by_discipline)
+    for key, value in sub_table.items():
+        sport = _SUPPORTED_PRIORITY_SPORTS.get(key)
+        if sport is None:
+            supported = ", ".join(sorted(_SUPPORTED_PRIORITY_SPORTS))
+            raise LoadSettingsError(
+                f"{settings_file}: [load.priority] key {key!r} is not a "
+                f"supported discipline, got {key!r}; supported disciplines "
+                f"are {supported}"
+            )
+        by_discipline[sport] = _channel_priority_order(key, value, settings_file)
+
+    return ChannelPriority(by_discipline=MappingProxyType(by_discipline))
+
+
+def _channel_priority_order(
+    key: str, value: object, settings_file: Path
+) -> tuple[ChannelId, ...]:
+    """Validate and convert one ``[load.priority]`` discipline entry.
+
+    Rejects a non-list value, a non-string element, an unrecognized channel
+    name, a repeated channel, and an empty list -- each naming the file, the
+    key and the offending value (Req 7.6, 7.7).
+    """
+    if not isinstance(value, list):
+        raise LoadSettingsError(
+            f"{settings_file}: [load.priority] {key} must be a list of "
+            f"channel names, got {value!r} ({type(value).__name__})"
+        )
+    if not value:
+        raise LoadSettingsError(
+            f"{settings_file}: [load.priority] {key} must not be empty, got {value!r}"
+        )
+
+    channels: list[ChannelId] = []
+    seen: set[ChannelId] = set()
+    for element in value:
+        if not isinstance(element, str):
+            raise LoadSettingsError(
+                f"{settings_file}: [load.priority] {key} entries must be "
+                f"strings, got {element!r} ({type(element).__name__})"
+            )
+        channel = _CHANNEL_BY_TOML_VALUE.get(element)
+        if channel is None:
+            recognized = ", ".join(sorted(_CHANNEL_BY_TOML_VALUE))
+            raise LoadSettingsError(
+                f"{settings_file}: [load.priority] {key} names unrecognized "
+                f"channel {element!r}; recognized channels are {recognized}"
+            )
+        if channel in seen:
+            raise LoadSettingsError(
+                f"{settings_file}: [load.priority] {key} repeats channel {element!r}"
+            )
+        seen.add(channel)
+        channels.append(channel)
+    return tuple(channels)

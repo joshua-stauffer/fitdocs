@@ -40,6 +40,7 @@ import subprocess
 import sys
 import types
 from pathlib import Path
+from types import MappingProxyType
 
 import pytest
 from typer.testing import CliRunner
@@ -51,8 +52,10 @@ from fitdocs.load import settings as load_settings_module
 from fitdocs.load.channels.types import (
     DEFAULT_MIN_DURATION_S,
     DEFAULT_MIN_STREAM_COVERAGE,
+    ChannelId,
     SufficiencySettings,
 )
+from fitdocs.load.priority import DEFAULT_CHANNEL_PRIORITY, ChannelPriority
 from fitdocs.load.settings import (
     DEFAULT_LOAD_SETTINGS,
     LoadSettings,
@@ -70,6 +73,7 @@ from fitdocs.load.types import (
     LoadResult,
     ProfileView,
 )
+from fitdocs.model import Sport
 from fitdocs.settings import SettingsError
 from tests.fixtures import builder
 
@@ -714,6 +718,355 @@ def _sync_one_run(source: Path, data_root: Path) -> None:
     assert len(docs) == 1, f"expected exactly one workout document, found {docs}"
 
 
+# --- [load.priority] projection (Req 7.1-7.9, task 1.2) ----------------------
+
+
+def test_default_load_settings_channel_priority_equals_keyless_channel_priority() -> (
+    None
+):
+    """The default ``channel_priority`` member of :data:`DEFAULT_LOAD_SETTINGS`
+    agrees in value with a keyless :class:`ChannelPriority` and with
+    :data:`DEFAULT_CHANNEL_PRIORITY`.
+
+    What this pins and what it does not: it catches a settings default whose
+    *content* stops matching the priority module's table -- an empty default,
+    or a differently-ordered one (measured: ``default_factory=lambda:
+    ChannelPriority(by_discipline={})`` reds this and four more). It does
+    **not** catch a hand-copied literal equal to that table, in either module,
+    because both sides of both assertions dereference the same constant
+    (measured: replacing either ``default_factory`` with an equal literal
+    leaves the whole suite green). Nor is it a mutation test of
+    :data:`DEFAULT_CHANNEL_PRIORITY`'s *contents* -- that is
+    :mod:`tests.load.test_priority`'s job."""
+    assert DEFAULT_LOAD_SETTINGS.channel_priority == ChannelPriority()
+    assert DEFAULT_LOAD_SETTINGS.channel_priority.by_discipline == (
+        DEFAULT_CHANNEL_PRIORITY
+    )
+
+
+def test_absent_priority_sub_table_returns_documented_defaults() -> None:
+    """A present ``[load]`` table with no ``[load.priority]`` -> the
+    documented default order for every supported discipline (Req 7.3, 7.4)."""
+    document = {"load": {"default_calculator": "threshold"}}
+    result = load_load_settings(document, _SETTINGS_FILE)
+    assert result.channel_priority == ChannelPriority()
+    for sport in (Sport.RUN, Sport.RIDE, Sport.WALK, Sport.HIKE):
+        assert (
+            result.channel_priority.for_discipline(sport)
+            == DEFAULT_CHANNEL_PRIORITY[sport]
+        )
+        assert len(result.channel_priority.for_discipline(sport)) >= 1
+
+
+def test_empty_priority_sub_table_returns_documented_defaults() -> None:
+    """A present, empty ``[load.priority]`` table -> the same defaults."""
+    document = {"load": {"priority": {}}}
+    result = load_load_settings(document, _SETTINGS_FILE)
+    assert result.channel_priority == ChannelPriority()
+
+
+def test_configured_entry_overrides_default_for_its_discipline_only() -> None:
+    """A configured order -- deliberately the reverse of the documented
+    default for ride -- overrides only ride; run, walk and hike keep their
+    own documented defaults untouched (Req 7.3, 7.4). Using an order that
+    differs from the default is deliberate: a fixture whose configured value
+    equals the default would pin nothing about override behavior."""
+    assert DEFAULT_CHANNEL_PRIORITY[Sport.RIDE] == (
+        ChannelId.POWER,
+        ChannelId.HEART_RATE,
+    )
+    document = {
+        "load": {"priority": {"ride": ["heart_rate", "power"]}},
+    }
+    result = load_load_settings(document, _SETTINGS_FILE)
+    assert result.channel_priority.for_discipline(Sport.RIDE) == (
+        ChannelId.HEART_RATE,
+        ChannelId.POWER,
+    )
+    for sport in (Sport.RUN, Sport.WALK, Sport.HIKE):
+        assert (
+            result.channel_priority.for_discipline(sport)
+            == DEFAULT_CHANNEL_PRIORITY[sport]
+        )
+
+
+def test_all_four_disciplines_are_independently_configurable() -> None:
+    """Each of the four supported disciplines accepts its own configured
+    order, and each ends up on its own discipline (not shuffled, not
+    shared) -- a pairwise-distinct fixture per Req 3.2's sibling
+    convention above, so a wrong-discipline assignment (e.g. walk and hike
+    swapped) would redden this. All four orders below are valid per Req
+    7.9 (a futile order is accepted, not an error) and no two disciplines
+    share the same value, so a mixup between any pair is detectable."""
+    document = {
+        "load": {
+            "priority": {
+                "run": ["power"],
+                "ride": ["pace"],
+                "walk": ["heart_rate", "power"],
+                "hike": ["power", "heart_rate"],
+            }
+        }
+    }
+    result = load_load_settings(document, _SETTINGS_FILE)
+    assert result.channel_priority.for_discipline(Sport.RUN) == (ChannelId.POWER,)
+    assert result.channel_priority.for_discipline(Sport.RIDE) == (ChannelId.PACE,)
+    assert result.channel_priority.for_discipline(Sport.WALK) == (
+        ChannelId.HEART_RATE,
+        ChannelId.POWER,
+    )
+    assert result.channel_priority.for_discipline(Sport.HIKE) == (
+        ChannelId.POWER,
+        ChannelId.HEART_RATE,
+    )
+    # Implied by the four assertions above -- kept as documentation of the
+    # substitution the pairwise-distinct fixture exists to defeat, not as
+    # independent coverage: no reader mutation reds this without reddening
+    # one of them first.
+    assert result.channel_priority != ChannelPriority(
+        by_discipline=MappingProxyType(
+            {
+                Sport.RUN: (ChannelId.POWER,),
+                Sport.RIDE: (ChannelId.PACE,),
+                Sport.WALK: (ChannelId.POWER, ChannelId.HEART_RATE),
+                Sport.HIKE: (ChannelId.HEART_RATE, ChannelId.POWER),
+            }
+        )
+    )
+
+
+def test_futile_configured_order_is_accepted_not_an_error() -> None:
+    """Req 7.9: a valid-but-futile order -- pace configured for cycling, a
+    channel the calculator never computes for that discipline -- is accepted
+    without complaint. This reader validates only that the named channel is
+    one of the three recognized identifiers, never whether it can ever
+    produce a value for the discipline it is configured under."""
+    document = {"load": {"priority": {"ride": ["pace"]}}}
+    result = load_load_settings(document, _SETTINGS_FILE)
+    assert result.channel_priority.for_discipline(Sport.RIDE) == (ChannelId.PACE,)
+
+
+# --- [load.priority] malformed values (Req 7.5, 7.6, 7.7) --------------------
+
+
+def test_non_table_priority_value_is_rejected() -> None:
+    document = {"load": {"priority": "not-a-table"}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    message = str(excinfo.value)
+    assert str(_SETTINGS_FILE) in message
+    assert "priority" in message
+    assert "not-a-table" in message
+
+
+def test_unrecognized_discipline_key_is_rejected() -> None:
+    """A key that names no ``Sport`` at all (Req 7.5, first form)."""
+    document = {"load": {"priority": {"cycling": ["power"]}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    message = str(excinfo.value)
+    assert str(_SETTINGS_FILE) in message
+    assert "cycling" in message
+    assert "run" in message  # names the supported disciplines
+
+
+def test_unsupported_sport_key_is_rejected() -> None:
+    """A key that names a recognized ``Sport`` this calculator does not
+    support -- swim, rowing, workout -- is rejected the same way an
+    unrecognized name is (Req 7.5, second form): distinct fixture from the
+    unrecognized-name case above so each guard is reached on its own."""
+    document = {"load": {"priority": {"swim": ["power"]}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    message = str(excinfo.value)
+    assert str(_SETTINGS_FILE) in message
+    assert "swim" in message
+    assert "run" in message  # names the supported disciplines
+
+
+def test_non_list_priority_value_is_rejected() -> None:
+    document = {"load": {"priority": {"run": "power"}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    message = str(excinfo.value)
+    assert str(_SETTINGS_FILE) in message
+    assert "run" in message
+    # Deliberately checks the QUOTED, whole-string repr rather than a bare
+    # "power" substring: "power" is also one of the *recognized* channel
+    # names this reader would list if it instead (wrongly) iterated the
+    # string char-by-char and rejected the first character as an
+    # unrecognized channel -- a bare substring check cannot tell "the
+    # offending value was reported" from "the word 'power' merely appears
+    # somewhere in this unrelated error", so it would pass vacuously
+    # against that wrong implementation (measured).
+    assert "'power'" in message
+    assert "must be a list" in message
+
+
+def test_non_string_element_is_rejected() -> None:
+    document = {"load": {"priority": {"run": [5, "power"]}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    message = str(excinfo.value)
+    assert str(_SETTINGS_FILE) in message
+    assert "run" in message
+    # Deliberately requires the *type*-rejection wording, not merely "some
+    # LoadSettingsError naming 5" -- an implementation that drops this
+    # element's own type guard but still coincidentally raises through the
+    # "unrecognized channel" guard below it (because a non-string element
+    # is never a key of the recognized-channel mapping either) would also
+    # produce a LoadSettingsError naming "5" and "run", so that alone pins
+    # nothing about *this* guard specifically (measured: deleting only the
+    # ``isinstance(element, str)`` check, while keeping the unrecognized-
+    # channel guard, left a bare "5"/"run" assertion here green). The
+    # "entries must be strings" wording only comes from this guard's own
+    # branch, not from the unrecognized-channel one.
+    assert "entries must be strings" in message
+    assert "int" in message
+    assert "5" in message
+
+
+def test_unrecognized_channel_name_is_rejected() -> None:
+    """Req 7.6: the message names the file, the key, the offending value,
+    and the recognized channels."""
+    document = {"load": {"priority": {"run": ["cadence"]}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    message = str(excinfo.value)
+    assert str(_SETTINGS_FILE) in message
+    assert "run" in message
+    assert "cadence" in message
+    assert "recognized channels" in message
+    for name in ("power", "heart_rate", "pace"):
+        assert name in message
+
+
+def test_repeated_channel_is_rejected() -> None:
+    document = {"load": {"priority": {"run": ["power", "power"]}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    message = str(excinfo.value)
+    assert str(_SETTINGS_FILE) in message
+    assert "run" in message
+    assert "power" in message
+
+
+def test_empty_priority_list_is_rejected() -> None:
+    """Req 7.7: the message names the file, the key, the offending
+    value (the empty list itself), and this guard's own wording."""
+    document = {"load": {"priority": {"run": []}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    message = str(excinfo.value)
+    assert str(_SETTINGS_FILE) in message
+    assert "run" in message
+    assert "must not be empty" in message
+    assert "[]" in message
+
+
+# --- 7.8: validated before any document is written ---------------------------
+
+
+def test_invalid_priority_value_in_data_root_aborts_load_pass_before_writing(
+    isolated_registry: None,
+    tmp_path: Path,
+) -> None:
+    """An invalid ``[load.priority]`` value in a real data root's
+    ``fitdocs.toml`` makes ``fitdocs load`` exit at the configuration exit
+    (2) before any document is created or modified (Req 7.8) -- mirrors
+    :func:`test_invalid_sufficiency_value_in_data_root_aborts_load_pass_before_writing`
+    above, exercising the same upstream wiring for a different ``[load.*]``
+    sub-table. Half A (a *valid* ``[load.priority]`` config through the
+    identical CLI path) is the control proving a write can happen at all, so
+    Half B's "nothing changed" is not vacuous.
+    """
+    runner = CliRunner()
+    calc = _FieldFreeCalculator()
+    try:
+        valid_root = tmp_path / "valid"
+        valid_root.mkdir()
+        _sync_one_run(tmp_path / "src_a", valid_root)
+        before_valid = {
+            p: p.read_bytes() for p in sorted(valid_root.rglob("*")) if p.is_file()
+        }
+        (valid_root / "fitdocs.toml").write_text(
+            '[load.priority]\nrun = ["power", "pace"]\n', encoding="utf-8"
+        )
+        registry.register(calc)
+
+        valid_run = runner.invoke(
+            app, ["load", "--out", str(valid_root), "--no-prompt"]
+        )
+        assert valid_run.exit_code == 0, valid_run.output
+        assert "Computed" in valid_run.output
+        after_valid = {
+            p: p.read_bytes() for p in sorted(valid_root.rglob("*")) if p.is_file()
+        }
+        before_valid[valid_root / "fitdocs.toml"] = (
+            valid_root / "fitdocs.toml"
+        ).read_bytes()
+        assert after_valid != before_valid, (
+            "sanity: a valid-config run through this exact CLI path must "
+            "change at least one byte, or the invalid-config assertion "
+            "below cannot distinguish 'aborted before writing' from 'had "
+            "nothing to write'"
+        )
+
+        invalid_root = tmp_path / "invalid"
+        invalid_root.mkdir()
+        registry.unregister(calc.calculator_id)
+        _sync_one_run(tmp_path / "src_b", invalid_root)
+        before_invalid = {
+            p: p.read_bytes() for p in sorted(invalid_root.rglob("*")) if p.is_file()
+        }
+        settings_file = invalid_root / "fitdocs.toml"
+        settings_file.write_text("[load.priority]\nrun = []\n", encoding="utf-8")
+        registry.register(calc)
+
+        invalid_run = runner.invoke(
+            app, ["load", "--out", str(invalid_root), "--no-prompt"]
+        )
+        assert invalid_run.exit_code == 2, invalid_run.output
+        after_invalid = {
+            p: p.read_bytes() for p in sorted(invalid_root.rglob("*")) if p.is_file()
+        }
+        before_invalid[settings_file] = settings_file.read_bytes()
+        assert after_invalid == before_invalid
+    finally:
+        registry.unregister(calc.calculator_id)
+
+
+# --- Additivity: [load.priority] alongside its siblings (design.md Validation)
+
+
+def test_priority_sufficiency_flags_and_default_calculator_parse_cleanly() -> None:
+    """A document carrying ``[load.priority]``, ``[load.sufficiency]``,
+    ``[load.flags]`` (an unlanded sibling table) and ``default_calculator``
+    together parses cleanly, each sub-table validated independently --
+    design.md's own stated additivity guard from this side."""
+    document = {
+        "load": {
+            "default_calculator": "threshold",
+            "priority": {"ride": ["heart_rate", "power"]},
+            "sufficiency": {"min_duration_s": 120},
+            "flags": {"staleness_days": 30},
+        }
+    }
+    result = load_load_settings(document, _SETTINGS_FILE)
+    assert result.default_calculator == "threshold"
+    assert result.sufficiency == SufficiencySettings(min_duration_s=120)
+    assert result.channel_priority.for_discipline(Sport.RIDE) == (
+        ChannelId.HEART_RATE,
+        ChannelId.POWER,
+    )
+    # unconfigured disciplines keep their documented defaults even though
+    # this document configures other [load.*] sub-tables too
+    assert (
+        result.channel_priority.for_discipline(Sport.RUN)
+        == DEFAULT_CHANNEL_PRIORITY[Sport.RUN]
+    )
+
+
 # --- Additivity: unknown keys and unknown sub-tables ignored (Req 14.3) ------
 
 
@@ -726,14 +1079,19 @@ def test_unknown_key_in_load_table_is_ignored() -> None:
 def test_two_unknown_downstream_sub_tables_parse_cleanly() -> None:
     """Two sub-tables not yet owned by this reader parse without error.
 
-    Stands in for ``[load.priority]`` (``threshold-load``) and
-    ``[load.flags]`` (``activity-qa-flags``) -- sub-tables this reader does
-    not know about yet, landing additively without touching this module.
+    ``[load.flags]`` (``activity-qa-flags``, not yet landed in this
+    checkout) is a genuinely-owned-but-unrecognized-here sub-table.
+    ``[load.qa]`` is a synthetic, never-owned name used only to stand in
+    for "a sub-table this reader has never heard of" -- ``activity-qa-flags``
+    does not read a ``[load.qa]`` table. Both land additively without
+    touching this module. ``[load.priority]`` (``threshold-load``) is now a
+    *recognized* sub-table (this task) and is exercised on its own above,
+    not here.
     """
     document = {
         "load": {
             "default_calculator": "threshold",
-            "priority": {"channels": ["hr", "pace"]},
+            "qa": {"cadence_lock_threshold": 0.5},
             "flags": {"staleness_days": 30},
         }
     }
@@ -744,14 +1102,15 @@ def test_two_unknown_downstream_sub_tables_parse_cleanly() -> None:
 def test_unknown_sub_table_alongside_configured_staleness_is_ignored() -> None:
     """An unknown ``[load.*]`` sub-table does not shadow the staleness key.
 
-    ``[load.sufficiency]`` is now a *recognized* sub-table (this task), so
-    this uses ``[load.priority]`` (``threshold-load``, not yet landed in
-    this checkout) as the genuinely-unknown one instead.
+    ``[load.sufficiency]`` and ``[load.priority]`` are now *recognized*
+    sub-tables (this task and its predecessor), so this uses ``[load.flags]``
+    (``activity-qa-flags``, not yet landed in this checkout) as the
+    genuinely-unknown one instead.
     """
     document = {
         "load": {
             "benchmark_staleness_days": 30,
-            "priority": {"channels": ["hr", "pace"]},
+            "flags": {"staleness_days": 30},
         }
     }
     result = load_load_settings(document, _SETTINGS_FILE)
@@ -1073,7 +1432,17 @@ class SufficiencySettings:
             setattr(self, k, v)
 
 
+import enum
+
+
+class ChannelId(str, enum.Enum):
+    POWER = "power"
+    HEART_RATE = "heart_rate"
+    PACE = "pace"
+
+
 stub_types_mod.SufficiencySettings = SufficiencySettings
+stub_types_mod.ChannelId = ChannelId
 sys.modules["fitdocs.load.channels.types"] = stub_types_mod
 
 spec = importlib.util.spec_from_file_location(

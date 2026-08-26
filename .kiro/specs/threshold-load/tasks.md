@@ -101,7 +101,7 @@ They are deliberately kept strictly sequential for that reason.
   - _Requirements: 7.3, 7.4_
   - _Boundary: ChannelPriorityValue_
 
-- [ ] 1.2 Extend the load configuration reader with the priority table
+- [x] 1.2 Extend the load configuration reader with the priority table
   - Add the channel-priority member to the **single existing** load settings
     value and teach the **single existing** reader to project and validate the
     priority sub-table; create no second module, no second reader, and open no
