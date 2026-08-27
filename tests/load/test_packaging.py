@@ -169,6 +169,7 @@ _LOAD_MODULE_ALLOWLIST = frozenset(
         "fitdocs/load/render.py",
         "fitdocs/load/settings.py",
         "fitdocs/load/threshold/__init__.py",
+        "fitdocs/load/threshold/anchors.py",
         "fitdocs/load/threshold/discipline.py",
         "fitdocs/load/threshold/selection.py",
         "fitdocs/load/types.py",

@@ -189,7 +189,7 @@ They are deliberately kept strictly sequential for that reason.
   - _Requirements: 5.4, 5.5, 5.6, 5.7, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 8.3, 8.4, 8.5, 8.9_
   - _Boundary: ChannelSelection_
 
-- [ ] 2.3 Resolve an activity's benchmarks from its sport and its own date
+- [x] 2.3 Resolve an activity's benchmarks from its sport and its own date
   - Add the one module that asks the benchmark store for values: for each
     quantity, walk that sport's discipline chain and take the first benchmark
     applicable on the activity's own local calendar date, asking one discipline
