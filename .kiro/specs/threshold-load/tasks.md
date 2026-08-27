@@ -164,7 +164,7 @@ They are deliberately kept strictly sequential for that reason.
   - _Requirements: 2.1, 2.4, 2.6, 3.1, 3.2, 3.5_
   - _Boundary: DisciplineSupport_
 
-- [ ] 2.2 (P) Implement the priority walk and the non-selected records
+- [x] 2.2 (P) Implement the priority walk and the non-selected records
   - Add a pure selection function that walks the configured order for a
     discipline and returns the first channel that produced a computed load, or
     nothing when none did — reading only membership in the order and whether an
