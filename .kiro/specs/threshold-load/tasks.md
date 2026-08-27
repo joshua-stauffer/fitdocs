@@ -279,7 +279,7 @@ They are deliberately kept strictly sequential for that reason.
   - _Boundary: ResultAssembly_
   - _Depends: 2.2, 2.3_
 
-- [ ] 3.3 Implement the calculator's decision sequence
+- [x] 3.3 Implement the calculator's decision sequence
   - Answer the contract's support question for a given activity from the
     supported-sport set, overriding the protocol's modality-test default: the
     load pass asks it **before** the prompt flow, so a rowing or generic-workout

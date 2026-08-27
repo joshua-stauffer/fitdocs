@@ -44,6 +44,48 @@ byte-identical records (Req 8.9). It deliberately takes no ``flags``
 argument -- adding one later is an additive signature change, whereas an
 always-empty parameter today would be the anticipatory dead code the roadmap
 forbids (Req 8.8).
+
+Task 3.3 (``ThresholdCalculator``, Req 1.4-1.7, 2.2, 2.3, 2.5, 2.7, 4.2, 4.3,
+5.1-5.4, 6.7, 9.4-9.7, 10.1, 10.2, 10.5, 10.6) adds ``supports`` and
+``compute``: the fixed decision sequence -- sport check, date check, resolve
+anchors, evaluate all three channels, select, assemble or explain -- that
+turns one activity into one :class:`~fitdocs.load.types.LoadOutcome`.
+
+**Why the not-computed case rides ``NotComputed``.** The contract's closed
+union offers ``Computed``, ``Unsupported``, ``MissingInputs`` and
+``NotComputed``. ``Unsupported`` drives a *document state* and would wrongly
+claim the sport is out of scope -- every activity that reaches this point
+already passed the sport check. ``MissingInputs`` renders as "missing
+required inputs" and would misdescribe a coverage failure (e.g. every
+channel gated by too little recorded stream, or a benchmark on file but not
+yet in force on this date) as an absent athlete input. ``NotComputed`` is the
+variant the engine renders as "skipped, with the calculator's own reason",
+which is exactly this case -- so this feature uses it and does not widen a
+closed union it does not own.
+
+**``supports`` narrows by sport AND modality, not by sport alone.**
+design.md's docstring for ``supports`` says it "may only narrow
+DECLARED_MODALITIES, never widen them -- the registry's modality prefilter
+runs first". That premise does not hold on every path: ``arbitrate()``'s
+``forced_id`` and ``default_calculator`` branches (``arbitrate.py``) return
+``Selected`` unconditionally, un-narrowed by ``registry.for_modality`` --
+only the no-default candidates branch composes the modality prefilter with
+``supports_activity`` first. Under a forced or configured
+``default_calculator = "threshold"``, ``supports_activity`` is the *only*
+question standing between an activity and the prompt flow (engine.py's own
+comment at the support-check call site says as much). A ``supports`` that
+answers purely from ``SUPPORTED_SPORTS`` would therefore return ``True`` for
+``detect_sport("running", "strength_training")``, whose modality is the
+undeclared ``Modality.STRENGTH`` but whose sport is ``Sport.RUN`` -- widening
+past ``DECLARED_MODALITIES`` and breaking Req 2.2 for exactly the strength
+case that motivated the sport/modality split in the first place. Answering
+from *both* ``SUPPORTED_SPORTS`` and ``DECLARED_MODALITIES`` is a genuine
+narrowing of the declared modalities (a Rowing or Workout document, both
+inside the catch-all ``Modality.OTHER``, is still refused before the prompt
+flow -- Req 2.7), and it is what ``load/types.py``'s documented obligation on
+every ``supports`` implementation ("must only ever narrow ... never widen")
+actually requires here, which the sport-only reading violates on this one
+shipped path.
 """
 
 from __future__ import annotations
@@ -53,19 +95,51 @@ from dataclasses import dataclass
 from typing import Final
 
 from fitdocs.benchmarks import BenchmarkKind
+from fitdocs.load.channels import (
+    heart_rate_compute,
+    pace_compute,
+    power_compute,
+)
 from fitdocs.load.channels.types import (
     ChannelId,
+    ChannelInsufficient,
     ChannelLoad,
     ChannelOutcome,
+    InsufficiencyReason,
     StreamCoverage,
 )
-from fitdocs.load.threshold.anchors import Borrowing, ResolvedAnchors
-from fitdocs.load.threshold.selection import CHANNEL_LABELS, non_selected_values
-from fitdocs.load.types import AthleteField, BenchmarkRef, LoadResult
-from fitdocs.model import Sport
+from fitdocs.load.threshold.anchors import Borrowing, ResolvedAnchors, resolve
+from fitdocs.load.threshold.discipline import (
+    DECLARED_MODALITIES,
+    SUPPORTED_SPORTS,
+    anchor_plan,
+)
+from fitdocs.load.threshold.selection import (
+    CHANNEL_LABELS,
+    non_selected_values,
+    select,
+)
+from fitdocs.load.types import (
+    AthleteField,
+    BenchmarkRef,
+    Computed,
+    InteractionSession,
+    LoadContext,
+    LoadOutcome,
+    LoadResult,
+    MissingInputs,
+    NotComputed,
+    ProfileView,
+    Unsupported,
+)
+from fitdocs.metrics.types import DerivedMetrics
+from fitdocs.model import Activity, Modality, Sport
 
 __all__ = [
     "ATHLETE_FIELDS",
+    "CALCULATOR_ID",
+    "DISPLAY_NAME",
+    "THRESHOLD_CALCULATOR",
     "ThresholdCalculator",
     "build_result",
     "format_coverage",
@@ -192,21 +266,194 @@ the two athlete-wide heart-rate quantities -- see
 table."""
 
 
+CALCULATOR_ID: Final[str] = "threshold"
+DISPLAY_NAME: Final[str] = "Threshold Load"
+
+
 @dataclass(frozen=True)
 class ThresholdCalculator:
     """fitdocs' built-in threshold-based training-load methodology (Req 1.1).
 
-    Tasks 3.1 and 3.2 land :meth:`required_athlete_fields` and the
-    module-level :func:`build_result` respectively. ``supports`` and
-    ``compute`` are added to this class by a later task (3.3) under its own
-    component boundary.
+    A frozen dataclass with the three contract attributes and three methods
+    -- nothing a plugin author could not write. Tasks 3.1 and 3.2 land
+    :meth:`required_athlete_fields` and the module-level :func:`build_result`
+    respectively; task 3.3 (``ThresholdCalculator``) adds :attr:`
+    supported_modalities`, :meth:`supports` and :meth:`compute` -- the
+    contract's fixed decision sequence, documented in full on
+    :meth:`compute`.
     """
+
+    calculator_id: str = CALCULATOR_ID
+    display_name: str = DISPLAY_NAME
+    supported_modalities: frozenset[Modality] = DECLARED_MODALITIES
 
     def required_athlete_fields(self) -> tuple[AthleteField, ...]:
         """The athlete inputs this methodology declares it needs (Req 1.1,
         9.1). Static -- takes no activity, see the module docstring's
         known-limitation note."""
         return ATHLETE_FIELDS
+
+    def supports(self, activity: Activity) -> bool:
+        """True iff ``activity`` is both a supported sport and inside the
+        declared modalities (Req 2.5, 2.6, 2.7).
+
+        Optional and off-Protocol (design.md Amendment 2): ``LoadCalculator``
+        declares no ``supports`` member, and defining one here is additive.
+        The engine reaches it through ``supports_activity(calculator,
+        activity)``, which prefers this answer by ``getattr`` and otherwise
+        falls back to ``supported_modalities`` membership.
+
+        Answers from ``SUPPORTED_SPORTS`` **and** ``DECLARED_MODALITIES``,
+        not sport alone -- see the module docstring's "``supports`` narrows
+        by sport AND modality" note for why the sport-only reading widens
+        past the declared modalities on the forced/default arbitration path
+        and breaks Req 2.2 for a strength activity whose normalized sport is
+        ``Sport.RUN`` (``detect_sport`` has no ``Sport.STRENGTH`` member; a
+        ``strength_training`` sub-sport only overrides the *modality*). This
+        is a genuine narrowing of ``DECLARED_MODALITIES``, never a widening:
+        the ``and`` conjunct is itself the narrowing -- a sport does not
+        carry a modality, so answering from the sport set alone can only
+        ever be equal-or-wider than answering from both sets together, never
+        narrower. ``ANCHOR_PLANS``/``SUPPORTED_SPORTS`` exhaustiveness is
+        proven separately, in ``test_discipline.py`` and ``test_fields.py``.
+
+        Asked BEFORE the prompt flow, so an activity inside a declared
+        modality but outside the supported sport set -- a Rowing or generic
+        Workout document, both inside the catch-all ``Modality.OTHER`` --
+        never costs the athlete a question (Req 2.7).
+        """
+        return activity.sport in SUPPORTED_SPORTS and (
+            activity.modality in DECLARED_MODALITIES
+        )
+
+    def compute(
+        self,
+        activity: Activity,
+        metrics: DerivedMetrics,
+        profile: ProfileView,
+        session: InteractionSession,
+        context: LoadContext,
+    ) -> LoadOutcome:
+        """Compute a typed load outcome for ``activity`` (design:
+        ``ThresholdCalculator`` Service Interface, Postconditions 1-6).
+
+        The fixed decision sequence, in the order it is decided:
+
+        1. ``activity.sport not in SUPPORTED_SPORTS or activity.modality not
+           in DECLARED_MODALITIES`` -> :class:`Unsupported` naming the sport
+           (Req 2.2, 2.3, 2.5, 2.7). The same sport-AND-modality conjunction
+           :meth:`supports` answers from (see the module docstring's
+           "``supports`` narrows by sport AND modality" note), so the two
+           stay provably in agreement -- a strength-labelled Run
+           (``detect_sport("running", "strength_training")`` -> ``(Sport.
+           RUN, Modality.STRENGTH)``) is refused here exactly as it is by
+           ``supports``, never computing a heart-rate-derived value for it
+           (Req 2.2). Normally unreachable because :meth:`supports` already
+           said no; retained as defence in depth so an unsupported activity
+           reaching ``compute`` through any path costs no lookup and no
+           channel call.
+        2. ``context.activity_date is None`` -> :class:`NotComputed` naming
+           the absent date (Req 4.3) -- the start time is a UTC instant, the
+           document is named from a local calendar date, and scoring must
+           agree with the file name (Req 4.1), so this reads only
+           ``context.activity_date``, never ``activity.start_time``.
+        3. Otherwise resolve the anchors, then evaluate **all three**
+           channels with those anchors and ``context.settings.sufficiency``
+           (Req 5.1, 5.2, 5.3) -- every channel regardless of what the
+           configured order prefers, so the diagnostics are complete and the
+           heart-rate outcome exists even when another channel is selected.
+        4. A selection -> :class:`Computed` carrying :func:`build_result`.
+        5. No selection, and at least one channel in the configured order
+           reported a missing benchmark whose quantity is in
+           ``anchors.not_on_file`` -> :class:`MissingInputs` carrying the
+           corresponding declared fields, in ``ATHLETE_FIELDS`` declaration
+           order (Req 9.4).
+        6. No selection otherwise -> :class:`NotComputed` whose reason names
+           every evaluated channel and its reason, in
+           :data:`~fitdocs.load.threshold.selection.CANONICAL_CHANNELS`
+           order (Req 10.1, 10.2).
+
+        Never raises (Req 1.7): every failure path returns one of the
+        contract's four typed outcomes. ``session`` is never used (Req 9.7)
+        -- this calculator asks nothing and confirms nothing. Applies no
+        sufficiency rule, no rounding and no adjustment of a channel's
+        reported load or intensity (Req 5.4); every channel's outcome is
+        carried forward unmodified into :func:`build_result` or the
+        not-computed reason. Reads the configured order from
+        ``context.settings.channel_priority`` and the sufficiency config
+        from ``context.settings.sufficiency``; opens, locates or re-reads no
+        settings or profile file (Req 1.6). Identical inputs yield an
+        identical outcome, reason strings included (Req 1.4, 10.6).
+        """
+        del session  # Req 9.7: this calculator asks nothing, confirms nothing.
+
+        if (
+            activity.sport not in SUPPORTED_SPORTS
+            or activity.modality not in DECLARED_MODALITIES
+        ):
+            return Unsupported(
+                reason=f"{activity.sport} is not a sport the threshold "
+                "calculator scores"
+            )
+
+        if context.activity_date is None:
+            return NotComputed(
+                reason=(
+                    "activity carries no local calendar date to resolve "
+                    "benchmarks against"
+                )
+            )
+
+        sport = activity.sport
+        anchors = resolve(profile, sport=sport, on=context.activity_date)
+        sufficiency = context.settings.sufficiency
+
+        outcomes: dict[ChannelId, ChannelOutcome] = {
+            ChannelId.POWER: power_compute(
+                activity, metrics, ftp=anchors.ftp, settings=sufficiency
+            ),
+            ChannelId.HEART_RATE: heart_rate_compute(
+                activity,
+                metrics,
+                lthr=anchors.lthr,
+                resting_hr=anchors.resting_hr,
+                max_hr=anchors.max_hr,
+                settings=sufficiency,
+            ),
+            ChannelId.PACE: pace_compute(
+                activity,
+                metrics,
+                threshold_pace=anchors.threshold_pace,
+                settings=sufficiency,
+            ),
+        }
+
+        order = context.settings.channel_priority.for_discipline(sport)
+        selected_id = select(outcomes, order)
+
+        if selected_id is not None:
+            selected_outcome = outcomes[selected_id]
+            assert isinstance(selected_outcome, ChannelLoad)  # select()'s own guarantee
+            result = build_result(
+                selected=selected_outcome,
+                outcomes=outcomes,
+                order=order,
+                anchors=anchors,
+                discipline=sport,
+            )
+            return Computed(result=result)
+
+        missing_fields = _missing_inputs(outcomes, order=order, anchors=anchors)
+        if missing_fields:
+            return MissingInputs(fields=missing_fields)
+
+        return NotComputed(reason=_not_computed_reason(outcomes, order, sport))
+
+
+THRESHOLD_CALCULATOR: Final[ThresholdCalculator] = ThresholdCalculator()
+"""The one shipped instance (design: Service Interface). Registering it is
+task 4.1's job -- importing this module for a test registers nothing and
+mutates no global state."""
 
 
 # ---------------------------------------------------------------------------
@@ -331,4 +578,152 @@ def build_result(
         flags=(),
         inputs_used=inputs_used,
         notes=notes,
+    )
+
+
+# ---------------------------------------------------------------------------
+# ThresholdCalculator's own decision helpers (task 3.3)
+# ---------------------------------------------------------------------------
+
+_CHANNEL_BENCHMARK_KINDS: Final[Mapping[ChannelId, tuple[BenchmarkKind, ...]]] = {
+    ChannelId.POWER: (BenchmarkKind.FTP_WATTS,),
+    ChannelId.HEART_RATE: (
+        BenchmarkKind.LTHR_BPM,
+        BenchmarkKind.MAX_HR_BPM,
+        BenchmarkKind.RESTING_HR_BPM,
+    ),
+    ChannelId.PACE: (BenchmarkKind.THRESHOLD_PACE_S_PER_KM,),
+}
+"""Which benchmark quantities each channel's ``compute`` consumes (Req 9.4).
+Used only to decide whether a channel's :data:`InsufficiencyReason.
+NO_BENCHMARK` traces back to a quantity that is genuinely not on file
+anywhere (``anchors.not_on_file``) versus one that is on file but not
+applicable to this date (``anchors.not_applicable``, which reports
+:class:`NotComputed` instead -- Req 9.5)."""
+
+_FieldRef = tuple[BenchmarkKind, Sport | None]
+_FIELD_BY_BENCHMARK_REF: Final[Mapping[_FieldRef, AthleteField]] = {
+    (field.benchmark.kind, field.benchmark.discipline): field
+    for field in ATHLETE_FIELDS
+    if field.benchmark is not None
+}
+"""``ATHLETE_FIELDS`` indexed by the exact ``(kind, discipline)`` it
+declares -- e.g. ``(FTP_WATTS, Sport.RUN)`` -> the Running FTP field. Built
+from the real table, not a hand-authored copy, so a future field addition or
+removal cannot silently desync this lookup."""
+
+
+def _declared_field_for_absence(
+    kind: BenchmarkKind, discipline: Sport | None
+) -> AthleteField:
+    """The declared :class:`AthleteField` that would resolve a
+    ``ResolvedAnchors.not_on_file`` entry (Req 9.4).
+
+    An athlete-wide quantity (``discipline is None``) maps directly. A
+    discipline-scoped quantity maps to the *last* entry of that sport's
+    anchor chain -- the guaranteed-to-resolve entry ``ATHLETE_FIELDS``'
+    module docstring documents declaring -- since ``not_on_file`` records the
+    activity's own sport, not the chain entry that produced the verdict (see
+    ``ResolvedAnchors``' own docstring), and only that last entry is ever
+    declared as an athlete input for a borrowing sport such as Walk or Hike.
+    """
+    if discipline is None:
+        return _FIELD_BY_BENCHMARK_REF[(kind, None)]
+    chain = _chain_for_kind(kind, discipline)
+    return _FIELD_BY_BENCHMARK_REF[(kind, chain[-1])]
+
+
+def _chain_for_kind(kind: BenchmarkKind, discipline: Sport) -> tuple[Sport, ...]:
+    """The anchor chain ``discipline``'s plan declares for ``kind`` -- the
+    same three chains :func:`~fitdocs.load.threshold.anchors.resolve` walks,
+    read back out by benchmark kind rather than by field name."""
+    plan = anchor_plan(discipline)
+    if kind is BenchmarkKind.FTP_WATTS:
+        return plan.ftp
+    if kind is BenchmarkKind.LTHR_BPM:
+        return plan.lthr
+    if kind is BenchmarkKind.THRESHOLD_PACE_S_PER_KM:
+        return plan.threshold_pace
+    raise AssertionError(  # pragma: no cover - defensive; only reached for an
+        # athlete-wide kind, which the caller (_declared_field_for_absence)
+        # never routes here (discipline is None short-circuits first).
+        f"{kind} has no discipline-scoped anchor chain"
+    )
+
+
+def _missing_inputs(
+    outcomes: Mapping[ChannelId, ChannelOutcome],
+    *,
+    order: tuple[ChannelId, ...],
+    anchors: ResolvedAnchors,
+) -> tuple[AthleteField, ...]:
+    """The declared fields to name in :class:`MissingInputs` (Postcondition
+    5, Req 9.4), or ``()`` when nothing blocking is on the not-on-file list.
+
+    Only channels in the *configured* ``order`` are consulted -- a channel
+    excluded from the order can never be selected, so a benchmark that
+    blocks only that channel is not a reason to ask the athlete for
+    anything. A channel qualifies when its outcome is :class:`
+    ChannelInsufficient` with reason :data:`InsufficiencyReason.
+    NO_BENCHMARK` **and** at least one of the quantities it consumes
+    (:data:`_CHANNEL_BENCHMARK_KINDS`) is in ``anchors.not_on_file`` --
+    distinguishing "never provided" from "on file but not applicable to this
+    date" (Req 9.5), which contributes to :class:`NotComputed` instead.
+
+    The returned fields are deduplicated and ordered by their position in
+    ``ATHLETE_FIELDS`` -- declaration order, not the order channels were
+    walked or the order their quantities were resolved (Req 9.4).
+    """
+    not_on_file_by_kind: dict[BenchmarkKind, Sport | None] = {
+        kind: discipline for kind, discipline in anchors.not_on_file
+    }
+    needed_kinds: set[BenchmarkKind] = set()
+    for channel_id in order:
+        outcome = outcomes[channel_id]
+        if not isinstance(outcome, ChannelInsufficient):
+            continue
+        if outcome.reason is not InsufficiencyReason.NO_BENCHMARK:
+            continue
+        for kind in _CHANNEL_BENCHMARK_KINDS[channel_id]:
+            if kind in not_on_file_by_kind:
+                needed_kinds.add(kind)
+
+    if not needed_kinds:
+        return ()
+
+    fields = {
+        _declared_field_for_absence(kind, not_on_file_by_kind[kind]).key: (
+            _declared_field_for_absence(kind, not_on_file_by_kind[kind])
+        )
+        for kind in needed_kinds
+    }
+    return tuple(field for field in ATHLETE_FIELDS if field.key in fields)
+
+
+def _not_computed_reason(
+    outcomes: Mapping[ChannelId, ChannelOutcome],
+    order: tuple[ChannelId, ...],
+    sport: Sport,
+) -> str:
+    """The not-computed reason, naming every evaluated channel and why it
+    produced no selected value, in ``CANONICAL_CHANNELS`` order
+    (Postcondition 6, Req 10.1, 10.2).
+
+    Delegates the per-channel wording to :func:`~fitdocs.load.threshold.
+    selection.non_selected_values` with ``selected=None`` -- with no
+    selection, no computed-and-in-order branch of that function can fire (a
+    channel in ``order`` producing :class:`ChannelLoad` would have made
+    :func:`~fitdocs.load.threshold.selection.select` return a channel), so
+    every record is either an insufficiency's own ``detail`` or -- for a
+    channel that computed a load but sits outside the configured order --
+    the "not in the configured order" reason. Reusing this function keeps
+    the wording identical to the diagnostics :func:`build_result` records
+    for the very same channels on a *different* activity that did select,
+    rather than maintaining a second, driftable phrasing here.
+    """
+    records = non_selected_values(
+        outcomes, order=order, selected=None, discipline=sport
+    )
+    return "no channel produced a load: " + "; ".join(
+        f"{record.label}: {record.reason}" for record in records
     )

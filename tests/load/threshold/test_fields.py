@@ -555,14 +555,17 @@ class TestAnchorPlanInvariant:
 
 
 class TestNoNonBoundaryMembers:
-    """The declaration boundary adds no `compute`, `supports`, or contract
-    attribute -- those are later tasks' responsibility, sharing this file."""
-
-    def test_calculator_has_no_compute_yet(self) -> None:
-        assert not hasattr(ThresholdCalculator, "compute")
-
-    def test_calculator_has_no_supports_yet(self) -> None:
-        assert not hasattr(ThresholdCalculator, "supports")
+    """The declaration boundary (task 3.1) added no `compute`, `supports`, or
+    contract attribute -- those were later tasks' responsibility, sharing
+    this file (this class's own original docstring said as much). Task 3.3
+    (`ThresholdCalculator`, design.md Service Interface) has now landed both,
+    which is exactly the shared-file handoff the module docstring's "three
+    different component boundaries ... kept strictly sequential" note
+    anticipates -- so the two negative assertions this class opened with
+    (`not hasattr(..., "compute")` / `"supports"`) are retired rather than
+    left to fail permanently; nothing about `AthleteFieldDeclaration`'s own
+    boundary (Req 9.1-9.3) is affected, and the still-valid frozen-dataclass
+    check below is unchanged."""
 
     def test_calculator_is_a_frozen_dataclass(self) -> None:
         assert dataclasses.is_dataclass(ThresholdCalculator)
