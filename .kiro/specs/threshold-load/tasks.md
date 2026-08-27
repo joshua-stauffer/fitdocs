@@ -419,7 +419,7 @@ They are deliberately kept strictly sequential for that reason.
   - _Boundary: ThresholdCalculator, BuiltInRegistration_
   - _Depends: 4.1_
 
-- [ ] 5.4 Close the boundary guards and the quality gates
+- [x] 5.4 Close the boundary guards and the quality gates
   - Assert the import boundary: the priority leaf pulls in no calculator module;
     no module in this feature imports the CLI, the renderer, the load pass, the
     document editor or the load-section renderer; and no module in this feature
