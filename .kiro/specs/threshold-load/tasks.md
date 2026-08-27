@@ -398,7 +398,7 @@ They are deliberately kept strictly sequential for that reason.
   - _Boundary: ThresholdCalculator_
   - _Depends: 4.1_
 
-- [ ] 5.3 (P) Prove the feature through a real load pass
+- [x] 5.3 (P) Prove the feature through a real load pass
   - Run a load pass over a data root holding running, cycling, walking, hiking,
     strength and rowing documents with a populated benchmark file, and assert the
     four scored documents carry the expected bases while strength and rowing
