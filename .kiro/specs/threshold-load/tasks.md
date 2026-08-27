@@ -356,7 +356,7 @@ They are deliberately kept strictly sequential for that reason.
 
 - [ ] 5. Validation
 
-- [ ] 5.1 (P) Prove anchoring and fallback against realistic data
+- [x] 5.1 (P) Prove anchoring and fallback against realistic data
   - Assert the hardware-boundary case end to end: two running threshold-power
     entries measured years apart, with each dated activity scored against the
     entry current at its own date, and regeneration resolving identically
