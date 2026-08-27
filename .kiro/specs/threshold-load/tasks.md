@@ -78,7 +78,7 @@ boundaries. The boundaries are *responsibility* boundaries, not file boundaries,
 so none of the three may be promoted to `(P)` without first splitting the module.
 They are deliberately kept strictly sequential for that reason.
 
-- [ ] 1. Foundation: the configuration value, its reader, and the path that
+- [x] 1. Foundation: the configuration value, its reader, and the path that
       carries it to a calculator
 
 - [x] 1.1 Create the channel-priority value with its documented defaults
@@ -136,7 +136,7 @@ They are deliberately kept strictly sequential for that reason.
 > values off the context. No task is renumbered — 1.3 was the last task in its
 > group — and the dependency edge that pointed at it now points at 1.2.
 
-- [ ] 2. Policy: the tables, the walk, and benchmark resolution
+- [x] 2. Policy: the tables, the walk, and benchmark resolution
 
 - [x] 2.1 (P) Declare which activities are scored and what anchors them
   - Add the supported-sport set — running, cycling, walking and hiking — and the
@@ -217,7 +217,7 @@ They are deliberately kept strictly sequential for that reason.
   - _Boundary: BenchmarkResolution_
   - _Depends: 2.1_
 
-- [ ] 3. The calculator: declaration, computation and assembly
+- [x] 3. The calculator: declaration, computation and assembly
 
 - [x] 3.1 Declare the athlete inputs the prompt flow must collect
   - Declare the seven benchmarks required to score the supported disciplines —
@@ -330,7 +330,7 @@ They are deliberately kept strictly sequential for that reason.
   - _Boundary: ThresholdCalculator_
   - _Depends: 1.2, 2.2, 2.3, 3.1, 3.2_
 
-- [ ] 4. Integration: registration and the published surface
+- [x] 4. Integration: registration and the published surface
 
 - [x] 4.1 Register the built-in and republish the surface
   - Register the calculator from the load package's initializer so that importing
@@ -354,7 +354,7 @@ They are deliberately kept strictly sequential for that reason.
   - _Boundary: BuiltInRegistration, PublicSurfacePin_
   - _Depends: 3.3_
 
-- [ ] 5. Validation
+- [x] 5. Validation
 
 - [x] 5.1 (P) Prove anchoring and fallback against realistic data
   - Assert the hardware-boundary case end to end: two running threshold-power
