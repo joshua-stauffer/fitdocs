@@ -377,7 +377,7 @@ They are deliberately kept strictly sequential for that reason.
   - _Boundary: BenchmarkResolution, ChannelSelection, ThresholdCalculator_
   - _Depends: 3.3_
 
-- [ ] 5.2 (P) Prove the honest outcomes for everything that cannot be scored
+- [x] 5.2 (P) Prove the honest outcomes for everything that cannot be scored
   - Cover, one case each: an unsupported sport by name; a strength activity
     reaching the honest unsupported state without the calculator being invoked;
     a rowing document — inside the declared catch-all modality — refused by the
