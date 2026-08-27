@@ -219,7 +219,7 @@ They are deliberately kept strictly sequential for that reason.
 
 - [ ] 3. The calculator: declaration, computation and assembly
 
-- [ ] 3.1 Declare the athlete inputs the prompt flow must collect
+- [x] 3.1 Declare the athlete inputs the prompt flow must collect
   - Declare the seven benchmarks required to score the supported disciplines —
     running and cycling threshold power, running and cycling threshold heart
     rate, running threshold pace, and the athlete-wide maximum and resting heart
