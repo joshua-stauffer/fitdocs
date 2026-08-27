@@ -238,7 +238,7 @@ They are deliberately kept strictly sequential for that reason.
   - _Boundary: AthleteFieldDeclaration_
   - _Depends: 2.1_
 
-- [ ] 3.2 Assemble the selected value and its diagnostics into the result
+- [x] 3.2 Assemble the selected value and its diagnostics into the result
   - Build the contract's computed result in one place: the selected channel's
     load verbatim as the one value that counts, the selected channel's identity
     as the basis, the non-selected records from the selection step, and an empty
