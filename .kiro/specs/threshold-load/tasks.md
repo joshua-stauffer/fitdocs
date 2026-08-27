@@ -332,7 +332,7 @@ They are deliberately kept strictly sequential for that reason.
 
 - [ ] 4. Integration: registration and the published surface
 
-- [ ] 4.1 Register the built-in and republish the surface
+- [x] 4.1 Register the built-in and republish the surface
   - Register the calculator from the load package's initializer so that importing
     the load layer makes it available, and keep the calculator module itself free
     of registration side effects so importing it for a test mutates no global

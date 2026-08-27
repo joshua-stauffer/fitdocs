@@ -38,6 +38,7 @@ from fitdocs.declaration import DECLARATION_FILENAME
 from fitdocs.load import engine as load_engine_module
 from fitdocs.load import registry as load_registry
 from fitdocs.load import settings as load_settings_module
+from fitdocs.load.docedit import RegionState, classify_load_region
 from fitdocs.load.engine import apply_load
 from fitdocs.load.types import (
     Computed,
@@ -83,9 +84,9 @@ def _offline_tiles(monkeypatch: pytest.MonkeyPatch) -> None:
 
 # The CLI threads the *system local* timezone into the engine, so a document's
 # date/time suffix is machine-dependent; tests assert on the stable sport slug
-# (`-run-`, `-ride-`) the engine always embeds, never on a hardcoded time.
+# (`-run-`, `-rowing-`) the engine always embeds, never on a hardcoded time.
 _RUN_SLUG = "-run-"
-_RIDE_SLUG = "-ride-"
+_ROW_SLUG = "-rowing-"
 
 
 def _put(source_dir: Path, name: str, data: bytes) -> Path:
@@ -159,11 +160,17 @@ def test_regen_help_documents_flag() -> None:
 
 
 def test_sync_writes_docs_reports_summary_and_exits_zero(tmp_path: Path) -> None:
+    """Rowing, not ride, is the second sport here: ``threshold-load``'s
+    built-in now supports RIDE (Req 1.1, 2.1), where -- with no athlete
+    benchmarks on file -- it would report ``skipped`` for missing inputs
+    rather than ``unsupported`` (and a skip writes no ``fitdocs-load`` region
+    at all). Rowing is outside every registered calculator's declared
+    support, so the honest-unsupported claim below stays true."""
     source = tmp_path / "src"
     data_root = tmp_path / "data"
     data_root.mkdir()
     _put(source, "run.fit", builder.run_fit_bytes())
-    _put(source, "ride.fit", builder.ride_fit_bytes())
+    _put(source, "row.fit", builder.small_sport_fit_bytes(3104, "rowing"))
 
     result = runner.invoke(app, ["sync", str(source), "--out", str(data_root)])
 
@@ -172,19 +179,19 @@ def test_sync_writes_docs_reports_summary_and_exits_zero(tmp_path: Path) -> None
     docs = _docs(data_root)
     assert len(docs) == 2
     assert any(_RUN_SLUG in name for name in docs)
-    assert any(_RIDE_SLUG in name for name in docs)
+    assert any(_ROW_SLUG in name for name in docs)
     assert list((data_root / "fit-archive").glob("*.fit"))
     # The end-of-run summary lists the written documents and a written count.
     assert "Written" in result.output
     for name in docs:
         assert name in result.output
     # sync now runs the load pass after writing docs (Req 8.1): its summary
-    # prints, and the ride doc -- a sport no calculator supports -- ends up in
-    # the honest unsupported load state.
+    # prints, and the rowing doc -- a sport no calculator supports -- ends up
+    # in the honest unsupported load state.
     assert "Unsupported" in result.output
-    ride_doc = next(name for name in docs if _RIDE_SLUG in name)
-    ride_text = (data_root / "workouts" / ride_doc).read_text(encoding="utf-8")
-    assert "fitdocs-load" in ride_text
+    row_doc = next(name for name in docs if _ROW_SLUG in name)
+    row_text = (data_root / "workouts" / row_doc).read_text(encoding="utf-8")
+    assert "fitdocs-load" in row_text
 
 
 # --- all-skipped re-run is still success (Req 1.5) --------------------------
@@ -348,8 +355,12 @@ def test_invalid_staleness_window_exits_two_and_writes_nothing(
 
     The "nothing written" clause is only a meaningful assertion if the
     document, left alone, is something the pass *would* rewrite: a bare
-    ``sync`` with no calculator registered leaves it in the honest
-    ``unsupported`` state, asserted below as a precondition. Two stub
+    ``sync`` leaves it uncomputed, asserted below as a precondition (with
+    ``threshold-load``'s built-in registered and no athlete benchmarks on
+    file, that precondition is now the honest ``skipped``-for-missing-inputs
+    state -- a PLACEHOLDER region, never written -- rather than the
+    ``unsupported`` state a bare RUN document produced before that built-in
+    existed; either way, nothing has been computed yet). Two stub
     calculators are then registered (after that first sync, so it plays no
     part in producing the precondition) and the settings file configures one
     of them, unambiguously, as the default -- so if the ``[load]`` table's
@@ -366,10 +377,11 @@ def test_invalid_staleness_window_exits_two_and_writes_nothing(
     doc_path = next((data_root / "workouts").glob("*.md"))
     before = doc_path.read_bytes()
     # Precondition: the document is genuinely computable-and-uncomputed, not
-    # merely unchanged by coincidence -- it already carries the honest
-    # "unsupported" payload a supporting calculator would replace.
-    assert "<!-- fitdocs-load:v2" in before.decode("utf-8")
-    assert '"status":"unsupported"' in before.decode("utf-8")
+    # merely unchanged by coincidence -- the bare sync's built-in threshold
+    # calculator declined for want of a benchmark, writing nothing.
+    assert classify_load_region(before.decode("utf-8")).state is (
+        RegionState.PLACEHOLDER
+    )
 
     stop_stubs = _register_stub_calculators()
     try:
@@ -416,9 +428,14 @@ def test_malformed_benchmark_entry_exits_two_and_writes_nothing(
 
     As in ``test_invalid_staleness_window_exits_two_and_writes_nothing``, a
     stub calculator is registered and configured as the default *after* the
-    first (bare) sync produces the honest ``unsupported`` precondition below,
-    so the byte-identical assertion is independently discriminating for this
-    call site too: ``profile = load_profile(data_root)`` (``engine.py:266``)
+    first (bare) sync produces the honest uncomputed precondition below (with
+    ``threshold-load``'s built-in registered and no athlete benchmarks on
+    file, that precondition is now the honest ``skipped``-for-missing-inputs
+    state -- a PLACEHOLDER region, never written -- rather than the
+    ``unsupported`` state a bare RUN document produced before that built-in
+    existed; either way, nothing has been computed yet), so the
+    byte-identical assertion is independently discriminating for this call
+    site too: ``profile = load_profile(data_root)`` (``engine.py:266``)
     runs before the document loop and before ``load_load_settings``/
     ``validate_configured``. Deferring that ``load_profile`` call past the
     document loop and re-raising its error afterwards makes this exact
@@ -433,10 +450,11 @@ def test_malformed_benchmark_entry_exits_two_and_writes_nothing(
     doc_path = next((data_root / "workouts").glob("*.md"))
     before = doc_path.read_bytes()
     # Precondition: the document is genuinely computable-and-uncomputed, not
-    # merely unchanged by coincidence -- it already carries the honest
-    # "unsupported" payload a supporting calculator would replace.
-    assert "<!-- fitdocs-load:v2" in before.decode("utf-8")
-    assert '"status":"unsupported"' in before.decode("utf-8")
+    # merely unchanged by coincidence -- the bare sync's built-in threshold
+    # calculator declined for want of a benchmark, writing nothing.
+    assert classify_load_region(before.decode("utf-8")).state is (
+        RegionState.PLACEHOLDER
+    )
 
     stop_stubs = _register_stub_calculators()
     try:
@@ -931,9 +949,13 @@ def test_plugins_help_documents_the_command() -> None:
     assert "plugins" in result.stdout
 
 
-def test_plugins_lists_no_calculators_on_clean_install(tmp_path: Path) -> None:
-    """A clean install lists no calculators: this spec ships none (Req 13.2),
-    the listing still renders and reports no load errors (Req 4.1, 4.5).
+def test_plugins_lists_the_threshold_built_in_on_a_clean_install(
+    tmp_path: Path,
+) -> None:
+    """A clean install lists exactly the ``threshold`` built-in
+    (``threshold-load``, Req 1.1-1.3, superseding this test's former
+    ``training-load`` Req 13.2 reading of "lists no calculators"); the
+    listing still renders and reports no load errors (Req 4.1, 4.5).
 
     RETIRED here (encumbered-content-purge, task 4.4), not re-based: a
     literal identifying-token-absence assertion against ``result.output``
@@ -941,20 +963,19 @@ def test_plugins_lists_no_calculators_on_clean_install(tmp_path: Path) -> None:
     token literally to be re-based or retired; this one's subject is the
     withdrawn calculator, which no longer exists in any form.
 
-    ``test_fresh_interpreter_reports_the_registry_empty``
-    (``tests/load/test_packaging.py``) proves only that nothing is
-    registered in ``_REGISTRY`` at ``fitdocs.load`` import time, before any
-    discovery runs -- it says nothing about this command's output.
-    ``plugins_command`` renders ``discover()``'s report, and ``discover()``
-    has an entry-point channel (installed distributions advertising the
+    ``test_fresh_interpreter_registry_holds_exactly_the_threshold_built_in``
+    (``tests/load/test_packaging.py``) proves only what is registered in
+    ``_REGISTRY`` at ``fitdocs.load`` import time, before any discovery
+    runs -- it says nothing about this command's output. ``plugins_command``
+    renders ``discover()``'s report, and ``discover()`` has an entry-point
+    channel (installed distributions advertising the
     ``fitdocs.load_calculators`` group) and, when a data root resolves, a
     local-file channel, independent of what was registered at import.
     Confirmed directly: with a synthetic entry point injected via
     ``discover``'s ``entry_points_fn`` parameter, a full CLI invocation of
-    this command rendered a planted display name in ``result.output`` while
-    ``registry.available()`` was empty immediately beforehand. So this
-    deleted assertion's coverage is *not* subsumed by the fresh-import
-    registry check.
+    this command rendered a planted display name in ``result.output``
+    alongside the built-in. So this deleted assertion's coverage is *not*
+    subsumed by the fresh-import registry check.
 
     It is also not replaced by the standing forbidden-string guard (task
     4.3): that guard scans tracked file content, tracked path names, and
@@ -976,6 +997,7 @@ def test_plugins_lists_no_calculators_on_clean_install(tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert "fitdocs plugins" in result.output
     assert "no plugin load errors" in result.output.lower()
+    assert "threshold" in result.output
 
 
 def test_plugins_lists_injected_distribution_plugin_with_name_and_version(
@@ -1070,8 +1092,9 @@ def test_plugins_lists_load_errors_and_still_exits_zero(
 def test_plugins_with_unresolvable_data_root_still_lists_and_exits_zero(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An unresolvable data root still produces a listing (built-ins and
-    distribution-provided calculators -- none of either ship with this spec,
+    """An unresolvable data root still produces a listing (built-ins --
+    ``threshold-load`` now ships one, Req 1.1-1.3 -- and distribution-
+    provided calculators, neither of the latter shipping with this spec,
     Req 13.2), states that no local plugin configuration was consulted, and
     exits 0 -- the deliberate departure from the exit-2 config-error
     treatment (Req 4.7)."""
@@ -1087,9 +1110,9 @@ def test_plugins_with_unresolvable_data_root_still_lists_and_exits_zero(
     # RETIRED here (encumbered-content-purge, task 4.4), not re-based: a
     # literal identifying-token-absence assertion against ``result.output``
     # that used to sit here. See the sibling retirement note in
-    # `test_plugins_lists_no_calculators_on_clean_install` above for the
-    # reason and the coverage analysis -- this is the second of the two
-    # CLI-output token assertions Req 11.7 requires retired.
+    # `test_plugins_lists_the_threshold_built_in_on_a_clean_install` above
+    # for the reason and the coverage analysis -- this is the second of the
+    # two CLI-output token assertions Req 11.7 requires retired.
     lowered = result.output.lower()
     assert "not consulted" in lowered or "no local" in lowered
 

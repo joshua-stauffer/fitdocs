@@ -70,6 +70,7 @@ import fitdocs.load
 import fitdocs.load.channels
 import fitdocs.load.registry
 import fitdocs.load.settings
+import fitdocs.load.threshold.calculator
 import fitdocs.load.types
 import fitdocs.metrics
 import fitdocs.metrics.types
@@ -159,13 +160,16 @@ def test_end_to_end_parse_then_compute_via_public_names(ride_fit_bytes: bytes) -
 # the ones below it: ``fitdocs.load.__all__`` also lists ``registry``, which
 # the plugin-api design's "Public-surface ownership" section explicitly
 # declares NOT part of the plugin-author surface (an implementation detail
-# plugin authors never import directly). This spec ships no calculator (Req
-# 13.2), so no bundled calculator name is expected here either. This test
-# asserts every ENUMERATED name is importable and identical to its defining
-# object, and never asserts or forbids names beyond that enumeration --
-# deleting any one of them fails the test below; adding ``registry`` to it
-# would be a test bug, not a regression, so it is deliberately absent from
-# ``_LOAD_EXPECTED``.
+# plugin authors never import directly). ``threshold-load`` supersedes
+# ``training-load``'s Req 13.2 "this spec ships no calculator": fitdocs now
+# ships exactly one, ``THRESHOLD_CALCULATOR`` (id ``"threshold"``), added to
+# this surface by threshold-load task 4.1 (``BuiltInRegistration`` /
+# ``PublicSurfacePin``) -- the calculator export only, no ``ProfileView``
+# member. This test asserts every ENUMERATED name is importable and identical
+# to its defining object, and never asserts or forbids names beyond that
+# enumeration -- deleting any one of them fails the test below; adding
+# ``registry`` to it would be a test bug, not a regression, so it is
+# deliberately absent from ``_LOAD_EXPECTED``.
 _LOAD_EXPECTED = {
     "LoadCalculator": fitdocs.load.types.LoadCalculator,
     "AthleteField": fitdocs.load.types.AthleteField,
@@ -196,6 +200,7 @@ _LOAD_EXPECTED = {
     "BenchmarkAge": fitdocs.benchmarks.BenchmarkAge,
     "BenchmarkRef": fitdocs.load.types.BenchmarkRef,
     "benchmark_age": fitdocs.benchmarks.benchmark_age,
+    "THRESHOLD_CALCULATOR": fitdocs.load.threshold.calculator.THRESHOLD_CALCULATOR,
 }
 
 
@@ -205,9 +210,27 @@ def test_every_load_plugin_surface_name_is_importable_and_correct() -> None:
         assert getattr(fitdocs.load, name) is expected, f"{name} is the wrong object"
 
 
+def test_every_load_plugin_surface_name_is_in_load_all() -> None:
+    """Every ``_LOAD_EXPECTED`` name is also listed in ``fitdocs.load.__all__``.
+
+    ``getattr``/``from ... import`` above succeed regardless of ``__all__``
+    membership -- both bind through the module's own attributes, not through
+    ``__all__``. ``tests/test_docs_guarantees.py``'s doc-sync check only
+    catches an *extra*, undocumented name (``set(__all__) - documented``),
+    the direction that shrinks on removal. So deleting a name from
+    ``fitdocs.load.__all__`` (e.g. ``THRESHOLD_CALCULATOR``) left the suite
+    fully green until this assertion existed (REMEDIATION ROUND 1 finding 4)
+    -- this is what actually pins the published ``__all__`` surface in the
+    removal direction.
+    """
+    missing = set(_LOAD_EXPECTED) - set(fitdocs.load.__all__)
+    assert not missing, f"missing from fitdocs.load.__all__: {sorted(missing)}"
+
+
 def test_load_plugin_surface_direct_from_import_binds_the_public_names() -> None:
     from fitdocs.load import (  # noqa: F401
         DEFAULT_LOAD_SETTINGS,
+        THRESHOLD_CALCULATOR,
         AthleteField,
         Benchmark,
         BenchmarkAge,
@@ -250,6 +273,9 @@ def test_load_plugin_surface_direct_from_import_binds_the_public_names() -> None
     assert BenchmarkAge is fitdocs.benchmarks.BenchmarkAge
     assert BenchmarkRef is fitdocs.load.types.BenchmarkRef
     assert benchmark_age is fitdocs.benchmarks.benchmark_age
+    assert (
+        THRESHOLD_CALCULATOR is fitdocs.load.threshold.calculator.THRESHOLD_CALCULATOR
+    )
 
 
 # Every name the document contract publishes: the vocabulary, the versions, the

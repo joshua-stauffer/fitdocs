@@ -809,7 +809,9 @@ def unregister(calculator_id: str) -> None: ...            # no-op when absent
   `QualityFlag`, `supports_activity`, `register`, `get`, `available`,
   `for_modality`, `UnknownCalculatorError`, `InvalidCalculatorError`,
   `DuplicateCalculatorIdError`, `Benchmark`, `BenchmarkKind`, `BenchmarkRef`,
-  `BenchmarkAge`, `benchmark_age`) (5.2). Everything else
+  `BenchmarkAge`, `benchmark_age`, `THRESHOLD_CALCULATOR`) (5.2). `THRESHOLD_CALCULATOR`
+  was added by `threshold-load` task 4.1 (`BuiltInRegistration`/`PublicSurfacePin`).
+  Everything else
   is internal (5.3); `tests/test_public_api.py` guards the shipped `__all__`
   list (5.5), and `tests/test_docs_guarantees.py`'s
   `test_design_doc_public_surface_list_names_actually_import` /

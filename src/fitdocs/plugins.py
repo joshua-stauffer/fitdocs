@@ -214,15 +214,14 @@ LOCAL_MODULE_PREFIX: Final[str] = "fitdocs_local_plugins"
 class BuiltIn:
     """Origin: a calculator no plugin channel accounted for.
 
-    Origin is assigned by *discovery channel*, so this is the fallback for any
-    calculator registered outside the entry-point and local-file channels --
-    today that means one registered directly, by a test or by a downstream
-    spec, not one that ships. fitdocs bundles no calculator. The withdrawn
-    calculator was removed from the shipped tool (``training-load``
-    Amendment 2). Req 13.2 forbids the load package's initializer from
-    registering one. The name is retained because the channel distinction it
-    draws is real and is what :func:`_incumbent_origin_text` reports on a
-    duplicate id.
+    Origin is assigned by *discovery channel*, so this is the fallback for
+    any calculator registered outside the entry-point and local-file
+    channels. fitdocs ships exactly one built-in, ``threshold``, registered
+    by :mod:`fitdocs.load`'s initializer (Req 1.1-1.3); it carries this
+    origin, as does anything else registered directly -- by a test or by a
+    downstream spec -- rather than through a plugin channel. The name is
+    retained because the channel distinction it draws is real and is what
+    :func:`_incumbent_origin_text` reports on a duplicate id.
     """
 
 
@@ -286,12 +285,13 @@ class PluginReport:
     calculators: tuple[PluginInfo, ...]
     """Every registered calculator, in registration order.
 
-    No ordering privilege is implied: fitdocs bundles no calculator, so there
-    are none to come first. This used to carry a parenthetical granting bundled
-    calculators the leading slots, which told a plugin author they exist and
-    outrank theirs -- exactly the mental model Req 13.2 removed. That wording
-    is now forbidden by
-    ``tests/test_plugin_regression.py::test_plugins_module_prose_never_asserts_a_bundled_calculator_ships``.
+    No ordering privilege is implied: fitdocs's one built-in, ``threshold``,
+    carries no leading-slot privilege over anything a plugin author
+    registers (``registry.py``'s own documented rule). This used to carry a
+    parenthetical granting bundled calculators the leading slots, which told
+    a plugin author they exist and outrank theirs -- the wrong mental model
+    then and now. That wording is now forbidden by
+    ``tests/test_plugin_regression.py::test_plugins_module_prose_never_asserts_multiple_bundled_calculators_or_an_ordering_privilege``.
     """
     errors: tuple[PluginLoadError, ...]
     """Every plugin load failure, in discovery order."""
@@ -320,12 +320,14 @@ def discover(
 ) -> PluginReport:
     """Discover, validate, register, and attribute third-party calculators.
 
-    Importing ``fitdocs.load`` registers **no** calculator (Req 13.2), so on a
-    fresh interpreter this runs against an empty registry and there are no
-    bundled calculators occupying the first slots. When ``settings.enabled`` is
-    ``False`` no entry point is loaded at all (Req 1.8); the returned report
+    Importing ``fitdocs.load`` registers its one built-in, ``threshold``
+    (Req 1.1-1.3), so on a fresh interpreter this runs against a registry
+    already holding that single calculator -- it carries no ordering
+    privilege over anything registered afterwards. When ``settings.enabled``
+    is ``False`` no entry point is loaded at all (Req 1.8); the returned report
     then describes only whatever was already registered by other means, which
-    for a plain run is nothing. Otherwise every entry advertised under
+    for a plain run is fitdocs' own ``threshold`` built-in and nothing else.
+    Otherwise every entry advertised under
     :data:`ENTRY_POINT_GROUP` is processed in an order derived only from the
     advertised names -- sorted by ``(entry_point.name, distribution name,
     entry_point.value)`` -- so automatic calculator selection is reproducible

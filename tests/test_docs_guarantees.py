@@ -930,3 +930,39 @@ def test_every_intra_documentation_anchor_link_resolves_to_a_real_heading() -> N
         f"expected at least the three known plugins.md anchors, checked {checked}"
     )
     assert not broken, "dead intra-documentation anchor links:\n" + "\n".join(broken)
+
+
+def test_no_shipped_doc_claims_fitdocs_ships_no_built_in_calculator() -> None:
+    """The shipped documentation set never says fitdocs ships no methodology
+    of its own or that importing ``fitdocs.load`` registers nothing.
+
+    ``threshold-load`` supersedes ``training-load`` Req 13.2's "the registry
+    is empty of built-ins": fitdocs now ships exactly one built-in,
+    ``threshold``, registered by ``fitdocs.load``'s package initializer
+    (Req 1.1-1.3). ``docs/contributing-calculators.md`` carried the
+    superseded claim in four places (a REMEDIATION ROUND 1 finding) even
+    after ``docs/plugins.md`` was corrected -- no guard covered that file, so
+    CI did not force the fix. This is that guard, scanning the whole shipped
+    corpus (as the module docstring above explains) so the phrasing cannot
+    resurface in a new file either.
+    """
+    text = _shipped_documentation_text()
+
+    # Positive control: without it, a regex/text change that matches nothing
+    # would leave this green having verified nothing.
+    assert "threshold" in text.lower(), "not reading the shipped documentation set"
+
+    forbidden = [
+        "ships no methodology",
+        "ships no calculator",
+        "fitdocs ships no",
+        "registers **nothing**",
+        "registers nothing",
+        "is empty on a fresh interpreter",
+    ]
+    found = [phrase for phrase in forbidden if phrase.lower() in text.lower()]
+    assert not found, (
+        f"shipped docs claim fitdocs ships no built-in calculator: {found}. "
+        "fitdocs ships exactly one built-in, threshold, registered by "
+        "fitdocs/load/__init__.py's own docstring (Req 1.1-1.3)."
+    )

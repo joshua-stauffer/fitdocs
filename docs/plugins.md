@@ -242,9 +242,9 @@ distribution name — it is the short, stable string written into a document's
 Plugin authors may depend on exactly the following names. Everything else in
 fitdocs is internal and may change without notice — including the
 `fitdocs.plugins` module itself, which is not public surface. fitdocs ships
-no calculator of its own; every calculator, including the ones registered
-during fitdocs' own test suite, is installed the same way a third party's
-would be.
+one built-in calculator, `threshold`, registered the same way — through the
+same `register()`/`validate_calculator()` gate — any other calculator is,
+including the ones registered during fitdocs' own test suite.
 
 From `fitdocs`:
 
@@ -263,7 +263,8 @@ LoadResult, Computed, Unsupported, MissingInputs, NotComputed, LoadContext,
 LoadSettings, LoadSettingsError, DEFAULT_LOAD_SETTINGS, NonSelectedValue,
 QualityFlag, supports_activity, register, get, available, for_modality,
 UnknownCalculatorError, InvalidCalculatorError, DuplicateCalculatorIdError,
-Benchmark, BenchmarkKind, BenchmarkRef, BenchmarkAge, benchmark_age
+Benchmark, BenchmarkKind, BenchmarkRef, BenchmarkAge, benchmark_age,
+THRESHOLD_CALCULATOR
 ```
 
 `Benchmark`, `BenchmarkKind`, `BenchmarkRef`, `BenchmarkAge` and
@@ -291,6 +292,15 @@ for how. `fitdocs.load` also re-exports its own `registry` submodule for
 internal wiring; it is not part of this depend-on list — use the
 module-level functions above (`register`, `get`, `available`,
 `for_modality`) instead of importing `fitdocs.load.registry` directly.
+
+`THRESHOLD_CALCULATOR` is fitdocs' own built-in `LoadCalculator` instance
+(id `"threshold"`), registered by `fitdocs.load`'s package initializer
+through the same `register()`/`validate_calculator()` gate this document
+describes for a third-party calculator — it needs, and gets, no privileged
+path. It is exported here for introspection (e.g. identity checks in a
+plugin's own tests); look it up through `available()` or `get("threshold")`
+rather than importing this name directly if all you need is "is the built-in
+registered."
 
 [loadcontext-section]: contributing-calculators.md#6-reading-configuration-and-the-activitys-date-only-through-loadcontext
 

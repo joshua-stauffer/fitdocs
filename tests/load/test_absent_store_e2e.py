@@ -211,7 +211,16 @@ def test_absent_athlete_file_reports_every_document_not_computed_and_creates_not
     calc = _RequiresMaxHrCalculator()
     registry.register(calc)
     try:
-        report = apply_load(data_root, session=NonInteractiveSession())
+        # threshold-load ships a built-in that also declares RUN/BIKE support
+        # (Req 1.1), so both documents would otherwise be genuinely ambiguous
+        # between it and this stub; force this stub's id so the scenario under
+        # test -- this calculator's own genuinely-empty-store observation --
+        # stays deterministic regardless of what else is registered.
+        report = apply_load(
+            data_root,
+            session=NonInteractiveSession(),
+            calculator_id=calc.calculator_id,
+        )
     finally:
         registry.unregister(calc.calculator_id)
 

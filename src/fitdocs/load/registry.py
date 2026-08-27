@@ -11,12 +11,14 @@ discovery order, and ``--calculator`` can always select exactly one by id
 (Req 1.5, 1.6).
 
 The store is a module-level ``dict`` keyed by ``calculator_id``; a ``dict``
-preserves insertion order, which *is* registration order. This feature
-registers no built-in calculator of its own (Req 13.2): importing
-:mod:`fitdocs.load` leaves the registry empty until a plugin author or a
-downstream spec calls :func:`register`. This module does no I/O. Its only
-non-stdlib imports are the ``fitdocs`` public :class:`~fitdocs.Modality` type
-and the :class:`~fitdocs.load.types.LoadCalculator` contract it stores.
+preserves insertion order, which *is* registration order. This module itself
+registers no calculator of its own -- it is pure mechanism, never a
+methodology -- but importing :mod:`fitdocs.load` registers fitdocs' one
+built-in, ``threshold`` (``threshold-load``, Req 1.1-1.3), through this same
+:func:`register` function before any plugin author or downstream spec adds
+another. This module does no I/O. Its only non-stdlib imports are the
+``fitdocs`` public :class:`~fitdocs.Modality` type and the
+:class:`~fitdocs.load.types.LoadCalculator` contract it stores.
 
 Every registration -- built-in, packaged, or local -- passes through one
 validation gate, :func:`validate_calculator`, before it enters the registry

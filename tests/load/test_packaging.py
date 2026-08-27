@@ -285,17 +285,20 @@ def test_value_oracle_control_flags_invented_values_not_a_clean_sibling(
     ), "the clean sibling was flagged -- the control passes by matching everything"
 
 
-def test_fresh_interpreter_reports_the_registry_empty() -> None:
+def test_fresh_interpreter_registry_holds_exactly_the_threshold_built_in() -> None:
     """Importing the load layer in a fresh interpreter leaves the calculator
-    registry empty -- not merely free of the withdrawn calculator (Req 13.2).
+    registry holding exactly one calculator, ``threshold`` -- never more, never
+    fewer (``threshold-load``, Req 1.1-1.3; supersedes this test's own former
+    ``Req 13.2`` reading of an empty registry, a recorded revalidation trigger
+    there).
 
     A *declining* built-in registered at ``fitdocs.load`` import time is
-    behaviourally identical to no built-in at all (1837 of the suite's tests
-    passed with exactly such a fixture present, task 6.3's finding) -- so the
-    guard must assert the registry's *contents*, in a subprocess: an
-    in-process re-import of an already-imported ``fitdocs.load`` is a
-    ``sys.modules`` cache hit that runs no module-level code a second time and
-    proves nothing about a cold import.
+    behaviourally identical to no built-in at all for most of the suite (1837
+    tests once passed with exactly such a fixture present, task 6.3's
+    finding) -- so the guard must assert the registry's *contents*, in a
+    subprocess: an in-process re-import of an already-imported ``fitdocs.load``
+    is a ``sys.modules`` cache hit that runs no module-level code a second time
+    and proves nothing about a cold import.
     """
     code = "import fitdocs.load as load; print(f'REGISTRY={load.available()!r}')"
     result = subprocess.run(
@@ -306,7 +309,12 @@ def test_fresh_interpreter_reports_the_registry_empty() -> None:
         cwd=str(_PROJECT_ROOT),
     )
     assert result.returncode == 0, result.stderr
-    assert "REGISTRY=()" in result.stdout, result.stdout
+    assert (
+        "REGISTRY=(ThresholdCalculator(calculator_id='threshold'," in result.stdout
+    ), result.stdout
+    # Exactly one entry, not two: a second calculator_id=... substring would
+    # mean a duplicate or an extra built-in crept in.
+    assert result.stdout.count("calculator_id=") == 1, result.stdout
 
 
 def test_wheel_contains_no_stray_data_or_module_under_load(

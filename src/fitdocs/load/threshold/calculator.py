@@ -92,7 +92,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, cast
 
 from fitdocs.benchmarks import BenchmarkKind
 from fitdocs.load.channels import (
@@ -124,6 +124,7 @@ from fitdocs.load.types import (
     BenchmarkRef,
     Computed,
     InteractionSession,
+    LoadCalculator,
     LoadContext,
     LoadOutcome,
     LoadResult,
@@ -450,10 +451,28 @@ class ThresholdCalculator:
         return NotComputed(reason=_not_computed_reason(outcomes, order, sport))
 
 
-THRESHOLD_CALCULATOR: Final[ThresholdCalculator] = ThresholdCalculator()
-"""The one shipped instance (design: Service Interface). Registering it is
-task 4.1's job -- importing this module for a test registers nothing and
-mutates no global state."""
+THRESHOLD_CALCULATOR: Final[LoadCalculator] = cast(
+    LoadCalculator, ThresholdCalculator()
+)
+"""The ``cast`` is a pure typing accommodation, not a runtime coercion: a
+frozen ``@dataclass`` instance's fields are read-only from mypy's Protocol
+variance rules, so ``ThresholdCalculator`` -- despite genuinely satisfying
+:class:`~fitdocs.load.types.LoadCalculator` at runtime, and despite passing
+:func:`~fitdocs.load.registry.validate_calculator`'s real, dynamic
+introspection unmodified -- does not structurally type-check as one. This is
+the one, centralized place that accommodation lives, so every downstream
+import of this name (the package initializer, the registry, any test) sees
+the ordinary ``LoadCalculator``-typed name a plugin author's own calculator
+would present, with no repeated cast anywhere else.
+
+The one shipped instance (design: Service Interface). Registered by
+``fitdocs/load/__init__.py`` (task 4.1, ``BuiltInRegistration``), not here:
+this module makes no ``register()`` call of its own, so it never registers
+the built-in a second time on any import path that reaches it. Because this
+module is nested under ``fitdocs.load``, Python still runs
+``fitdocs/load/__init__.py`` -- and so still registers this instance once --
+on the way to importing this module by any path; what this module's silence
+buys is that the registration is never duplicated, not that it is bypassed."""
 
 
 # ---------------------------------------------------------------------------

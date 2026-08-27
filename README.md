@@ -23,11 +23,11 @@ Early discovery / spec phase. No installable package yet.
    modeled on [fitdocs.ai](https://github.com/joshua-stauffer/fitdocs.ai)'s
    activity views.
 3. **Compute training load** through a pluggable `LoadCalculator` interface.
-   fitdocs ships no methodology of its own — it is the carrier: a calculator
-   is a plugin, installed or dropped in locally, and contributions are
-   welcome. If an activity is missing data a calculator needs (e.g. max heart
-   rate, a threshold pace), fitdocs prompts for it and completes the
-   calculation.
+   fitdocs ships one built-in methodology, `threshold`, and is otherwise the
+   carrier: any other calculator is a plugin, installed or dropped in
+   locally, and contributions are welcome. If an activity is missing data a
+   calculator needs (e.g. max heart rate, a threshold pace), fitdocs prompts
+   for it and completes the calculation.
 
 Organizing workouts into cycles/training blocks is deliberately deferred.
 
@@ -129,9 +129,9 @@ re-fetched on the next render.
 
 ## Plugins
 
-fitdocs ships no training-load methodology of its own — it discovers
-calculators, all of them plugins, from two channels: an installed Python
-distribution advertising the `fitdocs.load_calculators` entry point
+fitdocs ships one built-in training-load methodology, `threshold`, and
+discovers any other calculator as a plugin, from two channels: an installed
+Python distribution advertising the `fitdocs.load_calculators` entry point
 (`pip install fitdocs-mycalc` is the whole install), or a local plugin
 file/directory named by `[plugins].path` in `<data-root>/fitdocs.toml`. Run
 `fitdocs plugins` at any time to see every registered calculator (id, version,

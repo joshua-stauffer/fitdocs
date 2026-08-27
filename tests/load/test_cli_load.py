@@ -267,10 +267,14 @@ def test_root_help_lists_load_command() -> None:
 
 
 def test_load_prints_summary_and_exits_zero(tmp_path: Path) -> None:
-    """Over a prepared data root with nothing registered, ``load`` prints the
-    five-row summary table; both the run and the ride doc receive the honest
-    unsupported state (Req 13.2, 13.6), and the pass exits 0 (all-unsupported
-    is success; Req 8.6)."""
+    """Over a prepared data root with no athlete benchmarks on file, ``load``
+    prints the five-row summary table; both the run and the ride doc are
+    honestly SKIPPED for missing inputs -- ``threshold-load``'s built-in
+    supports both sports (Req 1.1, 2.1) but has no benchmark to compute from --
+    and the pass exits 0 (all-skipped is success; Req 8.6; supersedes this
+    test's former ``training-load`` Req 13.2 reading, under which both
+    documents were unsupported instead, because no calculator was registered
+    at all)."""
     data_root = _build_data_root(
         tmp_path,
         {"run.fit": builder.run_fit_bytes(), "ride.fit": builder.ride_fit_bytes()},
@@ -284,12 +288,12 @@ def test_load_prints_summary_and_exits_zero(tmp_path: Path) -> None:
     # The summary table carries every category label.
     for label in ("Computed", "Restored", "Unsupported", "Skipped", "Failed"):
         assert label in result.output
-    # Both docs received the honest unsupported state (no numbers).
+    # A missing-inputs skip writes nothing at all -- both docs stay PLACEHOLDER.
     assert classify_load_region(ride.read_text(encoding="utf-8")).state is (
-        RegionState.UNSUPPORTED
+        RegionState.PLACEHOLDER
     )
     assert classify_load_region(run.read_text(encoding="utf-8")).state is (
-        RegionState.UNSUPPORTED
+        RegionState.PLACEHOLDER
     )
     assert read_frontmatter_load(run.read_text(encoding="utf-8")) == {}
 
@@ -297,10 +301,20 @@ def test_load_prints_summary_and_exits_zero(tmp_path: Path) -> None:
 def test_load_second_identical_run_writes_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Task 6.3 bullet 1: with nothing registered, ``fitdocs load`` over several
-    documents leaves every one honestly unsupported and exits 0; an identical
-    second run then performs literally zero atomic writes (Req 8.1, 8.2, 8.6,
-    13.2, 13.6).
+    """Task 6.3 bullet 1: with a sport no calculator supports, ``fitdocs load``
+    over several documents leaves every one honestly unsupported and exits 0;
+    an identical second run then performs literally zero atomic writes (Req
+    8.1, 8.2, 8.6, 13.2, 13.6).
+
+    Strength and rowing, not run/ride, are the sports used here:
+    ``threshold-load``'s built-in now supports RUN and RIDE (Req 1.1, 2.1),
+    where it would report ``skipped`` for missing benchmarks rather than
+    ``unsupported`` -- a skip never writes on ANY pass, which would make the
+    "second run writes nothing" half of this test vacuously true regardless
+    of whether idempotency actually holds. Strength and rowing are outside
+    every registered calculator's declared support, so the ``UNSUPPORTED``
+    write on the first pass -- and therefore the idempotency check on the
+    second -- stays genuinely discriminating.
 
     The first pass's own effect is asserted first (task 6.2's remediation): the
     post-condition under test -- ``PLACEHOLDER`` -> ``UNSUPPORTED`` -- is
@@ -312,14 +326,17 @@ def test_load_second_identical_run_writes_nothing(
     snapshot but not a call count)."""
     data_root = _build_data_root(
         tmp_path,
-        {"run.fit": builder.run_fit_bytes(), "ride.fit": builder.ride_fit_bytes()},
+        {
+            "strength.fit": builder.strength_fit_bytes(),
+            "row.fit": builder.small_sport_fit_bytes(3101, "rowing"),
+        },
     )
-    run = _doc(data_root, "run")
-    ride = _doc(data_root, "ride")
-    assert classify_load_region(run.read_text(encoding="utf-8")).state is (
+    strength = _doc(data_root, "strength")
+    row = _doc(data_root, "row")
+    assert classify_load_region(strength.read_text(encoding="utf-8")).state is (
         RegionState.PLACEHOLDER
     )
-    assert classify_load_region(ride.read_text(encoding="utf-8")).state is (
+    assert classify_load_region(row.read_text(encoding="utf-8")).state is (
         RegionState.PLACEHOLDER
     )
 
@@ -330,10 +347,10 @@ def test_load_second_identical_run_writes_nothing(
     # pass regardless of the report, so only the printed count distinguishes an
     # honest tally from an under-reported one (Req 8.6, 13.6).
     assert _table_count(first.output, "Unsupported") == 2
-    assert classify_load_region(run.read_text(encoding="utf-8")).state is (
+    assert classify_load_region(strength.read_text(encoding="utf-8")).state is (
         RegionState.UNSUPPORTED
     )
-    assert classify_load_region(ride.read_text(encoding="utf-8")).state is (
+    assert classify_load_region(row.read_text(encoding="utf-8")).state is (
         RegionState.UNSUPPORTED
     )
 
@@ -799,22 +816,30 @@ def test_build_session_interactive_only_on_tty_with_prompting(
 # --- sync wiring: the load pass runs after syncing (Req 8.1) -----------------
 
 
-def test_sync_runs_load_pass_marking_ride_unsupported(tmp_path: Path) -> None:
-    """``fitdocs sync`` runs the load pass after writing docs: a synced ride doc
-    ends up with the unsupported load state and the load summary prints (Req 8.1)."""
+def test_sync_runs_load_pass_marking_rowing_unsupported(tmp_path: Path) -> None:
+    """``fitdocs sync`` runs the load pass after writing docs: a synced rowing
+    doc ends up with the unsupported load state and the load summary prints
+    (Req 8.1).
+
+    Rowing, not ride, is the sport used here: ``threshold-load``'s built-in
+    now supports RIDE (Req 1.1, 2.1), where -- with no athlete benchmarks on
+    file -- it would report ``skipped`` for missing inputs rather than
+    ``unsupported``. Rowing is outside every registered calculator's declared
+    support, so the honest-unsupported claim this test names stays true.
+    """
     source = tmp_path / "src"
     data_root = tmp_path / "data"
     data_root.mkdir()
     source.mkdir()
-    (source / "ride.fit").write_bytes(builder.ride_fit_bytes())
+    (source / "row.fit").write_bytes(builder.small_sport_fit_bytes(3102, "rowing"))
 
     result = runner.invoke(app, ["sync", str(source), "--out", str(data_root)])
 
     assert result.exit_code == 0
     # The load summary printed (distinct from the sync summary's rows).
     assert "Unsupported" in result.output
-    ride = _doc(data_root, "ride")
-    assert classify_load_region(ride.read_text(encoding="utf-8")).state is (
+    row = _doc(data_root, "row")
+    assert classify_load_region(row.read_text(encoding="utf-8")).state is (
         RegionState.UNSUPPORTED
     )
 

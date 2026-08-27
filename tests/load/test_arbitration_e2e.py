@@ -26,7 +26,8 @@ turning a silently-passing mutation into a per-document failure.
 from __future__ import annotations
 
 import tomllib
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from datetime import timedelta, timezone
 from pathlib import Path
 
@@ -37,8 +38,8 @@ from fitdocs import Modality, Sport
 from fitdocs.athlete import load_athlete_inputs
 from fitdocs.docio import read_frontmatter
 from fitdocs.layout import SETTINGS_FILE, WORKOUTS_DIR
+from fitdocs.load import THRESHOLD_CALCULATOR, registry
 from fitdocs.load import engine as load_engine
-from fitdocs.load import registry
 from fitdocs.load.engine import DocLoadEntry, apply_load
 from fitdocs.load.profile import PROFILE_FILENAME
 from fitdocs.load.registry import UnknownCalculatorError
@@ -61,6 +62,36 @@ from tests.load.conftest import (
 )
 
 _TZ = timezone(timedelta(hours=-6))
+
+
+@contextmanager
+def _threshold_built_in_excluded() -> Iterator[None]:
+    """Temporarily excludes ``THRESHOLD_CALCULATOR`` from the registry so a
+    stub can be the sole supporter of a modality it also declares, then
+    restores exactly what this excluded -- never more.
+
+    A bare ``registry.unregister(...)`` / ``finally: registry.register(...)``
+    pair *installs* the built-in on exit regardless of whether it was there
+    on entry: if the product ever fails to register it (e.g. task 4.1's
+    ``register(THRESHOLD_CALCULATOR)`` call is missing or broken), this
+    unconditional restore silently repairs that defect for the rest of the
+    test session, masking it from every test that runs afterward
+    (REMEDIATION ROUND 1 finding 5). Checking presence first and restoring
+    only when this context actually removed it closes that gap: with the
+    product registration missing, entry finds nothing to remove, so exit
+    installs nothing either, and the defect stays visible to every test that
+    depends on the built-in being registered.
+    """
+    was_registered = THRESHOLD_CALCULATOR.calculator_id in {
+        c.calculator_id for c in registry.available()
+    }
+    if was_registered:
+        registry.unregister(THRESHOLD_CALCULATOR.calculator_id)
+    try:
+        yield
+    finally:
+        if was_registered:
+            registry.register(THRESHOLD_CALCULATOR)
 
 
 # --- shared scaffolding ------------------------------------------------------
@@ -692,26 +723,34 @@ def test_two_broad_supporters_exactly_one_covering_computes_with_no_configuratio
     fallback ("first one found") could instead compute it with
     ``stub-e2e-broad-walk``'s id, which its own ``compute`` refuses by
     raising.
+
+    ``threshold-load`` ships a built-in that also supports Hike (Req 2.1), so
+    the registry now genuinely holds a THIRD candidate that would make this
+    scenario ambiguous. This test's subject is arbitration's narrowing among
+    exactly these two stubs, not the built-in's own arbitration behavior (that
+    is ``threshold-load``'s own concern), so the built-in is unregistered for
+    the scope of this test and restored afterward regardless of outcome.
     """
     hike_only = _BroadModalityHikeOnly()
     walk_only = _BroadModalityWalkOnly()
-    registry.register(hike_only)
-    registry.register(walk_only)
-    try:
-        data_root = _build_data_root(tmp_path, {"hike.fit": _hike_fit_bytes()})
-        hike = _doc(data_root, "hike")
+    with _threshold_built_in_excluded():
+        registry.register(hike_only)
+        registry.register(walk_only)
+        try:
+            data_root = _build_data_root(tmp_path, {"hike.fit": _hike_fit_bytes()})
+            hike = _doc(data_root, "hike")
 
-        report = apply_load(data_root, session=_RecordingSession())
+            report = apply_load(data_root, session=_RecordingSession())
 
-        rel = _rel(data_root, hike)
-        assert rel in _docs_of(report.computed)
-        assert report.computed[0].detail == hike_only.calculator_id
-        assert report.failures == ()
-        assert report.skipped == ()
-        assert report.unsupported == ()
-    finally:
-        registry.unregister(hike_only.calculator_id)
-        registry.unregister(walk_only.calculator_id)
+            rel = _rel(data_root, hike)
+            assert rel in _docs_of(report.computed)
+            assert report.computed[0].detail == hike_only.calculator_id
+            assert report.failures == ()
+            assert report.skipped == ()
+            assert report.unsupported == ()
+        finally:
+            registry.unregister(hike_only.calculator_id)
+            registry.unregister(walk_only.calculator_id)
 
 
 # --- Bullet 5: the per-activity context (settings + activity date) ---------
@@ -1015,51 +1054,62 @@ def test_hinted_scoped_field_is_asked_once_hint_echoed_second_doc_not_reasked(
     ``ask_float`` answer with none queued, raising
     ``AssertionError: unexpected extra ask_float prompt`` and moving the
     second document into ``report.failures`` instead of ``report.computed``.
+
+    ``threshold-load`` ships a built-in that also supports RUN (Req 2.1), so
+    -- with no configured default -- these RUN documents would otherwise be
+    genuinely ambiguous between it and ``HintedCalculator``. This test's
+    subject is the ask-once/hint/persistence mechanism, not arbitration
+    itself, so the built-in is unregistered for the scope of this test (to
+    keep ``HintedCalculator`` the sole RUN supporter, as the docstring above
+    states) and restored afterward regardless of outcome.
     """
     calc = HintedCalculator()
-    registry.register(calc)
-    try:
-        data_root = _build_data_root(
-            tmp_path,
-            {
-                "run-a.fit": builder.run_fit_bytes(),
-                "run-b.fit": builder.small_sport_fit_bytes(
-                    4001, "running", timestamp_offset=3600 * 5
-                ),
-            },
-        )
-        run_docs = sorted(
-            p for p in (data_root / WORKOUTS_DIR).glob("*.md") if "-run-" in p.name
-        )
-        assert len(run_docs) == 2  # both fixtures rendered as distinct RUN docs
-        # one float answer only: the first-processed doc's field collection
-        # asks once; the hint-confirmation and each doc's own
-        # compute-confirmation are separate `confirm` calls (first doc:
-        # hint-confirm + compute-confirm; second doc: compute-confirm only --
-        # its field is already persisted).
-        session = _ScriptedSession(
-            floats=[42.5],
-            confirms=[True, True, True],
-        )
+    with _threshold_built_in_excluded():
+        registry.register(calc)
+        try:
+            data_root = _build_data_root(
+                tmp_path,
+                {
+                    "run-a.fit": builder.run_fit_bytes(),
+                    "run-b.fit": builder.small_sport_fit_bytes(
+                        4001, "running", timestamp_offset=3600 * 5
+                    ),
+                },
+            )
+            run_docs = sorted(
+                p for p in (data_root / WORKOUTS_DIR).glob("*.md") if "-run-" in p.name
+            )
+            assert len(run_docs) == 2  # both fixtures rendered as distinct RUN docs
+            # one float answer only: the first-processed doc's field collection
+            # asks once; the hint-confirmation and each doc's own
+            # compute-confirmation are separate `confirm` calls (first doc:
+            # hint-confirm + compute-confirm; second doc: compute-confirm only --
+            # its field is already persisted).
+            session = _ScriptedSession(
+                floats=[42.5],
+                confirms=[True, True, True],
+            )
 
-        report = apply_load(data_root, session=session)
+            report = apply_load(data_root, session=session)
 
-        expected_docs = {_rel(data_root, p) for p in run_docs}
-        assert expected_docs <= _docs_of(report.computed)
-        assert report.failures == ()
+            expected_docs = {_rel(data_root, p) for p in run_docs}
+            assert expected_docs <= _docs_of(report.computed)
+            assert report.failures == ()
 
-        ask_float_prompts = [p for p in session.prompts if p.startswith("ask_float:")]
-        assert len(ask_float_prompts) == 1  # asked exactly once (Req 3.3)
+            ask_float_prompts = [
+                p for p in session.prompts if p.startswith("ask_float:")
+            ]
+            assert len(ask_float_prompts) == 1  # asked exactly once (Req 3.3)
 
-        assert any(
-            "noted for confirmation echo" in message for message in session.informs
-        )
+            assert any(
+                "noted for confirmation echo" in message for message in session.informs
+            )
 
-        profile_toml = tomllib.loads(
-            (data_root / PROFILE_FILENAME).read_text(encoding="utf-8")
-        )
-        table_name, field_name = HINTED_FIELD.key.split(".")
-        assert table_name in profile_toml
-        assert profile_toml[table_name][field_name] == pytest.approx(42.5)
-    finally:
-        registry.unregister(calc.calculator_id)
+            profile_toml = tomllib.loads(
+                (data_root / PROFILE_FILENAME).read_text(encoding="utf-8")
+            )
+            table_name, field_name = HINTED_FIELD.key.split(".")
+            assert table_name in profile_toml
+            assert profile_toml[table_name][field_name] == pytest.approx(42.5)
+        finally:
+            registry.unregister(calc.calculator_id)

@@ -1,12 +1,15 @@
 # Contributing a load calculator
 
 fitdocs computes training load through a pluggable seam: every methodology is
-a `LoadCalculator` registered by id. **fitdocs ships no methodology of its
-own** — the load layer is only the contract, the registry, the athlete
-profile store, the prompt flow, and the document integration. Every training
-load a user sees comes from a calculator a plugin author or a downstream
-project registered. You can add one — a running system, a cycling or
-strength model, anything — **without touching core code**. This page shows
+a `LoadCalculator` registered by id. **fitdocs ships exactly one built-in
+methodology, `threshold`** — the load layer is otherwise only the contract,
+the registry, the athlete profile store, the prompt flow, and the document
+integration, and the built-in needs no privileged path: it registers through
+the same `register()`/`validate_calculator()` gate a plugin author's
+calculator does. Every other training load a user sees comes from a
+calculator a plugin author or a downstream project registered. You can add
+one — a running system, a cycling or strength model, anything — **without
+touching core code**. This page shows
 how; the authoritative, always-current source of truth is the docstrings in
 [`src/fitdocs/load/types.py`](../src/fitdocs/load/types.py).
 
@@ -57,7 +60,7 @@ from fitdocs.load.types import NonSelectedValue, QualityFlag
 
 
 class ExampleCalculator:
-    """A worked example only -- fitdocs ships no calculator of its own."""
+    """A worked example only -- not fitdocs' own `threshold` built-in."""
 
     calculator_id = "example-pace-load"
     display_name = "Example Pace Load"
@@ -427,9 +430,10 @@ from fitdocs.load import register
 register(ExampleCalculator())
 ```
 
-Importing `fitdocs.load` registers **nothing** — `available()` is empty on a
-fresh interpreter and stays empty until a plugin author or a downstream
-methodology calls `register()`. A duplicate id raises
+Importing `fitdocs.load` registers its own `threshold` built-in — on a
+fresh interpreter `available()` returns exactly `(THRESHOLD_CALCULATOR,)`
+until a plugin author or a downstream methodology calls `register()` to add
+another. A duplicate id raises
 `DuplicateCalculatorIdError`. Once registered, `for_modality(modality)`
 returns your calculator for its sports and `fitdocs load --calculator
 example-pace-load` selects it explicitly (still declining any sport it does

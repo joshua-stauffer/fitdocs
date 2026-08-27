@@ -31,12 +31,15 @@ Three properties make the pass trustworthy:
 
 * **Fully offline.** The pass reads only the documents, their archived sources,
   the athlete profile, and its own resolved ``[load]`` configuration (Req 8.7)
-  -- no network, no other I/O. This feature registers no built-in calculator of
-  its own (Req 13.2): the registry is populated only by a plugin author or a
-  downstream methodology spec calling :func:`fitdocs.load.registry.register`.
-  The engine addresses calculators only through the registry and
-  :mod:`fitdocs.load.arbitrate`, so it stays calculator-agnostic (it reads the
-  additive ``athlete_field_hints`` seam generically via ``getattr``).
+  -- no network, no other I/O. This module itself registers no calculator
+  (built-in or otherwise); ``fitdocs.load``'s package initializer registers
+  fitdocs' one built-in, ``threshold`` (``threshold-load``, Req 1.1-1.3,
+  superseding ``training-load`` Req 13.2's "the registry is empty of
+  built-ins"), and a plugin author or downstream spec can add more through
+  :func:`fitdocs.load.registry.register`. The engine addresses calculators
+  only through the registry and :mod:`fitdocs.load.arbitrate`, so it stays
+  calculator-agnostic (it reads the additive ``athlete_field_hints`` seam
+  generically via ``getattr``).
 
 **One document interpretation (design: DocumentContract).** Every read of a
 document's frontmatter -- the fence, the ``type`` marker, the parse, and the

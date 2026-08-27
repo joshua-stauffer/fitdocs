@@ -761,22 +761,30 @@ def test_report_load_prints_each_bucket_count_distinctly(
         assert _table_count(out, label) == expected
 
 
-def test_cli_sync_runs_load_pass_marking_ride_unsupported(tmp_path: Path) -> None:
-    """``fitdocs sync`` runs the load pass after writing documents: a synced ride
-    ends up with the unsupported load state and the load summary prints (Req 8.1,
-    8.6) -- proving the sync-integrated pass over freshly written documents."""
+def test_cli_sync_runs_load_pass_marking_rowing_unsupported(tmp_path: Path) -> None:
+    """``fitdocs sync`` runs the load pass after writing documents: a synced
+    rowing document ends up with the unsupported load state and the load
+    summary prints (Req 8.1, 8.6) -- proving the sync-integrated pass over
+    freshly written documents.
+
+    Rowing, not ride, is the sport used here: ``threshold-load``'s built-in
+    now supports RIDE (Req 1.1, 2.1), where -- with no athlete benchmarks on
+    file -- it would report ``skipped`` for missing inputs rather than
+    ``unsupported``. Rowing is outside every registered calculator's declared
+    support, so the honest-unsupported claim this test names stays true.
+    """
     source = tmp_path / "src"
     data_root = tmp_path / "data"
     source.mkdir()
     data_root.mkdir()
-    (source / "ride.fit").write_bytes(builder.ride_fit_bytes())
+    (source / "row.fit").write_bytes(builder.small_sport_fit_bytes(3103, "rowing"))
 
     result = runner.invoke(app, ["sync", str(source), "--out", str(data_root)])
 
     assert result.exit_code == 0
     assert "Unsupported" in result.output
-    ride = _doc(data_root, "ride")
-    assert classify_load_region(ride.read_text(encoding="utf-8")).state is (
+    row = _doc(data_root, "row")
+    assert classify_load_region(row.read_text(encoding="utf-8")).state is (
         RegionState.UNSUPPORTED
     )
 
