@@ -9,6 +9,8 @@ kind: cross-spec-conflict
 area: training-load, athlete-benchmarks, threshold-load, src/fitdocs/load/engine.py, src/fitdocs/load/prompts.py
 created: 2026-08-27
 surfaced_by: /kiro-validate-impl threshold-load
+maintainer_ruling: "2026-08-29 -- accepted as a known limitation; threshold-load merges as-is. The design is to be EXTENDED to handle past dates as follow-up work, rather than the merge being blocked on it."
+
 pinned_at: 3e14ab9
 resume_command: "/kiro-impl training-load [queue: .kiro/queue/2026-08-27-prompt-date-strands-historical-documents.md] Decide how a prompt-answered benchmark is dated, then implement"
 context:
@@ -76,6 +78,20 @@ Pace: no threshold-pace benchmark was supplied, or its value is not positive
 No test covers prompt -> score for a historical activity:
 `tests/load/threshold/test_feature_e2e.py` writes benchmarks via
 `with_benchmark` at a chosen date, bypassing the prompt path entirely.
+
+## Maintainer ruling (2026-08-29)
+
+**Accepted as a known limitation. `threshold-load` merged as-is at the
+maintainer's direction**, rather than blocking the branch on a cross-spec
+product decision. The design is to be **extended to handle past dates** as
+follow-up work.
+
+This does not narrow the item: the defect, its evidence and its four candidate
+fixes below all stand, and the work is still owned by `training-load` /
+`athlete-benchmarks`. What changed is only that it is planned follow-up rather
+than a merge blocker. Anyone picking this up should treat option 1 or 2 as the
+likely shape, since "extend the design to handle past dates" is what was
+asked for.
 
 ## How to pick it up
 
