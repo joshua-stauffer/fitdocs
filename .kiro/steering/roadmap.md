@@ -49,7 +49,9 @@ third delivers the differentiating feature (training load).
   look, rendered as static SVG assets (route-maps spec). Determinism
   constraint is carved out to "byte-identical given a warm tile cache".
 - **Out** (deferred): training cycles/blocks/plan-level docs; weekly load
-  aggregation views; automated `.fit` acquisition; non-`.fit` formats
+  aggregation views *(lifted in Phase 6, 2026-09-09 — `load-history` owns the
+  longitudinal page; cycles/blocks stay deferred)*; automated `.fit`
+  acquisition; non-`.fit` formats
   (GPX/TCX — measured on real HealthFit exports 2026-07-16: GPX sidecars
   are the FIT track re-encoded, mm-level deltas only, so ingesting them
   gains nothing); web UI; cycling and weight-training load methodologies
@@ -327,7 +329,10 @@ extraction, including seven discrepancies between the two defining texts:
   divergence, threshold staleness).
 - **Out**: per-activity load fusion of any kind; build-time power-calibrated HR
   regression (deferred — see the constraint below); auto-FTP / eFTP
-  estimation; weekly/CTL/ATL aggregation (still deferred with the plan level);
+  estimation *(Phase 6, 2026-09-09: `performance-benchmarks` derives dated
+  thresholds from tagged races in its own pass; the calculator's own exclusion,
+  threshold-load Req 11.6, stands)*; weekly/CTL/ATL aggregation (still deferred
+  with the plan level *— until Phase 6; `load-history`*);
   a strength-training load number; the withdrawal of the withdrawn calculator
   (training-load Amendment 2 owns that); getting `.fit` files into the data
   root (inbox owns that).
@@ -928,3 +933,192 @@ the encumbered blobs, which is the thing this phase exists to prevent).
   refs with verification that no object reaches the removed paths, locally and
   on the remote. Dependencies: none — but see the sequencing constraint above,
   which is stronger than a dependency edge
+
+### Phase 6 — historical fitness from races (discovery 2026-09-09)
+
+**Goal**: let the athlete use the archive to plan. Two things are missing:
+the archive's pages score *not computed* because no benchmark on file is dated
+before today, and nothing shows how load accumulates and decays over months.
+The athlete's races are dated maximal performances — the literature has
+converted such results into threshold estimates for forty years, and they are
+the criterion performances Banister's model was fitted to in the first place.
+Phase 6 turns tagged races and hard efforts into dated benchmarks, draws the
+fitness/fatigue/form curve over the whole archive on one page, and — as a
+separate, gated step — fits the model's constants to the athlete's own results.
+
+**Approach decision — tag on the page, benchmarks written to `athlete.toml`,
+history read from documents only.** The athlete marks a workout page as a
+race, test or hard effort with a user-owned frontmatter key (the contract's
+first such key; today any unmanaged key is dropped on regeneration). A
+derivation pass re-parses only tagged activities and writes dated, provenanced
+entries into the one place thresholds already live, so the shipped calculator
+scores the archive with no change to its code. The history page reads every
+page's date and load from frontmatter and never opens a `.fit`. Rejected: *a
+race registry in `athlete.toml`* (no contract change, but the tag lives away
+from the page it describes, same-day activities are ambiguous, and race
+markers need a second lookup); *deriving anchors inside the calculator with
+nothing written* (contradicts threshold-load Req 11.4/11.6, the permanent
+exclusions that keep estimation and aggregation out of the calculator, and
+would leave the derived numbers invisible to the athlete).
+
+#### Decisions taken at discovery (2026-09-09)
+
+- **Fitness in two steps.** Step one draws fitness/fatigue/form with the
+  exponentially-weighted recursion of Morton, Fitz-Clarke & Banister (1990)
+  eq. (4)/(5) using *published seed constants*, labelled as seeds (reference
+  doc D5). Step two, its own spec, fits k₁/k₂/τ₁/τ₂ to tagged race results as
+  criterion performances — and the viability check found that step to be on
+  thin ice (below), which is exactly why it is separate and gated.
+- **Hand-tagged efforts only.** No auto-detection of best efforts in this
+  phase; a mean-maximal pass over 2,478 files that would also pick up tempo
+  runs and GPS artefacts is listed as a follow-on candidate, not scheduled.
+- **One longitudinal page.** Fitness/fatigue/form chart with race markers,
+  weekly table, coverage statement. No forecasting, no plan/cycle/block
+  documents — those stay deferred as product.md says.
+- **Running and cycling.** The maintainer chose both over running-only.
+  Running derives threshold pace and LTHR; cycling derives FTP and LTHR.
+  Caveat recorded: the 2026-07-15 HealthFit sample carried no cycling power,
+  so the FTP derivation may derive nothing on this archive — it must say so,
+  never fabricate.
+- **Wave 0 is the prompt-date fix.** Queue item
+  `2026-08-27-prompt-date-strands-historical-documents` (critical, maintainer
+  ruling 2026-08-29: extend the design to handle past dates) lands first via
+  its own resume command, so the history page also covers activities before
+  the first tagged race. Derived entries carry their own dates and do not
+  depend on whichever semantic wave 0 picks.
+
+#### Scope
+
+- **In**: user-owned frontmatter keys and the effort-tag vocabulary; the
+  derivation of threshold pace, LTHR and FTP from tagged efforts, written as
+  dated, provenanced benchmarks; the daily load series from documents, the
+  fitness/fatigue/form recursion with cited seed constants, and one history
+  page with an SVG chart, race markers, weekly table and coverage statement;
+  a gated least-squares fit of the model's constants to tagged race results
+  with a fidelity report; the commands, owned paths and settings each needs.
+- **Out**: auto-detection of races or best efforts; forecasting form at a
+  future date; plan, cycle and block documents; deriving maximum or resting
+  heart rate; any change to channel arithmetic, selection, or the calculator;
+  sports other than running and cycling; non-Morton model variants.
+
+#### Constraints
+
+- **Citation discipline decides what ships, and the viability check
+  (2026-09-09) mapped the ground.** Full tables are in the briefs. In short:
+  Riegel's power law (1981; the 1.06 exponent from Riegel 1977, attested in
+  Drake et al. 2024) is the cleanest single-race path to a one-hour pace and
+  cites as *secondary attestation* until the JSTOR-only 1981 text is read;
+  Daniels' VDOT coefficients are not printed in either Daniels text and cannot
+  cite to a page; critical speed needs ≥ 2 race distances and is not a one-hour
+  pace. LTHR from a sustained effort has a primary chain (McGehee et al. 2005,
+  30-min TT; Dumke et al. 2006, 60-min TT — both whole-effort average); the
+  coaching-book "final 20 of 30 minutes" is secondary and its discard
+  unsourced. FTP's definition is in Coggan (2003), in hand; the 0.95 ×
+  20-minute rule is Allen & Coggan's with the **book page unverified** and
+  Borszcz et al. 2018 as the measured attestation (limits of agreement about
+  ±40 W). Coggan's 42/7-day constants have **no peer-reviewed origin** — trade
+  and vendor literature only — and the `1/τ` vs `e^(−1/τ)` recursion form is a
+  fitdocs choice to record.
+- **The fit is not citable as meaningful on sparse data.** Hellard et al.
+  2006 and Marchal et al. 2025 report non-identifiable k₁/k₂ even with 35–54
+  performances in ≤ 15 weeks; there is no peer-reviewed minimum-N rule; a few
+  dozen races over nine years is sparser than any published dataset.
+  `performance-model-fit` therefore ships a refusal gate, confidence intervals
+  or a flatness check, and a fitness-only variant as a first-class option, and
+  proceeds to requirements only after `load-history` has reported how many
+  criterion points the archive actually holds.
+- **Absent data is `None`, never a fabricated value** — a declined
+  derivation, a suppressed curve segment and a refused fit are outcomes with
+  reasons, not zeros.
+- **Documents are the history page's only input** (no `.fit`, no network, no
+  clock beyond the pass's `today`); the derivation pass re-parses only tagged
+  activities. Both are byte-deterministic.
+- **Stdlib only.** The optimiser is written in Python; cross-platform golden
+  tests on fitted constants use a stated tolerance because `math.exp` is
+  libm-backed.
+- **The data root has no home for a non-activity page today**
+  (`layout.py`, `OWNED_PATHS`, `DECLARED_DIRS`, `tests/test_confinement.py`):
+  `load-history` adds one, and every guard moves in the same change.
+- No personal data in the repository; the athlete's real wiki is a manual
+  check, never a fixture.
+
+#### Boundary Strategy
+
+- **Why this split**: the tag is a document-contract fact consumed by three
+  specs, so it is its own small spec rather than a corner of the first
+  consumer; derivation writes the store and the history reads documents, and
+  they share nothing but the tag, so they run in parallel; the fit is the one
+  piece whose viability is in doubt, so it is last and gated.
+- **Shared seams to watch**: `src/fitdocs/contract.py` — the `MANAGED_KEYS`
+  anti-drift pin must keep holding while a separate user-owned key set is
+  added (effort-tags); the benchmark entry's `source` field — the merge in
+  `load/profile.py` already preserves unknown keys but the serializer emits
+  only three, so parser, serializer and `with_benchmark` move together
+  (performance-benchmarks); `layout.py` + confinement guard for the history
+  page (load-history); `load-channels`' sufficiency rules — reused or mirrored
+  by the derivation leaf, but the channels package's purity guard forbids any
+  import back into it; `tests/load/threshold/test_boundary.py` pins the
+  calculator's allowed imports, and neither new pass may become reachable from
+  it.
+
+#### Existing Spec Updates
+
+- [ ] training-load — **wave 0**: the prompt-date semantic, picked up with the
+  queue item's own resume command (`/kiro-impl training-load [queue:
+  .kiro/queue/2026-08-27-prompt-date-strands-historical-documents.md] Decide
+  how a prompt-answered benchmark is dated, then implement`); and its
+  out-of-scope line ("weekly/cycle load aggregation … auto-updating athlete
+  fitness from race results") amended to point at `load-history` and
+  `performance-benchmarks`. Dependencies: none
+- [ ] athlete-benchmarks — a `source` provenance field on a benchmark entry
+  (parser, serializer, `with_benchmark`), the never-overwrite rule for entries
+  the deriver did not write, and its boundary line excluding estimation
+  amended to point at `performance-benchmarks`. Landed by
+  `performance-benchmarks`' tasks, the way athlete-benchmarks itself amended
+  training-load's settings reader. Dependencies: effort-tags
+- [ ] wiki-contract — user-owned frontmatter keys as a contract class with
+  their own pin (landed by `effort-tags`), and the history page's owned
+  location and, if typed, document type (landed by `load-history`).
+  Dependencies: none
+
+#### Direct Implementation Candidates
+
+- [x] product.md's "Explicitly deferred" line — weekly aggregation views
+  lifted, cycles/blocks kept. Done in this discovery change.
+- [ ] Verify the Allen & Coggan chapter/page locators (2nd ed. 2010: FTP
+  testing and the 0.95 rule; the Performance Management Chart constants) from
+  a physical copy before either `CitedConstant` is written. A reading task,
+  not code; owed to `performance-benchmarks` and `load-history` and listed
+  here so it is not rediscovered as a blocker inside a task.
+
+#### Follow-on candidates (not scheduled)
+
+- `effort-detection` — mean-maximal best-effort mining over the archive to
+  propose tags for confirmation; needs a pass over every `.fit` and a
+  false-positive story.
+- A forecast on the history page — form at a target date given a planned
+  weekly load.
+- Critical-speed derivation once an athlete has two or more tagged races at
+  different distances (Monod & Scherrer 1965; Jones & Vanhatalo 2017).
+- Maximum and resting heart-rate derivation, if a defensible method exists.
+
+#### Specs (dependency order)
+
+- [ ] effort-tags — user-owned frontmatter keys marking a workout page as a
+  race, test or hard effort, with optional official distance, time and event
+  link; preserved byte-for-byte across sync, regen and the load pass;
+  validated; read through one contract reader. Dependencies: none
+- [ ] performance-benchmarks — a pass that derives dated threshold pace, LTHR
+  and FTP from tagged efforts through cited models and writes them to
+  `athlete.toml` with provenance, never overwriting what the athlete typed.
+  Dependencies: effort-tags
+- [ ] load-history — the daily load series from documents, the
+  fitness/fatigue/form recursion with cited seed constants, and one history
+  page with chart, race markers, weekly table and coverage statement.
+  Dependencies: effort-tags
+- [ ] performance-model-fit — **gated**: a least-squares fit of the model's
+  constants to tagged race results with a sufficiency gate, confidence
+  intervals and a fitness-only option, offered to the history page in place of
+  the seeds; requirements begin only after `load-history` reports the
+  archive's criterion-point count. Dependencies: performance-benchmarks,
+  load-history

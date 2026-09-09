@@ -47,7 +47,10 @@ inside a vendor platform.
 
 ## Explicitly deferred (first pass)
 
-- Plan-level concepts: cycles, training blocks, weekly aggregation views.
+- Plan-level concepts: cycles and training blocks. *(Weekly aggregation views
+  were deferred here too until 2026-09-09; Phase 6 of the roadmap lifts that
+  one — the longitudinal fitness/fatigue page is `load-history`'s. Cycles and
+  blocks stay deferred.)*
 - Automated `.fit` acquisition (device sync, platform APIs).
 
 ---
