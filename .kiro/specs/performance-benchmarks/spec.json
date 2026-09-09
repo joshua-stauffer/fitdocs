@@ -1,0 +1,23 @@
+{
+  "feature_name": "performance-benchmarks",
+  "created_at": "2026-09-10T00:50:00Z",
+  "updated_at": "2026-09-10T02:20:00Z",
+  "language": "en",
+  "phase": "tasks-generated",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  },
+  "ready_for_implementation": true,
+  "phase_note": "Generated 2026-09-10 by the Phase 6 spec batch (wave 1) in auto-approve mode. 10 requirements / 90 acceptance criteria; 11 design components; 5 major tasks / 18 executable tasks. Step 3.5 task-graph sanity review ran as an independent reviewer subagent on Opus, read-only: round 1 NEEDS_FIXES (3 blocking, 5 should-fix, 6 notes -- all 14 applied, including splitting the oversized pass task into discovery and archive-resolution halves, correcting the merge overlay to a two-half rule so an unknown key inside a provenance record survives a refresh, and adding a governed record for the rounding offset); round 2 NEEDS_FIXES (1 blocking, 2 should-fix, 3 notes -- all applied: the forward _Depends: edge from 4.5 to 5.1 removed by giving 4.5 its own test module, requirement 5.6 moved onto the task that proves it, and four stale identifiers/wordings in design.md corrected). Per the skill's bound of one repair-and-re-review cycle, round 2's fixes were applied without a third review round; every round-2 finding was a renumber, one _Requirements: line, or a stale name, and none was a design gap (the reviewer said so explicitly). Lands the roadmap Phase 6 Existing Spec Update for athlete-benchmarks via task 5.3. Deferred, for the queue: (1) the Allen & Coggan 2nd-ed. chapter/page locator for the 0.95 x 20-minute rule is unverified, so that method ships blocked and declines by name -- the roadmap's own Direct Implementation Candidate; (2) Riegel (1981) is JSTOR-only and unread, so its citation ships as a tracked SECONDARY_ATTESTATION exception; (3) the archive-resolution rule is now stated in two passes, mitigated by an equivalence test rather than a shared private import."
+}
