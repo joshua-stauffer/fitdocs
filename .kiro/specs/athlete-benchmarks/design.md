@@ -455,13 +455,14 @@ before any document is written.
 | 2.5, 2.6 | Unknown discipline; wrong scope for a quantity | BenchmarkVocabulary | `BenchmarkKind.scope`, `parse_benchmarks` | — |
 | 2.7, 2.8 | Duplicate measurement date; structural shape errors | BenchmarkVocabulary | `parse_benchmarks` | Resolution flow |
 | 2.9, 2.10 | Configuration error before any write; never silently dropped | BenchmarkStore, CLIErrorSurface | `ProfileError`, `_config_error` | Prompt/persistence flow |
-| 3.1, 3.2, 3.3, 3.4 | Filter by date, latest wins, no future entry, no cross-scope fallback | BenchmarkSelection | `BenchmarkSet.applicable` | Resolution flow |
+| 3.1, 3.2, 3.3, 3.4 | Filter by date, latest wins, no future entry unless athlete-declared (Amendment 1), no cross-scope fallback | BenchmarkSelection | `BenchmarkSet.applicable` | Resolution flow |
+| 3.10, 3.11 | Tier 2 (Amendment 1): the athlete-declared entry measured soonest after the activity; `applies_from` returned with the value | BenchmarkSelection | `BenchmarkSet.applicable`, `Benchmark.applies_from` | Resolution flow |
 | 3.5 | None-on-file vs none-applicable are distinguishable | BenchmarkSelection | `BenchmarkSet.has` | Resolution flow |
 | 3.6, 3.7 | Local calendar date read from the document and carried on the per-pass context; undated activity yields nothing | DocumentDateAccessor, LoadEngineWiring, BenchmarkStore | `document_date`, `LoadContext.activity_date` (training-load), `AthleteProfile.benchmark(on=None) -> None` | Resolution flow |
 | 3.8, 3.9 | Deterministic repeat; returns date and note with the value | BenchmarkSelection | `Benchmark` | Resolution flow |
 | 4.1, 4.2, 4.4 | Age in days; verdict against the window; report age and window | StalenessCalculation | `benchmark_age`, `BenchmarkAge` | — |
 | 4.3, 4.5 | Evaluated against the activity date; pure, no clock, no I/O | StalenessCalculation | `benchmark_age` | — |
-| 4.6, 4.7 | Loud on a future measurement date; never alters a value | StalenessCalculation | `benchmark_age` | — |
+| 4.6, 4.7 | Negative age, never stale, for a measurement after the activity (Amendment 1; was loud); never alters a value | StalenessCalculation | `benchmark_age` | — |
 | 5.1, 5.2, 5.6 | `[load]` key; documented default on absence; single shared file read | LoadSettingsExtension | `load_load_settings`, `LoadSettings.benchmark_staleness_days`, `DEFAULT_STALENESS_WINDOW_DAYS` | Prompt/persistence flow |
 | 5.3, 5.4, 5.5 | Value validation; unknown `[load]` keys ignored; fail before writing | LoadSettingsExtension, LoadEngineWiring, CLIErrorSurface | `LoadSettingsError` | Prompt/persistence flow |
 | 6.1, 6.2, 6.3 | Same file; measurement date is the answer date; upsert on same date | BenchmarkStore | `AthleteProfile.with_benchmark` | Prompt/persistence flow |
@@ -591,12 +592,14 @@ def benchmarks_to_document(entries: Sequence[Benchmark]) -> dict[str, object]: .
 | Field | Detail |
 |-------|--------|
 | Intent | Answer "which benchmark applied on this date" and "is one on file at all" |
-| Requirements | 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 8.4, 9.5 |
+| Requirements | 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 8.4, 9.5 |
 
 **Responsibilities & Constraints**
 
 - Pure lookups over an immutable parsed set. Never falls back across scope or
-  discipline, never returns a future-dated entry, never fabricates a value.
+  discipline, never returns an entry measured after the activity unless the
+  athlete declared it to apply from an earlier date (Amendment 1), never
+  fabricates a value.
 - Deterministic: entries are held in a canonical order and ties are impossible
   because duplicate `(scope, kind, measured_on)` keys are rejected at parse time.
 
