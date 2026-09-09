@@ -1,7 +1,7 @@
 {
   "feature_name": "threshold-load",
   "created_at": "2026-07-25T10:00:00Z",
-  "updated_at": "2026-08-29",
+  "updated_at": "2026-09-10",
   "language": "en",
   "phase": "implemented",
   "phase_note": "Implementation complete and merged to main at 09aa9b2 (2026-08-29). All 13 leaf tasks and 5 majors [x], none blocked. Validated on main after the merge: 3085 passed / 5 skipped, ruff check + format --check clean, mypy --strict clean over 94 source files, smoke clean. MERGED WITH ONE ACCEPTED LIMITATION on the maintainer's explicit ruling (2026-08-29): a benchmark answered at the prompt flow is dated today (engine.py:504 -> prompts.py:122-124), while Req 4.1 resolves anchors at the activity's own date and BenchmarkSet.applicable never returns a future-dated entry, so activities older than the prompt date resolve nothing and are never re-asked. The design is to be EXTENDED to handle past dates as follow-up work; the branch was not blocked on it. See .kiro/queue/2026-08-27-prompt-date-strands-historical-documents.md, which carries the ruling and four candidate fixes spanning training-load and athlete-benchmarks. Nine further findings from the feature-level gate are queued under .kiro/queue/2026-08-27-*, notably the Req 3.7/8.6 anchor-provenance gap (build_result never reads selected.anchor, so only a power-selected result carries the benchmark's own value, date and discipline -- a pace-selected run, running's default channel, carries none) and the borrowing note that asserts 'no X threshold is on file' for one that is on file but future-dated. NOTE FOR THE NEXT READER OF design.md: it is NOT updated for what shipped -- supports() and compute step 1 conjoin sport AND modality (the modality-prefilter premise is false on the forced/default arbitration path), and anchors.py is not the sole caller of ProfileView.has_benchmark. Both are fired revalidation triggers; queued as 2026-08-27-threshold-load-design-doc-stale.",
@@ -19,5 +19,14 @@
       "approved": true
     }
   },
-  "ready_for_implementation": true
+  "ready_for_implementation": true,
+  "amendments": [
+    {
+      "date": "2026-09-10",
+      "requirement": "None added, revised, withdrawn or renumbered; a clarification appended to 4.5 (Amendment 2)",
+      "reason": "athlete-benchmarks Amendment 1 / training-load Amendment 4 (queue item 2026-08-27-prompt-date-strands-historical-documents) let the athlete declare a benchmark entry retroactive via applies_from, so the store can now return an entry measured after the activity.",
+      "also": "No code change: 'applicable' is the store's ruling; this calculator neither chooses nor filters, so a retroactively applied anchor is not a substitution under 4.5, and 4.4's not-applicable classification is unchanged.",
+      "cross_spec": "The two open queue items on anchor provenance and not-applicable reasons should name applies_from when they land."
+    }
+  ]
 }

@@ -66,8 +66,10 @@ misattributed.
   carrier and the presentation for all four, never the computation.
 - Retiring the plugin extension point — it is retained, and `plugin-api`
   continues to own the published surface.
-- Weekly/cycle aggregation, overload guardrails, auto-updating fitness from
-  race results, and load from recorded perceived exertion.
+- Weekly/cycle aggregation (Phase 6: `load-history`), overload guardrails,
+  auto-updating fitness from race results (Phase 6: `performance-benchmarks`,
+  which writes dated, provenanced entries into the same store the prompt flow
+  writes), and load from recorded perceived exertion.
 
 ## Boundary Commitments
 
@@ -1297,22 +1299,66 @@ def validate_configured(
 | Field | Detail |
 |-------|--------|
 | Intent | Collect declared missing athlete inputs, generically |
-| Requirements | 1.4, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 9.1 |
+| Requirements | 1.4, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 9.1 |
 
 **Responsibilities & Constraints**
 
-- **Behavior is unchanged**: `collect_missing_fields`, both sessions, the
-  `s`/`skip` decline keyword, immediate persistence, threading the updated
-  profile forward, and `None`-means-declined.
+- **Behavior is unchanged** for everything but the one question Amendment 4
+  adds: `collect_missing_fields`, both sessions, the `s`/`skip` decline
+  keyword, immediate persistence, threading the updated profile forward, and
+  `None`-means-declined.
 - The per-field confirmation hint seam (3.6) is retained. **No hint ships**; it
   is exercised by a stub calculator, and the engine keeps reading it
   generically through the additive `athlete_field_hints` attribute — the CLI
   and the flow stay methodology-agnostic per steering.
+- **The retroactive-application question (Amendment 4; 3.7–3.9).** For a
+  *benchmark* field only, once a value is accepted (and, when a hint exists,
+  confirmed), and only when the caller-supplied `activity_date` is not `None`
+  and is strictly earlier than `on`, the flow asks through the session's
+  existing `confirm` primitive — no new `InteractionSession` member — whether
+  the answer also applies to earlier activities back to `activity_date`. The
+  question text names both dates in ISO form and the default is `True`. `True`
+  persists `with_benchmark(..., measured_on=on, applies_from=activity_date)`;
+  `False` persists `with_benchmark(..., measured_on=on)`; `None` (skipped or
+  non-interactive) is the flow's one rule for `None` — declined, nothing
+  persisted, the field reported still-missing. When the condition does not
+  hold (flat field, undated activity, activity dated on or after `on`), no
+  question is asked and the answer is persisted exactly as before. The flow
+  reads no clock and no document: both dates are its caller's arguments.
+- Ordering note: the engine visits documents in sorted stem order, and a stem
+  begins with the activity's local date, so the first fillable document that
+  needs a field is the earliest one in the pass that needs it. The prompt text
+  states only what is true regardless of order — *this activity's date* — and
+  never claims to be the earliest.
 
 **Dependencies**: Inbound — LoadEngine (P0). Outbound — AthleteProfileStore
 (P0), LoadContracts (P0), `rich` (P1).
 
 **Contracts**: Service [x] / API [ ] / Event [ ] / Batch [ ] / State [ ]
+
+##### Service Interface (Amendment 4)
+
+```python
+def collect_missing_fields(
+    fields: Sequence[AthleteField],
+    profile: AthleteProfile,
+    session: InteractionSession,
+    persist: Callable[[AthleteProfile], None],
+    hints: Mapping[str, Callable[[float], str]] = _NO_HINTS,
+    *,
+    on: date,
+    activity_date: date | None,
+) -> tuple[AthleteProfile, tuple[AthleteField, ...]]: ...
+```
+
+- Preconditions: `on` is the date the pass is running (unchanged);
+  `activity_date` is the processed document's own recorded local calendar
+  date as the engine already resolves it for `LoadContext` (Amendment 3), or
+  `None` for an undated document. Both are keyword-only and required, so no
+  caller can forget the second the way the pre-amendment engine could not
+  supply it.
+- Postconditions: as the bullet above; a flat field is unaffected by
+  `activity_date` entirely.
 
 ### Document Integration
 
@@ -1670,6 +1716,10 @@ def apply_load(
   `collect_missing_fields`. `_compute_document` gains the parsed frontmatter
   mapping and the resolved `LoadSettings` as parameters so it can build the
   context; both are already resolved by its caller.
+- *Amendment 4*: `_compute_document` passes the `activity_date` it already
+  holds for `LoadContext` into `collect_missing_fields(activity_date=...)` as
+  well, alongside `on=today`. The pass still has exactly one clock read
+  (`today`), and the flow's second date is the document's, never the clock's.
 - *Validation*: the four arbitration outcomes; the support check's no-prompt
   guarantee under an interactive session, including a calculator that declares a
   modality but refuses a sport inside it; the context's `activity_date` observed

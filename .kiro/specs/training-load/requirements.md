@@ -161,6 +161,71 @@ this amendment's scope; `supports(activity)` narrows the blast radius to sports 
 calculator actually covers but does not close it. Recorded here so the next spec
 to hit it inherits the finding rather than rediscovering it.
 
+## Amendment 4 (2026-09-10): dating a prompt-answered benchmark
+
+Queue item `2026-08-27-prompt-date-strands-historical-documents` (critical;
+maintainer ruling 2026-08-29: *extend the design to handle past dates*;
+roadmap Phase 6 wave 0). Three individually correct rules composed into a
+feature that scored nothing for an archive: the load pass stamps a
+prompt-answered benchmark with the date the pass runs (athlete-benchmarks
+6.2), the threshold calculator resolves anchors at the activity's own date
+(threshold-load 4.1), and the store never returns an entry measured after the
+activity (athlete-benchmarks 3.3). A first-time athlete who answered the seven
+prompts therefore scored only activities dated that day or later — and was
+never re-asked, because presence is deliberately undated (8.3).
+
+**Decision.** A prompt answer keeps its honest measurement date — the day it
+was given — and the athlete is asked, once per accepted answer, whether it
+also stands in for earlier activities, back to the date of the activity that
+prompted it. A *yes* records an **applies-from date** on the entry; the store
+then resolves that entry for activities on or after that date which no
+earlier-measured entry covers. Nothing is applied to the past without the
+athlete saying so, and nothing the tool writes claims a measurement date it
+knows to be false.
+
+**Why not the alternatives the queue item lists.** Stamping an earlier date
+onto the measurement date — whether typed by the athlete, defaulted to the
+earliest activity, or set to the beginning of time — writes a measurement
+date the tool knows is not one; it inverts staleness (the activities furthest
+from the real measurement would read as *current* and the nearest as *stale*);
+and it makes the athlete's current number lose to any genuinely earlier-dated
+entry added later by hand or derived by Phase 6's `performance-benchmarks`,
+because selection takes the latest measurement on or before the activity.
+Letting a calculator opt into "latest known" resolution contradicts
+athlete-benchmarks 3.3 and threshold-load 4.5 and would apply a Stryd FTP to
+Apple Watch runs — the case the dated store exists to prevent. Accepting the
+limitation leaves the product's primary use case broken.
+
+**What changes, and where it is owned.**
+
+- *Store semantics* (athlete-benchmarks Amendment 1, same date): an optional
+  `applies_from` date on a benchmark entry, no later than `measured_on`;
+  two-tier selection — the latest entry measured on or before the activity,
+  else the entry the athlete declared to apply from on or before the activity
+  that was measured *soonest after* it; staleness reports a negative age
+  instead of failing for an entry measured after the activity. The schema
+  version does not change: an older reader ignores the key (1.10) and merely
+  declines to score the past, which is a degradation, not a misread.
+- *The question* (this spec, Requirement 3, criteria 3.7–3.9 below): the
+  prompt flow asks it, and the engine hands the flow the activity's own
+  recorded local calendar date alongside the pass date so the flow still reads
+  no clock. The default answer is the retroactive one: the athlete was asked
+  *because of* that activity, and an answer that did not cover it would leave
+  the prompting activity unscored — the confusing state the queue item
+  reports.
+- *The calculator* (threshold-load Amendment 2, same date): no code change.
+  "Applicable" is the store's ruling; the calculator neither chooses nor
+  filters, so an anchor the athlete declared retroactive is not a substitution
+  by the calculator under its 4.5.
+
+Nothing is renumbered. Requirement 3 gains criteria 3.7, 3.8 and 3.9;
+`design.md`'s PromptFlow and LoadEngine components and the Non-Goals line are
+amended in place; `tasks.md` gains major task 7. The out-of-scope line naming
+"weekly/cycle load aggregation" and "auto-updating athlete fitness from race
+results" is amended below to point at the Phase 6 specs that now own them
+(`load-history`, `performance-benchmarks`), as the roadmap's wave-0 entry
+asks.
+
 ## Introduction
 
 training-load is the differentiating layer of fitdocs: it turns each workout
@@ -229,9 +294,13 @@ mistaken for the activity's load.
 - **Out of scope**: the workout document template, section structure, and
   region preservation mechanics (workout-docs — this feature only replaces
   the reserved load section's content and adds load metadata); `.fit` parsing
-  and derived-metric formulas (fit-ingest); weekly/cycle load aggregation and
-  overload guardrails (deferred with the plan level); auto-updating athlete
-  fitness from race results; any load methodology whatsoever — the calculator
+  and derived-metric formulas (fit-ingest); weekly/cycle load aggregation
+  (Phase 6: `load-history` owns the daily load series and the
+  fitness/fatigue/form page) and overload guardrails (deferred with the plan
+  level); auto-updating athlete fitness from race results (Phase 6:
+  `performance-benchmarks` derives dated benchmarks from tagged efforts and
+  writes them to the store this feature's prompt flow also writes); any load
+  methodology whatsoever — the calculator
   contract must let methodologies slot in, but this feature specifies none;
   load derived from recorded perceived-exertion estimates (the session RPE
   developer field is noted as a possible future input only).
@@ -310,6 +379,9 @@ configuration files.
 4. If the user declines to provide a required input, the fitdocs CLI shall skip load computation for the affected activities, report the reason, and shall not substitute any value.
 5. While running non-interactively (prompting disabled by the user or no interactive terminal), the fitdocs CLI shall not prompt, shall leave affected documents uncomputed with the reason reported, and shall complete the pass cleanly.
 6. _(revised by Amendment 2)_ The prompt flow shall support a per-field confirmation hint through which a declaring methodology can echo derived context for the value being entered, so that a user can sanity-check an answer before it is persisted. No such hint ships with this feature.
+7. _(added by Amendment 4)_ When a benchmark answer is accepted during an interactive load pass while processing an activity whose recorded local calendar date is earlier than the date the pass is running, the fitdocs CLI shall ask — after the value and any confirmation hint, and before anything is persisted — whether the answer also applies to earlier activities, back to that activity's date; an affirmative answer shall be persisted with that activity's date as the entry's applies-from date, a negative answer shall be persisted with no applies-from date, and a skipped question shall be treated as declining the whole answer, persisting nothing (3.4). Either persisted form keeps the pass date as the entry's measurement date.
+8. _(added by Amendment 4)_ The fitdocs CLI shall not ask that question for a non-benchmark field, for an activity with no recorded local calendar date, or for an activity dated on or after the date the pass is running; such an answer is persisted exactly as before, and the prompt flow shall obtain the activity's date from its caller rather than from a clock or a document read of its own.
+9. _(added by Amendment 4)_ The question shall name both dates — the pass date the answer is recorded as measured on and the activity date it would apply from — and shall offer the affirmative answer as its default, so that an athlete who accepts the default scores the activity that prompted the question.
 
 ### Requirement 4: Withdrawn-Methodology Zone Determination with Confirmation
 **WITHDRAWN by Amendment 2.** The withdrawn methodology is no longer part of

@@ -51,9 +51,10 @@ exactly like a right one.
 Three principles govern every requirement below. A benchmark that is not on
 file yields nothing — never a default, never a substituted value from another
 discipline. A benchmark that exists but was measured after the activity is not
-applicable to it. And a file that exists but is malformed fails loudly and
-names the offending entry, because silently dropping a threshold would change
-computed load invisibly.
+applicable to it — unless the athlete has declared, on that entry, that it
+stands in for earlier activities (Amendment 1). And a file that exists but is
+malformed fails loudly and names the offending entry, because silently
+dropping a threshold would change computed load invisibly.
 
 ## Boundary Context
 
@@ -104,6 +105,41 @@ computed load invisibly.
   reader to. The ownership contract already treats `athlete.toml` as user-owned
   rather than tool-owned, and this feature does not change that.
 
+## Amendment 1 (2026-09-10): retroactive application of a prompt-answered benchmark
+
+Queue item `2026-08-27-prompt-date-strands-historical-documents`, ruled by the
+maintainer on 2026-08-29 (*extend the design to handle past dates*) and taken
+up as roadmap Phase 6 wave 0 under `training-load` Amendment 4, which records
+the decision and its rejected alternatives in full. Only what this spec owns
+is restated here.
+
+A prompt answer is recorded as measured on the day it is given (6.2,
+unchanged). The load pass may hand this store, alongside that answer, the
+athlete's declaration that it also stands in for earlier activities back to a
+given date. That declaration is a new optional entry field, **`applies_from`**
+— a bare calendar date no later than the entry's `measured_on` — and it
+changes three things this store does: what a valid entry is (1.12, 2.11), which
+entry applies to an activity that no earlier measurement covers (3.3 revised,
+3.10, 3.11), and what staleness reports for an entry measured after the
+activity (4.6 revised). The write path carries the field like the note (6.10),
+and the question itself stays `training-load`'s (8.8).
+
+The principle "a benchmark measured after the activity is not applicable to
+it" is narrowed, not dropped: the *tool* still never applies a later
+measurement on its own. Only the athlete's explicit, per-entry declaration
+does, and every hand-edited history keeps its meaning — an entry without
+`applies_from` behaves exactly as before. The measurement-system case in the
+Introduction (a Stryd FTP must not rescale Apple Watch runs) is preserved
+because an entry measured on or before the activity always wins over a
+retroactive one, whatever their values.
+
+The schema version does not change. A fitdocs older than this amendment
+ignores the key (1.10) and merely declines to score activities before the
+measurement — a degradation the athlete can see, never a misread number.
+Nothing is renumbered; the design components named in `training-load`'s
+amendment record are amended in place, and the implementing tasks are
+`training-load` 7.1 (this leaf module) and 7.2 (the profile store).
+
 ## Requirements
 
 ### Requirement 1: Versioned Per-Discipline Benchmark Schema
@@ -126,6 +162,7 @@ actually belongs to that sport and that point in time.
 9. If `athlete.toml` does not exist, the fitdocs athlete store shall report no benchmarks and shall not treat this as an error.
 10. The fitdocs athlete store shall ignore keys and tables in `athlete.toml` that it does not recognize, so that files written by a later fitdocs version within the same schema version remain readable.
 11. The fitdocs athlete store shall leave the existing flat athlete-input keys — the ones the document renderer consumes for zones and threshold-dependent metrics — readable with unchanged meaning, and shall not derive, override or reinterpret them from benchmarks.
+12. _(added by Amendment 1)_ The fitdocs athlete store shall accept, on any benchmark entry, an optional applies-from calendar date no later than the entry's measurement date, expressing the athlete's declaration that the measurement also stands in for activities dated on or after that date which no earlier-measured entry covers; an entry without one applies from its measurement date only, exactly as before.
 
 ### Requirement 2: Loud Validation of Benchmark Data
 
@@ -146,6 +183,7 @@ the file.
 8. If the benchmark section of `athlete.toml` is structurally wrong — a scalar where a table or a list of entries belongs — the fitdocs CLI shall fail with a configuration error naming the offending path.
 9. When a benchmark validation failure occurs, the fitdocs CLI shall report it as a configuration error and terminate before writing, modifying, or deleting any file.
 10. The fitdocs athlete store shall never silently drop, coerce, or substitute a benchmark entry it cannot validate.
+11. _(added by Amendment 1)_ If a benchmark entry's applies-from date is not a bare calendar date, carries a time or time-zone component, or falls after the entry's measurement date, the fitdocs CLI shall fail with a configuration error naming the file and the offending entry.
 
 ### Requirement 3: Date-Aware Benchmark Selection
 
@@ -158,13 +196,15 @@ rescale my 2023 training.
 
 1. When asked for the benchmark applicable to an activity, the fitdocs athlete store shall consider only entries for the requested quantity and scope whose measurement date is on or before the activity's own calendar date.
 2. When more than one entry qualifies, the fitdocs athlete store shall return the one with the latest measurement date.
-3. When no entry qualifies because every recorded measurement date falls after the activity's date, the fitdocs athlete store shall report no applicable benchmark and shall not return a later-measured one.
+3. _(revised by Amendment 1)_ When no entry qualifies because every recorded measurement date falls after the activity's date, the fitdocs athlete store shall report no applicable benchmark and shall not return a later-measured one — unless the athlete has declared an entry to apply from a date on or before the activity's, in which case 3.10 governs.
 4. When no entry exists at all for the requested quantity and scope, the fitdocs athlete store shall report no applicable benchmark and shall not substitute a value from another discipline, from the athlete-wide scope, or from any default.
 5. The fitdocs athlete store shall distinguish "no benchmark of this kind is on file at all" from "benchmarks exist but none applies on that date", so that callers can report the two situations differently.
 6. When an activity's calendar date is determined, the fitdocs athlete store shall use the activity's local calendar date — the same date the document is named from — so that a benchmark measured on the day of an activity applies to it regardless of the recording time zone.
 7. If an activity has no recorded start time, the fitdocs athlete store shall report no applicable benchmark rather than assuming today's date or any other date.
 8. When the same request is repeated with the same file contents and the same activity date, the fitdocs athlete store shall return the same benchmark, so that repeated runs are deterministic.
 9. When a benchmark is returned, the fitdocs athlete store shall return its measurement date and note alongside its value, so that a caller can report what the number was anchored to.
+10. _(added by Amendment 1)_ When no entry for the requested quantity and scope is measured on or before the activity's date but one or more such entries carry an applies-from date on or before it, the fitdocs athlete store shall return, among those, the entry measured soonest after the activity; it shall never return an entry that carries neither a measurement date on or before the activity nor such an applies-from date, and an entry measured on or before the activity shall always take precedence over a retroactively applied one.
+11. _(added by Amendment 1)_ When a benchmark is returned, the fitdocs athlete store shall return its applies-from date, when it has one, alongside its measurement date and note, so that a caller can report that the anchor was measured after the activity and applied by the athlete's declaration.
 
 ### Requirement 4: Staleness Computation
 
@@ -179,7 +219,7 @@ number carries the fact that its threshold may no longer have been valid.
 3. While regenerating a document for a past activity, the fitdocs athlete store shall evaluate staleness against that activity's date and not against the current calendar date, so that regenerating an old document does not flag it differently than the original run did.
 4. When reporting staleness, the fitdocs athlete store shall report the benchmark's age in days and the window it was compared against, not only a yes/no verdict.
 5. The staleness computation shall depend only on the activity date, the measurement date and the configured window, and shall read no files and consult no clock.
-6. If staleness is requested for a benchmark whose measurement date falls after the activity date, the fitdocs athlete store shall fail loudly rather than reporting the benchmark as current, because selection never yields such a benchmark.
+6. _(revised by Amendment 1)_ If staleness is requested for a benchmark whose measurement date falls after the activity date, the fitdocs athlete store shall report a negative age in days and a current verdict rather than failing, because an entry the athlete declared to apply retroactively legitimately reaches this computation; the sign of the age is what tells a caller the benchmark was measured after the activity. A staleness window below one day remains a loud failure.
 7. The fitdocs athlete store shall report staleness as a fact about the benchmark and shall not alter, suppress, or adjust any benchmark value in response to it.
 
 ### Requirement 5: Staleness Window Configuration
@@ -219,6 +259,7 @@ that there is exactly one place my thresholds live.
 7. When the store is written, the fitdocs athlete store shall write the file atomically, leaving no partial or temporary file behind on failure.
 8. The fitdocs athlete store shall not write any new flat threshold key when persisting a benchmark; flat keys already present are preserved but never created or updated by this path.
 9. If a value fails validation, the fitdocs athlete store shall reject it and persist nothing, leaving the file exactly as it was.
+10. _(added by Amendment 1)_ When a benchmark answer is persisted together with an applies-from date, the fitdocs athlete store shall record that date on the same entry, shall refuse one later than the entry's measurement date exactly as it refuses an invalid value (6.9), and on rewrite shall preserve and overlay it exactly as it does the note.
 
 ### Requirement 7: Benchmark Access for Load Calculators
 
@@ -251,6 +292,7 @@ single answer rather than a question repeated for every historical activity.
 5. If the user declines to provide a prompted benchmark, the fitdocs CLI shall persist nothing, report the reason, and shall not substitute any value.
 6. While running non-interactively, the fitdocs CLI shall not prompt for a benchmark, shall leave affected documents uncomputed with the reason reported, and shall complete the pass cleanly.
 7. When a prompted benchmark answer is accepted, the fitdocs CLI shall persist it immediately, so that a later failure in the same run does not lose the answer.
+8. _(added by Amendment 1)_ The question by which the fitdocs CLI establishes whether a prompted answer also applies to earlier activities is `training-load`'s (its criteria 3.7–3.9); this store persists whatever applies-from date that flow hands it and asks nothing itself.
 
 ### Requirement 9: Store Invariants and Data-Root Contract
 

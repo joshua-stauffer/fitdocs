@@ -1063,13 +1063,19 @@ would leave the derived numbers invisible to the athlete).
 
 #### Existing Spec Updates
 
-- [ ] training-load — **wave 0**: the prompt-date semantic, picked up with the
+- [x] training-load — **wave 0**: the prompt-date semantic, picked up with the
   queue item's own resume command (`/kiro-impl training-load [queue:
   .kiro/queue/2026-08-27-prompt-date-strands-historical-documents.md] Decide
   how a prompt-answered benchmark is dated, then implement`); and its
   out-of-scope line ("weekly/cycle load aggregation … auto-updating athlete
   fitness from race results") amended to point at `load-history` and
-  `performance-benchmarks`. Dependencies: none
+  `performance-benchmarks`. Dependencies: none. *Landed 2026-09-10 as
+  training-load Amendment 4 / athlete-benchmarks Amendment 1: the answer
+  keeps its measurement date and the athlete is asked whether it also
+  applies back to the prompting activity's date, persisted as an optional
+  `applies_from` on the entry; selection falls back to such an entry only
+  when no earlier measurement covers the activity. Derived Phase 6 entries
+  carry their own dates and need no `applies_from`.*
 - [ ] athlete-benchmarks — a `source` provenance field on a benchmark entry
   (parser, serializer, `with_benchmark`), the never-overwrite rule for entries
   the deriver did not write, and its boundary line excluding estimation

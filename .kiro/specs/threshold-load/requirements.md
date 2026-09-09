@@ -96,6 +96,33 @@ computation raising on a future-dated benchmark, because this feature never
 calls it — the only caller inside `compute` is `activity-qa-flags`' staleness
 check, which guards the future-date case and degrades to not-assessed.
 
+## Amendment 2 (2026-09-10): what "applicable" means once a benchmark can be declared retroactive
+
+`athlete-benchmarks` Amendment 1 and `training-load` Amendment 4 (both
+2026-09-10; queue item `2026-08-27-prompt-date-strands-historical-documents`)
+let the athlete declare, per entry, that a benchmark measured on one date
+also stands in for earlier activities back to an `applies_from` date. The
+store then resolves such an entry for an activity that no earlier-measured
+entry covers.
+
+**Nothing in this feature changes — no criterion, no task, no code.** This
+calculator asks the store for the benchmark applicable at the activity's own
+date (4.1) and uses whatever the store returns. An anchor the athlete declared
+retroactive is therefore *the applicable benchmark*, not a substitution by
+this calculator, and 4.5's "shall not substitute a … later-measured
+benchmark" continues to bind exactly what it bound: the calculator never
+chooses, estimates or falls back on its own. The "on file but none applies"
+classification (4.4) is likewise unchanged — it still means the store returned
+nothing while presence is true, which now also covers an entry whose
+`applies_from` is later than the activity.
+
+Recorded here so that no reviewer reads 4.5 as contradicted by an anchor whose
+`measured_on` is after the activity, and so that the open queue items on this
+feature's anchor provenance and not-applicable reasons
+(`2026-08-27-anchor-provenance-missing-for-pace-and-hr`,
+`2026-08-27-not-applicable-has-no-readers`) know the `Benchmark` they will
+report now carries an `applies_from` worth naming.
+
 ## Introduction
 
 threshold-load is the third spec of the Phase 4 threshold load engine, and the
@@ -247,7 +274,7 @@ current when it happened, so that a threshold measured in 2026 never rescales
 2. The fitdocs threshold calculator shall pass already-resolved benchmarks to the channel layer and shall not ask that layer to resolve, select, or date-scope a benchmark.
 3. If the activity carries no local calendar date, the fitdocs threshold calculator shall treat every benchmark as unavailable and shall report the activity as not computed with a reason naming the absent date.
 4. If a benchmark exists for the requested quantity and discipline but none applies on the activity's date, the fitdocs threshold calculator shall treat the anchor as unavailable and shall record a reason distinguishing that case from a benchmark that was never provided.
-5. The fitdocs threshold calculator shall not substitute a default, an estimated, or a later-measured benchmark for an unavailable one.
+5. The fitdocs threshold calculator shall not substitute a default, an estimated, or a later-measured benchmark for an unavailable one. _(clarified by Amendment 2: "unavailable" and "applicable" are the store's rulings — an entry the athlete declared to apply retroactively is the applicable benchmark, not a substitution by this calculator.)_
 6. When the same activity is scored twice against the same stored benchmarks, the fitdocs threshold calculator shall resolve the same benchmarks both times.
 
 ### Requirement 5: Computing Every Channel

@@ -46,8 +46,10 @@ describes.
   and `threshold-load`.
 - Rendering benchmarks or staleness into a document — `activity-qa-flags`.
 - Auto-FTP / eFTP estimation, or any inference of a benchmark from activity data.
-- Changing what the prompt flow asks or how it asks it; changing `ZoneSpec` or
-  the flat athlete-input keys' meaning.
+- Changing what the prompt flow asks or how it asks it (the
+  retroactive-application question Amendment 1 introduces is `training-load`'s
+  3.7–3.9; this design specifies only what the store does with the answer);
+  changing `ZoneSpec` or the flat athlete-input keys' meaning.
 - Mapping an activity's modality to a benchmark discipline (Walk/Hike → which
   LTHR): that policy belongs to `threshold-load`.
 - **Creating or owning the `[load]` settings reader.** `src/fitdocs/load/settings.py`
@@ -432,7 +434,8 @@ sequenceDiagram
     Engine->>Prompts: collect_missing_fields(fields, profile, session, persist, on=today)
     Prompts->>Profile: has_benchmark(kind, scope) for benchmark fields
     Prompts->>Prompts: prompt only when none on file
-    Prompts->>Profile: with_benchmark(kind, scope, value, measured_on=today)
+    Prompts->>Prompts: confirm "apply back to <activity date>?" (Amendment 1; only when activity date < today)
+    Prompts->>Profile: with_benchmark(kind, scope, value, measured_on=today, applies_from=<activity date> | None)
     Prompts->>Disk: persist immediately via save_profile
 ```
 
@@ -545,10 +548,19 @@ class Benchmark:
     value: float
     measured_on: date
     note: str | None = None
+    applies_from: date | None = None   # Amendment 1: athlete-declared, <= measured_on
 
 def parse_benchmarks(document: Mapping[str, object]) -> BenchmarkSet: ...
 def benchmarks_to_document(entries: Sequence[Benchmark]) -> dict[str, object]: ...
 ```
+
+- *Amendment 1*: `applies_from` is trailing and defaulted, so every existing
+  keyword construction is unchanged. The parser accepts an optional
+  `applies_from` key with exactly `measured_on`'s bare-date strictness and
+  rejects, naming the entry, a value that is not a bare date or that falls
+  after `measured_on` (1.12, 2.11); `applies_from == measured_on` is accepted
+  and behaves as if absent. The serializer emits it after `measured_on` when
+  present and omits it otherwise; the round trip holds either way.
 
 - Preconditions: `document` is the already-decoded top-level `athlete.toml`
   mapping; `parse_benchmarks` reads only its `benchmarks` key.
@@ -607,12 +619,19 @@ class BenchmarkSet:
 - Preconditions: `discipline` is `None` exactly when `kind` is athlete-scoped;
   passing a mismatched scope is a programming error and raises `ValueError`.
 - Postconditions: `applicable` returns the entry with the greatest
-  `measured_on <= on` for that `(kind, discipline)`, else `None` (3.1–3.4). `has`
-  ignores dates entirely (3.5). The returned `Benchmark` carries its
-  `measured_on` and `note` (3.9). Repeated calls with equal inputs return an
-  equal result (3.8).
+  `measured_on <= on` for that `(kind, discipline)` (3.1–3.4); *failing that*
+  (Amendment 1, 3.10), among the same `(kind, discipline)` entries whose
+  `applies_from` is not `None` and `<= on`, the one with the **smallest**
+  `measured_on` — the measurement closest after the activity — else `None`.
+  An entry with neither is never returned, and a tier-1 entry always beats a
+  tier-2 one regardless of value. `has` ignores dates entirely (3.5). The
+  returned `Benchmark` carries its `measured_on`, `note` and `applies_from`
+  (3.9, 3.11). Repeated calls with equal inputs return an equal result (3.8);
+  the tier-2 minimum is unambiguous because `(discipline, kind, measured_on)`
+  is unique.
 - Invariants: no cross-scope, cross-discipline or default fallback exists in any
-  code path (9.5).
+  code path (9.5). The only path to an entry measured after `on` is the
+  athlete's own `applies_from` declaration on that entry.
 
 #### StalenessCalculation
 
@@ -637,13 +656,18 @@ def benchmark_age(
 ) -> BenchmarkAge: ...
 ```
 
-- Preconditions: `measured_on <= activity_date` (selection guarantees it) and
-  `window_days >= 1`. A violated precondition raises `ValueError` rather than
-  reporting a benchmark as current (4.6).
-- Postconditions: `age_days == (activity_date - measured_on).days`;
-  `is_stale == age_days > window_days`; the window is reported alongside the
-  verdict (4.1, 4.2, 4.4). The function reads no file and no clock (4.5) and
-  returns a verdict only — it never touches a `Benchmark` value (4.7).
+- Preconditions: `window_days >= 1`; a violation raises `ValueError`.
+  *Amendment 1 (4.6 revised)*: `measured_on > activity_date` is no longer a
+  precondition — selection now yields such an entry when the athlete declared
+  it to apply retroactively — and no longer raises.
+- Postconditions: `age_days == (activity_date - measured_on).days`, which is
+  **negative** for an entry measured after the activity; `is_stale == age_days
+  > window_days` (so a negative age is never stale); the window is reported
+  alongside the verdict (4.1, 4.2, 4.4). A negative age is the arithmetic
+  fact a caller reads as "measured after this activity" — not a sentinel, and
+  `BenchmarkAge`'s shape is unchanged. The function reads no file and no clock
+  (4.5) and returns a verdict only — it never touches a `Benchmark` value
+  (4.7).
 - Invariants: called with the activity's own date, so regenerating an old
   document yields the same verdict it did originally (4.3).
 
@@ -839,6 +863,7 @@ class AthleteProfile:
         value: float,
         measured_on: date,
         note: str | None = None,
+        applies_from: date | None = None,   # Amendment 1
     ) -> AthleteProfile: ...
 
 def load_profile(data_root: Path) -> AthleteProfile: ...
@@ -861,7 +886,13 @@ def save_profile(data_root: Path, profile: AthleteProfile) -> None: ...
   same key rather than appending a duplicate (6.3) — with all other data deep-copied
   verbatim (6.4). `save_profile` stamps `ATHLETE_SCHEMA_VERSION` into
   `profile_version` (6.5), emits benchmark entries date-sorted (6.6), and replaces
-  the target atomically (6.7).
+  the target atomically (6.7). *Amendment 1 (6.10)*: `with_benchmark` carries
+  `applies_from` onto the entry it builds and refuses one later than
+  `measured_on` with `ValueError`, nothing stored; the rewrite merge treats
+  `applies_from` exactly as it treats `note` — a fresh entry carrying one
+  overlays it, a fresh entry without one (`None`, "not supplied") leaves an
+  existing value on that `measured_on` untouched — so the field survives a
+  later same-date rewrite that did not mention it.
 - Invariants: `load_profile` of an absent file yields an empty profile and creates
   nothing (1.9, 9.2); the file remains ordinary readable TOML (9.3); every read of
   an absent benchmark yields `None` (9.5).
@@ -1005,13 +1036,20 @@ def collect_missing_fields(
 ```
 
 - Preconditions: `on` is the date the pass is running — the date an accepted
-  answer is recorded as measured (6.2).
+  answer is recorded as measured (6.2). *Amendment 1*: the signature also
+  takes keyword-only, required `activity_date: date | None` — the processed
+  document's own recorded local calendar date, or `None`; the full signature
+  and the question it drives are specified in `training-load` design.md's
+  PromptFlow component (its 3.7–3.9), not here.
 - Postconditions: a benchmark field with no entry on file is prompted and, on
-  acceptance, persisted through `with_benchmark(measured_on=on)` and saved
+  acceptance, persisted through `with_benchmark(measured_on=on)` — with
+  `applies_from=activity_date` when the athlete answered the
+  retroactive-application question affirmatively (8.8, 6.10) — and saved
   immediately (8.7); a declined or non-interactive answer persists nothing and is
   returned as still-missing (8.5, 8.6); a non-benchmark field behaves exactly as
   today.
-- Invariants: nothing in this module reads a clock or the filesystem.
+- Invariants: nothing in this module reads a clock or the filesystem — both
+  dates are the caller's arguments.
 
 ### Runtime — `src/fitdocs/load/engine.py`
 
@@ -1031,6 +1069,10 @@ def collect_missing_fields(
   the store holds no configuration.
 - Resolves `today` once at the entry point (injectable for tests) and passes it
   to `collect_missing_fields`. No module below the engine reads a clock.
+  *Amendment 1*: it also passes the document's own `activity_date` — the same
+  value it resolves for `LoadContext` below — so the flow can ask the
+  retroactive-application question without a clock or a document read of its
+  own.
 - Resolves each document's **local calendar date** and supplies it as the
   context's `activity_date` before calling `compute`. `_process_document` already
   parses the frontmatter; that mapping is threaded into `_compute_document`, which
@@ -1186,12 +1228,25 @@ measured_on = 2025-11-09
 | `benchmarks.<scope>.<kind>` | array of tables | `<kind>` is a `BenchmarkKind`; scope must match the kind (2.6); a scalar or non-list here is an error (2.8) |
 | `…[].value` | integer or float | finite, > 0, not a bool; whole number for bpm kinds (2.1, 2.2, 2.3) |
 | `…[].measured_on` | local date | bare date only, no time or offset; unique within its array (2.4, 2.7) |
+| `…[].applies_from` | local date | optional (Amendment 1); bare date only; `<= measured_on` (1.12, 2.11) |
 | `…[].note` | string | optional, free text, never interpreted |
 
 **Temporal semantics**: `measured_on` is the date the benchmark was measured (or,
 for a prompted answer, the date it was provided — 6.2). Selection compares it to
 the activity's **local calendar date** with `<=`, so a benchmark measured on the
-morning of an activity applies to that activity.
+morning of an activity applies to that activity. *Amendment 1*: `applies_from`
+is the athlete's declaration that the measurement also stands in for earlier
+activities dated on or after it. It is consulted only when no entry of that
+scope and quantity is measured on or before the activity, and then the entry
+measured soonest after the activity wins (3.10). A prompt answer the athlete
+chose to apply retroactively is written as, for example:
+
+```toml
+[[benchmarks.run.ftp_watts]]
+value = 250
+measured_on = 2026-09-10                # the day the prompt was answered
+applies_from = 2019-03-04               # the athlete's choice at the prompt; hand-editable
+```
 
 ### Data Contracts & Integration
 
