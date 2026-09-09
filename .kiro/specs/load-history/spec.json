@@ -1,0 +1,31 @@
+{
+  "feature_name": "load-history",
+  "created_at": "2026-09-10T00:20:00Z",
+  "updated_at": "2026-09-10T02:05:00Z",
+  "language": "en",
+  "phase": "tasks-generated",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  },
+  "ready_for_implementation": true,
+  "amendments": [
+    {
+      "date": "2026-09-10",
+      "phase": "tasks",
+      "summary": "Requirement 3.5 reworded and 3.10 appended after requirements were auto-approved.",
+      "detail": "The Step 3.5 task-graph reviewer found that Req 3.5 as written demanded per-period excluded AND skipped counts, but a skipped document has no date to attribute by -- the commonest skip reason is that its date is precisely what could not be read. 3.5 now asks for pages / pages-with-load / excluded per period and adds the skipped count on the archive-wide line only; new criterion 3.10 states the unattributable-skip rule explicitly. No existing criterion was renumbered. Design followed: coverage_report() takes the excluded PageRecords (which do carry dates) and Coverage.pages_skipped is int | None, None meaning 'not attributable'."
+    }
+  ],
+  "phase_note": "Generated 2026-09-10 by the Phase 6 spec batch (wave 1) in auto-approve mode. 8 requirements / 66 acceptance criteria; 16 design components; 5 major tasks / 20 executable tasks. Step 3.5 task-graph sanity review ran as an independent reviewer subagent on model opus, twice: round 1 NEEDS_FIXES (5 blocking, 5 should-fix, 3 notes), round 2 NEEDS_FIXES (3 blocking, 5 should-fix, 2 notes) -- round 2's three blocking findings were all the SAME defect, three edits silently lost when a batch script raised before its write; every round-2 finding was then applied and mechanically verified against the files on disk rather than against a claim of having applied them. The review loop is bounded at one re-run by the skill, so round 3's repairs were self-verified by exact-string checks (all 15 PASS) and not independently re-reviewed -- stated here as the downgrade it is. Lands the second half of the roadmap Phase 6 Existing Spec Update for wiki-contract (task 5.5): the history page's owned location, its declaration, and its document type; effort-tags landed the user-owned-keys half. Accepted trade-offs: design.md is ~1600 lines, over the template's 1000-line advisory, because the feature spans layout+ownership, model provenance, series, chart, page, pass, CLI and four guard surfaces and the roadmap fixes it as one spec -- the length is per-component detail that tasks reference, not padding. Deferred, for the queue: the read-only audit (fitdocs check) is not extended to the new owned directory, so a stale or foreign file under history/ is reported only by a history run; and the 42/7 Performance Management Chart preset ships as a declared BlockedPreset, not a CitedConstant, pending the roadmap's Direct Implementation Candidate to verify the Allen & Coggan page locators."
+}
