@@ -192,7 +192,7 @@ report.
   - _Depends: 1.3_
   - _Boundary: FrontmatterBuilder_
 
-- [ ] 2.2 Carry the user-owned lines through every rewrite in sync and regen
+- [x] 2.2 Carry the user-owned lines through every rewrite in sync and regen
   - In the per-file rewrite, inside the matched-document branch and after the
     version gate (which still returns first and rewrites nothing): compute the
     carried lines from the already-read existing text with the line carry and
@@ -539,3 +539,24 @@ report.
   before the change, so a green golden run IS the HEAD-vs-worktree diff. Confirm the
   check is live by making a mutation red the goldens (emitting a blank line on the
   empty path reds 9).
+- 2.2: A BEHAVIOUR CHANGE CAN FALSIFY A SENTENCE THAT WAS TRUE WHEN WRITTEN. This
+  task was rejected for prose nobody in the task had authored or read: sync.py's
+  module docstring said "any key outside MANAGED_KEYS is genuinely dropped by this
+  rewrite". USER_KEYS is pinned disjoint from MANAGED_KEYS, so `effort` IS such a
+  key -- and the whole point of the change is that it now survives. True at HEAD,
+  false at the commit. No test can catch this; nothing asserts a docstring. AFTER A
+  BEHAVIOUR CHANGE, grep the touched modules' docstrings for the invariant you just
+  changed ("dropped", "rewritten in full", "never", "always") and re-read each hit.
+- 2.2: verify a frontmatter claim through the ENGINE or the CLI, and mind the helper's
+  return type. `tests/test_sync.py::_frontmatter` returns a PARSED DICT, so
+  `"effort: race" in _frontmatter(doc)` asks whether a whole YAML line is a dict KEY
+  -- always False, and it reads as a data-loss bug. Use `fm["effort"] == "race"`, or
+  check the raw text for the verbatim line. The decisive probe for the carry is ONE
+  document carrying both an unmanaged key and a user-owned key through ONE rewrite:
+  the first must vanish and the second survive.
+- 2.2: a test that is green both BEFORE and AFTER the change it accompanies has no
+  RED evidence and looks unpinned. `test_version_gated_tagged_page_is_untouched` was
+  that shape, but is genuinely the sole detector of a version gate that stops
+  returning first -- found by making the gate's early return CONDITIONAL on the page
+  being tagged. When a scenario is a preservation test, its mutation lives in the
+  guard that preserves, not in the feature.

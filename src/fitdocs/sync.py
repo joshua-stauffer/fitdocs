@@ -124,11 +124,13 @@ never on the report bucket.
 not version-gated (so it will actually be rewritten), the same frontmatter
 parse the version gate above just performed is reused -- no second read, no
 second parse -- to compute :func:`fitdocs.contract.unmanaged_keys`. The
-frontmatter block is tool-owned and rewritten in full (Req 6.1), so any key
-outside :data:`fitdocs.contract.MANAGED_KEYS` is genuinely dropped by this
-rewrite; when that set is non-empty, a :class:`DocWarning` names the document
-and the sorted key names before they go. The rewrite still proceeds and the
-run still succeeds. A version-gated document is never rewritten and so drops
+frontmatter block is tool-owned and rebuilt on every rewrite, so any key that
+is in neither :data:`fitdocs.contract.MANAGED_KEYS` nor
+:data:`fitdocs.contract.USER_KEYS` is genuinely dropped by this rewrite (Req
+6.1, 6.2); a user-owned key is not -- its lines are carried forward verbatim,
+below. When the unmanaged set is non-empty, a :class:`DocWarning` names the
+document and the sorted key names before they go. The rewrite still proceeds
+and the run still succeeds. A version-gated document is never rewritten and so drops
 nothing: this check only runs on the branch that falls through the gate.
 """
 
@@ -152,6 +154,7 @@ from fitdocs.contract import (
     sha_of_ref,
     source_refs,
     unmanaged_keys,
+    user_owned_lines,
 )
 from fitdocs.declaration import (
     DECLARATION_FILENAME,
@@ -1172,6 +1175,7 @@ def _process_file(
     # honest "out of date" and fall through unchanged to the normal
     # merge-and-write path below, coming out at the current version.
     existing_text: str | None = None
+    carried: tuple[str, ...] = ()
     if match is not None:
         existing_text = match.path.read_text(encoding="utf-8")
         existing_frontmatter = parse_frontmatter(existing_text)
@@ -1200,6 +1204,16 @@ def _process_file(
                 pending_warnings.append(
                     DocWarning(doc=match_ref, detail=_unmanaged_keys_detail(dropped))
                 )
+
+        # User-owned frontmatter carry (Req 4.1, 4.2, 4.4, 4.5, 4.6): every
+        # top-level frontmatter entry whose key is user-owned (``effort`` and
+        # its three companions) is carried forward verbatim into the
+        # rewritten document, including any continuation lines its value
+        # spans -- whether or not it forms a valid effort tag, since carrying
+        # never inspects validity (that check, and its warning, is a
+        # different concern). Computed from ``existing_text``, already read
+        # above for the version gate: no second read, no second parse.
+        carried = user_owned_lines(existing_text.split("\n"))
 
     # Source history: existing refs (minus any already equal to the new one) with
     # the new ref appended last, so the current render source is always the unique
@@ -1248,6 +1262,7 @@ def _process_file(
         source_refs=history,
         tz=tz,
         map_data=map_data,
+        user_frontmatter=carried,
     )
     rendered = render_document(ctx)
 

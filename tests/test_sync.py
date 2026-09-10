@@ -1939,6 +1939,198 @@ def test_regen_version_gated_document_produces_no_unmanaged_key_warning(
 
 
 # ===========================================================================
+# User-owned frontmatter carry on every rewrite (task 2.2, Req 4.1, 4.2, 4.4,
+# 4.5, 4.6)
+# ===========================================================================
+#
+# In the matched-document branch of ``_process_file``, after the version gate
+# (which still returns first and rewrites nothing), the user-owned lines of
+# the existing document are carried forward verbatim into the rewritten
+# frontmatter block -- regardless of whether they form a valid effort tag.
+# Carrying never inspects validity (that is task 2.3's warning, not this
+# task's boundary).
+
+
+def test_block_scalar_effort_event_survives_forced_resync_with_notes_edited(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "src"
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    data = builder.run_fit_bytes()
+    _put(source, "run.fit", data)
+    sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
+    doc = doc_path(data_root, _RUN_STEM)
+
+    edited = doc.read_text(encoding="utf-8")
+    edited = _add_frontmatter_key(
+        edited, "effort: race\neffort_event: >-\n  Boston\n  Marathon"
+    )
+    edited = _set_region(edited, "notes", "MY HAND-WRITTEN NOTE")
+    doc.write_text(edited, encoding="utf-8")
+
+    # A forced re-sync of the same bytes matches this document and rewrites it.
+    report = sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES, force=True)
+
+    assert report.failures == ()
+    assert len(report.written) == 1
+    rewritten = doc.read_text(encoding="utf-8")
+    assert "effort: race\neffort_event: >-\n  Boston\n  Marathon" in rewritten
+    assert extract_regions(rewritten)["notes"] == "MY HAND-WRITTEN NOTE"
+
+
+def test_block_scalar_effort_event_survives_regen_with_notes_edited(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "src"
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _put(source, "run.fit", builder.run_fit_bytes())
+    sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
+    doc = doc_path(data_root, _RUN_STEM)
+    shutil.rmtree(source)
+
+    edited = doc.read_text(encoding="utf-8")
+    edited = _add_frontmatter_key(
+        edited, "effort: race\neffort_event: >-\n  Boston\n  Marathon"
+    )
+    edited = _set_region(edited, "notes", "MY HAND-WRITTEN NOTE")
+    doc.write_text(edited, encoding="utf-8")
+
+    report = regen(data_root, athlete=None, tz=_TZ, tiles=_TILES)
+
+    assert report.failures == ()
+    assert len(report.written) == 1
+    rewritten = doc.read_text(encoding="utf-8")
+    assert "effort: race\neffort_event: >-\n  Boston\n  Marathon" in rewritten
+    assert extract_regions(rewritten)["notes"] == "MY HAND-WRITTEN NOTE"
+
+
+def test_single_line_quoted_wikilink_event_survives_regen_with_notes_edited(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "src"
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _put(source, "run.fit", builder.run_fit_bytes())
+    sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
+    doc = doc_path(data_root, _RUN_STEM)
+    shutil.rmtree(source)
+
+    edited = doc.read_text(encoding="utf-8")
+    edited = _add_frontmatter_key(
+        edited, 'effort: race\neffort_event: "[[Boston Marathon]]"'
+    )
+    edited = _set_region(edited, "notes", "ANOTHER HAND-WRITTEN NOTE")
+    doc.write_text(edited, encoding="utf-8")
+
+    report = regen(data_root, athlete=None, tz=_TZ, tiles=_TILES)
+
+    assert report.failures == ()
+    assert len(report.written) == 1
+    rewritten = doc.read_text(encoding="utf-8")
+    assert 'effort: race\neffort_event: "[[Boston Marathon]]"' in rewritten
+    assert extract_regions(rewritten)["notes"] == "ANOTHER HAND-WRITTEN NOTE"
+
+
+def test_malformed_tag_lines_survive_a_rewrite(tmp_path: Path) -> None:
+    source = tmp_path / "src"
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _put(source, "run.fit", builder.run_fit_bytes())
+    sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
+    doc = doc_path(data_root, _RUN_STEM)
+    shutil.rmtree(source)
+
+    # "Race" (wrong case) with no ``effort_time_s``/``effort_distance_m``
+    # value is not a rule the reader accepts -- but the carry never inspects
+    # validity, so it is preserved unchanged regardless.
+    edited = _add_frontmatter_key(doc.read_text(encoding="utf-8"), "effort: Race")
+    doc.write_text(edited, encoding="utf-8")
+
+    report = regen(data_root, athlete=None, tz=_TZ, tiles=_TILES)
+
+    assert report.failures == ()
+    assert len(report.written) == 1
+    assert "effort: Race" in doc.read_text(encoding="utf-8")
+
+
+def test_regenerating_a_tagged_page_twice_is_byte_identical(tmp_path: Path) -> None:
+    source = tmp_path / "src"
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _put(source, "run.fit", builder.run_fit_bytes())
+    sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
+    doc = doc_path(data_root, _RUN_STEM)
+    shutil.rmtree(source)
+
+    edited = _add_frontmatter_key(
+        doc.read_text(encoding="utf-8"), "effort: race\neffort_time_s: 3600"
+    )
+    doc.write_text(edited, encoding="utf-8")
+
+    regen(data_root, athlete=None, tz=_TZ, tiles=_TILES)
+    first = doc.read_text(encoding="utf-8")
+    assert "effort: race\neffort_time_s: 3600" in first
+
+    regen(data_root, athlete=None, tz=_TZ, tiles=_TILES)
+    second = doc.read_text(encoding="utf-8")
+
+    assert second == first
+
+
+def test_carried_lines_sit_after_the_last_managed_key(tmp_path: Path) -> None:
+    source = tmp_path / "src"
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _put(source, "run.fit", builder.run_fit_bytes())
+    sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
+    doc = doc_path(data_root, _RUN_STEM)
+    shutil.rmtree(source)
+
+    edited = _add_frontmatter_key(
+        doc.read_text(encoding="utf-8"), "effort: race\neffort_time_s: 3600"
+    )
+    doc.write_text(edited, encoding="utf-8")
+
+    report = regen(data_root, athlete=None, tz=_TZ, tiles=_TILES)
+
+    assert report.failures == ()
+    rewritten = doc.read_text(encoding="utf-8")
+    # The carried lines are the last content before the closing fence -- i.e.
+    # after every managed key, since the managed block is a single
+    # ``yaml.safe_dump`` immediately preceding them.
+    assert "effort: race\neffort_time_s: 3600\n---\n" in rewritten
+
+
+def test_version_gated_tagged_page_is_untouched(tmp_path: Path) -> None:
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    a = builder.reexport_a_fit_bytes()
+    b = builder.reexport_b_fit_bytes()
+    doc = doc_path(data_root, _RUN_STEM)
+
+    _put(tmp_path / "src_a", "a.fit", a)
+    sync(tmp_path / "src_a", data_root, athlete=None, tz=_TZ, tiles=_TILES)
+
+    edited = _add_frontmatter_key(
+        doc.read_text(encoding="utf-8"), "effort: race\neffort_time_s: 3600"
+    )
+    newer = _set_doc_version_line(edited, "doc_version: 999")
+    doc.write_text(newer, encoding="utf-8")
+
+    _put(tmp_path / "src_b", "b.fit", b)
+    report = sync(tmp_path / "src_b", data_root, athlete=None, tz=_TZ, tiles=_TILES)
+
+    assert report.written == ()
+    assert len(report.skipped) == 1
+    assert report.failures == ()
+    # Untouched: still carries the hand-added tag, byte-identical.
+    assert doc.read_text(encoding="utf-8") == newer
+    assert "effort: race" in doc.read_text(encoding="utf-8")
+
+
+# ===========================================================================
 # Symlink confinement: a workouts/*.md symlink is never followed for writing
 # (task 7.2, Req 7.5, 7.6)
 # ===========================================================================
