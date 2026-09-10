@@ -318,7 +318,7 @@ construction. `design.md` is amended in place at each affected component.
 
 - [ ] 7. Amendment 4 (2026-09-10): dating a prompt-answered benchmark — queue item `2026-08-27-prompt-date-strands-historical-documents`
   > Cross-spec by construction: 7.1 and 7.2 edit modules athlete-benchmarks owns (its Amendment 1 of the same date records the rulings and the module-level obligations), and 7.4's end-to-end proof drives threshold-load's registered calculator (its Amendment 2 records that no calculator change is required). All four tasks land on one branch in this order; each leaves `uv run pytest`, `uv run ruff check .`, `uv run ruff format --check .` and `uv run mypy` green. Phase 6's `performance-benchmarks` is about to add a `source` field to the same parser/serializer/`with_benchmark` trio — it consumes the shape 7.1 and 7.2 leave, it does not re-add.
-- [ ] 7.1 Give a benchmark entry an athlete-declared applies-from date in the store leaf
+- [x] 7.1 Give a benchmark entry an athlete-declared applies-from date in the store leaf
   - `Benchmark` gains `applies_from: date | None = None` (trailing, defaulted, so every existing keyword construction is unchanged); the parser accepts an optional `applies_from` key on an entry table with exactly the bare-local-date strictness `measured_on` already has, and rejects — loudly, naming the entry — a value that is not a bare date or that falls after the entry's `measured_on`; the serializer emits `applies_from` after `measured_on` when present and omits it otherwise, and the round-trip property holds for entries with and without it
   - `BenchmarkSet.applicable` becomes two-tier: the latest entry measured on or before `on` as today; failing that, among entries whose `applies_from` is on or before `on`, the one with the *earliest* `measured_on`; never an entry carrying neither. `has` is unchanged. The duplicate-key rule stays `(discipline, kind, measured_on)`, so the tier-2 minimum is unambiguous
   - `benchmark_age` no longer raises for `measured_on > activity_date`: it returns the negative `age_days` the subtraction yields and `is_stale=False`, because a retroactively applied entry legitimately reaches it; the `window_days < 1` guard stays loud. Its docstring and `BenchmarkAge`'s state that a negative age is the signal a caller reads as "measured after this activity" — a fact of the arithmetic, not a sentinel
@@ -977,3 +977,47 @@ Obsolete and deliberately dropped:
 - **Packaging seam:** the scoped ignore-file negation that existed only to ship
   the withdrawn methodology's tables is removed in task 1.3. No package data
   ships from the load layer, so the broad ignore rule needs no exception.
+
+### From task 7.1 (Amendment 4; seven review rounds, production correct from round 1)
+
+- **A fixture set that varies every axis but one leaves that axis entirely
+  unpinned, and no amount of reading finds it.** Each round's survivors sat
+  on one unvaried axis: (R1) tier-2 fixtures with `measured_on` and
+  `applies_from` ascending *together*; (R2) no serializer fixture with
+  `applies_from == measured_on`; (R3) 108 `applies_from` occurrences, none
+  in the athlete-wide scope; (R4) the duplicate key never exercised with
+  differing `applies_from`; (R5) every `applies_from` fixture in a
+  single-entry or homogeneous group, so tier-1 filtering, serializer sort
+  and own-entry validation were never reached with a *mixed* group; (R6) no
+  ISO-*string* `applies_from` case, and 3.11 pinned on tier 2 only. What
+  terminated it was not another incremental round but three explicit
+  enumerations: layer × scope × kind (R3), every sentence of the task text
+  (R4), and every production site that reads the field in group context
+  (R5). Do those enumerations *before* the first report on any task that
+  adds a field to a shared record shape.
+- **A one-fixture rule with two wrong alternatives needs two fixtures.**
+  "Earliest `measured_on`" versus "latest `applies_from`" and "earliest
+  `applies_from`": whichever order one fixture uses agrees with one of the
+  two wrong keys. The task text originally asked for the reverse-order case
+  alone and mis-stated which rule it defeats.
+- **`-x` hides the second failure.** A parent-run mutation reported as
+  "red, first failure X" proved nothing about the assertion it was written
+  for; the reviewer had to re-run without `-x`. Report sole-failure counts
+  from a full module run.
+- **A reviewer subagent ran `git checkout <file>` on the uncommitted
+  implementation (R5)** and rebuilt it from a diff it had captured at
+  review start; the blob matched by luck of the capture. The
+  no-destructive-reset rule reaches neither template (queue item
+  `2026-07-29-destructive-reset-reaches-implementers-nowhere`); until it
+  does, every subagent prompt for uncommitted work must say so verbatim and
+  prescribe cp-and-restore for mutations.
+- **Subagents dispatched from a session rooted at `main` need the absolute
+  worktree path and a `cd` prefix on every command**, or the change-guard
+  denies their edits; the shell cwd resets between calls.
+- **Round-6 remediation was applied by the parent directly** (four
+  assertions), a stated downgrade from a subagent implementer; the round-7
+  reviewer re-broke every site independently.
+- **Non-blocking, left open**: `applies_from`'s participation in
+  `Benchmark.__eq__` is unpinned (`field(compare=False)` stays green); the
+  carry is pinned by direct field reads. One inequality assertion closes it
+  if 7.2's merge tests lean on entry equality.

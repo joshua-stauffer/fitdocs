@@ -98,6 +98,14 @@ class Benchmark:
     value: float
     measured_on: date
     note: str | None = None
+    applies_from: date | None = None
+    """*Amendment 1.* The athlete's declaration that this measurement also
+    stands in for activities dated on or after this date which no
+    earlier-measured entry covers. Trailing and defaulted so every existing
+    keyword construction is unchanged. ``None`` (the default) means the
+    entry applies from its own ``measured_on`` only, exactly as before;
+    when set, it is a bare calendar date no later than ``measured_on``
+    (enforced by the parser, not by this value type)."""
 
 
 @dataclass(frozen=True)
@@ -107,17 +115,27 @@ class BenchmarkSet:
     Task 1.2 lands the container the parser returns. Task 1.3 (design:
     BenchmarkSelection) adds date-aware applicability (:meth:`applicable`)
     and undated presence (:meth:`has`): pure lookups that never fall back
-    across scope or discipline, never return a future-dated entry relative
-    to the query date, and never fabricate a value.
+    across scope or discipline and never fabricate a value. *Amendment 1*:
+    the tool itself still never applies a later measurement on its own --
+    :meth:`applicable` only ever returns an entry measured after the query
+    date when the athlete's own ``applies_from`` declaration on that entry
+    reaches back to or before the query date (3.10).
 
     Determinism (3.8) does **not** rest on ``entries`` being held in any
     particular canonical order -- the parser rejects a duplicate
     ``(discipline, kind, measured_on)`` key (2.7), so at most one entry can
     ever match a given ``(kind, discipline, measured_on)`` triple, and
     ``applicable`` picks the greatest ``measured_on`` among the entries that
-    qualify by an unambiguous ``max`` over that key. The result is therefore
-    independent of stored order by construction, which the round-trip and
-    order-independence tests in ``tests/test_benchmarks.py`` prove directly.
+    qualify by an unambiguous ``max`` over that key (tier 1) or the least
+    ``measured_on`` among the ``applies_from``-qualifying entries (tier 2,
+    Amendment 1) -- both unambiguous for the same reason. The result is
+    therefore independent of stored order by construction:
+    ``test_applicable_repeated_calls_stay_equal_regardless_of_entry_order``
+    proves this for tier 1 and
+    ``test_applicable_tier2_repeated_calls_stay_equal_regardless_of_entry_order``
+    proves it for tier 2, each with candidates whose stored order and
+    selection order disagree so a stored-order-dependent implementation
+    (e.g. "last/first in iteration order") would fail them.
     """
 
     entries: tuple[Benchmark, ...]
@@ -125,14 +143,34 @@ class BenchmarkSet:
     def applicable(
         self, kind: BenchmarkKind, *, discipline: Sport | None, on: date
     ) -> Benchmark | None:
-        """Return the benchmark applicable to an activity on ``on`` (3.1-3.4).
+        """Return the benchmark applicable to an activity on ``on``.
 
-        Considers only entries for the requested ``(kind, discipline)`` whose
-        ``measured_on`` is on or before ``on``, and returns the one with the
-        latest such date, or ``None`` when none qualifies -- whether because
-        none exists at all or because every recorded date falls after ``on``
-        (3.3, 3.4). Never substitutes an entry from another discipline, from
-        the athlete-wide scope, or any default (9.5).
+        Two-tier (design: BenchmarkSelection; Amendment 1, 3.10):
+
+        Tier 1 (3.1-3.4): among entries for the requested ``(kind,
+        discipline)`` whose ``measured_on`` is on or before ``on``, returns
+        the one with the latest such date. A tier-1 entry always wins over
+        a tier-2 one, whatever their values -- the measurement-system case
+        (a Stryd FTP must not rescale Apple Watch runs) is preserved because
+        an entry measured on or before the activity always beats a
+        retroactive one.
+
+        Tier 2 (3.3 revised, 3.10, 3.11): consulted only when tier 1 finds
+        nothing. Among the same ``(kind, discipline)`` entries whose
+        ``applies_from`` is not ``None`` and is on or before ``on``, returns
+        the one with the *smallest* ``measured_on`` -- the measurement
+        closest after the activity. The tier-2 minimum is unambiguous because
+        ``(discipline, kind, measured_on)`` is unique within a parsed set.
+
+        Returns ``None`` when neither tier qualifies -- whether because no
+        entry exists at all or because every recorded entry falls after
+        ``on`` with no ``applies_from`` reaching back far enough. An entry
+        carrying neither a qualifying ``measured_on`` nor a qualifying
+        ``applies_from`` is never returned. Never substitutes an entry from
+        another discipline, from the athlete-wide scope, or any default
+        (9.5). The tool itself never applies a later measurement on its
+        own; only the athlete's explicit, per-entry ``applies_from``
+        declaration does.
 
         ``discipline`` must agree with ``kind``'s scope (``None`` exactly for
         an :data:`ATHLETE_SCOPED` quantity); a mismatch is a programming
@@ -140,16 +178,23 @@ class BenchmarkSet:
         nothing or borrowing another scope's entry.
         """
         _check_selection_scope(kind, discipline)
-        qualifying = [
+        candidates = [
             entry
             for entry in self.entries
-            if entry.kind is kind
-            and entry.discipline == discipline
-            and entry.measured_on <= on
+            if entry.kind is kind and entry.discipline == discipline
         ]
-        if not qualifying:
+        qualifying = [entry for entry in candidates if entry.measured_on <= on]
+        if qualifying:
+            return max(qualifying, key=lambda entry: entry.measured_on)
+
+        retroactive = [
+            entry
+            for entry in candidates
+            if entry.applies_from is not None and entry.applies_from <= on
+        ]
+        if not retroactive:
             return None
-        return max(qualifying, key=lambda entry: entry.measured_on)
+        return min(retroactive, key=lambda entry: entry.measured_on)
 
     def has(self, kind: BenchmarkKind, *, discipline: Sport | None) -> bool:
         """Report whether any entry for ``(kind, discipline)`` is on file at
@@ -292,6 +337,32 @@ def _validate_measured_on(raw: object, *, path: str) -> date:
     return raw
 
 
+def _validate_applies_from(raw: object, measured_on: date, *, path: str) -> date | None:
+    """Validate one entry's optional ``applies_from`` (Amendment 1: 1.12, 2.11).
+
+    Absent (``None``) is accepted -- the entry then applies from its own
+    ``measured_on`` only, exactly as before. When present it is held to
+    exactly ``measured_on``'s bare-date strictness (``type(raw) is date``,
+    so a ``datetime`` -- which subclasses ``date`` -- is rejected even
+    though it would pass a looser ``isinstance`` check), and it must not
+    fall *after* ``measured_on``; ``applies_from == measured_on`` is
+    accepted and behaves as if absent.
+    """
+    if raw is None:
+        return None
+    if type(raw) is not date:
+        raise BenchmarkError(
+            f"{path}.applies_from must be a bare calendar date with no time "
+            f"or time zone component, got {raw!r} ({type(raw).__name__})"
+        )
+    if raw > measured_on:
+        raise BenchmarkError(
+            f"{path}.applies_from ({raw.isoformat()}) must not fall after "
+            f"{path}.measured_on ({measured_on.isoformat()})"
+        )
+    return raw
+
+
 def _validate_note(raw: object, *, path: str) -> str | None:
     """Validate one entry's optional ``note``."""
     if raw is None or isinstance(raw, str):
@@ -363,6 +434,9 @@ def parse_benchmarks(document: Mapping[str, object]) -> BenchmarkSet:
                     entry.get("measured_on"), path=entry_path
                 )
                 note = _validate_note(entry.get("note"), path=entry_path)
+                applies_from = _validate_applies_from(
+                    entry.get("applies_from"), measured_on, path=entry_path
+                )
 
                 key = (discipline, kind, measured_on)
                 if key in seen:
@@ -379,6 +453,7 @@ def parse_benchmarks(document: Mapping[str, object]) -> BenchmarkSet:
                         value=value,
                         measured_on=measured_on,
                         note=note,
+                        applies_from=applies_from,
                     )
                 )
 
@@ -392,6 +467,13 @@ class BenchmarkAge:
 
     Derived, never stored -- computed fresh by :func:`benchmark_age` for each
     query rather than carried on :class:`Benchmark`.
+
+    *Amendment 1 (4.6 revised):* ``age_days`` is negative when the benchmark
+    was measured *after* the activity -- the legitimate tier-2 (retroactive)
+    case, not an error condition. A caller reads the sign directly as the
+    arithmetic fact "measured after this activity"; it is not a sentinel to
+    special-case. A negative ``age_days`` is never stale, since it can never
+    exceed a positive ``window_days``.
     """
 
     age_days: int
@@ -415,19 +497,16 @@ def benchmark_age(
     window is current, one day beyond it is stale. Both the age and the
     window accompany the verdict (4.4).
 
-    Selection (:meth:`BenchmarkSet.applicable`) never yields a benchmark
-    measured after the activity it applies to, so ``measured_on >
-    activity_date`` reaching this function is a programming error, not
-    reportable data -- it raises :class:`ValueError` rather than reporting
-    the benchmark as current (4.6). A ``window_days`` below one day is
-    likewise a programming error and raises.
+    *Amendment 1 (4.6 revised):* ``measured_on > activity_date`` no longer
+    raises. Selection's tier-2 fallback (:meth:`BenchmarkSet.applicable`)
+    legitimately yields a benchmark measured after the activity it applies
+    to when the athlete declared it retroactive, and that entry must still
+    reach staleness. In that case ``age_days`` is **negative** and
+    ``is_stale`` is ``False`` (a negative age is never greater than a
+    positive window) -- the sign of the age is the arithmetic fact a caller
+    reads as "measured after this activity", not a sentinel value. A
+    ``window_days`` below one day is a programming error and still raises.
     """
-    if measured_on > activity_date:
-        raise ValueError(
-            f"measured_on ({measured_on.isoformat()}) is after activity_date "
-            f"({activity_date.isoformat()}); selection never yields such a "
-            f"benchmark"
-        )
     if window_days < 1:
         raise ValueError(f"window_days must be at least 1, got {window_days!r}")
 
@@ -460,6 +539,8 @@ def benchmarks_to_document(entries: Sequence[Benchmark]) -> dict[str, object]:
             "value": entry.value,
             "measured_on": entry.measured_on,
         }
+        if entry.applies_from is not None:
+            record["applies_from"] = entry.applies_from
         if entry.note is not None:
             record["note"] = entry.note
         kind_list.append(record)
