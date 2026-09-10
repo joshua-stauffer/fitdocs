@@ -27,7 +27,9 @@ Early discovery / spec phase. No installable package yet.
    carrier: any other calculator is a plugin, installed or dropped in
    locally, and contributions are welcome. If an activity is missing data a
    calculator needs (e.g. max heart rate, a threshold pace), fitdocs prompts
-   for it and completes the calculation.
+   for it and completes the calculation; when the activity predates the
+   prompt, fitdocs also asks whether the answer covers earlier activities
+   too.
 
 Organizing workouts into cycles/training blocks is deliberately deferred.
 

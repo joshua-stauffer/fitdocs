@@ -316,7 +316,7 @@ construction. `design.md` is amended in place at each affected component.
   - _Requirements: 1.10, 1.13, 1.15, 13.1, 13.2, 13.3, 14.1, 14.2, 14.7_
   - _Depends: 5.1, 5.2, 6.1, 6.2, 6.3_
 
-- [ ] 7. Amendment 4 (2026-09-10): dating a prompt-answered benchmark — queue item `2026-08-27-prompt-date-strands-historical-documents`
+- [x] 7. Amendment 4 (2026-09-10): dating a prompt-answered benchmark — queue item `2026-08-27-prompt-date-strands-historical-documents`
   > Cross-spec by construction: 7.1 and 7.2 edit modules athlete-benchmarks owns (its Amendment 1 of the same date records the rulings and the module-level obligations), and 7.4's end-to-end proof drives threshold-load's registered calculator (its Amendment 2 records that no calculator change is required). All four tasks land on one branch in this order; each leaves `uv run pytest`, `uv run ruff check .`, `uv run ruff format --check .` and `uv run mypy` green. Phase 6's `performance-benchmarks` is about to add a `source` field to the same parser/serializer/`with_benchmark` trio — it consumes the shape 7.1 and 7.2 leave, it does not re-add.
 - [x] 7.1 Give a benchmark entry an athlete-declared applies-from date in the store leaf
   - `Benchmark` gains `applies_from: date | None = None` (trailing, defaulted, so every existing keyword construction is unchanged); the parser accepts an optional `applies_from` key on an entry table with exactly the bare-local-date strictness `measured_on` already has, and rejects — loudly, naming the entry — a value that is not a bare date or that falls after the entry's `measured_on`; the serializer emits `applies_from` after `measured_on` when present and omits it otherwise, and the round-trip property holds for entries with and without it
@@ -344,7 +344,7 @@ construction. `design.md` is amended in place at each affected component.
   - _Requirements: 3.3, 3.4, 3.7, 3.8, 3.9, 9.1; athlete-benchmarks 6.2, 8.7_
   - _Boundary: PromptFlow, LoadEngine — `src/fitdocs/load/prompts.py`, `src/fitdocs/load/engine.py`, `tests/load/test_prompts.py`, `tests/load/test_engine.py`, and the one paragraph in `docs/contributing-calculators.md`_
   - _Depends: 7.2_
-- [ ] 7.4 Prove prompt → score for an activity older than the prompt date end to end, and document the question
+- [x] 7.4 Prove prompt → score for an activity older than the prompt date end to end, and document the question
   - A new module `tests/load/test_prompt_date_e2e.py` drives the real sync pipeline, an *absent* `athlete.toml`, the registered built-in threshold calculator and a scripted session through `apply_load(today=<a date after the documents>)`: a running document dated before `today` is prompted for every declared field, every retroactive question is answered *yes*, and the document lands in `report.computed`; the written `athlete.toml` carries each entry with `measured_on == today` and `applies_from == the document's date`, read back through the real store
   - Control, same fixture, every retroactive question answered *no*: the document is *not* computed (it lands in `report.skipped` with the calculator's not-computed reason — assert the bucket and that it is not `computed`, not the reason text, which queue item `2026-08-27-not-applicable-has-no-readers` owns), and every entry is written with `measured_on == today` and no `applies_from`
   - Two documents of the same sport on different dates, both before `today`: the questions fire while the earlier one is processed (the session's recorded questions name the earlier date), a single *yes* per field covers both, both compute, and a second identical pass prompts nothing, computes nothing anew and writes no bytes (asked once, 3.3)
@@ -1056,3 +1056,22 @@ Obsolete and deliberately dropped:
   field (indistinguishable outcome); the engine None-branch test lacks a
   reachability assertion; one no-question test uses a self-referential
   compare where its siblings use `len(...) == 1`.
+
+### From task 7.4 (one review round, approved)
+
+- **An injected `today=` that equals the real calendar date is not an
+  injection.** The module's `_TODAY` was 2026-09-10 on 2026-09-10, so an
+  engine that ignored the parameter and read the clock passed all three
+  scenarios; the reviewer's mutation surfaced it and the literal now sits in
+  2027. Pick fixture pass dates that cannot coincide with the run date.
+- **The task Observable's "sole suite failure" wording was aspirational**: a
+  mutation that skips the question or drops `applies_from` also reds the
+  7.1-7.3 unit suites, which is the correct state of a layered suite. The
+  reviewer confirmed no *unrelated* module reds. Write Observables as "reds,
+  and every other failure is this feature's own finer-grained test".
+- The engine's per-document `except Exception` makes `report.failures == ()`
+  the first assertion of every e2e scenario; mutation (f) proved it
+  load-bearing (a double's exhausted queue surfaced only there).
+- Non-blocking, left open: the sibling e2e modules and this one sit outside
+  `[tool.mypy].files` by convention, so their `_: InteractionSession = ...`
+  conformance annotations are inert (queued).

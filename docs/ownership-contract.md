@@ -169,7 +169,12 @@ above, and each has a distinct contract:
   not manage preserved. That preservation covers keys, tables, and values;
   it does **not** cover comments or formatting, because the file is parsed
   and re-serialized rather than edited in place. An absent file is never an
-  error — it is simply treated as empty.
+  error — it is simply treated as empty. A benchmark answer is dated the
+  day you gave it (`measured_on`); if you were asked whether it also
+  applies to earlier activities and said yes, the entry also carries the
+  earlier activity's date as `applies_from`. Both are plain dates in the
+  entry's table — no different from any other key here — so a hand edit
+  can change either one.
 - **`fitdocs.toml`** — your settings file (`[tiles]` today; more tables as
   more features land). This file is **read-only to fitdocs**: nothing in
   fitdocs ever creates, writes, or modifies it. An absent file, or an absent
