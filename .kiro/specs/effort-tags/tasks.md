@@ -134,7 +134,7 @@ report.
   - _Requirements: 1.3, 2.2, 2.3, 2.4, 2.5, 2.6, 2.8, 3.1, 3.2, 3.3, 3.6, 3.7, 5.1, 5.2, 5.3, 5.5, 5.6_
   - _Boundary: EffortTagReader_
 
-- [ ] 1.3 Implement the verbatim line carry for user-owned entries
+- [x] 1.3 Implement the verbatim line carry for user-owned entries
   - Add the pure line-level function that takes the lossless `split("\n")`
     list of a document and returns, verbatim and in document order, every line
     belonging to a top-level frontmatter entry whose key is user-owned: the
@@ -489,3 +489,31 @@ report.
 - 1.2: the `kind is None` guard at the end of `effort_tag` is unreachable but MUST
   STAY -- deleting it fails mypy strict narrowing (`Argument "kind" to "EffortTag"
   has incompatible type "EffortKind | None"`).
+- 1.3: for a multi-condition predicate, ASK "WHICH GUARD DECIDES THIS LINE?" before
+  writing each fixture. `user_owned_lines`' entry-start test is `column zero AND
+  contains ':' AND first char not in (space, tab, '#', '-')`. Fixtures named for the
+  comment rule ('# a comment') and the indent rule ('  Boston') contained no colon,
+  so the colon guard rejected them first and THREE OF FOUR CONDITIONS were unpinned
+  with a green suite. One character per fixture fixed it: '# note: my fastest 10k',
+  '  Boston: A Race'. Invisible to reading -- the fixtures look like coverage and the
+  assertions are concrete tuple equality.
+- 1.3: uniform fixtures hide slice and boundary bugs. All 15 fixtures began with
+  `title: ...` and none had a blank line, trailing space, tab, or a colon in a
+  column-zero value -- so `lines[1:]`->`lines[2:]`, `append(line.rstrip())`,
+  dropping the tab arm, and `split(':',1)`->`rsplit(':',1)` ALL stayed green. Vary
+  the position of the thing under test, not just its content.
+- 1.3: deleting the `line and` non-empty guard leaves the suite green but raises
+  IndexError on any block with a blank line. A "never raises" clause needs a fixture
+  for EVERY input shape the design enumerates -- here the design listed four
+  continuation kinds and only three had fixtures.
+- 1.3: MUTATION-ESCAPING TRAP, cost a wasted cycle. The exclusion tuple's source text
+  contains a LITERAL backslash-t. A Python mutation script using "\t" in a normal
+  string produces a real tab, matches nothing, and the suite stays green -- reading
+  as "this assertion does not discriminate". Use a raw string and ALWAYS assert the
+  anchor matched exactly once before writing the mutated file.
+- 1.3: five of this spec's review rounds went to COMMENTS asserting things nobody
+  re-ran. Any sentence with "every", "only", "nothing", "never", "because" or "so
+  that" about your own suite is a claim about mutation output: run it, read the
+  failure COUNT and the failing test NAMES, and write down what you saw. "Sole
+  failure" is the evidence for "pinned only by X". One such comment contradicted a
+  note 400 lines up in its own file.

@@ -154,6 +154,7 @@ __all__ = [
     "sha_of_ref",
     "source_refs",
     "unmanaged_keys",
+    "user_owned_lines",
 ]
 
 # --- versions ----------------------------------------------------------------
@@ -754,6 +755,42 @@ def frontmatter_close_index(lines: list[str]) -> int | None:
         if lines[index].strip() == FRONTMATTER_FENCE:
             return index
     return None
+
+
+def user_owned_lines(lines: list[str]) -> tuple[str, ...]:
+    """Every frontmatter line belonging to a user-owned entry, verbatim (Req
+    2.6, 3.2, 4.4, 4.5, 5.5).
+
+    ``lines`` must be ``markdown.split("\\n")`` -- the same lossless
+    precondition as :func:`frontmatter_close_index`, which this function uses
+    to find the block. A *top-level entry* starts at a line inside the fences
+    whose first character is not whitespace, ``#`` or ``-`` and that contains
+    ``:``; its key is the text before the first ``:``, stripped of whitespace
+    and of one pair of matching surrounding quotes (``'`` or ``"``). Every
+    following line up to the next entry start or the closing fence --
+    indented lines, column-zero ``- `` list items, blank lines, comment lines
+    -- belongs to that entry and is carried with it when the key is in
+    :data:`USER_KEYS`.
+
+    Returns ``()`` when there is no leading fence, the block is unterminated,
+    or no user-owned entry exists. Never raises, parses no YAML, and
+    validates nothing: a malformed tag's lines are carried exactly like a
+    valid one's (Req 3.2, 4.4).
+    """
+    close_index = frontmatter_close_index(lines)
+    if close_index is None:
+        return ()
+    carried: list[str] = []
+    carrying = False
+    for line in lines[1:close_index]:
+        if line and line[0] not in (" ", "\t", "#", "-") and ":" in line:
+            key = line.split(":", 1)[0].strip()
+            if len(key) >= 2 and key[0] == key[-1] and key[0] in "'\"":
+                key = key[1:-1]
+            carrying = key in USER_KEYS
+        if carrying:
+            carried.append(line)
+    return tuple(carried)
 
 
 def is_workout_document(frontmatter: Mapping[str, object] | None) -> bool:

@@ -334,6 +334,7 @@ _CONTRACT_SURFACE = {
     "sha_of_ref",
     "source_refs",
     "unmanaged_keys",
+    "user_owned_lines",
     # re-exported marker grammar
     "begin_marker",
     "end_marker",
