@@ -3,7 +3,7 @@ id: 2026-07-28-mypy-perimeter-membership-unguarded
 title: Nothing guards `[tool.mypy].files` membership, so deleting a test module's line silently degrades the type-check perimeter
 status: open
 importance: medium
-importance_why: The perimeter is opt-in per test module and every command stays green when an entry is removed, so a type-level observable reverts to vacuous with no signal at all. Now confirmed TWICE IN ONE DAY by independent reviewers. (1) fit-ingest task 8.1's Req 16.4 negative is enforced ONLY by `tests/test_citation.py` being inside the perimeter; deleting that one line takes mypy 71 -> 70 files, leaves the widening mutation completely undetected, and leaves `uv run pytest` at 2108 passed. (2) task 8.2's explicit `as` re-export in `load/channels/sources.py` is load-bearing under `no_implicit_reexport`, yet collapsing it leaves pytest, ruff, ruff format AND mypy all green because `tests/load/channels/` is not in the list. The second is an ordinary refactor, not a type-level observable someone opted into — which is what makes this a general hazard rather than an 8.1 quirk.
+importance_why: The perimeter is opt-in per test module and every command stays green when an entry is removed, so a type-level observable reverts to vacuous with no signal at all. Now confirmed THREE TIMES by independent reviewers, the third on 2026-09-10 in a different spec. (1) fit-ingest task 8.1's Req 16.4 negative is enforced ONLY by `tests/test_citation.py` being inside the perimeter; deleting that one line takes mypy 71 -> 70 files, leaves the widening mutation completely undetected, and leaves `uv run pytest` at 2108 passed. (2) task 8.2's explicit `as` re-export in `load/channels/sources.py` is load-bearing under `no_implicit_reexport`, yet collapsing it leaves pytest, ruff, ruff format AND mypy all green because `tests/load/channels/` is not in the list. The second is an ordinary refactor, not a type-level observable someone opted into — which is what makes this a general hazard rather than an 8.1 quirk. (3) effort-tags 1.1: narrowing `EffortTag.distance_m` from `float | None` to `float` is green under pytest AND mypy AND ruff, because the only module that contradicts it is `tests/test_contract.py`, outside the perimeter -- an ordinary optional dataclass field, not an opted-in static assertion.
 effort: S
 kind: gap
 area: pyproject.toml, tests/test_docs_guarantees.py, fit-ingest
@@ -112,6 +112,36 @@ instances were a line *removed* from the list, this one is a line never
 nothing, while `tests/metrics/test_sources.py` is listed. Whatever guard closes
 this should therefore assert membership for the test modules the spec relies
 on, not merely detect deletions from the existing list.
+
+### Third confirmation (2026-09-10, effort-tags task 1.1)
+
+A different shape again, and the most ordinary one yet: not a `type: ignore`,
+not an explicit re-export, but a **plain dataclass annotation narrowing**.
+
+In `src/fitdocs/contract.py`, mutating `EffortTag.distance_m` from
+`float | None` to `float` leaves ALL of these green:
+
+- `uv run pytest` -> `3168 passed, 5 skipped`
+- `uv run mypy` -> `Success: no issues found in 94 source files`
+- `uv run ruff check .` -> `All checks passed!`
+
+The only consumer that contradicts the narrowed annotation is
+`tests/test_contract.py`, which constructs `EffortTag(distance_m=None, ...)` --
+and that module is not in `[tool.mypy] files`, so mypy never sees the
+contradiction. Three green tools, zero signal.
+
+This one was caught only because a reviewer subagent invented the mutation; the
+implementer's own report had declared the requirement PINNED. The task then
+needed a test-side pin (`typing.get_type_hints()` + `typing.get_args()`,
+asserting `type(None) in get_args(...)`) to close it, because the type checker
+could not be relied on to.
+
+Why this raises the stakes rather than just adding a tally mark: the first two
+confirmations were type-level observables someone had deliberately opted into.
+This one is the annotation on an ordinary optional dataclass field -- the most
+common shape in the codebase -- which means the hole is not confined to clever
+static assertions. Any spec that publishes an optional field and pins it by
+annotation alone inherits it.
 
 ## How to pick it up
 
