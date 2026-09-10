@@ -2131,6 +2131,210 @@ def test_version_gated_tagged_page_is_untouched(tmp_path: Path) -> None:
 
 
 # ===========================================================================
+# Malformed-tag warning on rewrite, and the unmanaged warning stays honest
+# (task 2.3, Req 1.4, 3.4, 3.6, 4.7)
+# ===========================================================================
+#
+# Reusing the same already-parsed frontmatter the unmanaged-key check reads,
+# a rewrite that finds a malformed effort tag records a second DocWarning
+# naming the document, with a detail built from the design's fixed prefix
+# followed by ``InvalidEffortTag.describe()`` -- the same renderer ``check``
+# uses. The unmanaged-key warning (now user-key-exempt, task 1.1/2.2) is
+# unaffected: a page whose only extra content is a valid or malformed tag
+# produces no unmanaged-key warning at all. Intra-file order is fixed by
+# statement order: unmanaged-key, then invalid-effort-tag, then map omission.
+
+_INVALID_TAG_PREFIX = (
+    "carries an effort tag fitdocs cannot read -- preserved unchanged, not "
+    "in effect until corrected: "
+)
+
+
+def test_malformed_tag_warns_exactly_once_with_the_renderers_text(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "src"
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _put(source, "run.fit", builder.run_fit_bytes())
+    sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
+    doc = doc_path(data_root, _RUN_STEM)
+    shutil.rmtree(source)
+
+    edited = _add_frontmatter_key(
+        doc.read_text(encoding="utf-8"), "effort: race\neffort_time_s: abc"
+    )
+    doc.write_text(edited, encoding="utf-8")
+
+    report = regen(data_root, athlete=None, tz=_TZ, tiles=_TILES)
+
+    assert report.failures == ()
+    assert len(report.written) == 1
+    # Exactly one warning -- not merely "a warning is present".
+    assert len(report.warnings) == 1
+    assert report.warnings[0].doc == f"{WORKOUTS_DIR}/{_RUN_STEM}.md"
+    expected_detail = (
+        _INVALID_TAG_PREFIX
+        + "effort_time_s: must be a positive number of seconds; got 'abc'"
+    )
+    assert report.warnings[0].detail == expected_detail
+    # The malformed lines are still present -- carried, not dropped.
+    assert "effort_time_s: abc" in doc.read_text(encoding="utf-8")
+
+
+def test_tagged_page_with_no_other_extra_key_produces_no_warning(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "src"
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _put(source, "run.fit", builder.run_fit_bytes())
+    sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
+    doc = doc_path(data_root, _RUN_STEM)
+    shutil.rmtree(source)
+
+    # A VALID tag and nothing else extra: this proves the unmanaged-key
+    # exemption (task 1.1) still holds once the malformed-tag warning exists
+    # alongside it.
+    edited = _add_frontmatter_key(
+        doc.read_text(encoding="utf-8"), "effort: race\neffort_time_s: 3600"
+    )
+    doc.write_text(edited, encoding="utf-8")
+
+    report = regen(data_root, athlete=None, tz=_TZ, tiles=_TILES)
+
+    assert report.failures == ()
+    assert len(report.written) == 1
+    assert report.warnings == ()
+
+
+def test_page_with_tags_key_and_valid_tag_warns_once_naming_tags_only(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "src"
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _put(source, "run.fit", builder.run_fit_bytes())
+    sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
+    doc = doc_path(data_root, _RUN_STEM)
+    shutil.rmtree(source)
+
+    edited = _add_frontmatter_key(doc.read_text(encoding="utf-8"), "tags: hiking")
+    edited = _add_frontmatter_key(edited, "effort: race\neffort_time_s: 3600")
+    doc.write_text(edited, encoding="utf-8")
+    assert "tags" in _frontmatter(doc)
+
+    report = regen(data_root, athlete=None, tz=_TZ, tiles=_TILES)
+
+    assert report.failures == ()
+    assert len(report.written) == 1
+    assert len(report.warnings) == 1
+    assert "tags" in report.warnings[0].detail
+    assert "effort" not in report.warnings[0].detail
+
+    rewritten = doc.read_text(encoding="utf-8")
+    assert "tags" not in _frontmatter(doc)
+    assert "effort: race" in rewritten
+    assert "effort_time_s: 3600" in rewritten
+
+
+def test_unmanaged_key_warning_precedes_invalid_tag_warning_for_one_document(
+    tmp_path: Path,
+) -> None:
+    """Both fire for one document; the unmanaged-key notice comes first.
+
+    Distinct from the ``tags:`` + valid-tag scenario above (which produces
+    only ONE warning): here the extra key (``notes_pinned``) is unrelated to
+    the tag, so both the unmanaged-key warning and the invalid-effort-tag
+    warning fire for the same rewrite, and their order is exactly the module
+    docstring's stated sequence (unmanaged-key, invalid-effort-tag, map
+    omission).
+    """
+    source = tmp_path / "src"
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _put(source, "run.fit", builder.run_fit_bytes())
+    sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
+    doc = doc_path(data_root, _RUN_STEM)
+    shutil.rmtree(source)
+
+    edited = _add_frontmatter_key(doc.read_text(encoding="utf-8"), "notes_pinned: yes")
+    edited = _add_frontmatter_key(edited, "effort: race\neffort_time_s: abc")
+    doc.write_text(edited, encoding="utf-8")
+
+    report = regen(data_root, athlete=None, tz=_TZ, tiles=_TILES)
+
+    assert report.failures == ()
+    assert len(report.written) == 1
+    assert len(report.warnings) == 2
+    assert "notes_pinned" in report.warnings[0].detail
+    assert report.warnings[1].detail.startswith(_INVALID_TAG_PREFIX)
+
+
+def test_malformed_tag_with_no_tile_source_warns_before_map_warning(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "src"
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _put(source, "run.fit", builder.run_fit_bytes())
+    sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
+    doc = doc_path(data_root, _RUN_STEM)
+    shutil.rmtree(source)
+
+    edited = _add_frontmatter_key(
+        doc.read_text(encoding="utf-8"), "effort: race\neffort_time_s: abc"
+    )
+    doc.write_text(edited, encoding="utf-8")
+
+    # No tile source available on the rebuild: the map is omitted AND the
+    # tag is malformed, in the same rewrite of the same document.
+    report = regen(data_root, athlete=None, tz=_TZ, tiles=_UnavailableTiles())
+
+    assert report.failures == ()
+    assert len(report.written) == 1
+    assert len(report.warnings) == 2
+
+    expected_doc = f"{WORKOUTS_DIR}/{_RUN_STEM}.md"
+    assert [w.doc for w in report.warnings] == [expected_doc, expected_doc]
+    assert report.warnings[0].detail.startswith(_INVALID_TAG_PREFIX)
+    assert "no route to host" in report.warnings[1].detail
+
+
+def test_version_gated_tagged_page_is_warned_only_for_its_version(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    a = builder.reexport_a_fit_bytes()
+    b = builder.reexport_b_fit_bytes()
+    doc = doc_path(data_root, _RUN_STEM)
+
+    _put(tmp_path / "src_a", "a.fit", a)
+    sync(tmp_path / "src_a", data_root, athlete=None, tz=_TZ, tiles=_TILES)
+
+    edited = _add_frontmatter_key(
+        doc.read_text(encoding="utf-8"), "effort: race\neffort_time_s: abc"
+    )
+    newer = _set_doc_version_line(edited, "doc_version: 999")
+    doc.write_text(newer, encoding="utf-8")
+
+    _put(tmp_path / "src_b", "b.fit", b)
+    report = sync(tmp_path / "src_b", data_root, athlete=None, tz=_TZ, tiles=_TILES)
+
+    assert report.written == ()
+    assert len(report.skipped) == 1
+    assert report.failures == ()
+    # Warned ONLY for its version -- the version gate returns before the tag
+    # is ever read, so no invalid-effort-tag warning is added.
+    assert len(report.warnings) == 1
+    assert "999" in report.warnings[0].detail
+    assert _INVALID_TAG_PREFIX not in report.warnings[0].detail
+    # Untouched: byte-identical, still carrying the malformed tag.
+    assert doc.read_text(encoding="utf-8") == newer
+
+
+# ===========================================================================
 # Symlink confinement: a workouts/*.md symlink is never followed for writing
 # (task 7.2, Req 7.5, 7.6)
 # ===========================================================================

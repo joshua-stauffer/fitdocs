@@ -132,6 +132,22 @@ below. When the unmanaged set is non-empty, a :class:`DocWarning` names the
 document and the sorted key names before they go. The rewrite still proceeds
 and the run still succeeds. A version-gated document is never rewritten and so drops
 nothing: this check only runs on the branch that falls through the gate.
+
+**Invalid-effort-tag warning (Req 1.4, 3.4, 3.6, 4.7).** Immediately after the
+unmanaged-key check above, the same reused frontmatter parse is handed to
+:func:`fitdocs.contract.effort_tag`. A well-formed tag or no tag at all warns
+nothing here. A malformed tag -- an :class:`~fitdocs.contract.InvalidEffortTag`
+-- adds its own :class:`DocWarning` naming the document, ordered after the
+unmanaged-key warning above when both fire for the same document. Its detail
+is a fixed prefix stating the outcome (preserved unchanged, not in effect
+until corrected) followed by
+:meth:`~fitdocs.contract.InvalidEffortTag.describe`, the one renderer every
+consumer of a malformed tag is designed to share (a future ``check`` finding
+for the identical defect renders the same way, once it exists). The tag's
+lines are carried forward verbatim regardless (below,
+User-owned frontmatter carry) -- this warning only names the problem; it never
+blocks the rewrite or changes the exit code. A version-gated document is never
+rewritten and so is never read for its tag: it is warned only for its version.
 """
 
 from __future__ import annotations
@@ -147,8 +163,10 @@ from typing import Final
 from fitdocs import AthleteInputs, FitDecodeError, Modality, compute_metrics, parse_fit
 from fitdocs.contract import (
     DOC_VERSION,
+    InvalidEffortTag,
     document_uuid,
     document_version,
+    effort_tag,
     is_workout_document,
     parse_frontmatter,
     sha_of_ref,
@@ -327,15 +345,17 @@ class SyncReport:
     docstring's version-gate section.
 
     ``warnings`` is a **separate, additive channel** for non-fatal, subject-scoped
-    conditions. Five causes emit one today: a map that could not be rendered
+    conditions. Six causes emit one today: a map that could not be rendered
     (Req 4.3, 4.4), a foreign ownership declaration that could not be placed
     (Req 3.6), a document left untouched because it records a newer
     document-format version (Req 5.5), a rewritten document that carried
-    frontmatter keys fitdocs does not manage and therefore drops (Req 6.3), and
-    a ``workouts/*.md`` symlink discovery never follows (Req 7.5, 7.6, task
+    frontmatter keys fitdocs does not manage and therefore drops (Req 6.3), a
+    rewritten document whose effort tag fitdocs cannot read (preserved
+    unchanged, not in effect until corrected, Req 1.4, 3.4, 3.6, 4.7), and a
+    ``workouts/*.md`` symlink discovery never follows (Req 7.5, 7.6, task
     7.2 F2). This is the canonical enumeration every other module points at
     instead of repeating (:class:`DocWarning`, :func:`fitdocs.cli._report`) --
-    keep it, and only it, current when a sixth cause is added. A
+    keep it, and only it, current when a seventh cause is added. A
     :class:`DocWarning` rides *alongside* the partition: it never enters
     ``failures``, never moves a file into or out of
     ``written``/``skipped``/``failures``, and never changes the exit code. A
@@ -346,9 +366,10 @@ class SyncReport:
     so every existing three-argument construction reports ``warnings == ()``.
 
     One file can emit **several**. When it does they appear in the order the
-    per-file pipeline detects them -- the unmanaged-key notice before the map
-    omission -- which is fixed by statement order in ``_process_file``, not by
-    any set or mapping iteration, so the sequence is reproducible run to run.
+    per-file pipeline detects them -- the unmanaged-key notice, then the
+    invalid-effort-tag notice, then the map omission -- which is fixed by
+    statement order in ``_process_file``, not by any set or mapping
+    iteration, so the sequence is reproducible run to run.
     """
 
     written: tuple[str, ...]
@@ -1205,6 +1226,21 @@ def _process_file(
                     DocWarning(doc=match_ref, detail=_unmanaged_keys_detail(dropped))
                 )
 
+            # Invalid-effort-tag warning (Req 1.4, 3.4, 3.6, 4.7, design:
+            # "SyncEngine"). Reuses the same ``existing_frontmatter`` parse
+            # above -- no second read, no second parse. A malformed tag is
+            # never a failure: the rewrite still proceeds and its lines are
+            # still carried (below) unchanged; this only names the problem
+            # before the run continues. A valid tag, or no tag at all,
+            # ``effort_tag`` returns as ``EffortTag``/``None`` and neither
+            # warns here.
+            tag = effort_tag(existing_frontmatter)
+            if isinstance(tag, InvalidEffortTag):
+                match_ref = match.path.relative_to(data_root).as_posix()
+                pending_warnings.append(
+                    DocWarning(doc=match_ref, detail=_invalid_effort_tag_detail(tag))
+                )
+
         # User-owned frontmatter carry (Req 4.1, 4.2, 4.4, 4.5, 4.6): every
         # top-level frontmatter entry whose key is user-owned (``effort`` and
         # its three companions) is carried forward verbatim into the
@@ -1344,6 +1380,22 @@ def _unmanaged_keys_detail(keys: tuple[str, ...]) -> str:
     return (
         f"carries frontmatter {noun} fitdocs does not manage, dropped by this "
         f"rewrite: {', '.join(keys)}"
+    )
+
+
+def _invalid_effort_tag_detail(tag: InvalidEffortTag) -> str:
+    """The warning detail naming a malformed effort tag (Req 1.4, 3.4, 3.6).
+
+    The design's fixed prefix, stating the outcome up front (preserved
+    unchanged, not in effect, not a failure) followed by
+    :meth:`fitdocs.contract.InvalidEffortTag.describe` -- the one renderer
+    every consumer of a malformed tag is designed to share (Req 5.6, design:
+    "SyncEngine"), so this warning and any future ``fitdocs check`` finding
+    for the identical defect would describe it identically.
+    """
+    return (
+        "carries an effort tag fitdocs cannot read -- preserved unchanged, "
+        "not in effect until corrected: " + tag.describe()
     )
 
 

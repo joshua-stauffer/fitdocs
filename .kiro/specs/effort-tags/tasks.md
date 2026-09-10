@@ -214,7 +214,7 @@ report.
   - _Depends: 1.3, 2.1_
   - _Boundary: SyncEngine (carry)_
 
-- [ ] 2.3 Warn on a malformed tag during a rewrite, and keep the unmanaged warning honest
+- [x] 2.3 Warn on a malformed tag during a rewrite, and keep the unmanaged warning honest
   - In the same branch, reuse the already-parsed frontmatter: the (now
     user-key-exempt) unmanaged warning is computed as today; then read the tag
     and, when it is malformed, record a warning naming the document with the
@@ -560,3 +560,27 @@ report.
   returning first -- found by making the gate's early return CONDITIONAL on the page
   being tagged. When a scenario is a preservation test, its mutation lives in the
   guard that preserves, not in the feature.
+- 2.3: FIRST TASK IN THIS SPEC APPROVED ON ROUND ONE, and the difference was that the
+  implementer ran the named mutations BEFORE reporting and acted on what it saw. The
+  "swap the two warning statements" mutation left the whole suite GREEN -- no scenario
+  combined an unmanaged key with a malformed tag, so the design's stated order was
+  pinned by nothing. It added a sixth test and re-ran the mutation. It also caught and
+  fixed three false prose claims pre-submission. Running the gate is cheap; a rejection
+  round is not.
+- 2.3: WHEN A MUTATION REDS SEVERAL TESTS, BUILD THE CONDITIONAL FORM before concluding
+  anything about isolation. Reverting the unmanaged-key exemption unconditionally reds
+  5 tests (other fixtures also carry effort keys); narrowed to "flag user keys only when
+  the tag is valid AND no other unmanaged key exists" it is a SOLE failure, which is
+  what actually proves the no-warning test is the engine-level detector of 1.1's
+  exemption. Note test_contract.py's exemption test did NOT red under the conditional --
+  the two pin different layers.
+- 2.3: COUNTS IN PROSE ARE CLAIMS. This task's docstring says "Six causes emit one
+  today" and "when a seventh cause is added"; there are exactly six DocWarning emit
+  sites in sync.py (foreign declaration, newer version, unmanaged keys, invalid tag,
+  map omission, symlink). Count the emit sites, not the paragraphs, and re-count after
+  adding one.
+- 2.3: three prose sites carry hedges that must be retired together when task 3 lands
+  FindingKind.INVALID_EFFORT_TAG -- sync.py's module-docstring "once it exists",
+  _invalid_effort_tag_detail's "would describe it identically", and cli.py:17-20's
+  check-findings enumeration (which 2.3 correctly left alone, since it enumerates
+  findings, not sync warning causes).
