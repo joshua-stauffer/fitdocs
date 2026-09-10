@@ -1131,7 +1131,7 @@ def criterion_points(pages: Sequence[PageRecord]) -> CriterionPoints: ...
   extended and not changed.
 - **Colour carries provenance.** `palette.py` is not a bag of hex strings:
   `SERIES_COLORS` maps a name to `(hex, oklch_source)` and
-  `tests/render/charts/test_palette.py:97` reconverts every entry's oklch source
+  `tests/render/charts/test_palette.py:116` reconverts every entry's oklch source
   through the module's own pipeline and asserts equality within +/-1 per channel.
   The three new colours are therefore chosen as oklch values first, converted,
   and registered in `SERIES_COLORS` with their source -- a hand-picked hex with
@@ -1523,7 +1523,7 @@ def history_command(
   holds `fitdocs.contract` names *only*, because the guard resolves each through
   `getattr(fitdocs.contract, name)` (`tests/test_contract_consumers.py:346-348`);
   `fitdocs.audit` is the precedent (`src/fitdocs/audit.py:65-78`,
-  `tests/test_contract_consumers.py:174-180`). The module obtains frontmatter
+  `tests/test_contract_consumers.py:173-179`). The module obtains frontmatter
   through `docio.read_frontmatter` -- a `fitdocs.docio` name, not a contract one,
   and `fitdocs.docio` is itself an already-registered consumer with its own
   bindings -- so `read_frontmatter` is deliberately absent from the binding list.

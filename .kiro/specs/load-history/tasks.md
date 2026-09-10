@@ -68,8 +68,9 @@ stated rule:
 in parallel with this one. Five files are written by both plans:
 
 - `tests/test_confinement.py` -- peer editor `performance-benchmarks` task 4.5
-  (appends an `EntryPoint`); here task 5.4 (appends an `EntryPoint` and widens
-  `OWNED_PATHS`).
+  (appends an `EntryPoint`); here task 5.4 (appends an `EntryPoint` only;
+  `OWNED_PATHS` is widened in `src/fitdocs/layout.py` by task 1.1 and the guard
+  reads it directly).
 - `tests/test_contract_consumers.py` -- peer editor `performance-benchmarks`
   task 4.5; here task 5.4.
 - `tests/test_public_api.py` -- peer editor `performance-benchmarks` task 4.5;
@@ -90,7 +91,8 @@ first -- the roadmap orders `effort-tags` before this spec -- so task 1.3 amends
 a document that already carries those sections, not the one in the tree today.
 The "Upstream Prerequisites" note above names `wiki-contract` as that document's
 owner, which it is; `effort-tags` is nonetheless the immediately preceding
-writer.
+writer. `README.md`'s Ownership paragraph has the same prior writer:
+`effort-tags` task 4.2.
 
 ## Test File Ownership
 

@@ -6,8 +6,9 @@
   `fitdocs.contract`'s published reader. Five names it needs do **not** exist on
   `main` today and arrive with that spec: `effort_tag`, `EffortKind`,
   `EffortTag`, `InvalidEffortTag` (and its `describe()`) and `USER_KEYS`. The
-  contract names this plan also uses — `parse_frontmatter`,
-  `is_workout_document`, `document_date`, `source_refs`, `sha_of_ref` — all ship
+  contract names this plan also uses — `parse_frontmatter` (reached only
+  through `docio.read_frontmatter`), `is_workout_document`, `document_date`,
+  `source_refs`, `sha_of_ref` — all ship
   today and are not blockers. Every task that touches a tag stops and reports
   rather than defining a second reader, a second key spelling, or its own
   frontmatter parse.
@@ -250,7 +251,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
     temporary file is created. Mutation each dies on: letting the provenance
     field inherit like the note does
   - _Requirements: 5.3, 5.5, 5.6, 5.7, 5.9, 6.6_
-  - _Boundary: BenchmarkProvenance_
+  - _Boundary: BenchmarkProvenance, ProfileDerivedWrite_
   - _Depends: 2.1_
 
 - [ ] 2.3 Add the derived-subset write and the never-overwrite rule
@@ -277,7 +278,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
     atomic. Mutation each dies on: retaining derived entries instead of
     replacing them
   - _Requirements: 6.1, 6.3, 6.4, 6.5, 6.7, 6.8_
-  - _Boundary: BenchmarkProvenance_
+  - _Boundary: ProfileDerivedWrite_
   - _Depends: 2.2_
 
 - [ ] 3. The derivations
