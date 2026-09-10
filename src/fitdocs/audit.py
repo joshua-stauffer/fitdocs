@@ -64,7 +64,9 @@ from pathlib import Path
 
 from fitdocs.contract import (
     DOC_VERSION,
+    InvalidEffortTag,
     document_version,
+    effort_tag,
     is_workout_document,
     parse_frontmatter,
     unmanaged_keys,
@@ -117,6 +119,11 @@ class FindingKind(StrEnum):
     DECLARATION_FOREIGN = "declaration_foreign"
     """A declared directory's ``AGENTS.md`` path is occupied by a file fitdocs
     did not write (Req 8.5)."""
+
+    INVALID_EFFORT_TAG = "invalid_effort_tag"
+    """The document's effort tag (:func:`fitdocs.contract.effort_tag`) is
+    malformed -- distinct from :attr:`UNMANAGED_KEYS`, since an effort key is
+    user-owned, not unmanaged (Req 1.4, 3.5, 4.7)."""
 
 
 @dataclass(frozen=True)
@@ -184,6 +191,10 @@ _REMEDY_CLEAR_FOREIGN: str = (
     "rename or remove the foreign file occupying this path so fitdocs can "
     "place its declaration"
 )
+_REMEDY_FIX_EFFORT_TAG: str = (
+    "correct the named effort key(s) by hand; the tag is preserved as "
+    "written but is not in effect until it is valid"
+)
 
 
 def _document_findings(
@@ -248,6 +259,17 @@ def _document_findings(
                 subject=subject,
                 detail=f"unmanaged frontmatter keys: {', '.join(dropped)}",
                 remedy=_REMEDY_MOVE_UNMANAGED,
+            )
+        )
+
+    tag = effort_tag(frontmatter)
+    if isinstance(tag, InvalidEffortTag):
+        findings.append(
+            Finding(
+                kind=FindingKind.INVALID_EFFORT_TAG,
+                subject=subject,
+                detail=f"malformed effort tag: {tag.describe()}",
+                remedy=_REMEDY_FIX_EFFORT_TAG,
             )
         )
 
@@ -416,8 +438,10 @@ def audit(data_root: Path) -> AuditReport:
 
     Each recognized workout document is checked for every condition
     independently -- an out-of-date or newer ``doc_version``, damaged region
-    markers, and unmanaged frontmatter keys -- so one document can contribute
-    more than one :class:`Finding` (Req 5.3, 5.7, 8.2-8.4). The in-tree
+    markers, an unmanaged frontmatter key, and a malformed effort tag -- so
+    one document can contribute more than one :class:`Finding` (Req 5.3, 5.7,
+    8.2-8.4; effort-tags 1.4, 3.5). The unmanaged-key and malformed-tag checks
+    are independent of each other: a document can carry both. The in-tree
     ownership declarations are inspected the same way (Req 8.5).
 
     Findings are sorted by :attr:`Finding.subject` then :attr:`Finding.kind`

@@ -340,6 +340,81 @@ def test_unmanaged_keys(tmp_path: Path) -> None:
     assert finding.remedy
 
 
+def test_invalid_effort_tag(tmp_path: Path) -> None:
+    doc = _doc_text(
+        extra_frontmatter="effort: race\neffort_time_s: abc\n",
+        regions=_region("notes"),
+    )
+    _write(tmp_path, f"{WORKOUTS_DIR}/malformed.md", doc)
+
+    report = audit(tmp_path)
+
+    finding = next(
+        f for f in report.findings if f.kind == FindingKind.INVALID_EFFORT_TAG
+    )
+    assert finding.subject == f"{WORKOUTS_DIR}/malformed.md"
+    assert finding.detail == (
+        "malformed effort tag: effort_time_s: must be a positive number of "
+        "seconds; got 'abc'"
+    )
+    assert "not in effect" in finding.remedy
+
+
+def test_valid_effort_tag_yields_no_finding(tmp_path: Path) -> None:
+    """A well-formed tag yields no finding of either kind (Req 3.6)."""
+    doc = _doc_text(extra_frontmatter="effort: race\n", regions=_region("notes"))
+    _write(tmp_path, f"{WORKOUTS_DIR}/valid.md", doc)
+
+    report = audit(tmp_path)
+
+    kinds = {f.kind for f in report.findings if f.subject.endswith("valid.md")}
+    assert FindingKind.INVALID_EFFORT_TAG not in kinds
+    assert FindingKind.UNMANAGED_KEYS not in kinds
+
+
+def test_effort_key_is_exempt_from_the_unmanaged_key_finding(
+    tmp_path: Path,
+) -> None:
+    doc = _doc_text(
+        extra_frontmatter="effort: race\ntags: foo\n", regions=_region("notes")
+    )
+    _write(tmp_path, f"{WORKOUTS_DIR}/effort_and_tags.md", doc)
+
+    report = audit(tmp_path)
+
+    finding = next(
+        f
+        for f in report.findings
+        if f.kind == FindingKind.UNMANAGED_KEYS
+        and f.subject.endswith("effort_and_tags.md")
+    )
+    assert finding.detail == "unmanaged frontmatter keys: tags"
+
+
+def test_unmanaged_key_and_malformed_tag_findings_are_independent(
+    tmp_path: Path,
+) -> None:
+    """A document can carry both an unmanaged key and a malformed effort tag;
+    neither finding suppresses the other (Req 1.4, 3.5, 4.7)."""
+    doc = _doc_text(
+        extra_frontmatter="tags: foo\neffort: race\neffort_time_s: abc\n",
+        regions=_region("notes"),
+    )
+    _write(tmp_path, f"{WORKOUTS_DIR}/both.md", doc)
+
+    report = audit(tmp_path)
+
+    kinds = {f.kind for f in report.findings if f.subject.endswith("both.md")}
+    assert kinds == {FindingKind.UNMANAGED_KEYS, FindingKind.INVALID_EFFORT_TAG}
+
+    unmanaged = next(
+        f
+        for f in report.findings
+        if f.kind == FindingKind.UNMANAGED_KEYS and f.subject.endswith("both.md")
+    )
+    assert unmanaged.detail == "unmanaged frontmatter keys: tags"
+
+
 def test_declaration_missing(tmp_path: Path) -> None:
     _write(tmp_path, f"{WORKOUTS_DIR}/one.md", _clean_doc_text())
     # No ensure_declarations call: AGENTS.md is absent everywhere.

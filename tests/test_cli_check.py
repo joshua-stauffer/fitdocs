@@ -205,9 +205,15 @@ def test_check_reports_every_finding_kind_and_exits_one(tmp_path: Path) -> None:
     ride_doc.write_text(ride_text, encoding="utf-8")
 
     # Unmanaged frontmatter key: add a hand-authored key to strength.fit's doc.
+    # Also add a malformed effort tag to the same document, proving the two
+    # findings are independent -- neither suppresses the other.
     strength_text = strength_doc.read_text(encoding="utf-8")
     strength_doc.write_text(
-        strength_text.replace("title:", "custom_tag: hand-added\ntitle:", 1),
+        strength_text.replace(
+            "title:",
+            "custom_tag: hand-added\neffort: race\neffort_time_s: abc\ntitle:",
+            1,
+        ),
         encoding="utf-8",
     )
 
@@ -236,6 +242,7 @@ def test_check_reports_every_finding_kind_and_exits_one(tmp_path: Path) -> None:
     assert "region markers by hand" in output  # damaged regions
     assert "move any content worth keeping" in output  # unmanaged keys
     assert "to write the current declaration" in output  # missing declaration
+    assert "not in effect" in output  # invalid effort tag (distinctive remedy fragment)
 
     # Every finding's `detail` -- the "what was observed" half of Req 8.6 --
     # is also present, not just its `remedy`. Deleting the `finding.detail`
@@ -246,6 +253,31 @@ def test_check_reports_every_finding_kind_and_exits_one(tmp_path: Path) -> None:
     assert "begins before region 'notes' is closed" in output  # damaged regions
     assert "unmanaged frontmatter keys: custom_tag" in output  # unmanaged keys
     assert "no AGENTS.md ownership declaration is present" in output  # missing decl
+    # Malformed effort tag: distinctive detail fragment is the offending key
+    # name, carried on the same document (strength.fit) as the unmanaged key
+    # above -- proving the two findings are independent.
+    assert "effort_time_s: must be a positive number of seconds" in output
+
+
+def test_check_reports_invalid_effort_tag_and_exits_one(tmp_path: Path) -> None:
+    """A malformed effort tag alone is a distinct finding, per-document
+    failure status, naming the offending key and the remedy (Req 3.3, 3.5)."""
+    data_root = _build_data_root(tmp_path, {"run.fit": builder.run_fit_bytes()})
+    run_doc = _doc(data_root, "run")
+
+    run_text = run_doc.read_text(encoding="utf-8")
+    run_doc.write_text(
+        run_text.replace("title:", "effort: race\neffort_time_s: abc\ntitle:", 1),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["check", "--out", str(data_root)])
+
+    assert result.exit_code == 1
+    output = result.output
+    assert run_doc.name in output
+    assert "effort_time_s: must be a positive number of seconds" in output
+    assert "not in effect" in output
 
 
 # --- unresolvable data root: exit 2, nothing scanned (Req 8.7) ---------------

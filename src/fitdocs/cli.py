@@ -16,8 +16,9 @@ of the baseline ``--version`` / ``--help`` shell:
   those that lack results (Req 8.2).
 * ``fitdocs check [--out PATH]`` -- read-only: report every place the data
   root diverges from the installed contract (an out-of-date or damaged
-  document, an unmanaged frontmatter key, a missing/stale/foreign ownership
-  declaration) without creating, modifying, or deleting anything (Req 8.1).
+  document, an unmanaged frontmatter key, a malformed effort tag, a
+  missing/stale/foreign ownership declaration) without creating, modifying,
+  or deleting anything (Req 8.1).
 
 Every command, *before any processing* (Req 2.1), resolves the data root by the
 explicit precedence (``--out`` > ``FITDOCS_DATA`` > ``.fitdocs/data-root``

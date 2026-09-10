@@ -142,9 +142,10 @@ unmanaged-key warning above when both fire for the same document. Its detail
 is a fixed prefix stating the outcome (preserved unchanged, not in effect
 until corrected) followed by
 :meth:`~fitdocs.contract.InvalidEffortTag.describe`, the one renderer every
-consumer of a malformed tag is designed to share (a future ``check`` finding
-for the identical defect renders the same way, once it exists). The tag's
-lines are carried forward verbatim regardless (below,
+consumer of a malformed tag is designed to share (the ``check`` inspection's
+:attr:`~fitdocs.audit.FindingKind.INVALID_EFFORT_TAG` finding for the
+identical defect renders it the same way, through the same ``describe()``
+renderer). The tag's lines are carried forward verbatim regardless (below,
 User-owned frontmatter carry) -- this warning only names the problem; it never
 blocks the rewrite or changes the exit code. A version-gated document is never
 rewritten and so is never read for its tag: it is warned only for its version.
@@ -1390,8 +1391,9 @@ def _invalid_effort_tag_detail(tag: InvalidEffortTag) -> str:
     unchanged, not in effect, not a failure) followed by
     :meth:`fitdocs.contract.InvalidEffortTag.describe` -- the one renderer
     every consumer of a malformed tag is designed to share (Req 5.6, design:
-    "SyncEngine"), so this warning and any future ``fitdocs check`` finding
-    for the identical defect would describe it identically.
+    "SyncEngine"), so this warning and the ``fitdocs check`` inspection's
+    :attr:`~fitdocs.audit.FindingKind.INVALID_EFFORT_TAG` finding for the
+    identical defect describe it identically.
     """
     return (
         "carries an effort tag fitdocs cannot read -- preserved unchanged, "

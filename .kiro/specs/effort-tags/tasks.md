@@ -261,7 +261,7 @@ report.
   - _Depends: 1.1_
   - _Boundary: LoadPassPreservation_
 
-- [ ] 3. (P) Inspection: report a malformed tag from the read-only audit and the check command
+- [x] 3. (P) Inspection: report a malformed tag from the read-only audit and the check command
   - Add the new finding kind (`invalid_effort_tag`) and its remedy constant
     ("correct the named effort key(s) by hand; the tag is preserved as written
     but is not in effect until it is valid"); in the per-document findings,
@@ -601,3 +601,24 @@ report.
   replace_load_region + apply_frontmatter_load; recompute = strip_frontmatter_load
   then compute. Compute and recompute both land in `report.computed`, so the report
   bucket does NOT tell you which path ran.
+- 3: A REQUIREMENT CITATION IN A TEST DOCSTRING IS A COVERAGE CLAIM, AND MUTATIONS
+  DECIDE IT. Task 3 was rejected for citing five requirements on a test whose fixture
+  reaches two. Three were disproved by mutation: suppressing the unmanaged finding
+  when an effort key is present, reverting the unmanaged-key reader, and emitting a
+  finding for a VALID tag each left that test green. Cite what the fixture reaches;
+  when you remove a citation, check the requirement is still cited somewhere it IS
+  pinned (Req 3.6 briefly ended up cited nowhere).
+- 3: POST-HOC BRANCH DELETION IS DISCRIMINATION EVIDENCE, NOT RED-PHASE EVIDENCE. It
+  shows the tests fail when the feature is removed; it cannot show they were written
+  first. The specific risk it leaves open is assertions transcribed from whatever the
+  code happened to emit -- closed here only because the reviewer checked the finding
+  kind, detail prefix and remedy BYTE-FOR-BYTE AGAINST design.md rather than against
+  the code. Accepted once, for a task whose strings were fully specified; natural
+  pre-implementation absence remains the standard.
+- 3: prove a docstring-only edit is prose-only MECHANICALLY -- parse HEAD and the
+  working tree, strip every docstring and bare string-constant statement, and compare
+  `ast.dump`. Reading a diff cannot distinguish a docstring edit from a code edit
+  hidden in the same hunk.
+- 3: `FindingKind`'s string VALUES and every `_REMEDY_` constant are unpinned --
+  changing one leaves the whole suite green, on pre-existing members too. Queue item
+  2026-09-10-finding-kind-values-and-remedy-texts-unpinned.
