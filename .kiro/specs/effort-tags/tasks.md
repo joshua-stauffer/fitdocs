@@ -241,7 +241,7 @@ report.
   - _Depends: 1.2, 2.2_
   - _Boundary: SyncEngine (warnings), CliApp (docstring prose only)_
 
-- [ ] 2.4 (P) Prove the load pass leaves user-owned lines byte-identical
+- [x] 2.4 (P) Prove the load pass leaves user-owned lines byte-identical
   - Change nothing under the load package. Add editor-level tests: a
     frontmatter block holding the four user lines (one a block scalar) plus
     stale load keys keeps every user line byte-identical and in the same
@@ -584,3 +584,20 @@ report.
   _invalid_effort_tag_detail's "would describe it identically", and cli.py:17-20's
   check-findings enumeration (which 2.3 correctly left alone, since it enumerates
   findings, not sync warning causes).
+- 2.4: A MUTATION THAT STAYS GREEN MAY MEAN THE FIXTURE HAS NOTHING TO MUTATE, not
+  that the assertion is weak. The `rstrip` mutation on carried lines stayed green
+  because NO FIXTURE LINE CARRIED TRAILING WHITESPACE -- the pre-satisfied-fixture
+  anti-pattern, where the mutation has nothing to act on. Adding deliberate trailing
+  whitespace to one carried user line per module made all six tests red. Proven
+  load-bearing by round trip: remove the whitespace again and both rstrip mutations
+  survive with the FULL suite green. When a mutation you believe in stays green, ask
+  what the fixture would have to contain for it to bite.
+- 2.4: `lines.index(line)` returns the FIRST occurrence, so an order helper built on
+  it cannot see duplication -- `kept = [*kept, *kept]` leaves all six new tests green
+  (caught only by eight pre-existing idempotency/byte-identity tests). If a helper
+  must stand alone, count occurrences instead of indexing.
+- 2.4: the three load-engine paths are genuinely distinct and each needs its own
+  isolating mutation: restore = apply_frontmatter_load only; compute =
+  replace_load_region + apply_frontmatter_load; recompute = strip_frontmatter_load
+  then compute. Compute and recompute both land in `report.computed`, so the report
+  bucket does NOT tell you which path ran.

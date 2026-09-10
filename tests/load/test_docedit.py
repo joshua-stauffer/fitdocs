@@ -647,3 +647,155 @@ def test_stamp_cannot_construct_a_load_result() -> None:
         "notes",
         "display_name",
     }
+
+
+# --- task 2.4: LoadPassPreservation -- user-owned lines through the load
+# editor's three primitives (Req 4.3) ----------------------------------------
+#
+# The editor never parses or re-serializes YAML (module docstring); a
+# user-owned (effort-tag) frontmatter line is simply an "other" line that
+# `_is_managed_line` does not claim, so it survives whatever the upsert, the
+# strip, and the region replacement each do. These tests build a frontmatter
+# block carrying the four effort-tag user lines -- `effort`,
+# `effort_distance_m`, `effort_time_s`, and a block-scalar `effort_event`
+# spanning two indented continuation lines -- interleaved with stale managed
+# load keys, and prove each primitive leaves every user line byte-identical
+# and in the same relative order, with the fresh load keys landing after them.
+
+_USER_LINE_EFFORT = "effort: race"
+_USER_LINE_DISTANCE = "effort_distance_m: 42195"
+# Trailing whitespace, deliberately: a byte-identity assertion that only
+# checks a line's stripped/semantic value would not notice it silently
+# dropped -- proven against a `line.rstrip()` mutation applied to `kept` in
+# both `apply_frontmatter_load` and `strip_frontmatter_load`.
+_USER_LINE_TIME = "effort_time_s: 10800  "
+_USER_LINE_EVENT_KEY = "effort_event: >-"
+_USER_LINE_EVENT_CONT_1 = "  Boston"
+_USER_LINE_EVENT_CONT_2 = "  Marathon"
+
+# The four user-owned lines in their fixture-authored relative order -- the
+# block scalar's key line stands for the whole entry; its continuation lines
+# are checked separately (immediately following, byte-identical).
+_USER_KEY_LINES_IN_ORDER = (
+    _USER_LINE_EFFORT,
+    _USER_LINE_DISTANCE,
+    _USER_LINE_TIME,
+    _USER_LINE_EVENT_KEY,
+)
+
+_STALE_LOAD_LINE_VALUE = "load_value: 999"
+_STALE_LOAD_LINE_METHODOLOGY = 'load_methodology: "old-methodology"'
+_STALE_LOAD_LINE_BASIS = 'load_basis: "old basis"'
+
+
+def _document_with_user_lines_and_stale_load_keys() -> str:
+    """A realistic document whose frontmatter interleaves the four user-owned
+    effort-tag lines (one a block scalar) with stale managed load keys left
+    over from a prior pass, on top of the same body/region/notes shape the
+    rest of this module uses."""
+    frontmatter = (
+        "\n".join(
+            [
+                "---",
+                "type: workout",
+                "date: 2026-07-16",
+                _USER_LINE_EFFORT,
+                _STALE_LOAD_LINE_VALUE,
+                "distance_km: 10.0",
+                _USER_LINE_DISTANCE,
+                _STALE_LOAD_LINE_METHODOLOGY,
+                _USER_LINE_TIME,
+                _STALE_LOAD_LINE_BASIS,
+                _USER_LINE_EVENT_KEY,
+                _USER_LINE_EVENT_CONT_1,
+                _USER_LINE_EVENT_CONT_2,
+                "sources:",
+                "  - fit-archive/abc123def456.fit",
+                "---",
+            ]
+        )
+        + "\n"
+    )
+    load = docmerge.region_block("load", LOAD_NOT_COMPUTED)
+    return f"{frontmatter}{_BODY}{load}\n{_NOTES}{_TRAILER}"
+
+
+def _assert_user_lines_preserved_and_ordered(markdown: str) -> None:
+    """Every user-owned line is present verbatim, in the fixture's relative
+    order, with the block scalar's continuation lines immediately following
+    its key line, byte-identical."""
+    lines = markdown.split("\n")
+    indices = [lines.index(line) for line in _USER_KEY_LINES_IN_ORDER]
+    assert indices == sorted(indices), f"user lines out of relative order: {indices}"
+    event_key_idx = indices[-1]
+    assert lines[event_key_idx + 1] == _USER_LINE_EVENT_CONT_1
+    assert lines[event_key_idx + 2] == _USER_LINE_EVENT_CONT_2
+
+
+def _fresh_load_key_indices(markdown: str) -> list[int]:
+    """Indices of the (post-upsert) fresh managed load key lines."""
+    lines = markdown.split("\n")
+    prefixes = ("load_value:", "load_methodology:", "load_basis:")
+    return [i for i, line in enumerate(lines) if line.startswith(prefixes)]
+
+
+def _frontmatter_prefix(markdown: str) -> str:
+    """Everything up to and including the closing ``---`` fence."""
+    suffix = _body_after_frontmatter(markdown)
+    assert markdown.endswith(suffix)
+    return markdown[: len(markdown) - len(suffix)]
+
+
+def test_load_key_upsert_preserves_user_lines_and_orders_fresh_keys_after() -> None:
+    """apply_frontmatter_load (the upsert) keeps every user-owned line
+    byte-identical and in the same relative order, and lands the fresh
+    managed keys after them -- a placement claim, not mere presence (Req 4.3).
+    """
+    doc = _document_with_user_lines_and_stale_load_keys()
+
+    applied = apply_frontmatter_load(doc, _computed_result())
+
+    _assert_user_lines_preserved_and_ordered(applied)
+    # exactly one fresh occurrence of each managed key -- the stale ones were
+    # removed, not merely appended alongside.
+    fresh_indices = _fresh_load_key_indices(applied)
+    assert len(fresh_indices) == 3
+    lines = applied.split("\n")
+    event_cont2_idx = lines.index(_USER_LINE_EVENT_CONT_2)
+    assert min(fresh_indices) > event_cont2_idx
+    assert _body_after_frontmatter(applied) == _body_after_frontmatter(doc)
+
+
+def test_load_key_strip_preserves_user_lines_and_removes_only_stale_keys() -> None:
+    """strip_frontmatter_load keeps every user-owned line byte-identical and
+    in the same relative order while removing the stale managed lines (Req
+    4.3)."""
+    doc = _document_with_user_lines_and_stale_load_keys()
+
+    stripped = strip_frontmatter_load(doc)
+
+    _assert_user_lines_preserved_and_ordered(stripped)
+    assert _STALE_LOAD_LINE_VALUE not in stripped
+    assert _STALE_LOAD_LINE_METHODOLOGY not in stripped
+    assert _STALE_LOAD_LINE_BASIS not in stripped
+    assert _body_after_frontmatter(stripped) == _body_after_frontmatter(doc)
+
+
+def test_region_replacement_preserves_user_lines_after_an_upsert() -> None:
+    """replace_load_region never inspects the frontmatter at all, so the four
+    user-owned lines already upserted alongside fresh managed keys survive a
+    region swap byte-identically, in the same relative order (Req 4.3).
+
+    Built on the *upserted* document (rather than a bare fresh fixture) so
+    that a defect in the upsert's own line-classification is not masked by
+    testing region replacement in isolation: if the upsert corrupted the user
+    lines before this test ever calls ``replace_load_region``, this
+    assertion sees the corruption too.
+    """
+    doc = _document_with_user_lines_and_stale_load_keys()
+    upserted = apply_frontmatter_load(doc, _computed_result())
+
+    replaced = replace_load_region(upserted, render_computed(_continuous_result()))
+
+    assert _frontmatter_prefix(replaced) == _frontmatter_prefix(upserted)
+    _assert_user_lines_preserved_and_ordered(replaced)

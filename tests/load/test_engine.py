@@ -1705,3 +1705,155 @@ def test_apply_load_today_parameter_is_keyword_only_and_typed() -> None:
     assert today_param.kind is inspect.Parameter.KEYWORD_ONLY
     assert today_param.default is None
     assert today_param.annotation == "date | None"
+
+
+# --- task 2.4: LoadPassPreservation -- engine-level, all three load paths
+# leave a hand-tagged page's effort lines byte-identical (Req 4.3) ----------
+#
+# A "synced page tagged by hand" is a real, rendered workout document (the
+# real sync pipeline, not a hand-mocked string) into which the four
+# effort-tag user lines are inserted, verbatim, exactly the way a person
+# editing the file would -- never through any fitdocs write path. These
+# tests drive that page through each of the engine's three distinct load
+# branches (restore / compute / recompute, ``fitdocs/load/engine.py``'s
+# ``_process_document``) and prove that every effort line survives
+# byte-identically, in the same relative order, and that the unmanaged-key
+# reader (``contract.unmanaged_keys``, the effort-tag exemption) still
+# reports nothing for the page afterward.
+
+_TAG_LINES: tuple[str, ...] = (
+    "effort: race",
+    # Trailing whitespace, deliberately: a byte-identity assertion that only
+    # checks a line's stripped/semantic value would not notice it silently
+    # dropped -- proven against a `line.rstrip()` mutation applied to
+    # `kept` in both `apply_frontmatter_load` and `strip_frontmatter_load`.
+    "effort_distance_m: 42195  ",
+    "effort_time_s: 10800",
+    'effort_event: "[[Boston Marathon 2024]]"',
+)
+"""The four effort-tag user lines, in a fixed relative order, exactly as the
+task's Observable names the ``effort_event`` line."""
+
+
+def _tag_by_hand(text: str) -> str:
+    """Insert the four effort-tag user lines just before the closing
+    frontmatter fence -- simulating a page a person tagged by hand, never a
+    line any fitdocs write path produces."""
+    first_idx = text.index("---\n")
+    second_idx = text.index("---\n", first_idx + len("---\n"))
+    return text[:second_idx] + "\n".join(_TAG_LINES) + "\n" + text[second_idx:]
+
+
+def _assert_effort_lines_preserved_and_ordered(text: str) -> None:
+    """Every effort-tag line is present verbatim and in the fixture's
+    relative order -- a swap of any two would fail this."""
+    lines = text.split("\n")
+    indices = [lines.index(line) for line in _TAG_LINES]
+    assert indices == sorted(indices), f"effort lines out of relative order: {indices}"
+
+
+def _assert_unmanaged_keys_empty_for(text: str) -> None:
+    frontmatter = contract.parse_frontmatter(text)
+    assert frontmatter is not None
+    assert contract.unmanaged_keys(frontmatter) == ()
+
+
+def test_restore_path_preserves_hand_tagged_effort_lines(
+    isolated_registry: None,
+    computing_calculator: ComputingCalculator,
+    tmp_path: Path,
+) -> None:
+    """A synced page already carrying a computed load payload in the region,
+    tagged by hand afterward, runs the restore path (no recompute, no
+    prompting): every effort-tag line is byte-identical and in the same
+    relative order afterward, and the unmanaged-key reader still reports
+    nothing for the page (Req 4.3).
+
+    Mutation caught: if the restore branch's ``apply_frontmatter_load`` call
+    ever classified an effort-tag line as managed (this task's named
+    mutation), the line would be stripped out of ``kept`` and this
+    assertion would raise ``ValueError`` looking it up in the rewritten
+    file instead of finding it in place.
+    """
+    data_root = _build_data_root(tmp_path, {"run.fit": builder.run_fit_bytes()})
+    run = _doc(data_root, "run")
+    apply_load(data_root, session=_compute_run_session(level=7))
+    assert classify_load_region(run.read_text(encoding="utf-8")).state is (
+        RegionState.COMPUTED
+    )
+
+    run.write_text(_tag_by_hand(run.read_text(encoding="utf-8")), encoding="utf-8")
+
+    report = apply_load(data_root, session=NonInteractiveSession())
+
+    assert _docs_of(report.restored) == {_rel(data_root, run)}
+    result_text = run.read_text(encoding="utf-8")
+    _assert_effort_lines_preserved_and_ordered(result_text)
+    _assert_unmanaged_keys_empty_for(result_text)
+
+
+def test_compute_path_preserves_hand_tagged_effort_lines(
+    isolated_registry: None,
+    computing_calculator: ComputingCalculator,
+    tmp_path: Path,
+) -> None:
+    """A synced page still holding the placeholder region, tagged by hand,
+    runs the compute path (the stub calculator fills the region and the
+    frontmatter for the first time): every effort-tag line is byte-identical
+    and in the same relative order afterward, and the unmanaged-key reader
+    still reports nothing for the page (Req 4.3).
+
+    Mutation caught: same as the restore test above -- the compute branch's
+    ``apply_frontmatter_load`` call is the same function under the same
+    named mutation.
+    """
+    data_root = _build_data_root(tmp_path, {"run.fit": builder.run_fit_bytes()})
+    run = _doc(data_root, "run")
+    assert classify_load_region(run.read_text(encoding="utf-8")).state is (
+        RegionState.PLACEHOLDER
+    )
+
+    run.write_text(_tag_by_hand(run.read_text(encoding="utf-8")), encoding="utf-8")
+
+    report = apply_load(data_root, session=_compute_run_session(level=6))
+
+    assert _docs_of(report.computed) == {_rel(data_root, run)}
+    result_text = run.read_text(encoding="utf-8")
+    _assert_effort_lines_preserved_and_ordered(result_text)
+    _assert_unmanaged_keys_empty_for(result_text)
+
+
+def test_recompute_path_preserves_hand_tagged_effort_lines(
+    isolated_registry: None,
+    computing_calculator: ComputingCalculator,
+    tmp_path: Path,
+) -> None:
+    """A synced page computed once, then tagged by hand, then recomputed
+    (``recompute=True`` strips the managed keys and re-confirms from
+    scratch, Req 8.3): the effort-tag lines -- including the exact
+    ``effort_event: "[[Boston Marathon 2024]]"`` line the task's Observable
+    names -- are byte-identical and in the same relative order in the
+    written file afterward, and the unmanaged-key reader still reports
+    nothing (Req 4.3).
+
+    Mutation caught: the recompute branch strips first (``strip_frontmatter_
+    load``) and then upserts fresh keys after a real ``replace_load_region``
+    (``apply_frontmatter_load`` again) -- both calls go through the same
+    ``_is_managed_line`` this task's named mutation corrupts, so an
+    effort-tag line dropped by either call reddens the same lookup-by-value
+    assertion below.
+    """
+    data_root = _build_data_root(tmp_path, {"run.fit": builder.run_fit_bytes()})
+    run = _doc(data_root, "run")
+    apply_load(data_root, session=_compute_run_session(level=3))
+
+    run.write_text(_tag_by_hand(run.read_text(encoding="utf-8")), encoding="utf-8")
+
+    report = apply_load(data_root, session=_recompute_run_session(), recompute=True)
+
+    assert _docs_of(report.computed) == {_rel(data_root, run)}
+    result_text = run.read_text(encoding="utf-8")
+    # the task's Observable: this exact line, unchanged, in the written file.
+    assert 'effort_event: "[[Boston Marathon 2024]]"' in result_text
+    _assert_effort_lines_preserved_and_ordered(result_text)
+    _assert_unmanaged_keys_empty_for(result_text)
