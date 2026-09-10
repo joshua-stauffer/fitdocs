@@ -88,6 +88,21 @@ def build_frontmatter(ctx: DocContext) -> str:
     Inserts only the present keys, in the fixed schema order -- ``generator``
     immediately after ``type`` and before ``doc_version`` (Req 4.1) -- then
     emits them with a single ``yaml.safe_dump`` (Req 5.1, 5.2, 5.6, 3.4, 4.1).
+
+    The block has two parts (effort-tags Req 1.2, 1.3, 2.7, 4.5, 4.6): the
+    managed part above, produced by the single ``yaml.safe_dump`` call, and
+    ``ctx.user_frontmatter`` -- an existing document's user-owned frontmatter
+    lines, carried verbatim, one per line, after the managed part and before
+    the closing fence. That text is copied, never re-parsed or re-serialized,
+    so this function names ``yaml`` only for ``safe_dump``. Precondition
+    (documented, not checked): no element of ``ctx.user_frontmatter``
+    may contain ``"\\n"``. The intended producer,
+    :func:`fitdocs.contract.user_owned_lines` over a document's
+    ``split("\\n")`` lines, cannot yield one; the sync/regen wiring that
+    supplies this field is not yet in place. An empty tuple (the default,
+    and every render of a document that has never carried a user-owned key)
+    reproduces the exact block this function produced before the carry
+    existed.
     """
     activity = ctx.activity
     metrics = ctx.metrics
@@ -135,4 +150,5 @@ def build_frontmatter(ctx: DocContext) -> str:
     dumped = yaml.safe_dump(
         data, sort_keys=False, allow_unicode=True, default_flow_style=False
     )
-    return f"{FRONTMATTER_FENCE}\n{dumped}{FRONTMATTER_FENCE}\n"
+    carried = "".join(f"{line}\n" for line in ctx.user_frontmatter)
+    return f"{FRONTMATTER_FENCE}\n{dumped}{carried}{FRONTMATTER_FENCE}\n"

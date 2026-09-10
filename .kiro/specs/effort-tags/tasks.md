@@ -165,7 +165,7 @@ report.
 
 - [ ] 2. Core: preservation through the rewrite path and the load pass
 
-- [ ] 2.1 Land the carried lines in the frontmatter block
+- [x] 2.1 Land the carried lines in the frontmatter block
   - Add a defaulted tuple-of-lines field to the render context after the map
     field, so every existing constructor call stays valid and a first-time
     render carries nothing
@@ -517,3 +517,25 @@ report.
   failure COUNT and the failing test NAMES, and write down what you saw. "Sole
   failure" is the evidence for "pinned only by X". One such comment contradicted a
   note 400 lines up in its own file.
+- 2.1: a PRESERVED-ONLY classification must name a test that ACTUALLY REACHES THE
+  CASE. Req 2.7 (the tag never reaches the body) was defended as "preserved by the
+  golden suite running unmodified" -- but no golden fixture carries a tag, so the
+  golden suite never reaches a tagged document. A mutation appending every carried
+  line into the body left all 3235 tests green. The fix was one test rendering two
+  contexts identical but for `user_frontmatter` and comparing bodies and assets.
+- 2.1: when designing a mutation to prove a test isolates a property, prefer the
+  CONDITIONAL form. The unconditional body leak (`body += "\n\n" + ...`) reds 10
+  tests because the bare "\n\n" perturbs all 9 goldens; guarding it with
+  `if ctx.user_frontmatter:` makes it a sole failure and actually proves the new
+  test is the only detector. A mutation that reddens ten tests proves the suite is
+  alive, not that your assertion discriminates.
+- 2.1: `build_frontmatter(ctx)` is exactly the leading slice of
+  `render_document(ctx).markdown` (`_assemble` builds
+  `f"{build_frontmatter(ctx)}\n{DOC_BANNER}\n\n{body}\n"`), so a body-invariance
+  test can slice on that length. Verify the slice by measuring the length delta --
+  here it is exactly the carried bytes -- rather than assuming it.
+- 2.1: golden byte-neutrality is checkable by MECHANISM, not just `git status`:
+  `tests/render/test_golden_docs.py` compares live output against bytes committed
+  before the change, so a green golden run IS the HEAD-vs-worktree diff. Confirm the
+  check is live by making a mutation red the goldens (emitting a blank line on the
+  empty path reds 9).

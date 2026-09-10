@@ -112,7 +112,10 @@ class DocContext:
     one) so dates are user-correct yet deterministic. :attr:`map_data` carries
     prepared route-map inputs when the sync engine could plan and resolve them
     (Req 1.1); it defaults to ``None`` so every existing constructor call stays
-    valid.
+    valid. :attr:`user_frontmatter` carries an existing document's user-owned
+    frontmatter lines verbatim (effort-tags Req 1.2, 1.3, 4.5, 4.6); it
+    defaults to ``()`` so a first-time render, and every existing constructor
+    call, carries nothing forward.
     """
 
     activity: Activity
@@ -123,6 +126,7 @@ class DocContext:
     tz: tzinfo
     map_data: MapData | None = None  # None: no positions, tiles unavailable,
     #   or strength modality
+    user_frontmatter: tuple[str, ...] = ()  # verbatim user-owned lines, or ()
 
 
 def render_document(ctx: DocContext) -> RenderedDoc:
