@@ -1,7 +1,7 @@
 ---
 id: 2026-08-27-prompt-date-strands-historical-documents
 title: Benchmarks answered at the prompt are dated today, so every historical activity is unscorable
-status: open
+status: done
 importance: critical
 importance_why: A first-time athlete scores nothing except activities dated today or later, and is never re-asked, so it is unrecoverable without hand-editing athlete.toml. fitdocs' primary use case is an archive of past .fit files.
 effort: M
@@ -115,3 +115,36 @@ First three moves: read `prompts.py:100-130` and `engine.py:495-510`; read
 `measured_on`. Done looks like: a chosen semantic, recorded as an amendment in
 the owning spec, and an end-to-end test that drives prompt -> score for an
 activity older than the prompt date.
+
+## Resolution
+
+**Closed 2026-09-10** — resolved by training-load Amendment 4, merged to `main`
+at `664960a` (tasks 7.1–7.4 all `[x]`).
+
+Semantic chosen: the pass date stays the entry's `measured_on`, and the athlete
+may declare a separate, optional, trailing `applies_from` (never later than
+`measured_on`) that reaches the measurement back to earlier activities. The
+prompt flow asks for it — `collect_missing_fields(*, on, activity_date)` puts
+the retroactive question through `session.confirm(default=True)` only for a
+benchmark field on an activity dated strictly before the pass date — so an
+athlete who accepts the default scores the activity that prompted the question.
+
+Recorded as amendments in all three owning specs:
+- `training-load` requirements Amendment 4 (3.7–3.9), design §Amendment 4
+- `athlete-benchmarks` requirements Amendment 1 (1.12, 2.11, 3.10, 3.11, 6.10)
+- `threshold-load` — anchor resolution consumes the two-tier `applicable`
+
+Evidence:
+- `src/fitdocs/benchmarks.py:101` `Benchmark.applies_from`; `:160-193` two-tier
+  `BenchmarkSet.applicable` (tier 1 latest `measured_on <= on`, else tier 2
+  earliest `measured_on` among entries whose `applies_from <= on`)
+- `src/fitdocs/load/prompts.py:147-183` the retroactive question and its wording
+- `src/fitdocs/load/engine.py:408-511` threads the document's own
+  `activity_date` through to the prompt flow
+- `tests/load/test_prompt_date_e2e.py` — feature-level prompt → score for an
+  activity older than the prompt date: **3 passed** (re-run at close, 2026-09-10)
+
+Follow-ups that fell out of this work were queued separately, not folded in:
+`2026-09-10-performance-benchmarks-design-predates-applies-from`,
+`2026-09-10-activity-qa-flags-staleness-guard-neutralises-retroactive-anchors`,
+and the load-channels anchor-date rendering item.
