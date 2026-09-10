@@ -165,7 +165,7 @@ model, citation, contract   (pure leaves)
    on `None` / `EffortTag` / `InvalidEffortTag`. It defines no second reader and
    spells no effort key; `fitdocs.performance.engine` registers in
    `tests/test_contract_consumers.py::CONTRACT_BINDINGS` with `effort_tag`
-   (plus `document_date`, `is_workout_document`, `parse_frontmatter` as used).
+   (plus `document_date` and `is_workout_document` as used).
 2. `InvalidEffortTag` is a **failure** for this pass, reported with
    `InvalidEffortTag.describe()` and never read as untagged (Req 1.6).
 3. `EffortTag.distance_m` / `time_s` / `event` are `None` when absent; the
@@ -206,6 +206,12 @@ model, citation, contract   (pure leaves)
    `EntryPoint` to that module's existing `WRITING_ENTRY_POINTS` registry and
    changes nothing else in it; `athlete.toml` is already in
    `PERMITTED_SHARED_FILES`.
+3. **A derivable effort is not the same predicate as load-history's criterion
+   point.** load-history counts only race/test pages carrying an official time
+   (observations a fit can use); this pass derives from a wider set (LTHR from
+   `hard`; pace from a race with only recorded distance and time). A page can
+   yield a benchmark entry and not be a criterion point, and vice versa; the two
+   counts are not expected to agree and neither is wrong.
 
 ## Architecture
 
@@ -642,6 +648,13 @@ DerivationOutcome = DerivedBenchmark | DerivationDeclined
   not be written** because its locator is unverified — today exactly one: the
   Allen & Coggan 0.95 × 20-minute factor, with the work, the suspected
   chapter, and what must be read (8.5). No numeric value appears in the record.
+  `load-history` records the same block in its own shape — `BlockedPreset` /
+  `BLOCKED_PRESETS` in `src/fitdocs/history/sources.py` — and both are blocked
+  by the *same* roadmap Direct Implementation Candidate, so one reading task
+  clears two files. A shared record type was deliberately **not** introduced:
+  per-package citation shapes are the established precedent (`Divergence` in
+  `load/channels/sources.py:104`), and a queue item tracks promoting one shape
+  into `fitdocs.citation` later.
 - `BLOCKED_METHODS: frozenset[DerivationMethod]` = `{TWENTY_MINUTE_POWER_FACTOR}`
   today. A test asserts every `PendingConstant` has a blocking method and that
   every blocked method declines at runtime.
@@ -848,13 +861,17 @@ def derive_benchmarks(data_root: Path, *, dry_run: bool = False) -> DeriveReport
 - Validation: a test drives the pass over a data root containing one tagged and
   one untagged page and asserts, by instrumenting the archive directory's
   access, that only the tagged page's archive was opened (1.3).
-- Risks: the archive-resolution rule is stated twice (here and in
-  `load/engine.py`). Importing `load.engine._resolve_archive` would drag the
+- Risks: the archive-resolution rule **and** the `workouts/*.md` discovery rule
+  are each stated twice (here and in `load/engine.py`; `load-history` states the
+  discovery rule again). Importing `load.engine._resolve_archive` would drag the
   load pass's whole import surface into this one and couple two passes through
-  a private name. The mitigation is a **shared behavioural test**: one fixture
-  document is resolved by both passes and the two results are asserted equal,
-  including for the traversal-ref refusal. Recorded as an accepted duplication
-  with a named guard, not as an oversight.
+  a private name. The mitigation is a **shared behavioural test** covering both
+  rules: over one fixture data root the two passes are asserted to discover the
+  same document set — the same sorted top-level `*.md` glob under `workouts/`
+  behind the same `is_workout_document` filter (`load/engine.py:605-611`) — and
+  one fixture document is resolved by both passes with the two results asserted
+  equal, including for the traversal-ref refusal. Recorded as an accepted
+  duplication with a named guard, not as an oversight.
 
 ### benchmarks / profile (the athlete-benchmarks amendment)
 
@@ -909,6 +926,10 @@ class Benchmark:
     source: BenchmarkSource | None = None      # NEW
 ```
 
+- **Who writes `measured`**: only the athlete, by hand, to state that a number
+  was measured (a lab or field test) rather than merely typed; fitdocs never
+  writes it and reads it only as not-derived. The vocabulary stays closed and an
+  unrecognised origin is still rejected loudly, below.
 - **Validation** (`_validate_benchmark_source`, mirroring the module's existing
   `_validate_*` voice — a `BenchmarkError` naming the entry path):
   - absent → `None` (5.1); present but not a table → error.
@@ -1019,7 +1040,7 @@ class AthleteProfile:
 ##### API Contract
 | Command | Options | Behaviour | Exit |
 |---------|---------|-----------|------|
-| `fitdocs derive-benchmarks` | `--out PATH` (existing `_OUT_OPTION`), `--dry-run` | Runs the pass over the resolved data root and prints the report | `1` if `report.failures`, else `0` |
+| `fitdocs derive-benchmarks` | `--out PATH` (existing `_OUT_OPTION`), `--dry-run` | Runs the pass over the resolved data root and prints the report | `2` on a configuration fault, `1` if `report.failures`, else `0` |
 
 - The command name is deliberately distinct from every existing command and
   from the command `load-history` adds; neither spec may rename the other's.
@@ -1101,7 +1122,7 @@ Three tiers, matching the report's three buckets:
 |------|----------|-----------|------|
 | **Decline** | sport not covered, outside a validity window, no HR stream, coverage below the minimum, span mismatch, blocked method, superseded by a recorded entry | Reported with reason, observed and required; nothing written for that quantity; the run continues and succeeds | 0 |
 | **Failure** | unresolvable or undecodable archive, unreadable document, malformed effort tag | Reported per document with the cause; the run continues over other documents; other documents' derivations still write | 1 |
-| **Fatal** | unresolvable data root, malformed `athlete.toml`, malformed `[load]` settings, a write the reader would reject | The pass stops before writing; the existing file is untouched | 1 |
+| **Fatal** | unresolvable data root, malformed `athlete.toml`, malformed `[load]` settings, a write the reader would reject | The pass stops before writing; the existing file is untouched — via the existing `_config_error` / `_EXIT_CONFIG_ERROR` path, same as `load` and `check` | 2 |
 
 ### Error Categories and Responses
 - **User errors**: a malformed tag names the page, each offending key and the
@@ -1152,10 +1173,13 @@ is the inspection mode.
    byte-level no-op (6.4, 6.5).
 4. **Tagged-only re-parse**: a data root with one tagged and one untagged page;
    the untagged page's archive file is never opened (1.3).
-4b. **Archive-resolution equivalence**: one fixture document is resolved by this
-   pass and by `load/engine._resolve_archive`, and the two results are asserted
-   equal — including the traversal-ref refusal — which is the named mitigation
-   for stating the rule in two passes (1.4).
+4b. **Discovery and archive-resolution equivalence**: over one fixture data root
+   this pass and the load pass discover the same document set — the same sorted
+   top-level `*.md` glob under `workouts/` behind the same `is_workout_document`
+   filter (`load/engine.py:605-611`) — and one fixture document is resolved by
+   this pass and by `load/engine._resolve_archive` with the two results asserted
+   equal, including the traversal-ref refusal. This is the named mitigation for
+   stating both rules in two passes (1.2, 1.4).
 5. **Blocked method**: a 20-minute cycling test declines `METHOD_UNVERIFIED`
    naming the unverified locator, while a 55-minute time trial in the same run
    derives an FTP (4.3, 4.4).

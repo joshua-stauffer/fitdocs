@@ -82,6 +82,15 @@ assertions.
 - `src/fitdocs/cli.py` — 4.4 only.
 - `src/fitdocs/benchmarks.py` — 2.1 only.
 
+**Shared with `load-history`** (the other wave-2 spec, implementable in
+parallel with this one). Five files are edited by both: `tests/test_confinement.py`
+(4.5 here / `load-history` 5.4), `tests/test_contract_consumers.py` (4.5 / lh
+5.4), `tests/test_public_api.py` (4.5 / lh 5.4), `src/fitdocs/cli.py` (4.4 / lh
+5.3) and `README.md` (4.4 / lh 1.3). The partition rule in every one of them:
+**append** a row, an entry, a command or a section; never rewrite or reorder an
+existing one; never touch the peer spec's row. A conflict here means someone
+edited rather than appended.
+
 **Every new assertion names its mutation** (change-protocol § Fixture
 Discrimination): each task's detail bullets name the production mutation that
 must redden the assertion; the implementer runs it, observes red, reverts,
@@ -241,6 +250,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
     temporary file is created. Mutation each dies on: letting the provenance
     field inherit like the note does
   - _Requirements: 5.3, 5.5, 5.6, 5.7, 5.9, 6.6_
+  - _Boundary: BenchmarkProvenance_
   - _Depends: 2.1_
 
 - [ ] 2.3 Add the derived-subset write and the never-overwrite rule
@@ -267,6 +277,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
     atomic. Mutation each dies on: retaining derived entries instead of
     replacing them
   - _Requirements: 6.1, 6.3, 6.4, 6.5, 6.7, 6.8_
+  - _Boundary: BenchmarkProvenance_
   - _Depends: 2.2_
 
 - [ ] 3. The derivations
@@ -406,11 +417,13 @@ synthetic pages — the athlete's real wiki never enters the repository.
     document, an unresolvable archive, an undecodable archive, and a malformed
     tag rendered through the contract's own problem text; continue over the
     remaining documents in every case
-  - Add the archive-resolution equivalence test the design names as the
-    mitigation for stating that rule in two passes: one fixture document is
-    resolved by this pass and by the training-load pass's own resolver, and the
-    two results are asserted equal, including for a traversal reference where
-    both must refuse
+  - Add the equivalence test the design names as the mitigation for stating
+    those rules in two passes: over one fixture data root this pass and the
+    training-load pass discover the same document set — the same sorted
+    top-level markdown glob under the workouts directory behind the same
+    workout-document filter — and one fixture document is resolved by this pass
+    and by the training-load pass's own resolver, with the two results asserted
+    equal, including for a traversal reference where both must refuse
   - Observable: over a data root holding one tagged and one untagged page, only
     the tagged page's archive file is opened, proved by instrumenting the
     archive directory; a page whose archive is missing produces one failure and
@@ -533,6 +546,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
   - Pins: mutation each dies on: dating an entry from the run's today rather
     than from the page
   - _Requirements: 1.8, 1.9, 4.6, 6.5, 7.7, 9.1_
+  - _Boundary: DeriveCommand_
   - _Depends: 4.4, 4.5_
 
 - [ ] 5.3 (P) Land the athlete-benchmarks Existing Spec Update
