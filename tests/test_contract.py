@@ -36,8 +36,11 @@ Everything here is pure, so the tests are direct value assertions.
 from __future__ import annotations
 
 import ast
+import dataclasses
 import inspect
 from pathlib import Path
+
+import pytest
 
 from fitdocs import contract, docmerge
 
@@ -263,6 +266,184 @@ def test_managed_keys_equals_the_builders_emittable_keys_plus_load_keys() -> Non
 
     assert emittable, "no emittable keys found -- the AST walk found nothing"
     assert emittable | set(contract.LOAD_KEYS) == set(contract.MANAGED_KEYS)
+    # Sibling assertion (task 1.1, Req 1.1, 1.5): the keys the render layer can
+    # actually emit never collide with the user-owned effort-tag keys either --
+    # the same anti-drift discipline, applied to the second boundary.
+    assert emittable.isdisjoint(contract.USER_KEYS)
+
+
+# --------------------------------------------------------------------------- #
+# The effort-tag vocabulary: keys, USER_KEYS, EffortKind, and the three value
+# types (task 1.1, design §EffortVocabulary, Req 1.1, 1.4, 1.5, 2.1, 2.2, 5.3,
+# 5.5)
+# --------------------------------------------------------------------------- #
+
+
+def test_effort_key_constants_are_the_four_spellings_in_documentation_order() -> None:
+    """2.1: the exact spellings, and EFFORT_KEYS carries them in that order."""
+    assert contract.EFFORT_KEY == "effort"
+    assert contract.EFFORT_DISTANCE_KEY == "effort_distance_m"
+    assert contract.EFFORT_TIME_KEY == "effort_time_s"
+    assert contract.EFFORT_EVENT_KEY == "effort_event"
+    assert contract.EFFORT_KEYS == (
+        contract.EFFORT_KEY,
+        contract.EFFORT_DISTANCE_KEY,
+        contract.EFFORT_TIME_KEY,
+        contract.EFFORT_EVENT_KEY,
+    )
+
+
+def test_user_keys_equals_the_exact_frozenset_of_effort_keys() -> None:
+    """1.1: USER_KEYS is exactly the frozenset of EFFORT_KEYS, and is a frozenset."""
+    assert frozenset(contract.EFFORT_KEYS) == contract.USER_KEYS
+    assert isinstance(contract.USER_KEYS, frozenset)
+    # The literal spelling pinned by the task's own Observable line -- defeats a
+    # USER_KEYS built from the wrong constants that still happens to equal
+    # frozenset(EFFORT_KEYS) by construction.
+    assert (
+        frozenset({"effort", "effort_distance_m", "effort_time_s", "effort_event"})
+        == contract.USER_KEYS
+    )
+
+
+def test_user_keys_is_disjoint_with_managed_keys() -> None:
+    """1.1, 1.5: no key is both fitdocs-written and user-owned.
+
+    Named mutation (task 1.1): adding ``"effort"`` to ``MANAGED_KEYS`` reddens
+    this assertion (and the anti-drift equality above) together.
+    """
+    assert contract.USER_KEYS.isdisjoint(contract.MANAGED_KEYS)
+
+
+def test_effort_kind_is_the_closed_three_value_enumeration() -> None:
+    """2.2: exactly race/test/hard -- a fourth value is rejected, not accepted."""
+    assert {member.value for member in contract.EffortKind} == {"race", "test", "hard"}
+    assert contract.EffortKind.RACE == "race"
+    assert contract.EffortKind.TEST == "test"
+    assert contract.EffortKind.HARD == "hard"
+    with pytest.raises(ValueError):
+        contract.EffortKind("marathon")
+
+
+def test_effort_tag_is_a_frozen_dataclass_with_kind_and_three_optional_fields() -> None:
+    """5.3: kind plus three fields typed to accept None -- no fabricated default.
+
+    Reading back a ``None`` passed by this same test would be true before any
+    production change (post-condition-true-beforehand), so the "optional"
+    half of the claim is pinned on the *annotation* instead: each of the three
+    fields' type hint includes ``NoneType``, via ``typing.get_type_hints`` so a
+    ``from __future__ import annotations`` string annotation is resolved to the
+    real type before inspection.
+    """
+    import typing
+
+    field_names = {field.name for field in dataclasses.fields(contract.EffortTag)}
+    assert field_names == {"kind", "distance_m", "time_s", "event"}
+
+    hints = typing.get_type_hints(contract.EffortTag)
+    assert hints["kind"] is contract.EffortKind
+    for optional_field in ("distance_m", "time_s", "event"):
+        assert type(None) in typing.get_args(hints[optional_field]), optional_field
+
+    # No default is fabricated: dataclasses reports MISSING, not a real value,
+    # for every field -- constructing without all four arguments is a TypeError.
+    assert all(
+        field.default is dataclasses.MISSING
+        for field in dataclasses.fields(contract.EffortTag)
+    )
+    with pytest.raises(TypeError):
+        contract.EffortTag(kind=contract.EffortKind.RACE, distance_m=None, time_s=None)  # type: ignore[call-arg]
+
+    tag = contract.EffortTag(
+        kind=contract.EffortKind.RACE, distance_m=None, time_s=None, event=None
+    )
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        tag.kind = contract.EffortKind.TEST  # type: ignore[misc]
+
+
+def test_effort_tag_problem_is_a_frozen_dataclass_of_key_and_detail() -> None:
+    """3.3: both fields are ``str`` (not e.g. an ``int`` key or a ``list`` of
+    details), and neither has a fabricated default -- the same discrimination
+    applied to ``EffortTag`` in the sibling test above, carried across.
+    """
+    import typing
+
+    field_names = {
+        field.name for field in dataclasses.fields(contract.EffortTagProblem)
+    }
+    assert field_names == {"key", "detail"}
+
+    hints = typing.get_type_hints(contract.EffortTagProblem)
+    assert hints["key"] is str
+    assert hints["detail"] is str
+
+    assert all(
+        field.default is dataclasses.MISSING
+        and field.default_factory is dataclasses.MISSING
+        for field in dataclasses.fields(contract.EffortTagProblem)
+    )
+    with pytest.raises(TypeError):
+        contract.EffortTagProblem(key=contract.EFFORT_KEY)  # type: ignore[call-arg]
+
+    problem = contract.EffortTagProblem(key=contract.EFFORT_KEY, detail="bad kind")
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        problem.detail = "other"  # type: ignore[misc]
+
+
+def test_invalid_effort_tag_is_a_frozen_dataclass_of_problems() -> None:
+    """5.3: the third value type -- ``problems`` -- is frozen like the other two,
+    and ``problems`` is annotated as a ``tuple[EffortTagProblem, ...]`` -- not a
+    ``list`` (which would make the frozen instance's contents mutable in place
+    and the instance itself unhashable) and not a fabricated ``()`` default.
+    """
+    import typing
+
+    field_names = {
+        field.name for field in dataclasses.fields(contract.InvalidEffortTag)
+    }
+    assert field_names == {"problems"}
+
+    hints = typing.get_type_hints(contract.InvalidEffortTag)
+    assert typing.get_origin(hints["problems"]) is tuple
+    assert typing.get_args(hints["problems"]) == (contract.EffortTagProblem, Ellipsis)
+
+    assert all(
+        field.default is dataclasses.MISSING
+        and field.default_factory is dataclasses.MISSING
+        for field in dataclasses.fields(contract.InvalidEffortTag)
+    )
+    with pytest.raises(TypeError):
+        contract.InvalidEffortTag()  # type: ignore[call-arg]
+
+    invalid = contract.InvalidEffortTag(
+        problems=(contract.EffortTagProblem(key=contract.EFFORT_KEY, detail="x"),)
+    )
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        invalid.problems = ()  # type: ignore[misc]
+
+
+def test_invalid_effort_tag_describe_joins_key_detail_pairs_in_given_order() -> None:
+    """5.6: ``describe()`` renders ``"key: detail"`` pairs joined by ``"; "``.
+
+    Two distinct, non-alphabetically-sorted problems: this defeats a joiner
+    that uses ``", "`` instead of ``"; "``, a separator other than ``": "``
+    between key and detail, and an implementation that sorts the problems
+    rather than preserving the order given.
+    """
+    invalid = contract.InvalidEffortTag(
+        problems=(
+            contract.EffortTagProblem(
+                key=contract.EFFORT_TIME_KEY, detail="must be a positive number"
+            ),
+            contract.EffortTagProblem(
+                key=contract.EFFORT_KEY, detail="must be one of race, test, hard"
+            ),
+        )
+    )
+    assert invalid.describe() == (
+        "effort_time_s: must be a positive number; "
+        "effort: must be one of race, test, hard"
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -732,6 +913,16 @@ def test_unmanaged_keys_ignores_non_string_keys() -> None:
 
 def test_unmanaged_keys_is_empty_for_an_empty_mapping() -> None:
     assert contract.unmanaged_keys({}) == ()
+
+
+def test_unmanaged_keys_excludes_the_user_owned_effort_key() -> None:
+    """Task 1.1's exact pin: a user-owned key is not unmanaged; a stray one is.
+
+    Named mutation (task 1.1): reverting :func:`contract.unmanaged_keys` to
+    subtract only :data:`MANAGED_KEYS` brings ``"effort"`` back into the
+    result, i.e. ``("effort", "tags")``.
+    """
+    assert contract.unmanaged_keys({"effort": "race", "tags": ["a"]}) == ("tags",)
 
 
 # --------------------------------------------------------------------------- #

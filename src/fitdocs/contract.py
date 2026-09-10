@@ -48,6 +48,21 @@ out of date, higher means written by a newer fitdocs (Req 5.1-5.3, 5.5).
 contract* -- the guarantees, not the file format -- quoted in the documentation
 and in every in-tree declaration (Req 2.8).
 
+Three classes of frontmatter key
+---------------------------------
+Every frontmatter key a fitdocs document may carry falls into exactly one of
+three classes. **Managed** (:data:`MANAGED_KEYS`) keys are written by the
+render layer or the training-load pass and rewritten in full on every
+regeneration. **User-owned** (:data:`USER_KEYS`) keys -- currently the effort
+tag's four keys -- are never written by fitdocs and, once task 1.3 lands, will
+be carried forward verbatim on every rewrite, the same "yours to keep"
+guarantee :data:`USER_REGIONS` gives a region rather than a key; this module
+states only the vocabulary and the ownership class, not yet the carry
+mechanism. Everything else is **unmanaged**: a key fitdocs neither writes nor
+preserves, dropped with a warning on the next rewrite (:func:`unmanaged_keys`).
+The three classes partition every key a document can carry; ``MANAGED_KEYS``
+and ``USER_KEYS`` are disjoint, and held disjoint by test.
+
 Region ownership
 ----------------
 Three regions survive regeneration verbatim:
@@ -80,7 +95,9 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import date, datetime
+from enum import StrEnum
 from typing import Final
 
 import yaml
@@ -92,10 +109,19 @@ __all__ = [
     "DOC_BANNER",
     "DOC_VERSION",
     "DOC_VERSION_KEY",
+    "EFFORT_DISTANCE_KEY",
+    "EFFORT_EVENT_KEY",
+    "EFFORT_KEY",
+    "EFFORT_KEYS",
+    "EFFORT_TIME_KEY",
+    "EffortKind",
+    "EffortTag",
+    "EffortTagProblem",
     "FRONTMATTER_FENCE",
     "GENERATED_PREFIX",
     "GENERATOR",
     "GENERATOR_KEY",
+    "InvalidEffortTag",
     "LOAD_KEYS",
     "LOAD_NOT_COMPUTED",
     "LOAD_REGION",
@@ -106,6 +132,7 @@ __all__ = [
     "SOURCES_KEY",
     "TOOL_REGIONS",
     "TYPE_KEY",
+    "USER_KEYS",
     "USER_REGIONS",
     "UUID_KEY",
     "WORKOUT_PLACEHOLDER",
@@ -323,6 +350,99 @@ it is *unmanaged*, is not preserved, and is named in a warning before it goes
 :data:`LOAD_KEYS`; an anti-drift test pins the two together, failing the moment
 a key is added to either side alone.
 """
+
+# --- user-owned frontmatter keys: the effort tag (Req 1.1, 2.1) -------------
+
+EFFORT_KEY: Final[str] = "effort"
+"""Frontmatter key carrying the effort tag's kind (Req 2.1, 2.2)."""
+
+EFFORT_DISTANCE_KEY: Final[str] = "effort_distance_m"
+"""Frontmatter key carrying the official/certified course distance, metres."""
+
+EFFORT_TIME_KEY: Final[str] = "effort_time_s"
+"""Frontmatter key carrying the official/chip time, seconds."""
+
+EFFORT_EVENT_KEY: Final[str] = "effort_event"
+"""Frontmatter key carrying the event's name, ideally a quoted wikilink."""
+
+EFFORT_KEYS: Final[tuple[str, ...]] = (
+    EFFORT_KEY,
+    EFFORT_DISTANCE_KEY,
+    EFFORT_TIME_KEY,
+    EFFORT_EVENT_KEY,
+)
+"""The effort tag's keys in documentation order; also problem-report order
+(Req 2.1, 5.6)."""
+
+USER_KEYS: Final[frozenset[str]] = frozenset(EFFORT_KEYS)
+"""Every frontmatter key fitdocs preserves verbatim but never writes (Req 1.1,
+1.2) -- the user-owned class, parallel to :data:`USER_REGIONS` for a region.
+Disjoint with :data:`MANAGED_KEYS` (Req 1.1, 1.5): one test pins this set to
+the exact frozenset of :data:`EFFORT_KEYS`, a second pins that it is disjoint
+with :data:`MANAGED_KEYS` directly, and a third, the render-layer anti-drift
+test, additionally pins that no key :func:`fitdocs.render.frontmatter.build_frontmatter`
+can emit is in this set.
+"""
+
+
+class EffortKind(StrEnum):
+    """The effort tag's closed kind vocabulary (Req 2.2).
+
+    Matched exactly and case-sensitively against the ``effort`` frontmatter
+    value; any other string is a malformed tag, never a fourth kind.
+    """
+
+    RACE = "race"
+    TEST = "test"
+    HARD = "hard"
+
+
+@dataclass(frozen=True)
+class EffortTag:
+    """A well-formed effort tag (Req 2.1, 5.3).
+
+    ``distance_m``, ``time_s``, and ``event`` are ``None`` when the page does
+    not carry the corresponding key -- never a fabricated default (Req 5.3).
+    """
+
+    kind: EffortKind
+    distance_m: float | None
+    time_s: float | None
+    event: str | None
+
+
+@dataclass(frozen=True)
+class EffortTagProblem:
+    """One named defect in a malformed effort tag: which key, and why (Req 3.3)."""
+
+    key: str
+    detail: str
+
+
+@dataclass(frozen=True)
+class InvalidEffortTag:
+    """A malformed effort tag (Req 3.1, 5.6).
+
+    This type places no lower bound on ``problems`` itself: a hand-built
+    empty instance constructs, and :meth:`describe` returns ``""`` for it.
+    The reader that will produce every real instance (task 1.2) emits a
+    problem for each rule it fails, so an empty one does not arise in
+    practice -- but nothing here enforces that.
+    """
+
+    problems: tuple[EffortTagProblem, ...]
+
+    def describe(self) -> str:
+        """Render every problem as ``"key: detail"``, joined by ``"; "`` (Req 5.6).
+
+        The one renderer every consumer of a malformed tag -- the ``check``
+        finding, the ``sync``/``regen`` warning, and any downstream report --
+        shares, so the same defect is described identically everywhere.
+        """
+        return "; ".join(
+            f"{problem.key}: {problem.detail}" for problem in self.problems
+        )
+
 
 # --- provenance --------------------------------------------------------------
 
@@ -610,12 +730,17 @@ def sha_of_ref(ref: str) -> str | None:
 
 
 def unmanaged_keys(frontmatter: Mapping[str, object]) -> tuple[str, ...]:
-    """Frontmatter keys fitdocs does not manage, sorted and deduplicated (6.2, 6.3).
+    """Frontmatter keys fitdocs neither manages nor a user owns (6.2, 6.3, 1.4).
 
     The frontmatter block of a generated document is tool-owned and rewritten in
-    full, so any key outside :data:`MANAGED_KEYS` is dropped by the next
-    regeneration. Naming them is what turns that from silent data loss into a
-    warning the user can act on (Req 6.3) and into an audit finding (Req 8.4).
+    full, so any key outside :data:`MANAGED_KEYS` and :data:`USER_KEYS` is
+    dropped by the next regeneration. Naming them is what turns that from
+    silent data loss into a warning the user can act on (Req 6.3) and into an
+    audit finding (Req 8.4). A user-owned key -- the effort tag's keys -- is
+    never reported here (Req 1.4, 4.7): only a key in neither class is
+    unmanaged. The verbatim carry that makes that exemption safe arrives with
+    task 1.3; until it lands, a user-owned key is dropped by a rewrite without
+    a warning.
 
     Non-string keys -- YAML permits them -- are ignored: fitdocs cannot name one
     in a warning, and it has never written one. Returns ``()`` for a fully
@@ -626,7 +751,7 @@ def unmanaged_keys(frontmatter: Mapping[str, object]) -> tuple[str, ...]:
             {
                 key
                 for key in frontmatter
-                if isinstance(key, str) and key not in MANAGED_KEYS
+                if isinstance(key, str) and key not in MANAGED_KEYS | USER_KEYS
             }
         )
     )

@@ -65,7 +65,7 @@ report.
 
 - [ ] 1. Foundation: the user-owned key class, the vocabulary and the reader in the contract leaf
 
-- [ ] 1.1 Publish the user-owned key class and the effort-tag vocabulary
+- [x] 1.1 Publish the user-owned key class and the effort-tag vocabulary
   - Add the four effort key spellings as named constants, the ordered tuple
     of them in documentation order, and the user-owned set as an immutable
     frozenset of exactly those four; add the closed kind enumeration (`race`,
@@ -434,3 +434,33 @@ report.
     evidence each earlier task recorded and names anything left unfinished
   - _Requirements: 1.5, 4.6, 5.5, 6.5_
   - _Depends: 4.3, 5.2_
+
+## Implementation Notes
+
+- 1.1: pin a dataclass annotation with `typing.get_type_hints()` + `typing.get_args()`,
+  never by reading back a value the test itself passed to the constructor. The raw
+  `__annotations__` entry here is the *string* `'float | None'` (the module uses
+  `from __future__ import annotations`), so `get_args` on it returns `()` and the
+  assertion reds rather than silently passing -- it is fail-safe in the right
+  direction. `hasattr` on a dataclass field is `False` either way and pins nothing.
+- 1.1: a "no fabricated default" pin needs BOTH `f.default is dataclasses.MISSING`
+  AND `f.default_factory is dataclasses.MISSING` (default_factory is the escape
+  hatch), plus `pytest.raises(TypeError)` on a no-arg construction. A default on a
+  dataclass's FIRST field is unreachable -- it raises at class-definition time.
+- 1.1: `uv run mypy` does NOT type-check `tests/` (`[tool.mypy] files` in
+  pyproject.toml is `src` plus three named helpers), so narrowing an annotation whose
+  only consumer is a test is green under pytest AND mypy AND ruff. Three green tools
+  proved nothing; only the mutation did.
+- 1.1: when a task publishes a FAMILY of value types, sweep the whole family in one
+  round. Fixing `EffortTag` and leaving `EffortTagProblem`/`InvalidEffortTag` with the
+  identical defect cost a full rejection round on its own.
+- 1.1: three rejection rounds went to production *docstrings*, not code -- claims about
+  coverage that did not exist ("pinned in task 1.2") and present-tense claims about
+  behavior that had not landed ("is carried forward verbatim"). Tasks 1.2 and 1.3 will
+  land those mechanisms: when they do, update the `unmanaged_keys` and `InvalidEffortTag`
+  docstrings and the module docstring's "Three classes" section, which all currently
+  and correctly say the carry is still to come.
+- 1.1: `InvalidEffortTag` places no lower bound on `problems`; `InvalidEffortTag(problems=())`
+  constructs and `describe()` returns `""`. tasks.md line 75 calls it "a non-empty tuple",
+  but nothing enforces that. Task 1.2 owns the reader that produces every real instance --
+  see queue item for whether to pin it there.

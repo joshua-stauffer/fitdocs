@@ -296,6 +296,18 @@ _CONTRACT_SURFACE = {
     "TYPE_KEY",
     "UUID_KEY",
     "WORKOUT_TYPE",
+    # the effort-tag vocabulary (task 1.1; the reader and the line carry are
+    # published by tasks 1.2 and 1.3)
+    "EFFORT_KEY",
+    "EFFORT_DISTANCE_KEY",
+    "EFFORT_TIME_KEY",
+    "EFFORT_EVENT_KEY",
+    "EFFORT_KEYS",
+    "USER_KEYS",
+    "EffortKind",
+    "EffortTag",
+    "EffortTagProblem",
+    "InvalidEffortTag",
     # provenance
     "DOC_BANNER",
     "GENERATED_PREFIX",
