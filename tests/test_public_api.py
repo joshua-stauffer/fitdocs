@@ -326,6 +326,7 @@ _CONTRACT_SURFACE = {
     "document_date",
     "document_uuid",
     "document_version",
+    "effort_tag",
     "format_session_uuid",
     "frontmatter_close_index",
     "is_workout_document",

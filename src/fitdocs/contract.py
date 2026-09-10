@@ -93,6 +93,7 @@ makes that comparison trustworthy.
 
 from __future__ import annotations
 
+import math
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -142,6 +143,7 @@ __all__ = [
     "document_date",
     "document_uuid",
     "document_version",
+    "effort_tag",
     "end_marker",
     "format_session_uuid",
     "frontmatter_close_index",
@@ -425,9 +427,10 @@ class InvalidEffortTag:
 
     This type places no lower bound on ``problems`` itself: a hand-built
     empty instance constructs, and :meth:`describe` returns ``""`` for it.
-    The reader that will produce every real instance (task 1.2) emits a
-    problem for each rule it fails, so an empty one does not arise in
-    practice -- but nothing here enforces that.
+    The reader that produces every real instance, :func:`effort_tag`, emits
+    at least one problem whenever any rule fails, so an empty one does not
+    arise in practice -- but nothing here enforces that (see
+    ``.kiro/queue/2026-09-10-invalid-effort-tag-non-empty-unenforced.md``).
     """
 
     problems: tuple[EffortTagProblem, ...]
@@ -442,6 +445,172 @@ class InvalidEffortTag:
         return "; ".join(
             f"{problem.key}: {problem.detail}" for problem in self.problems
         )
+
+
+def _positive_finite_float(value: object) -> float | None:
+    """Return ``value`` as a ``float`` when it is a positive finite real
+    number, else ``None`` (Req 2.3, 5.2).
+
+    Shared by D1 and T1 so the guard decision and the stored value can never
+    disagree. Rejects ``bool`` (an ``int`` subclass), any non-numeric type,
+    non-finite values, and non-positive values. An arbitrary-precision
+    ``int`` too large to convert to ``float`` raises ``OverflowError`` from
+    :func:`float`; that is caught here rather than propagated. Only
+    ``OverflowError`` is caught, which covers every value the frontmatter
+    parser can produce.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        number = float(value)
+    except OverflowError:
+        return None
+    if not math.isfinite(number) or not number > 0:
+        return None
+    return number
+
+
+def effort_tag(
+    frontmatter: Mapping[str, object] | None,
+) -> EffortTag | InvalidEffortTag | None:
+    """Read the effort tag from a document's parsed frontmatter (Req 1.3, 5.1).
+
+    The one reader every consumer -- ``sync``, ``regen``, ``check``, and any
+    downstream feature -- calls instead of parsing :data:`EFFORT_KEYS` itself
+    (Req 5.4). Never raises (Req 5.2): ``frontmatter`` may be ``None`` (the
+    absent value :func:`parse_frontmatter` returns for an unreadable
+    document) or hold values of any shape.
+
+    Returns exactly one of three outcomes:
+
+    - ``None`` -- ``frontmatter`` is ``None``, or it is a mapping holding
+      none of :data:`EFFORT_KEYS`. Untagged, not malformed (Req 1.3).
+    - :class:`EffortTag` -- every effort key present passes its rule.
+    - :class:`InvalidEffortTag` -- at least one key fails its rule.
+
+    Six rules are applied in :data:`EFFORT_KEYS` order, at most one problem
+    per key (the first failing rule for that key), so ``describe()`` and
+    every reporter built on it name each offending key exactly once, in the
+    same order (Req 5.6):
+
+    - K1: ``effort`` must be present whenever any other effort key is
+      present -- an orphan field is malformed, never read as untagged
+      (Req 2.5).
+    - K2: ``effort``'s value must be exactly one of ``race``, ``test``,
+      ``hard``, matched case-sensitively (Req 2.2).
+    - D1/T1: ``effort_distance_m`` and ``effort_time_s`` must each be an
+      ``int`` or ``float`` that is not a ``bool``, finite, and strictly
+      positive (Req 2.3). Python's ``bool`` is an ``int`` subclass, so it is
+      rejected explicitly rather than read as ``0``/``1``. A string is never
+      parsed into a number, however numeric it looks (Req 3.2).
+    - D2: ``effort_distance_m`` requires ``effort_time_s`` to also be
+      present; ``effort_time_s`` may stand alone (Req 2.4).
+    - E1: ``effort_event`` must be a ``str`` whose stripped form is
+      non-empty; stored exactly as written, never stripped (Req 2.6). An
+      unquoted wikilink is read by YAML as a nested list rather than text,
+      so that shape is reported here too, with a quoting hint (Req 3.7).
+
+    Numeric fields are stored as ``float``; ``event`` is stored as written.
+    Nothing is coerced, rounded, or defaulted (Req 3.2).
+    """
+    if frontmatter is None:
+        return None
+    if not any(key in frontmatter for key in EFFORT_KEYS):
+        return None
+
+    problems: list[EffortTagProblem] = []
+    kind: EffortKind | None = None
+    distance_m: float | None = None
+    time_s: float | None = None
+    event: str | None = None
+
+    has_other_effort_key = any(
+        key in frontmatter
+        for key in (EFFORT_DISTANCE_KEY, EFFORT_TIME_KEY, EFFORT_EVENT_KEY)
+    )
+    if EFFORT_KEY not in frontmatter:
+        if has_other_effort_key:
+            problems.append(
+                EffortTagProblem(
+                    EFFORT_KEY,
+                    "required whenever any other effort key is present; "
+                    "expected one of race, test, hard",
+                )
+            )
+    else:
+        kind_value = frontmatter[EFFORT_KEY]
+        if not isinstance(kind_value, str) or kind_value not in (
+            EffortKind.RACE,
+            EffortKind.TEST,
+            EffortKind.HARD,
+        ):
+            problems.append(
+                EffortTagProblem(
+                    EFFORT_KEY,
+                    "must be one of race, test, hard (exact, lowercase); "
+                    f"got {kind_value!r}",
+                )
+            )
+        else:
+            kind = EffortKind(kind_value)
+
+    if EFFORT_DISTANCE_KEY in frontmatter:
+        distance_value = frontmatter[EFFORT_DISTANCE_KEY]
+        distance_number = _positive_finite_float(distance_value)
+        if distance_number is None:
+            problems.append(
+                EffortTagProblem(
+                    EFFORT_DISTANCE_KEY,
+                    f"must be a positive number of metres; got {distance_value!r}",
+                )
+            )
+        elif EFFORT_TIME_KEY not in frontmatter:
+            problems.append(
+                EffortTagProblem(
+                    EFFORT_DISTANCE_KEY,
+                    "requires effort_time_s: a course distance is an "
+                    "official result only together with its time",
+                )
+            )
+        else:
+            distance_m = distance_number
+
+    if EFFORT_TIME_KEY in frontmatter:
+        time_value = frontmatter[EFFORT_TIME_KEY]
+        time_number = _positive_finite_float(time_value)
+        if time_number is None:
+            problems.append(
+                EffortTagProblem(
+                    EFFORT_TIME_KEY,
+                    f"must be a positive number of seconds; got {time_value!r}",
+                )
+            )
+        else:
+            time_s = time_number
+
+    if EFFORT_EVENT_KEY in frontmatter:
+        event_value = frontmatter[EFFORT_EVENT_KEY]
+        if not isinstance(event_value, str) or not event_value.strip():
+            problems.append(
+                EffortTagProblem(
+                    EFFORT_EVENT_KEY,
+                    "must be non-empty text; quote a wikilink, e.g. "
+                    f'effort_event: "[[Boston Marathon 2024]]"; got {event_value!r}',
+                )
+            )
+        else:
+            event = event_value
+
+    if problems:
+        return InvalidEffortTag(problems=tuple(problems))
+    if kind is None:
+        # Structurally unreachable in the rules above: reaching here with no
+        # problems recorded means EFFORT_KEY was absent while no other effort
+        # key was present either, which the early absence check above already
+        # returns None for. Kept as a guard against ever raising rather than
+        # constructing an EffortTag with no kind, in keeping with Req 5.2.
+        return None
+    return EffortTag(kind=kind, distance_m=distance_m, time_s=time_s, event=event)
 
 
 # --- provenance --------------------------------------------------------------

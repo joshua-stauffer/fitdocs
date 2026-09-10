@@ -99,7 +99,7 @@ report.
   - _Requirements: 1.1, 1.4, 1.5, 2.1, 2.2, 5.3, 5.5_
   - _Boundary: EffortVocabulary, UserKeyCarry (unmanaged_keys), SurfacePins_
 
-- [ ] 1.2 Implement the one typed reader with loud, canonical validation
+- [x] 1.2 Implement the one typed reader with loud, canonical validation
   - Add the reader that takes parsed frontmatter (or the parser's absent
     value) and returns exactly one of: nothing when the frontmatter is absent
     or holds none of the four keys; the valid tag; or the malformed tag with
@@ -464,3 +464,28 @@ report.
   constructs and `describe()` returns `""`. tasks.md line 75 calls it "a non-empty tuple",
   but nothing enforces that. Task 1.2 owns the reader that produces every real instance --
   see queue item for whether to pin it there.
+- 1.2: `yaml.safe_load` returns Python's ARBITRARY-PRECISION `int`, and `float()`
+  cannot always convert one -- `math.isfinite(int("9"*400))` raises
+  `OverflowError`. An `isinstance(v, (int, float))` guard does NOT protect you.
+  Any reader with a "never raises" contract that validates a numeric frontmatter
+  field must wrap the conversion. The shape that works: one helper returning
+  `float | None` that catches `OverflowError` and derives BOTH the guard decision
+  and the stored value from the single conversion, so the two cannot disagree.
+  Fixing only `isfinite` MOVES the crash to the later `float()` call.
+- 1.2: `x = float(v)` -> `x = v` on a field annotated `float | None` is green under
+  pytest AND mypy -- mypy's numeric tower accepts `int` where `float` is declared,
+  no `type: ignore` needed. "Stored as a float" needs an explicit
+  `isinstance(result, float)` assertion or it is pinned by nothing.
+- 1.2: rules that short-circuit at the first failure per key make CONFOUNDED
+  fixtures easy to ship. Two survivors here came from fixture sets that varied
+  every axis but one: the only two-problem fixture was `{effort, effort_time_s}`,
+  so swapping the whole distance and time blocks was green; and every invalid-
+  distance fixture also carried a valid time, so emitting two problems for one
+  key was green. A fixture must reach the rule it claims to test.
+- 1.2: a test asserting only `f(a) == f(b)` is defeated by any mutation making
+  both sides `None`. The sport-blindness test passed under a mutation that made
+  the reader return "untagged" for EVERY real fitdocs document. Assert a concrete
+  expected value on both sides, not just their mutual equality.
+- 1.2: the `kind is None` guard at the end of `effort_tag` is unreachable but MUST
+  STAY -- deleting it fails mypy strict narrowing (`Argument "kind" to "EffortTag"
+  has incompatible type "EffortKind | None"`).
