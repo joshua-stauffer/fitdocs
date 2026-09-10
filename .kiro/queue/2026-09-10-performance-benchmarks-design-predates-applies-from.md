@@ -73,3 +73,36 @@ instruction would be violated by a session that never saw it.
 Whether a derived entry may ever carry `applies_from` (e.g. the athlete later
 declares that a derived FTP applied from an earlier date) — probably yes by
 hand, never by the deriver; the amendment should say so.
+
+## Update 2026-09-10 (wave 0 landed: training-load Amendment 4 merged to main)
+
+The shape wave 0 leaves, so the amendment can be written against code rather
+than the log line:
+
+- `fitdocs.benchmarks.Benchmark` fields, in order: `kind, discipline, value,
+  measured_on, note, applies_from`; `applies_from: date | None = None` is
+  trailing and defaulted. `source` goes after it.
+- `benchmarks_to_document` emits `value`, `measured_on`, then `applies_from`
+  only when present; the group sort key is `measured_on` alone and is pinned
+  against `applies_from` by
+  `tests/test_benchmarks.py::test_serializer_sorts_mixed_group_by_measured_on_not_applies_from`.
+  A `source` sub-table must not change the sort key either — add the same
+  mixed-group fixture for it. Omitting a `None` field is load-bearing for the
+  store's merge (see the function's docstring).
+- `AthleteProfile.with_benchmark(kind, *, discipline, value, measured_on,
+  note=None, applies_from=None)`; a `source=` keyword goes last.
+- `_merge_benchmarks_document` in `src/fitdocs/load/profile.py` overlays
+  whatever keys the fresh serialized record carries and leaves existing keys
+  the record omits untouched — that is how `note` and `applies_from` are
+  both preserved on a rewrite that does not mention them. It has **no scope
+  conditional**; the 7.2 reviewer noted that an athlete-scope-only
+  regression in preserve/overlay would pass the store suite because no
+  fixture varies scope through the merge. When the two-half overlay rule for
+  `source` lands, keep the merge scope-agnostic and add athlete-wide fixtures
+  for every overlay branch.
+- `BenchmarkSet.applicable` is two-tier: a derived entry with no
+  `applies_from` is tier-1 only, exactly like a hand-written one; derived
+  entries need no `applies_from` (roadmap Phase 6).
+- Lesson from seven review rounds on 7.1 (tasks.md § Implementation Notes
+  "From task 7.1"): enumerate layers × scopes × kinds × group shapes before
+  the first report on any task that adds a field to this entry shape.
