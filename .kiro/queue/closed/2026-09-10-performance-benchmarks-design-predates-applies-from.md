@@ -1,7 +1,7 @@
 ---
 id: 2026-09-10-performance-benchmarks-design-predates-applies-from
 title: performance-benchmarks' benchmark-entry shape predates wave 0's applies_from field — amend before implementing tasks 2.1–2.3 and 5.3
-status: open
+status: done
 importance: high
 importance_why: Tasks 2.1–2.3 implement an entry shape (source as the fourth field, emitted after note, "emits three fields" today) that will be wrong the moment the in-flight wave 0 branch merges with applies_from as the fourth field; implementing from the spec as written would re-add or reorder a field a peer just landed.
 effort: S
@@ -106,3 +106,57 @@ than the log line:
 - Lesson from seven review rounds on 7.1 (tasks.md § Implementation Notes
   "From task 7.1"): enumerate layers × scopes × kinds × group shapes before
   the first report on any task that adds a field to this entry shape.
+
+## Resolution
+
+**Closed 2026-09-10** — resolved by performance-benchmarks Amendment 1, merged
+to `main` at `7541553` (`spec/perfbench-applies-from`, ff-only, worktree and
+branch removed).
+
+Written against wave 0's landed code, not against the peer's log line, as this
+item's own step 1 required. Verified at close:
+
+- `Benchmark` field order read out of `src/fitdocs/benchmarks.py`:
+  `kind, discipline, value, measured_on, note, applies_from`. Emitted key order
+  read out of `benchmarks_to_document`: `value, measured_on, applies_from,
+  note`. **The two differ**, which the amendment now states explicitly — the
+  original design's "emits `source` after `note`" was accidentally still true
+  for the wrong reason.
+- `design.md:1039-1040` — `source` is the fifth field, appended after
+  `applies_from`.
+- `design.md:1063-1075` — `source` emitted last; group sort key stays
+  `measured_on` alone, with the `source` mixed-group fixture required and
+  `::test_serializer_sorts_mixed_group_by_measured_on_not_applies_from` named
+  as the one it belongs beside. Same requirement on `tasks.md:231-236`.
+- `design.md` cross-spec obligations 1–7 — the deriver never writes
+  `applies_from` (so a derived entry is tier-1 only), the merge stays
+  scope-agnostic with an athlete-wide fixture owed on every overlay branch, and
+  the 7.1 "enumerate layers × scopes × kinds × group shapes" lesson is carried
+  into both documents.
+- `tasks.md` — task 5.3 lands as `athlete-benchmarks` **Amendment 2** and is
+  told to read that spec's post-Amendment-1 text rather than the pre-merge line
+  numbers. Tasks were amended in place: `git diff 4b76906..7541553` shows no
+  task line added, removed or renumbered (23 leaf tasks before and after), so
+  step 3's "regenerate only if wording changes" was satisfied without a
+  regeneration.
+- `spec.json` — phase `tasks-generated`, all approvals true,
+  `ready_for_implementation` true, unchanged; one `amendments` entry recording
+  the correction and the ruling below.
+
+**The open question this item raised is answered, and one it did not raise was
+found.** "Whether a derived entry may ever carry `applies_from`" → never by the
+deriver, freely by hand; a hand-added one survives a refresh under the
+inherit-on-absent rule. Beyond that, the independent review gate (round 1
+NEEDS_FIXES: 1 blocking, 2 should-fix, 5 notes, all applied) found that the
+first draft asserted away a real interaction: a derived entry measured *inside*
+an athlete's declared `applies_from` window has no same-date collision, so the
+pass writes it, and it then wins tier 1 for activities in the overlap. **Ruled
+accepted** — `athlete-benchmarks` Req 3.10 makes tier 1 beat tier 2
+unconditionally, and Requirement 6's "shadow" is date-scoped throughout — so
+the pass does not decline on window overlap, and the shadowing invariant plus
+the 6.1/6.2 traceability line are qualified to "on its own date". Declining
+instead would be a behavioural change needing its own criterion.
+
+Filed rather than folded in: `2026-09-10-resolve-archive-citation-stale` (a
+pre-existing wrong line range for `_resolve_archive`, correct before wave 0 too,
+so out of this amendment's scope).
