@@ -290,3 +290,38 @@ def test_parsed_benchmarks_and_raw_document_agree_after_a_reload(
     raw_entry = raw["benchmarks"]["run"]["ftp_watts"][0]
     assert resolved.value == raw_entry["value"]
     assert resolved.measured_on == raw_entry["measured_on"]
+
+
+# --- hand-written applies_from resolves through the store (Amendment 1) ---
+
+
+def test_hand_written_applies_from_resolves_before_its_own_measured_on(
+    tmp_path: Path,
+) -> None:
+    """A hand-edited ``athlete.toml`` carrying ``applies_from`` on a raw
+    entry -- never written through ``with_benchmark`` -- still resolves via
+    the store's ``benchmark`` query (tier 2), and does not resolve for a
+    date before ``applies_from``."""
+    (tmp_path / "athlete.toml").write_text(
+        "[[benchmarks.run.ftp_watts]]\n"
+        "value = 275\n"
+        "measured_on = 2024-08-20\n"
+        "applies_from = 2024-07-01\n"
+    )
+
+    profile = load_profile(tmp_path)
+
+    resolved = profile.benchmark(
+        BenchmarkKind.FTP_WATTS, discipline=Sport.RUN, on=date(2024, 7, 15)
+    )
+    assert resolved is not None
+    assert resolved.value == 275
+    assert resolved.applies_from == date(2024, 7, 1)
+
+    assert (
+        profile.benchmark(
+            BenchmarkKind.FTP_WATTS, discipline=Sport.RUN, on=date(2024, 6, 30)
+        )
+        is None
+    )
+    assert profile.has_benchmark(BenchmarkKind.FTP_WATTS, discipline=Sport.RUN) is True

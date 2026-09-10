@@ -155,7 +155,13 @@ class AthleteProfile:
         returns ``None`` unconditionally: an undated activity has no
         applicable benchmark, regardless of what is on file (Req 3.7, 9.5).
         Otherwise delegates to
-        :meth:`fitdocs.benchmarks.BenchmarkSet.applicable`.
+        :meth:`fitdocs.benchmarks.BenchmarkSet.applicable`, which -- absent an
+        athlete-declared exception -- never returns an entry measured after
+        ``on``; the one exception (*Amendment 1*, athlete-benchmarks 3.10)
+        is an entry whose own ``applies_from`` reaches back to or before
+        ``on``, which the athlete recorded explicitly via
+        :meth:`AthleteProfile.with_benchmark`'s ``applies_from`` -- this
+        method itself never applies a later measurement on its own.
         """
         if on is None:
             return None
@@ -223,6 +229,7 @@ class AthleteProfile:
         value: float,
         measured_on: date,
         note: str | None = None,
+        applies_from: date | None = None,
     ) -> AthleteProfile:
         """Return a new profile with one dated benchmark measurement recorded.
 
@@ -232,7 +239,13 @@ class AthleteProfile:
         stores nothing (Req 6.9). ``value`` is validated before anything is
         stored -- finite, positive, and (for a beats-per-minute quantity) a
         whole number -- and any violation likewise raises :class:`ValueError`
-        with nothing stored (Req 6.9).
+        with nothing stored (Req 6.9). ``applies_from`` (*Amendment 1*, Req
+        6.10) is the athlete's own declaration that this measurement also
+        stands in for activities dated on or after ``applies_from`` that no
+        earlier-measured entry covers; a value falling *after* ``measured_on``
+        is refused with :class:`ValueError`, in the same voice as the scope
+        and value refusals above, and nothing is stored (Req 6.10).
+        ``applies_from == measured_on`` is accepted and behaves as if omitted.
 
         The entry is keyed by ``(discipline, kind, measured_on)`` (Req 1.5):
         an existing entry with the same key is *replaced*, never duplicated
@@ -254,10 +267,15 @@ class AthleteProfile:
         together these are what make "the writer cannot emit a shape the
         reader would reject" true, not merely asserted; the guarantee is
         enforced there, not by this method alone. No flat threshold key is
-        written by this method (Req 6.8).
+        written by this method (Req 6.8). Omitting ``applies_from`` on a
+        same-date rewrite (leaving it ``None``) never erases an
+        ``applies_from`` already on file for that ``measured_on`` -- overlaid,
+        not replaced, exactly as ``note`` (Req 6.4, 6.10); see
+        :func:`_merge_benchmarks_document`.
         """
         _check_benchmark_scope(kind, discipline)
         stored_value = _validate_benchmark_value(kind, value)
+        _check_benchmark_applies_from(applies_from, measured_on)
 
         key = (discipline, kind, measured_on)
         entries = [
@@ -272,6 +290,7 @@ class AthleteProfile:
                 value=stored_value,
                 measured_on=measured_on,
                 note=note,
+                applies_from=applies_from,
             )
         )
 
@@ -532,20 +551,27 @@ def _merge_benchmarks_document(
     module wrote it one-to-many -- and, within each ``(scope, kind)`` group
     the fresh entries cover, merges *per entry* keyed by ``measured_on``: an
     existing raw entry table at that date is preserved and only its
-    recognized fields (``value``, ``measured_on``, ``note``) are overlaid
-    with the freshly validated ones, so an unrecognized key on that entry
-    (e.g. a ``source`` a future feature wrote) survives even when the
-    entry's value is the one being replaced. A ``measured_on`` with no prior
-    raw entry (a genuinely new date) has nothing to inherit and is emitted
-    as freshly built. Every scope key and every unrecognized kind key the
-    fresh groups do not cover is left untouched entirely (Req 6.4, 1.10).
+    recognized fields (``value``, ``measured_on``, ``note``, and -- *Amendment
+    1* -- ``applies_from``) are overlaid with the freshly validated ones, so
+    an unrecognized key on that entry (e.g. a ``source`` a future feature
+    wrote) survives even when the entry's value is the one being replaced. A
+    ``measured_on`` with no prior raw entry (a genuinely new date) has
+    nothing to inherit and is emitted as freshly built. Every scope key and
+    every unrecognized kind key the fresh groups do not cover is left
+    untouched entirely (Req 6.4, 1.10).
 
     One accepted consequence of overlay-not-replace: if a later
     :meth:`AthleteProfile.with_benchmark` call omits ``note`` (leaving it
     ``None``) for a ``measured_on`` that already carries a ``note``, the old
     ``note`` is *not* cleared -- ``None`` here means "not supplied", not
     "erase", consistent with this store never deleting data a caller did
-    not explicitly ask to remove.
+    not explicitly ask to remove. ``applies_from`` behaves identically (Req
+    6.10): :func:`fitdocs.benchmarks.benchmarks_to_document` omits the
+    ``applies_from`` key from a fresh entry's record entirely when the
+    ``Benchmark`` it was built from carries ``None``, so ``combined.update``
+    below leaves an existing raw ``applies_from`` at that ``measured_on``
+    untouched rather than overwriting it with an absence; a fresh entry that
+    *does* carry one overlays it exactly as a fresh ``note`` would.
     """
     merged: dict[str, object] = _canonicalize_benchmarks_region(existing)
     new_region = cast(
@@ -600,6 +626,28 @@ def _check_benchmark_scope(kind: BenchmarkKind, discipline: Sport | None) -> Non
         raise ValueError(
             f"{kind.value} is a discipline-scoped quantity; record it with an "
             f"explicit discipline, not discipline=None"
+        )
+
+
+def _check_benchmark_applies_from(applies_from: date | None, measured_on: date) -> None:
+    """Enforce :meth:`AthleteProfile.with_benchmark`'s ``applies_from`` precondition
+    (*Amendment 1*, Req 6.10).
+
+    Mirrors the bare-date-order rule
+    :func:`fitdocs.benchmarks._validate_applies_from` enforces on a parsed
+    *file* entry, but here a value falling after ``measured_on`` is the
+    mutation *caller's* error, not malformed data on disk -- so this raises
+    the plain :class:`ValueError` this module already uses for a
+    caller-supplied violation (mirroring :func:`_check_benchmark_scope` and
+    :func:`_validate_benchmark_value`), never
+    :class:`~fitdocs.benchmarks.BenchmarkError`, and nothing is stored.
+    ``applies_from is None`` (not supplied) and ``applies_from ==
+    measured_on`` are both accepted.
+    """
+    if applies_from is not None and applies_from > measured_on:
+        raise ValueError(
+            f"applies_from ({applies_from.isoformat()}) must not fall after "
+            f"measured_on ({measured_on.isoformat()})"
         )
 
 

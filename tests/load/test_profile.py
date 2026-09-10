@@ -1406,6 +1406,347 @@ def test_with_benchmark_note_omission_keeps_prior_note_but_explicit_note_replace
     assert entry2["note"] == "new note"
 
 
+# --- applies_from: carry, refusal, and round trip (Amendment 1, Req 6.10) -
+
+
+def test_with_benchmark_carries_applies_from_onto_entry_discipline_scoped(
+    tmp_path: Path,
+) -> None:
+    """A discipline-scoped kind's ``with_benchmark`` carries ``applies_from``
+    onto the built :class:`Benchmark` (asserted directly on
+    ``profile.benchmarks.entries``, before any save)."""
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RUN,
+        value=333,
+        measured_on=date(2025, 3, 10),
+        applies_from=date(2025, 2, 1),
+    )
+
+    assert len(profile.benchmarks.entries) == 1
+    entry = profile.benchmarks.entries[0]
+    assert entry.applies_from == date(2025, 2, 1)
+    assert entry.measured_on == date(2025, 3, 10)
+
+
+def test_with_benchmark_carries_applies_from_onto_entry_athlete_scoped(
+    tmp_path: Path,
+) -> None:
+    """Same carry for an athlete-wide (``discipline=None``) kind."""
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.MAX_HR_BPM,
+        discipline=None,
+        value=190,
+        measured_on=date(2025, 1, 15),
+        applies_from=date(2024, 12, 1),
+    )
+
+    assert len(profile.benchmarks.entries) == 1
+    entry = profile.benchmarks.entries[0]
+    assert entry.applies_from == date(2024, 12, 1)
+
+
+def test_with_benchmark_rejects_applies_from_after_measured_on_discipline_scoped(
+    tmp_path: Path,
+) -> None:
+    """A value falling after ``measured_on`` raises ``ValueError`` naming
+    ``applies_from`` and both dates, and stores nothing (6.10 via 6.9).
+
+    Seeds a real, non-empty profile file first -- the same shape as
+    ``test_with_benchmark_rejects_non_positive_value`` -- so that the
+    "unchanged" assertions compare against a state that is genuinely at
+    stake: an empty starting profile makes ``base.data == data_before`` the
+    tautology ``{} == {}`` (the first round of review replaced both snapshots
+    with bare literals and the module stayed green).
+    """
+    seed = (
+        "resting_hr_bpm = 52\n"
+        "\n"
+        "[[benchmarks.run.ftp_watts]]\n"
+        "value = 233\n"
+        "measured_on = 2024-07-19\n"
+    )
+    path = tmp_path / PROFILE_FILENAME
+    path.write_text(seed)
+    bytes_before = path.read_bytes()
+    base = load_profile(tmp_path)
+    data_before = copy.deepcopy(dict(base.data))
+    entries_before = base.benchmarks.entries
+    assert data_before != {}  # something is genuinely at stake, not a no-op
+    assert len(entries_before) == 1
+
+    with pytest.raises(ValueError) as excinfo:
+        base.with_benchmark(
+            BenchmarkKind.FTP_WATTS,
+            discipline=Sport.RUN,
+            value=311,
+            measured_on=date(2025, 4, 5),
+            applies_from=date(2025, 4, 6),
+        )
+
+    message = str(excinfo.value)
+    assert "applies_from" in message
+    assert "2025-04-06" in message and "2025-04-05" in message
+    assert base.data == data_before
+    assert base.benchmarks.entries == entries_before
+    assert path.read_bytes() == bytes_before
+
+
+def test_with_benchmark_rejects_applies_from_after_measured_on_athlete_scoped(
+    tmp_path: Path,
+) -> None:
+    """The same refusal for an athlete-wide quantity, over a seeded non-empty
+    profile whose existing entry is itself athlete-scoped."""
+    seed = "[[benchmarks.athlete.max_hr_bpm]]\nvalue = 187\nmeasured_on = 2024-10-28\n"
+    path = tmp_path / PROFILE_FILENAME
+    path.write_text(seed)
+    bytes_before = path.read_bytes()
+    base = load_profile(tmp_path)
+    data_before = copy.deepcopy(dict(base.data))
+    entries_before = base.benchmarks.entries
+    assert data_before != {}
+    assert len(entries_before) == 1
+
+    with pytest.raises(ValueError) as excinfo:
+        base.with_benchmark(
+            BenchmarkKind.MAX_HR_BPM,
+            discipline=None,
+            value=195,
+            measured_on=date(2025, 2, 2),
+            applies_from=date(2025, 2, 3),
+        )
+
+    message = str(excinfo.value)
+    assert "applies_from" in message
+    assert "2025-02-03" in message and "2025-02-02" in message
+    assert base.data == data_before
+    assert base.benchmarks.entries == entries_before
+    assert path.read_bytes() == bytes_before
+
+
+def test_with_benchmark_accepts_applies_from_equal_to_measured_on(
+    tmp_path: Path,
+) -> None:
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RUN,
+        value=321,
+        measured_on=date(2025, 5, 5),
+        applies_from=date(2025, 5, 5),
+    )
+
+    entry = profile.benchmarks.entries[0]
+    assert entry.applies_from == date(2025, 5, 5)
+
+
+def test_with_benchmark_round_trip_resolves_tier2_discipline(
+    tmp_path: Path,
+) -> None:
+    """Save then reload, and resolve through :meth:`AthleteProfile.benchmark`
+    (tier 2) for an activity strictly between ``applies_from`` and
+    ``measured_on``; also assert the *false* side (before ``applies_from``)
+    is ``None`` and that presence is ``True`` either way (reachability both
+    sides)."""
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RUN,
+        value=345,
+        measured_on=date(2025, 8, 20),
+        applies_from=date(2025, 7, 1),
+    )
+    save_profile(tmp_path, profile)
+
+    reloaded = load_profile(tmp_path)
+    resolved = reloaded.benchmark(
+        BenchmarkKind.FTP_WATTS, discipline=Sport.RUN, on=date(2025, 7, 15)
+    )
+    assert resolved is not None
+    assert resolved.value == 345
+    assert resolved.applies_from == date(2025, 7, 1)
+
+    assert (
+        reloaded.benchmark(
+            BenchmarkKind.FTP_WATTS, discipline=Sport.RUN, on=date(2025, 6, 30)
+        )
+        is None
+    )
+    assert reloaded.has_benchmark(BenchmarkKind.FTP_WATTS, discipline=Sport.RUN) is True
+
+
+def test_with_benchmark_round_trip_resolves_tier2_athlete(
+    tmp_path: Path,
+) -> None:
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.MAX_HR_BPM,
+        discipline=None,
+        value=188,
+        measured_on=date(2025, 6, 10),
+        applies_from=date(2025, 5, 1),
+    )
+    save_profile(tmp_path, profile)
+
+    reloaded = load_profile(tmp_path)
+    resolved = reloaded.benchmark(
+        BenchmarkKind.MAX_HR_BPM, discipline=None, on=date(2025, 5, 15)
+    )
+    assert resolved is not None
+    assert resolved.value == 188
+
+    assert (
+        reloaded.benchmark(
+            BenchmarkKind.MAX_HR_BPM, discipline=None, on=date(2025, 4, 30)
+        )
+        is None
+    )
+    assert reloaded.has_benchmark(BenchmarkKind.MAX_HR_BPM, discipline=None) is True
+
+
+def test_with_benchmark_and_save_writes_applies_from_key_to_toml(
+    tmp_path: Path,
+) -> None:
+    """Pins the serializer path *through the store* -- read the file bytes
+    and parse independently with ``tomllib``, not only the in-memory
+    profile."""
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RUN,
+        value=350,
+        measured_on=date(2025, 9, 9),
+        applies_from=date(2025, 9, 1),
+    )
+    save_profile(tmp_path, profile)
+
+    raw = tomllib.loads((tmp_path / PROFILE_FILENAME).read_text())
+    entry = raw["benchmarks"]["run"]["ftp_watts"][0]
+    assert entry["applies_from"] == date(2025, 9, 1)
+
+
+def test_with_benchmark_rewrite_with_applies_from_overlays_a_different_existing_one(
+    tmp_path: Path,
+) -> None:
+    """A same-``measured_on`` rewrite that carries ``applies_from`` overlays
+    an existing raw entry's *different* ``applies_from`` -- the new one
+    wins."""
+    seed = (
+        "[[benchmarks.run.ftp_watts]]\n"
+        "value = 200\n"
+        "measured_on = 2024-03-01\n"
+        "applies_from = 2024-01-10\n"
+    )
+    (tmp_path / PROFILE_FILENAME).write_text(seed)
+
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RUN,
+        value=205,
+        measured_on=date(2024, 3, 1),
+        applies_from=date(2024, 2, 20),
+    )
+    save_profile(tmp_path, profile)
+
+    raw = tomllib.loads((tmp_path / PROFILE_FILENAME).read_text())
+    entry = raw["benchmarks"]["run"]["ftp_watts"][0]
+    assert entry["applies_from"] == date(2024, 2, 20)
+    assert entry["value"] == 205
+
+
+def test_with_benchmark_rewrite_without_applies_from_preserves_existing_one(
+    tmp_path: Path,
+) -> None:
+    """A same-``measured_on`` rewrite that omits ``applies_from`` leaves the
+    existing raw entry's ``applies_from`` untouched -- and the value *did*
+    change, so this pins a real overlay, not a no-op rewrite."""
+    seed = (
+        "[[benchmarks.run.ftp_watts]]\n"
+        "value = 200\n"
+        "measured_on = 2024-05-05\n"
+        "applies_from = 2024-04-05\n"
+    )
+    (tmp_path / PROFILE_FILENAME).write_text(seed)
+
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RUN,
+        value=222,
+        measured_on=date(2024, 5, 5),
+    )
+    save_profile(tmp_path, profile)
+
+    raw = tomllib.loads((tmp_path / PROFILE_FILENAME).read_text())
+    entry = raw["benchmarks"]["run"]["ftp_watts"][0]
+    assert entry["value"] == 222, "the rewrite must be real, not a no-op"
+    assert entry["applies_from"] == date(2024, 4, 5), (
+        "an omitted applies_from must not erase the prior one"
+    )
+
+
+def test_with_benchmark_mixed_group_preserves_and_adds_plain_entries_in_date_order(
+    tmp_path: Path,
+) -> None:
+    """A group with one entry carrying ``applies_from`` and one without, then
+    a third ``with_benchmark`` on a new date without ``applies_from``: the
+    existing dated entries keep their own applies_from-or-absence, the new
+    entry is plain, and the emitted order is ascending ``measured_on``."""
+    seed = (
+        "[[benchmarks.run.ftp_watts]]\n"
+        "value = 200\n"
+        "measured_on = 2023-01-01\n"
+        "applies_from = 2022-12-01\n"
+        "[[benchmarks.run.ftp_watts]]\n"
+        "value = 210\n"
+        "measured_on = 2023-06-01\n"
+    )
+    (tmp_path / PROFILE_FILENAME).write_text(seed)
+
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RUN,
+        value=220,
+        measured_on=date(2023, 9, 1),
+    )
+    save_profile(tmp_path, profile)
+
+    raw = tomllib.loads((tmp_path / PROFILE_FILENAME).read_text())
+    group = raw["benchmarks"]["run"]["ftp_watts"]
+    assert [e["measured_on"] for e in group] == [
+        date(2023, 1, 1),
+        date(2023, 6, 1),
+        date(2023, 9, 1),
+    ]
+    assert group[0]["applies_from"] == date(2022, 12, 1)
+    assert "applies_from" not in group[1]
+    assert "applies_from" not in group[2]
+
+
+def test_with_benchmark_preserves_unrecognized_key_alongside_applies_from(
+    tmp_path: Path,
+) -> None:
+    """6.4: an existing raw entry carrying both ``applies_from`` and an
+    unrecognized key survives a same-date rewrite with both intact."""
+    seed = (
+        "[[benchmarks.run.ftp_watts]]\n"
+        "value = 100\n"
+        "measured_on = 2022-05-05\n"
+        "applies_from = 2022-04-01\n"
+        'source = "stryd"\n'
+    )
+    (tmp_path / PROFILE_FILENAME).write_text(seed)
+
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RUN,
+        value=150,
+        measured_on=date(2022, 5, 5),
+    )
+    save_profile(tmp_path, profile)
+
+    raw = tomllib.loads((tmp_path / PROFILE_FILENAME).read_text())
+    entry = raw["benchmarks"]["run"]["ftp_watts"][0]
+    assert entry["value"] == 150
+    assert entry["applies_from"] == date(2022, 4, 1)
+    assert entry["source"] == "stryd"
+
+
 def test_profile_version_name_retired_in_favor_of_shared_schema_constant() -> None:
     import fitdocs.load.profile as profile_module
 

@@ -300,7 +300,12 @@ class ProfileView(Protocol):
 
         ``discipline`` and ``on`` are explicit arguments, never encoded into a
         key string (Req 7.5). ``on`` is the *activity's* date -- this member
-        holds no bound date of its own and never assumes today's (Amendment 3)."""
+        holds no bound date of its own and never assumes today's (Amendment 3).
+        Absent an athlete-declared exception, never returns an entry measured
+        after ``on``; the one exception (*athlete-benchmarks* Amendment 1,
+        3.10) is an entry the athlete explicitly declared, via its own
+        ``applies_from``, to reach back to or before ``on`` -- this member
+        itself never applies a later measurement on its own."""
         ...
 
     def has_benchmark(self, kind: BenchmarkKind, *, discipline: Sport | None) -> bool:

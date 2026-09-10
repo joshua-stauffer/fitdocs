@@ -326,7 +326,7 @@ construction. `design.md` is amended in place at each affected component.
   - Observable: the unit suite for the leaf module pins every bullet above by mutation, and the existing selection, staleness and round-trip tests stay green unchanged
   - _Requirements: athlete-benchmarks 1.12, 2.11, 3.3, 3.10, 3.11, 4.6_
   - _Boundary: athlete-benchmarks' BenchmarkVocabulary, BenchmarkSelection and StalenessCalculation — `src/fitdocs/benchmarks.py` and `tests/test_benchmarks.py` only_
-- [ ] 7.2 Persist and preserve the applies-from date through the profile store
+- [x] 7.2 Persist and preserve the applies-from date through the profile store
   - `AthleteProfile.with_benchmark` gains `applies_from: date | None = None` (keyword-only, trailing) and carries it onto the entry it builds; a value later than `measured_on` is refused with `ValueError` and nothing stored, in the same voice as the existing scope and value refusals
   - The merge that preserves unmanaged entry keys on rewrite treats `applies_from` exactly as it treats `note`: a fresh entry carrying one overlays it; a fresh entry without one (`None`, "not supplied") leaves an existing `applies_from` on that `measured_on` untouched; the round trip through `save_profile` then `load_profile` returns the date
   - `ProfileView.benchmark`'s docstring in `src/fitdocs/load/types.py` and `AthleteProfile.benchmark`'s no longer claim "never a later-measured entry" without the athlete-declared exception; no signature changes
@@ -1021,3 +1021,17 @@ Obsolete and deliberately dropped:
   `Benchmark.__eq__` is unpinned (`field(compare=False)` stays green); the
   carry is pinned by direct field reads. One inequality assertion closes it
   if 7.2's merge tests lean on entry equality.
+
+### From task 7.2 (two review rounds; production correct from round 1)
+
+- **A "nothing stored" assertion over an empty starting profile is `{} ==
+  {}`.** Both refusal tests snapshotted `load_profile(tmp_path)` on an empty
+  directory; replacing the snapshots with bare literals left the module
+  green, under a docstring saying the opposite. The module's own older 6.9
+  tests already show the shape: seed a real file, `assert before != {}`,
+  compare `path.read_bytes()`. Falsity-before is not satisfied by a
+  snapshot -- the snapshot must be *non-trivial*.
+- The matrix discipline from 7.1 (layers x scopes x group shapes, built
+  before the first report) held: one round, one finding, no oscillation.
+- Non-blocking, left open: the refusal message's two dates are asserted
+  present but not which label each sits behind.
