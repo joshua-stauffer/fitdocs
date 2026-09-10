@@ -105,3 +105,15 @@ last entry" on the strength of that sentence.
   the selection precondition)? A set built by hand in a downstream spec is
   arguably the latter, but a set built from disk by the task 3.1 store is the
   former, and the same constructor serves both.
+
+## Update 2026-09-10 (training-load Amendment 4, design + boundary validation)
+
+One more invariant of the same kind: `applies_from <= measured_on` is
+enforced by the parser (2.11) and by `AthleteProfile.with_benchmark` (6.10),
+never by the frozen `Benchmark` value type — its docstring says so
+deliberately ("enforced by the parser, not by this value type", verified by
+constructing `Benchmark(measured_on=2020-01-01, applies_from=2030-01-01)`
+without error). A plugin building `Benchmark` directly can therefore make
+`BenchmarkSet.applicable`'s tier 2 return a nonsense entry. Whether the value
+type should validate is the same design-intent question this item already
+asks; decide it once for all three invariants.

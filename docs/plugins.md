@@ -270,13 +270,17 @@ THRESHOLD_CALCULATOR
 `Benchmark`, `BenchmarkKind`, `BenchmarkRef`, `BenchmarkAge` and
 `benchmark_age` are the dated-measurement vocabulary. A calculator asks the
 profile view for a benchmark *as of a date* — `profile.benchmark(kind,
-discipline, on=context.activity_date)` returns the measurement current at that
-date, or `None` — and `profile.has_benchmark(...)` answers the undated question
+discipline, on=context.activity_date)` returns the latest measurement on or
+before that date or, when there is none, an entry the athlete declared
+(`applies_from`) to stand in for earlier activities, else `None` — and
+`profile.has_benchmark(...)` answers the undated question
 "is anything on file at all", so "none recorded" and "none applicable yet" stay
 distinguishable. Declare a `BenchmarkRef` on an `AthleteField` to have the
 prompt flow collect and persist one. `benchmark_age` compares a measurement
 date against the activity date and returns a `BenchmarkAge` carrying the age in
-days, the window it was compared against, and whether it is stale; the window
+days (negative when the measurement is later than the activity — a declared
+retroactive entry, never stale), the window it was compared against, and
+whether it is stale; the window
 comes from `context.settings.benchmark_staleness_days`, never from the view.
 
 `LoadContext` is `compute`'s required fifth parameter (see the worked

@@ -525,6 +525,12 @@ def benchmarks_to_document(entries: Sequence[Benchmark]) -> dict[str, object]:
     (the reserved athlete-wide token or a lowercased discipline name -- the
     hand-editable spelling ambiguity 1 chose) and quantity, and each group is
     emitted in ascending ``measured_on`` order (6.6).
+
+    ``note`` and ``applies_from`` are emitted only when present -- never as an
+    explicit ``None``. That omission is load-bearing for the profile store's
+    rewrite merge (``fitdocs.load.profile._merge_benchmarks_document``), which
+    overlays the emitted record onto the existing raw entry: an omitted key
+    leaves an existing value untouched, an explicit ``None`` would erase it.
     """
     grouped: dict[str, dict[str, list[dict[str, object]]]] = {}
     for entry in sorted(entries, key=lambda benchmark: benchmark.measured_on):

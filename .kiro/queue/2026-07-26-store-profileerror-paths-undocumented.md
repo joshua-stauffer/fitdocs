@@ -77,3 +77,14 @@ error text appear.
 Done when: both mutations red — the f-string → bare literal at `:377`, and
 deleting the newly documented `with_benchmark` path's coverage. Verify
 cache-cleared per `2026-07-26-pycache-masks-length-preserving-mutations`.
+
+## Update 2026-09-10 (training-load Amendment 4, task 7.2 review)
+
+Same species, one refusal further along: `with_benchmark`'s new
+`applies_from > measured_on` refusal (`src/fitdocs/load/profile.py`,
+`_check_benchmark_applies_from`) names both ISO dates, and the two refusal
+tests in `tests/load/test_profile.py` assert that both dates appear — but not
+which label each sits behind. Swapping the two dates inside the f-string
+leaves the suite green (7.2 round-2 reviewer, finding 1). When this item is
+picked up, pin the message *shape* for every refusal in `with_benchmark`,
+not only the tokens.

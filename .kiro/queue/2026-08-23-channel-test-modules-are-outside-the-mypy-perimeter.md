@@ -70,3 +70,17 @@ is documented with its reason.
 
 - Was the 21-entry perimeter chosen deliberately, or has it simply never been
   revisited since the purge reduced it from 115 to 83 and onward?
+
+## Update 2026-09-10 (training-load Amendment 4, task 7.4 review)
+
+Three more modules with the same exposure, this time the load e2e suites:
+`tests/load/test_prompt_date_e2e.py` (`_: InteractionSession = ...` at two
+sites), `tests/load/test_benchmark_selection_e2e.py` and
+`tests/load/threshold/test_feature_e2e.py` each carry protocol-conformance
+annotations and tile-source stubs and each sits outside `[tool.mypy].files`
+(`pyproject.toml`), so those annotations are inert: Python performs no
+protocol check on assignment and mypy never sees the file. The perimeter's
+own rationale comment says every module holding a LoadCalculator- or
+TileSource-shaped stub is in scope; these are not. Either add them (and
+accept the per-module opt-in cost) or delete the annotations so they stop
+claiming a check that never runs.

@@ -498,7 +498,10 @@ src/fitdocs/load/
 ├── profile.py          # MODIFIED: docstrings redacted of the withdrawn
 │                       #   methodology's identity; behavior unchanged.
 ├── prompts.py          # MODIFIED: docstrings redacted of the withdrawn
-│                       #   methodology's identity; behavior unchanged.
+│                       #   methodology's identity; behavior unchanged --
+│                       #   until Amendment 4: collect_missing_fields gains
+│                       #   keyword-only activity_date and asks the
+│                       #   retroactive-application question (3.7-3.9).
 ├── render.py           # MODIFIED: payload v2, inspect_payload/PayloadStamp,
 │                       #   non-selected + flags sections omitted when empty.
 ├── docedit.py          # MODIFIED: RegionState.SUPERSEDED, RegionClassification,
@@ -570,6 +573,26 @@ tests/load/
   presented as available (13.3).
 - `pyproject.toml` — **no change**; verified: the CSVs ship only by directory
   membership.
+
+**Amendment 4 (2026-09-10)** — the prompt-date change touches, on one branch:
+
+- `src/fitdocs/benchmarks.py` (athlete-benchmarks' leaf, by its Amendment 1):
+  `Benchmark.applies_from`, parser/serializer support, two-tier
+  `BenchmarkSet.applicable`, negative-age `benchmark_age`;
+  `tests/test_benchmarks.py`.
+- `src/fitdocs/load/profile.py`: `with_benchmark(applies_from=)` and the
+  note-identical merge; `tests/load/test_profile.py`,
+  `tests/load/test_profile_benchmarks.py`; docstring-only
+  `src/fitdocs/load/types.py`.
+- `src/fitdocs/load/prompts.py`: keyword-only `activity_date` and the
+  question; `src/fitdocs/load/engine.py`: threads the document date it
+  already resolves; `tests/load/test_prompts.py`, `tests/load/test_engine.py`.
+- `tests/load/test_prompt_date_e2e.py` — **NEW**: prompt → score for a
+  pre-prompt activity through the real sync pipeline, an absent
+  `athlete.toml` and the registered threshold calculator.
+- `docs/ownership-contract.md`, `README.md`, `docs/contributing-calculators.md`
+  (one passage each) and `docs/plugins.md` (one sentence, **`plugin-api`
+  coordination**: the published `Benchmark` gained a field).
 
 ## System Flows
 
@@ -707,6 +730,7 @@ irrelevant rather than fatal (Req 10.3).
 | 3.4 | Decline → skip affected docs, report, no substitution | PromptFlow, LoadEngine | `MissingInputs` | Per-document |
 | 3.5 | Non-interactive → no prompt, uncomputed, clean finish | PromptFlow, CliIntegration | `NonInteractiveSession` | Per-document |
 | 3.6 | Per-field confirmation hint seam; none ships | PromptFlow, TestCalculators | `hints` mapping | — |
+| 3.7, 3.8, 3.9 | Retroactive-application question (Amendment 4): asked after the value and any hint, only for a benchmark field whose activity predates the pass; yes → `applies_from`, no → none, skip → decline; never for flat, undated or on-or-after activities; both ISO dates named, affirmative default | PromptFlow, LoadEngine | `collect_missing_fields(activity_date=…)`, `session.confirm(default=True)` | Per-document |
 | 4 | **WITHDRAWN** (Amendment 2) — withdrawn-methodology zone determination | WithdrawnCalculatorRemoval | — | — |
 | 5 | **WITHDRAWN** (Amendment 2) — withdrawn-methodology continuous load; no bundled data | WithdrawnCalculatorRemoval, Packaging | — | — |
 | 6 | **WITHDRAWN** (Amendment 2) — withdrawn-methodology interval load | WithdrawnCalculatorRemoval | — | — |
@@ -2070,6 +2094,15 @@ calculator lands.
 - **Ambiguity is actionable (10.2)**: with two registered supporters and no
   default, the run exits 0, the document is unchanged, and the printed reason
   names both ids and the setting to configure.
+- **Prompt → score for a pre-prompt activity (Amendment 4; 3.3, 3.7–3.9,
+  9.1; athlete-benchmarks 3.10, 6.2, 6.10)** — `tests/load/test_prompt_date_e2e.py`:
+  real sync, absent `athlete.toml`, the registered threshold calculator, a
+  scripted session and an injected pass date after the documents. Yes to
+  every retroactive question scores the older activity and writes each entry
+  with `measured_on` at the pass date and `applies_from` at the document's
+  date; no leaves it uncomputed and the entries undated; two same-sport
+  documents are asked once, both compute, and a second pass prompts nothing
+  and moves no byte. Every scenario asserts `report.failures == ()` first.
 
 ### Removal Guards
 

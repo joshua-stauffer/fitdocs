@@ -1547,12 +1547,18 @@ def test_apply_load_stamps_an_accepted_benchmark_with_the_injected_today(
         session = ScriptedSession(floats=[275.0])
         stamped = date(2019, 4, 4)
 
-        apply_load(
+        report = apply_load(
             data_root,
             session=session,
             calculator_id=calc.calculator_id,
             today=stamped,
         )
+
+        # The document (2021) is dated after the injected pass date, so the
+        # retroactive question must not fire -- asserted directly, not only
+        # through the empty confirm queue raising into report.failures.
+        assert report.failures == ()
+        assert session.confirm_defaults == []
 
         profile = load_profile(data_root)
         entry = profile.benchmark(
@@ -1673,13 +1679,18 @@ def test_apply_load_retroactive_question_none_persists_nothing(
         assert activity_date < stamped
         session = ScriptedSession(floats=[312.0], confirms=[None])
 
-        apply_load(
+        report = apply_load(
             data_root,
             session=session,
             calculator_id=calc.calculator_id,
             today=stamped,
         )
 
+        # Reachability: the question was asked (and skipped) and the pass
+        # recorded no failure -- an engine that never asks also writes no
+        # profile, so the absent-file assertion alone cannot tell them apart.
+        assert report.failures == ()
+        assert len(session.confirm_defaults) == 1
         assert not (data_root / PROFILE_FILENAME).exists()
     finally:
         registry.unregister(calc.calculator_id)

@@ -135,7 +135,11 @@ retroactive one, whatever their values.
 
 The schema version does not change. A fitdocs older than this amendment
 ignores the key (1.10) and merely declines to score activities before the
-measurement — a degradation the athlete can see, never a misread number.
+measurement — a degradation the athlete can see, never a misread number. The
+other direction is also deliberate: a file that already carried an
+`applies_from` key while it was unrecognized is now validated by 2.11, so an
+entry whose stray value falls after its `measured_on` becomes a loud
+configuration error rather than being silently preserved.
 Nothing is renumbered; the design components named in `training-load`'s
 amendment record are amended in place, and the implementing tasks are
 `training-load` 7.1 (this leaf module) and 7.2 (the profile store).

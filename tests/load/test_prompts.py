@@ -908,7 +908,7 @@ def test_no_question_when_activity_date_equals_on() -> None:
     )
 
     assert missing == ()
-    assert session.asked == [session.asked[0]]  # exactly one question: the value ask
+    assert len(session.asked) == 1  # exactly one question: the value ask
     entry = updated.benchmark(BenchmarkKind.FTP_WATTS, discipline=Sport.RUN, on=_ON)
     assert entry is not None and entry.applies_from is None
 
@@ -1060,8 +1060,7 @@ def test_retroactive_question_text_names_both_dates() -> None:
     expected = (
         f"Recorded as measured on {_ON.isoformat()}. Also apply it to earlier "
         f"activities, back to this activity's date {_EARLIER.isoformat()}? "
-        "Activities in between are then scored against it and marked as "
-        "measured later."
+        "Activities in between are then scored against it."
     )
     assert session.asked[-1] == expected
 

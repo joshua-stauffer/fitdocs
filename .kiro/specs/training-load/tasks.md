@@ -1047,15 +1047,24 @@ Obsolete and deliberately dropped:
   Recording `(question, default)` per `confirm` call pins the *value*; the
   keyword-omitted form is provably equivalent because the Protocol and every
   double default to `True`. The user-visible `[Y/n]` rendering on the real
-  session is still pinned by nothing (queued).
+  session is still pinned by nothing (queued as
+  `2026-09-10-rich-session-default-rendering-unpinned`).
 - **The engine's per-document `except Exception` swallows a test double's
   `AssertionError` into `report.failures`.** An engine test that does not
   assert `report.failures == ()` can pass while its own double raised
-  (queued). Every `apply_load` assertion in 7.4 asserts the failures tuple.
-- Non-blocking, left open and queued: the hint-ordering test drives a flat
-  field (indistinguishable outcome); the engine None-branch test lacks a
-  reachability assertion; one no-question test uses a self-referential
-  compare where its siblings use `len(...) == 1`.
+  (queued as `2026-09-10-engine-per-document-except-swallows-test-double-assertions`).
+  Every `apply_load` assertion in 7.4 asserts the failures tuple.
+- Non-blocking: the hint-ordering test drives a flat field (indistinguishable
+  outcome; queued as `2026-09-10-hint-ordering-test-drives-a-flat-field`).
+  Fixed after the feature gate, by the parent, suite-green and
+  mutation-checked but not separately reviewed: the engine None-branch test
+  now asserts the question was reached and the failures tuple is empty; the
+  no-question test at `test_prompts.py` uses `len(session.asked) == 1`
+  like its siblings; the injected-today engine probe asserts that no confirm
+  was asked and no failure was recorded; and the prompt's "marked as
+  measured later" clause was removed as an unbacked promise (pace-anchored
+  runs render no anchor date — queued as
+  `2026-09-10-load-channels-renders-a-retroactive-anchor-date-unexplained`).
 
 ### From task 7.4 (one review round, approved)
 
@@ -1074,4 +1083,6 @@ Obsolete and deliberately dropped:
   load-bearing (a double's exhausted queue surfaced only there).
 - Non-blocking, left open: the sibling e2e modules and this one sit outside
   `[tool.mypy].files` by convention, so their `_: InteractionSession = ...`
-  conformance annotations are inert (queued).
+  conformance annotations are inert (recorded on
+  `2026-08-23-channel-test-modules-are-outside-the-mypy-perimeter`, updated
+  2026-09-10).

@@ -181,8 +181,7 @@ def _retroactive_question(on: date, activity_date: date) -> str:
     return (
         f"Recorded as measured on {on.isoformat()}. Also apply it to earlier "
         f"activities, back to this activity's date {activity_date.isoformat()}? "
-        "Activities in between are then scored against it and marked as "
-        "measured later."
+        "Activities in between are then scored against it."
     )
 
 

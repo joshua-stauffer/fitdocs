@@ -218,6 +218,17 @@ limitation leaves the product's primary use case broken.
   filters, so an anchor the athlete declared retroactive is not a substitution
   by the calculator under its 4.5.
 
+**What this does not do.** The question is asked only when nothing of that
+kind and scope is on file (athlete-benchmarks 8.3 — ask once), and the
+`applies_from` it records is the date of the activity that prompted it: the
+earliest fillable document in *that* pass. An activity imported later and
+dated before that `applies_from` finds the benchmark on file, not
+applicable, and no question — the original symptom, narrowed to later
+imports. Recovery today is a hand edit of `applies_from` in `athlete.toml`
+(documented in `docs/ownership-contract.md`); whether the pass should offer
+to extend an on-file entry is a separate product decision, queued as
+`2026-09-10-later-imported-activity-before-applies-from-never-re-asked`.
+
 Nothing is renumbered. Requirement 3 gains criteria 3.7, 3.8 and 3.9;
 `design.md`'s PromptFlow and LoadEngine components and the Non-Goals line are
 amended in place; `tasks.md` gains major task 7. The out-of-scope line naming

@@ -195,7 +195,12 @@ rulings below are binding and the design text has been amended to match.
 
 - Any change to the `[benchmarks]` TOML shape, the `BenchmarkKind` set, or the
   scope rules → `athlete.toml` schema version bump; `load-channels` and
-  `threshold-load` re-check their benchmark reads.
+  `threshold-load` re-check their benchmark reads. *Amendment 1 exception*:
+  adding an **optional** entry key that an older reader ignores under 1.10
+  and whose absence changes nothing (`applies_from`) is not a bump; the
+  re-check still applies — `load-channels` renders `measured_on` into
+  diagnostics and must decide whether to show `applies_from` beside it (queue
+  item `2026-09-10-load-channels-renders-a-retroactive-anchor-date-unexplained`).
 - Any change to `ProfileView` members or to `AthleteField` → `threshold-load`,
   `plugin-api`'s published surface, and `tests/test_public_api.py`.
 - Any change to selection semantics (which entry applies to a date) → every
@@ -369,8 +374,11 @@ src/fitdocs/
 - `src/fitdocs/load/types.py` — `ProfileView` gains `benchmark` and
   `has_benchmark`; `BenchmarkRef` added; `AthleteField` gains an optional
   `benchmark` reference. No non-query member is added to the view.
-- `src/fitdocs/load/prompts.py` — `collect_missing_fields` takes `on: date`; the
-  presence check and the persistence branch route on `field.benchmark`.
+- `src/fitdocs/load/prompts.py` — `collect_missing_fields` takes `on: date` and,
+  since Amendment 1, keyword-only `activity_date: date | None`; the presence
+  check and the persistence branch route on `field.benchmark`, and the
+  retroactive-application question is asked between them (`training-load`
+  3.7–3.9).
 - `src/fitdocs/load/engine.py` — `apply_load` projects `[load]` once through
   `load_load_settings`, resolves `today` once and passes it to
   `collect_missing_fields`, and resolves each document's own calendar date through
@@ -407,9 +415,12 @@ flowchart TD
     Entries -- no --> NotOnFile[Return nothing: none on file]
     Entries -- yes --> Filter[Keep entries measured on or before the activity date]
     Filter --> Any{Any remain}
-    Any -- no --> NotApplicable[Return nothing: none applicable yet]
     Any -- yes --> Latest[Take the latest measured_on]
+    Any -- no --> Declared{Any entry declared applies_from on or before the activity date}
+    Declared -- no --> NotApplicable[Return nothing: none applicable yet]
+    Declared -- yes --> Soonest[Tier 2, Amendment 1: take the one measured soonest after the activity]
     Latest --> Age[Caller computes benchmark_age against the window]
+    Soonest --> Age
 ```
 
 `NotOnFile` and `NotApplicable` are both "no benchmark" to the caller's value
@@ -431,7 +442,7 @@ sequenceDiagram
     Engine->>Profile: load_profile(data_root)
     Profile->>Disk: read athlete.toml
     Profile->>Profile: guard version, parse benchmarks (loud on malformed)
-    Engine->>Prompts: collect_missing_fields(fields, profile, session, persist, on=today)
+    Engine->>Prompts: collect_missing_fields(fields, profile, session, persist, on=today, activity_date=<document date>)
     Prompts->>Profile: has_benchmark(kind, scope) for benchmark fields
     Prompts->>Prompts: prompt only when none on file
     Prompts->>Prompts: confirm "apply back to <activity date>?" (Amendment 1; only when activity date < today)
@@ -450,11 +461,13 @@ before any document is written.
 | 1.1, 1.2, 1.3, 1.4, 1.5 | One file; five quantities; scope rules; dated entries with optional note; history | BenchmarkVocabulary, BenchmarkStore | `BenchmarkKind`, `Benchmark`, `[benchmarks]` schema | — |
 | 1.6, 1.7, 1.8 | Explicit schema version; refuse unknown; absent version means earliest | AthleteFileGuard | `ATHLETE_SCHEMA_VERSION`, `check_schema_version` | Prompt/persistence flow, step 5 |
 | 1.9, 1.10, 1.11 | Absent file is not an error; unknown keys ignored; flat keys untouched | AthleteFileGuard, BenchmarkStore | `load_profile`, `load_athlete_inputs` | — |
+| 1.12 | Optional athlete-declared applies-from date, no later than `measured_on`; absent means unchanged behaviour (Amendment 1) | BenchmarkVocabulary | `Benchmark.applies_from`, `parse_benchmarks` | — |
 | 2.1, 2.2, 2.3 | Value type, positivity/finiteness, integral bpm | BenchmarkVocabulary | `parse_benchmarks`, `BenchmarkError` | — |
 | 2.4 | Date type and no time/zone component | BenchmarkVocabulary | `parse_benchmarks` | — |
 | 2.5, 2.6 | Unknown discipline; wrong scope for a quantity | BenchmarkVocabulary | `BenchmarkKind.scope`, `parse_benchmarks` | — |
 | 2.7, 2.8 | Duplicate measurement date; structural shape errors | BenchmarkVocabulary | `parse_benchmarks` | Resolution flow |
 | 2.9, 2.10 | Configuration error before any write; never silently dropped | BenchmarkStore, CLIErrorSurface | `ProfileError`, `_config_error` | Prompt/persistence flow |
+| 2.11 | `applies_from` not a bare date, with a time component, or after `measured_on` → loud, naming the entry (Amendment 1) | BenchmarkVocabulary | `parse_benchmarks` | — |
 | 3.1, 3.2, 3.3, 3.4 | Filter by date, latest wins, no future entry unless athlete-declared (Amendment 1), no cross-scope fallback | BenchmarkSelection | `BenchmarkSet.applicable` | Resolution flow |
 | 3.10, 3.11 | Tier 2 (Amendment 1): the athlete-declared entry measured soonest after the activity; `applies_from` returned with the value | BenchmarkSelection | `BenchmarkSet.applicable`, `Benchmark.applies_from` | Resolution flow |
 | 3.5 | None-on-file vs none-applicable are distinguishable | BenchmarkSelection | `BenchmarkSet.has` | Resolution flow |
@@ -468,6 +481,7 @@ before any document is written.
 | 6.1, 6.2, 6.3 | Same file; measurement date is the answer date; upsert on same date | BenchmarkStore | `AthleteProfile.with_benchmark` | Prompt/persistence flow |
 | 6.4, 6.5, 6.6, 6.7 | Preserve unmanaged data; stamp version; date-sorted output; atomic write | BenchmarkStore | `save_profile` | Prompt/persistence flow |
 | 6.8, 6.9 | Never writes a flat threshold key; reject-and-persist-nothing | BenchmarkStore | `with_benchmark` | — |
+| 6.10 | `applies_from` recorded on the entry, refused if later than `measured_on`, preserved and overlaid on rewrite exactly like `note` (Amendment 1) | BenchmarkStore | `with_benchmark(applies_from=)`, `_merge_benchmarks_document` | Prompt/persistence flow |
 | 7.1, 7.2 | Request by kind/scope/date; undated presence | ProfileContract | `ProfileView.benchmark`, `ProfileView.has_benchmark` | Resolution flow |
 | 7.3 | Window exposed to calculators via the per-pass context's settings, not the view | LoadSettingsExtension | `LoadSettings.benchmark_staleness_days` on `LoadContext.settings` | Prompt/persistence flow |
 | 7.4, 7.5, 7.7 | Keyed numeric access retained; explicit arguments; absence returns nothing | ProfileContract | `ProfileView` | Resolution flow |
@@ -475,6 +489,7 @@ before any document is written.
 | 8.1, 8.2, 8.3 | Declarable benchmark fields; prompt when none on file; never re-ask | ProfileContract, PromptFlowIntegration | `AthleteField.benchmark`, `collect_missing_fields` | Prompt/persistence flow |
 | 8.4 | None-applicable is reported, not prompted | PromptFlowIntegration, BenchmarkSelection | `has_benchmark` vs `benchmark` | Resolution flow |
 | 8.5, 8.6, 8.7 | Decline persists nothing; non-interactive completes cleanly; immediate persist | PromptFlowIntegration | `collect_missing_fields` | Prompt/persistence flow |
+| 8.8 | The retroactive question is `training-load`'s (3.7–3.9); this store persists the applies-from date it is handed and asks nothing (Amendment 1) | PromptFlowIntegration, BenchmarkStore | `with_benchmark(applies_from=)` | Prompt/persistence flow |
 | 9.1, 9.2 | Read path stays read-only; writes only from a user answer | AthleteFileGuard, BenchmarkStore | `load_athlete_inputs` | — |
 | 9.3, 9.4 | Plain hand-editable text; data-root confinement | BenchmarkStore | `[benchmarks]` schema, `layout` paths | — |
 | 9.5 | Absence yields nothing at every read point | BenchmarkSelection, BenchmarkStore | `benchmark`, `get_number` | Resolution flow |
@@ -1035,6 +1050,7 @@ def collect_missing_fields(
     hints: Mapping[str, Callable[[float], str]] = _NO_HINTS,
     *,
     on: date,
+    activity_date: date | None,   # Amendment 1
 ) -> tuple[AthleteProfile, tuple[AthleteField, ...]]: ...
 ```
 
@@ -1288,7 +1304,9 @@ never an error — it is a return value.
 | Benchmark absent for an activity | none | `None` from `benchmark(...)`; the calculator declines (9.5) |
 | Benchmarks on file but none applicable | none | `None` from `benchmark(...)` with `has_benchmark() == True`; reported as skipped with a distinct reason, never prompted (3.5, 8.4) |
 | Document carries no parseable date | none | `context.activity_date` is `None`; `benchmark(on=None)` returns `None`, so no benchmark can apply (3.7) |
-| Scope/kind mismatch or future `measured_on` passed programmatically | `ValueError` | Programming error, fails loudly in tests (4.6, 6.9) |
+| Scope/kind mismatch passed programmatically | `ValueError` | Programming error, fails loudly in tests (6.9) |
+| `applies_from` later than `measured_on` | `BenchmarkError` from the parser (2.11); `ValueError` from `with_benchmark` (6.10) | Loud, nothing stored (Amendment 1) |
+| A `measured_on` after the activity date reaches `benchmark_age` | none | No longer an error (4.6 revised, Amendment 1): a negative `age_days` and a current verdict — the signal of an athlete-declared retroactive entry |
 
 ### Monitoring
 
@@ -1305,13 +1323,32 @@ existing `_config_error`; per-document skip reasons flow through the existing
   `datetime` instead of `date`, unknown discipline table, athlete-scoped quantity
   under a discipline (and the reverse), duplicate `measured_on`, scalar where an
   array of tables belongs. Each asserts the message names the offending path.
+  *Amendment 1 (2.11)*: `applies_from` as a string, an integer or a `datetime`,
+  and `applies_from` after `measured_on`, in both scopes, naming the entry index
+  and the offending value; a duplicate `measured_on` is still a duplicate when
+  the two entries carry different `applies_from` dates.
 - **`BenchmarkSet.applicable`** — latest-on-or-before wins; a same-day
   measurement applies; every entry in the future yields `None` while `has()`
-  stays `True`; nothing on file yields `None` and `has() == False`; no
-  cross-discipline or cross-scope leakage; repeated calls are equal.
+  stays `True` **for entries without `applies_from`**; nothing on file yields
+  `None` and `has() == False`; no cross-discipline or cross-scope leakage;
+  repeated calls are equal. *Amendment 1 (3.10, 3.11)*: tier 2 takes the
+  athlete-declared entry measured soonest after the activity, with fixtures
+  whose `measured_on` order agrees with and, separately, reverses the
+  `applies_from` order; a tier-1 entry (with or without `applies_from`) beats
+  a closer retroactive one; the inclusive `applies_from == on` boundary; tier 2
+  re-filters kind and scope; order independence; the returned entry carries
+  `applies_from` on both tiers; the athlete-wide scope and every kind carry a
+  fixture through parser, serializer, round trip and selection.
 - **`benchmark_age`** — exact boundary at `age_days == window_days` (current) and
   `window_days + 1` (stale); age and window are both reported; a `measured_on`
-  after the activity date raises; window ≤ 0 raises.
+  after the activity date yields a negative age and is never stale (*Amendment
+  1*, was: raises); window ≤ 0 raises.
+- **`with_benchmark` / merge (6.10)** — `applies_from` carried onto the entry,
+  refused when later than `measured_on` over a seeded non-empty profile with
+  the file byte-identical afterwards, overlaid by a same-date rewrite that
+  supplies one and preserved by one that omits it, surviving beside an
+  unrecognized key, in a mixed group, and round-tripping through
+  `save_profile`/`load_profile`.
 - **`document_date`** — the quoted string form and the bare-date form both yield
   the same date; an absent key, a non-string non-date value and an unparseable
   string each yield `None` without raising.

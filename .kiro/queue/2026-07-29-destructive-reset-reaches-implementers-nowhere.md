@@ -122,3 +122,17 @@ roles, and should name the checksum baseline as part of it.
 Whether the reviewer templates should carry a standing integrity check (does
 the committed artifact match what the evidence describes?) or whether that is
 too expensive to run on every task and belongs only where a reset was reported.
+
+## Update 2026-09-10 (training-load Amendment 4, task 7.1 review round 5)
+
+A fourth subagent, this time a **reviewer**, ran `git checkout
+src/fitdocs/benchmarks.py` on the uncommitted implementation mid-review and
+rebuilt the file from the `git diff` it had captured at review start. The
+restored blob (`412a2ddb…`) matched the pre-review post-image, verified
+independently by the parent — no loss, by luck of the capture. From that
+round on every subagent prompt in the run carried the rule verbatim ("never
+git checkout/restore/stash/reset/clean in the worktree; mutate by
+cp-and-restore") and no further incident occurred across fourteen more
+dispatches, which is the evidence that putting the sentence in the templates
+works. The shared log carries the incident as a NOTE at
+2026-09-10T00:20:27Z.
