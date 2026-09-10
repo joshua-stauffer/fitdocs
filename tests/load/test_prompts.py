@@ -1,4 +1,5 @@
-"""Tests for the generic prompt flow and interaction sessions (task 1.5, Req 3.1-3.6).
+"""Tests for the generic prompt flow and interaction sessions (task 1.5/7.3,
+Req 3.1-3.9).
 
 ``collect_missing_fields`` is calculator-agnostic: it walks the declared
 :class:`AthleteField`s, prompts only for the ones absent from the profile
@@ -121,9 +122,15 @@ class ScriptedSession:
         self.choices: deque[int | None] = deque(choices)
         self.asked: list[str] = []
         self.informed: list[str] = []
+        self.confirm_defaults: list[tuple[str, bool]] = []
+        """Every ``confirm`` call's ``(question, default)`` pair, in order --
+        lets a test pin the ``default`` a *specific* question (by its exact
+        text) was asked with, distinct from any other confirm in the same
+        pass (Req 3.9's "offer the affirmative answer as its default")."""
 
     def confirm(self, question: str, *, default: bool = True) -> bool | None:
         self.asked.append(question)
+        self.confirm_defaults.append((question, default))
         return self.confirms.popleft()
 
     def ask_int(
@@ -194,7 +201,7 @@ def test_valid_answer_persists_immediately_and_is_returned() -> None:
     saved, persist = _recording_persist()
 
     updated, missing = collect_missing_fields(
-        [MAX_HR], profile, session, persist, on=_ON
+        [MAX_HR], profile, session, persist, on=_ON, activity_date=None
     )
 
     assert missing == ()
@@ -217,7 +224,7 @@ def test_present_field_is_not_prompted() -> None:
     saved, persist = _recording_persist()
 
     updated, missing = collect_missing_fields(
-        [MAX_HR], profile, session, persist, on=_ON
+        [MAX_HR], profile, session, persist, on=_ON, activity_date=None
     )
 
     assert missing == ()
@@ -233,7 +240,7 @@ def test_declined_field_stays_missing_and_is_not_persisted() -> None:
     saved, persist = _recording_persist()
 
     updated, missing = collect_missing_fields(
-        [MAX_HR], profile, session, persist, on=_ON
+        [MAX_HR], profile, session, persist, on=_ON, activity_date=None
     )
 
     assert missing == (MAX_HR,)
@@ -249,7 +256,7 @@ def test_non_interactive_session_leaves_all_fields_missing() -> None:
     saved, persist = _recording_persist()
 
     updated, missing = collect_missing_fields(
-        [MAX_HR, HPL], profile, session, persist, on=_ON
+        [MAX_HR, HPL], profile, session, persist, on=_ON, activity_date=None
     )
 
     assert missing == (MAX_HR, HPL)  # every missing field returned
@@ -271,6 +278,7 @@ def test_hint_is_echoed_and_user_may_re_enter() -> None:
         persist,
         hints={"acme.threshold": _race_times_hint},
         on=_ON,
+        activity_date=None,
     )
 
     assert missing == ()
@@ -296,6 +304,7 @@ def test_hint_confirm_decline_leaves_field_missing() -> None:
         persist,
         hints={"acme.threshold": _race_times_hint},
         on=_ON,
+        activity_date=None,
     )
 
     assert missing == (HPL,)
@@ -310,7 +319,7 @@ def test_multiple_missing_fields_threaded_and_each_persisted() -> None:
     saved, persist = _recording_persist()
 
     updated, missing = collect_missing_fields(
-        [MAX_HR, HPL], profile, session, persist, on=_ON
+        [MAX_HR, HPL], profile, session, persist, on=_ON, activity_date=None
     )
 
     assert missing == ()
@@ -331,7 +340,9 @@ def test_float_field_uses_ask_float() -> None:
     session = ScriptedSession(floats=[250.0])
     saved, persist = _recording_persist()
 
-    updated, missing = collect_missing_fields([FTP], profile, session, persist, on=_ON)
+    updated, missing = collect_missing_fields(
+        [FTP], profile, session, persist, on=_ON, activity_date=None
+    )
 
     assert missing == ()
     assert updated.get_number("ftp_watts") == 250.0
@@ -539,7 +550,12 @@ def test_benchmark_with_nothing_on_file_prompted_once_and_persisted_with_on() ->
     stamped = date(2025, 5, 20)  # distinct from `_ON` and every other fixture date
 
     updated, missing = collect_missing_fields(
-        [FTP_BENCH, MAX_HR_BENCH], profile, session, persist, on=stamped
+        [FTP_BENCH, MAX_HR_BENCH],
+        profile,
+        session,
+        persist,
+        on=stamped,
+        activity_date=None,  # undated activity (3.8) -- no retroactive question
     )
 
     assert missing == ()
@@ -573,7 +589,7 @@ def test_benchmark_field_and_flat_field_share_one_declaration_list() -> None:
     on = date(2023, 11, 2)
 
     updated, missing = collect_missing_fields(
-        [MAX_HR, FTP_BENCH], profile, session, persist, on=on
+        [MAX_HR, FTP_BENCH], profile, session, persist, on=on, activity_date=None
     )
 
     assert missing == ()
@@ -644,7 +660,14 @@ def test_benchmark_on_file_is_not_reprompted_even_when_on_predates_every_entry()
     saved, persist = _recording_persist()
 
     updated, missing = collect_missing_fields(
-        [FTP_BENCH, FTP_RIDE_BENCH], base, session, persist, on=on
+        [FTP_BENCH, FTP_RIDE_BENCH],
+        base,
+        session,
+        persist,
+        on=on,
+        # activity_date == on (not < on) -- 3.8's "on or after" half; no
+        # retroactive question even though FTP_RIDE_BENCH is accepted.
+        activity_date=on,
     )
 
     assert missing == ()  # FTP_BENCH not reported still-missing (8.3, 8.4 prompt half)
@@ -676,7 +699,15 @@ def test_declined_benchmark_answer_persists_nothing_and_leaves_profile_untouched
     saved, persist = _recording_persist()
 
     updated, missing = collect_missing_fields(
-        [FTP_BENCH], profile, session, persist, on=_ON
+        [FTP_BENCH],
+        profile,
+        session,
+        persist,
+        on=_ON,
+        # Earlier than `_ON`, so the retroactive-question condition holds --
+        # but the value itself was declined, so the question must never be
+        # reached at all (no confirm queued; consulting it would raise).
+        activity_date=date(2020, 1, 1),
     )
 
     assert missing == (FTP_BENCH,)
@@ -696,7 +727,12 @@ def test_non_interactive_session_prompts_nothing_for_a_benchmark_field() -> None
     saved, persist = _recording_persist()
 
     updated, missing = collect_missing_fields(
-        [FTP_BENCH], profile, session, persist, on=_ON
+        [FTP_BENCH],
+        profile,
+        session,
+        persist,
+        on=_ON,
+        activity_date=date(2020, 1, 1),  # earlier than `_ON`; value declined first
     )
 
     assert session.ask_float_calls == 1  # the session WAS reached
@@ -716,3 +752,384 @@ def test_collect_missing_fields_on_is_keyword_only() -> None:
     assert on_param.kind is inspect.Parameter.KEYWORD_ONLY
     assert on_param.default is inspect.Parameter.empty  # required, no default
     assert on_param.annotation == "date"
+
+
+def test_collect_missing_fields_activity_date_is_keyword_only_and_required() -> None:
+    """Pins ``activity_date``'s shape (design's Amendment 4 Service Interface)
+    -- keyword-only, required (no default), annotated ``date | None``."""
+    import inspect
+
+    params = inspect.signature(collect_missing_fields).parameters
+    activity_date_param = params["activity_date"]
+    assert activity_date_param.kind is inspect.Parameter.KEYWORD_ONLY
+    assert activity_date_param.default is inspect.Parameter.empty  # required
+    assert activity_date_param.annotation == "date | None"
+
+
+# =============================================================================
+# Amendment 4 (Req 3.7-3.9): the retroactive-application question
+# =============================================================================
+#
+# For a benchmark field only, once a value is accepted (and any hint
+# confirmed), and only when `activity_date is not None and activity_date < on`,
+# the flow asks through `session.confirm` (default=True) whether the answer
+# also applies to earlier activities back to `activity_date`. Branch x
+# condition matrix:
+#
+#   True / False / None (declined)   x   activity_date < on
+#   no question                      x   activity_date == on
+#   no question                      x   activity_date > on
+#   no question                      x   activity_date is None
+#   no question                      x   flat field (any activity_date)
+
+_EARLIER = date(2020, 1, 1)
+"""An activity date strictly earlier than every `on` used below."""
+
+
+def test_retroactive_question_true_persists_applies_from_activity_date() -> None:
+    """3.7 True-branch: an affirmative answer persists
+    ``with_benchmark(..., measured_on=on, applies_from=activity_date)`` -- the
+    pass date stays the measurement date; the activity date becomes
+    ``applies_from``. Also exercises the discipline-scoped SCOPE x KIND cell
+    (``FTP_BENCH``).
+    """
+    profile = AthleteProfile(data={})
+    session = ScriptedSession(floats=[275.0], confirms=[True])
+    saved, persist = _recording_persist()
+
+    updated, missing = collect_missing_fields(
+        [FTP_BENCH], profile, session, persist, on=_ON, activity_date=_EARLIER
+    )
+
+    assert missing == ()
+    entry = updated.benchmark(BenchmarkKind.FTP_WATTS, discipline=Sport.RUN, on=_ON)
+    assert entry is not None
+    assert entry.value == 275.0
+    assert entry.measured_on == _ON  # measurement date is the pass date, always
+    assert entry.applies_from == _EARLIER
+    saved_entry = saved[-1].benchmark(
+        BenchmarkKind.FTP_WATTS, discipline=Sport.RUN, on=_ON
+    )
+    assert saved_entry is not None and saved_entry.applies_from == _EARLIER
+
+
+def test_retroactive_question_true_persists_for_athlete_wide_scope_too() -> None:
+    """3.7 True-branch, SCOPE x KIND cell for an athlete-wide (discipline=None)
+    field (``MAX_HR_BENCH``) -- pairwise-distinct value/dates from the
+    discipline-scoped test above.
+    """
+    profile = AthleteProfile(data={})
+    session = ScriptedSession(ints=[188], confirms=[True])
+    saved, persist = _recording_persist()
+    on = date(2024, 6, 15)
+    activity_date = date(2021, 2, 2)
+
+    updated, missing = collect_missing_fields(
+        [MAX_HR_BENCH],
+        profile,
+        session,
+        persist,
+        on=on,
+        activity_date=activity_date,
+    )
+
+    assert missing == ()
+    entry = updated.benchmark(BenchmarkKind.MAX_HR_BPM, discipline=None, on=on)
+    assert entry is not None
+    assert entry.value == 188
+    assert entry.measured_on == on
+    assert entry.applies_from == activity_date
+    saved_entry = saved[-1].benchmark(BenchmarkKind.MAX_HR_BPM, discipline=None, on=on)
+    assert saved_entry is not None and saved_entry.applies_from == activity_date
+
+
+def test_retroactive_question_false_persists_with_no_applies_from() -> None:
+    """3.7 False-branch: persists ``with_benchmark(..., measured_on=on)`` with
+    no ``applies_from`` -- the measurement date is unaffected either way."""
+    profile = AthleteProfile(data={})
+    session = ScriptedSession(floats=[280.0], confirms=[False])
+    saved, persist = _recording_persist()
+
+    updated, missing = collect_missing_fields(
+        [FTP_BENCH], profile, session, persist, on=_ON, activity_date=_EARLIER
+    )
+
+    assert missing == ()
+    entry = updated.benchmark(BenchmarkKind.FTP_WATTS, discipline=Sport.RUN, on=_ON)
+    assert entry is not None
+    assert entry.value == 280.0
+    assert entry.measured_on == _ON
+    assert entry.applies_from is None
+    saved_entry = saved[-1].benchmark(
+        BenchmarkKind.FTP_WATTS, discipline=Sport.RUN, on=_ON
+    )
+    assert saved_entry is not None and saved_entry.applies_from is None
+
+
+def test_retroactive_question_none_persists_nothing_and_leaves_field_missing() -> None:
+    """3.7 None-branch (declined/skipped retroactive question): nothing is
+    persisted -- the persist callback never runs at all, not merely "the
+    field's value is absent" -- and the field is reported still-missing.
+
+    The before-state is a profile that already holds a DIFFERENT benchmark
+    entry (``MAX_HR_BENCH``'s kind/scope), so "profile unchanged" is not the
+    trivial ``{} == {}`` case (Implementation Notes, task 7.1/7.2 lesson).
+    """
+    base = AthleteProfile(data={}).with_benchmark(
+        BenchmarkKind.MAX_HR_BPM, discipline=None, value=180, measured_on=_EARLIER
+    )
+    before = base.data
+    session = ScriptedSession(floats=[290.0], confirms=[None])
+    saved, persist = _recording_persist()
+
+    updated, missing = collect_missing_fields(
+        [FTP_BENCH], base, session, persist, on=_ON, activity_date=_EARLIER
+    )
+
+    assert missing == (FTP_BENCH,)
+    assert saved == []  # persist callback never invoked
+    assert updated.data == before  # profile unchanged from its non-trivial start
+    assert updated.has_benchmark(BenchmarkKind.FTP_WATTS, discipline=Sport.RUN) is False
+
+
+def test_no_question_when_activity_date_equals_on() -> None:
+    """3.8: ``activity_date == on`` does not trigger the question -- an empty
+    ``confirms`` deque would raise if it were consulted."""
+    session = ScriptedSession(floats=[300.0])  # no confirms queued
+    saved, persist = _recording_persist()
+
+    updated, missing = collect_missing_fields(
+        [FTP_BENCH],
+        AthleteProfile(data={}),
+        session,
+        persist,
+        on=_ON,
+        activity_date=_ON,
+    )
+
+    assert missing == ()
+    assert session.asked == [session.asked[0]]  # exactly one question: the value ask
+    entry = updated.benchmark(BenchmarkKind.FTP_WATTS, discipline=Sport.RUN, on=_ON)
+    assert entry is not None and entry.applies_from is None
+
+
+def test_no_question_when_activity_date_is_after_on() -> None:
+    """3.8: ``activity_date > on`` does not trigger the question."""
+    session = ScriptedSession(floats=[301.0])  # no confirms queued
+    saved, persist = _recording_persist()
+    later = date(2030, 1, 1)
+
+    updated, missing = collect_missing_fields(
+        [FTP_BENCH],
+        AthleteProfile(data={}),
+        session,
+        persist,
+        on=_ON,
+        activity_date=later,
+    )
+
+    assert missing == ()
+    assert len(session.asked) == 1
+    entry = updated.benchmark(BenchmarkKind.FTP_WATTS, discipline=Sport.RUN, on=_ON)
+    assert entry is not None and entry.applies_from is None
+
+
+def test_no_question_when_activity_date_is_none() -> None:
+    """3.8: an undated activity (``activity_date is None``) does not trigger
+    the question."""
+    session = ScriptedSession(floats=[302.0])  # no confirms queued
+    saved, persist = _recording_persist()
+
+    updated, missing = collect_missing_fields(
+        [FTP_BENCH],
+        AthleteProfile(data={}),
+        session,
+        persist,
+        on=_ON,
+        activity_date=None,
+    )
+
+    assert missing == ()
+    assert len(session.asked) == 1
+    entry = updated.benchmark(BenchmarkKind.FTP_WATTS, discipline=Sport.RUN, on=_ON)
+    assert entry is not None and entry.applies_from is None
+
+
+def test_no_question_for_a_flat_field_even_when_activity_date_is_earlier() -> None:
+    """3.8: a flat field is never asked, regardless of ``activity_date`` --
+    the condition is gated on ``field.benchmark is not None`` first."""
+    session = ScriptedSession(ints=[199])  # no confirms queued
+    saved, persist = _recording_persist()
+
+    updated, missing = collect_missing_fields(
+        [MAX_HR],
+        AthleteProfile(data={}),
+        session,
+        persist,
+        on=_ON,
+        activity_date=_EARLIER,
+    )
+
+    assert missing == ()
+    assert len(session.asked) == 1  # only the value ask -- never a confirm
+    assert updated.get_number("max_hr_bpm") == 199
+
+
+def test_retroactive_question_asked_after_the_hint_confirm() -> None:
+    """Ordering: value -> hint confirm -> retroactive confirm. A decline at
+    the hint confirm (``None``) short-circuits before the retroactive
+    question is ever asked -- ``asked`` records only the value ask and the
+    hint confirm, never a retroactive question text.
+    """
+    profile = AthleteProfile(data={})
+    session = ScriptedSession(ints=[40], confirms=[None])  # hint confirm declined
+    saved, persist = _recording_persist()
+
+    updated, missing = collect_missing_fields(
+        [HPL],
+        profile,
+        session,
+        persist,
+        hints={"acme.threshold": _race_times_hint},
+        on=_ON,
+        activity_date=_EARLIER,
+    )
+
+    assert missing == (HPL,)
+    assert saved == []
+    # exactly two questions: the value ask and the hint confirm -- no retro
+    assert len(session.asked) == 2
+    assert "Recorded as measured on" not in session.asked[-1]
+
+
+def test_retroactive_question_reached_when_hint_is_accepted() -> None:
+    """Ordering, positive case: the hint confirm is consumed BEFORE the
+    retroactive confirm -- both queued, hint True then retroactive True --
+    and the persisted entry carries the retroactive answer's
+    ``applies_from``. ``HPL`` is a benchmark-shaped stand-in only through its
+    ``AthleteField`` fields; to exercise the ordering against a real
+    benchmark field with a hint, this test declares one inline.
+    """
+    hinted_bench = AthleteField(
+        key="benchmarks.run.hinted",
+        label="Hinted benchmark",
+        kind="float",
+        minimum=50,
+        maximum=600,
+        help_text="benchmark field with a confirm hint, for ordering",
+        benchmark=BenchmarkRef(kind=BenchmarkKind.FTP_WATTS, discipline=Sport.RUN),
+    )
+    profile = AthleteProfile(data={})
+    session = ScriptedSession(floats=[260.0], confirms=[True, True])
+    saved, persist = _recording_persist()
+
+    updated, missing = collect_missing_fields(
+        [hinted_bench],
+        profile,
+        session,
+        persist,
+        hints={"benchmarks.run.hinted": _race_times_hint},
+        on=_ON,
+        activity_date=_EARLIER,
+    )
+
+    assert missing == ()
+    assert len(session.asked) == 3  # value ask, hint confirm, retro question
+    assert "Recorded as measured on" in session.asked[-1]
+    entry = updated.benchmark(BenchmarkKind.FTP_WATTS, discipline=Sport.RUN, on=_ON)
+    assert entry is not None
+    assert entry.applies_from == _EARLIER
+
+
+def test_retroactive_question_text_names_both_dates() -> None:
+    """3.9: the question names both dates in ISO form -- pinned on the exact
+    recorded question string, not mere substring presence of an ever-present
+    token."""
+    session = ScriptedSession(floats=[303.0], confirms=[True])
+    saved, persist = _recording_persist()
+
+    collect_missing_fields(
+        [FTP_BENCH],
+        AthleteProfile(data={}),
+        session,
+        persist,
+        on=_ON,
+        activity_date=_EARLIER,
+    )
+
+    expected = (
+        f"Recorded as measured on {_ON.isoformat()}. Also apply it to earlier "
+        f"activities, back to this activity's date {_EARLIER.isoformat()}? "
+        "Activities in between are then scored against it and marked as "
+        "measured later."
+    )
+    assert session.asked[-1] == expected
+
+
+def test_retroactive_question_defaults_to_true_distinct_from_the_hint_confirm() -> None:
+    """3.9: the retroactive question is asked with ``default=True`` --
+    pinned by exact question text in ``confirm_defaults``, in a pass that
+    ALSO asks a hint confirm, so the assertion targets the retroactive call
+    specifically rather than "any confirm happened to default True".
+    """
+    hinted_bench = AthleteField(
+        key="benchmarks.run.hinted",
+        label="Hinted benchmark",
+        kind="float",
+        minimum=50,
+        maximum=600,
+        help_text="benchmark field with a confirm hint, for the default pin",
+        benchmark=BenchmarkRef(kind=BenchmarkKind.FTP_WATTS, discipline=Sport.RUN),
+    )
+    profile = AthleteProfile(data={})
+    session = ScriptedSession(floats=[261.0], confirms=[True, True])
+    saved, persist = _recording_persist()
+
+    collect_missing_fields(
+        [hinted_bench],
+        profile,
+        session,
+        persist,
+        hints={"benchmarks.run.hinted": _race_times_hint},
+        on=_ON,
+        activity_date=_EARLIER,
+    )
+
+    assert len(session.confirm_defaults) == 2  # hint confirm, then retro question
+    hint_question, hint_default = session.confirm_defaults[0]
+    retro_question, retro_default = session.confirm_defaults[-1]
+    assert "Recorded as measured on" not in hint_question
+    assert "Recorded as measured on" in retro_question
+    assert retro_default is True
+
+
+def test_multi_field_pass_asks_retroactive_only_for_benchmark_fields() -> None:
+    """Multi-field pass: two benchmark fields + one flat field in one
+    declaration list, ``confirms=[True, False]`` -- first benchmark entry
+    retroactive, second not, flat field unaffected, exactly two retroactive
+    questions recorded.
+    """
+    profile = AthleteProfile(data={})
+    session = ScriptedSession(ints=[201, 189], floats=[276.0], confirms=[True, False])
+    saved, persist = _recording_persist()
+
+    updated, missing = collect_missing_fields(
+        [FTP_BENCH, MAX_HR, MAX_HR_BENCH],
+        profile,
+        session,
+        persist,
+        on=_ON,
+        activity_date=_EARLIER,
+    )
+
+    assert missing == ()
+    retro_questions = [q for q in session.asked if "Recorded as measured on" in q]
+    assert len(retro_questions) == 2
+
+    ftp_entry = updated.benchmark(BenchmarkKind.FTP_WATTS, discipline=Sport.RUN, on=_ON)
+    assert ftp_entry is not None and ftp_entry.applies_from == _EARLIER
+
+    assert updated.get_number("max_hr_bpm") == 201  # flat field, unaffected
+
+    hr_entry = updated.benchmark(BenchmarkKind.MAX_HR_BPM, discipline=None, on=_ON)
+    assert hr_entry is not None and hr_entry.applies_from is None

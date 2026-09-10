@@ -235,7 +235,11 @@ def _conformance_check(
   to `athlete.toml` (once, so the user is never re-asked), and only then calls
   your `compute`. **You never write field-prompting code**; a dotted `key` such
   as `"example-pace-load.threshold_pace_s_per_km"` scopes the value under an
-  `[example-pace-load]` table so methodologies never collide.
+  `[example-pace-load]` table so methodologies never collide. For a
+  *benchmark* field declared via `AthleteField.benchmark`, the generic flow
+  may additionally ask the athlete whether an accepted answer also applies to
+  earlier activities, back to the activity that prompted it — your
+  calculator never sees or handles that question.
 
 Read `profile` values with `profile.get_number(key)` — it returns
 `float | None` (dotted keys work), and `None` means absent, never a default.

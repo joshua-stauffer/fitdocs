@@ -1,4 +1,4 @@
-"""The generic prompt flow and the two interaction sessions (Req 3.1-3.6).
+"""The generic prompt flow and the two interaction sessions (Req 3.1-3.9).
 
 This module holds everything front-end about collecting missing athlete inputs
 *without* knowing any methodology. :func:`collect_missing_fields` walks a
@@ -13,7 +13,13 @@ missing, nothing is persisted, nothing is substituted, and the flow moves on
 derived context after a valid answer -- e.g. a calculator that derives a
 threshold from a recorded race time might echo that time back for the user
 to sanity-check (Req 3.6); the user may re-enter, and a declined confirmation
-leaves the field missing.
+leaves the field missing. For a *benchmark* field only, once the value is
+accepted the flow may additionally ask whether the answer also applies to
+earlier activities, back to the activity that prompted it, when that
+activity's date -- supplied by the caller, never read from a clock or a
+document -- is earlier than the date the pass is running (Req 3.7-3.9); a
+decline there is this flow's one rule for ``None``, same as any other
+decline (Req 3.4).
 
 Two sessions ship here. :class:`RichInteractionSession` is the interactive,
 terminal-backed implementation: it re-asks on unparseable or out-of-range
@@ -68,12 +74,17 @@ def collect_missing_fields(
     hints: Mapping[str, Callable[[float], str]] = _NO_HINTS,
     *,
     on: date,
+    activity_date: date | None,
 ) -> tuple[AthleteProfile, tuple[AthleteField, ...]]:
     """Prompt for each missing declared field; return (updated profile, still-missing).
 
     ``on`` is the date the pass is running -- the date an accepted benchmark
-    answer is recorded as measured (Req 6.2). It is supplied by the caller;
-    this module never reads a clock itself.
+    answer is recorded as measured (Req 6.2, athlete-benchmarks 6.2).
+    ``activity_date`` is the recorded local calendar date of the activity
+    currently being processed, or ``None`` when the activity carries no such
+    date; it is keyword-only and required so no caller can forget it. Both
+    dates are supplied by the caller -- this module reads no clock and no
+    document of its own (Req 3.8).
 
     For every ``field`` in declaration order:
 
@@ -95,12 +106,25 @@ def collect_missing_fields(
       context is echoed via ``session.inform`` and confirmed (Req 3.6): a ``No``
       re-asks the field from the top, a ``None`` is treated as a decline, and a
       ``Yes`` accepts.
+    * For a benchmark field only, once the value is accepted (and any hint
+      confirmed), and only when ``activity_date is not None and activity_date <
+      on``, the flow asks -- through the same ``session.confirm`` primitive,
+      no new session member -- whether the answer also applies to earlier
+      activities back to ``activity_date`` (Req 3.7-3.9). The question names
+      both dates in ISO form and defaults to ``True``. A ``True`` persists
+      ``with_benchmark(..., measured_on=on, applies_from=activity_date)``; a
+      ``False`` persists ``with_benchmark(..., measured_on=on)`` (no
+      ``applies_from``); a ``None`` is this flow's one rule for ``None`` --
+      declined, nothing persisted, the field reported still-missing (Req
+      3.4). When the condition does not hold (a flat field, an undated
+      activity, or an activity dated on or after ``on``), no question is
+      asked and the answer is persisted exactly as before (Req 3.8).
     * On acceptance, a benchmark field is stored via
       ``profile.with_benchmark(ref.kind, discipline=ref.discipline, value=value,
-      measured_on=on)``; a flat field keeps ``profile.with_value``. Either way
-      ``persist`` is invoked immediately (Req 3.3, 8.7) so a later crash loses
-      nothing; the updated profile is threaded forward so later fields see
-      earlier answers.
+      measured_on=on[, applies_from=...])``; a flat field keeps
+      ``profile.with_value``. Either way ``persist`` is invoked immediately
+      (Req 3.3, 8.7) so a later crash loses nothing; the updated profile is
+      threaded forward so later fields see earlier answers.
 
     Returns the updated profile and the tuple of fields still missing afterward.
     """
@@ -119,13 +143,47 @@ def collect_missing_fields(
             still_missing.append(field)  # declined / non-interactive (Req 3.4, 3.5)
             continue
         if ref is not None:
+            applies_from: date | None = None
+            if activity_date is not None and activity_date < on:
+                # Retroactive-application question (Req 3.7-3.9). Asked once
+                # per accepted benchmark answer, after the value and any hint
+                # confirm, and before anything is persisted.
+                answer = session.confirm(
+                    _retroactive_question(on, activity_date), default=True
+                )
+                if answer is None:
+                    still_missing.append(field)  # declined -- persist nothing
+                    continue
+                if answer:
+                    applies_from = activity_date
             profile = profile.with_benchmark(
-                ref.kind, discipline=ref.discipline, value=value, measured_on=on
+                ref.kind,
+                discipline=ref.discipline,
+                value=value,
+                measured_on=on,
+                applies_from=applies_from,
             )
         else:
             profile = profile.with_value(field, value)
         persist(profile)  # immediate persistence per accepted answer (Req 3.3, 8.7)
     return profile, tuple(still_missing)
+
+
+def _retroactive_question(on: date, activity_date: date) -> str:
+    """Compose the retroactive-application question (Req 3.7-3.9).
+
+    Names both dates in ISO form -- the pass date the answer is recorded as
+    measured on, and the activity date it would apply from -- and states the
+    consequence, without claiming ``activity_date`` is the earliest activity
+    in the pass (the design's Ordering note: the engine visits documents in
+    sorted-stem order, so it is only ever the earliest *so far*).
+    """
+    return (
+        f"Recorded as measured on {on.isoformat()}. Also apply it to earlier "
+        f"activities, back to this activity's date {activity_date.isoformat()}? "
+        "Activities in between are then scored against it and marked as "
+        "measured later."
+    )
 
 
 def _prompt_until_accepted(

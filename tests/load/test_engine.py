@@ -107,6 +107,10 @@ class ScriptedSession:
         self._floats = list(floats)
         self._chooses = list(chooses)
         self.informs: list[str] = []
+        self.confirm_defaults: list[tuple[str, bool]] = []
+        """Every ``confirm`` call's ``(question, default)`` pair, in order --
+        lets a test pin the ``default`` a specific question was asked with
+        (Req 3.9), without disturbing the FIFO ``_pop`` semantics below."""
 
     @staticmethod
     def _pop(queue: list[object], kind: str) -> object:
@@ -115,6 +119,7 @@ class ScriptedSession:
         return queue.pop(0)
 
     def confirm(self, question: str, *, default: bool = True) -> bool | None:
+        self.confirm_defaults.append((question, default))
         answer = self._pop(self._confirms, "confirm")  # type: ignore[arg-type]
         assert answer is None or isinstance(answer, bool)
         return answer
@@ -1567,6 +1572,12 @@ def test_apply_load_defaults_today_to_the_real_calendar_date(
     """Omitting ``today`` resolves it via ``date.today()`` (task 4.2's
     ``today = today or date.today()``) -- the pass's one permitted clock read.
 
+    The fixture document's own recorded date (derived from
+    ``builder.run_fit_bytes()``'s fixed FIT timestamp) is 2021, always earlier
+    than the real calendar date this test runs under -- so the retroactive
+    question (Req 3.7-3.9) now fires, and a queued ``confirm`` answer is
+    required (task 7.3; previously this probe never reached the question).
+
     Mutation caught: deleting the ``or date.today()`` fallback (leaving
     ``today`` as ``None``) breaks ``with_benchmark(measured_on=today)``'s type
     at runtime; a mutant that instead hardcodes a fixed fallback date
@@ -1577,8 +1588,13 @@ def test_apply_load_defaults_today_to_the_real_calendar_date(
     registry.register(calc)
     try:
         data_root = _build_data_root(tmp_path, {"run.fit": builder.run_fit_bytes()})
-        session = ScriptedSession(floats=[310.0])
+        doc = _doc(data_root, "run")
+        frontmatter = contract.parse_frontmatter(doc.read_text(encoding="utf-8"))
+        activity_date = contract.document_date(frontmatter)
+        assert activity_date is not None
+        session = ScriptedSession(floats=[310.0], confirms=[True])
         before = date.today()
+        assert activity_date < before  # precondition: the question must fire
 
         apply_load(data_root, session=session, calculator_id=calc.calculator_id)
 
@@ -1590,6 +1606,81 @@ def test_apply_load_defaults_today_to_the_real_calendar_date(
         assert entry is not None
         assert entry.value == 310.0
         assert before <= entry.measured_on <= after
+        assert entry.applies_from == activity_date
+        # Req 3.9: the retroactive question defaults to True. This probe
+        # asks exactly one confirm (no hint), so the single recorded entry
+        # is unambiguously the retroactive question.
+        assert len(session.confirm_defaults) == 1
+        retro_question, retro_default = session.confirm_defaults[0]
+        assert "Recorded as measured on" in retro_question
+        assert retro_default is True
+    finally:
+        registry.unregister(calc.calculator_id)
+
+
+def test_apply_load_retroactive_question_false_persists_with_no_applies_from(
+    isolated_registry: None,
+    tmp_path: Path,
+) -> None:
+    """Engine-level False-branch: a declined-retroactive (``False``) answer
+    persists ``measured_on=today`` with no ``applies_from``."""
+    calc = _BenchmarkProbeCalculator()
+    registry.register(calc)
+    try:
+        data_root = _build_data_root(tmp_path, {"run.fit": builder.run_fit_bytes()})
+        doc = _doc(data_root, "run")
+        frontmatter = contract.parse_frontmatter(doc.read_text(encoding="utf-8"))
+        activity_date = contract.document_date(frontmatter)
+        assert activity_date is not None
+        stamped = date(2030, 1, 1)  # after the fixture's ~2021 activity date
+        assert activity_date < stamped
+        session = ScriptedSession(floats=[311.0], confirms=[False])
+
+        apply_load(
+            data_root,
+            session=session,
+            calculator_id=calc.calculator_id,
+            today=stamped,
+        )
+
+        profile = load_profile(data_root)
+        entry = profile.benchmark(
+            BenchmarkKind.FTP_WATTS, discipline=Sport.RUN, on=stamped
+        )
+        assert entry is not None
+        assert entry.value == 311.0
+        assert entry.measured_on == stamped
+        assert entry.applies_from is None
+    finally:
+        registry.unregister(calc.calculator_id)
+
+
+def test_apply_load_retroactive_question_none_persists_nothing(
+    isolated_registry: None,
+    tmp_path: Path,
+) -> None:
+    """Engine-level None-branch: a declined/skipped retroactive question
+    persists nothing at all -- ``athlete.toml`` is not even written."""
+    calc = _BenchmarkProbeCalculator()
+    registry.register(calc)
+    try:
+        data_root = _build_data_root(tmp_path, {"run.fit": builder.run_fit_bytes()})
+        doc = _doc(data_root, "run")
+        frontmatter = contract.parse_frontmatter(doc.read_text(encoding="utf-8"))
+        activity_date = contract.document_date(frontmatter)
+        assert activity_date is not None
+        stamped = date(2030, 1, 1)
+        assert activity_date < stamped
+        session = ScriptedSession(floats=[312.0], confirms=[None])
+
+        apply_load(
+            data_root,
+            session=session,
+            calculator_id=calc.calculator_id,
+            today=stamped,
+        )
+
+        assert not (data_root / PROFILE_FILENAME).exists()
     finally:
         registry.unregister(calc.calculator_id)
 

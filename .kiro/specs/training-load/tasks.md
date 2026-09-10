@@ -334,7 +334,7 @@ construction. `design.md` is amended in place at each affected component.
   - _Requirements: athlete-benchmarks 6.4, 6.9, 6.10_
   - _Boundary: AthleteProfileStore — `src/fitdocs/load/profile.py`, `tests/load/test_profile_benchmarks.py`, `tests/load/test_profile.py`; docstring-only edits to `src/fitdocs/load/types.py`_
   - _Depends: 7.1_
-- [ ] 7.3 Ask the retroactive-application question in the prompt flow, and thread the activity date from the engine
+- [x] 7.3 Ask the retroactive-application question in the prompt flow, and thread the activity date from the engine
   - `collect_missing_fields` gains keyword-only, required `activity_date: date | None`; for a benchmark field, after the value is accepted and any hint confirmed, and only when `activity_date is not None and activity_date < on`, it asks through `session.confirm` (no new session member) whether the answer applies to earlier activities back to `activity_date`, naming both dates in ISO form with `default=True`; `True` → `with_benchmark(..., measured_on=on, applies_from=activity_date)`, `False` → `measured_on=on` only, `None` → declined, nothing persisted, still-missing. Flat fields, undated activities and activities dated on or after `on` are never asked and persist exactly as before
   - `_compute_document` passes its already-resolved `activity_date` into the flow; the pass keeps its single clock read
   - The existing engine probe that runs against the real calendar date with a 2021-dated document now reaches the question and must queue a `confirm` answer; the injected-`today` probe (2019, earlier than its document) must *not* reach it — pin both, so the condition is proven from both sides at the engine level
@@ -1035,3 +1035,24 @@ Obsolete and deliberately dropped:
   before the first report) held: one round, one finding, no oscillation.
 - Non-blocking, left open: the refusal message's two dates are asserted
   present but not which label each sits behind.
+
+### From task 7.3 (one review round, approved)
+
+- The branch x condition matrix built before the first report (True/False/
+  None x activity_date < on; no-question x == on / > on / None / flat field;
+  scope x kind; hint ordering; multi-field; exact question text; engine both
+  sides of the date comparison) closed the loop in one round: 16 reviewer
+  mutations, 0 full-suite survivors.
+- **A `ScriptedSession` that ignores `default` cannot pin a `default=` clause.**
+  Recording `(question, default)` per `confirm` call pins the *value*; the
+  keyword-omitted form is provably equivalent because the Protocol and every
+  double default to `True`. The user-visible `[Y/n]` rendering on the real
+  session is still pinned by nothing (queued).
+- **The engine's per-document `except Exception` swallows a test double's
+  `AssertionError` into `report.failures`.** An engine test that does not
+  assert `report.failures == ()` can pass while its own double raised
+  (queued). Every `apply_load` assertion in 7.4 asserts the failures tuple.
+- Non-blocking, left open and queued: the hint-ordering test drives a flat
+  field (indistinguishable outcome); the engine None-branch test lacks a
+  reachability assertion; one no-question test uses a self-referential
+  compare where its siblings use `len(...) == 1`.

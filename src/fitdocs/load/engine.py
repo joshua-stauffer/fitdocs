@@ -260,7 +260,11 @@ def apply_load(
     prompt flow's ``on`` parameter, which stamps it onto any accepted
     benchmark answer as its measurement date (Req 6.2, 8.7); a caller-supplied
     value makes the date injectable for tests, and this is the pass's only
-    clock read -- no module below this function reads one.
+    clock read -- no module below this function reads one. The prompt flow's
+    ``activity_date`` parameter carries the document's own recorded local
+    calendar date (Amendment 4), never a second clock read; when it is
+    earlier than ``today``, an accepted benchmark answer's retroactive
+    question (Req 3.7-3.9) fires from that comparison alone.
 
     Returns a :class:`LoadReport` whose tuples are in scan order.
     """
@@ -502,6 +506,7 @@ def _compute_document(
         persist=lambda updated: save_profile(data_root, updated),
         hints=hints,
         on=today,
+        activity_date=activity_date,
     )
     context = LoadContext(activity_date=activity_date, settings=settings)
     calc_outcome = calc.compute(activity, metrics, profile, session, context)
