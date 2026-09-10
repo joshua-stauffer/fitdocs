@@ -18,6 +18,12 @@
   `(discipline, kind, measured_on)`, an unrecognised entry key is ignored on
   parse, and an unrecognised discipline is rejected. This plan extends that
   module with one field and changes no existing guarantee.
+  **Read the post-Amendment-1 shape, not this plan's memory of it**
+  (design.md § Amendment 1): `Benchmark` is
+  `kind, discipline, value, measured_on, note, applies_from`; the serializer
+  emits `value, measured_on, applies_from, note`; `with_benchmark` already takes
+  `applies_from=`. Every "last", "after the note and the applies-from date" and
+  "fifth" below means *after `applies_from`*. Re-adding or reordering `applies_from` is a stop-and-report.
 - **`training-load`** owns `src/fitdocs/load/profile.py` — `AthleteProfile`,
   `with_benchmark`, `load_profile`, `save_profile`,
   `_merge_benchmarks_document` and its overlay rule (which already preserves an
@@ -200,8 +206,9 @@ synthetic pages — the athlete's real wiki never enters the repository.
     measured) and the frozen provenance value carrying the origin plus the
     optional method, document, inputs and citation, with a derived-origin
     predicate
-  - Add the optional provenance field to the entry value, last and defaulted, so
-    no existing construction site changes
+  - Add the optional provenance field to the entry value, last and defaulted —
+    after the athlete-declared applies-from date Amendment 1 left trailing — so
+    no existing construction site changes and no existing field moves
   - Validate the record on parse in the module's existing voice: absent yields
     the absent value; a non-table is an error naming the entry path; a missing
     or unrecognised origin is an error naming the entry path; a derived origin
@@ -209,8 +216,10 @@ synthetic pages — the athlete's real wiki never enters the repository.
     requires none; an unrecognised key inside the record is ignored on parse;
     the method name is validated as a non-empty string only, never against a
     vocabulary
-  - Emit the record from the serializer after the note, with a fixed key order
-    and every absent field omitted
+  - Emit the record from the serializer **last**, after the applies-from date
+    and the note (the file's order, which is not the value type's), with a fixed
+    key order and every absent field omitted, leaving the group's
+    measured-on-only sort key untouched
   - Observable: a decoded document carrying a derived entry and a measured entry
     parses into typed values whose fields match the file, and serializing those
     values back produces the same recognised keys in the same order — the
@@ -219,8 +228,12 @@ synthetic pages — the athlete's real wiki never enters the repository.
   - Pins: an entry with no record parses to the absent value and is therefore
     "not derived"; a record whose origin is an unrecognised string raises naming
     the entry path (the *file* name is added by the profile layer and is
-    asserted in 2.2). Mutation each dies on: accepting a derived origin with no
-    citation field
+    asserted in 2.2); a group mixing entries with and without the record still
+    sorts by measured-on alone — belongs beside
+    `tests/test_benchmarks.py::test_serializer_sorts_mixed_group_by_measured_on_not_applies_from`,
+    which pins the same thing for the applies-from date. Mutation each dies on:
+    accepting a derived origin with no citation field; making the record a sort
+    tie-breaker
   - _Requirements: 5.1, 5.2, 5.4, 5.5, 5.6, 5.8, 5.10_
   - _Boundary: BenchmarkProvenance_
 
@@ -235,12 +248,19 @@ synthetic pages — the athlete's real wiki never enters the repository.
     one, write the five recognised keys onto the inherited raw record rather
     than replacing the whole table, so an unrecognised key inside it survives a
     refresh
-  - Keep the note's existing inherit-on-absent rule untouched, and document the
-    asymmetry in the merge function's docstring — a note is commentary that can
-    outlive a value, provenance is a claim about this value
+  - Keep the inherit-on-absent rule of **both** the note and the applies-from
+    date untouched — the latter acquired it in Amendment 1 for the same reason —
+    and document the asymmetry in the merge function's docstring: a note is
+    commentary that can outlive a value and an applies-from date is the athlete's
+    own declaration, but provenance is a claim about this value
+  - Keep the merge scope-agnostic: it has no scope conditional today and must
+    gain none. Give every overlay branch this task adds an athlete-wide fixture
+    alongside its discipline-scoped one — no existing fixture varies scope
+    through the merge, so an athlete-scope-only regression would pass the suite
+    silently (the finding from the upstream task that added applies-from)
   - Observable: writing a prompt-style answer over a date that previously held a
-    derived entry leaves no provenance record behind while a note written
-    earlier at that date survives; refreshing a derived entry at a date whose
+    derived entry leaves no provenance record behind while a note *and an
+    applies-from date* written earlier at that date both survive; refreshing a derived entry at a date whose
     raw record carries an unrecognised inner key leaves that key in the written
     file; every non-benchmark key, every quantity the write did not cover and
     every unrecognised table survive untouched
@@ -249,7 +269,8 @@ synthetic pages — the athlete's real wiki never enters the repository.
     the save path already performs now also proves the record round-trips, so a
     serializer that emitted a shape the parser rejects fails before any
     temporary file is created. Mutation each dies on: letting the provenance
-    field inherit like the note does
+    field inherit like the note and the applies-from date do; making the
+    absent-→-removed rule also delete the inherited applies-from date
   - _Requirements: 5.3, 5.5, 5.6, 5.7, 5.9, 6.6_
   - _Boundary: BenchmarkProvenance, ProfileDerivedWrite_
   - _Depends: 2.1_
@@ -273,7 +294,12 @@ synthetic pages — the athlete's real wiki never enters the repository.
     twice produces byte-identical files; writing an empty derived set removes
     every derived entry — including the whole group and its scope table when
     they held nothing else — while leaving every hand-written entry, note,
-    unknown key and unrecognised quantity table exactly as they were
+    **applies-from date**, unknown key and unrecognised quantity table exactly
+    as they were. Give at least one retained hand-written entry in that fixture
+    an applies-from date, and one a note, so a group rebuild that drops either
+    is caught: this task deletes and rebuilds whole groups, which is the most
+    plausible place to lose a neighbour's field (the 7.1 lesson — enumerate
+    layers × scopes × kinds × group shapes before the first report)
   - Pins: a refused write leaves the existing file untouched, and the write is
     atomic. Mutation each dies on: retaining derived entries instead of
     replacing them
@@ -551,12 +577,20 @@ synthetic pages — the athlete's real wiki never enters the repository.
   - _Depends: 4.4, 4.5_
 
 - [ ] 5.3 (P) Land the athlete-benchmarks Existing Spec Update
+  - This lands as that spec's **Amendment 2**; its Amendment 1 (the
+    athlete-declared applies-from date) is already on `main` and is what the
+    entry shape below extends. Read its current requirements, design and
+    `spec.json` before writing — the line numbers this plan was drafted against
+    predate it — and add to its amendments list rather than replacing it
   - Add an amendment block to the benchmark store spec's requirements carrying
     the new criteria for the provenance field — its optionality, its closed
     origin class, the required fields for a derived origin, the ignored-unknown
-    -key rule, its preservation on rewrite, and the rule that fitdocs never
-    modifies an entry without derived provenance — renumbering no existing
-    criterion
+    -key rule, its preservation on rewrite, the rule that fitdocs never
+    modifies an entry without derived provenance, and the statement that the
+    provenance field is the entry's fifth recognised field and neither displaces
+    nor interacts with Amendment 1's applies-from date (a derived entry carries
+    none, so it is tier-1 only in that amendment's two-tier resolution) —
+    renumbering no existing criterion of either amendment
   - Amend that spec's out-of-scope line excluding estimation of any kind so it
     states that estimation is performed by this spec, which hands the store
     ordinary dated entries, and that the store still performs none itself; do
