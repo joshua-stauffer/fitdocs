@@ -1104,15 +1104,15 @@ would leave the derived numbers invisible to the athlete).
 
 #### Specs (dependency order)
 
-- [ ] effort-tags — user-owned frontmatter keys marking a workout page as a
+- [ ] effort-tags — **spec written 2026-09-10** (Phase 6 batch, `tasks-generated`, all approvals set; 6 requirements, 5 majors / 14 executable tasks, major 3 a single promoted task; cross-spec reviewed). user-owned frontmatter keys marking a workout page as a
   race, test or hard effort, with optional official distance, time and event
   link; preserved byte-for-byte across sync, regen and the load pass;
   validated; read through one contract reader. Dependencies: none
-- [ ] performance-benchmarks — a pass that derives dated threshold pace, LTHR
+- [ ] performance-benchmarks — **spec written 2026-09-10** (Phase 6 batch, `tasks-generated`, all approvals set; 10 requirements, 5 majors / 18 executable tasks; cross-spec reviewed). a pass that derives dated threshold pace, LTHR
   and FTP from tagged efforts through cited models and writes them to
   `athlete.toml` with provenance, never overwriting what the athlete typed.
   Dependencies: effort-tags
-- [ ] load-history — the daily load series from documents, the
+- [ ] load-history — **spec written 2026-09-10** (Phase 6 batch, `tasks-generated`, all approvals set; 8 requirements, 5 majors / 20 executable tasks; cross-spec reviewed). the daily load series from documents, the
   fitness/fatigue/form recursion with cited seed constants, and one history
   page with chart, race markers, weekly table and coverage statement.
   Dependencies: effort-tags
