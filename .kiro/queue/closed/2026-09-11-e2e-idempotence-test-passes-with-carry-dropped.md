@@ -1,7 +1,7 @@
 ---
 id: 2026-09-11-e2e-idempotence-test-passes-with-carry-dropped
 title: The e2e double-regen test passes on a build that deletes every effort tag
-status: open
+status: done
 importance: low
 importance_why: The test cannot distinguish "the tag survived twice" from "the tag was destroyed twice"; Req 4.6 is pinned elsewhere, so the risk is a false sense of coverage.
 effort: S
@@ -20,7 +20,7 @@ blocked_by: []
 
 ## What
 
-`tests/test_effort_tags_e2e.py::test_regenerating_two_times_over_a_tagged_document_is_byte_identical`
+`tests/test_effort_tags_e2e.py::test_regenerating_twice_over_a_tagged_document_is_byte_identical`
 regenerates twice and compares the bytes. It never asserts the tag is present in
 the first regeneration's output, so a build that silently deletes every effort
 tag regenerates idempotently too and the test passes.
@@ -49,7 +49,7 @@ survived both rounds.
 Executed during task 5.3 validation at `e39b35f`. Mutation: `carried = ""` in
 `src/fitdocs/render/frontmatter.py:153`, dropping the carry entirely.
 
-- `uv run pytest tests/test_effort_tags_e2e.py::test_regenerating_two_times_over_a_tagged_document_is_byte_identical`
+- `uv run pytest tests/test_effort_tags_e2e.py::test_regenerating_twice_over_a_tagged_document_is_byte_identical`
   alone -> **1 passed**
 - the same mutation across the suite -> **16 failed** in `test_effort_tags_e2e.py`
   and `test_sync.py`, including the `test_sync.py` idempotence counterpart

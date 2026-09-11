@@ -369,6 +369,11 @@ def test_regenerating_twice_over_a_tagged_document_is_byte_identical(
         assert first.exit_code == 0, first.output
         first_bytes = doc.read_bytes()
 
+        # Reachability: the first regen must actually have kept the tag --
+        # otherwise byte-identity across the second regen would hold just as
+        # well for a build that drops every tag on write.
+        assert _VALID_TAG.encode("utf-8") in first_bytes
+
         second = runner.invoke(app, ["regen", "--out", str(data_root)])
         assert second.exit_code == 0, second.output
         second_bytes = doc.read_bytes()
