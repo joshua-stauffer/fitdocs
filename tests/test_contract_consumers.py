@@ -56,6 +56,8 @@ import fitdocs.history.page
 import fitdocs.layout
 import fitdocs.load.docedit
 import fitdocs.load.engine
+import fitdocs.performance.derive
+import fitdocs.performance.engine
 import fitdocs.render.frontmatter
 import fitdocs.render.sections
 import fitdocs.render.views
@@ -70,7 +72,14 @@ import fitdocs.sync
 #: added would leave exactly the surface most likely to grow a second
 #: interpretation unguarded (proven: injecting ``_fence = "---"``,
 #: ``_type = "workout"``, ``_region = "notes"`` into ``audit.py`` passed the
-#: full suite before this wave was registered).
+#: full suite before this wave was registered). A fifth wave, this feature's
+#: own two modules (``performance/engine``, the impure pass, and
+#: ``performance/derive``, the pure leaf that reads the tag vocabulary the
+#: contract publishes), is registered below for the identical reason: a
+#: faithful local re-implementation of a bound reader -- a copy of
+#: ``is_workout_document`` appended to ``performance/engine.py`` using the
+#: contract's own key constants -- passed every test outside this file and
+#: failed only the identity binding here.
 CONVERTED_MODULES: Final[tuple[ModuleType, ...]] = (
     fitdocs.sync,
     fitdocs.load.engine,
@@ -98,6 +107,8 @@ CONVERTED_MODULES: Final[tuple[ModuleType, ...]] = (
     # registered with an empty binding list.
     fitdocs.history.documents,
     fitdocs.history.page,
+    fitdocs.performance.engine,
+    fitdocs.performance.derive,
 )
 
 #: The one converted module allowed to name ``yaml`` at all. The frontmatter
@@ -214,6 +225,19 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
     # comment above) -- registered for the structural checks only, the same
     # shape as `fitdocs.cli`.
     "fitdocs.history.page": (),
+    "fitdocs.performance.engine": (
+        "EffortTag",
+        "InvalidEffortTag",
+        "document_date",
+        "effort_tag",
+        "is_workout_document",
+        "sha_of_ref",
+        "source_refs",
+    ),
+    "fitdocs.performance.derive": (
+        "EffortKind",
+        "EffortTag",
+    ),
 }
 
 #: Document vocabulary no converted module may spell for itself: the frontmatter

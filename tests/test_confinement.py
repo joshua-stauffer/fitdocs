@@ -73,6 +73,7 @@ from fitdocs.layout import (
 from fitdocs.load import registry
 from fitdocs.load.engine import apply_load
 from fitdocs.load.types import InteractionSession
+from fitdocs.performance import derive_benchmarks
 from fitdocs.quarantine import load_quarantine
 from fitdocs.settings import load_settings_document
 from fitdocs.sync import drain, regen, sync
@@ -493,6 +494,66 @@ def _wrote_a_workout_document(touched: Sequence[str]) -> bool:
     )
 
 
+def _stage_tagged_race(data_root: Path, source_dir: Path) -> None:
+    """Stage one tagged, dated running race with a resolvable archive (Req
+    1.10, 9.4, 9.5, 10.3, 10.8): a distance/time pair (10000 m, 2400 s) well
+    inside Riegel's validity window, which is what makes the measured
+    ``derive-benchmarks`` run below actually accept a candidate and reach the
+    reconciling write, rather than only exercising the decline path -- a
+    guard that never wrote would pass vacuously. ``source_dir`` is unused:
+    this entry point reads only the data root, never a sibling source
+    directory of raw ``.fit`` files, mirroring ``drain``'s prepare.
+    """
+    data = builder.run_fit_bytes()
+    sha256 = hashlib.sha256(data).hexdigest()
+    archive_dir = data_root / ARCHIVE_DIR
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    (archive_dir / f"{sha256}.fit").write_bytes(data)
+
+    workouts = data_root / WORKOUTS_DIR
+    workouts.mkdir(parents=True, exist_ok=True)
+    (workouts / "race.md").write_text(
+        "---\n"
+        "type: workout\n"
+        'date: "2024-05-01"\n'
+        "effort: race\n"
+        "effort_distance_m: 10000\n"
+        "effort_time_s: 2400\n"
+        "sources:\n"
+        f"  - {ARCHIVE_DIR}/{sha256}.fit\n"
+        "---\n"
+        "\nBody.\n",
+        encoding="utf-8",
+    )
+
+
+def _run_derive_benchmarks(data_root: Path, source_dir: Path) -> None:
+    """The ``derive-benchmarks`` entry point, driven exactly as the CLI
+    drives it: one call over the data root, no dry run (Req 1.10).
+
+    Writes only ``athlete.toml`` (via
+    :func:`fitdocs.load.profile.save_profile`'s reconciling write) -- never a
+    workout document (``tasks.md``'s hard rule for every task: "no document
+    is written by anything in this plan") -- which is exactly why this entry
+    point
+    reuses :data:`PERMITTED_SHARED_FILES` rather than adding a location of
+    its own.
+    """
+    derive_benchmarks(data_root)
+
+
+def _wrote_only_the_athlete_profile(touched: Sequence[str]) -> bool:
+    """``derive-benchmarks``'s own non-vacuity predicate (Req 1.10, 9.4): the
+    touched set is *exactly* ``{"data/athlete.toml"}`` -- no more, no less.
+    Equality rather than membership pins two things in one clause: the run
+    really wrote (never calling ``save_profile`` leaves ``touched`` empty and
+    fails), and it wrote *nothing but* the profile (a stray lock file, a
+    stray cache entry, or a workout document alongside it also fails, because
+    the touched set is then a strict superset of the singleton).
+    """
+    return tuple(touched) == (f"data/{ATHLETE_FILE}",)
+
+
 def _wrote_the_history_document(touched: Sequence[str]) -> bool:
     """The ``history`` entry point's own non-vacuity check (load-history
     spec, task 5.4): its measured run wrote the one history document it
@@ -547,6 +608,12 @@ WRITING_ENTRY_POINTS: Final[tuple[EntryPoint, ...]] = (
         prepare=_stage_history_pages,
         run=_run_history,
         non_vacuous=_wrote_the_history_document,
+    ),
+    EntryPoint(
+        id="derive-benchmarks",
+        prepare=_stage_tagged_race,
+        run=_run_derive_benchmarks,
+        non_vacuous=_wrote_only_the_athlete_profile,
     ),
 )
 
@@ -603,6 +670,18 @@ def test_entry_point_writes_only_inside_the_permitted_locations(
     )
     configured = configured_locations(data_root)
     assert_confined(sandbox, permitted_locations(data_root, configured), before, after)
+
+
+def test_derive_benchmarks_is_a_registered_writing_entry_point() -> None:
+    """``derive-benchmarks`` must be registered in :data:`WRITING_ENTRY_POINTS`
+    (Req 7.6) so it is checked by the confinement guard like every other
+    writing entry point -- dropping its registration is this task's own named
+    mutation, and this test dies on it in this file rather than only being
+    caught indirectly by the parametrized guard silently losing a case.
+    """
+    assert "derive-benchmarks" in {
+        entry_point.id for entry_point in WRITING_ENTRY_POINTS
+    }
 
 
 def test_guard_catches_a_stray_create_modify_and_delete(tmp_path: Path) -> None:

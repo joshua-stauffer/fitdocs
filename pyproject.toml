@@ -88,6 +88,7 @@ files = [
     "tests/performance/test_purity.py",
     "tests/performance/test_reachability.py",
     "tests/test_cli_derive.py",
+    "tests/performance/test_single_writer.py",
 ]
 
 [tool.pytest.ini_options]

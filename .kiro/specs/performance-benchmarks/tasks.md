@@ -508,7 +508,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
   - _Boundary: DeriveCommand_
   - _Depends: 4.3_
 
-- [ ] 4.5 (P) Register the pass with the shared guards and pin its surface
+- [x] 4.5 (P) Register the pass with the shared guards and pin its surface
   - Append the pass as one more writing entry point to the existing
     write-confinement registry, reusing the shared-file allowance the profile
     already has; add no owned path and change nothing else in that module

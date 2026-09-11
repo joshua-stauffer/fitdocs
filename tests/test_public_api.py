@@ -81,6 +81,9 @@ import fitdocs.load.types
 import fitdocs.metrics
 import fitdocs.metrics.types
 import fitdocs.model
+import fitdocs.performance
+import fitdocs.performance.engine
+import fitdocs.performance.types
 
 # Every name the package root must re-export, paired with its defining object.
 _EXPECTED = {
@@ -925,3 +928,66 @@ def test_every_history_name_is_the_same_object_as_its_defining_module() -> None:
 def test_history_is_not_re_exported_from_the_package_root() -> None:
     """The history package is a module-level surface, not a package-root name."""
     assert not set(fitdocs.__all__) & _HISTORY_SURFACE
+
+
+# --- fitdocs.performance: the derivation pass' published surface -----------
+#
+# (performance-benchmarks task 4.5, design: PerformanceTypes / Guards
+# "Public surface", Req 9.4, 9.5, 10.8) Every name `fitdocs.performance`
+# publishes: the five names 1.1 shipped (the derivation-method and
+# decline-reason vocabularies, the two frozen outcome values, and their
+# sealed union) plus `derive_benchmarks`, appended last by 4.3 once the pass
+# existed. Pinned the same way as `fitdocs.contract`/`fitdocs.audit`/
+# `fitdocs.docio` above -- an equality pin on `__all__` plus an identity
+# check against each name's *defining* module, `is` rather than `==`, so a
+# same-named local re-implementation (e.g. a second `derive_benchmarks` that
+# merely matches by name) is rejected exactly as a renamed or dropped export
+# is.
+_PERFORMANCE_EXPECTED = {
+    "DeclineReason": fitdocs.performance.types.DeclineReason,
+    "DerivationDeclined": fitdocs.performance.types.DerivationDeclined,
+    "DerivationMethod": fitdocs.performance.types.DerivationMethod,
+    "DerivationOutcome": fitdocs.performance.types.DerivationOutcome,
+    "DerivedBenchmark": fitdocs.performance.types.DerivedBenchmark,
+    "derive_benchmarks": fitdocs.performance.engine.derive_benchmarks,
+}
+
+
+def test_performance_all_lists_exactly_its_published_surface() -> None:
+    assert set(fitdocs.performance.__all__) == set(_PERFORMANCE_EXPECTED)
+    # __all__ has no duplicates.
+    assert len(fitdocs.performance.__all__) == len(set(fitdocs.performance.__all__))
+
+
+def test_every_performance_name_is_importable_and_correct() -> None:
+    for name, expected in _PERFORMANCE_EXPECTED.items():
+        assert hasattr(fitdocs.performance, name), (
+            f"fitdocs.performance is missing {name}"
+        )
+        assert getattr(fitdocs.performance, name) is expected, (
+            f"fitdocs.performance.{name} is not {expected!r}"
+        )
+
+
+def test_performance_direct_from_import_binds_the_public_names() -> None:
+    from fitdocs.performance import (  # noqa: F401
+        DeclineReason,
+        DerivationDeclined,
+        DerivationMethod,
+        DerivationOutcome,
+        DerivedBenchmark,
+        derive_benchmarks,
+    )
+
+    assert DeclineReason is fitdocs.performance.types.DeclineReason
+    assert DerivationDeclined is fitdocs.performance.types.DerivationDeclined
+    assert DerivationMethod is fitdocs.performance.types.DerivationMethod
+    assert DerivationOutcome is fitdocs.performance.types.DerivationOutcome
+    assert DerivedBenchmark is fitdocs.performance.types.DerivedBenchmark
+    assert derive_benchmarks is fitdocs.performance.engine.derive_benchmarks
+
+
+def test_performance_is_not_re_exported_from_the_package_root() -> None:
+    """The performance package is a module-level surface, not a package-root
+    name -- ``fitdocs.__all__`` stays the narrow parse/compute API."""
+    assert not set(fitdocs.__all__) & set(_PERFORMANCE_EXPECTED)
