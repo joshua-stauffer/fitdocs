@@ -23,6 +23,12 @@ from fitdocs.history.page import (
     HISTORY_VERSION,
     HISTORY_VERSION_KEY,
 )
+from fitdocs.history.series import (
+    MethodologyChoice,
+    MethodologyProblem,
+    partition_pages,
+    select_methodology,
+)
 from fitdocs.history.settings import (
     DEFAULT_HISTORY_SETTINGS,
     HistorySettings,
@@ -45,4 +51,8 @@ __all__: list[str] = [
     "ModelSeries",
     "run_model",
     "unscaled_accumulators",
+    "MethodologyChoice",
+    "MethodologyProblem",
+    "partition_pages",
+    "select_methodology",
 ]
