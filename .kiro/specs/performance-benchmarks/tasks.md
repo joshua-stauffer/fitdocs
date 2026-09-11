@@ -309,7 +309,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
 
 - [ ] 3. The derivations
 
-- [ ] 3.1 Derive threshold pace from a tagged race
+- [x] 3.1 Derive threshold pace from a tagged race
   - Add the derivation module with the threshold-pace derivation: solve the
     race-equivalence model for the one-hour distance and express the result as a
     pace in seconds per kilometre under the running discipline, dated at the

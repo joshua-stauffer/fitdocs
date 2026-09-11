@@ -83,6 +83,7 @@ files = [
     "tests/performance/test_sources.py",
     "tests/performance/test_models.py",
     "tests/performance/test_constant_guard.py",
+    "tests/performance/test_derive.py",
 ]
 
 [tool.pytest.ini_options]
