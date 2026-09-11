@@ -390,7 +390,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
   - _Boundary: DerivationLeaf_
   - _Depends: 3.2_
 
-- [ ] 3.4 Route an activity and its tag to every quantity its discipline covers
+- [x] 3.4 Route an activity and its tag to every quantity its discipline covers
   - Add the single pure entry point that takes a parsed activity, a valid tag,
     the page's date, the page's data-root-relative path and the sufficiency
     settings, and returns one outcome per quantity the discipline covers

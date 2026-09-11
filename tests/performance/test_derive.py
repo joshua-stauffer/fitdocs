@@ -2552,3 +2552,418 @@ def test_ftp_never_raises_on_a_decline_path() -> None:
         assert outcome.kind is BenchmarkKind.FTP_WATTS
         assert outcome.reason is expected_reason
         assert outcome.detail != ""
+
+
+# =============================================================================
+# routing (task 3.4)
+# =============================================================================
+
+
+def _route_samples(
+    time_s: tuple[float, ...],
+    *,
+    heart_rate_bpm: tuple[int | None, ...] = (),
+    power_w: tuple[int | None, ...] = (),
+) -> Samples:
+    return Samples(
+        time_s=time_s,
+        heart_rate_bpm=heart_rate_bpm,
+        power_w=power_w,
+        cadence_rpm=(),
+        speed_mps=(),
+        distance_m=(),
+        altitude_m=(),
+        latitude_deg=(),
+        longitude_deg=(),
+        temperature_c=(),
+    )
+
+
+def _route_activity(*, sport: Sport, samples: Samples) -> Activity:
+    modality = Modality.BIKE if sport is Sport.RIDE else Modality.RUN
+    return Activity(
+        schema_version=SCHEMA_VERSION,
+        provenance=Provenance(sha256="4" * 64, source_path=None, decode_errors=()),
+        sport=sport,
+        modality=modality,
+        is_indoor=False,
+        start_time=None,
+        summary=_summary(total_distance_m=None, total_elapsed_time_s=None),
+        laps=(),
+        samples=samples,
+        sets=(),
+        devices=(),
+    )
+
+
+_ROUTE_ON = date(2024, 9, 1)
+_ROUTE_DOCUMENT = "workouts/2024-09-01-route.md"
+
+
+@pytest.mark.parametrize(
+    "sport", [s for s in Sport if s not in (Sport.RUN, Sport.RIDE)], ids=str
+)
+def test_uncovered_sport_page_yields_exactly_one_sport_not_covered_decline(
+    sport: Sport,
+) -> None:
+    """A page for any sport other than running or cycling is not on the
+    routing table at all (Req 7.5, 10.4, 10.5):
+    the router attempts no quantity for it and returns exactly one outcome,
+    a `SPORT_NOT_COVERED` decline naming the sport -- never the two outcomes
+    a covered sport would produce, and never a decline that silently omits
+    the sport from its own detail text.
+
+    Mutation this dies on: routing every sport through the `Sport.RUN` (or
+    `Sport.RIDE`) arm regardless of `activity.sport` -- the outcome count
+    would become two (a derived/declined pace or FTP outcome plus an LTHR
+    outcome) instead of one, and neither outcome would be a
+    `SPORT_NOT_COVERED` decline naming the sport.
+    """
+    samples = _route_samples((0.0, 1800.0), heart_rate_bpm=(140, 140))
+    activity = _route_activity(sport=sport, samples=samples)
+    tag = _tag(kind=EffortKind.RACE)
+
+    outcomes = derive.derive(
+        activity,
+        tag,
+        on=_ROUTE_ON,
+        document=_ROUTE_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert len(outcomes) == 1
+    (outcome,) = outcomes
+    assert isinstance(outcome, DerivationDeclined)
+    assert outcome.reason is DeclineReason.SPORT_NOT_COVERED
+    assert sport.value in outcome.detail
+    assert outcome.detail != ""
+
+
+def test_running_race_with_hr_stream_yields_pace_and_lthr() -> None:
+    """A running race with an official distance/time pair and a full
+    heart-rate stream over the same span attempts, and derives, both
+    covered quantities (Req 7.5): threshold pace from the official pair,
+    and LTHR from the whole-effort time-weighted mean heart rate. The two
+    values are pairwise distinct in kind (`THRESHOLD_PACE_S_PER_KM` versus
+    `LTHR_BPM`), so this fixture cannot be satisfied by deriving the same
+    quantity twice.
+
+    Mutation this dies on: routing `Sport.RUN` through only one leaf (either
+    dropping the pace call or the LTHR call) -- the outcome count would drop
+    to one, and whichever `BenchmarkKind` was dropped would be entirely
+    absent from the result. Also dies on swapping the two leaves' call
+    order: the fixed order the docstring documents (pace, then LTHR) is
+    pinned positionally below, not merely as a set. Also dies on passing the
+    wrong `document`/`on` value into either leaf call (e.g. a swapped
+    argument order or a hardcoded literal): the per-outcome `document`/
+    `measured_on` assertions below name `_ROUTE_DOCUMENT`/`_ROUTE_ON`
+    exactly, values distinct from every default used elsewhere in this
+    module.
+    """
+    samples = _route_samples((0.0, 1800.0, 3600.0), heart_rate_bpm=(150, 151, 151))
+    activity = _route_activity(sport=Sport.RUN, samples=samples)
+    tag = _tag(kind=EffortKind.RACE, distance_m=10000.0, time_s=3600.0)
+
+    outcomes = derive.derive(
+        activity,
+        tag,
+        on=_ROUTE_ON,
+        document=_ROUTE_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert len(outcomes) == 2
+    kinds = {outcome.kind for outcome in outcomes}
+    assert kinds == {BenchmarkKind.THRESHOLD_PACE_S_PER_KM, BenchmarkKind.LTHR_BPM}
+    assert all(isinstance(outcome, DerivedBenchmark) for outcome in outcomes)
+    assert outcomes[0].kind is BenchmarkKind.THRESHOLD_PACE_S_PER_KM
+    assert outcomes[1].kind is BenchmarkKind.LTHR_BPM
+    for outcome in outcomes:
+        assert isinstance(outcome, DerivedBenchmark)
+        assert outcome.document == _ROUTE_DOCUMENT
+        assert outcome.measured_on == _ROUTE_ON
+
+
+def test_undated_running_race_yields_two_undated_declines() -> None:
+    """An undated running race (Req 7.6) attempts the same two quantities a
+    dated one would, but both decline `UNDATED_DOCUMENT` -- the router does
+    not short-circuit to a single decline for the whole document, and does
+    not let one leaf's undated check suppress the other leaf's call.
+
+    Mutation this dies on: the router special-casing `on is None` with a
+    single early-return decline for the whole document -- the outcome count
+    would drop from two to one.
+    """
+    samples = _route_samples((0.0, 1800.0, 3600.0), heart_rate_bpm=(150, 151, 151))
+    activity = _route_activity(sport=Sport.RUN, samples=samples)
+    tag = _tag(kind=EffortKind.RACE, distance_m=10000.0, time_s=3600.0)
+
+    outcomes = derive.derive(
+        activity,
+        tag,
+        on=None,
+        document=_ROUTE_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert len(outcomes) == 2
+    declines = [
+        outcome for outcome in outcomes if isinstance(outcome, DerivationDeclined)
+    ]
+    assert len(declines) == 2
+    assert all(decline.reason is DeclineReason.UNDATED_DOCUMENT for decline in declines)
+    kinds = {decline.kind for decline in declines}
+    assert kinds == {BenchmarkKind.THRESHOLD_PACE_S_PER_KM, BenchmarkKind.LTHR_BPM}
+
+
+def test_cycling_hard_effort_yields_ftp_decline_and_lthr_derived() -> None:
+    """A cycling `hard` effort (Req 2.8's cycling analogue) attempts FTP,
+    which declines `EFFORT_KIND_NOT_USED` (the routing table names FTP
+    race/test only), and LTHR, which derives (the routing table names LTHR
+    for all three kinds) -- two outcomes, not one, and not a stop after the
+    first decline.
+
+    Mutation this dies on: returning after the first decline (stopping at
+    the FTP decline and never calling `lactate_threshold_hr`) -- the
+    outcome count would drop from two to one and the LTHR outcome would be
+    entirely absent. Also dies on passing the wrong `document`/`on` value
+    into the LTHR call: `lthr_outcome.document`/`.measured_on` are asserted
+    against `_ROUTE_DOCUMENT`/`_ROUTE_ON` exactly.
+    """
+    samples = _route_samples((0.0, 1200.0, 2400.0), heart_rate_bpm=(160, 161, 161))
+    activity = _route_activity(sport=Sport.RIDE, samples=samples)
+    tag = _tag(kind=EffortKind.HARD)
+
+    outcomes = derive.derive(
+        activity,
+        tag,
+        on=_ROUTE_ON,
+        document=_ROUTE_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert len(outcomes) == 2
+    by_kind = {outcome.kind: outcome for outcome in outcomes}
+    assert set(by_kind) == {BenchmarkKind.FTP_WATTS, BenchmarkKind.LTHR_BPM}
+    ftp_outcome = by_kind[BenchmarkKind.FTP_WATTS]
+    lthr_outcome = by_kind[BenchmarkKind.LTHR_BPM]
+    assert isinstance(ftp_outcome, DerivationDeclined)
+    assert ftp_outcome.reason is DeclineReason.EFFORT_KIND_NOT_USED
+    assert isinstance(lthr_outcome, DerivedBenchmark)
+    assert outcomes[0].kind is BenchmarkKind.FTP_WATTS
+    assert outcomes[1].kind is BenchmarkKind.LTHR_BPM
+    assert lthr_outcome.document == _ROUTE_DOCUMENT
+    assert lthr_outcome.measured_on == _ROUTE_ON
+
+
+def test_cycling_race_with_power_and_hr_yields_ftp_and_lthr() -> None:
+    """A cycling race inside the FTP window with full power and heart-rate
+    coverage derives both quantities in the order (FTP, LTHR); both carry
+    the page's document and date the router was given."""
+    samples = _route_samples(
+        (0.0, 1800.0, 3600.0),
+        heart_rate_bpm=(150, 150, 150),
+        power_w=(200, 200, 200),
+    )
+    activity = _route_activity(sport=Sport.RIDE, samples=samples)
+    tag = _tag(kind=EffortKind.RACE)
+
+    outcomes = derive.derive(
+        activity,
+        tag,
+        on=_ROUTE_ON,
+        document=_ROUTE_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert len(outcomes) == 2
+    assert [o.kind for o in outcomes] == [
+        BenchmarkKind.FTP_WATTS,
+        BenchmarkKind.LTHR_BPM,
+    ]
+    for outcome in outcomes:
+        assert isinstance(outcome, DerivedBenchmark)
+        assert outcome.document == _ROUTE_DOCUMENT
+        assert outcome.measured_on == _ROUTE_ON
+
+
+def test_derive_never_calls_lactate_threshold_hr_for_a_non_run_or_ride_sport(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The router must never call the LTHR leaf for a sport outside
+    `Sport.RUN`/`Sport.RIDE` (design DerivationLeaf routing table: "every
+    other" sport attempts no quantity at all, LTHR included). Patches
+    `derive.lactate_threshold_hr` itself to raise if it is ever invoked, so
+    this assertion fails on an actual call rather than merely on an
+    observable outcome shape a different bug could also produce.
+
+    Mutation this dies on: routing every sport through the LTHR leaf
+    unconditionally (e.g. calling `lactate_threshold_hr` before checking
+    `activity.sport`) -- the patched leaf would raise and the test would
+    error instead of passing.
+    """
+
+    def _forbidden(*args: object, **kwargs: object) -> None:
+        raise AssertionError("lactate_threshold_hr must not be called for Sport.SWIM")
+
+    monkeypatch.setattr(derive, "lactate_threshold_hr", _forbidden)
+
+    samples = _route_samples((0.0, 1800.0), heart_rate_bpm=(140, 140))
+    activity = _route_activity(sport=Sport.SWIM, samples=samples)
+    tag = _tag(kind=EffortKind.RACE)
+
+    outcomes = derive.derive(
+        activity,
+        tag,
+        on=_ROUTE_ON,
+        document=_ROUTE_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert len(outcomes) == 1
+    assert isinstance(outcomes[0], DerivationDeclined)
+    assert outcomes[0].reason is DeclineReason.SPORT_NOT_COVERED
+
+
+@pytest.mark.parametrize("sport", [Sport.RUN, Sport.RIDE], ids=str)
+def test_routing_passes_the_callers_sufficiency_settings_to_lthr(
+    sport: Sport,
+) -> None:
+    """Req 3.4's rule -- the caller-supplied `SufficiencySettings` governs
+    the gate, never a default constructed in its place -- must hold when
+    the settings arrive through `derive.derive`'s routing, not only when
+    `lactate_threshold_hr` is called directly. An 85%-covered heart-rate
+    stream passes the shared 80% default but must decline against a
+    caller-supplied 95% minimum.
+
+    Mutation this dies on: `derive.derive` constructing its own
+    `SufficiencySettings()` (or any settings value other than the
+    `sufficiency` parameter) for either sport's LTHR call -- this fixture's
+    85% coverage would then clear the default 80% minimum and derive
+    instead of declining `STREAM_COVERAGE` against the caller's 95%.
+    """
+    samples = _route_samples((0.0, 2040.0, 2400.0), heart_rate_bpm=(150, None, None))
+    activity = _route_activity(sport=sport, samples=samples)
+    tag = _tag(kind=EffortKind.RACE)
+    strict_settings = SufficiencySettings(hr_min_stream_coverage=0.95)
+
+    outcomes = derive.derive(
+        activity,
+        tag,
+        on=_ROUTE_ON,
+        document=_ROUTE_DOCUMENT,
+        sufficiency=strict_settings,
+    )
+
+    by_kind = {outcome.kind: outcome for outcome in outcomes}
+    lthr_outcome = by_kind[BenchmarkKind.LTHR_BPM]
+    assert isinstance(lthr_outcome, DerivationDeclined)
+    assert lthr_outcome.reason is DeclineReason.STREAM_COVERAGE
+    assert lthr_outcome.required == pytest.approx(0.95)
+    assert lthr_outcome.required != pytest.approx(0.80)
+
+
+def test_routing_passes_the_callers_sufficiency_settings_to_ftp() -> None:
+    """The cycling analogue of the LTHR case above: an 85%-covered power
+    stream, inside the FTP definition window (3000-4200 s), passes the
+    shared 80% default but must decline against a caller-supplied 95%
+    power minimum.
+
+    Mutation this dies on: `derive.derive` constructing its own
+    `SufficiencySettings()` (or any settings value other than the
+    `sufficiency` parameter) for the `Sport.RIDE` FTP call -- this
+    fixture's 85% coverage would then clear the default 80% minimum and
+    derive instead of declining `STREAM_COVERAGE` against the caller's
+    95%.
+    """
+    samples = _route_samples(
+        (0.0, 3060.0, 3600.0),
+        heart_rate_bpm=(150, 150, 150),
+        power_w=(200, None, None),
+    )
+    activity = _route_activity(sport=Sport.RIDE, samples=samples)
+    tag = _tag(kind=EffortKind.RACE)
+    strict_settings = SufficiencySettings(power_min_stream_coverage=0.95)
+
+    outcomes = derive.derive(
+        activity,
+        tag,
+        on=_ROUTE_ON,
+        document=_ROUTE_DOCUMENT,
+        sufficiency=strict_settings,
+    )
+
+    by_kind = {outcome.kind: outcome for outcome in outcomes}
+    ftp_outcome = by_kind[BenchmarkKind.FTP_WATTS]
+    assert isinstance(ftp_outcome, DerivationDeclined)
+    assert ftp_outcome.reason is DeclineReason.STREAM_COVERAGE
+    assert ftp_outcome.required == pytest.approx(0.95)
+    assert ftp_outcome.required != pytest.approx(0.80)
+
+
+def test_undated_cycling_effort_yields_two_undated_declines() -> None:
+    """The cycling analogue of `test_undated_running_race_yields_two_undated_
+    declines`: an undated cycling effort attempts both FTP and LTHR, but
+    both decline `UNDATED_DOCUMENT` -- the router does not short-circuit to
+    a single decline for the whole document, and does not let one leaf's
+    undated check suppress the other leaf's call.
+
+    Mutation this dies on: the `Sport.RIDE` arm special-casing `on is None`
+    with a single early-return decline for the whole document -- the
+    outcome count would drop from two to one.
+    """
+    samples = _route_samples(
+        (0.0, 1200.0, 2400.0), heart_rate_bpm=(160, 161, 161), power_w=(200, 200, 200)
+    )
+    activity = _route_activity(sport=Sport.RIDE, samples=samples)
+    tag = _tag(kind=EffortKind.RACE)
+
+    outcomes = derive.derive(
+        activity,
+        tag,
+        on=None,
+        document=_ROUTE_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert len(outcomes) == 2
+    declines = [
+        outcome for outcome in outcomes if isinstance(outcome, DerivationDeclined)
+    ]
+    assert len(declines) == 2
+    assert all(decline.reason is DeclineReason.UNDATED_DOCUMENT for decline in declines)
+    kinds = {decline.kind for decline in declines}
+    assert kinds == {BenchmarkKind.FTP_WATTS, BenchmarkKind.LTHR_BPM}
+
+
+def test_running_hard_effort_declines_pace_and_derives_lthr_in_order() -> None:
+    """Req 2.8 at the routing level: a running `hard` effort attempts
+    threshold pace, which declines `EFFORT_KIND_NOT_USED` (the routing
+    table names pace `race`-only for running), and LTHR, which derives (the
+    routing table names LTHR for all three kinds) -- two outcomes, not one,
+    in the fixed order (pace, then LTHR).
+
+    Mutation this dies on: returning after the first decline (stopping at
+    the pace decline and never calling `lactate_threshold_hr`) -- the
+    outcome count would drop from two to one and the LTHR outcome would be
+    entirely absent. Also dies on swapping the two leaves' call order.
+    """
+    samples = _route_samples((0.0, 1200.0, 2400.0), heart_rate_bpm=(150, 150, 150))
+    activity = _route_activity(sport=Sport.RUN, samples=samples)
+    tag = _tag(kind=EffortKind.HARD)
+
+    outcomes = derive.derive(
+        activity,
+        tag,
+        on=_ROUTE_ON,
+        document=_ROUTE_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert len(outcomes) == 2
+    pace_outcome, lthr_outcome = outcomes
+    assert pace_outcome.kind is BenchmarkKind.THRESHOLD_PACE_S_PER_KM
+    assert isinstance(pace_outcome, DerivationDeclined)
+    assert pace_outcome.reason is DeclineReason.EFFORT_KIND_NOT_USED
+    assert lthr_outcome.kind is BenchmarkKind.LTHR_BPM
+    assert isinstance(lthr_outcome, DerivedBenchmark)

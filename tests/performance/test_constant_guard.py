@@ -1,5 +1,6 @@
-"""The numeric-literal guard over `fitdocs.performance.models` (task 1.3;
-Req 8.1, 8.3), imitating `tests/metrics/test_constant_guard.py`'s pattern:
+"""The numeric-literal guard over `fitdocs.performance.models` and (task 3.4)
+`fitdocs.performance.derive` (task 1.3; Req 8.1, 8.3), imitating
+`tests/metrics/test_constant_guard.py`'s pattern:
 parse the module as source text, collect every numeric `ast.Constant` its
 syntax tree actually contains, and require each one to be named in
 `_EXEMPTIONS` at its exact `(line, col_offset, value)` -- a walk over
@@ -37,9 +38,11 @@ from collections import Counter
 from dataclasses import dataclass
 from types import ModuleType
 
-from fitdocs.performance import models
+from fitdocs.performance import derive, models
 
-_SCANNED_MODULES: tuple[ModuleType, ...] = (models,)
+_SCANNED_MODULES: tuple[ModuleType, ...] = (models, derive)
+"""Task 3.4 appends `derive` here, per the note above -- the tuple restructure
+no other task needed to make."""
 
 
 class ExemptionCategory(enum.Enum):
@@ -230,6 +233,17 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
         ExemptionCategory.ARITHMETIC_IDENTITY,
         "`value >= 0` is the sign test choosing which direction "
         "'away from zero' means for the rounding offset.",
+    ),
+    LiteralExemption(
+        "derive.py",
+        69,
+        44,
+        0,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`value > 0` is the positivity boundary `_finite_positive` tests "
+        "against -- the same arithmetic identity as `models.py`'s own "
+        "`_is_finite_positive`; zero is the definition of non-positive, "
+        "not a methodology constant.",
     ),
 )
 

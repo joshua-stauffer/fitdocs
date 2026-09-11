@@ -17,14 +17,28 @@ kinds, the time-weighted mean heart rate over the whole recorded effort.
 `functional_threshold_power` (task 3.3) is the third: FTP for cycling races
 and tests, the time-weighted mean power over the whole effort with no
 scaling factor, when the recorded duration falls inside the FTP definition's
-own window, and a blocked decline for the unverified shorter protocol. 3.4
-adds the `derive()` routing entry point to this module.
+own window, and a blocked decline for the unverified shorter protocol.
+
+`derive` (task 3.4) is the single pure entry point (design: DerivationLeaf
+Service Interface) that routes one activity and its tag to every quantity
+its discipline covers, by consulting the design's routing table directly:
+`Sport.RUN` attempts threshold pace and LTHR, `Sport.RIDE` attempts FTP and
+LTHR, and every other sport attempts nothing and yields exactly one
+`SPORT_NOT_COVERED` decline naming the sport. It never calls a leaf outside
+that table -- in particular it never calls `lactate_threshold_hr` for a
+sport other than `Sport.RUN`/`Sport.RIDE` -- and it calls every attempted
+leaf unconditionally (an undated page, `on is None`, is not special-cased
+here: each leaf above already checks `on is None` before any other gate, so
+routing a `RUN`/`RIDE` activity through an undated page naturally yields one
+`UNDATED_DOCUMENT` decline per attempted quantity without the router
+duplicating that check).
 """
 
 from __future__ import annotations
 
 import math
 from datetime import date
+from typing import assert_never
 
 from fitdocs import Sport
 from fitdocs.benchmarks import BenchmarkKind
@@ -657,4 +671,117 @@ def functional_threshold_power(
             + sources.FTP_LIMITS_OF_AGREEMENT
         ),
         document=document,
+    )
+
+
+def _covered_effort_kind(kind: EffortKind) -> None:
+    """Match every `EffortKind` member by name (tasks.md 3.4 Pins:
+    "the routing switch over the tag's kind enumeration is exhaustive under
+    the type checker"; design.md:282). This is the kind-side half of
+    `derive`'s routing switch -- `Sport` is handled by the deliberate
+    early-return chain below, but `EffortKind` is a closed,
+    feature-owned vocabulary every one of whose members this feature already
+    routes somewhere (`threshold_pace` and `functional_threshold_power` each
+    use only a subset; `lactate_threshold_hr` uses all three), so there is
+    no "uncovered kind" fallthrough to fall back on here. `case _:
+    assert_never(kind)` makes a fourth `EffortKind` member added to
+    `fitdocs.contract` a mypy `arg-type` error at this call, not a silent
+    value that reaches a leaf's own kind gate having never been routed by
+    name at this level. This function's only job is that type-checked
+    exhaustiveness; it returns nothing and its result is not used by the
+    sport routing below, which continues to dispatch on `activity.sport`
+    exactly as before.
+    """
+    match kind:
+        case EffortKind.RACE | EffortKind.TEST | EffortKind.HARD:
+            return
+        case _:  # pragma: no cover - exhaustive over the closed kind union
+            assert_never(kind)
+
+
+def derive(
+    activity: Activity,
+    tag: EffortTag,
+    *,
+    on: date | None,
+    document: str,
+    sufficiency: SufficiencySettings,
+) -> tuple[DerivationOutcome, ...]:
+    """Route one activity and its tag to every quantity its discipline
+    covers (design: DerivationLeaf Service Interface; Req 2.8, 7.5, 7.6,
+    7.9, 10.4, 10.5).
+
+    Two switches make up this routing, one exhaustive under the type
+    checker and one deliberately not:
+
+    - `tag.kind` is matched by `_covered_effort_kind` against every
+      `EffortKind` member by name (`RACE`, `TEST`, `HARD`), ending in
+      `case _: assert_never(kind)`. `EffortKind` is a closed vocabulary this
+      feature owns entirely, so a fourth member added upstream is a mypy
+      `arg-type` error here rather than a silently-uncovered kind reaching a
+      leaf's own gate unrouted.
+    - `activity.sport` is switched with a plain early-return chain, deliberately
+      *not* matched exhaustively: `Sport`'s membership (`RUN`, `RIDE`,
+      `SWIM`, `WALK`, `HIKE`, `ROWING`, `WORKOUT`) is far larger than the two
+      members this feature covers, and this feature's whole purpose for
+      every other sport is to decline it, not to be forced to name it. An
+      the early-return chain is exhaustive by construction (every input reaches
+      exactly one branch) so mypy accepts it without an `assert_never`, and
+      a new `Sport` member added upstream is routed to the uncovered-sport
+      branch automatically rather than reddening a type check here.
+
+    Routing table (design DerivationLeaf, copied here as the single source
+    of truth for this function):
+
+    - `Sport.RUN` attempts threshold pace, then LTHR, in that fixed order.
+    - `Sport.RIDE` attempts FTP, then LTHR, in that fixed order.
+    - Every other sport attempts nothing and returns exactly one outcome: a
+      `SPORT_NOT_COVERED` decline naming the sport. No quantity is
+      attempted for an uncovered sport, so no `BenchmarkKind` in the
+      returned decline names a quantity this activity could actually have
+      produced; `kind=BenchmarkKind.LTHR_BPM` is used because LTHR is the
+      one quantity the routing table shares between both covered
+      disciplines (`Sport.RUN` and `Sport.RIDE`), rather than a quantity
+      (pace or FTP) tied to one covered sport specifically. `method=None`
+      records that no derivation method was attempted at all (10.4, 10.5:
+      this feature derives no max/resting heart rate and detects no effort
+      of its own, so an uncovered sport is refused outright, never
+      estimated).
+
+    Never raises, never returns an empty tuple, and returns every outcome
+    for a document -- an attempted quantity that declines does not stop a
+    later quantity from being attempted (Req 7.9): each attempted leaf is
+    called unconditionally and its outcome is always included, whatever
+    that outcome is.
+    """
+    _covered_effort_kind(tag.kind)
+
+    if activity.sport is Sport.RUN:
+        return (
+            threshold_pace(activity, tag, on=on, document=document),
+            lactate_threshold_hr(
+                activity, tag, on=on, document=document, sufficiency=sufficiency
+            ),
+        )
+
+    if activity.sport is Sport.RIDE:
+        return (
+            functional_threshold_power(
+                activity, tag, on=on, document=document, sufficiency=sufficiency
+            ),
+            lactate_threshold_hr(
+                activity, tag, on=on, document=document, sufficiency=sufficiency
+            ),
+        )
+
+    return (
+        DerivationDeclined(
+            kind=BenchmarkKind.LTHR_BPM,
+            method=None,
+            reason=DeclineReason.SPORT_NOT_COVERED,
+            detail=(
+                f"sport {activity.sport.value!r} is not covered by this "
+                "feature (running and cycling only)"
+            ),
+        ),
     )
