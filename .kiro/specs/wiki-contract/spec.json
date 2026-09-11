@@ -37,6 +37,12 @@
       "requirement": "6.5, 6.6, 6.7, 6.8 (new)",
       "reason": "effort-tags spec task 4.3: effort-tags adds a second class of user-owned frontmatter key (the effort tag's four keys, contract.USER_KEYS) alongside the user-owned regions this spec already names. This spec's frontmatter-key-ownership contract is extended to cover the class generically -- publication as disjoint from the managed set, byte-for-byte carry-forward with rebuild placement, and exclusion from the unmanaged-key warning (6.3) and finding (8.4) -- while the vocabulary, validation, and typed reader of the effort tag itself remain effort-tags' own.",
       "also": "requirements.md gains Amendment 1 (2026-09-11) and Requirement 6 criteria 6.5-6.8; design.md's DocumentContract component gains a matching amendment note (USER_KEYS, user_owned_lines, the unmanaged_keys postcondition change) and 'This Spec Owns' gains a bullet for the user-owned key class. Nothing renumbered."
+    },
+    {
+      "date": "2026-09-11",
+      "requirement": "2.11, 3.9 (new) -- implemented by the load-history spec, not by this one",
+      "reason": "load-history spec task 5.5, the second half of the roadmap's Phase 6 Existing Spec Update for wiki-contract (the first half, 6.5-6.8 above, was landed by effort-tags). load-history adds a new owned data-root location (history/, history/assets/) holding one training-load history page -- a second document type distinct from the workout document this spec defines. This spec's published-ownership-contract guarantee (2.11) is extended to name the location as fitdocs-owned and to state that a second document type exists there, declared and versioned by load-history rather than by this contract; its in-tree-declaration guarantee (3.9) is extended to state what the location's own declaration says about that document -- one generated page and its chart image, rewritten in full, no user-owned region, re-derivable from the workout documents alone -- without restating the document's type or schema, which 2.11 locates. The location's write path, its declaration text, and the page's own schema remain load-history's own.",
+      "also": "requirements.md gains Amendment 2 (2026-09-11), Requirement 2 criterion 2.11 and Requirement 3 criterion 3.9; design.md's DocumentContract component gains a matching amendment note (the second type, its declaration in fitdocs.history.page, and why it is not published from this leaf). CONTRACT_VERSION advances \"2\" to \"3\" in code by load-history task 1.2, not restated here. Nothing renumbered."
     }
   ]
 }

@@ -118,6 +118,28 @@ the frontmatter block -- has changed; that version bump and its own document
 are effort-tags' to make, not restated by this amendment. Nothing existing is
 renumbered.
 
+## Amendment 2 (2026-09-11): the history location and a second document type, landed by load-history
+
+`load-history` adds a new owned data-root location, `history/` and
+`history/assets/`, holding one training-load history page and its chart
+image. That spec owns the location's write path, its in-tree declaration
+text, and the page's own schema (its `type` value, its frontmatter keys, and
+their versioning); this spec owns only the published-ownership-contract and
+in-tree-declaration guarantees it extends -- naming the new location as
+fitdocs-owned and stating that a second, distinct document type now exists
+under the data root, declared and versioned by the spec that owns it rather
+than by this one, recorded as Requirement 2 criterion 2.11; and stating what
+the location's own in-tree declaration says about that document (what it
+holds, that it carries no user-owned region, that it is re-derivable, and
+that it does not restate the type or schema 2.11 locates), recorded as
+Requirement 3 criterion 3.9. The published contract's version identifier
+changes on account of it (`CONTRACT_VERSION` `"2"` to `"3"`), because a new
+owned path changes a guarantee that document states; that version bump and
+its own document are load-history's to make, not restated by this amendment.
+Nothing existing is renumbered. This is the second half of the roadmap's
+Phase 6 Existing Spec Update for this spec; `effort-tags` landed the
+user-owned-keys half (Amendment 1), and neither half edits the other's text.
+
 ## Requirements
 
 ### Requirement 1: Consistent Document Interpretation Across Operations
@@ -150,6 +172,7 @@ that I can rely on the boundary instead of inferring it from behavior.
 8. The ownership contract shall carry a version identifier that changes whenever the stated guarantees change.
 9. The fitdocs documentation shall describe how to mark generated files as generated in a wiki kept under version control, and shall state that fitdocs does not write that configuration itself.
 10. The ownership contract shall state that a location the user configures fitdocs to write into grants fitdocs the right to create and write within that location, that such locations are named in the user's settings file rather than fixed by the contract, and that fitdocs writes nowhere outside the contract's named owned paths and the locations the settings configure.
+11. _(added by Amendment 2)_ The ownership contract shall name the history location as fitdocs-owned, and shall state that the document it holds is a second document type, distinct from the workout document this contract defines, whose type value and format are published by the history package rather than by this contract.
 
 ### Requirement 3: In-Tree Ownership Declaration
 **Objective:** As an LLM agent maintaining a markdown wiki, I want the ownership
@@ -166,6 +189,7 @@ work and do not "improve" generated files.
 6. If a file with the declaration's name exists and does not carry fitdocs' provenance stamp, the fitdocs CLI shall leave that file unchanged, report that the declaration could not be placed, and complete the run.
 7. The fitdocs CLI shall never treat an ownership declaration as a workout document in any document scan, identity match, regeneration, or training-load operation.
 8. When a sync run discovers no new files and every ownership declaration is already current, the fitdocs CLI shall leave the data root unchanged.
+9. _(added by Amendment 2)_ The ownership declaration placed in the history location shall state that the location holds one generated document and its chart image, both rewritten in full on every history run and carrying no user-owned region, and that the document is re-derivable from the workout documents alone; the user-owned-region element of 3.2 does not apply to it. The declaration shall not restate that document's type or schema, which the published contract (2.11) locates.
 
 ### Requirement 4: Generated-Document Provenance
 **Objective:** As a human or agent opening a workout document, I want the file
