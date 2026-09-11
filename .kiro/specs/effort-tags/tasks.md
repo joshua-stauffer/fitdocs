@@ -63,7 +63,7 @@ mutation that must redden the assertion, and the implementer runs it through
 `uv run pytest`, observes red, reverts, observes green, and says so in the
 report.
 
-- [ ] 1. Foundation: the user-owned key class, the vocabulary and the reader in the contract leaf
+- [x] 1. Foundation: the user-owned key class, the vocabulary and the reader in the contract leaf
 
 - [x] 1.1 Publish the user-owned key class and the effort-tag vocabulary
   - Add the four effort key spellings as named constants, the ordered tuple
@@ -163,7 +163,7 @@ report.
   - _Requirements: 2.6, 3.2, 4.4, 4.5, 5.5_
   - _Boundary: UserKeyCarry_
 
-- [ ] 2. Core: preservation through the rewrite path and the load pass
+- [x] 2. Core: preservation through the rewrite path and the load pass
 
 - [x] 2.1 Land the carried lines in the frontmatter block
   - Add a defaulted tuple-of-lines field to the render context after the map
