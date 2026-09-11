@@ -372,7 +372,7 @@ report.
   - _Depends: 4.2_
   - _Boundary: ContractDocs (upstream spec)_
 
-- [ ] 5. Integration and feature-level validation
+- [x] 5. Integration and feature-level validation
 
 - [x] 5.1 Register the new contract bindings in the consumer guard
   - Add the names each converted module now binds so the identity check
@@ -416,7 +416,7 @@ report.
   - _Depends: 2.3, 2.4, 3, 4.2, 5.1_
   - _Boundary: SurfacePins (e2e)_
 
-- [ ] 5.3 Feature-level validation
+- [x] 5.3 Feature-level validation
   - Run the full validation set for the `src/`/`tests/` class -- `uv run
     pytest && uv run ruff check . && uv run ruff format --check . && uv run
     mypy` -- after rebasing onto current `main`; then `/kiro-spec-status
@@ -720,3 +720,21 @@ report.
   required athlete inputs and no `athlete.toml` exists. ALSO: the fix to a false sentence is
   itself a claim -- correcting it introduced a new citation that needed its own check (the
   same thing happened to 4.2's `effort_event` cell). Verify corrections, not just originals.
+- 5.3: VALIDATE A BOUNDARY CLAIM BY EVALUATED VALUE, NOT BY READING THE DIFF. "MANAGED_KEYS
+  unchanged" was confirmed by exec'ing the module source at both `main` and `HEAD` and
+  comparing the frozensets (n=20, symdiff []), not by observing that no hunk fell inside the
+  literal -- the hunk positions had shifted by +6 lines and a diff reader must not rely on that.
+- 5.3: PROVE A GENERATOR ACTUALLY WRITES BEFORE TRUSTING "regenerates byte-identically". The
+  declaration-golden check was made meaningful by a corrupt-then-restore round trip: overwrite
+  a golden with garbage, watch the goldens test red, re-run the generator, confirm the file
+  returns to the committed hash. A generator that no-ops produces the same clean `git status`
+  as one that reproduces the bytes.
+- 5.3: requirement 4.6's "byte-identical to pre-feature output" is checkable across the WHOLE
+  feature, not just one branch -- `git diff --name-only 27ae825..HEAD -- tests/golden
+  tests/render/golden_docs tests/render/charts/golden tests/fixtures` is empty across all 14
+  tasks (27ae825 is the parent of the first effort-tags src/ commit).
+- 5.3: the e2e idempotence test passes on a build that drops the carry entirely -- it has no
+  `assert _VALID_TAG in first_bytes`, so it cannot distinguish "the tag survived twice" from
+  "the tag was destroyed twice". Req 4.6 is genuinely pinned by test_sync.py's counterpart,
+  which does red. Queued. Note where this surfaced: inside the very file whose own WARN calls
+  the unreachable-scenario species the most transferable lesson in the spec.
