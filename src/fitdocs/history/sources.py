@@ -50,13 +50,11 @@ literature states a minimum-coverage rule for a period of missing daily
 pages, so :data:`COVERAGE_THRESHOLD` is governed by
 :data:`COVERAGE_THRESHOLD_CHOICE`, whose ``measurement`` records the
 per-uncomputed-daily-page understatement the shipped recursion produces at
-the seed constants. **Those figures are transcribed here from design.md and
-are not yet verified against running code** -- this task (2.1) precedes the
-recursion (2.2) and its own measurement test
-(``tests/history/test_coverage_threshold_measurement.py``, task 2.3); 2.3
-measures them directly and is the only later task licensed to correct this
-module's ``measurement`` string if the reproduced figure differs from the
-one transcribed here.
+the seed constants. **Those figures are reproduced from the shipped model
+by** ``tests/history/test_coverage_threshold_measurement.py`` **(task
+2.3)** -- that module is the only one licensed to correct this module's
+``measurement`` string, should a later change to the shipped recursion make
+the reproduced figure differ from the one stated here.
 
 **The recursion-form choice is fitdocs' own, not an instruction taken from a
 source.** M90/B91 print the exact exponential decay
@@ -64,15 +62,18 @@ source.** M90/B91 print the exact exponential decay
 the reciprocal approximation ``1/tau`` per step instead.
 :data:`RECURSION_FORM_CHOICE` records fitdocs' choice of the exact form, with
 the per-step divergence of the vendor approximation over the exact form
-already established elsewhere in this spec's research (``1 - e^(-1/tau)``
-against ``1/tau``): **1.12% at the shipped fitness seed (tau = 45 d)** and
-**1.20% at the blocked 42-day Performance Management Chart candidate**
-(:data:`BLOCKED_PRESETS`) -- the same systematic bias regardless of which of
-the two fitness time constants this spec's design considered. These figures
-are transcribed here, not freshly computed by this module (which holds no
-arithmetic), and are to be reproduced by the same task-2.3 measurement test
-that reproduces :data:`COVERAGE_THRESHOLD_CHOICE`'s figures, on the same
-footing -- no stated number in this module ships unreproduced.
+(``1 - e^(-1/tau)`` against ``1/tau``) established in this spec's research at
+the shipped fitness seed and at the blocked 42-day Performance Management
+Chart candidate (:data:`BLOCKED_PRESETS`), and extended by task 2.3's
+measurement to the shipped fatigue seed -- the same systematic bias, growing
+as tau shrinks, at every time constant checked; see :data:`RECURSION_FORM_CHOICE`'s own
+``justification``/``measurement`` fields for the exact percentages, stated
+there rather than duplicated here. These figures are not freshly computed by
+this module (which holds no arithmetic); they are reproduced from the
+shipped model by ``tests/history/test_coverage_threshold_measurement.py``'s
+three ``test_recursion_form_measurement_states_the_*_figure`` tests, on the
+same footing as :data:`COVERAGE_THRESHOLD_CHOICE`'s figures -- no stated
+number in this module ships unreproduced.
 
 **The daily-average scale is fitdocs' own reporting choice.**
 :data:`DAILY_AVERAGE_SCALE_CHOICE` records that fitness and fatigue are
@@ -206,11 +207,12 @@ COVERAGE_THRESHOLD_CHOICE: Final[FitdocsChoice] = FitdocsChoice(
     "one uncomputed daily page understates the reported fitness accumulator "
     "by 2.198% and the reported fatigue accumulator by 6.449% relative to "
     "what an equal-magnitude recorded page at that day would have "
-    "contributed, per day the page is missing. To be reproduced by task "
-    "2.3's tests/history/test_coverage_threshold_measurement.py, which "
-    "owns correcting this figure if the shipped recursion measures "
-    "differently -- these numbers are transcribed here from design.md, not "
-    "yet run.",
+    "contributed, per day the page is missing. Reproduced from the shipped "
+    "model by tests/history/test_coverage_threshold_measurement.py's "
+    "test_coverage_threshold_measurement_states_the_fitness_figure_this_"
+    "reproduces and "
+    "test_coverage_threshold_measurement_states_the_fatigue_figure_this_"
+    "reproduces.",
 )
 
 RECURSION_FORM_CHOICE: Final[FitdocsChoice] = FitdocsChoice(
@@ -232,12 +234,13 @@ RECURSION_FORM_CHOICE: Final[FitdocsChoice] = FitdocsChoice(
     "form; no published work in this literature recommends the "
     "approximation over the exact decay.",
     measurement="The reciprocal approximation 1/tau exceeds the exact "
-    "1 - e^(-1/tau) by 1.12% at the shipped fitness seed (tau = 45 d) and "
+    "1 - e^(-1/tau) by 1.12% at the shipped fitness seed (tau = 45 d), "
     "by 1.20% at the blocked Performance Management Chart candidate "
-    "(tau = 42 d; see BLOCKED_PRESETS) -- the same systematic bias at "
-    "either time constant. To be reproduced by the same task-2.3 "
-    "measurement test as COVERAGE_THRESHOLD_CHOICE, on the same footing: "
-    "transcribed here, not yet run.",
+    "(tau = 42 d; see BLOCKED_PRESETS), and by 3.37% at the fatigue seed "
+    "(tau = 15 d) -- the same systematic bias, growing as tau shrinks, at "
+    "every time constant checked. Reproduced by task 2.3's "
+    "tests/history/test_coverage_threshold_measurement.py, which also "
+    "reproduces COVERAGE_THRESHOLD_CHOICE's figures, on the same footing.",
 )
 
 DAILY_AVERAGE_SCALE_CHOICE: Final[FitdocsChoice] = FitdocsChoice(
