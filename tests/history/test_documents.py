@@ -98,6 +98,28 @@ def test_an_unscored_page_records_no_load_never_a_zero(tmp_path: Path) -> None:
     assert page.methodology is None
 
 
+def test_a_methodology_with_no_load_value_is_not_a_zero_load(tmp_path: Path) -> None:
+    """Req 1.4, the half the no-keys fixture above cannot pin: a page that
+    names a `load_methodology` but carries no `load_value` (a load pass that
+    declined to score it) records `load is None` -- not `0.0`. Named
+    mutation (feature validation, 2026-09-12): `if value is None: value =
+    0.0` in `_read_load` survived every fixture here because each one that
+    lacked the value also lacked the methodology, so the methodology gate
+    masked the zero-fill; under that mutant this page scores `0.0` and both
+    assertions below red."""
+    _write(
+        tmp_path,
+        f"{WORKOUTS_DIR}/declined.md",
+        _page(load_lines='load_methodology: "banister_1991"'),
+    )
+
+    scan = scan_documents(tmp_path)
+
+    assert len(scan.pages) == 1
+    assert scan.pages[0].load is None
+    assert scan.pages[0].methodology is None
+
+
 def test_a_load_value_with_no_methodology_is_dropped_entirely(tmp_path: Path) -> None:
     """design.md's stated postcondition is `load is None` iff `methodology is
     None`: a hand-edited page carrying `load_value` with no

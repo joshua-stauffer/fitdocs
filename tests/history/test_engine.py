@@ -565,6 +565,52 @@ def test_a_requested_methodology_beats_the_configured_one(
     assert report.methodology == "banister_1991"
 
 
+def _frontmatter_of_written_document(root: Path) -> dict[str, object]:
+    text = (root / _DOC_REL).read_text(encoding="utf-8")
+    parsed = contract.parse_frontmatter(text)
+    assert parsed is not None
+    return parsed
+
+
+@pytest.mark.parametrize(
+    ("settings_text", "requested", "expected_source"),
+    [
+        ("", None, "inferred"),
+        ('[history]\nmethodology = "banister_1991"\n', None, "configured"),
+        ("", "banister_1991", "requested"),
+    ],
+)
+def test_the_written_page_states_how_its_methodology_was_chosen(
+    tmp_path: Path,
+    settings_text: str,
+    requested: str | None,
+    expected_source: str,
+) -> None:
+    """Req 4.3: when the methodology is inferred from a single-methodology
+    archive, the page says so -- and (Req 4.2) the same field says
+    `configured` or `requested` on the other two paths, so the token is
+    the choice's real `source`, not a constant. Named mutation (feature
+    validation, 2026-09-12): `methodology_source="configured"` hardcoded in
+    `render_history` left every history/CLI/e2e test green; this reds it on
+    the `inferred` and `requested` rows."""
+    _write_page(
+        tmp_path,
+        "a",
+        day="2024-01-01",
+        load_value=5.0,
+        load_methodology="banister_1991",
+    )
+    if settings_text:
+        _write_settings(tmp_path, settings_text)
+
+    report = run_history(tmp_path, methodology=requested)
+
+    assert report.methodology == "banister_1991"
+    assert _frontmatter_of_written_document(tmp_path)["methodology_source"] == (
+        expected_source
+    )
+
+
 # ==============================================================================
 # Implementation Notes (from 4.3 review): the engine passes RACE markers
 # only -- render_history labels EVERY marker it is handed as a race.
