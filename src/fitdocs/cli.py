@@ -94,6 +94,7 @@ from rich.table import Table
 from fitdocs import AthleteInputs
 from fitdocs.athlete import AthleteFileError, load_athlete_inputs
 from fitdocs.audit import AuditReport, audit
+from fitdocs.benchmarks import BenchmarkKind
 from fitdocs.config import DataRootError, resolve_data_root
 from fitdocs.history.engine import HistoryReport, run_history
 from fitdocs.inbox import (
@@ -110,6 +111,7 @@ from fitdocs.load.profile import ProfileError
 from fitdocs.load.prompts import NonInteractiveSession, RichInteractionSession
 from fitdocs.load.registry import UnknownCalculatorError
 from fitdocs.load.types import InteractionSession
+from fitdocs.performance.engine import DeriveReport, derive_benchmarks
 from fitdocs.plugins import (
     DEFAULT_PLUGIN_SETTINGS,
     BuiltIn,
@@ -195,6 +197,11 @@ _NO_PROMPT_OPTION = typer.Option(
     False,
     "--no-prompt",
     help="Never prompt during the load pass; leave affected documents uncomputed.",
+)
+_DRY_RUN_OPTION = typer.Option(
+    False,
+    "--dry-run",
+    help="Print the identical report but write nothing to the profile.",
 )
 _RETRY_QUARANTINED_OPTION = typer.Option(
     False,
@@ -505,6 +512,36 @@ def plugins_command(
     _report_plugins(report, data_root_resolved=data_root is not None)
     # Exits 0 whenever a listing was produced -- including with load errors
     # present (Req 4.6); no call to _finish() here.
+
+
+@app.command("derive-benchmarks")
+def derive_benchmarks_command(
+    out: Path | None = _OUT_OPTION,
+    dry_run: bool = _DRY_RUN_OPTION,
+) -> None:
+    """Turn tagged efforts into dated athlete-profile benchmarks.
+
+    Resolves the data root by the usual precedence (Req 9.6), runs the
+    benchmark-derivation pass (:func:`fitdocs.performance.engine.
+    derive_benchmarks`) over every generated workout document, and prints the
+    report: a summary line, the derived entries, the declines grouped by
+    document, the failures, and the per-quantity summaries (Req 7.1-7.3,
+    7.8). ``--dry-run`` produces the identical report but writes nothing (Req
+    1.1, 1.9). Exits ``2`` on a configuration fault (an unresolvable data
+    root, a malformed profile, or a malformed ``[load]`` table -- the pass
+    reads the same stream-sufficiency settings the load pass does), ``1``
+    when any document failed, and ``0`` otherwise -- a decline is an outcome,
+    never a failure, so a run that only derived and declined still exits
+    ``0`` (Req 1.9, 1.10).
+    """
+    data_root = _resolved_data_root(out)
+    try:
+        report = derive_benchmarks(data_root, dry_run=dry_run)
+    except (ProfileError, SettingsError) as exc:
+        _config_error(str(exc))
+    _report_derive(report, dry_run=dry_run)
+    # A decline is a successful outcome (Req 7.8); only a failure exits 1.
+    _finish(failed=bool(report.failures))
 
 
 def _report_plugins(report: PluginReport, *, data_root_resolved: bool) -> None:
@@ -920,6 +957,112 @@ def _print_detail(
         console.print(
             f"    {entry.detail}", markup=False, highlight=False, soft_wrap=True
         )
+
+
+_QUANTITY_UNITS: dict[BenchmarkKind, str] = {
+    BenchmarkKind.FTP_WATTS: "W",
+    BenchmarkKind.LTHR_BPM: "bpm",
+    BenchmarkKind.THRESHOLD_PACE_S_PER_KM: "s/km",
+}
+
+
+def _report_derive(report: DeriveReport, *, dry_run: bool) -> None:
+    """Print the derivation-pass report: a summary line, the derived
+    entries, the declines grouped by document, the failures, and the
+    per-quantity summaries (design: DeriveCommand; Req 7.1-7.3, 7.7, 7.8).
+
+    ``--dry-run``'s leading line states that nothing was written (Req 1.9),
+    printed before anything else so it cannot be missed even if the rest of
+    the report is redirected or truncated. Every printed reason, path and
+    detail uses ``markup=False`` so a bracketed reason (e.g. an insufficiency
+    detail) or path is shown literally, matching the escaping idiom
+    ``tests/test_cli_drain_report.py`` already pins for ``_report_drain``.
+    """
+    console = Console()
+    if dry_run:
+        console.print(
+            "Dry run: nothing was written to the profile.",
+            markup=False,
+            highlight=False,
+        )
+
+    table = Table(title="fitdocs derive-benchmarks")
+    table.add_column("Result")
+    table.add_column("Count", justify="right")
+    table.add_row("Considered", str(report.considered))
+    table.add_row("Tagged", str(report.tagged))
+    table.add_row("Derived", str(len(report.derived)))
+    table.add_row("Declined", str(len(report.declined)))
+    table.add_row("Failed", str(len(report.failures)))
+    console.print(table)
+    console.print(
+        f"Profile written: {'yes' if report.written else 'no'}",
+        markup=False,
+        highlight=False,
+    )
+
+    if report.derived:
+        console.print("Derived:")
+        for benchmark in report.derived:
+            unit = _QUANTITY_UNITS.get(benchmark.kind, "")
+            console.print(
+                f"  {benchmark.kind.value} ({benchmark.discipline.value}): "
+                f"{benchmark.value:g}{(' ' + unit) if unit else ''} on "
+                f"{benchmark.measured_on.isoformat()} via {benchmark.method.value}"
+                f" [{benchmark.document}]",
+                markup=False,
+                highlight=False,
+                soft_wrap=True,
+            )
+
+    declined_entries = [entry for entry in report.entries if entry.declined]
+    if declined_entries:
+        console.print("Declined:")
+        for entry in declined_entries:
+            console.print(
+                f"  {entry.document}", markup=False, highlight=False, soft_wrap=True
+            )
+            for outcome in entry.declined:
+                console.print(
+                    f"    {outcome.kind.value}: {outcome.reason.value} -- "
+                    f"{outcome.detail}",
+                    markup=False,
+                    highlight=False,
+                    soft_wrap=True,
+                )
+                if outcome.observed is not None or outcome.required is not None:
+                    console.print(
+                        f"      observed={outcome.observed!r} "
+                        f"required={outcome.required!r}",
+                        markup=False,
+                        highlight=False,
+                        soft_wrap=True,
+                    )
+
+    if report.failures:
+        console.print("Failed:")
+        for failure in report.failures:
+            console.print(
+                f"  {failure.document}", markup=False, highlight=False, soft_wrap=True
+            )
+            console.print(
+                f"    {failure.reason}", markup=False, highlight=False, soft_wrap=True
+            )
+
+    if report.summaries:
+        console.print("Quantity summaries:")
+        for summary in report.summaries:
+            reason_text = (
+                summary.dominant_reason.value
+                if summary.dominant_reason is not None
+                else "never attempted"
+            )
+            console.print(
+                f"  {summary.kind.value}: {reason_text}",
+                markup=False,
+                highlight=False,
+                soft_wrap=True,
+            )
 
 
 def _report_audit(report: AuditReport) -> None:

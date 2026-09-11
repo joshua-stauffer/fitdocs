@@ -255,6 +255,17 @@ The quarantine record's directory, `<data-root>/.fitdocs/`, is **tool-owned
 state** — one of the fixed paths the ownership contract already lists fitdocs
 as owning outright.
 
+## Benchmarks
+
+`fitdocs derive-benchmarks [--out PATH] [--dry-run]` turns your tagged
+efforts (races, tests, and hard efforts you marked with the `effort`
+frontmatter key) into dated benchmarks — threshold pace, lactate-threshold
+heart rate, and functional threshold power — written to `athlete.toml`
+alongside anything you typed in by hand. It never touches a benchmark you
+recorded yourself, reports exactly why any tagged page was declined or
+failed, and `--dry-run` prints the identical report without writing
+anything.
+
 ## Ownership
 
 fitdocs writes into a wiki it does not control, so what it owns and what

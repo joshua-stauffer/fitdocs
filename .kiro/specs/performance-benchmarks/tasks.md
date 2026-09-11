@@ -485,7 +485,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
   - _Boundary: PassEngine_
   - _Depends: 2.3, 4.2_
 
-- [ ] 4.4 Add the command and its report rendering
+- [x] 4.4 Add the command and its report rendering
   - Add the flat command, named distinctly from every existing command and from
     the command the history spec adds, with the shared data-root option and a
     preview flag; resolve the data root through the existing precedence and fail

@@ -1903,11 +1903,16 @@ def test_load_load_settings_is_called_the_documented_number_of_times_per_command
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Req 14.1, package-wide: ``load_load_settings`` is called exactly once
-    per ``fitdocs sync``, ``fitdocs regen``, and ``fitdocs load`` invocation
-    (the single read inside ``apply_load`` itself, task 4.1) and exactly
-    zero times for ``fitdocs check`` (the command that runs the read-only
-    contract audit, ``src/fitdocs/audit.py``) -- ``audit()`` never touches
-    the load engine or the ``[load]`` table at all.
+    per ``fitdocs sync``, ``fitdocs regen``, ``fitdocs load``, and
+    ``fitdocs derive-benchmarks`` invocation (the single read inside
+    ``apply_load`` itself, task 4.1, and inside
+    ``fitdocs.performance.engine.derive_benchmarks`` itself,
+    performance-benchmarks task 4.2 -- see the controller ruling recorded
+    against this test in ``.kiro/specs/performance-benchmarks/tasks.md``
+    Implementation Notes ``(4.1 -> 4.2)``) and exactly zero times for
+    ``fitdocs check`` (the command that runs the read-only contract audit,
+    ``src/fitdocs/audit.py``) -- ``audit()`` never touches the load engine or
+    the ``[load]`` table at all.
 
     Sweeps *every* already-imported ``fitdocs.*`` module rather than
     hand-listing the two binding surfaces this test used to spy on
@@ -2026,4 +2031,12 @@ def test_load_load_settings_is_called_the_documented_number_of_times_per_command
     assert checked.exit_code == 0, checked.output
     assert len(calls) == 0, (
         f"fitdocs check called load_load_settings {len(calls)} times, expected 0"
+    )
+    calls.clear()
+
+    derived = runner.invoke(app, ["derive-benchmarks", "--out", str(data_root)])
+    assert derived.exit_code == 0, derived.output
+    assert len(calls) == 1, (
+        f"fitdocs derive-benchmarks called load_load_settings {len(calls)} "
+        "times, expected 1"
     )
