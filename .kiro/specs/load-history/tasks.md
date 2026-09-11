@@ -416,7 +416,7 @@ shape.
 
 - [ ] 3. Core: reading the archive and assembling the series
 
-- [ ] 3.1 (P) Read every workout document into typed page records through the one contract reader
+- [x] 3.1 (P) Read every workout document into typed page records through the one contract reader
   - The `(P)` here means concurrent with **group 1**, not with 2.1: the package
     directory and its published-surface list are created by 2.1, so this task
     cannot precede it (`_Depends: 2.1_` below). Its file set --
@@ -458,7 +458,7 @@ shape.
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.9, 3.9, 5.4_
   - _Boundary: DocumentScan_
 
-- [ ] 3.2 Resolve the methodology and partition the archive by it
+- [x] 3.2 Resolve the methodology and partition the archive by it
   - Add the pure selection function: an explicitly requested methodology beats a
     configured one, which beats a single methodology observed across the
     archive. More than one observed with nothing requested or configured, and a
@@ -890,3 +890,35 @@ shape.
     and `uv run mypy` all green; the two dated runs produce identical bytes
   - _Depends: 5.3, 5.4_
   - _Requirements: 1.10, 7.6, 8.5, 8.6_
+
+## Implementation Notes
+
+- **5.2 must gate the empty archive before methodology selection (controller
+  decision, 2026-09-11).** `select_methodology` returns a `MethodologyProblem`
+  for an archive where no page records a load (nothing observed), including
+  when an id is configured or requested -- the design's own "chosen id observed
+  nowhere" rule. The design's engine order (select first, then build the
+  series) would turn that into a configuration exit, contradicting Req 1.10 and
+  this plan's "the empty archive writes nothing, reports no failure" pin.
+  `HistoryEngine` therefore checks "every `PageRecord.load is None`" BEFORE
+  calling `select_methodology`, and on that path writes nothing at all -- no
+  outputs and no declaration refresh; the refresh happens only on a run that
+  reaches its write step (the published contract states it this way).
+- **2.3's divergence figures are stated at tau = 45, 42 and 15 d.** tasks.md
+  2.1/2.3 read the design's 1.20%/1.12% pair as "both seeds"; the design and
+  research.md label it tau = 42 (blocked PMC candidate) vs 45. Both readings
+  now hold: `RECURSION_FORM_CHOICE.measurement` carries all three, pinned.
+- **Consumer-guard registration (5.4):** `documents.py` binds `LOAD_KEYS`,
+  `document_date`, `effort_tag`, `is_workout_document` by from-import (the
+  guard resolves `getattr(module, name) is getattr(contract, name)`);
+  `page.py` also imports `fitdocs.contract` (the shared vocabulary), so 5.4
+  registers BOTH modules, not only `documents.py` as the design's "only
+  importer" sentence says.
+- **Exemption table (`tests/history/test_constant_guard.py`):** keyed by AST
+  site `(module, enclosing assignment target, keyword/positional slot, value)`
+  and matched one-to-one by count -- a prose-only edit never reds it; a second
+  copy of an exempted number does. Later tasks append entries and, when no
+  existing category is honest, a category member.
+- **Reviewers revert with `cp` from a snapshot, never `git checkout`** (one
+  wiped an implementer's uncommitted file), and namespace scratch files by
+  task (parallel agents share one scratchpad and clobbered each other).
