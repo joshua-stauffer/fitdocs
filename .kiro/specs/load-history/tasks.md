@@ -576,7 +576,7 @@ shape.
   - _Requirements: 6.1, 6.2, 6.3_
   - _Boundary: SeriesAssembly_
 
-- [ ] 4. Rendering: the chart and the page
+- [x] 4. Rendering: the chart and the page
 
 - [x] 4.1 (P) Add the calendar-axis, absolutely-scaled multi-series chart
   - Add a new chart module beside the existing ones, built on the shared SVG
@@ -654,7 +654,7 @@ shape.
   - _Requirements: 5.8, 6.4_
   - _Boundary: HistoryPage_
 
-- [ ] 4.3 Render the document's body sections and pin them as goldens
+- [x] 4.3 Render the document's body sections and pin them as goldens
   - Assemble the sections in a fixed order after the frontmatter block: the
     generated banner, the title, the chart with its numbered race list, the
     constants-and-scale paragraph, the coverage statement, the
@@ -933,3 +933,8 @@ shape.
   `DayLoad`/`DailySeries`/`build_daily_series` are module-level in
   `history.series`, not on the package surface; 5.2 appends whatever the
   engine or page import off the surface before 5.4 pins it.
+- **For 5.2 (from 4.3 review):** `render_history` labels EVERY marker it is
+  handed as a race under the "Races:" heading -- the engine passes RACE
+  markers only (design.md:1614, Req 5.4 put the selection in the engine).
+  `render_history`/`RenderedHistory` are module-level in `history.page`; 5.2
+  appends them to the package surface if it imports them off the surface.
