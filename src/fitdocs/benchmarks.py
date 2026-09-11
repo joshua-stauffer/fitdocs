@@ -82,6 +82,45 @@ INTEGRAL_KINDS: Final[frozenset[BenchmarkKind]] = frozenset(
 rejected rather than rounded or truncated."""
 
 
+class BenchmarkSourceKind(StrEnum):
+    """The closed, published origin vocabulary for a benchmark's provenance.
+
+    ``DERIVED`` is written only by a derivation pass (never by hand);
+    ``MEASURED`` is written only by the athlete, by hand, to state that a
+    number was measured (a lab or field test) rather than merely typed.
+    fitdocs never writes ``MEASURED`` itself and reads it only as
+    "not derived" (design: BenchmarkProvenance)."""
+
+    DERIVED = "derived"
+    MEASURED = "measured"
+
+
+@dataclass(frozen=True)
+class BenchmarkSource:
+    """The provenance record on a benchmark entry (design: BenchmarkProvenance).
+
+    ``kind`` is required and drawn from :class:`BenchmarkSourceKind`. The four
+    detail fields are required, non-empty strings when ``kind`` is
+    :attr:`BenchmarkSourceKind.DERIVED` (the origin, the derivation method,
+    the document it read, the inputs it used, and the key of the governing
+    source record) and are all optional when ``kind`` is
+    :attr:`BenchmarkSourceKind.MEASURED`. ``method`` is validated as a
+    non-empty string only -- never against a vocabulary -- so an entry naming
+    a derivation method a future release adds stays readable (5.10).
+    """
+
+    kind: BenchmarkSourceKind
+    method: str | None = None
+    document: str | None = None
+    inputs: str | None = None
+    citation: str | None = None
+
+    @property
+    def is_derived(self) -> bool:
+        """Whether this record states a derivation origin (5.1, 5.2)."""
+        return self.kind is BenchmarkSourceKind.DERIVED
+
+
 @dataclass(frozen=True)
 class Benchmark:
     """One dated measurement of an athlete's threshold value.
@@ -106,6 +145,13 @@ class Benchmark:
     entry applies from its own ``measured_on`` only, exactly as before;
     when set, it is a bare calendar date no later than ``measured_on``
     (enforced by the parser, not by this value type)."""
+    source: BenchmarkSource | None = None
+    """*This spec (performance-benchmarks, design: BenchmarkProvenance).*
+    The entry's provenance: who or what produced it and, when derived, how.
+    Trailing and defaulted, appended *after* ``applies_from`` -- so every
+    existing keyword construction (with no ``source`` argument at all) is
+    unchanged and no existing field moves. ``None`` (the default) means the
+    entry carries no provenance record and is therefore not derived (5.1)."""
 
 
 @dataclass(frozen=True)
@@ -372,6 +418,76 @@ def _validate_note(raw: object, *, path: str) -> str | None:
     )
 
 
+def _validate_source_detail(raw: object, field_name: str, *, path: str) -> str | None:
+    """Validate one optional string detail field of a ``source`` table.
+
+    Absent (``None``) is accepted here unconditionally; whether it is
+    actually *required* depends on ``kind`` and is enforced by
+    ``_validate_benchmark_source`` after every field has been read.
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, str):
+        raise BenchmarkError(
+            f"{path}.source.{field_name} must be a string, got {raw!r} "
+            f"({type(raw).__name__})"
+        )
+    return raw
+
+
+def _validate_benchmark_source(raw: object, *, path: str) -> BenchmarkSource | None:
+    """Validate one entry's optional ``source`` provenance table (5.1-5.6, 5.10).
+
+    Absent -> ``None`` (5.1). Present but not a table -> error naming the
+    entry path. A missing, non-string or unrecognized ``kind`` -> error
+    naming the entry path (5.5) -- the vocabulary is closed and published
+    (:class:`BenchmarkSourceKind`). A ``derived`` origin requires ``method``,
+    ``document``, ``inputs`` and ``citation`` each as a non-empty string,
+    else error (5.2, 5.5); a ``measured`` origin requires none of them. Any
+    other key inside the table is ignored by the parser (1.10, 5.6) -- it is
+    carried through unchanged only by the merge layer (task 2.2), which is
+    the only layer that ever sees the raw table.
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        raise BenchmarkError(
+            f"{path}.source must be a table, got {raw!r} ({type(raw).__name__})"
+        )
+
+    kind_raw = raw.get("kind")
+    if not isinstance(kind_raw, str) or kind_raw not in {
+        member.value for member in BenchmarkSourceKind
+    }:
+        recognized = ", ".join(sorted(member.value for member in BenchmarkSourceKind))
+        raise BenchmarkError(
+            f"{path}.source.kind must be one of {recognized}, got {kind_raw!r}"
+        )
+    kind = BenchmarkSourceKind(kind_raw)
+
+    method = _validate_source_detail(raw.get("method"), "method", path=path)
+    document = _validate_source_detail(raw.get("document"), "document", path=path)
+    inputs = _validate_source_detail(raw.get("inputs"), "inputs", path=path)
+    citation = _validate_source_detail(raw.get("citation"), "citation", path=path)
+
+    if kind is BenchmarkSourceKind.DERIVED:
+        for field_name, value in (
+            ("method", method),
+            ("document", document),
+            ("inputs", inputs),
+            ("citation", citation),
+        ):
+            if not value:
+                raise BenchmarkError(
+                    f"{path}.source.{field_name} must be a non-empty string "
+                    f"when source.kind is 'derived', got {value!r}"
+                )
+
+    return BenchmarkSource(
+        kind=kind, method=method, document=document, inputs=inputs, citation=citation
+    )
+
+
 def parse_benchmarks(document: Mapping[str, object]) -> BenchmarkSet:
     """Parse the decoded ``[benchmarks]`` region of ``athlete.toml``.
 
@@ -437,6 +553,9 @@ def parse_benchmarks(document: Mapping[str, object]) -> BenchmarkSet:
                 applies_from = _validate_applies_from(
                     entry.get("applies_from"), measured_on, path=entry_path
                 )
+                source = _validate_benchmark_source(
+                    entry.get("source"), path=entry_path
+                )
 
                 key = (discipline, kind, measured_on)
                 if key in seen:
@@ -454,6 +573,7 @@ def parse_benchmarks(document: Mapping[str, object]) -> BenchmarkSet:
                         measured_on=measured_on,
                         note=note,
                         applies_from=applies_from,
+                        source=source,
                     )
                 )
 
@@ -531,6 +651,13 @@ def benchmarks_to_document(entries: Sequence[Benchmark]) -> dict[str, object]:
     rewrite merge (``fitdocs.load.profile._merge_benchmarks_document``), which
     overlays the emitted record onto the existing raw entry: an omitted key
     leaves an existing value untouched, an explicit ``None`` would erase it.
+
+    ``source`` is emitted **last**, after ``applies_from`` and ``note`` (the
+    file's emitted order, which is not :class:`Benchmark`'s field order), only
+    when present, with its own keys in the fixed order ``kind, method,
+    document, inputs, citation`` and every absent field omitted (design:
+    BenchmarkProvenance). The group sort key stays ``measured_on`` alone --
+    ``source``'s presence or absence never becomes a tie-breaker.
     """
     grouped: dict[str, dict[str, list[dict[str, object]]]] = {}
     for entry in sorted(entries, key=lambda benchmark: benchmark.measured_on):
@@ -549,6 +676,17 @@ def benchmarks_to_document(entries: Sequence[Benchmark]) -> dict[str, object]:
             record["applies_from"] = entry.applies_from
         if entry.note is not None:
             record["note"] = entry.note
+        if entry.source is not None:
+            source_record: dict[str, object] = {"kind": entry.source.kind.value}
+            if entry.source.method is not None:
+                source_record["method"] = entry.source.method
+            if entry.source.document is not None:
+                source_record["document"] = entry.source.document
+            if entry.source.inputs is not None:
+                source_record["inputs"] = entry.source.inputs
+            if entry.source.citation is not None:
+                source_record["citation"] = entry.source.citation
+            record["source"] = source_record
         kind_list.append(record)
 
     return {"benchmarks": grouped}

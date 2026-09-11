@@ -201,7 +201,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
 
 - [ ] 2. The benchmark store gains provenance (the athlete-benchmarks amendment)
 
-- [ ] 2.1 (P) Add the provenance record to the benchmark entry, its parser and its serializer
+- [x] 2.1 (P) Add the provenance record to the benchmark entry, its parser and its serializer
   - Extend the benchmark vocabulary with the closed origin class (derived,
     measured) and the frozen provenance value carrying the origin plus the
     optional method, document, inputs and citation, with a derived-origin

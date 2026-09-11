@@ -13,6 +13,12 @@ presence (``BenchmarkSet.has``) (design: BenchmarkSelection).
 
 Task 1.4 adds the pure staleness computation (``benchmark_age``,
 ``BenchmarkAge``) (design: StalenessCalculation).
+
+Task 2.1 (performance-benchmarks) adds the provenance record --
+``BenchmarkSourceKind``, ``BenchmarkSource``, ``Benchmark.source`` -- its
+parsing (``_validate_benchmark_source``, reached through
+``parse_benchmarks``) and its emission (``benchmarks_to_document``)
+(design: BenchmarkProvenance).
 """
 
 from __future__ import annotations
@@ -34,6 +40,8 @@ from fitdocs.benchmarks import (
     BenchmarkError,
     BenchmarkKind,
     BenchmarkSet,
+    BenchmarkSource,
+    BenchmarkSourceKind,
     benchmark_age,
     benchmarks_to_document,
     parse_benchmarks,
@@ -142,6 +150,96 @@ def test_benchmark_applies_from_can_be_set_explicitly() -> None:
     assert benchmark.applies_from == date(2019, 3, 4)
 
 
+def test_benchmark_field_order_appends_source_last_after_applies_from() -> None:
+    """``source`` is the fifth recognised file key, after Amendment 1's trailing
+    ``applies_from``; nothing before it moves."""
+    assert [f.name for f in dataclasses.fields(Benchmark)] == [
+        "kind",
+        "discipline",
+        "value",
+        "measured_on",
+        "note",
+        "applies_from",
+        "source",
+    ]
+
+
+def test_benchmark_source_defaults_to_none() -> None:
+    """Task 2.1: ``source`` is trailing and defaulted *after* ``applies_from``,
+    so every existing keyword construction (with no ``source`` argument at
+    all) is unchanged.
+    """
+    benchmark = Benchmark(
+        kind=BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RUN,
+        value=285.0,
+        measured_on=date(2026, 3, 14),
+        applies_from=date(2025, 1, 1),
+    )
+
+    assert benchmark.source is None
+
+
+def test_benchmark_source_can_be_set_explicitly() -> None:
+    """``source`` accepts an explicit ``BenchmarkSource`` without disturbing
+    the fields it trails."""
+    source = BenchmarkSource(
+        kind=BenchmarkSourceKind.DERIVED,
+        method="riegel_race_equivalence",
+        document="workouts/2024-04-14-run-1230.md",
+        inputs="official distance 21097.5 m, official time 4512 s",
+        citation="riegel_1981",
+    )
+    benchmark = Benchmark(
+        kind=BenchmarkKind.THRESHOLD_PACE_S_PER_KM,
+        discipline=Sport.RUN,
+        value=234.5,
+        measured_on=date(2024, 4, 14),
+        source=source,
+    )
+
+    assert benchmark.source is source
+    assert benchmark.applies_from is None
+
+
+def test_benchmark_source_is_derived_predicate_true_for_derived() -> None:
+    """``BenchmarkSource.is_derived`` reads ``True`` for a derived origin."""
+    source = BenchmarkSource(
+        kind=BenchmarkSourceKind.DERIVED,
+        method="m",
+        document="d",
+        inputs="i",
+        citation="c",
+    )
+
+    assert source.is_derived is True
+
+
+def test_benchmark_source_is_derived_predicate_false_for_measured() -> None:
+    """``BenchmarkSource.is_derived`` reads ``False`` for a measured origin --
+    the sibling of the predicate's ``True`` case, so a stub that always
+    returns ``True`` cannot pass both.
+    """
+    source = BenchmarkSource(kind=BenchmarkSourceKind.MEASURED)
+
+    assert source.is_derived is False
+
+
+def test_benchmark_source_kind_members() -> None:
+    """The closed origin vocabulary has exactly the two published members."""
+    assert BenchmarkSourceKind.DERIVED == "derived"
+    assert BenchmarkSourceKind.MEASURED == "measured"
+    assert {member.value for member in BenchmarkSourceKind} == {"derived", "measured"}
+
+
+def test_benchmark_source_is_immutable() -> None:
+    """``BenchmarkSource`` is a frozen value object."""
+    source = BenchmarkSource(kind=BenchmarkSourceKind.MEASURED)
+
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        source.method = "x"  # type: ignore[misc]
+
+
 def test_benchmark_is_immutable() -> None:
     """``Benchmark`` is a frozen value object."""
     benchmark = Benchmark(
@@ -226,6 +324,183 @@ def test_unrecognized_quantity_name_is_ignored_for_forward_compatibility() -> No
 
 def _entry(scope: str, kind: str, **fields: object) -> dict[str, object]:
     return {"benchmarks": {scope: {kind: [dict(fields)]}}}
+
+
+def test_entry_with_no_source_parses_to_none_and_is_not_derived() -> None:
+    """Task 2.1 (5.1): an entry carrying no provenance record parses with
+    ``source is None`` and is therefore "not derived" -- the pin for the
+    absent case that every other source test's fixtures must not
+    accidentally satisfy too.
+    """
+    document = _entry("run", "ftp_watts", value=250, measured_on=date(2026, 1, 1))
+
+    result = parse_benchmarks(document)
+
+    assert len(result.entries) == 1
+    assert result.entries[0].source is None
+
+
+def test_parser_accepts_a_measured_origin_with_no_detail_fields() -> None:
+    """Task 2.1: a ``measured`` origin requires none of the four detail
+    fields -- a bare ``{"kind": "measured"}`` table is accepted.
+    """
+    document = _entry(
+        "run",
+        "ftp_watts",
+        value=250,
+        measured_on=date(2026, 1, 1),
+        source={"kind": "measured"},
+    )
+
+    result = parse_benchmarks(document)
+
+    assert result.entries[0].source == BenchmarkSource(
+        kind=BenchmarkSourceKind.MEASURED
+    )
+    assert result.entries[0].source is not None
+    assert result.entries[0].source.is_derived is False
+
+
+def test_parser_carries_detail_fields_on_a_measured_origin() -> None:
+    """Task 2.1 (5.1, 5.6 remediation): a ``measured`` origin's detail
+    fields are not merely permitted to be absent (as the bare-table fixture
+    above proves) -- when present, they are carried through the parser onto
+    the parsed value exactly like a ``derived`` origin's, and ``is_derived``
+    is decided by the origin's ``kind``, not by whether detail fields are
+    present.
+    """
+    document = _entry(
+        "run",
+        "ftp_watts",
+        value=250,
+        measured_on=date(2026, 1, 1),
+        source={
+            "kind": "measured",
+            "method": "lab_lactate_step_test",
+            "document": "notes/2026-01-01-lab.md",
+            "inputs": "4 mmol/L step protocol",
+            "citation": "lab_report_2026",
+        },
+    )
+
+    result = parse_benchmarks(document)
+
+    assert result.entries[0].source == BenchmarkSource(
+        kind=BenchmarkSourceKind.MEASURED,
+        method="lab_lactate_step_test",
+        document="notes/2026-01-01-lab.md",
+        inputs="4 mmol/L step protocol",
+        citation="lab_report_2026",
+    )
+    assert result.entries[0].source is not None
+    assert result.entries[0].source.is_derived is False
+
+
+def test_parser_accepts_a_derived_origin_with_all_four_detail_fields() -> None:
+    """Task 2.1 (5.2, 5.4): a ``derived`` origin with all four required
+    fields parses into the same typed value the write path would produce --
+    a record written by one run is read identically by the next.
+    """
+    document = _entry(
+        "run",
+        "threshold_pace_s_per_km",
+        value=234.5,
+        measured_on=date(2024, 4, 14),
+        source={
+            "kind": "derived",
+            "method": "riegel_race_equivalence",
+            "document": "workouts/2024-04-14-run-1230.md",
+            "inputs": "official distance 21097.5 m, official time 4512 s",
+            "citation": "riegel_1981",
+        },
+    )
+
+    result = parse_benchmarks(document)
+
+    assert result.entries[0].source == BenchmarkSource(
+        kind=BenchmarkSourceKind.DERIVED,
+        method="riegel_race_equivalence",
+        document="workouts/2024-04-14-run-1230.md",
+        inputs="official distance 21097.5 m, official time 4512 s",
+        citation="riegel_1981",
+    )
+    assert result.entries[0].source is not None
+    assert result.entries[0].source.is_derived is True
+
+
+def test_parser_accepts_a_derived_origin_on_an_athlete_scoped_entry() -> None:
+    """Task 2.1: the scope axis -- a derived origin parses on an
+    athlete-wide entry exactly as it does on a discipline-scoped one, so a
+    fixture set covering only discipline-scoped entries cannot hide a
+    scope-conditional bug in the source path.
+    """
+    document = _entry(
+        ATHLETE_SCOPE,
+        "max_hr_bpm",
+        value=190,
+        measured_on=date(2026, 1, 1),
+        source={
+            "kind": "derived",
+            "method": "m",
+            "document": "d",
+            "inputs": "i",
+            "citation": "c",
+        },
+    )
+
+    result = parse_benchmarks(document)
+
+    assert result.entries[0].discipline is None
+    assert result.entries[0].source is not None
+    assert result.entries[0].source.is_derived is True
+
+
+def test_parser_ignores_unrecognized_key_inside_source_table() -> None:
+    """Task 2.1 (5.6): an extra key inside a ``source`` table is ignored by
+    the parser -- the typed value carries only the five recognised fields.
+    Its *preservation on rewrite* is a merge property proved by task 2.2,
+    not here.
+    """
+    document = _entry(
+        "run",
+        "ftp_watts",
+        value=250,
+        measured_on=date(2026, 1, 1),
+        source={"kind": "measured", "future_key": "ignored"},
+    )
+
+    result = parse_benchmarks(document)
+
+    source = result.entries[0].source
+    assert source is not None
+    assert source == BenchmarkSource(kind=BenchmarkSourceKind.MEASURED)
+
+
+def test_parser_accepts_a_method_name_never_validated_against_a_vocabulary() -> None:
+    """Task 2.1 (5.10): the method name is validated as a non-empty string
+    only. A name outside any closed vocabulary this module knows about is
+    still accepted, so a future release's method name stays readable.
+    """
+    document = _entry(
+        "run",
+        "ftp_watts",
+        value=250,
+        measured_on=date(2026, 1, 1),
+        source={
+            "kind": "derived",
+            "method": "a_method_name_invented_by_a_future_release",
+            "document": "d",
+            "inputs": "i",
+            "citation": "c",
+        },
+    )
+
+    result = parse_benchmarks(document)
+
+    assert result.entries[0].source is not None
+    assert (
+        result.entries[0].source.method == "a_method_name_invented_by_a_future_release"
+    )
 
 
 # Each case: (label, document, expected substrings that must all appear in the
@@ -395,6 +670,252 @@ REJECTION_CASES: list[tuple[str, dict[str, object], tuple[str, ...]]] = [
             applies_from=date(2026, 6, 2),
         ),
         (ATHLETE_SCOPE, "max_hr_bpm", "applies_from"),
+    ),
+    (
+        # Task 2.1 (5.5), round-3 remediation: a non-table ``source`` is
+        # rejected naming the entry path. The string is deliberately
+        # ``"measured"`` -- itself a member of the closed kind vocabulary --
+        # so only the not-a-table check can reject it; a value outside the
+        # vocabulary (e.g. ``"cash"``) would also be rejected by the
+        # separate kind-vocabulary rule if a mutant silently coerced the
+        # string into ``{"kind": raw}``, leaving the not-a-table branch
+        # unexercised.
+        "source_non_table",
+        _entry(
+            "run",
+            "ftp_watts",
+            value=250,
+            measured_on=date(2026, 1, 1),
+            source="measured",
+        ),
+        ("run", "ftp_watts", "source", "table"),
+    ),
+    (
+        # Task 2.1 (5.5): a ``source`` table missing ``kind`` is rejected.
+        "source_missing_kind",
+        _entry(
+            "run",
+            "ftp_watts",
+            value=250,
+            measured_on=date(2026, 1, 1),
+            source={"method": "m"},
+        ),
+        ("run", "ftp_watts", "source", "kind"),
+    ),
+    (
+        # Task 2.1 (5.5): an origin outside the closed, published vocabulary
+        # is rejected -- never silently accepted as a forward-compatible
+        # third kind.
+        "source_unrecognized_kind",
+        _entry(
+            "run",
+            "ftp_watts",
+            value=250,
+            measured_on=date(2026, 1, 1),
+            source={"kind": "guessed"},
+        ),
+        ("run", "ftp_watts", "source", "kind", "guessed"),
+    ),
+    (
+        # Task 2.1 (5.2): a derived origin missing ``method`` is rejected --
+        # sibling of the missing_document/inputs/citation cases below, each
+        # varying exactly one of the four required fields so no single
+        # required-field check can silently cover another's absence.
+        "source_derived_missing_method",
+        _entry(
+            "run",
+            "ftp_watts",
+            value=250,
+            measured_on=date(2026, 1, 1),
+            source={
+                "kind": "derived",
+                "document": "d",
+                "inputs": "i",
+                "citation": "c",
+            },
+        ),
+        ("run", "ftp_watts", "source", "method"),
+    ),
+    (
+        "source_derived_missing_document",
+        _entry(
+            "run",
+            "ftp_watts",
+            value=250,
+            measured_on=date(2026, 1, 1),
+            source={"kind": "derived", "method": "m", "inputs": "i", "citation": "c"},
+        ),
+        ("run", "ftp_watts", "source", "document"),
+    ),
+    (
+        "source_derived_missing_inputs",
+        _entry(
+            "run",
+            "ftp_watts",
+            value=250,
+            measured_on=date(2026, 1, 1),
+            source={
+                "kind": "derived",
+                "method": "m",
+                "document": "d",
+                "citation": "c",
+            },
+        ),
+        ("run", "ftp_watts", "source", "inputs"),
+    ),
+    (
+        # Sibling of missing_method/missing_document/missing_inputs above:
+        # a derived origin missing ``citation`` is rejected.
+        "source_derived_missing_citation",
+        _entry(
+            "run",
+            "ftp_watts",
+            value=250,
+            measured_on=date(2026, 1, 1),
+            source={"kind": "derived", "method": "m", "document": "d", "inputs": "i"},
+        ),
+        ("run", "ftp_watts", "source", "citation"),
+    ),
+    (
+        # Empty string, not merely absent -- "non-empty string" (5.2) is
+        # checked, not just "field is present". A validator using
+        # ``raw.get("citation") is None`` instead of a falsy/blank check
+        # would accept this.
+        "source_derived_empty_string_citation",
+        _entry(
+            "run",
+            "ftp_watts",
+            value=250,
+            measured_on=date(2026, 1, 1),
+            source={
+                "kind": "derived",
+                "method": "m",
+                "document": "d",
+                "inputs": "i",
+                "citation": "",
+            },
+        ),
+        ("run", "ftp_watts", "source", "citation"),
+    ),
+    (
+        # Task 2.1 (5.10): the method name is validated as a non-empty
+        # string only, but its *type* is still checked -- a non-string
+        # method is rejected even though no vocabulary check applies.
+        "source_method_wrong_type",
+        _entry(
+            "run",
+            "ftp_watts",
+            value=250,
+            measured_on=date(2026, 1, 1),
+            source={
+                "kind": "derived",
+                "method": 7,
+                "document": "d",
+                "inputs": "i",
+                "citation": "c",
+            },
+        ),
+        ("run", "ftp_watts", "source", "method"),
+    ),
+    (
+        # Task 2.1 (5.5): the wrong-type check is per field. A truthy
+        # non-string ``document`` passes the required-field check, so only the
+        # type check on ``document`` itself can reject it.
+        "source_document_wrong_type",
+        _entry(
+            "run",
+            "ftp_watts",
+            value=250,
+            measured_on=date(2026, 1, 1),
+            source={
+                "kind": "derived",
+                "method": "m",
+                "document": 7,
+                "inputs": "i",
+                "citation": "c",
+            },
+        ),
+        ("run", "ftp_watts", "source", "document"),
+    ),
+    (
+        # Task 2.1 (5.5): the wrong-type check is per field. A truthy
+        # non-string ``inputs`` passes the required-field check, so only the
+        # type check on ``inputs`` itself can reject it.
+        "source_inputs_wrong_type",
+        _entry(
+            "run",
+            "ftp_watts",
+            value=250,
+            measured_on=date(2026, 1, 1),
+            source={
+                "kind": "derived",
+                "method": "m",
+                "document": "d",
+                "inputs": 7,
+                "citation": "c",
+            },
+        ),
+        ("run", "ftp_watts", "source", "inputs"),
+    ),
+    (
+        # Task 2.1 (5.5): the wrong-type check is per field. A truthy
+        # non-string ``citation`` passes the required-field check, so only the
+        # type check on ``citation`` itself can reject it.
+        "source_citation_wrong_type",
+        _entry(
+            "run",
+            "ftp_watts",
+            value=250,
+            measured_on=date(2026, 1, 1),
+            source={
+                "kind": "derived",
+                "method": "m",
+                "document": "d",
+                "inputs": "i",
+                "citation": 7,
+            },
+        ),
+        ("run", "ftp_watts", "source", "citation"),
+    ),
+    (
+        # Round-2 remediation (O7): a validator that skips
+        # ``_validate_source_detail`` entirely for a ``measured`` origin
+        # (reasoning that no field is *required*) would never notice a
+        # wrong-typed ``method`` here even though it is present and
+        # malformed -- absence and malformedness are different failures,
+        # and only the derived-origin sibling above pins the required case.
+        "source_measured_method_wrong_type",
+        _entry(
+            "run",
+            "ftp_watts",
+            value=250,
+            measured_on=date(2026, 1, 1),
+            source={"kind": "measured", "method": 7},
+        ),
+        ("run", "ftp_watts", "source", "method"),
+    ),
+    (
+        # Round-2 remediation (O2): a validator that lowercases ``kind_raw``
+        # before checking it against the closed vocabulary would silently
+        # accept a wrong-case spelling as if it were the canonical
+        # ``"derived"`` -- the vocabulary is closed and exact-match, not
+        # case-insensitive, so a hand-edit typo is rejected rather than
+        # coerced.
+        "source_kind_wrong_case",
+        _entry(
+            "run",
+            "ftp_watts",
+            value=250,
+            measured_on=date(2026, 1, 1),
+            source={
+                "kind": "Derived",
+                "method": "m",
+                "document": "d",
+                "inputs": "i",
+                "citation": "c",
+            },
+        ),
+        ("run", "ftp_watts", "source", "kind", "Derived"),
     ),
     (
         "scalar_where_scope_table_belongs",
@@ -792,6 +1313,219 @@ def test_benchmarks_to_document_omits_applies_from_for_athlete_scope_when_absent
 
     record = document["benchmarks"][ATHLETE_SCOPE]["max_hr_bpm"][0]  # type: ignore[index]
     assert "applies_from" not in record
+
+
+def test_benchmarks_to_document_emits_source_last_after_applies_from_and_note() -> None:
+    """Task 2.1: ``source`` is emitted last, after ``applies_from`` and
+    ``note`` -- the file's emitted order, not the dataclass field order
+    (where ``note`` precedes ``applies_from``).
+    """
+    entries = (
+        Benchmark(
+            kind=BenchmarkKind.FTP_WATTS,
+            discipline=Sport.RUN,
+            value=250,
+            measured_on=date(2026, 9, 10),
+            note="Stryd test",
+            applies_from=date(2019, 3, 4),
+            source=BenchmarkSource(kind=BenchmarkSourceKind.MEASURED),
+        ),
+    )
+
+    document = benchmarks_to_document(entries)
+
+    record = document["benchmarks"]["run"]["ftp_watts"][0]  # type: ignore[index]
+    keys = list(record.keys())
+    assert keys.index("applies_from") < keys.index("source")
+    assert keys.index("note") < keys.index("source")
+    assert keys[-1] == "source"
+
+
+def test_benchmarks_to_document_emits_source_keys_in_fixed_order_omitting_absent() -> (
+    None
+):
+    """A ``derived`` source's own keys are emitted in the fixed order
+    ``kind, method, document, inputs, citation``; a ``measured`` source with
+    every optional detail absent omits all four.
+    """
+    derived_entries = (
+        Benchmark(
+            kind=BenchmarkKind.THRESHOLD_PACE_S_PER_KM,
+            discipline=Sport.RUN,
+            value=234.5,
+            measured_on=date(2024, 4, 14),
+            source=BenchmarkSource(
+                kind=BenchmarkSourceKind.DERIVED,
+                method="riegel_race_equivalence",
+                document="workouts/2024-04-14-run-1230.md",
+                inputs="official distance 21097.5 m, official time 4512 s",
+                citation="riegel_1981",
+            ),
+        ),
+    )
+
+    derived_record = benchmarks_to_document(derived_entries)["benchmarks"]["run"][  # type: ignore[index]
+        "threshold_pace_s_per_km"
+    ][0]
+    source_record = derived_record["source"]
+    assert list(source_record.keys()) == [
+        "kind",
+        "method",
+        "document",
+        "inputs",
+        "citation",
+    ]
+    assert source_record["kind"] == "derived"
+
+    measured_entries = (
+        Benchmark(
+            kind=BenchmarkKind.FTP_WATTS,
+            discipline=Sport.RUN,
+            value=250,
+            measured_on=date(2026, 9, 10),
+            source=BenchmarkSource(kind=BenchmarkSourceKind.MEASURED),
+        ),
+    )
+    measured_record = benchmarks_to_document(measured_entries)["benchmarks"]["run"][  # type: ignore[index]
+        "ftp_watts"
+    ][0]
+    measured_source_record = measured_record["source"]
+    assert list(measured_source_record.keys()) == ["kind"]
+
+    # Round-2 remediation (O8): a serializer that emits `method` only when
+    # `source.is_derived` -- rather than "when `method is not None`" -- would
+    # drop `method` here even though this source carries all four details,
+    # because `kind` is `measured` (`is_derived` is `False`). A `measured`
+    # source is not merely permitted to omit its details (the bare-table
+    # case above); when it carries all four, the serializer emits every one
+    # of them in the same fixed order a `derived` source would.
+    measured_full_entries = (
+        Benchmark(
+            kind=BenchmarkKind.FTP_WATTS,
+            discipline=Sport.RUN,
+            value=250,
+            measured_on=date(2026, 1, 1),
+            source=BenchmarkSource(
+                kind=BenchmarkSourceKind.MEASURED,
+                method="lab_lactate_step_test",
+                document="notes/2026-01-01-lab.md",
+                inputs="4 mmol/L step protocol",
+                citation="lab_report_2026",
+            ),
+        ),
+    )
+    measured_full_record = benchmarks_to_document(measured_full_entries)["benchmarks"][
+        "run"
+    ]["ftp_watts"][0]  # type: ignore[index]
+    measured_full_source_record = measured_full_record["source"]
+    assert list(measured_full_source_record.keys()) == [
+        "kind",
+        "method",
+        "document",
+        "inputs",
+        "citation",
+    ]
+    assert measured_full_source_record["kind"] == "measured"
+
+
+def test_benchmarks_to_document_omits_source_when_absent() -> None:
+    """The serializer omits the ``source`` key entirely for an entry that
+    has none -- it is never emitted as an explicit ``None`` or an empty
+    table.
+    """
+    entries = (
+        Benchmark(
+            kind=BenchmarkKind.FTP_WATTS,
+            discipline=Sport.RUN,
+            value=250,
+            measured_on=date(2026, 9, 10),
+        ),
+    )
+
+    document = benchmarks_to_document(entries)
+
+    record = document["benchmarks"]["run"]["ftp_watts"][0]  # type: ignore[index]
+    assert "source" not in record
+
+
+def test_serializer_sorts_mixed_source_group_by_measured_on_only() -> None:
+    """Sibling of
+    ``test_serializer_sorts_mixed_group_by_measured_on_not_applies_from``,
+    pinning the same rule for ``source``: within one scope+quantity group
+    holding both a source-carrying entry and a plain one, the serializer's
+    ascending order is by ``measured_on`` alone. ``later_measured`` is
+    measured after ``earlier_measured`` but carries a ``source`` while
+    ``earlier_measured`` carries none.
+
+    Mutation: ``key=lambda benchmark: (benchmark.source is None,
+    benchmark.measured_on)`` -- ranking a source-carrying entry first
+    regardless of date -- reorders ``later_measured`` ahead of
+    ``earlier_measured`` because ``False < True``.
+    """
+    earlier_measured = Benchmark(
+        kind=BenchmarkKind.FTP_WATTS,
+        discipline=Sport.WALK,
+        value=180,
+        measured_on=date(2020, 1, 1),
+    )
+    later_measured = Benchmark(
+        kind=BenchmarkKind.FTP_WATTS,
+        discipline=Sport.WALK,
+        value=210,
+        measured_on=date(2026, 1, 1),
+        source=BenchmarkSource(kind=BenchmarkSourceKind.MEASURED),
+    )
+    entries = (later_measured, earlier_measured)
+
+    # Reachability: the two orderings genuinely disagree -- one entry
+    # carries a source and is measured *later*, the other carries none and
+    # is measured *earlier*.
+    assert earlier_measured.measured_on < later_measured.measured_on
+    assert earlier_measured.source is None
+    assert later_measured.source is not None
+
+    document = benchmarks_to_document(entries)
+
+    walk_ftp = document["benchmarks"]["walk"]["ftp_watts"]  # type: ignore[index]
+    assert [record["measured_on"] for record in walk_ftp] == [
+        date(2020, 1, 1),
+        date(2026, 1, 1),
+    ]
+    assert [record["value"] for record in walk_ftp] == [180, 210]
+
+
+def test_round_trip_parse_of_serialize_preserves_source() -> None:
+    """The round-trip property holds for an entry carrying a derived
+    ``source``, alongside a second entry that carries none -- both survive
+    ``parse(serialize(entries))``.
+    """
+    entries = (
+        Benchmark(
+            kind=BenchmarkKind.THRESHOLD_PACE_S_PER_KM,
+            discipline=Sport.RUN,
+            value=234.5,
+            measured_on=date(2024, 4, 14),
+            source=BenchmarkSource(
+                kind=BenchmarkSourceKind.DERIVED,
+                method="riegel_race_equivalence",
+                document="workouts/2024-04-14-run-1230.md",
+                inputs="official distance 21097.5 m, official time 4512 s",
+                citation="riegel_1981",
+            ),
+        ),
+        Benchmark(
+            kind=BenchmarkKind.FTP_WATTS,
+            discipline=Sport.RUN,
+            value=262,
+            measured_on=date(2024, 5, 2),
+        ),
+    )
+    original = BenchmarkSet(entries=entries)
+
+    round_tripped = parse_benchmarks(benchmarks_to_document(list(entries)))
+
+    assert set(round_tripped.entries) == set(original.entries)
+    assert len(round_tripped.entries) == len(original.entries)
 
 
 def test_round_trip_parse_of_serialize_preserves_applies_from() -> None:

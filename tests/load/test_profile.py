@@ -699,7 +699,7 @@ def test_with_benchmark_and_save_preserve_unrecognized_benchmark_content(
         "[[benchmarks.run.ftp_watts]]\n"
         "value = 250\n"
         "measured_on = 2025-01-01\n"
-        'source = "stryd"\n'
+        'sensor = "stryd"\n'
     )
     path = tmp_path / PROFILE_FILENAME
     path.write_text(seed)
@@ -722,7 +722,7 @@ def test_with_benchmark_and_save_preserve_unrecognized_benchmark_content(
     ftp_entry = raw["benchmarks"]["run"]["ftp_watts"][0]
     assert ftp_entry["value"] == 260
     # ...but the unrecognized key on that same entry still survives.
-    assert ftp_entry["source"] == "stryd"
+    assert ftp_entry["sensor"] == "stryd"
 
 
 # --- save_profile re-sorts benchmarks even bypassing with_benchmark (6.6) --
@@ -1728,7 +1728,7 @@ def test_with_benchmark_preserves_unrecognized_key_alongside_applies_from(
         "value = 100\n"
         "measured_on = 2022-05-05\n"
         "applies_from = 2022-04-01\n"
-        'source = "stryd"\n'
+        'sensor = "stryd"\n'
     )
     (tmp_path / PROFILE_FILENAME).write_text(seed)
 
@@ -1744,7 +1744,7 @@ def test_with_benchmark_preserves_unrecognized_key_alongside_applies_from(
     entry = raw["benchmarks"]["run"]["ftp_watts"][0]
     assert entry["value"] == 150
     assert entry["applies_from"] == date(2022, 4, 1)
-    assert entry["source"] == "stryd"
+    assert entry["sensor"] == "stryd"
 
 
 def test_profile_version_name_retired_in_favor_of_shared_schema_constant() -> None:
