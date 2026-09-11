@@ -3,26 +3,41 @@
 `.kiro/specs/load-history/design.md`.
 
 `tests/history/test_series.py` carries one headed section per task: this
-file currently holds task 3.2's "methodology" section and task 3.3's "daily
-series" section. Fixtures build
+file currently holds task 3.2's "methodology" section, task 3.3's "daily
+series" section, and task 3.4's "weeks and coverage" section. Fixtures build
 `PageRecord`s directly (the type task 3.1 already owns and tests through its
 own real-frontmatter fixtures) rather than writing a page tree, because this
-module is pure and never touches the filesystem.
+module is pure and never touches the filesystem. Task 3.4's fixtures build
+`DailySeries`/`DayLoad`/`ModelSeries` directly too, rather than routing
+through `build_daily_series` and `run_model` (each already exercised by its
+own task), because `week_rows`/`suppressed_weeks` only ever consume those
+types; `coverage_report` also takes a period's `DailySeries`, but its
+`excluded`/`choice` arguments are `PageRecord`s and a `MethodologyChoice`
+built the same way task 3.2's own fixtures build them.
 """
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import date
 
+import pytest
+
 from fitdocs.history.documents import PageRecord
+from fitdocs.history.model import ModelSeries
 from fitdocs.history.series import (
+    Coverage,
     DailySeries,
     DayLoad,
     MethodologyChoice,
     MethodologyProblem,
+    WeekRow,
     build_daily_series,
+    coverage_report,
     partition_pages,
     select_methodology,
+    suppressed_weeks,
+    week_rows,
 )
 
 # ---------------------------------------------------------------------------
@@ -409,3 +424,401 @@ def test_build_daily_series_returns_none_when_nothing_records_a_load() -> None:
         _page("b.md", _D2, None),
     ]
     assert build_daily_series(pages) is None
+
+
+# ---------------------------------------------------------------------------
+# weeks and coverage (task 3.4)
+# ---------------------------------------------------------------------------
+
+
+def test_weeks_rows_reports_end_of_week_values_and_distinct_session_count() -> None:
+    """One full ISO week, Jan 1 (Mon) - Jan 7 (Sun) 2024, seven `DayLoad`s.
+    Jan 1 carries two pages, only one with a load, so `pages` (8) and
+    `sessions`/`pages_with_load` (7) differ -- a `sessions=pages` swap would
+    report 8, not 7. `model` carries seven distinct, non-integral values per
+    series so index 0 (week start) and index 6 (week end) are never equal --
+    an `indices[0]` instead of `indices[-1]` mutation reports the wrong
+    number, not merely a coincidentally-equal one."""
+    days = (
+        DayLoad(date(2024, 1, 1), recorded_load=1.25, pages=2, pages_with_load=1),
+        DayLoad(date(2024, 1, 2), recorded_load=2.5, pages=1, pages_with_load=1),
+        DayLoad(date(2024, 1, 3), recorded_load=3.75, pages=1, pages_with_load=1),
+        DayLoad(date(2024, 1, 4), recorded_load=4.125, pages=1, pages_with_load=1),
+        DayLoad(date(2024, 1, 5), recorded_load=5.5, pages=1, pages_with_load=1),
+        DayLoad(date(2024, 1, 6), recorded_load=6.25, pages=1, pages_with_load=1),
+        DayLoad(date(2024, 1, 7), recorded_load=7.875, pages=1, pages_with_load=1),
+    )
+    series = DailySeries(start=days[0].day, days=days)
+    model = ModelSeries(
+        fitness=(10.5, 20.5, 30.5, 40.5, 50.5, 60.5, 70.5),
+        fatigue=(1.1, 2.1, 3.1, 4.1, 5.1, 6.1, 7.1),
+        form=(9.4, 18.4, 27.4, 36.4, 45.4, 54.4, 63.4),
+    )
+
+    rows = week_rows(series, model, suppressed=frozenset())
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.iso_year == 2024
+    assert row.iso_week == 1
+    assert row.monday == date(2024, 1, 1)
+    assert row.days_in_span == 7
+    assert row.total_load == pytest.approx(31.25)
+    assert row.pages == 8
+    assert row.pages_with_load == 7
+    assert row.sessions == 7
+    assert row.fitness == 70.5
+    assert row.fatigue == 7.1
+    assert row.form == 63.4
+    assert row.suppressed is False
+
+
+def test_suppressed_weeks_empty_week_is_complete_not_zero() -> None:
+    """A week with no pages at all (a rest week) is *complete* coverage
+    (Req 3.6), not suppressed -- an empty-period-coverage-as-zero mutation
+    would suppress it and flip the whole page's report for that week."""
+    days = tuple(
+        DayLoad(
+            date(2024, 1, 8 + offset), recorded_load=0.0, pages=0, pages_with_load=0
+        )
+        for offset in range(7)
+    )
+    series = DailySeries(start=days[0].day, days=days)
+
+    assert suppressed_weeks(series, threshold=0.80) == frozenset()
+
+    model = ModelSeries(fitness=(1.0,) * 7, fatigue=(1.0,) * 7, form=(0.0,) * 7)
+    rows = week_rows(series, model, suppressed=suppressed_weeks(series, 0.80))
+    assert len(rows) == 1
+    assert rows[0].suppressed is False
+    assert rows[0].fitness == 1.0
+    assert rows[0].total_load == 0.0
+    assert rows[0].pages == 0
+    assert rows[0].sessions == 0
+
+
+def test_weeks_suppression_at_threshold_not_suppressed_and_just_below_is() -> None:
+    """Two adjacent full ISO weeks, contiguous Jan 15 - Jan 28 2024. Week
+    (2024, 3) carries 5 pages, 4 with a load -- coverage exactly 0.80, the
+    shipped threshold -- and must NOT be suppressed (a `<=` mutation would
+    suppress it). Week (2024, 4) carries 5 pages, 3 with a load -- 0.60,
+    strictly below -- and must be suppressed, with `None` for all three
+    model values.
+
+    Jan 15 carries two pages (both with a load), so the week's *page*
+    coverage (4 loaded of 5 total pages, 0.80, at the threshold) and a
+    per-*day* boolean coverage (days with any loaded page over days with
+    any page: Jan 15-17 have one each, Jan 18 has none, 3/4 = 0.75, below
+    the threshold) disagree -- a `_week_coverage` that counted
+    `sum(bool(day.pages_with_load) for day in ...)` /
+    `sum(bool(day.pages) for day in ...)` over days instead of summing the
+    actual page counts would suppress week (2024, 3) here, where the page
+    based measure must not."""
+    at_threshold = [
+        DayLoad(date(2024, 1, 15), 1.0, pages=2, pages_with_load=2),
+        DayLoad(date(2024, 1, 16), 1.0, pages=1, pages_with_load=1),
+        DayLoad(date(2024, 1, 17), 1.0, pages=1, pages_with_load=1),
+        DayLoad(date(2024, 1, 18), 0.0, pages=1, pages_with_load=0),
+        DayLoad(date(2024, 1, 19), 0.0, pages=0, pages_with_load=0),
+        DayLoad(date(2024, 1, 20), 0.0, pages=0, pages_with_load=0),
+        DayLoad(date(2024, 1, 21), 0.0, pages=0, pages_with_load=0),
+    ]
+    just_below = [
+        DayLoad(date(2024, 1, 22), 1.0, pages=1, pages_with_load=1),
+        DayLoad(date(2024, 1, 23), 1.0, pages=1, pages_with_load=1),
+        DayLoad(date(2024, 1, 24), 1.0, pages=1, pages_with_load=1),
+        DayLoad(date(2024, 1, 25), 0.0, pages=1, pages_with_load=0),
+        DayLoad(date(2024, 1, 26), 0.0, pages=1, pages_with_load=0),
+        DayLoad(date(2024, 1, 27), 0.0, pages=0, pages_with_load=0),
+        DayLoad(date(2024, 1, 28), 0.0, pages=0, pages_with_load=0),
+    ]
+    days = tuple(at_threshold + just_below)
+    series = DailySeries(start=days[0].day, days=days)
+
+    suppressed = suppressed_weeks(series, threshold=0.80)
+    assert suppressed == frozenset({(2024, 4)})
+
+    model = ModelSeries(
+        fitness=tuple(float(i) for i in range(14)),
+        fatigue=tuple(float(i) for i in range(14)),
+        form=tuple(float(i) for i in range(14)),
+    )
+    rows = week_rows(series, model, suppressed)
+    assert len(rows) == 2
+    week3, week4 = rows
+    assert week3.iso_year == 2024 and week3.iso_week == 3
+    assert week3.suppressed is False
+    assert week3.fitness == 6.0  # index 6, the week's own last day (Jan 21)
+
+    assert week4.iso_year == 2024 and week4.iso_week == 4
+    assert week4.suppressed is True
+    assert week4.fitness is None
+    assert week4.fatigue is None
+    assert week4.form is None
+
+
+def test_weeks_rows_partial_first_and_last_week_days_in_span_and_monday() -> None:
+    """A span Jan 4 (Thu) - Jan 10 (Wed) 2024 crosses one ISO-week boundary:
+    the first week (2024, 1) holds only 4 of its 7 calendar days in span,
+    the second (2024, 2) only 3. `monday` is each ISO week's own Monday --
+    Jan 1 and Jan 8 -- neither of which is in the span at all, so a
+    `date.fromisocalendar(..., 2)` (Tuesday) mutation is directly visible,
+    and `days_in_span` must report the in-span count (4, 3), never a
+    constant 7."""
+    dates = [date(2024, 1, d) for d in (4, 5, 6, 7, 8, 9, 10)]
+    days = tuple(
+        DayLoad(d, recorded_load=1.0, pages=1, pages_with_load=1) for d in dates
+    )
+    series = DailySeries(start=days[0].day, days=days)
+    model = ModelSeries(
+        fitness=tuple(float(i) for i in range(7)),
+        fatigue=tuple(float(i) for i in range(7)),
+        form=tuple(float(i) for i in range(7)),
+    )
+
+    rows = week_rows(series, model, suppressed=frozenset())
+
+    assert len(rows) == 2
+    first, second = rows
+    assert first.iso_year == 2024 and first.iso_week == 1
+    assert first.monday == date(2024, 1, 1)
+    assert first.days_in_span == 4
+
+    assert second.iso_year == 2024 and second.iso_week == 2
+    assert second.monday == date(2024, 1, 8)
+    assert second.days_in_span == 3
+
+
+def test_weeks_rows_iso_week_spanning_a_year_boundary_is_one_row() -> None:
+    """Dec 30, 2024 (Mon) - Jan 5, 2025 (Sun) is a single ISO week,
+    `(2025, 1)`, even though its calendar dates span two years -- a
+    `(date.year, isocalendar().week)` keying mutation would split this into
+    two rows instead of one, and would misreport `days_in_span` for each."""
+    dates = [
+        date(2024, 12, 30),
+        date(2024, 12, 31),
+        date(2025, 1, 1),
+        date(2025, 1, 2),
+        date(2025, 1, 3),
+        date(2025, 1, 4),
+        date(2025, 1, 5),
+    ]
+    days = tuple(
+        DayLoad(d, recorded_load=1.0, pages=1, pages_with_load=1) for d in dates
+    )
+    series = DailySeries(start=days[0].day, days=days)
+    model = ModelSeries(
+        fitness=tuple(float(i) for i in range(7)),
+        fatigue=tuple(float(i) for i in range(7)),
+        form=tuple(float(i) for i in range(7)),
+    )
+
+    rows = week_rows(series, model, suppressed=frozenset())
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.iso_year == 2025
+    assert row.iso_week == 1
+    assert row.monday == date(2024, 12, 30)
+    assert row.days_in_span == 7
+
+
+def test_coverage_report_per_year_excluded_split_differs_from_archive_wide() -> None:
+    """Two calendar years, each holding excluded pages of a *different*
+    methodology: 2023 excludes 3 'cycle' pages, 2024 excludes 5 'swim'
+    pages. An implementation that reads `choice.excluded` (the archive-wide
+    total, `(('cycle', 3), ('swim', 5))`) instead of `excluded`'s own dated
+    records would report that same combined tuple on *both* year rows --
+    this fixture makes the two year rows differ from each other and from
+    the combined total, so that mutation is directly visible.
+
+    `series.days`' own page counts are pairwise-distinct and non-tied
+    across the two years, and 2023 carries an unknown page: 2023 is
+    pages=3/pages_with_load=2 (Dec-30's two pages split 1/1 -- the one
+    unknown page -- and Dec-31's single page has a load), 2024 is Jan-1
+    alone at pages=1/pages_with_load=1,
+    and the combined archive-wide row is pages=4/pages_with_load=3 -- three
+    distinct totals, so a year-row rule that sums every `series.days` entry
+    regardless of year, or an archive-wide `pages_with_load` read from
+    `pages` instead of `pages_with_load`, each lands on a value the fixture
+    already rules out elsewhere.
+
+    `excluded`'s own construction order is `swim` records built before
+    `cycle` -- the reverse of the alphabetical order asserted below on the
+    combined `archive.pages_excluded` -- so a `_excluded_by_methodology`
+    that dropped its `sorted()` would return the input order (swim, cycle)
+    instead of (cycle, swim), which the fixture's own input order does not
+    already satisfy.
+    """
+    days = (
+        DayLoad(date(2023, 12, 30), recorded_load=1.0, pages=2, pages_with_load=1),
+        DayLoad(date(2023, 12, 31), recorded_load=1.0, pages=1, pages_with_load=1),
+        DayLoad(date(2024, 1, 1), recorded_load=1.0, pages=1, pages_with_load=1),
+    )
+    series = DailySeries(start=days[0].day, days=days)
+    swim_records = tuple(
+        PageRecord(
+            path=f"swim{i}.md",
+            day=date(2024, 7, 1),
+            load=2.0,
+            methodology="swim",
+            effort=None,
+            tag_problem=None,
+        )
+        for i in range(5)
+    )
+    cycle_records = tuple(
+        PageRecord(
+            path=f"cycle{i}.md",
+            day=date(2023, 5, 1),
+            load=2.0,
+            methodology="cycle",
+            effort=None,
+            tag_problem=None,
+        )
+        for i in range(3)
+    )
+    excluded = swim_records + cycle_records
+    choice = MethodologyChoice("run", "inferred", (("cycle", 3), ("swim", 5)))
+
+    rows = coverage_report(series, excluded, choice, skipped=0)
+
+    assert [row.label for row in rows] == ["2023", "2024", "all"]
+    year_2023, year_2024, archive = rows
+    assert year_2023.pages_excluded == (("cycle", 3),)
+    assert year_2024.pages_excluded == (("swim", 5),)
+    assert year_2023.pages_excluded != year_2024.pages_excluded
+    assert archive.pages_excluded == (("cycle", 3), ("swim", 5))
+    assert year_2023.pages_excluded != archive.pages_excluded
+    assert year_2024.pages_excluded != archive.pages_excluded
+
+    assert year_2023.pages == 3
+    assert year_2023.pages_with_load == 2
+    assert year_2024.pages == 1
+    assert year_2024.pages_with_load == 1
+    assert archive.pages == 4
+    assert archive.pages_with_load == 3
+
+
+def test_coverage_report_year_touched_only_by_excluded_page_gets_its_own_row() -> None:
+    """An excluded page dated 2022, a year `series.days` never touches at
+    all (the series only spans 2023-2024) -- `coverage_report`'s own year
+    set is the *union* of the days' years and the excluded records' years,
+    so 2022 still gets a row, with `pages == 0` (nothing from `series.days`
+    falls in it) and therefore `fraction == 1.0` (an empty period is
+    complete, Req 3.6), and its own `pages_excluded` naming the one
+    excluded page. A `years` computed from `series.days` alone would omit
+    2022 from the label list entirely."""
+    days = (
+        DayLoad(date(2023, 6, 1), recorded_load=1.0, pages=1, pages_with_load=1),
+        DayLoad(date(2024, 6, 1), recorded_load=1.0, pages=1, pages_with_load=1),
+    )
+    series = DailySeries(start=days[0].day, days=days)
+    excluded = (
+        PageRecord(
+            path="cycle.md",
+            day=date(2022, 6, 1),
+            load=2.0,
+            methodology="cycle",
+            effort=None,
+            tag_problem=None,
+        ),
+    )
+    choice = MethodologyChoice("run", "inferred", (("cycle", 1),))
+
+    rows = coverage_report(series, excluded, choice, skipped=0)
+
+    assert [row.label for row in rows] == ["2022", "2023", "2024", "all"]
+    year_2022 = rows[0]
+    assert year_2022.pages == 0
+    assert year_2022.fraction == 1.0
+    assert year_2022.pages_excluded == (("cycle", 1),)
+
+
+def test_coverage_report_skipped_document_is_archive_wide_only() -> None:
+    """One skipped, undated document: the archive-wide row must count it
+    (an integer), and every period row must show `None` -- not zero, which
+    would read as "none were skipped" -- and never the skipped count
+    itself, which would misattribute an unplaceable document to a period it
+    was never placed in (Req 3.10)."""
+    days = (DayLoad(date(2024, 3, 1), recorded_load=1.0, pages=1, pages_with_load=1),)
+    series = DailySeries(start=days[0].day, days=days)
+    choice = MethodologyChoice("run", "inferred", ())
+
+    rows = coverage_report(series, excluded=(), choice=choice, skipped=1)
+
+    assert [row.label for row in rows] == ["2024", "all"]
+    year_row, archive_row = rows
+    assert year_row.pages_skipped is None
+    assert archive_row.pages_skipped == 1
+
+
+def test_coverage_fraction_is_one_when_empty_and_a_fraction_otherwise() -> None:
+    """`Coverage.fraction` (Req 3.6): `1.0` when a period has no pages at
+    all, `pages_with_load / pages` otherwise -- exercised directly against
+    the dataclass, not only through the weekly-suppression path."""
+    empty = Coverage(
+        label="2024", pages=0, pages_with_load=0, pages_excluded=(), pages_skipped=None
+    )
+    partial = Coverage(
+        label="2024", pages=5, pages_with_load=4, pages_excluded=(), pages_skipped=None
+    )
+    assert empty.fraction == 1.0
+    assert partial.fraction == pytest.approx(0.8)
+
+
+# --- frozenness (Req: design.md "SeriesAssembly" `@dataclass(frozen=True)`) --
+
+
+def test_day_load_is_frozen() -> None:
+    day_load = DayLoad(date(2024, 1, 1), recorded_load=1.0, pages=1, pages_with_load=1)
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        day_load.pages = 2  # type: ignore[misc]
+
+
+def test_daily_series_is_frozen() -> None:
+    series = DailySeries(
+        start=date(2024, 1, 1),
+        days=(DayLoad(date(2024, 1, 1), 1.0, pages=1, pages_with_load=1),),
+    )
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        series.start = date(2024, 1, 2)  # type: ignore[misc]
+
+
+def test_methodology_choice_is_frozen() -> None:
+    choice = MethodologyChoice("run", "inferred", ())
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        choice.methodology = "cycle"  # type: ignore[misc]
+
+
+def test_methodology_problem_is_frozen() -> None:
+    problem = MethodologyProblem("detail")
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        problem.detail = "other"  # type: ignore[misc]
+
+
+def test_week_row_is_frozen() -> None:
+    row = WeekRow(
+        iso_year=2024,
+        iso_week=1,
+        monday=date(2024, 1, 1),
+        days_in_span=7,
+        total_load=1.0,
+        sessions=1,
+        pages=1,
+        pages_with_load=1,
+        fitness=1.0,
+        fatigue=1.0,
+        form=0.0,
+        suppressed=False,
+    )
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        row.suppressed = True  # type: ignore[misc]
+
+
+def test_coverage_is_frozen() -> None:
+    coverage = Coverage(
+        label="all", pages=1, pages_with_load=1, pages_excluded=(), pages_skipped=0
+    )
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        coverage.pages = 2  # type: ignore[misc]

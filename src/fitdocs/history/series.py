@@ -63,6 +63,39 @@ exempted at its own site in `tests/history/test_constant_guard.py`:
 
 None of the three is a value any source cites -- each is a structural
 detail of how this module walks or sums, not a methodological choice.
+
+Task 3.4 adds the weekly aggregation, the coverage measure and the
+suppression rule (Req 3.1-3.3, 3.5, 3.6, 3.10, 5.6):
+
+- `Coverage` is `pages_with_load / pages`, `1.0` when `pages == 0` (an empty
+  period is complete -- nothing is missing from it, Req 3.6), reported once
+  per calendar year and once for the whole archive by `coverage_report`. A
+  period row's excluded counts come from the excluded `PageRecord`s
+  themselves, grouped by their own dates (an excluded page has a date; the
+  methodology choice's own archive-wide totals do not), so the per-year
+  split can differ from the archive-wide one. A skipped document has no date
+  to attribute by, so `pages_skipped` is an integer on the archive-wide row
+  only and `None` on every period row (Req 3.10).
+- `suppressed_weeks` and `week_rows` walk `series.days` grouped by ISO
+  `(year, week)` -- `date.isocalendar()`, never `date.year`, because an ISO
+  week can straddle a calendar-year boundary. A week whose coverage is
+  *strictly* below `threshold` is suppressed: its `WeekRow` carries
+  `suppressed=True` and `None` for `fitness`/`fatigue`/`form`. Both
+  functions take an already-computed `ModelSeries` (`week_rows`) or nothing
+  at all (`suppressed_weeks` needs only the day counts) -- neither ever
+  calls `run_model`; suppression is a reporting decision applied to values
+  the recursion already produced over the whole, unsuppressed span (Req
+  3.7), never a re-run confined to one week.
+
+Task 3.4 introduces two further bare numeric literals, each exempted at its
+own site in `tests/history/test_constant_guard.py`:
+
+- `_last_index`'s own `indices[-1]` -- the same structural last-element
+  offset as `DailySeries.end`'s `self.days[-1]` above, a second occurrence
+  of that module's `(None, None, 1)` site.
+- `week_rows`'s own `date.fromisocalendar(iso_year, iso_week, 1)` -- ISO
+  weekday `1` is Monday by the calendar's own definition, not a value any
+  source cites.
 """
 
 from __future__ import annotations
@@ -74,15 +107,21 @@ from datetime import date, timedelta
 from typing import Literal
 
 from fitdocs.history.documents import PageRecord
+from fitdocs.history.model import ModelSeries
 
 __all__ = [
+    "Coverage",
     "DailySeries",
     "DayLoad",
     "MethodologyChoice",
     "MethodologyProblem",
+    "WeekRow",
     "build_daily_series",
+    "coverage_report",
     "partition_pages",
     "select_methodology",
+    "suppressed_weeks",
+    "week_rows",
 ]
 
 #: One calendar day -- the daily series' own step size (Req 1.6), not a
@@ -350,3 +389,212 @@ def build_daily_series(pages: Sequence[PageRecord]) -> DailySeries | None:
         current += _ONE_DAY
 
     return DailySeries(start=start, days=tuple(days))
+
+
+def _coverage_fraction(pages: int, pages_with_load: int) -> float:
+    """`pages_with_load / pages`, defined as `1.0` when `pages == 0` (Req
+    3.6): an empty period is complete because nothing is missing from it,
+    never a zero. The one site both `Coverage.fraction` and the weekly
+    suppression check (`_week_coverage`) read, so the empty-period rule is
+    stated exactly once."""
+    if pages == 0:
+        return 1.0
+    return pages_with_load / pages
+
+
+def _week_key(day: date) -> tuple[int, int]:
+    """A day's ISO `(year, week)`, never `(date.year, isocalendar().week)`
+    -- an ISO week can straddle a calendar-year boundary (e.g. 2024-12-30 is
+    ISO week `(2025, 1)`), and this key is what groups a straddling week's
+    days into one row rather than two."""
+    iso_year, iso_week, _ = day.isocalendar()
+    return iso_year, iso_week
+
+
+def _week_groups(series: DailySeries) -> list[tuple[tuple[int, int], list[int]]]:
+    """`series.days`' indices grouped by ISO `(year, week)`, in day order.
+    Each `DailySeries` is contiguous by calendar date (Req 1.6), so every
+    group's indices are already ascending and unbroken; nothing here
+    re-sorts them."""
+    groups: dict[tuple[int, int], list[int]] = {}
+    order: list[tuple[int, int]] = []
+    for index, day_load in enumerate(series.days):
+        key = _week_key(day_load.day)
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(index)
+    return [(key, groups[key]) for key in order]
+
+
+def _week_coverage(series: DailySeries, indices: Sequence[int]) -> float:
+    """A week's own coverage fraction (Req 3.1, 3.3), summed only over the
+    days of `series` that actually lie inside this week (a partial week's
+    missing days are simply not counted, not treated as missing pages)."""
+    pages = sum(series.days[index].pages for index in indices)
+    pages_with_load = sum(series.days[index].pages_with_load for index in indices)
+    return _coverage_fraction(pages, pages_with_load)
+
+
+def _last_index(indices: Sequence[int]) -> int:
+    """The index, into `series.days` and therefore into `model.fitness` /
+    `.fatigue` / `.form` (`run_model`'s own postcondition: one value per
+    day), of a week's own last in-span day -- "the week's end" (Req 5.6)."""
+    return indices[-1]
+
+
+def suppressed_weeks(
+    series: DailySeries, threshold: float
+) -> frozenset[tuple[int, int]]:
+    """Every ISO `(year, week)` whose coverage falls *strictly* below
+    `threshold` (Req 3.3) -- a week exactly at the threshold is not
+    suppressed. Needs no `ModelSeries`: suppression is decided from the day
+    counts alone, before any model value is consulted."""
+    return frozenset(
+        key
+        for key, indices in _week_groups(series)
+        if _week_coverage(series, indices) < threshold
+    )
+
+
+@dataclass(frozen=True)
+class WeekRow:
+    """One row of the weekly table (Req 5.6, 5.7): the week identified by
+    its own ISO year and week number, its Monday, how many of its days lie
+    inside the span, its total recorded load, its session count (pages that
+    record a load), its page and known-page counts, and the fitness,
+    fatigue and form at the week's end -- or, when `suppressed`, `None` for
+    all three instead."""
+
+    iso_year: int
+    iso_week: int
+    monday: date
+    days_in_span: int
+    total_load: float
+    sessions: int
+    pages: int
+    pages_with_load: int
+    fitness: float | None
+    fatigue: float | None
+    form: float | None
+    suppressed: bool
+
+
+def week_rows(
+    series: DailySeries, model: ModelSeries, suppressed: frozenset[tuple[int, int]]
+) -> tuple[WeekRow, ...]:
+    """The weekly table, one `WeekRow` per ISO week from the week containing
+    `series.start` to the week containing `series.end` (Req 5.6). `model` is
+    an already-computed `ModelSeries` over the whole span -- this function
+    only indexes into it at each week's own last in-span day; it never calls
+    `run_model` itself, so suppression never restarts or re-runs the
+    recursion (Req 3.7). A week in `suppressed` carries `None` for
+    `fitness`/`fatigue`/`form` and `suppressed=True` (Req 3.3, 5.7); every
+    other week reports the model's values at its own last day.
+    """
+    rows = []
+    for key, indices in _week_groups(series):
+        iso_year, iso_week = key
+        is_suppressed = key in suppressed
+        pages = sum(series.days[index].pages for index in indices)
+        pages_with_load = sum(series.days[index].pages_with_load for index in indices)
+        end_index = _last_index(indices)
+        rows.append(
+            WeekRow(
+                iso_year=iso_year,
+                iso_week=iso_week,
+                monday=date.fromisocalendar(iso_year, iso_week, 1),
+                days_in_span=len(indices),
+                total_load=sum(series.days[index].recorded_load for index in indices),
+                sessions=pages_with_load,
+                pages=pages,
+                pages_with_load=pages_with_load,
+                fitness=None if is_suppressed else model.fitness[end_index],
+                fatigue=None if is_suppressed else model.fatigue[end_index],
+                form=None if is_suppressed else model.form[end_index],
+                suppressed=is_suppressed,
+            )
+        )
+    return tuple(rows)
+
+
+@dataclass(frozen=True)
+class Coverage:
+    """One row of the coverage statement (Req 3.1, 3.5, 3.6, 3.10):
+    `label` is a calendar year (`"2019"`) or `"all"`. `pages_excluded` is
+    that period's own excluded-page counts by methodology, sorted by name.
+    `pages_skipped` is `None` on every period row -- a skipped document has
+    no date to attribute by -- and an integer only on the archive-wide
+    (`"all"`) row."""
+
+    label: str
+    pages: int
+    pages_with_load: int
+    pages_excluded: tuple[tuple[str, int], ...]
+    pages_skipped: int | None
+
+    @property
+    def fraction(self) -> float:
+        return _coverage_fraction(self.pages, self.pages_with_load)
+
+
+def _excluded_by_methodology(
+    records: Sequence[PageRecord],
+) -> tuple[tuple[str, int], ...]:
+    """`records`' own methodology counts, sorted by name -- the same sort
+    order `_excluded` already uses for `MethodologyChoice.excluded`."""
+    counts: Counter[str] = Counter(
+        record.methodology for record in records if record.methodology is not None
+    )
+    return tuple(sorted(counts.items()))
+
+
+def coverage_report(
+    series: DailySeries,
+    excluded: Sequence[PageRecord],
+    choice: MethodologyChoice,
+    skipped: int,
+) -> tuple[Coverage, ...]:
+    """The coverage statement (Req 3.1, 3.5, 3.6, 3.10): one row per
+    calendar year touched by `series.days` or by an `excluded` page's own
+    date, in ascending order, followed by one archive-wide `"all"` row.
+
+    A period row's `pages`/`pages_with_load` come from `series.days` (the
+    included partition's own daily series); its `pages_excluded` comes from
+    `excluded`'s own records for that year, never from `choice.excluded`'s
+    archive-wide totals, because an excluded page has a date and two
+    different years can hold a different mix of excluded methodologies.
+    `pages_skipped` is `None` on every period row and `skipped` on the
+    archive-wide row only (Req 3.10).
+    """
+    assert all(record.methodology != choice.methodology for record in excluded), (
+        "coverage_report received an 'excluded' page recording the chosen "
+        "methodology -- partition_pages should never produce that"
+    )
+    years = sorted(
+        {day.day.year for day in series.days} | {record.day.year for record in excluded}
+    )
+    rows = [
+        Coverage(
+            label=str(year),
+            pages=sum(day.pages for day in series.days if day.day.year == year),
+            pages_with_load=sum(
+                day.pages_with_load for day in series.days if day.day.year == year
+            ),
+            pages_excluded=_excluded_by_methodology(
+                [record for record in excluded if record.day.year == year]
+            ),
+            pages_skipped=None,
+        )
+        for year in years
+    ]
+    rows.append(
+        Coverage(
+            label="all",
+            pages=sum(day.pages for day in series.days),
+            pages_with_load=sum(day.pages_with_load for day in series.days),
+            pages_excluded=_excluded_by_methodology(excluded),
+            pages_skipped=skipped,
+        )
+    )
+    return tuple(rows)

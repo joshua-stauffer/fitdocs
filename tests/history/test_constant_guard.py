@@ -356,6 +356,47 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
         "`DayLoad.recorded_load` never silently degrades to `int` from "
         "`sum`'s own no-start-value default; not a cited value.",
     ),
+    # --- series.py (task 3.4): coverage, weeks and suppression.
+    LiteralExemption(
+        "series.py",
+        None,
+        None,
+        0,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`_coverage_fraction`'s own `pages == 0` guard -- an empty period's "
+        "denominator, not a cited value (Req 3.6).",
+    ),
+    LiteralExemption(
+        "series.py",
+        None,
+        None,
+        1.0,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`_coverage_fraction`'s own `return 1.0` -- an empty period's "
+        "coverage is complete by definition (Req 3.6), not a cited value. "
+        "Same `(None, None, 1)` key as `DailySeries.end`'s `self.days[-1]` "
+        "above (`1 == 1.0`); a second, independent entry at that key.",
+    ),
+    LiteralExemption(
+        "series.py",
+        None,
+        None,
+        1,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`_last_index`'s own `indices[-1]` -- the same structural "
+        "last-element offset as `DailySeries.end`'s `self.days[-1]` above; "
+        "a third, independent entry at the `(None, None, 1)` key.",
+    ),
+    LiteralExemption(
+        "series.py",
+        None,
+        "positional[2]",
+        1,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`week_rows`'s own `date.fromisocalendar(iso_year, iso_week, 1)` -- "
+        "ISO weekday `1` is Monday by the calendar's own definition (Req "
+        "5.6), not a value any source cites.",
+    ),
 )
 
 
