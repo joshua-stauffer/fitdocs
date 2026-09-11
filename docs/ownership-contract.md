@@ -1,14 +1,24 @@
 # fitdocs Ownership Contract
 
-**Contract version:** `2`
+**Contract version:** `3`
+
+**What changed at this version:** two new owned paths, `history/` and
+`history/assets/`, and a third declared directory alongside `workouts/` and
+`fit-archive/` — the data root now also carries a second published document
+type, `training-history` (see
+[A Second Document Type: Training History](#a-second-document-type-training-history)
+below), rendered by `fitdocs history` rather than by `sync` or `regen`.
 
 This document is the authoritative, published statement of what fitdocs owns
 in your data root, what you own, and the exact limits of every operation that
-writes there. It is restated, in shorter form, inside the two owned
-directories a human or agent browses (`workouts/AGENTS.md` and
-`fit-archive/AGENTS.md`, generated on the first `sync` or `regen`) and
-stamped onto every generated document as a provenance banner — the
-`AGENTS.md` texts and the provenance banner are generated from the same
+writes there. It is restated, in shorter form, inside the three owned
+directories a human or agent browses (`workouts/AGENTS.md`,
+`fit-archive/AGENTS.md`, and `history/AGENTS.md` — each generated on the
+first `sync` or `regen` run, or the first `fitdocs history` run that has a
+page to write, because all three refresh every declared directory's file
+when they write, not only the one their own output lands in) and stamped
+onto every generated document as a provenance banner —
+the `AGENTS.md` texts and the provenance banner are generated from the same
 code-level constants. This document's own enumerated lists (owned paths,
 preserved regions, managed keys, and the contract version above) are held
 equal to those same constants by a conformance test; its narrative
@@ -16,10 +26,13 @@ paragraphs are reviewed by hand at each contract-version bump.
 
 The version above changes whenever a guarantee stated in this document
 changes — a new owned path, a changed overwrite rule, a different managed
-key set, or a new class of user-owned frontmatter key. It is distinct from a
-document's own `doc_version` (see
+key set, a new class of user-owned frontmatter key, or a new document type
+the data root contains. It is distinct from a document's own `doc_version`
+(see
 [Document-Format Versions and Migration](#document-format-versions-and-migration)
-below), which versions the file format, not this contract's guarantees.
+below), which versions the file format, not this contract's guarantees —
+and the `training-history` page does not use `doc_version` at all (see that
+section for what it uses instead).
 
 ## Owned Paths
 
@@ -30,6 +43,12 @@ named in the next section.
 
 - `workouts/` — one generated markdown document per workout.
 - `workouts/assets/` — chart images (SVG) referenced by workout documents.
+- `history/` — one longitudinal training-history document, rewritten in full
+  by every `fitdocs history` run (see
+  [A Second Document Type: Training History](#a-second-document-type-training-history)
+  below).
+- `history/assets/` — the chart image (SVG) referenced by the training-history
+  document.
 - `fit-archive/` — the immutable archive of every `.fit` source fitdocs has
   processed, named by content hash.
 - `.cache/` — re-fetchable, re-derivable cache state (today: basemap tiles).
@@ -50,6 +69,34 @@ full -- but only key-wise, at your request, preserving every key it does
 not manage; it is never deleted. See
 [Shared and User-Owned Files](#shared-and-user-owned-files) for the exact
 guarantee, including what re-serialization does not preserve.
+
+## A Second Document Type: Training History
+
+The data root now carries a second kind of fitdocs-generated document,
+`training-history` (`type: training-history` in its frontmatter), alongside
+the per-workout documents (`type: workout`) under `workouts/`. It lives at
+`history/training-load-history.md`, with its chart image at
+`history/assets/training-load-history-fitness.svg`, and is published by the
+`fitdocs history` command and the history package rather than by the
+document-contract leaf (`src/fitdocs/contract.py`) that defines the workout
+vocabulary: the leaf is owned by a different spec in this development wave,
+and a second spec adding a second document type's vocabulary to that same
+leaf in the same wave is exactly the ownership conflict fitdocs' boundary
+rules are meant to prevent, so the training-history document declares its own
+vocabulary (`type`, `history_version`, and the rest of its frontmatter keys)
+in its own module instead.
+
+The training-history page carries **no user-owned region and no user-owned
+frontmatter key** — nothing under `history/` is a place to hand-author
+content, unlike the `notes`/`workout` regions and the effort-tag keys a
+workout document reserves. It is **rewritten in full on every `fitdocs
+history` run**: there is no partial merge, no carried-over content, and
+no `--force` or `--recompute` option, because there is nothing on the page
+a re-run could discard. Deleting it loses nothing that cannot be
+regenerated from the workout documents already in `workouts/` — see
+[Document-Format Versions and Migration](#document-format-versions-and-migration)
+below for how its own `history_version` key differs from the `doc_version`
+every workout document carries.
 
 ## Configured Locations fitdocs May Create
 
@@ -151,9 +198,9 @@ with its own placement rule for the carried lines:
 
 ## Managed Frontmatter Keys
 
-The complete set of keys fitdocs manages — every key it writes and will
-restore on the next `regen`, including the three keys the training-load
-pass writes — is:
+The complete set of keys fitdocs manages on a workout document — every key
+it writes and will restore on the next `regen`, including the three keys
+the training-load pass writes — is:
 
 - `avg_hr_bpm`
 - `avg_power_w`
@@ -355,7 +402,7 @@ above, and each has a distinct contract:
   `load`, and every user-owned frontmatter key, are still carried over
   verbatim. Forcing widens which sources get *rendered again*, never which
   content is discarded.
-- **`regen`** — rebuilds every document from the data root alone (the
+- **`regen`** — rebuilds every workout document from the data root alone (the
   archive, the athlete profile, the configured timezone, and the tile
   source — see re-derivability below), re-rendering each from its currently
   recorded archived source. Every preserved region, and every user-owned
@@ -382,6 +429,28 @@ above, and each has a distinct contract:
   the region holds and recomputes it from scratch. Nothing is written if
   the recompute is declined or fails, so the existing content survives a
   run that produces no result.
+
+- **`history`** — its outputs are `history/training-load-history.md` and
+  its chart `history/assets/training-load-history-fitness.svg`, each
+  rewritten in full whenever it is written: there is no preserved region and
+  no user-owned frontmatter key on the training-history page to carry over
+  (see
+  [A Second Document Type: Training History](#a-second-document-type-training-history)
+  above), so this operation has no `--force` and no `--recompute` option — a
+  fresh run already rebuilds everything a forced or recomputed run would.
+  Before writing either output it reads any existing file at that path; if
+  the file exists and does not carry fitdocs' generated-file marker, it is
+  left untouched, the outcome is recorded in the run report, and the run
+  does not fail. On a run that reaches the point of writing its outputs, it
+  first refreshes the ownership declaration in every declared directory —
+  `workouts/AGENTS.md`, `history/AGENTS.md`, and `fit-archive/AGENTS.md` —
+  through the same function `sync` and `regen` run at the start of every
+  run. If no workout document in the data root records a usable load,
+  nothing is written at all — neither output and no declaration — any
+  existing history page and chart are left untouched, and the run reports
+  this without failing. Aside from that declaration refresh,
+  `history` never writes, alters, or deletes a `workouts/*.md` document, a
+  `workouts/assets/` chart, or a `fit-archive/*` archived source.
 
 **No fitdocs operation discards user-owned region content**, with one
 precise exception worth stating plainly rather than glossing over: if a
@@ -424,19 +493,45 @@ for why this matters even more once a version gate is involved): if a run is
 interrupted before the archive write, nothing records the file as done and
 it is reprocessed idempotently on the next run.
 
-Every document's **generated** content — everything outside its preserved
-regions — is re-derivable: fitdocs can rebuild it from the archived source
-in `fit-archive/`, the athlete profile (`athlete.toml`), the configured
-timezone, and the configured tile source. This is what makes `regen`
-possible without the original `.fit` source directory. Content *inside* a
-document's preserved regions is not re-derived by regeneration — it is
-carried over from the document itself, so regenerating a document you
+Every workout document's **generated** content — everything outside its
+preserved regions — is re-derivable: fitdocs can rebuild it from the
+archived source in `fit-archive/`, the athlete profile (`athlete.toml`), the
+configured timezone, and the configured tile source. This is what makes
+`regen` possible without the original `.fit` source directory. Content
+*inside* a document's preserved regions is not re-derived by regeneration —
+it is carried over from the document itself, so regenerating a document you
 deleted brings back only the generated content, never the notes, workout
 log, or load-region content it used to hold.
 
+The training-history page is re-derived differently: it has no archived
+`.fit` source of its own to rebuild from. Instead it is re-derived entirely
+from the workout documents already in `workouts/` — the load values and
+dates their frontmatter already records — which is
+why deleting it loses nothing a subsequent `fitdocs history` run cannot
+reconstruct.
+
 ## Document-Format Versions and Migration
 
-Every generated document records a `doc_version` (a plain integer,
+This section describes `workouts/*.md` documents specifically, not every
+generated document: the training-history page carries no `doc_version` at
+all, and has nothing to migrate — see
+[A Second Document Type: Training History](#a-second-document-type-training-history)
+above for why (it is rewritten in full on every run, so there is no older
+copy to bring current and no gate to consult). Everything below refers to
+`doc_version`, a key only workout documents carry.
+
+In place of `doc_version`, the training-history page carries its own
+`history_version` key: a plain integer, `1` today, that versions the page's
+own format rather than this contract's guarantees. It is not a migration
+gate: fitdocs does not consult any older copy of the page, because
+`fitdocs history` rewrites `history/training-load-history.md`
+in full on every run (see
+[A Second Document Type: Training History](#a-second-document-type-training-history)
+above) — an older page is silently replaced, never reported as out of date
+and never left in place pending a `regen`-equivalent migration step, because
+`fitdocs history` has no such step.
+
+Every generated workout document records a `doc_version` (a plain integer,
 independent of this contract's own version number above). When fitdocs
 encounters an existing document whose recorded `doc_version` is **older**
 than the version it produces, it reports the document as out of date and
@@ -478,6 +573,8 @@ for exactly this purpose. A line such as
 ```
 workouts/*.md linguist-generated
 fit-archive/* linguist-generated -diff
+history/*.md linguist-generated
+history/assets/* linguist-generated -diff
 ```
 
 in a `.gitattributes` at the root of your wiki tells those tools to collapse
@@ -491,15 +588,20 @@ fitdocs manages or enforces.
 
 If your wiki already has its own root-level agent-instructions file (for
 example, a root `AGENTS.md` or `CLAUDE.md` that you author and own), it is
-enough to point at `workouts/AGENTS.md` and `fit-archive/AGENTS.md` from
-there rather than duplicating their contents. A short pointer such as:
+enough to point at `workouts/AGENTS.md`, `fit-archive/AGENTS.md`, and
+`history/AGENTS.md` from there rather than duplicating their contents. A
+short pointer such as:
 
 ```markdown
-See `workouts/AGENTS.md` for what fitdocs owns under `workouts/`, and
-`fit-archive/AGENTS.md` for the source archive's immutability rule.
+See `workouts/AGENTS.md` for what fitdocs owns under `workouts/`,
+`fit-archive/AGENTS.md` for the source archive's immutability rule, and
+`history/AGENTS.md` for the training-history page.
 ```
 
-is sufficient: those two files are generated and kept current by fitdocs on
-every `sync`/`regen`, so a pointer from your own root file stays accurate
-without you having to maintain it. Your root instructions file itself is
-never written or modified by fitdocs — it belongs entirely to you.
+is sufficient: those three files are generated and kept current by fitdocs
+on every `sync` and `regen` run and on every `fitdocs history` run that
+writes its page — each of the three refreshes every declared directory's
+file, not only the one its own output lands in — so a pointer from your own
+root file stays accurate without you
+having to maintain it. Your root instructions file itself is never written
+or modified by fitdocs — it belongs entirely to you.

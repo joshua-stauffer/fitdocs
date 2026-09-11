@@ -30,6 +30,10 @@ Early discovery / spec phase. No installable package yet.
    for it and completes the calculation; when the activity predates the
    prompt, fitdocs also asks whether the answer covers earlier activities
    too.
+4. **Show training history.** `fitdocs history` renders one longitudinal
+   page — a fitness/fatigue/form model and chart built from the training
+   load already recorded on your workout documents — with no new data to
+   enter and no `.fit` file read.
 
 Organizing workouts into cycles/training blocks is deliberately deferred.
 
@@ -258,18 +262,21 @@ you own is a published, versioned contract, not an implicit arrangement:
 see the
 [fitdocs Ownership Contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md).
 
-In short: fitdocs owns `workouts/`, `workouts/assets/`, `fit-archive/`,
-`.cache/`, and `.fitdocs/` under your data root (plus any location your
-`fitdocs.toml` settings configure it to write into — the [Inbox](#inbox)'s
-`path` and `processed_dir` are the first example), and writes nowhere else.
-You own every document's `notes` and `workout` regions, and its effort-tag
-frontmatter keys (`effort`, `effort_distance_m`, `effort_time_s`,
-`effort_event`) — see the published contract for the full detail. And
-`athlete.toml`'s hand-added keys survive every fitdocs write. Every
-generated document carries a provenance stamp, and the two owned
-directories a human or agent browses — `workouts/` and `fit-archive/` —
-each carry an `AGENTS.md` restating the same contract for LLM agents
-maintaining the wiki.
+In short: fitdocs owns `workouts/`, `workouts/assets/`, `history/`,
+`history/assets/`, `fit-archive/`, `.cache/`, and `.fitdocs/` under your data
+root (plus any location your `fitdocs.toml` settings configure it to write
+into — the [Inbox](#inbox)'s `path` and `processed_dir` are the first
+example), and writes nowhere else. `history/` and `history/assets/` hold a
+second, generated document type — the training-history page `fitdocs
+history` writes, alongside the per-workout documents under `workouts/` — and
+carry no user-owned content of their own. You own every workout document's
+`notes` and `workout` regions, and its effort-tag frontmatter keys (`effort`,
+`effort_distance_m`, `effort_time_s`, `effort_event`) — see the published
+contract for the full detail. And `athlete.toml`'s hand-added keys survive
+every fitdocs write. Every generated document carries a provenance stamp,
+and the three owned directories a human or agent browses — `workouts/`,
+`history/`, and `fit-archive/` — each carry an `AGENTS.md` restating the
+same contract for LLM agents maintaining the wiki.
 
 ## Development workflow
 
