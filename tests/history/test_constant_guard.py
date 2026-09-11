@@ -92,6 +92,11 @@ class ExemptionCategory(enum.Enum):
     one canonical site a methodologically significant number is declared;
     every other module reads it back through `.value`, never respells it."""
 
+    DOCUMENT_FORMAT_VERSION = "document_format_version"
+    """A generated document format's own version number -- a schema
+    identifier compared for equality, never a value the model computes
+    with."""
+
 
 @dataclass(frozen=True)
 class LiteralExemption:
@@ -189,6 +194,18 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
         "COVERAGE_THRESHOLD.value -- the canonical declaration site for the "
         "shipped coverage threshold; every other module reads this back "
         "through COVERAGE_THRESHOLD.value, never respells 0.80.",
+    ),
+    # task 4.2's own entry -- appended only, nothing above this line touched.
+    LiteralExemption(
+        "page.py",
+        "HISTORY_VERSION",
+        None,
+        1,
+        ExemptionCategory.DOCUMENT_FORMAT_VERSION,
+        "HISTORY_VERSION -- the training-history document format's own "
+        "version number: a schema identifier fitdocs prints and compares for "
+        "equality, never a methodologically significant model number a "
+        "CitedConstant would otherwise carry.",
     ),
 )
 

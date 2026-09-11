@@ -15,4 +15,18 @@ earlier task's published names.
 
 from __future__ import annotations
 
-__all__: list[str] = []
+from fitdocs.history.page import (
+    HISTORY_FRONTMATTER_KEYS,
+    HISTORY_TITLE,
+    HISTORY_TYPE,
+    HISTORY_VERSION,
+    HISTORY_VERSION_KEY,
+)
+
+__all__: list[str] = [
+    "HISTORY_FRONTMATTER_KEYS",
+    "HISTORY_TITLE",
+    "HISTORY_TYPE",
+    "HISTORY_VERSION",
+    "HISTORY_VERSION_KEY",
+]
