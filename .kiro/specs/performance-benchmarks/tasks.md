@@ -461,7 +461,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
   - _Boundary: PassEngine_
   - _Depends: 4.1_
 
-- [ ] 4.3 Reconcile, filter collisions and write once
+- [x] 4.3 Reconcile, filter collisions and write once
   - Filter every candidate against the store's recorded-entry query after all
     documents are processed; turn a collision into a decline naming the existing
     entry's value and date, and drop the candidate so it can never shadow a

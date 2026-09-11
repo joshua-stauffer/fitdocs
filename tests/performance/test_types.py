@@ -169,26 +169,43 @@ def test_derivation_outcome_is_the_sealed_union_of_both_outcomes() -> None:
 
 
 def test_package_all_covers_exactly_the_published_names() -> None:
+    # Disclosed task-4.3 edit (tasks.md 4.3 "Append the pass entry point to
+    # the package's published names ... the one addition to that file after
+    # 1.1"): this assertion's own pre-4.3 comment named 4.3 as the task that
+    # would invalidate it. `derive_benchmarks` joins the set here, appended
+    # last in `__init__.py`'s `__all__` -- the five pre-existing names and
+    # their relative order are otherwise unchanged, which the trailing
+    # positional check below proves directly (not merely the set check,
+    # which cannot see an append-vs-insert difference).
     expected = {
         "DeclineReason",
         "DerivationDeclined",
         "DerivationMethod",
         "DerivationOutcome",
         "DerivedBenchmark",
+        "derive_benchmarks",
     }
     assert set(performance.__all__) == expected
     # Every name in __all__ must actually resolve on the module (a real
     # getattr, not merely appearing in the list) and be the same object the
     # types module defines.
+    from fitdocs.performance.engine import derive_benchmarks as _derive_benchmarks
+
     expected_objects = {
         "DeclineReason": DeclineReason,
         "DerivationDeclined": DerivationDeclined,
         "DerivationMethod": DerivationMethod,
         "DerivationOutcome": DerivationOutcome,
         "DerivedBenchmark": DerivedBenchmark,
+        "derive_benchmarks": _derive_benchmarks,
     }
     for name in performance.__all__:
         assert getattr(performance, name) is expected_objects[name]
-    # The engine entry point is deliberately absent until 4.3.
-    assert "derive_benchmarks" not in performance.__all__
-    assert not hasattr(performance, "derive_benchmarks")
+    assert list(performance.__all__)[:5] == [
+        "DeclineReason",
+        "DerivationDeclined",
+        "DerivationMethod",
+        "DerivationOutcome",
+        "DerivedBenchmark",
+    ]
+    assert list(performance.__all__)[5] == "derive_benchmarks"

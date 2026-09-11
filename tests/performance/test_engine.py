@@ -27,6 +27,15 @@ other assertion in the task-4.1 section changes. The shared `_write_workout`
 helper gains an additive `sources` parameter (default `None`, i.e. task
 4.1's original no-archive shape) and a new `_write_archive` helper is added;
 neither changes behavior for a call site that does not pass `sources`.
+
+Task 4.3 appends the write/reconciliation section at the end of this file
+and makes one further disclosed edit to the task-4.1 section:
+`test_report_type_shapes_are_frozen_dataclasses`'s `DeriveReport` field-list
+assertion is updated from five names to six, since this task appends
+`summaries` to that dataclass (design: PassEngine; the report type is this
+task's to extend) -- the same shape of disclosed, minimal edit task 4.2
+already made twice above, not a silent rewrite. No other assertion in that
+test, or anywhere else in the task-4.1 or task-4.2 sections, changes.
 """
 
 from __future__ import annotations
@@ -505,6 +514,7 @@ def test_report_type_shapes_are_frozen_dataclasses() -> None:
         "entries",
         "failures",
         "written",
+        "summaries",
     ]
 
 
@@ -1401,3 +1411,897 @@ def test_derive_call_uses_each_documents_own_date_not_a_neighbours(
     assert "1200 s" in threshold_b.inputs
     assert "10000 m" not in threshold_b.inputs
     assert "2400 s" not in threshold_b.inputs
+
+
+# --- reconciliation, collision filter, the single write, per-quantity
+# summaries (task 4.3) ------------------------------------------------------
+#
+# Design: PassEngine, ProfileDerivedWrite, BenchmarkProvenance; Req 1.7, 1.8,
+# 6.2, 6.4, 6.5, 7.7, 9.1, 9.4, 9.5. This section owns everything from here
+# to the end of the file, plus the one disclosed edit to the task-4.1
+# section's field-list assertion noted in the module docstring.
+
+
+def test_accepted_derivation_is_written_once_with_round_tripping_provenance(
+    tmp_path: Path,
+) -> None:
+    """A single accepted derivation is written once, and reading the profile
+    back produces a `BenchmarkSource` whose five fields match the derived
+    candidate's own method, document, inputs and citation exactly (design:
+    ProfileDerivedWrite, BenchmarkProvenance; Req 1.7, 5.2, 5.3).
+
+    Falsity in the starting state: before the run, the profile has no
+    benchmark entries at all -- asserted explicitly, so the post-run entry
+    is demonstrably produced by this run, not merely present coincidentally.
+
+    Every field checked below has a pairwise-distinct value from every other
+    (method, document, inputs, citation are four different strings), so a
+    swap between any two fields in `_to_benchmark`'s `BenchmarkSource`
+    construction reddens a specific assertion rather than surviving on a
+    tied comparison.
+    """
+    from fitdocs.load.profile import load_profile
+
+    ref = _write_archive(tmp_path, builder.run_fit_bytes())
+    _write_workout(
+        tmp_path, "a.md", kind="race", distance=10000, time=2400, sources=[ref]
+    )
+
+    before = load_profile(tmp_path)
+    assert before.benchmarks.entries == ()
+
+    report = derive_benchmarks(tmp_path)
+
+    assert report.written is True
+    assert len(report.entries) == 1
+    derived = report.entries[0].derived
+    assert len(derived) == 1
+    candidate = derived[0]
+    # Falsity in the starting state / reachability: the candidate itself
+    # carries a real note before any round trip happens, so the equality
+    # check below is not vacuously satisfied by two `None`s.
+    assert candidate.note is not None
+
+    after = load_profile(tmp_path)
+    assert len(after.benchmarks.entries) == 1
+    stored = after.benchmarks.entries[0]
+
+    assert stored.kind == candidate.kind
+    assert stored.discipline == candidate.discipline
+    assert stored.value == candidate.value
+    assert stored.measured_on == candidate.measured_on
+    assert stored.note == candidate.note
+    assert stored.applies_from is None
+    assert stored.source is not None
+    assert stored.source.kind.value == "derived"
+    assert stored.source.method == candidate.method.value
+    assert stored.source.document == candidate.document
+    assert stored.source.inputs == candidate.inputs
+    assert stored.source.citation == candidate.citation_key
+
+    # Pairwise-distinct guard: a field swap in `_to_benchmark` would leave
+    # the suite green if any two of these coincided.
+    fields = {
+        stored.source.method,
+        stored.source.document,
+        stored.source.inputs,
+        stored.source.citation,
+    }
+    assert len(fields) == 4
+
+
+def test_second_run_over_an_unchanged_tag_set_leaves_the_profile_untouched(
+    tmp_path: Path,
+) -> None:
+    """Running the pass twice over an unchanged tag set, archive and
+    configuration leaves the profile byte-identical and reports `written is
+    False` the second time (design: PassEngine Batch Contract idempotency;
+    Req 6.5, 9.1).
+
+    `save_profile` is monkeypatched to count calls in addition to running
+    for real: this directly catches the "second run rewriting bytes"
+    mutation (always calling `save_profile`, or always returning
+    `written=True`) even in the case where the rewritten bytes would happen
+    to be byte-identical to what is already on disk -- a bytes-only
+    assertion cannot distinguish "skipped the call" from "made the call and
+    it happened to reproduce the same bytes", but the call counter can.
+    """
+    import fitdocs.performance.engine as engine_module
+    from fitdocs.load.profile import save_profile as real_save_profile
+
+    ref = _write_archive(tmp_path, builder.run_fit_bytes())
+    _write_workout(
+        tmp_path, "a.md", kind="race", distance=10000, time=2400, sources=[ref]
+    )
+
+    save_calls: list[object] = []
+
+    def counting_save_profile(data_root: Path, profile: object) -> None:
+        save_calls.append(profile)
+        real_save_profile(data_root, profile)  # type: ignore[arg-type]
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(engine_module, "save_profile", counting_save_profile)
+    try:
+        first = derive_benchmarks(tmp_path)
+        assert first.written is True
+        assert len(save_calls) == 1
+
+        profile_path = tmp_path / "athlete.toml"
+        before_bytes = profile_path.read_bytes()
+
+        second = derive_benchmarks(tmp_path)
+
+        after_bytes = profile_path.read_bytes()
+        assert after_bytes == before_bytes
+        assert second.written is False
+        # The named mutation ("second run rewriting bytes" / "written=True
+        # when nothing changed") is what this call count catches: an
+        # implementation that always calls `save_profile` would leave this
+        # at 2, not 1, even though the bytes above already matched.
+        assert len(save_calls) == 1
+    finally:
+        monkeypatch.undo()
+
+
+def test_single_write_covers_every_accepted_document_in_the_run(
+    tmp_path: Path,
+) -> None:
+    """Two accepted documents at distinct dates are reconciled into exactly
+    one `save_profile` call carrying both, not one call per accepted
+    document (design: ProfileDerivedWrite; Req 1.7).
+
+    Named mutation: calling `save_profile` once per accepted candidate
+    (rather than once for the whole accepted set) leaves `save_calls` at 2
+    even though the final file would still end up holding both entries --
+    the call count, not the final content, is what catches it.
+    """
+    import fitdocs.performance.engine as engine_module
+    from fitdocs.load.profile import load_profile
+    from fitdocs.load.profile import save_profile as real_save_profile
+
+    ref = _write_archive(tmp_path, builder.run_fit_bytes())
+    _write_workout(
+        tmp_path,
+        "a.md",
+        on="2024-01-01",
+        kind="race",
+        distance=10000,
+        time=2400,
+        sources=[ref],
+    )
+    _write_workout(
+        tmp_path,
+        "b.md",
+        on="2024-02-02",
+        kind="race",
+        distance=5000,
+        time=1200,
+        sources=[ref],
+    )
+
+    save_calls: list[object] = []
+
+    def counting_save_profile(data_root: Path, profile: object) -> None:
+        save_calls.append(profile)
+        real_save_profile(data_root, profile)  # type: ignore[arg-type]
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(engine_module, "save_profile", counting_save_profile)
+    try:
+        report = derive_benchmarks(tmp_path)
+
+        assert report.written is True
+        assert len(save_calls) == 1
+
+        after = load_profile(tmp_path)
+        assert len(after.benchmarks.entries) == 2
+    finally:
+        monkeypatch.undo()
+
+
+def test_editing_the_official_time_at_the_same_date_rewrites_the_entry(
+    tmp_path: Path,
+) -> None:
+    """Editing a tagged page's official `time` between two runs, with the
+    date unchanged, is detected and rewritten: the second run's stored value
+    and provenance `inputs` differ from the first run's (design:
+    ProfileDerivedWrite; Req 6.5).
+
+    Named mutation: detecting a change by `(discipline, kind, measured_on)`
+    key alone (rather than by the candidate's *full* value) would see the
+    same key present both times and conclude nothing changed, leaving
+    `written is False` on the second run and the stale value on file --
+    caught by asserting the first-run value explicitly (falsity in the
+    starting state) and then asserting the second-run value differs from it.
+    """
+    from fitdocs.load.profile import load_profile
+
+    ref = _write_archive(tmp_path, builder.run_fit_bytes())
+    _write_workout(
+        tmp_path, "a.md", kind="race", distance=10000, time=2400, sources=[ref]
+    )
+
+    first = derive_benchmarks(tmp_path)
+    assert first.written is True
+    first_profile = load_profile(tmp_path)
+    assert len(first_profile.benchmarks.entries) == 1
+    first_stored = first_profile.benchmarks.entries[0]
+    first_value = first_stored.value
+    assert first_stored.source is not None
+    first_inputs = first_stored.source.inputs
+
+    _write_workout(
+        tmp_path, "a.md", kind="race", distance=10000, time=2600, sources=[ref]
+    )
+
+    second = derive_benchmarks(tmp_path)
+
+    assert second.written is True
+    second_profile = load_profile(tmp_path)
+    assert len(second_profile.benchmarks.entries) == 1
+    second_stored = second_profile.benchmarks.entries[0]
+    assert second_stored.value != first_value
+    assert second_stored.source is not None
+    assert second_stored.source.inputs != first_inputs
+
+
+def test_dry_run_creates_nothing_and_reports_identically_except_written(
+    tmp_path: Path,
+) -> None:
+    """`dry_run=True` over a fixture that would otherwise derive and write
+    produces the identical report -- same entries, same summaries -- except
+    `written`, and creates no file at all (design: PassEngine Service
+    Interface postconditions; Req 1.8, 9.4, 9.5).
+
+    Falsity in the starting state / distinct outcome: a real run over the
+    identical fixture *does* write (`written is True`), which is what makes
+    "creates nothing" in the dry-run case a non-trivial claim rather than a
+    fixture that would never have written anything anyway.
+
+    A hand-written pace entry, present before either run, collides with
+    `b.md`'s candidate (a different date from `a.md`'s, so only `b.md` is
+    affected): both `dry_report` and `real_report` must carry the identical
+    `SUPERSEDED_BY_RECORDED` decline for it, while `a.md` still derives and
+    is still what makes the real run write. Named mutation: skipping the
+    collision filter under `dry_run=True` (running the reconciliation loop
+    only in the real-run branch) would leave `dry_report`'s entry for `b.md`
+    with the pace candidate still in `derived` and no decline at all, while
+    `real_report`'s would carry the decline -- caught by comparing the two
+    entries tuples for equality directly, not merely by each report's own
+    decline count.
+
+    `athlete.toml` already exists before the dry run (the hand-written entry
+    was saved to set up the collision), so a full snapshot of every file
+    under `tmp_path` -- both the path set and every file's bytes -- taken
+    immediately before the dry run must be identical immediately after it:
+    a `dry_run=True` that appends a trailing newline to an existing workout
+    page, or that touches any file at all, is caught here even though it
+    creates no *new* file.
+    """
+    from fitdocs import Sport
+    from fitdocs.benchmarks import BenchmarkKind
+    from fitdocs.load.profile import load_profile, save_profile
+    from fitdocs.performance.types import DeclineReason
+
+    ref = _write_archive(tmp_path, builder.run_fit_bytes())
+    _write_workout(
+        tmp_path,
+        "a.md",
+        on="2024-05-01",
+        kind="race",
+        distance=10000,
+        time=2400,
+        sources=[ref],
+    )
+    _write_workout(
+        tmp_path,
+        "b.md",
+        on="2024-06-01",
+        kind="race",
+        distance=5000,
+        time=1200,
+        sources=[ref],
+    )
+
+    hand_written = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.THRESHOLD_PACE_S_PER_KM,
+        discipline=Sport.RUN,
+        value=200.0,
+        measured_on=date(2024, 6, 1),
+    )
+    save_profile(tmp_path, hand_written)
+
+    before_snapshot = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    assert (tmp_path / "athlete.toml") in before_snapshot
+
+    dry_report = derive_benchmarks(tmp_path, dry_run=True)
+
+    after_snapshot = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    assert set(after_snapshot) == set(before_snapshot)
+    assert after_snapshot == before_snapshot
+
+    assert dry_report.written is False
+
+    def _pace_declines(
+        report: DeriveReport,
+    ) -> list[DerivationDeclined]:
+        return [
+            d
+            for entry in report.entries
+            for d in entry.declined
+            if d.kind == BenchmarkKind.THRESHOLD_PACE_S_PER_KM
+        ]
+
+    dry_pace_declines = _pace_declines(dry_report)
+    assert len(dry_pace_declines) == 1
+    assert dry_pace_declines[0].reason == DeclineReason.SUPERSEDED_BY_RECORDED
+    assert sum(len(entry.derived) for entry in dry_report.entries) == 1
+
+    real_report = derive_benchmarks(tmp_path)
+
+    assert real_report.written is True
+    assert (tmp_path / "athlete.toml").exists()
+    real_pace_declines = _pace_declines(real_report)
+    assert len(real_pace_declines) == 1
+    assert real_pace_declines[0].reason == DeclineReason.SUPERSEDED_BY_RECORDED
+
+    assert dry_report.considered == real_report.considered
+    assert dry_report.tagged == real_report.tagged
+    assert dry_report.failures == real_report.failures
+    assert dry_report.entries == real_report.entries
+    assert dry_report.summaries == real_report.summaries
+    assert dry_report.written != real_report.written
+
+
+def test_removing_a_tag_removes_exactly_the_entry_it_produced(tmp_path: Path) -> None:
+    """When a tag that produced a derived entry on an earlier run is removed,
+    the next run removes exactly that entry and leaves every other derived
+    entry untouched (design: ProfileDerivedWrite Implementation Notes; Req
+    6.4).
+
+    Two documents, two different dates and two different official
+    distance/time pairs, so their derived values are pairwise distinct --
+    removing one page's tag and observing the *other* page's stored value
+    survive unchanged is a non-trivial check, not merely "one entry
+    remains".
+    """
+    from fitdocs.load.profile import load_profile
+
+    ref = _write_archive(tmp_path, builder.run_fit_bytes())
+    _write_workout(
+        tmp_path,
+        "a.md",
+        on="2024-01-01",
+        kind="race",
+        distance=10000,
+        time=2400,
+        sources=[ref],
+    )
+    _write_workout(
+        tmp_path,
+        "b.md",
+        on="2024-02-02",
+        kind="race",
+        distance=5000,
+        time=1200,
+        sources=[ref],
+    )
+
+    first = derive_benchmarks(tmp_path)
+    assert first.written is True
+    profile = load_profile(tmp_path)
+    assert len(profile.benchmarks.entries) == 2
+    by_date = {e.measured_on: e.value for e in profile.benchmarks.entries}
+    assert set(by_date) == {date(2024, 1, 1), date(2024, 2, 2)}
+    b_value_before = by_date[date(2024, 2, 2)]
+
+    (tmp_path / "workouts" / "a.md").unlink()
+
+    second = derive_benchmarks(tmp_path)
+    assert second.written is True
+
+    after = load_profile(tmp_path)
+    remaining = {e.measured_on: e.value for e in after.benchmarks.entries}
+    assert set(remaining) == {date(2024, 2, 2)}
+    assert remaining[date(2024, 2, 2)] == b_value_before
+
+
+def test_removing_the_sole_tagged_page_still_writes_the_now_empty_set(
+    tmp_path: Path,
+) -> None:
+    """The sole tagged page in the whole archive, deleted between runs, still
+    produces a write on the next run: the accepted set going from one entry
+    to zero is itself a change and must be persisted, not treated as "nothing
+    accepted, so nothing to do" (design: ProfileDerivedWrite; Req 6.4).
+
+    Named mutation: gating the write on `if accepted and ...` (instead of on
+    "the accepted set differs from what was previously recorded") would
+    leave `written` `False` here and leave the stale entry on disk, since the
+    now-empty `accepted` list is falsy -- caught by `written is True`, by the
+    entries tuple going empty, and by the `[benchmarks]` table itself
+    disappearing from the file's bytes.
+    """
+    from fitdocs.load.profile import load_profile
+
+    ref = _write_archive(tmp_path, builder.run_fit_bytes())
+    _write_workout(
+        tmp_path, "a.md", kind="race", distance=10000, time=2400, sources=[ref]
+    )
+
+    first = derive_benchmarks(tmp_path)
+    assert first.written is True
+    profile = load_profile(tmp_path)
+    assert len(profile.benchmarks.entries) == 1
+
+    (tmp_path / "workouts" / "a.md").unlink()
+
+    second = derive_benchmarks(tmp_path)
+
+    assert second.written is True
+    after = load_profile(tmp_path)
+    assert after.benchmarks.entries == ()
+    profile_bytes = (tmp_path / "athlete.toml").read_bytes()
+    assert b"[benchmarks]" not in profile_bytes
+    assert b"[[benchmarks" not in profile_bytes
+
+
+def test_candidate_colliding_with_a_hand_written_entry_declines_and_is_dropped(
+    tmp_path: Path,
+) -> None:
+    """A derived candidate that would occupy the same
+    `(discipline, kind, measured_on)` key as an existing, non-derived
+    (hand-written) entry is never written: it is dropped from `derived`,
+    turned into a `SUPERSEDED_BY_RECORDED` decline naming the existing
+    entry's value and date, and the hand-written entry survives byte-for-byte
+    (design: PassEngine Responsibilities & Constraints "Collision filter";
+    Req 6.1, 6.2, 6.3).
+
+    Named mutation (tasks.md 4.3 Pins: "mutation each dies on: writing a
+    candidate that collides with a hand-written entry"): removing the
+    collision check (always accepting the candidate) writes over the
+    hand-written entry -- caught below both by `derived == ()` and by the
+    unchanged hand-written value on reload.
+
+    A second, decoy hand-written entry of the *same* discipline and kind, at
+    a different date and a different value (`180.0` on `2024-04-01`), is
+    dated earlier (2024-04-01 < 2024-05-01), so it sorts earlier in
+    `profile.benchmarks.entries` (entries are ordered by `measured_on`, not
+    by insertion) -- a `_recorded_collision` implementation
+    that locates the colliding entry by `(discipline, kind)` alone (ignoring
+    `measured_on`) would find the decoy first and report *its* value and
+    date in the decline, which the negative assertions below catch.
+    """
+    from fitdocs.benchmarks import BenchmarkKind
+    from fitdocs.load.profile import load_profile, save_profile
+
+    ref = _write_archive(tmp_path, builder.run_fit_bytes())
+    _write_workout(
+        tmp_path, "a.md", kind="race", distance=10000, time=2400, sources=[ref]
+    )
+
+    from fitdocs import Sport
+
+    with_decoy = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.THRESHOLD_PACE_S_PER_KM,
+        discipline=Sport.RUN,
+        value=180.0,
+        measured_on=date(2024, 4, 1),
+    )
+    hand_written = with_decoy.with_benchmark(
+        BenchmarkKind.THRESHOLD_PACE_S_PER_KM,
+        discipline=Sport.RUN,
+        value=200.0,
+        measured_on=date(2024, 5, 1),
+    )
+    # Falsity in the starting state / reachability: confirm the decoy really
+    # precedes the true colliding entry in stored order before relying on
+    # that order below.
+    entry_dates = [e.measured_on for e in hand_written.benchmarks.entries]
+    assert entry_dates.index(date(2024, 4, 1)) < entry_dates.index(date(2024, 5, 1))
+    save_profile(tmp_path, hand_written)
+    before_bytes = (tmp_path / "athlete.toml").read_bytes()
+
+    report = derive_benchmarks(tmp_path)
+
+    assert report.written is False
+    assert report.entries[0].derived == ()
+    collisions = [
+        d
+        for d in report.entries[0].declined
+        if d.kind == BenchmarkKind.THRESHOLD_PACE_S_PER_KM
+    ]
+    assert len(collisions) == 1
+    collision = collisions[0]
+    from fitdocs.performance.types import DeclineReason
+
+    assert collision.reason == DeclineReason.SUPERSEDED_BY_RECORDED
+    assert "200" in collision.detail
+    assert "2024-05-01" in collision.detail
+    assert "180" not in collision.detail
+    assert "2024-04-01" not in collision.detail
+
+    after_bytes = (tmp_path / "athlete.toml").read_bytes()
+    assert after_bytes == before_bytes
+
+
+def test_dropped_collision_candidate_never_appears_in_derived_alongside_its_decline(
+    tmp_path: Path,
+) -> None:
+    """A candidate dropped by the collision filter appears exactly once, in
+    `declined`, and never also in `derived` (design: PassEngine
+    Responsibilities & Constraints "Collision filter"; Req 6.2).
+
+    Named mutation: appending the decline to `declined` without also
+    excluding the candidate from `kept_derived` would leave the candidate in
+    both tuples -- caught by the `derived == ()` assertion here, distinct
+    from the `SUPERSEDED_BY_RECORDED` reason assertion in the sibling test
+    above.
+    """
+    from fitdocs import Sport
+    from fitdocs.benchmarks import BenchmarkKind
+    from fitdocs.load.profile import load_profile, save_profile
+
+    ref = _write_archive(tmp_path, builder.run_fit_bytes())
+    _write_workout(
+        tmp_path, "a.md", kind="race", distance=10000, time=2400, sources=[ref]
+    )
+
+    hand_written = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.THRESHOLD_PACE_S_PER_KM,
+        discipline=Sport.RUN,
+        value=200.0,
+        measured_on=date(2024, 5, 1),
+    )
+    save_profile(tmp_path, hand_written)
+
+    report = derive_benchmarks(tmp_path)
+
+    entry = report.entries[0]
+    assert entry.derived == ()
+    declined_kinds = [d.kind for d in entry.declined]
+    assert declined_kinds.count(BenchmarkKind.THRESHOLD_PACE_S_PER_KM) == 1
+
+
+def test_a_measured_entry_is_never_treated_as_the_pass_own_derived_subset(
+    tmp_path: Path,
+) -> None:
+    """An entry the athlete recorded with `source=BenchmarkSource(kind=
+    MEASURED)` is not derived, so it must never be counted as part of the
+    pass's own previously-derived subset: it must survive an otherwise
+    empty run untouched, and the run must report `written is False` since
+    nothing the pass itself derived changed (design: BenchmarkProvenance
+    "who writes measured"; ProfileDerivedWrite; Req 6.1).
+
+    Computing the pass's own previously-derived subset from `source is not
+    None` alone (instead of `source is not None and source.is_derived`)
+    would wrongly include this measured entry, so the empty accepted set
+    would differ from the "previous derived" set and the pass would call
+    `with_derived_benchmarks`/`save_profile` needlessly. That call retains
+    every non-derived entry, so the measured entry and the file's bytes
+    survive unchanged; `written is False` and the zero `save_profile` call
+    count are the assertions that pin it, and the value and bytes checks pin
+    only that the entry is not damaged.
+    """
+    from fitdocs import Sport
+    from fitdocs.benchmarks import BenchmarkKind, BenchmarkSource, BenchmarkSourceKind
+    from fitdocs.load.profile import load_profile, save_profile
+
+    measured = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.THRESHOLD_PACE_S_PER_KM,
+        discipline=Sport.RUN,
+        value=210.0,
+        measured_on=date(2024, 3, 3),
+        source=BenchmarkSource(kind=BenchmarkSourceKind.MEASURED),
+    )
+    save_profile(tmp_path, measured)
+    before_bytes = (tmp_path / "athlete.toml").read_bytes()
+
+    import fitdocs.performance.engine as engine_module
+
+    save_calls: list[object] = []
+
+    def counting_save_profile(data_root: Path, profile: object) -> None:
+        save_calls.append(profile)
+        save_profile(data_root, profile)  # type: ignore[arg-type]
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(engine_module, "save_profile", counting_save_profile)
+    try:
+        report = derive_benchmarks(tmp_path)
+    finally:
+        monkeypatch.undo()
+
+    assert report.written is False
+    assert save_calls == []
+    after_bytes = (tmp_path / "athlete.toml").read_bytes()
+    assert after_bytes == before_bytes
+    after = load_profile(tmp_path)
+    assert len(after.benchmarks.entries) == 1
+    stored = after.benchmarks.entries[0]
+    assert stored.value == 210.0
+    assert stored.source is not None
+    assert stored.source.kind is BenchmarkSourceKind.MEASURED
+
+
+def test_summary_reflects_the_collision_filter_not_the_pre_filter_candidate(
+    tmp_path: Path,
+) -> None:
+    """A quantity whose only candidate for the whole run is dropped by the
+    collision filter gets a `QuantitySummary` naming
+    `SUPERSEDED_BY_RECORDED` as its dominant reason -- the summary must be
+    computed from the *post*-collision-filter `derived`/`declined` sets, not
+    from `derive()`'s raw, pre-filter outcomes (design: PassEngine
+    Responsibilities & Constraints "summary line per quantity"; Req 6.2,
+    7.7).
+
+    Named mutation: computing `_quantity_summaries` from the pre-filter
+    outcomes (before the collision decline is appended and the candidate is
+    dropped) would see the candidate as an accepted derivation and omit the
+    summary entirely -- caught by asserting the summary is present with the
+    exact reason, not merely that some summary exists.
+    """
+    from fitdocs import Sport
+    from fitdocs.benchmarks import BenchmarkKind
+    from fitdocs.load.profile import load_profile, save_profile
+    from fitdocs.performance.types import DeclineReason
+
+    ref = _write_archive(tmp_path, builder.run_fit_bytes())
+    _write_workout(
+        tmp_path, "a.md", kind="race", distance=10000, time=2400, sources=[ref]
+    )
+
+    hand_written = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.THRESHOLD_PACE_S_PER_KM,
+        discipline=Sport.RUN,
+        value=200.0,
+        measured_on=date(2024, 5, 1),
+    )
+    save_profile(tmp_path, hand_written)
+
+    report = derive_benchmarks(tmp_path)
+
+    pace_summary = next(
+        s for s in report.summaries if s.kind == BenchmarkKind.THRESHOLD_PACE_S_PER_KM
+    )
+    assert pace_summary.dominant_reason == DeclineReason.SUPERSEDED_BY_RECORDED
+
+
+def test_summary_omitted_for_a_quantity_that_derived_something_anywhere_in_the_run(
+    tmp_path: Path,
+) -> None:
+    """A quantity with at least one accepted derivation anywhere in the run
+    gets no `QuantitySummary`, even though the same quantity was also
+    declined on another document in the same run (design: PassEngine
+    Responsibilities & Constraints "summary line per quantity"; Req 7.7).
+
+    One page derives a threshold pace (`race` kind); a second page's `test`
+    kind tag declines threshold pace with `EFFORT_KIND_NOT_USED` -- so a
+    naive "summary for any quantity that was ever declined" implementation
+    would wrongly emit one for `THRESHOLD_PACE_S_PER_KM` here, while the
+    correct "zero *derivations*" rule does not.
+    """
+    from fitdocs.benchmarks import BenchmarkKind
+
+    ref = _write_archive(tmp_path, builder.run_fit_bytes())
+    _write_workout(
+        tmp_path,
+        "a.md",
+        on="2024-01-01",
+        kind="race",
+        distance=10000,
+        time=2400,
+        sources=[ref],
+    )
+    _write_workout(
+        tmp_path,
+        "b.md",
+        on="2024-02-02",
+        kind="test",
+        distance=10000,
+        time=2400,
+        sources=[ref],
+    )
+
+    report = derive_benchmarks(tmp_path)
+
+    summary_kinds = [s.kind for s in report.summaries]
+    assert BenchmarkKind.THRESHOLD_PACE_S_PER_KM not in summary_kinds
+
+
+def test_summary_dominant_reason_is_most_frequent_not_first_seen(
+    tmp_path: Path,
+) -> None:
+    """The dominant reason on a quantity's summary is the most frequent
+    decline reason recorded for it across the whole run, not the first one
+    encountered while scanning documents in sorted order (design: PassEngine
+    Responsibilities & Constraints, "Reports a summary line per quantity
+    with zero derivations across the whole run, naming the dominant decline
+    reason").
+
+    `a.md` (processed first, sorted) declines FTP with
+    `EFFORT_KIND_NOT_USED` (one occurrence); `b.md` and `c.md` (processed
+    after) each decline FTP with `TOO_SHORT` (two occurrences). The two
+    reasons are pairwise distinct and `EFFORT_KIND_NOT_USED` sorts *earlier*
+    than `TOO_SHORT` in `DeclineReason`'s declared member order, so neither a
+    first-seen bug nor a "break frequency ties by declared order regardless
+    of count" bug can coincidentally reproduce the correct answer here: both
+    would return `EFFORT_KIND_NOT_USED`, while the correct, frequency-driven
+    answer is `TOO_SHORT`.
+    """
+    from fitdocs.benchmarks import BenchmarkKind
+    from fitdocs.performance.types import DeclineReason
+
+    hard_ref = _write_archive(tmp_path, builder.ride_fit_bytes())
+    _write_workout(tmp_path, "a.md", kind="hard", sources=[hard_ref])
+
+    no_power_ref = _write_archive(tmp_path, builder.ride_no_power_fit_bytes())
+    _write_workout(
+        tmp_path, "b.md", on="2024-06-01", kind="test", sources=[no_power_ref]
+    )
+    _write_workout(
+        tmp_path, "c.md", on="2024-07-01", kind="test", sources=[no_power_ref]
+    )
+
+    report = derive_benchmarks(tmp_path)
+
+    ftp_summary = next(s for s in report.summaries if s.kind == BenchmarkKind.FTP_WATTS)
+    # Falsity in the starting state: the two reasons are pairwise distinct
+    # and the first-seen one (`EFFORT_KIND_NOT_USED`) differs from the
+    # correct, frequency-driven answer -- so a wrong implementation reports
+    # a concretely different, non-`None` value rather than merely omitting
+    # one.
+    assert ftp_summary.dominant_reason != DeclineReason.EFFORT_KIND_NOT_USED
+    assert ftp_summary.dominant_reason == DeclineReason.TOO_SHORT
+
+
+def test_summary_dominant_reason_tie_breaks_by_declared_enum_order(
+    tmp_path: Path,
+) -> None:
+    """A genuine tie between two decline reasons for the same quantity is
+    broken by `DeclineReason`'s own declared member order -- the
+    earlier-declared member wins -- never by which reason was merely
+    encountered first while scanning documents (design: PassEngine
+    Responsibilities & Constraints, "Reports a summary line per quantity
+    with zero derivations across the whole run, naming the dominant decline
+    reason").
+
+    `a.md` (processed first) declines FTP with `TOO_SHORT`, which is
+    declared *after* `EFFORT_KIND_NOT_USED` in `DeclineReason`; `b.md`
+    (processed second) declines FTP with `EFFORT_KIND_NOT_USED`. Both occur
+    exactly once, so a first-seen implementation would (coincidentally)
+    return the same reason as `a.md`'s (`TOO_SHORT`) -- the wrong one, since
+    the declared-order rule must pick `EFFORT_KIND_NOT_USED`.
+    """
+    from fitdocs.benchmarks import BenchmarkKind
+    from fitdocs.performance.types import DeclineReason
+
+    no_power_ref = _write_archive(tmp_path, builder.ride_no_power_fit_bytes())
+    _write_workout(tmp_path, "a.md", kind="test", sources=[no_power_ref])
+
+    hard_ref = _write_archive(tmp_path, builder.ride_fit_bytes())
+    _write_workout(tmp_path, "b.md", on="2024-06-01", kind="hard", sources=[hard_ref])
+
+    report = derive_benchmarks(tmp_path)
+
+    ftp_summary = next(s for s in report.summaries if s.kind == BenchmarkKind.FTP_WATTS)
+    assert ftp_summary.dominant_reason == DeclineReason.EFFORT_KIND_NOT_USED
+
+
+def test_summary_dominant_reason_is_none_when_the_quantity_was_never_attempted(
+    tmp_path: Path,
+) -> None:
+    """A routed quantity that was neither derived nor declined anywhere in
+    the run (no cycling document at all) gets a summary with
+    `dominant_reason is None`, rather than a fabricated reason (design:
+    PassEngine Responsibilities & Constraints "summary line per quantity";
+    absent data is `None`, never a fabricated value -- steering tech.md).
+    """
+    from fitdocs.benchmarks import BenchmarkKind
+
+    ref = _write_archive(tmp_path, builder.run_fit_bytes())
+    _write_workout(
+        tmp_path, "a.md", kind="race", distance=10000, time=2400, sources=[ref]
+    )
+
+    report = derive_benchmarks(tmp_path)
+
+    ftp_summary = next(s for s in report.summaries if s.kind == BenchmarkKind.FTP_WATTS)
+    assert ftp_summary.dominant_reason is None
+
+
+def test_all_three_routed_quantities_get_a_summary_when_none_derive(
+    tmp_path: Path,
+) -> None:
+    """Over a run and a ride document that between them decline every
+    routed quantity and derive nothing at all, the summary set is exactly
+    the three quantities `fitdocs.performance.derive.derive` can ever
+    attempt -- threshold pace, LTHR and FTP -- never a proper subset of it
+    (design: PassEngine Responsibilities & Constraints "summary line per
+    quantity"; Req 7.7).
+
+    Named mutation: removing `LTHR_BPM` from the module's own `_ROUTED_KINDS`
+    tuple would silently drop it from this set even though both documents
+    below decline it -- caught by the exact-set equality, not merely by
+    checking the other two are present.
+    """
+    from fitdocs.benchmarks import BenchmarkKind
+
+    run_ref = _write_archive(tmp_path, builder.run_fit_bytes())
+    _write_workout(tmp_path, "a.md", on="2024-01-01", kind="hard", sources=[run_ref])
+
+    ride_ref = _write_archive(tmp_path, builder.ride_fit_bytes())
+    _write_workout(tmp_path, "b.md", on="2024-02-02", kind="hard", sources=[ride_ref])
+
+    report = derive_benchmarks(tmp_path)
+
+    assert report.derived == ()
+    assert {s.kind for s in report.summaries} == {
+        BenchmarkKind.THRESHOLD_PACE_S_PER_KM,
+        BenchmarkKind.LTHR_BPM,
+        BenchmarkKind.FTP_WATTS,
+    }
+
+
+def test_load_profile_is_called_exactly_once_after_every_document_is_processed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`load_profile` is called exactly once per invocation, and strictly
+    *after* every document has been read through `read_frontmatter` -- never
+    before the loop and never once per document (tasks.md 4.3: "Filter every
+    candidate against the store's recorded-entry query after all documents
+    are processed").
+
+    Two tagged documents make "once, at the end" observably different from
+    "once per document" (would record 2 calls) and from "once, up front"
+    (the call would be recorded before either `read_frontmatter` call
+    below, rather than after both).
+    """
+    import fitdocs.performance.engine as engine_module
+    from fitdocs.load.profile import load_profile as real_load_profile
+
+    ref = _write_archive(tmp_path, builder.run_fit_bytes())
+    _write_workout(
+        tmp_path,
+        "a.md",
+        on="2024-01-01",
+        kind="race",
+        distance=10000,
+        time=2400,
+        sources=[ref],
+    )
+    _write_workout(
+        tmp_path,
+        "b.md",
+        on="2024-02-02",
+        kind="race",
+        distance=5000,
+        time=1200,
+        sources=[ref],
+    )
+
+    call_order: list[str] = []
+    real_read_frontmatter = docio.read_frontmatter
+
+    def recording_read_frontmatter(path: Path) -> dict[str, object] | None:
+        call_order.append(f"read:{path.name}")
+        return real_read_frontmatter(path)
+
+    def recording_load_profile(data_root: Path) -> object:
+        call_order.append("load_profile")
+        return real_load_profile(data_root)
+
+    monkeypatch.setattr(engine_module, "read_frontmatter", recording_read_frontmatter)
+    monkeypatch.setattr(engine_module, "load_profile", recording_load_profile)
+
+    derive_benchmarks(tmp_path)
+
+    assert call_order.count("load_profile") == 1
+    # Falsity in the starting state: before the run, no document has been
+    # read and `load_profile` has not been called at all, so this ordering
+    # is entirely produced by this run.
+    assert call_order == [
+        "read:a.md",
+        "read:b.md",
+        "load_profile",
+    ]
