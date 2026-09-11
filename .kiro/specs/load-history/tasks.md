@@ -510,7 +510,7 @@ shape.
   - _Requirements: 1.4, 1.5, 1.6, 1.7, 1.8_
   - _Boundary: SeriesAssembly_
 
-- [ ] 3.4 Aggregate weeks and coverage, and apply the suppression rule
+- [x] 3.4 Aggregate weeks and coverage, and apply the suppression rule
   - Add the coverage measure -- pages recording a load over pages -- defined as
     complete when a period has no pages at all, because nothing is missing from
     an empty period; report it per calendar year and once for the whole archive
