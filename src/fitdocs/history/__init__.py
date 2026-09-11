@@ -15,6 +15,7 @@ earlier task's published names.
 
 from __future__ import annotations
 
+from fitdocs.history.model import ModelSeries, run_model, unscaled_accumulators
 from fitdocs.history.page import (
     HISTORY_FRONTMATTER_KEYS,
     HISTORY_TITLE,
@@ -41,4 +42,7 @@ __all__: list[str] = [
     "HistorySettingsError",
     "load_history_settings",
     "resolve_constants",
+    "ModelSeries",
+    "run_model",
+    "unscaled_accumulators",
 ]

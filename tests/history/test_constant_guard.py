@@ -102,6 +102,15 @@ class ExemptionCategory(enum.Enum):
     methodologically significant model value: it bounds what any caller may
     configure rather than choosing what fitdocs ships. Added by task 5.1 for
     `settings.py`'s `[history]` table validation (Req 2.7, 3.4, 8.3, 8.4)."""
+    ARITHMETIC_IDENTITY = "arithmetic_identity"
+    """A literal that carries no methodological choice at all -- the `1` a
+    decay factor's own exponent or a constant-input rescaling is built from
+    (`e^(-1/tau)`, `1 - decay`), or the `0` two accumulators start from
+    because the archive begins with no accumulated history, or the `0` a
+    non-positive/non-negative structural guard compares against. None of
+    these could be routed through a `CitedConstant.value` read -- they are
+    not a value the primary literature states, they are what the recursion
+    itself (task 2.2, `src/fitdocs/history/model.py`) is."""
 
 
 @dataclass(frozen=True)
@@ -261,6 +270,58 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
         ExemptionCategory.VALIDATION_BOUND,
         "_unit_interval_float's `value <= 1.0` upper bound -- the closed "
         "unit interval's ceiling for coverage_threshold.",
+    ),
+    # --- model.py (task 2.2): arithmetic identities, no CitedConstant reads.
+    LiteralExemption(
+        "model.py",
+        None,
+        "positional[0]",
+        1.0,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`_decay`'s own `-1.0 / tau_days` exponent -- M90 eq. (4)/(5)'s "
+        "`e^(-1/tau)` decay factor. The `1` is the recursion's own step "
+        "size in days (the caller guarantees one element per calendar "
+        "day), not a value any source states as a constant to cite.",
+    ),
+    LiteralExemption(
+        "model.py",
+        None,
+        None,
+        1.0,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`_rescale`'s own `1.0 - decay_factor` -- M90 eq. (6)/(7)'s "
+        "constant-input asymptotic scale is one minus the decay factor by "
+        "construction, not a separately cited number.",
+    ),
+    LiteralExemption(
+        "model.py",
+        None,
+        None,
+        0.0,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`unscaled_accumulators`' own `fitness_accumulator = "
+        "fatigue_accumulator = 0.0` seed -- the archive begins with no "
+        "accumulated history (design.md), not a cited value.",
+    ),
+    LiteralExemption(
+        "model.py",
+        None,
+        None,
+        0.0,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`_require_positive_finite`'s own `value <= 0` structural-guard "
+        "comparison -- the boundary a time constant must exceed, not a "
+        "cited value.",
+    ),
+    LiteralExemption(
+        "model.py",
+        None,
+        None,
+        0.0,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`_require_nonnegative_finite`'s own `value < 0` structural-guard "
+        "comparison -- the boundary a weighting or a load must not fall "
+        "below, not a cited value.",
     ),
 )
 
