@@ -435,7 +435,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
   - _Boundary: PassEngine_
   - _Depends: 3.4_
 
-- [ ] 4.2 Resolve and re-parse a tagged page's archive, and classify every failure
+- [x] 4.2 Resolve and re-parse a tagged page's archive, and classify every failure
   - Resolve a tagged document's archived source by the same rule the
     training-load pass uses — the document's last source reference, refusing a
     traversal reference — and re-parse it; never resolve or open an archive for

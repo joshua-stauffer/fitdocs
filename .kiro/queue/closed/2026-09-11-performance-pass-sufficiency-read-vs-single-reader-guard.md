@@ -1,7 +1,7 @@
 ---
 id: 2026-09-11-performance-pass-sufficiency-read-vs-single-reader-guard
 title: performance-benchmarks' PassEngine cannot call load_load_settings without breaking training-load's single-reader guard
-status: open
+status: done
 importance: high
 importance_why: Blocks task 4.2 (and any later task) from reading `[load].sufficiency` the way design.md prescribes; will recur identically for whoever lands 4.2 unless resolved first.
 effort: S
@@ -92,3 +92,39 @@ parsing logic (also forbidden by the hard rules in tasks.md).
 3. Whichever path is chosen, update `design.md`'s PassEngine section and
    task 4.2's bullets to say so explicitly, so the guard and the design agree
    before task 4.2 is implemented.
+
+## Resolution
+
+Ruling (recorded in `tasks.md` § Implementation Notes `(4.1 -> 4.2)`),
+applied by task 4.2: the first option under "How to pick it up" above. Req
+14.1's guarantee is that `[load]` is parsed from exactly one *reader*
+(`load_load_settings`), not that the reader has exactly one *call site*.
+`src/fitdocs/performance/engine.py`'s `derive_benchmarks` is now a second,
+sanctioned caller alongside `load/engine.py`'s `apply_load`, calling that
+same single reader once per invocation (never once per document) rather than
+opening a second reader or duplicating `[load.sufficiency]` parsing logic.
+
+`tests/load/test_settings.py::test_load_load_settings_is_called_from_exactly_one_module`
+is widened accordingly: its expected caller set is now
+`{Path("load/engine.py"), Path("performance/engine.py")}`, and its docstring
+now states the "one reader, two passes" framing directly (the reader itself
+stays singular; two passes now consume it, training-load Req 14.1). The
+behavioral companion
+(`test_load_load_settings_is_called_the_documented_number_of_times_per_command`)
+is untouched by this task -- `performance/engine.py` is not yet reachable
+from any CLI command (that lands in task 4.4), so it does not yet appear in
+that test's per-command call counts.
+
+## Closed 2026-09-11 (performance-benchmarks 4.2)
+
+Ruling applied: training-load Req 14.1 pins one READER of `[load]`, not one
+caller. `src/fitdocs/performance/engine.py` calls `load_load_settings` once
+per invocation before the document loop (pinned by
+`tests/performance/test_engine.py::test_sufficiency_settings_are_read_once_and_threaded_into_derive`,
+which reds when the call moves inside the loop or when a default
+`SufficiencySettings()` is threaded instead), and
+`tests/load/test_settings.py::test_load_load_settings_is_called_from_exactly_one_module`
+now expects exactly `{load/engine.py, performance/engine.py}` (reds in both
+directions: removing the pass's call, or adding a guarded third caller in
+`load/docedit.py`). The behavioural per-command companion gains its
+`derive-benchmarks` row when task 4.4 wires the command.
