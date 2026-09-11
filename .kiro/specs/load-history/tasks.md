@@ -147,7 +147,7 @@ observes red, reverts, observes green, and says so in the report.
 `tmp_path`. No `.fit` file is read by any task in this plan, and the athlete's
 real wiki is never a fixture.
 
-- [ ] 1. Foundation: the new owned location and every guard that reads it
+- [x] 1. Foundation: the new owned location and every guard that reads it
 
 **Group 1 is one atomic change, and its three tasks are red in between.** The
 owned-path set, the contract version, the declaration goldens and the published
@@ -168,7 +168,7 @@ implementer, running 1.1-1.3 back to back before validating is the intended
 shape.
 
 
-- [ ] 1.1 Add the history location to the layout leaf and move its constant pins
+- [x] 1.1 Add the history location to the layout leaf and move its constant pins
   - Add the directory name, the assets subdirectory (reusing the existing assets
     name so the two locations cannot diverge), the document stem and the chart
     name as named constants, plus three pure path helpers: the document's
@@ -201,7 +201,7 @@ shape.
   - _Requirements: 5.1, 5.9, 7.1, 7.2_
   - _Boundary: HistoryLocation_
 
-- [ ] 1.2 Advance the ownership contract version and give the history directory its own declaration
+- [x] 1.2 Advance the ownership contract version and give the history directory its own declaration
   - **Before editing, assert `contract.CONTRACT_VERSION == "2"`**; if it reads
     `"1"`, `effort-tags` has not landed -- stop and report rather than advancing
   - Advance the published contract version by one, because a new owned path
@@ -255,7 +255,7 @@ shape.
   - _Requirements: 7.2, 7.3_
   - _Boundary: HistoryDeclaration_
 
-- [ ] 1.3 Publish the history location and the second document type in the ownership contract and the README
+- [x] 1.3 Publish the history location and the second document type in the ownership contract and the README
   - Add the two new owned paths to the published contract's owned-path list with
     one sentence each, and add the history directory to the sentence naming the
     directories that receive an in-tree declaration
