@@ -705,7 +705,7 @@ shape.
 
 - [ ] 5. Integration: settings, the pass, the command, the guards, and validation
 
-- [ ] 5.1 Read the history settings table and resolve the model constants
+- [x] 5.1 Read the history settings table and resolve the model constants
   - Add a fourth peer settings reader beside the ones for tiles, inbox, plugins
     and load: it receives the already-parsed settings mapping and validates only
     its own table, never opening a file. Nothing is added to the load table's
