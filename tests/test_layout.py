@@ -2,7 +2,7 @@
 
 These lock the pure helpers in :mod:`fitdocs.layout` (design: DataRootLayout,
 ``src/fitdocs/layout.py``) that the sync engine depends on for output placement
-and stable identity (Req 2.4-2.7, 3.1, 3.6, 5.6):
+and stable identity (workout-docs Req 2.4-2.7, 3.1, 3.6, 5.6):
 
 * ``sport_slug`` -- ``"strength"`` for the strength modality, else the normalized
   sport label lowercased (2.4);
@@ -13,9 +13,12 @@ and stable identity (Req 2.4-2.7, 3.1, 3.6, 5.6):
   identity-prefixed undated fallback that never fabricates a date, and a
   deterministic collision suffix that depends only on recorded identity (2.5,
   2.6);
-* the path/reference helpers -- ``doc_path``, ``archive_path`` (real filesystem
-  paths) and ``asset_rel_path``, ``source_ref`` (POSIX, data-root-relative
-  strings so moving the whole data root never breaks a document) (2.7, 3.1);
+* the path/reference helpers -- ``doc_path``, ``archive_path``, ``history_doc_path``,
+  ``history_asset_path`` (real filesystem paths) and ``asset_rel_path``,
+  ``history_asset_rel_path``, ``source_ref`` (POSIX strings -- ``asset_rel_path``/
+  ``history_asset_rel_path`` relative to the document's own directory,
+  ``source_ref`` relative to the data root -- so moving the whole data root
+  never breaks a document) (workout-docs Req 2.7, 3.1; load-history Req 5.9);
 * the ownership constants -- ``OWNED_PATHS`` (every path the contract calls
   fitdocs-owned, covering each write site and already admitting the ownership
   declarations task 4.2 writes) and ``DECLARED_DIRS`` (the owned top-level
@@ -55,6 +58,10 @@ from fitdocs.layout import (
     CACHE_DIR,
     DECLARED_DIRS,
     DEFAULT_INBOX_DIR,
+    HISTORY_ASSETS_SUBDIR,
+    HISTORY_CHART,
+    HISTORY_DIR,
+    HISTORY_DOC_STEM,
     OWNED_PATHS,
     SETTINGS_FILE,
     TILE_CACHE_DIR,
@@ -65,6 +72,9 @@ from fitdocs.layout import (
     asset_rel_path,
     doc_path,
     doc_stem,
+    history_asset_path,
+    history_asset_rel_path,
+    history_doc_path,
     quarantine_path,
     settings_path,
     source_ref,
@@ -394,6 +404,60 @@ def test_source_ref_is_data_root_relative_posix() -> None:
     assert archive_path(root, _SHA).relative_to(root).as_posix() == ref
 
 
+# --- history location (Req 5.1, 5.9, 7.1, 7.2) ------------------------------
+
+
+def test_history_location_constants() -> None:
+    assert HISTORY_DIR == "history"
+    # Reuses ASSETS_SUBDIR by identity, not by a second "assets" literal, so the
+    # workouts and history assets names cannot diverge. A value comparison alone
+    # (`HISTORY_ASSETS_SUBDIR == ASSETS_SUBDIR`) stays green even if the source
+    # respells the literal (`HISTORY_ASSETS_SUBDIR: Final[str] = "assets"`), so the
+    # mechanism itself is pinned by source text, not just by the values it
+    # currently produces.
+    assert HISTORY_ASSETS_SUBDIR == ASSETS_SUBDIR
+    assert "HISTORY_ASSETS_SUBDIR: Final[str] = ASSETS_SUBDIR" in inspect.getsource(
+        layout
+    )
+    assert HISTORY_DOC_STEM == "training-load-history"
+    assert HISTORY_CHART == "fitness"
+
+
+def test_history_doc_path_lives_under_history() -> None:
+    root = Path("/data/root")
+    assert history_doc_path(root) == root / "history" / "training-load-history.md"
+
+
+def test_history_asset_path_lives_under_history_assets() -> None:
+    root = Path("/data/root")
+    assert history_asset_path(root, "fitness") == (
+        root / "history" / "assets" / "training-load-history-fitness.svg"
+    )
+    # Distinct chart names land in distinct files -- the helper is not a
+    # constant that ignores its argument.
+    assert history_asset_path(root, "fitness") != history_asset_path(root, "form")
+
+
+def test_history_asset_rel_path_is_posix_and_doc_relative() -> None:
+    rel = history_asset_rel_path(HISTORY_CHART)
+    assert rel == "assets/training-load-history-fitness.svg"
+    # POSIX separators only -- never a backslash, so the link survives on any OS.
+    assert "\\" not in rel
+    # A distinct chart name produces a distinct link -- the helper is not a
+    # constant that ignores its argument.
+    other = history_asset_rel_path("form")
+    assert other == "assets/training-load-history-form.svg"
+    assert other != rel
+    # Doc-relative: resolved against the history document's own directory each
+    # lands exactly on the real chart path for its own chart name (design.md
+    # HistoryLocation postcondition; Req 5.9).
+    root = Path("/data/root")
+    doc = history_doc_path(root)
+    for chart, chart_rel in (("fitness", rel), ("form", other)):
+        resolved = doc.parent / chart_rel
+        assert resolved == history_asset_path(root, chart)
+
+
 # --- tile_cache_path --------------------------------------------------------
 
 
@@ -473,15 +537,22 @@ def test_owned_paths_name_every_fitdocs_owned_location() -> None:
     assert OWNED_PATHS == (
         "workouts/",
         "workouts/assets/",
+        "history/",
+        "history/assets/",
         "fit-archive/",
         ".cache/",
         ".fitdocs/",
     )
     # Composed from the directory constants, never respelled -- renaming a
     # directory constant moves its owned prefix with it.
-    for directory in (WORKOUTS_DIR, ARCHIVE_DIR, CACHE_DIR, TOOL_STATE_DIR):
+    all_dirs = (WORKOUTS_DIR, HISTORY_DIR, ARCHIVE_DIR, CACHE_DIR, TOOL_STATE_DIR)
+    for directory in all_dirs:
         assert f"{directory}/" in OWNED_PATHS
     assert f"{WORKOUTS_DIR}/{ASSETS_SUBDIR}/" in OWNED_PATHS
+    # Named mutation (design.md HistoryLocation): dropping "history/assets/" from
+    # OWNED_PATHS leaves the round-trip and subset pins green, so it is pinned
+    # here explicitly, by value, independent of the exact-tuple pin above.
+    assert f"{HISTORY_DIR}/{HISTORY_ASSETS_SUBDIR}/" in OWNED_PATHS
     assert len(set(OWNED_PATHS)) == len(OWNED_PATHS)  # no duplicates
     for owned in OWNED_PATHS:
         assert owned.endswith("/")
@@ -503,6 +574,18 @@ def test_owned_paths_cover_every_path_the_engines_write() -> None:
     assert _is_owned(document.parent / asset_rel_path(stem, "hero"), root)
     assert _is_owned(archive_path(root, _SHA), root)
     assert _is_owned(tile_cache_path(root, "osm", 12, 23, 45), root)
+    # The two history write sites, walked the same way as the workouts ones
+    # above. Note: dropping "history/assets/" from OWNED_PATHS alone would
+    # *still* leave the third assertion here green -- the "history/" parent
+    # prefix already covers everything beneath it -- so this by-value coverage
+    # check is not what catches that mutation; the explicit by-value pin in
+    # test_owned_paths_name_every_fitdocs_owned_location is what catches it, and
+    # must not be weakened or removed.
+    assert _is_owned(history_doc_path(root), root)
+    assert _is_owned(history_asset_path(root, HISTORY_CHART), root)
+    assert _is_owned(
+        history_doc_path(root).parent / history_asset_rel_path(HISTORY_CHART), root
+    )
 
 
 def test_owned_paths_admit_the_declaration_files_task_4_2_writes() -> None:
@@ -584,13 +667,34 @@ def test_declared_dirs_are_the_top_level_owned_directories() -> None:
     directory is drawn from ``OWNED_PATHS`` -- a declaration can never be placed
     somewhere fitdocs does not own.
     """
-    assert DECLARED_DIRS == ("workouts/", "fit-archive/")
+    assert DECLARED_DIRS == ("workouts/", "history/", "fit-archive/")
     assert f"{WORKOUTS_DIR}/" in DECLARED_DIRS
+    assert f"{HISTORY_DIR}/" in DECLARED_DIRS
     assert f"{ARCHIVE_DIR}/" in DECLARED_DIRS
     # A declaration is only ever placed where fitdocs owns the directory.
     assert set(DECLARED_DIRS) <= set(OWNED_PATHS)
     assert f"{WORKOUTS_DIR}/{ASSETS_SUBDIR}/" not in DECLARED_DIRS
+    assert f"{HISTORY_DIR}/{HISTORY_ASSETS_SUBDIR}/" not in DECLARED_DIRS
     assert f"{CACHE_DIR}/" not in DECLARED_DIRS
+
+
+def test_no_owned_prefix_is_a_prefix_of_another_except_the_two_assets_pairs() -> None:
+    """No owned entry sits inside another, except the two documented assets pairs.
+
+    Guards the invariant design.md states directly: ``history/`` is not a prefix
+    of, and is not prefixed by, any other owned entry, with exactly the two
+    assets-under-parent relationships as the sanctioned exceptions.
+    """
+    allowed_nestings = {
+        (f"{WORKOUTS_DIR}/", f"{WORKOUTS_DIR}/{ASSETS_SUBDIR}/"),
+        (f"{HISTORY_DIR}/", f"{HISTORY_DIR}/{HISTORY_ASSETS_SUBDIR}/"),
+    }
+    for outer in OWNED_PATHS:
+        for inner in OWNED_PATHS:
+            if outer == inner:
+                continue
+            if inner.startswith(outer):
+                assert (outer, inner) in allowed_nestings, (outer, inner)
 
 
 def test_cache_dir_is_the_root_of_the_tile_cache() -> None:
@@ -625,3 +729,59 @@ def test_layout_module_performs_no_file_io() -> None:
         "exists()",
     ):
         assert banned not in source, f"layout performs I/O: {banned}"
+
+
+def test_relative_helpers_use_plain_string_joins_never_os_path() -> None:
+    """The doc-relative ``*_rel_path`` helpers stay plain string joins (Req 2.7, 5.9).
+
+    Mutation caught: rewriting ``asset_rel_path``/``history_asset_rel_path`` (or
+    any other helper here) to use ``os.path.join`` or an ``os.sep`` join would
+    still pass on macOS/Linux, where the separator happens to be ``/``, but would
+    silently break the portable-link contract on Windows. Two independent pins
+    cover this, because banning the ``os`` module alone does not ban
+    ``pathlib`` -- ``str(Path(ASSETS_SUBDIR) / f"{stem}-{chart}.svg")`` produces
+    the identical value on macOS/Linux and would pass every other assertion in
+    this file, but joins with ``os.sep`` under the hood and would emit
+    backslashes on Windows:
+
+    1. Module-level: never importing ``os`` in the first place. The module's
+       docstring mentions ``os.path.join`` in prose (to name exactly the thing
+       it forbids), so a plain ``"os.path" not in source`` substring check
+       would false-positive on that sentence; asserting no ``os`` import is
+       the scoped pin that survives the docstring's own prose while still
+       making any real ``os.path``/``os.sep`` usage impossible (it would be a
+       ``NameError``, not silent).
+    2. Function-scoped: each rel-path helper's own source text must contain
+       neither ``Path(``/``PurePath(`` nor ``os.``, and must return an
+       f-string built directly on the subdir constant (``f"{PREFIX}/..."``);
+       any return that drops that f-string spelling reds, portable or not
+       (it is a substring pin, so a spelling that keeps the ``f"{PREFIX}/``
+       token and appends to it passes -- and is portable). Neither helper's
+       docstring mentions ``Path(`` or ``os.`` in prose, so no docstring
+       stripping is needed here to keep the check honest (unlike the
+       module-level ``os.path.join`` mention above).
+    """
+    source = inspect.getsource(layout)
+    assert "import os" not in source
+    assert "from os " not in source
+    assert "from os.path " not in source
+
+    for fn, prefix in (
+        (asset_rel_path, "ASSETS_SUBDIR"),
+        (history_asset_rel_path, "HISTORY_ASSETS_SUBDIR"),
+    ):
+        fn_source = inspect.getsource(fn)
+        assert "Path(" not in fn_source
+        assert "PurePath(" not in fn_source
+        assert "os." not in fn_source
+        # This is a FORM pin, not merely a mechanism pin: the f-string on the
+        # subdir constant with a literal "/" must appear in the helper's
+        # source, so any return that drops that spelling reds here -- the
+        # non-portable ones (``str(Path(...) / ...)``) and the portable ones
+        # alike (``posixpath.join(...)``, ``PurePosixPath(...)``,
+        # ``PREFIX + "/" + ...``). It is a substring check, so a spelling
+        # that keeps the token and appends to it (``f"{PREFIX}/" + f"..."``)
+        # passes; that one is portable. Fixing the one sanctioned spelling is
+        # intentional: a refactor gets a clear pointer to it rather than a
+        # separator rule to re-derive.
+        assert f'f"{{{prefix}}}/' in fn_source

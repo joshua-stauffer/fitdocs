@@ -1,10 +1,12 @@
 """Data-root layout, activity identity, and document naming (design: DataRootLayout).
 
 This leaf module is the single home for the fitdocs output-location contract
-(Req 2.4-2.7, 3.1, 3.6, 5.6). It defines the data-root layout constants
-(``workouts/``, ``workouts/assets/``, ``fit-archive/``, ``.cache/``,
-``.fitdocs/``) and the pure helpers the sync engine uses to place documents, name
-assets, archive sources, and derive a stable activity identity. Because it names
+(workout-docs Req 2.4-2.7, 3.1, 3.6, 5.6; load-history Req 5.1, 5.9). It
+defines the data-root layout constants
+(``workouts/``, ``workouts/assets/``, ``history/``, ``history/assets/``,
+``fit-archive/``, ``.cache/``, ``.fitdocs/``) and the pure helpers the sync
+engine uses to place documents, name assets, archive sources, and derive a
+stable activity identity. Because it names
 every location fitdocs writes into, it is also where the *ownership* boundary is
 stated: :data:`OWNED_PATHS` is the set the published contract and the
 write-confinement guard both read (wiki-contract Req 7.5, 7.6), and
@@ -25,9 +27,10 @@ write-confinement guard both read (wiki-contract Req 7.5, 7.6), and
 
 The module performs **no file I/O**. The collision predicate (``taken``) is
 injected by the caller, and the "relative" helpers (``asset_rel_path``,
-``source_ref``) return POSIX forward-slash strings built by plain string joins --
-never ``os.path.join`` -- so links stay portable across operating systems and a
-whole-data-root move never breaks a document (Req 2.7).
+``history_asset_rel_path``, ``source_ref``) return POSIX forward-slash strings
+built by plain string joins -- never ``os.path.join`` -- so links stay portable
+across operating systems and a whole-data-root move never breaks a document
+(workout-docs Req 2.7; load-history Req 5.9).
 """
 
 from __future__ import annotations
@@ -44,7 +47,10 @@ WORKOUTS_DIR: Final[str] = "workouts"
 """Documents directory under the data root: ``<data-root>/workouts/``."""
 
 ASSETS_SUBDIR: Final[str] = "assets"
-"""Chart-assets directory under ``workouts/``: ``<data-root>/workouts/assets/``."""
+"""Chart-assets directory under ``workouts/``: ``<data-root>/workouts/assets/``.
+
+Also the history assets subdirectory name -- :data:`HISTORY_ASSETS_SUBDIR` is
+defined *as* this constant, not as a second ``"assets"`` literal."""
 
 ARCHIVE_DIR: Final[str] = "fit-archive"
 """Immutable source archive under the data root: ``<data-root>/fit-archive/``."""
@@ -89,9 +95,30 @@ found by walking upward from the working directory, and is read-only to fitdocs;
 this one is a directory *inside* the data root the pointer points at. They share
 a name and nothing else."""
 
+HISTORY_DIR: Final[str] = "history"
+"""Longitudinal history document directory: ``<data-root>/history/``."""
+
+HISTORY_ASSETS_SUBDIR: Final[str] = ASSETS_SUBDIR
+"""Chart-assets directory under ``history/``: ``<data-root>/history/assets/``.
+
+Reuses :data:`ASSETS_SUBDIR` rather than spelling ``"assets"`` again, so the
+workouts and history assets subdirectory names can never diverge."""
+
+HISTORY_DOC_STEM: Final[str] = "training-load-history"
+"""The history document's filename stem (without the ``.md`` extension).
+
+There is exactly one history document per data root (Req 5.1), so unlike
+:func:`doc_stem` this name is a fixed constant, never derived from an
+activity."""
+
+HISTORY_CHART: Final[str] = "fitness"
+"""The history chart's name component, used to compose its filename."""
+
 OWNED_PATHS: Final[tuple[str, ...]] = (
     f"{WORKOUTS_DIR}/",
     f"{WORKOUTS_DIR}/{ASSETS_SUBDIR}/",
+    f"{HISTORY_DIR}/",
+    f"{HISTORY_DIR}/{HISTORY_ASSETS_SUBDIR}/",
     f"{ARCHIVE_DIR}/",
     f"{CACHE_DIR}/",
     f"{TOOL_STATE_DIR}/",
@@ -114,16 +141,21 @@ run is this tuple **union** the configured locations, so a configured intake
 directory grants its own permission without widening the contract's fixed owned
 set."""
 
-DECLARED_DIRS: Final[tuple[str, ...]] = (f"{WORKOUTS_DIR}/", f"{ARCHIVE_DIR}/")
+DECLARED_DIRS: Final[tuple[str, ...]] = (
+    f"{WORKOUTS_DIR}/",
+    f"{HISTORY_DIR}/",
+    f"{ARCHIVE_DIR}/",
+)
 """The owned top-level directories that receive an ownership declaration (Req 3.1).
 
 A subset of :data:`OWNED_PATHS` -- a declaration can never be placed anywhere
-fitdocs does not own. These are the two directories a human or an LLM agent
-actually browses; ``workouts/assets/`` is excluded because it is not top level
-(the declaration in ``workouts/`` already covers what is beneath it), and
-``.cache/`` and ``.fitdocs/`` are excluded because they are dot-prefixed machine
-state nobody reads. Writing the files is task 4.2's job; this constant only names
-their directories."""
+fitdocs does not own. These are the directories a human or an LLM agent
+actually browses; ``workouts/assets/`` and ``history/assets/`` are excluded
+because they are not top level (the declaration in each parent already covers
+what is beneath it), and ``.cache/`` and ``.fitdocs/`` are excluded because
+they are dot-prefixed machine state nobody reads. Writing the files is task
+4.2's (and the history package's) job; this constant only names their
+directories."""
 
 _SESSION_UUID_FIELD: Final[str] = "SESSION UUID"
 """Developer-field key carrying the recorded 16-byte session identifier."""
@@ -211,6 +243,39 @@ def asset_rel_path(stem: str, chart: str) -> str:
     on every operating system.
     """
     return f"{ASSETS_SUBDIR}/{stem}-{chart}.svg"
+
+
+def history_doc_path(data_root: Path) -> Path:
+    """The history document's filesystem path.
+
+    ``<data_root>/history/training-load-history.md``.
+    """
+    return data_root / HISTORY_DIR / f"{HISTORY_DOC_STEM}.md"
+
+
+def history_asset_path(data_root: Path, chart: str) -> Path:
+    """A history chart's filesystem path.
+
+    ``<data_root>/history/assets/training-load-history-<chart>.svg``.
+    """
+    return (
+        data_root
+        / HISTORY_DIR
+        / HISTORY_ASSETS_SUBDIR
+        / f"{HISTORY_DOC_STEM}-{chart}.svg"
+    )
+
+
+def history_asset_rel_path(chart: str) -> str:
+    """A history chart's link, POSIX and *relative to the history document's directory*.
+
+    Returns ``assets/training-load-history-<chart>.svg``. Because the history
+    document lives in ``<data-root>/history/`` and its charts live in
+    ``<data-root>/history/assets/``, this doc-relative link resolves correctly
+    and survives a whole-data-root move (Req 5.9). Built by a plain string join
+    so the separators stay forward slashes on every operating system.
+    """
+    return f"{HISTORY_ASSETS_SUBDIR}/{HISTORY_DOC_STEM}-{chart}.svg"
 
 
 def archive_path(data_root: Path, sha256: str) -> Path:
