@@ -414,7 +414,7 @@ shape.
   - _Requirements: 3.4_
   - _Boundary: ModelSources_
 
-- [ ] 3. Core: reading the archive and assembling the series
+- [x] 3. Core: reading the archive and assembling the series
 
 - [x] 3.1 (P) Read every workout document into typed page records through the one contract reader
   - The `(P)` here means concurrent with **group 1**, not with 2.1: the package
@@ -553,7 +553,7 @@ shape.
   - _Requirements: 3.1, 3.2, 3.3, 3.5, 3.6, 3.10, 5.6_
   - _Boundary: SeriesAssembly_
 
-- [ ] 3.5 Count the archive's criterion points
+- [x] 3.5 Count the archive's criterion points
   - Add the criterion-point count: pages carrying a valid effort tag whose kind
     is a race or a test and which record an official time. Break the count down
     by kind, sorted by the kind vocabulary's own order, and report the earliest
@@ -922,3 +922,14 @@ shape.
 - **Reviewers revert with `cp` from a snapshot, never `git checkout`** (one
   wiped an implementer's uncommitted file), and namespace scratch files by
   task (parallel agents share one scratchpad and clobbered each other).
+- **For 4.3 / 5.2 (from 3.4/3.5 review):** `WeekRow.sessions` has no
+  definition in the design and is implemented as `pages_with_load`; 4.3
+  decides how the weekly table shows it. `CriterionPoints.by_kind` omits
+  zero-count kinds -- 4.3 derives 0 for an unobserved kind when the template
+  prints "a race, b test". `criterion_points` takes the FULL scan
+  (`scan.pages`), not the partition, so every tagged page excluded from the
+  count can be stated with a reason (Req 6.3); the design's blanket "pages is
+  the included partition" precondition at design.md:1092 is wrong for it.
+  `DayLoad`/`DailySeries`/`build_daily_series` are module-level in
+  `history.series`, not on the package surface; 5.2 appends whatever the
+  engine or page import off the surface before 5.4 pins it.
