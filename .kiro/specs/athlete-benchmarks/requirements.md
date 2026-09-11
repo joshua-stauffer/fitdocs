@@ -70,12 +70,15 @@ dropping a threshold would change computed load invisibly.
   through which a calculator reaches a benchmark by discipline and date.
 - **Out of scope**: rendering the staleness flag or any benchmark into a
   document (activity-qa-flags owns surfacing); auto-FTP / eFTP estimation of
-  any kind; any load math whatsoever — no TSS, no HRSS, no channel logic, no
-  channel selection; zone-definition changes (the shipped zone-divider contract
-  is unchanged); changes to the questions the prompt flow asks or how it asks
-  them; what a stale benchmark *means* for a rendered document or a load value
-  — this feature reports the fact and does not decide the consequence;
-  interpreting or aggregating benchmarks over time (trend analysis, CTL/ATL).
+  any kind — `performance-benchmarks` performs that estimation and hands
+  this store ordinary dated entries (Amendment 2); this store performs no
+  estimation or inference of its own; any load math whatsoever — no TSS, no
+  HRSS, no channel logic, no channel selection; zone-definition changes (the
+  shipped zone-divider contract is unchanged); changes to the questions the
+  prompt flow asks or how it asks them; what a stale benchmark *means* for a
+  rendered document or a load value — this feature reports the fact and
+  does not decide the consequence; interpreting or aggregating benchmarks
+  over time (trend analysis, CTL/ATL).
 - **Not owned by this spec** (stated plainly so the boundary does not drift):
   - The `[load]` settings **reader module** (`src/fitdocs/load/settings.py`) —
     `training-load` owns it, including the `LoadSettings` dataclass, the reader
@@ -144,6 +147,54 @@ Nothing is renumbered; the design components named in `training-load`'s
 amendment record are amended in place, and the implementing tasks are
 `training-load` 7.1 (this leaf module) and 7.2 (the profile store).
 
+## Amendment 2 (2026-09-11): benchmark provenance for a derivation pass
+
+Roadmap Phase 6 Existing Spec Update, taken up by `performance-benchmarks`
+task 5.3 (that spec's design § `BenchmarkProvenance` and § Cross-spec
+obligations → *performance-benchmarks ↔ athlete-benchmarks (the Existing Spec
+Update)*). `performance-benchmarks` turns an athlete's tagged races, tests and
+hard efforts into dated benchmark entries and needs a way to record where an
+entry came from and, when it was derived, how — a fact this store must
+validate, store and hand back, without itself estimating, inferring or
+choosing a value.
+
+A benchmark entry gains a new optional field, **`source`** — a provenance
+record naming the entry's origin and, for a derived origin, the derivation
+detail. `source` is the *fifth* recognized entry field, appended after
+Amendment 1's `applies_from`; it neither displaces `applies_from` nor
+interacts with it — a derived entry carries no `applies_from` (the deriver
+never writes one), so it is tier-1 only in Amendment 1's two-tier
+resolution — and it changes nothing about which entry
+`BenchmarkSet.applicable` selects or how staleness is computed — those
+remain governed by `measured_on` and `applies_from` alone. The origin
+vocabulary is closed to exactly two values: `derived`, written only by a
+derivation pass, and `measured`, written only by the athlete by hand to
+state that a number came from a lab or field test rather than merely being
+typed; this store never writes `measured` itself and reads it only as "not
+derived." A derived origin additionally requires a non-empty method,
+document, inputs and citation; a measured origin requires none of them. Any
+other key inside the `source` table is ignored on read, for the same
+forward-compatibility reason the store already ignores unrecognized keys
+elsewhere (1.10), and is carried through unchanged when the store rewrites
+the file. When an automated derivation pass writes to the store, it neither
+modifies nor deletes an entry whose `source` is absent or whose origin is
+not `derived`, and it does not write a derived entry at a discipline,
+quantity and measurement date such an entry already occupies — an automated
+write path touches only the entries it itself derived, never a
+hand-recorded or measured one; the prompt-driven write path (6.1–6.3, 6.10)
+is unchanged by this rule.
+
+The schema version does not change; an older reader ignores the key (1.10)
+and simply cannot distinguish a derived entry from a hand-recorded one, a
+degradation the athlete can see, never a misread number. The `source` field
+is validated by the store but is not part of the entry's natural key
+`(discipline, kind, measured_on)`, so it never affects duplicate detection.
+Nothing is renumbered. This spec's design is amended only at its Non-Goals
+line; the field's component-level design (parser, serializer, merge overlay
+and the derived write path) lives in `performance-benchmarks` design §
+`BenchmarkProvenance` and § `ProfileDerivedWrite`, and the implementing
+tasks are that spec's 2.1–2.3.
+
 ## Requirements
 
 ### Requirement 1: Versioned Per-Discipline Benchmark Schema
@@ -167,6 +218,7 @@ actually belongs to that sport and that point in time.
 10. The fitdocs athlete store shall ignore keys and tables in `athlete.toml` that it does not recognize, so that files written by a later fitdocs version within the same schema version remain readable.
 11. The fitdocs athlete store shall leave the existing flat athlete-input keys — the ones the document renderer consumes for zones and threshold-dependent metrics — readable with unchanged meaning, and shall not derive, override or reinterpret them from benchmarks.
 12. _(added by Amendment 1)_ The fitdocs athlete store shall accept, on any benchmark entry, an optional applies-from calendar date no later than the entry's measurement date, expressing the athlete's declaration that the measurement also stands in for activities dated on or after that date which no earlier-measured entry covers; an entry without one applies from its measurement date only, exactly as before.
+13. _(added by Amendment 2)_ The fitdocs athlete store shall accept, on any benchmark entry, an optional source provenance record naming the entry's origin as either "derived" or "measured" and, when the origin is "derived", the derivation method, the document it was derived from, the inputs it used, and a citation key; this is the fifth recognized entry field, appended after applies-from, and it neither displaces applies-from nor changes which entry is selected or how staleness is computed.
 
 ### Requirement 2: Loud Validation of Benchmark Data
 
@@ -188,6 +240,9 @@ the file.
 9. When a benchmark validation failure occurs, the fitdocs CLI shall report it as a configuration error and terminate before writing, modifying, or deleting any file.
 10. The fitdocs athlete store shall never silently drop, coerce, or substitute a benchmark entry it cannot validate.
 11. _(added by Amendment 1)_ If a benchmark entry's applies-from date is not a bare calendar date, carries a time or time-zone component, or falls after the entry's measurement date, the fitdocs CLI shall fail with a configuration error naming the file and the offending entry.
+12. _(added by Amendment 2)_ If a benchmark entry's source record declares an origin that is missing, is not a string, or is outside the closed vocabulary "derived" and "measured", the fitdocs CLI shall fail with a configuration error naming the file and the offending entry.
+13. _(added by Amendment 2)_ If a benchmark entry's source record declares a "derived" origin without a non-empty method, document, inputs, and citation each, the fitdocs CLI shall fail with a configuration error naming the file, the offending entry, and the missing field; a "measured" origin shall require none of these four.
+14. _(added by Amendment 2)_ The fitdocs athlete store shall ignore any key inside a benchmark entry's source record that it does not recognize, so that a source detail a later fitdocs version adds remains readable within the same schema version.
 
 ### Requirement 3: Date-Aware Benchmark Selection
 
@@ -264,6 +319,8 @@ that there is exactly one place my thresholds live.
 8. The fitdocs athlete store shall not write any new flat threshold key when persisting a benchmark; flat keys already present are preserved but never created or updated by this path.
 9. If a value fails validation, the fitdocs athlete store shall reject it and persist nothing, leaving the file exactly as it was.
 10. _(added by Amendment 1)_ When a benchmark answer is persisted together with an applies-from date, the fitdocs athlete store shall record that date on the same entry, shall refuse one later than the entry's measurement date exactly as it refuses an invalid value (6.9), and on rewrite shall preserve and overlay it exactly as it does the note.
+11. _(added by Amendment 2)_ When the store rewrites `athlete.toml`, it shall preserve, on an existing entry's source record, any key it does not recognize, and shall overlay only the recognized source keys onto that record; when a freshly written entry carries no source record at all, the store shall remove any source record already on file for that entry rather than inheriting it — a rule distinct from, and not extended to, note or applies-from.
+12. _(added by Amendment 2)_ When an automated derivation pass writes to the store, the fitdocs athlete store shall neither modify nor delete a benchmark entry whose `source` is absent or whose origin is not "derived", and shall not write a derived entry at the discipline, quantity and measurement date such an entry already occupies; the prompt-driven write path (6.1–6.3, 6.10) is unchanged by this rule.
 
 ### Requirement 7: Benchmark Access for Load Calculators
 

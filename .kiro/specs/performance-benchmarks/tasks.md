@@ -576,7 +576,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
   - _Boundary: DeriveCommand_
   - _Depends: 4.4, 4.5_
 
-- [ ] 5.3 (P) Land the athlete-benchmarks Existing Spec Update
+- [x] 5.3 (P) Land the athlete-benchmarks Existing Spec Update
   - This lands as that spec's **Amendment 2**; its Amendment 1 (the
     athlete-declared applies-from date) is already on `main` and is what the
     entry shape below extends. Read its current requirements, design and

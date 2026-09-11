@@ -45,7 +45,12 @@ describes.
 - Any load math (TSS, HRSS, pace anchoring, channel selection) — `load-channels`
   and `threshold-load`.
 - Rendering benchmarks or staleness into a document — `activity-qa-flags`.
-- Auto-FTP / eFTP estimation, or any inference of a benchmark from activity data.
+- Auto-FTP / eFTP estimation, or any inference of a benchmark from activity
+  data. *Amendment 2*: `performance-benchmarks` performs that estimation and
+  hands this store ordinary dated entries carrying a `source` provenance
+  record (see requirements Amendment 2); this store still performs no
+  estimation or inference of its own — it validates, stores and hands back
+  what it is given.
 - Changing what the prompt flow asks or how it asks it (the
   retroactive-application question Amendment 1 introduces is `training-load`'s
   3.7–3.9; this design specifies only what the store does with the answer);

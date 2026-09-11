@@ -1076,12 +1076,19 @@ would leave the derived numbers invisible to the athlete).
   `applies_from` on the entry; selection falls back to such an entry only
   when no earlier measurement covers the activity. Derived Phase 6 entries
   carry their own dates and need no `applies_from`.*
-- [ ] athlete-benchmarks — a `source` provenance field on a benchmark entry
+- [x] athlete-benchmarks — a `source` provenance field on a benchmark entry
   (parser, serializer, `with_benchmark`), the never-overwrite rule for entries
   the deriver did not write, and its boundary line excluding estimation
   amended to point at `performance-benchmarks`. Landed by
   `performance-benchmarks`' tasks, the way athlete-benchmarks itself amended
-  training-load's settings reader. Dependencies: effort-tags
+  training-load's settings reader. Dependencies: effort-tags. *Done
+  2026-09-11, performance-benchmarks task 5.3, at athlete-benchmarks
+  Amendment 2: requirements 1.13, 2.12-2.14, 6.11-6.12 added (the source
+  field's optionality, closed origin class, derived-origin required fields,
+  ignored-unknown-inner-key rule, rewrite preservation/overlay, and the
+  never-modify rule for a non-derived entry), the estimation-boundary line in
+  requirements.md and design.md amended, and spec.json's amendments list and
+  updated_at bumped. No existing criterion renumbered.*
 - [ ] wiki-contract — user-owned frontmatter keys as a contract class with
   their own pin (landed by `effort-tags`), and the history page's owned
   location and, if typed, document type (landed by `load-history`).
