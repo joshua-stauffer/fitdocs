@@ -413,7 +413,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
 
 - [ ] 4. The pass, its command and its registrations
 
-- [ ] 4.1 Build the pass skeleton: discovery, the tag branch and the report types
+- [x] 4.1 Build the pass skeleton: discovery, the tag branch and the report types
   - Add the pass module: discover every generated workout document under the
     data root in sorted order, read each one's frontmatter once through the
     shared read, and branch on the contract reader's three outcomes — untagged,
@@ -611,4 +611,6 @@ synthetic pages — the athlete's real wiki never enters the repository.
 - (3.2) Gate ordering ruling for the stream leaves: undated -> span agreement (when the tag carries `time_s`) -> sufficiency -> validity window, per design § Per-quantity gates (`Span -> Gate -> Window`). 3.3 copies it; 3.4 pins it at the routing level. A present-but-zero stream is gated with `_finite_positive` on the mean and declines `MISSING_INPUT` -- never a zero benchmark.
 - (3.4) `lactate_threshold_hr` records `discipline=activity.sport` unconditionally; the router must never call it for a sport other than RUN/RIDE.
 - (3.2) A `recorded_span_s` of `None` (fewer than two samples / zero span) declines `MISSING_INPUT` with `required=None` in the leaf rather than falling through to the shared sufficiency gate -- absent data is `None`, never a zero span handed to `evaluate`. This is a deliberate, documented departure from the training-load pass's `TOO_SHORT` wording for the same file (Req 7.4 covers the three verdicts the gate actually returns).
+- (4.1 -> 4.2) Controller ruling on `.kiro/queue/2026-09-11-performance-pass-sufficiency-read-vs-single-reader-guard.md`: training-load Req 14.1 pins ONE READER of `[load]`, not one caller; `tests/load/test_settings.py::test_load_load_settings_is_called_from_exactly_one_module` over-pins. Task 4.2 calls `load_load_settings` from `performance/engine.py` (the single reader, once per invocation) and widens that guard's expected caller set to `{load/engine.py, performance/engine.py}` -- a test-only edit to a training-load-owned file, recorded as a training-load guard amendment in the queue item's closing note. The behavioural per-command companion gains the `derive-benchmarks` row when 4.4 wires the command. No second reader, no duplicated `[load.sufficiency]` parsing.
+- (5.1) Two more AST-guard holes measured on this spec, for any future denylist scan: `from fitdocs import performance` (a level-0 from-import of the PACKAGE) is invisible to a scan that only compares `node.module` -- compare `module + "." + alias.name` for every alias; and a function-scope `(lambda: None).__globals__["__builtins__"]["__import__"](...)` binds no module-level name, so only a dunder-attribute rule (channels `_dunder_attribute_violations`) catches it.
 
