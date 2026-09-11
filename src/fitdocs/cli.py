@@ -95,6 +95,7 @@ from fitdocs import AthleteInputs
 from fitdocs.athlete import AthleteFileError, load_athlete_inputs
 from fitdocs.audit import AuditReport, audit
 from fitdocs.config import DataRootError, resolve_data_root
+from fitdocs.history.engine import HistoryReport, run_history
 from fitdocs.inbox import (
     InboxNote,
     InboxPaths,
@@ -202,6 +203,11 @@ _RETRY_QUARANTINED_OPTION = typer.Option(
         "Inbox drains only: re-attempt files already recorded in the "
         "quarantine record. A configuration error when combined with SOURCE."
     ),
+)
+_METHODOLOGY_OPTION = typer.Option(
+    None,
+    "--methodology",
+    help="Sum the history page's curve under only this methodology id.",
 )
 
 
@@ -433,6 +439,36 @@ def check_command(
     # Any finding exits 1, exactly like a per-file or per-document failure;
     # nothing found is success (Req 8.7).
     _finish(failed=bool(report.findings))
+
+
+@app.command("history")
+def history_command(
+    out: Path | None = _OUT_OPTION,
+    methodology: str | None = _METHODOLOGY_OPTION,
+) -> None:
+    """Regenerate the one longitudinal fitness/fatigue/form history page.
+
+    Rebuilds the history document and its chart from the data root's
+    documents as they currently stand (Req 8.1) -- there is no --force and
+    no --recompute, because the page is always rebuilt in full. --methodology
+    sums the curve under only that id, overriding the configured default and
+    the archive's own single-methodology inference (Req 4.2). Distinct from
+    -- and never chained onto -- sync, regen or load (Req 8.7): this is the
+    only place in the module that calls the history engine.
+    """
+    data_root = _resolved_data_root(out)
+    try:
+        history_report = run_history(data_root, methodology=methodology)
+    except SettingsError as exc:
+        # Covers a malformed [history]/[load] settings table
+        # (HistorySettingsError/LoadSettingsError) and an unresolved
+        # methodology (MethodologyConfigurationError) alike -- both are
+        # SettingsError subclasses, so no new branch is needed (Req 8.4).
+        _config_error(str(exc))
+    _report_history(history_report)
+    # Suppressed weeks, excluded pages and skipped documents never fail the
+    # run on their own; only a write failure does (Req 8.8).
+    _finish(failed=bool(history_report.failures))
 
 
 @app.command("plugins")
@@ -923,6 +959,77 @@ def _report_audit(report: AuditReport) -> None:
         console.print(
             f"    {finding.remedy}", markup=False, highlight=False, soft_wrap=True
         )
+
+
+def _report_history(report: HistoryReport) -> None:
+    """Print the ``history`` run report (Req 8.6): the two written paths (or
+    ``None`` when not written), a counts table, each excluded methodology
+    with its own page count, every foreign path left alone, every skipped
+    document with its reason, every write failure with its reason, and the
+    empty-archive note when the run set one.
+
+    Detail lines use ``soft_wrap`` with markup disabled, matching every other
+    reporter in this module, so long paths and reasons are never truncated
+    or reinterpreted as markup.
+    """
+    console = Console()
+    console.print(
+        f"Document: {report.document or '(not written)'}",
+        markup=False,
+        highlight=False,
+        soft_wrap=True,
+    )
+    console.print(
+        f"Chart: {report.chart or '(not written)'}",
+        markup=False,
+        highlight=False,
+        soft_wrap=True,
+    )
+
+    table = Table(title="fitdocs history")
+    table.add_column("Result")
+    table.add_column("Count", justify="right")
+    table.add_row("Pages read", str(report.pages_read))
+    table.add_row("Contributing", str(report.pages_contributing))
+    table.add_row("Without a load", str(report.pages_without_load))
+    table.add_row("Out of span", str(report.pages_out_of_span))
+    table.add_row("Suppressed weeks", str(report.suppressed_weeks))
+    table.add_row("Criterion points", str(report.criterion_points))
+    table.add_row("Methodology", report.methodology or "(none)")
+    console.print(table)
+
+    if report.pages_excluded:
+        console.print("Excluded methodologies:")
+        for name, count in report.pages_excluded:
+            console.print(
+                f"  {name}: {count}", markup=False, highlight=False, soft_wrap=True
+            )
+
+    if report.foreign:
+        console.print("Foreign (left untouched):")
+        for path in report.foreign:
+            console.print(f"  {path}", markup=False, highlight=False, soft_wrap=True)
+
+    if report.skipped:
+        console.print("Skipped:")
+        for skip in report.skipped:
+            console.print(
+                f"  {skip.path}", markup=False, highlight=False, soft_wrap=True
+            )
+            console.print(
+                f"    {skip.reason}", markup=False, highlight=False, soft_wrap=True
+            )
+
+    if report.failures:
+        console.print("Failed:")
+        for path, reason in report.failures:
+            console.print(f"  {path}", markup=False, highlight=False, soft_wrap=True)
+            console.print(
+                f"    {reason}", markup=False, highlight=False, soft_wrap=True
+            )
+
+    if report.note is not None:
+        console.print(report.note, markup=False, highlight=False, soft_wrap=True)
 
 
 def _finish(*, failed: bool) -> None:
