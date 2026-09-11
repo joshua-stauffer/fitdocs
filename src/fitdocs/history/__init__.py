@@ -22,6 +22,13 @@ from fitdocs.history.page import (
     HISTORY_VERSION,
     HISTORY_VERSION_KEY,
 )
+from fitdocs.history.settings import (
+    DEFAULT_HISTORY_SETTINGS,
+    HistorySettings,
+    HistorySettingsError,
+    load_history_settings,
+    resolve_constants,
+)
 
 __all__: list[str] = [
     "HISTORY_FRONTMATTER_KEYS",
@@ -29,4 +36,9 @@ __all__: list[str] = [
     "HISTORY_TYPE",
     "HISTORY_VERSION",
     "HISTORY_VERSION_KEY",
+    "DEFAULT_HISTORY_SETTINGS",
+    "HistorySettings",
+    "HistorySettingsError",
+    "load_history_settings",
+    "resolve_constants",
 ]

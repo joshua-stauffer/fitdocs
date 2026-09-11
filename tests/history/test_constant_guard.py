@@ -96,6 +96,12 @@ class ExemptionCategory(enum.Enum):
     """A generated document format's own version number -- a schema
     identifier compared for equality, never a value the model computes
     with."""
+    VALIDATION_BOUND = "validation_bound"
+    """A settings-reader range bound (e.g. `> 0`, `>= 0`, the closed unit
+    interval `[0.0, 1.0]`) -- a generic numeric-type check, not a
+    methodologically significant model value: it bounds what any caller may
+    configure rather than choosing what fitdocs ships. Added by task 5.1 for
+    `settings.py`'s `[history]` table validation (Req 2.7, 3.4, 8.3, 8.4)."""
 
 
 @dataclass(frozen=True)
@@ -206,6 +212,55 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
         "version number: a schema identifier fitdocs prints and compares for "
         "equality, never a methodologically significant model number a "
         "CitedConstant would otherwise carry.",
+    ),
+    # -- settings.py (task 5.1): range-bound literals in the [history] table
+    # reader's validation helpers. `0` (int, from `value <= 0` in
+    # `_positive_finite_float` and `value < 0` in `_nonnegative_finite_float`)
+    # and `0.0` (float, the lower bound of `_unit_interval_float`'s closed
+    # interval check) are numerically equal, so the scan's `(target, site,
+    # value)` key collapses all three into one key at `value=0` -- three
+    # independent comparisons, three exemption entries at the same key, not
+    # one entry covering all three. `1.0` (the interval's upper bound) is a
+    # distinct key with its own single entry.
+    LiteralExemption(
+        "settings.py",
+        None,
+        None,
+        0,
+        ExemptionCategory.VALIDATION_BOUND,
+        "_positive_finite_float's `value <= 0` bound -- a tau_* must be "
+        "strictly greater than zero; a generic range check, not a "
+        "methodologically significant model value.",
+    ),
+    LiteralExemption(
+        "settings.py",
+        None,
+        None,
+        0,
+        ExemptionCategory.VALIDATION_BOUND,
+        "_nonnegative_finite_float's `value < 0` bound -- a k_* must not be "
+        "negative; numerically equal to but a distinct comparison from the "
+        "_positive_finite_float bound above (different helper, different "
+        "operator).",
+    ),
+    LiteralExemption(
+        "settings.py",
+        None,
+        None,
+        0,
+        ExemptionCategory.VALIDATION_BOUND,
+        "_unit_interval_float's `0.0 <= value` lower bound -- the closed "
+        "unit interval's floor for coverage_threshold; numerically equal "
+        "to (`0.0 == 0`) but a distinct site from the two bounds above.",
+    ),
+    LiteralExemption(
+        "settings.py",
+        None,
+        None,
+        1.0,
+        ExemptionCategory.VALIDATION_BOUND,
+        "_unit_interval_float's `value <= 1.0` upper bound -- the closed "
+        "unit interval's ceiling for coverage_threshold.",
     ),
 )
 
