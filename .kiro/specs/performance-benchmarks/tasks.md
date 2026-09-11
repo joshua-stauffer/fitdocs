@@ -106,7 +106,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
 
 - [ ] 1. Foundation: the pure vocabulary, the citation records and the arithmetic
 
-- [ ] 1.1 Publish the derivation vocabularies and outcome values
+- [x] 1.1 Publish the derivation vocabularies and outcome values
   - Create the package and its first module, holding the closed
     derivation-method vocabulary (four members: the race-equivalence model, the
     sustained-effort mean heart rate, the time-trial mean power, and the

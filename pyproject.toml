@@ -79,6 +79,7 @@ files = [
     "tests/test_plugin_regression.py",
     "tests/metrics/test_sources.py",
     "tests/metrics/test_constant_guard.py",
+    "tests/performance/test_types.py",
 ]
 
 [tool.pytest.ini_options]
