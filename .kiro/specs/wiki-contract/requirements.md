@@ -101,6 +101,23 @@ a newer fitdocs is left alone rather than silently downgraded.
   as the completed-file discriminator) but implements none of inbox's own
   behavior.
 
+## Amendment 1 (2026-09-11): user-owned frontmatter keys, landed by effort-tags
+
+`effort-tags` adds a second class of user-owned frontmatter key alongside the
+user-owned regions this spec already names: the four keys of its effort tag
+(`effort`, `effort_distance_m`, `effort_time_s`, `effort_event`), published in
+code as `contract.USER_KEYS`. That spec owns the vocabulary, the validation,
+and the typed reader; this spec owns only the frontmatter-key-ownership
+contract it extends -- the publication of the class as disjoint from the
+managed set, the byte-for-byte carry-forward and its placement, the
+exclusion from the unmanaged-key warning and finding, and the declaration
+text -- recorded here as Requirement 6 criteria 6.5-6.8. The published
+contract's version identifier changes on account of it (`CONTRACT_VERSION`
+`"1"` to `"2"`), because a stated guarantee -- what regeneration preserves in
+the frontmatter block -- has changed; that version bump and its own document
+are effort-tags' to make, not restated by this amendment. Nothing existing is
+renumbered.
+
 ## Requirements
 
 ### Requirement 1: Consistent Document Interpretation Across Operations
@@ -188,6 +205,10 @@ data silently.
 2. The fitdocs CLI shall publish the complete set of frontmatter keys it manages, including the keys written by the training-load pass.
 3. If regenerating a document would drop frontmatter keys that fitdocs does not manage, the fitdocs CLI shall report the affected document and the dropped key names as a warning and shall complete the run successfully.
 4. The fitdocs CLI shall continue to preserve unknown keys and sections in the user-editable configuration and athlete-profile files under the data root, and shall state that guarantee in the ownership contract.
+5. _(added by Amendment 1)_ The fitdocs CLI shall publish the complete set of user-owned frontmatter keys as a class distinct from, and disjoint with, the managed key set (6.2), and shall never write a user-owned key into a document.
+6. _(added by Amendment 1)_ The fitdocs CLI shall carry every user-owned key's frontmatter line, including any continuation lines its value spans, byte-for-byte through every operation that rewrites the document. When the fitdocs CLI rebuilds a document's frontmatter block in full, it shall place the carried lines after every managed key and before the closing fence, in the order they appeared in the document being regenerated, and this placement shall be stated as part of the published contract.
+7. _(added by Amendment 1)_ A user-owned key shall be excluded from the unmanaged-key warning (6.3) and from the unmanaged-key finding (8.4); a user-owned key carrying a malformed value shall instead be reported as a finding of its own kind, distinct from the unmanaged-key finding, naming the affected document and the offending key.
+8. _(added by Amendment 1)_ The ownership declaration placed in the generated-documents directory shall name the user-owned frontmatter keys and shall state that fitdocs never writes them and carries them through regeneration.
 
 ### Requirement 7: Regeneration and Overwrite Guarantees
 **Objective:** As a user whose documents fitdocs rewrites, I want the destructive

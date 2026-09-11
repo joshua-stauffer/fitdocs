@@ -38,6 +38,7 @@
 - **Document-format versioning behavior**: the drift classification (out of date / current / newer), the downgrade refusal in `sync` and `regen`, and migration-by-regeneration as the stated path.
 - The **unmanaged-frontmatter-key warning** raised when a rewrite would drop keys.
 - The **`fitdocs check` command**, its findings model, its presentation, and its exit-code mapping onto the existing 0/1/2 contract.
+- _(added by Amendment, 2026-09-11)_ The **frontmatter-key-ownership contract's extension to a user-owned key class**: publishing the class as disjoint from the managed set, its byte-for-byte carry-forward and rebuild placement, and its exclusion from the unmanaged-key warning and finding (6.5-6.8). The vocabulary, validation, and typed reader of any particular user-owned key class (the effort tag) remain `effort-tags`' own.
 
 ### Out of Boundary
 
@@ -414,6 +415,8 @@ def format_session_uuid(value: object) -> str | None
 - Preconditions: none — every reader accepts arbitrary input.
 - Postconditions: `parse_frontmatter` returns a mapping only for a document whose **first line** (stripped) is the fence and whose block parses to a mapping — matching the baseline parsers described above, which key on `lines[0].strip()`; a leading blank line means no frontmatter, and treating it otherwise would be a behavior change the byte-neutral refactor phases forbid; `document_version` returns an `int` only for an integer value (a `bool` is rejected), else `None`; `unmanaged_keys` returns sorted, deduplicated string keys not in `MANAGED_KEYS`; `sha_of_ref` returns a non-empty sha only for a well-formed `fit-archive/<sha>.fit` ref.
 - Invariants: `PRESERVED_REGIONS == ("notes", "workout", "load")` in that order (unchanged from today); `LOAD_KEYS ⊂ MANAGED_KEYS`; `DOC_BANNER` starts with `GENERATED_PREFIX` and contains no value that varies per run or per release (4.5).
+
+**Amendment (2026-09-11), landed by `effort-tags`:** the published surface gains a second frontmatter-key class, `USER_KEYS` (currently the four `EFFORT_KEYS`), held disjoint from `MANAGED_KEYS`, and a `user_owned_lines` reader that extracts the carried lines from a frontmatter block's line list. The `unmanaged_keys` postcondition above changes accordingly: it now returns sorted, deduplicated string keys not in `MANAGED_KEYS | USER_KEYS`, so a user-owned key is no longer reported by the unmanaged-key warning (6.3) or the unmanaged-key finding (8.4) -- see this spec's Requirement 6, criteria 6.5-6.8, added by the same amendment. The vocabulary, validation, and typed reader of any particular user-owned key class -- the effort tag's four keys, their kinds and value rules -- are `effort-tags`' own and are not restated here.
 
 **Implementation Notes**
 

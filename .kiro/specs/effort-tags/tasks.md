@@ -286,7 +286,7 @@ report.
   - _Depends: 1.1, 1.2_
   - _Boundary: ContractAudit_
 
-- [ ] 4. Declaration and published contract
+- [x] 4. Declaration and published contract
 
 - [x] 4.1 (P) Advance the contract version and name the keys in the workouts declaration
   - Set the published contract version identifier to `2`, its docstring
@@ -352,7 +352,7 @@ report.
   - _Depends: 4.1_
   - _Boundary: ContractDocs_
 
-- [ ] 4.3 Land the wiki-contract Existing Spec Update
+- [x] 4.3 Land the wiki-contract Existing Spec Update
   - In `wiki-contract`'s requirements document, add an Amendment block dated
     with this change and, under Requirement 6, criteria 6.5-6.8: the published
     user-owned set, disjoint from the managed set and never written; verbatim
@@ -660,3 +660,21 @@ report.
   corrected wording may make MORE claims than the original -- "stored exactly as written,
   unstripped" was a second, new assertion, and it needed its own round trip
   (`effort_event: "  Boston  "` keeps its spaces) before it could ship.
+- 4.3: WHEN YOU WRITE A CRITERION INTO ANOTHER SPEC, YOU ARE WRITING SOMEONE ELSE'S FAILING
+  IMPLEMENTATION IF IT IS FALSE -- and the placement clause was exactly that trap. "User-owned
+  keys are placed after the managed keys" is TRUE of a frontmatter rebuild and FALSE of the
+  state a user sees after a load pass, because `load/docedit.py:288-290` builds
+  `[lines[0], *kept, *managed, *lines[close:]]` and appends load_value/load_methodology/
+  load_basis AFTER the carried lines. wiki-contract 6.6 therefore scopes its ordering sentence
+  to "when the CLI rebuilds the frontmatter block in full" while leaving the byte-for-byte
+  CARRY sentence unconditional -- carry was verified on all six rewrite paths (sync,
+  sync --force, regen, compute, --recompute, restore-after-drift) and does hold everywhere.
+  Split a compound guarantee when only one half is universal.
+- 4.3: A WRONG CROSS-SPEC ID IS INVISIBLE TO EVERY TOOL. 6.7 references wiki-contract's own 6.3
+  (drop-with-warning) and 8.4 (check's unmanaged-key finding); nothing in the repo would have
+  caught pointing at the wrong numbers. Read the referenced criteria verbatim and confirm the
+  behaviour you describe is the behaviour they state.
+- 4.3: prove "renumber nothing" MECHANICALLY -- extract the criterion IDs from
+  `git show HEAD:<file>` and from the working copy and show the before-list is an
+  order-preserving subsequence of the after-list (here 56 -> 60, only 6.5-6.8 added), and diff
+  the `^#` headings too. Reading a diff cannot tell you a heading did not shift.

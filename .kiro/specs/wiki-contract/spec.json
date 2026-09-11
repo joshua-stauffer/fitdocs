@@ -1,7 +1,7 @@
 {
   "feature_name": "wiki-contract",
   "created_at": "2026-07-21T07:56:54Z",
-  "updated_at": "2026-07-22T00:00:00Z",
+  "updated_at": "2026-09-11T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -31,6 +31,12 @@
       "requirement": "5.5 / 5.8 (LoadEngine version gate) and structural (docio.py)",
       "reason": "Task 7.2 found sync and the load engine each carrying its own local frontmatter read, functionally identical to each other and BOTH lacking the symlink refusal that audit._read_document already had -- so a symlinked workouts/*.md was refused by `check` and followed by every writer, letting a write escape the data root (Req 7.5, 7.6). The two were collapsed into src/fitdocs/docio.py, one enforcement point; deleting its refusal now fails five tests where it previously failed none. Separately, the document-format version gate was duplicated into load/engine.py because the training-load pass is itself a writer, so Req 5.5's 'left unchanged' guarantee held for the engine functions but not for the CLI commands that run that pass afterwards.",
       "also": "design.md's File Structure Plan (New Files) now lists docio.py; the LoadEngine component section now states the version-gate duplication and its requirement coverage; a fourth cross-spec integration obligation records that a writing entry point must read through docio.read_frontmatter and run the once-per-run symlink scan beside refresh_declarations; tests/test_public_api.py now pins docio's exported surface alongside contract, declaration, and audit."
+    },
+    {
+      "date": "2026-09-11",
+      "requirement": "6.5, 6.6, 6.7, 6.8 (new)",
+      "reason": "effort-tags spec task 4.3: effort-tags adds a second class of user-owned frontmatter key (the effort tag's four keys, contract.USER_KEYS) alongside the user-owned regions this spec already names. This spec's frontmatter-key-ownership contract is extended to cover the class generically -- publication as disjoint from the managed set, byte-for-byte carry-forward with rebuild placement, and exclusion from the unmanaged-key warning (6.3) and finding (8.4) -- while the vocabulary, validation, and typed reader of the effort tag itself remain effort-tags' own.",
+      "also": "requirements.md gains Amendment 1 (2026-09-11) and Requirement 6 criteria 6.5-6.8; design.md's DocumentContract component gains a matching amendment note (USER_KEYS, user_owned_lines, the unmanaged_keys postcondition change) and 'This Spec Owns' gains a bullet for the user-owned key class. Nothing renumbered."
     }
   ]
 }
