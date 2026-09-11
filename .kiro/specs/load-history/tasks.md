@@ -619,7 +619,7 @@ shape.
   - _Requirements: 3.8, 5.2, 5.3, 5.4, 5.5_
   - _Boundary: CalendarChart_
 
-- [ ] 4.2 Declare the document's vocabulary and emit its frontmatter
+- [x] 4.2 Declare the document's vocabulary and emit its frontmatter
   - Declare the document's own vocabulary in this module and nowhere else: its
     type value, its title, its format version and version key, and the ordered
     tuple of frontmatter keys. Import the shared vocabulary -- the frontmatter
