@@ -54,11 +54,12 @@ Every frontmatter key a fitdocs document may carry falls into exactly one of
 three classes. **Managed** (:data:`MANAGED_KEYS`) keys are written by the
 render layer or the training-load pass and rewritten in full on every
 regeneration. **User-owned** (:data:`USER_KEYS`) keys -- currently the effort
-tag's four keys -- are never written by fitdocs and, once task 1.3 lands, will
-be carried forward verbatim on every rewrite, the same "yours to keep"
-guarantee :data:`USER_REGIONS` gives a region rather than a key; this module
-states only the vocabulary and the ownership class, not yet the carry
-mechanism. Everything else is **unmanaged**: a key fitdocs neither writes nor
+tag's four keys -- are never written by fitdocs and are carried forward
+verbatim on every rewrite, the same "yours to keep" guarantee
+:data:`USER_REGIONS` gives a region rather than a key; this module states the
+vocabulary, the ownership class and the line-level carry
+(:func:`user_owned_lines`), which the sync engine applies to every rewrite.
+Everything else is **unmanaged**: a key fitdocs neither writes nor
 preserves, dropped with a warning on the next rewrite (:func:`unmanaged_keys`).
 The three classes partition every key a document can carry; ``MANAGED_KEYS``
 and ``USER_KEYS`` are disjoint, and held disjoint by test.
@@ -944,9 +945,9 @@ def unmanaged_keys(frontmatter: Mapping[str, object]) -> tuple[str, ...]:
     silent data loss into a warning the user can act on (Req 6.3) and into an
     audit finding (Req 8.4). A user-owned key -- the effort tag's keys -- is
     never reported here (Req 1.4, 4.7): only a key in neither class is
-    unmanaged. The verbatim carry that makes that exemption safe arrives with
-    task 1.3; until it lands, a user-owned key is dropped by a rewrite without
-    a warning.
+    unmanaged. The verbatim carry that makes that exemption safe is
+    :func:`user_owned_lines`, which the sync engine applies on every rewrite, so
+    a user-owned key survives rather than being dropped.
 
     Non-string keys -- YAML permits them -- are ignored: fitdocs cannot name one
     in a warning, and it has never written one. Returns ``()`` for a fully

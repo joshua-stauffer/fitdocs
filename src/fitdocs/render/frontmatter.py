@@ -96,10 +96,10 @@ def build_frontmatter(ctx: DocContext) -> str:
     the closing fence. That text is copied, never re-parsed or re-serialized,
     so this function names ``yaml`` only for ``safe_dump``. Precondition
     (documented, not checked): no element of ``ctx.user_frontmatter``
-    may contain ``"\\n"``. The intended producer,
+    may contain ``"\\n"``. Its producer,
     :func:`fitdocs.contract.user_owned_lines` over a document's
-    ``split("\\n")`` lines, cannot yield one; the sync/regen wiring that
-    supplies this field is not yet in place. An empty tuple (the default,
+    ``split("\\n")`` lines, cannot yield one, and the sync engine supplies
+    this field from that producer on every rewrite. An empty tuple (the default,
     and every render of a document that has never carried a user-owned key)
     reproduces the exact block this function produced before the carry
     existed.
