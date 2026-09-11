@@ -51,6 +51,8 @@ import fitdocs.cli
 import fitdocs.contract
 import fitdocs.declaration
 import fitdocs.docio
+import fitdocs.history.documents
+import fitdocs.history.page
 import fitdocs.layout
 import fitdocs.load.docedit
 import fitdocs.load.engine
@@ -81,6 +83,21 @@ CONVERTED_MODULES: Final[tuple[ModuleType, ...]] = (
     fitdocs.declaration,
     fitdocs.audit,
     fitdocs.cli,
+    # load-history (task 5.4): the package's one filesystem read
+    # (`documents.py`, binding the load keys, the date reader, the
+    # effort-tag reader and the workout-document test by identity) and the
+    # page module (`page.py`), which also imports `fitdocs.contract` -- the
+    # design's "only importer" sentence names `documents.py` alone, but
+    # `page.py` reaches the same shared vocabulary (`TYPE_KEY`,
+    # `GENERATOR_KEY`, `GENERATOR`, `FRONTMATTER_FENCE`, `DOC_BANNER`,
+    # `EffortKind`) through the qualified `contract.NAME` form rather than a
+    # from-import, so it binds no name directly on its own module namespace
+    # and its `CONTRACT_BINDINGS` entry is empty -- it is registered so the
+    # structural checks (no YAML, no bare fence/workout literal, no private
+    # duplicate reader) apply to it, the same reason `cli.py` above is
+    # registered with an empty binding list.
+    fitdocs.history.documents,
+    fitdocs.history.page,
 )
 
 #: The one converted module allowed to name ``yaml`` at all. The frontmatter
@@ -187,6 +204,16 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
     # still registered above so a future direct contract literal or duplicate
     # reader added to the CLI is caught the moment it appears.
     "fitdocs.cli": (),
+    "fitdocs.history.documents": (
+        "LOAD_KEYS",
+        "document_date",
+        "effort_tag",
+        "is_workout_document",
+    ),
+    # `page.py` binds no contract name directly (see the CONVERTED_MODULES
+    # comment above) -- registered for the structural checks only, the same
+    # shape as `fitdocs.cli`.
+    "fitdocs.history.page": (),
 }
 
 #: Document vocabulary no converted module may spell for itself: the frontmatter

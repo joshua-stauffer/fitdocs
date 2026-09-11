@@ -64,6 +64,12 @@ import fitdocs.benchmarks
 import fitdocs.contract
 import fitdocs.declaration
 import fitdocs.docio
+import fitdocs.history
+import fitdocs.history.engine
+import fitdocs.history.model
+import fitdocs.history.page
+import fitdocs.history.series
+import fitdocs.history.settings
 import fitdocs.ingest
 import fitdocs.ingest.errors
 import fitdocs.load
@@ -804,3 +810,118 @@ def test_load_types_never_imports_load_settings_at_runtime() -> None:
     )
     assert result.returncode == 0, result.stderr
     assert "OK" in result.stdout
+
+
+# --------------------------------------------------------------------------- #
+# fitdocs.history (load-history task 5.4, Req 2.4, 7.5): the package's
+# published surface, pinned once every task that appends to
+# ``fitdocs.history.__all__`` (2.2, 3.2, 4.2, 5.1, 5.2) has landed. Unlike the
+# leaf-module surfaces above, this pin also asserts *identity against each
+# name's own defining submodule* (not just against ``fitdocs.contract``): the
+# package root re-exports names gathered from five different submodules
+# (``engine``, ``model``, ``page``, ``series``, ``settings``), so a local
+# shadow bound directly in ``__init__.py`` -- e.g. a stray
+# ``run_history = lambda *a, **k: None`` added after the real import --
+# would satisfy every ``hasattr``/``__all__`` check here and still be a
+# different object from ``fitdocs.history.engine.run_history``, exactly the
+# class of drift the module-surface pins above (``_CHANNELS_SURFACE`` et al.)
+# do not need to catch because those modules define every name they publish
+# themselves.
+# --------------------------------------------------------------------------- #
+
+_HISTORY_SURFACE = {
+    "HISTORY_FRONTMATTER_KEYS",
+    "HISTORY_TITLE",
+    "HISTORY_TYPE",
+    "HISTORY_VERSION",
+    "HISTORY_VERSION_KEY",
+    "DEFAULT_HISTORY_SETTINGS",
+    "HistorySettings",
+    "HistorySettingsError",
+    "load_history_settings",
+    "resolve_constants",
+    "ModelSeries",
+    "run_model",
+    "unscaled_accumulators",
+    "MethodologyChoice",
+    "MethodologyProblem",
+    "partition_pages",
+    "select_methodology",
+    "HistoryReport",
+    "MethodologyConfigurationError",
+    "run_history",
+}
+
+#: Which submodule defines each published name -- the object the identity
+#: check below compares against.
+_HISTORY_SURFACE_OWNERS = {
+    "HISTORY_FRONTMATTER_KEYS": fitdocs.history.page,
+    "HISTORY_TITLE": fitdocs.history.page,
+    "HISTORY_TYPE": fitdocs.history.page,
+    "HISTORY_VERSION": fitdocs.history.page,
+    "HISTORY_VERSION_KEY": fitdocs.history.page,
+    "DEFAULT_HISTORY_SETTINGS": fitdocs.history.settings,
+    "HistorySettings": fitdocs.history.settings,
+    "HistorySettingsError": fitdocs.history.settings,
+    "load_history_settings": fitdocs.history.settings,
+    "resolve_constants": fitdocs.history.settings,
+    "ModelSeries": fitdocs.history.model,
+    "run_model": fitdocs.history.model,
+    "unscaled_accumulators": fitdocs.history.model,
+    "MethodologyChoice": fitdocs.history.series,
+    "MethodologyProblem": fitdocs.history.series,
+    "partition_pages": fitdocs.history.series,
+    "select_methodology": fitdocs.history.series,
+    "HistoryReport": fitdocs.history.engine,
+    "MethodologyConfigurationError": fitdocs.history.engine,
+    "run_history": fitdocs.history.engine,
+}
+
+
+def test_history_all_lists_exactly_its_published_surface() -> None:
+    assert set(fitdocs.history.__all__) == _HISTORY_SURFACE
+    # __all__ has no duplicates.
+    assert len(fitdocs.history.__all__) == len(set(fitdocs.history.__all__))
+
+
+def test_history_surface_owners_cover_exactly_the_published_surface() -> None:
+    """``_HISTORY_SURFACE_OWNERS`` must name exactly the published names --
+    a name published with no owner entry would leave the identity check
+    below silently skipping it, the same failure mode
+    ``test_every_converted_module_declares_its_contract_bindings`` (in
+    ``tests/test_contract_consumers.py``) guards against for that registry.
+    """
+    assert set(_HISTORY_SURFACE_OWNERS) == _HISTORY_SURFACE
+
+
+def test_every_history_name_is_the_same_object_as_its_defining_module() -> None:
+    """Each published name is its defining submodule's own object, not a
+    same-named local re-export bound directly in ``__init__.py``.
+
+    Mutation caught (measured, round 2): adding
+    ``run_history = lambda *args, **kwargs: None`` to
+    ``src/fitdocs/history/__init__.py`` immediately below the real
+    ``from fitdocs.history.engine import (... run_history)`` line reds this
+    identity assertion at ``getattr(fitdocs.history, "run_history") is
+    getattr(fitdocs.history.engine, "run_history")`` -- but not *only* this
+    one: the shadow, still callable with the same signature and still
+    listed in ``__all__``, is exercised by the confinement suite's history
+    entry point, so
+    ``tests/test_confinement.py::test_entry_point_writes_only_inside_the_permitted_locations[history]``
+    and
+    ``tests/test_confinement.py::test_history_entry_point_writes_no_workout_doc_asset_source_profile_or_settings``
+    also go red (measured: 3 failed total) because the shadow writes
+    nothing. The package's own ``__all__`` list and every ``hasattr``
+    check do stay green, because the name is still listed and bound.
+    """
+    for name, owner in _HISTORY_SURFACE_OWNERS.items():
+        assert hasattr(fitdocs.history, name), f"fitdocs.history is missing {name}"
+        assert hasattr(owner, name), f"{owner.__name__} does not define {name}"
+        assert getattr(fitdocs.history, name) is getattr(owner, name), (
+            f"fitdocs.history.{name} is not the same object as {owner.__name__}.{name}"
+        )
+
+
+def test_history_is_not_re_exported_from_the_package_root() -> None:
+    """The history package is a module-level surface, not a package-root name."""
+    assert not set(fitdocs.__all__) & _HISTORY_SURFACE

@@ -59,9 +59,14 @@ import pytest
 
 from fitdocs.athlete import ATHLETE_FILE, load_athlete_inputs
 from fitdocs.declaration import DECLARATION_FILENAME
+from fitdocs.history import run_history
 from fitdocs.inbox import load_inbox_settings, prepare_inbox
 from fitdocs.layout import (
+    ARCHIVE_DIR,
+    HISTORY_DIR,
+    HISTORY_DOC_STEM,
     OWNED_PATHS,
+    SETTINGS_FILE,
     WORKOUTS_DIR,
     settings_path,
 )
@@ -437,6 +442,68 @@ def _run_load(data_root: Path, source_dir: Path) -> None:
         registry._REGISTRY.update(saved)
 
 
+def _stage_history_pages(data_root: Path, source_dir: Path) -> None:
+    """A real, minimal workout document recording a load under a real
+    frontmatter fence and real ``fitdocs.contract`` vocabulary (load-history
+    spec, task 5.4) -- the same construction ``tests/history/test_engine.py``'s
+    own ``_page`` fixture builder uses, restated here rather than imported so
+    this guard's own fixtures never depend on another test module. Without a
+    page recording a load the history pass takes the empty-archive path
+    (Req 1.10) and writes nothing at all, which would make the measured run
+    below vacuous. ``source_dir`` is unused -- the history pass reads only
+    already-generated workout documents, never a ``.fit`` source (Req 1.1).
+    """
+    workouts_dir = data_root / WORKOUTS_DIR
+    workouts_dir.mkdir(parents=True, exist_ok=True)
+    (workouts_dir / "confinement-fixture.md").write_text(
+        "\n".join(
+            [
+                "---",
+                "title: Confinement Fixture",
+                "type: workout",
+                'date: "2024-01-01"',
+                "load_value: 100",
+                "load_methodology: threshold",
+                "---",
+                "",
+                "# Confinement Fixture",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
+def _run_history(data_root: Path, source_dir: Path) -> None:
+    """The ``history`` entry point, driven exactly as the CLI drives it
+    (load-history spec, task 5.4; Req 7.4, 7.5)."""
+    run_history(data_root)
+
+
+def _wrote_a_workout_document(touched: Sequence[str]) -> bool:
+    """The default non-vacuity check every entry point but ``history`` uses:
+    the measured run produced a real *workout document* under ``workouts/``
+    (the ownership declaration excluded, since every entry point writes it
+    on every run regardless of whether any source was processed)."""
+    return any(
+        key.startswith(f"data/{WORKOUTS_DIR}/")
+        and key.endswith(".md")
+        and not key.endswith(f"/{DECLARATION_FILENAME}")
+        for key in touched
+    )
+
+
+def _wrote_the_history_document(touched: Sequence[str]) -> bool:
+    """The ``history`` entry point's own non-vacuity check (load-history
+    spec, task 5.4): its measured run wrote the one history document it
+    owns. Deliberately distinct from :func:`_wrote_a_workout_document` --
+    the history pass writes no ``workouts/*.md`` document at all (Req 7.5),
+    so reusing that check here would fail on every genuinely successful run
+    and the guard would never be able to tell a real write from a silent
+    no-op for this entry point."""
+    return f"data/{HISTORY_DIR}/{HISTORY_DOC_STEM}.md" in touched
+
+
 @dataclass(frozen=True)
 class EntryPoint:
     """One registered writing entry point -- guard axis (a).
@@ -445,12 +512,19 @@ class EntryPoint:
     and is executed *before* the snapshot, so its writes are not measured;
     ``run`` performs the measured run. Both take ``(data_root, source_dir)``,
     a signature wide enough for an ingestion entry point that reads a staged
-    directory as well as for one that reads only the data root.
+    directory as well as for one that reads only the data root. ``non_vacuous``
+    is the entry point's own proof that its measured run actually wrote
+    something observable (load-history task 5.4): every entry point before
+    ``history`` writes a workout document, so :func:`_wrote_a_workout_document`
+    is the default every existing registration keeps without change; the
+    ``history`` pass writes no such document at all (Req 7.5), so it supplies
+    :func:`_wrote_the_history_document` instead.
     """
 
     id: str
     prepare: Callable[[Path, Path], None]
     run: Callable[[Path, Path], None]
+    non_vacuous: Callable[[Sequence[str]], bool] = _wrote_a_workout_document
 
 
 #: Every fitdocs entry point that writes into the data root (Req 7.6).
@@ -459,6 +533,21 @@ WRITING_ENTRY_POINTS: Final[tuple[EntryPoint, ...]] = (
     EntryPoint(id="regen", prepare=_sync_once_then_drop_a_document, run=_run_regen),
     EntryPoint(id="load", prepare=_run_sync, run=_run_load),
     EntryPoint(id="drain", prepare=_stage_drain_inbox, run=_run_drain),
+    # Disclosure (round-2 remediation): `EntryPoint.non_vacuous` did not
+    # exist before this history registration. It was added specifically
+    # because the history pass writes no workout document at all (Req
+    # 7.5); the old hard-coded `_wrote_a_workout_document` check reds on
+    # every genuinely successful history run, so the field-with-default was
+    # introduced to let `history` supply its own check without changing
+    # any other registration's behavior. This shared-file change (an
+    # addition to `EntryPoint`, not the `history` entry itself) was logged
+    # to the agent log by the controller.
+    EntryPoint(
+        id="history",
+        prepare=_stage_history_pages,
+        run=_run_history,
+        non_vacuous=_wrote_the_history_document,
+    ),
 )
 
 
@@ -481,13 +570,14 @@ def test_entry_point_writes_only_inside_the_permitted_locations(
     contract-named shared files fitdocs legitimately writes (``athlete.toml``,
     which the ``load`` entry point updates and which is deliberately *not*
     owned), plus the locations the settings under test configure -- empty for
-    ``sync``/``regen``/``load``, whose fixtures write no ``[inbox]`` table,
-    and the configured inbox and processed-files directories for ``drain``.
-    The run is also asserted to have
-    *written a workout document*, so a pipeline that silently stopped writing
-    could not pass this guard by doing nothing. The ownership declaration does
-    not count toward that assertion: it is written on every run regardless of
-    whether any source was processed.
+    ``sync``/``regen``/``load``/``history``, whose fixtures write no
+    ``[inbox]`` table, and the configured inbox and processed-files
+    directories for ``drain``. The run is also asserted to have produced its
+    own observable, non-vacuous write (``entry_point.non_vacuous`` -- a
+    workout document under ``workouts/`` for every entry point but
+    ``history``, the history document itself for ``history``, since that
+    pass writes no workout document at all), so a pipeline that silently
+    stopped writing could not pass this guard by doing nothing.
 
     Mutation caught: any write outside the owned tree -- a stray file at the data
     root, a report dropped beside the source directory, a temp file left in the
@@ -504,16 +594,12 @@ def test_entry_point_writes_only_inside_the_permitted_locations(
     entry_point.run(data_root, source_dir)
     after = _snapshot(sandbox)
 
-    # Non-vacuity: the run really did produce a *workout document* under
-    # ``workouts/``. The ownership declaration is excluded deliberately -- since
-    # task 4.2 every entry point writes ``workouts/AGENTS.md`` on every run, so
-    # counting it here would let a pipeline that stopped processing files
-    # entirely satisfy this assertion by placing a declaration and nothing else.
-    assert any(
-        key.startswith(f"data/{WORKOUTS_DIR}/")
-        and key.endswith(".md")
-        and not key.endswith(f"/{DECLARATION_FILENAME}")
-        for key in _touched(before, after)
+    # Non-vacuity: the run really did produce its own registered observable
+    # write. See EntryPoint.non_vacuous's own docstring for why this is no
+    # longer a single hardcoded check shared by every entry point.
+    assert entry_point.non_vacuous(_touched(before, after)), (
+        f"{entry_point.id} entry point's measured run produced no observable "
+        "write; the guard would pass vacuously over a pipeline that wrote nothing"
     )
     configured = configured_locations(data_root)
     assert_confined(sandbox, permitted_locations(data_root, configured), before, after)
@@ -614,3 +700,85 @@ def test_settings_without_an_inbox_table_configure_no_write_location(
     assert permitted_locations(data_root) == tuple(
         data_root / owned for owned in OWNED_PATHS
     ) + tuple(data_root / name for name in PERMITTED_SHARED_FILES)
+
+
+def test_history_entry_point_writes_no_workout_doc_asset_source_profile_or_settings(
+    tmp_path: Path,
+) -> None:
+    """The history run's own, narrower negative claim (Req 7.5), additional to
+    the generic confinement check above.
+
+    ``workouts/``, ``workouts/assets/`` and ``fit-archive/`` are all inside
+    :data:`~fitdocs.layout.OWNED_PATHS`, so the generic ``assert_confined``
+    check in ``test_entry_point_writes_only_inside_the_permitted_locations``
+    above would pass a history run that wrote a stray workout document --
+    that path is itself permitted, for *other* entry points (``sync``,
+    ``regen``, ``load``, ``drain``). The history pass's own guarantee is
+    narrower than "somewhere permitted": stated precisely (Req 7.5, and the
+    task's own "state it precisely rather than broadly"), the run creates,
+    modifies or deletes **no** ``workouts/*.md`` document, **no** file under
+    ``workouts/assets/``, and **no** ``fit-archive/*.fit`` archived source,
+    and it writes neither ``athlete.toml`` nor ``fitdocs.toml`` itself.
+
+    Deliberately **excluded** from this claim: the two in-tree ownership
+    declarations (``workouts/AGENTS.md``, ``fit-archive/AGENTS.md``) --
+    ``fitdocs.declaration.ensure_declarations`` may legitimately create or
+    rewrite either on a data root that has never been synced
+    (``fitdocs.history.engine``'s own module docstring, "Ownership
+    declarations"), so asserting those two files untouched would itself be a
+    false negative claim -- exactly the kind the module docstring above
+    warns a blanket "touches nothing under ``workouts/``" assertion would be.
+
+    Mutation caught: a stand-in run that also writes
+    ``workouts/injected.md`` fails this test's own assertion while the
+    generic confinement guard above stays green for the same write (the path
+    lies inside ``OWNED_PATHS``, so it is merely "permitted", not "forbidden
+    for this pass") -- proving this test catches a class of regression the
+    generic one cannot.
+    """
+    sandbox = tmp_path
+    data_root = sandbox / "data"
+    data_root.mkdir()
+    source_dir = sandbox / "src"
+    _stage_history_pages(data_root, source_dir)
+
+    before = _snapshot(sandbox)
+    _run_history(data_root, source_dir)
+    after = _snapshot(sandbox)
+
+    touched = _touched(before, after)
+
+    no_workout_document = [
+        key
+        for key in touched
+        if key.startswith(f"data/{WORKOUTS_DIR}/")
+        and key.endswith(".md")
+        and not key.endswith(f"/{DECLARATION_FILENAME}")
+    ]
+    no_workout_asset = [
+        key for key in touched if key.startswith(f"data/{WORKOUTS_DIR}/assets/")
+    ]
+    no_archived_source = [
+        key
+        for key in touched
+        if key.startswith(f"data/{ARCHIVE_DIR}/") and key.endswith(".fit")
+    ]
+
+    assert no_workout_document == [], (
+        f"history run wrote a workout document: {no_workout_document}"
+    )
+    assert no_workout_asset == [], (
+        f"history run wrote a workout asset: {no_workout_asset}"
+    )
+    assert no_archived_source == [], (
+        f"history run wrote an archived source: {no_archived_source}"
+    )
+    assert f"data/{ATHLETE_FILE}" not in touched, (
+        "history run wrote the athlete profile"
+    )
+    assert f"data/{SETTINGS_FILE}" not in touched, "history run wrote the settings file"
+
+    # Non-vacuity for this test's own precondition: the run actually wrote
+    # something (the history document), so the negative assertions above are
+    # not vacuously true over a run that did nothing at all.
+    assert f"data/{HISTORY_DIR}/{HISTORY_DOC_STEM}.md" in touched

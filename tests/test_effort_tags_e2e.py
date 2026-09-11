@@ -486,14 +486,30 @@ def test_deleted_document_regenerates_untagged_with_no_warning(
 
 
 def test_no_new_writing_entry_point_was_registered() -> None:
-    """The four registered writing entry points (Req 7.5/7.6, wiki-contract)
-    are unchanged by this feature -- no fifth entry point was added.
+    """The four writing entry points that predate this feature (Req 7.5/7.6,
+    wiki-contract) are still registered, and this feature added none of its
+    own: every registered entry point is either one of those four or one a
+    *later* spec registered under its own name (load-history's ``history``,
+    performance-benchmarks' derivation pass). An effort-tags entry point would
+    have to be named for this feature, and none is.
 
     The generic per-entry-point confinement guard itself lives, unduplicated,
-    in ``tests/test_confinement.py`` (reused there, not reimplemented here);
-    this pins only that the *registry* this feature could have widened still
-    names exactly the four entry points that predate it.
+    in ``tests/test_confinement.py`` (reused there, not reimplemented here).
+    This used to pin the registry by exact equality against the four, which
+    reddened the moment load-history registered its fifth, design-mandated
+    entry point -- the pin now states the narrower claim its docstring always
+    made.
     """
-    assert {
+    registered = {
         entry_point.id for entry_point in test_confinement.WRITING_ENTRY_POINTS
-    } == {"sync", "regen", "load", "drain"}
+    }
+    assert {"sync", "regen", "load", "drain"} <= registered
+    # Round-2 fix (item 7): `"tag" in entry_point_id` also matches an id like
+    # "stage" (s-t-a-g-e contains the substring "tag" at index 1), which
+    # names no effort-tag concept at all -- tightened to the two spellings
+    # an effort-tag-related id would actually use.
+    assert not {
+        entry_point_id
+        for entry_point_id in registered
+        if "effort" in entry_point_id or entry_point_id.endswith("tags")
+    }
