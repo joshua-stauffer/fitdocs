@@ -172,7 +172,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
   - _Boundary: PerformanceSources_
   - _Depends: 1.1_
 
-- [ ] 1.3 Implement the pure arithmetic and its literal guard
+- [x] 1.3 Implement the pure arithmetic and its literal guard
   - Add the arithmetic module: the race-equivalence solve for the distance whose
     predicted time is the one-hour target, the pace that follows from it, the
     time-weighted mean over a sample array, the recorded span, and the
