@@ -388,7 +388,7 @@ report.
   - _Depends: 2.3, 3, 4.1_
   - _Boundary: SurfacePins (consumer guard)_
 
-- [ ] 5.2 End-to-end through the commands
+- [x] 5.2 End-to-end through the commands
   - Drive the installed entry point through the CLI runner, not the engine
     functions, fully offline: either monkeypatch the tile fetch seam the way
     the existing CLI suite's offline-tiles fixture does, or write a settings
@@ -696,3 +696,27 @@ report.
 - 5.1: the identity check is true `is`, not `==` -- and mutating a tuple to test it is harder
   than it looks: `tuple(t) is t` and `(t + ()) is t` are both True in CPython, so a copy-based
   mutation silently tests nothing. Use `tuple(list(t))` to force a distinct equal object.
+- 5.2: AN E2E LEG THAT DRIVES A COMMAND IS NOT EVIDENCE THAT THE COMMAND DID ANYTHING. The
+  `load` leg ran `fitdocs load` and asserted the tag survived -- but the pass reported
+  `Skipped 1 -- missing required inputs` and never edited a byte, so the assertions could not
+  distinguish "preserved my lines" from "did nothing". `kept = []` at BOTH
+  `load/docedit.py:287` and `:326` left the whole e2e file green while reddening 26 tests in
+  `tests/load`. THE FIX IS A PRECONDITION: force a field-free stub calculator via
+  `--calculator` (pattern at `tests/load/test_cli_load.py::_FieldFreeCalculator`, under its own
+  Req 8.4 section), assert `"load_value:" not in before` and `in after`, THEN assert survival.
+  Assert the precondition, not just the postcondition -- at e2e scale this is the
+  "unreachable scenario" anti-pattern wearing a passing CLI invocation as a disguise.
+- 5.2: `assert doc.name in result.output` IS AN EVER-PRESENT TOKEN in this CLI. Every
+  successful regen lists the document under `Written:`, so replacing the warning's subject with
+  a literal (`DocWarning(doc="a-document", ...)`) left the file green and Req 3.4's "names the
+  document" clause pinned by nothing. Pin the WARNING ROW instead: a `Warnings` count that is
+  0 on an untagged baseline and 1 after (two-sided -- it reds at 2 as well), plus the doc line
+  ADJACENT to the detail line. Whitespace-coupled and therefore brittle, but every
+  vacuity-free alternative was worse.
+- 5.2: THREE ROUNDS, AND THE THIRD WAS ONE COMMENT SENTENCE -- "fitdocs ships no calculator"
+  when `registry.available()` returns `['threshold']`. It was the stated justification for the
+  precondition the whole remediation rests on, so a later session debugging that assertion
+  would have been handed the wrong diagnosis. The real reason is that `threshold` declares
+  required athlete inputs and no `athlete.toml` exists. ALSO: the fix to a false sentence is
+  itself a claim -- correcting it introduced a new citation that needed its own check (the
+  same thing happened to 4.2's `effort_event` cell). Verify corrections, not just originals.
