@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import time
+from itertools import combinations
 from pathlib import Path
 
 import pytest
@@ -36,11 +37,14 @@ from fitdocs.layout import (
     ARCHIVE_DIR,
     CACHE_DIR,
     DECLARED_DIRS,
+    HISTORY_DIR,
+    OWNED_PATHS,
     TOOL_STATE_DIR,
     WORKOUTS_DIR,
 )
 
 _WORKOUTS = f"{WORKOUTS_DIR}/"
+_HISTORY = f"{HISTORY_DIR}/"
 _ARCHIVE = f"{ARCHIVE_DIR}/"
 
 
@@ -67,12 +71,18 @@ def _age(path: Path) -> None:
 
 
 def test_declaration_text_is_deterministic() -> None:
-    assert declaration_text(_WORKOUTS) == declaration_text(_WORKOUTS)
-    assert declaration_text(_ARCHIVE) == declaration_text(_ARCHIVE)
+    for directory in DECLARED_DIRS:
+        assert declaration_text(directory) == declaration_text(directory)
 
 
 def test_declaration_text_differs_between_directories() -> None:
-    assert declaration_text(_WORKOUTS) != declaration_text(_ARCHIVE)
+    # Pairwise-distinct over every declared directory, not just the original
+    # workouts-versus-archive pair: with a third directory in play, two of the
+    # three matching (e.g. `history/` accidentally inheriting `workouts/`'s
+    # text) would pass a two-way-only check.
+    texts = {directory: declaration_text(directory) for directory in DECLARED_DIRS}
+    for left, right in combinations(DECLARED_DIRS, 2):
+        assert texts[left] != texts[right], f"{left!r} and {right!r} match"
 
 
 def test_declaration_text_begins_with_the_generated_prefix() -> None:
@@ -116,6 +126,52 @@ def test_workouts_declaration_names_every_user_owned_region() -> None:
         assert f"`{region}`" in text
 
 
+def test_history_declaration_names_no_region_id() -> None:
+    # The history page has no region the athlete owns (Req 7.2, design:
+    # HistoryDeclaration) -- unlike `workouts/`, its text must name none of
+    # `contract.USER_REGIONS`.
+    text = declaration_text(_HISTORY)
+    for region in contract.USER_REGIONS:
+        assert f"`{region}`" not in text
+
+
+def test_history_declaration_names_no_user_owned_key() -> None:
+    # The history page carries no frontmatter the athlete owns either -- the
+    # `_USER_KEYS` fragment `workouts/` selects must not leak into `history/`'s
+    # text (design: HistoryDeclaration, "the dispatch ... selects it for
+    # `workouts/` and not for `history/`").
+    text = declaration_text(_HISTORY)
+    for key in contract.EFFORT_KEYS:
+        assert f"`{key}`" not in text
+
+
+# Every `OWNED_PATHS` member that is NOT in `DECLARED_DIRS` (e.g.
+# `workouts/assets/`, `history/assets/`, `.cache/`, `.fitdocs/`) plus two
+# directories chosen specifically to share a prefix with a declared one
+# without being it: "history" has no trailing slash, and "history-old/" is a
+# sibling directory whose name merely starts with "history". Each member
+# defeats a different wrong dispatch: a `directory.startswith(HISTORY_DIR)`
+# dispatch would wrongly accept "history", "history-old/" and
+# "history/assets/"; a `directory.startswith(WORKOUTS_DIR)` dispatch would
+# wrongly accept "workouts/assets/"; and the remaining members (".cache/",
+# ".fitdocs/", "not-a-declared-dir/") share no prefix with any declared
+# directory, so they pin that the final branch raises rather than falling
+# through to another directory's prose.
+_OUTSIDE_DECLARED_SET = sorted(set(OWNED_PATHS) - set(DECLARED_DIRS)) + [
+    "history",
+    "history-old/",
+    "not-a-declared-dir/",
+]
+
+
+@pytest.mark.parametrize("directory", _OUTSIDE_DECLARED_SET)
+def test_declaration_text_raises_for_a_directory_outside_the_declared_set(
+    directory: str,
+) -> None:
+    with pytest.raises(ValueError):
+        declaration_text(directory)
+
+
 # --- no distributive universals over documents (fix plan step 3) ------------
 
 # Words that would make a declaration sentence a false per-document claim:
@@ -134,8 +190,8 @@ def test_workouts_declaration_names_every_user_owned_region() -> None:
 # *every* document -- is not specific to region prose, so the predicate now
 # inspects every line of the emitted text (including `fit-archive/`'s, which
 # the region-only filter never inspected at all). Widening it was checked
-# against the two current declaration texts line by line and trips no
-# existing sentence: neither text contains any of `_QUANTIFIER_WORDS`
+# against the three current declaration texts line by line and trips no
+# existing sentence: none of them contains any of `_QUANTIFIER_WORDS`
 # anywhere, region line or not.
 _QUANTIFIER_WORDS = ("each", "every", "all documents", "any document")
 
@@ -145,7 +201,7 @@ def _quantifier_hits(text: str) -> list[str]:
     as ``"<word> in line <line>"``.
 
     Factored out of the guard test below so the predicate itself -- not just
-    its behavior against the two live declaration texts -- can be pinned
+    its behavior against the three live declaration texts -- can be pinned
     directly against a synthetic string
     (:func:`test_quantifier_hits_flags_a_synthetic_document_quantifying_sentence`).
     """
@@ -160,7 +216,7 @@ def _quantifier_hits(text: str) -> list[str]:
 
 def test_quantifier_hits_flags_a_synthetic_document_quantifying_sentence() -> None:
     # Synthetic corpus, not the real declaration text: pins `_quantifier_hits`
-    # itself, independent of whatever the two shipped declarations currently
+    # itself, independent of whatever the three shipped declarations currently
     # say. None of these lines mentions "region", so this also pins that the
     # predicate is no longer scoped to region-adjacent lines. Every quantifier
     # sits mid-line, never at line start -- a corpus with the quantifier
@@ -284,26 +340,31 @@ def test_ensure_declarations_leaves_a_current_file_untouched(tmp_path: Path) -> 
     assert all(outcome.state == DeclarationState.CURRENT for outcome in outcomes)
 
 
-def test_ensure_declarations_refreshes_a_stale_file(tmp_path: Path) -> None:
+@pytest.mark.parametrize("directory", DECLARED_DIRS)
+def test_ensure_declarations_refreshes_a_stale_file(
+    tmp_path: Path, directory: str
+) -> None:
     ensure_declarations(tmp_path)
-    workouts_path = declaration_path(tmp_path, _WORKOUTS)
+    target_path = declaration_path(tmp_path, directory)
     stale_text = contract.GENERATED_PREFIX + ": stale content -->\nold\n"
-    workouts_path.write_text(stale_text, encoding="utf-8")
-    _age(workouts_path)
-    aged_mtime = workouts_path.stat().st_mtime_ns
+    target_path.write_text(stale_text, encoding="utf-8")
+    _age(target_path)
+    aged_mtime = target_path.stat().st_mtime_ns
 
     outcomes = ensure_declarations(tmp_path)
 
-    outcome = next(o for o in outcomes if o.directory == _WORKOUTS)
+    outcome = next(o for o in outcomes if o.directory == directory)
     assert outcome.state == DeclarationState.WRITTEN
-    assert workouts_path.read_text(encoding="utf-8") == declaration_text(_WORKOUTS)
-    assert workouts_path.stat().st_mtime_ns != aged_mtime
+    assert target_path.read_text(encoding="utf-8") == declaration_text(directory)
+    assert target_path.stat().st_mtime_ns != aged_mtime
 
 
-def test_ensure_declarations_preserves_a_foreign_file(tmp_path: Path) -> None:
-    (tmp_path / WORKOUTS_DIR).mkdir(parents=True)
-    (tmp_path / ARCHIVE_DIR).mkdir(parents=True)
-    foreign_path = declaration_path(tmp_path, _WORKOUTS)
+@pytest.mark.parametrize("directory", DECLARED_DIRS)
+def test_ensure_declarations_preserves_a_foreign_file(
+    tmp_path: Path, directory: str
+) -> None:
+    (tmp_path / directory).mkdir(parents=True)
+    foreign_path = declaration_path(tmp_path, directory)
     foreign_text = "# My own AGENTS.md\n\nHands off.\n"
     foreign_path.write_text(foreign_text, encoding="utf-8")
     _age(foreign_path)
@@ -317,11 +378,14 @@ def test_ensure_declarations_preserves_a_foreign_file(tmp_path: Path) -> None:
     assert after[key] == before[key]
     assert foreign_path.read_text(encoding="utf-8") == foreign_text
 
-    outcome = next(o for o in outcomes if o.directory == _WORKOUTS)
+    outcome = next(o for o in outcomes if o.directory == directory)
     assert outcome.state == DeclarationState.FOREIGN
-    # The archive directory is untouched by the workouts directory's foreign file.
-    archive_outcome = next(o for o in outcomes if o.directory == _ARCHIVE)
-    assert archive_outcome.state == DeclarationState.WRITTEN
+    # The OTHER two declared directories come back WRITTEN -- one directory's
+    # foreign file never touches its siblings' placement.
+    other_dirs = set(DECLARED_DIRS) - {directory}
+    for other in other_dirs:
+        other_outcome = next(o for o in outcomes if o.directory == other)
+        assert other_outcome.state == DeclarationState.WRITTEN
 
 
 def test_ensure_declarations_never_writes_at_the_data_root(tmp_path: Path) -> None:
@@ -363,25 +427,39 @@ def test_inspect_declarations_writes_nothing(tmp_path: Path) -> None:
     assert after == []
 
 
+@pytest.mark.parametrize(
+    ("stale_dir", "foreign_dir"),
+    [
+        (_WORKOUTS, _ARCHIVE),
+        (_ARCHIVE, _HISTORY),
+        (_HISTORY, _WORKOUTS),
+    ],
+)
 def test_inspect_declarations_reports_current_stale_and_foreign(
-    tmp_path: Path,
+    tmp_path: Path, stale_dir: str, foreign_dir: str
 ) -> None:
+    # Rotated across all three parametrizations so each of `workouts/`,
+    # `fit-archive/`, and `history/` takes the STALE role once and the
+    # FOREIGN role once -- a single fixed pair (e.g. always workouts/archive)
+    # would never exercise `history/` at all.
     ensure_declarations(tmp_path)
 
-    # workouts/: make it stale.
-    workouts_path = declaration_path(tmp_path, _WORKOUTS)
-    workouts_path.write_text(
+    stale_path = declaration_path(tmp_path, stale_dir)
+    stale_path.write_text(
         contract.GENERATED_PREFIX + ": stale -->\nold\n", encoding="utf-8"
     )
 
-    # fit-archive/: make it foreign.
-    archive_path = declaration_path(tmp_path, _ARCHIVE)
-    archive_path.write_text("# hands off\n", encoding="utf-8")
+    foreign_path = declaration_path(tmp_path, foreign_dir)
+    foreign_path.write_text("# hands off\n", encoding="utf-8")
 
     outcomes = {o.directory: o.state for o in inspect_declarations(tmp_path)}
 
-    assert outcomes[_WORKOUTS] == DeclarationState.STALE
-    assert outcomes[_ARCHIVE] == DeclarationState.FOREIGN
+    assert outcomes[stale_dir] == DeclarationState.STALE
+    assert outcomes[foreign_dir] == DeclarationState.FOREIGN
+    # The third, untouched directory is still CURRENT.
+    remaining = set(DECLARED_DIRS) - {stale_dir, foreign_dir}
+    for directory in remaining:
+        assert outcomes[directory] == DeclarationState.CURRENT
 
 
 def test_inspect_declarations_reports_current_when_matching(tmp_path: Path) -> None:

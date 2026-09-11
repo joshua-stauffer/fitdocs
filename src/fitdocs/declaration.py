@@ -18,9 +18,9 @@ Two things happen here and nowhere else:
   repository layout, and the same text may ship in a distribution artifact
   whose file list excludes the documentation directory. Every prose claim it
   can make lives in a module-level fragment table, each written exactly once
-  and reused by both directories -- `declaration_text` only selects and orders
+  and reused across directories -- `declaration_text` only selects and orders
   fragments, so a claim can never be fixed in one directory's text while an
-  unpinned copy stands in the other's. The two emitted texts are pinned as
+  unpinned copy stands in another's. The three emitted texts are pinned as
   committed byte-goldens under ``tests/declaration_golden/`` rather than
   substring assertions.
 - **Placement** (:func:`ensure_declarations`) writes only when a directory's
@@ -56,6 +56,8 @@ from fitdocs.contract import (
 from fitdocs.layout import (
     ARCHIVE_DIR,
     DECLARED_DIRS,
+    HISTORY_DIR,
+    WORKOUTS_DIR,
 )
 
 __all__ = [
@@ -130,14 +132,16 @@ class DeclarationOutcome:
 # --- claim fragment table ----------------------------------------------------
 #
 # Every prose claim the emitted text can possibly make is written here EXACTLY
-# ONCE, as a named fragment, and reused by both directories. `declaration_text`
+# ONCE, as a named fragment, and reused across directories. `declaration_text`
 # below only *selects and orders* fragments for a given directory -- it holds no
 # prose string literal that is not one of these names. This is deliberate: three
 # review rounds each fixed a false sentence in one of the two hand-written
-# branches this replaced, and each left an unexamined copy of the same claim (or
-# a related one) standing in the other branch, or introduced a new one while
-# fixing it. A single shared table makes that shape of mistake structurally
-# impossible -- there is nowhere for a second, unpinned copy of a claim to hide.
+# branches this originally replaced, and each left an unexamined copy of the
+# same claim (or a related one) standing in the other branch, or introduced a
+# new one while fixing it. A single shared table makes that shape of mistake
+# structurally impossible -- there is nowhere for a second, unpinned copy of a
+# claim to hide, even now that a third directory (`history/`) selects its own
+# subset of fragments below.
 #
 # Each fragment's comment names the exact code that makes it true, so a future
 # change that breaks the claim has a specific site to re-check.
@@ -154,12 +158,16 @@ _WRITTEN_AND_OWNED: Final[str] = (
     "The contents of `{directory}` are written and tool-owned by fitdocs."
 )
 # CLAIM ANCHOR: every writer into `layout.DECLARED_DIRS` is fitdocs itself --
-# `ensure_declarations` here, `sync._write_outputs` (sync.py:567) for documents
-# and assets, and `load.engine`'s atomic temp-file-then-`os.replace` document
-# rewrite (engine.py:476), which a `write_text` grep does not surface. True of
-# both `workouts/` and `fit-archive/` -- fitdocs is the one that copies an
-# export's bytes into `fit-archive/<sha>.fit`, even though those bytes
-# originate outside fitdocs (Req 3.2).
+# `ensure_declarations` here, `sync._write_outputs` for documents and assets,
+# `load.engine`'s atomic temp-file-then-`os.replace` document rewrite (which a
+# `write_text` grep does not surface), and the (not-yet-implemented)
+# `history/engine.py`'s `HistoryEngine` (design.md, lands in task 5.2), which
+# writes the history chart and then the history page, the page by that same
+# atomic idiom. True of
+# all three directories this fragment is selected for -- `workouts/`,
+# `history/`, and `fit-archive/` -- fitdocs is the one that copies an export's
+# bytes into `fit-archive/<sha>.fit`, even though those bytes originate
+# outside fitdocs (Req 3.2).
 
 _REGIONS: Final[str] = (
     "This directory holds generated workout documents; the user-owned "
@@ -186,8 +194,9 @@ _USER_KEYS: Final[str] = (
 # `USER_KEYS`/`MANAGED_KEYS`). Quantifies over *keys*, never over documents --
 # it uses none of `_QUANTIFIER_WORDS`
 # (`tests/test_declaration.py::test_no_declaration_quantifies_over_documents`),
-# so it does not trip that guard (Req 6.4). Workouts only: the archive
-# declaration gains nothing but the restated version.
+# so it does not trip that guard (Req 6.4). Workouts only: neither the
+# archive declaration nor the history declaration gains anything but the
+# restated version.
 
 _REDERIVABILITY_DOCS: Final[str] = (
     "The *generated* content of the documents in this directory is "
@@ -241,6 +250,38 @@ _NEVER_ADD_MARKER: Final[str] = (
 # this fragment claims no such thing (the one actionable rule Req 3.2a's
 # amendment retains).
 
+_HISTORY_CONTENT: Final[str] = (
+    "This directory holds one generated longitudinal page and its chart "
+    "image, both rewritten in full whenever `fitdocs history` runs. Neither "
+    "carries a user-owned region of any kind."
+)
+# CLAIM ANCHOR: `layout.history_doc_path` and `layout.history_asset_path` /
+# `history_asset_rel_path` (layout.py) each take no per-activity argument and
+# return exactly one path -- there is one history document and one chart per
+# data root (Req 5.1), unlike `doc_path`/`asset_rel_path`'s per-stem paths for
+# `workouts/`. `HistoryCommand` (design.md) has no `--force` and no
+# `--recompute`: the page is always rebuilt in full, so "rewritten in full"
+# is the command's only mode, not an option. The page reserves no region
+# because nothing under the (not-yet-implemented) `history/` package imports
+# `docmerge`'s region helpers or emits a region marker -- the history page is
+# a `history/` module concern entirely, distinct from `render/views.py`'s
+# workout-document renderers that do.
+
+_HISTORY_RERUNNABLE: Final[str] = (
+    "The page is re-derivable from the workout documents alone: deleting it "
+    "costs only a re-run of `fitdocs history`."
+)
+# CLAIM ANCHOR: design.md's DocumentScan component (`history/documents.py`) --
+# its only filesystem read is `workouts/*.md`, explicitly excluding
+# `history/`, `fit-archive/`, and every `.fit` file; `HistoryEngine`'s stated
+# inputs are that scan plus the `[history]` settings table (`HistorySettings`)
+# and the `[load]` table's `default_calculator` field
+# (`LoadSettings.default_calculator`) -- design.md ~1334-1335: "Reads
+# `fitdocs.toml` exactly once ... and projects it through both table
+# readers" -- never the athlete profile or the archive. Nothing the page
+# depends on is itself only re-derivable from the page, so regenerating it
+# loses no information the workout documents did not already carry.
+
 _OWNER_BLOCK: Final[str] = (
     "## Ownership\n\n"
     "Owner: `{generator}`.\n"
@@ -287,19 +328,34 @@ def declaration_text(directory: str) -> str:
     is deferred to the published ownership contract (task 7.1), reached by
     ``CONTRACT_DOCUMENTATION_URL``.
 
-    For the directory holding generated documents (``workouts/``): the
-    written-and-tool-owned statement, the user-owned region names, the
+    Dispatches explicitly on ``directory`` over exactly the three members of
+    `layout.DECLARED_DIRS` -- ``workouts/``, ``history/``, ``fit-archive/`` --
+    with **no fall-through branch**: a ``directory`` this function does not
+    recognize raises :class:`ValueError` rather than silently inheriting
+    another directory's prose.
+
+    For the directory holding generated workout documents (``workouts/``):
+    the written-and-tool-owned statement, the user-owned region names, the
     user-owned effort-tag frontmatter keys (Req 6.4), and re-derivability by
-    regeneration (Req 3.2), plus the never-add-a-marker rule. For the source
-    archive (``fit-archive/``): the written-and-tool-owned statement and the
-    immutable-inputs statement (Req 3.3) -- the re-derivability,
-    user-owned-region, and user-owned-key elements do not apply here (Req
-    3.2a, 6.4), so this branch never selects those fragments.
+    regeneration (Req 3.2), plus the never-add-a-marker rule. For the
+    longitudinal history directory (``history/``): the written-and-tool-owned
+    statement, a statement that its one page and chart carry no user-owned
+    region of any kind, and a statement that the page is re-derivable from
+    the workout documents alone (Req 7.2) -- the region-name, user-owned-key,
+    and never-add-a-marker elements do not apply here, because the page has
+    no frontmatter and no region the athlete owns, so this branch never
+    selects those fragments. For the source archive (``fit-archive/``): the
+    written-and-tool-owned statement and the immutable-inputs statement (Req
+    3.3) -- the re-derivability, user-owned-region, and user-owned-key
+    elements do not apply here either (Req 3.2a, 6.4), so this branch never
+    selects those fragments.
 
     No fragment quantifies over documents ("each"/"every"/"all
     documents"/"any document"): only :func:`~fitdocs.render.views.render_strength`
     emits :data:`~fitdocs.contract.WORKOUT_REGION`, so a document-distributive
-    claim about regions would be false for most golden documents (Req 3.2a).
+    claim about regions would be false for most golden documents (Req 3.2a);
+    the history page is not a workout document at all, and no fragment names
+    a region it does not have.
 
     The emitted text is plain markdown with no YAML frontmatter (Req 3.4, 3.7):
     it is readable without fitdocs installed, renders correctly in common
@@ -316,12 +372,7 @@ def declaration_text(directory: str) -> str:
         contract_url=CONTRACT_DOCUMENTATION_URL,
     )
 
-    if directory == ARCHIVE_DIR + "/":
-        heading = "Source Archive"
-        body = (
-            f"{_WRITTEN_AND_OWNED.format(directory=directory)}\n\n{_IMMUTABILITY}\n\n"
-        )
-    else:
+    if directory == WORKOUTS_DIR + "/":
         heading = "Generated Workout Documents"
         body = (
             f"{_WRITTEN_AND_OWNED.format(directory=directory)}\n\n"
@@ -329,6 +380,22 @@ def declaration_text(directory: str) -> str:
             f"{_USER_KEYS.format(user_keys_list=user_keys_list)}\n\n"
             f"{_REDERIVABILITY_DOCS.format(archive_dir=ARCHIVE_DIR)}\n\n"
             f"{_NEVER_ADD_MARKER}\n\n"
+        )
+    elif directory == HISTORY_DIR + "/":
+        heading = "Generated Training-Load History"
+        body = (
+            f"{_WRITTEN_AND_OWNED.format(directory=directory)}\n\n"
+            f"{_HISTORY_CONTENT}\n\n"
+            f"{_HISTORY_RERUNNABLE}\n\n"
+        )
+    elif directory == ARCHIVE_DIR + "/":
+        heading = "Source Archive"
+        body = (
+            f"{_WRITTEN_AND_OWNED.format(directory=directory)}\n\n{_IMMUTABILITY}\n\n"
+        )
+    else:
+        raise ValueError(
+            f"declaration_text: {directory!r} is not a member of layout.DECLARED_DIRS"
         )
 
     return (

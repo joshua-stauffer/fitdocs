@@ -1,4 +1,7 @@
-"""Byte-golden pin for the two emitted ``AGENTS.md`` declaration texts (task 4.1).
+"""Byte-golden pin for the three emitted ``AGENTS.md`` declaration texts.
+
+Task 4.1 originally; extended by ``load-history`` task 1.2 to a third,
+``history/``, directory.
 
 Three review rounds each cleared a named false sentence in
 ``fitdocs.declaration.declaration_text``'s hand-written prose and each left a
@@ -26,15 +29,18 @@ from pathlib import Path
 import pytest
 
 from fitdocs.declaration import declaration_text
-from fitdocs.layout import ARCHIVE_DIR, DECLARED_DIRS, WORKOUTS_DIR
+from fitdocs.layout import ARCHIVE_DIR, DECLARED_DIRS, HISTORY_DIR, WORKOUTS_DIR
 
 _GOLDEN_DIR = Path(__file__).parent / "declaration_golden"
 
 # Directory (data-root-relative, POSIX, trailing slash) -> golden filename stem.
 # Named so the directory is recoverable from the filename, per task 4.1's fix
-# plan step 5.
+# plan step 5. A literal dictionary, not a derivation over `DECLARED_DIRS`: a
+# declared directory with no entry here makes both `_golden_path` and the
+# parameterized test below raise `KeyError` rather than silently skip it.
 _GOLDEN_NAMES: dict[str, str] = {
     f"{WORKOUTS_DIR}/": "workouts",
+    f"{HISTORY_DIR}/": "history",
     f"{ARCHIVE_DIR}/": "fit-archive",
 }
 

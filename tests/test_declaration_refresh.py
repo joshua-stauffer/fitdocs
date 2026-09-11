@@ -6,7 +6,7 @@ isolation. This module covers task 4.2's job -- *wiring* that unit into the two
 engine entry points this spec implements (``sync`` and ``regen``) as one shared
 step, ``fitdocs.sync.refresh_declarations``:
 
-* a first run creates both declarations (Req 3.1, wired through the entry points);
+* a first run creates every declaration (Req 3.1, wired through the entry points);
 * a second run with no new files leaves every path under the data root byte- and
   mtime-identical, declarations included (Req 3.8);
 * a foreign declaration is preserved untouched, becomes a document-scoped
@@ -31,8 +31,10 @@ import time
 from datetime import timedelta, timezone
 from pathlib import Path
 
+import pytest
+
 from fitdocs.declaration import DECLARATION_FILENAME, declaration_path
-from fitdocs.layout import ARCHIVE_DIR, DECLARED_DIRS, WORKOUTS_DIR
+from fitdocs.layout import ARCHIVE_DIR, DECLARED_DIRS, HISTORY_DIR, WORKOUTS_DIR
 from fitdocs.load import engine as load_engine
 from fitdocs.load.engine import apply_load
 from fitdocs.load.prompts import NonInteractiveSession
@@ -41,6 +43,7 @@ from tests.fixtures import builder
 
 _TZ = timezone(timedelta(hours=-6))
 _WORKOUTS = f"{WORKOUTS_DIR}/"
+_HISTORY = f"{HISTORY_DIR}/"
 _ARCHIVE = f"{ARCHIVE_DIR}/"
 
 
@@ -100,10 +103,10 @@ def _declared_paths(data_root: Path) -> list[Path]:
     return [declaration_path(data_root, directory) for directory in DECLARED_DIRS]
 
 
-# --- first run creates both declarations -------------------------------------
+# --- first run creates every declaration --------------------------------------
 
 
-def test_first_sync_run_creates_both_declarations(tmp_path: Path) -> None:
+def test_first_sync_run_creates_every_declaration(tmp_path: Path) -> None:
     source = tmp_path / "src"
     data_root = tmp_path / "data"
     data_root.mkdir()
@@ -116,7 +119,7 @@ def test_first_sync_run_creates_both_declarations(tmp_path: Path) -> None:
         assert path.name == DECLARATION_FILENAME
 
 
-def test_first_regen_run_creates_both_declarations(tmp_path: Path) -> None:
+def test_first_regen_run_creates_every_declaration(tmp_path: Path) -> None:
     # regen takes no source directory -- an empty data root still gets its
     # declarations, because the refresh runs before any document processing,
     # not conditioned on there being anything to regenerate.
@@ -151,7 +154,7 @@ def test_second_sync_run_leaves_the_whole_data_root_byte_and_mtime_identical(
     after = _snapshot(data_root)
     assert second.written == ()
     assert len(second.skipped) == 1
-    # Every path -- documents, assets, archive, AND both declarations -- is
+    # Every path -- documents, assets, archive, AND every declaration -- is
     # untouched: same bytes, same mtime.
     assert after == before
 
@@ -184,7 +187,7 @@ def test_second_regen_run_rewrites_docs_byte_identically_leaves_declarations_alo
     assert {key: value[0] for key, value in after.items()} == {
         key: value[0] for key, value in before.items()
     }
-    # The two declarations specifically are untouched down to the mtime: regen's
+    # Every declaration specifically is untouched down to the mtime: regen's
     # unconditional per-document rewrite does not apply to them.
     declaration_keys = [
         declaration_path(data_root, directory).relative_to(data_root).as_posix()
@@ -204,8 +207,9 @@ def _plant_foreign(data_root: Path, directory: str) -> Path:
     return path
 
 
+@pytest.mark.parametrize("directory", DECLARED_DIRS)
 def test_sync_preserves_a_foreign_declaration_and_reports_only_a_warning(
-    tmp_path: Path,
+    tmp_path: Path, directory: str
 ) -> None:
     source = tmp_path / "src"
     data_root = tmp_path / "data"
@@ -215,10 +219,14 @@ def test_sync_preserves_a_foreign_declaration_and_reports_only_a_warning(
     # are processed. With a single source a per-file refresh would be
     # indistinguishable from a once-per-run one and the placement requirement
     # (Req 3.5, "once per run ... before per-file processing") would go
-    # unenforced.
+    # unenforced. Parametrized over every declared directory -- including
+    # `history/` -- so a foreign file in any declared directory is proved to
+    # warn rather than fail, not only the two directories a fixed pair
+    # exercises. (Owned paths that receive no declaration, such as the two
+    # assets subdirectories, are not what `refresh_declarations` looks at.)
     _put(source, "run.fit", builder.run_fit_bytes())
     _put(source, "ride.fit", builder.ride_fit_bytes())
-    foreign = _plant_foreign(data_root, _WORKOUTS)
+    foreign = _plant_foreign(data_root, directory)
     foreign_text = foreign.read_text(encoding="utf-8")
 
     report = _sync(source, data_root)
@@ -230,25 +238,26 @@ def test_sync_preserves_a_foreign_declaration_and_reports_only_a_warning(
     assert len(report.written) == 2
     # Exactly one warning names the foreign declaration's data-root-relative
     # path -- one per RUN, not one per processed file.
-    expected_doc = f"{_WORKOUTS}{DECLARATION_FILENAME}"
+    expected_doc = f"{directory}{DECLARATION_FILENAME}"
     matching = [w for w in report.warnings if w.doc == expected_doc]
     assert len(matching) == 1
     assert matching[0].detail  # non-empty, human-readable
 
 
+@pytest.mark.parametrize("directory", DECLARED_DIRS)
 def test_regen_preserves_a_foreign_declaration_and_reports_only_a_warning(
-    tmp_path: Path,
+    tmp_path: Path, directory: str
 ) -> None:
     data_root = tmp_path / "data"
     data_root.mkdir()
-    foreign = _plant_foreign(data_root, _ARCHIVE)
+    foreign = _plant_foreign(data_root, directory)
     foreign_text = foreign.read_text(encoding="utf-8")
 
     report = _regen(data_root)
 
     assert foreign.read_text(encoding="utf-8") == foreign_text
     assert report.failures == ()
-    expected_doc = f"{_ARCHIVE}{DECLARATION_FILENAME}"
+    expected_doc = f"{directory}{DECLARATION_FILENAME}"
     matching = [w for w in report.warnings if w.doc == expected_doc]
     assert len(matching) == 1
 
@@ -257,19 +266,18 @@ def test_refresh_declarations_appends_a_warning_per_foreign_directory(
     tmp_path: Path,
 ) -> None:
     # Unit-level check of the shared step itself, isolated from either entry
-    # point: both declared directories foreign -> two warnings, one per path.
+    # point: all three declared directories foreign -> three warnings, one
+    # per path -- not just the two-directory case a fixed workouts/archive
+    # pair would leave the only one exercised.
     data_root = tmp_path / "data"
-    _plant_foreign(data_root, _WORKOUTS)
-    _plant_foreign(data_root, _ARCHIVE)
+    for directory in DECLARED_DIRS:
+        _plant_foreign(data_root, directory)
     warnings: list[DocWarning] = []
 
     refresh_declarations(data_root, warnings)
 
     docs = {w.doc for w in warnings}
-    assert docs == {
-        f"{_WORKOUTS}{DECLARATION_FILENAME}",
-        f"{_ARCHIVE}{DECLARATION_FILENAME}",
-    }
+    assert docs == {f"{directory}{DECLARATION_FILENAME}" for directory in DECLARED_DIRS}
 
 
 # --- load never places declarations ------------------------------------------
@@ -363,11 +371,12 @@ def test_sync_regen_load_report_unchanged_document_counts_with_declarations_pres
     assert len(first.written) == 2
     count_after_sync = _workout_doc_count(data_root)
     assert count_after_sync == 2
-    # Both declarations really are present alongside the two documents, each
-    # ending in ``.md`` -- the exact shape that would inflate a naive
+    # All three declarations really are present alongside the two documents,
+    # each ending in ``.md`` -- the exact shape that would inflate a naive
     # ``glob("*.md")`` count if the scans did not filter on frontmatter.
     assert (data_root / WORKOUTS_DIR / DECLARATION_FILENAME).is_file()
     assert (data_root / ARCHIVE_DIR / DECLARATION_FILENAME).is_file()
+    assert (data_root / HISTORY_DIR / DECLARATION_FILENAME).is_file()
     assert len(list((data_root / WORKOUTS_DIR).glob("*.md"))) == 3
 
     second_sync = _sync(source, data_root)
