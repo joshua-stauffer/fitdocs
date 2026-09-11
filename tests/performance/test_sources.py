@@ -431,6 +431,28 @@ def test_borszcz_carries_the_measured_forty_watt_limits_of_agreement() -> None:
     assert "40 W" in text, text
 
 
+def test_ftp_limits_of_agreement_is_short_and_names_borszcz_and_forty_watts() -> None:
+    """Round 2, item 5: the derived-entry-facing statement is a dedicated,
+    short sentence -- not the ~900-char `BORSZCZ_2018.note` citation
+    bookkeeping, which would otherwise land verbatim in an athlete's
+    `athlete.toml`. Asserted short (under 300 chars, well below the note's
+    own length) and carrying both the citation name and the measured
+    figure.
+
+    Rebinding `FTP_LIMITS_OF_AGREEMENT` to `BORSZCZ_2018.note` (or any
+    equally long text) reds the length assertion; a leaf that bypasses the
+    constant is caught in `tests/performance/test_derive.py`, not here.
+    """
+    statement = sources.FTP_LIMITS_OF_AGREEMENT
+    assert statement, "the statement is empty"
+    assert len(statement) < 300, len(statement)
+    borszcz_note = sources.BORSZCZ_2018.note or ""
+    assert len(borszcz_note) > 300, "the bookkeeping note is not actually long"
+    assert statement != borszcz_note
+    assert "Borszcz" in statement
+    assert "40 W" in statement
+
+
 # --- Coggan cross-module agreement (Req 8.8) --------------------------------
 
 

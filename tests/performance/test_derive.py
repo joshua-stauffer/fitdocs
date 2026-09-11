@@ -1430,3 +1430,1125 @@ def test_lthr_never_raises_on_a_decline_path() -> None:
         assert outcome.reason is expected_reason
         assert outcome.detail != ""
         assert outcome.method is DerivationMethod.SUSTAINED_EFFORT_MEAN_HR
+
+
+# =============================================================================
+# functional threshold power (task 3.3)
+# =============================================================================
+
+
+def _power_samples(
+    time_s: tuple[float, ...], power_w: tuple[int | None, ...]
+) -> Samples:
+    return Samples(
+        time_s=time_s,
+        heart_rate_bpm=(),
+        power_w=power_w,
+        cadence_rpm=(),
+        speed_mps=(),
+        distance_m=(),
+        altitude_m=(),
+        latitude_deg=(),
+        longitude_deg=(),
+        temperature_c=(),
+    )
+
+
+def _power_activity(
+    *,
+    sport: Sport,
+    modality: Modality,
+    samples: Samples,
+) -> Activity:
+    return Activity(
+        schema_version=SCHEMA_VERSION,
+        provenance=Provenance(sha256="3" * 64, source_path=None, decode_errors=()),
+        sport=sport,
+        modality=modality,
+        is_indoor=False,
+        start_time=None,
+        summary=_summary(total_distance_m=None, total_elapsed_time_s=None),
+        laps=(),
+        samples=samples,
+        sets=(),
+        devices=(),
+    )
+
+
+_FTP_ON = date(2024, 7, 1)
+_FTP_DOCUMENT = "workouts/2024-07-01-ftp-test.md"
+_FTP_MIN_S = sources.FTP_DEFINITION_MIN_DURATION_S.value
+_FTP_MAX_S = sources.FTP_DEFINITION_MAX_DURATION_S.value
+_FTP_FLOOR_S = sources.FTP_SHORT_PROTOCOL_FLOOR_S.value
+
+
+def test_full_coverage_fifty_five_minute_effort_derives_whole_watts() -> None:
+    """A 55-minute (3300 s) cycling time trial with full power coverage
+    derives (Req 4.1, 4.2, 4.10). The two half-weighted segments (200 W,
+    201 W) time-weight to exactly 200.5 W -- a tie Python's banker's
+    `round()` would send to 200 (the even neighbour) while the
+    round-half-away-from-zero rule sends to 201, so this fixture
+    discriminates `models.whole_watts` from a bare `round()`. It also
+    discriminates against a 0.95 scaling factor: `0.95 * 200.5 == 190.475`,
+    rounding to 190 -- nowhere near the derived value.
+
+    Mutation this dies on: `round()` instead of `models.whole_watts` (the
+    value would be `200` instead of `201`); applying any scaling factor to
+    the mean before rounding.
+    """
+    samples = _power_samples((0.0, 1650.0, 3300.0), (200, 201, 201))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.RACE)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivedBenchmark)
+    assert outcome.value == 201.0
+    assert outcome.value != 200.0
+    assert outcome.value != pytest.approx(190.0)
+    assert float(outcome.value).is_integer()
+    assert outcome.kind is BenchmarkKind.FTP_WATTS
+    assert outcome.discipline is Sport.RIDE
+    assert outcome.method is DerivationMethod.TIME_TRIAL_MEAN_POWER
+    assert outcome.measured_on == _FTP_ON
+    assert outcome.citation_key == sources.COGGAN_2003.key
+    assert f"{3300.0:g}" in outcome.inputs
+
+
+def test_ftp_derived_value_is_the_time_weighted_mean_not_the_sample_count_mean() -> (
+    None
+):
+    """Req 4.2: the derived number is the time-weighted mean over the whole
+    effort, not an unweighted sample-count mean. A heavy 3200 s interval at
+    100 W followed by a light 100 s interval at 300 W time-weights to
+    ~106.06 W, while the plain arithmetic mean of the three recorded values
+    is ~233.33 W -- computed independently here and asserted unequal before
+    either is compared against the outcome (fixture discrimination).
+
+    Mutation this dies on: computing an unweighted sample-count mean
+    instead of `models.time_weighted_mean` -- the outcome would then equal
+    the sample-count candidate instead.
+    """
+    time_s = (0.0, 3200.0, 3300.0)
+    values: tuple[int | None, ...] = (100, 300, 300)
+    samples = _power_samples(time_s, values)
+
+    time_weighted = models.time_weighted_mean(samples, values)
+    sample_count_mean = sum(v for v in values if v is not None) / len(
+        [v for v in values if v is not None]
+    )
+    assert time_weighted is not None
+    assert time_weighted != pytest.approx(sample_count_mean)
+
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.TEST)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivedBenchmark)
+    assert outcome.value == pytest.approx(models.whole_watts(time_weighted))
+    assert outcome.value != pytest.approx(models.whole_watts(sample_count_mean))
+
+
+def test_derived_note_carries_borszcz_limits_of_agreement() -> None:
+    """Req 4.8: the derived entry's note always carries Borszcz et al.'s
+    published limits of agreement -- reached through
+    `sources.FTP_LIMITS_OF_AGREEMENT` (the short, derived-entry-facing
+    statement), never a retyped figure. The whole statement string is
+    asserted present, not merely a matched phrase, so a mutation that swaps
+    in unrelated boilerplate containing the words "limits of agreement"
+    would still be caught.
+
+    Mutation this dies on: dropping the statement from the derived entry's
+    `note` -- `sources.FTP_LIMITS_OF_AGREEMENT` would no longer be a
+    substring of `outcome.note`.
+    """
+    samples = _power_samples((0.0, 1650.0, 3300.0), (200, 200, 200))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.RACE)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivedBenchmark)
+    statement = sources.FTP_LIMITS_OF_AGREEMENT
+    assert statement != ""
+    assert "limits of agreement" in outcome.note
+    assert statement in outcome.note
+
+
+def test_derived_note_reads_the_statement_through_the_sources_binding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """4.8 record binding pin (round 2, item 4): the leaf reads
+    `sources.FTP_LIMITS_OF_AGREEMENT` at call time rather than embedding a
+    retyped copy of the text. Patching the module attribute to a sentinel
+    makes the sentinel appear in the derived note and the real statement
+    disappear -- a retyped literal in `derive.py` would leave the sentinel
+    absent and the real (pre-patch) text present regardless of the patch.
+
+    Mutation this dies on: retyping
+    `sources.FTP_LIMITS_OF_AGREEMENT`'s text as a literal inside
+    `functional_threshold_power` instead of reading the module attribute --
+    the sentinel would never appear in `outcome.note`.
+    """
+    real_statement = sources.FTP_LIMITS_OF_AGREEMENT
+    sentinel = "SENTINEL limits of agreement 40 W statement"
+    assert sentinel != real_statement
+
+    monkeypatch.setattr(sources, "FTP_LIMITS_OF_AGREEMENT", sentinel)
+
+    samples = _power_samples((0.0, 1650.0, 3300.0), (200, 200, 200))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.RACE)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivedBenchmark)
+    assert sentinel in outcome.note
+    assert real_statement not in outcome.note
+
+
+def test_twenty_minute_test_declines_unverified_while_fifty_five_minute_derives() -> (
+    None
+):
+    """Req 4.3, 4.4: in the same fixture set, a 20-minute (1200 s) cycling
+    test -- inside the routing floor but below the FTP definition's own
+    window -- declines `METHOD_UNVERIFIED` naming the suspected work, its
+    suspected locator and what must be read, all read from
+    `sources.PENDING_CONSTANTS` with no numeric value anywhere in the
+    detail, while a 55-minute (3300 s) effort from the same activity kind
+    still derives -- proving the block is scoped to the one method rather
+    than disabling the leaf entirely.
+    """
+    short_samples = _power_samples((0.0, 1200.0), (220, 220))
+    short_activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=short_samples
+    )
+    tag = _tag(kind=EffortKind.TEST)
+
+    short_outcome = derive.functional_threshold_power(
+        short_activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(short_outcome, DerivationDeclined)
+    assert short_outcome.kind is BenchmarkKind.FTP_WATTS
+    assert short_outcome.reason is DeclineReason.METHOD_UNVERIFIED
+    assert short_outcome.method is DerivationMethod.TWENTY_MINUTE_POWER_FACTOR
+    pending = sources.PENDING_CONSTANTS[0]
+    assert pending.suspected_work in short_outcome.detail
+    assert pending.suspected_locator in short_outcome.detail
+    assert pending.what_would_resolve in short_outcome.detail
+    assert "0.95" not in short_outcome.detail
+
+    long_samples = _power_samples((0.0, 3300.0), (220, 220))
+    long_activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=long_samples
+    )
+
+    long_outcome = derive.functional_threshold_power(
+        long_activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(long_outcome, DerivedBenchmark)
+
+
+def test_removing_the_blocked_method_lets_the_short_protocol_fall_through(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pin, tasks.md 3.3: the decline above is anchored to
+    `sources.BLOCKED_METHODS` itself, not merely to the duration range.
+    Patching that set to no longer contain the twenty-minute factor makes
+    the exact same 20-minute effort fall through to the generic
+    `OUTSIDE_VALIDITY_WINDOW` decline instead of `METHOD_UNVERIFIED` -- the
+    named mutation ("removing the blocked method from the blocked set").
+
+    Mutation this dies on: hard-coding the duration-range check without
+    consulting `sources.BLOCKED_METHODS` at all -- this test's patched set
+    would then have no effect, and the reason would stay `METHOD_UNVERIFIED`
+    when it must not.
+    """
+    samples = _power_samples((0.0, 1200.0), (220, 220))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.TEST)
+
+    baseline = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+    assert isinstance(baseline, DerivationDeclined)
+    assert baseline.reason is DeclineReason.METHOD_UNVERIFIED
+
+    monkeypatch.setattr(sources, "BLOCKED_METHODS", frozenset())
+
+    patched = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+    assert isinstance(patched, DerivationDeclined)
+    assert patched.reason is not DeclineReason.METHOD_UNVERIFIED
+    assert patched.reason is DeclineReason.OUTSIDE_VALIDITY_WINDOW
+
+
+@pytest.mark.parametrize("sport", [Sport.RUN, Sport.SWIM])
+def test_running_activity_with_full_power_coverage_never_derives_ftp(
+    sport: Sport,
+) -> None:
+    """Req 4.9: a non-cycling activity derives no functional threshold
+    power even when it carries a full, in-window power stream -- the sport
+    gate this leaf carries on its own, independent of the routing table
+    (3.4). Parametrised over `Sport.RUN` and `Sport.SWIM` so an
+    implementation that special-cases only running (`is Sport.RUN` instead
+    of `is not Sport.RIDE`) is caught by the swim case.
+
+    Mutation this dies on: removing the `activity.sport is not Sport.RIDE`
+    check -- this fixture, whose power stream and window are otherwise a
+    clean derive, would then produce a `DerivedBenchmark` instead of
+    declining `SPORT_NOT_COVERED`. Substituting `is Sport.RUN` for
+    `is not Sport.RIDE` reds only the `Sport.SWIM` case.
+    """
+    modality = Modality.RUN if sport is Sport.RUN else Modality.SWIM
+    samples = _power_samples((0.0, 1650.0, 3300.0), (200, 200, 200))
+    activity = _power_activity(sport=sport, modality=modality, samples=samples)
+    tag = _tag(kind=EffortKind.RACE)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivationDeclined)
+    assert outcome.kind is BenchmarkKind.FTP_WATTS
+    assert outcome.reason is DeclineReason.SPORT_NOT_COVERED
+    assert sport.value in outcome.detail
+
+
+@pytest.mark.parametrize("kind", [EffortKind.HARD])
+def test_hard_kind_declines_effort_kind_not_used(kind: EffortKind) -> None:
+    """Req: the routing table names FTP `race`/`test` only for cycling; a
+    `hard` tag declines rather than deriving.
+
+    Mutation this dies on: accepting every effort kind (dropping the kind
+    gate) -- this fixture would then derive instead of declining.
+    """
+    samples = _power_samples((0.0, 1650.0, 3300.0), (200, 200, 200))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=kind)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivationDeclined)
+    assert outcome.kind is BenchmarkKind.FTP_WATTS
+    assert outcome.reason is DeclineReason.EFFORT_KIND_NOT_USED
+
+
+def test_wrong_channel_would_apply_the_wrong_coverage_minimum_for_power() -> None:
+    """The caller-supplied `power_min_stream_coverage` override -- not the
+    heart-rate channel's -- governs this leaf's coverage gate. A 70%
+    covered stream passes the power override (50%) but would fail the HR
+    override (99%) if the leaf mistakenly gated on `ChannelId.HEART_RATE`.
+
+    Mutation this dies on: passing `ChannelId.HEART_RATE` (or any channel
+    other than `ChannelId.POWER`) to `sufficiency.evaluate` -- this fixture
+    would then decline `STREAM_COVERAGE` instead of deriving.
+    """
+    samples = _power_samples((0.0, 2310.0, 3300.0), (200, None, None))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.RACE)
+    settings = SufficiencySettings(
+        power_min_stream_coverage=0.5, hr_min_stream_coverage=0.99
+    )
+
+    outcome = derive.functional_threshold_power(
+        activity, tag, on=_FTP_ON, document=_FTP_DOCUMENT, sufficiency=settings
+    )
+
+    assert isinstance(outcome, DerivedBenchmark)
+
+
+def test_stream_absent_declines_naming_power() -> None:
+    """Req 4.6: no power anywhere declines with a reason stating that the
+    file carries no power.
+
+    Mutation this dies on: passing a stream label other than "power" to
+    `sufficiency.evaluate` -- `"power"` would no longer appear in the
+    detail.
+    """
+    samples = _power_samples((0.0, 3300.0), (None, None))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.RACE)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivationDeclined)
+    assert outcome.kind is BenchmarkKind.FTP_WATTS
+    assert outcome.reason is DeclineReason.STREAM_ABSENT
+    assert "power" in outcome.detail
+
+
+def test_ftp_sparse_coverage_below_minimum_declines_with_observed_fraction() -> None:
+    """Req 4.5: coverage below the configured minimum declines naming the
+    observed coverage and the required minimum. 1650 s of a 3300 s effort
+    is covered (fraction 0.5), below the default 0.80 minimum.
+
+    Mutation this dies on: reporting a fixed placeholder fraction instead
+    of the measured one -- `observed` would then not equal the true `0.5`
+    fraction this fixture actually produces.
+    """
+    samples = _power_samples((0.0, 1650.0, 3300.0), (200, None, None))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.RACE)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivationDeclined)
+    assert outcome.kind is BenchmarkKind.FTP_WATTS
+    assert outcome.reason is DeclineReason.STREAM_COVERAGE
+    assert outcome.observed == pytest.approx(0.5)
+    assert outcome.required == pytest.approx(0.80)
+
+
+def test_below_floor_declines_outside_the_validity_window() -> None:
+    """Req 4.7: a duration below the routing floor (500 s) declines
+    `OUTSIDE_VALIDITY_WINDOW` naming the observed duration and the floor as
+    the bound crossed -- distinct from `METHOD_UNVERIFIED`, whose range
+    starts only at the floor.
+    """
+    samples = _power_samples((0.0, 500.0), (200, 200))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.RACE)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivationDeclined)
+    assert outcome.kind is BenchmarkKind.FTP_WATTS
+    assert outcome.reason is DeclineReason.OUTSIDE_VALIDITY_WINDOW
+    assert outcome.observed == pytest.approx(500.0)
+    assert outcome.required == pytest.approx(_FTP_FLOOR_S)
+    assert outcome.required != pytest.approx(_FTP_MAX_S)
+    assert f"{500.0:g}" in outcome.detail
+    assert f"{_FTP_FLOOR_S:g}" in outcome.detail
+    assert f"{_FTP_MAX_S:g}" in outcome.detail
+
+
+def test_above_max_declines_outside_the_validity_window() -> None:
+    """Req 4.7, mirror of the floor case: a duration above the definition's
+    own maximum (5000 s) declines `OUTSIDE_VALIDITY_WINDOW`, naming the
+    maximum as the bound crossed.
+    """
+    samples = _power_samples((0.0, 5000.0), (200, 200))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.RACE)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivationDeclined)
+    assert outcome.kind is BenchmarkKind.FTP_WATTS
+    assert outcome.reason is DeclineReason.OUTSIDE_VALIDITY_WINDOW
+    assert outcome.observed == pytest.approx(5000.0)
+    assert outcome.required == pytest.approx(_FTP_MAX_S)
+    assert outcome.required != pytest.approx(_FTP_FLOOR_S)
+    assert f"{_FTP_FLOOR_S:g}" in outcome.detail
+    assert f"{_FTP_MAX_S:g}" in outcome.detail
+
+
+@pytest.mark.parametrize("bound", ["min", "max"])
+def test_duration_exactly_at_definition_bounds_is_not_declined(bound: str) -> None:
+    """The definition's window is closed (inclusive at both ends): a
+    duration exactly at either published bound derives rather than
+    declining, at the fixture's true 200 W mean -- pinned so a mutation
+    that applies a scaling factor only near one bound (e.g. only below
+    `min_duration_s`) cannot hide behind an unchecked value.
+
+    Mutation this dies on: flipping either bound comparison from `<=` to
+    `<` reds the corresponding case; a single fixture at one bound alone
+    cannot catch a flip at the other, hence both cases here. Applying a
+    scaling factor only near the min bound reds the `value` assertion on
+    the `min` case without reddening the `max` case.
+    """
+    bound_s = _FTP_MIN_S if bound == "min" else _FTP_MAX_S
+    samples = _power_samples((0.0, bound_s), (200, 200))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.RACE)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivedBenchmark)
+    assert outcome.value == 200.0
+
+
+def test_at_floor_declines_unverified_one_second_below_declines_window() -> None:
+    """The blocked range is `[floor, min)`, half-open: a duration exactly
+    at the floor (900 s) declines `METHOD_UNVERIFIED`, while one second
+    below it (899 s) already falls outside every window this feature
+    covers and declines `OUTSIDE_VALIDITY_WINDOW` instead.
+
+    Mutation this dies on: shifting the floor comparison from `<=` to `<`
+    -- the 900 s fixture would then decline `OUTSIDE_VALIDITY_WINDOW`
+    instead of `METHOD_UNVERIFIED`.
+    """
+    tag = _tag(kind=EffortKind.TEST)
+
+    at_floor_samples = _power_samples((0.0, _FTP_FLOOR_S), (200, 200))
+    at_floor_activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=at_floor_samples
+    )
+    at_floor_outcome = derive.functional_threshold_power(
+        at_floor_activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+    assert isinstance(at_floor_outcome, DerivationDeclined)
+    assert at_floor_outcome.reason is DeclineReason.METHOD_UNVERIFIED
+
+    below_floor_samples = _power_samples((0.0, _FTP_FLOOR_S - 1.0), (200, 200))
+    below_floor_activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=below_floor_samples
+    )
+    below_floor_outcome = derive.functional_threshold_power(
+        below_floor_activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+    assert isinstance(below_floor_outcome, DerivationDeclined)
+    assert below_floor_outcome.reason is DeclineReason.OUTSIDE_VALIDITY_WINDOW
+
+
+def test_duration_just_below_min_is_unverified_min_itself_derives() -> None:
+    """The blocked range's upper edge is exclusive: 2999 s (one second
+    below the definition's minimum) still declines `METHOD_UNVERIFIED`,
+    while 3000 s itself (already covered by the bounds test above) derives.
+
+    Mutation this dies on: an inclusive upper comparison on the blocked
+    range (`<=` instead of `<` against the minimum) has no separate
+    observable here since 2999 already satisfies either -- this fixture
+    instead pins that 2999 s is *not* mistakenly routed to
+    `OUTSIDE_VALIDITY_WINDOW`.
+    """
+    samples = _power_samples((0.0, _FTP_MIN_S - 1.0), (200, 200))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.TEST)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivationDeclined)
+    assert outcome.reason is DeclineReason.METHOD_UNVERIFIED
+
+
+def test_ftp_unmeasurable_recorded_span_declines_missing_input_never_raises() -> None:
+    """A single-sample recording declines `MISSING_INPUT` naming an absent
+    observed value, rather than raising or fabricating a `0.0` duration.
+
+    Mutation this dies on: restoring a `0.0` fallback for a `None` recorded
+    duration -- this fixture would then fall through to the shared
+    sufficiency gate on a single-sample stream and decline `TOO_SHORT` with
+    a fabricated `observed=0.0` instead of `MISSING_INPUT` with
+    `observed=None`.
+    """
+    samples = _power_samples((0.0,), (200,))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.RACE)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivationDeclined)
+    assert outcome.kind is BenchmarkKind.FTP_WATTS
+    assert outcome.reason is DeclineReason.MISSING_INPUT
+    assert outcome.observed is None
+    assert outcome.required is None
+
+
+@pytest.mark.parametrize("value", [0, -5])
+def test_non_positive_power_stream_declines_rather_than_deriving(value: int) -> None:
+    """Hard rule (design § PerformanceTypes postcondition: a derived value
+    is finite and positive; never a fabricated zero or negative): a zero or
+    negative power stream over an otherwise valid window declines
+    `MISSING_INPUT`, never a `DerivedBenchmark` carrying that value.
+
+    Mutation this dies on: removing the `_finite_positive(mean_watts)` gate
+    -- this fixture would then derive a `DerivedBenchmark` with
+    `value == 0.0` or `value == -5.0` instead of declining.
+    """
+    samples = _power_samples((0.0, 1650.0, 3300.0), (value, value, value))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.RACE)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivationDeclined)
+    assert outcome.kind is BenchmarkKind.FTP_WATTS
+    assert outcome.reason is DeclineReason.MISSING_INPUT
+    assert outcome.observed == pytest.approx(float(value))
+
+
+def test_ftp_undated_document_declines_before_every_other_gate() -> None:
+    """The undated gate runs first, unconditionally. This fixture's
+    activity is a running sport with an absent power stream -- would
+    otherwise decline `SPORT_NOT_COVERED` on its own merits -- so if the
+    undated gate ran anywhere but first, this fixture would surface that
+    later reason instead of `UNDATED_DOCUMENT`.
+
+    Mutation this dies on: moving the `on is None` check to run after the
+    sport gate -- this fixture would then decline `SPORT_NOT_COVERED`
+    instead of `UNDATED_DOCUMENT`.
+    """
+    samples = _power_samples((0.0, 3300.0), (None, None))
+    activity = _power_activity(sport=Sport.RUN, modality=Modality.RUN, samples=samples)
+    tag = _tag(kind=EffortKind.RACE)
+
+    outcome = derive.functional_threshold_power(
+        activity, tag, on=None, document=_FTP_DOCUMENT, sufficiency=_DEFAULT_SUFFICIENCY
+    )
+
+    assert isinstance(outcome, DerivationDeclined)
+    assert outcome.kind is BenchmarkKind.FTP_WATTS
+    assert outcome.reason is DeclineReason.UNDATED_DOCUMENT
+    assert _FTP_DOCUMENT in outcome.detail
+
+
+def test_ftp_derived_value_is_dated_at_the_passed_on_date_not_the_wall_clock() -> None:
+    """The derived value's `measured_on` is exactly the `on` argument -- a
+    fixed date far from today, so a `date.today()` implementation could
+    never accidentally match it.
+
+    Mutation this dies on: dating from `date.today()` instead of `on`.
+    """
+    samples = _power_samples((0.0, 1650.0, 3300.0), (200, 200, 200))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.RACE)
+    fixed_on = date(2019, 6, 1)
+    assert fixed_on != date.today()
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=fixed_on,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivedBenchmark)
+    assert outcome.measured_on == fixed_on
+
+
+def test_ftp_official_time_disagreeing_with_recorded_span_declines_span_mismatch() -> (
+    None
+):
+    """Req 3.6 (shared with LTHR): the tag's official time (3000 s)
+    disagrees with the recorded span (3600 s, a 20% difference) by more
+    than the 5% tolerance -- declines naming both durations.
+
+    Mutation this dies on: ignoring the span-tolerance check entirely --
+    this fixture, whose power stream and window gates both pass cleanly,
+    would then derive instead of declining.
+    """
+    samples = _power_samples((0.0, 1800.0, 3600.0), (200, 200, 200))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.RACE, time_s=3000.0)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivationDeclined)
+    assert outcome.kind is BenchmarkKind.FTP_WATTS
+    assert outcome.reason is DeclineReason.EFFORT_SPAN_MISMATCH
+    assert "3600" in outcome.detail
+    assert "3000" in outcome.detail
+    assert outcome.observed == pytest.approx(3600.0)
+    assert outcome.required == pytest.approx(3000.0)
+
+
+def test_ftp_official_time_longer_than_recorded_span_declines_span_mismatch() -> None:
+    """One-sided tolerance pin: the official time (4000 s) is the *longer*
+    duration here and the recording (3300 s) the shorter one -- the other
+    span-mismatch fixture in this module has the recording longer, so a
+    one-sided tolerance check (comparing only `recorded - official`) would
+    survive undetected without this fixture.
+
+    Mutation this dies on: a one-sided check such as
+    `(recorded - tag.time_s) > tolerance * tag.time_s` (dropping `abs`) --
+    this fixture would then derive instead of declining, since
+    `recorded - tag.time_s` is negative here.
+    """
+    samples = _power_samples((0.0, 1650.0, 3300.0), (200, 200, 200))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.RACE, time_s=4000.0)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivationDeclined)
+    assert outcome.reason is DeclineReason.EFFORT_SPAN_MISMATCH
+    assert outcome.observed == pytest.approx(3300.0)
+    assert outcome.required == pytest.approx(4000.0)
+
+
+def test_ftp_span_exactly_at_tolerance_is_not_declined() -> None:
+    """The tolerance edge is inclusive: a recording exactly `tolerance`
+    longer than the official time derives. Operands are exact in binary so
+    the difference equals the threshold bit-for-bit."""
+    official_s = 3200.0
+    tolerance = sources.EFFORT_SPAN_TOLERANCE.value
+    recorded_s = official_s * (1 + tolerance)
+    assert recorded_s - official_s == tolerance * official_s
+    assert _FTP_MIN_S <= recorded_s <= _FTP_MAX_S
+    samples = _power_samples((0.0, recorded_s / 2, recorded_s), (200, 200, 200))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.RACE, time_s=official_s)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivedBenchmark)
+
+
+def test_ftp_span_just_over_tolerance_declines_for_a_test_tag() -> None:
+    """Just past the tolerance of the *official* time, on a `test` tag:
+    0.05 x 3200 = 160 < 161, while a tolerance scaled by the recorded span
+    (0.05 x 3361 = 168.05) would have accepted it. In-window recorded span
+    and full coverage, so only the span gate can decline."""
+    official_s = 3200.0
+    recorded_s = 3361.0
+    tolerance = sources.EFFORT_SPAN_TOLERANCE.value
+    assert tolerance * official_s < recorded_s - official_s
+    assert recorded_s - official_s < tolerance * recorded_s
+    assert _FTP_MIN_S <= recorded_s <= _FTP_MAX_S
+    samples = _power_samples((0.0, 1680.0, recorded_s), (200, 200, 200))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.TEST, time_s=official_s)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivationDeclined)
+    assert outcome.reason is DeclineReason.EFFORT_SPAN_MISMATCH
+    assert outcome.observed == pytest.approx(recorded_s)
+    assert outcome.required == pytest.approx(official_s)
+
+
+def test_span_mismatch_declines_ahead_of_sparse_coverage_and_window() -> None:
+    """Gate-ordering ruling (copied from `lactate_threshold_hr`, Implementation
+    Notes): a mismatched official time (3300 s) inside a recording that is
+    both SPARSE (below the coverage minimum) and itself outside the FTP
+    window (5400 s) still declines `EFFORT_SPAN_MISMATCH` -- the span gate
+    runs ahead of both the sufficiency gate and the window check.
+
+    Mutation this dies on: checking sufficiency or the window before the
+    span (swapping the gates) -- this fixture would then decline
+    `STREAM_COVERAGE` or `OUTSIDE_VALIDITY_WINDOW` instead.
+    """
+    samples = _power_samples((0.0, 2700.0, 5400.0), (200, None, None))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.RACE, time_s=3300.0)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivationDeclined)
+    assert outcome.reason is DeclineReason.EFFORT_SPAN_MISMATCH
+
+
+def test_ftp_window_is_judged_on_the_recorded_span_not_the_official_time() -> None:
+    """Req 4.2/4.7, the F10 lesson (3.2's Implementation Notes): the
+    blocked-range routing is judged on the *recorded* span, never the tag's
+    official time. Here the tag's official time sits exactly on the
+    definition's lower bound (3000 s) while the recorded span (2900 s,
+    within the 5% tolerance of 3000 s) sits inside the blocked range
+    instead, so only the recorded span can explain the decline. The
+    `OUTSIDE_VALIDITY_WINDOW` side of the same claim (the max-bound side) is
+    pinned separately by
+    `test_ftp_max_bound_window_is_judged_on_recorded_span_not_official_time`.
+
+    Mutation this dies on: judging the window against `tag.time_s` instead
+    of the recorded span -- this fixture would then derive (3000 s sits
+    exactly at the definition's own lower bound) instead of declining
+    `METHOD_UNVERIFIED`.
+    """
+    tolerance = sources.EFFORT_SPAN_TOLERANCE.value
+    assert abs(2900.0 - _FTP_MIN_S) <= tolerance * _FTP_MIN_S
+
+    samples = _power_samples((0.0, 1450.0, 2900.0), (200, 200, 200))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.RACE, time_s=_FTP_MIN_S)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivationDeclined)
+    assert outcome.reason is DeclineReason.METHOD_UNVERIFIED
+
+
+def test_ftp_max_bound_window_is_judged_on_recorded_span_not_official_time() -> None:
+    """Req 4.2/4.7, the F10 lesson's other side (round 2, item 1): the
+    `OUTSIDE_VALIDITY_WINDOW` decline above the maximum is also judged on
+    the *recorded* span, never the tag's official time. Here the tag's
+    official time sits exactly on the definition's upper bound (4200 s)
+    while the recorded span (4300 s, within the 5% tolerance of 4200 s)
+    sits 100 s past it -- so only the recorded span can explain the
+    decline.
+
+    Mutation this dies on: judging the window (`tag.time_s if tag.time_s is
+    not None else recorded_duration_s`) against the tag's official time
+    instead of the recorded span -- this fixture would then derive (4200 s
+    sits exactly at the definition's own upper bound) instead of declining
+    `OUTSIDE_VALIDITY_WINDOW`.
+    """
+    tolerance = sources.EFFORT_SPAN_TOLERANCE.value
+    assert abs(4300.0 - _FTP_MAX_S) <= tolerance * _FTP_MAX_S
+
+    samples = _power_samples((0.0, 2150.0, 4300.0), (200, 200, 200))
+    activity = _power_activity(
+        sport=Sport.RIDE, modality=Modality.BIKE, samples=samples
+    )
+    tag = _tag(kind=EffortKind.RACE, time_s=_FTP_MAX_S)
+
+    outcome = derive.functional_threshold_power(
+        activity,
+        tag,
+        on=_FTP_ON,
+        document=_FTP_DOCUMENT,
+        sufficiency=_DEFAULT_SUFFICIENCY,
+    )
+
+    assert isinstance(outcome, DerivationDeclined)
+    assert outcome.reason is DeclineReason.OUTSIDE_VALIDITY_WINDOW
+    assert outcome.observed == pytest.approx(4300.0)
+    assert outcome.required == pytest.approx(_FTP_MAX_S)
+
+
+def test_ftp_never_raises_on_a_decline_path() -> None:
+    """Sweep over every reachable `DeclineReason` on this leaf, enumerated
+    from the gate order in `functional_threshold_power`'s own docstring:
+    undated, sport not covered, effort kind not used, missing input (via
+    either of its two reachable routes), stream absent, sparse coverage
+    (with and without an agreeing official time), too short, span mismatch,
+    method unverified, and outside the validity window (via either of its
+    two reachable bounds). Each returns rather than raises, and each
+    carries a non-empty `detail`.
+
+    The sparse-coverage row that also carries an agreeing `tag.time_s`
+    (round 2, item 6) dies on a mutation that runs the sufficiency
+    evaluation only when `tag.time_s is None` -- a plausible bug that
+    forgets to gate the coverage check when an official time is present;
+    the pre-existing sparse-coverage row (no official time) does not
+    exercise that branch and would stay green under that mutation.
+    """
+    fixtures: list[
+        tuple[
+            date | None,
+            Sport,
+            EffortKind,
+            tuple[float, ...],
+            tuple[int | None, ...],
+            float | None,
+            DeclineReason,
+        ]
+    ] = [
+        (
+            None,
+            Sport.RIDE,
+            EffortKind.RACE,
+            (0.0, 1650.0, 3300.0),
+            (200, 200, 200),
+            None,
+            DeclineReason.UNDATED_DOCUMENT,
+        ),
+        (
+            _FTP_ON,
+            Sport.RUN,
+            EffortKind.RACE,
+            (0.0, 1650.0, 3300.0),
+            (200, 200, 200),
+            None,
+            DeclineReason.SPORT_NOT_COVERED,
+        ),
+        (
+            _FTP_ON,
+            Sport.RIDE,
+            EffortKind.HARD,
+            (0.0, 1650.0, 3300.0),
+            (200, 200, 200),
+            None,
+            DeclineReason.EFFORT_KIND_NOT_USED,
+        ),
+        (
+            _FTP_ON,
+            Sport.RIDE,
+            EffortKind.RACE,
+            (0.0,),
+            (200,),
+            None,
+            DeclineReason.MISSING_INPUT,
+        ),
+        (
+            _FTP_ON,
+            Sport.RIDE,
+            EffortKind.RACE,
+            (0.0, 1650.0, 3300.0),
+            (0, 0, 0),
+            None,
+            DeclineReason.MISSING_INPUT,
+        ),
+        (
+            _FTP_ON,
+            Sport.RIDE,
+            EffortKind.RACE,
+            (0.0, 3300.0),
+            (None, None),
+            None,
+            DeclineReason.STREAM_ABSENT,
+        ),
+        (
+            _FTP_ON,
+            Sport.RIDE,
+            EffortKind.RACE,
+            (0.0, 1650.0, 3300.0),
+            (200, None, None),
+            None,
+            DeclineReason.STREAM_COVERAGE,
+        ),
+        (
+            _FTP_ON,
+            Sport.RIDE,
+            EffortKind.RACE,
+            (0.0, 1650.0, 3300.0),
+            (200, None, None),
+            3300.0,
+            DeclineReason.STREAM_COVERAGE,
+        ),
+        (
+            _FTP_ON,
+            Sport.RIDE,
+            EffortKind.RACE,
+            (0.0, 30.0),
+            (200, 200),
+            None,
+            DeclineReason.TOO_SHORT,
+        ),
+        (
+            _FTP_ON,
+            Sport.RIDE,
+            EffortKind.RACE,
+            (0.0, 1650.0, 3300.0),
+            (200, 200, 200),
+            2000.0,
+            DeclineReason.EFFORT_SPAN_MISMATCH,
+        ),
+        (
+            _FTP_ON,
+            Sport.RIDE,
+            EffortKind.TEST,
+            (0.0, 1200.0),
+            (200, 200),
+            None,
+            DeclineReason.METHOD_UNVERIFIED,
+        ),
+        (
+            _FTP_ON,
+            Sport.RIDE,
+            EffortKind.RACE,
+            (0.0, 500.0),
+            (200, 200),
+            None,
+            DeclineReason.OUTSIDE_VALIDITY_WINDOW,
+        ),
+        (
+            _FTP_ON,
+            Sport.RIDE,
+            EffortKind.RACE,
+            (0.0, 5000.0),
+            (200, 200),
+            None,
+            DeclineReason.OUTSIDE_VALIDITY_WINDOW,
+        ),
+    ]
+    for on, sport, kind, time_s, values, tag_time_s, expected_reason in fixtures:
+        samples = _power_samples(time_s, values)
+        modality = Modality.BIKE if sport is Sport.RIDE else Modality.RUN
+        activity = _power_activity(sport=sport, modality=modality, samples=samples)
+        tag = _tag(kind=kind, time_s=tag_time_s)
+
+        outcome = derive.functional_threshold_power(
+            activity,
+            tag,
+            on=on,
+            document=_FTP_DOCUMENT,
+            sufficiency=_DEFAULT_SUFFICIENCY,
+        )
+
+        assert isinstance(outcome, DerivationDeclined)
+        assert outcome.kind is BenchmarkKind.FTP_WATTS
+        assert outcome.reason is expected_reason
+        assert outcome.detail != ""

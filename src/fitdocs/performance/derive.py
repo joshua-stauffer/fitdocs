@@ -14,8 +14,11 @@ race kind only, solved through the Riegel race-equivalence model
 (`fitdocs.performance.models.threshold_pace_s_per_km`). `lactate_threshold_hr`
 (task 3.2) is the second: LTHR for running and cycling, all three effort
 kinds, the time-weighted mean heart rate over the whole recorded effort.
-3.3 and 3.4 add the remaining leaf and the `derive()` routing entry point to
-this module.
+`functional_threshold_power` (task 3.3) is the third: FTP for cycling races
+and tests, the time-weighted mean power over the whole effort with no
+scaling factor, when the recorded duration falls inside the FTP definition's
+own window, and a blocked decline for the unverified shorter protocol. 3.4
+adds the `derive()` routing entry point to this module.
 """
 
 from __future__ import annotations
@@ -409,6 +412,249 @@ def lactate_threshold_hr(
             "heart rate over the whole recorded effort, never a selected "
             "portion and never with a leading or trailing segment "
             "discarded."
+        ),
+        document=document,
+    )
+
+
+def _method_unverified_detail(pending: sources.PendingConstant) -> str:
+    """The `METHOD_UNVERIFIED` detail text for the blocked short-protocol
+    factor, naming the suspected work, its suspected locator and what must
+    be read -- every piece read from `pending` (Req 8.5), never a bare
+    numeric value *for the factor itself* anywhere in this string (the
+    suspected work's own publication year, e.g. "2010", legitimately
+    appears)."""
+    return (
+        f"the twenty-minute short-protocol power factor is not verified: "
+        f"suspected work {pending.suspected_work}; "
+        f"suspected locator {pending.suspected_locator}; "
+        f"what would resolve this: {pending.what_would_resolve}"
+    )
+
+
+def functional_threshold_power(
+    activity: Activity,
+    tag: EffortTag,
+    *,
+    on: date | None,
+    document: str,
+    sufficiency: SufficiencySettings,
+) -> DerivationOutcome:
+    """Functional threshold power for a cycling race or test, cycling only
+    (design: DerivationLeaf; Req 4.1-4.10). Computes the time-weighted mean
+    power (`fitdocs.performance.models.time_weighted_mean`) over the *whole*
+    recorded effort, with no scaling factor, when the recorded duration
+    falls inside the FTP definition's own window
+    (`sources.FTP_DEFINITION_MIN_DURATION_S` / `_MAX_DURATION_S`), expressed
+    in whole watts (`models.whole_watts`) under `Sport.RIDE`.
+
+    Unlike `lactate_threshold_hr`, this leaf does not assume its caller has
+    already restricted it to cycling: it carries its own `SPORT_NOT_COVERED`
+    check (Req 4.9) so a running activity -- even one recording running
+    power -- never derives FTP through this function, whether or not the
+    routing table (3.4) also excludes it.
+
+    Gate order, each carrying a non-empty `detail` and never raising (design
+    § Per-quantity gates; the Implementation Notes' ruling for the stream
+    leaves -- undated, span agreement, sufficiency, window -- copied here
+    with the sport and kind gates from `threshold_pace`/the design's overall
+    flow inserted ahead of the span gate):
+
+    - `UNDATED_DOCUMENT` -- `on` is `None` (7.6). Checked first, ahead of
+      every other gate.
+    - `SPORT_NOT_COVERED` -- `activity.sport` is not `Sport.RIDE` (Req 4.9):
+      this leaf covers cycling only, and never derives FTP for a running
+      activity even when it records power.
+    - `EFFORT_KIND_NOT_USED` -- the tag's kind is not `race` or `test` (the
+      routing table names FTP `race`/`test` for cycling; a `hard` tag
+      declines here).
+    - `MISSING_INPUT` -- the recorded duration itself
+      (`models.recorded_span_s`) carries no usable value. `required` is
+      `None`, mirroring `lactate_threshold_hr`'s ruling for the same
+      condition.
+    - `EFFORT_SPAN_MISMATCH` -- only when the tag carries `time_s`: the
+      recorded span disagrees with it by more than
+      `sources.EFFORT_SPAN_TOLERANCE`.
+    - The shared sufficiency evaluation gates the power stream
+      (`ChannelId.POWER`) next; its verdict (`TOO_SHORT`, `STREAM_ABSENT`,
+      `STREAM_COVERAGE`) is carried through via
+      `DeclineReason.from_insufficiency` (4.5, 4.6).
+    - Duration routing over three ranges, none clamped:
+      - inside `[FTP_DEFINITION_MIN_DURATION_S, FTP_DEFINITION_MAX_DURATION_S]`
+        -- derives.
+      - inside `[FTP_SHORT_PROTOCOL_FLOOR_S, FTP_DEFINITION_MIN_DURATION_S)`
+        -- declines `METHOD_UNVERIFIED`, naming the suspected work, its
+        suspected locator and what must be read, all read from
+        `sources.PENDING_CONSTANTS` -- no numeric value for the factor
+        itself anywhere (4.3, 4.4).
+        Every other derivation in the run is unaffected: this decline
+        returns from this one call and touches no other leaf or activity.
+      - outside both -- declines `OUTSIDE_VALIDITY_WINDOW`, naming the
+        observed duration and the bound crossed (below the routing floor,
+        or above the definition's own maximum) (4.7).
+    - `MISSING_INPUT` -- the time-weighted mean power itself is not a
+      finite, positive number, mirroring `lactate_threshold_hr`'s hard rule
+      against a fabricated zero or negative value.
+
+    The derived entry's `note` always carries Borszcz et al.'s published
+    limits of agreement for the twenty-minute protocol (Req 4.8), reached
+    through `sources.FTP_LIMITS_OF_AGREEMENT` -- a short, derived-entry-
+    facing statement, not the citation bookkeeping carried on
+    `sources.BORSZCZ_2018.note` -- rather than a retyped figure.
+    """
+    method = DerivationMethod.TIME_TRIAL_MEAN_POWER
+
+    if on is None:
+        return DerivationDeclined(
+            kind=BenchmarkKind.FTP_WATTS,
+            method=method,
+            reason=DeclineReason.UNDATED_DOCUMENT,
+            detail=f"{document} carries no parseable date to derive against",
+        )
+
+    if activity.sport is not Sport.RIDE:
+        return DerivationDeclined(
+            kind=BenchmarkKind.FTP_WATTS,
+            method=method,
+            reason=DeclineReason.SPORT_NOT_COVERED,
+            detail=(
+                f"functional threshold power is not derived for sport "
+                f"{activity.sport.value!r} (cycling only)"
+            ),
+        )
+
+    if tag.kind not in (EffortKind.RACE, EffortKind.TEST):
+        return DerivationDeclined(
+            kind=BenchmarkKind.FTP_WATTS,
+            method=method,
+            reason=DeclineReason.EFFORT_KIND_NOT_USED,
+            detail=(
+                f"effort kind {tag.kind.value!r} is not used for functional "
+                "threshold power (race or test only)"
+            ),
+        )
+
+    recorded_duration_s = models.recorded_span_s(activity.samples)
+    if recorded_duration_s is None:
+        return DerivationDeclined(
+            kind=BenchmarkKind.FTP_WATTS,
+            method=method,
+            reason=DeclineReason.MISSING_INPUT,
+            detail=(
+                "the recorded duration carries no usable value (fewer than "
+                "two samples, or a non-positive total span)"
+            ),
+            observed=None,
+            required=None,
+        )
+
+    if tag.time_s is not None:
+        tolerance = sources.EFFORT_SPAN_TOLERANCE.value
+        if abs(recorded_duration_s - tag.time_s) > tolerance * tag.time_s:
+            return DerivationDeclined(
+                kind=BenchmarkKind.FTP_WATTS,
+                method=method,
+                reason=DeclineReason.EFFORT_SPAN_MISMATCH,
+                detail=(
+                    f"recorded span {recorded_duration_s:g}s disagrees with "
+                    f"the tag's official time {tag.time_s:g}s beyond the "
+                    f"{tolerance:g} tolerance; locating the effort inside a "
+                    "longer recording is out of scope"
+                ),
+                observed=recorded_duration_s,
+                required=tag.time_s,
+            )
+
+    verdict = _sufficiency_evaluate(
+        activity.samples,
+        activity.samples.power_w,
+        channel=ChannelId.POWER,
+        stream="power",
+        settings=sufficiency,
+    )
+    if isinstance(verdict, ChannelInsufficient):
+        return DerivationDeclined(
+            kind=BenchmarkKind.FTP_WATTS,
+            method=method,
+            reason=DeclineReason.from_insufficiency(verdict.reason),
+            detail=verdict.detail,
+            observed=verdict.observed,
+            required=verdict.required,
+        )
+
+    min_duration_s = sources.FTP_DEFINITION_MIN_DURATION_S.value
+    max_duration_s = sources.FTP_DEFINITION_MAX_DURATION_S.value
+    floor_s = sources.FTP_SHORT_PROTOCOL_FLOOR_S.value
+
+    if (
+        floor_s <= recorded_duration_s < min_duration_s
+        and DerivationMethod.TWENTY_MINUTE_POWER_FACTOR in sources.BLOCKED_METHODS
+    ):
+        # The decline is anchored to `BLOCKED_METHODS` itself, not merely to
+        # this duration range, so a change to the blocked set is the single
+        # source of truth for whether this method is available -- were the
+        # twenty-minute factor ever unblocked, this branch would no longer
+        # fire and a duration in this range would fall through to the
+        # window check below instead.
+        pending = next(
+            p
+            for p in sources.PENDING_CONSTANTS
+            if p.blocks is DerivationMethod.TWENTY_MINUTE_POWER_FACTOR
+        )
+        return DerivationDeclined(
+            kind=BenchmarkKind.FTP_WATTS,
+            method=DerivationMethod.TWENTY_MINUTE_POWER_FACTOR,
+            reason=DeclineReason.METHOD_UNVERIFIED,
+            detail=_method_unverified_detail(pending),
+        )
+
+    if not (min_duration_s <= recorded_duration_s <= max_duration_s):
+        # `required` names the specific bound this duration actually
+        # crossed: the routing floor below, or the definition's own
+        # maximum above -- never both, and never the bound it satisfies.
+        required = floor_s if recorded_duration_s < floor_s else max_duration_s
+        return DerivationDeclined(
+            kind=BenchmarkKind.FTP_WATTS,
+            method=method,
+            reason=DeclineReason.OUTSIDE_VALIDITY_WINDOW,
+            detail=(
+                f"duration {recorded_duration_s:g}s is outside every "
+                "window this feature covers "
+                f"(below {floor_s:g}s or above {max_duration_s:g}s)"
+            ),
+            observed=recorded_duration_s,
+            required=required,
+        )
+
+    mean_watts = models.time_weighted_mean(activity.samples, activity.samples.power_w)
+    if not _finite_positive(mean_watts):
+        return DerivationDeclined(
+            kind=BenchmarkKind.FTP_WATTS,
+            method=method,
+            reason=DeclineReason.MISSING_INPUT,
+            detail=(
+                "the time-weighted mean power "
+                f"({_fmt(mean_watts)} W) is not a finite, positive number"
+            ),
+            observed=mean_watts,
+        )
+
+    assert mean_watts is not None  # narrowed by `_finite_positive` above
+
+    return DerivedBenchmark(
+        kind=BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RIDE,
+        value=float(models.whole_watts(mean_watts)),
+        measured_on=on,
+        method=method,
+        citation_key=sources.COGGAN_2003.key,
+        inputs=(
+            f"power stream over the whole recorded effort ({recorded_duration_s:g} s)"
+        ),
+        note=(
+            "Functional threshold power via the time-weighted average "
+            "power over the whole effort, with no scaling factor applied. "
+            + sources.FTP_LIMITS_OF_AGREEMENT
         ),
         document=document,
     )

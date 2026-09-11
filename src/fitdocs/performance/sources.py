@@ -523,6 +523,18 @@ FTP_SHORT_PROTOCOL_FLOOR_S: Final[CitedConstant[float]] = CitedConstant(
 every window this feature covers, rather than as the blocked short
 protocol -- not Allen & Coggan's own 20-minute number."""
 
+FTP_LIMITS_OF_AGREEMENT: Final[str] = (
+    "Borszcz et al. (2018) reports limits of agreement of roughly "
+    "plus-or-minus 40 W between the 20-minute-test protocol's FTP estimate "
+    "and a directly measured FTP."
+)
+"""The short, derived-entry-facing statement of Borszcz et al.'s (2018)
+measured limits of agreement (Req 4.8) -- deliberately distinct from
+:attr:`BORSZCZ_2018.note`, which carries this module's own citation
+bookkeeping (what was and was not read, what would resolve it) and is not
+fit for embedding verbatim in an athlete's derived provenance. This is the
+string a derived FTP entry's `note` field actually embeds."""
+
 ROUNDING_HALF_OFFSET: Final[CitedConstant[float]] = CitedConstant(
     name="rounding_half_offset",
     value=0.5,

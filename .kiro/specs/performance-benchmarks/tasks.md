@@ -362,7 +362,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
   - _Boundary: DerivationLeaf_
   - _Depends: 3.1_
 
-- [ ] 3.3 Derive functional threshold power, with the unverified factor blocked
+- [x] 3.3 Derive functional threshold power, with the unverified factor blocked
   - Add the power derivation for cycling races and tests: the time-weighted
     average power over the whole effort with no scaling factor, when the
     effort's duration falls inside the window the definition itself states,
