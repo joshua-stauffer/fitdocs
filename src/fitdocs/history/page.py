@@ -259,9 +259,6 @@ def render_frontmatter(
 # weekly table, and the skipped-and-excluded list -- in that fixed order.
 # ==============================================================================
 
-_CHART_NAME: Final[str] = "calendar"
-"""The one chart this document ever writes (Req 5.1) -- the ``chart``
-argument to :func:`fitdocs.layout.history_asset_rel_path`/``history_asset_path``."""
 
 _CHART_Y_LABEL: Final[str] = "fitness / fatigue / form (daily-average load)"
 
@@ -633,7 +630,7 @@ def render_history(
     the weekly table; the skipped-and-excluded list.
     """
     all_coverage = next(row for row in coverage if row.label == "all")
-    chart_rel_path = layout.history_asset_rel_path(_CHART_NAME)
+    chart_rel_path = layout.history_asset_rel_path(layout.HISTORY_CHART)
     chart_spec = _build_chart(series, model, weeks, markers)
     chart_svg = render_calendar_chart(chart_spec)
 

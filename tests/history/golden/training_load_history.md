@@ -24,7 +24,7 @@ criterion_points: 2
 
 ## Training Load Chart
 
-![Training Load History chart](assets/training-load-history-calendar.svg)
+![Training Load History chart](assets/training-load-history-fitness.svg)
 
 Races:
 1. 2024-01-03 — Winter 10K — finished in 40:00 (10.00 km)

@@ -1151,7 +1151,7 @@ def test_section_order_is_fixed() -> None:
 
 def test_chart_link_is_relative_and_uses_forward_slashes() -> None:
     rendered = _render()
-    assert rendered.chart_rel_path == "assets/training-load-history-calendar.svg"
+    assert rendered.chart_rel_path == "assets/training-load-history-fitness.svg"
     assert f"]({rendered.chart_rel_path})" in rendered.markdown
     assert "\\" not in rendered.chart_rel_path
 
