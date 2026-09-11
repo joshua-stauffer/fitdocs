@@ -703,7 +703,7 @@ shape.
   - _Requirements: 2.2, 2.5, 2.7, 2.11, 3.5, 3.7, 3.10, 5.4, 5.5, 5.6, 5.7, 5.9, 5.10, 6.1, 6.2, 6.3, 6.5_
   - _Boundary: HistoryPage_
 
-- [ ] 5. Integration: settings, the pass, the command, the guards, and validation
+- [x] 5. Integration: settings, the pass, the command, the guards, and validation
 
 - [x] 5.1 Read the history settings table and resolve the model constants
   - Add a fourth peer settings reader beside the ones for tiles, inbox, plugins
@@ -876,7 +876,7 @@ shape.
   - _Requirements: 7.2, 7.3_
   - _Boundary: WikiContractSpecUpdate_
 
-- [ ] 5.6 End-to-end and feature-level validation
+- [x] 5.6 End-to-end and feature-level validation
   - Add the end-to-end test over a synthetic data root: run the command, assert
     both files exist at the owned paths, assert the report's counts, and assert
     the page's frontmatter carries the criterion-point count
