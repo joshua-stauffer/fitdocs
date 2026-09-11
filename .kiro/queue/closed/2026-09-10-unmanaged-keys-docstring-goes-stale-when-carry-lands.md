@@ -1,7 +1,7 @@
 ---
 id: 2026-09-10-unmanaged-keys-docstring-goes-stale-when-carry-lands
 title: unmanaged_keys' docstring describes the user-key carry in the future tense and nobody owns flipping it when 2.x lands
-status: open
+status: done
 importance: medium
 importance_why: The sentence documents a live data-loss window; it is true today and becomes false the moment the carry is wired in, and no task's boundary currently assigns the edit.
 effort: S
@@ -94,3 +94,29 @@ description of the *behavior* ("a user-owned key is preserved across a
 rewrite") with no task reference would not need this queue item to exist.
 Worth deciding as a general convention for this repo rather than for this
 sentence alone.
+
+## Resolution (2026-09-11, the effort-tags session that created the problem)
+
+Fixed directly rather than assigned, in commit `ab184d4` on `main`. The question
+the item posed -- which task owns the edit -- became moot once the edit was made.
+
+Three sentences were false by then, not one, all falsified by tasks 1.3/2.2/2.3:
+
+- `src/fitdocs/contract.py` module docstring: "once task 1.3 lands, will be
+  carried forward verbatim"
+- `src/fitdocs/contract.py` `unmanaged_keys`: "arrives with task 1.3; until it
+  lands, a user-owned key is dropped by a rewrite without a warning" -- the worst
+  of them, telling a reader the opposite of the truth about data-loss-adjacent
+  behaviour
+- `src/fitdocs/render/frontmatter.py` `build_frontmatter`: "the sync/regen wiring
+  that supplies this field is not yet in place"
+
+All three now describe what is true at that commit. Verified: both files are
+AST-identical after docstring stripping (prose only); `sync.py` calls
+`user_owned_lines` on the rewrite path; the carry tests pass.
+
+The general lesson outlived the item and is recorded in the shared log and in
+`.kiro/specs/effort-tags/tasks.md` Implementation Notes: **a behaviour change can
+falsify a sentence that was true when written, and no test will catch it.** After
+a behaviour change, grep the touched modules' docstrings for the invariant you
+just changed.
