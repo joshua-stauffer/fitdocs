@@ -556,7 +556,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
   - _Boundary: Guards_
   - _Depends: 3.4_
 
-- [ ] 5.2 End-to-end: determinism, the powerless archive and the mixed run
+- [x] 5.2 End-to-end: determinism, the powerless archive and the mixed run
   - Drive the command end to end over a synthetic data root holding a tagged
     running race, a tagged cycling time trial, a tagged cycling ride with no
     power, an untagged page and a page with a malformed tag
