@@ -1547,23 +1547,30 @@ def _modules_calling_load_load_settings() -> set[Path]:
     return callers
 
 
-def test_load_load_settings_is_called_from_exactly_one_module() -> None:
-    """Req 14.1: the reader is called from exactly one place in shipped
-    source -- the load engine -- and from nowhere else, including the
-    command surface, the document editor, the profile store, or any other
-    module that might be tempted to read ``[load]`` directly.
+def test_load_load_settings_is_called_from_exactly_the_licensed_modules() -> None:
+    """Req 14.1: the reader is called from exactly the places shipped source
+    is licensed to read ``[load]`` -- the load engine, and (since
+    load-history) the history engine, which reads ``[load]``'s
+    ``default_calculator`` as the configured methodology (load-history
+    design, "Allowed Dependencies": ``fitdocs.load.settings --
+    load_load_settings and LoadSettings.default_calculator, read only``) --
+    and from nowhere else, including the command surface, the document
+    editor, the profile store, or any other module that might be tempted to
+    read ``[load]`` directly.
 
-    Mutation caught: adding a second, real call site (e.g. a guarded
+    Mutation caught: adding a third, real call site (e.g. a guarded
     ``load_load_settings(...)`` invocation added to ``fitdocs/load/docedit.py``,
     reached only behind an always-false condition so it changes no
-    behavior) reddens this test by naming both callers, while leaving the
-    rest of the suite green -- the same shape task 4.2's reviewer proved
-    against the CLI-specific version of this guard.
+    behavior) reddens this test -- ``callers`` would then name all three
+    modules (the two already-licensed ones plus the new one), no longer
+    equal to the exactly-two-element set this assertion pins -- while
+    leaving the rest of the suite green -- the same shape task 4.2's
+    reviewer proved against the CLI-specific version of this guard.
     """
     callers = _modules_calling_load_load_settings()
-    assert callers == {Path("load/engine.py")}, (
+    assert callers == {Path("load/engine.py"), Path("history/engine.py")}, (
         f"load_load_settings is called from {sorted(str(p) for p in callers)}, "
-        "expected exactly ['load/engine.py']"
+        "expected exactly ['history/engine.py', 'load/engine.py']"
     )
 
 
