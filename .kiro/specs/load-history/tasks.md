@@ -778,7 +778,7 @@ shape.
   - _Requirements: 1.9, 1.10, 4.2, 7.4, 7.5, 7.6, 8.1, 8.5, 8.6_
   - _Boundary: HistoryEngine_
 
-- [ ] 5.3 Add the history command and its run report
+- [x] 5.3 Add the history command and its run report
   - Add one command named distinctly from the sibling spec's derivation command,
     with the shared data-root option and one option naming a methodology. It has
     no force and no recompute option: the page is always rebuilt in full
@@ -805,7 +805,7 @@ shape.
   - _Requirements: 4.4, 4.5, 8.1, 8.2, 8.4, 8.6, 8.7, 8.8_
   - _Boundary: HistoryCommand_
 
-- [ ] 5.4 Register the pass in the confinement guard and pin the package's surface and boundary
+- [x] 5.4 Register the pass in the confinement guard and pin the package's surface and boundary
   - Register the history pass as a writing entry point in the confinement guard,
     with a fixture producing a small synthetic data root. The guard's permitted
     set already reads the owned paths directly, so nothing is hardcoded and the
@@ -950,3 +950,13 @@ shape.
   peer WARN of 2026-09-11T18:25: resolve relative imports against the
   ENCLOSING package, exclude the bare `fitdocs` namespace from any
   owner-prefix allowance, and pin import allowlists by equality.
+- **From 5.4 (for the merge and for the peer):** `tests/test_confinement.py`'s
+  `EntryPoint` gained `non_vacuous: Callable[[Sequence[str]], bool]` (default:
+  the old "wrote a workout document" check) because the history pass writes
+  no workout document; `impl/performance-benchmarks` added the same hook under
+  the name `wrote` -- whichever branch merges second keeps ONE field and
+  passes the other's predicate through it. `tests/test_effort_tags_e2e.py`'s
+  entry-point pin is restated as subset-plus-no-effort-tags-entry.
+  `tests/load/test_settings.py`'s caller guard licenses `history/engine.py`;
+  the peer licenses `performance/engine.py`; the merge takes the union of
+  three and fixes the docstring's count.
