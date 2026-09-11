@@ -316,6 +316,134 @@ class AthleteProfile:
         )
         return AthleteProfile(data=document)
 
+    def is_recorded(
+        self, kind: BenchmarkKind, *, discipline: Sport | None, measured_on: date
+    ) -> bool:
+        """Report whether a non-derived entry exists at exactly this key.
+
+        ``True`` exactly when an entry exists at
+        ``(discipline, kind, measured_on)`` whose ``source`` is absent or
+        whose ``source.is_derived`` is ``False`` -- a hand-written entry or
+        one the athlete recorded as
+        :attr:`~fitdocs.benchmarks.BenchmarkSourceKind.MEASURED` (design:
+        ProfileDerivedWrite). A derived entry at that same key
+        answers ``False``: it is not something the derivation pass must
+        never overwrite (Req 6.1). Undated queries are not supported --
+        ``measured_on`` is a required, explicit date, exactly as
+        :meth:`benchmark` never assumes today's.
+        """
+        key = (discipline, kind, measured_on)
+        return any(
+            (entry.discipline, entry.kind, entry.measured_on) == key
+            and (entry.source is None or not entry.source.is_derived)
+            for entry in self.benchmarks.entries
+        )
+
+    def with_derived_benchmarks(self, entries: Sequence[Benchmark]) -> AthleteProfile:
+        """Return a new profile whose whole derived subset is replaced by ``entries``.
+
+        Every entry already on file whose ``source`` is absent or not
+        derived is *retained* untouched, and appears in ``retained`` below
+        unchanged. But **a fresh derived entry landing at the same
+        ``measured_on`` as a stale derived entry already on file is not
+        dropped and replaced wholesale** -- the rebuilt document is handed to
+        the same :func:`_merge_benchmarks_document` :meth:`with_benchmark`
+        uses, which overlays each fresh entry onto whatever raw entry already
+        occupies that exact date, stale derived entries included. So a
+        refreshed derived entry at a previously-derived date inherits that
+        stale entry's ``note``, its ``applies_from`` date and any
+        unrecognized entry-level or inner-``source`` key exactly as
+        :meth:`with_benchmark` would (5.6, 5.7), while the five recognized
+        ``source`` fields are overlaid with the fresh derivation's values.
+        This is the one write path for the derived subset (design:
+        ProfileDerivedWrite).
+
+        Before anything is stored, every element of ``entries`` is checked
+        against two conditions and, on either violation, :class:`ValueError`
+        is raised and nothing is stored -- a backstop behind the pass's own
+        filter, which is expected to have already excluded both cases:
+
+        * ``entry.source`` must be present and ``entry.source.is_derived``
+          must be ``True`` -- a caller-supplied entry without derived
+          provenance is a programming error, not a value this method will
+          silently store as if it were.
+        * ``(entry.discipline, entry.kind, entry.measured_on)`` must not
+          collide with a *retained* (non-derived) entry's key -- a derived
+          entry may never occupy the same key as an existing hand-written or
+          measured entry (Req 6.1).
+
+        The rebuilt document goes through the existing
+        :func:`_merge_benchmarks_document`, over the *full* set of retained
+        plus incoming entries, exactly as :meth:`with_benchmark` merges --
+        so every non-benchmark key, every non-derived entry (with its
+        ``note``, ``applies_from`` and any unrecognized inner key) and every
+        quantity table :func:`~fitdocs.benchmarks.parse_benchmarks` does not
+        recognize survive verbatim (Req 6.3, athlete-benchmarks 1.10).
+
+        That merge alone cannot reach one case: a ``(scope, kind)`` group
+        whose every entry was derived and is now gone is covered by nothing
+        in the rebuilt entry set, so the merge leaves the stale raw group in
+        the document untouched. This method closes that explicitly: it
+        records which ``(scope, kind)`` groups held at least one derived
+        entry *before* the call and, after the merge, removes outright any
+        such group the rebuilt set no longer covers -- and drops a scope
+        table left with no groups afterward, so the file never carries an
+        empty table no caller asked for (Req 6.4). When that leaves the
+        rebuilt ``benchmarks`` region with no scope tables at all -- every
+        derived entry gone and nothing non-derived was ever on file -- the
+        ``benchmarks`` key itself is dropped from the document, mirroring
+        the rule :func:`save_profile` already applies to a benchmark-free
+        profile (Req 6.4, 6.6).
+        """
+        for entry in entries:
+            if entry.source is None or not entry.source.is_derived:
+                raise ValueError(
+                    f"with_derived_benchmarks: {entry.kind.value} at "
+                    f"{entry.measured_on.isoformat()} lacks derived provenance"
+                )
+
+        retained = [
+            entry
+            for entry in self.benchmarks.entries
+            if entry.source is None or not entry.source.is_derived
+        ]
+        retained_keys = {
+            (entry.discipline, entry.kind, entry.measured_on) for entry in retained
+        }
+        for entry in entries:
+            key = (entry.discipline, entry.kind, entry.measured_on)
+            if key in retained_keys:
+                raise ValueError(
+                    f"with_derived_benchmarks: {entry.kind.value} at "
+                    f"{entry.measured_on.isoformat()} collides with a retained "
+                    "non-derived entry"
+                )
+
+        derived_groups_before = {
+            _benchmark_group_key(entry)
+            for entry in self.benchmarks.entries
+            if entry.source is not None and entry.source.is_derived
+        }
+
+        fresh_entries = [*retained, *entries]
+        merged = _merge_benchmarks_document(
+            _existing_benchmarks_region(self.data), fresh_entries
+        )
+        covered_groups = {_benchmark_group_key(entry) for entry in fresh_entries}
+        for scope_key, kind_key in derived_groups_before - covered_groups:
+            scope_table = merged.get(scope_key)
+            if isinstance(scope_table, dict):
+                scope_table.pop(kind_key, None)
+                if not scope_table:
+                    merged.pop(scope_key, None)
+
+        document = copy.deepcopy(dict(self.data))
+        if merged:
+            document["benchmarks"] = merged
+        else:
+            document.pop("benchmarks", None)
+        return AthleteProfile(data=document)
+
 
 def load_profile(data_root: Path) -> AthleteProfile:
     """Read ``<data_root>/athlete.toml`` into an :class:`AthleteProfile`.
@@ -542,6 +670,21 @@ def _canonicalize_benchmarks_region(
                 "two tables by hand in the file"
             )
     return cast("dict[str, object]", canonicalized)
+
+
+def _benchmark_group_key(entry: Benchmark) -> tuple[str, str]:
+    """Return the ``(scope, kind)`` document key an entry's group lands under.
+
+    Mirrors :func:`fitdocs.benchmarks.benchmarks_to_document`'s own grouping
+    exactly: :data:`~fitdocs.benchmarks.ATHLETE_SCOPE` for an athlete-wide
+    entry, otherwise the lowercased discipline name; the quantity's raw TOML
+    key for the kind. Used by :meth:`AthleteProfile.with_derived_benchmarks`
+    to detect a group the fresh entry set no longer covers at all.
+    """
+    scope_key = (
+        ATHLETE_SCOPE if entry.discipline is None else entry.discipline.value.lower()
+    )
+    return (scope_key, entry.kind.value)
 
 
 def _is_entry_list(value: object) -> bool:

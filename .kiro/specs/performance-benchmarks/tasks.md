@@ -275,7 +275,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
   - _Boundary: BenchmarkProvenance, ProfileDerivedWrite_
   - _Depends: 2.1_
 
-- [ ] 2.3 Add the derived-subset write and the never-overwrite rule
+- [x] 2.3 Add the derived-subset write and the never-overwrite rule
   - Add the query that answers whether an entry exists at exactly a given
     discipline, quantity and date whose provenance is absent or not derived
   - Add the write that keeps every non-derived entry, replaces the whole derived
@@ -603,3 +603,8 @@ synthetic pages — the athlete's real wiki never enters the repository.
     field shape that shipped, and the roadmap item is no longer open
   - _Requirements: 5.1, 10.9_
   - _Boundary: AthleteBenchmarksAmendment_
+
+## Implementation Notes
+- (3.1) Gate ordering ruling: the undated gate (`on is None` -> `UNDATED_DOCUMENT`) runs FIRST in every leaf, before the kind gate, so an undated page yields one `UNDATED_DOCUMENT` per attempted quantity regardless of tag kind. 3.2/3.3 copy the order; 3.4 pins it at the routing level.
+- (3.1 -> 3.4) `derive.py` carries one numeric literal, `value > 0` in `_finite_positive` -- an arithmetic identity the constant guard must register when 3.4 adds the module to the scanned tuple (mirror the `models.py` entry).
+- (1.2 -> 5.1) AST import-allowlists that filter `node.level == 0` silently admit relative imports; the purity guard must assert `level == 0` explicitly.

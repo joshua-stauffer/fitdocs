@@ -2394,3 +2394,805 @@ def test_save_profile_round_trips_a_full_derived_source_on_a_hand_assembled_prof
         inputs="official distance, official time",
         citation="riegel_1981",
     )
+
+
+# --- derived subset (design: ProfileDerivedWrite, task 2.3, Req 6.1, 6.3,
+# 6.4, 6.5, 6.6, 6.7, 6.8) ------------------------------------------------
+#
+# Fixture matrix (layers x scopes x kinds x group shapes), all seeded onto a
+# hand-written file at once so one write exercises every shape:
+#   - top level:             a non-benchmark flat key (``max_hr_bpm`` -- the
+#                            *athlete-input* key of that name, unrelated to
+#                            the benchmark quantity sharing its spelling) and
+#                            a calculator sub-table (``[mycalc]``); neither is
+#                            benchmark content at all, so both must survive a
+#                            derived-subset write byte-for-byte (Req 6.6).
+#   - athlete/max_hr_bpm:    MIXED group (hand-written w/ applies_from, no
+#                            note; derived), athlete-wide scope.
+#   - athlete/resting_hr_bpm: ALL-DERIVED group, but its scope table survives
+#                            because max_hr_bpm keeps it non-empty.
+#   - run/threshold_pace_s_per_km: MIXED group (hand-written w/ note and an
+#                            unrecognized inner key "sensor"; derived),
+#                            discipline-scoped.
+#   - run/vo2max_score:      an unrecognized quantity table under a
+#                            recognized discipline -- never touched at all.
+#   - ride/ftp_watts:        ALL-DERIVED group, sharing its scope with a
+#                            MIXED group (below) -- so dropping this group
+#                            alone must NOT drop the "ride" table.
+#   - ride/lthr_bpm:         MIXED group -- a *measured* entry (``source =
+#                            {"kind": "measured", "lab": "xyz"}``, an
+#                            unrecognized inner key) alongside a derived
+#                            entry, so a measured entry is exercised in the
+#                            same fixture as a hand-written one, and "ride" is
+#                            no longer the sole-group scope-drop case.
+#   - swim/lthr_bpm:         ALL-DERIVED group that IS the sole group under
+#                            its scope, so the whole "swim" table must be
+#                            dropped, not just the group.
+
+
+def _derived_source(
+    method: str, *, document: str, inputs: str, citation: str
+) -> dict[str, object]:
+    return {
+        "kind": "derived",
+        "method": method,
+        "document": document,
+        "inputs": inputs,
+        "citation": citation,
+    }
+
+
+def _seed_derived_subset_document() -> dict[str, object]:
+    return {
+        # A non-benchmark flat key (the athlete-input field of the same
+        # name, in a wholly different namespace than benchmarks.athlete.
+        # max_hr_bpm) and a calculator sub-table -- neither is benchmark
+        # content, and both must survive a derived-subset write untouched.
+        "max_hr_bpm": 190,
+        "mycalc": {"custom_threshold": 42},
+        "benchmarks": {
+            "athlete": {
+                "max_hr_bpm": [
+                    {
+                        "value": 190,
+                        "measured_on": date(2024, 1, 1),
+                        "applies_from": date(2023, 6, 1),
+                    },
+                    {
+                        "value": 192,
+                        "measured_on": date(2024, 6, 1),
+                        "source": _derived_source(
+                            "hr_ceiling_v1",
+                            document="workouts/2024-06-01-run.md",
+                            inputs="recorded hr stream",
+                            citation="cite_a",
+                        ),
+                    },
+                ],
+                "resting_hr_bpm": [
+                    {
+                        "value": 45,
+                        "measured_on": date(2024, 3, 1),
+                        "source": _derived_source(
+                            "resting_hr_v1",
+                            document="workouts/2024-03-01-run.md",
+                            inputs="recorded hr stream",
+                            citation="cite_a",
+                        ),
+                    },
+                ],
+            },
+            "run": {
+                "threshold_pace_s_per_km": [
+                    {
+                        "value": 300,
+                        "measured_on": date(2024, 2, 1),
+                        "note": "watch effort",
+                        "sensor": "stryd",
+                    },
+                    {
+                        "value": 290,
+                        "measured_on": date(2024, 7, 1),
+                        "source": _derived_source(
+                            "riegel_race_equivalence",
+                            document="workouts/2024-07-01-run.md",
+                            inputs="official distance, official time",
+                            citation="riegel_1981",
+                        ),
+                    },
+                ],
+                "vo2max_score": [
+                    {"value": 55, "measured_on": date(2024, 5, 1)},
+                ],
+            },
+            "ride": {
+                "ftp_watts": [
+                    {
+                        "value": 250,
+                        "measured_on": date(2024, 4, 1),
+                        "source": _derived_source(
+                            "ftp_v1",
+                            document="workouts/2024-04-01-ride.md",
+                            inputs="power stream",
+                            citation="cite_a",
+                        ),
+                    },
+                ],
+                "lthr_bpm": [
+                    {
+                        "value": 155,
+                        "measured_on": date(2024, 8, 1),
+                        "source": {"kind": "measured", "lab": "xyz"},
+                    },
+                    {
+                        "value": 160,
+                        "measured_on": date(2024, 8, 5),
+                        "source": _derived_source(
+                            "sustained_effort_mean_hr",
+                            document="workouts/2024-08-05-ride.md",
+                            inputs="recorded hr stream",
+                            citation="cite_a",
+                        ),
+                    },
+                ],
+            },
+            "swim": {
+                "lthr_bpm": [
+                    {
+                        "value": 150,
+                        "measured_on": date(2024, 9, 1),
+                        "source": _derived_source(
+                            "sustained_effort_mean_hr",
+                            document="workouts/2024-09-01-swim.md",
+                            inputs="recorded hr stream",
+                            citation="cite_a",
+                        ),
+                    },
+                ],
+            },
+        },
+    }
+
+
+def _seed_derived_subset_profile(tmp_path: Path) -> Path:
+    """Write :func:`_seed_derived_subset_document` to disk as the
+    hand-written starting file, and return its path."""
+    save_profile(tmp_path, AthleteProfile(data=_seed_derived_subset_document()))
+    return tmp_path / PROFILE_FILENAME
+
+
+def _seed_derived_entries() -> tuple[Benchmark, ...]:
+    """The six derived entries the seed document carries, as typed
+    :class:`Benchmark` values -- exactly what a derivation pass finding the
+    same six tags again would hand to
+    :meth:`AthleteProfile.with_derived_benchmarks`. The seed's *measured*
+    ``ride/lthr_bpm`` entry (2024-08-01) is deliberately absent: a measured
+    entry is never supplied to ``with_derived_benchmarks``, only retained by
+    it."""
+    return (
+        Benchmark(
+            kind=BenchmarkKind.MAX_HR_BPM,
+            discipline=None,
+            value=192,
+            measured_on=date(2024, 6, 1),
+            source=BenchmarkSource(
+                kind=BenchmarkSourceKind.DERIVED,
+                method="hr_ceiling_v1",
+                document="workouts/2024-06-01-run.md",
+                inputs="recorded hr stream",
+                citation="cite_a",
+            ),
+        ),
+        Benchmark(
+            kind=BenchmarkKind.RESTING_HR_BPM,
+            discipline=None,
+            value=45,
+            measured_on=date(2024, 3, 1),
+            source=BenchmarkSource(
+                kind=BenchmarkSourceKind.DERIVED,
+                method="resting_hr_v1",
+                document="workouts/2024-03-01-run.md",
+                inputs="recorded hr stream",
+                citation="cite_a",
+            ),
+        ),
+        Benchmark(
+            kind=BenchmarkKind.THRESHOLD_PACE_S_PER_KM,
+            discipline=Sport.RUN,
+            value=290,
+            measured_on=date(2024, 7, 1),
+            source=BenchmarkSource(
+                kind=BenchmarkSourceKind.DERIVED,
+                method="riegel_race_equivalence",
+                document="workouts/2024-07-01-run.md",
+                inputs="official distance, official time",
+                citation="riegel_1981",
+            ),
+        ),
+        Benchmark(
+            kind=BenchmarkKind.FTP_WATTS,
+            discipline=Sport.RIDE,
+            value=250,
+            measured_on=date(2024, 4, 1),
+            source=BenchmarkSource(
+                kind=BenchmarkSourceKind.DERIVED,
+                method="ftp_v1",
+                document="workouts/2024-04-01-ride.md",
+                inputs="power stream",
+                citation="cite_a",
+            ),
+        ),
+        Benchmark(
+            kind=BenchmarkKind.LTHR_BPM,
+            discipline=Sport.RIDE,
+            value=160,
+            measured_on=date(2024, 8, 5),
+            source=BenchmarkSource(
+                kind=BenchmarkSourceKind.DERIVED,
+                method="sustained_effort_mean_hr",
+                document="workouts/2024-08-05-ride.md",
+                inputs="recorded hr stream",
+                citation="cite_a",
+            ),
+        ),
+        Benchmark(
+            kind=BenchmarkKind.LTHR_BPM,
+            discipline=Sport.SWIM,
+            value=150,
+            measured_on=date(2024, 9, 1),
+            source=BenchmarkSource(
+                kind=BenchmarkSourceKind.DERIVED,
+                method="sustained_effort_mean_hr",
+                document="workouts/2024-09-01-swim.md",
+                inputs="recorded hr stream",
+                citation="cite_a",
+            ),
+        ),
+    )
+
+
+def test_is_recorded_distinguishes_hand_written_derived_and_absent(
+    tmp_path: Path,
+) -> None:
+    """``is_recorded`` is ``True`` for the hand-written entry itself and for
+    a *measured* entry, ``False`` for a derived entry at the same
+    kind/discipline on a different date, ``False`` for a key nothing
+    occupies at all, and ``False`` when only the discipline or only the kind
+    at an otherwise-occupied date differs from what is on file -- proving
+    the query's key is checked component-by-component, not merely "some
+    entry exists on this date" (Req 6.1, design: ProfileDerivedWrite)."""
+    _seed_derived_subset_profile(tmp_path)
+    profile = load_profile(tmp_path)
+
+    assert profile.is_recorded(
+        BenchmarkKind.MAX_HR_BPM, discipline=None, measured_on=date(2024, 1, 1)
+    ), "the hand-written entry itself must read as recorded"
+    assert not profile.is_recorded(
+        BenchmarkKind.MAX_HR_BPM, discipline=None, measured_on=date(2024, 6, 1)
+    ), "a derived entry at that key must not read as recorded"
+    assert not profile.is_recorded(
+        BenchmarkKind.MAX_HR_BPM, discipline=None, measured_on=date(2099, 1, 1)
+    ), "an absent key must not read as recorded"
+
+    # A measured entry -- source present but not derived -- reads exactly
+    # like a hand-written one (source absent): both are "recorded" (Req 6.1).
+    assert profile.is_recorded(
+        BenchmarkKind.LTHR_BPM, discipline=Sport.RIDE, measured_on=date(2024, 8, 1)
+    ), "a measured entry must read as recorded, the same as a hand-written one"
+
+    # The kind and discipline both belong to the query key -- an entry at
+    # the right date under the wrong discipline, or the wrong kind, must not
+    # be found (a query ignoring either component would wrongly match here).
+    assert not profile.is_recorded(
+        BenchmarkKind.THRESHOLD_PACE_S_PER_KM,
+        discipline=Sport.RIDE,
+        measured_on=date(2024, 2, 1),  # the hand-written run/threshold_pace date
+    ), "the hand-written entry at this date is scoped to Run, not Ride"
+    assert not profile.is_recorded(
+        BenchmarkKind.RESTING_HR_BPM,
+        discipline=None,
+        measured_on=date(2024, 1, 1),  # the hand-written max_hr_bpm date
+    ), "the hand-written entry at this date is max_hr_bpm, not resting_hr_bpm"
+
+
+def test_with_derived_benchmarks_empty_set_removes_derived_preserves_rest(
+    tmp_path: Path,
+) -> None:
+    """Writing an empty derived set removes every derived entry -- including
+    a whole group and its scope table when they held nothing else -- while
+    every hand-written and measured entry (with its ``note``,
+    ``applies_from``, and unrecognized inner keys both at the entry level
+    and inside a measured ``source``), every unrecognized quantity table,
+    and every non-benchmark top-level key and table, survives exactly as it
+    was (Req 6.1, 6.3, 6.4, 6.6)."""
+    path = _seed_derived_subset_profile(tmp_path)
+
+    pre = tomllib.loads(path.read_text())
+    # Precondition: every shape this test claims to remove or preserve is
+    # actually present before the call -- not merely asserted afterward.
+    assert pre["max_hr_bpm"] == 190
+    assert pre["mycalc"]["custom_threshold"] == 42
+    assert len(pre["benchmarks"]["athlete"]["max_hr_bpm"]) == 2
+    assert "resting_hr_bpm" in pre["benchmarks"]["athlete"]
+    assert len(pre["benchmarks"]["run"]["threshold_pace_s_per_km"]) == 2
+    assert "ftp_watts" in pre["benchmarks"]["ride"]
+    assert len(pre["benchmarks"]["ride"]["lthr_bpm"]) == 2
+    assert "swim" in pre["benchmarks"]
+
+    profile = load_profile(tmp_path)
+    updated = profile.with_derived_benchmarks(())
+    save_profile(tmp_path, updated)
+
+    raw = tomllib.loads(path.read_text())
+
+    # Non-benchmark content is untouched: a flat top-level key this store
+    # does not manage at all, and a whole calculator sub-table.
+    assert raw["max_hr_bpm"] == 190
+    assert raw["mycalc"] == {"custom_threshold": 42}
+
+    # The whole-derived group that shared a scope with a surviving group:
+    # the group is gone, the scope table survives.
+    assert "resting_hr_bpm" not in raw["benchmarks"]["athlete"]
+    assert raw["benchmarks"]["athlete"]["max_hr_bpm"] == [
+        {
+            "value": 190,
+            "measured_on": date(2024, 1, 1),
+            "applies_from": date(2023, 6, 1),
+        }
+    ]
+
+    # The mixed discipline-scoped group: derived entry gone, hand-written
+    # entry survives with its note and its unrecognized inner key.
+    assert raw["benchmarks"]["run"]["threshold_pace_s_per_km"] == [
+        {
+            "value": 300,
+            "measured_on": date(2024, 2, 1),
+            "note": "watch effort",
+            "sensor": "stryd",
+        }
+    ]
+
+    # The unrecognized quantity table is untouched, byte-for-byte in shape.
+    assert raw["benchmarks"]["run"]["vo2max_score"] == [
+        {"value": 55, "measured_on": date(2024, 5, 1)}
+    ]
+
+    # The all-derived group sharing "ride" with a mixed group: the group is
+    # gone, but "ride" itself survives because lthr_bpm's measured entry
+    # keeps it non-empty.
+    assert "ftp_watts" not in raw["benchmarks"]["ride"]
+    assert raw["benchmarks"]["ride"]["lthr_bpm"] == [
+        {
+            "value": 155,
+            "measured_on": date(2024, 8, 1),
+            "source": {"kind": "measured", "lab": "xyz"},
+        }
+    ]
+
+    # The whole-derived group that was the *sole* group under its scope:
+    # the scope table itself is dropped, not left empty.
+    assert "swim" not in raw["benchmarks"]
+
+
+def test_with_derived_benchmarks_replaces_prior_derived_value_dropping_old(
+    tmp_path: Path,
+) -> None:
+    """A second derivation run that finds a *different* date for the same
+    quantity replaces the old derived entry outright -- it does not retain
+    the stale one alongside the new one (the named mutation this task's
+    pin must die on: retaining derived entries instead of replacing them)."""
+    path = _seed_derived_subset_profile(tmp_path)
+    profile = load_profile(tmp_path)
+
+    # Precondition: the old derived date is present before the call.
+    assert any(
+        entry.kind is BenchmarkKind.MAX_HR_BPM and entry.measured_on == date(2024, 6, 1)
+        for entry in profile.benchmarks.entries
+    )
+
+    refreshed_max_hr = Benchmark(
+        kind=BenchmarkKind.MAX_HR_BPM,
+        discipline=None,
+        value=200,
+        measured_on=date(2024, 9, 1),
+        source=BenchmarkSource(
+            kind=BenchmarkSourceKind.DERIVED,
+            method="hr_ceiling_v1",
+            document="workouts/2024-09-01-run.md",
+            inputs="recorded hr stream",
+            citation="cite_a",
+        ),
+    )
+    other_derived = _seed_derived_entries()[1:]  # unchanged resting/pace/ftp
+
+    updated = profile.with_derived_benchmarks((refreshed_max_hr, *other_derived))
+    save_profile(tmp_path, updated)
+
+    raw = tomllib.loads(path.read_text())
+    dates = [
+        entry["measured_on"] for entry in raw["benchmarks"]["athlete"]["max_hr_bpm"]
+    ]
+    assert date(2024, 6, 1) not in dates, "the stale derived date must not survive"
+    assert dates == [date(2024, 1, 1), date(2024, 9, 1)]
+
+
+def test_with_derived_benchmarks_empty_write_from_all_derived_drops_benchmarks_table(
+    tmp_path: Path,
+) -> None:
+    """A profile whose *only* benchmark content is one derived entry,
+    written through ``with_derived_benchmarks(())``, leaves the document
+    with no ``benchmarks`` table at all -- not a bare, empty one -- mirroring
+    the rule ``save_profile`` already applies to a benchmark-free profile.
+    A second empty write from the resulting file is byte-identical (Req 6.4,
+    6.5, 6.6)."""
+    path = tmp_path / PROFILE_FILENAME
+    seed = AthleteProfile(
+        data={
+            "benchmarks": {
+                "ride": {
+                    "ftp_watts": [
+                        {
+                            "value": 250,
+                            "measured_on": date(2024, 4, 1),
+                            "source": _derived_source(
+                                "ftp_v1",
+                                document="workouts/2024-04-01-ride.md",
+                                inputs="power stream",
+                                citation="cite_a",
+                            ),
+                        }
+                    ]
+                }
+            }
+        }
+    )
+    save_profile(tmp_path, seed)
+    # Precondition: the benchmarks table -- and the entry inside it -- are
+    # actually present before the empty write.
+    pre = tomllib.loads(path.read_text())
+    assert pre["benchmarks"]["ride"]["ftp_watts"][0]["value"] == 250
+
+    save_profile(tmp_path, load_profile(tmp_path).with_derived_benchmarks(()))
+    first_bytes = path.read_bytes()
+    raw = tomllib.loads(path.read_text())
+    assert "benchmarks" not in raw
+
+    save_profile(tmp_path, load_profile(tmp_path).with_derived_benchmarks(()))
+    second_bytes = path.read_bytes()
+    assert first_bytes == second_bytes
+
+
+def test_with_derived_benchmarks_twice_produces_byte_identical_files(
+    tmp_path: Path,
+) -> None:
+    """Writing the same derived set twice, from a fresh load each time,
+    leaves the file byte-identical (Req 6.5)."""
+    path = _seed_derived_subset_profile(tmp_path)
+    derived = _seed_derived_entries()
+
+    save_profile(tmp_path, load_profile(tmp_path).with_derived_benchmarks(derived))
+    first_bytes = path.read_bytes()
+
+    save_profile(tmp_path, load_profile(tmp_path).with_derived_benchmarks(derived))
+    second_bytes = path.read_bytes()
+
+    assert first_bytes == second_bytes
+
+
+@pytest.mark.parametrize(
+    "bad_source",
+    [None, BenchmarkSource(kind=BenchmarkSourceKind.MEASURED)],
+    ids=["absent", "measured"],
+)
+def test_with_derived_benchmarks_rejects_entry_without_derived_provenance(
+    tmp_path: Path, bad_source: BenchmarkSource | None
+) -> None:
+    """An entry lacking derived provenance is refused before anything is
+    stored -- a backstop behind the pass's own filter (Req 6.1)."""
+    profile = load_profile(tmp_path)
+    bad_entry = Benchmark(
+        kind=BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RUN,
+        value=250,
+        measured_on=date(2025, 1, 1),
+        source=bad_source,
+    )
+
+    with pytest.raises(ValueError, match="derived provenance"):
+        profile.with_derived_benchmarks((bad_entry,))
+
+
+def test_with_derived_benchmarks_rejects_entry_colliding_with_retained_entry(
+    tmp_path: Path,
+) -> None:
+    """A supplied derived entry may never occupy the same key as a retained
+    non-derived entry, storing nothing on the collision (Req 6.1)."""
+    _seed_derived_subset_profile(tmp_path)
+    profile = load_profile(tmp_path)
+
+    colliding = Benchmark(
+        kind=BenchmarkKind.MAX_HR_BPM,
+        discipline=None,
+        value=999,
+        measured_on=date(2024, 1, 1),  # the hand-written entry's own date
+        source=BenchmarkSource(
+            kind=BenchmarkSourceKind.DERIVED,
+            method="hr_ceiling_v1",
+            document="workouts/2024-01-01-run.md",
+            inputs="recorded hr stream",
+            citation="cite_a",
+        ),
+    )
+
+    with pytest.raises(ValueError, match="collides"):
+        profile.with_derived_benchmarks((colliding,))
+
+
+def test_with_derived_benchmarks_accepts_entry_at_retained_date_under_other_discipline(
+    tmp_path: Path,
+) -> None:
+    """The collision key is ``(discipline, kind, measured_on)`` in full: a
+    derived entry sharing a retained entry's *date and kind* but a different
+    *discipline* is not a collision at all and must be accepted (a
+    collision check that dropped ``discipline`` from the key would wrongly
+    refuse this)."""
+    _seed_derived_subset_profile(tmp_path)
+    profile = load_profile(tmp_path)
+
+    same_date_other_discipline = Benchmark(
+        kind=BenchmarkKind.THRESHOLD_PACE_S_PER_KM,
+        discipline=Sport.RIDE,  # the hand-written entry at this date is Run
+        value=280,
+        measured_on=date(2024, 2, 1),  # the hand-written run/threshold_pace date
+        source=BenchmarkSource(
+            kind=BenchmarkSourceKind.DERIVED,
+            method="riegel_race_equivalence",
+            document="workouts/2024-02-01-ride.md",
+            inputs="official distance, official time",
+            citation="riegel_1981",
+        ),
+    )
+
+    updated = profile.with_derived_benchmarks((same_date_other_discipline,))
+    save_profile(tmp_path, updated)
+
+    raw = tomllib.loads((tmp_path / PROFILE_FILENAME).read_text())
+    assert raw["benchmarks"]["ride"]["threshold_pace_s_per_km"] == [
+        {
+            "value": 280,
+            "measured_on": date(2024, 2, 1),
+            "source": {
+                "kind": "derived",
+                "method": "riegel_race_equivalence",
+                "document": "workouts/2024-02-01-ride.md",
+                "inputs": "official distance, official time",
+                "citation": "riegel_1981",
+            },
+        }
+    ]
+
+
+def test_with_derived_benchmarks_allows_refreshing_a_derived_entry_at_the_same_key(
+    tmp_path: Path,
+) -> None:
+    """The collision backstop is scoped to *retained* (non-derived) entries
+    only -- a derived entry may freely occupy the same key an existing
+    derived entry already held (a same-key refresh), which must not be
+    rejected as a collision."""
+    path = _seed_derived_subset_profile(tmp_path)
+    profile = load_profile(tmp_path)
+
+    refreshed = Benchmark(
+        kind=BenchmarkKind.MAX_HR_BPM,
+        discipline=None,
+        value=195,
+        measured_on=date(2024, 6, 1),  # same key as the seed's derived entry
+        source=BenchmarkSource(
+            kind=BenchmarkSourceKind.DERIVED,
+            method="hr_ceiling_v1",
+            document="workouts/2024-06-01-run.md",
+            inputs="recorded hr stream",
+            citation="cite_a",
+        ),
+    )
+
+    updated = profile.with_derived_benchmarks((refreshed,))
+    save_profile(tmp_path, updated)
+
+    raw = tomllib.loads(path.read_text())
+    max_hr_entries = raw["benchmarks"]["athlete"]["max_hr_bpm"]
+    assert len(max_hr_entries) == 2, "the same-key refresh must not duplicate the entry"
+    refreshed_entry = next(
+        entry for entry in max_hr_entries if entry["measured_on"] == date(2024, 6, 1)
+    )
+    assert refreshed_entry["value"] == 195
+
+
+def test_with_derived_benchmarks_overlays_stale_derived_entry_field_by_field(
+    tmp_path: Path,
+) -> None:
+    """A fresh derived entry landing at the *same* ``measured_on`` as a
+    stale derived entry already on file is NOT dropped and replaced
+    wholesale -- it is overlaid onto that stale record through the same
+    :func:`_merge_benchmarks_document` :meth:`with_benchmark` uses. The
+    stale entry's ``note``, its ``applies_from`` date, its unrecognized
+    entry-level key and its unrecognized inner ``source`` key all survive;
+    only the five recognized ``source`` fields are refreshed to the new
+    derivation's values (design: ProfileDerivedWrite)."""
+    seed: dict[str, object] = {
+        "benchmarks": {
+            "ride": {
+                "ftp_watts": [
+                    {
+                        "value": 240,
+                        "measured_on": date(2024, 4, 1),
+                        "note": "stale note",
+                        "applies_from": date(2024, 3, 1),
+                        "widget": "gadget",
+                        "source": {
+                            "kind": "derived",
+                            "method": "ftp_v0",
+                            "document": "workouts/2024-04-01-old.md",
+                            "inputs": "old inputs",
+                            "citation": "old_cite",
+                            "extra": "keepme",
+                        },
+                    }
+                ]
+            }
+        }
+    }
+    with (tmp_path / PROFILE_FILENAME).open("wb") as handle:
+        tomli_w.dump(seed, handle)
+    path = tmp_path / PROFILE_FILENAME
+
+    # Precondition: the stale record's fields are what this test claims to
+    # overlay, not something already matching the fresh values below.
+    pre_entry = tomllib.loads(path.read_text())["benchmarks"]["ride"]["ftp_watts"][0]
+    assert pre_entry["value"] == 240
+    assert pre_entry["source"]["method"] == "ftp_v0"
+
+    profile = load_profile(tmp_path)
+    fresh = Benchmark(
+        kind=BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RIDE,
+        value=260,
+        measured_on=date(2024, 4, 1),  # the same date as the stale derived entry
+        source=BenchmarkSource(
+            kind=BenchmarkSourceKind.DERIVED,
+            method="ftp_v1",
+            document="workouts/2024-04-01-new.md",
+            inputs="new inputs",
+            citation="new_cite",
+        ),
+    )
+
+    updated = profile.with_derived_benchmarks((fresh,))
+    save_profile(tmp_path, updated)
+
+    raw = tomllib.loads(path.read_text())
+    entries = raw["benchmarks"]["ride"]["ftp_watts"]
+    assert len(entries) == 1, "the same-date refresh must not duplicate the entry"
+    entry = entries[0]
+
+    # The value and the five recognized source fields are refreshed.
+    assert entry["value"] == 260
+    assert entry["source"]["method"] == "ftp_v1"
+    assert entry["source"]["document"] == "workouts/2024-04-01-new.md"
+    assert entry["source"]["inputs"] == "new inputs"
+    assert entry["source"]["citation"] == "new_cite"
+
+    # The stale entry's note, applies_from, unrecognized entry-level key and
+    # unrecognized inner source key all survive the overlay untouched.
+    assert entry["note"] == "stale note"
+    assert entry["applies_from"] == date(2024, 3, 1)
+    assert entry["widget"] == "gadget"
+    assert entry["source"]["extra"] == "keepme"
+
+
+def test_with_derived_benchmarks_refuses_unreadable_document_at_construction(
+    tmp_path: Path,
+) -> None:
+    """An entry that carries derived provenance but an incomplete detail
+    record serializes to a shape the profile reader would reject; the
+    refusal surfaces at :class:`AthleteProfile` construction inside
+    ``with_derived_benchmarks`` itself -- via the same eager
+    :meth:`AthleteProfile.__post_init__` re-parse every profile goes
+    through -- as a :class:`ProfileError`, before ``save_profile`` or any
+    file write is ever reached (Req 6.7).
+
+    This method never touches the filesystem -- ``save_profile`` is not
+    called here at all -- so "the file is left untouched" is not an
+    observable this test can pin; that half of Req 6.7 (a refused *write*
+    leaves the target file byte-identical) is PRESERVED-ONLY by
+    ``test_save_refuses_a_document_the_reader_would_reject_and_leaves_file_untouched``,
+    which drives the refusal through ``save_profile`` directly and asserts
+    the file's bytes are unchanged.
+    """
+    _seed_derived_subset_profile(tmp_path)
+    profile = load_profile(tmp_path)
+
+    incomplete = Benchmark(
+        kind=BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RUN,  # a fresh group -- no collision with anything retained
+        value=250,
+        measured_on=date(2030, 1, 1),
+        source=BenchmarkSource(
+            kind=BenchmarkSourceKind.DERIVED
+        ),  # missing detail fields
+    )
+
+    with pytest.raises(ProfileError):
+        profile.with_derived_benchmarks((incomplete,))
+
+
+def test_with_derived_benchmarks_returns_new_object_without_mutating_original(
+    tmp_path: Path,
+) -> None:
+    """``with_derived_benchmarks`` returns a fresh :class:`AthleteProfile`
+    without mutating ``self`` -- the base profile's own ``data``, including
+    an unmanaged nested table, is left exactly as it was (M: mutate
+    ``self.data`` in place instead of building a fresh ``document`` via
+    ``copy.deepcopy``)."""
+    base = AthleteProfile(
+        data={
+            "max_hr_bpm": 195,
+            "other": {"nested": {"k": 1}},
+            "benchmarks": {
+                "run": {
+                    "threshold_pace_s_per_km": [
+                        {
+                            "value": 300,
+                            "measured_on": date(2024, 2, 1),
+                        }
+                    ]
+                }
+            },
+        }
+    )
+
+    fresh = Benchmark(
+        kind=BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RIDE,
+        value=250,
+        measured_on=date(2026, 1, 1),
+        source=BenchmarkSource(
+            kind=BenchmarkSourceKind.DERIVED,
+            method="ftp_v1",
+            document="workouts/2026-01-01-ride.md",
+            inputs="power stream",
+            citation="cite_a",
+        ),
+    )
+
+    data_before = copy.deepcopy(dict(base.data))
+    assert "ride" not in base.data["benchmarks"]  # type: ignore[operator]
+
+    updated = base.with_derived_benchmarks((fresh,))
+
+    assert updated is not base
+    assert updated.has_benchmark(BenchmarkKind.FTP_WATTS, discipline=Sport.RIDE)
+    assert base.data == data_before
+    assert "ride" not in base.data["benchmarks"]  # type: ignore[operator]
+    # The unmanaged nested table is deep-copied, never shared (Req 6.6).
+    assert base.data["other"] is not updated.data["other"]
+    assert (
+        base.data["other"]["nested"]  # type: ignore[index]
+        is not updated.data["other"]["nested"]  # type: ignore[index]
+    )
+
+
+def test_save_profile_after_with_derived_benchmarks_write_leaves_no_temp_files(
+    tmp_path: Path,
+) -> None:
+    """Persisting a profile built by ``with_derived_benchmarks`` goes
+    through the existing atomic save path: no partial or temporary file is
+    left behind (Req 6.8)."""
+    _seed_derived_subset_profile(tmp_path)
+    profile = load_profile(tmp_path)
+
+    updated = profile.with_derived_benchmarks(())
+    save_profile(tmp_path, updated)
+
+    leftovers = [p for p in tmp_path.iterdir() if p.name != PROFILE_FILENAME]
+    assert leftovers == []
