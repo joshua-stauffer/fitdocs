@@ -374,7 +374,7 @@ report.
 
 - [ ] 5. Integration and feature-level validation
 
-- [ ] 5.1 Register the new contract bindings in the consumer guard
+- [x] 5.1 Register the new contract bindings in the consumer guard
   - Add the names each converted module now binds so the identity check
     covers them: the sync engine binds the reader, the line carry and the
     unmanaged-key reader; the audit binds the reader; the declaration binds
@@ -678,3 +678,21 @@ report.
   `git show HEAD:<file>` and from the working copy and show the before-list is an
   order-preserving subsequence of the after-list (here 56 -> 60, only 6.5-6.8 added), and diff
   the `^#` headings too. Reading a diff cannot tell you a heading did not shift.
+- 5.1: THE DESIGN WAS WRONG AND THE TASK TEXT KNEW IT. `design.md:878` prescribes
+  `CONTRACT_BINDINGS["fitdocs.declaration"] += USER_KEYS`, but `declaration.py:48-55`
+  imports `EFFORT_KEYS` and `hasattr(fitdocs.declaration, "USER_KEYS")` is False -- registering
+  the design's literal name REDS the identity test. Bind what the module imports. `design.md:878`
+  is now stale and will mislead the next reader of the design (queued).
+- 5.1: FIVE REGISTRY LINES WERE THE SOLE PIN FOR FIVE SHADOW COPIES. The reviewer's decisive
+  probe was neither of the named mutations: rebind all five new names to same-named local
+  wrappers AND delete all five registry entries -- the WHOLE 3264-test suite stays green.
+  Nothing else in this repo catches a second reader. That is what makes 5.4 pinned rather than
+  decorated, and it is the probe shape to reuse whenever you claim a guard is load-bearing.
+- 5.1: `CONTRACT_BINDINGS` VALUE-EMPTYING IS UNDETECTED (pre-existing, queued). Setting
+  `CONTRACT_BINDINGS["fitdocs.sync"] = ()` leaves the full suite green, because
+  `test_every_converted_module_declares_its_contract_bindings` compares KEY SETS only
+  (`set(CONTRACT_BINDINGS) == set(_MODULE_IDS)`). It catches a dropped key and is blind to an
+  emptied value. A naive non-empty assertion will not work -- `"fitdocs.cli": ()` is legitimate.
+- 5.1: the identity check is true `is`, not `==` -- and mutating a tuple to test it is harder
+  than it looks: `tuple(t) is t` and `(t + ()) is t` are both True in CPython, so a copy-based
+  mutation silently tests nothing. Use `tuple(list(t))` to force a distinct equal object.

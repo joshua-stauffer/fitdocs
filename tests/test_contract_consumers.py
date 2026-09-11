@@ -121,10 +121,13 @@ FORBIDDEN_LOCAL_NAMES: Final[tuple[str, ...]] = (
 CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
     "fitdocs.sync": (
         "document_uuid",
+        "effort_tag",
         "is_workout_document",
         "parse_frontmatter",
         "sha_of_ref",
         "source_refs",
+        "unmanaged_keys",
+        "user_owned_lines",
     ),
     "fitdocs.load.engine": (
         "is_workout_document",
@@ -165,6 +168,7 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
     "fitdocs.docio": ("parse_frontmatter",),
     "fitdocs.declaration": (
         "CONTRACT_VERSION",
+        "EFFORT_KEYS",
         "GENERATED_PREFIX",
         "GENERATOR",
         "USER_REGIONS",
@@ -173,6 +177,7 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
     "fitdocs.audit": (
         "DOC_VERSION",
         "document_version",
+        "effort_tag",
         "is_workout_document",
         "parse_frontmatter",
         "unmanaged_keys",
