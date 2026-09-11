@@ -45,6 +45,13 @@ SPEED_COLOR: Final = "#008a96"  # oklch(0.55 0.16 200) -- teal (clamped to gamut
 CADENCE_COLOR: Final = "#c66000"  # oklch(0.6 0.17 60)   -- amber (clamped)
 ALTITUDE_COLOR: Final = "#1c8742"  # oklch(0.55 0.14 150) -- green
 
+# Three more series colors for the calendar chart (`charts/calendar.py`):
+# fitness, fatigue and form. Hues chosen well clear of the six above (14, 60,
+# 240, 200, 60, 150) so all nine stay mutually distinguishable.
+FITNESS_COLOR: Final = "#5a66c7"  # oklch(0.55 0.15 275) -- indigo
+FATIGUE_COLOR: Final = "#bf50a0"  # oklch(0.6 0.17 340)  -- magenta
+FORM_COLOR: Final = "#849b11"  # oklch(0.65 0.15 120)  -- olive/lime
+
 #: Runtime-inspectable provenance: series name -> (sRGB hex, oklch source).
 SERIES_COLORS: Final[dict[str, tuple[str, str]]] = {
     "hr": (HR_COLOR, "oklch(0.6 0.18 14)"),
@@ -53,6 +60,9 @@ SERIES_COLORS: Final[dict[str, tuple[str, str]]] = {
     "speed": (SPEED_COLOR, "oklch(0.55 0.16 200)"),
     "cadence": (CADENCE_COLOR, "oklch(0.6 0.17 60)"),
     "altitude": (ALTITUDE_COLOR, "oklch(0.55 0.14 150)"),
+    "fitness": (FITNESS_COLOR, "oklch(0.55 0.15 275)"),
+    "fatigue": (FATIGUE_COLOR, "oklch(0.6 0.17 340)"),
+    "form": (FORM_COLOR, "oklch(0.65 0.15 120)"),
 }
 
 # --- route colors (map section) ---------------------------------------------
