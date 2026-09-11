@@ -116,14 +116,38 @@ content to preserve).
 
 ## Frontmatter Ownership
 
-The frontmatter block of a generated workout document is tool-owned and is
-rebuilt on every regeneration, **except** the
-[user-owned frontmatter keys](#user-owned-frontmatter-keys): those keys are
-carried over verbatim, unchanged, and placed after the managed keys, in the
-order they appeared in the document being regenerated. Every managed key is
-rewritten from scratch each time; any key that is neither managed nor
-user-owned is dropped, not rewritten (see
-[Managed Frontmatter Keys](#managed-frontmatter-keys) below).
+The frontmatter block of a generated workout document is tool-owned, **except**
+the [user-owned frontmatter keys](#user-owned-frontmatter-keys): those keys
+are carried over verbatim, unchanged, in the order they appeared in the
+document being regenerated. Two distinct operations write to the block, each
+with its own placement rule for the carried lines:
+
+- **A full rebuild** — every `regen`, and the rewrite path inside `sync` —
+  rewrites every managed key *except* the three the training-load pass owns
+  (below) from a single `yaml.safe_dump`, then places the carried
+  user-owned lines immediately after that block and before the closing
+  fence; any key that is neither managed nor user-owned is dropped, not
+  rewritten (see [Managed Frontmatter Keys](#managed-frontmatter-keys)
+  below). `load_value`, `load_methodology`, and `load_basis` are not part of
+  what this step writes, so the rebuilt block never contains them: any
+  existing occurrences of those three lines are dropped along with the rest
+  of the old block, the same as any other key this step does not manage.
+  Whether they come back afterward is a question for the training-load
+  pass that runs next (see the next bullet), and for which documents
+  that pass can and cannot restore them on, see the `load` and
+  `regen` entries under
+  [Overwrite Semantics](#overwrite-semantics-of-every-writing-operation).
+- **The training-load pass** (`fitdocs load`, and the pass `sync` and `regen`
+  each run automatically once their own rebuild finishes) never re-serializes
+  the block. It only upserts its own three keys: it removes any existing
+  `load_value` / `load_methodology` / `load_basis` lines and appends fresh
+  ones immediately before the closing fence, after every other line already
+  there — including a user-owned line a preceding rebuild just placed. So on
+  a document that carries both a user-owned key and a computed load result,
+  the load keys are the ones that end up *last*, after the carried lines —
+  the opposite of every other managed key's position, and true regardless of
+  whether that load computation was triggered by a standalone `fitdocs load`
+  or ran automatically inside `sync`/`regen`.
 
 ## Managed Frontmatter Keys
 
@@ -192,10 +216,15 @@ well-formed: a malformed tag (see [The Effort Tag](#the-effort-tag) below)
 is preserved exactly as written, never dropped, corrected, or replaced —
 only reported.
 
-When a document's frontmatter block is rebuilt, the carried user-owned
-lines are placed after every managed key and before the closing fence, in
-the order they appeared in the document being regenerated (see
-[Frontmatter Ownership](#frontmatter-ownership) above).
+When a document's frontmatter block is *rebuilt in full* (`regen`, and the
+rewrite path inside `sync`), the carried user-owned lines are placed after
+every key that rebuild writes and before the closing fence, in the order
+they appeared in the document being regenerated. That rebuild never writes
+`load_value` / `load_methodology` / `load_basis`, so this does not describe
+where those three end up: the training-load pass listed above writes them
+separately, by a different rule, and places them *after* the carried
+user-owned lines instead — see
+[Frontmatter Ownership](#frontmatter-ownership) above for the full picture.
 
 To edit a user-owned key, edit its line directly, the same as any other
 frontmatter key — there is no separate region syntax for these. A comment

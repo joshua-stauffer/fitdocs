@@ -22,11 +22,12 @@ source-directory immutability, force semantics, and region-conflict failures.
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import hashlib
 import re
 import shutil
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from datetime import timedelta, timezone
 from pathlib import Path
 
@@ -49,6 +50,21 @@ from fitdocs.layout import (
     archive_path,
     doc_path,
     source_ref,
+)
+from fitdocs.load import registry as load_registry
+from fitdocs.load.docedit import read_frontmatter_load
+from fitdocs.load.engine import apply_load
+from fitdocs.load.prompts import NonInteractiveSession
+from fitdocs.load.types import (
+    Activity,
+    AthleteField,
+    Computed,
+    DerivedMetrics,
+    InteractionSession,
+    LoadContext,
+    LoadOutcome,
+    LoadResult,
+    ProfileView,
 )
 from fitdocs.render import plan_map
 from fitdocs.sync import (
@@ -2077,6 +2093,114 @@ def test_regenerating_a_tagged_page_twice_is_byte_identical(tmp_path: Path) -> N
     second = doc.read_text(encoding="utf-8")
 
     assert second == first
+
+
+class _FieldFreeCalculator:
+    """A RUN calculator requiring no athlete input, so a forced
+    ``--calculator`` reaches ``Computed`` under a non-interactive session
+    (mirrors ``tests/load/test_cli_load.py::_FieldFreeCalculator`` and
+    ``tests/test_effort_tags_e2e.py::_FieldFreeStubCalculator``, reimplemented
+    locally rather than imported: this module drives ``apply_load`` directly
+    rather than through the CLI, and needs its own RUN-only calculator id
+    distinct from either sibling's -- reusing one would carry that sibling
+    module's id and modality set rather than one scoped to this module).
+    """
+
+    calculator_id = "stub-sync-field-free"
+    display_name = "Sync Test Stub Field-Free Calculator"
+    supported_modalities = frozenset({Modality.RUN})
+
+    def required_athlete_fields(self) -> tuple[AthleteField, ...]:
+        return ()
+
+    def compute(
+        self,
+        activity: Activity,
+        metrics: DerivedMetrics,
+        profile: ProfileView,
+        session: InteractionSession,
+        context: LoadContext,
+    ) -> LoadOutcome:
+        return Computed(
+            result=LoadResult(
+                calculator_id=self.calculator_id,
+                display_name=self.display_name,
+                value=42.0,
+                basis="stub field-free basis",
+                non_selected=(),
+                flags=(),
+                inputs_used=(),
+                notes=(),
+            )
+        )
+
+
+@contextlib.contextmanager
+def _forced_field_free_calculator() -> Iterator[None]:
+    """Register :class:`_FieldFreeCalculator` as the *only* calculator for the
+    duration of the block, then restore the registry exactly as it was
+    (mirrors ``tests/test_effort_tags_e2e.py::_forced_stub_calculator``,
+    reimplemented locally per the docstring above)."""
+    saved = dict(load_registry._REGISTRY)
+    load_registry._REGISTRY.clear()
+    load_registry.register(_FieldFreeCalculator())
+    try:
+        yield
+    finally:
+        load_registry._REGISTRY.clear()
+        load_registry._REGISTRY.update(saved)
+
+
+def test_carried_user_lines_sit_before_the_load_keys_a_load_pass_appends(
+    tmp_path: Path,
+) -> None:
+    """The load-only pass (``apply_load``, not a full frontmatter rebuild)
+    appends its three managed keys *after* an already-carried user-owned
+    line, not before it -- the opposite order from a full rebuild (see
+    ``test_carried_lines_sit_after_the_last_managed_key`` below). This is
+    what ``docs/ownership-contract.md``'s ``## Frontmatter Ownership``
+    section must state truthfully alongside the rebuild case, since
+    ``apply_frontmatter_load`` (``src/fitdocs/load/docedit.py``) only
+    upserts the three ``load_*`` lines and never re-rebuilds the block."""
+    source = tmp_path / "src"
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _put(source, "run.fit", builder.run_fit_bytes())
+    sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
+    doc = doc_path(data_root, _RUN_STEM)
+    shutil.rmtree(source)
+
+    edited = _add_frontmatter_key(doc.read_text(encoding="utf-8"), "effort: race")
+    doc.write_text(edited, encoding="utf-8")
+
+    # Precondition (falsity in the starting state): no load key has been
+    # written yet, so a subsequent "load_value present" check below is
+    # meaningful rather than self-referential.
+    before = doc.read_text(encoding="utf-8")
+    assert "load_value:" not in before
+    assert "effort: race" in before
+
+    with _forced_field_free_calculator():
+        report = apply_load(
+            data_root, session=NonInteractiveSession(), calculator_id=None
+        )
+
+    assert report.failures == ()
+    after = doc.read_text(encoding="utf-8")
+
+    # Postcondition, asserted rather than assumed: the load pass actually
+    # wrote the managed keys this time -- the frontmatter reader agrees, and
+    # the ordering assertion below means nothing against a pass that skipped.
+    fm = read_frontmatter_load(after)
+    assert fm["load_value"] == 42
+
+    # The carried user-owned line (``effort: race``) sits BEFORE the
+    # appended ``load_*`` block, not after it -- the reverse of what a full
+    # rebuild produces (regen's `test_carried_lines_sit_after_the_last_managed_key`).
+    effort_idx = after.index("effort: race")
+    load_value_idx = after.index("load_value:")
+    assert effort_idx < load_value_idx
+    assert "effort: race\nload_value:" in after
 
 
 def test_carried_lines_sit_after_the_last_managed_key(tmp_path: Path) -> None:

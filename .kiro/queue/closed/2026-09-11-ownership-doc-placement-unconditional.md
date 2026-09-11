@@ -1,7 +1,7 @@
 ---
 id: 2026-09-11-ownership-doc-placement-unconditional
 title: The published contract states the user-key placement rule unconditionally, and it is false after a load pass
-status: open
+status: done
 importance: high
 importance_why: A published user-facing guarantee is false of the state a user sees whenever training load is computed, and the nearest pin cannot reach the case.
 effort: S
