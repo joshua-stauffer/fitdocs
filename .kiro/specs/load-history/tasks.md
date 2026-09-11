@@ -731,7 +731,7 @@ shape.
   - _Requirements: 2.7, 3.4, 8.3, 8.4_
   - _Boundary: HistorySettings_
 
-- [ ] 5.2 Orchestrate the pass and write its two outputs
+- [x] 5.2 Orchestrate the pass and write its two outputs
   - Add the package's one writing module: read the settings document once and
     project it through both table readers; scan the documents; resolve the
     methodology, raising a settings-error subclass on a problem so the command's
@@ -938,3 +938,15 @@ shape.
   markers only (design.md:1614, Req 5.4 put the selection in the engine).
   `render_history`/`RenderedHistory` are module-level in `history.page`; 5.2
   appends them to the package surface if it imports them off the surface.
+- **For 5.3 / 5.4 (from 5.2):** the engine's public names are `run_history`,
+  `HistoryReport`, `MethodologyConfigurationError` (a `SettingsError`
+  subclass) -- the CLI maps it through the existing settings-error handler.
+  `tests/load/test_settings.py`'s caller guard now licenses
+  `history/engine.py`; `impl/performance-benchmarks` widens the same guard to
+  `performance/engine.py` -- whichever merges second takes the union of three
+  and fixes the docstring's count. The chart's generated marker is a
+  module-local `_CHART_MARKER` in `engine.py` (DOC_BANNER's `--` is invalid
+  inside an XML comment). For 5.4's reachability/boundary guards, apply the
+  peer WARN of 2026-09-11T18:25: resolve relative imports against the
+  ENCLOSING package, exclude the bare `fitdocs` namespace from any
+  owner-prefix allowance, and pin import allowlists by equality.
