@@ -857,7 +857,7 @@ shape.
   - _Requirements: 1.1, 2.4, 7.4, 7.5, 8.5_
   - _Boundary: ConfinementRegistration, PackageBoundary, SurfacePins_
 
-- [ ] 5.5 Land the wiki-contract Existing Spec Update
+- [x] 5.5 Land the wiki-contract Existing Spec Update
   - Amend the wiki-contract spec's requirements with an amendment block on the
     published-ownership-contract and in-tree-declaration requirements recording
     the new owned location, its declaration and the second document type the
