@@ -118,28 +118,87 @@ def test_workouts_declaration_names_every_user_owned_region() -> None:
 
 # --- no distributive universals over documents (fix plan step 3) ------------
 
-# Words that, appearing near a region mention, would make the sentence a false
-# per-document claim: only `render_strength` emits WORKOUT_REGION, so 7 of the
-# 8 golden documents carry `notes` + `load` alone. This is the exact false-claim
-# shape that sank review rounds 2 and 3 -- a real, mechanical guard over every
-# declared directory, not a one-off pin on a single sentence.
+# Words that would make a declaration sentence a false per-document claim:
+# only `render_strength` emits WORKOUT_REGION, so 8 of the 9 golden documents
+# carry `notes` + `load` alone. This is the exact false-claim shape that sank
+# review rounds 2 and 3 -- a real, mechanical guard over every declared
+# directory, not a one-off pin on a single sentence.
+#
+# Originally this guard only examined lines containing "region", on the theory
+# that a document-distributive claim only mattered next to a region mention.
+# Task 4.1 added `_USER_KEYS`, a sentence naming the four user-owned
+# frontmatter keys with no region word in it, and the guard never looked at
+# it -- only the byte-golden would have noticed a quantifier landing there
+# (queue: 2026-09-11-declaration-quantifier-guard-only-sees-region-lines). The
+# hazard this guard exists for -- a sentence claiming something is true of
+# *every* document -- is not specific to region prose, so the predicate now
+# inspects every line of the emitted text (including `fit-archive/`'s, which
+# the region-only filter never inspected at all). Widening it was checked
+# against the two current declaration texts line by line and trips no
+# existing sentence: neither text contains any of `_QUANTIFIER_WORDS`
+# anywhere, region line or not.
 _QUANTIFIER_WORDS = ("each", "every", "all documents", "any document")
 
 
-@pytest.mark.parametrize("directory", DECLARED_DIRS)
-def test_no_declaration_quantifies_over_documents_near_a_region_mention(
-    directory: str,
-) -> None:
-    text = declaration_text(directory)
+def _quantifier_hits(text: str) -> list[str]:
+    """Every line in ``text`` containing one of `_QUANTIFIER_WORDS`, described
+    as ``"<word> in line <line>"``.
+
+    Factored out of the guard test below so the predicate itself -- not just
+    its behavior against the two live declaration texts -- can be pinned
+    directly against a synthetic string
+    (:func:`test_quantifier_hits_flags_a_synthetic_document_quantifying_sentence`).
+    """
+    hits: list[str] = []
     for line in text.splitlines():
-        if "region" not in line.lower():
-            continue
         lowered = line.lower()
         for word in _QUANTIFIER_WORDS:
-            assert word not in lowered, (
-                f"{directory!r} declaration quantifies over documents near a "
-                f"region mention ({word!r} in line {line!r})"
-            )
+            if word in lowered:
+                hits.append(f"{word!r} in line {line!r}")
+    return hits
+
+
+def test_quantifier_hits_flags_a_synthetic_document_quantifying_sentence() -> None:
+    # Synthetic corpus, not the real declaration text: pins `_quantifier_hits`
+    # itself, independent of whatever the two shipped declarations currently
+    # say. None of these lines mentions "region", so this also pins that the
+    # predicate is no longer scoped to region-adjacent lines. Every quantifier
+    # sits mid-line, never at line start -- a corpus with the quantifier
+    # leading its line (e.g. "Every document...") is satisfied identically by
+    # `word in lowered` and by `lowered.startswith(word)`, so it cannot tell a
+    # substring predicate apart from a prefix one; mid-line placement can.
+    # One entry is capitalised for the same reason in the other direction:
+    # an all-lowercase corpus is matched identically with and without the
+    # predicate's `.lower()`, so deleting that call would stay green.
+    text = (
+        "The policy applies to each document in turn.\n"
+        "The rest of the block is rebuilt, in every document.\n"
+        "This clause covers All Documents without exception.\n"
+        "Nothing here is exempt: any document counts.\n"
+        "This line names no quantifier at all.\n"
+    )
+    hits = _quantifier_hits(text)
+    # Every hit string has the fixed shape `f"{word!r} in line {line!r}"`
+    # (see `_quantifier_hits`); slicing off the repr quotes recovers the word.
+    found_words = {hit.split(" in line ", 1)[0][1:-1] for hit in hits}
+    # A literal expected set, NOT `set(_QUANTIFIER_WORDS)`: comparing against
+    # the constant under test would be self-referential -- deleting an entry
+    # from `_QUANTIFIER_WORDS` would shrink both sides identically and this
+    # assertion would still pass.
+    assert found_words == {"each", "every", "all documents", "any document"}, hits
+    assert not any("no quantifier at all" in hit for hit in hits), hits
+
+
+@pytest.mark.parametrize("directory", DECLARED_DIRS)
+def test_no_declaration_quantifies_over_documents(directory: str) -> None:
+    text = declaration_text(directory)
+    lines = text.splitlines()
+    assert lines, (
+        f"{directory!r} declaration text is empty -- the guard is not "
+        "looking at real content"
+    )
+    hits = _quantifier_hits(text)
+    assert not hits, f"{directory!r} declaration quantifies over documents: {hits}"
 
 
 # --- portability and invisibility to document scans --------------------------

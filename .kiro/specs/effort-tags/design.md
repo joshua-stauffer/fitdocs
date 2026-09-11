@@ -790,9 +790,16 @@ class FindingKind(StrEnum):
   EFFORT_KEYS)`. CLAIM ANCHOR: `contract.USER_KEYS`; `sync._process_file`'s
   carry; `render.frontmatter.build_frontmatter`'s append; the unmanaged drop
   for everything else.
-- The sentence quantifies over *keys*, never over documents, and its line
-  contains no "region" word, so the existing quantifier guard is not
-  triggered and no per-document claim is made (Req 3.2a of wiki-contract).
+- The sentence quantifies over *keys*, never over documents: it contains none
+  of the guard's quantifier words (`each`/`every`/`all documents`/`any
+  document`), so no per-document claim is made (Req 3.2a of wiki-contract).
+  Superseded 2026-09-11 (queue:
+  declaration-quantifier-guard-only-sees-region-lines): the guard originally
+  fired only on lines mentioning "region", so the reason this sentence did
+  not trip it used to be "its line contains no 'region' word"; the guard now
+  inspects every line of both declarations (it had never inspected
+  `fit-archive/` at all), so the reason is now, and only, the absence of a
+  quantifier word.
 - The archive declaration changes only in its restated version.
 
 **Implementation Notes**
@@ -875,8 +882,11 @@ class FindingKind(StrEnum):
   `effort_tag`, `user_owned_lines`.
 - `CONTRACT_BINDINGS`: `fitdocs.sync` += (`effort_tag`, `user_owned_lines`,
   `unmanaged_keys`); `fitdocs.audit` += (`effort_tag`,);
-  `fitdocs.declaration` += (`USER_KEYS`,). The identity check then covers the
-  new bindings; the YAML-emitter rule and the literal scans are unchanged.
+  `fitdocs.declaration` += (`EFFORT_KEYS`,) -- the declaration renders its
+  fragment from the ordered tuple (above), so `EFFORT_KEYS` is the name it
+  imports and `USER_KEYS` is never bound there. The identity check then
+  covers the new bindings; the YAML-emitter rule and the literal scans are
+  unchanged.
 - `tests/test_contract.py`: `USER_KEYS` pins; `emittable.isdisjoint(USER_KEYS)`
   in the anti-drift test; `unmanaged_keys` exempts user keys.
 - `tests/test_effort_tags_e2e.py` (CLI-level, through `typer`'s runner as

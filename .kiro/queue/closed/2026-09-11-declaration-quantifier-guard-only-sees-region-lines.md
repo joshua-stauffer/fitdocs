@@ -1,7 +1,7 @@
 ---
 id: 2026-09-11-declaration-quantifier-guard-only-sees-region-lines
 title: The declaration quantifier guard only inspects lines containing "region"
-status: open
+status: done
 importance: medium
 importance_why: New declaration prose that does not mention a region is unguarded; only the byte-golden notices, and it cannot say why the change is wrong.
 effort: S

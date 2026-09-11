@@ -146,7 +146,7 @@ class DeclarationOutcome:
 # emitted text carries ONLY the elements Req 3.2/3.2a/3.3 mandate, plus one
 # actionable rule (never add a region marker fitdocs did not write). No fragment
 # quantifies over documents ("each"/"every"/"all documents"/"any document"),
-# because only `render_strength` emits `WORKOUT_REGION` -- 7 of 8 golden
+# because only `render_strength` emits `WORKOUT_REGION` -- 8 of 9 golden
 # documents carry `notes` + `load` alone (`src/fitdocs/render/views.py`:
 # `render_run_ride` ~146, `render_strength` ~183-202, `render_generic` ~214).
 
@@ -184,9 +184,10 @@ _USER_KEYS: Final[str] = (
 # build_frontmatter`'s append of the carried keys after the managed ones; the
 # unmanaged-key drop for everything else (`contract` docstring around
 # `USER_KEYS`/`MANAGED_KEYS`). Quantifies over *keys*, never over documents --
-# it names no region and states no claim about which documents carry which
-# key, so it does not trip the quantifier guard below (Req 6.4). Workouts only:
-# the archive declaration gains nothing but the restated version.
+# it uses none of `_QUANTIFIER_WORDS`
+# (`tests/test_declaration.py::test_no_declaration_quantifies_over_documents`),
+# so it does not trip that guard (Req 6.4). Workouts only: the archive
+# declaration gains nothing but the restated version.
 
 _REDERIVABILITY_DOCS: Final[str] = (
     "The *generated* content of the documents in this directory is "

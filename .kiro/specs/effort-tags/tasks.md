@@ -633,7 +633,10 @@ report.
   document-quantifying sentence in the new key fragment ("...through regeneration in every
   document") reds ONLY the byte-golden -- verified as a sole failure, 1 failed / 3262 passed.
   Design-sanctioned (`design.md:788-791`), but do not assume the guard covers prose that
-  does not mention a region.
+  does not mention a region. Superseded 2026-09-11: the guard now inspects every declaration
+  line (both `workouts/` and `fit-archive/`), not only lines mentioning "region" -- see
+  queue: declaration-quantifier-guard-only-sees-region-lines and
+  `tests/test_declaration.py::test_no_declaration_quantifies_over_documents`.
 - 4.1: `_english_list`'s docstring (`declaration.py:255-263`) still says it "is used
   everywhere a region list is rendered into prose" and is "correct regardless of how many
   regions `contract` declares". It now also renders the user-owned key list -- narrow rather

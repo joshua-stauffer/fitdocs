@@ -1,7 +1,7 @@
 ---
 id: 2026-09-11-effort-tags-design-878-user-keys-stale
 title: effort-tags design.md:878 prescribes USER_KEYS where the declaration binds EFFORT_KEYS
-status: open
+status: done
 importance: low
 importance_why: A later reader following the design literally would register a binding that reds the identity test; the correction lives only in tasks.md.
 effort: S
