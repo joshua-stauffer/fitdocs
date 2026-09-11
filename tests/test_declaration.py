@@ -87,6 +87,23 @@ def test_declaration_text_states_the_contract_version_and_owner() -> None:
         assert contract.GENERATOR in text
 
 
+def test_workouts_declaration_names_every_user_owned_key() -> None:
+    # `contract.EFFORT_KEYS` is the ordered tuple the fragment is built from
+    # (task 4.1) -- every key must appear backticked in the workouts text, so
+    # adding an effort key cannot silently go unmentioned here either.
+    text = declaration_text(_WORKOUTS)
+    for key in contract.EFFORT_KEYS:
+        assert f"`{key}`" in text
+
+
+def test_archive_declaration_names_no_user_owned_key() -> None:
+    # Req 6.4: the source-archive declaration is unchanged apart from the
+    # restated version -- it must gain none of the user-owned keys.
+    text = declaration_text(_ARCHIVE)
+    for key in contract.EFFORT_KEYS:
+        assert f"`{key}`" not in text
+
+
 def test_workouts_declaration_names_every_user_owned_region() -> None:
     # Region cardinality is never hardcoded prose: every user-owned region id
     # `contract` declares must actually appear in the docs-holding directory's

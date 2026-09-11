@@ -47,6 +47,7 @@ from typing import Final
 
 from fitdocs.contract import (
     CONTRACT_VERSION,
+    EFFORT_KEYS,
     GENERATED_PREFIX,
     GENERATOR,
     USER_REGIONS,
@@ -173,6 +174,20 @@ _REGIONS: Final[str] = (
 # -- that is the false claim shape Req 3.2a forbids and rounds 2/3 both stated
 # (Req 3.2).
 
+_USER_KEYS: Final[str] = (
+    "The frontmatter keys {user_keys_list} are user-owned: fitdocs never "
+    "writes them and carries them unchanged through regeneration. The rest "
+    "of the frontmatter block is tool-owned and rebuilt on regeneration."
+)
+# CLAIM ANCHOR: `contract.USER_KEYS`; `sync._process_file`'s carry of the
+# existing document's user-owned keys forward; `render.frontmatter.
+# build_frontmatter`'s append of the carried keys after the managed ones; the
+# unmanaged-key drop for everything else (`contract` docstring around
+# `USER_KEYS`/`MANAGED_KEYS`). Quantifies over *keys*, never over documents --
+# it names no region and states no claim about which documents carry which
+# key, so it does not trip the quantifier guard below (Req 6.4). Workouts only:
+# the archive declaration gains nothing but the restated version.
+
 _REDERIVABILITY_DOCS: Final[str] = (
     "The *generated* content of the documents in this directory is "
     "re-derivable: fitdocs rebuilds it by regeneration from the archived "
@@ -272,12 +287,13 @@ def declaration_text(directory: str) -> str:
     ``CONTRACT_DOCUMENTATION_URL``.
 
     For the directory holding generated documents (``workouts/``): the
-    written-and-tool-owned statement, the user-owned region names, and
-    re-derivability by regeneration (Req 3.2), plus the never-add-a-marker
-    rule. For the source archive (``fit-archive/``): the written-and-tool-owned
-    statement and the immutable-inputs statement (Req 3.3) -- the
-    re-derivability and user-owned-region elements do not apply here (Req
-    3.2a), so this branch never selects those fragments.
+    written-and-tool-owned statement, the user-owned region names, the
+    user-owned effort-tag frontmatter keys (Req 6.4), and re-derivability by
+    regeneration (Req 3.2), plus the never-add-a-marker rule. For the source
+    archive (``fit-archive/``): the written-and-tool-owned statement and the
+    immutable-inputs statement (Req 3.3) -- the re-derivability,
+    user-owned-region, and user-owned-key elements do not apply here (Req
+    3.2a, 6.4), so this branch never selects those fragments.
 
     No fragment quantifies over documents ("each"/"every"/"all
     documents"/"any document"): only :func:`~fitdocs.render.views.render_strength`
@@ -291,6 +307,7 @@ def declaration_text(directory: str) -> str:
     never opens with.
     """
     user_regions_list = _english_list(f"`{region}`" for region in USER_REGIONS)
+    user_keys_list = _english_list(f"`{key}`" for key in EFFORT_KEYS)
 
     owner_block = _OWNER_BLOCK.format(
         generator=GENERATOR,
@@ -308,6 +325,7 @@ def declaration_text(directory: str) -> str:
         body = (
             f"{_WRITTEN_AND_OWNED.format(directory=directory)}\n\n"
             f"{_REGIONS.format(user_regions_list=user_regions_list)}\n\n"
+            f"{_USER_KEYS.format(user_keys_list=user_keys_list)}\n\n"
             f"{_REDERIVABILITY_DOCS.format(archive_dir=ARCHIVE_DIR)}\n\n"
             f"{_NEVER_ADD_MARKER}\n\n"
         )

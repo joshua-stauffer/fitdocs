@@ -288,7 +288,7 @@ report.
 
 - [ ] 4. Declaration and published contract
 
-- [ ] 4.1 (P) Advance the contract version and name the keys in the workouts declaration
+- [x] 4.1 (P) Advance the contract version and name the keys in the workouts declaration
   - Set the published contract version identifier to `2`, its docstring
     recording why (a stated guarantee -- what regeneration preserves in the
     frontmatter block -- changed), and move the version line at the top of the
@@ -622,3 +622,19 @@ report.
 - 3: `FindingKind`'s string VALUES and every `_REMEDY_` constant are unpinned --
   changing one leaves the whole suite green, on pre-existing members too. Queue item
   2026-09-10-finding-kind-values-and-remedy-texts-unpinned.
+- 4.1: APPROVED ON ROUND ONE (third in this spec), and again the difference was running
+  the named mutations before reporting. FOR TASK 5.1: `design.md:287-289` prescribes that
+  `CONTRACT_BINDINGS["fitdocs.declaration"]` gains `USER_KEYS`, but `design.md:789` mandates
+  the fragment render from `EFFORT_KEYS` and `declaration.py:50` correctly imports
+  `EFFORT_KEYS` -- the module never binds `USER_KEYS`. Following the design literally would
+  register a binding the module does not have. Bind what the module imports.
+- 4.1: the quantifier guard is NARROWER than it reads. `_QUANTIFIER_WORDS`
+  (`tests/test_declaration.py:134-136`) only inspects lines containing "region", so a
+  document-quantifying sentence in the new key fragment ("...through regeneration in every
+  document") reds ONLY the byte-golden -- verified as a sole failure, 1 failed / 3262 passed.
+  Design-sanctioned (`design.md:788-791`), but do not assume the guard covers prose that
+  does not mention a region.
+- 4.1: `_english_list`'s docstring (`declaration.py:255-263`) still says it "is used
+  everywhere a region list is rendered into prose" and is "correct regardless of how many
+  regions `contract` declares". It now also renders the user-owned key list -- narrow rather
+  than false, and the sentence to widen for whoever next opens that helper.

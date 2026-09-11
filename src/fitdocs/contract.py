@@ -261,7 +261,7 @@ own docstring in that test module for why that is an accepted property of
 this trigger shape, not a defect to route around a second time.
 """
 
-CONTRACT_VERSION: Final[str] = "1"
+CONTRACT_VERSION: Final[str] = "2"
 """The published ownership contract's version identifier (Req 2.8).
 
 A *string*, and deliberately not comparable with :data:`DOC_VERSION`: it
@@ -269,6 +269,12 @@ versions the stated guarantees -- what fitdocs owns, what the user owns, what
 regeneration replaces -- not the document format. It is quoted in the published
 contract and restated in every in-tree ownership declaration, and changes
 whenever a stated guarantee changes.
+
+Bumped ``1`` -> ``2`` (Req 6.3) because a stated guarantee about what
+regeneration preserves in the frontmatter block changed: :data:`USER_KEYS`
+(the effort tag's four frontmatter keys) is a new class of key fitdocs never
+writes and carries unchanged through every rewrite, alongside the pre-existing
+managed keys and user-owned regions.
 """
 
 # --- document vocabulary -----------------------------------------------------

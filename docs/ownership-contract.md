@@ -1,6 +1,6 @@
 # fitdocs Ownership Contract
 
-**Contract version:** `1`
+**Contract version:** `2`
 
 This document is the authoritative, published statement of what fitdocs owns
 in your data root, what you own, and the exact limits of every operation that
