@@ -960,3 +960,10 @@ shape.
   `tests/load/test_settings.py`'s caller guard licenses `history/engine.py`;
   the peer licenses `performance/engine.py`; the merge takes the union of
   three and fixes the docstring's count.
+- **From validation (5.2/5.3, recorded late):** chart race markers are drawn
+  from the FULL scan (`criterion_points(scan.pages)`), then clipped to the
+  series span because the chart has no day index outside it -- the engine.py
+  comment calls this "remediation round 4"; this is that decision's record.
+  5.3's README edit also rewrote the Ownership paragraph (three owned
+  directories) rather than only appending -- disclosed in the agent log,
+  restated here.
