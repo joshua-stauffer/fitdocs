@@ -262,7 +262,9 @@ In short: fitdocs owns `workouts/`, `workouts/assets/`, `fit-archive/`,
 `.cache/`, and `.fitdocs/` under your data root (plus any location your
 `fitdocs.toml` settings configure it to write into — the [Inbox](#inbox)'s
 `path` and `processed_dir` are the first example), and writes nowhere else.
-You own every document's `notes` and `workout` regions, and
+You own every document's `notes` and `workout` regions, and its effort-tag
+frontmatter keys (`effort`, `effort_distance_m`, `effort_time_s`,
+`effort_event`) — see the published contract for the full detail. And
 `athlete.toml`'s hand-added keys survive every fitdocs write. Every
 generated document carries a provenance stamp, and the two owned
 directories a human or agent browses — `workouts/` and `fit-archive/` —

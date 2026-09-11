@@ -134,6 +134,37 @@ def test_managed_keys_equal_contract_exactly() -> None:
     assert documented == contract.MANAGED_KEYS
 
 
+def test_user_owned_keys_equal_contract_exactly() -> None:
+    """The document's `## User-Owned Frontmatter Keys` list (effort-tags
+    design: ContractDocs) must equal `contract.USER_KEYS` exactly -- same
+    set-equality discipline as owned paths, regions, and managed keys above,
+    using the same two helpers.
+
+    A heading-not-found parse does not reach this assertion at all: `_section`
+    itself raises (`AssertionError: heading ... not found`) before returning,
+    which this task's own RED-phase run demonstrated when this section did
+    not yet exist. An empty-section parse (the heading present with no
+    backtick-quoted list items) reaches this assertion and is already caught
+    by the equality on its own -- `set() != contract.USER_KEYS` reds without
+    any separate emptiness check, verified by parsing a synthetic empty
+    section through `_section`/`_backticked_list_items` and confirming
+    inequality. `assert documented` above is therefore a redundant, cheap
+    positive control, not what makes the empty-parse case fail.
+
+    This single equality is also the mutation surface the task's three named
+    mutations exercise directly against the real document text: adding a
+    bogus key to the list, removing a real one, or moving the effort kinds
+    (`race`, `test`, `hard`) into this section as a backticked list all
+    change what `_backticked_list_items` returns here and so must fail this
+    assertion -- verified by hand-editing `docs/ownership-contract.md` for
+    each case and re-running this test (see the task's DISCRIMINATION
+    report; the edits are not left in the tree)."""
+    section = _section(_read_doc(), "User-Owned Frontmatter Keys")
+    documented = _backticked_list_items(section)
+    assert documented, "expected at least one user-owned key documented"
+    assert documented == contract.USER_KEYS
+
+
 def test_deferred_5_9_clause_is_echoed() -> None:
     """Task 5.1's deferred clause (Req 5.9) must be echoed here, not summarized
     away. Distinctive substrings, not the whole sentence, so a paraphrase that

@@ -321,7 +321,7 @@ report.
   - _Depends: 1.3_
   - _Boundary: DeclarationWriter, ContractDocs (version line only)_
 
-- [ ] 4.2 Publish the user-owned key class in the ownership contract and the README
+- [x] 4.2 Publish the user-owned key class in the ownership contract and the README
   - In the published contract: amend the preamble's "what changes the
     version" sentence; rewrite "Frontmatter Ownership" so the block is
     tool-owned and rebuilt except the user-owned keys, which are carried over
@@ -638,3 +638,25 @@ report.
   everywhere a region list is rendered into prose" and is "correct regardless of how many
   regions `contract` declares". It now also renders the user-owned key list -- narrow rather
   than false, and the sentence to widen for whoever next opens that helper.
+- 4.2: THE TASK'S OWN GREP DELIVERABLE IS THE CHEAPEST FINDING-CATCHER IN THIS SPEC, AND
+  SKIPPING IT COST THE ROUND. The task text bolds "grep the changed sections for
+  every/all/never/always/cannot/only and list each hit against the code that makes it true
+  in the task report"; round 1 omitted the table and shipped a sentence claiming the
+  no-placeholder discipline was "the same discipline the `notes` and `workout` regions
+  apply" -- the exact opposite of the truth (`contract.py` NOTES_PLACEHOLDER /
+  WORKOUT_PLACEHOLDER are written into every brand-new document), contradicting this same
+  document 80 lines up. Running the table is what surfaces it.
+- 4.2: USE `-i` ON THAT GREP. The literal lowercase pattern misses sentence-initial "Every"
+  and "Any", and in this task exactly two capitalized-only hits escaped the table -- one of
+  them the brand-new sentence the table had just been extended to justify.
+- 4.2: A DOCSTRING JUSTIFYING A POSITIVE CONTROL IS A COUNTERFACTUAL, AND A COUNTERFACTUAL
+  IS A CLAIM. The new test's docstring said a heading-not-found "would make this pass for
+  the wrong reason" -- but `_section` RAISES on a missing heading, so it can never pass, and
+  the task's own RED_PHASE_OUTPUT (`AssertionError: heading ... not found`) was that raise.
+  The report disproved its own docstring. Run the counterfactual; do not reason about it.
+- 4.2: a published-contract table cell that states a rule states it EXACTLY. "Non-empty
+  text" for `effort_event` told users a whitespace-only value was valid; `contract.py:601` is
+  `not event_value.strip()`, so it is malformed. When you correct such a cell, note that the
+  corrected wording may make MORE claims than the original -- "stored exactly as written,
+  unstripped" was a second, new assertion, and it needed its own round trip
+  (`effort_event: "  Boston  "` keeps its spaces) before it could ship.
