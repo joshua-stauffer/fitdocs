@@ -262,9 +262,11 @@ _HISTORY_CONTENT: Final[str] = (
 # `workouts/`. `HistoryCommand` (design.md) has no `--force` and no
 # `--recompute`: the page is always rebuilt in full, so "rewritten in full"
 # is the command's only mode, not an option. The page reserves no region
-# because nothing under the (not-yet-implemented) `history/` package imports
-# `docmerge`'s region helpers or emits a region marker -- the history page is
-# a `history/` module concern entirely, distinct from `render/views.py`'s
+# because nothing under the `history/` package imports `docmerge`'s region
+# helpers or emits a region marker (5.4's boundary test pins the import list;
+# `page.py`, the module that emits the page, lands its body in 4.3) -- the
+# history page is a `history/` module concern entirely, distinct from
+# `render/views.py`'s
 # workout-document renderers that do.
 
 _HISTORY_RERUNNABLE: Final[str] = (
