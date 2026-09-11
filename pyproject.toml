@@ -85,6 +85,8 @@ files = [
     "tests/performance/test_constant_guard.py",
     "tests/performance/test_derive.py",
     "tests/performance/test_engine.py",
+    "tests/performance/test_purity.py",
+    "tests/performance/test_reachability.py",
 ]
 
 [tool.pytest.ini_options]

@@ -532,7 +532,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
 
 - [ ] 5. Guards, end-to-end validation and the upstream amendment
 
-- [ ] 5.1 (P) Guard the package's purity and its unreachability from the calculator
+- [x] 5.1 (P) Guard the package's purity and its unreachability from the calculator
   - Add the layered guard over the four pure modules — an import-target and
     imported-name allowlist, a module-namespace allowlist, a dynamic-import call
     scan, an input-output-and-clock denylist, and a builtin-reference allowlist
