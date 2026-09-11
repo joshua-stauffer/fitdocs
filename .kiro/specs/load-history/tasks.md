@@ -284,7 +284,7 @@ shape.
   - _Requirements: 7.2, 7.3_
   - _Boundary: OwnershipDocs_
 
-- [ ] 2. The model: its provenance, its recursion, and its measured threshold
+- [x] 2. The model: its provenance, its recursion, and its measured threshold
 
 - [x] 2.1 (P) Declare the model's citation records, seed constants, choices and the blocked preset
   - Create the history package with its module marker and its published surface
@@ -348,7 +348,7 @@ shape.
   - _Requirements: 2.4, 2.5, 2.6, 2.8, 2.10, 3.4_
   - _Boundary: ModelSources_
 
-- [ ] 2.2 Implement the recursion and prove it against the primary text's own worked figures
+- [x] 2.2 Implement the recursion and prove it against the primary text's own worked figures
   - Add the pure recursion module: one step per element of the input sequence,
     each accumulator decaying by the exact exponential of minus the reciprocal
     of its time constant and then adding the day's load; accumulators start at
@@ -386,7 +386,7 @@ shape.
   - _Requirements: 2.1, 2.2, 2.3, 2.9, 2.10_
   - _Boundary: FitnessModel_
 
-- [ ] 2.3 Measure and pin every figure the provenance records state
+- [x] 2.3 Measure and pin every figure the provenance records state
   - Write the measurement the coverage threshold's provenance record names: from
     the shipped model, compute the relative understatement of daily-average
     fitness and of daily-average fatigue caused by exactly one uncomputed daily
