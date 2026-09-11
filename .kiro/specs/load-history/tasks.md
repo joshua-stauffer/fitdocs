@@ -286,7 +286,7 @@ shape.
 
 - [ ] 2. The model: its provenance, its recursion, and its measured threshold
 
-- [ ] 2.1 (P) Declare the model's citation records, seed constants, choices and the blocked preset
+- [x] 2.1 (P) Declare the model's citation records, seed constants, choices and the blocked preset
   - Create the history package with its module marker and its published surface
     list, then declare, in the sources module: two citation records at the
     recursion's own locators -- the 1990 paper at its equations (4) and (5) and
