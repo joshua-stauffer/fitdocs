@@ -323,6 +323,39 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
         "comparison -- the boundary a weighting or a load must not fall "
         "below, not a cited value.",
     ),
+    # --- series.py (task 3.3): the daily series' own step size.
+    LiteralExemption(
+        "series.py",
+        "_ONE_DAY",
+        "days",
+        1,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`_ONE_DAY = timedelta(days=1)` -- the daily series advances exactly "
+        "one calendar day per `DayLoad` (Req 1.6); a structural step size "
+        "`build_daily_series` walks by, not a value any source cites.",
+    ),
+    LiteralExemption(
+        "series.py",
+        None,
+        None,
+        1,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`DailySeries.end`'s own `self.days[-1].day` -- the last element of "
+        "a tuple, a structural indexing offset, not a cited value. Distinct "
+        "from the `_ONE_DAY` site above: no enclosing assignment target, no "
+        "call keyword (a subscript index, not a call argument).",
+    ),
+    LiteralExemption(
+        "series.py",
+        None,
+        "positional[1]",
+        0.0,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`build_daily_series`'s own `sum(loaded, 0.0)` start value -- forces "
+        "`float` even when `loaded` is empty (a rest day), so "
+        "`DayLoad.recorded_load` never silently degrades to `int` from "
+        "`sum`'s own no-start-value default; not a cited value.",
+    ),
 )
 
 

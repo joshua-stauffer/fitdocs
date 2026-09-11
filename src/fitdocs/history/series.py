@@ -27,12 +27,42 @@ resolution and the partition it drives (Req 4.1-4.6):
   recording the chosen methodology, and a page recording no load at all,
   are included; any page recording a different methodology is excluded.
 
+Task 3.3 adds the contiguous daily series (Req 1.4-1.8):
+
+- `DayLoad` is one calendar date's own record: the load actually recorded,
+  and the page counts (`pages`, `pages_with_load`) that qualify it, so no
+  consumer can read `recorded_load` as a complete total without also reading
+  how many pages that date has and how many of them are known. `unknown_pages`
+  and `is_complete` are derived views over those two counts.
+- `build_daily_series` spans the earliest to the latest *contributing* page
+  date inclusive -- a page contributes when it records a load, which for the
+  included partition this function receives means `page.load is not None`
+  (every load present in that partition is already under the chosen
+  methodology; see `partition_pages`) -- with one `DayLoad` per calendar date
+  and none omitted. An included page whose date falls outside that span (a
+  page recorded before the first contributing page, or after the last) is
+  simply not folded into any `DayLoad`; its `PageRecord` is still present, by
+  construction, in the caller's own `pages` sequence, so nothing is dropped,
+  only left for a later pass (Req 1.8, 3.10) to report by date-comparison
+  against `DailySeries.start`/`.end`. Returns `None` iff no page in `pages`
+  records a load (Req 1.10's empty-archive case, gated one level up by
+  `HistoryEngine`, not re-guessed here).
+
 No module in this package names a clock function, imports a YAML parser, or
 spells the forbidden reference-docs path (package-wide rules the constant
-guard checks independently). This module holds no bare numeric literal at all --
-every count comparison below is done either by plain truthiness on the
-`Counter` itself, or through structural pattern matching on a *sorted* list of
-observed methodology names, never through a length or an index literal.
+guard checks independently). Task 3.2's own code holds no bare numeric
+literal at all. Task 3.3 introduces three bare numeric literals, each
+exempted at its own site in `tests/history/test_constant_guard.py`:
+
+- `_ONE_DAY = timedelta(days=1)` below -- the daily series' own step size.
+- `DailySeries.end`'s own `self.days[-1].day` -- the `-1` last-element
+  index into the `days` tuple.
+- `build_daily_series`'s own `sum(loaded, 0.0)` -- the `0.0` start value
+  that keeps `DayLoad.recorded_load` a `float` even on a rest day, when
+  `loaded` is empty and `sum` would otherwise default to `int 0`.
+
+None of the three is a value any source cites -- each is a structural
+detail of how this module walks or sums, not a methodological choice.
 """
 
 from __future__ import annotations
@@ -40,16 +70,26 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import date, timedelta
 from typing import Literal
 
 from fitdocs.history.documents import PageRecord
 
 __all__ = [
+    "DailySeries",
+    "DayLoad",
     "MethodologyChoice",
     "MethodologyProblem",
+    "build_daily_series",
     "partition_pages",
     "select_methodology",
 ]
+
+#: One calendar day -- the daily series' own step size (Req 1.6), not a
+#: value any source cites. Declared once here so its constant-guard
+#: exemption attaches to this single site, not to a literal repeated at
+#: every use.
+_ONE_DAY = timedelta(days=1)
 
 
 @dataclass(frozen=True)
@@ -219,3 +259,94 @@ def partition_pages(
         if page.methodology is not None and page.methodology != choice.methodology
     )
     return included, excluded
+
+
+@dataclass(frozen=True)
+class DayLoad:
+    """One calendar date's own record (Req 1.4, 1.5, 1.7).
+
+    `recorded_load` is the sum over `pages` that date has which record a
+    load; `pages` and `pages_with_load` travel with it always, so no
+    consumer can read the sum as a complete total without also reading how
+    many pages that date has and how many of them are known. A genuine rest
+    day (`pages == 0`) and a date whose pages all lack a load
+    (`pages_with_load == 0`, `pages > 0`) both record zero load, but are
+    distinguishable by these counts, not by convention.
+    """
+
+    day: date
+    recorded_load: float
+    pages: int
+    pages_with_load: int
+
+    @property
+    def unknown_pages(self) -> int:
+        return self.pages - self.pages_with_load
+
+    @property
+    def is_complete(self) -> bool:
+        return self.pages == self.pages_with_load
+
+
+@dataclass(frozen=True)
+class DailySeries:
+    """A contiguous run of `DayLoad`, one per calendar date, spanning the
+    earliest to the latest contributing page date inclusive (Req 1.6).
+
+    `days` is never empty: `build_daily_series` returns `None` instead of an
+    empty `DailySeries` whenever no page records a load, so `.end`'s own
+    `self.days[-1]` is always safe to index."""
+
+    start: date
+    days: tuple[DayLoad, ...]
+
+    @property
+    def end(self) -> date:
+        return self.days[-1].day
+
+
+def build_daily_series(pages: Sequence[PageRecord]) -> DailySeries | None:
+    """Build the contiguous daily series from `pages`, the scan's included
+    partition (Req 1.4-1.8).
+
+    Spans the earliest to the latest *contributing* page date inclusive --
+    contributing means `page.load is not None`, which for the included
+    partition this function receives means the load is already recorded
+    under the chosen methodology (`partition_pages`'s own postcondition).
+    Every calendar date in that span gets exactly one `DayLoad`, whether or
+    not any page falls on it. An included page whose date falls outside the
+    span (before the first contributing date, or after the last) is simply
+    not folded into any `DayLoad` here -- it remains, unaltered, in the
+    caller's own `pages` sequence for a later pass to count by comparing its
+    date against `.start`/`.end`, never silently dropped.
+
+    Returns `None` iff no page in `pages` records a load at all (Req 1.10's
+    empty-archive case).
+    """
+    contributing_days = [page.day for page in pages if page.load is not None]
+    if not contributing_days:
+        return None
+    start = min(contributing_days)
+    end = max(contributing_days)
+
+    pages_by_day: dict[date, list[PageRecord]] = {}
+    for page in pages:
+        if start <= page.day <= end:
+            pages_by_day.setdefault(page.day, []).append(page)
+
+    days: list[DayLoad] = []
+    current = start
+    while current <= end:
+        day_pages = pages_by_day.get(current, [])
+        loaded = [page.load for page in day_pages if page.load is not None]
+        days.append(
+            DayLoad(
+                day=current,
+                recorded_load=sum(loaded, 0.0),
+                pages=len(day_pages),
+                pages_with_load=len(loaded),
+            )
+        )
+        current += _ONE_DAY
+
+    return DailySeries(start=start, days=tuple(days))

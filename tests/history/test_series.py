@@ -3,7 +3,8 @@
 `.kiro/specs/load-history/design.md`.
 
 `tests/history/test_series.py` carries one headed section per task: this
-file currently holds only task 3.2's "methodology" section. Fixtures build
+file currently holds task 3.2's "methodology" section and task 3.3's "daily
+series" section. Fixtures build
 `PageRecord`s directly (the type task 3.1 already owns and tests through its
 own real-frontmatter fixtures) rather than writing a page tree, because this
 module is pure and never touches the filesystem.
@@ -15,8 +16,11 @@ from datetime import date
 
 from fitdocs.history.documents import PageRecord
 from fitdocs.history.series import (
+    DailySeries,
+    DayLoad,
     MethodologyChoice,
     MethodologyProblem,
+    build_daily_series,
     partition_pages,
     select_methodology,
 )
@@ -226,3 +230,182 @@ def test_methodology_partition_includes_chosen_and_unscored_excludes_other() -> 
 
     assert included == (chosen, unscored)
     assert excluded == (other2, other)
+
+
+# ---------------------------------------------------------------------------
+# daily series (task 3.3)
+# ---------------------------------------------------------------------------
+
+# A single fixture threading every required scenario through one contiguous
+# span, Jan 3 - Jan 7 2024:
+#   Jan 1  -- a page dated *before* the first contributing page, recording no
+#             load (leading unknown; outside the span; pins the span start
+#             at Jan 3 rather than Jan 1).
+#   Jan 3  -- two pages on one date, loads 4.5 and 7.25. Pairwise-distinct
+#             and non-integral, and chosen so the sum (11.75) equals neither
+#             addend, their average (5.875), nor either alone -- defeats
+#             "sum only the first/last load" and "average the loads" alike,
+#             and (being non-integral) defeats a `round(sum(...))` or a
+#             truncating `int(sum(...))` alongside the correctly-summed
+#             value. First contributing day: pins the span start.
+#   Jan 4  -- a rest day inside the span: no pages at all. `sum([])` on the
+#             empty `loaded` list defaults to `int 0` unless the production
+#             code forces a `float` start value, so this day's own
+#             `recorded_load` pins `DayLoad.recorded_load: float` (design.md)
+#             by its runtime *type*, not merely its numeric value (`0 == 0.0`
+#             both pass an equality check).
+#   Jan 5  -- a partially known day: one page with a load (5.5), one without.
+#   Jan 6  -- a fully unknown day: two pages, neither with a load.
+#   Jan 7  -- a single page, load 9.0. Last contributing day: pins the span
+#             end.
+#   Jan 9  -- a page dated *after* the last contributing page, recording no
+#             load (trailing unknown; outside the span; non-adjacent to
+#             Jan 7 so a wrong end that included it would also manufacture a
+#             phantom rest day on Jan 8, not merely shift the end by one).
+#             Pins the span end at Jan 7 rather than Jan 9.
+_LEADING = date(2024, 1, 1)
+_SPAN_START = date(2024, 1, 3)
+_REST_DAY = date(2024, 1, 4)
+_PARTIAL_DAY = date(2024, 1, 5)
+_UNKNOWN_DAY = date(2024, 1, 6)
+_SPAN_END = date(2024, 1, 7)
+_TRAILING = date(2024, 1, 9)
+
+
+def _daily_series_fixture() -> list[PageRecord]:
+    return [
+        _page("leading.md", _LEADING, None),
+        _page("start-a.md", _SPAN_START, "banister", load=4.5),
+        _page("start-b.md", _SPAN_START, "banister", load=7.25),
+        _page("partial-known.md", _PARTIAL_DAY, "banister", load=5.5),
+        _page("partial-unknown.md", _PARTIAL_DAY, None),
+        _page("unknown-a.md", _UNKNOWN_DAY, None),
+        _page("unknown-b.md", _UNKNOWN_DAY, None),
+        _page("end.md", _SPAN_END, "banister", load=9.0),
+        _page("trailing.md", _TRAILING, None),
+    ]
+
+
+def _series_by_day(series: DailySeries) -> dict[date, DayLoad]:
+    return {day_load.day: day_load for day_load in series.days}
+
+
+def test_day_load_unknown_and_complete_views_distinguish_rest_from_unknown() -> None:
+    """`DayLoad`'s derived views, exercised directly (not only through
+    `build_daily_series`): a rest day (0 pages) and a fully unknown day (2
+    pages, 0 with a load) both record zero load, so they must be
+    distinguishable by their `pages`/`pages_with_load` fields -- and hence by
+    equality -- not merely by convention."""
+    rest = DayLoad(day=_REST_DAY, recorded_load=0.0, pages=0, pages_with_load=0)
+    unknown_day = DayLoad(
+        day=_UNKNOWN_DAY, recorded_load=0.0, pages=2, pages_with_load=0
+    )
+    partial = DayLoad(day=_PARTIAL_DAY, recorded_load=5.0, pages=2, pages_with_load=1)
+
+    assert rest.unknown_pages == 0
+    assert rest.is_complete is True
+
+    assert unknown_day.unknown_pages == 2
+    assert unknown_day.is_complete is False
+
+    assert partial.unknown_pages == 1
+    assert partial.is_complete is False
+
+    assert rest != unknown_day
+
+
+def test_build_daily_series_spans_first_to_last_contributing_day() -> None:
+    series = build_daily_series(_daily_series_fixture())
+    assert series is not None
+    assert series.start == _SPAN_START
+    assert series.end == _SPAN_END
+    assert [day_load.day for day_load in series.days] == [
+        _SPAN_START,
+        _REST_DAY,
+        _PARTIAL_DAY,
+        _UNKNOWN_DAY,
+        _SPAN_END,
+    ]
+
+
+def test_build_daily_series_sums_two_same_day_loads() -> None:
+    series = build_daily_series(_daily_series_fixture())
+    assert series is not None
+    by_day = _series_by_day(series)
+    assert by_day[_SPAN_START] == DayLoad(
+        day=_SPAN_START, recorded_load=11.75, pages=2, pages_with_load=2
+    )
+
+
+def test_build_daily_series_rest_day_is_complete_with_zero_pages() -> None:
+    series = build_daily_series(_daily_series_fixture())
+    assert series is not None
+    by_day = _series_by_day(series)
+    assert by_day[_REST_DAY] == DayLoad(
+        day=_REST_DAY, recorded_load=0.0, pages=0, pages_with_load=0
+    )
+    # `sum([])` on an empty `loaded` list defaults to `int 0` unless the
+    # production code forces a `float` start value -- an equality check
+    # against `0.0` alone cannot tell `int 0` from `float 0.0` apart
+    # (`0 == 0.0`), so this pins `DailySeries`' design.md contract
+    # (`recorded_load: float`) by the value's own runtime type.
+    assert type(by_day[_REST_DAY].recorded_load) is float
+
+
+def test_build_daily_series_partially_known_day_keeps_its_recorded_load() -> None:
+    series = build_daily_series(_daily_series_fixture())
+    assert series is not None
+    by_day = _series_by_day(series)
+    assert by_day[_PARTIAL_DAY] == DayLoad(
+        day=_PARTIAL_DAY, recorded_load=5.5, pages=2, pages_with_load=1
+    )
+
+
+def test_build_daily_series_fully_unknown_day_records_zero_but_counts_pages() -> None:
+    series = build_daily_series(_daily_series_fixture())
+    assert series is not None
+    by_day = _series_by_day(series)
+    assert by_day[_UNKNOWN_DAY] == DayLoad(
+        day=_UNKNOWN_DAY, recorded_load=0.0, pages=2, pages_with_load=0
+    )
+    # The rest day and the fully unknown day both record zero load, but
+    # compare unequal -- the observable the task names.
+    assert by_day[_REST_DAY] != by_day[_UNKNOWN_DAY]
+
+
+def test_build_daily_series_pages_outside_span_are_not_counted() -> None:
+    """The leading page (Jan 1) and the trailing page (Jan 9) are both
+    included but record no load, so neither moves the span start or end,
+    and neither is folded into any in-span day's `pages` count -- the total
+    pages across the series' days must equal the number of included pages
+    that fall inside the span (7 of the fixture's 9), not 8 or 9 as either
+    outside page would add if it leaked in. The trailing page is also
+    non-adjacent to the span end (Jan 7 vs. Jan 9): an end wrongly computed
+    as `max(page.day for page in pages)` (the last *included* page rather
+    than the last *contributing* one) would both move `.end` to Jan 9 and
+    manufacture a phantom rest day on Jan 8, so `series.end` is pinned here
+    directly alongside the page count."""
+    series = build_daily_series(_daily_series_fixture())
+    assert series is not None
+    assert series.end == _SPAN_END
+    total_pages = sum(day_load.pages for day_load in series.days)
+    assert total_pages == 7
+
+
+def test_build_daily_series_single_day_archive() -> None:
+    only = _page("only.md", _SPAN_START, "banister", load=3.0)
+    series = build_daily_series([only])
+    assert series is not None
+    assert series.start == _SPAN_START
+    assert series.end == _SPAN_START
+    assert series.days == (
+        DayLoad(day=_SPAN_START, recorded_load=3.0, pages=1, pages_with_load=1),
+    )
+
+
+def test_build_daily_series_returns_none_when_nothing_records_a_load() -> None:
+    pages = [
+        _page("a.md", _D1, None),
+        _page("b.md", _D2, None),
+    ]
+    assert build_daily_series(pages) is None
