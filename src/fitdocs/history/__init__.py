@@ -15,6 +15,11 @@ earlier task's published names.
 
 from __future__ import annotations
 
+from fitdocs.history.engine import (
+    HistoryReport,
+    MethodologyConfigurationError,
+    run_history,
+)
 from fitdocs.history.model import ModelSeries, run_model, unscaled_accumulators
 from fitdocs.history.page import (
     HISTORY_FRONTMATTER_KEYS,
@@ -55,4 +60,7 @@ __all__: list[str] = [
     "MethodologyProblem",
     "partition_pages",
     "select_methodology",
+    "HistoryReport",
+    "MethodologyConfigurationError",
+    "run_history",
 ]

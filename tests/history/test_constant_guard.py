@@ -514,6 +514,39 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
         "at the same `(page.py, None, None, 1)` key as `_contiguous_bands`'s "
         "`previous + 1` above -- a distinct call site, not a respelling.",
     ),
+    # --- engine.py (task 5.2): the empty-archive report's own zero counts.
+    # No page in the whole archive records a load on this path (the gate's
+    # own precondition), so `pages_contributing`, `pages_out_of_span` and
+    # `suppressed_weeks` are each structurally zero -- no series was ever
+    # built to derive them from -- not a value any source cites.
+    LiteralExemption(
+        "engine.py",
+        None,
+        "pages_contributing",
+        0,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`_empty_archive_report`'s own `pages_contributing=0` -- no page "
+        "contributes a load on the empty-archive path by construction.",
+    ),
+    LiteralExemption(
+        "engine.py",
+        None,
+        "pages_out_of_span",
+        0,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`_empty_archive_report`'s own `pages_out_of_span=0` -- no daily "
+        "series was ever built on the empty-archive path, so there is no "
+        "span for a page to fall outside of.",
+    ),
+    LiteralExemption(
+        "engine.py",
+        None,
+        "suppressed_weeks",
+        0,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`_empty_archive_report`'s own `suppressed_weeks=0` -- no weekly "
+        "table was ever built on the empty-archive path.",
+    ),
 )
 
 
