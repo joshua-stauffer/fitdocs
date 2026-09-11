@@ -484,7 +484,7 @@ shape.
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
   - _Boundary: SeriesAssembly_
 
-- [ ] 3.3 Build the contiguous daily series with its known / unknown split
+- [x] 3.3 Build the contiguous daily series with its known / unknown split
   - Add the day record -- the date, the load actually recorded, how many pages
     that date has, and how many of them record a load -- with derived unknown
     and complete views, so no consumer can ever hold the recorded sum without
