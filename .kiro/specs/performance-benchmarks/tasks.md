@@ -334,7 +334,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
   - _Boundary: DerivationLeaf_
   - _Depends: 1.1, 1.3_
 
-- [ ] 3.2 Derive lactate-threshold heart rate from a sustained maximal effort
+- [x] 3.2 Derive lactate-threshold heart rate from a sustained maximal effort
   - Add the heart-rate derivation for running and cycling and for all three
     effort kinds: the time-weighted average heart rate over the whole recorded
     effort, never a selected portion and never with a leading or trailing
@@ -608,3 +608,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
 - (3.1) Gate ordering ruling: the undated gate (`on is None` -> `UNDATED_DOCUMENT`) runs FIRST in every leaf, before the kind gate, so an undated page yields one `UNDATED_DOCUMENT` per attempted quantity regardless of tag kind. 3.2/3.3 copy the order; 3.4 pins it at the routing level.
 - (3.1 -> 3.4) `derive.py` carries one numeric literal, `value > 0` in `_finite_positive` -- an arithmetic identity the constant guard must register when 3.4 adds the module to the scanned tuple (mirror the `models.py` entry).
 - (1.2 -> 5.1) AST import-allowlists that filter `node.level == 0` silently admit relative imports; the purity guard must assert `level == 0` explicitly.
+- (3.2) Gate ordering ruling for the stream leaves: undated -> span agreement (when the tag carries `time_s`) -> sufficiency -> validity window, per design § Per-quantity gates (`Span -> Gate -> Window`). 3.3 copies it; 3.4 pins it at the routing level. A present-but-zero stream is gated with `_finite_positive` on the mean and declines `MISSING_INPUT` -- never a zero benchmark.
+- (3.4) `lactate_threshold_hr` records `discipline=activity.sport` unconditionally; the router must never call it for a sport other than RUN/RIDE.
+- (3.2) A `recorded_span_s` of `None` (fewer than two samples / zero span) declines `MISSING_INPUT` with `required=None` in the leaf rather than falling through to the shared sufficiency gate -- absent data is `None`, never a zero span handed to `evaluate`. This is a deliberate, documented departure from the training-load pass's `TOO_SHORT` wording for the same file (Req 7.4 covers the three verdicts the gate actually returns).
+
