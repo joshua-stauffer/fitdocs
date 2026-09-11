@@ -444,6 +444,76 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
         "as a zero-count row; design.md is silent on this point, so this is "
         "this task's own reporting decision, not a cited value.",
     ),
+    # --- page.py (task 4.3): body-section rendering.
+    LiteralExemption(
+        "page.py",
+        "race_count",
+        "positional[1]",
+        0,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`_render_criterion_section`'s own `counts_by_kind.get(RACE, 0)` -- "
+        "`CriterionPoints.by_kind` omits an unobserved kind entirely "
+        "(series.py's own `by_kind` exemption above), so the page derives "
+        "0 for it when printing 'a race, b test' (tasks.md's Implementation "
+        "Notes for 4.3); not a cited value.",
+    ),
+    LiteralExemption(
+        "page.py",
+        "test_count",
+        "positional[1]",
+        0,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`_render_criterion_section`'s own `counts_by_kind.get(TEST, 0)` -- "
+        "the same zero-derivation as `race_count` above, at a distinct "
+        "target (`test_count`), so a distinct site.",
+    ),
+    LiteralExemption(
+        "page.py",
+        "chart_markers",
+        "start",
+        1,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`_build_chart`'s own `enumerate(markers, start=1)` -- "
+        "`CalendarMarker.number` is 1-based (design.md), a structural "
+        "numbering offset, not a cited value.",
+    ),
+    LiteralExemption(
+        "page.py",
+        None,
+        "start",
+        1,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`_render_chart_section`'s own `enumerate(markers, start=1)` -- the "
+        "markdown race list's own 1-based numbering, matching "
+        "`CalendarMarker.number` above (design.md: 'matches the markdown "
+        "list'); a `for` loop, not an assignment, so no enclosing target -- "
+        "a distinct site from `chart_markers`'s `start=1` above even though "
+        "the value is the same.",
+    ),
+    LiteralExemption(
+        "page.py",
+        None,
+        None,
+        1,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`_contiguous_bands`'s own `index != previous + 1` -- the "
+        "consecutive-integer test that groups suppressed day indices into "
+        "contiguous `CalendarBand` ranges; a structural adjacency check, "
+        "not a cited value.",
+    ),
+    # -- 4.3 remediation round 2: the singular/plural word-choice helper.
+    LiteralExemption(
+        "page.py",
+        None,
+        None,
+        1,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`_plural`'s own `count == 1` guard -- a grammatical singular/plural "
+        "word choice for a rendered count (e.g. '1 criterion point' vs '2 "
+        "criterion points'), not a cited value. A second, independent entry "
+        "at the same `(page.py, None, None, 1)` key as `_contiguous_bands`'s "
+        "`previous + 1` above -- a distinct call site, not a respelling.",
+    ),
 )
 
 
