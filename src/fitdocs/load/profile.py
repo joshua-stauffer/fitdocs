@@ -72,6 +72,7 @@ from fitdocs.benchmarks import (
     BenchmarkError,
     BenchmarkKind,
     BenchmarkSet,
+    BenchmarkSource,
     benchmarks_to_document,
     parse_benchmarks,
 )
@@ -230,6 +231,7 @@ class AthleteProfile:
         measured_on: date,
         note: str | None = None,
         applies_from: date | None = None,
+        source: BenchmarkSource | None = None,
     ) -> AthleteProfile:
         """Return a new profile with one dated benchmark measurement recorded.
 
@@ -246,6 +248,18 @@ class AthleteProfile:
         is refused with :class:`ValueError`, in the same voice as the scope
         and value refusals above, and nothing is stored (Req 6.10).
         ``applies_from == measured_on`` is accepted and behaves as if omitted.
+        ``source`` (design: BenchmarkProvenance, keyword added *last*, after
+        ``applies_from``) is the entry's provenance record; it is validated
+        before anything is stored -- a derived origin requires all four
+        detail fields as non-empty strings, a measured origin requires none
+        -- and a violation raises :class:`ValueError` with nothing stored,
+        mirroring the scope/value/applies-from checks above (Req 5.9). Unlike
+        ``note`` and ``applies_from``, an omitted ``source`` on a same-date
+        rewrite does **not** preserve a prior entry's provenance: the merge
+        deletes any inherited ``source`` when the fresh entry carries none,
+        because provenance is a claim about *this* value, not commentary or
+        an athlete declaration that can outlive it -- see
+        :func:`_merge_benchmarks_document`.
 
         The entry is keyed by ``(discipline, kind, measured_on)`` (Req 1.5):
         an existing entry with the same key is *replaced*, never duplicated
@@ -276,6 +290,7 @@ class AthleteProfile:
         _check_benchmark_scope(kind, discipline)
         stored_value = _validate_benchmark_value(kind, value)
         _check_benchmark_applies_from(applies_from, measured_on)
+        _check_benchmark_source(source)
 
         key = (discipline, kind, measured_on)
         entries = [
@@ -291,6 +306,7 @@ class AthleteProfile:
                 measured_on=measured_on,
                 note=note,
                 applies_from=applies_from,
+                source=source,
             )
         )
 
@@ -553,12 +569,12 @@ def _merge_benchmarks_document(
     existing raw entry table at that date is preserved and only its
     recognized fields (``value``, ``measured_on``, ``note``, and -- *Amendment
     1* -- ``applies_from``) are overlaid with the freshly validated ones, so
-    an unrecognized key on that entry (e.g. a ``source`` a future feature
-    wrote) survives even when the entry's value is the one being replaced. A
-    ``measured_on`` with no prior raw entry (a genuinely new date) has
-    nothing to inherit and is emitted as freshly built. Every scope key and
-    every unrecognized kind key the fresh groups do not cover is left
-    untouched entirely (Req 6.4, 1.10).
+    an unrecognized key on that entry (e.g. a ``sensor`` field a future
+    feature wrote) survives even when the entry's value is the one being
+    replaced. A ``measured_on`` with no prior raw entry (a genuinely new
+    date) has nothing to inherit and is emitted as freshly built. Every
+    scope key and every unrecognized kind key the fresh groups do not cover
+    is left untouched entirely (Req 6.4, 1.10).
 
     One accepted consequence of overlay-not-replace: if a later
     :meth:`AthleteProfile.with_benchmark` call omits ``note`` (leaving it
@@ -572,6 +588,32 @@ def _merge_benchmarks_document(
     below leaves an existing raw ``applies_from`` at that ``measured_on``
     untouched rather than overwriting it with an absence; a fresh entry that
     *does* carry one overlays it exactly as a fresh ``note`` would.
+
+    ``source`` (design: BenchmarkProvenance) does **not** follow that
+    inherit-on-absent rule, and deliberately so -- this is the asymmetry the
+    task that adds it documents here: a ``note`` is commentary that can
+    outlive the value it was written against, and an ``applies_from`` date is
+    the athlete's own declaration about the quantity that a later, unrelated
+    rewrite has no business erasing; a ``source`` record is a claim about
+    *this* value. When a value is replaced by a rewrite that states no
+    provenance, the old provenance no longer describes anything true and
+    must not survive attached to the new number. Concretely, in two halves:
+
+    1. **Absent in the fresh entry -> removed, not inherited.** Any
+       ``source`` on the inherited raw entry is deleted before the rest of
+       the fresh entry is overlaid.
+    2. **Present in the fresh entry -> overlaid key-by-key, not replaced.**
+       ``source`` is the store's first *nested* recognized value, and the
+       entry-level ``combined.update(fresh_entry)`` above is too blunt for
+       it -- replacing the whole inherited ``source`` table the way it
+       replaces a scalar field would drop any key inside it that a future
+       release wrote and this one does not recognize. Instead, each of the
+       five recognized keys (``kind``, ``method``, ``document``, ``inputs``,
+       ``citation``) is written onto the *inherited raw* ``source`` table --
+       present in the fresh record, it overwrites; absent from the fresh
+       record, it is removed, so a full, self-consistent five-key record is
+       always the result -- while any key the fresh record's five names do
+       not include is left exactly as it was on the inherited table.
     """
     merged: dict[str, object] = _canonicalize_benchmarks_region(existing)
     new_region = cast(
@@ -599,12 +641,66 @@ def _merge_benchmarks_document(
                 combined: dict[str, object] = (
                     dict(original) if original is not None else {}
                 )
-                combined.update(fresh_entry)
+                inherited_source = combined.pop("source", None)
+                fresh_source = fresh_entry.get("source")
+                combined.update({k: v for k, v in fresh_entry.items() if k != "source"})
+                overlaid_source = _overlay_benchmark_source(
+                    inherited_source, fresh_source
+                )
+                if overlaid_source is not None:
+                    combined["source"] = overlaid_source
                 merged_entries.append(combined)
             existing_scope[kind_key] = merged_entries
 
         merged[scope_key] = existing_scope
     return merged
+
+
+_SOURCE_RECOGNIZED_KEYS: Final[tuple[str, ...]] = (
+    "kind",
+    "method",
+    "document",
+    "inputs",
+    "citation",
+)
+"""The five recognized ``source`` keys, in the emitted order (design:
+BenchmarkProvenance). Only these are overlaid by
+:func:`_overlay_benchmark_source`; any other key on an inherited raw
+``source`` table survives untouched."""
+
+
+def _overlay_benchmark_source(
+    inherited: object, fresh: object
+) -> dict[str, object] | None:
+    """Apply the ``source`` overlay's second half (see
+    :func:`_merge_benchmarks_document`'s docstring for the full two-half
+    rule; the *first* half -- deleting an inherited ``source`` when ``fresh``
+    is absent -- is applied by the caller before this is even reached).
+
+    ``fresh`` is ``None`` exactly when the freshly emitted entry carries no
+    ``source`` at all, in which case there is nothing to overlay and this
+    returns ``None`` (the caller has already dropped ``inherited``, so a
+    ``None`` result correctly leaves no ``source`` key on the merged entry).
+    Otherwise ``fresh`` is the fully-validated source record
+    :func:`fitdocs.benchmarks.benchmarks_to_document` emitted -- carrying
+    only the recognized keys it has a value for -- and each of the five
+    recognized keys is written onto a copy of ``inherited`` (or a fresh table
+    if ``inherited`` was not a table): present in ``fresh``, it overwrites;
+    absent from ``fresh``, it is removed, so the five recognized keys always
+    end up a complete, self-consistent reflection of the fresh record. Any
+    key on ``inherited`` outside the five recognized names is left exactly as
+    it was -- the forward-compatibility guarantee this overlay exists for.
+    """
+    if fresh is None:
+        return None
+    base: dict[str, object] = dict(inherited) if isinstance(inherited, Mapping) else {}
+    fresh_table = fresh if isinstance(fresh, Mapping) else {}
+    for name in _SOURCE_RECOGNIZED_KEYS:
+        if name in fresh_table:
+            base[name] = fresh_table[name]
+        else:
+            base.pop(name, None)
+    return base
 
 
 def _check_benchmark_scope(kind: BenchmarkKind, discipline: Sport | None) -> None:
@@ -649,6 +745,34 @@ def _check_benchmark_applies_from(applies_from: date | None, measured_on: date) 
             f"applies_from ({applies_from.isoformat()}) must not fall after "
             f"measured_on ({measured_on.isoformat()})"
         )
+
+
+def _check_benchmark_source(source: BenchmarkSource | None) -> None:
+    """Validate a caller-supplied ``source`` argument to
+    :meth:`AthleteProfile.with_benchmark` (design: BenchmarkProvenance, Req
+    5.9).
+
+    ``source`` arrives as an already-typed :class:`~fitdocs.benchmarks.BenchmarkSource`,
+    never raw TOML, so this mirrors the *shape* rule
+    :func:`fitdocs.benchmarks._validate_benchmark_source` enforces on a
+    parsed file entry -- a derived origin requires ``method``, ``document``,
+    ``inputs`` and ``citation`` each as a non-empty string; a measured origin
+    requires none of them -- but a violation here is the *caller's* error,
+    not malformed data on disk. Raises the plain :class:`ValueError` this
+    module's caller-error convention uses (:func:`_check_benchmark_scope`,
+    :func:`_check_benchmark_applies_from`, :func:`_validate_benchmark_value`),
+    never :class:`~fitdocs.benchmarks.BenchmarkError`, and nothing is stored.
+    ``source is None`` (not supplied) is always accepted.
+    """
+    if source is None:
+        return
+    if source.is_derived:
+        for name in ("method", "document", "inputs", "citation"):
+            detail = getattr(source, name)
+            if not isinstance(detail, str) or not detail:
+                raise ValueError(
+                    f"a derived source requires a non-empty {name!r}, got {detail!r}"
+                )
 
 
 def _validate_benchmark_value(kind: BenchmarkKind, value: float) -> int | float:

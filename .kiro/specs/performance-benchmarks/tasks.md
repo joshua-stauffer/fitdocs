@@ -237,7 +237,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
   - _Requirements: 5.1, 5.2, 5.4, 5.5, 5.6, 5.8, 5.10_
   - _Boundary: BenchmarkProvenance_
 
-- [ ] 2.2 Thread provenance through the profile write path and refine the merge overlay
+- [x] 2.2 Thread provenance through the profile write path and refine the merge overlay
   - Add the optional provenance argument to the existing single-benchmark write
     method, validated before anything is stored, with nothing stored on a
     violation

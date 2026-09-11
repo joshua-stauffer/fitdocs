@@ -32,7 +32,10 @@ from fitdocs.benchmarks import (
     Benchmark,
     BenchmarkKind,
     BenchmarkSet,
+    BenchmarkSource,
+    BenchmarkSourceKind,
 )
+from fitdocs.load import profile as profile_module
 from fitdocs.load.profile import (
     PROFILE_FILENAME,
     AthleteProfile,
@@ -1752,3 +1755,642 @@ def test_profile_version_name_retired_in_favor_of_shared_schema_constant() -> No
 
     assert not hasattr(profile_module, "PROFILE_VERSION")
     assert "PROFILE_VERSION" not in profile_module.__all__
+
+
+# --- with_benchmark provenance argument (design: BenchmarkProvenance, 2.2) -
+def test_with_benchmark_accepts_derived_source_and_writes_full_record(
+    tmp_path: Path,
+) -> None:
+    """A discipline-scoped ``with_benchmark`` call carrying a full derived
+    ``source`` writes all five recognized keys, in the fixed emitted order,
+    onto the written entry (Req 5.2, 5.6)."""
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RUN,
+        value=250,
+        measured_on=date(2025, 1, 1),
+        source=BenchmarkSource(
+            kind=BenchmarkSourceKind.DERIVED,
+            method="riegel_race_equivalence",
+            document="workouts/2025-01-01-run.md",
+            inputs="official distance, official time",
+            citation="riegel_1981",
+        ),
+    )
+    save_profile(tmp_path, profile)
+
+    raw = tomllib.loads((tmp_path / PROFILE_FILENAME).read_text())
+    source = raw["benchmarks"]["run"]["ftp_watts"][0]["source"]
+    assert source["kind"] == "derived"
+    assert source["method"] == "riegel_race_equivalence"
+    assert source["document"] == "workouts/2025-01-01-run.md"
+    assert source["inputs"] == "official distance, official time"
+    assert source["citation"] == "riegel_1981"
+    assert list(source) == ["kind", "method", "document", "inputs", "citation"], (
+        "the inner key order is owned by the merge's own emitted order, not "
+        "tomllib's arbitrary dict order -- tomllib preserves on-disk order, "
+        "so this pins _SOURCE_RECOGNIZED_KEYS' order directly"
+    )
+
+
+def test_with_benchmark_accepts_derived_source_athlete_wide(
+    tmp_path: Path,
+) -> None:
+    """The same shape, but for an athlete-scoped quantity -- vary scope
+    independently of the origin class so an athlete-scope-only regression
+    cannot pass silently."""
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.MAX_HR_BPM,
+        discipline=None,
+        value=190,
+        measured_on=date(2025, 2, 2),
+        source=BenchmarkSource(
+            kind=BenchmarkSourceKind.DERIVED,
+            method="max_effort",
+            document="workouts/2025-02-02-run.md",
+            inputs="observed peak",
+            citation="some_key",
+        ),
+    )
+    save_profile(tmp_path, profile)
+
+    raw = tomllib.loads((tmp_path / PROFILE_FILENAME).read_text())
+    source = raw["benchmarks"]["athlete"]["max_hr_bpm"][0]["source"]
+    assert source["kind"] == "derived"
+    assert source["method"] == "max_effort"
+
+
+def test_with_benchmark_accepts_measured_source_with_no_details(
+    tmp_path: Path,
+) -> None:
+    """A measured origin requires none of the four detail fields, and the
+    written record carries the ``kind`` key alone (Req 5.2)."""
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RUN,
+        value=260,
+        measured_on=date(2025, 3, 3),
+        source=BenchmarkSource(kind=BenchmarkSourceKind.MEASURED),
+    )
+    save_profile(tmp_path, profile)
+
+    raw = tomllib.loads((tmp_path / PROFILE_FILENAME).read_text())
+    source = raw["benchmarks"]["run"]["ftp_watts"][0]["source"]
+    assert source == {"kind": "measured"}
+
+
+@pytest.mark.parametrize("missing", ["method", "document", "inputs", "citation"])
+def test_with_benchmark_rejects_derived_source_missing_required_field(
+    tmp_path: Path, missing: str
+) -> None:
+    """A derived origin missing any one of the four detail fields is refused
+    before anything is stored (Req 5.2, 5.9)."""
+    details = {
+        "method": "riegel_race_equivalence",
+        "document": "workouts/2025-01-01-run.md",
+        "inputs": "official distance, official time",
+        "citation": "riegel_1981",
+    }
+    details[missing] = None
+    base = load_profile(tmp_path)
+
+    with pytest.raises(ValueError, match=missing):
+        base.with_benchmark(
+            BenchmarkKind.FTP_WATTS,
+            discipline=Sport.RUN,
+            value=250,
+            measured_on=date(2025, 1, 1),
+            source=BenchmarkSource(kind=BenchmarkSourceKind.DERIVED, **details),
+        )
+
+    assert base.data == {}
+    assert not (tmp_path / PROFILE_FILENAME).exists()
+
+
+@pytest.mark.parametrize("blank", ["method", "document", "inputs", "citation"])
+def test_with_benchmark_rejects_derived_source_with_empty_string_field(
+    tmp_path: Path, blank: str
+) -> None:
+    """An empty string is not a valid detail field either -- ``None`` and
+    ``""`` are both refused, distinguishing "absent" from "merely falsy but
+    present" is not a defence this check is meant to draw (Req 5.2, 5.9)."""
+    details = {
+        "method": "riegel_race_equivalence",
+        "document": "workouts/2025-01-01-run.md",
+        "inputs": "official distance, official time",
+        "citation": "riegel_1981",
+    }
+    details[blank] = ""
+    base = load_profile(tmp_path)
+
+    with pytest.raises(ValueError, match=blank):
+        base.with_benchmark(
+            BenchmarkKind.FTP_WATTS,
+            discipline=Sport.RUN,
+            value=250,
+            measured_on=date(2025, 1, 1),
+            source=BenchmarkSource(kind=BenchmarkSourceKind.DERIVED, **details),
+        )
+
+    assert base.data == {}
+    assert not (tmp_path / PROFILE_FILENAME).exists()
+
+
+# --- the source overlay rule (design: ProfileDerivedWrite, 2.2) ------------
+def test_with_benchmark_rewrite_without_source_removes_existing_derived_source(
+    tmp_path: Path,
+) -> None:
+    """Writing a prompt-style answer (no ``source``) over a date that held a
+    derived entry leaves no source behind, while a ``note`` *and* an
+    ``applies_from`` date already on that entry both survive -- the named
+    asymmetry between provenance and the note/applies-from inherit-on-absent
+    rule (Req 5.3, 6.6)."""
+    seed = (
+        "[[benchmarks.run.ftp_watts]]\n"
+        "value = 200\n"
+        "measured_on = 2024-01-01\n"
+        'note = "hand-typed from a lab test"\n'
+        "applies_from = 2023-12-01\n"
+        "\n"
+        "[benchmarks.run.ftp_watts.source]\n"
+        'kind = "derived"\n'
+        'method = "riegel_race_equivalence"\n'
+        'document = "workouts/2024-01-01-run.md"\n'
+        'inputs = "official distance, official time"\n'
+        'citation = "riegel_1981"\n'
+    )
+    (tmp_path / PROFILE_FILENAME).write_text(seed)
+
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RUN,
+        value=205,
+        measured_on=date(2024, 1, 1),
+    )
+    save_profile(tmp_path, profile)
+
+    raw = tomllib.loads((tmp_path / PROFILE_FILENAME).read_text())
+    entry = raw["benchmarks"]["run"]["ftp_watts"][0]
+    assert entry["value"] == 205
+    assert "source" not in entry, "an omitted source must not inherit"
+    assert entry["note"] == "hand-typed from a lab test"
+    assert entry["applies_from"] == date(2023, 12, 1)
+
+
+def test_with_benchmark_rewrite_without_source_removes_record_with_unknown_key(
+    tmp_path: Path,
+) -> None:
+    """The absent-fresh half removes the whole inherited record, including an
+    unrecognized inner key: 5.6's carry-through applies to a rewrite *of the
+    record* (the present half), and here there is no record to carry it into
+    (Req 5.3, 6.6)."""
+    seed = (
+        "[[benchmarks.run.ftp_watts]]\n"
+        "value = 200\n"
+        "measured_on = 2024-01-01\n"
+        "\n"
+        "[benchmarks.run.ftp_watts.source]\n"
+        'kind = "derived"\n'
+        'method = "riegel_race_equivalence"\n'
+        'document = "workouts/2024-01-01-run.md"\n'
+        'inputs = "official distance, official time"\n'
+        'citation = "riegel_1981"\n'
+        'confidence = "high"\n'
+    )
+    (tmp_path / PROFILE_FILENAME).write_text(seed)
+
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RUN,
+        value=205,
+        measured_on=date(2024, 1, 1),
+    )
+    save_profile(tmp_path, profile)
+
+    raw = tomllib.loads((tmp_path / PROFILE_FILENAME).read_text())
+    entry = raw["benchmarks"]["run"]["ftp_watts"][0]
+    assert entry["value"] == 205
+    assert "source" not in entry
+
+
+def test_with_benchmark_rewrite_without_source_removes_source_athlete_wide(
+    tmp_path: Path,
+) -> None:
+    """The athlete-wide companion to the discipline-scoped removal case
+    above, per the task's fixture rule: every overlay branch gets both an
+    athlete-wide and a discipline-scoped fixture."""
+    seed = (
+        "[[benchmarks.athlete.max_hr_bpm]]\n"
+        "value = 190\n"
+        "measured_on = 2024-02-02\n"
+        'note = "field test"\n'
+        "applies_from = 2024-01-15\n"
+        "\n"
+        "[benchmarks.athlete.max_hr_bpm.source]\n"
+        'kind = "derived"\n'
+        'method = "max_effort"\n'
+        'document = "workouts/2024-02-02-run.md"\n'
+        'inputs = "observed peak"\n'
+        'citation = "some_key"\n'
+    )
+    (tmp_path / PROFILE_FILENAME).write_text(seed)
+
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.MAX_HR_BPM,
+        discipline=None,
+        value=192,
+        measured_on=date(2024, 2, 2),
+    )
+    save_profile(tmp_path, profile)
+
+    raw = tomllib.loads((tmp_path / PROFILE_FILENAME).read_text())
+    entry = raw["benchmarks"]["athlete"]["max_hr_bpm"][0]
+    assert entry["value"] == 192
+    assert "source" not in entry
+    assert entry["note"] == "field test"
+    assert entry["applies_from"] == date(2024, 1, 15)
+
+
+def test_with_benchmark_rewrite_with_source_overlays_keys_preserving_unrecognized(
+    tmp_path: Path,
+) -> None:
+    """Refreshing a derived entry at a date whose raw ``source`` table
+    carries an unrecognized inner key leaves that key in the written file,
+    while the five recognized keys take the new values -- a whole-table
+    replace would drop the unrecognized key (Req 5.6, 5.7)."""
+    seed = (
+        "[[benchmarks.run.ftp_watts]]\n"
+        "value = 200\n"
+        "measured_on = 2024-03-01\n"
+        "\n"
+        "[benchmarks.run.ftp_watts.source]\n"
+        'kind = "derived"\n'
+        'method = "old_method"\n'
+        'document = "workouts/old.md"\n'
+        'inputs = "old inputs"\n'
+        'citation = "old_citation"\n'
+        'confidence = "high"\n'
+    )
+    (tmp_path / PROFILE_FILENAME).write_text(seed)
+
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RUN,
+        value=210,
+        measured_on=date(2024, 3, 1),
+        source=BenchmarkSource(
+            kind=BenchmarkSourceKind.DERIVED,
+            method="new_method",
+            document="workouts/new.md",
+            inputs="new inputs",
+            citation="new_citation",
+        ),
+    )
+    save_profile(tmp_path, profile)
+
+    raw = tomllib.loads((tmp_path / PROFILE_FILENAME).read_text())
+    source = raw["benchmarks"]["run"]["ftp_watts"][0]["source"]
+    assert source["method"] == "new_method"
+    assert source["document"] == "workouts/new.md"
+    assert source["inputs"] == "new inputs"
+    assert source["citation"] == "new_citation"
+    assert source["confidence"] == "high", (
+        "an unrecognized inner key must survive a refresh"
+    )
+
+
+def test_with_benchmark_rewrite_with_source_overlays_recognized_keys_athlete_wide(
+    tmp_path: Path,
+) -> None:
+    """The athlete-wide companion to the overlay case above."""
+    seed = (
+        "[[benchmarks.athlete.max_hr_bpm]]\n"
+        "value = 188\n"
+        "measured_on = 2024-04-04\n"
+        "\n"
+        "[benchmarks.athlete.max_hr_bpm.source]\n"
+        'kind = "derived"\n'
+        'method = "old_method"\n'
+        'document = "workouts/old.md"\n'
+        'inputs = "old inputs"\n'
+        'citation = "old_citation"\n'
+        'confidence = "high"\n'
+    )
+    (tmp_path / PROFILE_FILENAME).write_text(seed)
+
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.MAX_HR_BPM,
+        discipline=None,
+        value=191,
+        measured_on=date(2024, 4, 4),
+        source=BenchmarkSource(
+            kind=BenchmarkSourceKind.DERIVED,
+            method="new_method",
+            document="workouts/new.md",
+            inputs="new inputs",
+            citation="new_citation",
+        ),
+    )
+    save_profile(tmp_path, profile)
+
+    raw = tomllib.loads((tmp_path / PROFILE_FILENAME).read_text())
+    source = raw["benchmarks"]["athlete"]["max_hr_bpm"][0]["source"]
+    assert source["method"] == "new_method"
+    assert source["confidence"] == "high"
+
+
+def test_with_benchmark_rewrite_with_measured_source_clears_stale_recognized_keys(
+    tmp_path: Path,
+) -> None:
+    """A fresh ``source`` that is present but carries fewer recognized
+    fields than the inherited raw table (a measured origin overlaying a
+    derived one's detail fields) removes the now-stale recognized keys --
+    the overlay is key-by-key against the *fresh* record's own five names,
+    not a mere ``dict.update`` that would leave ``old_method`` etc. behind
+    alongside a now-contradictory ``kind = "measured"``. The unrecognized
+    ``confidence`` key still survives."""
+    seed = (
+        "[[benchmarks.run.ftp_watts]]\n"
+        "value = 200\n"
+        "measured_on = 2024-05-05\n"
+        "\n"
+        "[benchmarks.run.ftp_watts.source]\n"
+        'kind = "derived"\n'
+        'method = "old_method"\n'
+        'document = "workouts/old.md"\n'
+        'inputs = "old inputs"\n'
+        'citation = "old_citation"\n'
+        'confidence = "high"\n'
+    )
+    (tmp_path / PROFILE_FILENAME).write_text(seed)
+
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RUN,
+        value=215,
+        measured_on=date(2024, 5, 5),
+        source=BenchmarkSource(kind=BenchmarkSourceKind.MEASURED),
+    )
+    save_profile(tmp_path, profile)
+
+    raw = tomllib.loads((tmp_path / PROFILE_FILENAME).read_text())
+    source = raw["benchmarks"]["run"]["ftp_watts"][0]["source"]
+    assert source["kind"] == "measured"
+    assert "method" not in source
+    assert "document" not in source
+    assert "inputs" not in source
+    assert "citation" not in source
+    assert source["confidence"] == "high"
+
+
+def test_with_benchmark_rewrite_without_source_removes_measured_inherited_source(
+    tmp_path: Path,
+) -> None:
+    """The absent-fresh removal rule (Req 5.3, 6.6) is not conditioned on the
+    inherited source's ``kind``: a ``measured`` inherited source is removed
+    just as a ``derived`` one is when the fresh entry at that date carries no
+    ``source`` at all. The rewritten value differs from the seed so this
+    fixture cannot be satisfied by a same-value special case (that axis is
+    pinned separately, see the ``same value`` test below)."""
+    seed = (
+        "[[benchmarks.run.ftp_watts]]\n"
+        "value = 200\n"
+        "measured_on = 2024-07-07\n"
+        "\n"
+        "[benchmarks.run.ftp_watts.source]\n"
+        'kind = "measured"\n'
+    )
+    (tmp_path / PROFILE_FILENAME).write_text(seed)
+
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RUN,
+        value=205,
+        measured_on=date(2024, 7, 7),
+    )
+    save_profile(tmp_path, profile)
+
+    raw = tomllib.loads((tmp_path / PROFILE_FILENAME).read_text())
+    entry = raw["benchmarks"]["run"]["ftp_watts"][0]
+    assert entry["value"] == 205
+    assert "source" not in entry, (
+        "a measured inherited source must not survive an absent-fresh rewrite"
+    )
+
+
+def test_with_benchmark_rewrite_without_source_removes_derived_source_same_value(
+    tmp_path: Path,
+) -> None:
+    """The absent-fresh removal rule also applies when the rewritten value is
+    identical to the value the derived source described -- the removal is not
+    conditioned on the value changing."""
+    seed = (
+        "[[benchmarks.run.ftp_watts]]\n"
+        "value = 200\n"
+        "measured_on = 2024-08-08\n"
+        "\n"
+        "[benchmarks.run.ftp_watts.source]\n"
+        'kind = "derived"\n'
+        'method = "riegel_race_equivalence"\n'
+        'document = "workouts/2024-08-08-run.md"\n'
+        'inputs = "official distance, official time"\n'
+        'citation = "riegel_1981"\n'
+    )
+    (tmp_path / PROFILE_FILENAME).write_text(seed)
+
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RUN,
+        value=200,
+        measured_on=date(2024, 8, 8),
+    )
+    save_profile(tmp_path, profile)
+
+    raw = tomllib.loads((tmp_path / PROFILE_FILENAME).read_text())
+    entry = raw["benchmarks"]["run"]["ftp_watts"][0]
+    assert entry["value"] == 200
+    assert "source" not in entry, (
+        "a derived inherited source must not survive an absent-fresh "
+        "rewrite even when the rewritten value is unchanged"
+    )
+
+
+def test_with_benchmark_rewrite_elsewhere_in_group_preserves_untouched_sourced_entry(
+    tmp_path: Path,
+) -> None:
+    """A ``with_benchmark`` call touching one date in a group must not
+    disturb a *different*, untouched entry in the same group -- including its
+    full ``source`` record and the unrecognized inner key on it (Req 5.7).
+    The group also carries a sourceless sibling, asserted to survive as well,
+    so keeping only the first or only the last entry both fail."""
+    seed = (
+        "[[benchmarks.run.ftp_watts]]\n"
+        "value = 200\n"
+        "measured_on = 2024-01-01\n"
+        "\n"
+        "[benchmarks.run.ftp_watts.source]\n"
+        'kind = "derived"\n'
+        'method = "riegel_race_equivalence"\n'
+        'document = "workouts/2024-01-01-run.md"\n'
+        'inputs = "official distance, official time"\n'
+        'citation = "riegel_1981"\n'
+        'confidence = "high"\n'
+        "\n"
+        "[[benchmarks.run.ftp_watts]]\n"
+        "value = 210\n"
+        "measured_on = 2024-06-01\n"
+    )
+    (tmp_path / PROFILE_FILENAME).write_text(seed)
+
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RUN,
+        value=220,
+        measured_on=date(2024, 12, 1),
+    )
+    save_profile(tmp_path, profile)
+
+    raw = tomllib.loads((tmp_path / PROFILE_FILENAME).read_text())
+    entries_by_date = {
+        e["measured_on"]: e for e in raw["benchmarks"]["run"]["ftp_watts"]
+    }
+    assert date(2024, 1, 1) in entries_by_date, (
+        "the untouched sourced entry must survive a rewrite elsewhere in its group"
+    )
+    assert entries_by_date[date(2024, 6, 1)]["value"] == 210
+    assert "source" not in entries_by_date[date(2024, 6, 1)]
+    assert entries_by_date[date(2024, 1, 1)]["source"] == {
+        "kind": "derived",
+        "method": "riegel_race_equivalence",
+        "document": "workouts/2024-01-01-run.md",
+        "inputs": "official distance, official time",
+        "citation": "riegel_1981",
+        "confidence": "high",
+    }
+
+
+def test_malformed_source_in_loaded_file_raises_naming_file_and_entry_path(
+    tmp_path: Path,
+) -> None:
+    """A ``source`` record whose ``kind`` is outside the published vocabulary
+    is rejected at load time, in the profile layer's own voice: the message
+    names the file and the entry path (Req 5.5)."""
+    seed = (
+        "[[benchmarks.run.ftp_watts]]\n"
+        "value = 200\n"
+        "measured_on = 2024-06-06\n"
+        "\n"
+        "[benchmarks.run.ftp_watts.source]\n"
+        'kind = "guessed"\n'
+    )
+    (tmp_path / PROFILE_FILENAME).write_text(seed)
+
+    with pytest.raises(ProfileError) as excinfo:
+        load_profile(tmp_path)
+
+    message = str(excinfo.value)
+    assert PROFILE_FILENAME in message
+    assert "benchmarks.run.ftp_watts" in message
+
+
+def test_save_reparse_refuses_hand_forged_incomplete_derived_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``save_profile``'s pre-write re-parse also proves the ``source`` round
+    trip: a hand-forged ``Benchmark`` whose derived ``source`` is missing its
+    required detail fields serializes to a shape the parser would reject,
+    and the refusal happens before any temporary file is created -- a
+    construction ``with_benchmark`` itself would refuse, reached here only by
+    bypassing it entirely, exactly as the existing hand-forged-duplicate test
+    bypasses it for the natural-key collision (Req 5.5, 6.7). ``tempfile.mkstemp``
+    (as the profile module itself calls it) is replaced with a function that
+    fails the test if reached, so "before any temporary file is created" is an
+    observed ordering, not merely a side effect that a cleanup ``unlink`` would
+    also leave looking true."""
+
+    def _mkstemp_should_not_be_reached(**kwargs: object) -> tuple[int, str]:
+        pytest.fail("mkstemp reached before the re-parse refused")
+
+    monkeypatch.setattr(
+        profile_module.tempfile, "mkstemp", _mkstemp_should_not_be_reached
+    )
+
+    profile = object.__new__(AthleteProfile)
+    object.__setattr__(profile, "data", {})
+    object.__setattr__(
+        profile,
+        "benchmarks",
+        BenchmarkSet(
+            entries=(
+                Benchmark(
+                    kind=BenchmarkKind.FTP_WATTS,
+                    discipline=Sport.RUN,
+                    value=250,
+                    measured_on=date(2025, 7, 7),
+                    source=BenchmarkSource(kind=BenchmarkSourceKind.DERIVED),
+                ),
+            )
+        ),
+    )
+
+    with pytest.raises(ProfileError):
+        save_profile(tmp_path, profile)
+
+    assert not (tmp_path / PROFILE_FILENAME).exists()
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_save_profile_round_trips_a_full_derived_source_on_a_hand_assembled_profile(
+    tmp_path: Path,
+) -> None:
+    """The positive counterpart: ``save_profile`` re-emits benchmarks
+    independently of ``with_benchmark``, and a hand-assembled profile
+    carrying a valid ``source`` round-trips through it and reloads to an
+    identical typed value."""
+    profile = AthleteProfile(
+        data={
+            "benchmarks": {
+                "run": {
+                    "ftp_watts": [
+                        {
+                            "value": 240,
+                            "measured_on": date(2025, 8, 8),
+                        }
+                    ]
+                }
+            }
+        }
+    )
+    object.__setattr__(
+        profile,
+        "benchmarks",
+        BenchmarkSet(
+            entries=(
+                Benchmark(
+                    kind=BenchmarkKind.FTP_WATTS,
+                    discipline=Sport.RUN,
+                    value=240,
+                    measured_on=date(2025, 8, 8),
+                    source=BenchmarkSource(
+                        kind=BenchmarkSourceKind.DERIVED,
+                        method="riegel_race_equivalence",
+                        document="workouts/2025-08-08-run.md",
+                        inputs="official distance, official time",
+                        citation="riegel_1981",
+                    ),
+                ),
+            )
+        ),
+    )
+
+    save_profile(tmp_path, profile)
+
+    reloaded = load_profile(tmp_path)
+    entry = reloaded.benchmarks.entries[0]
+    assert entry.source == BenchmarkSource(
+        kind=BenchmarkSourceKind.DERIVED,
+        method="riegel_race_equivalence",
+        document="workouts/2025-08-08-run.md",
+        inputs="official distance, official time",
+        citation="riegel_1981",
+    )
