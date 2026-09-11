@@ -75,3 +75,13 @@ the backstop matches.
 
 - Should citation notes be forbidden from naming sibling modules at all? This
   is the second time a note has gone stale by enumerating its surroundings.
+
+## Additional evidence (2026-09-12, performance-benchmarks 1.2 review)
+
+`COGGAN_TSS.locator` in `src/fitdocs/load/channels/sources.py:127-129` says
+"pp. 8-11" for IF/TSS; in the manuscript fetched during that review
+(`pdftotext` of the URL the record names) §3 "Analysis of power meter data"
+begins on printed p. 7 and the TSS steps run to about p. 9 — re-check the
+page range when this item is taken.
+
+(1.2 reviewer, pinned_at d4fbc6f)
