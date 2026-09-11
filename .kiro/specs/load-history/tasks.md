@@ -578,7 +578,7 @@ shape.
 
 - [ ] 4. Rendering: the chart and the page
 
-- [ ] 4.1 (P) Add the calendar-axis, absolutely-scaled multi-series chart
+- [x] 4.1 (P) Add the calendar-axis, absolutely-scaled multi-series chart
   - Add a new chart module beside the existing ones, built on the shared SVG
     primitives and the shared gap-splitting helper. The hero chart is neither
     imported, extended nor changed
