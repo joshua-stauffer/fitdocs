@@ -4,7 +4,8 @@
 
 `tests/history/test_series.py` carries one headed section per task: this
 file currently holds task 3.2's "methodology" section, task 3.3's "daily
-series" section, and task 3.4's "weeks and coverage" section. Fixtures build
+series" section, task 3.4's "weeks and coverage" section, and task 3.5's
+"criterion points" section. Fixtures build
 `PageRecord`s directly (the type task 3.1 already owns and tests through its
 own real-frontmatter fixtures) rather than writing a page tree, because this
 module is pure and never touches the filesystem. Task 3.4's fixtures build
@@ -13,7 +14,11 @@ through `build_daily_series` and `run_model` (each already exercised by its
 own task), because `week_rows`/`suppressed_weeks` only ever consume those
 types; `coverage_report` also takes a period's `DailySeries`, but its
 `excluded`/`choice` arguments are `PageRecord`s and a `MethodologyChoice`
-built the same way task 3.2's own fixtures build them.
+built the same way task 3.2's own fixtures build them. Task 3.5's fixtures
+build `PageRecord`s directly too, each with a real `EffortTag` (or `None`,
+or a `tag_problem` string) in its `effort`/`tag_problem` fields -- the
+fields `_page` above always sets explicitly (`effort=None, tag_problem=None`),
+since `PageRecord` is a plain dataclass with no field defaults of its own.
 """
 
 from __future__ import annotations
@@ -23,10 +28,12 @@ from datetime import date
 
 import pytest
 
+from fitdocs.contract import EffortKind, EffortTag
 from fitdocs.history.documents import PageRecord
 from fitdocs.history.model import ModelSeries
 from fitdocs.history.series import (
     Coverage,
+    CriterionPoints,
     DailySeries,
     DayLoad,
     MethodologyChoice,
@@ -34,6 +41,7 @@ from fitdocs.history.series import (
     WeekRow,
     build_daily_series,
     coverage_report,
+    criterion_points,
     partition_pages,
     select_methodology,
     suppressed_weeks,
@@ -822,3 +830,265 @@ def test_coverage_is_frozen() -> None:
     )
     with pytest.raises(dataclasses.FrozenInstanceError):
         coverage.pages = 2  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# criterion points (task 3.5)
+# ---------------------------------------------------------------------------
+
+# The two reason strings `criterion_points` groups a well-formed, non-counted
+# tag under (Req 6.3). Copied here, not imported, so a test comparing against
+# them is pinning the module's own production strings, not trivially
+# comparing a value against itself.
+_HARD_REASON = "hard effort -- no official result is required"
+_NO_TIME_REASON = "race or test tag recorded with no official time"
+
+
+def _tagged_page(
+    path: str,
+    day: date,
+    *,
+    effort: EffortTag | None = None,
+    tag_problem: str | None = None,
+) -> PageRecord:
+    """A `PageRecord` carrying only what `criterion_points` reads
+    meaningfully -- `load`/`methodology` are irrelevant to it and passed
+    explicitly as `None`."""
+    return PageRecord(
+        path=path,
+        day=day,
+        load=None,
+        methodology=None,
+        effort=effort,
+        tag_problem=tag_problem,
+    )
+
+
+# One archive threading every required fixture through pairwise-distinct
+# dates and a path ordering that deliberately disagrees with date order, so
+# a "latest by path" implementation cannot coincide with "latest by date".
+# Counted totals: 2 RACE, 2 TEST -- a TIE, so a by-count sort (ascending or
+# descending) cannot be distinguished from EffortKind's own declaration
+# order (RACE, then TEST) by count alone; `_TEST_FIRST` (the first counted
+# page in this list's own order) is a TEST, counted before either RACE page
+# is, so an insertion-order `by_kind` would also read (TEST, RACE) here --
+# ascending count, descending count and insertion order each disagree with
+# the declaration order `by_kind` must actually return.
+#   z_test_first.md           2024-02-01  TEST, time -- counted, and the
+#                                          FIRST counted page in this list's
+#                                          own order (pins declaration order
+#                                          against an insertion-order read).
+#   race_no_time_2023.md      2023-06-01  RACE, no time -- excluded, dated
+#                                          *before* the counted span
+#                                          (2024-01-10 - 2024-12-25), so an
+#                                          `earliest` computed over every
+#                                          tagged page rather than only the
+#                                          counted ones would move; the
+#                                          matching bracket after the span is
+#                                          `g_test_no_time.md` (2025-01-15),
+#                                          which pins `latest` the same way.
+#   c_race_a.md                2024-01-10  RACE, time+distance -- earliest
+#                                          counted date, but not the
+#                                          alphabetically-first path.
+#   f_race_distance_only.md    2024-04-01  RACE, distance only, no time --
+#                                          excluded (a recorded distance
+#                                          does not substitute for an
+#                                          official time).
+#   h_hard_with_time.md        2024-06-01  HARD, *with* a time -- excluded
+#                                          (a hard tag may carry a time; it
+#                                          is excluded because no official
+#                                          result is *required*, not because
+#                                          none was recorded).
+#   m_race_b.md                 2024-03-05  RACE, time only -- counted, and
+#                                          the LAST counted page in this
+#                                          list's own order although dated
+#                                          inside the span, so a `latest`
+#                                          taken as the last counted page
+#                                          rather than the maximum would
+#                                          move to it.
+#   i_hard_no_time.md          2024-07-01  HARD, no time -- excluded, and
+#                                          groups with `h_hard_with_time.md`
+#                                          under the SAME reason
+#                                          (`_HARD_REASON`) despite disagreeing
+#                                          on whether a time was recorded --
+#                                          pins that the HARD branch is
+#                                          checked before the no-time branch.
+#   g_test_no_time.md          2025-01-15  TEST, no time -- excluded, and
+#                                          dated *after* the counted span so
+#                                          a `latest` taken over every tagged
+#                                          page would move to it.
+#   y_malformed_first.md       2024-08-01  malformed tag -- inserted before
+#                                          `b_malformed_second.md` although
+#                                          its own path sorts AFTER it.
+#   x_untagged.md               2024-09-01  no tag at all.
+#   a_test_last.md               2024-12-25  TEST, time -- latest counted
+#                                          date, but the alphabetically
+#                                          FIRST path (pins date, not path).
+#   b_malformed_second.md      2024-08-02  malformed tag, inserted AFTER
+#                                          `y_malformed_first.md` although
+#                                          its own path sorts BEFORE it --
+#                                          pins that `malformed` is actually
+#                                          sorted by path, not left in
+#                                          insertion order.
+# The two well-formed exclusion reasons carry UNEQUAL counts (HARD: 2 --
+# `h_hard_with_time.md`, `i_hard_no_time.md`; no-time: 3 --
+# `race_no_time_2023.md`, `f_race_distance_only.md`, `g_test_no_time.md`),
+# so the two reason strings are not interchangeable by count, and the
+# no-time reason group itself is fed by three different sources (no time
+# and no distance, a recorded distance with no time, and a TEST with no
+# time) -- none of which is conflated with the HARD reason.
+_TEST_FIRST = _tagged_page(
+    "z_test_first.md",
+    date(2024, 2, 1),
+    effort=EffortTag(EffortKind.TEST, None, 1100.0, None),
+)
+_RACE_NO_TIME = _tagged_page(
+    "race_no_time_2023.md",
+    date(2023, 6, 1),
+    effort=EffortTag(EffortKind.RACE, None, None, None),
+)
+_RACE_A = _tagged_page(
+    "c_race_a.md",
+    date(2024, 1, 10),
+    effort=EffortTag(EffortKind.RACE, 10_000.0, 1800.0, None),
+)
+_RACE_DISTANCE_ONLY = _tagged_page(
+    "f_race_distance_only.md",
+    date(2024, 4, 1),
+    effort=EffortTag(EffortKind.RACE, 5_000.0, None, None),
+)
+_HARD_WITH_TIME = _tagged_page(
+    "h_hard_with_time.md",
+    date(2024, 6, 1),
+    effort=EffortTag(EffortKind.HARD, None, 5000.0, None),
+)
+_RACE_B = _tagged_page(
+    "m_race_b.md",
+    date(2024, 3, 5),
+    effort=EffortTag(EffortKind.RACE, None, 3600.0, None),
+)
+_HARD_NO_TIME = _tagged_page(
+    "i_hard_no_time.md",
+    date(2024, 7, 1),
+    effort=EffortTag(EffortKind.HARD, None, None, None),
+)
+_TEST_NO_TIME = _tagged_page(
+    "g_test_no_time.md",
+    date(2025, 1, 15),
+    effort=EffortTag(EffortKind.TEST, None, None, None),
+)
+_MALFORMED_DESCRIPTION = (
+    "effort: must be one of race, test, hard (exact, lowercase); got 'marathon'"
+)
+_MALFORMED_FIRST = _tagged_page(
+    "y_malformed_first.md", date(2024, 8, 1), tag_problem=_MALFORMED_DESCRIPTION
+)
+_UNTAGGED = _tagged_page("x_untagged.md", date(2024, 9, 1))
+_TEST_LAST = _tagged_page(
+    "a_test_last.md",
+    date(2024, 12, 25),
+    effort=EffortTag(EffortKind.TEST, None, 1300.0, None),
+)
+_MALFORMED_SECOND = _tagged_page(
+    "b_malformed_second.md", date(2024, 8, 2), tag_problem=_MALFORMED_DESCRIPTION
+)
+
+
+def _criterion_archive() -> list[PageRecord]:
+    return [
+        _TEST_FIRST,
+        _RACE_NO_TIME,
+        _RACE_A,
+        _RACE_DISTANCE_ONLY,
+        _HARD_WITH_TIME,
+        _HARD_NO_TIME,
+        _TEST_NO_TIME,
+        _MALFORMED_FIRST,
+        _UNTAGGED,
+        _TEST_LAST,
+        _MALFORMED_SECOND,
+        _RACE_B,
+    ]
+
+
+def test_criterion_points_counts_only_timed_race_and_test_tags() -> None:
+    result = criterion_points(_criterion_archive())
+    assert result.count == 4
+
+
+def test_criterion_points_by_kind_sorted_by_vocabulary_order_not_count() -> None:
+    """RACE and TEST are tied at 2 counted pages each, and the first counted
+    page in the archive's own order (`_TEST_FIRST`) is a TEST -- so neither
+    an ascending-count, a descending-count, nor an insertion-order read of
+    `by_kind` can coincide with the declaration order (`RACE`, then `TEST`)
+    this test pins."""
+    result = criterion_points(_criterion_archive())
+    assert result.by_kind == ((EffortKind.RACE, 2), (EffortKind.TEST, 2))
+
+
+def test_criterion_points_by_kind_omits_a_kind_with_no_observations() -> None:
+    result = criterion_points([_RACE_B])
+    assert result.by_kind == ((EffortKind.RACE, 1),)
+
+
+def test_criterion_points_earliest_and_latest_are_by_date_not_by_path() -> None:
+    result = criterion_points(_criterion_archive())
+    assert result.earliest == date(2024, 1, 10)
+    assert result.latest == date(2024, 12, 25)
+
+
+def test_criterion_points_earliest_and_latest_are_none_when_count_is_zero() -> None:
+    result = criterion_points(
+        [_RACE_NO_TIME, _HARD_WITH_TIME, _MALFORMED_FIRST, _UNTAGGED]
+    )
+    assert result.count == 0
+    assert result.earliest is None
+    assert result.latest is None
+
+
+def test_criterion_points_exclusion_groups_by_stated_reason() -> None:
+    """The two reason groups carry unequal counts (HARD: 2, no-time: 3), so
+    the two reason strings are not interchangeable by count -- a swap of
+    `_HARD_REASON`/`_NO_TIME_REASON`, or a branch order that checks the
+    no-time condition before the HARD condition (which would misclassify
+    `_HARD_NO_TIME`, a HARD tag with no time, into the no-time group), each
+    produce a different, wrong pair of counts."""
+    result = criterion_points(_criterion_archive())
+    assert result.excluded == ((_HARD_REASON, 2), (_NO_TIME_REASON, 3))
+
+
+def test_criterion_points_malformed_tags_named_individually_with_own_description() -> (
+    None
+):
+    """`_MALFORMED_SECOND` (`b_malformed_second.md`) is inserted *after*
+    `_MALFORMED_FIRST` (`y_malformed_first.md`) although its own path sorts
+    before it -- pins that `malformed` is actually sorted by path, not left
+    in insertion order."""
+    result = criterion_points(_criterion_archive())
+    assert result.malformed == (
+        ("b_malformed_second.md", _MALFORMED_DESCRIPTION),
+        ("y_malformed_first.md", _MALFORMED_DESCRIPTION),
+    )
+
+
+def test_criterion_points_untagged_page_contributes_to_nothing() -> None:
+    result = criterion_points([_UNTAGGED])
+    assert result == CriterionPoints(
+        count=0, by_kind=(), earliest=None, latest=None, excluded=(), malformed=()
+    )
+
+
+def test_criterion_points_archive_with_no_tags_at_all_reports_all_zero() -> None:
+    pages = [_tagged_page("only.md", date(2024, 1, 1))]
+    result = criterion_points(pages)
+    assert result == CriterionPoints(
+        count=0, by_kind=(), earliest=None, latest=None, excluded=(), malformed=()
+    )
+
+
+def test_criterion_points_is_frozen() -> None:
+    points = CriterionPoints(
+        count=0, by_kind=(), earliest=None, latest=None, excluded=(), malformed=()
+    )
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        points.count = 1  # type: ignore[misc]

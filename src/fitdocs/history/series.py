@@ -96,6 +96,37 @@ own site in `tests/history/test_constant_guard.py`:
 - `week_rows`'s own `date.fromisocalendar(iso_year, iso_week, 1)` -- ISO
   weekday `1` is Monday by the calendar's own definition, not a value any
   source cites.
+
+Task 3.5 adds the criterion-point count (Req 6.1-6.3):
+
+- `criterion_points` walks the *scanned* pages (not the included/excluded
+  partition `select_methodology`/`partition_pages` produce -- a criterion
+  point is a fact about the tag, independent of which load methodology the
+  page's load, if any, was recorded under), and classifies every tagged page
+  exactly once: a malformed tag (`page.tag_problem is not None`) is named
+  individually by its own path and the reader's own `describe()` string in
+  `malformed`; a well-formed `hard` tag, and a well-formed `race`/`test` tag
+  recording no `time_s`, are each counted into one of `excluded`'s two
+  reason groups; a well-formed `race`/`test` tag recording a `time_s` is a
+  criterion point, tallied into `by_kind` and folded into `earliest`/
+  `latest`. An untagged page (`page.effort is None` and `page.tag_problem is
+  None`) contributes to none of the four. `by_kind` lists only the kinds
+  actually observed, in `EffortKind`'s own declaration order (`RACE`, then
+  `TEST`) -- never by count, and never alphabetically, which happens to
+  coincide with declaration order here (`"race" < "test"`), and is exactly
+  why the test fixture that pins this ties the two kinds' counts (RACE and
+  TEST both counted twice) with a TEST page counted first, so insertion
+  order, ascending count and descending count each pick a different, wrong
+  ordering than the declaration order this function actually returns.
+  `excluded`'s two reason groups are sorted by their own reason text, and
+  only a group that is actually non-empty appears, the same convention
+  `MethodologyChoice.excluded` and `Coverage.pages_excluded` already use
+  elsewhere in this module. This task introduces four bare numeric
+  literals, each exempted at its own site in
+  `tests/history/test_constant_guard.py`: the three `+= 1` tally
+  increments (`reason_counts[_HARD_REASON]`, `reason_counts[_NO_TIME_REASON]`
+  and `kind_counts[tag.kind]`), and `by_kind`'s own `kind_counts[kind] > 0`
+  non-empty-count guard.
 """
 
 from __future__ import annotations
@@ -106,11 +137,13 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Literal
 
+from fitdocs.contract import EffortKind
 from fitdocs.history.documents import PageRecord
 from fitdocs.history.model import ModelSeries
 
 __all__ = [
     "Coverage",
+    "CriterionPoints",
     "DailySeries",
     "DayLoad",
     "MethodologyChoice",
@@ -118,6 +151,7 @@ __all__ = [
     "WeekRow",
     "build_daily_series",
     "coverage_report",
+    "criterion_points",
     "partition_pages",
     "select_methodology",
     "suppressed_weeks",
@@ -598,3 +632,89 @@ def coverage_report(
         )
     )
     return tuple(rows)
+
+
+#: The two exclusion reasons `criterion_points` groups a well-formed but
+#: non-counted tag under (Req 6.3). A malformed tag is never grouped here --
+#: it is named individually in `CriterionPoints.malformed` instead, by its
+#: own path and the reader's own `describe()`.
+_HARD_REASON = "hard effort -- no official result is required"
+_NO_TIME_REASON = "race or test tag recorded with no official time"
+
+
+@dataclass(frozen=True)
+class CriterionPoints:
+    """The archive's criterion-point report (Req 6.1-6.3): how many pages
+    carry a valid `race` or `test` effort tag *and* record an official
+    time, broken down by kind, with the earliest and latest counted dates,
+    and every other tagged page grouped as an exclusion with a stated
+    reason. Attaches no judgement of any kind -- no sufficiency verdict, no
+    confidence claim, no recommendation (Req 6.5's negative, restated here
+    because this is the one value that report reads).
+
+    `by_kind` lists only the kinds actually observed, sorted by
+    `EffortKind`'s own declaration order (`RACE`, then `TEST`) -- never by
+    count. `earliest`/`latest` are `None` exactly when `count == 0` (Req
+    6.2). `excluded` is `(reason, count)` for each of the two well-formed
+    exclusion reasons that actually occurred, sorted by reason text.
+    `malformed` is `(path, description)` for every malformed tag, sorted by
+    path, each carrying the contract reader's own `describe()` (Req 3.9,
+    6.3) rather than a generic label.
+    """
+
+    count: int
+    by_kind: tuple[tuple[EffortKind, int], ...]
+    earliest: date | None
+    latest: date | None
+    excluded: tuple[tuple[str, int], ...]
+    malformed: tuple[tuple[str, str], ...]
+
+
+def criterion_points(pages: Sequence[PageRecord]) -> CriterionPoints:
+    """The archive's criterion-point report (Req 6.1-6.3).
+
+    Walks every page in `pages` once. A malformed tag
+    (`page.tag_problem is not None`) is named individually in `malformed` by
+    its own path and the reader's own description; an untagged page
+    (`page.effort is None` and `page.tag_problem is None`) contributes
+    nothing. A well-formed `hard` tag, and a well-formed `race`/`test` tag
+    recording no `time_s`, are each tallied into one of `excluded`'s two
+    reason groups. A well-formed `race`/`test` tag recording a `time_s` is a
+    criterion point: tallied into `by_kind` and folded into
+    `earliest`/`latest`.
+    """
+    kind_counts: Counter[EffortKind] = Counter()
+    reason_counts: Counter[str] = Counter()
+    malformed: list[tuple[str, str]] = []
+    counted_dates: list[date] = []
+
+    for page in pages:
+        if page.tag_problem is not None:
+            malformed.append((page.path, page.tag_problem))
+            continue
+        tag = page.effort
+        if tag is None:
+            continue
+        if tag.kind is EffortKind.HARD:
+            reason_counts[_HARD_REASON] += 1
+            continue
+        if tag.time_s is None:
+            reason_counts[_NO_TIME_REASON] += 1
+            continue
+        kind_counts[tag.kind] += 1
+        counted_dates.append(page.day)
+
+    by_kind = tuple(
+        (kind, kind_counts[kind]) for kind in EffortKind if kind_counts[kind] > 0
+    )
+    count = sum(n for _, n in by_kind)
+    excluded = tuple(sorted(reason_counts.items()))
+
+    return CriterionPoints(
+        count=count,
+        by_kind=by_kind,
+        earliest=min(counted_dates) if counted_dates else None,
+        latest=max(counted_dates) if counted_dates else None,
+        excluded=excluded,
+        malformed=tuple(sorted(malformed)),
+    )

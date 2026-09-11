@@ -397,6 +397,53 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
         "ISO weekday `1` is Monday by the calendar's own definition (Req "
         "5.6), not a value any source cites.",
     ),
+    # --- series.py (task 3.5): criterion-point tallying. Each `+= 1` below
+    # is an `ast.AugAssign` (no enclosing `Assign`/`AnnAssign` target, no
+    # call keyword/position), so all three share the same `(None, None, 1)`
+    # key as `DailySeries.end`'s `self.days[-1]`, `_coverage_fraction`'s
+    # `return 1.0` and `_last_index`'s `indices[-1]` above -- three more
+    # independent entries at that key, not a respelling of any of them.
+    # `week_rows`'s own ISO-weekday `1` sits at a different key entirely
+    # (`positional[2]`, the third argument to `date.fromisocalendar`), so
+    # it is not one of this key's siblings.
+    LiteralExemption(
+        "series.py",
+        None,
+        None,
+        1,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`criterion_points`'s own `reason_counts[_HARD_REASON] += 1` -- a "
+        "one-page tally increment (Req 6.3), not a cited value.",
+    ),
+    LiteralExemption(
+        "series.py",
+        None,
+        None,
+        1,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`criterion_points`'s own `reason_counts[_NO_TIME_REASON] += 1` -- "
+        "a one-page tally increment (Req 6.3), not a cited value.",
+    ),
+    LiteralExemption(
+        "series.py",
+        None,
+        None,
+        1,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`criterion_points`'s own `kind_counts[tag.kind] += 1` -- a "
+        "one-page tally increment (Req 6.1), not a cited value.",
+    ),
+    LiteralExemption(
+        "series.py",
+        "by_kind",
+        "positional[0]",
+        0,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "`criterion_points`'s own `by_kind = tuple(... if kind_counts[kind] "
+        "> 0)` -- a kind with no observations is omitted rather than listed "
+        "as a zero-count row; design.md is silent on this point, so this is "
+        "this task's own reporting decision, not a cited value.",
+    ),
 )
 
 
