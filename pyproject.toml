@@ -80,6 +80,7 @@ files = [
     "tests/metrics/test_sources.py",
     "tests/metrics/test_constant_guard.py",
     "tests/performance/test_types.py",
+    "tests/performance/test_sources.py",
 ]
 
 [tool.pytest.ini_options]

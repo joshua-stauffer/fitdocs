@@ -136,7 +136,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
   - _Requirements: 5.10, 7.3, 7.4_
   - _Boundary: PerformanceTypes_
 
-- [ ] 1.2 Record every source, every constant and the two blocked sets
+- [x] 1.2 Record every source, every constant and the two blocked sets
   - Add the citation module holding the six citations (Riegel 1981, Drake et al.
     2024, McGehee et al. 2005, Dumke et al. 2006, Coggan 2003, Borszcz et al.
     2018), each with authors, year, work, locator and an honest verification

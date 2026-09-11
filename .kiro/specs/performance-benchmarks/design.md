@@ -755,8 +755,10 @@ DerivationOutcome = DerivedBenchmark | DerivationDeclined
   fitdocs' choice and is recorded as one) (3.7, 4.10).
 - `BLOCKED_CITATIONS: frozenset[str]` names every citation carrying
   `SECONDARY_ATTESTATION` as a tracked, non-silent exception (`riegel_1981`
-  today), with a note stating that the JSTOR 1981 text has not been read
-  (8.4). A test fails on any `SECONDARY_ATTESTATION` citation not named there.
+  plus the four unread corroborators `drake_2024`, `mcgehee_2005`,
+  `dumke_2006`, `borszcz_2018` today -- the guard walks every citation, not
+  only governing records), Riegel's with a note stating that the JSTOR 1981
+  text has not been read (8.4). A test fails on any `SECONDARY_ATTESTATION` citation not named there.
 - `PENDING_CONSTANTS: tuple[PendingConstant, ...]` names a constant that **may
   not be written** because its locator is unverified — today exactly one: the
   Allen & Coggan 0.95 × 20-minute factor, with the work, the suspected
