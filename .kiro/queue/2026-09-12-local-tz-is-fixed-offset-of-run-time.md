@@ -79,3 +79,16 @@ documents.
   New York and Berlin) gets the *machine's* zone either way, which is still
   one honest, consistent choice -- but the activity's own recorded zone, when a
   FIT file carries one, would be better and is a larger change.
+
+## Further evidence (2026-09-12, Garmin adoption)
+
+The zone is also the *machine's*, not the activity's. 761 documents from
+2018–2022 were recorded in the US and are now stamped in the current
+machine zone (Europe/Zurich), so a 21:10 Eastern run is titled `Run
+2022-05-10 03:10` and dated the next day (see
+`pkm-data/raw/garmin-adoption/post-report.json`, maintainer's data). The FIT
+`activity` message carries `local_timestamp` on Garmin devices, which is
+the activity's own local clock and would resolve both this and the DST
+facet without any machine-zone lookup; whether it is present on the
+HealthFit/Apple Watch exports needs measuring before relying on it.
+
