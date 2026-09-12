@@ -1,7 +1,7 @@
 ---
 id: 2026-09-12-entrypoint-field-collision-with-performance-benchmarks
 title: tests/test_confinement.py EntryPoint gained `non_vacuous` on load-history while performance-benchmarks adds `wrote` -- whoever merges second must reconcile to one field
-status: open
+status: done
 importance: medium
 importance_why: Both branches extend the same frozen dataclass in an append-only shared test; a keep-both rebase compiles and then every EntryPoint literal fails on a missing keyword, which looks like an unrelated confinement failure.
 effort: S
@@ -37,3 +37,20 @@ Close as no-op if the second merge already reconciled them (check
 `grep -n "non_vacuous\|wrote" tests/test_confinement.py` on main). Otherwise
 a one-field refactor plus the caller-set union; trivial class, but touch it
 on a branch since it is a shared guard.
+
+## Closed 2026-09-12 (performance-benchmarks merge-back)
+
+Resolved on the rebase of impl/performance-benchmarks onto main at
+9a86e48: `tests/test_confinement.py` keeps ONE field,
+`EntryPoint.non_vacuous: Callable[[Sequence[str]], bool]` (load-history's
+name, default `_wrote_a_workout_document`), and the `derive-benchmarks`
+entry passes `_wrote_only_the_athlete_profile` through it (equality with
+`("data/athlete.toml",)`); `EntryPoint.wrote` no longer exists.
+`tests/load/test_settings.py::test_load_load_settings_is_called_from_exactly_the_licensed_modules`
+pins the three-set `{load/engine.py, history/engine.py,
+performance/engine.py}` with the docstring count updated, and the
+per-command companion carries both the `history` and `derive-benchmarks`
+rows. Verified: full suite 4041 passed on the rebased tree;
+`tests/test_confinement.py -k derive-benchmarks` passes with the equality
+predicate.
+

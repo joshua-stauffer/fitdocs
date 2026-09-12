@@ -80,3 +80,12 @@ or one of two citation records.
    `metrics/sources.py:192`'s `coggan_2003` alongside the existing channels
    comparison.
 </content>
+
+## Additional gaps (2026-09-12, feature-level validation)
+
+- Req 10.1's second half -- "a derived benchmark shall reach the calculator as
+  an ordinary dated entry indistinguishable in use from a typed one" -- has no
+  end-to-end pin: no test runs `derive-benchmarks` then `load` (or
+  `BenchmarkSet.applicable` / `AthleteProfile.benchmark` over a derived
+  entry). It holds by construction (`source` is outside the natural key and
+  `applicable` never reads it).

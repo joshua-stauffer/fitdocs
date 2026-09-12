@@ -74,3 +74,12 @@ undetected by the very test written to catch it.
    `test_purity.py`/`test_boundary.py`; extend `FORBIDDEN_LITERALS` with
    the effort key constants in `test_contract_consumers.py`.
 </content>
+
+## Additional gap (2026-09-12, feature-level validation)
+
+- design § Allowed Dependencies claims a structural assertion that
+  `fitdocs.performance` imports nothing from `fitdocs.render`, `fitdocs.sync`
+  or `fitdocs.cli`; `tests/performance/test_purity.py` covers exactly the four
+  pure modules, so `src/fitdocs/performance/engine.py`'s import surface is
+  unguarded. Add an engine-level import allowlist (no `render`, `sync`, `cli`,
+  `load.prompts`).

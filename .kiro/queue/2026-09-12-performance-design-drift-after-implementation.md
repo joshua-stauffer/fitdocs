@@ -94,3 +94,17 @@ wrong mental model of the shipped behavior.
 3. Where a reading is being pinned (e.g. Req 6.4's), state it explicitly as
    the adopted reading, not as a rewrite that erases the prior ambiguity.
 </content>
+
+## Additional drift (2026-09-12, feature-level validation)
+
+- Req 8.6 says a corroborating record carries "its own locator"; the four
+  corroborators (`DRAKE_2024`, `MCGEHEE_2005`, `DUMKE_2006`, `BORSZCZ_2018`)
+  ship `locator=None` because they are honestly unread -- amend the wording
+  ("a locator once read") or record the exception.
+- § Per-quantity gates puts `Dated` before `Sport`; `derive()` returns
+  `SPORT_NOT_COVERED` for an undated swim page (the sport branch precedes any
+  leaf's undated gate; the `(3.1)` ruling governs leaves only).
+- § File Structure Plan's `tests/performance/` tree omits
+  `test_single_writer.py` (named later in § Guards).
+- § Modified Files omits `pyproject.toml` (mypy scope), `tests/load/test_settings.py`
+  and `tests/test_effort_tags_e2e.py` (both disclosed cross-spec edits).

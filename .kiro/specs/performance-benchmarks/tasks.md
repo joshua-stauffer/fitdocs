@@ -104,7 +104,7 @@ must redden the assertion; the implementer runs it, observes red, reverts,
 observes green, and says so in the report. Fixtures are synthetic activities and
 synthetic pages — the athlete's real wiki never enters the repository.
 
-- [ ] 1. Foundation: the pure vocabulary, the citation records and the arithmetic
+- [x] 1. Foundation: the pure vocabulary, the citation records and the arithmetic
 
 - [x] 1.1 Publish the derivation vocabularies and outcome values
   - Create the package and its first module, holding the closed
@@ -199,7 +199,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
   - _Boundary: PerformanceModels_
   - _Depends: 1.2_
 
-- [ ] 2. The benchmark store gains provenance (the athlete-benchmarks amendment)
+- [x] 2. The benchmark store gains provenance (the athlete-benchmarks amendment)
 
 - [x] 2.1 (P) Add the provenance record to the benchmark entry, its parser and its serializer
   - Extend the benchmark vocabulary with the closed origin class (derived,
@@ -307,7 +307,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
   - _Boundary: ProfileDerivedWrite_
   - _Depends: 2.2_
 
-- [ ] 3. The derivations
+- [x] 3. The derivations
 
 - [x] 3.1 Derive threshold pace from a tagged race
   - Add the derivation module with the threshold-pace derivation: solve the
@@ -411,7 +411,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
   - _Boundary: DerivationLeaf_
   - _Depends: 3.3_
 
-- [ ] 4. The pass, its command and its registrations
+- [x] 4. The pass, its command and its registrations
 
 - [x] 4.1 Build the pass skeleton: discovery, the tag branch and the report types
   - Add the pass module: discover every generated workout document under the
@@ -530,7 +530,7 @@ synthetic pages — the athlete's real wiki never enters the repository.
   - _Boundary: ConfinementRegistration, Guards_
   - _Depends: 4.3_
 
-- [ ] 5. Guards, end-to-end validation and the upstream amendment
+- [x] 5. Guards, end-to-end validation and the upstream amendment
 
 - [x] 5.1 (P) Guard the package's purity and its unreachability from the calculator
   - Add the layered guard over the four pure modules — an import-target and
