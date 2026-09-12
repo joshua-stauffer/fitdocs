@@ -39,3 +39,6 @@ data/
 # extracted from them: docs/reference/banister-trimp-primary-sources.md.
 bannister_physiological_testing_of_the_high_performance_athlete/
 Morton*Modeling*human*performance*in*running*.pdf
+
+# local secrets (Final Surge creds etc.) -- never committed
+.env
