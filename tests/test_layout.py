@@ -25,7 +25,14 @@ and stable identity (workout-docs Req 2.4-2.7, 3.1, 3.6, 5.6):
   directories that receive one), plus the exclusions that matter: the user-owned
   data-root files and the source-tree ``.fitdocs/data-root`` pointer, which is a
   different thing from the ``.fitdocs/`` state directory *inside* the data root
-  (wiki-contract Req 7.5, 7.6, 3.1).
+  (wiki-contract Req 7.5, 7.6, 3.1);
+* the block location -- ``block_doc_path``, ``block_pages_dir``,
+  ``planned_doc_path`` (real filesystem paths under the new ``blocks/`` owned
+  prefix) and ``planned_rel_link``/``block_rel_link`` (the two POSIX links
+  between a block page and its planned pages, built by plain string joins),
+  plus ``DEFAULT_PLANS_DIR`` -- the athlete's own plan-source default,
+  deliberately **not** owned (training-blocks Req 4.1, 4.6, 4.10, 5.1, 7.1,
+  7.2).
 
 The module is pure (no file I/O; ``taken`` is an injected predicate), so every
 case is exercised by constructing model dataclasses directly.
@@ -55,14 +62,17 @@ from fitdocs.config import POINTER_RELPATH
 from fitdocs.layout import (
     ARCHIVE_DIR,
     ASSETS_SUBDIR,
+    BLOCKS_DIR,
     CACHE_DIR,
     DECLARED_DIRS,
     DEFAULT_INBOX_DIR,
+    DEFAULT_PLANS_DIR,
     HISTORY_ASSETS_SUBDIR,
     HISTORY_CHART,
     HISTORY_DIR,
     HISTORY_DOC_STEM,
     OWNED_PATHS,
+    PLAN_SOURCE_SUFFIX,
     SETTINGS_FILE,
     TILE_CACHE_DIR,
     TOOL_STATE_DIR,
@@ -70,11 +80,16 @@ from fitdocs.layout import (
     activity_uid,
     archive_path,
     asset_rel_path,
+    block_doc_path,
+    block_pages_dir,
+    block_rel_link,
     doc_path,
     doc_stem,
     history_asset_path,
     history_asset_rel_path,
     history_doc_path,
+    planned_doc_path,
+    planned_rel_link,
     quarantine_path,
     settings_path,
     source_ref,
@@ -510,6 +525,53 @@ def test_tile_cache_path_never_inside_repo_or_package() -> None:
         assert "site-packages" not in parts
 
 
+# --- block location (Req 4.1, 4.6, 4.10, 5.1, 7.1, 7.2) ---------------------
+
+
+def test_block_doc_path_lives_directly_under_blocks() -> None:
+    root = Path("/data/root")
+    assert block_doc_path(root, "2026q1-base") == (root / "blocks" / "2026q1-base.md")
+
+
+def test_block_pages_dir_is_named_by_the_block_id() -> None:
+    root = Path("/data/root")
+    assert block_pages_dir(root, "2026q1-base") == root / "blocks" / "2026q1-base"
+    # A distinct block id lands in a distinct pages directory -- the helper is
+    # not a constant that ignores its argument.
+    assert block_pages_dir(root, "2026q1-base") != block_pages_dir(root, "2026q2-build")
+
+
+def test_planned_doc_path_lives_inside_the_blocks_pages_dir() -> None:
+    root = Path("/data/root")
+    assert planned_doc_path(root, "2026q1-base", "row-a") == (
+        root / "blocks" / "2026q1-base" / "row-a.md"
+    )
+    # Composition invariant: the planned page is exactly a row filename inside
+    # the block's own pages directory.
+    assert planned_doc_path(root, "2026q1-base", "row-a") == (
+        block_pages_dir(root, "2026q1-base") / "row-a.md"
+    )
+
+
+def test_planned_rel_link_is_id_slash_row_by_string_equality() -> None:
+    """The planned link's exact literal form (design.md BlockLocation).
+
+    A plain string-equality pin, distinct from the round-trip postcondition:
+    a rewrite that produces a *different but still round-trip-correct* string
+    (for example inserting an extra path segment on both sides) would not red
+    the round trip, but would red this.
+    """
+    assert planned_rel_link("2026q1-base", "row-a") == "2026q1-base/row-a.md"
+    # Pairwise-distinct block id and row id (not tied values) -- swapping the
+    # two arguments must produce a different literal.
+    assert planned_rel_link("row-a", "2026q1-base") == "row-a/2026q1-base.md"
+
+
+def test_block_rel_link_is_dotdot_slash_id_by_string_equality() -> None:
+    assert block_rel_link("2026q1-base") == "../2026q1-base.md"
+    assert block_rel_link("row-a") == "../row-a.md"
+
+
 # --- ownership constants: OWNED_PATHS / DECLARED_DIRS (Req 7.5, 7.6) --------
 
 
@@ -539,13 +601,21 @@ def test_owned_paths_name_every_fitdocs_owned_location() -> None:
         "workouts/assets/",
         "history/",
         "history/assets/",
+        "blocks/",
         "fit-archive/",
         ".cache/",
         ".fitdocs/",
     )
     # Composed from the directory constants, never respelled -- renaming a
     # directory constant moves its owned prefix with it.
-    all_dirs = (WORKOUTS_DIR, HISTORY_DIR, ARCHIVE_DIR, CACHE_DIR, TOOL_STATE_DIR)
+    all_dirs = (
+        WORKOUTS_DIR,
+        HISTORY_DIR,
+        BLOCKS_DIR,
+        ARCHIVE_DIR,
+        CACHE_DIR,
+        TOOL_STATE_DIR,
+    )
     for directory in all_dirs:
         assert f"{directory}/" in OWNED_PATHS
     assert f"{WORKOUTS_DIR}/{ASSETS_SUBDIR}/" in OWNED_PATHS
@@ -553,6 +623,10 @@ def test_owned_paths_name_every_fitdocs_owned_location() -> None:
     # OWNED_PATHS leaves the round-trip and subset pins green, so it is pinned
     # here explicitly, by value, independent of the exact-tuple pin above.
     assert f"{HISTORY_DIR}/{HISTORY_ASSETS_SUBDIR}/" in OWNED_PATHS
+    # Named mutation (design.md BlockLocation): dropping "blocks/" from
+    # OWNED_PATHS leaves the exact-tuple pin above as the primary catch, but
+    # is pinned by value here too, independent of tuple order.
+    assert f"{BLOCKS_DIR}/" in OWNED_PATHS
     assert len(set(OWNED_PATHS)) == len(OWNED_PATHS)  # no duplicates
     for owned in OWNED_PATHS:
         assert owned.endswith("/")
@@ -586,6 +660,25 @@ def test_owned_paths_cover_every_path_the_engines_write() -> None:
     assert _is_owned(
         history_doc_path(root).parent / history_asset_rel_path(HISTORY_CHART), root
     )
+    # The two block write sites (training-blocks Req 4.1, 5.1) and both link
+    # round trips (design.md BlockLocation postconditions).
+    block_id, row_id = "2026q1-base", "row-a"
+    block_doc = block_doc_path(root, block_id)
+    planned_doc = planned_doc_path(root, block_id, row_id)
+    assert _is_owned(block_doc, root)
+    assert _is_owned(planned_doc, root)
+    assert _is_owned(block_pages_dir(root, block_id), root)
+    # The block page's parent joined with the planned link equals the real
+    # planned path. Named mutation: dropping the block directory from
+    # planned_rel_link (emitting only "<row_id>.md") breaks this equality
+    # even though both sides still resolve to *some* owned location.
+    assert block_doc.parent / planned_rel_link(block_id, row_id) == planned_doc
+    # The planned page's parent joined with the block link normalises to the
+    # real block path. Named mutation: emitting block_rel_link without the
+    # "../" parent step breaks this equality.
+    assert (
+        planned_doc.parent / block_rel_link(block_id)
+    ).resolve() == block_doc.resolve()
 
 
 def test_owned_paths_admit_the_declaration_files_task_4_2_writes() -> None:
@@ -644,6 +737,18 @@ def test_default_inbox_dir_is_the_documented_default() -> None:
     assert f"{DEFAULT_INBOX_DIR}/" not in OWNED_PATHS
 
 
+def test_default_plans_dir_is_the_documented_default_and_not_owned() -> None:
+    """``plans/`` is the default plan-source location (training-blocks Req 7.1, 7.3).
+
+    The athlete's own -- fitdocs only reads plan sources from it -- so it must
+    not appear in :data:`OWNED_PATHS`, the same treatment
+    :data:`DEFAULT_INBOX_DIR` receives.
+    """
+    assert DEFAULT_PLANS_DIR == "plans"
+    assert f"{DEFAULT_PLANS_DIR}/" not in OWNED_PATHS
+    assert PLAN_SOURCE_SUFFIX == ".toml"
+
+
 def test_quarantine_path_resolves_under_the_tool_state_directory() -> None:
     """The quarantine record's path lives under ``.fitdocs/`` (Req 5.1, 8.5).
 
@@ -667,11 +772,15 @@ def test_declared_dirs_are_the_top_level_owned_directories() -> None:
     directory is drawn from ``OWNED_PATHS`` -- a declaration can never be placed
     somewhere fitdocs does not own.
     """
-    assert DECLARED_DIRS == ("workouts/", "history/", "fit-archive/")
+    assert DECLARED_DIRS == ("workouts/", "history/", "blocks/", "fit-archive/")
     assert f"{WORKOUTS_DIR}/" in DECLARED_DIRS
     assert f"{HISTORY_DIR}/" in DECLARED_DIRS
+    assert f"{BLOCKS_DIR}/" in DECLARED_DIRS
     assert f"{ARCHIVE_DIR}/" in DECLARED_DIRS
     # A declaration is only ever placed where fitdocs owns the directory.
+    # Named mutation (design.md BlockLocation): placing "blocks/" in
+    # DECLARED_DIRS without also adding it to OWNED_PATHS reds this subset
+    # assertion.
     assert set(DECLARED_DIRS) <= set(OWNED_PATHS)
     assert f"{WORKOUTS_DIR}/{ASSETS_SUBDIR}/" not in DECLARED_DIRS
     assert f"{HISTORY_DIR}/{HISTORY_ASSETS_SUBDIR}/" not in DECLARED_DIRS
@@ -732,7 +841,7 @@ def test_layout_module_performs_no_file_io() -> None:
 
 
 def test_relative_helpers_use_plain_string_joins_never_os_path() -> None:
-    """The doc-relative ``*_rel_path`` helpers stay plain string joins (Req 2.7, 5.9).
+    """The ``*_rel_path``/``*_rel_link`` helpers stay plain string joins (Req 2.7, 5.9).
 
     Mutation caught: rewriting ``asset_rel_path``/``history_asset_rel_path`` (or
     any other helper here) to use ``os.path.join`` or an ``os.sep`` join would
@@ -785,3 +894,31 @@ def test_relative_helpers_use_plain_string_joins_never_os_path() -> None:
         # intentional: a refactor gets a clear pointer to it rather than a
         # separator rule to re-derive.
         assert f'f"{{{prefix}}}/' in fn_source
+
+    # The two training-blocks link helpers (design.md BlockLocation) get the
+    # same form pin, but keyed on their own sanctioned tokens rather than a
+    # shared subdir constant -- ``planned_rel_link`` joins on the block id
+    # argument, ``block_rel_link`` climbs one parent step. Named mutation:
+    # rewriting planned_rel_link as
+    # ``str(PurePosixPath(block_id) / f"{row_id}.md")`` produces the
+    # identical value on POSIX and would pass every value-based pin above,
+    # but trips the "Path(" ban (``PurePosixPath(`` contains ``Path(``) and
+    # drops the "f\"{block_id}/" token.
+    planned_source = inspect.getsource(planned_rel_link)
+    assert "Path(" not in planned_source
+    assert "PurePath(" not in planned_source
+    assert "os." not in planned_source
+    assert 'f"{block_id}/' in planned_source
+
+    block_link_source = inspect.getsource(block_rel_link)
+    assert "Path(" not in block_link_source
+    assert "PurePath(" not in block_link_source
+    assert "os." not in block_link_source
+    # The docstring also mentions the ``"../<block_id>.md"`` literal in prose
+    # (to name exactly the value the function returns), so a plain
+    # ``'"../' in block_link_source`` substring check would false-positive on
+    # the docstring alone even with the parent step dropped from the actual
+    # ``return`` statement -- pin the *return statement's* token instead,
+    # exactly as the module-level ``os.path.join`` docstring mention above is
+    # avoided by scoping to the import line.
+    assert 'return f"../' in block_link_source

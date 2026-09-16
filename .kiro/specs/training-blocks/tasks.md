@@ -234,7 +234,7 @@ report a green suite before then. If the group is executed by a single
 implementer, running 1.1-1.3 back to back before validating is the intended
 shape.
 
-- [ ] 1.1 Add the blocks location and the plan-source default to the layout leaf and move its constant pins
+- [x] 1.1 Add the blocks location and the plan-source default to the layout leaf and move its constant pins
   - Add the rendered directory name, the default plan-source directory name
     and the source-file suffix as named constants, plus five pure path
     helpers: the block page's filesystem path, the block's pages directory,

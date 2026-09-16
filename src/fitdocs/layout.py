@@ -1,12 +1,13 @@
 """Data-root layout, activity identity, and document naming (design: DataRootLayout).
 
 This leaf module is the single home for the fitdocs output-location contract
-(workout-docs Req 2.4-2.7, 3.1, 3.6, 5.6; load-history Req 5.1, 5.9). It
-defines the data-root layout constants
+(workout-docs Req 2.4-2.7, 3.1, 3.6, 5.6; load-history Req 5.1, 5.9;
+training-blocks Req 4.1, 4.6, 4.10, 5.1, 7.1, 7.2). It defines the data-root
+layout constants
 (``workouts/``, ``workouts/assets/``, ``history/``, ``history/assets/``,
-``fit-archive/``, ``.cache/``, ``.fitdocs/``) and the pure helpers the sync
-engine uses to place documents, name assets, archive sources, and derive a
-stable activity identity. Because it names
+``blocks/``, ``fit-archive/``, ``.cache/``, ``.fitdocs/``) and the pure
+helpers the sync engine uses to place documents, name assets, archive
+sources, and derive a stable activity identity. Because it names
 every location fitdocs writes into, it is also where the *ownership* boundary is
 stated: :data:`OWNED_PATHS` is the set the published contract and the
 write-confinement guard both read (wiki-contract Req 7.5, 7.6), and
@@ -27,10 +28,11 @@ write-confinement guard both read (wiki-contract Req 7.5, 7.6), and
 
 The module performs **no file I/O**. The collision predicate (``taken``) is
 injected by the caller, and the "relative" helpers (``asset_rel_path``,
-``history_asset_rel_path``, ``source_ref``) return POSIX forward-slash strings
-built by plain string joins -- never ``os.path.join`` -- so links stay portable
-across operating systems and a whole-data-root move never breaks a document
-(workout-docs Req 2.7; load-history Req 5.9).
+``history_asset_rel_path``, ``source_ref``, ``planned_rel_link``,
+``block_rel_link``) return POSIX forward-slash strings built by plain string
+joins -- never ``os.path.join`` -- so links stay portable across operating
+systems and a whole-data-root move never breaks a document (workout-docs
+Req 2.7; load-history Req 5.9; training-blocks Req 4.10).
 """
 
 from __future__ import annotations
@@ -114,11 +116,22 @@ activity."""
 HISTORY_CHART: Final[str] = "fitness"
 """The history chart's name component, used to compose its filename."""
 
+BLOCKS_DIR: Final[str] = "blocks"
+"""Rendered training-block location: ``<data-root>/blocks/`` (training-blocks
+Req 4.1, 5.1, 7.1, 7.2).
+
+Holds one block page per plan source (``blocks/<id>.md``) and, per block, one
+directory of planned-workout pages (``blocks/<id>/<row>.md``). No fixed
+subdirectory constant names that pages directory: it is named by the block's
+own identity at write time, so the ``blocks/`` prefix in :data:`OWNED_PATHS`
+already covers everything beneath it without a second entry."""
+
 OWNED_PATHS: Final[tuple[str, ...]] = (
     f"{WORKOUTS_DIR}/",
     f"{WORKOUTS_DIR}/{ASSETS_SUBDIR}/",
     f"{HISTORY_DIR}/",
     f"{HISTORY_DIR}/{HISTORY_ASSETS_SUBDIR}/",
+    f"{BLOCKS_DIR}/",
     f"{ARCHIVE_DIR}/",
     f"{CACHE_DIR}/",
     f"{TOOL_STATE_DIR}/",
@@ -144,6 +157,7 @@ set."""
 DECLARED_DIRS: Final[tuple[str, ...]] = (
     f"{WORKOUTS_DIR}/",
     f"{HISTORY_DIR}/",
+    f"{BLOCKS_DIR}/",
     f"{ARCHIVE_DIR}/",
 )
 """The owned top-level directories that receive an ownership declaration (Req 3.1).
@@ -337,3 +351,75 @@ def source_ref(sha256: str) -> str:
     never bakes in an absolute or OS-specific path.
     """
     return f"{ARCHIVE_DIR}/{sha256}.fit"
+
+
+DEFAULT_PLANS_DIR: Final[str] = "plans"
+"""Default plan-source location under the data root: ``<data-root>/plans/``
+(training-blocks Req 7.1, 7.3).
+
+Used when the settings file or its ``[plans]`` table is absent, or when the
+table is present but does not override ``path``. Like :data:`DEFAULT_INBOX_DIR`,
+this directory is **not** owned: it is the athlete's own, fitdocs only reads
+plan sources from it and never creates, writes, or deletes anything there, so
+it is deliberately absent from :data:`OWNED_PATHS`."""
+
+PLAN_SOURCE_SUFFIX: Final[str] = ".toml"
+"""The plan-source file extension fitdocs reads from the plan-source
+directory (training-blocks Req 1)."""
+
+
+def block_doc_path(data_root: Path, block_id: str) -> Path:
+    """The block page's filesystem path: ``<data_root>/blocks/<block_id>.md``
+    (training-blocks Req 4.1).
+
+    The block page lives one level below the data root, directly inside
+    :data:`BLOCKS_DIR`, named by the block's own identity.
+    """
+    return data_root / BLOCKS_DIR / f"{block_id}.md"
+
+
+def block_pages_dir(data_root: Path, block_id: str) -> Path:
+    """A block's planned-pages directory: ``<data_root>/blocks/<block_id>/``
+    (training-blocks Req 5.1).
+
+    Holds one planned-workout page per row in the block's current plan. Named
+    by the block's own identity -- no fixed subdirectory constant names it,
+    because the :data:`BLOCKS_DIR` prefix already covers everything beneath it.
+    """
+    return data_root / BLOCKS_DIR / block_id
+
+
+def planned_doc_path(data_root: Path, block_id: str, row_id: str) -> Path:
+    """A planned page's filesystem path: ``<data_root>/blocks/<block_id>/<row_id>.md``
+    (training-blocks Req 5.1).
+
+    Two levels below the data root, inside the block's own
+    :func:`block_pages_dir`, and never under the generated workout-documents
+    directory.
+    """
+    return data_root / BLOCKS_DIR / block_id / f"{row_id}.md"
+
+
+def planned_rel_link(block_id: str, row_id: str) -> str:
+    """A planned page's link, *relative to the block page's own directory*
+    (training-blocks Req 4.6, 4.10).
+
+    Returns ``"<block_id>/<row_id>.md"`` as a POSIX forward-slash string,
+    built by a plain string join so the separators stay forward slashes on
+    every operating system -- the block page lives one level below the data
+    root, so this is exactly the block's planned-pages directory name joined
+    with the row's filename.
+    """
+    return f"{block_id}/{row_id}.md"
+
+
+def block_rel_link(block_id: str) -> str:
+    """The block page's link, *relative to a planned page's own directory*
+    (training-blocks Req 5.3).
+
+    Returns ``"../<block_id>.md"`` as a POSIX forward-slash string, built by a
+    plain string join so the separators stay forward slashes on every
+    operating system -- a planned page lives two levels below the data root,
+    one level below the block page, so its link back climbs one parent step.
+    """
+    return f"../{block_id}.md"
