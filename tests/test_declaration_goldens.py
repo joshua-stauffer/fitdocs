@@ -1,7 +1,8 @@
-"""Byte-golden pin for the three emitted ``AGENTS.md`` declaration texts.
+"""Byte-golden pin for the four emitted ``AGENTS.md`` declaration texts.
 
 Task 4.1 originally; extended by ``load-history`` task 1.2 to a third,
-``history/``, directory.
+``history/``, directory, and by ``training-blocks`` task 1.2 to a fourth,
+``blocks/``.
 
 Three review rounds each cleared a named false sentence in
 ``fitdocs.declaration.declaration_text``'s hand-written prose and each left a
@@ -29,7 +30,13 @@ from pathlib import Path
 import pytest
 
 from fitdocs.declaration import declaration_text
-from fitdocs.layout import ARCHIVE_DIR, DECLARED_DIRS, HISTORY_DIR, WORKOUTS_DIR
+from fitdocs.layout import (
+    ARCHIVE_DIR,
+    BLOCKS_DIR,
+    DECLARED_DIRS,
+    HISTORY_DIR,
+    WORKOUTS_DIR,
+)
 
 _GOLDEN_DIR = Path(__file__).parent / "declaration_golden"
 
@@ -42,6 +49,7 @@ _GOLDEN_NAMES: dict[str, str] = {
     f"{WORKOUTS_DIR}/": "workouts",
     f"{HISTORY_DIR}/": "history",
     f"{ARCHIVE_DIR}/": "fit-archive",
+    f"{BLOCKS_DIR}/": "blocks",
 }
 
 

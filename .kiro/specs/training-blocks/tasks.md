@@ -288,7 +288,7 @@ shape.
   - _Requirements: 4.1, 4.6, 4.10, 5.1, 7.1, 7.2_
   - _Boundary: BlockLocation_
 
-- [ ] 1.2 Advance the ownership contract version and give the blocks directory its own declaration
+- [x] 1.2 Advance the ownership contract version and give the blocks directory its own declaration
   - **Before editing, assert `contract.CONTRACT_VERSION == "3"`**; any other
     value means a peer moved it -- stop and report rather than advancing
   - Advance the published contract version by one. This is the only edit

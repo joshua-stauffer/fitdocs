@@ -34,7 +34,13 @@ from pathlib import Path
 import pytest
 
 from fitdocs.declaration import DECLARATION_FILENAME, declaration_path
-from fitdocs.layout import ARCHIVE_DIR, DECLARED_DIRS, HISTORY_DIR, WORKOUTS_DIR
+from fitdocs.layout import (
+    ARCHIVE_DIR,
+    BLOCKS_DIR,
+    DECLARED_DIRS,
+    HISTORY_DIR,
+    WORKOUTS_DIR,
+)
 from fitdocs.load import engine as load_engine
 from fitdocs.load.engine import apply_load
 from fitdocs.load.prompts import NonInteractiveSession
@@ -266,9 +272,9 @@ def test_refresh_declarations_appends_a_warning_per_foreign_directory(
     tmp_path: Path,
 ) -> None:
     # Unit-level check of the shared step itself, isolated from either entry
-    # point: all three declared directories foreign -> three warnings, one
-    # per path -- not just the two-directory case a fixed workouts/archive
-    # pair would leave the only one exercised.
+    # point: all declared directories foreign -> one warning per directory,
+    # one per path -- not just the two-directory case a fixed
+    # workouts/archive pair would leave the only one exercised.
     data_root = tmp_path / "data"
     for directory in DECLARED_DIRS:
         _plant_foreign(data_root, directory)
@@ -371,12 +377,13 @@ def test_sync_regen_load_report_unchanged_document_counts_with_declarations_pres
     assert len(first.written) == 2
     count_after_sync = _workout_doc_count(data_root)
     assert count_after_sync == 2
-    # All three declarations really are present alongside the two documents,
+    # All four declarations really are present alongside the two documents,
     # each ending in ``.md`` -- the exact shape that would inflate a naive
     # ``glob("*.md")`` count if the scans did not filter on frontmatter.
     assert (data_root / WORKOUTS_DIR / DECLARATION_FILENAME).is_file()
     assert (data_root / ARCHIVE_DIR / DECLARATION_FILENAME).is_file()
     assert (data_root / HISTORY_DIR / DECLARATION_FILENAME).is_file()
+    assert (data_root / BLOCKS_DIR / DECLARATION_FILENAME).is_file()
     assert len(list((data_root / WORKOUTS_DIR).glob("*.md"))) == 3
 
     second_sync = _sync(source, data_root)

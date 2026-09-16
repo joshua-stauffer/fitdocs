@@ -20,7 +20,7 @@ Two things happen here and nowhere else:
   can make lives in a module-level fragment table, each written exactly once
   and reused across directories -- `declaration_text` only selects and orders
   fragments, so a claim can never be fixed in one directory's text while an
-  unpinned copy stands in another's. The three emitted texts are pinned as
+  unpinned copy stands in another's. The four emitted texts are pinned as
   committed byte-goldens under ``tests/declaration_golden/`` rather than
   substring assertions.
 - **Placement** (:func:`ensure_declarations`) writes only when a directory's
@@ -55,6 +55,7 @@ from fitdocs.contract import (
 )
 from fitdocs.layout import (
     ARCHIVE_DIR,
+    BLOCKS_DIR,
     DECLARED_DIRS,
     HISTORY_DIR,
     WORKOUTS_DIR,
@@ -163,9 +164,10 @@ _WRITTEN_AND_OWNED: Final[str] = (
 # `write_text` grep does not surface), and the (not-yet-implemented)
 # `history/engine.py`'s `HistoryEngine` (design.md, lands in task 5.2), which
 # writes the history chart and then the history page, the page by that same
-# atomic idiom. True of
-# all three directories this fragment is selected for -- `workouts/`,
-# `history/`, and `fit-archive/` -- fitdocs is the one that copies an export's
+# atomic idiom, and `plans.engine.run_plan` (training-blocks spec), which
+# writes block and planned-workout pages the same way. True of all four
+# directories this fragment is selected for -- `workouts/`, `history/`,
+# `fit-archive/`, and `blocks/` -- fitdocs is the one that copies an export's
 # bytes into `fit-archive/<sha>.fit`, even though those bytes originate
 # outside fitdocs (Req 3.2).
 
@@ -284,6 +286,34 @@ _HISTORY_RERUNNABLE: Final[str] = (
 # depends on is itself only re-derivable from the page, so regenerating it
 # loses no information the workout documents did not already carry.
 
+_BLOCKS_CONTENT: Final[str] = (
+    "This directory holds generated training-block pages and, in a "
+    "subdirectory named after its block, the planned-workout pages that "
+    "block links to, rendered from the athlete's plan sources whenever "
+    "`fitdocs plan` runs."
+)
+# CLAIM ANCHOR: `layout.block_doc_path`, `layout.planned_doc_path`,
+# `plans.engine.run_plan`.
+
+_BLOCKS_NOTES: Final[str] = (
+    "A block page carries one user-owned region, `notes`, whose content is "
+    "carried over verbatim on rerender; a planned-workout page carries no "
+    "user-owned region and is rewritten in full."
+)
+# CLAIM ANCHOR: `plans.page.notes_region` (the one `region_block` call, made
+# by `plans.block_page` alone), `plans.engine` (`merge_regions` on the block
+# page only), `plans.planned_page` (never calls `notes_region`).
+
+_BLOCKS_RERUNNABLE: Final[str] = (
+    "The pages are re-derivable from the plan sources alone: deleting them "
+    "costs only a re-run of `fitdocs plan`. The plan sources live outside "
+    "this directory, in the athlete's plan directory, and fitdocs never "
+    "writes there."
+)
+# CLAIM ANCHOR: `plans.engine` has no write path under the resolved source
+# directory; `plans.settings.resolve_plans_dir` refuses an owned location;
+# `tests/test_confinement.py`'s `plan` entry.
+
 _OWNER_BLOCK: Final[str] = (
     "## Ownership\n\n"
     "Owner: `{generator}`.\n"
@@ -330,11 +360,11 @@ def declaration_text(directory: str) -> str:
     is deferred to the published ownership contract (task 7.1), reached by
     ``CONTRACT_DOCUMENTATION_URL``.
 
-    Dispatches explicitly on ``directory`` over exactly the three members of
-    `layout.DECLARED_DIRS` -- ``workouts/``, ``history/``, ``fit-archive/`` --
-    with **no fall-through branch**: a ``directory`` this function does not
-    recognize raises :class:`ValueError` rather than silently inheriting
-    another directory's prose.
+    Dispatches explicitly on ``directory`` over exactly the four members of
+    `layout.DECLARED_DIRS` -- ``workouts/``, ``history/``, ``fit-archive/``,
+    ``blocks/`` -- with **no fall-through branch**: a ``directory`` this
+    function does not recognize raises :class:`ValueError` rather than
+    silently inheriting another directory's prose.
 
     For the directory holding generated workout documents (``workouts/``):
     the written-and-tool-owned statement, the user-owned region names, the
@@ -350,7 +380,17 @@ def declaration_text(directory: str) -> str:
     written-and-tool-owned statement and the immutable-inputs statement (Req
     3.3) -- the re-derivability, user-owned-region, and user-owned-key
     elements do not apply here either (Req 3.2a, 6.4), so this branch never
-    selects those fragments.
+    selects those fragments. For the generated training-blocks directory
+    (``blocks/``): the written-and-tool-owned statement, a statement that it
+    holds block pages and, per block, the planned-workout pages under a
+    subdirectory named after that block, a statement that a block page's one
+    user-owned region is ``notes`` (carried over verbatim on rerender) while
+    a planned-workout page has none and is rewritten in full, and a
+    statement that the pages are re-derivable from the plan sources alone,
+    which live outside this directory and are never written by fitdocs (Req
+    7.2, 7.5, 7.6) -- the effort-tag user-owned-key element and the
+    never-add-a-marker rule do not apply here, because a block page has no
+    effort-tag frontmatter and this branch never selects those fragments.
 
     No fragment quantifies over documents ("each"/"every"/"all
     documents"/"any document"): only :func:`~fitdocs.render.views.render_strength`
@@ -394,6 +434,14 @@ def declaration_text(directory: str) -> str:
         heading = "Source Archive"
         body = (
             f"{_WRITTEN_AND_OWNED.format(directory=directory)}\n\n{_IMMUTABILITY}\n\n"
+        )
+    elif directory == BLOCKS_DIR + "/":
+        heading = "Generated Training Blocks"
+        body = (
+            f"{_WRITTEN_AND_OWNED.format(directory=directory)}\n\n"
+            f"{_BLOCKS_CONTENT}\n\n"
+            f"{_BLOCKS_NOTES}\n\n"
+            f"{_BLOCKS_RERUNNABLE}\n\n"
         )
     else:
         raise ValueError(

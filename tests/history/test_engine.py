@@ -21,12 +21,13 @@ import pytest
 
 import fitdocs.history.engine as engine_module
 from fitdocs import contract
+from fitdocs.declaration import DECLARATION_FILENAME
 from fitdocs.history.engine import (
     MethodologyConfigurationError,
     run_history,
 )
 from fitdocs.history.model import ModelSeries, run_model
-from fitdocs.layout import WORKOUTS_DIR
+from fitdocs.layout import DECLARED_DIRS, HISTORY_DIR, WORKOUTS_DIR
 from fitdocs.settings import SettingsError
 
 _DOC_REL = "history/training-load-history.md"
@@ -926,12 +927,22 @@ def test_run_history_takes_no_date_or_clock_parameter() -> None:
 # ==============================================================================
 
 
-#: The two ownership declarations `ensure_declarations` may legitimately
-#: create or rewrite on a data root that has never been synced (the design's
-#: own stated exception, tasks.md's 5.2 bullet) -- excluded from the
-#: before/after snapshot below so this test pins the *narrowed* claim: no
-#: workout document, workout asset or archived source is ever touched.
-_DECLARATION_PATHS = {Path("workouts/AGENTS.md"), Path("fit-archive/AGENTS.md")}
+#: The ownership declarations `ensure_declarations` may legitimately create
+#: or rewrite on a data root that has never been synced (the design's own
+#: stated exception, tasks.md's 5.2 bullet) -- excluded from the before/after
+#: snapshot below so this test pins the *narrowed* claim: no workout
+#: document, workout asset or archived source is ever touched. Derived from
+#: `layout.DECLARED_DIRS` and `declaration.DECLARATION_FILENAME`, minus the
+#: `history/` entry -- the `_snapshot` filter below already excludes every
+#: path with a `history` path segment, so including it here would be a
+#: redundant, never-reachable filter branch -- so `blocks/` (the fourth
+#: declared directory, training-blocks task 1.2) and any later one are
+#: covered here without repeating this hand-written list.
+_DECLARATION_PATHS = {
+    Path(f"{directory}{DECLARATION_FILENAME}")
+    for directory in DECLARED_DIRS
+    if directory != f"{HISTORY_DIR}/"
+}
 
 
 def _snapshot(root: Path) -> dict[Path, bytes]:

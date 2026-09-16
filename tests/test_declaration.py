@@ -35,6 +35,7 @@ from fitdocs.declaration import (
 )
 from fitdocs.layout import (
     ARCHIVE_DIR,
+    BLOCKS_DIR,
     CACHE_DIR,
     DECLARED_DIRS,
     HISTORY_DIR,
@@ -46,6 +47,7 @@ from fitdocs.layout import (
 _WORKOUTS = f"{WORKOUTS_DIR}/"
 _HISTORY = f"{HISTORY_DIR}/"
 _ARCHIVE = f"{ARCHIVE_DIR}/"
+_BLOCKS = f"{BLOCKS_DIR}/"
 
 
 def _snapshot(root: Path) -> dict[str, tuple[bytes, int]]:
@@ -145,14 +147,46 @@ def test_history_declaration_names_no_user_owned_key() -> None:
         assert f"`{key}`" not in text
 
 
+def test_blocks_declaration_names_the_notes_region_and_no_other_region_id() -> None:
+    # design: BlockDeclaration -- a block page carries exactly one user-owned
+    # region, `notes`; a planned-workout page carries none. The text must
+    # name `notes` (backticked, like every other region reference) but must
+    # not name any other region id the contract publishes -- today `workout`
+    # (`contract.USER_REGIONS`) and `load` (`contract.TOOL_REGIONS`) --
+    # distinguishing this from `workouts/`'s text, which names `notes` and
+    # `workout` both. Iterates `contract.PRESERVED_REGIONS` (the union of
+    # user-owned and tool-filled region ids), not only `USER_REGIONS`: a
+    # fragment that leaked `load` into the blocks text would be false of
+    # this directory (no `load` region exists on a block or planned-workout
+    # page) but would pass a check scoped to `USER_REGIONS` alone.
+    text = declaration_text(_BLOCKS)
+    assert f"`{contract.NOTES_REGION}`" in text
+    for region in contract.PRESERVED_REGIONS:
+        if region == contract.NOTES_REGION:
+            continue
+        assert f"`{region}`" not in text
+
+
+def test_blocks_declaration_names_no_user_owned_key() -> None:
+    # `_USER_KEYS` (the effort-tag frontmatter keys) is a `workouts/`-only
+    # fragment -- it must not leak into `blocks/`'s text either.
+    text = declaration_text(_BLOCKS)
+    for key in contract.EFFORT_KEYS:
+        assert f"`{key}`" not in text
+
+
 # Every `OWNED_PATHS` member that is NOT in `DECLARED_DIRS` (e.g.
-# `workouts/assets/`, `history/assets/`, `.cache/`, `.fitdocs/`) plus two
+# `workouts/assets/`, `history/assets/`, `.cache/`, `.fitdocs/`) plus four
 # directories chosen specifically to share a prefix with a declared one
 # without being it: "history" has no trailing slash, and "history-old/" is a
-# sibling directory whose name merely starts with "history". Each member
-# defeats a different wrong dispatch: a `directory.startswith(HISTORY_DIR)`
-# dispatch would wrongly accept "history", "history-old/" and
-# "history/assets/"; a `directory.startswith(WORKOUTS_DIR)` dispatch would
+# sibling directory whose name merely starts with "history"; "blocks" (no
+# slash) and "blocks-old/" defeat a `directory.startswith(BLOCKS_DIR)`
+# dispatch the same way the `history` pair defeats
+# `directory.startswith(HISTORY_DIR)`. Each member defeats a different wrong
+# dispatch: a `directory.startswith(HISTORY_DIR)` dispatch would wrongly
+# accept "history", "history-old/" and "history/assets/"; a
+# `directory.startswith(BLOCKS_DIR)` dispatch would wrongly accept "blocks"
+# and "blocks-old/"; a `directory.startswith(WORKOUTS_DIR)` dispatch would
 # wrongly accept "workouts/assets/"; and the remaining members (".cache/",
 # ".fitdocs/", "not-a-declared-dir/") share no prefix with any declared
 # directory, so they pin that the final branch raises rather than falling
@@ -161,6 +195,8 @@ _OUTSIDE_DECLARED_SET = sorted(set(OWNED_PATHS) - set(DECLARED_DIRS)) + [
     "history",
     "history-old/",
     "not-a-declared-dir/",
+    "blocks",
+    "blocks-old/",
 ]
 
 
@@ -190,7 +226,7 @@ def test_declaration_text_raises_for_a_directory_outside_the_declared_set(
 # *every* document -- is not specific to region prose, so the predicate now
 # inspects every line of the emitted text (including `fit-archive/`'s, which
 # the region-only filter never inspected at all). Widening it was checked
-# against the three current declaration texts line by line and trips no
+# against the four current declaration texts line by line and trips no
 # existing sentence: none of them contains any of `_QUANTIFIER_WORDS`
 # anywhere, region line or not.
 _QUANTIFIER_WORDS = ("each", "every", "all documents", "any document")
@@ -201,7 +237,7 @@ def _quantifier_hits(text: str) -> list[str]:
     as ``"<word> in line <line>"``.
 
     Factored out of the guard test below so the predicate itself -- not just
-    its behavior against the three live declaration texts -- can be pinned
+    its behavior against the four live declaration texts -- can be pinned
     directly against a synthetic string
     (:func:`test_quantifier_hits_flags_a_synthetic_document_quantifying_sentence`).
     """
@@ -216,7 +252,7 @@ def _quantifier_hits(text: str) -> list[str]:
 
 def test_quantifier_hits_flags_a_synthetic_document_quantifying_sentence() -> None:
     # Synthetic corpus, not the real declaration text: pins `_quantifier_hits`
-    # itself, independent of whatever the three shipped declarations currently
+    # itself, independent of whatever the four shipped declarations currently
     # say. None of these lines mentions "region", so this also pins that the
     # predicate is no longer scoped to region-adjacent lines. Every quantifier
     # sits mid-line, never at line start -- a corpus with the quantifier
@@ -380,7 +416,7 @@ def test_ensure_declarations_preserves_a_foreign_file(
 
     outcome = next(o for o in outcomes if o.directory == directory)
     assert outcome.state == DeclarationState.FOREIGN
-    # The OTHER two declared directories come back WRITTEN -- one directory's
+    # The OTHER declared directories come back WRITTEN -- one directory's
     # foreign file never touches its siblings' placement.
     other_dirs = set(DECLARED_DIRS) - {directory}
     for other in other_dirs:
@@ -432,16 +468,17 @@ def test_inspect_declarations_writes_nothing(tmp_path: Path) -> None:
     [
         (_WORKOUTS, _ARCHIVE),
         (_ARCHIVE, _HISTORY),
-        (_HISTORY, _WORKOUTS),
+        (_HISTORY, _BLOCKS),
+        (_BLOCKS, _WORKOUTS),
     ],
 )
 def test_inspect_declarations_reports_current_stale_and_foreign(
     tmp_path: Path, stale_dir: str, foreign_dir: str
 ) -> None:
-    # Rotated across all three parametrizations so each of `workouts/`,
-    # `fit-archive/`, and `history/` takes the STALE role once and the
-    # FOREIGN role once -- a single fixed pair (e.g. always workouts/archive)
-    # would never exercise `history/` at all.
+    # Rotated across all four parametrizations so each of `workouts/`,
+    # `fit-archive/`, `history/`, and `blocks/` takes the STALE role once and
+    # the FOREIGN role once -- a single fixed pair (e.g. always
+    # workouts/archive) would never exercise `history/` or `blocks/` at all.
     ensure_declarations(tmp_path)
 
     stale_path = declaration_path(tmp_path, stale_dir)
@@ -456,7 +493,7 @@ def test_inspect_declarations_reports_current_stale_and_foreign(
 
     assert outcomes[stale_dir] == DeclarationState.STALE
     assert outcomes[foreign_dir] == DeclarationState.FOREIGN
-    # The third, untouched directory is still CURRENT.
+    # The remaining, untouched directories are still CURRENT.
     remaining = set(DECLARED_DIRS) - {stale_dir, foreign_dir}
     for directory in remaining:
         assert outcomes[directory] == DeclarationState.CURRENT

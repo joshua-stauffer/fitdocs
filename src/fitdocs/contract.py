@@ -261,7 +261,7 @@ own docstring in that test module for why that is an accepted property of
 this trigger shape, not a defect to route around a second time.
 """
 
-CONTRACT_VERSION: Final[str] = "3"
+CONTRACT_VERSION: Final[str] = "4"
 """The published ownership contract's version identifier (Req 2.8).
 
 A *string*, and deliberately not comparable with :data:`DOC_VERSION`: it
