@@ -1081,3 +1081,13 @@ shape.
   guard is the behavioural layer. Also: CPython interns identifier-like
   string literals, so an `is` identity check does NOT catch a re-spelled
   `"fitdocs"` -- pin re-spelling with an AST assignment scan, not identity.
+- **Surface additions beyond the design's Contracts blocks (record-only,
+  found by feature validation 2026-09-16)**: `plans.page` re-exports
+  `contract.GENERATOR` so the renderers bind no contract name (3.1);
+  `plans.model` adds `is_reserved_block_id(candidate)` and
+  `mesocycle_number(starts, length, day)` (2.1; `Block.mesocycle_of`
+  delegates to the latter). All three are in `fitdocs.plans.__all__` and
+  pinned name-for-name with owners in `tests/test_public_api.py`.
+  `tests/test_declaration_refresh.py` gained one assertion and two count
+  corrections in 1.2 (its ownership line said "run"; same class as the
+  by-value-pin allowance).
