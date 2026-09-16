@@ -1,7 +1,7 @@
 ---
 id: 2026-09-10-activity-qa-flags-staleness-guard-neutralises-retroactive-anchors
 title: activity-qa-flags' staleness design guards `measured_on <= activity_date` before calling benchmark_age and reports a violation as not-assessed, so every athlete-declared retroactive anchor would surface as not-assessed instead of current — and its stated rationale is now false
-status: open
+status: done
 importance: high
 importance_why: Amendment 4's primary case (a first-time athlete's archive scored against a prompt answer applied retroactively) produces exactly the anchors this guard rejects; implemented as designed, the staleness flag on every such document would be wrong, and the design forbids removing the guard on a premise athlete-benchmarks Amendment 1 revised.
 effort: S
@@ -87,3 +87,54 @@ implementer the guard is load-bearing. The premise is false in shipped code:
 - Should the retroactive case be a fourth verdict of the existing staleness
   flag, or a separate flag? athlete-benchmarks only promises the sign of the
   age; the surfacing vocabulary is activity-qa-flags' to choose.
+
+## Resolution
+
+Closed 2026-09-16 (`/kiro-queue close`), done. Landed on `main` at `8d2b8ff`
+(`docs(activity-qa-flags): retroactive-anchor amendment -- retire the
+staleness ordering guard for athlete-benchmarks Amendment 1`), merged
+`--ff-only` from `chore/aqf-staleness-amendment` and pushed.
+
+Verified on `main` before closing:
+
+- `.kiro/specs/activity-qa-flags/design.md` — the pre-call
+  `measured_on <= activity_date` guard and its "must not be removed as dead
+  code" note are gone (`grep -c` of both phrasings: 0). StalenessSurfacing
+  now reads the sign of the store's age: `StalenessOutcome` gains
+  `RETROACTIVE`, set exactly when `age_days < 0`, mapped by FlagAssembly to
+  the contract's *not-detected* with the measurement date, the day count
+  after the activity, `Benchmark.applies_from` (or its absence) and the
+  window in the basis. The `benchmark_age` revalidation trigger is widened
+  to the sign convention and to the selection rule (`athlete-benchmarks`
+  3.10).
+- `.kiro/specs/activity-qa-flags/requirements.md` — criterion 5.8 added
+  (retroactive anchor: *not-detected*, both dates, never stale, never
+  *not-assessed* on the ordering); amendment section and Adjacent
+  expectations record the store's revised behaviour.
+- `.kiro/specs/activity-qa-flags/tasks.md` — task 2.5 no longer builds the
+  guard ("this guard is the seam": 0 matches); tasks 2.5 and 3.1 trace 5.8.
+- `.kiro/specs/activity-qa-flags/research.md` — the decision "a future-dated
+  anchor reports not-assessed rather than raising" is replaced by "a
+  retroactive anchor is a fourth staleness outcome, mapped to not-detected",
+  with the fifth-flag, sign-check-in-basis, keep-the-guard and
+  map-to-not-assessed alternatives rejected on record.
+- `.kiro/specs/activity-qa-flags/spec.json` — `amendments[0]` (2026-09-16)
+  records the change; approvals retained per the athlete-benchmarks /
+  training-load precedent, with the entry marked as awaiting maintainer
+  review.
+- `.kiro/specs/athlete-benchmarks/spec.json` (Amendment 1 `cross_spec`) and
+  `design.md` (selection-semantics revalidation trigger) record the
+  activity-qa-flags re-check as discharged on 2026-09-16.
+- `src/fitdocs/benchmarks.py` — the premise stays retired: the only
+  `raise ValueError` in `benchmark_age` is `window_days < 1`; the one
+  `measured_on > activity_date` match is the docstring saying it no longer
+  raises.
+
+Open question answered: a fourth internal outcome of the existing staleness
+flag, not a separate flag — the contract's three-value verdict vocabulary is
+untouched, so `training-load`'s renderer is not revalidated.
+
+Adjacent, still open: `2026-09-10-load-channels-renders-a-retroactive-anchor-date-unexplained`
+(the channels' `inputs_used` table still renders `measured_on` without
+`applies_from`). Surfaced by this run:
+`2026-09-16-kiro-spec-design-has-no-amendment-mode-metadata-rule`.
