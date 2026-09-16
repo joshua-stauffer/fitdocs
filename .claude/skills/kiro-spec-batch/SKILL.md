@@ -146,7 +146,7 @@ Output format:
 2. For each completed spec, read spec.json to confirm phase and approvals
 3. Update roadmap.md: mark completed specs as `[x]`
 4. If roadmap.md includes `Existing Spec Updates` or `Direct Implementation Candidates`, leave them untouched and mention them as remaining follow-up items unless already explicitly completed elsewhere
-5. **Merge-back and the log**: this run is not done when the files are written — `.kiro/steering/change-protocol.md`'s Definition of Done still applies (rebase, re-run validation, `git merge --ff-only`). Once the branch lands on `main`, append `MERGED` naming every feature this run produced specs for and the sha, so a peer sees the choke point (roadmap.md, `.kiro/specs/`) is free again:
+5. **Merge-back and the log**: this run is not done when the files are written — `.kiro/steering/change-protocol.md`'s Definition of Done still applies (each commit pushed as it was made, rebase, `git push --force-with-lease` of the rebased branch, re-run validation, `git merge --ff-only`, `git push origin main`). Once the branch lands on `main` and `main` is pushed, append `MERGED` naming every feature this run produced specs for and the sha, so a peer sees the choke point (roadmap.md, `.kiro/specs/`) is free again:
    ```bash
    LOG="$(git rev-parse --git-common-dir)/agent-log"
    printf '%s\t%s\t%s\t%s\n' "$(date -u +%FT%TZ)" "spec-batch" MERGED "<sha> - specs for: <feature-a>, <feature-b>, ..." >> "$LOG"

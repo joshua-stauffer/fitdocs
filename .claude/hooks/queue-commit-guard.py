@@ -64,8 +64,9 @@ What this deliberately does not catch
   would mean judging whether a branch is destined to merge, which is not a
   fact in the repository at Stop time. ``log-guard.py`` covers the adjacent
   case (commits `main` lacks, nothing logged) from a different angle.
-* **Committed but not pushed.** This repo has no remote in its workflow;
-  ``main`` is the integration point.
+* **Committed but not pushed.** ``change-guard.py``'s Stop check owns that
+  since 2026-09-16 -- it blocks once on ``main`` ahead of ``origin/main`` or a
+  branch ahead of its upstream -- and one rule per hook file keeps it there.
 * **A close that is wrong.** No hook can verify a resolution's evidence. That
   is ``kiro-queue``'s never-auto-close rule and the reviewer's job.
 
@@ -98,7 +99,8 @@ Appending to or closing a `.kiro/queue/` item is trivial per \
 change-protocol.md, so this may be committed on `main` directly -- declare it \
 trivial in its own tool call first if `change-guard.py` asks:
 
-  git add .kiro/queue && git commit -m "chore(queue): <what changed>"
+  git add .kiro/queue && git commit -m "chore(queue): <what changed>" &&
+    git push origin main
 
 This is advisory only -- it never blocks stopping. If these edits are genuinely \
 still in progress, ignore it."""

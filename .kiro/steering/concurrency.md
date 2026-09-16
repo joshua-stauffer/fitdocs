@@ -20,9 +20,10 @@ skipped is unrecoverable.
 Every session reads and writes the shared log.**
 
 A session claims a spec, works it to completion in its own worktree on its
-own branch, and merges that branch back into `main` itself. The worktree is
-already required by the change protocol; concurrency is what makes sharing one
-unsafe rather than merely untidy.
+own branch, merges that branch back into `main` itself, and pushes `main`. The
+worktree is already required by the change protocol, as is pushing every
+commit as it is made; concurrency is what makes sharing one tree unsafe rather
+than merely untidy.
 
 The two halves are one rule. Worktree isolation is what makes the sessions
 independent, and that independence is exactly what leaves them blind to each
@@ -54,14 +55,18 @@ baseline all become per-session and correct — with no protocol changes.
 ## Session Lifecycle
 
 The lifecycle is the one in `change-protocol.md` — log read and claim, worktree,
-branch, per-task commits, rebase, post-rebase validation, `--ff-only` merge,
-teardown — with the branch named `impl/<spec>`.
+branch, per-task commits each pushed as it is made, rebase and a
+`--force-with-lease` push of the rebased branch, post-rebase validation,
+`--ff-only` merge, `git push origin main`, teardown of the local and remote
+branch — with the branch named `impl/<spec>`.
 
 Two additions concurrency imposes:
 
 - **Rebase early and often** — daily at minimum, and immediately whenever the
   log shows a peer merged. Long-lived branches are the only real merge risk;
-  per-task commits rebase cheaply.
+  per-task commits rebase cheaply. Each rebase is followed by
+  `git push --force-with-lease origin impl/<spec>`: the rebase made new
+  commits, and they are as unpushed as any other until they are on the remote.
 - **Keep the log current throughout** — the claim before the first edit, the
   merge once it lands, and every `WARN` or `NOTE` in between, at the read and
   write points below. This runs the whole length of the lifecycle; it is not
@@ -74,7 +79,8 @@ change-protocol Definition of Done, a spec run owes:
 
 1. All tasks `[x]` (or explicitly `_Blocked:_` with reasons reported)
 2. Feature-level validation passing, re-run after the rebase
-3. A log line recorded for the merge
+3. `main` pushed to `origin` — a merge is landed nowhere until it is
+4. A log line recorded for the merge
 
 A session that leaves an unmerged branch has not finished. If merge-back is
 blocked (a genuine semantic conflict with a peer's landed work), that is a
@@ -158,7 +164,7 @@ end, where a peer can no longer act on it.
 | `CLAIM` | You begin work on a spec or change — before the first edit |
 | `TOUCHING <path>` | A task enters a choke-point or otherwise peer-visible module |
 | `TASK-DONE` | A task is approved and committed, and changes what peers may assume |
-| `MERGED` | A branch lands on `main` — this is what frees a choke point |
+| `MERGED` | A branch lands on `main` and `main` is pushed — this is what frees a choke point |
 | `RELEASE` | You abandon or park a claim, so the spec is takeable again |
 | `BLOCKED` | You cannot proceed, and a peer's work is why |
 | `WARN` | You found something that will bite a peer: a shared surface you changed, a landed API they must consume rather than re-add, a trap that cost you review rounds |

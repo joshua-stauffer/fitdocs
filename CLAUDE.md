@@ -73,13 +73,19 @@ Skills are located in `.claude/skills/kiro-*/SKILL.md`
 
 ## Development Rules
 - **Every non-trivial change runs the same ritual — worktree, branch, merged
-  to `main` with validation green.** This binds steering, skills, hooks, spec
-  docs and config exactly as tightly as `src/`: prose that instructs an agent
-  is behavior. Trivial (typos, stale paths, `.kiro/queue/` items) may be done
-  on `main`, still committed. Triage, per-class validation and the Definition
-  of Done: `.kiro/steering/change-protocol.md`; a PreToolUse + Stop hook
-  (`.claude/hooks/change-guard.py`) enforces it, and prints the one-command
-  escape hatch when a change genuinely is trivial.
+  to `main` with validation green, `main` pushed — and every commit is pushed
+  to `origin` the moment it is made, on any branch.** This binds steering,
+  skills, hooks, spec docs and config exactly as tightly as `src/`: prose that
+  instructs an agent is behavior. Trivial (typos, stale paths, `.kiro/queue/`
+  items) may be done on `main`, still committed and pushed. A commit that
+  exists only on this machine is not landed: on 2026-09-16 a subagent deleted
+  `.git` while `main` was eight commits, and a whole spec batch, ahead of the
+  remote. Triage, per-class validation, push mechanics (`-u` on the first
+  push, `--force-with-lease` after a rebase, `git push origin main` after a
+  merge) and the Definition of Done: `.kiro/steering/change-protocol.md`; a
+  PreToolUse + Stop hook (`.claude/hooks/change-guard.py`) enforces it —
+  unpushed commits included — and prints the one-command escape hatch when a
+  change genuinely is trivial.
 - **The shared agent log is a first-class artifact of every session — read it
   before you start, write it as you go.**
   `cat "$(git rev-parse --git-common-dir)/agent-log"` is the first command of

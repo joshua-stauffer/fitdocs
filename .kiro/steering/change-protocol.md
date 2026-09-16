@@ -14,8 +14,10 @@ nothing in your tree says otherwise is how conflicts get made.
 ## The Rule
 
 **A non-trivial change is made in its own worktree on its own branch, and is
-done only when it is merged to `main` with validation green.** `main` is an
-integration branch, not a workbench.
+done only when it is merged to `main` with validation green and `main` is
+pushed to `origin`. Every commit is pushed the moment it is made, on every
+branch.** `main` is an integration branch, not a workbench, and this machine
+is not where the repository lives.
 
 This started as an implementation rule and, for a while, was obeyed only
 there. Steering edits, skill rewrites, hook changes and spec revisions went
@@ -24,9 +26,23 @@ files decide how every later session behaves, so an unreviewed, unvalidated,
 uncommitted diff does more damage in `.kiro/steering/` or `.claude/skills/`
 than in `src/`. The artifact type does not change the ritual.
 
+The push half was added on 2026-09-16, the day a subagent's
+`cd <uncreated dir> && rm -rf .git && git init` ran in the main tree — the
+`cd` failed, the rest executed — and deleted the repository database: every
+local object, ref and reflog. At that moment `main` was eight commits ahead of
+`origin/main` and the entire Phase 7 spec batch sat on one worktree branch that
+had never been pushed. It was recovered only because the working trees
+survived and a session happened to hold a copy of the log; had the remote been
+current, recovery would have been `git clone`. **A commit that exists on one
+machine is not landed anywhere.** The remote is the durable copy, and the only
+way it is guaranteed current is to make it current as each commit is made — a
+push deferred to "when the branch merges" is a push that is not there when the
+tree dies mid-branch.
+
 ## Triage
 
-**Trivial** — may be done on `main`, still committed with a real message:
+**Trivial** — may be done on `main`, still committed with a real message and
+pushed:
 
 - a typo, whitespace, or formatting fix that changes no instruction and no
   behavior
@@ -66,19 +82,54 @@ uv sync                              # .venv/ is gitignored: one per worktree
 mkdir -p .fitdocs && echo "<data-root path>" > .fitdocs/data-root
 # (or export FITDOCS_DATA; see the data-root contract in tech.md)
 
-# 3. Make the change. Commit as you go, on the branch.
+# 3. Make the change. Commit as you go, on the branch, and push each commit in
+#    the same line. -u on the first push records the upstream the Stop guard reads.
+git add <paths> && git commit -m "..." && git push -u origin chore/<slug>
+git add <paths> && git commit -m "..." && git push
 
 # 4. Integrate — part of finishing, not a follow-up
 git fetch && git rebase main         # resolve conflicts here, in your tree
+git push --force-with-lease origin chore/<slug>   # the rebase made new commits: push them
 <validation for the change class>    # AFTER the rebase, against integrated work
-git switch main && git merge --ff-only chore/<slug>
+git switch main && git merge --ff-only chore/<slug> && git push origin main
 
-# 5. Tear down
+# 5. Tear down — the local branch and its remote copy
 git worktree remove ../fitdocs-<slug> && git branch -d chore/<slug>
+git push origin --delete chore/<slug>
 ```
 
 A branch whose base is uncommitted work in another tree cannot be created this
 way. That is a signal, not an exception: land the base first.
+
+## Push On Commit
+
+Every commit is pushed to `origin` in the same breath it is made — `commit &&
+push` on one line, never a later step. There is no branch this does not apply
+to and no commit small enough to skip it.
+
+- **First commit on a branch**: `git push -u origin <branch>`. The `-u`
+  records the upstream; the Stop guard judges the branch against it, and a
+  branch holding commits with no upstream is a block in its own right.
+- **Every later commit**: `git push`.
+- **After a rebase**: `git push --force-with-lease origin <branch>`. The
+  rebase made new commits and orphaned the ones on the remote; the lease
+  refuses if anything else moved the branch meanwhile. This is the only
+  sanctioned force, it applies only to your own `chore/`/`impl/` branch, and
+  bare `--force` is never used.
+- **After a `--ff-only` merge to `main`, and after a trivial commit on
+  `main`**: `git push origin main`. Name the remote and branch — `main`'s
+  tracking config is exactly the kind of local state the `.git` loss erased,
+  and an explicit refspec does not depend on it. `main` is never
+  force-pushed. If the push is rejected as non-fast-forward, `origin/main`
+  moved without passing through this machine: `git fetch`, rebase onto
+  `origin/main`, re-run validation, push again.
+- **Teardown**: `git push origin --delete <branch>` alongside the local
+  `git branch -d`. Once `main` holds the commits and is pushed, the remote
+  branch is a duplicate that would otherwise accumulate forever.
+
+A remote branch is not a review request and not a message to peers — the
+shared log is. It is a backup that costs one command and is current by
+construction — the backup that was not there on 2026-09-16.
 
 ## Definition of Done
 
@@ -88,16 +139,19 @@ Identical for every change class:
 2. Validation for the class is green (below)
 3. The branch is rebased onto current `main`
 4. Validation is re-run **after** the rebase — pre-rebase green does not count
-5. Merged `--ff-only` to `main`; worktree and branch removed
-6. Nothing left uncommitted, in any tree
+5. Merged `--ff-only` to `main`, and `main` pushed to `origin`; worktree and
+   branch removed, locally and on the remote
+6. Nothing left uncommitted, in any tree; nothing left unpushed, on any branch
+   — `git rev-list origin/main..main` is empty
 7. The merge is in the shared log, along with anything a peer needs to know
    about what it changed for them
 
-Uncommitted work is not done. A merged branch whose validation only ran before
-the rebase is not done either. Work a peer cannot see landing is not done
-either — the log line is what makes the merge visible from inside another
-worktree. If merge-back is genuinely blocked, that is a finding to report —
-not a state to leave behind.
+Uncommitted work is not done. Committed work that exists only on this machine
+is not done either — it is one `rm -rf` from never having happened. A merged
+branch whose validation only ran before the rebase is not done. Work a peer
+cannot see landing is not done either — the log line is what makes the merge
+visible from inside another worktree. If merge-back is genuinely blocked, that
+is a finding to report — not a state to leave behind.
 
 ## Validation By Class
 
@@ -279,8 +333,12 @@ opposite responses:
   outside the repo, on gitignored files, on `.git/`, on `.kiro/queue/` items,
   or in any tree already on a branch.
 - **Stop** blocks once if the session wrote tracked files that are still
-  uncommitted, or if it is sitting on a branch holding commits `main` doesn't
-  have.
+  uncommitted, if it is sitting on a branch holding commits `main` doesn't
+  have, if that branch holds commits its upstream lacks (or has commits and
+  no upstream at all — never pushed), or if `main` holds commits
+  `origin/main` lacks. `main` is judged against `origin/main` by name, from
+  any tree, because it is everyone's; a tree with no remote configured is
+  out of scope.
 
 To declare a change trivial, create the session's marker — the block message
 prints the exact command with the id filled in:
@@ -298,13 +356,20 @@ into. It waives the worktree, never the commit.
 
 The guard covers file tools and `git commit`. Writes made through other shell
 commands are on the honor system, and a guard whose git commands fail lets the
-write through. It is a ratchet against drift, not a security boundary.
+write through. The push check judges the branch the session stopped in plus
+`main`, so a worktree branch driven from a session rooted at `main` is seen
+only once its commits reach `main` — the same blind spot the merge-back check
+has always had. It is a ratchet against drift, not a security boundary.
 
 ## Not Allowed
 
 - Editing steering, skills, or hooks on `main` because "it's only docs"
 - Leaving a session's changes uncommitted for a later session to find
 - Leaving a branch unmerged and calling the work done
+- Committing without pushing — `commit && push` is one line; a commit that
+  exists on one machine is not landed
+- `git push --force`. `--force-with-lease`, on your own branch, after a
+  rebase, is the only force; `main` is never force-pushed
 - Merging without re-running validation after the rebase
 - Declaring a change trivial after the guard blocked it, to get past the guard
 - Starting work without reading the log, or landing it without saying so there

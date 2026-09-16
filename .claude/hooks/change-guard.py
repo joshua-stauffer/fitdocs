@@ -11,7 +11,14 @@ Two events, one policy (contract: ``.kiro/steering/change-protocol.md``):
 * **PreToolUse** — deny ``Edit``/``Write``/``NotebookEdit`` against a tracked
   repo path while ``HEAD`` is ``main``, and deny ``git commit`` on ``main``.
 * **Stop** — block once if the session wrote tracked files that are still
-  uncommitted, or is sitting on a branch holding commits ``main`` lacks.
+  uncommitted, is sitting on a branch holding commits ``main`` lacks, is on a
+  branch holding commits its upstream lacks (or with commits and no upstream
+  at all — never pushed), or if ``main`` holds commits ``origin/main`` lacks.
+
+The push half dates from 2026-09-16, when a subagent's ``cd <missing> && rm
+-rf .git`` ran in the main tree with ``main`` eight commits and a whole spec
+batch ahead of the remote. A commit that exists on one machine is not landed;
+the remote is only guaranteed current if every commit is pushed as it is made.
 
 Escape hatch: ``touch "$TMPDIR/fitdocs-trivial-<session-id>"`` declares the
 session's change trivial. Deliberate, one command, visible in the transcript.
@@ -32,6 +39,7 @@ import sys
 from pathlib import Path
 
 MAIN_BRANCH = "main"
+REMOTE = "origin"
 
 WRITE_TOOLS = {"Edit", "Write", "NotebookEdit", "MultiEdit"}
 
@@ -266,6 +274,55 @@ def session_writes(transcript: Path) -> list[str]:
     return list(seen)
 
 
+def commits_ahead(branch: str, base: str, cwd: Path) -> int | None:
+    """Commits on `branch` that `base` lacks; None when git cannot say."""
+    code, out = run_git(["rev-list", "--count", f"{base}..{branch}"], cwd)
+    if code != 0 or not out.isdigit():
+        return None
+    return int(out)
+
+
+def unpushed(branch: str, cwd: Path) -> str | None:
+    """One sentence naming what `branch` holds that the remote lacks, or None.
+
+    `main` is judged against `origin/main` by name from any tree: its upstream
+    is fixed by contract, and tracking config is exactly the local state the
+    2026-09-16 `.git` loss erased. Any other branch is judged against the
+    upstream `git push -u` recorded; none recorded, with commits `main` lacks,
+    is itself the finding. A tree with no remote configured is out of scope,
+    and a remote ref git cannot resolve is a soft no, as everywhere here.
+    """
+    code, remotes = run_git(["remote"], cwd)
+    if code != 0 or not remotes:
+        return None
+    if branch == MAIN_BRANCH:
+        ahead = commits_ahead(branch, f"{REMOTE}/{MAIN_BRANCH}", cwd)
+        if ahead:
+            return (
+                f"`{MAIN_BRANCH}` holds {ahead} commit(s) that "
+                f"`{REMOTE}/{MAIN_BRANCH}` does not have: "
+                f"`git push {REMOTE} {MAIN_BRANCH}`."
+            )
+        return None
+    code, upstream = run_git(
+        ["for-each-ref", "--format=%(upstream:short)", f"refs/heads/{branch}"], cwd
+    )
+    if code != 0:
+        return None
+    ahead = commits_ahead(branch, upstream, cwd) if upstream else None
+    if ahead:
+        return (
+            f"Branch `{branch}` holds {ahead} commit(s) its upstream `{upstream}` "
+            f"does not have: `git push` (`--force-with-lease` after a rebase)."
+        )
+    if ahead is None and commits_ahead(branch, MAIN_BRANCH, cwd):
+        return (
+            f"Branch `{branch}` has never been pushed — it holds commits and no "
+            f"upstream resolves for it: `git push -u {REMOTE} {branch}`."
+        )
+    return None
+
+
 def handle_stop(payload: dict, cwd: Path, session_id: str) -> int:
     if payload.get("stop_hook_active"):
         return 0
@@ -302,6 +359,13 @@ def handle_stop(payload: dict, cwd: Path, session_id: str) -> int:
                 f"does not have. Merge-back is part of the change, not a "
                 f"follow-up."
             )
+        if (finding := unpushed(branch, cwd)) is not None:
+            problems.append(finding)
+
+    # main is everyone's, so it is judged from every tree — including a
+    # worktree whose own branch is already merged and whose merge was not pushed.
+    if (finding := unpushed(MAIN_BRANCH, cwd)) is not None:
+        problems.append(finding)
 
     if not problems:
         return 0
@@ -315,8 +379,10 @@ def handle_stop(payload: dict, cwd: Path, session_id: str) -> int:
         "(.kiro/steering/change-protocol.md):\n\n"
         + "\n\n".join(problems)
         + "\n\nFinish it: run the validation for the change class, commit the "
-        "paths by name (never `git add -A`), rebase onto current "
-        f"{MAIN_BRANCH}, re-run validation, and merge `--ff-only`.\n\n"
+        "paths by name (never `git add -A`) and push, rebase onto current "
+        f"{MAIN_BRANCH} and push `--force-with-lease`, re-run validation, "
+        f"merge `--ff-only`, and `git push {REMOTE} {MAIN_BRANCH}`. A commit "
+        "that exists on one machine is not landed.\n\n"
         "If the work is deliberately unfinished — a blocked merge, a base that "
         "belongs to someone else, an explicitly mid-flight session — say so in "
         "one line, name what is left uncommitted, and stop."

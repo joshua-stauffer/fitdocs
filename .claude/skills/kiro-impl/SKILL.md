@@ -146,6 +146,7 @@ For each task (one at a time):
 - **NEVER** use `git add -A` or `git add .`
 - Use `git add <file1> <file2> ...` with explicit file paths
 - Commit message format: `feat(<feature-name>): <task description>`
+- Push in the same line: `git push -u origin impl/<spec>` on the first commit, `git push` after (`git push --force-with-lease origin impl/<spec>` after a rebase). A task commit that exists only on this machine is not landed — `.kiro/steering/change-protocol.md`, "Push On Commit"
 
 **f) Record learnings** — two destinations, different audiences:
 - If this task revealed cross-cutting insights, append a one-line note to the `## Implementation Notes` section at the bottom of tasks.md (audience: later tasks in *this* spec)
@@ -217,7 +218,7 @@ Before writing any code, read the relevant sections of requirements.md and desig
 
 **Both modes — merge-back and the log** (a spec is not done when its last task is checked off):
 - **Before the rebase**: re-read the log. What peers merged while you were implementing is exactly what you are about to rebase onto, and their `WARN` lines are the cheapest warning you will get about a conflict that is semantic rather than textual
-- **After the branch lands on `main`**: append `MERGED` with the spec, the sha, and whether the spec is complete or leaves tasks open — that line is what tells a peer a choke point is free
+- **After the branch lands on `main` and `main` is pushed** (`git push origin main` — the merge is landed nowhere until it is): append `MERGED` with the spec, the sha, and whether the spec is complete or leaves tasks open — that line is what tells a peer a choke point is free
 - **If you park or hand back a claim instead of merging**: append `RELEASE` and say why, so the spec is takeable again
 - Ritual: `.kiro/steering/change-protocol.md`; scope and Definition of Done for a spec run: `concurrency.md`
 
