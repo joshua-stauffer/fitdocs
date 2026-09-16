@@ -649,7 +649,7 @@ shape.
   - _Requirements: 4.2, 4.7, 4.11, 5.2, 5.4, 6.1_
   - _Boundary: ResolutionSeam, PageVocabulary_
 
-- [ ] 3.2 (P) Render the block page
+- [x] 3.2 (P) Render the block page
   - Add the block-page renderer, pure over the block and the resolution,
     importing neither the contract nor the region module directly: the
     banner and the notes region come from the page module
