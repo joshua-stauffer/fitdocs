@@ -463,7 +463,7 @@ shape.
   - _Requirements: 1.4, 1.5, 2.4, 2.6, 2.8, 3.1, 3.2_
   - _Boundary: PlanModel_
 
-- [ ] 2.2 Apply amendments in order, keep the revision trail, check overrides as of their date, and build the block
+- [x] 2.2 Apply amendments in order, keep the revision trail, check overrides as of their date, and build the block
   - Declare the four operation shapes the source states (update by id with a
     typed field mapping, add a full row, remove by id, change a mesocycle's
     target or focus), the amendment specification (date, reason, operations),
@@ -1004,3 +1004,23 @@ shape.
     and `uv run mypy` all green; the two dated runs produce identical bytes
   - _Depends: 4.3, 4.4, 4.5_
   - _Requirements: 1.2, 1.10, 2.11, 7.8, 8.1, 8.4, 8.6, 8.9_
+
+## Implementation Notes
+
+- **2.2 (2026-09-16)**: an `AddOp` row is held to the same rules as an
+  original row (date in bounds; modality only with `Sport.WORKOUT`) through
+  one shared private helper, `_row_bounds_problem`, that `_apply_update`
+  also calls -- the design's `AddOp` sentence names only the id-history
+  rule, but its `build_block` postcondition (`sum(len(m.workouts)) ==
+  len(current.rows)`) is violated by an out-of-bounds add, so the stricter
+  reading was implemented. "Changes no field" is a **value** rule: an update
+  whose every stated value equals the current value is a problem even though
+  `fields` is non-empty. One problem per invalid op, first fault wins (id,
+  date, modality). **For 2.3**: the parser must not re-run the bounds/
+  modality checks over `[[amendment.add]]` rows (double-reporting), and
+  `states` is truncated when `apply_amendments` stops early -- do not run
+  `check_overrides` over a truncated prefix.
+- **1.2 / 1.3 (2026-09-16)**: adding a fourth member to an enumerated set
+  staled every "three"/"two"/"both" in the touched files and cost a review
+  round each time; grep `three|two|both|fifth` over every touched file before
+  reporting, and never write a comparative without re-reading the paragraph.

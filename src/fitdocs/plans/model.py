@@ -20,8 +20,8 @@ task wrote.
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from typing import Final
 
@@ -216,3 +216,535 @@ def check_targets(
             )
         seen.add(target.number)
     return tuple(problems)
+
+
+# ============================================================================
+# Task 2.2 -- amendments, the revision trail, overrides, Block, build_block.
+# Appends only; nothing above this line is 2.2's to edit.
+# ============================================================================
+
+MUTABLE_FIELDS: Final[tuple[str, ...]] = (
+    "date",
+    "sport",
+    "modality",
+    "indoor",
+    "title",
+    "summary",
+    "prescription",
+)
+"""The `PlannedWorkout` fields an `UpdateOp` may name -- every field except
+`id`, which identifies the row rather than describing it (Req 3.4, 2.9)."""
+
+
+@dataclass(frozen=True)
+class UpdateOp:
+    """Change named fields of an existing row, as the source states it
+    (Req 3.4)."""
+
+    row_id: str
+    fields: Mapping[str, object]  # keys in MUTABLE_FIELDS; values already typed
+
+
+@dataclass(frozen=True)
+class AddOp:
+    """Add a new row, as the source states it (Req 3.4)."""
+
+    row: PlannedWorkout
+
+
+@dataclass(frozen=True)
+class RemoveOp:
+    """Remove an existing row by id, as the source states it (Req 3.4)."""
+
+    row_id: str
+
+
+@dataclass(frozen=True)
+class TargetOp:
+    """Change a mesocycle's target load and/or focus, as the source states
+    it (Req 3.4)."""
+
+    number: int
+    target_load: float | None
+    focus: str | None
+
+
+AmendmentOp = UpdateOp | AddOp | RemoveOp | TargetOp
+
+
+@dataclass(frozen=True)
+class AmendmentSpec:
+    """One amendment as the source states it: a date, a reason and any
+    number of operations (Req 3.3, 3.4)."""
+
+    date: date
+    reason: str
+    ops: tuple[AmendmentOp, ...]
+
+
+@dataclass(frozen=True)
+class RowChanged:
+    """The revision-trail record of a successful `UpdateOp` (Req 3.7)."""
+
+    before: PlannedWorkout
+    after: PlannedWorkout
+
+
+@dataclass(frozen=True)
+class RowAdded:
+    """The revision-trail record of a successful `AddOp` (Req 3.7)."""
+
+    row: PlannedWorkout
+
+
+@dataclass(frozen=True)
+class RowRemoved:
+    """The revision-trail record of a successful `RemoveOp` (Req 3.7)."""
+
+    row: PlannedWorkout
+
+
+@dataclass(frozen=True)
+class TargetChanged:
+    """The revision-trail record of a successful `TargetOp`. `before` is
+    the synthesised `MesocycleTarget(number, None, None)` when the
+    mesocycle held no stated target beforehand (Req 3.4, 3.7)."""
+
+    number: int
+    before: MesocycleTarget
+    after: MesocycleTarget
+
+
+Change = RowChanged | RowAdded | RowRemoved | TargetChanged
+
+
+@dataclass(frozen=True)
+class Amendment:
+    """One amendment after successful application: its 1-based file-order
+    ordinal, its date, its reason, and every change it made (Req 3.3, 3.7)."""
+
+    ordinal: int
+    date: date
+    reason: str
+    changes: tuple[Change, ...]
+
+
+@dataclass(frozen=True)
+class Override:
+    """One override entry as the source states it. `stems` is empty iff
+    `skipped` is true; nothing about that relationship is judged by this
+    module (Req 3.8)."""
+
+    date: date
+    row_id: str
+    stems: tuple[str, ...]
+    skipped: bool
+    reason: str | None
+
+
+@dataclass(frozen=True)
+class Block:
+    """The fully assembled, validated plan: its identity and bounds, the
+    plan as first written and as it stands now, the revision trail, the
+    override entries, and the derived mesocycles (Req 4.2, 6.4)."""
+
+    id: str
+    title: str
+    starts: date
+    ends: date
+    goal: str
+    mesocycle_days: int
+    original: PlanState
+    current: PlanState
+    amendments: tuple[Amendment, ...]
+    overrides: tuple[Override, ...]
+    mesocycles: tuple[Mesocycle, ...]
+
+    @property
+    def days(self) -> int:
+        """The block's actual, inclusive length in days."""
+        return (self.ends - self.starts).days + 1
+
+    def mesocycle_of(self, day: date) -> int:
+        """The 1-based number of the mesocycle containing `day`. Delegates
+        to :func:`mesocycle_number` over this block's own `starts` and
+        `mesocycle_days` -- never a second derivation."""
+        return mesocycle_number(self.starts, self.mesocycle_days, day)
+
+
+def _row_bounds_problem(
+    row: PlannedWorkout, *, entry: str, starts: date, ends: date
+) -> PlanProblem | None:
+    """The one rule set every row in the current plan must satisfy,
+    whether it arrived by `UpdateOp` or `AddOp`: its date within
+    `[starts, ends]`, and a modality stated only when its sport is
+    `Sport.WORKOUT` (Req 2.4, 2.5, 2.9) -- the same rules an original row
+    must satisfy (`check_rows`'s bounds half, inlined here because this
+    check is per-op and needs its own `entry`/`field` naming). Both
+    `_apply_update` and `_apply_add` call this single helper so the two
+    paths' rule sets cannot drift apart."""
+    if not (starts <= row.date <= ends):
+        return PlanProblem(
+            entry=entry,
+            field="date",
+            message=f"{row.date} is outside {starts}..{ends}",
+        )
+    if row.modality is not None and row.sport is not Sport.WORKOUT:
+        return PlanProblem(
+            entry=entry,
+            field="modality",
+            message="modality is only allowed when sport is Sport.WORKOUT",
+        )
+    return None
+
+
+def _apply_update(
+    op: UpdateOp,
+    *,
+    ordinal: int,
+    op_index: int,
+    rows: list[PlannedWorkout],
+    starts: date,
+    ends: date,
+) -> tuple[Change | None, PlanProblem | None]:
+    """Design clarification (this task, per requirements 2.9/3.4's
+    "changes no field"): the rule is read as a *value* rule, not merely a
+    non-empty-mapping rule -- `fields` naming a key whose stated value
+    equals the row's current value is *also* "changes no field", not just
+    an empty `fields`. Both are checked below and both report the same
+    message; a `fields` mapping is valid only when at least one stated key
+    differs from the row's current value."""
+    entry = f"amendment[{ordinal}].update[{op_index}] (id {op.row_id})"
+    position = next((i for i, row in enumerate(rows) if row.id == op.row_id), None)
+    if position is None:
+        return None, PlanProblem(
+            entry=entry, field="row_id", message=f"no row with id {op.row_id} exists"
+        )
+    if not op.fields:
+        return None, PlanProblem(
+            entry=entry, field="fields", message="changes no field"
+        )
+    invalid_keys = sorted(key for key in op.fields if key not in MUTABLE_FIELDS)
+    if invalid_keys:
+        return None, PlanProblem(
+            entry=entry,
+            field="fields",
+            message=f"{invalid_keys[0]} is not a mutable field",
+        )
+    before = rows[position]
+    if all(getattr(before, key) == value for key, value in op.fields.items()):
+        # Every stated key already holds this value -- a no-op update, and
+        # "changes no field" applies even though `fields` is non-empty.
+        return None, PlanProblem(
+            entry=entry, field="fields", message="changes no field"
+        )
+    # op.fields is `Mapping[str, object]` (values already typed by the
+    # source parser, task 2.3); mypy cannot statically match an untyped
+    # mapping's values against PlannedWorkout's per-field types.
+    after = replace(before, **op.fields)  # type: ignore[arg-type]
+    bounds_problem = _row_bounds_problem(after, entry=entry, starts=starts, ends=ends)
+    if bounds_problem is not None:
+        return None, bounds_problem
+    rows[position] = after
+    return RowChanged(before=before, after=after), None
+
+
+def _apply_add(
+    op: AddOp,
+    *,
+    ordinal: int,
+    op_index: int,
+    rows: list[PlannedWorkout],
+    used_ids: set[str],
+    starts: date,
+    ends: date,
+) -> tuple[Change | None, PlanProblem | None]:
+    entry = f"amendment[{ordinal}].add[{op_index}] (id {op.row.id})"
+    if op.row.id in used_ids:
+        return None, PlanProblem(
+            entry=entry,
+            field="id",
+            message=f"{op.row.id} has already been used in this block's history",
+        )
+    bounds_problem = _row_bounds_problem(op.row, entry=entry, starts=starts, ends=ends)
+    if bounds_problem is not None:
+        return None, bounds_problem
+    used_ids.add(op.row.id)
+    rows.append(op.row)
+    return RowAdded(row=op.row), None
+
+
+def _apply_remove(
+    op: RemoveOp,
+    *,
+    ordinal: int,
+    op_index: int,
+    rows: list[PlannedWorkout],
+) -> tuple[Change | None, PlanProblem | None]:
+    entry = f"amendment[{ordinal}].remove[{op_index}] (id {op.row_id})"
+    position = next((i for i, row in enumerate(rows) if row.id == op.row_id), None)
+    if position is None:
+        return None, PlanProblem(
+            entry=entry, field="row_id", message=f"no row with id {op.row_id} exists"
+        )
+    removed = rows.pop(position)
+    return RowRemoved(row=removed), None
+
+
+def _apply_target(
+    op: TargetOp,
+    *,
+    ordinal: int,
+    op_index: int,
+    targets: list[MesocycleTarget],
+    count: int,
+) -> tuple[Change | None, PlanProblem | None]:
+    entry = f"amendment[{ordinal}].target[{op_index}] (mesocycle {op.number})"
+    if not (1 <= op.number <= count):
+        return None, PlanProblem(
+            entry=entry, field="number", message=f"{op.number} is outside 1..{count}"
+        )
+    if op.target_load is None and op.focus is None:
+        return None, PlanProblem(
+            entry=entry,
+            field="target_load",
+            message="neither target_load nor focus is stated",
+        )
+    position = next((i for i, t in enumerate(targets) if t.number == op.number), None)
+    before = (
+        targets[position]
+        if position is not None
+        else MesocycleTarget(op.number, None, None)
+    )
+    after = MesocycleTarget(
+        number=op.number,
+        target_load=op.target_load
+        if op.target_load is not None
+        else before.target_load,
+        focus=op.focus if op.focus is not None else before.focus,
+    )
+    if position is not None:
+        targets[position] = after
+    else:
+        insert_at = next(
+            (i for i, t in enumerate(targets) if t.number > op.number), len(targets)
+        )
+        targets.insert(insert_at, after)
+    return TargetChanged(number=op.number, before=before, after=after), None
+
+
+def _apply_op(
+    op: AmendmentOp,
+    *,
+    ordinal: int,
+    op_index: int,
+    rows: list[PlannedWorkout],
+    targets: list[MesocycleTarget],
+    used_ids: set[str],
+    starts: date,
+    ends: date,
+    count: int,
+) -> tuple[Change | None, PlanProblem | None]:
+    if isinstance(op, UpdateOp):
+        return _apply_update(
+            op, ordinal=ordinal, op_index=op_index, rows=rows, starts=starts, ends=ends
+        )
+    if isinstance(op, AddOp):
+        return _apply_add(
+            op,
+            ordinal=ordinal,
+            op_index=op_index,
+            rows=rows,
+            used_ids=used_ids,
+            starts=starts,
+            ends=ends,
+        )
+    if isinstance(op, RemoveOp):
+        return _apply_remove(op, ordinal=ordinal, op_index=op_index, rows=rows)
+    return _apply_target(
+        op, ordinal=ordinal, op_index=op_index, targets=targets, count=count
+    )
+
+
+def apply_amendments(
+    original: PlanState,
+    specs: Sequence[AmendmentSpec],
+    *,
+    starts: date,
+    ends: date,
+    count: int,
+) -> tuple[tuple[PlanState, ...], tuple[Amendment, ...], tuple[PlanProblem, ...]]:
+    """Apply `specs` in file order to `original`, one amendment at a time
+    (Req 3.3, 3.4, 3.5, 3.6, 3.7). Each amendment is all-or-nothing: every
+    one of its operations must be valid for any of them to take effect. An
+    amendment whose date is earlier than the previous amendment's, or which
+    holds any invalid operation, is not applied; application then stops,
+    and one further problem names every amendment after it as not checked
+    (never individually re-validated, so a later amendment referencing a
+    row the failed one would have added is never reported as a spurious
+    unknown-id problem).
+
+    Returns the state before any amendment, then the state after each
+    amendment that was applied (so `states[0] is original`); the applied
+    amendments themselves, carrying their trail; and every problem found.
+    With no specs, returns `(original,), (), ()` (Postconditions).
+    """
+    states: list[PlanState] = [original]
+    amendments: list[Amendment] = []
+    problems: list[PlanProblem] = []
+    committed = original
+    used_ids: set[str] = {row.id for row in original.rows}
+    prev_date: date | None = None
+    total = len(specs)
+
+    for index, spec in enumerate(specs):
+        ordinal = index + 1
+        amendment_problems: list[PlanProblem] = []
+
+        if prev_date is not None and spec.date < prev_date:
+            amendment_problems.append(
+                PlanProblem(
+                    entry=f"amendment[{ordinal}]",
+                    field="date",
+                    message=(
+                        f"{spec.date} is before the previous "
+                        f"amendment's date {prev_date}"
+                    ),
+                )
+            )
+
+        trial_rows = list(committed.rows)
+        trial_targets = list(committed.targets)
+        trial_used_ids = set(used_ids)
+        changes: list[Change] = []
+
+        for op_index, op in enumerate(spec.ops):
+            change, problem = _apply_op(
+                op,
+                ordinal=ordinal,
+                op_index=op_index,
+                rows=trial_rows,
+                targets=trial_targets,
+                used_ids=trial_used_ids,
+                starts=starts,
+                ends=ends,
+                count=count,
+            )
+            if problem is not None:
+                amendment_problems.append(problem)
+            elif change is not None:
+                changes.append(change)
+
+        if amendment_problems:
+            problems.extend(amendment_problems)
+            if ordinal < total:
+                problems.append(
+                    PlanProblem(
+                        entry=f"amendment[{ordinal + 1}..{total}]",
+                        field=None,
+                        message="not checked",
+                    )
+                )
+            break
+
+        committed = PlanState(rows=tuple(trial_rows), targets=tuple(trial_targets))
+        states.append(committed)
+        amendments.append(
+            Amendment(
+                ordinal=ordinal,
+                date=spec.date,
+                reason=spec.reason,
+                changes=tuple(changes),
+            )
+        )
+        used_ids = trial_used_ids
+        prev_date = spec.date
+
+    return tuple(states), tuple(amendments), tuple(problems)
+
+
+def check_overrides(
+    states: Sequence[PlanState],
+    amendments: Sequence[Amendment],
+    overrides: Sequence[Override],
+) -> tuple[PlanProblem, ...]:
+    """Report, for every override whose `row_id` does not exist in the
+    state after applying every amendment dated on or before the override's
+    date, one problem naming that override and id. Nothing else about an
+    override is judged here (Req 3.8, 2.10).
+
+    `states` and `amendments` are `apply_amendments`' return values: since
+    every applied amendment's date is non-decreasing by construction, the
+    amendments dated on or before an override's date are always a prefix
+    of `amendments`, so `states[len(prefix)]` is the state as of that date.
+    """
+    problems = []
+    for index, override in enumerate(overrides):
+        applied = 0
+        for amendment in amendments:
+            if amendment.date <= override.date:
+                applied += 1
+            else:
+                break
+        state = states[applied]
+        if state.row(override.row_id) is None:
+            problems.append(
+                PlanProblem(
+                    entry=f"override[{index}] (id {override.row_id})",
+                    field="row_id",
+                    message=(
+                        f"no row with id {override.row_id} exists as of {override.date}"
+                    ),
+                )
+            )
+    return tuple(problems)
+
+
+def build_block(
+    *,
+    id: str,
+    title: str,
+    starts: date,
+    ends: date,
+    goal: str,
+    mesocycle_days: int,
+    original: PlanState,
+    current: PlanState,
+    amendments: Sequence[Amendment],
+    overrides: Sequence[Override],
+) -> Block:
+    """Assemble the `Block`: derive its mesocycles from `starts`, `ends`
+    and `mesocycle_days` alone (Req 3.1), place each of `current`'s rows in
+    the window containing its date (Req 3.2), and order each window's rows
+    by date and then by position in `current.rows` -- source order within a
+    day, added rows after original ones (Req 4.5)."""
+    windows = mesocycle_windows(starts, ends, mesocycle_days)
+    mesocycles = []
+    for number, first, last in windows:
+        target = current.target(number)
+        window_rows = [row for row in current.rows if first <= row.date <= last]
+        window_rows.sort(key=lambda row: row.date)
+        mesocycles.append(
+            Mesocycle(
+                number=number,
+                starts=first,
+                ends=last,
+                nominal_days=mesocycle_days,
+                target_load=target.target_load if target is not None else None,
+                focus=target.focus if target is not None else None,
+                workouts=tuple(window_rows),
+            )
+        )
+    return Block(
+        id=id,
+        title=title,
+        starts=starts,
+        ends=ends,
+        goal=goal,
+        mesocycle_days=mesocycle_days,
+        original=original,
+        current=current,
+        amendments=tuple(amendments),
+        overrides=tuple(overrides),
+        mesocycles=tuple(mesocycles),
+    )
