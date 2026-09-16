@@ -974,7 +974,7 @@ shape.
   - _Requirements: 7.2, 7.3, 7.4, 7.5_
   - _Boundary: WikiContractSpecUpdate_
 
-- [ ] 4.6 End-to-end and feature-level validation
+- [x] 4.6 End-to-end and feature-level validation
   - Add the end-to-end test over a synthetic data root with two sources:
     run the command, assert the block pages and every planned page exist at
     the owned paths, assert the report lines, and assert a planned page's
