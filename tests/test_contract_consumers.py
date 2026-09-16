@@ -185,10 +185,15 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
         "parse_frontmatter",
     ),
     "fitdocs.render.frontmatter": (
+        "DATE_KEY",
         "DOC_VERSION",
         "DOC_VERSION_KEY",
         "FRONTMATTER_FENCE",
+        "INDOOR_KEY",
+        "MODALITY_KEY",
         "SOURCES_KEY",
+        "SPORT_KEY",
+        "START_TIME_KEY",
         "TYPE_KEY",
         "UUID_KEY",
         "WORKOUT_TYPE",
@@ -253,23 +258,35 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
         "EffortTag",
     ),
     "fitdocs.plans.page": (
+        "DATE_KEY",
         "DOC_BANNER",
         "FRONTMATTER_FENCE",
         "GENERATOR",
         "GENERATOR_KEY",
+        "INDOOR_KEY",
+        "MODALITY_KEY",
         "TYPE_KEY",
         "NOTES_REGION",
         "NOTES_PLACEHOLDER",
+        "SPORT_KEY",
     ),
     "fitdocs.plans.engine": ("is_generated",),
 }
 
 #: Document vocabulary no converted module may spell for itself: the frontmatter
-#: fence and the workout-type marker both have exactly one definition, in the
-#: contract.
+#: fence, the workout-type marker, and (plan-resolution task 1.1) the five
+#: matched-field keys -- the date, start time, sport, modality and indoor
+#: keys -- each have exactly one definition, in the contract. The scan walks
+#: every ``ast.Constant``, so a bare re-spelling reds wherever it sits, key
+#: or display word (``fitdocs.plans.page``'s ``INDOOR_WORD`` included).
 FORBIDDEN_LITERALS: Final[tuple[str, ...]] = (
     fitdocs.contract.FRONTMATTER_FENCE,
     fitdocs.contract.WORKOUT_TYPE,
+    fitdocs.contract.DATE_KEY,
+    fitdocs.contract.START_TIME_KEY,
+    fitdocs.contract.SPORT_KEY,
+    fitdocs.contract.MODALITY_KEY,
+    fitdocs.contract.INDOOR_KEY,
 )
 
 _MODULE_IDS: Final[tuple[str, ...]] = tuple(
@@ -371,12 +388,16 @@ def test_converted_module_parses_no_yaml_of_its_own(module: ModuleType) -> None:
 def test_converted_module_spells_no_document_vocabulary_of_its_own(
     module: ModuleType,
 ) -> None:
-    """The fence and the workout-type marker appear as literals only in the contract.
+    """None of :data:`FORBIDDEN_LITERALS` appears as a bare string literal in a
+    converted consumer.
 
-    A converted consumer compares against :data:`fitdocs.contract.WORKOUT_TYPE`
-    and :data:`fitdocs.contract.FRONTMATTER_FENCE`; re-spelling either as a bare
-    string is how one command's idea of "is this a fitdocs document?" drifts from
-    another's (Req 1.1).
+    A converted consumer compares against the contract's own constants --
+    :data:`fitdocs.contract.FRONTMATTER_FENCE`, :data:`fitdocs.contract.WORKOUT_TYPE`,
+    and the matched-field keys (:data:`fitdocs.contract.DATE_KEY`,
+    :data:`fitdocs.contract.START_TIME_KEY`, :data:`fitdocs.contract.SPORT_KEY`,
+    :data:`fitdocs.contract.MODALITY_KEY`, :data:`fitdocs.contract.INDOOR_KEY`);
+    re-spelling any of them as a bare string is how one command's idea of "is
+    this a fitdocs document?" drifts from another's (Req 1.1).
     """
     tree = _module_ast(module)
     spelled = sorted(

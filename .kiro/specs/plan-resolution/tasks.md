@@ -137,7 +137,7 @@ task.
 
 - [ ] 1. Foundation: the contract readers, the history record protocol, the logged-page links
 
-- [ ] 1.1 Give the contract one reader per matched field and make its key spellings the only ones
+- [x] 1.1 Give the contract one reader per matched field and make its key spellings the only ones
   - Assert the contract version literal reads `"4"` (wave 1 advanced it);
     any other value means a peer moved it -- stop and report
   - Add five key constants beside the existing session-identity and
@@ -779,3 +779,9 @@ task.
     and `uv run mypy` all green; the crossing-row run changes one row
   - _Depends: 3.2, 3.3, 3.4_
   - _Requirements: 4.3, 4.6, 5.2, 5.3, 5.4, 8.1, 8.3, 8.6, 8.7_
+
+## Implementation Notes
+
+- **1.1** `tests/plans/test_boundary.py::TestContractImporters::test_each_contract_importer_binds_exactly_its_registered_names` pins each contract importer's from-import *names* by set equality (`_CONTRACT_FROM_IMPORT_NAMES`), not only its import targets as design § Cross-spec obligations item 6 says. Any task that widens a plans module's `from fitdocs.contract import ...` line must widen that module's entry in the same change (1.1 did so for `page.py`: +DATE_KEY, INDOOR_KEY, MODALITY_KEY, SPORT_KEY). 2.1's corpus entry is a new key there, per Shared source files.
+- **1.1** `document_load` mirrors `history/documents.py::_read_load` line for line, and that reader accepts an empty-string methodology today; the parity table pins that shape (`{"load_value": 150, "load_methodology": ""}`). Design's "non-empty methodology" comment on `LoadReading` is therefore not enforced by the reader — queued as a spec decision, not changed here. 2.3 sums through the history package's own partition, so it inherits the same rule.
+- **1.1** The sport/modality readers return the recorded string verbatim; the emitted spellings are `Sport` values (`"Run"`, `"Ride"`, ...) and `Modality` values (`"run"`, `"bike"`, ...). Pin verbatim rules with values a normalisation changes (`" Trail Run "`), never with lowercase values a case-fold maps to themselves — a `.lower().strip()` reader survived the first fixture.

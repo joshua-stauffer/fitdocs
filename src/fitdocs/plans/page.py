@@ -34,12 +34,16 @@ from datetime import date
 from typing import Final
 
 from fitdocs.contract import (
+    DATE_KEY,
     DOC_BANNER,
     FRONTMATTER_FENCE,
     GENERATOR,
     GENERATOR_KEY,
+    INDOOR_KEY,
+    MODALITY_KEY,
     NOTES_PLACEHOLDER,
     NOTES_REGION,
+    SPORT_KEY,
     TYPE_KEY,
 )
 from fitdocs.docmerge import region_block
@@ -124,21 +128,25 @@ PLANNED_FRONTMATTER_KEYS: Final[tuple[str, ...]] = (
     "block",
     "planned_id",
     "mesocycle",
-    "date",
-    "sport",
-    "modality",
-    "indoor",
+    DATE_KEY,
+    SPORT_KEY,
+    MODALITY_KEY,
+    INDOOR_KEY,
 )
 """Every frontmatter key a rendered planned-workout page may emit, in
 emission order (Req 5.2). ``modality`` is written only when the row states
 one; the flag key here is written only when it is stated ``True`` -- a
 stated ``False`` and an unstated flag both omit the key, since neither is
 distinguishable to a reader and either is honest absence. Each of these four
-key spellings (the date, the sport, the movement modality, and the flag
-naming whether the session happens under a roof) appears exactly once **as
-a string literal in this tuple**; the flag's spelling appears once more,
-as :data:`INDOOR_WORD`, so a future rebinding onto a published contract
-constant touches exactly two literals per key, or one for the other three."""
+keys (the date, the sport, the movement modality, and the flag naming
+whether the session happens under a roof) is spelled through the contract's
+own constant (:data:`fitdocs.contract.DATE_KEY`,
+:data:`fitdocs.contract.SPORT_KEY`, :data:`fitdocs.contract.MODALITY_KEY`,
+:data:`fitdocs.contract.INDOOR_KEY`) rather than as a bare string literal
+(plan-resolution task 1.1); the flag's key is also the word
+:data:`INDOOR_WORD` displays, and that constant is rebound onto
+:data:`fitdocs.contract.INDOOR_KEY` below rather than restating the
+spelling."""
 
 WEEKDAYS: Final[tuple[str, ...]] = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 """Indexed by :meth:`datetime.date.weekday`. Deliberately a fixed tuple
@@ -147,13 +155,16 @@ locale-dependent, and this package reads no locale, so the block page's
 rendered day-of-week text is identical on every machine regardless of the
 process locale (Req 4.11)."""
 
-INDOOR_WORD: Final[str] = "indoor"
+INDOOR_WORD: Final[str] = INDOOR_KEY
 """The word :func:`sport_phrase` appends when a row's flag is stated `True`
 -- deliberately the same spelling as the last entry of
-:data:`PLANNED_FRONTMATTER_KEYS`, and this module's only other *string
-literal* spelling of that word (a field access such as ``row.indoor``,
-naming the model's own attribute, is not a re-spelling of this vocabulary
-and is not counted here)."""
+:data:`PLANNED_FRONTMATTER_KEYS`, so it is bound onto
+:data:`fitdocs.contract.INDOOR_KEY` rather than a bare string literal
+(plan-resolution task 1.1): the display word and the frontmatter key are the
+same spelling by design, and this module carries no bare ``"indoor"``
+constant of its own (a field access such as ``row.indoor``, naming the
+model's own attribute, is not a re-spelling of this vocabulary and is not
+counted here)."""
 
 # --- the frontmatter emitter (Req 4.2, 5.2) ----------------------------------
 

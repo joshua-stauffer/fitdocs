@@ -47,12 +47,17 @@ from typing import Final
 import yaml
 
 from fitdocs.contract import (
+    DATE_KEY,
     DOC_VERSION,
     DOC_VERSION_KEY,
     FRONTMATTER_FENCE,
     GENERATOR,
     GENERATOR_KEY,
+    INDOOR_KEY,
+    MODALITY_KEY,
     SOURCES_KEY,
+    SPORT_KEY,
+    START_TIME_KEY,
     TYPE_KEY,
     UUID_KEY,
     WORKOUT_TYPE,
@@ -121,14 +126,14 @@ def build_frontmatter(ctx: DocContext) -> str:
 
     if activity.start_time is not None:
         local = activity.start_time.astimezone(ctx.tz)
-        data["date"] = f"{local:%Y-%m-%d}"
-        data["start_time"] = local.isoformat()
+        data[DATE_KEY] = f"{local:%Y-%m-%d}"
+        data[START_TIME_KEY] = local.isoformat()
 
-    data["sport"] = activity.sport.value
-    data["modality"] = activity.modality.value
+    data[SPORT_KEY] = activity.sport.value
+    data[MODALITY_KEY] = activity.modality.value
 
     if activity.is_indoor:
-        data["indoor"] = True
+        data[INDOOR_KEY] = True
 
     if metrics.distance_m is not None:
         data["distance_km"] = round(metrics.distance_m / 1000, 2)

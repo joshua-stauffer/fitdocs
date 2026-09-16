@@ -2456,13 +2456,17 @@ class TestReverseReachabilitySyntheticControls:
 _CONTRACT_FROM_IMPORT_NAMES: Final[dict[str, frozenset[str]]] = {
     "fitdocs.plans.page": frozenset(
         {
+            "DATE_KEY",
             "DOC_BANNER",
             "FRONTMATTER_FENCE",
             "GENERATOR",
             "GENERATOR_KEY",
+            "INDOOR_KEY",
+            "MODALITY_KEY",
             "TYPE_KEY",
             "NOTES_REGION",
             "NOTES_PLACEHOLDER",
+            "SPORT_KEY",
         }
     ),
     "fitdocs.plans.engine": frozenset({"is_generated"}),

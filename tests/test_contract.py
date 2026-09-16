@@ -38,6 +38,7 @@ from __future__ import annotations
 import ast
 import dataclasses
 import inspect
+from datetime import UTC
 from pathlib import Path
 
 import pytest
@@ -168,6 +169,18 @@ def test_frontmatter_key_names_are_the_emitted_spellings() -> None:
     assert contract.SOURCES_KEY == "sources"
 
 
+def test_matched_field_key_names_are_the_emitted_spellings() -> None:
+    """Task 1.1: the five matched-or-summed fields each get one constant,
+    beside the existing session-identity and source-history constants --
+    absorbing queue item ``2026-07-26-date-key-has-no-constant`` for
+    ``DATE_KEY``."""
+    assert contract.DATE_KEY == "date"
+    assert contract.START_TIME_KEY == "start_time"
+    assert contract.SPORT_KEY == "sport"
+    assert contract.MODALITY_KEY == "modality"
+    assert contract.INDOOR_KEY == "indoor"
+
+
 def test_load_keys_are_the_three_training_load_keys_in_emission_order() -> None:
     assert contract.LOAD_KEYS == ("load_value", "load_methodology", "load_basis")
 
@@ -213,13 +226,30 @@ def test_managed_keys_is_the_published_frontmatter_schema() -> None:
 
 
 def test_managed_keys_contains_every_named_key_constant() -> None:
-    """A key the contract names by constant is, by definition, one it manages."""
+    """A key the contract names by constant is, by definition, one it manages.
+
+    Named mutation (task 1.1): dropping one of the five matched-field
+    constants (``DATE_KEY``/``START_TIME_KEY``/``SPORT_KEY``/
+    ``MODALITY_KEY``/``INDOOR_KEY``) from :data:`contract.MANAGED_KEYS`
+    reddens this assertion for that key, and also
+    :func:`test_managed_keys_is_the_published_frontmatter_schema` (pinned
+    against the independent bare-string ``_PUBLISHED_KEYS`` set) and
+    :func:`test_managed_keys_equals_the_builders_emittable_keys_plus_load_keys`
+    (pinned against the builder's own emitted-key AST scan) -- the three
+    together are what make the dropped key unrecoverable from any one
+    independent source.
+    """
     for key in (
         contract.TYPE_KEY,
         contract.GENERATOR_KEY,
         contract.DOC_VERSION_KEY,
         contract.UUID_KEY,
         contract.SOURCES_KEY,
+        contract.DATE_KEY,
+        contract.START_TIME_KEY,
+        contract.SPORT_KEY,
+        contract.MODALITY_KEY,
+        contract.INDOOR_KEY,
     ):
         assert key in contract.MANAGED_KEYS
 
@@ -793,6 +823,285 @@ def test_document_date_yields_none_for_an_unparseable_string() -> None:
 def test_document_date_yields_none_for_wrong_shaped_values() -> None:
     for value in (2024, 1.5, ["2024-01-15"], {"y": 2024}, None):
         assert contract.document_date({"date": value}) is None
+
+
+# --------------------------------------------------------------------------- #
+# document_sport / document_modality -- verbatim, never mapped (Req 1.2, 1.5)
+# --------------------------------------------------------------------------- #
+
+
+def test_document_sport_returns_the_recorded_string_verbatim() -> None:
+    """Pinned with the spellings fitdocs actually emits (``model.Sport``
+    values like ``"Run"``/``"Ride"``, capitalised, not the lowercase word a
+    ``.lower()`` mutation would leave unchanged) plus a value with
+    surrounding whitespace, which a ``.strip()`` mutation would change --
+    either normalisation reds this pin."""
+    assert contract.document_sport({"sport": "Run"}) == "Run"
+    assert contract.document_sport({"sport": "Ride"}) == "Ride"
+    assert contract.document_sport({"sport": " Trail Run "}) == " Trail Run "
+
+
+def test_document_sport_yields_none_for_absent_frontmatter() -> None:
+    assert contract.document_sport(None) is None
+
+
+def test_document_sport_yields_none_for_absent_wrong_type_or_empty() -> None:
+    assert contract.document_sport({}) is None
+    assert contract.document_sport({"sport": True}) is None
+    assert contract.document_sport({"sport": 7}) is None
+    assert contract.document_sport({"sport": ""}) is None
+
+
+def test_document_modality_returns_the_recorded_string_verbatim() -> None:
+    """Pinned with the spellings fitdocs actually emits (``model.Modality``
+    values like ``"run"``/``"bike"``), including one a case-fold maps onto
+    itself and one surrounding-whitespace stripping would change, so both
+    a ``.lower()`` and a ``.strip()`` normalisation red this pin."""
+    assert contract.document_modality({"modality": "bike"}) == "bike"
+    assert contract.document_modality({"modality": " Bike "}) == " Bike "
+
+
+def test_document_modality_yields_none_for_absent_wrong_type_or_empty() -> None:
+    assert contract.document_modality(None) is None
+    assert contract.document_modality({}) is None
+    assert contract.document_modality({"modality": True}) is None
+    assert contract.document_modality({"modality": 7}) is None
+    assert contract.document_modality({"modality": ""}) is None
+
+
+# --------------------------------------------------------------------------- #
+# document_indoor -- a genuine boolean or absent (Req 1.2, 1.5)
+# --------------------------------------------------------------------------- #
+
+
+def test_document_indoor_returns_the_recorded_boolean() -> None:
+    assert contract.document_indoor({"indoor": True}) is True
+    assert contract.document_indoor({"indoor": False}) is False
+
+
+def test_document_indoor_yields_none_for_absent_frontmatter() -> None:
+    assert contract.document_indoor(None) is None
+
+
+def test_document_indoor_yields_none_for_absent_key() -> None:
+    assert contract.document_indoor({}) is None
+
+
+def test_document_indoor_never_reads_a_truthy_value_as_true() -> None:
+    """Named mutation (task 1.1): reading ``indoor`` as truthy -- e.g.
+    ``bool(value)`` in place of an ``isinstance`` check -- would read
+    ``"yes"`` (and ``1``) as ``True``; this pin reddens on exactly that
+    change."""
+    assert contract.document_indoor({"indoor": "yes"}) is None
+    assert contract.document_indoor({"indoor": 1}) is None
+    assert contract.document_indoor({"indoor": "true"}) is None
+    assert contract.document_indoor({"indoor": 0}) is None
+
+
+def test_document_indoor_yields_none_for_an_empty_string() -> None:
+    """A special-case ``value == "": return False`` alongside the
+    ``isinstance(value, bool)`` gate would read ``""`` as a recorded
+    ``False`` rather than honest absence; this pin reddens on exactly that
+    addition (a clean assertion mismatch, not an exception)."""
+    assert contract.document_indoor({"indoor": ""}) is None
+
+
+# --------------------------------------------------------------------------- #
+# document_start_time -- an aware datetime or absent (Req 1.2, 1.5)
+# --------------------------------------------------------------------------- #
+
+
+def test_document_start_time_parses_the_emitted_aware_iso_string() -> None:
+    """The ordinary case: ``render.frontmatter`` always emits ``start_time``
+    as ``local.isoformat()`` on an aware ``datetime`` -- a string carrying a
+    UTC offset."""
+    from datetime import datetime, timedelta, timezone
+
+    parsed = contract.document_start_time({"start_time": "2024-01-15T07:30:00-05:00"})
+    assert parsed == datetime(2024, 1, 15, 7, 30, tzinfo=timezone(-timedelta(hours=5)))
+
+
+def test_document_start_time_accepts_a_genuine_aware_datetime() -> None:
+    """A hand-edited document that leaves the value unquoted is read by
+    PyYAML as a genuine ``datetime`` -- accepted when it is aware."""
+    from datetime import datetime
+
+    value = datetime(2024, 1, 15, 7, 30, tzinfo=UTC)
+    assert contract.document_start_time({"start_time": value}) == value
+
+
+def test_document_start_time_rejects_a_naive_string() -> None:
+    """Named mutation (task 1.1): accepting a naive start time -- dropping
+    the ``utcoffset()`` guard -- reddens this pin."""
+    assert contract.document_start_time({"start_time": "2024-01-15T07:30:00"}) is None
+
+
+def test_document_start_time_rejects_a_naive_datetime() -> None:
+    from datetime import datetime
+
+    value = datetime(2024, 1, 15, 7, 30)
+    assert contract.document_start_time({"start_time": value}) is None
+
+
+def test_document_start_time_rejects_an_empty_string() -> None:
+    """``datetime.fromisoformat("")`` itself raises ``ValueError``, caught by
+    the ``except ValueError: return None`` clause; a mutation that replaces
+    that clause's default with a fabricated aware datetime (e.g.
+    ``parsed = datetime(1970, 1, 1).astimezone()``) reds this pin
+    cleanly -- and, since the same clause also handles unparseable text,
+    reds :func:`test_document_start_time_rejects_unparseable_text` alongside
+    it."""
+    assert contract.document_start_time({"start_time": ""}) is None
+
+
+def test_document_start_time_rejects_a_bool() -> None:
+    """``bool`` is rejected by the initial ``isinstance(value, datetime)`` /
+    ``isinstance(value, str)`` gate (neither matches). Widening either
+    ``isinstance`` check to admit ``bool`` does not make this assertion fail
+    cleanly, but the pin still reds via an uncaught exception rather than a
+    returned wrong value: widen the ``datetime`` check to
+    ``(datetime, bool)`` and ``True`` reaches ``parsed.utcoffset()``, which
+    raises ``AttributeError`` on a plain ``bool``; widen the ``str`` check to
+    ``(str, int)`` (exploiting ``bool``'s ``int`` subclassing) and
+    ``datetime.fromisoformat(True)`` raises ``TypeError`` before
+    ``utcoffset()`` is reached."""
+    assert contract.document_start_time({"start_time": True}) is None
+
+
+def test_document_start_time_rejects_a_bare_date() -> None:
+    from datetime import date
+
+    assert contract.document_start_time({"start_time": date(2024, 1, 15)}) is None
+
+
+def test_document_start_time_rejects_unparseable_text() -> None:
+    assert contract.document_start_time({"start_time": "tomorrow"}) is None
+
+
+def test_document_start_time_yields_none_for_absent_frontmatter_or_key() -> None:
+    assert contract.document_start_time(None) is None
+    assert contract.document_start_time({}) is None
+
+
+# --------------------------------------------------------------------------- #
+# LoadReading / document_load -- exactly history's private rule (Req 1.2, 1.5)
+# --------------------------------------------------------------------------- #
+
+
+def test_load_reading_is_a_frozen_dataclass() -> None:
+    reading = contract.LoadReading(value=120.0, methodology="tss")
+    assert reading.value == 120.0
+    assert reading.methodology == "tss"
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        reading.value = 5.0  # type: ignore[misc]
+
+
+def test_document_load_returns_a_reading_for_a_well_formed_pair() -> None:
+    reading = contract.document_load({"load_value": 150, "load_methodology": "tss"})
+    assert reading == contract.LoadReading(value=150.0, methodology="tss")
+
+
+def test_document_load_converts_an_int_to_float() -> None:
+    reading = contract.document_load({"load_value": 150, "load_methodology": "tss"})
+    assert isinstance(reading.value, float)
+
+
+def test_document_load_rejects_a_bool_value() -> None:
+    """Named mutation (task 1.1, shared with history's own pin): ``bool`` is
+    an ``int`` subclass, rejected explicitly."""
+    reading = contract.document_load({"load_value": True, "load_methodology": "tss"})
+    assert reading is None
+
+
+def test_document_load_rejects_a_non_finite_value() -> None:
+    assert (
+        contract.document_load({"load_value": float("inf"), "load_methodology": "tss"})
+        is None
+    )
+    assert (
+        contract.document_load({"load_value": float("nan"), "load_methodology": "tss"})
+        is None
+    )
+
+
+def test_document_load_rejects_an_overflowing_value() -> None:
+    assert (
+        contract.document_load({"load_value": 10**400, "load_methodology": "tss"})
+        is None
+    )
+
+
+def test_document_load_rejects_an_empty_string_value() -> None:
+    """``""`` is rejected by the initial ``isinstance(value, (int, float))``
+    gate, on independent grounds from the ``float()`` conversion below it:
+    widening the gate alone to admit ``str`` reds this pin only via an
+    uncaught ``ValueError`` (``float("")`` raises, and only
+    ``OverflowError`` is caught); widening the gate *and* also catching
+    ``ValueError`` with a fabricated ``load = 0.0`` default reds it cleanly
+    -- the fabricated-zero mutation the steering rule (``tech.md``: absent
+    is never a fabricated ``0``) exists to catch."""
+    assert contract.document_load({"load_value": "", "load_methodology": "tss"}) is None
+
+
+def test_document_load_rejects_a_value_without_a_methodology() -> None:
+    assert contract.document_load({"load_value": 150}) is None
+    assert contract.document_load({"load_value": 150, "load_methodology": None}) is None
+    assert contract.document_load({"load_value": 150, "load_methodology": 7}) is None
+
+
+def test_document_load_rejects_a_methodology_without_a_value() -> None:
+    assert contract.document_load({"load_methodology": "tss"}) is None
+
+
+def test_document_load_yields_none_for_absent_frontmatter_or_wrong_type() -> None:
+    assert contract.document_load(None) is None
+    reading = contract.document_load({"load_value": "150", "load_methodology": "tss"})
+    assert reading is None
+    assert contract.document_load({}) is None
+
+
+# The parity table: `document_load(fm) is None` iff
+# `fitdocs.history.documents._read_load(fm) == (None, None)` -- built from
+# the union of shapes each side's own test module already covers, plus the
+# boundary shapes this task adds, never by importing the private reader into
+# production code (design.md
+# ContractReaders' stated postcondition).
+_LOAD_PARITY_CASES: tuple[dict[str, object], ...] = (
+    {},
+    {"load_value": 150, "load_methodology": "tss"},
+    {"load_value": 150.5, "load_methodology": "tss"},
+    {"load_value": True, "load_methodology": "tss"},
+    {"load_value": False, "load_methodology": "tss"},
+    {"load_value": "150", "load_methodology": "tss"},
+    {"load_value": None, "load_methodology": "tss"},
+    {"load_value": float("inf"), "load_methodology": "tss"},
+    {"load_value": float("-inf"), "load_methodology": "tss"},
+    {"load_value": float("nan"), "load_methodology": "tss"},
+    {"load_value": 10**400, "load_methodology": "tss"},
+    {"load_value": 150},
+    {"load_value": 150, "load_methodology": None},
+    {"load_value": 150, "load_methodology": 7},
+    {"load_methodology": "tss"},
+    {"load_value": 0, "load_methodology": "tss"},
+    {"load_value": -5.5, "load_methodology": "tss"},
+    {"load_value": 150, "load_methodology": ""},
+)
+
+
+@pytest.mark.parametrize("frontmatter", _LOAD_PARITY_CASES)
+def test_document_load_absence_matches_history_private_reader(
+    frontmatter: dict[str, object],
+) -> None:
+    from fitdocs.history import documents as history_documents
+
+    contract_reading = contract.document_load(frontmatter)
+    history_load, history_methodology = history_documents._read_load(frontmatter)
+    assert (contract_reading is None) == (
+        history_load is None and history_methodology is None
+    )
+    if contract_reading is not None:
+        assert contract_reading.value == history_load
+        assert contract_reading.methodology == history_methodology
 
 
 # --------------------------------------------------------------------------- #

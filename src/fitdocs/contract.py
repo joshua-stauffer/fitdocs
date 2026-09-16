@@ -108,6 +108,7 @@ from fitdocs.docmerge import begin_marker, end_marker, region_block
 
 __all__ = [
     "CONTRACT_VERSION",
+    "DATE_KEY",
     "DOC_BANNER",
     "DOC_VERSION",
     "DOC_VERSION_KEY",
@@ -123,15 +124,20 @@ __all__ = [
     "GENERATED_PREFIX",
     "GENERATOR",
     "GENERATOR_KEY",
+    "INDOOR_KEY",
     "InvalidEffortTag",
     "LOAD_KEYS",
     "LOAD_NOT_COMPUTED",
     "LOAD_REGION",
+    "LoadReading",
     "MANAGED_KEYS",
+    "MODALITY_KEY",
     "NOTES_PLACEHOLDER",
     "NOTES_REGION",
     "PRESERVED_REGIONS",
     "SOURCES_KEY",
+    "SPORT_KEY",
+    "START_TIME_KEY",
     "TOOL_REGIONS",
     "TYPE_KEY",
     "USER_KEYS",
@@ -142,6 +148,11 @@ __all__ = [
     "WORKOUT_TYPE",
     "begin_marker",
     "document_date",
+    "document_indoor",
+    "document_load",
+    "document_modality",
+    "document_sport",
+    "document_start_time",
     "document_uuid",
     "document_version",
     "effort_tag",
@@ -303,6 +314,31 @@ UUID_KEY: Final[str] = "uuid"
 SOURCES_KEY: Final[str] = "sources"
 """Frontmatter key carrying the append-ordered archive-ref history (Req 1.3)."""
 
+DATE_KEY: Final[str] = "date"
+"""Frontmatter key carrying the activity's recorded local calendar date
+(Req 1.2, 1.5). Absorbs queue item ``2026-07-26-date-key-has-no-constant``:
+:data:`MANAGED_KEYS` and :func:`document_date` route through this constant
+rather than the bare literal each spelled independently before."""
+
+START_TIME_KEY: Final[str] = "start_time"
+"""Frontmatter key carrying the activity's recorded local start time, as an
+ISO string (Req 1.2, 1.5)."""
+
+SPORT_KEY: Final[str] = "sport"
+"""Frontmatter key carrying the activity's recorded sport, verbatim (Req 1.2,
+1.5). The contract does not import the activity model, so the value is the
+raw non-empty string a caller maps onto its own enum."""
+
+MODALITY_KEY: Final[str] = "modality"
+"""Frontmatter key carrying the activity's recorded movement modality,
+verbatim (Req 1.2, 1.5) -- the same "raw string, caller maps it" discipline
+as :data:`SPORT_KEY`."""
+
+INDOOR_KEY: Final[str] = "indoor"
+"""Frontmatter key carrying the activity's recorded indoor flag (Req 1.2,
+1.5). Written only when ``True``; a stated ``False`` and an unstated flag are
+both honest absence to a reader, since the key is omitted either way."""
+
 LOAD_KEYS: Final[tuple[str, ...]] = (
     "load_value",
     "load_methodology",
@@ -333,11 +369,11 @@ MANAGED_KEYS: Final[frozenset[str]] = frozenset(
         GENERATOR_KEY,
         DOC_VERSION_KEY,
         UUID_KEY,
-        "date",
-        "start_time",
-        "sport",
-        "modality",
-        "indoor",
+        DATE_KEY,
+        START_TIME_KEY,
+        SPORT_KEY,
+        MODALITY_KEY,
+        INDOOR_KEY,
         "distance_km",
         "moving_time",
         "avg_hr_bpm",
@@ -894,7 +930,7 @@ def document_date(frontmatter: Mapping[str, object] | None) -> date | None:
     """
     if frontmatter is None:
         return None
-    value = frontmatter.get("date")
+    value = frontmatter.get(DATE_KEY)
     if isinstance(value, datetime):
         return None
     if isinstance(value, date):
@@ -905,6 +941,131 @@ def document_date(frontmatter: Mapping[str, object] | None) -> date | None:
         except ValueError:
             return None
     return None
+
+
+def document_sport(frontmatter: Mapping[str, object] | None) -> str | None:
+    """The document's own recorded sport, verbatim, or ``None`` (Req 1.2, 1.5).
+
+    This module may not import ``fitdocs.model`` (design §ContractReaders),
+    so this reader returns the raw non-empty string a document records under
+    :data:`SPORT_KEY` -- mapping it onto an activity enum is the caller's
+    job. A missing key, a non-``str`` value, and an empty string are all
+    honest absence, never a fabricated placeholder.
+    """
+    if frontmatter is None:
+        return None
+    value = frontmatter.get(SPORT_KEY)
+    if isinstance(value, str) and value:
+        return value
+    return None
+
+
+def document_modality(frontmatter: Mapping[str, object] | None) -> str | None:
+    """The document's own recorded movement modality, verbatim, or ``None``
+    (Req 1.2, 1.5) -- the same "raw string, caller maps it" discipline as
+    :func:`document_sport`, over :data:`MODALITY_KEY`.
+    """
+    if frontmatter is None:
+        return None
+    value = frontmatter.get(MODALITY_KEY)
+    if isinstance(value, str) and value:
+        return value
+    return None
+
+
+def document_indoor(frontmatter: Mapping[str, object] | None) -> bool | None:
+    """The document's own recorded indoor flag, or ``None`` (Req 1.2, 1.5).
+
+    Returns a genuine ``bool`` under :data:`INDOOR_KEY` -- ``True`` or
+    ``False`` -- and ``None`` for anything else: a missing key or a truthy
+    non-``bool`` such as ``"yes"`` or ``1`` is never coerced into a flag the
+    document never recorded (absent is never a fabricated default).
+    """
+    if frontmatter is None:
+        return None
+    value = frontmatter.get(INDOOR_KEY)
+    if isinstance(value, bool):
+        return value
+    return None
+
+
+def document_start_time(frontmatter: Mapping[str, object] | None) -> datetime | None:
+    """The document's own recorded *aware* local start time, or ``None``
+    (Req 1.2, 1.5).
+
+    :func:`~fitdocs.render.frontmatter.build_frontmatter` always emits
+    :data:`START_TIME_KEY` as an aware ISO string via ``datetime.isoformat``,
+    so the ordinary case here parses a ``str`` with
+    :meth:`datetime.fromisoformat`. A hand-edited document that leaves the
+    value unquoted is read by PyYAML as a genuine :class:`datetime.datetime`,
+    and that shape is accepted too. Returned only when the value carries a
+    timezone offset (``utcoffset() is not None``): a naive string, a naive
+    ``datetime``, a bare :class:`datetime.date`, and unparseable text (like
+    ``"tomorrow"``) are all honest absence -- this function never guesses a
+    timezone the document did not record.
+    """
+    if frontmatter is None:
+        return None
+    value = frontmatter.get(START_TIME_KEY)
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    else:
+        return None
+    if parsed.utcoffset() is None:
+        return None
+    return parsed
+
+
+_LOAD_VALUE_KEY, _LOAD_METHODOLOGY_KEY, _LOAD_BASIS_KEY = LOAD_KEYS
+
+
+@dataclass(frozen=True)
+class LoadReading:
+    """A document's recorded load value and methodology, read together (Req
+    1.2, 1.5). :func:`document_load` never returns one with a missing
+    methodology -- see its docstring for why."""
+
+    value: float
+    methodology: str
+
+
+def document_load(frontmatter: Mapping[str, object] | None) -> LoadReading | None:
+    """The document's own recorded load reading, or ``None`` (Req 1.2, 1.5).
+
+    Applies exactly the rule
+    :func:`fitdocs.history.documents._read_load` applies today -- the two
+    are pinned to agree by a parity table in ``tests/test_contract.py`` --
+    so the block page and the history page never disagree on which
+    documents carry a usable load: ``load_value`` (under :data:`LOAD_KEYS`'
+    first entry) is rejected as absent when it is missing, a ``bool`` (an
+    ``int`` subclass, rejected explicitly), not an ``int``/``float``,
+    non-finite, or too large to convert to a Python ``float``
+    (``OverflowError``); ``load_methodology`` (its second entry) is rejected
+    as absent when it is missing or not a ``str``. A load without a usable
+    methodology is dropped together with it -- never reported on its own --
+    because a load with no methodology would be summed under whatever
+    methodology a caller later chose, which Req 1.5 forbids.
+    """
+    if frontmatter is None:
+        return None
+    value = frontmatter.get(_LOAD_VALUE_KEY)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        load = float(value)
+    except OverflowError:
+        return None
+    if not math.isfinite(load):
+        return None
+    methodology_value = frontmatter.get(_LOAD_METHODOLOGY_KEY)
+    if not isinstance(methodology_value, str):
+        return None
+    return LoadReading(value=load, methodology=methodology_value)
 
 
 def source_refs(frontmatter: Mapping[str, object]) -> tuple[str, ...]:
