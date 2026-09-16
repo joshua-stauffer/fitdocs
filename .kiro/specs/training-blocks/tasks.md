@@ -351,7 +351,7 @@ shape.
   - _Requirements: 7.2, 7.5, 7.6_
   - _Boundary: BlockDeclaration_
 
-- [ ] 1.3 Publish the blocks location, the plan-source location and the two document types in the ownership contract and the README
+- [x] 1.3 Publish the blocks location, the plan-source location and the two document types in the ownership contract and the README
   - State at the top of the document what changed at this contract version:
     a new owned path, a fourth declared directory, two further document
     types, and -- new in kind -- a user-owned plan-source location fitdocs

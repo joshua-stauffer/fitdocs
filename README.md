@@ -34,6 +34,10 @@ Early discovery / spec phase. No installable package yet.
    page — a fitness/fatigue/form model and chart built from the training
    load already recorded on your workout documents — with no new data to
    enter and no `.fit` file read.
+5. **Render training blocks.** `fitdocs plan` renders one block page per
+   source in your plan directory, with one planned-workout page per row
+   underneath it — rebuilt from your plan sources alone, standalone in this
+   spec (not chained after `sync`).
 
 Organizing workouts into cycles/training blocks was deliberately deferred
 through the first releases; Phase 7 of the roadmap (2026-09-15) adds training
@@ -259,6 +263,20 @@ The quarantine record's directory, `<data-root>/.fitdocs/`, is **tool-owned
 state** — one of the fixed paths the ownership contract already lists fitdocs
 as owning outright.
 
+## Training blocks
+
+`fitdocs plan` renders every plan source in your plan directory into a block
+page under `blocks/`, plus one planned-workout page per row in a subdirectory
+per block. The plan directory itself is **user-owned and read-only to
+fitdocs**: fitdocs never creates, writes, renames, or deletes anything
+there. It is configured in the `[plans]` table of
+`<data-root>/fitdocs.toml`, the same settings file `[tiles]`, `[inbox]`, and
+`[plugins]` share, which is itself read-only to fitdocs.
+
+| Key | Meaning | Default |
+|-----|---------|---------|
+| `path` | The plan-source location. An absolute path is used as given; a relative path resolves against the data root. **Never created** by fitdocs. Must lie outside the owned paths — configuring it inside `blocks/` or another owned path is a configuration error. | `"plans"` (i.e. `<data-root>/plans/`) |
+
 ## Benchmarks
 
 `fitdocs derive-benchmarks [--out PATH] [--dry-run]` turns your tagged
@@ -278,20 +296,25 @@ see the
 [fitdocs Ownership Contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md).
 
 In short: fitdocs owns `workouts/`, `workouts/assets/`, `history/`,
-`history/assets/`, `fit-archive/`, `.cache/`, and `.fitdocs/` under your data
-root (plus any location your `fitdocs.toml` settings configure it to write
-into — the [Inbox](#inbox)'s `path` and `processed_dir` are the first
-example), and writes nowhere else. `history/` and `history/assets/` hold a
-second, generated document type — the training-history page `fitdocs
-history` writes, alongside the per-workout documents under `workouts/` — and
-carry no user-owned content of their own. You own every workout document's
+`history/assets/`, `blocks/`, `fit-archive/`, `.cache/`, and `.fitdocs/`
+under your data root (plus any location your `fitdocs.toml` settings
+configure it to write into — the [Inbox](#inbox)'s `path` and
+`processed_dir` are the first example), and writes nowhere else. `history/`
+and `history/assets/` hold a second, generated document type — the
+training-history page `fitdocs history` writes, alongside the per-workout
+documents under `workouts/` — and carry no user-owned content of their own.
+`blocks/` holds two further generated document types — one block page per
+plan source and one planned-workout page per row, written by `fitdocs plan`
+— of which the block page carries one user-owned region, `notes`, preserved
+the same way a workout document's `notes` region is; the planned-workout
+page carries no user-owned content. You own every workout document's
 `notes` and `workout` regions, and its effort-tag frontmatter keys (`effort`,
 `effort_distance_m`, `effort_time_s`, `effort_event`) — see the published
 contract for the full detail. And `athlete.toml`'s hand-added keys survive
 every fitdocs write. Every generated document carries a provenance stamp,
-and the three owned directories a human or agent browses — `workouts/`,
-`history/`, and `fit-archive/` — each carry an `AGENTS.md` restating the
-same contract for LLM agents maintaining the wiki.
+and the four owned directories a human or agent browses — `workouts/`,
+`history/`, `blocks/`, and `fit-archive/` — each carry an `AGENTS.md`
+restating the same contract for LLM agents maintaining the wiki.
 
 ## Development workflow
 

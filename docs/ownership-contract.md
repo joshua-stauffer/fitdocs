@@ -1,22 +1,26 @@
 # fitdocs Ownership Contract
 
-**Contract version:** `3`
+**Contract version:** `4`
 
-**What changed at this version:** two new owned paths, `history/` and
-`history/assets/`, and a third declared directory alongside `workouts/` and
-`fit-archive/` — the data root now also carries a second published document
-type, `training-history` (see
-[A Second Document Type: Training History](#a-second-document-type-training-history)
-below), rendered by `fitdocs history` rather than by `sync` or `regen`.
+**What changed at this version:** a new owned path, `blocks/`, and a fourth
+declared directory alongside `workouts/`, `history/`, and `fit-archive/` —
+the data root now also carries two further published document types,
+`training-block` and `planned-workout` (see
+[Two Further Document Types: Training Blocks and Planned Workouts](#two-further-document-types-training-blocks-and-planned-workouts)
+below), rendered by `fitdocs plan` rather than by `sync` or `regen`. New in
+kind at this version: a **user-owned plan-source location** fitdocs only
+reads, never writes — see
+[Shared and User-Owned Files](#shared-and-user-owned-files) below.
 
 This document is the authoritative, published statement of what fitdocs owns
 in your data root, what you own, and the exact limits of every operation that
-writes there. It is restated, in shorter form, inside the three owned
+writes there. It is restated, in shorter form, inside the four owned
 directories a human or agent browses (`workouts/AGENTS.md`,
-`fit-archive/AGENTS.md`, and `history/AGENTS.md` — each generated on the
-first `sync` or `regen` run, or the first `fitdocs history` run that has a
-page to write, because all three refresh every declared directory's file
-when they write, not only the one their own output lands in) and stamped
+`fit-archive/AGENTS.md`, `history/AGENTS.md`, and `blocks/AGENTS.md` — each
+generated on the first `sync` or `regen` run, the first `fitdocs history` run
+that has a page to write, or the first `fitdocs plan` run that has a block to
+render, because each of the four refreshes every declared directory's file
+when it writes, not only the one its own output lands in) and stamped
 onto every generated document as a provenance banner —
 the `AGENTS.md` texts and the provenance banner are generated from the same
 code-level constants. This document's own enumerated lists (owned paths,
@@ -49,6 +53,10 @@ named in the next section.
   below).
 - `history/assets/` — the chart image (SVG) referenced by the training-history
   document.
+- `blocks/` — block pages at the top level, and, per block, its
+  planned-workout pages in a subdirectory named after that block (see
+  [Two Further Document Types: Training Blocks and Planned Workouts](#two-further-document-types-training-blocks-and-planned-workouts)
+  below).
 - `fit-archive/` — the immutable archive of every `.fit` source fitdocs has
   processed, named by content hash.
 - `.cache/` — re-fetchable, re-derivable cache state (today: basemap tiles).
@@ -60,7 +68,10 @@ named in the next section.
 
 Two files at the top of the data root are explicitly **not** owned by
 fitdocs even though fitdocs reads and, in one case, writes into them —
-`fitdocs.toml` and `athlete.toml`. Both are covered under
+`fitdocs.toml` and `athlete.toml`. A third top-level entry (by default), the
+plan-source directory, is read but never owned either -- like `fitdocs.toml`,
+and unlike `athlete.toml`, fitdocs never writes there at all. All three are
+covered under
 [Shared and User-Owned Files](#shared-and-user-owned-files) below, not here,
 because "owned" in this contract means "fitdocs may create, rewrite, or
 delete wholesale, on its own initiative." `fitdocs.toml` is never written
@@ -98,15 +109,57 @@ regenerated from the workout documents already in `workouts/` — see
 below for how its own `history_version` key differs from the `doc_version`
 every workout document carries.
 
+## Two Further Document Types: Training Blocks and Planned Workouts
+
+The data root now also carries two further kinds of fitdocs-generated
+document: `training-block` (`type: training-block`) and `planned-workout`
+(`type: planned-workout`), both under `blocks/`. A block page carries a
+`block_version` key and a planned-workout page a `planned_version` key —
+each a plain integer, `1` today — in place of the `doc_version` a workout
+document carries (see
+[Document-Format Versions and Migration](#document-format-versions-and-migration)
+below). Both types are published by `fitdocs.plans.page` and the plans
+package rather than by the document-contract leaf
+(`src/fitdocs/contract.py`) that defines the workout vocabulary — the same
+reason the training-history type declares its own vocabulary instead of
+extending that leaf: the leaf is owned by a different spec in this
+development wave, and a second spec adding a second document type's
+vocabulary to that same leaf in the same wave is exactly the ownership
+conflict fitdocs' boundary rules are meant to prevent.
+
+A block page carries **one** user-owned region, `notes`, preserved by the
+same mechanism as a workout document's `notes` region: its content is
+carried over verbatim on rerender. The
+[User-Owned and Tool-Filled Regions](#user-owned-and-tool-filled-regions)
+section's list continues to describe workout documents only and is not
+widened to include it. A planned-workout page carries **no** user-owned
+region and is rewritten in full on every `fitdocs plan` run.
+
+A removed plan row's planned-workout page is deleted on the next `fitdocs
+plan` run, **provided the page carries fitdocs' provenance marking**; a
+stale page without that marking is left untouched and reported, not
+deleted. If a file already exists at a page's path but does not carry
+fitdocs' provenance marking, that block is blocked: the run writes nothing
+for it and reports the blocking path. A block page or a block's page
+directory under `blocks/` for which no plan source currently exists is left
+untouched and reported as having no source, rather than deleted.
+
 ## Configured Locations fitdocs May Create
 
 A location your `fitdocs.toml` settings file names as a place fitdocs should
 write is created and written by fitdocs **because that configuration grants
 the right** — not because the location is one of the fixed owned paths
-above. No fitdocs feature names such a location yet; the planned ingestion
-feature's intake directory and its optional `processed/` destination will be
-the first. When a setting names one, this rule — not the fixed owned-path
-set — is what grants fitdocs the right to create and write there.
+above. The inbox's `path` and optional `processed_dir` are the feature that
+names such a location today. When a setting names one, this rule — not the
+fixed owned-path set — is what grants fitdocs the right to create and write
+there.
+
+A configured *read* location is a different thing and grants nothing: the
+plan-source directory named by `[plans] path` (see
+[Shared and User-Owned Files](#shared-and-user-owned-files) below) is
+configured the same way a write location is, but fitdocs only ever reads
+there, so naming it never adds anything to the set of paths this section
+describes.
 
 Three things follow from that. These locations are named in your settings
 file (`fitdocs.toml`), not fixed by this contract — nothing in this document
@@ -356,8 +409,9 @@ A well-formed tag produces no warning and no finding.
 
 ## Shared and User-Owned Files
 
-Two files at the top of the data root are not part of the owned-path set
-above, and each has a distinct contract:
+Three locations at the top of the data root (by default), and one file
+outside it, are not part of the owned-path set above, and each has a distinct
+contract:
 
 - **`athlete.toml`** — your athlete profile (tested max heart rate, a
   threshold pace, or whatever else the calculators you have installed
@@ -374,10 +428,17 @@ above, and each has a distinct contract:
   earlier activity's date as `applies_from`. Both are plain dates in the
   entry's table — no different from any other key here — so a hand edit
   can change either one.
-- **`fitdocs.toml`** — your settings file (`[tiles]` today; more tables as
-  more features land). This file is **read-only to fitdocs**: nothing in
-  fitdocs ever creates, writes, or modifies it. An absent file, or an absent
-  table within it, degrades to defaults.
+- **`fitdocs.toml`** — your settings file (`[tiles]`, `[inbox]`, `[plugins]`,
+  `[load]`, `[history]`, and `[plans]` today; more tables as more features
+  land). This file is **read-only to fitdocs**: nothing in fitdocs ever
+  creates, writes, or modifies it. An absent file, or an absent table within
+  it, degrades to defaults.
+- **The plan-source directory** — your plan sources: the athlete's own
+  content and its own revision history. This directory is **user-owned and
+  read-only to fitdocs**: fitdocs never creates, writes, renames, or deletes
+  anything there. It is located by the `[plans] path` key in `fitdocs.toml`,
+  defaulting to `plans/`; it must not be the data root itself or lie inside
+  any owned path above — either is a configuration error.
 - **`.fitdocs/data-root`** — the pointer file that tells fitdocs which
   directory is the data root. This file lives in your *source* tree
   (found by walking upward from the working directory), not inside the
@@ -443,14 +504,40 @@ above, and each has a distinct contract:
   left untouched, the outcome is recorded in the run report, and the run
   does not fail. On a run that reaches the point of writing its outputs, it
   first refreshes the ownership declaration in every declared directory —
-  `workouts/AGENTS.md`, `history/AGENTS.md`, and `fit-archive/AGENTS.md` —
-  through the same function `sync` and `regen` run at the start of every
-  run. If no workout document in the data root records a usable load,
+  `workouts/AGENTS.md`, `history/AGENTS.md`, `blocks/AGENTS.md`, and
+  `fit-archive/AGENTS.md` — through the same function `sync` and `regen`
+  run at the start of every run, and `plan` runs once, after every source
+  is parsed and before its first write (see the `plan` bullet below). If no
+  workout document in the data root records a usable load,
   nothing is written at all — neither output and no declaration — any
   existing history page and chart are left untouched, and the run reports
   this without failing. Aside from that declaration refresh,
   `history` never writes, alters, or deletes a `workouts/*.md` document, a
   `workouts/assets/` chart, or a `fit-archive/*` archived source.
+- **`plan`** — its outputs live under `blocks/`: one block page per valid
+  plan source and, per block, one planned-workout page per row. Every source
+  in the plan-source directory is parsed before any write. It refreshes the
+  ownership declaration in every declared directory once, after every source
+  is parsed and before its first block's write, and only when at least one
+  block is valid — an all-invalid run creates no declaration (contrast
+  `sync` and `regen` above, which refresh declarations unconditionally at
+  the start of every run). Per valid block, when every target's bytes
+  already match the fresh render and no stale planned page exists, nothing
+  is written and the block is reported `unchanged`; otherwise it writes each
+  planned page whose bytes differ, removes any generated planned page under
+  that block's directory that no longer corresponds to a current row and
+  carries fitdocs' provenance marking — a stale planned page without that
+  marking is left untouched and reported, not removed — and writes the
+  block page last, so a block page never links to a planned page the run
+  has not already written. The block page's `notes` region is carried over
+  verbatim from the existing page; if that page's region markers are
+  damaged, the block is reported failed and its page is left untouched. A
+  planned page has no region to carry. A file at a page's path that does
+  not carry fitdocs' provenance marking blocks that block: nothing is
+  written or removed for it, and the run reports the blocking path. `plan`
+  never writes, alters, or deletes a `workouts/*.md` document, a
+  `history/*` output, a plan source, the athlete profile, or the settings
+  file.
 
 **No fitdocs operation discards user-owned region content**, with one
 precise exception worth stating plainly rather than glossing over: if a
@@ -531,6 +618,12 @@ above) — an older page is silently replaced, never reported as out of date
 and never left in place pending a `regen`-equivalent migration step, because
 `fitdocs history` has no such step.
 
+The two further document types under `blocks/` (see
+[Two Further Document Types: Training Blocks and Planned Workouts](#two-further-document-types-training-blocks-and-planned-workouts)
+above) carry their own version keys in the same place `doc_version` sits on
+a workout document: `block_version` on a block page and `planned_version`
+on a planned-workout page, each a plain integer, `1` today.
+
 Every generated workout document records a `doc_version` (a plain integer,
 independent of this contract's own version number above). When fitdocs
 encounters an existing document whose recorded `doc_version` is **older**
@@ -575,6 +668,8 @@ workouts/*.md linguist-generated
 fit-archive/* linguist-generated -diff
 history/*.md linguist-generated
 history/assets/* linguist-generated -diff
+blocks/*.md linguist-generated
+blocks/*/*.md linguist-generated
 ```
 
 in a `.gitattributes` at the root of your wiki tells those tools to collapse
@@ -588,19 +683,21 @@ fitdocs manages or enforces.
 
 If your wiki already has its own root-level agent-instructions file (for
 example, a root `AGENTS.md` or `CLAUDE.md` that you author and own), it is
-enough to point at `workouts/AGENTS.md`, `fit-archive/AGENTS.md`, and
-`history/AGENTS.md` from there rather than duplicating their contents. A
-short pointer such as:
+enough to point at `workouts/AGENTS.md`, `fit-archive/AGENTS.md`,
+`history/AGENTS.md`, and `blocks/AGENTS.md` from there rather than
+duplicating their contents. A short pointer such as:
 
 ```markdown
 See `workouts/AGENTS.md` for what fitdocs owns under `workouts/`,
-`fit-archive/AGENTS.md` for the source archive's immutability rule, and
-`history/AGENTS.md` for the training-history page.
+`fit-archive/AGENTS.md` for the source archive's immutability rule,
+`history/AGENTS.md` for the training-history page, and `blocks/AGENTS.md`
+for the training-block and planned-workout pages.
 ```
 
-is sufficient: those three files are generated and kept current by fitdocs
-on every `sync` and `regen` run and on every `fitdocs history` run that
-writes its page — each of the three refreshes every declared directory's
+is sufficient: those four files are generated and kept current by fitdocs
+on every `sync` and `regen` run, on every `fitdocs history` run that
+writes its page, and on every `fitdocs plan` run that has a block to
+render — each of the four refreshes every declared directory's
 file, not only the one its own output lands in — so a pointer from your own
 root file stays accurate without you
 having to maintain it. Your root instructions file itself is never written
