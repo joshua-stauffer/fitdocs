@@ -1216,8 +1216,7 @@ def load_block(path: Path, *, block_id: str) -> Block: ...   # raises PlanValida
   module is a registered consumer) and rebinds the word through the
   contract constant with one edit to `INDOOR_WORD`. For the same reason the
   four planned-page keys `date`, `sport`, `modality` and `indoor` are each
-  spelled once in this module's key tuples and taken from there by the
-  renderers, never re-spelled.
+  spelled exactly once in `PLANNED_FRONTMATTER_KEYS`.
 
 **Contracts**: State [x] / Service [x]
 ```python

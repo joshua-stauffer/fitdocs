@@ -364,7 +364,7 @@ src/fitdocs/
   and owners (+1), `_PLANS_SURFACE` and owners (this spec's names).
 - `tests/test_layout.py` -- the form pin gains the two helpers; round trips.
 - `tests/plans/test_boundary.py` -- five module entries appended one per
-  module task; the exemption map (2.3, 3.1); the third contract importer
+  module task; the exemption map (2.3, 2.4, 3.1); the third contract importer
   (2.1); the positive control and the threshold-closure assertion (3.3).
 - `tests/test_confinement.py` -- the `reconcile` entry point and its negative
   half.

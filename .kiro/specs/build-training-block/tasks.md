@@ -484,7 +484,8 @@ the skill *is* the feature, and distribution set the precedent (its tasks
     over the four files finds each; `grep -n "the agent skill's recorded
     version\|The packaged agent skill is deliberately" tasks.md` finds
     nothing; task 4.2 carries no `_Depends: 4.1_`; the 8.x criteria above
-    8.9 are unchanged against the pre-edit copy
+    8.9 are unchanged against the pre-edit copy; and the roadmap's
+    `distribution` entry under Phase 7 `#### Existing Spec Updates` reads `[x]`
   - _Requirements: 5.1, 5.2, 5.3_
   - _Boundary: DistributionSpecUpdate_
 

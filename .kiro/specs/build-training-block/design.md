@@ -290,6 +290,8 @@ tests/
 - `tests/test_docs_guarantees.py` -- one appended test.
 - `.kiro/specs/distribution/{requirements.md,design.md,tasks.md,spec.json}`
   -- Amendment 1 (component DistributionSpecUpdate).
+- `.kiro/steering/roadmap.md` -- one checkbox: the `distribution` entry under
+  Phase 7 `#### Existing Spec Updates`, ticked by task 3.3.
 
 ## System Flows
 

@@ -107,7 +107,7 @@ changes nothing this plan wrote:*
 - `tests/test_contract_consumers.py` (five forbidden literals and two
   binding extensions 1.1; the corpus module's registration 2.1);
 - `tests/plans/test_boundary.py` (five module entries and an exemption map,
-  one append per module task) -- **except two hunks re-anchored below**;
+  one append per module task; and 3.3's positive control and threshold-closure assertion) -- **except two hunks re-anchored below**;
 - `pyproject.toml` (four typed test modules in the mypy list, 3.3);
 - `src/fitdocs/contract.py` (key constants, readers and their published
   names, 1.1; that plan asserts `CONTRACT_VERSION == "4"` before editing,
@@ -128,7 +128,7 @@ wrote; this plan writes each so the edit is one hunk:*
   spellings `date`, `sport`, `modality`, `indoor` and the `INDOOR_WORD`
   constant are rebound to the contract's key constants as from-imports; no
   rendered byte changes. This plan spells each exactly once in `page.py`
-  (task 3.1) and the renderers take them from there.
+  (task 3.1).
 - `src/fitdocs/cli.py` `plan_command` (3.2): calls that plan's pass helper
   with its resolver instead of `run_plan` directly; the `except
   SettingsError` moves into the helper.
@@ -716,9 +716,7 @@ shape.
     reject a section line that satisfies the page module's fence predicate
   - Render: frontmatter in the planned key order (modality only when
     stated, indoor only when true), every key spelling taken from the page
-    module's key tuple and re-spelled nowhere in this module, because
-    `plan-resolution` rebinds four of those keys inside the page module
-    alone; the banner; the title; the planned-for
+    module's key tuple; the banner; the title; the planned-for
     line with the weekday and date, the page module's sport phrase, the
     mesocycle number and the link back to the block page with the block's
     title as link text; the summary in italics; the prescription heading and the
