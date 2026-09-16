@@ -746,7 +746,7 @@ shape.
 
 - [ ] 4. Integration: settings, the pass, the command, the guards, the amendment, and validation
 
-- [ ] 4.1 Read the plans settings table and resolve the source directory
+- [x] 4.1 Read the plans settings table and resolve the source directory
   - Add a peer settings reader beside the ones for tiles, inbox, plugins,
     load and history: it receives the already-parsed settings mapping and
     the settings path, validates only its own table, ignores unknown keys,

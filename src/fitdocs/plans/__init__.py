@@ -49,6 +49,14 @@ from fitdocs.plans.model import (
     mesocycle_number,
     mesocycle_windows,
 )
+from fitdocs.plans.settings import (
+    DEFAULT_PLAN_SETTINGS,
+    PLANS_TABLE,
+    PlanSettings,
+    PlanSettingsError,
+    load_plan_settings,
+    resolve_plans_dir,
+)
 
 __all__: list[str] = [
     # -- plans.model (task 2.1) --
@@ -86,5 +94,12 @@ __all__: list[str] = [
     # -- plans.source (task 2.3) appends its own names here --
     # -- plans.resolution (task 2.4) appends its own names here --
     # -- plans.page (task 3.1) appends its own names here --
+    # -- plans.settings (task 4.1) --
+    "PLANS_TABLE",
+    "PlanSettings",
+    "DEFAULT_PLAN_SETTINGS",
+    "PlanSettingsError",
+    "load_plan_settings",
+    "resolve_plans_dir",
     # -- plans.block_page, plans.planned_page (task 4.2) append here --
 ]
