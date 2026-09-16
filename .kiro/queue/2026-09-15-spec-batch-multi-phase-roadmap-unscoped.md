@@ -78,3 +78,16 @@ with `spec.json` present until 2026-09-15; the discovery change ticked them).
    amended Step 1 against the current roadmap and show that the parsed set
    is exactly `training-blocks`, `plan-resolution`, `build-training-block`.
    Done means that dry run is in the merge's log line.
+
+## Update 2026-09-16 (Phase 7 spec batch)
+
+The Phase 7 batch was run with the invocation scoped by name
+(`/kiro-spec-batch stage 7`): the controller parsed only Phase 7's
+`#### Specs (dependency order)`, dispatched exactly `training-blocks` →
+`plan-resolution` → `build-training-block` in three single-feature waves,
+and left `performance-model-fit` untouched (brief only). That is the
+workaround, not the fix -- the skill text still says `## Specs (dependency
+order)` (singular H2) and has no gated/already-generated rules. Items (1)-(3)
+above stand. Also for the fix: the roadmap checkbox means *implemented*
+(commit `b370406`'s message), so Step 5's "mark completed specs as `[x]`"
+should become "annotate as spec-written", the way b370406 and this run did.

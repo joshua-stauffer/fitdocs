@@ -1387,18 +1387,18 @@ model, needs none of it).
 
 #### Specs (dependency order)
 
-- [ ] training-blocks — the plan-source format and validation, the block page
+- [ ] training-blocks — **spec written 2026-09-16** (Phase 7 batch, `tasks-generated`, all approvals set; 8 requirements / 73 criteria, 4 majors / 15 executable tasks; cross-spec reviewed, two rounds, PASS). the plan-source format and validation, the block page
   and planned-workout pages, the user-owned source location and the owned
   rendered location with their declaration, guards and contract version, the
   `Resolution` seam rendered unresolved, and the `fitdocs plan` command.
   Dependencies: none
-- [ ] plan-resolution — matching logged workouts to planned rows by date and
+- [ ] plan-resolution — **spec written 2026-09-16** (Phase 7 batch, `tasks-generated`, all approvals set; 8 requirements / 58 criteria, 3 majors / 12 executable tasks; cross-spec reviewed, two rounds, PASS). matching logged workouts to planned rows by date and
   type with confidence labels, the split-session and same-day-ambiguity
   rules, overrides from the source, the per-mesocycle actual-load sum with
   one methodology and a coverage statement, the unplanned-workout listing,
   and chaining after `sync`, `drain` and `regen`. Dependencies:
   training-blocks
-- [ ] build-training-block — the packaged skill that builds, amends and
+- [ ] build-training-block — **spec written 2026-09-16** (Phase 7 batch, `tasks-generated`, all approvals set; 7 requirements / 48 criteria, 3 majors / 8 executable tasks; cross-spec reviewed, two rounds, PASS). the packaged skill that builds, amends and
   disambiguates a block through `fitdocs plan`, its conformance and
   wheel-member tests, and the by-name skill locator (distribution's update)
   it is found through. Dependencies: training-blocks, plan-resolution
