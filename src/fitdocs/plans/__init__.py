@@ -17,6 +17,14 @@ silently drop an earlier task's published names.
 
 from __future__ import annotations
 
+from fitdocs.plans.block_page import render_block_page
+from fitdocs.plans.engine import (
+    BlockOutcome,
+    BlockStatus,
+    PlanReport,
+    Resolver,
+    run_plan,
+)
 from fitdocs.plans.model import (
     IDENTIFIER,
     MUTABLE_FIELDS,
@@ -73,6 +81,7 @@ from fitdocs.plans.page import (
     sport_phrase,
     yaml_string,
 )
+from fitdocs.plans.planned_page import render_planned_page
 from fitdocs.plans.resolution import (
     UNRESOLVED_ROW,
     MesocycleResolution,
@@ -163,5 +172,12 @@ __all__: list[str] = [
     "PlanSettingsError",
     "load_plan_settings",
     "resolve_plans_dir",
-    # -- plans.block_page, plans.planned_page (task 4.2) append here --
+    # -- plans.block_page, plans.planned_page, plans.engine (task 4.2) --
+    "render_block_page",
+    "render_planned_page",
+    "BlockStatus",
+    "BlockOutcome",
+    "PlanReport",
+    "Resolver",
+    "run_plan",
 ]

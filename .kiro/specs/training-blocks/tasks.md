@@ -774,7 +774,7 @@ shape.
   - _Requirements: 1.8, 1.9, 8.3_
   - _Boundary: PlanSettings_
 
-- [ ] 4.2 Orchestrate the pass: discover, validate, resolve, render, write, remove, report
+- [x] 4.2 Orchestrate the pass: discover, validate, resolve, render, write, remove, report
   - Add the package's one writing module. Read the settings document once,
     project the plans table, resolve the source directory. Apply the
     existence rule: absent and unconfigured yields a note and nothing else
@@ -1043,3 +1043,15 @@ shape.
   days 01-06/01-07/01-10/01-11 and all of mesocycle 2, a short untargeted
   mesocycle 3 holding the moved `w1-sun`, and `w1-fri` as the
   `Workout (strength, indoor)` row with a three-line prescription.
+- **4.2 (2026-09-16)**: the engine's production code passed every reviewer
+  safety probe first time (source dir never written; symlinks at any target
+  path block and are not followed; atomic writes leave no `.plans-*`
+  residue; byte-identical idempotent runs); the round went to 19 unpinned
+  reviewer mutations, the worst being "drop `is_symlink()` from the
+  pages-dir check" -- a symlinked `blocks/<id>` would have had planned pages
+  written THROUGH it. A symlink pin must point at a target that already
+  LOOKS generated (carries `GENERATED_PREFIX`), or the content check blocks
+  it anyway and the symlink check is untested. **For 4.4**: engine.py binds
+  exactly one contract name, `is_generated`; every write path derives from
+  `layout.block_doc_path`/`planned_doc_path`/`block_pages_dir` or
+  `ensure_declarations`.
