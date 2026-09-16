@@ -255,6 +255,35 @@ def test_methodology_partition_includes_chosen_and_unscored_excludes_other() -> 
     assert excluded == (other2, other)
 
 
+@dataclasses.dataclass(frozen=True)
+class _ExternalMethodologyRecord:
+    """A record type this module owns, not `PageRecord` -- structurally
+    satisfies `MethodologyRecord` (task 1.2) by exposing `methodology`
+    alone, standing in for a caller outside `fitdocs.history` (e.g.
+    `plans.aggregate`'s `LoggedWorkout`) that runs `partition_pages` over
+    its own record type rather than a `PageRecord`."""
+
+    label: str
+    methodology: str | None
+
+
+def test_methodology_partition_returns_the_callers_own_instances_by_identity() -> None:
+    """`partition_pages` is generic over any `MethodologyRecord`: passed a
+    record type this module defines, it must hand back the exact objects
+    the caller passed in, not equal copies -- so a caller's own record type
+    round-trips through the partition unchanged and un-substituted."""
+    chosen = _ExternalMethodologyRecord("chosen", "banister")
+    unscored = _ExternalMethodologyRecord("unscored", None)
+    other = _ExternalMethodologyRecord("other", "tss")
+    choice = MethodologyChoice("banister", "inferred", (("tss", 1),))
+
+    included, excluded = partition_pages([chosen, unscored, other], choice)
+
+    assert included[0] is chosen
+    assert included[1] is unscored
+    assert excluded[0] is other
+
+
 # ---------------------------------------------------------------------------
 # daily series (task 3.3)
 # ---------------------------------------------------------------------------

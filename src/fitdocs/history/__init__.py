@@ -31,6 +31,7 @@ from fitdocs.history.page import (
 from fitdocs.history.series import (
     MethodologyChoice,
     MethodologyProblem,
+    MethodologyRecord,
     partition_pages,
     select_methodology,
 )
@@ -58,6 +59,7 @@ __all__: list[str] = [
     "unscaled_accumulators",
     "MethodologyChoice",
     "MethodologyProblem",
+    "MethodologyRecord",
     "partition_pages",
     "select_methodology",
     "HistoryReport",

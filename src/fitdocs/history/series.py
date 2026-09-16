@@ -135,7 +135,7 @@ from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Literal
+from typing import Literal, Protocol, TypeVar
 
 from fitdocs.contract import EffortKind
 from fitdocs.history.documents import PageRecord
@@ -148,6 +148,7 @@ __all__ = [
     "DayLoad",
     "MethodologyChoice",
     "MethodologyProblem",
+    "MethodologyRecord",
     "WeekRow",
     "build_daily_series",
     "coverage_report",
@@ -163,6 +164,23 @@ __all__ = [
 #: exemption attaches to this single site, not to a literal repeated at
 #: every use.
 _ONE_DAY = timedelta(days=1)
+
+
+class MethodologyRecord(Protocol):
+    """Any record that carries a methodology -- the structural type the two
+    published methodology helpers take, so a caller outside this package
+    (e.g. `plans.aggregate`'s `LoggedWorkout`) can run them without
+    building a `PageRecord` (Req 6.2).
+
+    `PageRecord` already satisfies this structurally; nothing about it
+    changes here.
+    """
+
+    @property
+    def methodology(self) -> str | None: ...
+
+
+_R = TypeVar("_R", bound=MethodologyRecord)
 
 
 @dataclass(frozen=True)
@@ -195,7 +213,7 @@ class MethodologyProblem:
     detail: str
 
 
-def _observed_counts(pages: Sequence[PageRecord]) -> Counter[str]:
+def _observed_counts(pages: Sequence[MethodologyRecord]) -> Counter[str]:
     """How many pages record each methodology, over pages that record a
     load at all (`PageRecord.methodology is not None`, the 3.1 invariant
     that `load is None` iff `methodology is None`)."""
@@ -228,7 +246,7 @@ def _present_clause(counts: Counter[str]) -> str:
 
 
 def select_methodology(
-    pages: Sequence[PageRecord],
+    pages: Sequence[MethodologyRecord],
     *,
     requested: str | None,
     configured: str | None,
@@ -312,8 +330,8 @@ def select_methodology(
 
 
 def partition_pages(
-    pages: Sequence[PageRecord], choice: MethodologyChoice
-) -> tuple[tuple[PageRecord, ...], tuple[PageRecord, ...]]:
+    pages: Sequence[_R], choice: MethodologyChoice
+) -> tuple[tuple[_R, ...], tuple[_R, ...]]:
     """Split `pages` by the chosen methodology (Req 4.1, 4.6).
 
     A page recording the chosen methodology, and a page recording no load

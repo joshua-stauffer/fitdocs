@@ -209,7 +209,7 @@ task.
   - _Requirements: 1.2, 1.5_
   - _Boundary: ContractReaders, ConsumerGuard_
 
-- [ ] 1.2 (P) Let the history package's methodology helpers take any record that carries a methodology
+- [x] 1.2 (P) Let the history package's methodology helpers take any record that carries a methodology
   - Add a structural record protocol with one read-only property, the
     methodology or absent, to the series module; widen the selection
     function's and its private counting helper's page parameter to it, and
