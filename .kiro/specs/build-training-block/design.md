@@ -667,8 +667,13 @@ def _report_skill_listing() -> tuple[str, ...]: ...   # returns the absent names
   `number = 3, focus = "sharpen"` (no target: absent is None on the page);
   at most twelve `[[workout]]` rows, among them `w1-mon` Run, `w1-wed`
   `Workout` with `modality = "strength"` and `indoor = true`, `w1-sat` Run
-  long run, **`w2-tue` and `w2-tue-b`, both Run on `2030-01-22`** (the
-  same-day, same-type pair the settling section and the e2e need), `w3-thu`
+  long run, **`w2-tue` and `w2-tue-b`, both Run on `2030-01-22`, with
+  `w2-tue`'s `[[workout]]` table written before `w2-tue-b`'s in the file**
+  (the same-day, same-type pair the settling section and the e2e need;
+  plan-resolution pairs an ambiguous group by `block.current.rows` order,
+  which for original rows is file order, so the e2e's stage-C assertion
+  that `w2-tue` takes the 07:00 stem depends on this order -- swap the two
+  tables and that pin reds), `w3-thu`
   Ride; one `[[amendment]]` dated `2030-01-15`, reason `Travel week`, with
   one `update` (moves `w1-sat` two days, across no boundary), one `add`
   (`w2-sun` Walk), one `remove` (`w1-wed`), one `mesocycle` (`number = 2,
@@ -864,8 +869,9 @@ def _report_skill_listing() -> tuple[str, ...]: ...   # returns the absent names
     shape of `tests/history/test_engine.py:43-64` extended with `sport`,
     `modality`, `indoor`, `start_time`): exit 0, `rendered`; both rows'
     cells start `matched (ambiguous):`; stdout contains `ambiguous:` and
-    both ids; `w2-tue`'s cell links `2030-01-22-run-0700` (first row, earlier
-    page).
+    both ids; `w2-tue`'s cell links `2030-01-22-run-0700` (the first row in
+    `block.current.rows` order takes the earlier page; the example writes
+    `w2-tue` before `w2-tue-b`, which this assertion depends on).
   - Stage D (+ overrides): exit 0, `rendered`; `w2-tue`'s cell starts
     `overridden:` and links `2030-01-22-run-0700`; `w2-tue-b`'s cell is
     `skipped`; the block page's `Planned workouts:` line counts `1

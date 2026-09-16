@@ -21,10 +21,14 @@
   not the code.
 - **`inbox`** established the configured-directory settings shape. Its reader
   is not imported; the shape is followed.
-- **No spec depends on this one being implemented before it starts**, but
-  `plan-resolution` and `build-training-block` consume the seams design.md
-  states verbatim under "Cross-spec obligations". A task that finds it must
-  change a seam's shape stops and reports rather than changing it.
+- **This plan has no upstream implementation prerequisite** -- every spec
+  it builds on above has shipped -- **and it is the prerequisite of both
+  downstream Phase 7 specs**: `plan-resolution` and `build-training-block`
+  must not start until this plan is merged to `main`, because they consume
+  the seams design.md states verbatim under "Cross-spec obligations"
+  (`plan-resolution`'s tasks.md opens with exactly that prerequisite). A
+  task that finds it must change a seam's shape stops and reports rather
+  than changing it.
 
 **Hard rules for every task**
 
@@ -81,14 +85,76 @@ stated rule:
   reported, not added in place.
 
 **Cross-spec shared files.** `plan-resolution` is implemented after this
-plan and will append to `tests/test_confinement.py` (a second `EntryPoint`),
-`tests/test_public_api.py`, `tests/test_contract_consumers.py`,
-`src/fitdocs/cli.py` (the chaining sites) and `src/fitdocs/layout.py` (two
-workout-link helpers). **The partition rule** for any concurrent
-implementation: append a row, an entry or a block, and nothing else; never
-rewrite or reorder an existing one; never touch the peer's row. A conflict in
-one of these files means the rule was broken, not that the two specs
-disagree.
+plan is merged and touches the following files this plan creates or edits
+(each verified against `.kiro/specs/plan-resolution/tasks.md`; the task
+numbers are that plan's). Written down so this plan's implementer shapes
+each file for the append and writes each named pin knowing it moves.
+
+*Append-only -- that plan adds a row, an entry, a block or a helper and
+changes nothing this plan wrote:*
+
+- `src/fitdocs/plans/__init__.py` (its module names, one append per module
+  task: 2.1, 2.2, 2.3, 2.4, 3.1);
+- `src/fitdocs/layout.py` (two logged-page link helpers and their docstring
+  entries, 1.3) and `tests/test_layout.py` (two form-pin clauses and two
+  round trips, 1.3);
+- `src/fitdocs/cli.py` (three helpers and three chaining insertions after
+  the load pass, 3.2) -- **except `plan_command`'s body, re-anchored below**;
+- `tests/test_confinement.py` (a second `EntryPoint`, `reconcile`, with its
+  negative half, 3.3);
+- `tests/test_public_api.py` (`_CONTRACT_SURFACE` 1.1, `_HISTORY_SURFACE`
+  1.2, `_PLANS_SURFACE` per module task, closed by 3.3);
+- `tests/test_contract_consumers.py` (five forbidden literals and two
+  binding extensions 1.1; the corpus module's registration 2.1);
+- `tests/plans/test_boundary.py` (five module entries and an exemption map,
+  one append per module task) -- **except two hunks re-anchored below**;
+- `pyproject.toml` (four typed test modules in the mypy list, 3.3);
+- `src/fitdocs/contract.py` (key constants, readers and their published
+  names, 1.1; that plan asserts `CONTRACT_VERSION == "4"` before editing,
+  so task 1.2 must leave the literal at exactly `"4"`);
+- `docs/ownership-contract.md` (a paragraph in the two-further-types section
+  and a clause appended to the `plan` overwrite bullet, 3.4; the version
+  line does not move) and `README.md` (sentences appended to the plan
+  paragraph, 3.4);
+- `.kiro/steering/roadmap.md` (one checkbox each under Phase 7 `#### Existing
+  Spec Updates`: this plan's 4.5 ticks `wiki-contract`, that plan's 3.4 ticks
+  `workout-docs`, `build-training-block`'s 3.3 ticks `distribution`; different
+  lines, and each plan is implemented after the previous one merges).
+
+*Re-anchored by exception -- that plan edits, in place, something this plan
+wrote; this plan writes each so the edit is one hunk:*
+
+- `src/fitdocs/plans/page.py` (1.1): the four planned-page frontmatter key
+  spellings `date`, `sport`, `modality`, `indoor` and the `INDOOR_WORD`
+  constant are rebound to the contract's key constants as from-imports; no
+  rendered byte changes. This plan spells each exactly once in `page.py`
+  (task 3.1) and the renderers take them from there.
+- `src/fitdocs/cli.py` `plan_command` (3.2): calls that plan's pass helper
+  with its resolver instead of `run_plan` directly; the `except
+  SettingsError` moves into the helper.
+- `tests/test_cli_plan.py` (3.2): task 4.3's AST pin is re-stated (`run_plan`
+  named nowhere in `cli.py`; the pass helper loaded at four sites).
+- `tests/test_plan_e2e.py` (3.2): task 4.6's two-dates test gains the
+  precondition that both local dates lie on the same side of every fixture
+  row (design.md, Cross-spec obligations (training-blocks ↔
+  plan-resolution), item 5).
+- `tests/plans/test_boundary.py` (2.1, 2.3): the contract-importer pin
+  widens from two modules (`page`, `engine`) to three (`corpus`), and the
+  forbidden-target check's body gains a hunk consulting the exemption map.
+- `src/fitdocs/declaration.py` `_BLOCKS_CONTENT` and its claim anchor (3.4):
+  one clause naming the chained runs; `tests/declaration_golden/blocks.AGENTS.md`
+  is regenerated by the goldens module's generator (the other three goldens
+  are byte-identical because the version does not move).
+- `.kiro/specs/training-blocks/{requirements.md,spec.json}` (3.4): that
+  plan currently records an Amendment 1 against criteria 8.4 and 8.8;
+  both are already scoped here to admit the resolver and the chaining, so
+  whatever that plan lands there is a record, not a change of meaning.
+
+**The partition rule** for any concurrent implementation: append a row, an
+entry or a block, and nothing else; never rewrite or reorder an existing
+one; never touch the peer's row -- the re-anchored hunks above are the
+stated exceptions, each owned by one task of that plan. A conflict in one of
+these files means the rule was broken, not that the two specs disagree.
 
 ## Test File Ownership
 
@@ -126,7 +192,8 @@ assertions.
 - `tests/test_confinement.py`, `tests/plans/test_boundary.py`,
   `tests/test_public_api.py` (`_PLANS_SURFACE`),
   `tests/test_contract_consumers.py`, `pyproject.toml` → 4.4.
-- `.kiro/specs/wiki-contract/{requirements.md,design.md,spec.json}` → 4.5.
+- `.kiro/specs/wiki-contract/{requirements.md,design.md,spec.json}` and the
+  roadmap's Phase 7 `wiki-contract` checkbox → 4.5.
 - `tests/test_plan_e2e.py` (new) → 4.6.
 
 **Every new assertion names its mutation** (change-protocol § Fixture
@@ -409,7 +476,11 @@ shape.
     mutable fields, and yield a row that satisfies the original-row rules; an
     add must use an id never used in the block's history; a remove must name
     an existing row; a target change must name a number in range and carry
-    at least one of load or focus. An amendment with any invalid operation
+    at least one of load or focus -- and it may name a mesocycle with no
+    stated target, in which case the change record's superseded value is
+    the absent target (both fields unset), the state gains the target, and
+    a field the change does not state keeps its current value. An amendment
+    with any invalid operation
     stops application: later amendments are not applied and one problem says
     which ones were not checked. Dates must be non-decreasing in file order
   - Check overrides: a row id must exist in the state after every amendment
@@ -430,13 +501,15 @@ shape.
     (problem); remove then re-add the same id (problem); a two-workout day
     whose ids sort in the opposite order to their source positions renders
     in source order; the sum of mesocycle row counts equals the current row
-    count
+    count; a target change on a mesocycle with no stated target (valid; the
+    change record's superseded value has both fields unset and the
+    resulting state holds the target)
   - Named mutations: let an add reuse a removed id (the history pin reds);
     check override existence against the final state (the before-add pin
     reds); keep applying after an invalid amendment (the "not checked" pin
     reds); order a day's rows by id (the source-order pin reds); take a
     moved row's mesocycle from its original date (the cross-boundary pin
-    reds)
+    reds); reject a target change on an untargeted mesocycle (its pin reds)
   - Observable: `uv run pytest tests/plans/test_model.py` green and
     `uv run mypy --strict tests/plans/test_model.py` still green; the trail
     for a fixture with one move, one add, one remove and one target change
@@ -536,6 +609,17 @@ shape.
     (the sport value alone, or with a parenthesised, comma-joined list of the
     stated modality and the word `indoor` when the flag is true -- `Run`,
     `Workout (strength)`, `Ride (indoor)`, `Workout (strength, indoor)`)
+  - Emit the phrase's word `indoor` from one module-level constant,
+    `INDOOR_WORD = "indoor"` -- the module's only spelling of that word
+    outside the planned key tuple: it is
+    deliberately the same spelling as the planned page's frontmatter key,
+    which `plan-resolution` registers as a forbidden literal in the
+    contract-consumer guard (this module is a registered consumer) and
+    rebinds through the contract's constant with one edit to `INDOOR_WORD`.
+    Likewise spell the four planned-page keys `date`, `sport`, `modality`
+    and `indoor` exactly once each, in the key tuples, so that rebinding is
+    confined to this module (design.md, Cross-spec obligations
+    (training-blocks ↔ plan-resolution), item 6)
   - Append the new names to the package's published surface list
   - Pins: the unresolved default has empty mappings and the unresolved row's
     cell is the word `unresolved` with a one-line section; the two types
@@ -631,7 +715,10 @@ shape.
   - Validate the resolution through the page module's structural check, and
     reject a section line that satisfies the page module's fence predicate
   - Render: frontmatter in the planned key order (modality only when
-    stated, indoor only when true); the banner; the title; the planned-for
+    stated, indoor only when true), every key spelling taken from the page
+    module's key tuple and re-spelled nowhere in this module, because
+    `plan-resolution` rebinds four of those keys inside the page module
+    alone; the banner; the title; the planned-for
     line with the weekday and date, the page module's sport phrase, the
     mesocycle number and the link back to the block page with the block's
     title as link text; the summary in italics; the prescription heading and the
@@ -781,7 +868,11 @@ shape.
   - Change nothing about the sync, regeneration, load or history commands,
     and add an AST assertion, in the shape the history command's test uses,
     that the pass's entry function is loaded by name exactly once, inside the
-    plan command
+    plan command. Write it knowing it moves: `plan-resolution` chains the
+    pass after sync, drain and regen and makes the plan command pass its
+    resolver, then re-states this assertion in the same change (design.md,
+    Cross-spec obligations (training-blocks ↔ plan-resolution), item 5), so
+    state it in that shape and no wider
   - Update the module docstring's command list and exit-code paragraph
   - Pins: no data root gives the configuration exit naming the three ways to
     supply one; the success path prints every outcome line; an invalid
@@ -872,10 +963,16 @@ shape.
     extend its owned-path-set bullet with the rendered directory and a
     sentence that a configured read location grants no write right; add the
     amendments entry to its spec metadata
+  - Tick the roadmap's `wiki-contract` checkbox under Phase 7 `#### Existing
+    Spec Updates` (`.kiro/steering/roadmap.md`) with "landed by
+    training-blocks as Amendment 3", the way `build-training-block`'s 3.3
+    ticks the `distribution` one; that checkbox is the only edit this plan
+    makes to the roadmap
   - Observable: `/kiro-spec-status wiki-contract` reports the spec clean
     with its amendments entry listing this change, and that spec's
     requirements, design and metadata all name the plan-source location, the
-    rendered location and the two document types
+    rendered location and the two document types; the roadmap's
+    `wiki-contract` entry under Phase 7 reads `[x]`
   - _Requirements: 7.2, 7.3, 7.4, 7.5_
   - _Boundary: WikiContractSpecUpdate_
 
@@ -889,7 +986,14 @@ shape.
     executed under two different fake system dates and time zones,
     importing the history e2e test's module-private fake-date context
     manager (`tests` is a package, so the import works; do not copy it) --
-    the behavioural half of the clock scan
+    the behavioural half of the clock scan. Write it knowing it moves:
+    choose the two (timestamp, time zone) pairs so that both local dates
+    already lie on the same side of every fixture row (for instance both
+    after the block's last day) and say so in a comment naming
+    `plan-resolution` -- with the default resolution any two dates prove
+    the same thing, and this choice keeps that spec's re-anchoring to an
+    added precondition assertion rather than a change of dates (design.md,
+    Cross-spec obligations (training-blocks ↔ plan-resolution), item 5)
   - Assert the invalid-beside-valid, foreign-block-page, default-absent and
     configured-absent scenarios through the command with their exit codes
   - Assert the source directory's contents are byte-identical before and

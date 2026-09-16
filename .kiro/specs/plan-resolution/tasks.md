@@ -35,7 +35,10 @@
   `fitdocs.render`, `fitdocs.sync`, `fitdocs.audit`, `yaml`, any
   `fitdocs.history.<submodule>`, or any `fitdocs.load.<submodule>` other
   than `fitdocs.load.settings` from the pass module alone; the history
-  package root is imported only by the pass module and the aggregator.
+  package root is imported only by the pass module, the aggregator and the
+  placement module (the last for the two methodology types alone, because
+  the per-block reconciliation record is defined there -- design.md,
+  Placement).
 - Only `plans/page.py`, `plans/engine.py` and `plans/corpus.py` import
   `fitdocs.contract`.
 - The vocabulary words live in the placement module and nowhere else; the
@@ -49,12 +52,15 @@
   asserted to read `"4"` before any edit and is not changed; another value
   means a peer moved it -- stop and report.
 - **`src/fitdocs/render/frontmatter.py`**, **`src/fitdocs/plans/page.py`**
-  -- task 1.1 only (five and four key spellings). The wave-1 renderers
-  (`block_page.py`, `planned_page.py`) are edited by **no** task.
+  -- task 1.1 only (five key spellings; four key spellings plus the
+  `INDOOR_WORD` display constant). The wave-1 renderers (`block_page.py`,
+  `planned_page.py`) are edited by **no** task.
 - **`src/fitdocs/history/series.py`**, **`src/fitdocs/history/__init__.py`**
   -- task 1.2 only. **`src/fitdocs/layout.py`** -- task 1.3 only.
 - **`src/fitdocs/cli.py`** -- task 3.2 only. **`src/fitdocs/declaration.py`**
   -- task 3.4 only. **`pyproject.toml`** -- task 3.3 only.
+  **`.kiro/steering/roadmap.md`** -- task 3.4 only, one checkbox (the Phase
+  7 `workout-docs` Existing Spec Update).
 - **Three files are append-only, one append per module task, in the same
   change as the module** -- because two wave-1 pins go red the moment a
   module or a published name exists that they do not list, and a task may
@@ -69,10 +75,11 @@
   defect. One expected exception to "append": 2.3 introduces the exemption
   map, which also changes the body of the wave-1 forbidden-target check to
   consult it -- a hunk inside that function beside the list appends, not a
-  rewrite; 2.2's entry needs no exemption and touches no check body. Task
-  3.3 adds only what no single module owns (the exemption map's positive
-  control, the threshold-closure assertion, the final whole-surface
-  identity check, the mypy list).
+  rewrite; 2.2's entry needs no exemption and touches no check body; 2.4
+  and 3.1 each append their own exemption entry to the map 2.3 introduced.
+  Task 3.3 adds only what no single module owns (the exemption map's
+  positive control, the threshold-closure assertion, the final
+  whole-surface identity check, the mypy list).
 - **`tests/test_contract_consumers.py`** -- 1.1 (the five literals; the
   frontmatter and page binding extensions) then 2.1 (the corpus module's
   registration), both appends.
@@ -81,8 +88,12 @@
   appends above; each edits only its own pin.
 - **Wave-1 files this plan edits by exception, each in one task**:
   `tests/test_cli_plan.py` and `tests/test_plan_e2e.py` (3.2, the two
-  re-anchored pins), `.kiro/specs/training-blocks/{requirements.md,spec.json}`
-  (3.4).
+  re-anchored pins training-blocks design § Cross-spec obligations item 5
+  names), `.kiro/specs/training-blocks/{requirements.md,spec.json}` (3.4,
+  a record of that re-anchoring -- an appended paragraph and one
+  amendments entry; no criterion reworded). This list and training-blocks
+  tasks.md "Cross-spec shared files" agree file for file and task for
+  task.
 
 ## Test File Ownership
 
@@ -151,12 +162,21 @@ task.
     constants (the anti-drift test resolves a bare name through the
     module's namespace by design) and, in the plans page module, route the
     planned page's four key spellings through the same constants as
-    from-imports. If a wave-1 renderer under the plans package turns out
-    to spell one of them too, **report it as a queue item and do not edit
-    it**: the renderers are outside this plan's boundary and the literal
-    guard does not reach unregistered modules by design. No rendered byte
-    changes: the workout goldens and the wave-1 planned golden stay green
-    unedited
+    from-imports **and rebind the module's display constant** -- the
+    wave-1 page module emits the sport phrase's word `indoor` from one
+    module-level constant, `INDOOR_WORD` (training-blocks design § Cross-spec
+    obligations item 6 / PageVocabulary), and that word is the fifth
+    registered-module occurrence of a now-forbidden value: make it
+    `INDOOR_WORD: Final[str] = INDOOR_KEY` with a comment that the display
+    word and the frontmatter key are deliberately the same spelling, so the
+    module carries no bare `"indoor"` constant (the guard walks every
+    string constant of a registered module, key or not). If a wave-1
+    renderer under the plans package turns out to spell one of them too,
+    **report it as a queue item and do not edit it**: the renderers are
+    outside this plan's boundary and the literal guard does not reach
+    unregistered modules by design. No rendered byte changes: the workout
+    goldens, the wave-1 planned golden and the page module's sport-phrase
+    pins stay green unedited
   - Extend the converted-consumer guard: the five key values join the
     forbidden-literal tuple (by constant, never re-spelled); the frontmatter
     builder's binding list gains the five constants and the plans page
@@ -169,14 +189,21 @@ task.
     parity table asserting the reading is absent exactly when the history
     package's private reader returns its absent pair; the named-constant
     membership test gains the five; the contract surface pin gains the
-    eleven names; the consumer guard green over every registered module
+    eleven names; the consumer guard green over every registered module,
+    the plans page module included with its display word rebound
   - Named mutations: accept a naive start time (its pin reds); read indoor
     as truthy (`"yes"` pin reds); return a reading with no methodology (the
     parity pin reds); spell the sport key inline in the frontmatter builder
-    (the literal guard reds); drop one constant from the managed set (the
-    published-schema pin reds)
+    (the literal guard reds); reintroduce the bare `"indoor"` literal for
+    the page module's `INDOOR_WORD` (the literal guard's plans-page case
+    reds -- the display-word occurrence, not a key); drop one constant from
+    the managed set (the published-schema pin reds)
   - Observable: `uv run pytest tests/test_contract.py tests/test_contract_consumers.py tests/test_public_api.py tests/plans tests/test_sync_e2e.py`
-    green; a Python shell reads sport, modality, indoor, start time and
+    green, with `tests/plans/test_page.py`'s sport-phrase pins unedited and
+    the consumer guard's literal scan green over `fitdocs.plans.page` (the
+    scan compares whole string constants, so a comment or docstring that
+    merely contains the word is not an occurrence -- only a constant equal
+    to it is); a Python shell reads sport, modality, indoor, start time and
     load from a real generated document's frontmatter through the five
     readers
   - _Requirements: 1.2, 1.5_
@@ -355,10 +382,10 @@ task.
     never computed
   - The three appends this module owes: its names to the plans package's
     published list; its boundary entry, **introducing the exemption map**
-    that admits exactly the aggregator → the history package root (every
-    history submodule stays forbidden from every module); its names with
-    owner to the plans surface pin (parallel with 2.2's appends to the same
-    three files; the controller merges)
+    with its first entry, the aggregator → the history package root (2.4
+    and 3.1 append theirs; every history submodule stays forbidden from
+    every module); its names with owner to the plans surface pin (parallel
+    with 2.2's appends to the same three files; the controller merges)
   - `(P)` with 2.2 after 2.1: the two share only the corpus and the model,
     build their sources inline, and each appends its own entries
   - Pins (typed; sources as inline text through the wave-1 parser): three
@@ -387,28 +414,52 @@ task.
   - _Requirements: 1.3, 1.4, 3.6, 4.2, 6.1, 6.2, 6.3, 6.4, 6.7, 6.8_
   - _Boundary: Aggregator_
 
-- [ ] 2.4 Place the words: the vocabulary and the resolution value
-  - Add the placement module, pure: the vocabulary constants (the state and
+- [ ] 2.4 Place the words: the vocabulary, the per-block record and the resolution value
+  - Add the placement module, pure: **the per-block reconciliation record**
+    (block id, the row outcomes, the mesocycle loads, the run's methodology
+    choice or problem, the problems) with its derived per-state counts,
+    ambiguous row ids in block order and unplanned count -- defined here,
+    not in the pass module, because this module reads it and the pass
+    module sits above it in the import order (a type defined upstairs would
+    force this module to import it, a cycle the boundary test reds; design
+    Placement states the choice); its methodology field is typed by the
+    history package's two published methodology types, which this module
+    imports from the history root and nothing else of history; the
+    vocabulary constants (the state and
     label words come from the matching enumerations; the not-computed,
     at-least, no-target, not-found and unscored words and the three line
-    prefixes live here and nowhere else); the actual-load sentence over a
-    mesocycle load, in exactly the grammar design.md tabulates, reused
-    verbatim by the report; the row cell (one line, no pipe, links from the
-    block page's depth); the row section (the label's rule in a sentence,
+    prefixes live here and nowhere else; the sport phrase's `indoor` word is
+    the page module's constant, not a second spelling); the actual-load
+    sentence over a mesocycle load, in exactly the grammar design.md
+    tabulates, reused verbatim by the report; the row cell (one line, no
+    pipe, links from the block page's depth; **the overridden cell is the
+    `overridden: ` prefix plus one comma-join over the existing stems'
+    links first and the missing stems' `` `stem` (not found) `` items
+    after, so a row whose every named stem is missing reads exactly
+    `` overridden: `stem` (not found) `` with no leading comma**); the row
+    section (the label's rule in a sentence,
     one bullet per fulfilling logged page with its sport phrase, wall-clock
     time when recorded and load phrase, the override date and reason, the
     competitor sentence, the same-day listing, links from the planned
     page's depth); the mesocycle lines (the actual-load line before the
     table; the unplanned and excluded listings after it); the block-level
-    lines (the per-state counts, the methodology and how it was chosen or
+    lines (the per-state count line -- **the total, then, when there is at
+    least one row, ` -- ` and only the states with a count of at least one
+    in the fixed order matched, overridden, skipped, not logged, upcoming,
+    the ambiguous parenthesis only when at least one row is ambiguous;
+    zero-count states are omitted, so an all-upcoming block reads
+    `Planned workouts: 3 -- 3 upcoming.` and a block with no rows
+    `Planned workouts: 0.`** -- the methodology and how it was chosen or
     why none was, the ambiguous rows, the problems); and the resolution
     builder that fills the wave-1 seam for every current row and every
     mesocycle. Link text passes through the page module's link-text helper;
     numbers through its load format; times as hour and minute of the
     recorded local wall clock; never the pass's today
-  - The three appends this module owes: its names to the plans package's
-    published list; its boundary entry; its names with owner to the plans
-    surface pin
+  - The three appends this module owes: its names (the record, the
+    resolution builder, the actual-load sentence) to the plans package's
+    published list; its boundary entry, **with its own exemption-map
+    entry** admitting exactly this module → the history package root (the
+    map 2.3 introduced); its names with owner to the plans surface pin
   - Pins (`tests/plans/test_placement.py` with goldens rendered through
     the wave-1 renderers): one block golden and two planned goldens from a
     synthetic block and corpus exercising every grammar row -- exact,
@@ -429,7 +480,15 @@ task.
     prints those dates (the fixture states both constraints beside the
     assertion); the actual-load sentence for each case by
     exact string; a stem containing `]` escaped in the link text; two calls
-    byte-equal
+    byte-equal; **the row cell for an overridden outcome with no existing
+    stem and one missing stem is exactly `` overridden: `stem` (not found) ``**
+    (by exact string, beside the golden's one-link-one-missing row);
+    **the count line over a record whose every row is upcoming is exactly
+    `Planned workouts: 3 -- 3 upcoming.`** and over a block with no rows
+    exactly `Planned workouts: 0.`; the record's counts sum to the row
+    count, its ambiguous ids name the pair in block order, its unplanned
+    count sums the mesocycles; the boundary test green with this module's
+    exemption entry in place
   - Named mutations: render an absent total as `0` (the golden reds); drop
     the at-least word (the lower-bound pin reds); count considered over
     every page in the aggregation module -- a cross-module mutation of
@@ -437,10 +496,14 @@ task.
     reds); use the block-depth link on the planned page (the planned golden
     reds); append today's ISO form to the upcoming section line (the
     value-level no-today pin reds); write the matched word for an
-    overridden row (the golden reds)
+    overridden row (the golden reds); prefix every not-found item with `, `
+    regardless of how many links precede it (the zero-link overridden-cell
+    pin reds on a leading comma); print zero-count states on the count line
+    (the all-upcoming pin reds)
   - Observable: `uv run pytest tests/plans tests/test_public_api.py` green;
     the block golden reads end to end as a training record an athlete could
-    review
+    review; a Python shell over an override naming only a missing stem
+    prints `` overridden: `stem` (not found) ``
   - _Depends: 2.2, 2.3, 1.3_
   - _Requirements: 3.7, 4.3, 4.5, 5.3, 6.3, 6.4, 6.5, 6.6, 6.7, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7_
   - _Boundary: Placement_
@@ -448,12 +511,13 @@ task.
 - [ ] 3. Integration: the pass, the CLI, the guards, the documents, and validation
 
 - [ ] 3.1 Run the reconciling pass through the plan pass's resolver hook
-  - Add the pass module: the per-block reconciliation (rows, mesocycle
-    loads, the run's methodology, problems) with its counts, ambiguous ids
-    and unplanned count; the report (the plan report, the reconciliations
+  - Add the pass module: the report (the plan report, the reconciliations
     in plan order, the methodology or none, and the failed flag -- the
     plan's failure or any problem); the pure per-block function composing
-    the matcher and the aggregator; the resolver object that scans the
+    the matcher and the aggregator into **the per-block reconciliation
+    record 2.4 defined in the placement module** (imported from there,
+    never redefined here -- the pass module sits above the placement in the
+    import order, so the type lives below); the resolver object that scans the
     corpus and selects the methodology on its first call only, records each
     block's reconciliation, and returns the placed resolution; and the run
     function that reads the settings document once, projects the history
@@ -464,10 +528,11 @@ task.
     of the settings file is the wave-1 pass's own and is stated in the
     docstring without naming a clock
   - The three appends this module owes (the last ones; 3.3 checks the
-    whole): its names to the plans package's published list; its boundary
-    entry with **its exemption-map entry** admitting exactly the history
-    package root and the load settings module; its names with owner to the
-    plans surface pin
+    whole): its names (the report, the per-block function, the run
+    function -- the record is 2.4's) to the plans package's published list;
+    its boundary entry with **its exemption-map entry** admitting exactly
+    the history package root and the load settings module; its names with
+    owner to the plans surface pin
   - Pins (typed, synthetic roots under `tmp_path`): the rendered block page
     carries the placed match text; a page added between runs flips a row
     from not logged to matched and the block from unchanged to rendered,
@@ -509,8 +574,10 @@ task.
     the plan report has no block, no unsourced path and no foreign
     declaration** -- so the standalone plan command still prints the
     absent-directory note wave 1 pins; then the reconciliation printer: per
-    block one summary line with the per-state counts and the unplanned
-    count, one indented actual-load line per mesocycle reusing the
+    block one summary line with the per-state counts (under the block
+    page's count-line rule: zero-count states omitted, the ambiguous
+    parenthesis only when there is one, no list for a block with no rows)
+    and the unplanned count, one indented actual-load line per mesocycle reusing the
     placement's sentence, the ambiguous ids, one indented description per
     problem; then once the methodology chosen and how, or why none. Detail
     lines without markup or highlighting
@@ -521,17 +588,21 @@ task.
     flag. Leave the load, history and check commands untouched. Update the
     module docstring's command bullets and exit-code paragraph and the two
     command docstrings
-  - Re-anchor the two wave-1 pins this change moves, in the same change:
-    the plan command's AST pin now asserts the wave-1 engine function is
-    named nowhere in the module, the run function is imported once and
-    loaded by name once inside the pass helper, and the pass helper is
-    loaded exactly four times -- inside the sync command twice, the
-    regeneration command and the plan command -- and nowhere else; the
-    wave-1 two-dates end-to-end test now asserts, as a precondition, that
-    the local date under each of its (timestamp, time zone) pairs lies on
-    the same side of every fixture row -- computed per pair, because a time
-    zone change alone can cross midnight (this plan's own e2e pins the
-    crossing case)
+  - Re-anchor the two wave-1 pins this change moves, in the same change --
+    the two training-blocks design § Cross-spec obligations item 5 names,
+    and the only two of that spec's tests this plan edits; its criteria
+    8.4 and 8.8 already admit the resolver and the chaining, so no criterion
+    is touched: the plan command's AST pin now asserts the wave-1 engine
+    function is named nowhere in the module, the run function is imported
+    once and loaded by name once inside the pass helper, and the pass
+    helper is loaded exactly four times -- inside the sync command twice,
+    the regeneration command and the plan command -- and nowhere else; the
+    wave-1 two-dates end-to-end test gains, as a precondition assertion,
+    that the local date under each of its (timestamp, time zone) pairs
+    lies on the same side of every fixture row -- computed per pair,
+    because a time zone change alone can cross midnight; training-blocks
+    task 4.6 already chose such dates, so this is an added assertion, not
+    a change of dates (this plan's own e2e pins the crossing case)
   - Pins (`tests/test_cli_reconcile.py`, CliRunner): sync with a source,
     the drain path and regen over a root with a plan and a matching
     generated page each leave the block page carrying the match text and
@@ -617,7 +688,7 @@ task.
   - _Requirements: 4.6, 5.1, 5.5, 6.8, 7.6, 8.4, 8.8_
   - _Boundary: ConfinementRegistration, PackageBoundary, SurfacePins_
 
-- [ ] 3.4 (P) Say who else writes into the rendered location: the declaration, the ownership contract, the README, and the upstream amendment
+- [ ] 3.4 (P) Say who else writes into the rendered location: the declaration, the ownership contract, the README, the upstream record and the roadmap tick
   - Extend the rendered directory's declaration fragment with one clause:
     the pages are also rewritten at the end of the sync and regeneration
     commands, when the same pass reconciles the plan against the logged
@@ -635,25 +706,38 @@ task.
     semantics section with the chained runs. The version line does not
     move. In the README, extend the plan paragraph with the five states,
     the ambiguous label, the override entry and the chaining
-  - Land Amendment 1 to the training-blocks requirements in the shape
-    wiki-contract's amendments use: criteria 8.4 and 8.8 each gain an
-    *(amended by Amendment 1)* clause -- with the resolver passed, a planned
-    workout's state depends on the pass's today only through the
-    not-logged/upcoming split and the pages print no date they were judged
-    against; the plan pass runs at the end of sync and regen after the load
-    pass and never as part of load, history or check. Renumber nothing; add
-    the amendments entry to that spec's metadata
+  - Record, in the training-blocks spec, the two test pins 3.2 re-anchored
+    -- **rewording no criterion**: that spec's 8.4 and 8.8 are already
+    scoped to admit this plan's resolver and chaining, and its design §
+    Cross-spec obligations item 5 names both pins. Add one amendments entry
+    to that spec's metadata (`spec.json`: date; requirement `8.4 / 8.8
+    (record only); tests of tasks 4.3 and 4.6`; reason: the 4.3 AST pin and
+    the 4.6 two-dates test now read as plan-resolution states them, no
+    criterion changes meaning) and append one paragraph to its
+    `requirements.md`, `## Amendment 1 (2026-09-16): the two test pins
+    re-anchored, landed by plan-resolution`, in the shape wiki-contract's
+    amendments use, saying exactly that. Renumber nothing; edit no
+    criterion's text
+  - Tick the roadmap's `workout-docs` checkbox under Phase 7 `#### Existing
+    Spec Updates` (`.kiro/steering/roadmap.md`) as `[x]` with "no change: no
+    back-link key is written (plan-resolution design § Decisions recorded
+    for the roadmap)", the way training-blocks' 4.5 ticks the
+    `wiki-contract` one and build-training-block's 3.3 ticks
+    `distribution`; that checkbox is the only edit this plan makes to the
+    roadmap
   - `(P)` with 3.3 after 3.2: no shared file
   - Pins: the goldens test green with the blocks golden regenerated and the
     other three unchanged; the quantifier guard green over the new text;
     the ownership conformance test and the documentation anchor-link check
-    green unedited
+    green unedited; `git diff .kiro/specs/training-blocks/requirements.md`
+    shows only the appended paragraph (no line of Requirement 8 changed)
   - Named mutations: write "each planned workout" into the clause (the
     quantifier guard reds); change the clause without regenerating (the
     goldens test reds)
   - Observable: `uv run pytest tests/test_declaration.py tests/test_declaration_goldens.py tests/test_ownership_contract.py tests/test_docs_guarantees.py`
     green; `/kiro-spec-status training-blocks` clean with the amendments
-    entry present
+    entry present; the roadmap's `workout-docs` entry under Phase 7 reads
+    `[x]`
   - _Depends: 3.2_
   - _Requirements: 5.2, 8.1, 8.2, 8.8_
   - _Boundary: OwnershipDocs, TrainingBlocksSpecUpdate_

@@ -63,6 +63,11 @@
     amendment to `training-blocks`' requirements 8.4 and 8.8 the way
     `training-blocks` landed wiki-contract's Amendment 3, re-anchoring its
     two-dates e2e test to two dates on the same side of every row.
+    *(Superseded 2026-09-16, cross-spec review round 1: `training-blocks`
+    scoped 8.4 and 8.8 itself to admit the resolver and the chaining, so
+    no criterion is amended; what remains is the re-anchoring of its two
+    pins (task 3.2) and a record of it in its `spec.json` and
+    `requirements.md` (task 3.4) -- design.md TrainingBlocksSpecUpdate.)*
   - **The `run_plan` AST pin moves.** `training-blocks` task 4.3 pins
     "`run_plan` loaded by name exactly once, inside `plan_command`"
     (`tests/test_cli_plan.py`, shape of `tests/test_cli_history.py:660`).

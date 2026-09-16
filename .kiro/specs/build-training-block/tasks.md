@@ -27,6 +27,13 @@
   nothing else about ownership. Its Amendment 3 (landed by training-blocks)
   puts `blocks/` into `OWNED_PATHS`, which the whole-body owned-path pin in
   2.2 relies on.
+- **`encumbered-content-purge`'s wheel builder is a test-side dependency**:
+  task 3.1 imports `tests.test_forbidden_strings._build_artifact(repo_root,
+  out_dir, flag)` (`tests/test_forbidden_strings.py:721`, a private helper
+  of that spec's Req 11.7 artifact guards) as the suite's one `uv build`
+  recipe. `tests/test_skill_wheel.py` is a sibling module that imports it;
+  `test_forbidden_strings.py` is not edited and gains no assertion (design §
+  SkillWheelTest).
 
 **Hard rules for every task**
 
@@ -211,7 +218,10 @@ the skill *is* the feature, and distribution set the precedent (its tasks
     14`, a two-line goal; a mesocycle entry with a target and a focus and one
     with a focus only; at most twelve workouts, among them a `Workout` row
     with `modality = "strength"` and `indoor = true`, a long run, a `Ride`,
-    and **two `Run` rows on `2030-01-22` (`w2-tue`, `w2-tue-b`)**; one
+    and **two `Run` rows on `2030-01-22` (`w2-tue`, `w2-tue-b`), `w2-tue`'s
+    table written before `w2-tue-b`'s** (plan-resolution pairs an ambiguous
+    group in `block.current.rows` order, file order for original rows; task
+    3.4's stage-C pin that `w2-tue` takes the 07:00 stem depends on it); one
     amendment dated `2030-01-15` with reason `Travel week` carrying one
     update (a two-day move across no boundary), one add (a `Walk`), one
     remove, and one mesocycle target change; two overrides dated
@@ -495,7 +505,9 @@ the skill *is* the feature, and distribution set the precedent (its tasks
     07:00 and `2030-01-22-run-1800` at 18:00, each with a load under one
     methodology): exit 0, both rows' cells start `matched (ambiguous):`,
     stdout contains `ambiguous:` with both ids, `w2-tue`'s cell links the
-    07:00 stem. Stage D (+ overrides): exit 0, `w2-tue`'s cell starts
+    07:00 stem (the first row in `block.current.rows` order takes the
+    earlier page -- the example writes `w2-tue` before `w2-tue-b`). Stage D
+    (+ overrides): exit 0, `w2-tue`'s cell starts
     `overridden:` and links the 07:00 stem, `w2-tue-b`'s cell is `skipped`,
     the count line says `1 overridden, 1 skipped`, stdout has no
     `ambiguous:` line. Negative stage, which is also the supersession

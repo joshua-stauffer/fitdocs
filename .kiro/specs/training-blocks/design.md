@@ -85,7 +85,7 @@ load value.
   `document_modality`, no `FORBIDDEN_LITERALS` change, no corpus scan
   (`plan-resolution`).
 - **The chaining sites** `cli.py:279-284, 306-309, 385-386` -- untouched;
-  `fitdocs plan` is standalone.
+  `fitdocs plan` is standalone (8.8). `plan-resolution` chains there.
 - **Any write to the plan-source directory**, including creating it.
 
 ### Allowed Dependencies
@@ -193,6 +193,36 @@ load value.
    None`), `Block.mesocycles` (windows and `target_load`), and
    `Block.overrides` (`date`, `row_id`, `stems`, `skipped`, `reason`) and
    never re-parses the source.
+5. **What `plan-resolution` moves in this spec, stated so the implementer
+   writes those pins knowing they move.** `plan-resolution` supplies the
+   resolver that reads the pass's `today` -- resolved in `cli.py`, never
+   under `fitdocs.plans`, so this spec's clock scan (4.4) keeps holding --
+   chains the pass after `sync`, `drain` and `regen` following the load
+   pass, and makes `fitdocs plan` pass that resolver. Criteria 8.4 and 8.8
+   are scoped to admit exactly this, so the chaining itself needs no
+   amendment to them. Two of this spec's tests are re-anchored by that spec,
+   by exception to the append-only rule: **task 4.3's AST pin** in
+   `tests/test_cli_plan.py` (`run_plan` loaded by name exactly once, inside
+   `plan_command`) becomes "`run_plan` named nowhere in `cli.py`; that
+   spec's pass helper loaded at its four call sites and nowhere else"; and
+   **task 4.6's two-dates test** in `tests/test_plan_e2e.py` gains the
+   precondition that both fake dates -- each taken as the local date under
+   its own (timestamp, `TZ`) pair, because a `TZ` change alone can cross
+   midnight -- lie on the same side of every fixture row, since with the
+   resolver passed a row's state depends on `today` through the
+   not-logged/upcoming split. Nothing else this spec pins moves: the
+   block-page forbidden-phrase pin holds over the *default* render, and the
+   "default absent directory prints the note" CLI pin stays green because
+   that spec prints the plan report in full when `fitdocs plan` runs
+   standalone.
+6. **The word `indoor` in `sport_phrase`** (PageVocabulary) is deliberately
+   the same spelling as the planned page's frontmatter key. `plan-resolution`
+   registers that key as `contract.INDOOR_KEY` in the consumer guard's
+   forbidden literals, and `plans/page.py` is a registered consumer, so this
+   spec emits the display word from one module-level constant,
+   `page.INDOOR_WORD = "indoor"` -- the module's only spelling of that word
+   outside the planned key tuple; that spec rebinds it through the contract
+   constant with one edit to that constant.
 
 #### Shared constant
 `src/fitdocs/contract.py`'s `CONTRACT_VERSION` is one string literal, edited
@@ -353,6 +383,8 @@ src/fitdocs/
   `fitdocs.plans.engine` registered with their bindings.
 - `.kiro/specs/wiki-contract/{requirements.md,design.md,spec.json}` --
   Amendment 3 (component `WikiContractSpecUpdate`).
+- `.kiro/steering/roadmap.md` -- the Phase 7 `#### Existing Spec Updates`
+  `wiki-contract` checkbox ticked (same component).
 
 ### New test modules
 `tests/plans/{__init__.py,test_model.py,test_source.py,test_settings.py,
@@ -500,11 +532,11 @@ flowchart TD
 | 8.1 | every source, fixed order | PlanEngine | sorted discovery | pass |
 | 8.2 | data-root precedence | PlanCommand | `_resolved_data_root` | pass |
 | 8.3 | own table; malformed → config error | PlanSettings, PlanCommand | `PlanSettingsError` | pass gating |
-| 8.4 | byte-identical; no clock | PackageBoundary, PlanEngine | clock scan; e2e | pass |
+| 8.4 | byte-identical with the default resolution; the package reads no clock | PackageBoundary, PlanEngine | clock scan; e2e two-dates test (re-anchored by `plan-resolution`) | pass |
 | 8.5 | unchanged blocks write nothing | PlanEngine | byte comparison | pass |
 | 8.6 | the run report | PlanEngine, PlanCommand | `PlanReport`, `_report_plan` | pass |
 | 8.7 | planned pages before block page; per-block isolation | PlanEngine | write order | pass |
-| 8.8 | not chained | PlanCommand | absence test | -- |
+| 8.8 | not chained by this spec; `plan-resolution` chains after `sync`/`drain`/`regen` | PlanCommand | AST pin (re-anchored by `plan-resolution`) | -- |
 | 8.9 | exit codes | PlanCommand | `_finish`, `_config_error` | pass |
 | 8.10 | declarations refreshed only with a valid block | PlanEngine | `ensure_declarations` gate | pass |
 
@@ -799,8 +831,14 @@ def resolve_plans_dir(data_root: Path, settings: PlanSettings, settings_file: Pa
   with `Workout`); `AddOp` -- the id must never have been used in the block's
   history (current, removed, or original); `RemoveOp` -- the id must exist in
   the current state; `TargetOp` -- the number in range, and at least one of
-  `target_load`/`focus` present. Each valid operation yields a `Change`
-  record with before/after; an invalid one yields a `PlanProblem`. An
+  `target_load`/`focus` present. A `TargetOp` naming a number for which the
+  current state holds no target (no original `[[mesocycle]]` entry and no
+  earlier `TargetOp`) is **valid**: `before` is the synthesised
+  `MesocycleTarget(number, None, None)` -- rendered `(unset)` -- the
+  resulting state gains that target, keeping `targets` ascending, and a
+  field the op does not state keeps its current value (`None` when unset).
+  Each valid operation yields a `Change` record with before/after; an
+  invalid one yields a `PlanProblem`. An
   amendment with any invalid operation stops application: later amendments
   are not applied and one problem says "amendment[k+1..n] not checked".
   Dates must be non-decreasing in file order (a problem names the
@@ -885,6 +923,7 @@ class RowAdded:      row: PlannedWorkout
 class RowRemoved:    row: PlannedWorkout
 @dataclass(frozen=True)
 class TargetChanged: number: int; before: MesocycleTarget; after: MesocycleTarget
+    # before is MesocycleTarget(number, None, None) when the number had no stated target
 Change = RowChanged | RowAdded | RowRemoved | TargetChanged
 
 @dataclass(frozen=True)
@@ -961,14 +1000,17 @@ def build_block(*, id: str, title: str, starts: date, ends: date, goal: str, mes
   before the amendment that adds its row (problem) and on the same day
   (valid); non-decreasing dates with an equal pair (valid) and a descending
   pair (problem); ids unique across history (remove then add the same id is
-  a problem); `agents` / `AGENTS` reserved; `MUTABLE_FIELDS` rejects `id`.
+  a problem); `agents` / `AGENTS` reserved; `MUTABLE_FIELDS` rejects `id`;
+  a `TargetOp` on a mesocycle with no stated target (valid; `before ==
+  MesocycleTarget(n, None, None)` and the state gains the target).
 - Named mutations: use `<` instead of `<=` for the window's last day (the
   row-on-`ends` fixture reds); compute the count with floor division (the
   short-window fixture reds); let `AddOp` reuse a removed id (the history
   pin reds); check override existence against the *final* state instead of
   the as-of state (the before-add fixture reds); continue applying after an
   invalid amendment (the "not checked" pin reds); order a day's rows by id
-  (the source-order fixture, with ids in reverse alphabetical order, reds).
+  (the source-order fixture, with ids in reverse alphabetical order, reds);
+  reject a `TargetOp` on an untargeted mesocycle (its pin reds).
 
 #### SourceParser (`src/fitdocs/plans/source.py`)
 
@@ -1035,7 +1077,7 @@ def build_block(*, id: str, title: str, starts: date, ends: date, goal: str, mes
 | `[[amendment.update]]` | table | | `id` + one or more of `date`, `sport`, `modality`, `indoor`, `title`, `summary`, `prescription` |
 | `[[amendment.add]]` | table | | a complete `[[workout]]` row |
 | `[[amendment.remove]]` | table | | `id` |
-| `[[amendment.mesocycle]]` | table | | `number` + one or both of `target_load`, `focus` |
+| `[[amendment.mesocycle]]` | table | | `number` + one or both of `target_load`, `focus`; the number need not have an original `[[mesocycle]]` entry (an unstated target is superseded as absent) |
 | `[[override]]` `date`, `id` | date, string | yes | `id` must exist as of `date` |
 | `[[override]]` `stems` | array of strings | one of | non-empty, distinct, single-line entries |
 | `[[override]]` `skipped` | boolean | one of | must be `true` when present; exclusive with `stems` |
@@ -1165,7 +1207,17 @@ def load_block(path: Path, *, block_id: str) -> Block: ...   # raises PlanValida
   `sport_phrase(row)` is the sport value alone or followed by a
   parenthesised, comma-joined list of the stated modality and the word
   `indoor` when the flag is true -- `Run`, `Workout (strength)`,
-  `Ride (indoor)`, `Workout (strength, indoor)`.
+  `Ride (indoor)`, `Workout (strength, indoor)`. The display word `indoor`
+  is deliberately the same spelling as the planned page's frontmatter key;
+  emit it from one module-level constant, `INDOOR_WORD: Final[str] =
+  "indoor"` -- the module's only spelling of that word outside the planned
+  key tuple -- because `plan-resolution` registers that key as
+  `contract.INDOOR_KEY` among the consumer guard's forbidden literals (this
+  module is a registered consumer) and rebinds the word through the
+  contract constant with one edit to `INDOOR_WORD`. For the same reason the
+  four planned-page keys `date`, `sport`, `modality` and `indoor` are each
+  spelled once in this module's key tuples and taken from there by the
+  renderers, never re-spelled.
 
 **Contracts**: State [x] / Service [x]
 ```python
@@ -1178,6 +1230,7 @@ PLANNED_VERSION: Final[int] = 1
 PLANNED_VERSION_KEY: Final[str] = "planned_version"
 PLANNED_FRONTMATTER_KEYS: Final[tuple[str, ...]]
 WEEKDAYS: Final[tuple[str, ...]]
+INDOOR_WORD: Final[str] = "indoor"   # the sport_phrase display word; plan-resolution rebinds it to contract.INDOOR_KEY
 
 def yaml_string(value: str, *, field: str) -> str: ...
 def frontmatter(pairs: Sequence[tuple[str, str | int | bool | None]]) -> str: ...   # fence, lines, fence
@@ -1268,7 +1321,9 @@ def format_load(value: float) -> str: ...
      changed` with nested `- was:` / `- now:` blockquotes; `- Added \`id\` --
      YYYY-MM-DD, Run, "Title" -- summary`; `- Removed \`id\` -- YYYY-MM-DD,
      Run, "Title"`; `- Mesocycle 2: target load 1200 -> 1100` / `focus
-     (unset) -> "sharpen"`. With no amendments: `No amendments.`
+     (unset) -> "sharpen"` (a mesocycle with no stated target before the
+     amendment renders `target load (unset) -> 650`). With no amendments:
+     `No amendments.`
 - Renders **no** logged-workout information and no word of the downstream
   vocabulary: a forbidden-phrase pin (`matched`, `skipped`, `upcoming`,
   `not logged`, `load_value`) holds over the default render.
@@ -1490,9 +1545,12 @@ def run_plan(data_root: Path, *, resolve: Resolver | None = None) -> PlanReport:
   <source>: <path>: <reason>`; then `No source: <path>` per unsourced entry;
   then `Declaration not placed (foreign): <path>`; then the note. Every
   detail line with `markup=False, highlight=False, soft_wrap=True`.
-- `sync`, `regen`, `load`, `history` are unchanged (8.8); an AST pin in the
-  style of `tests/test_cli_history.py:660` asserts `run_plan` is loaded by
-  name exactly once, inside `plan_command`.
+- `sync`, `regen`, `load`, `history` are unchanged by this spec (8.8); an
+  AST pin in the style of `tests/test_cli_history.py:660` asserts `run_plan`
+  is loaded by name exactly once, inside `plan_command`. The pin is written
+  knowing it moves: `plan-resolution` re-anchors it when it chains the pass
+  and makes `plan_command` pass its resolver (Cross-spec obligations
+  (training-blocks ↔ plan-resolution), item 5).
 - The module docstring's command list and exit-code paragraph gain `plan`.
 
 **Contracts**: Service [x]
@@ -1515,7 +1573,7 @@ def plan_command(out: Path | None = _OUT_OPTION) -> None: ...
 
 ### Guards
 
-#### WikiContractSpecUpdate (`.kiro/specs/wiki-contract/{requirements.md,design.md,spec.json}`)
+#### WikiContractSpecUpdate (`.kiro/specs/wiki-contract/{requirements.md,design.md,spec.json}`, `.kiro/steering/roadmap.md` one checkbox)
 
 | Field | Detail |
 |-------|--------|
@@ -1533,11 +1591,15 @@ def plan_command(out: Path | None = _OUT_OPTION) -> None: ...
   bullet (`:37`) gains a `blocks/` clause plus a sentence that a configured
   read location grants no write right.
 - `spec.json` gains an amendments entry.
+- The roadmap's Phase 7 `#### Existing Spec Updates` `wiki-contract`
+  checkbox is ticked with "landed by training-blocks as Amendment 3", the
+  way `build-training-block`'s 3.3 ticks the `distribution` one.
 
 **Contracts**: State [x]
 
 **Implementation Notes**
-- Validation: `/kiro-spec-status wiki-contract` clean with the entry present.
+- Validation: `/kiro-spec-status wiki-contract` clean with the entry present;
+  the roadmap checkbox reads `[x]`.
 - Risks: none -- no peer spec in this batch amends `wiki-contract`
   (`plan-resolution` amends it only if its design adds a back-link key, and
   that would be a fourth amendment appended after this one).
@@ -1724,7 +1786,14 @@ no telemetry.
 - Run twice: byte-identical pages, every block `unchanged` (8.5).
 - Run under two different fake system dates and time zones (importing the
   `tests/test_history_e2e.py:211-245` contextmanager -- `tests` is a
-  package -- rather than copying it): byte-identical (8.4).
+  package -- rather than copying it): byte-identical (8.4). Choose the two
+  (timestamp, `TZ`) pairs so that both local dates already lie on the same
+  side of every fixture row (for instance both after the block's last day)
+  and say so in a comment naming `plan-resolution`: with the default
+  resolution any two dates prove the same thing, and this choice keeps that
+  spec's re-anchoring to an added precondition assertion rather than a
+  change of dates (Cross-spec obligations (training-blocks ↔
+  plan-resolution), item 5).
 - An invalid source beside a valid one: exit 1, the valid block rendered,
   every problem printed (2.11, 8.9).
 - A foreign file at a block page path: exit 1, untouched, named (7.8).

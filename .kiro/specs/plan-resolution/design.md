@@ -63,8 +63,11 @@ or plan source, and no rendered structure of the block or planned pages.
   coverage and unplanned listing; the vocabulary and the placement into
   `Resolution`; the reconciling pass, its report and its entry point; the
   chaining and `fitdocs plan`'s resolver.
-- The amendment to `training-blocks` requirements 8.4 and 8.8 recording the
-  chaining and the `today` dependence.
+- The re-anchoring of two `training-blocks` tests (its task 4.3 AST pin and
+  its task 4.6 two-dates test) and the record of that re-anchoring in the
+  upstream spec. `training-blocks` has scoped its criteria 8.4 and 8.8
+  itself to admit this spec's resolver and chaining; no criterion of that
+  spec is reworded here.
 
 ### Out of Boundary
 - **`src/fitdocs/plans/{model,source,resolution,page,block_page,planned_page,engine,settings}.py`**
@@ -89,7 +92,10 @@ or plan source, and no rendered structure of the block or planned pages.
 - `fitdocs.history` **package root only**: `MethodologyChoice`,
   `MethodologyProblem`, `MethodologyRecord`, `select_methodology`,
   `partition_pages`, `load_history_settings` -- from `plans.reconcile` and
-  `plans.aggregate`. Never `fitdocs.history.<submodule>`.
+  `plans.aggregate`, and the two types `MethodologyChoice` /
+  `MethodologyProblem` alone from `plans.placement` (to type and
+  discriminate `BlockReconciliation.methodology`, which it defines; see
+  Placement). Never `fitdocs.history.<submodule>`.
 - `fitdocs.load.settings.load_load_settings` -- only from `plans.reconcile`
   (the same reader `history/engine.py:317` uses). Never any other
   `fitdocs.load.<submodule>`.
@@ -144,18 +150,36 @@ or plan source, and no rendered structure of the block or planned pages.
    re-parsed.
 6. **Obligations this spec places on `training-blocks` that its design does
    not provide** (stated so the cross-spec reviewer sees them):
-   - **8.8 and 8.4 are superseded in part.** Once this spec lands, `fitdocs
-     plan` passes a resolver, the pass runs after `sync`/`regen`, and a
-     row's state depends on `today`. Task 3.4 lands **Amendment 1** to
-     `.kiro/specs/training-blocks/requirements.md` (criteria 8.4 and 8.8
-     each gain an *(amended by plan-resolution)* clause; nothing
-     renumbered) and re-anchors two of its tests: the `tests/test_cli_plan.py`
-     AST pin (see CliChaining) and the `tests/test_plan_e2e.py` two-dates
-     test (both fake dates must lie on the same side of every fixture row,
-     or the fixture must hold no rows; this spec's own e2e pins the
-     crossing case).
-   - **`plans/page.py` spells four frontmatter keys** that become guarded
-     literals here; task 1.1 routes them through the contract constants and
+   - **8.4 and 8.8 are scoped by `training-blocks` to admit this spec; this
+     spec re-anchors the two pins.** `training-blocks` 8.4 requires
+     byte-identity across calendar days and no clock under the package
+     *with the default (unresolved) resolution*, and states that a
+     caller-supplied resolver may depend on the pass's `today`, resolved
+     outside the package (this spec's is resolved in `cli.py`), under which
+     byte-identity across days holds only for two dates on the same side of
+     every planned row; its 8.8 states that this spec chains the pass after
+     `sync`, `drain` and `regen` following the load pass and never after
+     `load`, `history` or `check`. Neither criterion is contradicted, so
+     neither is reworded. What does move is two of its tests, named by its
+     design § "Cross-spec obligations (training-blocks ↔ plan-resolution)"
+     item 5 and re-anchored by task 3.2 in the same change as the CLI edit:
+     the `tests/test_cli_plan.py` AST pin (`run_plan` loaded once inside
+     `plan_command` → `run_plan` named nowhere in `cli.py`, `_run_plan_pass`
+     loaded at its four sites; see CliChaining) and the `tests/test_plan_e2e.py`
+     two-dates test (precondition: both fake dates, each taken as the local
+     date under its own (timestamp, `TZ`) pair, lie on the same side of every
+     fixture row, or the fixture holds no rows -- `training-blocks` task 4.6
+     is told to choose such dates already; this spec's own e2e pins the
+     crossing case). Task 3.4 records the re-anchoring in that spec's
+     `spec.json` amendments and as one paragraph in its `requirements.md`
+     (TrainingBlocksSpecUpdate).
+   - **`plans/page.py` spells four frontmatter keys and one display word**
+     that become guarded literals here: the four members of its planned-key
+     tuple and `INDOOR_WORD` -- the constant `sport_phrase` emits the word
+     `indoor` from, deliberately the same spelling as the key
+     (`training-blocks` design item 6 / PageVocabulary). Task 1.1 routes
+     the four keys through the contract constants, rebinds `INDOOR_WORD` to
+     `INDOOR_KEY` (`INDOOR_WORD: Final[str] = INDOOR_KEY`, one edit), and
      extends its `CONTRACT_BINDINGS` entry (an append). Wave 1's boundary
      test pins `page.py`'s import *targets*, not names, so nothing there
      moves.
@@ -226,7 +250,8 @@ graph TD
   RUN --> MAT["plans/matching.py :: match_rows"]
   RUN --> AGG["plans/aggregate.py :: aggregate_mesocycles"]
   AGG --> PART["history :: partition_pages"]
-  RUN --> PLC["plans/placement.py :: place_resolution"]
+  RUN --> PLC["plans/placement.py :: BlockReconciliation place_resolution"]
+  PLC --> HTY["history :: MethodologyChoice MethodologyProblem"]
   PLC --> RES["plans/resolution.py :: Resolution"]
   PLC --> LAY["layout :: logged_rel_link_from_block logged_rel_link_from_planned"]
   PLC --> PG["plans/page.py :: link_text format_load"]
@@ -238,12 +263,24 @@ graph TD
 - Dependency direction: `cli → plans.reconcile → {plans.engine, plans.corpus,
   plans.matching, plans.aggregate, plans.placement, history (root),
   load.settings, settings, layout}`; `plans.placement → {plans.resolution,
-  plans.page, plans.model, plans.matching, plans.aggregate, layout}`;
-  `plans.aggregate → {plans.corpus, plans.model, history (root)}`;
+  plans.page, plans.model, plans.matching, plans.aggregate, layout, history
+  (root)}`; `plans.aggregate → {plans.corpus, plans.model, history (root)}`;
   `plans.matching → {plans.corpus, plans.model}`; `plans.corpus →
   {contract, docio, layout, model}`. `plans.engine` never imports any of
   these -- it takes the callable. No cycle: `plans.__init__` re-exports both
-  sides.
+  sides. **`BlockReconciliation` is defined in `plans.placement`**, the
+  lowest module that reads it, and imported upward by `plans.reconcile`
+  (which builds it): `place_resolution` takes it, and a type defined in
+  `reconcile` would need `placement` to import a module above it -- a cycle
+  the boundary test's equality pin on import targets would red, and a
+  `TYPE_CHECKING` import still appears in the AST (cross-spec reviewer,
+  round 1). It is not pushed lower: `matching` and `aggregate` stay free of
+  reconcile-level types (`aggregate` takes `claimed: frozenset[str]` for
+  exactly that reason). Placement had to import the two history types
+  regardless of where the record lives -- the `Methodology:` block line
+  discriminates `MethodologyChoice` from `MethodologyProblem`, which needs
+  the class objects -- so the exemption map admits `history (root)` for
+  `placement` as well as `aggregate` and `reconcile`.
 - Domain boundaries: reading, matching, summing, wording and orchestrating
   are five modules; the matcher never sees a load, the aggregator never sees
   a confidence label, the placement never sees a `Path`.
@@ -276,13 +313,13 @@ src/fitdocs/
 ├── cli.py                       # + _today, _run_plan_pass, _report_reconcile; chaining; plan passes the resolver
 └── plans/
     ├── __init__.py              # appended: this spec's published names
-    ├── page.py                  # four key spellings routed through the contract constants (no output change)
+    ├── page.py                  # four key spellings + INDOOR_WORD routed through the contract constants (no output change)
     ├── corpus.py                # LoggedWorkout, Corpus, scan_corpus -- the one read
     ├── matching.py              # RowState, Confidence, RowOutcome, ReconcileProblem, MatchResult,
     │                            #   effective_overrides, is_candidate, match_rows -- pure
     ├── aggregate.py             # MesocycleLoad, aggregate_mesocycles -- pure
-    ├── placement.py             # the vocabulary; place_resolution; actual_load_sentence -- pure
-    └── reconcile.py             # BlockReconciliation, ReconcileReport, reconcile_block, Reconciler, run_reconcile
+    ├── placement.py             # the vocabulary; BlockReconciliation; place_resolution; actual_load_sentence -- pure
+    └── reconcile.py             # ReconcileReport, reconcile_block, Reconciler, run_reconcile
 ```
 
 ### Modified Files
@@ -293,8 +330,11 @@ src/fitdocs/
   and the four siblings; the import line grows. Output unchanged.
 - `src/fitdocs/plans/page.py` -- `PLANNED_FRONTMATTER_KEYS`' four members and
   any sibling spelling become `DATE_KEY`, `SPORT_KEY`, `MODALITY_KEY`,
-  `INDOOR_KEY` (from-imports, so the identity binding sees them). Output
-  unchanged.
+  `INDOOR_KEY` (from-imports, so the identity binding sees them), and the
+  display constant `INDOOR_WORD` (the word `sport_phrase` emits) is rebound
+  to `INDOOR_KEY` with a comment that the display word and the key are
+  deliberately the same spelling -- so the module carries no bare
+  `"indoor"` constant. Output unchanged.
 - `src/fitdocs/history/series.py` -- `MethodologyRecord` protocol; the two
   signatures widened; a `TypeVar`. Docstring names the widening.
 - `src/fitdocs/history/__init__.py` -- one appended name.
@@ -332,7 +372,13 @@ src/fitdocs/
   -- the two-dates test re-anchored.
 - `tests/declaration_golden/blocks.AGENTS.md` -- regenerated by the goldens
   module's generator (only this golden's text changes).
-- `.kiro/specs/training-blocks/{requirements.md,spec.json}` -- Amendment 1.
+- `.kiro/specs/training-blocks/{requirements.md,spec.json}` -- the record
+  of the two re-anchored pins: one amendments entry in `spec.json` and one
+  paragraph appended to `requirements.md`; no criterion reworded, nothing
+  renumbered (TrainingBlocksSpecUpdate).
+- `.kiro/steering/roadmap.md` -- one checkbox: the Phase 7 `#### Existing
+  Spec Updates` entry for `workout-docs` ticked `[x]` as "no change" (see
+  "Decisions recorded for the roadmap").
 
 ### New test modules
 `tests/plans/{test_corpus.py,test_matching.py,test_aggregate.py,test_placement.py,test_reconcile.py}`;
@@ -479,13 +525,13 @@ flowchart TD
 | CorpusScan | Read | `LoggedWorkout`, `Corpus`, `scan_corpus` | 1.1, 1.3-1.7 | ContractReaders, `docio` (P0) | State, Service |
 | Matcher | Core | States, labels, rules, overrides, problems | 2.1-2.7, 3.1-3.9, 4.1-4.4 | CorpusScan, `plans.model` (P0) | State, Service |
 | Aggregator | Core | Per-mesocycle sums, coverage, unplanned | 1.3, 1.4, 3.6, 4.2, 6.1-6.4, 6.7, 6.8 | CorpusScan, HistoryRecordProtocol (P0) | State, Service |
-| Placement | Core | The vocabulary; `Resolution` from a reconciliation | 3.7, 4.3, 4.5, 5.3, 6.3-6.7, 7.1-7.7 | Matcher, Aggregator, LoggedLinks, `plans.page`, `plans.resolution` (P0) | Service |
+| Placement | Core | The vocabulary; `BlockReconciliation`; `Resolution` from a reconciliation | 3.7, 4.3, 4.5, 5.3, 6.3-6.7, 7.1-7.7 | Matcher, Aggregator, LoggedLinks, `plans.page`, `plans.resolution`, `history` root types (P0) | State, Service |
 | ReconcilePass | Pass | Settings, lazy corpus, methodology, resolver, report | 2.6, 4.3, 4.6, 5.1, 5.2, 5.4, 6.2, 6.6, 8.4, 8.6, 8.9 | all of the above, `plans.engine` (P0) | Service, Batch |
 | CliChaining | CLI | `_today`, `_run_plan_pass`, `_report_reconcile`, the four call sites | 4.3, 5.5, 8.1-8.3, 8.5-8.7 | ReconcilePass (P0) | Service |
 | ConfinementRegistration | Guard | The `reconcile` entry point | 4.6, 8.8 | ReconcilePass (P0) | -- |
 | PackageBoundary, SurfacePins | Guard | Boundary extension, surface pins, mypy | 5.1, 5.5, 6.8, 7.6, 8.4 | package (P0) | -- |
 | OwnershipDocs | Docs | Declaration clause, contract note, README | 8.1, 8.8 | `declaration` (P0) | State |
-| TrainingBlocksSpecUpdate | Spec | Amendment 1 and the two re-anchored tests | 5.2, 8.1, 8.2 | -- | State |
+| TrainingBlocksSpecUpdate | Spec | The two re-anchored tests, their record in the upstream spec, the roadmap tick | 5.2, 8.1, 8.2 | -- | State |
 
 ### Contract and Layout
 
@@ -518,8 +564,16 @@ flowchart TD
     a non-empty `str` or the whole reading is `None`.
 - `render/frontmatter.py:124-131` writes the five keys through the constants
   (`data[DATE_KEY] = ...`); `plans/page.py` names the four planned keys
-  through them. Neither changes an output byte -- the workout goldens and
-  the wave-1 planned golden pin that. If a wave-1 *renderer*
+  through them **and rebinds its display constant** -- `INDOOR_WORD:
+  Final[str] = INDOOR_KEY`, with a comment that the display word
+  `sport_phrase` emits and the frontmatter key are deliberately the same
+  spelling (`training-blocks` design § PageVocabulary). That is the fifth
+  registered-module occurrence of a forbidden value: `page.py` is a
+  registered consumer, the guard walks every `ast.Constant`, and
+  `training-blocks` emits the word from that one constant so this is one
+  edit; after it `page.py` carries no bare `"indoor"` constant. Neither
+  module changes an output byte -- the workout goldens and the wave-1
+  planned golden pin that. If a wave-1 *renderer*
   (`block_page.py`, `planned_page.py`) turns out to spell one of the keys
   too, it is **reported as a queue item, not edited**: the renderers are out
   of this spec's boundary and the literal guard does not reach unregistered
@@ -561,7 +615,9 @@ def document_load(frontmatter: Mapping[str, object] | None) -> LoadReading | Non
 - Named mutations: accept a naive start time (its pin reds); read `indoor`
   as truthy (`"yes"` → `True` pin reds); return a reading when methodology
   is absent (the `(None, None)` parity pin reds); spell `"sport"` inline in
-  `render/frontmatter.py` (the literal guard reds, ConsumerGuard).
+  `render/frontmatter.py` (the literal guard reds, ConsumerGuard);
+  reintroduce the bare literal for `plans/page.py`'s `INDOOR_WORD` (the
+  literal guard's `fitdocs.plans.page` case reds).
 
 #### ConsumerGuard (`tests/test_contract_consumers.py`)
 
@@ -573,8 +629,15 @@ def document_load(frontmatter: Mapping[str, object] | None) -> LoadReading | Non
 **Responsibilities & Constraints**
 - `FORBIDDEN_LITERALS` gains `DATE_KEY`, `START_TIME_KEY`, `SPORT_KEY`,
   `MODALITY_KEY`, `INDOOR_KEY` (by constant, never re-spelled). The scan
-  runs over every `CONVERTED_MODULES` entry; the two that spelled them are
-  routed in the same change (ContractReaders).
+  runs over every `CONVERTED_MODULES` entry and walks every `ast.Constant`
+  (`tests/test_contract_consumers.py:355-367`), so it reds on a bare
+  spelling wherever it sits, key or display word. The registered-module
+  occurrences of the five values are exactly ten, all routed in the same
+  change (ContractReaders): `render/frontmatter.py`'s five key writes,
+  `plans/page.py`'s four planned-key-tuple members, and `plans/page.py`'s
+  `INDOOR_WORD` -- the constant `sport_phrase` emits the word `indoor`
+  from, rebound to `INDOOR_KEY`. A docstring that merely contains the word
+  is not an occurrence (the scan compares the whole constant's value).
 - `CONVERTED_MODULES` gains `fitdocs.plans.corpus`; `CONTRACT_BINDINGS`
   gains `"fitdocs.plans.corpus": ("document_date", "document_indoor",
   "document_load", "document_modality", "document_sport",
@@ -592,7 +655,10 @@ def document_load(frontmatter: Mapping[str, object] | None) -> LoadReading | Non
 - Named mutations: `frontmatter.get("sport")` inline in `plans/corpus.py`
   (the literal scan reds); a local `def document_sport` copy in `corpus.py`
   (the identity binding reds); drop `fitdocs.plans.corpus` from one registry
-  (`test_every_converted_module_declares_its_contract_bindings` reds).
+  (`test_every_converted_module_declares_its_contract_bindings` reds);
+  rebind `plans/page.py`'s `INDOOR_WORD` to a bare `"indoor"` (the literal
+  scan's `fitdocs.plans.page` case reds -- the display-word occurrence, not
+  a key).
 
 #### HistoryRecordProtocol (`src/fitdocs/history/series.py`, `src/fitdocs/history/__init__.py`)
 
@@ -924,10 +990,23 @@ def aggregate_mesocycles(block: Block, corpus: Corpus, *, claimed: frozenset[str
 
 | Field | Detail |
 |-------|--------|
-| Intent | The words -- every state, label and statement the pages carry -- and the `Resolution` they are placed in |
+| Intent | The words -- every state, label and statement the pages carry -- the per-block record they are read from, and the `Resolution` they are placed in |
 | Requirements | 3.7, 4.3, 4.5, 5.3, 6.3-6.7, 7.1-7.7 |
 
 **Responsibilities & Constraints**
+- **Defines `BlockReconciliation`** -- the per-block record (rows, mesocycle
+  loads, the run's methodology, problems) with its derived `counts()`,
+  `ambiguous` and `unplanned_count` -- because this is the lowest module
+  that reads it: `place_resolution` takes one, and `reconcile.py` (which
+  builds it, one module up) imports it from here. Defining it in
+  `reconcile.py` would make `placement` import a module above it (a cycle
+  the boundary test's equality pin reds; a `TYPE_CHECKING` import still
+  appears in the AST); defining it in `matching.py` or `aggregate.py` would
+  put a reconcile-level type below the modules it composes. The record's
+  `methodology` field is typed `MethodologyChoice | MethodologyProblem`,
+  and the `Methodology:` block line discriminates the two, so this module
+  imports exactly those two names from the `fitdocs.history` root (its
+  exemption-map entry; PackageBoundary) and nothing else of history.
 - The vocabulary is constants here and nowhere else (7.7): the five
   `RowState` values and three `Confidence` values (imported), plus
   `NOT_COMPUTED = "not computed"`, `AT_LEAST = "at least"`, `NO_TARGET =
@@ -942,7 +1021,10 @@ def aggregate_mesocycles(block: Block, corpus: Corpus, *, claimed: frozenset[str
 - `logged_phrase(w)`: the sport value (`unknown sport` when `None`), with a
   parenthesised, comma-joined modality (only when `sport is Sport.WORKOUT`
   and stated) and `indoor` when `True` -- the same shape as
-  `page.sport_phrase`.
+  `page.sport_phrase`, and the word taken from `page.INDOOR_WORD` (which
+  task 1.1 rebinds to the contract constant), so the display word has one
+  spelling in the package even though this module is not a registered
+  consumer.
 - `load_phrase(w, methodology)`: `load 45` when scored under the chosen
   methodology; `load 45 under other (excluded from the sum)` under another;
   `unscored` when `None`.
@@ -954,7 +1036,7 @@ def aggregate_mesocycles(block: Block, corpus: Corpus, *, claimed: frozenset[str
 | cell | MATCHED exact | `matched: <link>` |
 | cell | MATCHED absorbed | `matched (absorbed 3): <link>, <link>, <link>` |
 | cell | MATCHED ambiguous | `matched (ambiguous): <link>` |
-| cell | OVERRIDDEN | `overridden: <link>, <link>` + `, \`stem\` (not found)` per missing |
+| cell | OVERRIDDEN | `overridden: ` + comma-join of (one `<link>` per existing stem, in the override's order, then one `` `stem` (not found) `` per missing stem, in the override's order) -- so `overridden: <link>, \`stem\` (not found)` with one of each, and `` overridden: `stem` (not found) `` when every named stem is missing (never a leading comma) |
 | cell | SKIPPED | `skipped` |
 | cell | NOT_LOGGED / UPCOMING | `not logged` / `upcoming` |
 | section | MATCHED exact | `Matched (exact): one logged workout on this day is of this type, and no other planned workout competes for it.` then `- <link> -- Run, 07:15, load 45` |
@@ -973,7 +1055,7 @@ def aggregate_mesocycles(block: Block, corpus: Corpus, *, claimed: frozenset[str
 | before_table | no methodology | `Actual load: not computed -- no methodology chosen (see Resolution below).` |
 | after_table | unplanned | `Unplanned: 2 logged workouts in this window match no planned workout.` + `- <link> -- 2026-09-23, Run, load 45` |
 | after_table | excluded | `Excluded from the sum (scored under another methodology):` + `- <link> -- 2026-09-23, Run, load 45 under other (excluded from the sum)` |
-| block_lines | always | `Planned workouts: 12 -- 7 matched (1 ambiguous), 1 overridden, 1 skipped, 2 not logged, 1 upcoming.` |
+| block_lines | always | `Planned workouts: 12 -- 7 matched (1 ambiguous), 1 overridden, 1 skipped, 2 not logged, 1 upcoming.` -- zero-count states omitted (rule below); every row one state: `Planned workouts: 3 -- 3 upcoming.`; no rows: `Planned workouts: 0.` |
 | block_lines | methodology | `Methodology: threshold (configured).` / `(inferred from the logged workouts).` / `Methodology: none chosen -- <detail>` |
 | block_lines | ambiguous rows | `Ambiguous: \`w2-tue\`, \`w2-tue-b\` -- settle them with override entries.` |
 | block_lines | problems | `Problems:` + `- override[0] (id w1-thu): stem \`2026-09-24-run-0700\` not found among the logged workouts` |
@@ -982,13 +1064,51 @@ Singular/plural: `1 logged workout`, `2 logged workouts`; `1 planned
 workout`. The `-- Run, 07:15, load 45` bullet omits the time when
 `start_time is None`. Percent: `round(100 * total / target)`.
 
-**Contracts**: Service [x]
+**The count line's rule** (cross-spec reviewer, round 1): `Planned
+workouts: <N>` where `N = len(block.current.rows)`; when `N >= 1`, then
+` -- ` and the comma-join of `<count> <state>` for exactly the states whose
+count is `>= 1`, in the fixed order matched, overridden, skipped, not
+logged, upcoming; `matched` carries ` (<k> ambiguous)` only when `k >= 1`;
+then `.`. Zero-count states are omitted, so a block whose every row is one
+state reads `Planned workouts: 3 -- 3 upcoming.`, and a block with no rows
+(valid under `training-blocks`) reads `Planned workouts: 0.` with no
+separator and no list. The CLI's `reconciled` summary line prints its
+per-state list under the same rule (CliChaining). `build-training-block`'s
+e2e asserts the substring `1 overridden, 1 skipped` and, for an all-upcoming
+block, that the line says so -- both hold.
+
+**The overridden cell's rule**: `overridden: ` followed by one comma-join
+over the existing stems' links first and the missing stems' `` `stem` (not
+found) `` items after, each group in the override's own order; the join is
+over the concatenated sequence, so with zero existing stems the cell is
+exactly `` overridden: `stem` (not found) `` (no leading comma).
+`build-training-block`'s negative stage asserts a cell starting
+`overridden:` and carrying `` `2030-01-22-run-0930` (not found) `` -- that
+is this form.
+
+**Contracts**: State [x] / Service [x]
 ```python
+@dataclass(frozen=True)
+class BlockReconciliation:                              # built by reconcile.reconcile_block; read here and by the report
+    block_id: str
+    rows: tuple[RowOutcome, ...]
+    mesocycles: tuple[MesocycleLoad, ...]
+    methodology: MethodologyChoice | MethodologyProblem   # the two history-root names this module imports
+    problems: tuple[ReconcileProblem, ...]
+    def counts(self) -> Mapping[RowState, int]: ...     # every state present, zero included; the count line omits zeros
+    @property
+    def ambiguous(self) -> tuple[str, ...]: ...        # row ids, block order
+    @property
+    def unplanned_count(self) -> int: ...
+
 def actual_load_sentence(m: MesocycleLoad) -> str: ...          # the text after "Actual load: " (reused by the report)
 def row_cell(outcome: RowOutcome) -> str: ...
 def row_section(block: Block, row: PlannedWorkout, outcome: RowOutcome, corpus: Corpus) -> tuple[str, ...]: ...
 def place_resolution(block: Block, reconciliation: BlockReconciliation, corpus: Corpus) -> Resolution: ...
 ```
+- `BlockReconciliation` invariants: `sum(counts().values()) == len(rows)`;
+  `ambiguous` = the ids of rows with `confidence is AMBIGUOUS`, block
+  order; `unplanned_count = sum(len(m.unplanned) for m in mesocycles)`.
 - Postconditions: `page.check_resolution(block, place_resolution(...))`
   raises nothing; every row id and every mesocycle number present; no cell
   contains `\n` or `|`; no section line is a fence line; `block_lines` is
@@ -1019,7 +1139,14 @@ def place_resolution(block: Block, reconciliation: BlockReconciliation, corpus: 
   built `Resolution` value (with `today` inside the block, so the day table
   prints it and only the value can be clean); `actual_load_sentence` over
   each case by exact string; a stem containing `]` passes through
-  `link_text`; two calls are byte-equal.
+  `link_text`; two calls are byte-equal; **`row_cell` over an overridden
+  outcome with zero existing stems and one missing stem is exactly**
+  `` overridden: `stem` (not found) `` (by exact string, beside the golden's
+  one-link-one-missing case); **the count line over a `BlockReconciliation`
+  whose every row is `UPCOMING`** is exactly `Planned workouts: 3 -- 3
+  upcoming.` and over a block with no rows exactly `Planned workouts: 0.`;
+  `BlockReconciliation.counts()` sums to the row count, `ambiguous` names
+  the pair in block order, `unplanned_count` sums the mesocycles.
 - Named mutations: render an absent total as `0` (the golden reds); drop
   `at least` (the lower-bound pin reds); count `considered` over `pages` in
   `aggregate.py` -- a cross-module mutation of the Aggregator's coverage
@@ -1027,7 +1154,9 @@ def place_resolution(block: Block, reconciliation: BlockReconciliation, corpus: 
   block-depth link on the planned page (the planned golden reds); append
   `today.isoformat()` to the upcoming section line (the value-level
   no-today postcondition reds); write `matched` for an overridden row (the
-  golden reds).
+  golden reds); prefix every not-found item with `, ` regardless of link
+  count (the zero-link overridden-cell pin reds: a leading comma); print
+  zero-count states on the count line (the all-upcoming pin reds).
 
 ### Pass and CLI
 
@@ -1051,7 +1180,10 @@ def place_resolution(block: Block, reconciliation: BlockReconciliation, corpus: 
   block id, returns `place_resolution(...)`. Never raises for a valid
   block. The corpus is never scanned when `run_plan` finds no valid block.
 - `reconcile_block` is pure: `match_rows` → `aggregate_mesocycles(claimed=)`
-  → `BlockReconciliation(problems = match.problems)`.
+  → `BlockReconciliation(problems = match.problems)`. The record type is
+  **imported from `plans.placement`**, which defines it (see Placement for
+  the dependency-order reason); this module builds it and hands it to
+  `place_resolution` and to the report.
 - A `MethodologyProblem` is carried on every `BlockReconciliation.methodology`
   (so each page states it) and once on the report (6.6); it is never
   raised.
@@ -1061,18 +1193,7 @@ def place_resolution(block: Block, reconciliation: BlockReconciliation, corpus: 
 
 **Contracts**: Service [x] / Batch [x]
 ```python
-@dataclass(frozen=True)
-class BlockReconciliation:
-    block_id: str
-    rows: tuple[RowOutcome, ...]
-    mesocycles: tuple[MesocycleLoad, ...]
-    methodology: MethodologyChoice | MethodologyProblem
-    problems: tuple[ReconcileProblem, ...]
-    def counts(self) -> Mapping[RowState, int]: ...
-    @property
-    def ambiguous(self) -> tuple[str, ...]: ...        # row ids, block order
-    @property
-    def unplanned_count(self) -> int: ...
+from fitdocs.plans.placement import BlockReconciliation, place_resolution   # the record is placement's (see Placement)
 
 @dataclass(frozen=True)
 class ReconcileReport:
@@ -1156,7 +1277,10 @@ def run_reconcile(data_root: Path, *, today: date) -> ReconcileReport: ...
   (8.3).
 - `_report_reconcile`: per block `reconciled <block_id>: N planned -- a
   matched (b ambiguous), c overridden, d skipped, e not logged, f upcoming;
-  g unplanned`, one indented `mesocycle n: <actual_load_sentence>` per
+  g unplanned` -- the per-state list under the block page's count-line
+  rule (Placement: zero-count states omitted, `(b ambiguous)` only when
+  `b >= 1`, no ` -- ` and no list when `N == 0`; `g unplanned` always
+  printed), one indented `mesocycle n: <actual_load_sentence>` per
   mesocycle, `ambiguous: <ids>` when any, one indented `describe()` per
   problem; then once `methodology: threshold (configured)` or `methodology:
   none chosen -- <detail>` when `report.methodology` is not `None`. Detail
@@ -1269,8 +1393,9 @@ def _report_reconcile(report: ReconcileReport) -> None: ...
   its names to `plans.__all__`, and the same names with owners to
   `_PLANS_SURFACE`** -- 2.1 (`corpus`; also widens the contract-importer
   pin to three), 2.2 (`matching`), 2.3 (`aggregate`; also introduces the
-  exemption map below with its own entry), 2.4 (`placement`), 3.1
-  (`reconcile`; appends its exemption entry). Two parallel tasks (2.2 and
+  exemption map below with its own entry), 2.4 (`placement`; appends its
+  exemption entry), 3.1 (`reconcile`; appends its exemption entry). Two
+  parallel tasks (2.2 and
   2.3) both append to these two test files and to `__init__.py`; the
   controller merges the appends, and a wholesale rewrite by either is a
   defect. Task 3.3 then adds only what no single module owns: the
@@ -1283,10 +1408,14 @@ def _report_reconcile(report: ReconcileReport) -> None: ...
   `fitdocs.history`, `fitdocs.render`, `fitdocs.sync`, `fitdocs.audit`,
   `yaml`); an **exemption map** `{"fitdocs.plans.reconcile":
   {"fitdocs.history", "fitdocs.load.settings"}, "fitdocs.plans.aggregate":
-  {"fitdocs.history"}}` admits exactly those (module, target) pairs;
-  `fitdocs.history.documents` (or any `fitdocs.history.<sub>`) from any
-  module stays forbidden -- a positive control (3.3) asserts a synthetic
-  `from fitdocs.history.documents import scan_documents` is caught.
+  {"fitdocs.history"}, "fitdocs.plans.placement": {"fitdocs.history"}}`
+  admits exactly those (module, target) pairs -- `placement`'s entry
+  exists for the two type names `MethodologyChoice` / `MethodologyProblem`
+  that `BlockReconciliation.methodology` and the `Methodology:` line need
+  (Placement); `fitdocs.history.documents` (or any `fitdocs.history.<sub>`)
+  from any module stays forbidden -- a positive control (3.3) asserts a
+  synthetic `from fitdocs.history.documents import scan_documents` is
+  caught.
 - The "only `page` and `engine` import `fitdocs.contract`" pin becomes
   "only `page`, `engine` and `corpus`" (2.1).
 - The clock scan, the reverse-reachability scan and the no-source-write scan
@@ -1301,10 +1430,10 @@ def _report_reconcile(report: ReconcileReport) -> None: ...
 - `_PLANS_SURFACE` ends with, appended by the task named: `LoggedWorkout`,
   `Corpus`, `scan_corpus` (2.1); `RowState`, `Confidence`, `RowOutcome`,
   `ReconcileProblem`, `MatchResult`, `match_rows` (2.2); `MesocycleLoad`,
-  `aggregate_mesocycles` (2.3); `place_resolution`, `actual_load_sentence`
-  (2.4); `BlockReconciliation`, `ReconcileReport`, `reconcile_block`,
-  `run_reconcile` (3.1) -- each with its owner. `_CONTRACT_SURFACE` and
-  `_HISTORY_SURFACE` as stated above.
+  `aggregate_mesocycles` (2.3); `BlockReconciliation`, `place_resolution`,
+  `actual_load_sentence` (2.4, owner `fitdocs.plans.placement`);
+  `ReconcileReport`, `reconcile_block`, `run_reconcile` (3.1) -- each with
+  its owner. `_CONTRACT_SURFACE` and `_HISTORY_SURFACE` as stated above.
 - mypy `files`: `tests/plans/test_corpus.py`, `test_matching.py`,
   `test_aggregate.py`, `test_reconcile.py`.
 
@@ -1346,27 +1475,43 @@ def _report_reconcile(report: ReconcileReport) -> None: ...
   quantifier guard reds); change the clause without regenerating the golden
   (the goldens test reds).
 
-#### TrainingBlocksSpecUpdate (`.kiro/specs/training-blocks/{requirements.md,spec.json}`, `tests/test_cli_plan.py`, `tests/test_plan_e2e.py`)
+#### TrainingBlocksSpecUpdate (`.kiro/specs/training-blocks/{requirements.md,spec.json}`, `tests/test_cli_plan.py`, `tests/test_plan_e2e.py`, `.kiro/steering/roadmap.md`)
 
 | Field | Detail |
 |-------|--------|
-| Intent | Record, in the upstream spec, what this spec supersedes, and re-anchor its two tests |
+| Intent | Re-anchor the two upstream tests this spec moves, record that in the upstream spec, and tick the roadmap entry this spec closes |
 | Requirements | 5.2, 8.1, 8.2 |
 
 **Responsibilities & Constraints**
-- `requirements.md` gains `## Amendment 1 (2026-09-15): the reconciling pass
-  is chained and the pages depend on today, landed by plan-resolution` in
-  the shape of wiki-contract's amendments; 8.4 gains the clause *(amended by
-  Amendment 1: with the resolver passed, a planned workout's state depends
-  on the pass's today only through the not-logged/upcoming split; the pages
-  print no date they were judged against)*; 8.8 gains *(amended by
-  Amendment 1: the plan pass runs at the end of sync and regen after the
-  load pass, and never as part of load, history or check)*. Nothing
-  renumbered; `spec.json` gains an amendments entry.
-- `tests/test_plan_e2e.py`'s two-dates test: both fake dates after the
-  fixture block's last day (or before its first), asserted as a
-  precondition; this spec's own e2e pins the crossing case.
-- `tests/test_cli_plan.py`'s AST pin as re-stated under CliChaining.
+- **No criterion of `training-blocks` is reworded.** Its 8.4 and 8.8 are
+  scoped by that spec to admit this one (Cross-spec obligations item 6,
+  first bullet); "Amendment 1" is therefore a *record* of the two
+  re-anchored pins, shrunk from the criterion amendments an earlier draft
+  carried (cross-spec reviewer, round 1).
+- `tests/test_cli_plan.py`'s AST pin, re-stated under CliChaining, and
+  `tests/test_plan_e2e.py`'s two-dates test, which gains the precondition
+  that both fake dates -- each the local date under its own (timestamp,
+  `TZ`) pair -- lie on the same side of every fixture row (or the fixture
+  holds no rows); `training-blocks` task 4.6 already chooses such dates, so
+  the edit is one added assertion, not a change of dates. Both are task
+  3.2's, in the same change as the CLI edit, exactly as `training-blocks`
+  design item 5 describes them. This spec's own e2e pins the crossing case.
+- Task 3.4 records it: `spec.json` gains one amendments entry (`date`,
+  `requirement: "8.4 / 8.8 (record only); tests of tasks 4.3 and 4.6"`,
+  `reason`: the two pins were re-anchored by plan-resolution as item 5
+  foresaw; no criterion changes meaning), and `requirements.md` gains one
+  paragraph, `## Amendment 1 (2026-09-16): the two test pins re-anchored,
+  landed by plan-resolution`, in the shape of wiki-contract's amendments,
+  saying exactly that -- criteria 8.4 and 8.8 admit the resolver and the
+  chaining as written; the 4.3 AST pin and the 4.6 two-dates precondition
+  now read as this spec states them; nothing renumbered, no criterion
+  reworded.
+- Task 3.4 also ticks the roadmap's Phase 7 `#### Existing Spec Updates`
+  entry for `workout-docs` as `[x]` with "no change: no back-link key is
+  written (plan-resolution design § Decisions recorded for the roadmap)" --
+  the third of the three Phase 7 ticks (`training-blocks` 4.5 ticks
+  `wiki-contract`, `build-training-block` 3.3 ticks `distribution`); that
+  checkbox is the only edit this spec makes to the roadmap.
 
 ## Data Models
 
@@ -1379,7 +1524,7 @@ def _report_reconcile(report: ReconcileReport) -> None: ...
   chosen methodology; `total` is `None` when nothing is scored.
 - **BlockReconciliation** -- the per-block aggregate the placement reads
   and the report prints; carries the run's methodology so a page is
-  self-contained.
+  self-contained. Defined in `placement.py`, built in `reconcile.py`.
 - **ReconcileReport** -- the upstream `PlanReport` plus the reconciliations.
 
 ### Logical Data Model
@@ -1483,7 +1628,10 @@ history page changes. The contract version does not move.
   entry for `workout-docs` closes as "no change": the fulfilment relation
   lives on the block page and the planned page, re-derived every run, and
   a key on the workout page would need the managed-key class, a pin move
-  and a version advance for a fact about the plan.
+  and a version advance for a fact about the plan. Task 3.4 ticks that
+  entry `[x]` with "no change: no back-link key is written (plan-resolution
+  design § Decisions recorded for the roadmap)" -- the only edit this spec
+  makes to `.kiro/steering/roadmap.md`.
 - **`fitdocs load` does not chain the pass** (the roadmap names three sites);
   the athlete's next `sync` or `fitdocs plan` reconciles the new loads.
 - **`history/documents._read_load` stays** as a private duplicate of
