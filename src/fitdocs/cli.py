@@ -19,6 +19,12 @@ of the baseline ``--version`` / ``--help`` shell:
   document, an unmanaged frontmatter key, a malformed effort tag, a
   missing/stale/foreign ownership declaration) without creating, modifying,
   or deleting anything (Req 8.1).
+* ``fitdocs plan [--out PATH]`` -- render every plan source under the
+  plan-source directory into its block page and planned pages, reporting
+  rendered, unchanged, invalid, blocked and failed per source (training-blocks
+  Req 8.2, 8.3, 8.6, 8.9). Standalone: this command is never chained onto
+  ``sync``, ``regen``, ``load``, ``history`` or ``check``, and none of those
+  commands change because it exists (Req 8.8).
 
 Every command, *before any processing* (Req 2.1), resolves the data root by the
 explicit precedence (``--out`` > ``FITDOCS_DATA`` > ``.fitdocs/data-root``
@@ -38,16 +44,20 @@ load pass restore-only and deterministic.
 Exit codes (Req 1.5, 2.2, 8.5, 8.7):
 
 * ``0`` -- success, including an all-skipped no-op run (everything written
-  and/or skipped, nothing failed) or a ``check`` run that reports nothing;
-* ``1`` -- one or more per-file *or* per-document (load) failures occurred, or
-  ``check`` reports one or more findings;
+  and/or skipped, nothing failed), a ``check`` run that reports nothing, or a
+  ``plan`` run with no plan sources present;
+* ``1`` -- one or more per-file *or* per-document (load) failures occurred,
+  ``check`` reports one or more findings, or ``plan`` finds an invalid,
+  blocked, or failed block;
 * ``2`` -- a configuration error: an unresolvable data root (its message lists
   the three configuration options), a malformed ``athlete.toml`` / profile, a
-  malformed ``fitdocs.toml`` ``[tiles]`` or ``[load]`` table, an unknown
-  ``--calculator``/configured-default id, or a missing source directory. The
-  ``[load]`` table is read inside the load pass itself (task 4.1); this
-  module reads none of it directly. A configuration error writes nothing, and for
-  ``check`` means nothing was scanned either.
+  malformed ``fitdocs.toml`` ``[tiles]``, ``[load]`` or ``[plans]`` table, an
+  unknown ``--calculator``/configured-default id, or a missing source
+  directory -- including a configured plan-source directory that does not
+  exist or is not a directory. The ``[load]`` table is read inside the load
+  pass itself (task 4.1); this module reads none of it directly. A
+  configuration error writes nothing, and for ``check`` means nothing was
+  scanned either.
 
 Data-root posture (stated here because ``check`` is the first new command to
 exercise it): *a command that describes a tree requires a data root; a
@@ -105,13 +115,14 @@ from fitdocs.inbox import (
     load_inbox_settings,
     validate_inbox_paths,
 )
-from fitdocs.layout import settings_path
+from fitdocs.layout import block_doc_path, settings_path
 from fitdocs.load.engine import DocLoadEntry, LoadReport, apply_load
 from fitdocs.load.profile import ProfileError
 from fitdocs.load.prompts import NonInteractiveSession, RichInteractionSession
 from fitdocs.load.registry import UnknownCalculatorError
 from fitdocs.load.types import InteractionSession
 from fitdocs.performance.engine import DeriveReport, derive_benchmarks
+from fitdocs.plans import BlockStatus, PlanReport, run_plan
 from fitdocs.plugins import (
     DEFAULT_PLUGIN_SETTINGS,
     BuiltIn,
@@ -476,6 +487,38 @@ def history_command(
     # Suppressed weeks, excluded pages and skipped documents never fail the
     # run on their own; only a write failure does (Req 8.8).
     _finish(failed=bool(history_report.failures))
+
+
+@app.command("plan")
+def plan_command(
+    out: Path | None = _OUT_OPTION,
+) -> None:
+    """Render every plan source into its block page and planned pages.
+
+    Rebuilds every block from whatever the plan-source directory currently
+    holds (Req 8.1) -- there is no --force and no --dry-run, because the
+    pages are always rebuilt and an unchanged block is detected by byte
+    comparison alone (Req 8.5). Standalone (Req 8.8): this command is never
+    chained onto sync, regen, load, history or check, and none of those
+    commands change because this command exists. A malformed ``[plans]``
+    settings table, or a configured plan-source directory that does not
+    exist or is not a directory, is a configuration error exactly like every
+    other malformed table this module reads (Req 8.3).
+    """
+    data_root = _resolved_data_root(out)
+    try:
+        report = run_plan(data_root)
+    except SettingsError as exc:
+        # Covers PlanSettingsError -- a malformed [plans] table, or a
+        # configured source directory that does not exist or is not a
+        # directory -- which subclasses the shared SettingsError this
+        # function already maps to the configuration exit; no new branch
+        # is needed (Req 8.3).
+        _config_error(str(exc))
+    _report_plan(report, data_root=data_root)
+    # Any invalid, blocked or failed block exits 1; a run with no plan
+    # sources -- or none configured at all -- is success (Req 8.9).
+    _finish(failed=report.failed)
 
 
 @app.command("plugins")
@@ -1170,6 +1213,124 @@ def _report_history(report: HistoryReport) -> None:
             console.print(
                 f"    {reason}", markup=False, highlight=False, soft_wrap=True
             )
+
+    if report.note is not None:
+        console.print(report.note, markup=False, highlight=False, soft_wrap=True)
+
+
+def _report_plan(report: PlanReport, *, data_root: Path) -> None:
+    """Print the ``plan`` run report (Req 8.6): the source directory, one
+    line per block in its outcome's shape, every unsourced path, every
+    declaration that could not be placed, and the note.
+
+    Detail lines use ``soft_wrap`` with markup disabled -- the style most
+    detail lines in this module already use -- so long paths, reasons and
+    problem descriptions are never truncated or reinterpreted as markup
+    (not every *summary* line in the module carries ``soft_wrap`` too --
+    e.g. ``_report_drain``'s leading ``Inbox:`` line does not -- so the
+    claim here is scoped to this function's own detail lines, not the
+    module at large).
+
+    The printed block-page path is derived independently of
+    :attr:`~fitdocs.plans.engine.BlockOutcome.written`
+    (:func:`~fitdocs.layout.block_doc_path`, made data-root-relative) rather
+    than read off the end of that tuple: the block page is *not* rewritten
+    -- and so does not appear in ``written`` -- on a run where only a
+    planned page's bytes changed. Concretely: editing an *original* row's
+    prescription in place, with no ``[[amendment.update]]`` recording the
+    change, leaves the block page's bytes unchanged, because neither the
+    current-plan day table nor the "as first written" table ever prints a
+    row's prescription text -- only an amendment's own change bullets do
+    (``block_page.py``'s ``_row_changed_bullets``). The printed
+    ``+n planned`` count is therefore every ``written`` entry other than
+    that path, not ``len(written) - 1``.
+
+    A rendered or unchanged block whose pages directory holds a
+    non-generated file the run left alone (Req 7.9,
+    :attr:`~fitdocs.plans.engine.BlockOutcome.foreign` is populated for
+    those two statuses too, not only ``blocked``) prints one further
+    indented line per such path so the athlete is told about it, not just
+    the engine's own report object.
+    """
+    console = Console()
+    console.print(
+        f"Source: {report.source_dir}", markup=False, highlight=False, soft_wrap=True
+    )
+
+    def _print_kept_foreign(paths: tuple[str, ...]) -> None:
+        for path in paths:
+            console.print(
+                f"  kept (not fitdocs'): {path}",
+                markup=False,
+                highlight=False,
+                soft_wrap=True,
+            )
+
+    for outcome in report.blocks:
+        block_page = block_doc_path(data_root, outcome.block_id)
+        block_page_report = block_page.relative_to(data_root).as_posix()
+        if outcome.status is BlockStatus.RENDERED:
+            planned = sum(1 for path in outcome.written if path != block_page_report)
+            console.print(
+                f"rendered  {outcome.source} -> {block_page_report} "
+                f"(+{planned} planned, -{len(outcome.removed)} removed)",
+                markup=False,
+                highlight=False,
+                soft_wrap=True,
+            )
+            _print_kept_foreign(outcome.foreign)
+        elif outcome.status is BlockStatus.UNCHANGED:
+            console.print(
+                f"unchanged {outcome.source}",
+                markup=False,
+                highlight=False,
+                soft_wrap=True,
+            )
+            _print_kept_foreign(outcome.foreign)
+        elif outcome.status is BlockStatus.INVALID:
+            console.print(
+                f"invalid   {outcome.source}",
+                markup=False,
+                highlight=False,
+                soft_wrap=True,
+            )
+            for problem in outcome.problems:
+                console.print(
+                    f"  {problem.describe()}",
+                    markup=False,
+                    highlight=False,
+                    soft_wrap=True,
+                )
+        elif outcome.status is BlockStatus.BLOCKED:
+            for path in outcome.foreign:
+                console.print(
+                    f"blocked   {outcome.source}: {path}",
+                    markup=False,
+                    highlight=False,
+                    soft_wrap=True,
+                )
+        else:
+            assert outcome.status is BlockStatus.FAILED
+            for path, reason in outcome.failures:
+                console.print(
+                    f"failed    {outcome.source}: {path}: {reason}",
+                    markup=False,
+                    highlight=False,
+                    soft_wrap=True,
+                )
+
+    for path in report.unsourced:
+        console.print(
+            f"No source: {path}", markup=False, highlight=False, soft_wrap=True
+        )
+
+    for path in report.declarations_foreign:
+        console.print(
+            f"Declaration not placed (foreign): {path}",
+            markup=False,
+            highlight=False,
+            soft_wrap=True,
+        )
 
     if report.note is not None:
         console.print(report.note, markup=False, highlight=False, soft_wrap=True)

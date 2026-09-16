@@ -847,7 +847,7 @@ shape.
   - _Requirements: 1.1, 1.2, 1.10, 2.11, 3.9, 4.1, 4.9, 5.1, 5.5, 5.6, 5.7, 6.3, 7.8, 7.9, 7.10, 8.1, 8.4, 8.5, 8.6, 8.7, 8.10_
   - _Boundary: PlanEngine_
 
-- [ ] 4.3 Add the plan command and its run report
+- [x] 4.3 Add the plan command and its run report
   - Add one command named `plan` with the shared data-root option and no
     other option: no force, no dry run, because the pages are always rebuilt
     and unchanged ones are detected by bytes
@@ -1055,3 +1055,14 @@ shape.
   exactly one contract name, `is_generated`; every write path derives from
   `layout.block_doc_path`/`planned_doc_path`/`block_pages_dir` or
   `ensure_declarations`.
+- **4.3 (2026-09-16)**: `_report_plan` prints one `  kept (not fitdocs'):
+  <path>` line per `BlockOutcome.foreign` entry under `rendered` and
+  `unchanged` -- Req 7.9's "left untouched and reported" otherwise reached
+  the data structure but never stdout. The line is NOT in design.md
+  PlanCommand's list (design follow-up queued). `+n planned` is
+  `len(written)` minus the block page, recomputed via
+  `layout.block_doc_path` because `written` omits the block page when its
+  bytes did not change; the engine should expose the block page on
+  `BlockOutcome` (queued). Pinning the Rich print idiom needs bracketed
+  synthetic values on EVERY print site -- one direct-call test over a
+  hand-built `PlanReport` covering all five statuses does it.
