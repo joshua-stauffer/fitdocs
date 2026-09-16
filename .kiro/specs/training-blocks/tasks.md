@@ -205,7 +205,7 @@ pytest`, observes red, reverts, observes green, and says so in the report.
 page tree under `tests/plans/fixtures/` or `tmp_path`. No `.fit` file is read
 by any task, and the athlete's real wiki is never a fixture.
 
-- [ ] 1. Foundation: the new owned location and every guard that reads it
+- [x] 1. Foundation: the new owned location and every guard that reads it
 
 **Group 1 is one atomic change, and its three tasks are red in between.** The
 owned-path set, the contract version, the declaration goldens and the
@@ -416,7 +416,7 @@ shape.
   - _Requirements: 7.2, 7.3, 7.4, 7.5_
   - _Boundary: OwnershipDocs_
 
-- [ ] 2. The source model: types, derivation, amendments, and the grammar
+- [x] 2. The source model: types, derivation, amendments, and the grammar
 
 - [x] 2.1 Create the plans package and declare the model's types, identifiers, mesocycle windows, and the row and target checks
   - Create the package with its module marker and a published-surface list
@@ -574,7 +574,7 @@ shape.
   - _Requirements: 1.1, 1.3, 1.4, 1.5, 1.6, 1.7, 2.1, 2.2, 2.3, 2.5, 2.6, 2.7, 2.10, 2.12, 3.4, 3.8_
   - _Boundary: SourceParser_
 
-- [ ] 3. Rendering: the seam, the vocabulary, and the two pages
+- [x] 3. Rendering: the seam, the vocabulary, and the two pages
 
 - [x] 3.1 Declare the resolution seam and both pages' vocabulary, and write the frontmatter emitter and the escaping helpers
   - Declare the seam exactly as design.md states it verbatim under the
@@ -744,7 +744,7 @@ shape.
   - _Requirements: 3.6, 5.2, 5.3, 5.4, 5.7, 6.2, 6.3_
   - _Boundary: PlannedPage_
 
-- [ ] 4. Integration: settings, the pass, the command, the guards, the amendment, and validation
+- [x] 4. Integration: settings, the pass, the command, the guards, the amendment, and validation
 
 - [x] 4.1 Read the plans settings table and resolve the source directory
   - Add a peer settings reader beside the ones for tiles, inbox, plugins,
