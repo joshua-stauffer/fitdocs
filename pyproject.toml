@@ -89,6 +89,10 @@ files = [
     "tests/performance/test_reachability.py",
     "tests/test_cli_derive.py",
     "tests/performance/test_single_writer.py",
+    "tests/plans/test_model.py",
+    "tests/plans/test_source.py",
+    "tests/plans/test_resolution.py",
+    "tests/plans/test_boundary.py",
 ]
 
 [tool.pytest.ini_options]

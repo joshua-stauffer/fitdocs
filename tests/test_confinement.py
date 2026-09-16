@@ -63,6 +63,8 @@ from fitdocs.history import run_history
 from fitdocs.inbox import load_inbox_settings, prepare_inbox
 from fitdocs.layout import (
     ARCHIVE_DIR,
+    BLOCKS_DIR,
+    DEFAULT_PLANS_DIR,
     HISTORY_DIR,
     HISTORY_DOC_STEM,
     OWNED_PATHS,
@@ -74,6 +76,7 @@ from fitdocs.load import registry
 from fitdocs.load.engine import apply_load
 from fitdocs.load.types import InteractionSession
 from fitdocs.performance import derive_benchmarks
+from fitdocs.plans import run_plan
 from fitdocs.quarantine import load_quarantine
 from fitdocs.settings import load_settings_document
 from fitdocs.sync import drain, regen, sync
@@ -554,6 +557,115 @@ def _wrote_only_the_athlete_profile(touched: Sequence[str]) -> bool:
     return tuple(touched) == (f"data/{ATHLETE_FILE}",)
 
 
+#: One small, valid plan source -- the same shape
+#: `tests/plans/fixtures/minimal.toml` holds, restated here rather than read
+#: from that fixture file so this guard's own fixture never depends on
+#: another test module (mirrors :func:`_stage_history_pages`'s own choice to
+#: restate rather than import). One workout row is enough to make the
+#: measured `plan` run genuinely write a block page and one planned-workout
+#: page, rather than passing vacuously over a plan with no rows.
+#:
+#: Also carries one ``[[amendment]]`` (an ``update`` op) and one
+#: ``[[override]]`` (round-1 review recommendation, item 10): Req 3.9's own
+#: negative claim -- "never itself append to a source" -- is otherwise
+#: exercised only by a source with *no* amendment or override at all, which
+#: cannot distinguish "the pass never writes here" from "the pass never had
+#: anything to append in the first place". Both post-date the one workout
+#: row (2026-02-02), so both are valid as of their own dates.
+_PLAN_SOURCE_TEXT: Final[str] = (
+    'title = "Confinement Fixture Block"\n'
+    "starts = 2026-02-02\n"
+    "ends = 2026-02-08\n"
+    'goal = "A minimal valid plan source for the confinement guard."\n'
+    "mesocycle_days = 7\n"
+    "\n"
+    "[[workout]]\n"
+    'id = "w1-mon"\n'
+    "date = 2026-02-02\n"
+    'sport = "Run"\n'
+    'title = "Easy run"\n'
+    'summary = "Zone 2"\n'
+    'prescription = "30 minutes easy."\n'
+    "\n"
+    "[[amendment]]\n"
+    "date = 2026-02-03\n"
+    'reason = "Confinement guard fixture amendment"\n'
+    "\n"
+    "[[amendment.update]]\n"
+    'id = "w1-mon"\n'
+    'prescription = "35 minutes easy."\n'
+    "\n"
+    "[[override]]\n"
+    "date = 2026-02-04\n"
+    'id = "w1-mon"\n'
+    "skipped = true\n"
+    'reason = "Confinement guard fixture override"\n'
+)
+
+#: The plan source's own report-relative filename under the default plan
+#: directory -- used both to stage it and, in the negative-half test, to
+#: assert its bytes are unchanged after the run.
+_PLAN_SOURCE_NAME: Final[str] = "confinement-fixture.toml"
+
+
+def _stage_plan_source(data_root: Path, source_dir: Path) -> None:
+    """Stage one small valid plan source under the *default* plan directory
+    inside the data root (training-blocks task 4.4; Req 1.2, 7.2, 7.7).
+
+    The default location, so no ``[plans]`` table and no
+    :data:`SETTINGS_LOCATION_KEYS` entry are needed -- the plan pass never
+    writes under its own source directory (design.md, "PlanEngine": every
+    write path is composed from the layout helpers or the declaration
+    refresh, never from the resolved source directory), so this guard
+    measures that promise directly rather than granting the location.
+    ``source_dir`` is unused: the plan pass reads only the data root's own
+    configured (or default) plan directory, never the sibling ``.fit``
+    source directory the other entry points stage.
+    """
+    plans_dir = data_root / DEFAULT_PLANS_DIR
+    plans_dir.mkdir(parents=True, exist_ok=True)
+    (plans_dir / _PLAN_SOURCE_NAME).write_text(_PLAN_SOURCE_TEXT, encoding="utf-8")
+
+
+def _run_plan(data_root: Path, source_dir: Path) -> None:
+    """The ``plan`` entry point, driven directly through
+    :func:`fitdocs.plans.run_plan` -- the plan CLI command does not exist
+    yet (task 4.3 owns ``cli.py`` and is not a dependency of this task), so
+    this registers the engine function itself rather than a CLI
+    invocation, exactly as :func:`_run_history` registers
+    :func:`fitdocs.history.run_history` directly rather than going through
+    the CLI."""
+    run_plan(data_root)
+
+
+def _wrote_a_block_page(touched: Sequence[str]) -> bool:
+    """The ``plan`` entry point's own non-vacuity check (Req 1.2, 8.4):
+    the measured run wrote *the block page itself*, named exactly by the
+    source's own block id -- ``fitdocs.plans.engine`` composes it as
+    ``blocks/<block_id>.md`` (``layout.block_doc_path``), and the source
+    staged by :func:`_stage_plan_source` names its block ``confinement-
+    fixture`` (its filename's stem, :data:`_PLAN_SOURCE_NAME`).
+
+    Deliberately **not** "any ``.md`` under ``blocks/``" (round-1 review
+    fix, item 6): that broader check would also accept a run that wrote
+    only the planned-workout page and silently skipped the block page
+    itself -- `run_plan`'s own write order (design.md, "PlanEngine":
+    planned pages before the block page) makes that a real, distinguishable
+    outcome, not a hypothetical one, and this check is written to require
+    the specific artifact it claims to observe.
+
+    ``blocks/AGENTS.md`` needs no explicit exclusion here (unlike
+    :func:`_wrote_a_workout_document`'s): ``ensure_declarations`` is called
+    only when at least one block is *valid* (Req 8.10; ``fitdocs.plans.engine
+    .run_plan``, ``if valid_blocks: ensure_declarations(...)``), so it is
+    never a stand-in non-vacuity signal in the first place -- a run over an
+    all-invalid source creates no ``blocks/`` directory at all, and the one
+    path this check requires is the block page, never the declaration.
+    """
+    block_id = Path(_PLAN_SOURCE_NAME).stem
+    return f"data/{BLOCKS_DIR}/{block_id}.md" in touched
+
+
 def _wrote_the_history_document(touched: Sequence[str]) -> bool:
     """The ``history`` entry point's own non-vacuity check (load-history
     spec, task 5.4): its measured run wrote the one history document it
@@ -614,6 +726,18 @@ WRITING_ENTRY_POINTS: Final[tuple[EntryPoint, ...]] = (
         prepare=_stage_tagged_race,
         run=_run_derive_benchmarks,
         non_vacuous=_wrote_only_the_athlete_profile,
+    ),
+    # training-blocks task 4.4: the plan pass, registered against the engine
+    # function directly (`fitdocs.plans.run_plan`) rather than the CLI --
+    # the `plan` command does not exist in this tree (task 4.3, not a
+    # dependency of this one). No SETTINGS_LOCATION_KEYS entry: the pass
+    # writes only into `blocks/` (already in OWNED_PATHS), never under the
+    # resolved plan-source directory.
+    EntryPoint(
+        id="plan",
+        prepare=_stage_plan_source,
+        run=_run_plan,
+        non_vacuous=_wrote_a_block_page,
     ),
 )
 
@@ -682,6 +806,37 @@ def test_derive_benchmarks_is_a_registered_writing_entry_point() -> None:
     assert "derive-benchmarks" in {
         entry_point.id for entry_point in WRITING_ENTRY_POINTS
     }
+
+
+def test_plan_is_a_registered_writing_entry_point() -> None:
+    """``plan`` must be registered in :data:`WRITING_ENTRY_POINTS` (training-
+    blocks task 4.4; Req 1.2, 7.2, 7.7), the same discipline
+    :func:`test_derive_benchmarks_is_a_registered_writing_entry_point` states
+    for its own entry point.
+
+    Deleting the registration is caught here, but by **nothing else** in
+    this suite: the parametrized guard
+    (``test_entry_point_writes_only_inside_the_permitted_locations``) would
+    simply run one fewer case rather than fail, and
+    ``tests/test_effort_tags_e2e.py``'s own subset check
+    (``{"sync", "regen", "load", "drain"} <= registered``) never named
+    ``"plan"`` at all, so it stays green either way -- this dedicated
+    membership assertion is the only thing in the suite that reds when the
+    registration is dropped.
+
+    Checks identity against the registered callables themselves, not only
+    the id (round-1 review fix, item 7): an id-only check is satisfied by
+    ``EntryPoint(id="plan", prepare=_nothing, run=_nothing, non_vacuous=
+    lambda touched: True)`` just as much as by the real registration, so a
+    swapped-in vacuous stand-in for any of the three callables would pass
+    an id-only membership test silently.
+    """
+    registered = {entry_point.id: entry_point for entry_point in WRITING_ENTRY_POINTS}
+    assert "plan" in registered
+    entry = registered["plan"]
+    assert entry.prepare is _stage_plan_source
+    assert entry.run is _run_plan
+    assert entry.non_vacuous is _wrote_a_block_page
 
 
 def test_guard_catches_a_stray_create_modify_and_delete(tmp_path: Path) -> None:
@@ -861,3 +1016,104 @@ def test_history_entry_point_writes_no_workout_doc_asset_source_profile_or_setti
     # something (the history document), so the negative assertions above are
     # not vacuously true over a run that did nothing at all.
     assert f"data/{HISTORY_DIR}/{HISTORY_DOC_STEM}.md" in touched
+
+
+def test_plan_entry_point_touches_only_the_plan_directory_and_writes_no_other_document(
+    tmp_path: Path,
+) -> None:
+    """The ``plan`` entry point's own, narrower negative claim (Req 1.2, 7.2,
+    7.7), stated precisely rather than broadly.
+
+    The generic confinement check above only proves the run stayed inside
+    the permitted set -- ``blocks/`` among it, since that prefix is already
+    in :data:`~fitdocs.layout.OWNED_PATHS`. It would pass a run that (for
+    example) also rewrote a workout document, since ``workouts/`` is itself
+    permitted for *other* entry points. This test states the plan pass's
+    own guarantee precisely: the staged source file's bytes are byte-for-byte
+    unchanged, and **nothing** under the plan-source directory
+    (:data:`~fitdocs.layout.DEFAULT_PLANS_DIR`) was created, modified or
+    deleted at all -- no new file, no rewrite, no removal, matching the
+    plan's hard rule that no task "writes, creates, renames or deletes
+    anything under the resolved plan-source directory". It also asserts the
+    run wrote no ``workouts/*.md`` document, no ``history/*.md`` page, and
+    neither ``athlete.toml`` nor ``fitdocs.toml`` itself.
+
+    Deliberately **excluded** from this claim: the other three in-tree
+    ownership declarations (``workouts/AGENTS.md``, ``history/AGENTS.md``,
+    ``fit-archive/AGENTS.md``) -- ``fitdocs.declaration.ensure_declarations``
+    legitimately creates every entry of :data:`~fitdocs.layout.DECLARED_DIRS`
+    that is still absent on a data root that has never been synced, exactly
+    the same exclusion the history entry point's own precise test states for
+    the same reason (see its docstring above). ``blocks/AGENTS.md`` is not
+    excluded from anything here because nothing above claims it untouched --
+    it lies inside the plan pass's own owned prefix and is exactly what a
+    genuinely successful run creates.
+
+    Mutation caught (measured): a stand-in run that also writes
+    ``workouts/injected.md`` fails this test's own ``no_workout_document``
+    assertion while the generic confinement guard above
+    (``test_entry_point_writes_only_inside_the_permitted_locations[plan]``)
+    stays green for the very same write, since ``workouts/`` is itself
+    inside :data:`~fitdocs.layout.OWNED_PATHS` and therefore "permitted" in
+    the generic sense -- for other entry points, never for this one --
+    proving this test catches a class of regression the generic one
+    cannot, the same way
+    ``test_history_entry_point_writes_no_workout_doc_asset_source_profile_or_settings``
+    does for ``history``. (A stray write under the plan-source directory
+    itself, by contrast, already reds the generic guard too, since
+    :data:`~fitdocs.layout.DEFAULT_PLANS_DIR` is deliberately *not* an owned
+    path -- this test's ``no_plan_source_writes`` assertion and the
+    source-bytes check above are the *precise* statement of that same
+    claim, not the only place it is caught.)
+    """
+    sandbox = tmp_path
+    data_root = sandbox / "data"
+    data_root.mkdir()
+    source_dir = sandbox / "src"
+    _stage_plan_source(data_root, source_dir)
+    plan_source_path = data_root / DEFAULT_PLANS_DIR / _PLAN_SOURCE_NAME
+    source_bytes_before = plan_source_path.read_bytes()
+
+    before = _snapshot(sandbox)
+    _run_plan(data_root, source_dir)
+    after = _snapshot(sandbox)
+
+    touched = _touched(before, after)
+
+    no_plan_source_writes = [
+        key for key in touched if key.startswith(f"data/{DEFAULT_PLANS_DIR}/")
+    ]
+    no_workout_document = [
+        key
+        for key in touched
+        if key.startswith(f"data/{WORKOUTS_DIR}/")
+        and key.endswith(".md")
+        and not key.endswith(f"/{DECLARATION_FILENAME}")
+    ]
+    no_history_document = [
+        key
+        for key in touched
+        if key.startswith(f"data/{HISTORY_DIR}/")
+        and key.endswith(".md")
+        and not key.endswith(f"/{DECLARATION_FILENAME}")
+    ]
+
+    assert no_plan_source_writes == [], (
+        f"plan run wrote under the plan-source directory: {no_plan_source_writes}"
+    )
+    assert plan_source_path.read_bytes() == source_bytes_before, (
+        "plan run modified the staged source's bytes"
+    )
+    assert no_workout_document == [], (
+        f"plan run wrote a workout document: {no_workout_document}"
+    )
+    assert no_history_document == [], (
+        f"plan run wrote a history document: {no_history_document}"
+    )
+    assert f"data/{ATHLETE_FILE}" not in touched, "plan run wrote the athlete profile"
+    assert f"data/{SETTINGS_FILE}" not in touched, "plan run wrote the settings file"
+
+    # Non-vacuity for this test's own precondition: the run actually wrote
+    # something (a block page), so the negative assertions above are not
+    # vacuously true over a run that did nothing at all.
+    assert _wrote_a_block_page(touched)

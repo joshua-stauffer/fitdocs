@@ -58,6 +58,8 @@ import fitdocs.load.docedit
 import fitdocs.load.engine
 import fitdocs.performance.derive
 import fitdocs.performance.engine
+import fitdocs.plans.engine
+import fitdocs.plans.page
 import fitdocs.render.frontmatter
 import fitdocs.render.sections
 import fitdocs.render.views
@@ -109,6 +111,18 @@ CONVERTED_MODULES: Final[tuple[ModuleType, ...]] = (
     fitdocs.history.page,
     fitdocs.performance.engine,
     fitdocs.performance.derive,
+    # training-blocks (task 4.4): the two modules the plan's hard rule
+    # names as this package's only importers of `fitdocs.contract` --
+    # `page.py` (binding the seven names it from-imports) and `engine.py`
+    # (binding the generated-marker predicate). Registered so the same
+    # structural checks (no YAML, no bare fence/workout literal, no
+    # private duplicate reader) apply here too; the import-closure pin in
+    # `tests/plans/test_boundary.py::TestContractImporters` is what keeps
+    # this registration at exactly two -- a third module importing the
+    # contract reds that test before it could slip past this registry
+    # unregistered.
+    fitdocs.plans.page,
+    fitdocs.plans.engine,
 )
 
 #: The one converted module allowed to name ``yaml`` at all. The frontmatter
@@ -238,6 +252,16 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
         "EffortKind",
         "EffortTag",
     ),
+    "fitdocs.plans.page": (
+        "DOC_BANNER",
+        "FRONTMATTER_FENCE",
+        "GENERATOR",
+        "GENERATOR_KEY",
+        "TYPE_KEY",
+        "NOTES_REGION",
+        "NOTES_PLACEHOLDER",
+    ),
+    "fitdocs.plans.engine": ("is_generated",),
 }
 
 #: Document vocabulary no converted module may spell for itself: the frontmatter

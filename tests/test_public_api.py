@@ -84,6 +84,15 @@ import fitdocs.model
 import fitdocs.performance
 import fitdocs.performance.engine
 import fitdocs.performance.types
+import fitdocs.plans
+import fitdocs.plans.block_page
+import fitdocs.plans.engine
+import fitdocs.plans.model
+import fitdocs.plans.page
+import fitdocs.plans.planned_page
+import fitdocs.plans.resolution
+import fitdocs.plans.settings
+import fitdocs.plans.source
 
 # Every name the package root must re-export, paired with its defining object.
 _EXPECTED = {
@@ -991,3 +1000,239 @@ def test_performance_is_not_re_exported_from_the_package_root() -> None:
     """The performance package is a module-level surface, not a package-root
     name -- ``fitdocs.__all__`` stays the narrow parse/compute API."""
     assert not set(fitdocs.__all__) & set(_PERFORMANCE_EXPECTED)
+
+
+# --- fitdocs.plans: the training-block package's published surface --------
+#
+# (training-blocks task 4.4, design: "PackageBoundary and SurfacePins", Req
+# 3.9, 6.4, 7.7, 8.4) ``fitdocs.plans.__init__`` is **append-only** across
+# this plan's tasks (2.1, 2.2, 2.3, 3.1, 4.1, 4.2) -- this pin, like
+# ``_HISTORY_SURFACE`` above, is a package-root surface gathered from eight
+# submodules, so it also asserts identity against each name's own *defining*
+# module, not merely ``fitdocs.contract`` -- a local shadow bound directly
+# in ``__init__.py`` would satisfy every ``hasattr``/``__all__`` check here
+# and still be a different object from its defining submodule's own.
+#
+# ``GENERATOR`` is the one name with two identities asserted, though the
+# second is **not** the stronger check it might look like: CPython interns
+# short, identifier-shaped string literals process-wide, so a re-spelled
+# ``GENERATOR: Final[str] = "fitdocs"`` written a second time in ``page.py``
+# is still ``is`` its own contract counterpart (measured directly: both
+# ``fitdocs.plans.GENERATOR is fitdocs.plans.page.GENERATOR`` and
+# ``fitdocs.plans.GENERATOR is fitdocs.contract.GENERATOR`` stay ``True``
+# under that mutation) -- neither assertion below rules out a re-spelled
+# *identical* literal. What the ``is`` checks rule out is everything an
+# ``==`` check would also miss but a same-*value* re-implementation would
+# not always share: a runtime-constructed string (``"".join(["f", "i", ...])``
+# or an f-string), a value bound from a different source entirely, or
+# simply a different value -- the ordinary "renamed or removed export"
+# class of regression these owner-identity pins exist to catch across this
+# whole file, GENERATOR included, is unaffected by the interning quirk.
+# ``tests/plans/test_boundary.py``'s own ``TestNoBareRegionIdLiteral``-style
+# AST scan is what actually rules out a local re-spelling of this specific
+# name (see ``tests/plans/test_boundary.py::TestNoLocalContractNameRebinding``).
+_PLANS_SURFACE = {
+    # -- plans.model (2.1, 2.2) --
+    "IDENTIFIER",
+    "RESERVED_BLOCK_IDS",
+    "is_reserved_block_id",
+    "PlannedWorkout",
+    "MesocycleTarget",
+    "PlanState",
+    "Mesocycle",
+    "PlanProblem",
+    "mesocycle_windows",
+    "mesocycle_number",
+    "check_rows",
+    "check_targets",
+    "MUTABLE_FIELDS",
+    "UpdateOp",
+    "AddOp",
+    "RemoveOp",
+    "TargetOp",
+    "AmendmentOp",
+    "AmendmentSpec",
+    "RowChanged",
+    "RowAdded",
+    "RowRemoved",
+    "TargetChanged",
+    "Change",
+    "Amendment",
+    "Override",
+    "Block",
+    "apply_amendments",
+    "check_overrides",
+    "build_block",
+    # -- plans.source (2.3) --
+    "PlanValidationError",
+    "parse_block",
+    "load_block",
+    # -- plans.resolution (3.1) --
+    "RowResolution",
+    "MesocycleResolution",
+    "Resolution",
+    "UNRESOLVED_ROW",
+    "unresolved",
+    # -- plans.page (3.1) --
+    "BLOCK_TYPE",
+    "BLOCK_VERSION",
+    "BLOCK_VERSION_KEY",
+    "BLOCK_FRONTMATTER_KEYS",
+    "PLANNED_TYPE",
+    "PLANNED_VERSION",
+    "PLANNED_VERSION_KEY",
+    "PLANNED_FRONTMATTER_KEYS",
+    "WEEKDAYS",
+    "INDOOR_WORD",
+    "GENERATOR",
+    "yaml_string",
+    "frontmatter",
+    "banner",
+    "notes_region",
+    "check_resolution",
+    "is_fence_line",
+    "sport_phrase",
+    "cell",
+    "link_text",
+    "format_day",
+    "format_load",
+    # -- plans.settings (4.1) --
+    "PLANS_TABLE",
+    "PlanSettings",
+    "DEFAULT_PLAN_SETTINGS",
+    "PlanSettingsError",
+    "load_plan_settings",
+    "resolve_plans_dir",
+    # -- plans.block_page, plans.planned_page, plans.engine (4.2) --
+    "render_block_page",
+    "render_planned_page",
+    "BlockStatus",
+    "BlockOutcome",
+    "PlanReport",
+    "Resolver",
+    "run_plan",
+}
+
+#: Which submodule defines each published name -- the object the identity
+#: check below compares against (mirrors ``_HISTORY_SURFACE_OWNERS``).
+_PLANS_SURFACE_OWNERS = {
+    "IDENTIFIER": fitdocs.plans.model,
+    "RESERVED_BLOCK_IDS": fitdocs.plans.model,
+    "is_reserved_block_id": fitdocs.plans.model,
+    "PlannedWorkout": fitdocs.plans.model,
+    "MesocycleTarget": fitdocs.plans.model,
+    "PlanState": fitdocs.plans.model,
+    "Mesocycle": fitdocs.plans.model,
+    "PlanProblem": fitdocs.plans.model,
+    "mesocycle_windows": fitdocs.plans.model,
+    "mesocycle_number": fitdocs.plans.model,
+    "check_rows": fitdocs.plans.model,
+    "check_targets": fitdocs.plans.model,
+    "MUTABLE_FIELDS": fitdocs.plans.model,
+    "UpdateOp": fitdocs.plans.model,
+    "AddOp": fitdocs.plans.model,
+    "RemoveOp": fitdocs.plans.model,
+    "TargetOp": fitdocs.plans.model,
+    "AmendmentOp": fitdocs.plans.model,
+    "AmendmentSpec": fitdocs.plans.model,
+    "RowChanged": fitdocs.plans.model,
+    "RowAdded": fitdocs.plans.model,
+    "RowRemoved": fitdocs.plans.model,
+    "TargetChanged": fitdocs.plans.model,
+    "Change": fitdocs.plans.model,
+    "Amendment": fitdocs.plans.model,
+    "Override": fitdocs.plans.model,
+    "Block": fitdocs.plans.model,
+    "apply_amendments": fitdocs.plans.model,
+    "check_overrides": fitdocs.plans.model,
+    "build_block": fitdocs.plans.model,
+    "PlanValidationError": fitdocs.plans.source,
+    "parse_block": fitdocs.plans.source,
+    "load_block": fitdocs.plans.source,
+    "RowResolution": fitdocs.plans.resolution,
+    "MesocycleResolution": fitdocs.plans.resolution,
+    "Resolution": fitdocs.plans.resolution,
+    "UNRESOLVED_ROW": fitdocs.plans.resolution,
+    "unresolved": fitdocs.plans.resolution,
+    "BLOCK_TYPE": fitdocs.plans.page,
+    "BLOCK_VERSION": fitdocs.plans.page,
+    "BLOCK_VERSION_KEY": fitdocs.plans.page,
+    "BLOCK_FRONTMATTER_KEYS": fitdocs.plans.page,
+    "PLANNED_TYPE": fitdocs.plans.page,
+    "PLANNED_VERSION": fitdocs.plans.page,
+    "PLANNED_VERSION_KEY": fitdocs.plans.page,
+    "PLANNED_FRONTMATTER_KEYS": fitdocs.plans.page,
+    "WEEKDAYS": fitdocs.plans.page,
+    "INDOOR_WORD": fitdocs.plans.page,
+    "GENERATOR": fitdocs.plans.page,
+    "yaml_string": fitdocs.plans.page,
+    "frontmatter": fitdocs.plans.page,
+    "banner": fitdocs.plans.page,
+    "notes_region": fitdocs.plans.page,
+    "check_resolution": fitdocs.plans.page,
+    "is_fence_line": fitdocs.plans.page,
+    "sport_phrase": fitdocs.plans.page,
+    "cell": fitdocs.plans.page,
+    "link_text": fitdocs.plans.page,
+    "format_day": fitdocs.plans.page,
+    "format_load": fitdocs.plans.page,
+    "PLANS_TABLE": fitdocs.plans.settings,
+    "PlanSettings": fitdocs.plans.settings,
+    "DEFAULT_PLAN_SETTINGS": fitdocs.plans.settings,
+    "PlanSettingsError": fitdocs.plans.settings,
+    "load_plan_settings": fitdocs.plans.settings,
+    "resolve_plans_dir": fitdocs.plans.settings,
+    "render_block_page": fitdocs.plans.block_page,
+    "render_planned_page": fitdocs.plans.planned_page,
+    "BlockStatus": fitdocs.plans.engine,
+    "BlockOutcome": fitdocs.plans.engine,
+    "PlanReport": fitdocs.plans.engine,
+    "Resolver": fitdocs.plans.engine,
+    "run_plan": fitdocs.plans.engine,
+}
+
+
+def test_plans_all_lists_exactly_its_published_surface() -> None:
+    assert set(fitdocs.plans.__all__) == _PLANS_SURFACE
+    # __all__ has no duplicates.
+    assert len(fitdocs.plans.__all__) == len(set(fitdocs.plans.__all__))
+
+
+def test_plans_surface_owners_cover_exactly_the_published_surface() -> None:
+    """``_PLANS_SURFACE_OWNERS`` must name exactly the published names --
+    a name published with no owner entry would leave the identity check
+    below silently skipping it (mirrors
+    ``test_history_surface_owners_cover_exactly_the_published_surface``)."""
+    assert set(_PLANS_SURFACE_OWNERS) == _PLANS_SURFACE
+
+
+def test_every_plans_name_is_the_same_object_as_its_defining_module() -> None:
+    """Each published name is its defining submodule's own object, not a
+    same-named local re-export bound directly in ``__init__.py``."""
+    for name, owner in _PLANS_SURFACE_OWNERS.items():
+        assert hasattr(fitdocs.plans, name), f"fitdocs.plans is missing {name}"
+        assert hasattr(owner, name), f"{owner.__name__} does not define {name}"
+        assert getattr(fitdocs.plans, name) is getattr(owner, name), (
+            f"fitdocs.plans.{name} is not the same object as {owner.__name__}.{name}"
+        )
+
+
+def test_generator_is_also_the_same_object_as_the_contract_publishes() -> None:
+    """``GENERATOR`` is asserted against both its owner (``plans.page``,
+    checked by the generic identity test above) and
+    ``fitdocs.contract.GENERATOR`` directly. Measured, not assumed (see the
+    ``_PLANS_SURFACE`` comment above): a re-spelled *identical* literal in
+    ``page.py`` would still pass **both** checks, since CPython interns
+    short identifier-shaped string literals -- this assertion, like the one
+    above, rules out a renamed, removed, or differently-valued export, not
+    a byte-identical local re-spelling; that narrower claim belongs to
+    ``tests/plans/test_boundary.py``'s own AST scan for a local rebinding of
+    a contract name.
+    """
+    assert fitdocs.plans.GENERATOR is fitdocs.contract.GENERATOR
+
+
+def test_plans_is_not_re_exported_from_the_package_root() -> None:
+    """The plans package is a module-level surface, not a package-root
+    name -- ``fitdocs.__all__`` stays the narrow parse/compute API."""
+    assert not set(fitdocs.__all__) & _PLANS_SURFACE

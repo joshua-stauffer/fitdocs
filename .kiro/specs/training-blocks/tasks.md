@@ -892,7 +892,7 @@ shape.
   - _Requirements: 8.2, 8.3, 8.6, 8.8, 8.9_
   - _Boundary: PlanCommand_
 
-- [ ] 4.4 Register the pass in the confinement guard and pin the package's surface and boundary
+- [x] 4.4 Register the pass in the confinement guard and pin the package's surface and boundary
   - Register the plan pass as a writing entry point in the confinement
     guard, with a fixture that stages one small valid source under the
     default plan directory inside the data root before the snapshot and a
@@ -1066,3 +1066,18 @@ shape.
   `BlockOutcome` (queued). Pinning the Rich print idiom needs bracketed
   synthetic values on EVERY print site -- one direct-call test over a
   hand-built `PlanReport` covering all five statuses does it.
+- **4.4 (2026-09-16)**: five review rounds, all on the engine write-target
+  AST audit in `tests/plans/test_boundary.py`. The lesson: an AST guard
+  that ENUMERATES the constructs it understands loses every round to the
+  next construct (Path.open("w"), aliased os.replace, AugAssign, tuple
+  targets, with-as, walrus, match bodies, except*, header expressions,
+  match captures, except-as). What ended it was two mechanical bounds:
+  "unknown binding form => discard" and "no field skipped" (every explicit
+  branch delegates the fields it does not consume to one generic walker,
+  and a partition test holds consumed + identifier + delegated == `_fields`
+  for every modelled kind). The audit's contract is stated in its docstring:
+  path-insensitive, no comprehension/lambda scoping, intraprocedural, no
+  dynamic dispatch, and (queued) callable aliasing; the runtime confinement
+  guard is the behavioural layer. Also: CPython interns identifier-like
+  string literals, so an `is` identity check does NOT catch a re-spelled
+  `"fitdocs"` -- pin re-spelling with an AST assignment scan, not identity.
