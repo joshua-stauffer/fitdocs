@@ -576,7 +576,7 @@ shape.
 
 - [ ] 3. Rendering: the seam, the vocabulary, and the two pages
 
-- [ ] 3.1 Declare the resolution seam and both pages' vocabulary, and write the frontmatter emitter and the escaping helpers
+- [x] 3.1 Declare the resolution seam and both pages' vocabulary, and write the frontmatter emitter and the escaping helpers
   - Declare the seam exactly as design.md states it verbatim under the
     plan-resolution obligations: the row resolution (a single-line cell and
     section lines), the mesocycle resolution (lines before and after the
