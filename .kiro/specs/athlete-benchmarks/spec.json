@@ -1,7 +1,7 @@
 {
   "feature_name": "athlete-benchmarks",
   "created_at": "2026-07-25T06:49:19Z",
-  "updated_at": "2026-09-11T00:00:00Z",
+  "updated_at": "2026-09-16T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -26,7 +26,7 @@
       "requirement": "1.12, 2.11, 3.10, 3.11, 6.10, 8.8 added; 3.3 and 4.6 revised (Amendment 1); nothing renumbered or withdrawn",
       "reason": "Queue item 2026-08-27-prompt-date-strands-historical-documents: a prompt answer is measured on the pass date and this store never returns an entry measured after the activity, so a first-time athlete scored nothing older than the day they answered. Maintainer ruling 2026-08-29: extend the design to handle past dates. The decision and its rejected alternatives are recorded in training-load Amendment 4 of the same date.",
       "also": "A new optional entry field applies_from (bare date, <= measured_on) carries the athlete's per-entry declaration that a measurement stands in for earlier activities. Selection becomes two-tier: latest entry measured on or before the activity, else the athlete-declared entry measured soonest after it; a tier-1 entry always beats a retroactive one. benchmark_age reports a negative age (never stale) instead of raising for an entry measured after the activity; BenchmarkAge's shape is unchanged. with_benchmark gains applies_from and the rewrite merge treats it like note. Schema version unchanged: an older reader ignores the key (1.10) and declines to score the past -- a degradation, never a misread.",
-      "cross_spec": "training-load: owns the question (its 3.7-3.9) and the engine threading of the activity date into the prompt flow; implements this amendment's store half as its tasks 7.1 (src/fitdocs/benchmarks.py) and 7.2 (src/fitdocs/load/profile.py) on one branch. threshold-load: no code change; its Amendment 2 clarifies that 'applicable' is this store's ruling. performance-benchmarks (Phase 6): the entry now has four recognized fields; its source field is a fifth and it must extend, not re-add, the parser/serializer/with_benchmark shape this amendment leaves. activity-qa-flags: when it surfaces staleness it must read a negative age as 'measured after this activity, applied by declaration', not as stale."
+      "cross_spec": "training-load: owns the question (its 3.7-3.9) and the engine threading of the activity date into the prompt flow; implements this amendment's store half as its tasks 7.1 (src/fitdocs/benchmarks.py) and 7.2 (src/fitdocs/load/profile.py) on one branch. threshold-load: no code change; its Amendment 2 clarifies that 'applicable' is this store's ruling. performance-benchmarks (Phase 6): the entry now has four recognized fields; its source field is a fifth and it must extend, not re-add, the parser/serializer/with_benchmark shape this amendment leaves. activity-qa-flags: when it surfaces staleness it must read a negative age as 'measured after this activity, applied by declaration', not as stale. [Re-check discharged 2026-09-16: activity-qa-flags amended -- its StalenessSurfacing no longer guards measured_on <= activity_date; a negative age is its own StalenessOutcome.RETROACTIVE, mapped to the contract's not-detected, with measured_on, the day count after the activity, applies_from and the window in the basis; its new criterion 5.8. Recorded in .kiro/specs/activity-qa-flags/spec.json amendments.]"
     },
     {
       "date": "2026-09-11",

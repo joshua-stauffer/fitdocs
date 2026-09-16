@@ -66,6 +66,53 @@ what changed *here*:
    `supports_activity(calculator, activity)`, which reads a calculator's own
    optional, off-Protocol `supports`. Still informational; still no change here.*
 
+### Amendment — 2026-09-16: a retroactive anchor is a state, not a guard violation
+
+`athlete-benchmarks` Amendment 1 (2026-09-10, implemented under
+`training-load` Amendment 4) revised the store this feature consumes: an entry
+may carry an athlete-declared `applies_from` date, selection falls back to such
+an entry when no earlier measurement covers the activity (its 3.3 revised,
+3.10, 3.11), and `benchmark_age` **returns a negative `age_days` and a current
+verdict** instead of raising for a benchmark measured after the activity (its
+4.6 revised). Its amendment record names this feature: a negative age must be
+read as "measured after this activity, applied by declaration", never as
+stale. The `benchmark_age` revalidation trigger below fired, and this is the
+re-check — queue item
+`2026-09-10-activity-qa-flags-staleness-guard-neutralises-retroactive-anchors`.
+
+What changed here, applied in place below:
+
+1. **The pre-call ordering guard is retired with its premise.**
+   StalenessSurfacing no longer checks `measured_on <= activity_date` before
+   calling `benchmark_age`, and the note that forbade removing that guard —
+   justified by "`athlete-benchmarks` specifies `benchmark_age` as *raising*"
+   — is gone, because the premise is false in shipped code
+   (`src/fitdocs/benchmarks.py`: only `window_days < 1` raises). Implemented
+   as previously designed, every anchor the amendment exists to create — a
+   prompt answer measured today and declared to apply back to a 2019 activity
+   — would have read *not-assessed*.
+2. **A retroactive anchor is a fourth `StalenessOutcome`, `RETROACTIVE`,
+   mapped to the contract's `not-detected`.** The check ran to completion and
+   the condition it looks for (age exceeds the window) was not found, which is
+   exactly what 1.2 defines *not-detected* to mean; the contract's three-value
+   verdict vocabulary is untouched, so `training-load`'s renderer does not
+   re-check. The basis states the measurement date, how many days after the
+   activity it falls, the applies-from date the athlete declared (read from
+   `Benchmark.applies_from` on the resolved anchor) and the window — new
+   criterion 5.8. A fifth flag, and a sign check hidden in the basis builder,
+   were both rejected; `research.md` records why.
+3. **Consequential edits**: the error-handling category "upstream
+   inconsistency — anchor measured after the activity" becomes the verdict
+   state above; the traceability table gains 5.8 and the 1.10 row no longer
+   names an ordering guard; the `benchmark_age` revalidation trigger is widened
+   to the sign convention of `age_days` and to the selection rule that decides
+   when a later-measured anchor applies; `Benchmark.applies_from` joins the
+   consumed data contract; `test_staleness.py` pins the retroactive path in
+   place of the "defensive future-dated anchor".
+
+Nothing else in this feature changes: no module, no flag key, no order, no
+setting, no other check.
+
 ### Goals
 
 - Four checks, each a pure function, each returning exactly one verdict from the
@@ -80,7 +127,9 @@ what changed *here*:
   published reference point, with every divergence from intervals.icu recorded
   with its reason (4.1–4.7).
 - Benchmark staleness *surfaced*, never recomputed — the store's own
-  `benchmark_age` is the single source (5.1–5.7).
+  `benchmark_age` is the single source, and an anchor measured after the
+  activity by the athlete's declaration surfaces as its own state, never as
+  stale and never as not-assessed (5.1–5.8).
 - Every threshold configurable in `[load.flags]`; every default cited in code as
   either a published figure, a fitdocs choice with the measurement that
   justifies it, or — for the one default that is neither — an explicitly
@@ -126,7 +175,11 @@ what changed *here*:
 - `ChannelLoad`, `ChannelInsufficient`, `intensity`, `StreamCoverage`,
   `stream_coverage` and all channel arithmetic — `load-channels`.
 - `Benchmark`, `BenchmarkAge`, `benchmark_age`, the staleness **window** and its
-  default, and every benchmark read — `athlete-benchmarks`.
+  default, and every benchmark read — `athlete-benchmarks`. That includes the
+  two-tier selection that decides when an anchor measured after the activity
+  applies to it, and the `applies_from` declaration itself: this feature reads
+  the sign of the age the store reports and the declaration on the anchor it
+  was handed, and re-decides neither.
 - `VerificationStatus` and all three of its members, including
   `FITDOCS_MEASURED` — `load-channels`, which defines them in its own task 1.1.
   This feature *uses* the measured status and edits neither that enum nor that
@@ -149,7 +202,7 @@ what changed *here*:
 | Outbound | `fitdocs.load.channels.types` — `ChannelId`, `ChannelLoad`, `ChannelInsufficient`, `ChannelOutcome` | P0 |
 | Outbound | `fitdocs.load.channels.sufficiency.stream_coverage` — the one coverage definition | P0 |
 | Outbound | `fitdocs.load.channels.sources` — `Citation`, `VerificationStatus`, `Divergence` | P1 |
-| Outbound | `fitdocs.benchmarks` — `Benchmark`, `BenchmarkAge`, `benchmark_age` | P0 |
+| Outbound | `fitdocs.benchmarks` — `Benchmark` (`measured_on`, `applies_from`), `BenchmarkAge`, `benchmark_age` | P0 |
 | Outbound | `fitdocs.load.types.QualityFlag` | P0 |
 | Outbound | `fitdocs.load.types.LoadContext` — `activity_date`, `settings` | P0 |
 | Inbound | `fitdocs.load.settings` — reads `FlagSettings` from `qa/types.py` | P0 |
@@ -240,8 +293,14 @@ module's own top-level imports is a `sys.modules` cache hit and proves nothing.
 - **A change to `LoadContext`'s members, or a return of load configuration to
   `ProfileView`** → the staleness check's window source and the calculator call
   site re-check.
-- **A change to `benchmark_age`'s signature or to `BenchmarkAge`'s fields** →
-  the staleness check re-checks.
+- **A change to `benchmark_age`'s signature, to `BenchmarkAge`'s fields, to
+  the sign convention of `age_days`, or to the selection rule that decides when
+  an anchor measured after the activity applies to it (`athlete-benchmarks`
+  3.10)** → the staleness check re-checks. This trigger has fired once:
+  `athlete-benchmarks` Amendment 1 (2026-09-10) changed `benchmark_age` from
+  raising to returning a negative age without touching its signature or its
+  fields, and the narrower wording this trigger had until 2026-09-16 let the
+  re-check lapse while `threshold-load`'s ran.
 - **A change to `build_result`'s signature beyond this feature's additive
   `flags` parameter** → the call site re-checks.
 - **Any change to `metrics.power.efficiency_factor` or `decoupling_pct`** —
@@ -290,7 +349,12 @@ why it is the last spec of the phase:
 - `channels.sufficiency.stream_coverage` already measures time-weighted coverage
   over raw ingested arrays with the degenerate cases handled.
 - `benchmarks.benchmark_age` already returns `(age_days, window_days, is_stale)`
-  from `(activity_date, measured_on, window_days)` and reads no clock.
+  from `(activity_date, measured_on, window_days)` and reads no clock. Since
+  `athlete-benchmarks` Amendment 1 it returns a **negative** `age_days` (and
+  `is_stale == False`) for a benchmark measured after the activity instead of
+  raising; the store's selection yields such an anchor only through the
+  athlete's own `applies_from` declaration, which the resolved `Benchmark`
+  carries.
 - `ChannelLoad` already carries `intensity`, `anchor: Benchmark` and
   `coverage: StreamCoverage`; `ChannelInsufficient` already carries a closed
   `reason` and a prose `detail`.
@@ -503,7 +567,7 @@ leaving 40 that the check can speak about at all.
 | 1.7 | Fixed emission order | FlagVocabulary, FlagAssembly | `FLAG_ORDER` | Four checks |
 | 1.8 | No fabricated zero in a basis | all four checks | basis format helpers | — |
 | 1.9 | Deterministic, no I/O, no clock, no LLM | whole package | `test_purity` | — |
-| 1.10 | Never raises | all four checks, StalenessSurfacing | guards | — |
+| 1.10 | Never raises | all four checks, StalenessSurfacing | not-assessed exits; the activity-date guard | — |
 | 2.1, 2.4 | Temporal, per span, not single-point | CadenceLockDetector | `span_statistics` | Cadence decision |
 | 2.2 | Conjunctive rule plus minimum duration | CadenceLockDetector | `detect` | Cadence decision |
 | 2.3 | Compare against full movement cycles | CadenceLockDetector | `STEPS_PER_CADENCE_REVOLUTION` | — |
@@ -531,9 +595,10 @@ leaving 40 that the check can speak about at all.
 | 5.1 | Report on the selected channel's anchor | StalenessSurfacing | `evaluate` | Four checks |
 | 5.2, 5.3 | Age, window and verdict from the store | StalenessSurfacing | `benchmark_age` | — |
 | 5.4 | Against the activity's own date | StalenessSurfacing | `evaluate` | — |
-| 5.5 | Missing date or anchor means not-assessed | StalenessSurfacing | guards | — |
+| 5.5 | Missing date or anchor means not-assessed | StalenessSurfacing | the activity-date guard | — |
 | 5.6 | Alters nothing | StalenessSurfacing | pure signature | — |
 | 5.7 | One window, the store's | FlagSettingsReader, StalenessSurfacing | `LoadSettings` | — |
+| 5.8 | Retroactive anchor: not-detected, both dates and the day count, never stale, never not-assessed | StalenessSurfacing, FlagAssembly | `StalenessOutcome.RETROACTIVE`, `Benchmark.applies_from` | — |
 | 6.1, 6.3 | `[load.flags]` with documented defaults, absence is not an error | FlagSettingsReader | `flag_settings_from_table` | — |
 | 6.2 | Extends the one reader; unknown keys still ignored | FlagSettingsReader | `LoadSettings` | — |
 | 6.4 | The seven configurable thresholds | FlagVocabulary | `FlagSettings` | — |
@@ -562,8 +627,8 @@ leaving 40 that the check can speak about at all.
 | CadenceLockDetector | Domain | Sustained HR-to-cadence lock over spans | 2.1–2.11, 8.1, 8.2 | `Samples` (P0), `stream_coverage` (P0) | Service |
 | DivergenceAnalysis | Domain | Selected-versus-HR intensity comparison | 3.1–3.9 | `channels.types` (P0) | Service |
 | AerobicDriftCheck | Domain | Decoupling verdict against the reference point | 4.1–4.7 | `DerivedMetrics` (P0) | Service |
-| StalenessSurfacing | Domain | The selected anchor's age, surfaced | 5.1–5.7 | `benchmarks` (P0) | Service |
-| FlagAssembly | Service | The one entry point; fixed order; `QualityFlag` construction | 1.1–1.10, 3.8, 7.6, 7.7 | all four checks (P0), `load.types` (P0) | Service |
+| StalenessSurfacing | Domain | The selected anchor's age, surfaced | 5.1–5.8 | `benchmarks` (P0) | Service |
+| FlagAssembly | Service | The one entry point; fixed order; `QualityFlag` construction | 1.1–1.10, 3.8, 5.8, 7.6, 7.7 | all four checks (P0), `load.types` (P0) | Service |
 | FlagSettingsReader | Config | `[load.flags]` projection and validation | 6.1–6.9 | `load.settings` (P0) | State |
 | CalculatorIntegration | Calculator | The additive parameter and the single call site | 7.1–7.5 | FlagAssembly (P0) | Service |
 | PublicSurfacePin | Packaging | Exported names and the pinned surface | 6.4 | — | — |
@@ -1108,29 +1173,37 @@ def evaluate(
 
 | Field | Detail |
 |---|---|
-| Intent | Surface how old the benchmark behind the activity's load already was on the day of the activity |
-| Requirements | 5.1–5.7 |
+| Intent | Surface how old the benchmark behind the activity's load already was on the day of the activity — or that it was measured after that day and applied by the athlete's declaration |
+| Requirements | 5.1–5.8 |
 
 **Responsibilities & Constraints**
 
 - **Surfaces, never computes.** The age, the window and the verdict all come from
-  `benchmarks.benchmark_age`; this module contributes the routing and the basis
-  string and no arithmetic (5.2).
+  `benchmarks.benchmark_age`; this module contributes the routing and no
+  arithmetic (5.2). It does not re-decide whether the anchor applies to the
+  activity: that is the store's two-tier selection (`athlete-benchmarks` 3.10),
+  already made by the time a `ChannelLoad` exists.
 - Reports on the anchor of the **selected** channel only (5.1).
-- Guards `measured_on <= activity_date` itself rather than letting
-  `benchmark_age` raise, so a violated upstream invariant degrades to
-  *not-assessed* instead of failing the load pass (1.10).
-- **The future-dated guard is load-bearing and must not be removed as dead
-  code.** It is what makes two neighbouring commitments simultaneously
-  satisfiable: `athlete-benchmarks` specifies `benchmark_age` as *raising* on a
-  benchmark measured after the activity, while `threshold-load` Req 1.7 requires
-  that a load pass *never raises* on athlete data. This module is the seam
-  between them — it detects the ordering violation before calling
-  `benchmark_age` and converts it into a verdict. Delete the guard and the two
-  requirements come into direct conflict at the first corrupt benchmark file.
-  The cross-spec review verified this reading; the rationale is stated here, at
-  the guard, precisely so a future reader who finds the branch unreachable in a
-  correct system does not "clean it up".
+- **Reads the sign of the age as the store's own signal.** `athlete-benchmarks`
+  4.6 (revised by its Amendment 1) promises that a benchmark measured after the
+  activity yields a *negative* `age_days` and a current verdict, and that
+  selection yields such an anchor only when the athlete declared it to apply
+  retroactively. A negative age is therefore `RETROACTIVE` — its own outcome,
+  never `STALE` (arithmetically impossible: a negative age never exceeds a
+  positive window) and never `NOT_ASSESSED` (the check ran to completion) —
+  and the reading carries the anchor so the basis can state the athlete's
+  `applies_from` beside `measured_on` (5.8).
+- **No pre-call ordering guard.** An earlier revision checked
+  `measured_on <= activity_date` before calling `benchmark_age` and reported a
+  violation as *not-assessed*, on the premise that the store *raised* for that
+  ordering. The premise was retired by `athlete-benchmarks` Amendment 1 and is
+  false in shipped code; the guard would have turned every athlete-declared
+  retroactive anchor — the case the amendment exists for — into *not-assessed*.
+  It is gone, together with its "must not be deleted as dead code" note.
+  Never-raises (1.10) holds because `benchmark_age` no longer raises on any
+  anchor the calculator can hand this module: its one remaining `ValueError`
+  is `window_days < 1`, which the settings reader rejects before any document
+  is read (`athlete-benchmarks` 5.3).
 
 **Dependencies**: Outbound — `fitdocs.benchmarks` (P0), `channels.types` (P0),
 `qa.types` (P0). Inbound — `qa.flags` (P0).
@@ -1143,6 +1216,7 @@ def evaluate(
 class StalenessOutcome(StrEnum):
     STALE = "stale"
     CURRENT = "current"
+    RETROACTIVE = "retroactive"   # measured after the activity; applied by the athlete's declaration
     NOT_ASSESSED = "not_assessed"
 
 @dataclass(frozen=True)
@@ -1162,12 +1236,14 @@ def evaluate(
 
 - **Preconditions**: `window_days >= 1`, satisfied by the settings reader.
 - **Postconditions**: `activity_date is None` → `NOT_ASSESSED` naming the absent
-  date (5.5). `selected.anchor.measured_on > activity_date` → `NOT_ASSESSED`
-  naming the inconsistency (defensive; selection makes it unreachable in
-  practice). Otherwise `benchmark_age(...)` is called and its `is_stale` maps
-  to `STALE` / `CURRENT`, with the measurement date, the age in days and the
-  window all carried (5.3).
-- **Invariants**: no clock is consulted; the verdict is a function of the
+  date (5.5). Otherwise `benchmark_age(...)` is called, unconditionally, and its
+  result is read in one place: `age_days < 0` → `RETROACTIVE`; else `is_stale`
+  → `STALE`; else `CURRENT` (5.3, 5.8). Every reached reading carries the
+  measurement date, the age in days and the window, and the anchor's
+  `applies_from` — the athlete's declaration, or `None` — is reachable through
+  `reading.anchor` (5.3, 5.8).
+- **Invariants**: `outcome is RETROACTIVE` exactly when `age is not None and
+  age.age_days < 0`. No clock is consulted; the verdict is a function of the
   activity's own date, so regenerating an old document reproduces the original
   verdict (5.4). The `Benchmark` is carried by reference and never modified
   (5.6). No second window and no second default exists in this module (5.7).
@@ -1178,9 +1254,17 @@ def evaluate(
   `Benchmark.measured_on` is a non-optional `date`. `StalenessReading.anchor` is
   therefore non-optional too, and the structural unreachability of an absent
   anchor is recorded at the type rather than defended by a branch that could
-  never run. The *ordering* case — an anchor measured after the activity — is a
-  different failure and is guarded, because that one is reachable through an
-  upstream defect rather than forbidden by a type.
+  never run. An anchor measured *after* the activity is not a third instance of
+  5.5: it is a benchmark that does carry a measurement date and does anchor the
+  load, and it is reported under 5.8.
+- **A negative age without a declaration.** The store's contract makes
+  `RETROACTIVE` with `anchor.applies_from is None` unreachable (the only path to
+  a later-measured anchor is the athlete's declaration on that entry). This
+  module does not guard it: the outcome is still `RETROACTIVE` — the age is
+  what it is — and the assembly's basis states that the anchor carries no
+  applies-from date, a reported absence rather than a fabricated one (1.8). A calculator or
+  store that produced such an anchor would show it in the document rather than
+  crash the load pass (1.10). One test pins that path.
 
 **Implementation Notes**
 
@@ -1193,11 +1277,19 @@ def evaluate(
   redundancy between `staleness_window_days` and
   `load_settings.benchmark_staleness_days` disappears with them. There is one
   window and one source for it (5.7, 6.9).
-- *Risks*: the defensive guard is unreachable in a correct system, which is what
-  makes it vulnerable to a well-meaning deletion. A test constructs a
-  future-dated anchor and asserts the not-assessed reading, so the path is
-  exercised; the responsibilities note above records *why* the guard exists so
-  the test is not deleted with it.
+- *Validation*: the retroactive path is the reachable one now, and the test
+  constructs it as the store's tier 2 would — a `Benchmark` whose `measured_on`
+  falls after the activity date and whose `applies_from` is on or before it —
+  then asserts `RETROACTIVE`, a negative `age_days`, `is_stale is False`, and
+  the anchor — with its `applies_from` — carried on the reading. The basis those
+  values produce is FlagAssembly's and is pinned in `test_flags.py`. The
+  mutation that must red this module's test: removing the `age_days < 0`
+  branch, which turns the reading `CURRENT`.
+- *Risks*: until the open queue item
+  `2026-09-10-load-channels-renders-a-retroactive-anchor-date-unexplained`
+  lands `applies_from` beside `measured_on` in the channels' `inputs_used`, this
+  basis is the only text in the rendered document that explains a measurement
+  date later than the activity. This module does not reach into that table.
 
 ### Service — `src/fitdocs/load/qa/flags.py`
 
@@ -1206,7 +1298,7 @@ def evaluate(
 | Field | Detail |
 |---|---|
 | Intent | The one entry point: run all four checks, in a fixed order, and render each reading as a `QualityFlag` |
-| Requirements | 1.1–1.10, 3.8, 7.6, 7.7 |
+| Requirements | 1.1–1.10, 3.8, 5.8, 7.6, 7.7 |
 
 **Responsibilities & Constraints**
 
@@ -1217,12 +1309,17 @@ def evaluate(
 - Runs every check unconditionally, so a check's absence never signals
   inapplicability (1.6), and emits in `FLAG_ORDER` regardless of which verdicts
   were reached (1.7).
-- Maps each check's own three-value outcome onto the contract's
-  `detected` / `not-detected` / `not-assessed` — the mapping is total and
+- Maps each check's own outcome enum — three members for cadence, divergence
+  and drift, four for staleness — onto the contract's
+  `detected` / `not-detected` / `not-assessed`; the mapping is total and
   explicit per check, never a name-based coincidence.
 - Owns the basis strings. Every reached verdict states the observed figure, the
   threshold and the span; every not-assessed verdict states the missing input and
-  no figure that was not measured (1.4, 1.5, 1.8).
+  no figure that was not measured (1.4, 1.5, 1.8). The retroactive staleness
+  basis states the anchor's measurement date, how many days after the activity
+  it falls, the applies-from date read from `reading.anchor.applies_from` (or
+  that the anchor carries none) and the window, so a reader sees their own
+  declaration rather than an unexplained later date (5.8).
 
 **Dependencies**: Outbound — the four check modules (P0), `qa.types` (P0),
 `fitdocs.load.types.QualityFlag` (P0). Inbound —
@@ -1266,7 +1363,7 @@ which also keeps every check testable without constructing a context.
 
 - *Integration*: the verdict mapping, stated once —
   `LOCKED`/`DIVERGENT`/`DRIFTED`/`STALE` → `detected`;
-  `CLEAR`/`AGREED`/`COUPLED`/`CURRENT` → `not-detected`;
+  `CLEAR`/`AGREED`/`COUPLED`/`CURRENT`/`RETROACTIVE` → `not-detected`;
   every `NOT_ASSESSED` → `not-assessed`. A test asserts the mapping is total by
   folding each check's outcome enum with `assert_never`.
 - *Validation*: basis strings are user-visible in rendered documents and are
@@ -1473,8 +1570,9 @@ file is optional. There is deliberately no staleness key here — it lives besid
 
 - **Consumed unchanged**: `QualityFlag` and its `verdict` literal;
   `ChannelLoad` (`intensity`, `anchor`, `coverage`), `ChannelInsufficient`
-  (`reason`, `detail`); `Benchmark` (`measured_on`, `value`, `discipline`);
-  `BenchmarkAge` (`age_days`, `window_days`, `is_stale`);
+  (`reason`, `detail`); `Benchmark` (`measured_on`, `value`, `discipline`,
+  `applies_from`); `BenchmarkAge` (`age_days` — negative for an anchor measured
+  after the activity, `window_days`, `is_stale`);
   `DerivedMetrics.decoupling_pct` and `.efficiency_factor`; `Samples`;
   `LoadContext` (`activity_date`, `settings`) and
   `VerificationStatus.FITDOCS_MEASURED`.
@@ -1490,10 +1588,12 @@ file is optional. There is deliberately no staleness key here — it lives besid
 Two categories only, and the split is the design's central honesty commitment.
 
 1. **Data problems are verdicts, not errors.** Absent streams, insufficient
-   coverage, undefined modalities, unavailable metrics, missing dates and
-   inconsistent anchors all produce a *not-assessed* verdict with a stated
-   reason. Nothing in the check path raises, so a diagnostic can never fail a
-   load pass or a document write (1.10).
+   coverage, undefined modalities, unavailable metrics and missing dates all
+   produce a *not-assessed* verdict with a stated reason. An anchor measured
+   after the activity is not a data problem but a verdict state — `RETROACTIVE`,
+   rendered *not-detected* with a basis that explains the later date by the
+   athlete's declaration. Nothing in the check path raises, so a diagnostic can
+   never fail a load pass or a document write (1.10).
 2. **Configuration problems are loud and early.** An invalid `[load.flags]`
    value raises `LoadSettingsError` — already a `SettingsError` subclass — from
    the settings reader at the start of the load pass, before any document is
@@ -1510,7 +1610,7 @@ A third, deliberately narrow category: a violated **programming** precondition �
 | Data absence | No cadence stream; `decoupling_pct is None`; no activity date | *not-assessed* naming the absent input |
 | Data insufficiency | Paired coverage below minimum; no full span | *not-assessed* naming the observed figure and the requirement |
 | Model undefined | Non-running modality for the cadence check; heart rate is the selected channel | *not-assessed* naming why the check does not apply |
-| Upstream inconsistency | Anchor measured after the activity | *not-assessed* naming the inconsistency; a test pins the path |
+| Retroactive anchor | Anchor measured after the activity — a negative age from the store, reached only through the athlete's `applies_from` declaration | *not-detected* stating the measurement date, the day count after the activity, the applies-from date (or its absence) and the window; never stale, never not-assessed; a test pins the path |
 | Configuration | Wrong type, wrong range, non-table `[load.flags]` | `LoadSettingsError` naming file, key, value and range; CLI exit 2 before any write |
 | Programming error | Selected channel is not a `ChannelLoad` | `ValueError`; unreachable from user data |
 
@@ -1546,9 +1646,13 @@ per-document summary is unchanged — a flagged activity is a computed activity.
 - `test_drift.py` — above, below and exactly at the reference point; `None`
   decoupling reaches not-assessed (4.4); EF present and absent both produce a
   valid basis, and absent EF produces no numeric stand-in (1.8, 4.5).
-- `test_staleness.py` — stale, current, absent date, and the defensive
-  future-dated anchor; the same activity date yields the same verdict on repeat
-  (5.4).
+- `test_staleness.py` — stale, current, absent date, and the retroactive anchor
+  built as the store's tier 2 would build it (`measured_on` after the activity,
+  `applies_from` on or before it): `RETROACTIVE`, negative `age_days`, not
+  stale, the anchor and its `applies_from` carried on the reading (5.8); a
+  negative age whose anchor carries no `applies_from` still reads
+  `RETROACTIVE`; no input reaches *not-assessed* on the ordering of the two
+  dates; the same activity date yields the same verdict on repeat (5.4).
 - `test_types.py` / `test_sources.py` — `FLAG_ORDER` is total and unique;
   `FLAG_LABELS` is total; every default constant names either a citation key
   present in `CITATIONS` or a key present in `PROVISIONAL_DEFAULTS`, and none
@@ -1565,7 +1669,11 @@ per-document summary is unchanged — a flagged activity is a computed activity.
 
 - `test_flags.py` — `evaluate_flags` returns exactly four flags in `FLAG_ORDER`
   for every combination of reachable per-check outcomes (1.6, 1.7); every
-  `detail` is non-empty; the outcome-to-verdict mapping is total (1.2); no
+  `detail` is non-empty; the outcome-to-verdict mapping is total over every
+  member of every outcome enum, `StalenessOutcome.RETROACTIVE` → `not-detected`
+  included (1.2, 5.8); the retroactive staleness basis carries `measured_on`,
+  the day count after the activity, `applies_from` and the window, and states
+  the absence of `applies_from` when the anchor has none (5.8, 1.8); no
   verdict is `not-detected` when its check did not run (1.3); equal inputs
   produce a string-equal tuple (7.6).
 - `tests/load/threshold/test_calculator.py` — a computed activity carries four

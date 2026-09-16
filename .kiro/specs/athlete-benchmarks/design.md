@@ -209,7 +209,11 @@ rulings below are binding and the design text has been amended to match.
 - Any change to `ProfileView` members or to `AthleteField` → `threshold-load`,
   `plugin-api`'s published surface, and `tests/test_public_api.py`.
 - Any change to selection semantics (which entry applies to a date) → every
-  computed load value changes; `threshold-load` and `activity-qa-flags` re-check.
+  computed load value changes; `threshold-load` and `activity-qa-flags` re-check. *Fired by
+  Amendment 1*: `threshold-load` re-checked 2026-09-10 (its Amendment 2, no
+  code change); `activity-qa-flags` re-checked 2026-09-16 (its retroactive-anchor
+  amendment — a negative `benchmark_age` is its own `RETROACTIVE` staleness
+  outcome, not a guard violation).
 - Adding a `[load]` key or changing `LoadSettings`' shape → **`training-load`
   first** (it owns the module), then the sibling specs sharing that table.
 - Any change to `load_load_settings`' name or signature, or to `LoadContext`'s

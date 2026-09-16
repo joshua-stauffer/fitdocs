@@ -33,6 +33,12 @@
      verdicts. The three-verdict vocabulary fixed by `training-load` has no prior
      art to copy — which is a reason to state the design rationale, not a reason
      to doubt it.
+  6. **(2026-09-16) The staleness guard's premise was retired upstream.**
+     `benchmark_age` now returns a negative age, never raising, for an anchor
+     measured after the activity, and the store yields such an anchor only
+     through the athlete's own `applies_from` declaration. The pre-call
+     ordering guard is gone; the case is a typed outcome mapped to
+     *not-detected* with both dates in the basis.
 
 ## Research Log
 
@@ -180,6 +186,49 @@
   that the corpus's channels are frequently the only channel available and on the
   research-established finding that platforms select rather than reconcile —
   neither of which needs the anecdote. Reported to the brief's owner.
+
+### Retroactive anchors after `athlete-benchmarks` Amendment 1 (2026-09-16)
+
+- **Context**: queue item
+  `2026-09-10-activity-qa-flags-staleness-guard-neutralises-retroactive-anchors`,
+  surfaced by `/kiro-validate-impl training-load` (Amendment 4). This design
+  guarded `measured_on <= activity_date` before calling `benchmark_age` and
+  called the guard load-bearing because the store *raised* for that ordering.
+- **Sources Consulted**: `src/fitdocs/benchmarks.py` at `41f980b`
+  (`benchmark_age`, `BenchmarkAge`, `BenchmarkSet.applicable`,
+  `Benchmark.applies_from`); `.kiro/specs/athlete-benchmarks/requirements.md`
+  Amendment 1 and criteria 3.3, 3.10, 3.11, 4.6; its `design.md`
+  StalenessCalculation block and the error-handling row for a later
+  `measured_on`; its `spec.json` amendment record's `cross_spec` entry naming
+  this feature; `training-load` Amendment 4 (the decision and its rejected
+  alternatives); `src/fitdocs/load/types.py` (`QualityFlag.verdict` is still
+  the three-value `Literal`); `src/fitdocs/load/settings.py` (the reader
+  rejects a non-positive `benchmark_staleness_days`); the sibling queue item
+  `2026-09-10-load-channels-renders-a-retroactive-anchor-date-unexplained`.
+- **Findings**:
+  - `benchmark_age` raises only for `window_days < 1`. `age_days` is
+    `(activity_date - measured_on).days`, negative when the benchmark was
+    measured after the activity, and `is_stale = age_days > window_days`, so a
+    negative age is never stale. Its docstring says the sign is the signal a
+    caller reads, not a sentinel.
+  - Selection is two-tier: the latest entry measured on or before the activity,
+    else — only among entries whose `applies_from` is not `None` and is on or
+    before the activity — the one measured soonest after it. The only path to
+    an anchor with a negative age is therefore the athlete's own declaration on
+    that entry, and the resolved `Benchmark` carries it.
+  - The contract's verdict vocabulary is unchanged: `QualityFlag.verdict` is
+    `Literal["detected", "not-detected", "not-assessed"]`. A fourth contract
+    value is a revalidation trigger for this feature *and* `training-load`'s
+    renderer.
+  - The guard's stated justification (`threshold-load` 1.7 never-raises versus a
+    raising store) no longer describes any raise that can occur on athlete data;
+    the settings reader rejects a non-positive window — the remaining
+    `ValueError` — before any document is read.
+- **Implications**: the guard is retired with its premise; a negative age is
+  surfaced as its own typed outcome and mapped to *not-detected*; new criterion
+  5.8; the `benchmark_age` revalidation trigger is widened to the sign
+  convention and the selection rule, since a change to neither signature nor
+  fields is what fired it.
 
 ## Architecture Pattern Evaluation
 
@@ -335,21 +384,59 @@
 - **Trade-offs**: a dependency from `load/qa` onto `load/channels`. Declared, and
   in the permitted direction.
 
-### Decision: A future-dated anchor reports not-assessed rather than raising
+### Decision: A retroactive anchor is a fourth staleness outcome, mapped to not-detected
 
-- **Context**: `benchmarks.benchmark_age` raises `ValueError` when
-  `measured_on > activity_date`, on the stated grounds that date-aware selection
-  can never produce one. Req 1.10 forbids this layer from raising, and
-  `threshold-load` Req 1.7 forbids the calculator from raising at all.
-- **Selected Approach**: the staleness check guards the ordering itself and
-  reports *not-assessed* naming the inconsistency, so `benchmark_age` is only
-  ever called with a satisfied precondition.
-- **Rationale**: a triggered guard means an upstream defect, and "could not
-  check" is the honest verdict for an input the layer cannot trust. Converting an
-  upstream invariant violation into a crashed load pass would fail the whole
-  document for a diagnostic.
-- **Trade-offs**: the defect is reported quietly in a flag rather than loudly as
-  a crash. A test asserts the guard fires, so the path is not dead code.
+- **Context**: `athlete-benchmarks` Amendment 1 (2026-09-10) revised its 4.6:
+  `benchmark_age` returns a negative `age_days` and a current verdict for a
+  benchmark measured after the activity, because two-tier selection now yields
+  such an entry when the athlete declared it to apply retroactively. This
+  design's earlier decision here — *a future-dated anchor reports not-assessed
+  rather than raising*, with a pre-call guard on `measured_on <= activity_date`
+  that "must not be deleted as dead code" — rested on the store raising, which
+  it no longer does. Implemented as written, the guard would have reported
+  *not-assessed* for every athlete-declared retroactive anchor.
+- **Alternatives Considered**:
+  1. Keep the guard — rejected: it neutralises the amendment's primary case (a
+     first-time athlete's archive scored against a prompt answer applied
+     retroactively), and its rationale is false.
+  2. Fold the case into `CURRENT` and let the basis builder branch on the sign
+     of `age_days` — rejected: the state would live in string formatting rather
+     than in a typed outcome, contrary to this design's rule that each verdict
+     mapping is explicit per typed outcome and folded with `assert_never`, and
+     a test could not tell "current" from "retroactive" without parsing the
+     basis.
+  3. A fifth flag (a `FlagKey` for the retroactive anchor) — rejected: it
+     changes `FLAG_ORDER`, the "exactly four flags" postcondition pinned across
+     `test_flags.py`, the calculator tests and the e2e render, and it would emit
+     a verdict on every document for what is a qualifier of the staleness
+     verdict, not a separate check. `athlete-benchmarks` promises only the sign
+     of the age; the vocabulary is this feature's, and a fourth internal
+     outcome is the smallest vocabulary that names the state.
+  4. Map the case to *not-assessed* — rejected: 1.2 reserves *not-assessed* for
+     a check that could not run to completion; this one ran, and the anchor is
+     not stale.
+- **Selected Approach**: `StalenessOutcome` gains `RETROACTIVE`, set exactly
+  when `age.age_days < 0`; the assembly maps it to the contract's
+  *not-detected* and its basis states the measurement date, the day count after
+  the activity, the applies-from date read from `reading.anchor.applies_from`
+  (or that the anchor carries none) and the window. No ordering guard precedes
+  the call.
+- **Rationale**: the check did run and the condition (age exceeds the window)
+  was not found, which is what 1.2 defines *not-detected* to mean; the
+  contract's three values are untouched, so `training-load`'s renderer is not
+  revalidated; and the athlete sees their own declaration rather than an
+  unexplained measurement date later than the activity — which the channels'
+  `inputs_used` table does not yet explain (sibling queue item
+  `2026-09-10-load-channels-renders-a-retroactive-anchor-date-unexplained`).
+- **Trade-offs**: a negative age with no `applies_from` — unreachable under the
+  store's contract — is reported as `RETROACTIVE` with the absence stated
+  rather than guarded, so an upstream defect of that shape would show in the
+  document rather than fail the pass; that is the same "verdicts are the
+  observability artifact" stance the rest of the design takes.
+- **Follow-up**: the test builds the retroactive anchor as tier 2 would
+  (`measured_on` after the activity, `applies_from` on or before it) and names
+  its mutation — removing the `age_days < 0` branch turns the reading `CURRENT`
+  and drops both dates from the basis.
 
 ## Risks & Mitigations
 
@@ -379,6 +466,12 @@
 - **`build_result` gains a parameter.** *Mitigation*: keyword-only with an empty
   default, so the change is additive and the single existing call site is the
   only one updated; `threshold-load` anticipated and endorsed exactly this.
+- **The staleness basis is, for now, the only document text explaining a
+  measurement date later than the activity.** The channels' `inputs_used` table
+  renders `measured_on` without `applies_from` (open queue item
+  `2026-09-10-load-channels-renders-a-retroactive-anchor-date-unexplained`).
+  *Mitigation*: the retroactive basis names the athlete's declaration date
+  explicitly; the sibling item is independent and unchanged by this amendment.
 
 ## References
 

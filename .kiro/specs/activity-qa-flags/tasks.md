@@ -35,6 +35,17 @@ Applied throughout this plan; the reasoning is in `requirements.md` and
 - Tasks 2.5 and 3.2 read the activity date and the staleness window from the
   `LoadContext`, not from the profile view.
 
+## Amendment — 2026-09-16: retroactive anchors
+
+`athlete-benchmarks` Amendment 1 retired the premise behind task 2.5's
+ordering guard: `benchmark_age` no longer raises for a benchmark measured after
+the activity — it returns a negative age, and selection yields such an anchor
+only when the athlete declared it to apply retroactively. Task 2.5 no longer
+guards the ordering and instead surfaces a negative age as the reading's own
+retroactive outcome; task 3.1 maps that outcome to *not-detected* and its basis
+states both dates. New criterion 5.8 is traced to both. No task added or
+removed.
+
 ## Upstream Prerequisites
 
 Every task below consumes contracts three other Phase 4 specs deliver, none of
@@ -341,13 +352,17 @@ does not add, reference or read a real file.
     measurement date, the age in days and the window on the reading
   - Take the window and the activity's calendar date from the per-pass context
     the calculator receives, never from the profile view and never from a clock
-  - Report not assessed when the activity carries no calendar date, and guard the
-    ordering of the measurement date against the activity date so an upstream
-    inconsistency degrades to a not-assessed reading rather than raising. Record
-    at the guard why it exists: the benchmark store raises on a benchmark
-    measured after the activity while the load pass must never raise on athlete
-    data, and this guard is the seam that makes both true. It is unreachable in a
-    correct system and must not be deleted as dead code
+  - Report not assessed when the activity carries no calendar date, and
+    otherwise consult the store's computation unconditionally: do not guard the
+    ordering of the measurement date against the activity date, because the
+    store no longer fails on a benchmark measured after the activity — it
+    reports a negative age, and only for an entry the athlete declared to apply
+    retroactively
+  - Surface a negative age as the reading's own retroactive outcome, distinct
+    from stale, current and not assessed, carrying the anchor so the assembly
+    can state the athlete's applies-from date beside the measurement date; a
+    negative age whose anchor carries no applies-from date keeps the retroactive
+    outcome and is reported as that absence, never guarded, never raised
   - Record at the definition that the absent-anchor half of the missing-anchor
     requirement is structurally unreachable — the channel outcome's anchor and
     the benchmark's measurement date are both non-optional upstream — so the
@@ -356,10 +371,12 @@ does not add, reference or read a real file.
   - Build every constructed channel load and benchmark this task needs inside its
     own test module; do not add to the shared fixture module, which task 2.1 owns
   - Observable: tests show a stale anchor, a current anchor, an undated activity
-    and a future-dated anchor each reaching their intended reading, and the same
-    activity date producing the same verdict on repeat regardless of when the
-    test runs
-  - _Requirements: 1.5, 1.10, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7_
+    and a retroactive anchor (measured after the activity, declared to apply
+    from on or before it) each reaching their intended reading, a negative age
+    with no declaration keeping the retroactive outcome, no input reaching not
+    assessed on the ordering of the two dates, and the same activity date
+    producing the same verdict on repeat regardless of when the test runs
+  - _Requirements: 1.5, 1.8, 1.10, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8_
   - _Boundary: StalenessSurfacing_
   - _Depends: 1.1_
 
@@ -371,10 +388,15 @@ does not add, reference or read a real file.
     record never signals inapplicability
   - Map each check's own outcome onto the contract's three verdict values
     explicitly and totally, never by name coincidence, and never emit the
-    condition-not-found verdict for a check that did not run
+    condition-not-found verdict for a check that did not run; the staleness
+    check's retroactive outcome maps to the condition-not-found verdict,
+    because that check ran and the anchor is not stale
   - Own the basis strings: state the observed figure, the threshold and the span
     on every reached verdict, and the unmet precondition with no unmeasured
-    figure on every not-assessed verdict
+    figure on every not-assessed verdict; on a retroactive staleness verdict
+    state the measurement date, how many days after the activity it falls, the
+    applies-from date read from the anchor (or that it carries none) and the
+    window
   - Keep this the only module in the package that imports the load contract, and
     add the entry point to the package initializer task 1.1 created so it is
     reachable from the package root. Re-export it **eagerly** — an ordinary
@@ -387,7 +409,7 @@ does not add, reference or read a real file.
     shows exactly four verdicts in the fixed order with non-empty bases, the
     outcome-to-verdict mapping proven total, and equal inputs producing a
     string-equal tuple
-  - _Requirements: 1.1, 1.2, 1.3, 1.6, 1.7, 1.9, 1.10, 3.8, 7.6, 7.7_
+  - _Requirements: 1.1, 1.2, 1.3, 1.6, 1.7, 1.9, 1.10, 3.8, 5.8, 7.6, 7.7_
   - _Boundary: FlagAssembly_
   - _Depends: 2.2, 2.3, 2.4, 2.5_
 

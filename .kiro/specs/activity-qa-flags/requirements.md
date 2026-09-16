@@ -121,6 +121,32 @@ here so the reasoning is not lost:
    it enters only as a constituent of decoupling and as a stated basis, never as
    a verdict (Req 4.5).
 
+## Amendment — 2026-09-16: retroactive anchors (`athlete-benchmarks` Amendment 1)
+
+Queue item
+`2026-09-10-activity-qa-flags-staleness-guard-neutralises-retroactive-anchors`.
+`athlete-benchmarks` Amendment 1 (2026-09-10, under `training-load` Amendment
+4 and the maintainer's 2026-08-29 ruling to extend the design to past dates)
+lets the athlete declare, per entry, that a benchmark measured on the day they
+answered a prompt also stands in for earlier activities (`applies_from`); the
+store then resolves such an entry for an activity no earlier measurement
+covers, and its staleness computation reports a **negative age and a current
+verdict** for it instead of failing (its 4.6 revised). Its amendment record
+names this feature: a negative age must be read as "measured after this
+activity, applied by declaration", never as stale.
+
+This document's Requirement 5 had been satisfied by a design that guarded the
+ordering of the two dates before consulting the store and reported a violation
+as *not-assessed*, on the premise that the store raised for it. That premise is
+false now, and the guard would have reported *not-assessed* on precisely the
+anchors the amendment exists to create — a first-time athlete's whole archive.
+Criterion 5.8 is added so the retroactive case is a stated obligation rather
+than a design accident: the check reports *not-detected* (it ran, and the
+anchor is not stale) and its basis explains the later measurement date by the
+athlete's own declaration. No criterion is revised, withdrawn or renumbered;
+the Adjacent expectations paragraph below records the store's revised
+behaviour.
+
 ## Boundary Context
 
 - **In scope**: the flag vocabulary and its three verdicts, including the
@@ -170,7 +196,14 @@ here so the reasoning is not lost:
   side effect. The benchmark store already computes a benchmark's age in days
   against the activity's own date and the configured window, and already
   reports whether that age exceeds the window; this feature surfaces that
-  computation and does not repeat it. The calculator receives the activity's
+  computation and does not repeat it. Since `athlete-benchmarks` Amendment 1
+  the store may resolve, for an activity that no earlier-measured entry
+  covers, an entry the athlete declared to apply from an earlier date; it
+  returns that applies-from date alongside the measurement date, and its age
+  computation then reports a negative age and a current verdict rather than
+  failing. The tool itself never applies a later measurement on its own, so a
+  negative age reaching this feature is always the athlete's declaration. The
+  calculator receives the activity's
   calendar date and the resolved load configuration through a per-pass context
   value the load layer hands to `compute`, rather than through the athlete
   profile view, which is a pure store view; this feature reads both from that
@@ -271,6 +304,7 @@ month old test says so.
 5. If the activity's load was computed without an anchoring benchmark carrying a measurement date, the fitdocs staleness check shall report *not-assessed* naming what was absent.
 6. The fitdocs staleness check shall report a verdict without altering, suppressing or adjusting the benchmark value or the load derived from it.
 7. The fitdocs staleness check shall use the same staleness window the benchmark store is configured with, and shall not introduce a second window or a second default.
+8. _(added 2026-09-16, retroactive-anchor amendment)_ When the anchoring benchmark's measurement date falls after the activity's date — which the benchmark store reports as a negative age, and which its selection yields only for an entry the athlete declared to apply from a date on or before the activity's — the fitdocs staleness check shall report *not-detected*, shall state the measurement date, how many days after the activity it falls, the applies-from date the athlete declared (or that the anchor carries none) and the window, and shall not report the benchmark as stale, shall not report the check as *not-assessed* on the ordering of the two dates, and shall not treat that ordering as an error.
 
 ### Requirement 6: Flag Threshold Configuration
 
