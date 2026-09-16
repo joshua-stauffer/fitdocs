@@ -1,7 +1,7 @@
 ---
 id: 2026-09-10-roadmap-phase4-status-lines-stale
 title: Roadmap Phase 4 status lines are stale — threshold-load shows [ ] though implemented, load-channels shows "1 of 20" though all 20 are ticked
-status: open
+status: done
 importance: low
 importance_why: The roadmap is the planning source of truth and /kiro-queue ranks from it; two shipped specs reading as pending misleads the next planning pass, but nothing executes on it.
 effort: S
@@ -51,3 +51,16 @@ reading as one-twentieth done, both misstate what is left in Phase 4.
    end to end afterwards.
 3. If load-channels' spec.json should read `implemented`, flip it in the same
    change with a phase_note, as threshold-load's was.
+
+## Resolution
+
+Closed 2026-09-15 by the Phase 7 discovery session (`chore/discovery-training-blocks`,
+commit `5def7a7`), which was editing the roadmap anyway. Both lines now match
+their specs: `threshold-load` reads `[x]` implemented 2026-08-29 at 09aa9b2,
+18/18 tasks; `load-channels` reads `[x]` implemented 2026-08-25 at e350709,
+20/20 tasks (agent log: "THE load-channels SPEC IS COMPLETE", 2026-08-25T15:39Z).
+Neither spec.json `phase` was flipped -- load-channels, effort-tags,
+performance-benchmarks and load-history all still read `tasks-generated`
+after completion, which is a convention question for a spec-status session,
+not a roadmap fact; the roadmap lines say so inline. activity-qa-flags and
+distribution were left `[ ]` (0 tasks ticked), as this item asked.
