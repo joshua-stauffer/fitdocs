@@ -6,8 +6,9 @@ Ship the leanest complete value first: **consume `.fit` files and write
 one-to-one markdown workout documents**, strong at the workout level, with
 computed training load. Doc structure and metric coverage are modeled on
 fitdocs.ai's activity views (running, cycling, weight training), approximated
-as markdown + pre-rendered charts. Cycle/block organization is explicitly
-deferred.
+as markdown + pre-rendered charts. Cycle/block organization was explicitly
+deferred from the first pass through Phase 6; Phase 7 (discovery 2026-09-15)
+lifts that deferral with training-block documents.
 
 The work is decomposed into three specs in dependency order, each a reviewable
 increment; the second delivers the first end-to-end user-visible value and the
@@ -48,9 +49,11 @@ third delivers the differentiating feature (training load).
 - **In (phase 2)**: route maps for activities with GPS data — basemap-tile
   look, rendered as static SVG assets (route-maps spec). Determinism
   constraint is carved out to "byte-identical given a warm tile cache".
-- **Out** (deferred): training cycles/blocks/plan-level docs; weekly load
+- **Out** (deferred): training cycles/blocks/plan-level docs *(lifted in
+  Phase 7, 2026-09-15 — `training-blocks`, `plan-resolution` and
+  `build-training-block` own the plan level)*; weekly load
   aggregation views *(lifted in Phase 6, 2026-09-09 — `load-history` owns the
-  longitudinal page; cycles/blocks stay deferred)*; automated `.fit`
+  longitudinal page)*; automated `.fit`
   acquisition; non-`.fit` formats
   (GPX/TCX — measured on real HealthFit exports 2026-07-16: GPX sidecars
   are the FIT track re-encoded, mm-level deltas only, so ingesting them
@@ -331,8 +334,9 @@ extraction, including seven discrepancies between the two defining texts:
   regression (deferred — see the constraint below); auto-FTP / eFTP
   estimation *(Phase 6, 2026-09-09: `performance-benchmarks` derives dated
   thresholds from tagged races in its own pass; the calculator's own exclusion,
-  threshold-load Req 11.6, stands)*; weekly/CTL/ATL aggregation (still deferred
-  with the plan level *— until Phase 6; `load-history`*);
+  threshold-load Req 11.6, stands)*; weekly/CTL/ATL aggregation (deferred
+  with the plan level *— until Phase 6 for aggregation, `load-history`; until
+  Phase 7 for the plan level itself, 2026-09-15*);
   a strength-training load number; the withdrawal of the withdrawn calculator
   (training-load Amendment 2 owns that); getting `.fit` files into the data
   root (inbox owns that).
@@ -744,7 +748,7 @@ limitation in `training-load` and `threshold-load`._
   `LoadContext.activity_date`, so without that amendment it cannot compute
   staleness at all. (Read `none` in the first pass; corrected 2026-07-25 by the
   same reasoning applied to load-channels and activity-qa-flags.)
-- [~] load-channels — **in flight (task 1.1 landed; 1 of 20 checklist items).**
+- [x] load-channels — **implemented 2026-08-25 at e350709, 20/20 tasks (ticked 2026-09-15; spec.json phase still reads tasks-generated).**
   The channel package and its provenance record ship
   (`src/fitdocs/load/channels/sources.py`), guarded by
   `tests/load/channels/test_sources.py::test_every_module_level_citation_is_registered_in_citations`
@@ -755,7 +759,7 @@ limitation in `training-load` and `threshold-load`._
   data-sufficiency gate. Dependencies: athlete-benchmarks, training-load
   (it extends `LoadSettings` in `load/settings.py`, which the training-load
   update creates — an implicit dependency the first pass omitted)
-- [ ] threshold-load — the `threshold` calculator: compute every channel with
+- [x] threshold-load — **implemented 2026-08-29 at 09aa9b2, 18/18 tasks (roadmap bullet ticked 2026-09-15)** — the `threshold` calculator: compute every channel with
   sufficient data, select one by configurable priority with fallback, emit the
   selection and the diagnostics. Dependencies: athlete-benchmarks,
   load-channels, and the training-load contract update
@@ -974,7 +978,8 @@ would leave the derived numbers invisible to the athlete).
   runs and GPS artefacts is listed as a follow-on candidate, not scheduled.
 - **One longitudinal page.** Fitness/fatigue/form chart with race markers,
   weekly table, coverage statement. No forecasting, no plan/cycle/block
-  documents — those stay deferred as product.md says.
+  documents — those stayed deferred as product.md said *(lifted by Phase 7,
+  2026-09-15)*.
 - **Running and cycling.** The maintainer chose both over running-only.
   Running derives threshold pace and LTHR; cycling derives FTP and LTHR.
   Caveat recorded: the 2026-07-15 HealthFit sample carried no cycling power,
@@ -997,7 +1002,8 @@ would leave the derived numbers invisible to the athlete).
   a gated least-squares fit of the model's constants to tagged race results
   with a fidelity report; the commands, owned paths and settings each needs.
 - **Out**: auto-detection of races or best efforts; forecasting form at a
-  future date; plan, cycle and block documents; deriving maximum or resting
+  future date; plan, cycle and block documents *(lifted by Phase 7,
+  2026-09-15)*; deriving maximum or resting
   heart rate; any change to channel arithmetic, selection, or the calculator;
   sports other than running and cycling; non-Morton model variants.
 
@@ -1117,15 +1123,15 @@ would leave the derived numbers invisible to the athlete).
 
 #### Specs (dependency order)
 
-- [ ] effort-tags — **spec written 2026-09-10** (Phase 6 batch, `tasks-generated`, all approvals set; 6 requirements, 5 majors / 14 executable tasks, major 3 a single promoted task; cross-spec reviewed). User-owned frontmatter keys marking a workout page as a
+- [x] effort-tags — **spec written 2026-09-10; implemented 2026-09-11 at 1dc8633, 18/18 tasks (ticked 2026-09-15)** (Phase 6 batch, `tasks-generated`, all approvals set; 6 requirements, 5 majors / 14 executable tasks, major 3 a single promoted task; cross-spec reviewed). User-owned frontmatter keys marking a workout page as a
   race, test or hard effort, with optional official distance, time and event
   link; preserved byte-for-byte across sync, regen and the load pass;
   validated; read through one contract reader. Dependencies: none
-- [ ] performance-benchmarks — **spec written 2026-09-10** (Phase 6 batch, `tasks-generated`, all approvals set; 10 requirements, 5 majors / 18 executable tasks; cross-spec reviewed). A pass that derives dated threshold pace, LTHR
+- [x] performance-benchmarks — **spec written 2026-09-10; implemented 2026-09-12 at bee5d59, 23/23 tasks (ticked 2026-09-15)** (Phase 6 batch, `tasks-generated`, all approvals set; 10 requirements, 5 majors / 18 executable tasks; cross-spec reviewed). A pass that derives dated threshold pace, LTHR
   and FTP from tagged efforts through cited models and writes them to
   `athlete.toml` with provenance, never overwriting what the athlete typed.
   Dependencies: effort-tags
-- [ ] load-history — **spec written 2026-09-10** (Phase 6 batch, `tasks-generated`, all approvals set; 8 requirements, 5 majors / 20 executable tasks; cross-spec reviewed). The daily load series from documents, the
+- [x] load-history — **spec written 2026-09-10; implemented 2026-09-11 at 9a86e48, 25/25 tasks (ticked 2026-09-15)** (Phase 6 batch, `tasks-generated`, all approvals set; 8 requirements, 5 majors / 20 executable tasks; cross-spec reviewed). The daily load series from documents, the
   fitness/fatigue/form recursion with cited seed constants, and one history
   page with chart, race markers, weekly table and coverage statement.
   Dependencies: effort-tags
@@ -1135,3 +1141,264 @@ would leave the derived numbers invisible to the athlete).
   the seeds; requirements begin only after `load-history` reports the
   archive's criterion-point count. Dependencies: performance-benchmarks,
   load-history
+
+### Phase 7 — training blocks (discovery 2026-09-15)
+
+**Goal**: let the athlete plan. Phase 6 gave every page a load and drew the
+fitness curve over the archive; the archive can now describe what training
+*did*. Nothing can yet state what training *should* do next. Phase 7 adds the
+plan level as one document per training block: dated bounds, a goal in prose,
+a mesocycle length, and a table — organized by numbered mesocycle and day — of
+planned workouts that link out to their own pages before any `.fit` exists.
+Logged workouts are reconciled against the plan as they arrive, the plan is
+expected to change midstream and the page keeps the record of it, and one
+packaged skill is the canonical way a curating LLM builds a block.
+
+**Approach decision — an athlete-owned plan source, rendered pages, one
+reconciling pass.** The block is authored as one structured source file
+(TOML; the maintainer's LLM writes it through the skill) in a user-owned
+location fitdocs only reads, exactly as `athlete.toml` and `fitdocs.toml`
+are read. fitdocs renders the block page and one planned-workout page per row
+into a new owned location, the way a `.fit` becomes a workout page. Changes to
+the plan are appended to the source as dated amendments, never edits to
+earlier entries, so the source is its own history and the render shows the
+current table beside the original plan and each supersession. A reconciling
+pass — pure over (source, the corpus's frontmatter, settings) — matches
+logged workouts to planned rows, sums actual load per mesocycle against the
+source's target, and rerenders; it keeps no state of its own, so a better fit
+logged later replaces an earlier match without a migration. The athlete's
+final say on an ambiguous match is an entry in the source, not a key on the
+workout page. Rejected: *a hand-authored block page with tool regions*
+(makes LLM-written markdown an input format, inverts the ownership model on
+one page, and has no natural revision record); *a user-owned override key on
+the logged workout page* (viability check 2026-09-15: a key outside
+`MANAGED_KEYS` ∪ `USER_KEYS` is dropped by the next regeneration, so it would
+need a second user-owned key class and move both exact pins on `USER_KEYS` —
+`tests/test_contract.py:296-306`, `tests/test_ownership_contract.py:137` —
+for a fact that is about the plan, not the workout); *the plan source inside
+the owned directory* (the ownership contract defines owned as "may create,
+rewrite, or delete wholesale", `docs/ownership-contract.md:37-40,61-67`, and a
+regeneration would be entitled to delete the athlete's plan); *in-place
+region editing of the block page by the reconciler* (`load/docedit.py` is
+hard-bound to the load region and `LoadResult`, `_atomic_write` is private to
+`load/engine.py`; whole-page regeneration from two inputs, the history page's
+model, needs none of it).
+
+#### Decisions taken at discovery (2026-09-15)
+
+- **Path E, three new specs, three existing-spec updates** (maintainer,
+  2026-09-15): `training-blocks` (source, pages, location, command),
+  `plan-resolution` (matching, per-mesocycle load, chaining, overrides),
+  `build-training-block` (the packaged skill). Folding the skill into
+  `training-blocks` was offered and declined: the skill must teach
+  disambiguation, so it cannot ship before the reconciler.
+- **Plan source, rendered pages** (maintainer, 2026-09-15) over a
+  hand-authored page with tool regions.
+- **Per-mesocycle load targets are in scope** (maintainer, 2026-09-15): the
+  source may carry a target load per mesocycle; the block page shows it
+  beside the actual sum of the logged workouts dated inside that mesocycle,
+  with a coverage statement. Per-row load targets are out (offered and
+  declined).
+- **The skill ships in the fitdocs wheel** (maintainer, 2026-09-15), a second
+  packaged skill beside distribution's inbox skill, located by name. A pkm-side
+  wrapper adding pkm's own closing rituals is that repository's work.
+- **Rendered links are relative markdown links, never wikilinks.** Workout
+  pages carry no wikilinks by design (`src/fitdocs/render/views.py:25-29`);
+  the roadmap's constraint that PKM affordances degrade gracefully in vanilla
+  renderers (`## Constraints`) permits wikilinks but is met most simply by
+  not emitting them. The block page → planned page and block page → logged
+  page links are the project's first cross-document links and follow the
+  same rule; Obsidian resolves relative links, `cat` and GitHub show them.
+- **Mesocycles are derived, not typed.** The source states `starts`, `ends`
+  and a mesocycle length in days; mesocycle numbers and their date windows
+  follow from those, the last may be short, and a row belongs to the
+  mesocycle its date falls in. Moving a workout across a boundary changes its
+  mesocycle, which is correct. A row dated outside the bounds is a validation
+  error naming the row.
+- **Rows carry a stable id.** Amendments and overrides name a row by id, so a
+  workout moved two days is the same workout, its planned page keeps its
+  identity, and the revision record can say "moved", not "removed and added".
+- **Disambiguation lives in the source.** An override entry names a row and
+  the logged workout stems that fulfil it (or marks the row skipped). The
+  curating LLM edits the source it already authors and reruns the command.
+  fitdocs never writes the source.
+- **The reconciler is stateless.** Every run recomputes matches from the
+  current source and corpus; the only sticky facts are overrides. No
+  persisted match table, no migration when heuristics change.
+- **Planned pages never live under `workouts/`.** Every discovery path globs
+  `workouts/*.md` and filters on `type == "workout"` (`sync._discover_documents`,
+  `load.engine._discover_workout_docs`, `history.documents.scan_documents`,
+  `audit`), and `regen` rebuilds from the archive a planned page does not
+  have. Planned pages carry their own type in their own directory, and
+  "this planned workout was done" is a link between two pages, never an
+  in-place promotion.
+- **The activity-type match is `sport` + `modality` (+ `indoor`), nothing
+  finer.** `sub_sport` is not in frontmatter (`model.py:127`, consumed at
+  ingest only), so "track session" and "easy run" are the same type to the
+  base case. Same-day, same-type rows are the ambiguous case the athlete
+  settles; the spec says so rather than inventing a classifier.
+
+#### Scope
+
+- **In**: the plan-source format and its loud validation; the block page
+  (bounds, goal, mesocycle length, the mesocycle-by-day table with title,
+  summary and link per row, per-mesocycle target vs actual load, the revision
+  record); one planned-workout page per row; a user-owned source location and
+  an owned rendered location, declared, guarded and versioned like every
+  other; the `fitdocs plan` command; the reconciling pass, its match rules,
+  confidence labels, unplanned-workout listing and chaining after `sync`,
+  `drain` and `regen`; overrides; the packaged `build-training-block` skill
+  with a conformance test, and the by-name skill locator it needs.
+- **Out**: forecasting fitness/form from the plan (a listed follow-on since
+  Phase 6, now reachable); per-row load targets; macrocycles or any page
+  spanning several blocks; a back-link key written into logged workout pages
+  (candidate); auto-generating a plan from history or from a goal race;
+  structured interval grammars (the prescription is prose); any change to
+  channel arithmetic, selection, the calculator or the history page;
+  pkm-side wrappers, schema sections and skills (the pkm repository's work);
+  editing the plan source from fitdocs.
+
+#### Constraints
+
+- **The source is user-owned and fitdocs only reads it.** It lives outside
+  every `OWNED_PATHS` prefix — a data-root directory of its own, configurable
+  through `fitdocs.toml` the way `[inbox]` is — and is documented in the
+  ownership contract's shared-and-user-owned section (which has no equality
+  pin, `tests/test_ownership_contract.py` covers only owned paths, regions
+  and keys). A malformed source is a per-block error naming the file, the
+  entry and the field; a block that fails validation is left unrendered and
+  its existing pages untouched, never half-rendered.
+- **TOML, parsed with `tomllib`.** Four modules already do
+  (`settings.py`, `athlete.py`, `quarantine.py`, `load/profile.py`) and none
+  share a helper — the plan reader is a fifth `tomllib.load` idiom unless a
+  task extracts one. YAML is barred: `tests/test_contract_consumers.py:261-343`
+  forbids `import yaml` in any registered module, and an unquoted
+  `[[wikilink]]` in a YAML value is a nested list (`contract.py:516-519`).
+- **Documents are the reconciler's only corpus input.** No `.fit`, no
+  network, no prompting, no clock beyond the pass's resolved `today` (used
+  only to tell "upcoming" from "not logged"). Byte-identical output for an
+  unchanged source and corpus.
+- **Absent is `None`, never `0`.** No target → no comparison; loads not
+  computed → the sum says how many pages were unscored; a row in the future
+  is "upcoming", not "missed"; an override naming a stem that does not exist
+  is a reported problem, never silently dropped.
+- **One methodology per sum.** Reuse `fitdocs.history`'s published
+  `select_methodology` / `partition_pages`; do not deep-import
+  `history.documents.scan_documents` (unpublished, and its `PageRecord` has no
+  sport or modality). The reconciler scans frontmatter through `docio` and
+  `contract` readers of its own.
+- **One contract reader per matched field.** `contract.py` has
+  `document_date` but no `document_sport` / `document_modality`; the
+  consumers test would *not* catch an inline `frontmatter.get("sport")`
+  (`FORBIDDEN_LITERALS` is only the fence and the workout type,
+  `tests/test_contract_consumers.py:246-249`). `plan-resolution` adds the
+  readers and the literals to that pin in the same change.
+- **Every pin moves in the change that needs it.** New owned path:
+  `layout.OWNED_PATHS` / `DECLARED_DIRS` (`tests/test_layout.py:537-545, 670`),
+  the ownership contract's list and version (`tests/test_ownership_contract.py:81-108`),
+  a declaration golden (`tests/test_declaration_goldens.py:41-46`, or the
+  new dir raises `KeyError`), `tests/test_declaration.py:160`'s derived cases,
+  `tests/test_confinement.py`'s permitted set and a new `EntryPoint` with its
+  own `non_vacuous` (the `history` registration at `:606-611` is the
+  template; `tests/test_effort_tags_e2e.py:506` only subset-checks the
+  registered ids and does not move), a new package's `__all__` surface pin in `tests/test_public_api.py`,
+  `CONVERTED_MODULES` and `CONTRACT_BINDINGS` together in
+  `tests/test_contract_consumers.py:83`, and the mypy `files` list in
+  `pyproject.toml:60-92`. New document types declare their own vocabulary in
+  their own package (the `training-history` precedent,
+  `docs/ownership-contract.md:73-100`), so `MANAGED_KEYS`, `USER_KEYS`,
+  `PRESERVED_REGIONS` and `DOC_VERSION` do not move.
+- **Wheel packaging is silent today.** Hatchling ships non-`.py` files under
+  `src/fitdocs/` by default (the built wheel carries `py.typed` with no
+  include rule) and honours `.gitignore`, which ignores `data/` — no skill
+  directory may be named that. No test asserts that a packaged data file is
+  a wheel member (`tests/test_packaging.py` is an install smoke;
+  `tests/test_forbidden_strings.py:1219-1224` checks only `__init__.py` and
+  `METADATA`; distribution's artifact policy is unimplemented), so
+  `build-training-block` owes its own
+  wheel-member test until that policy lands.
+- **Stdlib only; no personal data in the repository.** Fixtures are synthetic
+  sources and pages; the athlete's real wiki is a manual check, never a
+  fixture.
+
+#### Boundary Strategy
+
+- **Why this split**: the source format and the pages are a pure
+  contract — source in, bytes out, golden-testable, no corpus — and carry the
+  whole layout/declaration/contract-version ritual, so they are one spec;
+  matching is heuristic, corpus-dependent and the thing a reviewer must be
+  able to mutate row by row, so it is its own spec that plugs a `Resolution`
+  value into the render; the skill depends on both and on distribution's
+  unbuilt packaging, so it is last.
+- **Shared seams to watch**: the `Resolution` value type and the "nothing
+  resolved" default — `training-blocks` defines and renders it (an
+  unresolved column, the way workout-docs rendered the load placeholder),
+  `plan-resolution` fills it; the rendered location — `training-blocks`
+  declares it and registers the `plan` entry point, `plan-resolution`
+  registers a second writer into the same location with the chaining after
+  `sync`/`drain`/`regen` (`cli.py:279-284, 306-309, 385-386`, after the load
+  pass, since it reads load values); `contract.py` readers and
+  `FORBIDDEN_LITERALS` (`plan-resolution`); distribution's `AgentSkillLocator`
+  (`SKILL_NAME` constant, `skill_root()`, the name-equals-directory
+  conformance test at `distribution/design.md:494-533`) widened to by-name
+  before or by `build-training-block`; `history.__init__`'s append-only
+  `__all__` if `plan-resolution` needs anything not yet published.
+
+#### Existing Spec Updates
+
+- [ ] wiki-contract — a user-owned plan-source location stated in the
+  shared-and-user-owned section (read-only to fitdocs, like `fitdocs.toml`);
+  a new owned rendered location; two further document types
+  (`training-block`, `planned-workout`) declared and versioned by the spec
+  that owns them; the contract version advanced. Landed by `training-blocks`
+  as Amendment 3, the way Amendments 1 and 2 were landed by `effort-tags` and
+  `load-history`. Dependencies: none
+- [ ] distribution — `AgentSkillLocator` and the `skill` command by name
+  (`fitdocs skill <name>`, listing the packaged skills with no argument),
+  the artifact policy's required members holding every packaged skill file,
+  and task 4.2's conformance test generalized over the packaged set. Landed
+  by `build-training-block` if distribution major 4 has not shipped first;
+  otherwise consumed. Dependencies: none
+- [ ] workout-docs — no change unless `plan-resolution`'s design writes a
+  back-link key into logged pages, which would make it a managed key and move
+  the `MANAGED_KEYS` pins; the brief lists that as a candidate, not a
+  deliverable. Dependencies: plan-resolution
+
+#### Direct Implementation Candidates
+
+- [x] product.md's "Explicitly deferred" line and the roadmap's three copies
+  of the cycles/blocks deferral — lifted in this discovery change.
+- [ ] pkm repository (external): a `## Plans` section in `wiki-schema.md`
+  naming the two new fitdocs locations, and a thin wrapper skill that runs
+  `build-training-block` and closes with pkm's log line and data-root commit.
+  Not this repository's work; recorded so the install target is not
+  forgotten when `training-blocks` ships.
+
+#### Follow-on candidates (not scheduled)
+
+- A forecast on the history page — form at the block's end given its
+  planned per-mesocycle load (the Phase 6 candidate, now with a plan to read).
+- A back-link from a logged workout page to the planned row it fulfilled, as
+  a managed key written by the reconciler.
+- Per-row load targets and a prescription grammar (intervals, paces) the
+  reconciler could score against, once the prose form has been used for a
+  block or two.
+- Macrocycle pages spanning several blocks.
+
+#### Specs (dependency order)
+
+- [ ] training-blocks — the plan-source format and validation, the block page
+  and planned-workout pages, the user-owned source location and the owned
+  rendered location with their declaration, guards and contract version, the
+  `Resolution` seam rendered unresolved, and the `fitdocs plan` command.
+  Dependencies: none
+- [ ] plan-resolution — matching logged workouts to planned rows by date and
+  type with confidence labels, the split-session and same-day-ambiguity
+  rules, overrides from the source, the per-mesocycle actual-load sum with
+  one methodology and a coverage statement, the unplanned-workout listing,
+  and chaining after `sync`, `drain` and `regen`. Dependencies:
+  training-blocks
+- [ ] build-training-block — the packaged skill that builds, amends and
+  disambiguates a block through `fitdocs plan`, its conformance and
+  wheel-member tests, and the by-name skill locator (distribution's update)
+  it is found through. Dependencies: training-blocks, plan-resolution

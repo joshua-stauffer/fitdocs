@@ -47,10 +47,15 @@ inside a vendor platform.
 
 ## Explicitly deferred (first pass)
 
-- Plan-level concepts: cycles and training blocks. *(Weekly aggregation views
-  were deferred here too until 2026-09-09; Phase 6 of the roadmap lifts that
-  one — the longitudinal fitness/fatigue page is `load-history`'s. Cycles and
-  blocks stay deferred.)*
+- Plan-level concepts *(lifted 2026-09-15 by Phase 7 of the roadmap: a
+  training block is one document with dated bounds, a goal, a mesocycle
+  length and a table of planned workouts, rendered from an athlete-owned plan
+  source and reconciled against logged workouts — `training-blocks`,
+  `plan-resolution`, `build-training-block`. Weekly aggregation views were
+  deferred here too until 2026-09-09; Phase 6 lifted that one — the
+  longitudinal fitness/fatigue page is `load-history`'s.)* Still deferred at
+  the plan level: forecasting form from a plan, and macrocycles spanning
+  several blocks.
 - Automated `.fit` acquisition (device sync, platform APIs).
 
 ---

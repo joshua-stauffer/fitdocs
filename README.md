@@ -35,7 +35,11 @@ Early discovery / spec phase. No installable package yet.
    load already recorded on your workout documents — with no new data to
    enter and no `.fit` file read.
 
-Organizing workouts into cycles/training blocks is deliberately deferred.
+Organizing workouts into cycles/training blocks was deliberately deferred
+through the first releases; Phase 7 of the roadmap (2026-09-15) adds training
+blocks — a plan document rendered from an athlete-owned source and reconciled
+against logged workouts — as the `training-blocks`, `plan-resolution` and
+`build-training-block` specs, not yet shipped.
 
 ## Route maps
 
