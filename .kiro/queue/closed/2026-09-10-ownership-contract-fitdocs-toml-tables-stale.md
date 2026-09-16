@@ -1,7 +1,7 @@
 ---
 id: 2026-09-10-ownership-contract-fitdocs-toml-tables-stale
 title: docs/ownership-contract.md still describes fitdocs.toml as "[tiles] today"
-status: open
+status: done
 importance: low
 importance_why: The user-facing ownership document understates the settings surface by every table shipped since route-maps; wrong for a first-time reader, cheap to fix.
 effort: S
@@ -10,7 +10,7 @@ area: docs/ownership-contract.md
 created: 2026-09-10
 surfaced_by: /kiro-spec-batch (effort-tags design, wave 1)
 pinned_at: 1251a98
-resume_command: "do: update the fitdocs.toml bullet in docs/ownership-contract.md to name every table fitdocs reads today (see the Evidence grep) and keep its read-only statement; effort-tags task 4.2 edits neighbouring sections of that file and may absorb this"
+resume_command: "do: nothing -- absorbed by training-blocks task 1.3 (see Resolution)"
 context:
   - docs/ownership-contract.md
   - .kiro/specs/effort-tags/tasks.md
@@ -41,3 +41,12 @@ than it is, and a reader who greps the doc for a table name will not find it.
    fitdocs" statement unchanged.
 3. If effort-tags task 4.2 is in flight, hand it the edit rather than racing
    it on the same file.
+
+## Resolution
+Absorbed by training-blocks task 1.3 (main 68fe42e, 2026-09-16): the
+`fitdocs.toml` bullet in `docs/ownership-contract.md` now names `[tiles]`,
+`[inbox]`, `[plugins]`, `[load]`, `[history]` and `[plans]` and keeps the
+read-only statement. The 1.3 reviewer verified the list against every
+`*_TABLE` constant under `src/fitdocs/` (`LOAD_TABLE` has no `Final`
+annotation, which is why a `_TABLE: Final` grep misses it). Closed by the
+training-blocks session.
