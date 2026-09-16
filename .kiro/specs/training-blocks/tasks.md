@@ -707,7 +707,7 @@ shape.
   - _Requirements: 3.7, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 4.10, 4.11, 5.6, 6.2, 6.3_
   - _Boundary: BlockPage_
 
-- [ ] 3.3 (P) Render the planned-workout page
+- [x] 3.3 (P) Render the planned-workout page
   - Add the planned-page renderer, pure over the block, the row and the
     resolution, with the mesocycle number taken from the block's window
     lookup over the row's current date; it imports no region module (the
