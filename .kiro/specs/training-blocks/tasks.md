@@ -418,7 +418,7 @@ shape.
 
 - [ ] 2. The source model: types, derivation, amendments, and the grammar
 
-- [ ] 2.1 Create the plans package and declare the model's types, identifiers, mesocycle windows, and the row and target checks
+- [x] 2.1 Create the plans package and declare the model's types, identifiers, mesocycle windows, and the row and target checks
   - Create the package with its module marker and a published-surface list
     seeded with this task's own names, and create the test package's module
     marker (`tests/plans/__init__.py`, the shape every sibling test package
