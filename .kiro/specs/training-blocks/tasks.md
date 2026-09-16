@@ -517,7 +517,7 @@ shape.
   - _Requirements: 2.2, 2.9, 2.10, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 6.4_
   - _Boundary: PlanModel_
 
-- [ ] 2.3 Parse and validate a plan source into a block, naming every problem
+- [x] 2.3 Parse and validate a plan source into a block, naming every problem
   - Add the source module: a pure parse over text and a thin file read that
     decodes UTF-8 and delegates. An unreadable or non-UTF-8 file is one
     problem naming the file; a TOML decode error is one problem carrying the
@@ -1024,3 +1024,22 @@ shape.
   staled every "three"/"two"/"both" in the touched files and cost a review
   round each time; grep `three|two|both|fifth` over every touched file before
   reporting, and never write a comparative without re-reading the paragraph.
+- **2.3 (2026-09-16)**: the parser's control-character rule is `not
+  ch.isprintable()` except `\n`/`\t` -- the same class `page.yaml_string`
+  rejects -- so nothing that validates can fail at render time (the design
+  says "control character" for the parser and "not printable" for the
+  emitter; the stricter reading was implemented on both). Multi-line
+  fields (`goal`, `prescription`) have trailing newlines stripped after CRLF
+  normalisation (a TOML `"""` value carries one); leading whitespace is
+  preserved. A shape-faulty amendment is kept as a position-preserving
+  placeholder (its own date when it parsed, else the running date, seeded
+  `date.min`); shape-faulty overrides are passed positionally and their
+  delegated findings discarded, so `amendment[N]`/`override[i]` labels never
+  shift. When any amendment is invalid, overrides are not checked and one
+  `override[0..n-1]` "not checked" problem is emitted. Op labels use the
+  flattened per-amendment index `apply_amendments` uses. **For 3.2/3.3**:
+  `tests/plans/fixtures/full.toml` is the golden input; its current plan
+  has the two-workout day on 2026-01-08 (`w1-thu-b` before `w1-thu-a`), rest
+  days 01-06/01-07/01-10/01-11 and all of mesocycle 2, a short untargeted
+  mesocycle 3 holding the moved `w1-sun`, and `w1-fri` as the
+  `Workout (strength, indoor)` row with a three-line prescription.

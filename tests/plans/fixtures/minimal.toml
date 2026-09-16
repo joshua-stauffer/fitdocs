@@ -1,0 +1,13 @@
+title = "Minimal block"
+starts = 2026-02-02
+ends = 2026-02-08
+goal = "A minimal valid plan source."
+mesocycle_days = 7
+
+[[workout]]
+id = "w1-mon"
+date = 2026-02-02
+sport = "Run"
+title = "Easy run"
+summary = "Zone 2"
+prescription = "30 minutes easy."

@@ -88,6 +88,7 @@ from fitdocs.plans.settings import (
     load_plan_settings,
     resolve_plans_dir,
 )
+from fitdocs.plans.source import PlanValidationError, load_block, parse_block
 
 __all__: list[str] = [
     # -- plans.model (task 2.1) --
@@ -122,7 +123,10 @@ __all__: list[str] = [
     "apply_amendments",
     "check_overrides",
     "build_block",
-    # -- plans.source (task 2.3) appends its own names here --
+    # -- plans.source (task 2.3) --
+    "PlanValidationError",
+    "parse_block",
+    "load_block",
     # -- plans.resolution (task 3.1) --
     "RowResolution",
     "MesocycleResolution",

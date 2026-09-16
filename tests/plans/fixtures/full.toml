@@ -1,0 +1,134 @@
+# The "full source" fixture (training-blocks tasks.md 2.3). This is the
+# one block both renderer goldens (3.2, 3.3) render, and they add no
+# fixtures of their own -- so its properties are fixed here, exactly:
+#
+# - bounds 2026-01-05..2026-01-22 (18 days) with mesocycle_days = 7 ->
+#   three mesocycles, the third (2026-01-19..2026-01-22, 4 days) short.
+# - 2026-01-06 and 2026-01-07 carry no row: rest days.
+# - 2026-01-08 carries two rows, "w1-thu-b" then "w1-thu-a" in that file
+#   order -- their ids sort alphabetically opposite to source order. This
+#   day is never touched by either amendment, so the two-row, opposite-
+#   order day survives into the CURRENT plan too (review round 1: a
+#   fixture whose only two-row day exists solely in the ORIGINAL plan
+#   cannot pin a renderer that reads `Mesocycle.workouts`, the current
+#   plan's placement).
+# - "w1-fri" is a `Workout (strength, indoor)` row with a three-line
+#   prescription.
+# - "w1-mon"'s summary carries a `|`; "w1-thu-b"'s title carries a `]`.
+# - the top-level `goal` spans two lines.
+# - mesocycle 1 is targeted (target_load, focus); mesocycles 2 and 3 are
+#   untargeted as originally written.
+# - "w1-sun" (2026-01-11, otherwise a rest day in mesocycle 1) exists only
+#   to be moved: amendment 2 moves it to 2026-01-20 (mesocycle 3) -- a
+#   cross-boundary move -- keeping mesocycle 1's two-row day untouched.
+# - two amendments together cover all four change kinds: amendment 1
+#   updates "w1-mon" (a prescription change), adds "w1-sat", and sets a
+#   target on mesocycle 2 (previously untargeted); amendment 2 moves
+#   "w1-sun" (the cross-boundary move above) and removes "w1-sat".
+# - one override in "stems" form ("w1-mon") and one in "skipped" form
+#   ("w1-fri"), both dated before amendment 1 so both ids exist as of
+#   their override date in the original plan.
+
+title = "Base build"
+starts = 2026-01-05
+ends = 2026-01-22
+goal = """
+Build aerobic base through week two.
+Sharpen for the tune-up race in week three.
+"""
+mesocycle_days = 7
+
+[[mesocycle]]
+number = 1
+target_load = 300
+focus = "Base"
+
+[[workout]]
+id = "w1-mon"
+date = 2026-01-05
+sport = "Run"
+title = "Easy aerobic run"
+summary = "Zone 2 | easy effort"
+prescription = "45 minutes easy, conversational pace."
+
+[[workout]]
+id = "w1-thu-b"
+date = 2026-01-08
+sport = "Run"
+title = "Long run [key]"
+summary = "Zone 2 endurance, negative split"
+prescription = "75 minutes steady."
+
+[[workout]]
+id = "w1-thu-a"
+date = 2026-01-08
+sport = "Ride"
+title = "Easy spin"
+summary = "Recovery spin"
+prescription = "30 minutes easy."
+
+[[workout]]
+id = "w1-fri"
+date = 2026-01-09
+sport = "Workout"
+modality = "strength"
+indoor = true
+title = "Strength circuit"
+summary = "Full body maintenance"
+prescription = """
+Warm-up: 10 minutes mobility.
+Main: 3 rounds squat, row, plank.
+Cool-down: 5 minutes stretch.
+"""
+
+[[workout]]
+id = "w1-sun"
+date = 2026-01-11
+sport = "Run"
+title = "Shakeout jog"
+summary = "Very easy shakeout"
+prescription = "20 minutes very easy."
+
+[[amendment]]
+date = 2026-01-10
+reason = "Freshen week one, add a long run, set week two's target"
+
+[[amendment.update]]
+id = "w1-mon"
+prescription = "60 minutes easy, extended after feeling strong."
+
+[[amendment.add]]
+id = "w1-sat"
+date = 2026-01-10
+sport = "Run"
+title = "Long run"
+summary = "Zone 2 endurance"
+prescription = "90 minutes steady, fuel every 30 minutes."
+
+[[amendment.mesocycle]]
+number = 2
+target_load = 250
+focus = "Build"
+
+[[amendment]]
+date = 2026-01-15
+reason = "Move Sunday's shakeout into the taper, drop the extra long run"
+
+[[amendment.update]]
+id = "w1-sun"
+date = 2026-01-20
+
+[[amendment.remove]]
+id = "w1-sat"
+
+[[override]]
+date = 2026-01-06
+id = "w1-mon"
+stems = ["run-2026-01-06-am"]
+reason = "Logged as a note-based back-fill"
+
+[[override]]
+date = 2026-01-09
+id = "w1-fri"
+skipped = true
+reason = "Sick day, rescheduled informally"
