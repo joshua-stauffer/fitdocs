@@ -946,7 +946,7 @@ shape.
   - _Requirements: 1.2, 3.9, 6.4, 7.2, 7.7, 8.4_
   - _Boundary: ConfinementRegistration, PackageBoundary, SurfacePins_
 
-- [ ] 4.5 Land the wiki-contract Existing Spec Update as Amendment 3
+- [x] 4.5 Land the wiki-contract Existing Spec Update as Amendment 3
   - Amend the wiki-contract spec's requirements with an amendment block in
     the shape of Amendments 1 and 2, and three new criteria: on the
     published-ownership-contract requirement, the user-owned plan-source

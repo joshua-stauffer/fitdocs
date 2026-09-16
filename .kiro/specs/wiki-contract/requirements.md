@@ -140,6 +140,33 @@ Nothing existing is renumbered. This is the second half of the roadmap's
 Phase 6 Existing Spec Update for this spec; `effort-tags` landed the
 user-owned-keys half (Amendment 1), and neither half edits the other's text.
 
+## Amendment 3 (2026-09-15): a user-owned plan-source location, the blocks location and two further document types, landed by training-blocks
+
+`training-blocks` adds a new owned data-root location, `blocks/`, holding two
+further document types -- training-block pages and planned-workout pages --
+and a new user-owned source location, the plan-source directory, that
+fitdocs only reads. That spec owns the location's write path, the
+plan-source directory's resolution and confinement, and both pages' own
+schema (their `type` values, their frontmatter keys, and their versioning
+via `fitdocs.plans.page`); this spec owns only the published-ownership-
+contract and in-tree-declaration guarantees it extends -- naming the
+rendered location as fitdocs-owned and stating that it holds two further
+document types, distinct from the workout document and the history page,
+declared and versioned by the spec that owns them rather than by this one;
+stating which region of the block page is user-owned and that the planned
+page has none; and, new in kind, stating that the plan-source location is
+user-owned, read-only to fitdocs, located by a settings key and defaulting
+to a named directory, and never created, written or deleted by fitdocs --
+recorded as Requirement 2 criteria 2.12 and 2.13; and stating what the
+rendered location's own in-tree declaration says about those documents,
+recorded as Requirement 3 criterion 3.10. The published contract's version
+identifier changes on account of it (`CONTRACT_VERSION` `"3"` to `"4"`),
+because a new owned path, a new user-owned source location, and new document
+types change guarantees that document states; that version bump and its own
+document are training-blocks' to make, not restated by this amendment.
+Nothing existing is renumbered. This is the roadmap's Phase 7 Existing Spec
+Update for this spec.
+
 ## Requirements
 
 ### Requirement 1: Consistent Document Interpretation Across Operations
@@ -173,6 +200,8 @@ that I can rely on the boundary instead of inferring it from behavior.
 9. The fitdocs documentation shall describe how to mark generated files as generated in a wiki kept under version control, and shall state that fitdocs does not write that configuration itself.
 10. The ownership contract shall state that a location the user configures fitdocs to write into grants fitdocs the right to create and write within that location, that such locations are named in the user's settings file rather than fixed by the contract, and that fitdocs writes nowhere outside the contract's named owned paths and the locations the settings configure.
 11. _(added by Amendment 2)_ The ownership contract shall name the history location as fitdocs-owned, and shall state that the document it holds is a second document type, distinct from the workout document this contract defines, whose type value and format are published by the history package rather than by this contract.
+12. _(added by Amendment 3)_ The ownership contract shall state that the plan-source directory is user-owned and read-only to fitdocs, located by a settings key and defaulting to a named directory, that it must not lie inside an owned path, and that fitdocs never creates, writes or deletes anything there.
+13. _(added by Amendment 3)_ The ownership contract shall name the rendered blocks location as fitdocs-owned, and shall state that the documents it holds are two further document types, distinct from the workout document and the history page, whose type values and formats are published by the training-blocks package rather than by this contract, and shall state which region of the block page is user-owned and that the planned page has none.
 
 ### Requirement 3: In-Tree Ownership Declaration
 **Objective:** As an LLM agent maintaining a markdown wiki, I want the ownership
@@ -190,6 +219,7 @@ work and do not "improve" generated files.
 7. The fitdocs CLI shall never treat an ownership declaration as a workout document in any document scan, identity match, regeneration, or training-load operation.
 8. When a sync run discovers no new files and every ownership declaration is already current, the fitdocs CLI shall leave the data root unchanged.
 9. _(added by Amendment 2)_ The ownership declaration placed in the history location shall state that the location holds one generated document and its chart image, both rewritten in full on every history run and carrying no user-owned region, and that the document is re-derivable from the workout documents alone; the user-owned-region element of 3.2 does not apply to it. The declaration shall not restate that document's type or schema, which the published contract (2.11) locates.
+10. _(added by Amendment 3)_ The ownership declaration placed in the rendered blocks location shall state what the directory holds, that the block page's notes region is the athlete's and carried over, that the planned pages carry no user-owned content, that the pages are re-derivable from the plan sources alone, and that the plan sources are never written by fitdocs. The declaration shall not restate either document's type or schema, which the published contract (2.13) locates.
 
 ### Requirement 4: Generated-Document Provenance
 **Objective:** As a human or agent opening a workout document, I want the file

@@ -1346,7 +1346,7 @@ model, needs none of it).
 
 #### Existing Spec Updates
 
-- [ ] wiki-contract — a user-owned plan-source location stated in the
+- [x] wiki-contract — a user-owned plan-source location stated in the
   shared-and-user-owned section (read-only to fitdocs, like `fitdocs.toml`);
   a new owned rendered location; two further document types
   (`training-block`, `planned-workout`) declared and versioned by the spec
