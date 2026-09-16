@@ -41,6 +41,7 @@ case is exercised by constructing model dataclasses directly.
 from __future__ import annotations
 
 import inspect
+import os
 import uuid
 from datetime import UTC, datetime, timedelta, timezone, tzinfo
 from pathlib import Path
@@ -88,6 +89,8 @@ from fitdocs.layout import (
     history_asset_path,
     history_asset_rel_path,
     history_doc_path,
+    logged_rel_link_from_block,
+    logged_rel_link_from_planned,
     planned_doc_path,
     planned_rel_link,
     quarantine_path,
@@ -572,6 +575,50 @@ def test_block_rel_link_is_dotdot_slash_id_by_string_equality() -> None:
     assert block_rel_link("row-a") == "../row-a.md"
 
 
+# --- logged-page links from the two page depths (Req 7.5) -------------------
+
+
+def test_logged_rel_link_from_block_is_dotdot_workouts_slash_stem() -> None:
+    """The literal form (design.md LoggedLinks), distinct from the round trip.
+
+    A rewrite that keeps the round trip correct but inserts an extra segment
+    on both sides would not red the postcondition test below, but reds this.
+    """
+    assert logged_rel_link_from_block("2026-01-05-run-0700") == (
+        "../workouts/2026-01-05-run-0700.md"
+    )
+
+
+def test_logged_rel_link_from_planned_is_dotdotdotdot_workouts_slash_stem() -> None:
+    assert logged_rel_link_from_planned("2026-01-05-run-0700") == (
+        "../../workouts/2026-01-05-run-0700.md"
+    )
+
+
+def test_logged_rel_link_from_block_round_trips_to_the_real_doc_path(
+    tmp_path: Path,
+) -> None:
+    """Joining a real block page's parent with the link normalises to
+    :func:`doc_path` (design.md LoggedLinks postcondition), against the real
+    wave-1 layout helper -- not a hand-written path.
+    """
+    root = tmp_path
+    stem = "2026-01-05-run-0700"
+    block_parent = block_doc_path(root, "2026q1-base").parent
+    joined = os.path.normpath(block_parent / logged_rel_link_from_block(stem))
+    assert Path(joined) == doc_path(root, stem)
+
+
+def test_logged_rel_link_from_planned_round_trips_to_the_real_doc_path(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path
+    stem = "2026-01-05-run-0700"
+    planned_parent = planned_doc_path(root, "2026q1-base", "row-a").parent
+    joined = os.path.normpath(planned_parent / logged_rel_link_from_planned(stem))
+    assert Path(joined) == doc_path(root, stem)
+
+
 # --- ownership constants: OWNED_PATHS / DECLARED_DIRS (Req 7.5, 7.6) --------
 
 
@@ -922,3 +969,24 @@ def test_relative_helpers_use_plain_string_joins_never_os_path() -> None:
     # exactly as the module-level ``os.path.join`` docstring mention above is
     # avoided by scoping to the import line.
     assert 'return f"../' in block_link_source
+
+    # The two logged-page link helpers (design.md LoggedLinks) get the same
+    # form pin, keyed on the sanctioned parent-climb tokens joined onto
+    # WORKOUTS_DIR. Named mutation: rewriting the block helper through
+    # ``str(PurePosixPath("..") / WORKOUTS_DIR / f"{stem}.md")`` (or the
+    # planned helper through
+    # ``str(PurePosixPath("..") / ".." / WORKOUTS_DIR / f"{stem}.md")``)
+    # produces the identical value on POSIX (so the value and round-trip pins
+    # above would still pass) but trips the "Path(" ban and drops the
+    # sanctioned token.
+    block_link_from_block_source = inspect.getsource(logged_rel_link_from_block)
+    assert "Path(" not in block_link_from_block_source
+    assert "PurePath(" not in block_link_from_block_source
+    assert "os." not in block_link_from_block_source
+    assert 'f"../{WORKOUTS_DIR}/' in block_link_from_block_source
+
+    planned_link_source = inspect.getsource(logged_rel_link_from_planned)
+    assert "Path(" not in planned_link_source
+    assert "PurePath(" not in planned_link_source
+    assert "os." not in planned_link_source
+    assert 'f"../../{WORKOUTS_DIR}/' in planned_link_source

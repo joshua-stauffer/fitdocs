@@ -29,10 +29,12 @@ write-confinement guard both read (wiki-contract Req 7.5, 7.6), and
 The module performs **no file I/O**. The collision predicate (``taken``) is
 injected by the caller, and the "relative" helpers (``asset_rel_path``,
 ``history_asset_rel_path``, ``source_ref``, ``planned_rel_link``,
-``block_rel_link``) return POSIX forward-slash strings built by plain string
-joins -- never ``os.path.join`` -- so links stay portable across operating
-systems and a whole-data-root move never breaks a document (workout-docs
-Req 2.7; load-history Req 5.9; training-blocks Req 4.10).
+``block_rel_link``, ``logged_rel_link_from_block``,
+``logged_rel_link_from_planned``) return POSIX forward-slash strings built by
+plain string joins -- never ``os.path.join`` -- so links stay portable across
+operating systems and a whole-data-root move never breaks a document
+(workout-docs Req 2.7; load-history Req 5.9; training-blocks Req 4.10;
+plan-resolution Req 7.5).
 """
 
 from __future__ import annotations
@@ -423,3 +425,29 @@ def block_rel_link(block_id: str) -> str:
     one level below the block page, so its link back climbs one parent step.
     """
     return f"../{block_id}.md"
+
+
+def logged_rel_link_from_block(stem: str) -> str:
+    """A logged workout page's link, *relative to a block page's own directory*
+    (plan-resolution Req 7.5).
+
+    Returns ``"../workouts/<stem>.md"`` as a POSIX forward-slash string,
+    built by a plain string join so the separators stay forward slashes on
+    every operating system -- a block page lives one level below the data
+    root, so this climbs one parent step and descends into
+    :data:`WORKOUTS_DIR`.
+    """
+    return f"../{WORKOUTS_DIR}/{stem}.md"
+
+
+def logged_rel_link_from_planned(stem: str) -> str:
+    """A logged workout page's link, *relative to a planned page's own directory*
+    (plan-resolution Req 7.5).
+
+    Returns ``"../../workouts/<stem>.md"`` as a POSIX forward-slash string,
+    built by a plain string join so the separators stay forward slashes on
+    every operating system -- a planned page lives two levels below the data
+    root, one level below the block page, so this climbs two parent steps
+    and descends into :data:`WORKOUTS_DIR`.
+    """
+    return f"../../{WORKOUTS_DIR}/{stem}.md"

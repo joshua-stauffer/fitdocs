@@ -235,7 +235,7 @@ task.
   - _Requirements: 6.2_
   - _Boundary: HistoryRecordProtocol_
 
-- [ ] 1.3 (P) Add the two logged-page link helpers to the layout leaf
+- [x] 1.3 (P) Add the two logged-page link helpers to the layout leaf
   - Add the link to a logged workout page from a block page's directory
     (one level up, into the workouts directory) and from a planned page's
     directory (two levels up), both as plain string joins on the workouts
