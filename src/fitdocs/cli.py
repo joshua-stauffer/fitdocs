@@ -2,8 +2,9 @@
 
 A thin typer shell (design: CliApp, ``src/fitdocs/cli.py``): it parses flags,
 resolves configuration, calls the engine, and reports -- it contains no
-rendering or file-pipeline logic of its own. Four feature commands sit on top
-of the baseline ``--version`` / ``--help`` shell:
+rendering or file-pipeline logic of its own. Nine commands are registered on
+top of the baseline ``--version`` / ``--help`` shell. The tree-processing
+commands documented here are:
 
 * ``fitdocs sync SOURCE [--out PATH] [--force] [--no-prompt]`` -- turn every
   ``.fit`` file under SOURCE into a workout document under the data root,
@@ -30,9 +31,16 @@ of the baseline ``--version`` / ``--help`` shell:
   command is never chained onto ``sync``, ``regen``, ``load``, ``history`` or
   ``check``, and none of those commands change because it exists (Req 8.8).
 
-Every command, *before any processing* (Req 2.1), resolves the data root by the
-explicit precedence (``--out`` > ``FITDOCS_DATA`` > ``.fitdocs/data-root``
-pointer). ``sync`` and ``regen`` additionally load the optional athlete inputs
+Two further commands describe the installed tool rather than a tree and sit
+outside the list above: ``fitdocs plugins`` and ``fitdocs skill [NAME]`` --
+list every packaged agent skill and its installed directory, or (given
+``NAME``) print one skill's directory and a copy recipe (Req 1.3, 1.4, 1.5,
+1.6, 1.7, 7.2, 7.5).
+
+Every tree-processing command (each command in the list above), *before any
+processing* (Req 2.1), resolves the data root by the explicit precedence
+(``--out`` > ``FITDOCS_DATA`` > ``.fitdocs/data-root`` pointer). ``sync`` and
+``regen`` additionally load the optional athlete inputs
 and thread the *system local* timezone explicitly into the engine so document
 dates read in the user's own zone. ``sync``/``regen`` end with a summary of
 documents written, skipped, and failed (Req 1.4); the load pass adds its own
@@ -62,19 +70,19 @@ Exit codes (Req 1.5, 2.2, 8.5, 8.7):
   before it ever calls the plan engine, plan-resolution Req 8.7), an unknown
   ``--calculator``/configured-default id, or a missing source directory --
   including a configured plan-source directory that does not exist or is not
-  a directory. The ``[load]`` table is read inside the load pass itself (task
-  4.1); this module reads none of it directly. A configuration error writes
-  nothing, and for ``check`` means nothing was
+  a directory -- or (``skill``) an unknown or absent packaged skill name. The
+  ``[load]`` table is read inside the load pass itself (task 4.1); this
+  module reads none of it directly. A configuration error writes nothing,
+  and for ``check`` means nothing was
   scanned either.
 
 Data-root posture (stated here because ``check`` is the first new command to
 exercise it): *a command that describes a tree requires a data root; a
 command that describes the installed tool does not.* ``check`` describes a
 tree, so an unresolvable data root is a hard configuration error for it (exit
-``2``), not a degraded success -- see ``check_command``'s own docstring. This
-rule is not restated for the sibling specs' commands (plugin-api's
-``plugins``, distribution's ``skill``); their project-wide statement lives in
-distribution's ``docs/compatibility.md``.
+``2``), not a degraded success -- see ``check_command``'s own docstring.
+``skill`` is the second such instance, beside ``plugins``: it describes the
+installed tool, resolves nothing, and cannot fail for want of a data root.
 
 Third-party calculator discovery (plugin-api): ``sync``, ``regen``, and
 ``load`` each load the ``[plugins]`` settings and run discovery exactly once
@@ -110,6 +118,7 @@ from rich.console import Console
 from rich.table import Table
 
 from fitdocs import AthleteInputs
+from fitdocs.agentskill import PACKAGED_SKILLS, skill_root
 from fitdocs.athlete import AthleteFileError, load_athlete_inputs
 from fitdocs.audit import AuditReport, audit
 from fitdocs.benchmarks import BenchmarkKind
@@ -624,6 +633,86 @@ def derive_benchmarks_command(
     _report_derive(report, dry_run=dry_run)
     # A decline is a successful outcome (Req 7.8); only a failure exits 1.
     _finish(failed=bool(report.failures))
+
+
+@app.command("skill")
+def skill_command(
+    name: str | None = typer.Argument(
+        None, help="A packaged skill's name; omit to list every packaged skill."
+    ),
+) -> None:
+    """List every packaged agent skill, or print one's directory and copy recipe.
+
+    Describes the installed tool, not a data root (Req 1.7): resolves no data
+    root, reads no settings, loads no profile, builds no tile store, runs no
+    engine, and writes nothing.
+
+    No argument: one line per registered skill -- its name and installed
+    directory, or "(not present in this installation)" -- in registry order
+    (Req 1.3). If any packaged skill is absent, that is a configuration error
+    (exit 2, Req 1.6); otherwise exit 0.
+
+    With ``NAME``: an unregistered name is a configuration error naming it and
+    listing the packaged names (exit 2, Req 1.5); a registered name whose
+    directory is absent is a configuration error naming it as packaged but not
+    present (exit 2, Req 1.6); a present skill prints its absolute directory
+    followed by a one-line ``cp -R`` recipe, and exits 0 (Req 1.4).
+    """
+    if name is None:
+        absent = _report_skill_listing()
+        if absent:
+            _config_error(
+                "packaged skill(s) not present in this installation: "
+                + ", ".join(absent)
+                + " -- the installation is incomplete."
+            )
+        return
+
+    if name not in PACKAGED_SKILLS:
+        _config_error(
+            f"unknown skill {name!r}; packaged skills: " + ", ".join(PACKAGED_SKILLS)
+        )
+
+    root = skill_root(name)
+    if root is None:
+        _config_error(
+            f"skill {name!r} is packaged with fitdocs but not present in this "
+            "installation -- the install is incomplete; reinstall fitdocs."
+        )
+
+    console = Console()
+    console.print(str(root), markup=False, highlight=False, soft_wrap=True)
+    console.print(
+        f"Copy it into your agent's skills directory: cp -R {root} <skills-dir>/{name}",
+        markup=False,
+        highlight=False,
+        soft_wrap=True,
+    )
+
+
+def _report_skill_listing() -> tuple[str, ...]:
+    """Print one line per :data:`PACKAGED_SKILLS` entry; return the absent names.
+
+    ``f"{name}  {root}"`` for a present skill, ``f"{name}  (not present in
+    this installation)"`` for an absent one, in registry order.
+    """
+    console = Console()
+    absent: list[str] = []
+    for skill_name in PACKAGED_SKILLS:
+        root = skill_root(skill_name)
+        if root is None:
+            absent.append(skill_name)
+            console.print(
+                f"{skill_name}  (not present in this installation)",
+                markup=False,
+                highlight=False,
+                soft_wrap=True,
+            )
+        else:
+            console.print(
+                f"{skill_name}  {root}", markup=False, highlight=False, soft_wrap=True
+            )
+    return tuple(absent)
 
 
 def _report_plugins(report: PluginReport, *, data_root_resolved: bool) -> None:

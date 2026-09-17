@@ -158,7 +158,7 @@ the skill *is* the feature, and distribution set the precedent (its tasks
   - _Requirements: 1.2, 1.6, 5.1, 5.2, 7.3_
   - _Boundary: AgentSkillLocator, AgentSkillPackage (scaffold only)_
 
-- [ ] 1.2 Add the skill command: listing, by-name, the unknown and absent cases, and the docstring
+- [x] 1.2 Add the skill command: listing, by-name, the unknown and absent cases, and the docstring
   - One command, `skill`, with one optional positional argument and no
     options. No argument: one line per registered name -- the name and its
     absolute directory, or the name and "(not present in this installation)"
@@ -566,3 +566,16 @@ the skill *is* the feature, and distribution set the precedent (its tasks
   path -- a sort-order pin needs a nested file whose basename sorts *before* a
   top-level name. Test files carry no process claims ("mutations recorded in
   the Implementation Notes") -- they do not exist when the file is written.
+- 1.2 (round 2): controller ruling -- the config-error naming pins assert on
+  `result.stderr` (the task text says stderr; typer 0.27's CliRunner keeps the
+  streams separate), while `tests/test_cli.py`'s older `.output` convention is
+  left alone. The by-name absent message carries the design's `-- the install
+  is incomplete` clause; `fitdocs skill [NAME]` sits with `plugins` in a short
+  paragraph after the tree-processing bullet list (not in it -- the sentence
+  after that list says every listed command resolves a data root). Rejection
+  species: a docstring pin whose `not in` literal never matched the ORIGINAL
+  text because the original wrapped mid-sentence (whitespace-normalize before
+  asserting on docstring prose); a recipe check satisfied by the source path
+  alone; the mixed `result.output` stream cannot see a stdout/stderr swap; a
+  files-only snapshot cannot see `mkdir`. Reversed registry order is UNPINNED
+  by nature (one registered name).
