@@ -343,7 +343,7 @@ does not add, reference or read a real file.
   - _Boundary: AerobicDriftCheck_
   - _Depends: 1.1_
 
-- [ ] 2.5 (P) Surface the age of the benchmark that anchored the selected channel
+- [x] 2.5 (P) Surface the age of the benchmark that anchored the selected channel
   - Obtain the age in days, the window and the stale-or-current verdict from the
     benchmark store's existing computation, contributing no arithmetic of this
     feature's own and introducing no second window or second default
