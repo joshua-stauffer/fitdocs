@@ -256,7 +256,7 @@ task.
 
 - [ ] 2. Core: the corpus, the match rules, the sums, the words
 
-- [ ] 2.1 Scan the logged-workout corpus through the contract
+- [x] 2.1 Scan the logged-workout corpus through the contract
   - Add the corpus module: a frozen logged-workout record (stem, data-root-
     relative path, day, sport, modality, indoor, aware start time, load,
     methodology -- the last two absent together) with one ordering key
@@ -785,3 +785,4 @@ task.
 - **1.1** `tests/plans/test_boundary.py::TestContractImporters::test_each_contract_importer_binds_exactly_its_registered_names` pins each contract importer's from-import *names* by set equality (`_CONTRACT_FROM_IMPORT_NAMES`), not only its import targets as design § Cross-spec obligations item 6 says. Any task that widens a plans module's `from fitdocs.contract import ...` line must widen that module's entry in the same change (1.1 did so for `page.py`: +DATE_KEY, INDOOR_KEY, MODALITY_KEY, SPORT_KEY). 2.1's corpus entry is a new key there, per Shared source files.
 - **1.1** `document_load` mirrors `history/documents.py::_read_load` line for line, and that reader accepts an empty-string methodology today; the parity table pins that shape (`{"load_value": 150, "load_methodology": ""}`). Design's "non-empty methodology" comment on `LoadReading` is therefore not enforced by the reader — queued as a spec decision, not changed here. 2.3 sums through the history package's own partition, so it inherits the same rule.
 - **1.1** The sport/modality readers return the recorded string verbatim; the emitted spellings are `Sport` values (`"Run"`, `"Ride"`, ...) and `Modality` values (`"run"`, `"bike"`, ...). Pin verbatim rules with values a normalisation changes (`" Trail Run "`), never with lowercase values a case-fold maps to themselves — a `.lower().strip()` reader survived the first fixture.
+- **2.1** Three review rounds, all fixture-side. Round 2's sweep found what incremental review had not: ORDER of `within`/`on_day` results (set-equality fixtures cannot see a reversal — assert list equality with stems opposite to days), the stem tiebreak (only pinnable by constructing records directly, since `sorted(glob)` + stable sort masks it), and `indoor` absent-vs-`False` (both directions need their own pin). When a task's fixtures are all filesystem-built, add at least one direct-construction test per ordering rule. The `FORBIDDEN_LITERALS` guard holds only the five matched-field keys, not `LOAD_KEYS` — an inline `"load_methodology"` read is not structurally caught (queued).

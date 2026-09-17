@@ -18,6 +18,7 @@ silently drop an earlier task's published names.
 from __future__ import annotations
 
 from fitdocs.plans.block_page import render_block_page
+from fitdocs.plans.corpus import Corpus, LoggedWorkout, scan_corpus
 from fitdocs.plans.engine import (
     BlockOutcome,
     BlockStatus,
@@ -180,4 +181,8 @@ __all__: list[str] = [
     "PlanReport",
     "Resolver",
     "run_plan",
+    # -- plans.corpus (plan-resolution task 2.1) --
+    "LoggedWorkout",
+    "Corpus",
+    "scan_corpus",
 ]

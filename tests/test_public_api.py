@@ -86,6 +86,7 @@ import fitdocs.performance.engine
 import fitdocs.performance.types
 import fitdocs.plans
 import fitdocs.plans.block_page
+import fitdocs.plans.corpus
 import fitdocs.plans.engine
 import fitdocs.plans.model
 import fitdocs.plans.page
@@ -1124,6 +1125,10 @@ _PLANS_SURFACE = {
     "PlanReport",
     "Resolver",
     "run_plan",
+    # -- plans.corpus (plan-resolution 2.1) --
+    "LoggedWorkout",
+    "Corpus",
+    "scan_corpus",
 }
 
 #: Which submodule defines each published name -- the object the identity
@@ -1202,6 +1207,9 @@ _PLANS_SURFACE_OWNERS = {
     "PlanReport": fitdocs.plans.engine,
     "Resolver": fitdocs.plans.engine,
     "run_plan": fitdocs.plans.engine,
+    "LoggedWorkout": fitdocs.plans.corpus,
+    "Corpus": fitdocs.plans.corpus,
+    "scan_corpus": fitdocs.plans.corpus,
 }
 
 

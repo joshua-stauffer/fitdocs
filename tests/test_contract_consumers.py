@@ -58,6 +58,7 @@ import fitdocs.load.docedit
 import fitdocs.load.engine
 import fitdocs.performance.derive
 import fitdocs.performance.engine
+import fitdocs.plans.corpus
 import fitdocs.plans.engine
 import fitdocs.plans.page
 import fitdocs.render.frontmatter
@@ -118,11 +119,17 @@ CONVERTED_MODULES: Final[tuple[ModuleType, ...]] = (
     # structural checks (no YAML, no bare fence/workout literal, no
     # private duplicate reader) apply here too; the import-closure pin in
     # `tests/plans/test_boundary.py::TestContractImporters` is what keeps
-    # this registration at exactly two -- a third module importing the
-    # contract reds that test before it could slip past this registry
-    # unregistered.
+    # this registry from growing an unregistered importer -- any module
+    # newly importing the contract reds that test before it could slip
+    # past this registry unregistered.
     fitdocs.plans.page,
     fitdocs.plans.engine,
+    # plan-resolution (task 2.1): the package's third and last importer of
+    # `fitdocs.contract` (the corpus scan, binding the six field readers
+    # and the workout-document recognition test); widens
+    # `tests/plans/test_boundary.py::TestContractImporters`'s pin from two
+    # modules to three in the same change.
+    fitdocs.plans.corpus,
 )
 
 #: The one converted module allowed to name ``yaml`` at all. The frontmatter
@@ -271,6 +278,15 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
         "SPORT_KEY",
     ),
     "fitdocs.plans.engine": ("is_generated",),
+    "fitdocs.plans.corpus": (
+        "document_date",
+        "document_indoor",
+        "document_load",
+        "document_modality",
+        "document_sport",
+        "document_start_time",
+        "is_workout_document",
+    ),
 }
 
 #: Document vocabulary no converted module may spell for itself: the frontmatter

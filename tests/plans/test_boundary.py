@@ -48,13 +48,13 @@ does not need at all:
    with the bare `fitdocs` namespace excluded from every allowance for the
    same reason that file's peer WARN records. `TestReverseReachabilitySyntheticControls`
    proves each form against synthetic source, independent of the real tree.
-6. **Contract-importer pin** (`TestContractImporters`) -- exactly `{page,
-   engine}` import `fitdocs.contract`, a set-equality pin so a third module
-   importing it (as `plan-resolution`'s `corpus` module will) reds this test
-   before it can slip past `tests/test_contract_consumers.py`'s
-   `CONTRACT_BINDINGS` registry unregistered -- written as a plain set
-   comparison against `_import_targets`'s own measured result so
-   `plan-resolution` widens it to three names in one hunk.
+6. **Contract-importer pin** (`TestContractImporters`) -- exactly the
+   registered modules (`page`, `engine`, and `plan-resolution`'s `corpus`)
+   import `fitdocs.contract`, a set-equality pin so any other module
+   importing it reds this test before it can slip past
+   `tests/test_contract_consumers.py`'s `CONTRACT_BINDINGS` registry
+   unregistered -- written as a plain set comparison against
+   `_import_targets`'s own measured result.
 7. **Region-id literal scan** (`TestNoBareRegionIdLiteral`, follow-up from
    the 3.1 reviewer round): no module under the package spells any of
    `fitdocs.contract.PRESERVED_REGIONS`'s ids as a bare string constant --
@@ -90,6 +90,7 @@ PLANS_MODULE_NAMES: Final[tuple[str, ...]] = (
     "fitdocs.plans.resolution",
     "fitdocs.plans.settings",
     "fitdocs.plans.source",
+    "fitdocs.plans.corpus",
 )
 
 
@@ -219,6 +220,7 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
         {
             "__future__",
             "fitdocs.plans.block_page",
+            "fitdocs.plans.corpus",
             "fitdocs.plans.engine",
             "fitdocs.plans.model",
             "fitdocs.plans.page",
@@ -325,6 +327,18 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
             "typing",
             "fitdocs.model",
             "fitdocs.plans.model",
+        }
+    ),
+    "fitdocs.plans.corpus": frozenset(
+        {
+            "__future__",
+            "dataclasses",
+            "datetime",
+            "pathlib",
+            "fitdocs.contract",
+            "fitdocs.docio",
+            "fitdocs.layout",
+            "fitdocs.model",
         }
     ),
 }
@@ -2470,6 +2484,17 @@ _CONTRACT_FROM_IMPORT_NAMES: Final[dict[str, frozenset[str]]] = {
         }
     ),
     "fitdocs.plans.engine": frozenset({"is_generated"}),
+    "fitdocs.plans.corpus": frozenset(
+        {
+            "document_date",
+            "document_indoor",
+            "document_load",
+            "document_modality",
+            "document_sport",
+            "document_start_time",
+            "is_workout_document",
+        }
+    ),
 }
 
 
