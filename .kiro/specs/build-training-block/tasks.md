@@ -489,7 +489,7 @@ the skill *is* the feature, and distribution set the precedent (its tasks
   - _Requirements: 5.1, 5.2, 5.3_
   - _Boundary: DistributionSpecUpdate_
 
-- [ ] 3.4 Walk the skill end to end: the automated stages, the recorded exercise, and feature validation
+- [x] 3.4 Walk the skill end to end: the automated stages, the recorded exercise, and feature validation
   - `tests/test_skill_e2e.py`, typed (its mypy entry appended here),
     `CliRunner`, a synthetic root under `tmp_path` with no settings file (so
     `plans/` is the default), **every run inside `_fake_system_date(...)`
@@ -629,3 +629,33 @@ the skill *is* the feature, and distribution set the precedent (its tasks
   never `.+`. A README code span never wraps across a line (the file's
   convention; two new ones did). "copied" does not contain "copy", so the
   design's "the copied `SKILL.md`'s" wording keeps the Install pin honest.
+- 3.4 (round 2): **Recorded exercise (Req 6.1), 2026-09-17** -- a Sonnet
+  agent given ONLY the skill copied by the printed `cp -R` recipe, a synthetic
+  data root and operator answers for a *different* plan (`spring-10k`,
+  2030-03-04..2030-04-14, 14-day mesocycles, 10 rows, no targets; wall clock,
+  not faked). Outcome lines / exit codes: A `rendered plans/spring-10k.toml ->
+  blocks/spring-10k.md (+10 planned, -0 removed)`, `10 planned -- 10
+  upcoming`, exit 0; B (amendment 2030-03-18, update w3-sun 03-24->03-23 +
+  remove w3-sat) `(+1 planned, -1 removed)`, page `### Amendment 1 --
+  2030-03-18`, exit 0; C (two logged Run pages 2030-03-12 at 07:00/18:00)
+  `9 planned -- 2 matched (2 ambiguous), 7 upcoming`, `ambiguous: w2-tue,
+  w2-tue-b`, exit 0; D (overrides: w2-tue stems 0700, w2-tue-b stems 1800)
+  `2 overridden, 7 upcoming`, exit 0; negative (override 2030-03-14 w2-tue
+  stems 0930, no such page) `override[2] (id w2-tue): stem
+  `2030-03-12-run-0930` not found among the logged workouts`, exit 1. Final
+  cells: `w2-tue` = `overridden: `2030-03-12-run-0930` (not found)`,
+  `w2-tue-b` = `overridden: [2030-03-12-run-1800](...)`. The agent wrote only
+  the plan source and the two operator-supplied pages, never ran `regen`,
+  never edited a page. Gaps it reported (queued): no stated rule for override
+  dates beyond the tiebreak; the skill never says what an amendment/override
+  `date` is relative to. Automated half: `Problems:` must be pinned as a
+  HEADER with the problem line after it (a bare `override[2]` substring
+  survived renaming the header); the block-page path is pinned by literal,
+  not by "the rendered line's path exists" (survived `BLOCKS_DIR` renamed);
+  a "load under one methodology" fixture is inert unless stdout's
+  `methodology: banister_1991 (inferred)` is asserted.
+  `tests/test_history_e2e.py` is untyped, so `_fake_system_date` is imported
+  through `importlib.import_module` (static import pulls 18 strict errors;
+  queued). Feature validation: full suite 4806 passed / 5 skipped, ruff,
+  format, mypy green; `tests/test_cli.py`, `tests/test_determinism.py` and
+  every golden unedited on the branch; prose grep hits re-verified per task.
