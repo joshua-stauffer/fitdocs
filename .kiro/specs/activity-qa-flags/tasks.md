@@ -210,7 +210,7 @@ does not add, reference or read a real file.
   - _Boundary: FlagProvenance_
   - _Depends: 1.1_
 
-- [ ] 1.3 Project and validate the flag settings on the single load-settings reader
+- [x] 1.3 Project and validate the flag settings on the single load-settings reader
   - Extend the one load settings value with a member holding this feature's
     thresholds, and extend the one reader — `load_load_settings` in the module
     `training-load` task 3.1 owns — with a projection of the flag sub-table;

@@ -43,10 +43,11 @@ three to land (``load-channels``, Req 3.9): this module imports its
 :class:`~fitdocs.load.priority.ChannelPriority` and projects
 ``[load.priority]`` onto it, and neither module reverses the edge --
 ``load/priority.py`` stays a leaf, importing nothing under
-``fitdocs.load.settings``. ``load/qa/types.py`` does not exist yet in this
-checkout; when it lands, this module gains an import of it and a projection
-of its own sub-table, and nothing else about this module's signature
-changes. The one edge that must never become a
+``fitdocs.load.settings``. ``load/qa/types.py`` is the third
+(``activity-qa-flags``, Req 6.1): this module imports its
+:class:`~fitdocs.load.qa.types.FlagSettings` and projects
+``[load.flags]`` onto it, and that module stays a leaf too, importing
+nothing under ``fitdocs.load.settings``. The one edge that must never become a
 runtime import is ``fitdocs.load.types``'s reference back to
 :class:`LoadSettings` for ``LoadContext.settings``'s annotation, which stays
 ``TYPE_CHECKING``-only on that module's side. This module still imports
@@ -63,12 +64,14 @@ from typing import Any, Final
 
 from fitdocs.load.channels.types import ChannelId, SufficiencySettings
 from fitdocs.load.priority import DEFAULT_CHANNEL_PRIORITY, ChannelPriority
+from fitdocs.load.qa.types import FlagSettings
 from fitdocs.model import Sport
 from fitdocs.settings import SettingsError
 
 LOAD_TABLE = "load"
 SUFFICIENCY_TABLE = "sufficiency"
 PRIORITY_TABLE = "priority"
+FLAGS_TABLE = "flags"
 
 _SUPPORTED_PRIORITY_SPORTS: Final[Mapping[str, Sport]] = MappingProxyType(
     {sport.value.lower(): sport for sport in DEFAULT_CHANNEL_PRIORITY}
@@ -96,6 +99,7 @@ class LoadSettings:
     benchmark_staleness_days: int = DEFAULT_STALENESS_WINDOW_DAYS
     sufficiency: SufficiencySettings = field(default_factory=SufficiencySettings)
     channel_priority: ChannelPriority = field(default_factory=ChannelPriority)
+    flags: FlagSettings = field(default_factory=FlagSettings)
 
 
 DEFAULT_LOAD_SETTINGS: Final[LoadSettings] = LoadSettings()
@@ -158,6 +162,7 @@ def load_load_settings(
         ),
         sufficiency=_setting_sufficiency(table, settings_file),
         channel_priority=_setting_channel_priority(table, settings_file),
+        flags=_setting_flags(table, settings_file),
     )
 
 
@@ -388,3 +393,154 @@ def _channel_priority_order(
         seen.add(channel)
         channels.append(channel)
     return tuple(channels)
+
+
+def _setting_flags(table: dict[str, Any], settings_file: Path) -> FlagSettings:
+    """Project the ``[load.flags]`` sub-table (Req 6.1-6.9).
+
+    Absent sub-table, or an absent individual key within a present one, both
+    resolve to the documented default drawn from
+    :class:`~fitdocs.load.qa.types.FlagSettings`'s own field defaults (Req
+    6.3) -- never an error. A present but non-table value raises, naming the
+    ``load.flags`` path (Req 6.6). Keys this reader does not recognize inside
+    the sub-table are ignored, matching the ignore-unknown-keys behavior the
+    enclosing ``[load]`` reader already has (Req 6.2).
+
+    Reads no staleness window of its own: the benchmark store's own
+    configured ``benchmark_staleness_days`` is the only one this feature uses
+    (Req 6.9).
+
+    ``cadence_lock_min_duration_s`` configured below ``cadence_lock_window_s``
+    is accepted, not rejected -- a single locked span at least that long is
+    enough to raise the flag, a coherent if aggressive choice, and this
+    reader does not cross-validate the two keys against each other; rejecting
+    it would be the tool overriding the athlete's own configuration.
+    """
+    default = DEFAULT_LOAD_SETTINGS.flags
+    if FLAGS_TABLE not in table:
+        return default
+    sub_table = table[FLAGS_TABLE]
+    if not isinstance(sub_table, dict):
+        raise LoadSettingsError(
+            f"{settings_file}: [load.flags] must be a table, "
+            f"got {sub_table!r} ({type(sub_table).__name__})"
+        )
+
+    return FlagSettings(
+        cadence_lock_min_correlation=_setting_flag_unit_float(
+            sub_table,
+            "cadence_lock_min_correlation",
+            settings_file,
+            default.cadence_lock_min_correlation,
+        ),
+        cadence_lock_max_delta_bpm=_setting_flag_positive_float(
+            sub_table,
+            "cadence_lock_max_delta_bpm",
+            settings_file,
+            default.cadence_lock_max_delta_bpm,
+        ),
+        cadence_lock_window_s=_setting_flag_window_s(
+            sub_table, settings_file, default.cadence_lock_window_s
+        ),
+        cadence_lock_min_duration_s=_setting_flag_min_duration_s(
+            sub_table, settings_file, default.cadence_lock_min_duration_s
+        ),
+        cadence_lock_min_paired_coverage=_setting_flag_unit_float(
+            sub_table,
+            "cadence_lock_min_paired_coverage",
+            settings_file,
+            default.cadence_lock_min_paired_coverage,
+        ),
+        divergence_max_intensity_delta=_setting_flag_positive_float(
+            sub_table,
+            "divergence_max_intensity_delta",
+            settings_file,
+            default.divergence_max_intensity_delta,
+        ),
+        aerobic_drift_max_pct=_setting_flag_positive_float(
+            sub_table,
+            "aerobic_drift_max_pct",
+            settings_file,
+            default.aerobic_drift_max_pct,
+        ),
+    )
+
+
+def _setting_flag_unit_float(
+    sub_table: dict[str, Any],
+    key: str,
+    settings_file: Path,
+    default: float,
+) -> float:
+    """Map an optional ``[load.flags]`` key, rejecting anything outside
+    ``(0, 1]`` -- shared by ``cadence_lock_min_correlation`` and
+    ``cadence_lock_min_paired_coverage``."""
+    if key not in sub_table:
+        return default
+    value = sub_table[key]
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not (0 < value <= 1)
+    ):
+        raise LoadSettingsError(
+            f"{settings_file}: [load.flags] {key} must be a number "
+            f"above zero and at or below one, got {value!r} "
+            f"({type(value).__name__})"
+        )
+    return float(value)
+
+
+def _setting_flag_positive_float(
+    sub_table: dict[str, Any],
+    key: str,
+    settings_file: Path,
+    default: float,
+) -> float:
+    """Map an optional ``[load.flags]`` key, rejecting anything at or below
+    zero -- shared by ``cadence_lock_max_delta_bpm``,
+    ``divergence_max_intensity_delta`` and ``aerobic_drift_max_pct``."""
+    if key not in sub_table:
+        return default
+    value = sub_table[key]
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        raise LoadSettingsError(
+            f"{settings_file}: [load.flags] {key} must be a number "
+            f"above zero, got {value!r} ({type(value).__name__})"
+        )
+    return float(value)
+
+
+def _setting_flag_window_s(
+    sub_table: dict[str, Any], settings_file: Path, default: int
+) -> int:
+    """Map optional ``cadence_lock_window_s``, rejecting anything below 30
+    whole seconds."""
+    key = "cadence_lock_window_s"
+    if key not in sub_table:
+        return default
+    value = sub_table[key]
+    if isinstance(value, bool) or not isinstance(value, int) or value < 30:
+        raise LoadSettingsError(
+            f"{settings_file}: [load.flags] {key} must be a whole number of "
+            f"seconds at or above 30, got {value!r} ({type(value).__name__})"
+        )
+    return value
+
+
+def _setting_flag_min_duration_s(
+    sub_table: dict[str, Any], settings_file: Path, default: int
+) -> int:
+    """Map optional ``cadence_lock_min_duration_s``, rejecting non-positive
+    whole seconds. Accepted even when configured below
+    ``cadence_lock_window_s`` -- see :func:`_setting_flags`."""
+    key = "cadence_lock_min_duration_s"
+    if key not in sub_table:
+        return default
+    value = sub_table[key]
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise LoadSettingsError(
+            f"{settings_file}: [load.flags] {key} must be a positive whole "
+            f"number of seconds, got {value!r} ({type(value).__name__})"
+        )
+    return value

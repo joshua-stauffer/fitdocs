@@ -56,6 +56,7 @@ from fitdocs.load.channels.types import (
     SufficiencySettings,
 )
 from fitdocs.load.priority import DEFAULT_CHANNEL_PRIORITY, ChannelPriority
+from fitdocs.load.qa.types import FlagSettings
 from fitdocs.load.settings import (
     DEFAULT_LOAD_SETTINGS,
     LoadSettings,
@@ -1036,20 +1037,373 @@ def test_invalid_priority_value_in_data_root_aborts_load_pass_before_writing(
         registry.unregister(calc.calculator_id)
 
 
+# --- [load.flags] projection (Req 6.1-6.9, task 1.3) --------------------------
+
+
+def test_default_load_settings_flags_equals_keyless_flag_settings() -> None:
+    """Pins the derivation, not a retyped literal: the default ``flags``
+    member of :data:`DEFAULT_LOAD_SETTINGS` is exactly a keyless
+    :class:`FlagSettings`, so mutating that module's own field defaults
+    reddens this rather than a hand-copied number here."""
+    assert DEFAULT_LOAD_SETTINGS.flags == FlagSettings()
+
+
+def test_absent_flags_sub_table_returns_documented_defaults() -> None:
+    """A present ``[load]`` table with no ``[load.flags]`` -> defaults."""
+    document = {"load": {"default_calculator": "threshold"}}
+    result = load_load_settings(document, _SETTINGS_FILE)
+    assert result.flags == FlagSettings()
+
+
+def test_empty_flags_sub_table_returns_documented_defaults() -> None:
+    """A present, empty ``[load.flags]`` table -> the same defaults."""
+    document = {"load": {"flags": {}}}
+    result = load_load_settings(document, _SETTINGS_FILE)
+    assert result.flags == FlagSettings()
+
+
+def test_all_seven_flag_keys_are_read_and_kept_distinct() -> None:
+    """Seven pairwise-distinct configured values, one per key, so a
+    wrong-key assignment (e.g. the correlation value landing on the
+    paired-coverage field) would redden this."""
+    document = {
+        "load": {
+            "flags": {
+                "cadence_lock_min_correlation": 0.80,
+                "cadence_lock_max_delta_bpm": 8.0,
+                "cadence_lock_window_s": 60,
+                "cadence_lock_min_duration_s": 200,
+                "cadence_lock_min_paired_coverage": 0.35,
+                "divergence_max_intensity_delta": 0.15,
+                "aerobic_drift_max_pct": 6.5,
+            }
+        }
+    }
+    result = load_load_settings(document, _SETTINGS_FILE)
+    assert result.flags == FlagSettings(
+        cadence_lock_min_correlation=0.80,
+        cadence_lock_max_delta_bpm=8.0,
+        cadence_lock_window_s=60,
+        cadence_lock_min_duration_s=200,
+        cadence_lock_min_paired_coverage=0.35,
+        divergence_max_intensity_delta=0.15,
+        aerobic_drift_max_pct=6.5,
+    )
+    # a permutation of the same seven values would not equal this result
+    assert result.flags != FlagSettings(
+        cadence_lock_min_correlation=0.35,
+        cadence_lock_max_delta_bpm=6.5,
+        cadence_lock_window_s=200,
+        cadence_lock_min_duration_s=60,
+        cadence_lock_min_paired_coverage=0.80,
+        divergence_max_intensity_delta=8.0,
+        aerobic_drift_max_pct=0.15,
+    )
+
+
+def test_unset_flag_keys_keep_their_own_documented_defaults() -> None:
+    """Configuring one key leaves every other key at its own documented
+    default, not at the configured key's value or at zero."""
+    document = {"load": {"flags": {"cadence_lock_min_correlation": 0.5}}}
+    result = load_load_settings(document, _SETTINGS_FILE)
+    default = FlagSettings()
+    assert result.flags.cadence_lock_min_correlation == 0.5
+    assert result.flags.cadence_lock_max_delta_bpm == default.cadence_lock_max_delta_bpm
+    assert result.flags.cadence_lock_window_s == default.cadence_lock_window_s
+    assert (
+        result.flags.cadence_lock_min_duration_s == default.cadence_lock_min_duration_s
+    )
+    assert (
+        result.flags.cadence_lock_min_paired_coverage
+        == default.cadence_lock_min_paired_coverage
+    )
+    assert (
+        result.flags.divergence_max_intensity_delta
+        == default.divergence_max_intensity_delta
+    )
+    assert result.flags.aerobic_drift_max_pct == default.aerobic_drift_max_pct
+
+
+def test_unknown_key_inside_flags_sub_table_parses_cleanly() -> None:
+    document = {
+        "load": {
+            "flags": {
+                "cadence_lock_min_correlation": 0.6,
+                "made_up_key": "ignored",
+            }
+        }
+    }
+    result = load_load_settings(document, _SETTINGS_FILE)
+    assert result.flags == FlagSettings(cadence_lock_min_correlation=0.6)
+
+
+def test_min_duration_below_window_is_accepted_not_an_error() -> None:
+    """The design's documented, deliberate exception: a configured
+    ``cadence_lock_min_duration_s`` below ``cadence_lock_window_s`` means "a
+    single locked span is enough" and is accepted, not rejected -- this
+    reader never cross-validates the two keys against each other."""
+    document = {
+        "load": {
+            "flags": {
+                "cadence_lock_window_s": 120,
+                "cadence_lock_min_duration_s": 30,
+            }
+        }
+    }
+    result = load_load_settings(document, _SETTINGS_FILE)
+    assert result.flags.cadence_lock_window_s == 120
+    assert result.flags.cadence_lock_min_duration_s == 30
+
+
+# --- [load.flags] malformed values (Req 6.5, 6.6) -----------------------------
+
+
+def test_non_table_flags_value_is_rejected() -> None:
+    document = {"load": {"flags": "not-a-table"}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    message = str(excinfo.value)
+    assert str(_SETTINGS_FILE) in message
+    assert "flags" in message
+    assert "not-a-table" in message
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "cadence_lock_min_correlation",
+        "cadence_lock_max_delta_bpm",
+        "cadence_lock_window_s",
+        "cadence_lock_min_duration_s",
+        "cadence_lock_min_paired_coverage",
+        "divergence_max_intensity_delta",
+        "aerobic_drift_max_pct",
+    ],
+)
+def test_non_numeric_flag_value_is_rejected(key: str) -> None:
+    document = {"load": {"flags": {key: "high"}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert str(_SETTINGS_FILE) in str(excinfo.value)
+    assert key in body
+    assert "high" in body
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "cadence_lock_min_correlation",
+        "cadence_lock_max_delta_bpm",
+        "cadence_lock_window_s",
+        "cadence_lock_min_duration_s",
+        "cadence_lock_min_paired_coverage",
+        "divergence_max_intensity_delta",
+        "aerobic_drift_max_pct",
+    ],
+)
+def test_boolean_flag_value_is_rejected(key: str) -> None:
+    """``bool`` is an ``int`` subclass in Python -- must be rejected on its
+    own for every one of the seven keys, not merely wherever a float is
+    expected."""
+    document = {"load": {"flags": {key: True}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert key in body
+    assert "True" in body
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["cadence_lock_min_correlation", "cadence_lock_min_paired_coverage"],
+)
+def test_unit_range_flag_rejects_zero(key: str) -> None:
+    """The two ``(0, 1]``-ranged keys: zero itself is out of range (adversarial
+    low boundary)."""
+    document = {"load": {"flags": {key: 0.0}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert key in body
+    assert "0.0" in body
+    assert "above zero and at or below one" in body  # Req 6.5: the admissible range
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["cadence_lock_min_correlation", "cadence_lock_min_paired_coverage"],
+)
+def test_unit_range_flag_rejects_above_one(key: str) -> None:
+    """The two ``(0, 1]``-ranged keys: anything above one is out of range
+    (adversarial high boundary, distinct from the zero case above so
+    neither guard alone can pass both)."""
+    document = {"load": {"flags": {key: 1.01}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert key in body
+    assert "1.01" in body
+    assert "above zero and at or below one" in body  # Req 6.5: the admissible range
+
+
+def test_unit_range_flag_accepts_exactly_one() -> None:
+    """The documented range is inclusive at its top: exactly 1.0 is valid."""
+    document = {"load": {"flags": {"cadence_lock_min_correlation": 1.0}}}
+    result = load_load_settings(document, _SETTINGS_FILE)
+    assert result.flags.cadence_lock_min_correlation == 1.0
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "cadence_lock_max_delta_bpm",
+        "divergence_max_intensity_delta",
+        "aerobic_drift_max_pct",
+    ],
+)
+def test_positive_flag_rejects_zero(key: str) -> None:
+    document = {"load": {"flags": {key: 0.0}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert key in body
+    assert "0.0" in body
+    assert "above zero" in body  # Req 6.5: the admissible range
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "cadence_lock_max_delta_bpm",
+        "divergence_max_intensity_delta",
+        "aerobic_drift_max_pct",
+    ],
+)
+def test_positive_flag_rejects_negative(key: str) -> None:
+    """Adversarial complement to the zero case: a negative value, not merely
+    the boundary itself."""
+    document = {"load": {"flags": {key: -1.0}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert key in body
+    assert "-1.0" in body
+    assert "above zero" in body  # Req 6.5: the admissible range
+
+
+def test_non_integer_window_s_is_rejected() -> None:
+    document = {"load": {"flags": {"cadence_lock_window_s": 45.5}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    assert str(_SETTINGS_FILE) in str(excinfo.value)
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert "cadence_lock_window_s" in body
+    assert "45.5" in body
+    assert "at or above 30" in body  # Req 6.5: the admissible range
+
+
+def test_window_s_below_thirty_is_rejected() -> None:
+    document = {"load": {"flags": {"cadence_lock_window_s": 29}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert "cadence_lock_window_s" in body
+    assert "29" in body
+    assert "at or above 30" in body  # Req 6.5: the admissible range
+
+
+def test_window_s_zero_is_rejected() -> None:
+    """Adversarial complement to the just-below-thirty case: far below the
+    minimum, not merely the boundary."""
+    document = {"load": {"flags": {"cadence_lock_window_s": 0}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert "cadence_lock_window_s" in body
+    assert "0" in body
+    assert "at or above 30" in body  # Req 6.5: the admissible range
+
+
+def test_window_s_accepts_exactly_thirty() -> None:
+    """The documented range is inclusive at its floor: exactly 30 is valid."""
+    document = {"load": {"flags": {"cadence_lock_window_s": 30}}}
+    result = load_load_settings(document, _SETTINGS_FILE)
+    assert result.flags.cadence_lock_window_s == 30
+
+
+def test_non_integer_min_duration_s_flag_is_rejected() -> None:
+    document = {"load": {"flags": {"cadence_lock_min_duration_s": 30.5}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    assert str(_SETTINGS_FILE) in str(excinfo.value)
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert "cadence_lock_min_duration_s" in body
+    assert "30.5" in body
+    assert "positive whole number" in body  # Req 6.5: the admissible range
+
+
+def test_zero_min_duration_s_flag_is_rejected() -> None:
+    document = {"load": {"flags": {"cadence_lock_min_duration_s": 0}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert "cadence_lock_min_duration_s" in body
+    assert "0" in body
+    assert "positive whole number" in body  # Req 6.5: the admissible range
+
+
+def test_negative_min_duration_s_flag_is_rejected() -> None:
+    document = {"load": {"flags": {"cadence_lock_min_duration_s": -30}}}
+    with pytest.raises(LoadSettingsError) as excinfo:
+        load_load_settings(document, _SETTINGS_FILE)
+    body = str(excinfo.value).replace(str(_SETTINGS_FILE), "<path>")
+    assert "cadence_lock_min_duration_s" in body
+    assert "-30" in body
+    assert "positive whole number" in body  # Req 6.5: the admissible range
+
+
+# --- 6.7: validated before any document is written ----------------------------
+
+
+def test_invalid_flags_value_aborts_the_load_pass() -> None:
+    """A configuration error raised while projecting ``[load.flags]`` is a
+    :class:`LoadSettingsError`, the same subclass of the shared
+    :class:`~fitdocs.settings.SettingsError` every other ``[load.*]``
+    sub-table already raises (see :class:`LoadSettingsError`'s own
+    docstring) -- so it already routes through the CLI's existing
+    ``except SettingsError`` handler to exit code 2 before any document is
+    scanned, with no new CLI wiring. That upstream wiring -- ``[load]`` is
+    read and validated in full before any document is touched -- is proven
+    end-to-end once already, by
+    :func:`test_invalid_sufficiency_value_in_data_root_aborts_load_pass_before_writing`
+    and its ``[load.priority]`` counterpart above; re-running the same full
+    CLI/sync/write integration for a fourth ``[load.*]`` sub-table would
+    prove the identical upstream wiring again, not anything specific to
+    ``[load.flags]``. This test instead pins the one thing that *is*
+    specific to this sub-table: the reader itself raises for an invalid
+    ``[load.flags]`` value, which is the only new fact this task
+    introduces into that already-proven path."""
+    document = {"load": {"flags": {"cadence_lock_window_s": 5}}}
+    with pytest.raises(LoadSettingsError):
+        load_load_settings(document, _SETTINGS_FILE)
+
+
 # --- Additivity: [load.priority] alongside its siblings (design.md Validation)
 
 
 def test_priority_sufficiency_flags_and_default_calculator_parse_cleanly() -> None:
     """A document carrying ``[load.priority]``, ``[load.sufficiency]``,
-    ``[load.flags]`` (an unlanded sibling table) and ``default_calculator``
-    together parses cleanly, each sub-table validated independently --
-    design.md's own stated additivity guard from this side."""
+    ``[load.flags]`` and ``default_calculator`` together parses cleanly, each
+    sub-table validated independently and projected onto its own field --
+    design.md's own stated additivity guard, now exercised from all four
+    sides (``[load.flags]`` landed by this task)."""
     document = {
         "load": {
             "default_calculator": "threshold",
             "priority": {"ride": ["heart_rate", "power"]},
             "sufficiency": {"min_duration_s": 120},
-            "flags": {"staleness_days": 30},
+            "flags": {"cadence_lock_window_s": 90},
         }
     }
     result = load_load_settings(document, _SETTINGS_FILE)
@@ -1065,6 +1419,7 @@ def test_priority_sufficiency_flags_and_default_calculator_parse_cleanly() -> No
         result.channel_priority.for_discipline(Sport.RUN)
         == DEFAULT_CHANNEL_PRIORITY[Sport.RUN]
     )
+    assert result.flags == FlagSettings(cadence_lock_window_s=90)
 
 
 # --- Additivity: unknown keys and unknown sub-tables ignored (Req 14.3) ------
@@ -1077,22 +1432,21 @@ def test_unknown_key_in_load_table_is_ignored() -> None:
 
 
 def test_two_unknown_downstream_sub_tables_parse_cleanly() -> None:
-    """Two sub-tables not yet owned by this reader parse without error.
+    """Two sub-tables this reader has never heard of parse without error.
 
-    ``[load.flags]`` (``activity-qa-flags``, not yet landed in this
-    checkout) is a genuinely-owned-but-unrecognized-here sub-table.
-    ``[load.qa]`` is a synthetic, never-owned name used only to stand in
-    for "a sub-table this reader has never heard of" -- ``activity-qa-flags``
-    does not read a ``[load.qa]`` table. Both land additively without
-    touching this module. ``[load.priority]`` (``threshold-load``) is now a
-    *recognized* sub-table (this task) and is exercised on its own above,
-    not here.
+    ``[load.qa]`` and ``[load.reporting]`` are both synthetic, never-owned
+    names used only to stand in for "a sub-table this reader has never heard
+    of" -- neither ``activity-qa-flags`` nor any other sibling spec reads
+    either one. Both land additively without touching this module.
+    ``[load.sufficiency]``, ``[load.priority]`` and ``[load.flags]`` are now
+    all *recognized* sub-tables (this task and its predecessors) and are
+    each exercised on their own above, not here.
     """
     document = {
         "load": {
             "default_calculator": "threshold",
             "qa": {"cadence_lock_threshold": 0.5},
-            "flags": {"staleness_days": 30},
+            "reporting": {"staleness_days": 30},
         }
     }
     result = load_load_settings(document, _SETTINGS_FILE)
@@ -1102,15 +1456,15 @@ def test_two_unknown_downstream_sub_tables_parse_cleanly() -> None:
 def test_unknown_sub_table_alongside_configured_staleness_is_ignored() -> None:
     """An unknown ``[load.*]`` sub-table does not shadow the staleness key.
 
-    ``[load.sufficiency]`` and ``[load.priority]`` are now *recognized*
-    sub-tables (this task and its predecessor), so this uses ``[load.flags]``
-    (``activity-qa-flags``, not yet landed in this checkout) as the
-    genuinely-unknown one instead.
+    ``[load.sufficiency]``, ``[load.priority]`` and ``[load.flags]`` are now
+    all *recognized* sub-tables (this task and its predecessors), so this
+    uses the synthetic, never-owned ``[load.qa]`` name as the genuinely
+    unknown one instead.
     """
     document = {
         "load": {
             "benchmark_staleness_days": 30,
-            "flags": {"staleness_days": 30},
+            "qa": {"staleness_days": 30},
         }
     }
     result = load_load_settings(document, _SETTINGS_FILE)
