@@ -108,6 +108,7 @@ files = [
     "tests/test_skill_locator.py",
     "tests/test_cli_skill.py",
     "tests/test_agent_skill.py",
+    "tests/test_skill_wheel.py",
 ]
 
 [tool.pytest.ini_options]

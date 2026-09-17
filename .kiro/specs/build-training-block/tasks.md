@@ -379,7 +379,7 @@ the skill *is* the feature, and distribution set the precedent (its tasks
   - _Boundary: SkillConformance_
 
 - [ ] 3. Integration: packaging proof, documentation, the distribution amendment, and validation
-- [ ] 3.1 (P) Prove every packaged skill file is a wheel member
+- [x] 3.1 (P) Prove every packaged skill file is a wheel member
   - `tests/test_skill_wheel.py`, typed (its mypy entry appended here -- the
     one `pyproject.toml` touch among the parallel tasks): a module-scoped
     fixture builds one wheel into `tmp_path` through the artifact builder
@@ -604,3 +604,11 @@ the skill *is* the feature, and distribution set the precedent (its tasks
   (Req 2.5 closes the top-level key set only; design clarification queued).
   Per-skill map `_SKILL_PROFILES` is where distribution 4.2 appends the inbox
   skill's heading tuple; the frame is not edited.
+- 3.1 (round 2, prose only): the `data`-component negative pin cannot red on
+  a real `references/data/` addition -- `.gitignore`'s `data/` rule drops the
+  directory before the build, so that case is caught by the MEMBER pin (a
+  listed file that did not ship); what the data pin observes is a file named
+  `data` (the rule is directory-only) or the rule lifted. `_build_artifact` is
+  not the suite's only `uv build` recipe (tests/load/test_packaging.py has two
+  inline calls; design.md:189 is wrong -- queued). A wrong `_repo_root` fails
+  loudly in `uv build`, never silently.
