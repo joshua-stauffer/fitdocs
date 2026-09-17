@@ -742,6 +742,66 @@ def test_report_reconcile_omits_zero_count_states_from_the_summary_line(
     assert "reconciled b1: 1 planned -- 1 not logged; 0 unplanned" in lines
 
 
+def test_report_reconcile_prints_a_nonzero_unplanned_count(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Req 8.6's unplanned count is the sum over the mesocycles' unplanned
+    listings, not a fixed `0`: two unplanned records on one mesocycle and
+    one on another print `; 3 unplanned`. Every other report pin in this
+    module carries `0 unplanned`, so a hard-coded zero survives them all;
+    this one reds it."""
+    from datetime import UTC
+    from datetime import datetime as _dt
+
+    from fitdocs.model import Sport
+    from fitdocs.plans import LoggedWorkout
+
+    def _logged(stem: str, day: date) -> LoggedWorkout:
+        return LoggedWorkout(
+            stem=stem,
+            path=f"workouts/{stem}.md",
+            day=day,
+            sport=Sport.RUN,
+            modality=None,
+            indoor=None,
+            start_time=_dt(day.year, day.month, day.day, 7, 0, tzinfo=UTC),
+            load=None,
+            methodology=None,
+        )
+
+    first = MesocycleLoad(
+        number=1,
+        target=None,
+        methodology="threshold",
+        pages=(),
+        scored=(),
+        unscored=(),
+        excluded=(),
+        unplanned=(_logged("a", date(2026, 3, 2)), _logged("b", date(2026, 3, 3))),
+    )
+    second = MesocycleLoad(
+        number=2,
+        target=None,
+        methodology="threshold",
+        pages=(),
+        scored=(),
+        unscored=(),
+        excluded=(),
+        unplanned=(_logged("c", date(2026, 3, 9)),),
+    )
+    reconciliation = _reconciliation(
+        block_id="b1",
+        rows=(_row("r1", RowState.NOT_LOGGED),),
+        mesocycles=(first, second),
+    )
+    report = _report(blocks=(reconciliation,))
+
+    _report_reconcile(report)
+
+    lines = capsys.readouterr().out.splitlines()
+    assert "reconciled b1: 1 planned -- 1 not logged; 3 unplanned" in lines
+
+
 def test_report_reconcile_prints_ambiguous_parenthesis_only_when_present(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

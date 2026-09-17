@@ -407,6 +407,36 @@ def test_history_methodology_takes_precedence_over_load_default_calculator(
     assert report.methodology.source == "configured"
 
 
+def test_load_default_calculator_alone_configures_the_methodology(
+    tmp_path: Path,
+) -> None:
+    """Req 6.2's middle branch on its own: no `[history]` table, only
+    `[load].default_calculator`, and pages recorded under both `x` and `y`
+    (ambiguous without a configured name) -- the choice is the load
+    table's `x`, as configured. Dropping the `or load_settings.default_calculator`
+    fallback from the composition in `run_reconcile` turns this into a
+    MethodologyProblem and reds it; the precedence test above cannot see
+    that mutation because it sets both tables."""
+    _write_clean_block(tmp_path)
+    _write(tmp_path, "fitdocs.toml", '[load]\ndefault_calculator = "x"\n')
+    _write(
+        tmp_path,
+        f"{WORKOUTS_DIR}/logged-x.md",
+        _page(day="2026-05-04", sport="Run", load_value=10.0, load_methodology="x"),
+    )
+    _write(
+        tmp_path,
+        f"{WORKOUTS_DIR}/logged-y.md",
+        _page(day="2026-05-05", sport="Run", load_value=20.0, load_methodology="y"),
+    )
+
+    report = run_reconcile(tmp_path, today=date(2026, 5, 1))
+
+    assert isinstance(report.methodology, MethodologyChoice)
+    assert report.methodology.methodology == "x"
+    assert report.methodology.source == "configured"
+
+
 # ===========================================================================
 # A malformed [history] table raises before anything is written
 # ===========================================================================
