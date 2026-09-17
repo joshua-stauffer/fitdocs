@@ -164,7 +164,7 @@ does not add, reference or read a real file.
   - _Requirements: 1.1, 1.7, 6.4, 6.9, 6.10, 6.11_
   - _Boundary: FlagVocabulary_
 
-- [ ] 1.2 Record the provenance of every default and every divergence from established platform behavior
+- [x] 1.2 Record the provenance of every default and every divergence from established platform behavior
   - **Consume, do not extend, the shared provenance vocabulary.** The verification
     status for a value chosen by fitdocs and justified by a recorded measurement
     is defined by the channel layer's own foundation task; use it. Edit no module
@@ -532,3 +532,17 @@ does not add, reference or read a real file.
   quality-assurance sub-package "does not exist in this checkout" — now stale
   (the discovery logic itself already covers `fitdocs.load.qa` correctly).
   Task 3.3 owns and modifies this test module; fix the stale docstring there.
+- **1.2**: `tests/load/test_packaging.py`'s `_LOAD_MODULE_ALLOWLIST` needs one
+  more line per new `load/qa/` module file (now 3: `types.py`, `sources.py`,
+  and the package `__init__.py`) — tasks 2.1–2.5 and 3.1 each owe the same.
+  The list is no longer alphabetically sorted; low-importance cosmetic drift,
+  not worth a dedicated fix pass, but keep new entries near the existing ones.
+- **1.2**: `design.md`'s FlagProvenance Postcondition states every `DEFAULT_*`
+  constant in `qa/types.py` "names either a citation key present in
+  `CITATIONS` or a key present in `PROVISIONAL_DEFAULTS`" — a binary that
+  omits the fitdocs-chosen-with-reasoning category 6.10's own text authorises
+  ("the measurement **or reasoning** that justifies it") and that this task's
+  code correctly implements as a third category (`window_s`,
+  `min_paired_coverage` cite neither, per Requirement 6.10's "or reasoning"
+  clause). The code is right; the design sentence is stale prose and is
+  queued for a spec-doc fix, not a re-implementation.
