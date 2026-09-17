@@ -89,6 +89,7 @@ import fitdocs.plans.aggregate
 import fitdocs.plans.block_page
 import fitdocs.plans.corpus
 import fitdocs.plans.engine
+import fitdocs.plans.matching
 import fitdocs.plans.model
 import fitdocs.plans.page
 import fitdocs.plans.planned_page
@@ -1133,6 +1134,13 @@ _PLANS_SURFACE = {
     # -- plans.aggregate (plan-resolution 2.3) --
     "MesocycleLoad",
     "aggregate_mesocycles",
+    # -- plans.matching (plan-resolution 2.2) --
+    "RowState",
+    "Confidence",
+    "RowOutcome",
+    "ReconcileProblem",
+    "MatchResult",
+    "match_rows",
 }
 
 #: Which submodule defines each published name -- the object the identity
@@ -1216,6 +1224,12 @@ _PLANS_SURFACE_OWNERS = {
     "scan_corpus": fitdocs.plans.corpus,
     "MesocycleLoad": fitdocs.plans.aggregate,
     "aggregate_mesocycles": fitdocs.plans.aggregate,
+    "RowState": fitdocs.plans.matching,
+    "Confidence": fitdocs.plans.matching,
+    "RowOutcome": fitdocs.plans.matching,
+    "ReconcileProblem": fitdocs.plans.matching,
+    "MatchResult": fitdocs.plans.matching,
+    "match_rows": fitdocs.plans.matching,
 }
 
 

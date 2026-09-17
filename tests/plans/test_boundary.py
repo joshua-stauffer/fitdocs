@@ -92,6 +92,7 @@ PLANS_MODULE_NAMES: Final[tuple[str, ...]] = (
     "fitdocs.plans.source",
     "fitdocs.plans.corpus",
     "fitdocs.plans.aggregate",
+    "fitdocs.plans.matching",
 )
 
 
@@ -224,6 +225,7 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
             "fitdocs.plans.block_page",
             "fitdocs.plans.corpus",
             "fitdocs.plans.engine",
+            "fitdocs.plans.matching",
             "fitdocs.plans.model",
             "fitdocs.plans.page",
             "fitdocs.plans.planned_page",
@@ -348,6 +350,17 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
             "__future__",
             "dataclasses",
             "fitdocs.history",
+            "fitdocs.plans.corpus",
+            "fitdocs.plans.model",
+        }
+    ),
+    "fitdocs.plans.matching": frozenset(
+        {
+            "__future__",
+            "collections.abc",
+            "dataclasses",
+            "datetime",
+            "enum",
             "fitdocs.plans.corpus",
             "fitdocs.plans.model",
         }

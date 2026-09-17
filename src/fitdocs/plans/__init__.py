@@ -27,6 +27,14 @@ from fitdocs.plans.engine import (
     Resolver,
     run_plan,
 )
+from fitdocs.plans.matching import (
+    Confidence,
+    MatchResult,
+    ReconcileProblem,
+    RowOutcome,
+    RowState,
+    match_rows,
+)
 from fitdocs.plans.model import (
     IDENTIFIER,
     MUTABLE_FIELDS,
@@ -189,4 +197,11 @@ __all__: list[str] = [
     # -- plans.aggregate (plan-resolution task 2.3) --
     "MesocycleLoad",
     "aggregate_mesocycles",
+    # -- plans.matching (plan-resolution task 2.2) --
+    "RowState",
+    "Confidence",
+    "RowOutcome",
+    "ReconcileProblem",
+    "MatchResult",
+    "match_rows",
 ]
