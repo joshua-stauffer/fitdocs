@@ -1,7 +1,7 @@
 ---
 id: 2026-07-26-date-key-has-no-constant
 title: '`"date"` is the only managed frontmatter key with no `Final[str]` constant, and it is hardcoded at three sites'
-status: open
+status: done
 importance: low
 importance_why: Not a correctness risk today — the reader's key is mutation-pinned — but it is exactly the drift wiki-contract's own revalidation item is watching for, and every sibling key already has a constant.
 effort: S
@@ -66,3 +66,16 @@ before its module can be edited — the same vehicle problem recorded in
 
 Related: [[2026-07-26-frontmatter-date-vs-filename-date-unasserted]] — the other
 half of how the reader and writer could drift apart.
+
+## Closed 2026-09-16 by /kiro-impl plan-resolution task 1.1 (5d382b5 on impl/plan-resolution)
+
+`contract.DATE_KEY: Final[str] = "date"` now exists beside the four sibling
+key constants task 1.1 added (`START_TIME_KEY`, `SPORT_KEY`, `MODALITY_KEY`,
+`INDOOR_KEY`). All three sites this item named route through it:
+`MANAGED_KEYS`' member, `document_date`'s lookup, and
+`render/frontmatter.py`'s write. `"date"` is now a forbidden literal in
+`tests/test_contract_consumers.py`'s converted-module scan, so a re-spelling
+in any registered consumer reds; `test_managed_keys_contains_every_named_key_constant`
+holds the five constants in the managed set. The `src/`-wide "exactly once"
+property this item's done-looks-like line states is true today (grep) but
+has no test pin — recorded as a separate low-importance item at close time.
