@@ -17,6 +17,7 @@ silently drop an earlier task's published names.
 
 from __future__ import annotations
 
+from fitdocs.plans.aggregate import MesocycleLoad, aggregate_mesocycles
 from fitdocs.plans.block_page import render_block_page
 from fitdocs.plans.corpus import Corpus, LoggedWorkout, scan_corpus
 from fitdocs.plans.engine import (
@@ -185,4 +186,7 @@ __all__: list[str] = [
     "LoggedWorkout",
     "Corpus",
     "scan_corpus",
+    # -- plans.aggregate (plan-resolution task 2.3) --
+    "MesocycleLoad",
+    "aggregate_mesocycles",
 ]

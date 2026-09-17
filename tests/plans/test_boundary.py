@@ -91,6 +91,7 @@ PLANS_MODULE_NAMES: Final[tuple[str, ...]] = (
     "fitdocs.plans.settings",
     "fitdocs.plans.source",
     "fitdocs.plans.corpus",
+    "fitdocs.plans.aggregate",
 )
 
 
@@ -219,6 +220,7 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
     "fitdocs.plans": frozenset(
         {
             "__future__",
+            "fitdocs.plans.aggregate",
             "fitdocs.plans.block_page",
             "fitdocs.plans.corpus",
             "fitdocs.plans.engine",
@@ -341,6 +343,15 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
             "fitdocs.model",
         }
     ),
+    "fitdocs.plans.aggregate": frozenset(
+        {
+            "__future__",
+            "dataclasses",
+            "fitdocs.history",
+            "fitdocs.plans.corpus",
+            "fitdocs.plans.model",
+        }
+    ),
 }
 
 
@@ -393,6 +404,33 @@ def _matches_forbidden(target: str) -> str | None:
     return None
 
 
+#: The one expected exception to "forbidden": a module may import a
+#: forbidden package's **root** alone -- never a submodule of it, which
+#: stays forbidden for every module including these (design.md "Allowed
+#: Dependencies": "the history package root only"). Keyed by module name,
+#: valued by the exact (already-resolved) root target admitted; an entry
+#: never names a `fitdocs.history.<submodule>` or `fitdocs.load.<submodule>`
+#: target. `fitdocs.plans.aggregate` introduces this map with its own entry
+#: (task 2.3); `fitdocs.plans.placement` and `fitdocs.plans.reconcile` each
+#: append their own entry (2.4, 3.1) -- never widen another module's.
+_FORBIDDEN_EXEMPTIONS: Final[dict[str, frozenset[str]]] = {
+    "fitdocs.plans.aggregate": frozenset({"fitdocs.history"}),
+}
+
+
+def _is_exempt(module_name: str, target: str) -> bool:
+    """Whether `target` is exactly one of `module_name`'s admitted roots.
+
+    Checked against the *exact* target string, never a prefix: a real
+    submodule import (`fitdocs.history.documents`, or the alias-appended
+    candidate a `from fitdocs.history.documents import ...` produces) is
+    never equal to the admitted root `"fitdocs.history"`, so it is never
+    exempted by this check -- only a plain `import fitdocs.history` (or
+    `from fitdocs import history`), whose sole generated target is the
+    bare root itself, is."""
+    return target in _FORBIDDEN_EXEMPTIONS.get(module_name, frozenset())
+
+
 def _forbidden_scan_targets_for_path(
     path: Path, enclosing_package: str
 ) -> frozenset[str]:
@@ -426,17 +464,17 @@ def _forbidden_scan_targets_for_path(
 class TestForbiddenNames:
     def test_no_module_imports_a_forbidden_target(self) -> None:
         pairs = tuple(
-            (_module_path(name), _enclosing_package(name))
-            for name in PLANS_MODULE_NAMES
+            (module_name, _module_path(module_name), _enclosing_package(module_name))
+            for module_name in PLANS_MODULE_NAMES
         )
         assert pairs, "the walk found no files -- wrong path list"
         scanned = 0
         offenders: list[str] = []
-        for path, enclosing_package in pairs:
+        for module_name, path, enclosing_package in pairs:
             scanned += 1
             for target in _forbidden_scan_targets_for_path(path, enclosing_package):
                 forbidden = _matches_forbidden(target)
-                if forbidden is not None:
+                if forbidden is not None and not _is_exempt(module_name, target):
                     offenders.append(f"{path.name} imports {target} ({forbidden})")
         assert scanned == len(PLANS_MODULE_NAMES), (
             "the walk is looking at the wrong set"

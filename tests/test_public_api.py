@@ -85,6 +85,7 @@ import fitdocs.performance
 import fitdocs.performance.engine
 import fitdocs.performance.types
 import fitdocs.plans
+import fitdocs.plans.aggregate
 import fitdocs.plans.block_page
 import fitdocs.plans.corpus
 import fitdocs.plans.engine
@@ -1129,6 +1130,9 @@ _PLANS_SURFACE = {
     "LoggedWorkout",
     "Corpus",
     "scan_corpus",
+    # -- plans.aggregate (plan-resolution 2.3) --
+    "MesocycleLoad",
+    "aggregate_mesocycles",
 }
 
 #: Which submodule defines each published name -- the object the identity
@@ -1210,6 +1214,8 @@ _PLANS_SURFACE_OWNERS = {
     "LoggedWorkout": fitdocs.plans.corpus,
     "Corpus": fitdocs.plans.corpus,
     "scan_corpus": fitdocs.plans.corpus,
+    "MesocycleLoad": fitdocs.plans.aggregate,
+    "aggregate_mesocycles": fitdocs.plans.aggregate,
 }
 
 
