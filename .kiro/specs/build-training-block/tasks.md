@@ -307,7 +307,7 @@ the skill *is* the feature, and distribution set the precedent (its tasks
   - _Requirements: 1.1, 1.8, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 4.7_
   - _Boundary: AgentSkillPackage_
 
-- [ ] 2.2 Bind every name the skill teaches to the tool: the conformance test
+- [x] 2.2 Bind every name the skill teaches to the tool: the conformance test
   - `tests/test_agent_skill.py`, typed (its mypy entry appended here),
     parametrized over the registry of packaged names for the shared
     contract, with a per-skill map (heading tuple; later, the inbox skill's
@@ -592,3 +592,15 @@ the skill *is* the feature, and distribution set the precedent (its tasks
   strip code spans/fences before collecting link targets (line ~233 has the
   design-mandated `[stem](...)` in a span), and grep OWNED_PATHS members as
   fixed strings (the regex `.fitdocs/` matches the URL's `/fitdocs/`).
+- 2.2 (round 2): the reviewer ran 71 mutations of its own; the two that
+  survived round 1 are species worth naming. (a) EVER-PRESENT TOKEN across two
+  surfaces: `'sport = "Workout"' in body` was satisfied by the EXAMPLE FENCE's
+  `w1-wed` row, so deleting or inverting the prose rule sentence stayed green
+  -- a pin on a prose rule must scan the prose with the fences stripped. (b) A
+  gate narrower than the design's rule: `startswith("fitdocs ")` silently
+  waved through a tab- or NBSP-separated span; gate on the first whitespace
+  word (`split(None, 1)[0]`) so every other separator reaches the LOUD parse.
+  Controller ruling: an extra sub-key under `metadata` is not a pinned clause
+  (Req 2.5 closes the top-level key set only; design clarification queued).
+  Per-skill map `_SKILL_PROFILES` is where distribution 4.2 appends the inbox
+  skill's heading tuple; the frame is not edited.

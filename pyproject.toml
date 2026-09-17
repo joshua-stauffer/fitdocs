@@ -107,6 +107,7 @@ files = [
     "tests/plans/test_reconcile.py",
     "tests/test_skill_locator.py",
     "tests/test_cli_skill.py",
+    "tests/test_agent_skill.py",
 ]
 
 [tool.pytest.ini_options]
