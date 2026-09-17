@@ -290,10 +290,12 @@ _BLOCKS_CONTENT: Final[str] = (
     "This directory holds generated training-block pages and, in a "
     "subdirectory named after its block, the planned-workout pages that "
     "block links to, rendered from the athlete's plan sources whenever "
-    "`fitdocs plan` runs."
+    "`fitdocs plan` runs. The pages are also rewritten at the end of "
+    "`fitdocs sync` and `fitdocs regen`, when the same pass reconciles the "
+    "plan against the logged workout pages."
 )
 # CLAIM ANCHOR: `layout.block_doc_path`, `layout.planned_doc_path`,
-# `plans.engine.run_plan`.
+# `plans.engine.run_plan`, `cli._run_plan_pass`.
 
 _BLOCKS_NOTES: Final[str] = (
     "A block page carries one user-owned region, `notes`, whose content is "

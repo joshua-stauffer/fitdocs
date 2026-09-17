@@ -144,6 +144,14 @@ for it and reports the blocking path. A block page or a block's page
 directory under `blocks/` for which no plan source currently exists is left
 untouched and reported as having no source, rather than deleted.
 
+A planned row's resolution cell and a block's resolution section are filled
+by a reconciling pass, run from `fitdocs plan` itself and chained after
+`fitdocs sync` and `fitdocs regen`, that reads the logged workout pages'
+frontmatter to decide a match. That pass writes nothing into a workout page
+under `workouts/` and nothing into a plan source: the resolution shown on a
+block or planned page is re-derived from the current logged pages on the
+run that renders it, not stored or carried forward from a prior run.
+
 ## Configured Locations fitdocs May Create
 
 A location your `fitdocs.toml` settings file names as a place fitdocs should
@@ -537,7 +545,12 @@ contract:
   written or removed for it, and the run reports the blocking path. `plan`
   never writes, alters, or deletes a `workouts/*.md` document, a
   `history/*` output, a plan source, the athlete profile, or the settings
-  file.
+  file. `sync` and `regen` chain this same pass immediately after their own
+  document pass (ingestion for `sync`, rebuild for `regen`) and
+  training-load pass finish, so a block or planned page written
+  by a standalone `fitdocs plan` run and one written at the end of `sync` or
+  `regen` carry the same resolution, filled from whatever the logged workout
+  pages record at the moment that chained run reaches it.
 
 **No fitdocs operation discards user-owned region content**, with one
 precise exception worth stating plainly rather than glossing over: if a

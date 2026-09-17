@@ -227,3 +227,36 @@ short final mesocycle says how short.
 8. This spec shall not chain the plan pass: `fitdocs plan` is standalone, and this spec leaves the sync, regeneration, load and history commands unchanged. `plan-resolution` chains the pass after `sync`, `drain` and `regen`, following the load pass, and never after `load`, `history` or `check`; the test that pins this criterion is written knowing that spec re-anchors it.
 9. If any source is invalid, any block is blocked, or any page cannot be written or removed, the fitdocs CLI shall exit with the per-file-failure status; a configuration error shall exit with the configuration-error status and write nothing; a run with no plan sources shall exit with success and say so.
 10. The fitdocs CLI shall place or refresh the in-tree ownership declarations only on a run that has at least one valid block to render, and shall create no directory otherwise; the declaration for the rendered location is therefore placed by the first run that has a page to write there.
+
+## Amendment 1 (2026-09-17): the two test pins re-anchored, landed by plan-resolution
+
+`plan-resolution` lands the resolver and the chaining criteria 8.4 and 8.8
+already admit: 8.4 scopes the byte-identity guarantee to the default
+(unresolved) resolution and states that a supplied resolver may depend on
+`today`; 8.8 states that this spec does not chain the plan pass and that
+`plan-resolution` does. Neither criterion changes meaning here. The two
+test pins that spec's design named -- Cross-spec obligations item 5 -- were
+re-anchored as it foresaw: `tests/test_cli_plan.py`'s AST pin was re-stated
+under `plan-resolution`'s CLI chaining; the `tests/test_plan_e2e.py`
+two-dates test's precondition (both fake dates on the same side of every
+fixture row) was already present at this spec's own `be6c936`, so
+`plan-resolution` added no precondition to it; its one edit to that test is
+the staging line described next. Landing the resolver chained also
+surfaced a fixture gap this spec's design did not foresee: with the
+resolver in place, a plan-source override naming a stem the corpus lacks is
+a per-file failure (`plan-resolution` Req 8.7), and `tests/plans/fixtures/
+full.toml`'s `w1-mon` override names `run-2026-01-06-am`, a stem no wave-1
+CLI corpus provided. Four wave-1 tests -- three further ones and the
+two-dates pin itself --
+`tests/test_cli_plan.py::test_success_prints_every_outcome_line_and_the_counts`,
+`tests/test_plan_e2e.py::test_two_sources_render_every_owned_page_with_report_and_frontmatter`,
+`::test_two_plain_runs_are_byte_identical_and_report_unchanged`, and
+`::test_two_fake_dates_and_timezones_are_byte_identical` -- now stage that
+logged page so the fixture stays coherent under reconciliation; the fixture
+itself and every existing assertion are untouched. Separately,
+`tests/test_plan_e2e.py`'s two-dates test carries a docstring sentence,
+"With the default (unresolved) resolution, `fitdocs plan` reads no clock,"
+that is now stale once the resolver is chained -- the test's own docstring
+already says it was written knowing it moves, and it is left unedited here,
+outside this amendment's scope. Nothing in this requirements document is
+renumbered and no criterion's text is reworded.

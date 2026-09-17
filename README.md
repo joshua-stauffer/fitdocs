@@ -36,8 +36,9 @@ Early discovery / spec phase. No installable package yet.
    enter and no `.fit` file read.
 5. **Render training blocks.** `fitdocs plan` renders one block page per
    source in your plan directory, with one planned-workout page per row
-   underneath it — rebuilt from your plan sources alone, standalone in this
-   spec (not chained after `sync`).
+   underneath it — rebuilt from your plan sources and reconciled against
+   your logged workout pages; the same pass also runs at the end of
+   `fitdocs sync` and `fitdocs regen` (see [Training blocks](#training-blocks)).
 
 Organizing workouts into cycles/training blocks was deliberately deferred
 through the first releases; Phase 7 of the roadmap (2026-09-15) adds training
@@ -277,6 +278,20 @@ there. It is configured in the `[plans]` table of
 | Key | Meaning | Default |
 |-----|---------|---------|
 | `path` | The plan-source location. An absolute path is used as given; a relative path resolves against the data root. **Never created** by fitdocs. Must lie outside the owned paths — configuring it inside `blocks/` or another owned path is a configuration error. | `"plans"` (i.e. `<data-root>/plans/`) |
+
+`fitdocs plan`, and the same pass chained at the end of `fitdocs sync` and
+`fitdocs regen`, also reconciles each row against the logged workout pages,
+resolving it to one of five states — `matched`, `overridden`, `skipped`,
+`not logged`, or `upcoming` — a `matched` row further labeled `exact` (one
+candidate), `absorbed` (several candidates, all taken by that one row — a
+split session), or `ambiguous` when two or more planned workouts on the
+same day compete for the same candidates, in which case the proposed
+pairing is never presented as settled. An `[[override]]` entry in a plan
+source pins a row to named logged workouts, or marks it skipped, ahead of
+that automatic matching. Standalone or chained, the resolution shown is
+re-derived from whatever the logged workout pages currently record —
+nothing about the match is stored, and nothing is written back into a
+workout page or a plan source.
 
 ## Benchmarks
 

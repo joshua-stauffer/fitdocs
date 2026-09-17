@@ -1359,10 +1359,8 @@ model, needs none of it).
   and task 4.2's conformance test generalized over the packaged set. Landed
   by `build-training-block` if distribution major 4 has not shipped first;
   otherwise consumed. Dependencies: none
-- [ ] workout-docs — no change unless `plan-resolution`'s design writes a
-  back-link key into logged pages, which would make it a managed key and move
-  the `MANAGED_KEYS` pins; the brief lists that as a candidate, not a
-  deliverable. Dependencies: plan-resolution
+- [x] workout-docs — no change: no back-link key is written (plan-resolution
+  design § Decisions recorded for the roadmap). Dependencies: plan-resolution
 
 #### Direct Implementation Candidates
 
