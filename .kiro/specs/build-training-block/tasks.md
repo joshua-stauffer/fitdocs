@@ -107,7 +107,7 @@ not a discrepancy.
 the skill *is* the feature, and distribution set the precedent (its tasks
 4.2, 5.x). Each is paired with the test that keeps it honest.
 
-- [ ] 1. Foundation: the by-name locator and the read-only command
+- [x] 1. Foundation: the by-name locator and the read-only command
 - [x] 1.1 Land the skill registry and by-name locator, with the scaffold skill directory
   - **Precondition, run first and recorded**: assert
     `src/fitdocs/agentskill.py` does not exist. If it does (distribution's
@@ -211,7 +211,7 @@ the skill *is* the feature, and distribution set the precedent (its tasks
   - _Requirements: 1.3, 1.4, 1.5, 1.6, 1.7, 7.2, 7.5_
   - _Boundary: SkillCommand_
 
-- [ ] 2. Core: the skill and its conformance test
+- [x] 2. Core: the skill and its conformance test
 - [x] 2.1 Write the example plan source and the skill body in the fixed nine-section order
   - Write `example-block.toml` (block id `example-block`): title `Example
     block`, `starts = 2030-01-07`, `ends = 2030-02-17`, `mesocycle_days =
@@ -378,7 +378,7 @@ the skill *is* the feature, and distribution set the precedent (its tasks
   - _Requirements: 1.8, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.5, 3.6, 3.8, 3.12, 3.13, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8_
   - _Boundary: SkillConformance_
 
-- [ ] 3. Integration: packaging proof, documentation, the distribution amendment, and validation
+- [x] 3. Integration: packaging proof, documentation, the distribution amendment, and validation
 - [x] 3.1 (P) Prove every packaged skill file is a wheel member
   - `tests/test_skill_wheel.py`, typed (its mypy entry appended here -- the
     one `pyproject.toml` touch among the parallel tasks): a module-scoped
