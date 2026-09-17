@@ -429,7 +429,7 @@ the skill *is* the feature, and distribution set the precedent (its tasks
   - _Requirements: 5.4_
   - _Boundary: SkillDocs_
 
-- [ ] 3.3 (P) Land the distribution Existing Spec Update as Amendment 1
+- [x] 3.3 (P) Land the distribution Existing Spec Update as Amendment 1
   - Read task 1.1's Implementation Notes first: LANDED or WIDENED decides the
     wording below
   - Distribution `requirements.md`: an `## Amendment 1 (2026-09-16): a second
@@ -612,3 +612,12 @@ the skill *is* the feature, and distribution set the precedent (its tasks
   not the suite's only `uv build` recipe (tests/load/test_packaging.py has two
   inline calls; design.md:189 is wrong -- queued). A wrong `_repo_root` fails
   loudly in `uv build`, never silently.
+- 3.3 (round 2): LANDED wording throughout. Round-1 species: an amendment
+  written from memory of the design rather than from the files -- "4.1 and
+  4.2 ticked" (only 4.1 is), a pointer to a section that exists only in the
+  SIBLING spec's design, the design-mandated `INBOX_SKILL_NAME` replaced by its
+  literal value, and two skills' files conflated. Every identifier an
+  amendment spells must be grepped in the source; every cross-reference must
+  be opened. The design's "Regression section (:883)" label was wrong (that
+  line is the Unit Tests version-resolution bullet) -- amended by content;
+  queued.

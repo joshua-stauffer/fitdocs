@@ -1,7 +1,7 @@
 {
   "feature_name": "distribution",
   "created_at": "2026-07-21T08:14:49Z",
-  "updated_at": "2026-07-21T11:20:00Z",
+  "updated_at": "2026-09-17T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -18,5 +18,13 @@
       "approved": true
     }
   },
-  "ready_for_implementation": true
+  "ready_for_implementation": true,
+  "amendments": [
+    {
+      "date": "2026-09-16",
+      "requirement": "8.9 (new)",
+      "reason": "build-training-block spec task 3.3: distribution's agent-skill packaging (major 4) had not shipped at that base (tasks-generated, 0 of 33 tasks done), so build-training-block landed the by-name skill locator and the skill command that this spec's task 4.1 had not yet built, rather than re-adding a single-skill version that its own skill would have had to consume. Task 4.2 (author the inbox skill and generalize the conformance test) had not been built either and remains open, now also carrying 4.1's one residual (appending INBOX_SKILL_NAME to PACKAGED_SKILLS and creating its directory). This spec's Requirement 8 is extended to state that the distribution packages more than one agent skill under one skills location, lists the packaged skills on request, reports one skill's location by name, and applies 8.6's install/verify/update documentation obligation to every packaged skill.",
+      "also": "requirements.md gains Amendment 1 (2026-09-16) and Requirement 8 criterion 8.9; design.md gains matching amendment notes on the AgentSkillLocator block (SKILL_NAME retired for the PACKAGED_SKILLS registry, with the inbox skill's name renamed INBOX_SKILL_NAME and appended by task 4.2; skill_root(name)/skill_file(name)/skill_files(name)), the AgentSkillPackage block (a second skill, the conformance test generalized), the CliApp block (skill [NAME], listing and unknown-name forms), the ArtifactPolicy data shape ([wheel] required gains fitdocs/skills/build-training-block/SKILL.md and fitdocs/skills/build-training-block/example-block.toml), the File Structure Plan (both skill directories), and the three version-identity statements (one metadata.version per PACKAGED_SKILLS entry is a permitted copy, not a second literal). tasks.md's plan header gains a sequencing note pointing at build-training-block's own design.md § DistributionSpecUpdate for the widen-path alternative (this spec's design.md has no such section); task 1.1's observable and task 1.4's required-member and singular-subject bullets are amended in place; task 4.1 alone is ticked landed by build-training-block, with its residual (appending INBOX_SKILL_NAME to PACKAGED_SKILLS and creating the inbox skill's directory) folded into task 4.2, which stays open and drops its _Depends: 4.1_. The roadmap's Phase 7 Existing Spec Update distribution checkbox is ticked landed by build-training-block. Nothing renumbered."
+    }
+  ]
 }

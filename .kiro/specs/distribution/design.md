@@ -252,6 +252,12 @@ tests/
                                    #   features' (7.9, 10.6, 10.7)
 ```
 
+**Amendment 1 (2026-09-16, landed by build-training-block)**: `skills/`
+gains a sibling directory, `build-training-block/`, holding that spec's own
+`SKILL.md` and `example-block.toml`; `tests/test_agent_skill.py` above is not
+a new file for that spec — it exists, generalized over `PACKAGED_SKILLS`,
+and that spec's task 4.2 extends its per-skill map.
+
 ### Modified Files
 
 - `pyproject.toml` — complete `[project]` metadata (`authors`, `keywords`, `classifiers`, `license-files`, `[project.urls]` for source, documentation, changelog, issues); explicit `[tool.hatch.build.targets.sdist]` allowlist; wheel target unchanged in intent but stated explicitly. Version stays static and stays the single declaration. `[project.urls]` must additionally resolve every documentation page a *shipped or emitted* artifact points at — the ownership contract, the plugin platform, the inbox, and the configuration document — because the sdist excludes `docs/` and wiki-contract's emitted `AGENTS.md` lands in a tree that has no repository (1.9).
@@ -477,6 +483,12 @@ def version_display() -> str:
 - Validation: unit tests for the resolved and unresolved paths with the metadata lookup patched; an installed-tool test asserting the reported version equals the manifest's; a source-tree test asserting `--version` prints the unknown token and exits 0 instead of raising.
 - Risks: a second version declaration creeping in (a `__version__` attribute, a hardcoded string in a docstring) — mitigated by a repository scan that fails on any occurrence of the released version literal outside the manifest and the two places checked against it for equality: the changelog's newest released entry and the agent skill's recorded version.
 
+**Amendment 1 (2026-09-16, landed by build-training-block)**: the permitted
+copies of the released version are one `metadata.version` per
+`PACKAGED_SKILLS` entry, not one fixed "the agent skill's recorded version" —
+two packaged skills mean two recorded versions, and the repository scan
+above allows exactly those alongside the changelog's newest entry.
+
 #### AgentSkillLocator (`src/fitdocs/agentskill.py`)
 
 | Field | Detail |
@@ -511,6 +523,16 @@ def skill_file() -> Path | None:
 - Postconditions: any returned path exists and is readable; nothing is created.
 - Invariants: `skill_root()`'s final path component equals `SKILL_NAME`.
 
+**Amendment 1 (2026-09-16, landed by build-training-block)**: `SKILL_NAME` is
+retired in favour of a registry `PACKAGED_SKILLS: tuple[str, ...]` holding
+this skill's name — renamed `INBOX_SKILL_NAME` (value `"fitdocs-workouts"`)
+and appended by task 4.2 — alongside `build-training-block`'s own; the two
+no-argument resolvers become
+`skill_root(name)` and `skill_file(name)`, and a third resolver,
+`skill_files(name)`, lists every regular file under a packaged skill's
+directory. Resolution is otherwise unchanged: absent-by-default, nothing at
+import time, nothing from `fitdocs` imported, nothing written.
+
 #### AgentSkillPackage (`src/fitdocs/skills/fitdocs-workouts/SKILL.md`)
 
 | Field | Detail |
@@ -537,6 +559,13 @@ def skill_file() -> Path | None:
 - Validation: `tests/test_agent_skill.py` parses the frontmatter against the field constraints, asserts `name` equals both the directory name and `SKILL_NAME`, asserts the recorded version matches the manifest, and extracts every `fitdocs <command>` and `--option` occurrence from the body, asserting each exists in the typer application's registered surface. A second binding covers the **channels**: the set of channel names the body documents is compared against the drain report's own field set, so a channel added, renamed, or dropped by inbox fails this test rather than silently leaving the skill incomplete. Command binding alone would not catch it (8.8).
 - Risks: the standard is versionless and evolving, so a future field could become required — mitigated by keeping the frontmatter to the documented required-plus-stable set and by the conformance test failing loudly rather than silently accepting an unknown shape.
 
+**Amendment 1 (2026-09-16, landed by build-training-block)**: a second
+packaged skill, `build-training-block`, ships alongside this one under the
+same `skills/` location. The conformance test is `tests/test_agent_skill.py`,
+generalized over `PACKAGED_SKILLS` with a per-skill map (heading tuple,
+channel binding) rather than a single fixed body; task 4.2 adds this skill's
+entry to that map when it lands — the frame is not re-written.
+
 ### CLI
 
 #### CliApp additions (`src/fitdocs/cli.py`)
@@ -560,6 +589,13 @@ def skill_file() -> Path | None:
 
 - Validation: CLI tests for `skill` printing an existing path and exiting 0, for the absent-skill path exiting 2 with an instructive message, and for `--version` on an uninstalled tree.
 - Risks: command-surface churn across three concurrent Phase 3 specs — mitigated by the skill conformance test, which fails the moment the skill names a command that no longer exists.
+
+**Amendment 1 (2026-09-16, landed by build-training-block)**: `skill` gains
+one optional positional argument, `NAME`. No argument lists every registered
+name and its directory (or absence); a registered name prints its directory
+and a copy recipe; an unregistered name is the configuration-error path
+(exit 2) listing the packaged names. The no-argument and absent-skill forms
+above are the `NAME`-omitted case of this widened command, not a second one.
 
 ### Load
 
@@ -641,6 +677,11 @@ required_fields = ["Name", "Version", "Summary", "License-Expression",
 
 - Invariants: `permission = "granted"` requires a non-empty `evidence`, and the checker treats a granted record with no evidence as a violation; the marker list contains the redacted marker set and never a bare identifier, because the calculator id is not a trademark and must remain usable.
 - The split between `required` and `required_when_bundled` is what makes an unencumbered artifact legal under 1.5 rather than a missing-member violation. The shape above is the **end state**: each required member is declared by whichever task creates the file it names, so the packaged skill's entry arrives with the skill and not before.
+
+**Amendment 1 (2026-09-16, landed by build-training-block)**: `[wheel]
+required` gains `fitdocs/skills/build-training-block/SKILL.md` and
+`fitdocs/skills/build-training-block/example-block.toml`, landed alongside
+that skill rather than by this spec's own tasks.
 
 ### Release Tooling
 
@@ -838,6 +879,12 @@ The sdist is an explicit allowlist rather than an exclusion list, so a file adde
 
 One declaration in the manifest. Four derived appearances, all equal: the distribution metadata's version, the CLI's version output, the tile user-agent's version component, and the built-in calculator's reported version. Three further appearances are checked for equality without deriving from it — the changelog's newest released entry, the release tag, and the agent skill's recorded version — because their independence is exactly what makes the check meaningful. No other literal copy of the released version may exist anywhere in the repository.
 
+**Amendment 1 (2026-09-16, landed by build-training-block)**: "the agent
+skill's recorded version" above is, from this amendment forward, one
+`metadata.version` per `PACKAGED_SKILLS` entry — a second packaged skill is
+a second permitted, independently-checked copy, not a second literal copy
+that violates "no other literal copy".
+
 ### Skill frontmatter
 
 | Field | Presence | Constraint |
@@ -881,6 +928,10 @@ No telemetry and no logging framework, consistent with the project. Observabilit
 ### Unit Tests
 
 - **Version resolution**: resolved and unresolved lookups; `version_display()` returning the token rather than raising; both functions agreeing for an installed distribution; a repository scan asserting the released version literal appears only in the manifest and in the two equality-checked places — the changelog's newest released entry and the agent skill's recorded version (2.1–2.4).
+  - **Amendment 1 (2026-09-16, landed by build-training-block)**: the scan's
+    permitted set is the manifest, the changelog's newest entry, and every
+    `PACKAGED_SKILLS` entry's recorded version — one `SKILL.md` per entry —
+    and nowhere else.
 - **Skill location**: the resolved directory's final component equals the canonical name; an absent skill resolves to `None` rather than raising (8.1, 8.6).
 - **Licensing and policy readers**: each required key missing raises; a wrongly-typed value raises; an unknown key is tolerated; `granted` with empty evidence is a violation (6.3).
 - **Artifact checker rules**: fixture archives trip `MISSING_REQUIRED`, `FORBIDDEN_MEMBER`, `ENCUMBERED_CONTENT`, and `METADATA_INCOMPLETE` exactly once each; a clean archive trips none; violations sort deterministically; a marker present only in the distribution metadata is caught (1.3, 1.5, 1.6, 5.4, 6.1, 6.7).

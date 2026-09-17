@@ -252,6 +252,7 @@ instructions myself.
 6. The fitdocs documentation shall state where to install the agent skill, how to verify it is active, and how to update it when fitdocs is upgraded.
 7. The fitdocs documentation shall provide an integration recipe for adopting fitdocs into an existing agent-managed wiki, covering installation, pointing the data root at the wiki, configuring the inbox, running the first drain, and confirming the result.
 8. The agent skill shall be released together with the tool and carry the released version, and every command, option, and reported outcome channel it names shall exist in that release's command surface and in that release's reported outcomes.
+9. *(added by Amendment 1)* The distribution shall package more than one agent skill under one skills location, shall list the packaged skills on request, shall report one skill's location by name, and criterion 8.6's install/verify/update documentation obligation shall apply to every packaged skill.
 
 ### Requirement 9: Contribution Documentation
 **Objective:** As someone who wants to contribute to fitdocs or to publish my
@@ -278,3 +279,27 @@ private, or less predictable.
 5. Building the same tagged revision twice shall produce artifacts with identical contents.
 6. Reorganizing the project's documentation shall preserve every behavior statement the project publishes at the time of the reorganization — its own and its sibling features' — including data-root resolution order, the persistent tile opt-out, tile-provider attribution, the inbox never-delete guarantee, the statement that fitdocs performs no watching and no scheduling, and a pointer to the published ownership contract.
 7. Rewriting the readme shall preserve rather than replace the sections other features publish there — the ownership section, the inbox section, and the plugins section — either keeping each in place or relocating each into the documentation set with the readme linking to it.
+
+## Amendment 1 (2026-09-16): a second packaged skill, located by name, landed by build-training-block
+
+`build-training-block` lands, at implementation time, the by-name skill
+locator, the `skill` command and the generalized conformance test this
+spec's major 4 had not yet shipped (distribution was `tasks-generated` with
+0 of 33 tasks done at that base) — so that its own skill consumes them
+instead of re-adding a single-skill version. That spec owns its skill's
+content, its example plan source, and the frame of the generalized
+conformance test; this spec owns only the by-name locator (published in
+code as the registry `PACKAGED_SKILLS`, with `skill_root(name)`,
+`skill_file(name)` and `skill_files(name)`), the `skill` command, the
+artifact policy's required-member set and the version-identity guarantee it
+extends — the registry replacing the single-name constant, the `skill
+[NAME]` command's listing and by-name forms, the artifact policy's
+required-member set gaining `build-training-block`'s two files
+(`fitdocs/skills/build-training-block/SKILL.md` and
+`fitdocs/skills/build-training-block/example-block.toml`) now and this
+spec's own inbox skill's `SKILL.md` when task 4.2 lands it, and the
+statement that one `metadata.version` per registered skill is a permitted
+copy of the released version, not a second declaration — recorded here as
+Requirement 8 criterion 8.9. No criterion is renumbered. This is the
+roadmap's Phase 7
+Existing Spec Update for this spec.

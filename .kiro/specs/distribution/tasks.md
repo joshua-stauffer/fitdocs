@@ -25,13 +25,25 @@
 > documentation, the agent skill, and the contribution guide are the feature.
 > They appear as tasks, each paired with the conformance test or gate that keeps
 > it honest, following the precedent set by the published ownership contract.
+>
+> **Sequencing note (Amendment 1, 2026-09-16)**: `build-training-block` landed
+> the by-name skill locator and the `skill [NAME]` command before this plan's
+> major 4 started — task 4.1 below is ticked "landed by build-training-block"
+> rather than executed fresh. Task 4.2 stays open: it still authors this
+> spec's own inbox skill and now also carries 4.1's one residual (appending
+> the inbox name to the registry and creating its directory in the same
+> change). The alternative — major 4 shipping first, then `build-training-block`
+> widening a single-skill locator in place — did not occur at this base; that
+> path is recorded in `build-training-block`'s own design.md, § DistributionSpecUpdate,
+> "If distribution major 4 shipped first" bullet, not in this spec's design.md
+> (which has no such section).
 
 - [ ] 1. Foundation: version identity, package manifest, and policy data
 - [ ] 1.1 Consolidate version resolution behind one leaf
   - A pure module holding the distribution name, a resolver returning the installed version or an absent value, and a display form that falls back to a fixed unknown token; the lookup happens at the point of use, never at import time, because reading distribution metadata is measurably slow for a command-line start-up
   - The three existing unguarded call sites converge on it: the version flag, the tile user-agent, and the plugin listing's built-in version. The listing keeps an absent version absent rather than substituting the token, because the plugin surface forbids fabricating one
   - The module imports nothing from the package and is not added to the documented public import surface — it is internal
-  - Observable: unit tests cover the resolved and unresolved paths with the metadata lookup patched, running the command from an uninstalled checkout prints the unknown token and exits successfully instead of raising, and a repository scan finds the released version literal only in the manifest and in the two places that are checked against it for equality — the changelog's newest entry and the agent skill's recorded version — and nowhere else
+  - Observable: unit tests cover the resolved and unresolved paths with the metadata lookup patched, running the command from an uninstalled checkout prints the unknown token and exits successfully instead of raising, and a repository scan finds the released version literal only in the manifest, the changelog's newest entry, and every packaged skill's recorded version (one `SKILL.md` per `PACKAGED_SKILLS` entry) -- and nowhere else *(amended by Amendment 1, 2026-09-16, landed by build-training-block: the "two places" singular count is replaced by the registry-sized set)*
   - _Requirements: 2.1, 2.2, 2.3, 2.4_
   - _Boundary: VersionSource, CliApp, TileStore, PluginDiscovery_
 
@@ -57,7 +69,7 @@
   - A licensing record naming the bundled methodology, its branded name, the recorded permission state, the evidence reference, and the paths an unencumbered build prunes — the single place the release gate reads its licensing decision from
   - An artifact policy declaring, per artifact kind, the members a release must contain, the member patterns it must never contain (tests, specifications, reference material, lockfiles, spreadsheets, activity files, data-root paths), the content markers that indicate encumbered material, and the metadata fields a release must declare
   - Required members are split into those every profile must carry and those required **only when a methodology is bundled**, so an unencumbered artifact is legal rather than a missing-member violation; the source-distribution member set must mirror the allowlist declared in task 1.2, and the license and changelog files it names are created by tasks 1.2 and 1.3
-  - The packaged agent skill is deliberately **not** listed as a required member here — it does not exist yet, and task 4.2 adds its entry when it lands
+  - `build-training-block`'s two skill files (`fitdocs/skills/build-training-block/SKILL.md`, `fitdocs/skills/build-training-block/example-block.toml`) are unconditionally required wheel members *(added by Amendment 1, 2026-09-16, landed by build-training-block)*. The packaged `fitdocs-workouts` skill is deliberately **not** listed as a required member here — it does not exist yet, and task 4.2 adds its entry when it lands *(subject renamed from "the packaged agent skill" by Amendment 1, since a second skill's entry is already present above)*
   - Both files are pure data with no expressions or environment lookups, and neither ships in any artifact; the marker list carries branded terms only and never the bare calculator id, which is not a trademark and must stay usable
   - Observable: reader unit tests show a missing required key and a wrongly-typed value each raise, an unknown key is tolerated, and a permission recorded as granted with empty evidence is itself treated as a violation
   - _Requirements: 1.5, 1.6, 5.4, 6.3, 10.3_
@@ -121,12 +133,13 @@
   - _Depends: 2.1, 2.3, 3.1_
 
 - [ ] 4. Agent skill packaging
-- [ ] 4.1 Add the skill locator and the read-only skill command
+- [x] 4.1 Add the skill locator and the read-only skill command — **landed by build-training-block** *(Amendment 1, 2026-09-16)*
   - A leaf holding the skill's canonical name and resolving the packaged skill directory through the same resource mechanism the bundled tables already use, so it works from a wheel install, a source checkout, and an isolated tool environment alike; an absent skill resolves to an absent value rather than raising
   - A command that prints the packaged skill directory's absolute path plus a one-line copy recipe and exits successfully; it resolves no data root, loads no profile, builds no tile store, runs no engine, and writes nothing — the tool never installs into a location it does not own
   - An absent skill in an installed distribution is reported through the existing configuration-error path, because it means the install is incomplete rather than that the user erred
   - The command list and exit-code contract in the module docstring are amended; the exit-code contract itself is unchanged. The docstring also records the project-wide data-root posture rule in code — commands that describe the installed tool need no data root, commands that describe or change a tree require one — and this command is an instance of the first half, consistent with the plugin listing and deliberately unlike the contract check
   - Observable: with the skill directory scaffolded (its content is task 4.2's), the command prints an existing directory whose final path component equals the canonical skill name and exits successfully; with the directory absent, it exits with the configuration-error status and an instructive message
+  - *(Amendment 1, 2026-09-16)* `build-training-block` landed this task's locator (as `agentskill.PACKAGED_SKILLS`, `skill_root(name)`, `skill_file(name)`, `skill_files(name)`) and command (`fitdocs skill [NAME]`) by name rather than by the single-skill shape above; its one residual for this spec — appending `INBOX_SKILL_NAME` (`"fitdocs-workouts"`) to `PACKAGED_SKILLS` — is folded into task 4.2, which creates the directory in the same change
   - _Requirements: 8.1, 8.6_
   - _Boundary: AgentSkillLocator, CliApp_
 
@@ -136,10 +149,10 @@
   - Any documentation the skill points at is referenced by its published project URL, never by a repository-relative path — the skill ships inside the wheel and is copied into an agent's tree, where no repository exists
   - An ownership section that states the boundary and then defers: it names the in-tree ownership declaration as the authority and the published contract as the detail, and enumerates no owned paths, region identifiers, or managed frontmatter keys, so the skill cannot drift when those enumerations change
   - Plain markdown with no client-specific syntax and no pre-approved-tools declaration, so a human or a non-supporting agent environment can follow it directly and an agent environment applies its own permission model unchanged
-  - Packaging lands with the content: the skill directory is confirmed to ship as package data in the wheel, and its file is added to the artifact policy's unconditionally-required member set — until both hold, the skill never reaches an installed tool
-  - Observable: a conformance test parses the frontmatter against the field constraints, asserts the name matches both the directory and the constant and the recorded version matches the manifest, extracts every command and option the body names and asserts each exists in the registered command surface, and compares the set of reported channel names the body documents against the union of the drain report's own channel fields and the nested sync report's channel fields (eight in total — the drain report carries the deferred, quarantined, moved, and move-failure channels, while written, skipped, failures, and warnings live on the nested sync report) — removing a command from the application, or adding, renaming, or dropping a channel, makes the test fail, which binding commands alone would not catch
+  - *(Amendment 1, 2026-09-16)* This task also appends `INBOX_SKILL_NAME` (`"fitdocs-workouts"`) to `PACKAGED_SKILLS` and creates its directory in the same change (folded in from task 4.1's residual): the both-ways pin (`skills/` subdirectories equal the registered names) and the registry-parametrized conformance test red on a name registered without its directory and on a directory without its name, so the two cannot be separate tasks in either order
+  - Packaging lands with the content: the skill directory is confirmed to ship as package data in the wheel, and its file is added to the artifact policy's unconditionally-required member set — until both hold, the skill never reaches an installed tool *(Amendment 1: this bullet becomes adding the inbox skill's file to the policy's required set; the wheel-member test already covers a registered skill via build-training-block's own)*
+  - Observable: a conformance test extends `tests/test_agent_skill.py`'s per-skill map with this skill's heading tuple and its eight-channel binding — the frame is not re-written — asserting the name matches both the directory and `INBOX_SKILL_NAME` and the recorded version matches the manifest, extracting every command and option the body names and asserting each exists in the registered command surface, and comparing the set of reported channel names the body documents against the union of the drain report's own channel fields and the nested sync report's channel fields (eight in total — the drain report carries the deferred, quarantined, moved, and move-failure channels, while written, skipped, failures, and warnings live on the nested sync report) — removing a command from the application, or adding, renaming, or dropping a channel, makes the test fail, which binding commands alone would not catch
   - _Requirements: 1.9, 8.1, 8.2, 8.3, 8.4, 8.5, 8.8_
-  - _Depends: 4.1_
 
 - [ ] 5. Policy and user documentation
 - [ ] 5.1 (P) Publish the compatibility policy

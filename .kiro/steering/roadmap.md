@@ -1353,12 +1353,11 @@ model, needs none of it).
   that owns them; the contract version advanced. Landed by `training-blocks`
   as Amendment 3, the way Amendments 1 and 2 were landed by `effort-tags` and
   `load-history`. Dependencies: none
-- [ ] distribution — `AgentSkillLocator` and the `skill` command by name
+- [x] distribution — `AgentSkillLocator` and the `skill` command by name
   (`fitdocs skill <name>`, listing the packaged skills with no argument),
   the artifact policy's required members holding every packaged skill file,
   and task 4.2's conformance test generalized over the packaged set. Landed
-  by `build-training-block` if distribution major 4 has not shipped first;
-  otherwise consumed. Dependencies: none
+  by `build-training-block`. Dependencies: none
 - [x] workout-docs — no change: no back-link key is written (plan-resolution
   design § Decisions recorded for the roadmap). Dependencies: plan-resolution
 
