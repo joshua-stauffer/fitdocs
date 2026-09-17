@@ -183,6 +183,8 @@ _LOAD_MODULE_ALLOWLIST = frozenset(
         "fitdocs/load/channels/sufficiency.py",
         "fitdocs/load/channels/types.py",
         "fitdocs/load/channels/weighting.py",
+        "fitdocs/load/qa/__init__.py",
+        "fitdocs/load/qa/types.py",
     }
 )
 

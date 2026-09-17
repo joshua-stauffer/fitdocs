@@ -130,7 +130,7 @@ does not add, reference or read a real file.
 
 - [ ] 1. Foundation: the flag vocabulary, its provenance, and its configuration
 
-- [ ] 1.1 Create the flag vocabulary, its emission order and its tunable defaults
+- [x] 1.1 Create the flag vocabulary, its emission order and its tunable defaults
   - Add a leaf module holding the four check identifiers — cadence lock, channel
     divergence, aerobic drift, benchmark staleness — their display labels, and
     the fixed order in which they are always emitted
@@ -501,3 +501,34 @@ does not add, reference or read a real file.
     value
   - _Requirements: 1.9, 8.4, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9_
   - _Depends: 3.2_
+
+## Implementation Notes
+
+- **1.1**: `tests/load/test_packaging.py`'s `_LOAD_MODULE_ALLOWLIST` wheel-contents
+  guard required a two-line addition for `fitdocs/load/qa/__init__.py` and
+  `fitdocs/load/qa/types.py` — any later task adding a new module file under
+  `load/qa/` (2.1–2.5, 3.1) owes the same allowlist line or the packaging test
+  reds.
+- **1.1 → 1.2**: a provenance-docstring test helper matching `rf"{name}[^\"]*\"\"\"(.*?)\"\"\""`
+  slides forward into the *next* constant's docstring when the named constant's
+  own docstring is empty or absent — harmless today only because the expected
+  substrings still differ downstream. Task 1.2's own provenance assertions in
+  `qa/sources.py`/`test_sources.py` will likely need the same regex shape;
+  anchor it so a missing docstring is its own failure, not a false match on a
+  neighbor's.
+- **1.1 → 1.2**: a provenance docstring's opening marker (`Measured:` /
+  `fitdocs' own choice` / `PROVISIONAL --` / `<Publisher>-published:`) is now
+  asserted as a closed, mutually exclusive set, but free prose *inside* the
+  body is not policed beyond the `"Measured:"` token search — a fabricated
+  measurement claim phrased without that literal marker (e.g. "the corpus
+  showed 0.20 at the 95th percentile") can sit undetected in a PROVISIONAL
+  docstring's body. Worth a sentence of awareness when 1.2 writes the
+  authoritative `PROVISIONAL_DEFAULTS` record for the divergence tolerance.
+- **1.1 → 1.3**: `src/fitdocs/load/settings.py:46` states `load/qa/types.py`
+  "does not exist yet in this checkout" — now false. Task 1.3 touches this
+  file directly (extends `load_load_settings`); fix the stale comment there
+  rather than filing it separately.
+- **1.1 → 3.3**: `tests/test_public_api.py:713-716`'s docstring states the
+  quality-assurance sub-package "does not exist in this checkout" — now stale
+  (the discovery logic itself already covers `fitdocs.load.qa` correctly).
+  Task 3.3 owns and modifies this test module; fix the stale docstring there.
