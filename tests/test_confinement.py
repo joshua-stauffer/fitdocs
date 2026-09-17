@@ -51,7 +51,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import timedelta, timezone
+from datetime import date, timedelta, timezone
 from pathlib import Path
 from typing import Final
 
@@ -77,6 +77,7 @@ from fitdocs.load.engine import apply_load
 from fitdocs.load.types import InteractionSession
 from fitdocs.performance import derive_benchmarks
 from fitdocs.plans import run_plan
+from fitdocs.plans.reconcile import run_reconcile
 from fitdocs.quarantine import load_quarantine
 from fitdocs.settings import load_settings_document
 from fitdocs.sync import drain, regen, sync
@@ -666,6 +667,116 @@ def _wrote_a_block_page(touched: Sequence[str]) -> bool:
     return f"data/{BLOCKS_DIR}/{block_id}.md" in touched
 
 
+# --- the reconcile entry point (plan-resolution task 3.3; Req 4.6, 8.8) -----
+
+#: The reconcile entry point's own small, valid plan source -- one ``Run``
+#: row dated ``_RECONCILE_ROW_DATE``, deliberately simpler than
+#: :data:`_PLAN_SOURCE_TEXT` (no amendment, no override: this entry point's
+#: whole point is a resolved match, not the plan pass's own write shape,
+#: which :func:`_wrote_a_block_page`'s sibling test already covers).
+_RECONCILE_ROW_DATE: Final[date] = date(2026, 3, 2)
+_RECONCILE_BLOCK_SOURCE_TEXT: Final[str] = (
+    'title = "Reconcile Confinement Fixture Block"\n'
+    "starts = 2026-03-02\n"
+    "ends = 2026-03-08\n"
+    'goal = "A minimal valid plan source for the reconcile confinement guard."\n'
+    "mesocycle_days = 7\n"
+    "\n"
+    "[[workout]]\n"
+    'id = "w1-mon"\n'
+    "date = 2026-03-02\n"
+    'sport = "Run"\n'
+    'title = "Easy run"\n'
+    'summary = "Zone 2"\n'
+    'prescription = "30 minutes easy."\n'
+)
+
+#: The plan source's own report-relative filename -- also the resolved
+#: block id (:data:`_wrote_a_reconciled_block`'s own use).
+_RECONCILE_BLOCK_SOURCE_NAME: Final[str] = "reconcile-confinement-fixture.toml"
+
+#: One synthetic *generated* workout page, dated the same day as the plan
+#: row above, sport ``Run``, with a load -- a real match candidate
+#: (``fitdocs.plans.matching.is_candidate``: equal dates, equal sports) so
+#: the measured run's resolver actually matches this row rather than
+#: leaving it ``not logged`` (which would make the guard's stronger
+#: non-vacuity predicate, :func:`_wrote_a_reconciled_block`, vacuously
+#: false over a run that wrote a block page with no real reconciliation in
+#: it). The same minimal frontmatter shape :func:`_stage_history_pages`
+#: restates for its own entry point, restated here rather than imported for
+#: the same reason that function's own docstring gives.
+_RECONCILE_WORKOUT_STEM: Final[str] = "reconcile-confinement-workout"
+
+
+def _stage_plan_and_logged_page(data_root: Path, source_dir: Path) -> None:
+    """Stage one valid plan source under the default plan directory and one
+    matching, already-generated workout page under ``workouts/`` (Req 4.6,
+    8.8) -- the state the ``reconcile`` entry point's measured run
+    resolves. ``source_dir`` is unused, mirroring :func:`_stage_plan_source`
+    and :func:`_stage_history_pages`: the reconciling pass reads only the
+    data root's plan directory and its already-generated workout pages,
+    never a sibling ``.fit`` source directory.
+    """
+    plans_dir = data_root / DEFAULT_PLANS_DIR
+    plans_dir.mkdir(parents=True, exist_ok=True)
+    (plans_dir / _RECONCILE_BLOCK_SOURCE_NAME).write_text(
+        _RECONCILE_BLOCK_SOURCE_TEXT, encoding="utf-8"
+    )
+
+    workouts_dir = data_root / WORKOUTS_DIR
+    workouts_dir.mkdir(parents=True, exist_ok=True)
+    (workouts_dir / f"{_RECONCILE_WORKOUT_STEM}.md").write_text(
+        "\n".join(
+            [
+                "---",
+                "title: Reconcile Confinement Fixture",
+                "type: workout",
+                f'date: "{_RECONCILE_ROW_DATE.isoformat()}"',
+                "sport: Run",
+                "load_value: 100",
+                "load_methodology: threshold",
+                "---",
+                "",
+                "# Reconcile Confinement Fixture",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
+def _run_reconcile(data_root: Path, source_dir: Path) -> None:
+    """The ``reconcile`` entry point, driven directly through
+    :func:`fitdocs.plans.reconcile.run_reconcile` -- the guard's
+    ``(data_root, source_dir)`` signature is wider than this pass needs
+    (mirrors :func:`_run_plan`, :func:`_run_history`); ``source_dir`` is
+    ignored. ``today`` is fixed a week after the staged row's own date, well
+    clear of it either way this entry point's resolver reads it, so the row
+    resolves the same regardless of exactly how ``today`` participates in
+    matching."""
+    run_reconcile(data_root, today=_RECONCILE_ROW_DATE + timedelta(days=7))
+
+
+def _wrote_a_reconciled_block(touched: Sequence[str]) -> bool:
+    """The ``reconcile`` entry point's own non-vacuity check (Req 4.6,
+    8.8), deliberately **stronger** than :func:`_wrote_a_block_page`: both
+    the block page *and* the row's own planned page must be in ``touched``
+    (``layout.planned_doc_path``, ``blocks/<block_id>/<row_id>.md``) --
+    `run_plan` writes a planned page for *every* current row regardless of
+    what the resolver returns (wave 1's own write shape), so
+    :func:`_wrote_a_block_page`'s single-page check cannot tell a run whose
+    resolver actually reconciled the row from one that returned
+    ``fitdocs.plans.resolution.unresolved()`` for it; requiring both pages
+    does not discriminate that either, but the sibling behavioural test
+    below (:func:`test_reconcile_entry_point_writes_a_resolved_match`)
+    reads the block page's own cell text to close that last gap."""
+    block_id = Path(_RECONCILE_BLOCK_SOURCE_NAME).stem
+    row_id = "w1-mon"
+    block_page = f"data/{BLOCKS_DIR}/{block_id}.md" in touched
+    planned_page = f"data/{BLOCKS_DIR}/{block_id}/{row_id}.md" in touched
+    return block_page and planned_page
+
+
 def _wrote_the_history_document(touched: Sequence[str]) -> bool:
     """The ``history`` entry point's own non-vacuity check (load-history
     spec, task 5.4): its measured run wrote the one history document it
@@ -738,6 +849,17 @@ WRITING_ENTRY_POINTS: Final[tuple[EntryPoint, ...]] = (
         prepare=_stage_plan_source,
         run=_run_plan,
         non_vacuous=_wrote_a_block_page,
+    ),
+    # plan-resolution task 3.3: the reconciling pass, registered against the
+    # engine function directly (`fitdocs.plans.reconcile.run_reconcile`) --
+    # no CLI wiring is a dependency of this task (that is task 3.2's own,
+    # parallel task). No SETTINGS_LOCATION_KEYS entry: like `plan`, this
+    # pass writes only into `blocks/` (already in OWNED_PATHS).
+    EntryPoint(
+        id="reconcile",
+        prepare=_stage_plan_and_logged_page,
+        run=_run_reconcile,
+        non_vacuous=_wrote_a_reconciled_block,
     ),
 )
 
@@ -837,6 +959,64 @@ def test_plan_is_a_registered_writing_entry_point() -> None:
     assert entry.prepare is _stage_plan_source
     assert entry.run is _run_plan
     assert entry.non_vacuous is _wrote_a_block_page
+
+
+def test_reconcile_is_a_registered_writing_entry_point() -> None:
+    """``reconcile`` must be registered in :data:`WRITING_ENTRY_POINTS`
+    (plan-resolution task 3.3; Req 4.6, 8.8), the same discipline
+    :func:`test_plan_is_a_registered_writing_entry_point` states for its
+    own entry point -- including the identity check against the registered
+    callables themselves, not only the id, for the same reason that test's
+    own docstring gives."""
+    registered = {entry_point.id: entry_point for entry_point in WRITING_ENTRY_POINTS}
+    assert "reconcile" in registered
+    entry = registered["reconcile"]
+    assert entry.prepare is _stage_plan_and_logged_page
+    assert entry.run is _run_reconcile
+    assert entry.non_vacuous is _wrote_a_reconciled_block
+
+
+def test_reconcile_non_vacuous_predicate_discriminates_the_plan_entrys_own() -> None:
+    """Named mutation guard: swapping :data:`_wrote_a_reconciled_block` for
+    :func:`_wrote_a_block_page` (the ``plan`` entry's own predicate) on the
+    ``reconcile`` registration must be caught.
+
+    :func:`_wrote_a_reconciled_block`'s own pin (using the reconcile
+    fixture's real block id and row id, :data:`_RECONCILE_BLOCK_SOURCE_NAME`
+    and ``"w1-mon"``): the block page alone in ``touched`` is ``False``; the
+    block page *and* its row's planned page is ``True`` -- proving the
+    stronger predicate actually requires both writes, not merely the one
+    ``plan``'s own predicate checks.
+
+    :func:`_wrote_a_block_page`'s own shape, over its own fixture's block
+    id (:data:`_PLAN_SOURCE_NAME`) -- the plan entry's predicate never
+    inspects any planned-page path at all, so it answers ``True`` whether
+    or not one is present in ``touched``: this is the design's own named
+    point, that a run whose resolver returns
+    ``fitdocs.plans.resolution.unresolved()`` for every row would still
+    pass ``plan``'s own predicate (wave 1 writes a planned page for every
+    current row regardless of what the resolver returns), which is exactly
+    why this task registers the stronger, row-aware predicate instead of
+    reusing that one for ``reconcile``.
+    """
+    reconcile_block_id = Path(_RECONCILE_BLOCK_SOURCE_NAME).stem
+    reconcile_row_id = "w1-mon"
+    block_only = (f"data/{BLOCKS_DIR}/{reconcile_block_id}.md",)
+    block_and_planned = (
+        f"data/{BLOCKS_DIR}/{reconcile_block_id}.md",
+        f"data/{BLOCKS_DIR}/{reconcile_block_id}/{reconcile_row_id}.md",
+    )
+    assert _wrote_a_reconciled_block(block_only) is False
+    assert _wrote_a_reconciled_block(block_and_planned) is True
+
+    plan_block_id = Path(_PLAN_SOURCE_NAME).stem
+    plan_block_only = (f"data/{BLOCKS_DIR}/{plan_block_id}.md",)
+    plan_block_and_a_planned_page = (
+        f"data/{BLOCKS_DIR}/{plan_block_id}.md",
+        f"data/{BLOCKS_DIR}/{plan_block_id}/some-row.md",
+    )
+    assert _wrote_a_block_page(plan_block_only) is True
+    assert _wrote_a_block_page(plan_block_and_a_planned_page) is True
 
 
 def test_guard_catches_a_stray_create_modify_and_delete(tmp_path: Path) -> None:
@@ -1117,3 +1297,130 @@ def test_plan_entry_point_touches_only_the_plan_directory_and_writes_no_other_do
     # something (a block page), so the negative assertions above are not
     # vacuously true over a run that did nothing at all.
     assert _wrote_a_block_page(touched)
+
+
+def test_reconcile_entry_point_writes_a_resolved_match(tmp_path: Path) -> None:
+    """Sibling behavioural test (plan-resolution task 3.3; Req 4.6, 8.8):
+    the block page the guarded ``reconcile`` run wrote actually carries a
+    resolved match, not merely a block page written by wave 1's own
+    unconditional render step regardless of what the resolver returned --
+    the gap :func:`_wrote_a_reconciled_block`'s own docstring names as the
+    one its stronger, two-page predicate still cannot close by itself.
+    """
+    sandbox = tmp_path
+    data_root = sandbox / "data"
+    data_root.mkdir()
+    source_dir = sandbox / "src"
+    _stage_plan_and_logged_page(data_root, source_dir)
+
+    _run_reconcile(data_root, source_dir)
+
+    block_id = Path(_RECONCILE_BLOCK_SOURCE_NAME).stem
+    block_page_path = data_root / BLOCKS_DIR / f"{block_id}.md"
+    assert block_page_path.exists(), "the reconcile run wrote no block page at all"
+    block_page_text = block_page_path.read_text(encoding="utf-8")
+    assert "matched:" in block_page_text, (
+        "the block page carries no 'matched:' cell -- the resolver did not "
+        f"run, or did not resolve a match:\n{block_page_text}"
+    )
+
+
+def test_reconcile_touches_only_the_plan_directory_and_writes_no_other_document(
+    tmp_path: Path,
+) -> None:
+    """The ``reconcile`` entry point's own, narrower negative claim (Req
+    4.6, 8.8), stated precisely rather than broadly -- the same discipline
+    :func:`test_plan_entry_point_touches_only_the_plan_directory_and_writes_no_other_document`
+    states for ``plan``, phrased in that test's own words (design.md,
+    "ConfinementRegistration"): the staged plan source's bytes are
+    byte-for-byte unchanged, and **nothing** under the plan-source
+    directory was created, modified or deleted; the staged, already-
+    generated workout page's bytes are unchanged, and no other workout
+    document under ``workouts/`` was created, modified or deleted (the
+    declaration file there, ``workouts/AGENTS.md``, excluded -- the
+    measured ``run_plan`` beneath this pass refreshes every declared
+    directory's declaration, exactly as ``plan``'s own test excludes it);
+    no history page; neither the athlete profile nor the settings file.
+
+    Deliberately **excluded** from this claim, mirroring ``plan``'s own
+    test: the other two in-tree ownership declarations
+    (``history/AGENTS.md``, ``fit-archive/AGENTS.md``) that
+    ``ensure_declarations`` may legitimately create or rewrite, and
+    ``blocks/AGENTS.md`` itself, which lies inside this pass's own owned
+    prefix.
+
+    Mutation caught (measured): a stand-in run that writes a marker file
+    under ``workouts/`` (e.g. ``workouts/.reconcile``) fails this test's own
+    ``no_workout_write`` assertion -- deliberately not narrowed to ``.md``
+    documents the way
+    :func:`test_plan_entry_point_touches_only_the_plan_directory_and_writes_no_other_document`'s
+    own ``no_workout_document`` is, precisely so a non-document marker like
+    this one is still caught.
+    """
+    sandbox = tmp_path
+    data_root = sandbox / "data"
+    data_root.mkdir()
+    source_dir = sandbox / "src"
+    _stage_plan_and_logged_page(data_root, source_dir)
+    plan_source_path = data_root / DEFAULT_PLANS_DIR / _RECONCILE_BLOCK_SOURCE_NAME
+    source_bytes_before = plan_source_path.read_bytes()
+    workout_page_path = data_root / WORKOUTS_DIR / f"{_RECONCILE_WORKOUT_STEM}.md"
+    workout_bytes_before = workout_page_path.read_bytes()
+
+    before = _snapshot(sandbox)
+    _run_reconcile(data_root, source_dir)
+    after = _snapshot(sandbox)
+
+    touched = _touched(before, after)
+
+    no_plan_source_writes = [
+        key for key in touched if key.startswith(f"data/{DEFAULT_PLANS_DIR}/")
+    ]
+    # Deliberately not narrowed to `.md` (unlike the `plan` entry's own
+    # analogous filter): this task's own named mutation is a `.reconcile`
+    # marker file dropped under `workouts/`, which is not a workout
+    # *document* in the ".md" sense but is exactly the kind of stray write
+    # under this owned-but-foreign-to-this-pass prefix the negative half
+    # forbids -- so the filter here is "anything under `workouts/` but the
+    # declaration file", catching a non-document write a `.md`-only filter
+    # would miss.
+    no_workout_write = [
+        key
+        for key in touched
+        if key.startswith(f"data/{WORKOUTS_DIR}/")
+        and not key.endswith(f"/{DECLARATION_FILENAME}")
+    ]
+    no_history_document = [
+        key
+        for key in touched
+        if key.startswith(f"data/{HISTORY_DIR}/")
+        and key.endswith(".md")
+        and not key.endswith(f"/{DECLARATION_FILENAME}")
+    ]
+
+    assert no_plan_source_writes == [], (
+        f"reconcile run wrote under the plan-source directory: {no_plan_source_writes}"
+    )
+    assert plan_source_path.read_bytes() == source_bytes_before, (
+        "reconcile run modified the staged plan source's bytes"
+    )
+    assert workout_page_path.read_bytes() == workout_bytes_before, (
+        "reconcile run modified the staged workout page's bytes"
+    )
+    assert no_workout_write == [], (
+        f"reconcile run wrote under the workouts directory: {no_workout_write}"
+    )
+    assert no_history_document == [], (
+        f"reconcile run wrote a history document: {no_history_document}"
+    )
+    assert f"data/{ATHLETE_FILE}" not in touched, (
+        "reconcile run wrote the athlete profile"
+    )
+    assert f"data/{SETTINGS_FILE}" not in touched, (
+        "reconcile run wrote the settings file"
+    )
+
+    # Non-vacuity for this test's own precondition: the run actually wrote
+    # both pages, so the negative assertions above are not vacuously true
+    # over a run that did nothing at all.
+    assert _wrote_a_reconciled_block(touched)

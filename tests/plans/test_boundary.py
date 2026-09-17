@@ -539,6 +539,183 @@ class TestForbiddenNames:
         )
         assert not offenders, offenders
 
+    def test_a_synthetic_history_submodule_import_is_caught_despite_the_exemption_map(
+        self, tmp_path: Path
+    ) -> None:
+        """Positive control (task 3.3 residual, design.md "PackageBoundary
+        and SurfacePins"): a synthetic ``from fitdocs.history.documents
+        import scan_documents`` is caught even from ``fitdocs.plans.reconcile``
+        -- one of the three modules :data:`_FORBIDDEN_EXEMPTIONS` names --
+        because the map admits only the exact root ``"fitdocs.history"``,
+        never a real submodule target
+        (:func:`_is_exempt`'s own docstring). Proves the exemption is as
+        narrow as it claims: an exempt module gets no free pass for a
+        *different*, non-root target under the same forbidden prefix.
+        """
+        synthetic = tmp_path / "synthetic_history_submodule_import.py"
+        synthetic.write_text(
+            "from fitdocs.history.documents import scan_documents\n",
+            encoding="utf-8",
+        )
+        enclosing = _enclosing_package("fitdocs.plans.reconcile")
+        targets = _forbidden_scan_targets_for_path(synthetic, enclosing)
+        offenders = [
+            target
+            for target in targets
+            if _matches_forbidden(target) is not None
+            and not _is_exempt("fitdocs.plans.reconcile", target)
+        ]
+        assert offenders != [], (
+            "a synthetic fitdocs.history.documents import from the exempt "
+            "'fitdocs.plans.reconcile' module was not caught"
+        )
+
+    def test_a_synthetic_whole_module_history_import_from_a_non_exempt_module_is_caught(
+        self, tmp_path: Path
+    ) -> None:
+        """Positive control (task 3.3 residual, per the 2.3 Implementation
+        Note: "the map's positive control ... must also cover a non-exempt
+        module's `import fitdocs.history` (a module-agnostic `_is_exempt`
+        survives otherwise)"). A synthetic ``import fitdocs.history`` --
+        exactly the admitted root, the spelling the map genuinely exempts
+        for `aggregate`/`placement`/`reconcile` -- must still be caught when
+        the importing module is NOT one of those three (`fitdocs.plans.corpus`
+        here), proving `_is_exempt` checks the importing module's own name,
+        not merely the target."""
+        synthetic = tmp_path / "synthetic_whole_module_history_import.py"
+        synthetic.write_text("import fitdocs.history\n", encoding="utf-8")
+        assert "fitdocs.plans.corpus" not in _FORBIDDEN_EXEMPTIONS
+        enclosing = _enclosing_package("fitdocs.plans.corpus")
+        targets = _forbidden_scan_targets_for_path(synthetic, enclosing)
+        offenders = [
+            target
+            for target in targets
+            if _matches_forbidden(target) is not None
+            and not _is_exempt("fitdocs.plans.corpus", target)
+        ]
+        assert offenders != [], (
+            "a synthetic 'import fitdocs.history' from the non-exempt "
+            "'fitdocs.plans.corpus' module was not caught"
+        )
+
+    def test_the_same_synthetic_whole_module_import_is_accepted_from_an_exempt_module(
+        self, tmp_path: Path
+    ) -> None:
+        """Negative control beside the two positive controls above: the
+        very same synthetic ``import fitdocs.history`` the previous test
+        proves is caught for a non-exempt module must be accepted -- not
+        flagged at all -- for one of the three modules
+        :data:`_FORBIDDEN_EXEMPTIONS` actually names
+        (`fitdocs.plans.reconcile`). Without this, the two positive
+        controls alone would not distinguish a scanner that flags every
+        ``fitdocs.history`` import unconditionally (which would also catch
+        this legitimate case, wrongly) from the real, module-aware
+        `_is_exempt`."""
+        synthetic = tmp_path / "synthetic_whole_module_history_import.py"
+        synthetic.write_text("import fitdocs.history\n", encoding="utf-8")
+        assert "fitdocs.plans.reconcile" in _FORBIDDEN_EXEMPTIONS
+        enclosing = _enclosing_package("fitdocs.plans.reconcile")
+        targets = _forbidden_scan_targets_for_path(synthetic, enclosing)
+        offenders = [
+            target
+            for target in targets
+            if _matches_forbidden(target) is not None
+            and not _is_exempt("fitdocs.plans.reconcile", target)
+        ]
+        assert offenders == [], (
+            f"a legitimate 'import fitdocs.history' from the exempt "
+            f"'fitdocs.plans.reconcile' module was wrongly flagged: {offenders}"
+        )
+
+
+# --------------------------------------------------------------------------- #
+# Layer 2b: the threshold-calculator package's import closure (preserved-only;
+# `tests/load/threshold/test_boundary.py` is unchanged -- this is the one-line
+# assertion design.md "PackageBoundary and SurfacePins" names)
+# --------------------------------------------------------------------------- #
+
+
+def _threshold_module_names() -> frozenset[str]:
+    """Every module under the ``fitdocs.load.threshold`` production
+    package, enumerated from the package directory itself -- mirroring
+    :func:`_plans_module_names_on_disk` above, never importing
+    ``tests/load/threshold/test_boundary.py`` (that module stays
+    preserved-only, per this class's own docstring; importing it here would
+    also pull an unrelated test module into this file's own import graph
+    for no reason)."""
+    import fitdocs.load.threshold as threshold_package
+
+    path = threshold_package.__file__
+    assert path is not None, "fitdocs.load.threshold has no __file__"
+    root = Path(path).parent
+    names: set[str] = set()
+    for module_path in sorted(root.rglob("*.py")):
+        rel = module_path.relative_to(root)
+        if rel.name == "__init__.py":
+            parts = rel.parts[:-1]
+            dotted = "fitdocs.load.threshold" + ("." + ".".join(parts) if parts else "")
+        else:
+            parts = rel.with_suffix("").parts
+            dotted = "fitdocs.load.threshold." + ".".join(parts)
+        names.add(dotted)
+    return frozenset(names)
+
+
+def _threshold_import_closure() -> frozenset[str]:
+    """Every ``fitdocs.*`` dotted target reachable, transitively, by walking
+    the AST imports of every module under the ``fitdocs.load.threshold``
+    package (:func:`_threshold_module_names`) -- proving `fitdocs.plans` is
+    absent not merely from those modules' own direct imports but from
+    whatever *they* import as well, one level at a time until nothing new
+    is reached. Independent of `_module_path`/`_module_ast` above, which
+    resolve only files under `src/fitdocs/plans/`; this walk uses
+    `importlib.util.find_spec` so it can resolve a target anywhere under
+    `fitdocs`."""
+    seen: set[str] = set()
+    stack: list[str] = list(_threshold_module_names())
+    while stack:
+        name = stack.pop()
+        if name in seen or not name.startswith("fitdocs"):
+            continue
+        seen.add(name)
+        spec = importlib.util.find_spec(name)
+        if spec is None or spec.origin is None or not spec.origin.endswith(".py"):
+            continue
+        path = Path(spec.origin)
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        enclosing = name if path.name == "__init__.py" else name.rsplit(".", 1)[0]
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    stack.append(alias.name)
+            elif isinstance(node, ast.ImportFrom):
+                resolved = _resolve_import_from(node, enclosing)
+                if resolved is None:
+                    continue
+                if resolved == "fitdocs":
+                    for alias in node.names:
+                        stack.append(f"fitdocs.{alias.name}")
+                else:
+                    stack.append(resolved)
+    return frozenset(seen)
+
+
+class TestThresholdImportClosureExcludesPlans:
+    def test_fitdocs_plans_is_absent_from_the_threshold_import_closure(self) -> None:
+        """`tests/load/threshold/test_boundary.py` stays **preserved-only**
+        (design.md "PackageBoundary and SurfacePins"): the reconciler
+        imports nothing the threshold allowlist names, and this contract
+        adds no import of its own. Stated here, once, as the one-line
+        closure assertion the design names, rather than editing that
+        module's own boundary test."""
+        closure = _threshold_import_closure()
+        assert closure, "the closure walk reached no modules -- wrong seed set"
+        assert "fitdocs.plans" not in closure
+        plans_descendants = {
+            target for target in closure if target.startswith("fitdocs.plans.")
+        }
+        assert plans_descendants == set()
+
 
 # --------------------------------------------------------------------------- #
 # Layer 3: clock scan -- raw-text substring, code or docstring alike
@@ -2612,7 +2789,15 @@ def _contract_from_import_names(module_name: str) -> frozenset[str]:
 
 
 class TestContractImporters:
-    def test_exactly_page_and_engine_import_fitdocs_contract(self) -> None:
+    def test_exactly_the_registered_contract_importers_import_fitdocs_contract(
+        self,
+    ) -> None:
+        """Renamed (plan-resolution task 3.3 residual) from
+        ``test_exactly_page_and_engine_import_fitdocs_contract``: that name
+        pinned only the original two importers, but 2.1's `corpus` entry
+        widened `_CONTRACT_FROM_IMPORT_NAMES` (and therefore the set this
+        test checks) to three -- the old name no longer described what the
+        body asserts. The assertion itself is unchanged."""
         importers = {
             module_name
             for module_name in PLANS_MODULE_NAMES

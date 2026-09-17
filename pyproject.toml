@@ -93,6 +93,18 @@ files = [
     "tests/plans/test_source.py",
     "tests/plans/test_resolution.py",
     "tests/plans/test_boundary.py",
+    # plan-resolution task 3.3: design.md "PackageBoundary and SurfacePins"
+    # names only four (test_corpus.py, test_matching.py, test_aggregate.py,
+    # test_reconcile.py) -- but the package has FIVE new modules (corpus,
+    # matching, aggregate, placement, reconcile), and a fifth typed test
+    # module, tests/plans/test_placement.py, already exists on disk. Listed
+    # here too (the design's own omission, not repeated) -- all five were
+    # confirmed mypy-clean before being added.
+    "tests/plans/test_corpus.py",
+    "tests/plans/test_matching.py",
+    "tests/plans/test_aggregate.py",
+    "tests/plans/test_placement.py",
+    "tests/plans/test_reconcile.py",
 ]
 
 [tool.pytest.ini_options]
