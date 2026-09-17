@@ -44,8 +44,10 @@ Organizing workouts into cycles/training blocks was deliberately deferred
 through the first releases; Phase 7 of the roadmap (2026-09-15) adds training
 blocks — a plan document rendered from an athlete-owned source and reconciled
 against logged workouts — as the `training-blocks` (shipped: the plan
-source, the two page types and `fitdocs plan`), `plan-resolution` and
-`build-training-block` specs; the latter two are not yet shipped.
+source, the two page types and `fitdocs plan`) and `plan-resolution`
+(shipped: the reconciling pass chained after `fitdocs sync`/`fitdocs regen`
+and run standalone through `fitdocs plan`) specs; only `build-training-block`
+is not yet shipped.
 
 ## Route maps
 

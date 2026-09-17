@@ -135,7 +135,7 @@ the coverage count -- are 2.2's and 2.3's and are listed by name there.
 page tree under `tests/plans/` or `tmp_path`; no `.fit` file is read by any
 task.
 
-- [ ] 1. Foundation: the contract readers, the history record protocol, the logged-page links
+- [x] 1. Foundation: the contract readers, the history record protocol, the logged-page links
 
 - [x] 1.1 Give the contract one reader per matched field and make its key spellings the only ones
   - Assert the contract version literal reads `"4"` (wave 1 advanced it);
@@ -254,7 +254,7 @@ task.
   - _Requirements: 7.5_
   - _Boundary: LoggedLinks_
 
-- [ ] 2. Core: the corpus, the match rules, the sums, the words
+- [x] 2. Core: the corpus, the match rules, the sums, the words
 
 - [x] 2.1 Scan the logged-workout corpus through the contract
   - Add the corpus module: a frozen logged-workout record (stem, data-root-
@@ -508,7 +508,7 @@ task.
   - _Requirements: 3.7, 4.3, 4.5, 5.3, 6.3, 6.4, 6.5, 6.6, 6.7, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7_
   - _Boundary: Placement_
 
-- [ ] 3. Integration: the pass, the CLI, the guards, the documents, and validation
+- [x] 3. Integration: the pass, the CLI, the guards, the documents, and validation
 
 - [x] 3.1 Run the reconciling pass through the plan pass's resolver hook
   - Add the pass module: the report (the plan report, the reconciliations
@@ -742,7 +742,7 @@ task.
   - _Requirements: 5.2, 8.1, 8.2, 8.8_
   - _Boundary: OwnershipDocs, TrainingBlocksSpecUpdate_
 
-- [ ] 3.5 End-to-end and feature-level validation
+- [x] 3.5 End-to-end and feature-level validation
   - Add the end-to-end test over a synthetic root with two plan sources and
     a synthetic corpus: sync from a fixture source, then assert the block
     pages carry the placed text, every planned page carries its section,
@@ -793,3 +793,4 @@ task.
 - **3.3** Approved in one round — the guard task whose tests were designed from the mutations up. The design's "four typed test modules" is five (`test_placement.py` is 2.4's, added after the design was written); all five are in `[tool.mypy].files`. The threshold-closure walk seeds from the production `fitdocs.load.threshold` directory, never from the sibling test module (pulling a test module into mypy's follow-imports scope surfaced five pre-existing errors outside the boundary). The exemption map's controls: a submodule import from an exempt module is caught; a whole-module `import fitdocs.history` from a NON-exempt module is caught; the same from an exempt module is accepted. The reconcile entry's negative-half `no_workout_write` filter is deliberately NOT `.md`-narrowed (the named marker mutation is a dotfile); the history clause still is (queued).
 - **3.2** BLOCKED in round 1 on a spec gap, resolved by controller ruling (recorded here; design amendment queued): design § Cross-spec obligations / TrainingBlocksSpecUpdate claim only two wave-1 tests move, but once the resolver is chained (Req 8.2) FOUR more wave-1 tests exit 1 under Req 8.7, because `tests/plans/fixtures/full.toml`'s `w1-mon` override names `run-2026-01-06-am`, a stem no wave-1 CLI corpus provides. Ruling: those tests (`tests/test_cli_plan.py::test_success_prints_every_outcome_line_and_the_counts`; `tests/test_plan_e2e.py::test_two_sources_render_every_owned_page_with_report_and_frontmatter`, `::test_two_plain_runs_are_byte_identical_and_report_unchanged`, `::test_two_fake_dates_and_timezones_are_byte_identical`) stage that page (`_stage_w1_mon_override_stem`) so the fixture is coherent under reconciliation; the fixture and every existing assertion are untouched. The 4.6 two-dates precondition was already present at training-blocks be6c936, so 3.2 edits nothing else there. Also `tests/load/test_settings.py::test_load_load_settings_is_called_the_documented_number_of_times_per_command` widened: `sync`/`regen` read `[load]` TWICE (load pass + the reconciling pass's `default_calculator` read); its docstring cites this note. Four review rounds after the ruling, all fixture-side: the quiet rule (8.5) and the exit fold (8.7) need a pin PER CALL SITE (drain, regen, plan standalone — a single explicit-source test leaves the other sites' mutations green); "print nothing" must stub `_run_plan_pass` itself, not `run_reconcile`; ordering clauses (8.1 pass-after-load, 8.6 reconcile-after-plan-line) need `output.index` assertions; `markup=False, highlight=False, soft_wrap=True` needs a `[bold]` fixture per printed line. `_today()` via `datetime.now(...)` is pinned only by 3.5's crossing-row e2e — 3.5's reviewer must run it.
 - **3.4** Two rounds, prose only. The athlete-facing README taught `[[overrides]]` (the parser accepts `[[override]]`) and inverted absorbed/ambiguous — a docs task's fixtures are the source files it describes: check every table name and rule against the parser and the matcher, not the design. The training-blocks record states what actually moved (the 4.3 AST pin; the two-dates precondition already at be6c936; four wave-1 tests — three further plus the two-dates pin itself — gained the staging line), dated 2026-09-17, the landing date. README :45-47 ("not yet shipped") is 3.5's to update.
+- **3.5** Three rounds. The task's single "sync + two sources + synthetic corpus" scenario had to split into a `plan` scenario (synthetic corpus) and a `sync` scenario (the fixture `.fit`): any hand-written `type: workout` page under `workouts/` makes the chained load pass fail that document (`no reserved 'load' region`; with a placeholder region, `no archived source`), so `sync` exits 1 over a synthetic corpus — queued as a training-load/wiki-contract question, since the corpus reads such pages by design. The crossing-row e2e is the repo's ONLY pin that `cli._today()` reads the clock the fake-date hook reaches (`date.today()`, not `datetime.now()`): keep it. "Every scenario hashes the source directory and every workout page" needs a bracket around EVERY run under test, including the setup sync (the reconciling pass runs on every chained call, quietly, even with no plan directory — an unconditional write leaks into the setup run); a names-only stray-file check cannot see an idempotent rewrite. The page-added pin needs two rows in two mesocycles with one already scored, or "exactly the row it matches and its mesocycle" is indistinguishable.
