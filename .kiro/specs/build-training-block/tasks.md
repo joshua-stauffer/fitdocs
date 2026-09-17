@@ -405,7 +405,7 @@ the skill *is* the feature, and distribution set the precedent (its tasks
   - _Requirements: 1.1, 1.9_
   - _Boundary: SkillWheelTest_
 
-- [ ] 3.2 (P) Say where to install a packaged skill, how to verify it is active, and how to update it on upgrade
+- [x] 3.2 (P) Say where to install a packaged skill, how to verify it is active, and how to update it on upgrade
   - README: a `## Agent skills` section after `## Plugins` -- fitdocs
     packages agent skills inside the wheel; `fitdocs skill` lists them and
     `fitdocs skill <name>` prints one's directory and a copy recipe; install
@@ -621,3 +621,11 @@ the skill *is* the feature, and distribution set the precedent (its tasks
   be opened. The design's "Regression section (:883)" label was wrong (that
   line is the Unit Tests version-resolution bullet) -- amended by content;
   queued.
+- 3.2 (round 3): a placement rule stated as "after X" needs an ADJACENCY pin
+  (the first `## ` heading after `## Plugins` is `## Agent skills`), not an
+  index ordering -- ordering survived the section being spliced anywhere later
+  in the file, and a comment claiming "anywhere else reds this" was false until
+  the pin matched it. Under `re.S`, capture the heading text with `[^\n]+`,
+  never `.+`. A README code span never wraps across a line (the file's
+  convention; two new ones did). "copied" does not contain "copy", so the
+  design's "the copied `SKILL.md`'s" wording keeps the Install pin honest.

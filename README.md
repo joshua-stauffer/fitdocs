@@ -166,6 +166,30 @@ compatibility policy, and diagnosis of every rejection reason — and
 [`docs/contributing-calculators.md`](docs/contributing-calculators.md) for how
 to write the calculator itself.
 
+## Agent skills
+
+fitdocs packages agent skills inside the wheel. Run `fitdocs skill` to list
+the packaged skills and their installed directories, and
+`fitdocs skill <name>` to print one skill's installed directory and a
+recipe for putting it where your agent can use it.
+
+**Install** a packaged skill by copying its directory into your agent's
+skills directory — the open SKILL.md standard fixes no location, so your
+agent's own documentation is where you find it.
+
+**Verify** a packaged skill is active by asking the agent to list its
+skills; the packaged skill appears under its frontmatter `name`.
+
+**Update** a packaged skill once you have upgraded fitdocs: run
+`fitdocs skill <name>` again and replace the old directory with the new
+one; the copied `SKILL.md`'s `metadata.version` says which fitdocs release
+it came from.
+
+`build-training-block` is the one packaged skill shipped today — it walks an
+agent through building a training block from the athlete's answers as a plan
+source, rendering it with `fitdocs plan`, amending it, and settling
+ambiguous matches.
+
 ## Inbox
 
 fitdocs defines a standing inbox: get `.fit` files there, however you like —

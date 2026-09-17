@@ -966,3 +966,77 @@ def test_no_shipped_doc_claims_fitdocs_ships_no_built_in_calculator() -> None:
         "fitdocs ships exactly one built-in, threshold, registered by "
         "fitdocs/load/__init__.py's own docstring (Req 1.1-1.3)."
     )
+
+
+# --- agent-skill packaging docs (build-training-block task 3.2, Req 5.4) ----
+
+
+def _agent_skills_section(readme_text: str) -> str:
+    """The text of README's ``## Agent skills`` section: everything between
+    that heading and the next ``## `` heading (or end of file).
+
+    Scoped deliberately, rather than searching the whole documentation
+    corpus, so that a ``copy``/``verify``/``upgrade`` mention living
+    elsewhere in the corpus (README's ``## Inbox`` section already contains
+    the word "copy", in "an archived copy") cannot pre-satisfy a pin that is
+    supposed to be about *this* section's install/verify/update prose.
+    """
+    match = re.search(r"^## Agent skills\n(.*?)(?=^## |\Z)", readme_text, re.S | re.M)
+    assert match is not None, (
+        "README has no '## Agent skills' section -- the scoped search below "
+        "is looking at the wrong place"
+    )
+    return match.group(1)
+
+
+def test_agent_skills_readme_section_documents_install_verify_and_update() -> None:
+    """Req 5.4: the shipped documentation states, for the packaged skills,
+    where to install a skill, how to verify it is active, and how to update
+    it on upgrade, without naming a skill that has not shipped
+    (``fitdocs-workouts``, the unshipped inbox skill's name -- distribution's
+    task 4.2 removes this negative clause once that skill ships).
+
+    Every positive pin below is scoped to the ``## Agent skills`` section via
+    :func:`_agent_skills_section`, found first and asserted non-empty, so an
+    install/verify/update word appearing in some *other* section of the
+    corpus cannot satisfy a pin about this one -- confirmed empirically: the
+    real README already contains the word "copy" once outside this section
+    (``## Inbox``'s "an archived copy"), and the pre-task README (no ``##
+    Agent skills`` heading at all) contained neither "verify" nor "upgrade"
+    anywhere, so the property this test pins did not hold before this task.
+    The negative pin, by contrast, is corpus-wide on purpose (design.md
+    SkillDocs): a future page could name the unshipped skill without ever
+    touching README's own text.
+    """
+    readme_text = (_REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    section = _agent_skills_section(readme_text)
+    assert section.strip(), "the Agent skills section is empty"
+
+    assert "fitdocs skill" in section
+    # Backticked form: distinguishes "the command `fitdocs skill`" from a
+    # near-miss like "fitdocs skills" (plural, no such command exists) --
+    # the bare substring above is satisfied by either.
+    assert "`fitdocs skill`" in section
+    assert "build-training-block" in section
+    assert "copy" in section.lower()
+    assert "verify" in section.lower()
+    assert "upgrade" in section.lower()
+
+    # README places this section immediately after `## Plugins`: relocating
+    # it anywhere else -- above `## Plugins`, or further down past `## Inbox`
+    # -- reds this while every pin above stays green (the section's own
+    # content is unchanged by relocation). A plain ordering check
+    # (`index("## Plugins") < index("## Agent skills")`) only pins "somewhere
+    # after", which stays green even when another `## ` section is spliced
+    # in between; the next-heading match below pins adjacency instead.
+    next_heading_after_plugins = re.search(
+        r"^## Plugins\n.*?^## ([^\n]+)$", readme_text, re.S | re.M
+    )
+    assert next_heading_after_plugins is not None, (
+        "README has no '## Plugins' section -- the adjacency check below is "
+        "looking at the wrong place"
+    )
+    assert next_heading_after_plugins.group(1) == "Agent skills"
+
+    corpus = _shipped_documentation_text()
+    assert "fitdocs-workouts" not in corpus
