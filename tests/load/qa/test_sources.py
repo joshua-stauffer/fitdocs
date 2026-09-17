@@ -68,35 +68,53 @@ _DEFAULT_CONSTANT_NAMES = (
 # ---------------------------------------------------------------------------
 
 
-def _types_docstring_for(name: str) -> str:
+def _types_docstring_for(name: str, source: str = _TYPES_MODULE_SOURCE) -> str:
+    """Extracts the bare-string "docstring" convention ``qa/types.py`` uses
+    for each ``DEFAULT_*`` constant. ``source`` defaults to the real module's
+    source but is an explicit parameter precisely so a test can drive this
+    exact function -- not a second, lookalike copy of its regex -- against a
+    fabricated module text (see
+    ``test_docstring_helper_rejects_a_constant_with_no_docstring_of_its_own``
+    below, which is the regression guard for the anchoring fix)."""
     match = re.search(
         rf"^{re.escape(name)}:[^\n]*\n\"\"\"(.*?)\"\"\"",
-        _TYPES_MODULE_SOURCE,
+        source,
         re.DOTALL | re.MULTILINE,
     )
     assert match is not None, f"{name} has no immediately-following docstring"
     return match.group(1)
 
 
-def test_docstring_helper_does_not_slide_forward_into_a_neighbors_docstring() -> None:
-    """Proves the anchoring actually works, independent of the real module:
-    a constant with no docstring of its own must fail to match rather than
-    silently returning the next constant's docstring (the exact defect noted
-    in tasks.md's Implementation Notes for 1.1 -> 1.2)."""
+def test_docstring_helper_rejects_a_constant_with_no_docstring_of_its_own() -> None:
+    """Regression guard for the 1.1 -> 1.2 slide-forward trap (tasks.md
+    Implementation Notes): drives the real ``_types_docstring_for`` -- not a
+    second inline copy of its regex -- against a fabricated two-constant
+    module in which ``DEFAULT_FOO`` has no docstring of its own and
+    ``DEFAULT_BAR`` does. A helper that slides forward (the naive
+    ``rf"{name}[^\"]*\"\"\"(.*?)\"\"\""`` pattern the trap warns about) would
+    silently return ``DEFAULT_BAR``'s docstring for ``DEFAULT_FOO``; the
+    anchored helper must instead fail loudly (its own ``assert`` raises)
+    because no ``\"\"\"`` immediately follows ``DEFAULT_FOO``'s assignment
+    line.
+
+    Reverting ``_types_docstring_for`` to the naive pattern must turn this
+    test red: verified live (mutation applied, this test observed failing --
+    it returned "bar's own text, not foo's." instead of raising -- then
+    reverted, confirmed green again) before this test was accepted."""
     fabricated_source = (
         "DEFAULT_FOO: Final[float] = 1.0\n"
         "\n"
         "DEFAULT_BAR: Final[float] = 2.0\n"
         '"""Measured: bar\'s own text, not foo\'s."""\n'
     )
-    match = re.search(
-        r"^DEFAULT_FOO:[^\n]*\n\"\"\"(.*?)\"\"\"",
-        fabricated_source,
-        re.DOTALL | re.MULTILINE,
-    )
-    assert match is None, (
-        "the anchored pattern must not slide forward past DEFAULT_FOO's "
-        "missing docstring into DEFAULT_BAR's"
+    with pytest.raises(AssertionError):
+        _types_docstring_for("DEFAULT_FOO", source=fabricated_source)
+
+    # Sanity: the helper does find DEFAULT_BAR's own docstring correctly, so
+    # the AssertionError above is specifically about FOO's missing one, not
+    # a helper that is broken outright.
+    assert _types_docstring_for("DEFAULT_BAR", source=fabricated_source) == (
+        "Measured: bar's own text, not foo's."
     )
 
 
@@ -295,10 +313,15 @@ def test_trainingpeaks_decoupling_citation_carries_the_5_percent_quote() -> None
 
 
 def test_ppg_cadence_artifact_corroborates_the_phenomenon_only() -> None:
-    """PPG_CADENCE_ARTIFACT is corroboration, not the source of any fitdocs
-    constant -- no DEFAULT_* docstring in qa/types.py should classify as
-    'measured' while citing this key (the only measured citation is the
-    corpus measurement)."""
+    """PPG_CADENCE_ARTIFACT's own note states it corroborates the cadence-
+    lock phenomenon only and that no fitdocs constant derives from it, and
+    its verification status is not FITDOCS_MEASURED -- so it cannot be the
+    citation that backs a 'Measured:' default in qa/types.py. The actual
+    cross-file check -- that the sole FITDOCS_MEASURED citation
+    (FITDOCS_CORPUS_2026_07_25, not this one) is what every measured
+    default is backed by -- is
+    ``test_every_measured_default_is_backed_by_a_fitdocs_measured_citation``,
+    not this test."""
     assert PPG_CADENCE_ARTIFACT.note is not None
     assert "no fitdocs constant" in PPG_CADENCE_ARTIFACT.note
     assert PPG_CADENCE_ARTIFACT.verification != VerificationStatus.FITDOCS_MEASURED
@@ -311,6 +334,21 @@ def test_ppg_cadence_artifact_corroborates_the_phenomenon_only() -> None:
 
 def test_divergences_are_exactly_six() -> None:
     assert len(DIVERGENCES) == 6
+
+
+def test_divergences_docstring_states_the_count_as_six() -> None:
+    """tasks.md 1.2: "six entries in all, and the section header must say
+    six" -- pinned as the literal word, not merely the tuple's length,
+    against DIVERGENCES' own bare-string documentation immediately
+    following its definition."""
+    source = inspect.getsource(sources)
+    pattern = (
+        r"\nDIVERGENCES: Final\[tuple\[Divergence, \.\.\.\]\] = \(.*?\n\)"
+        r"\n\"\"\"(.*?)\"\"\""
+    )
+    match = re.search(pattern, source, re.DOTALL)
+    assert match is not None, "DIVERGENCES has no immediately-following docstring"
+    assert "six" in match.group(1)
 
 
 def test_divergence_behaviors_are_unique() -> None:
@@ -423,18 +461,53 @@ def test_module_docstring_states_the_anecdote_was_not_located_and_is_unused() ->
     assert "no default, verdict or threshold" in doc
 
 
+def _ef_withdrawal_paragraph(doc: str) -> str:
+    """Isolates the module docstring's EF-withdrawal paragraph (item 2 of
+    the "Two brief claims are withdrawn" list) so the assertions below pin
+    text unique to *that* paragraph, not tokens ("withdrawn", "never",
+    "verdict") that also occur elsewhere in the docstring -- the
+    "ever-present token" gap a reviewer found: asserting bare membership of
+    those tokens anywhere in ``doc`` stays green even if the EF paragraph's
+    own wording is inverted, because the header ("Two brief claims are
+    withdrawn...") and an unrelated sentence ("no default, verdict or
+    threshold...") supply the tokens instead."""
+    match = re.search(
+        r"2\. The brief's framing of Efficiency Factor.*?(?=\*\*A third,)",
+        doc,
+        re.DOTALL,
+    )
+    assert match is not None, "EF-withdrawal paragraph not found in module docstring"
+    return match.group(0)
+
+
 def test_module_docstring_withdraws_efficiency_factor_as_a_standalone_signal() -> None:
     """4.5: the module must record that EF's framing as a signal in its own
     right is withdrawn, name why (no absolute reference point, units differ
     by sport), and state EF enters only as a decoupling constituent and a
-    basis, never a verdict."""
+    basis, never a verdict -- all pinned within the EF paragraph itself
+    (see ``_ef_withdrawal_paragraph``), not merely present somewhere in the
+    module docstring.
+
+    Verified live: inverting the paragraph's own wording to "is **retained
+    as originally framed**" (leaving every other occurrence of "withdrawn"
+    in the docstring's header untouched) turns this test red; reverting
+    turns it green again."""
     doc = sources.__doc__
     assert doc is not None
-    assert "withdrawn" in doc
-    assert "no absolute reference point" in doc
-    assert "units differ by" in doc
-    assert "sport" in doc
-    assert "never" in doc and "verdict" in doc
+    paragraph = _ef_withdrawal_paragraph(doc)
+    withdrawal_pattern = (
+        r"framing of Efficiency Factor as a signal in its own right is"
+        r"\s*\n?\s*\*\*withdrawn\*\*"
+    )
+    assert re.search(withdrawal_pattern, paragraph)
+    assert "no absolute reference point" in paragraph
+    assert "units differ by" in paragraph
+    assert "sport" in paragraph
+    # Req 4.5's "never a verdict of its own" clause, pinned to the exact
+    # phrase and confined to this paragraph rather than to bare co-presence
+    # of "never" and "verdict" anywhere in the docstring (see finding 3:
+    # deleting this clause alone must turn this assertion red).
+    assert "never itself thresholded into a verdict" in paragraph
 
 
 def test_module_docstring_does_not_verify_or_claim_the_friel_attribution() -> None:
