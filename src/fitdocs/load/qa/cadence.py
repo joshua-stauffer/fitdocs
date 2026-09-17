@@ -30,8 +30,11 @@ from __future__ import annotations
 
 import statistics
 from dataclasses import dataclass
+from enum import StrEnum
 
-from fitdocs.model import Samples
+from fitdocs.load.channels.sufficiency import stream_coverage
+from fitdocs.load.channels.types import StreamCoverage
+from fitdocs.model import Modality, Samples
 
 from .types import STEPS_PER_CADENCE_REVOLUTION, FlagSettings
 
@@ -207,3 +210,139 @@ def span_statistics(
         span_index += 1
 
     return tuple(spans)
+
+
+class CadenceLockOutcome(StrEnum):
+    """The three-way cadence-lock verdict (Req 1.1, 1.2)."""
+
+    LOCKED = "locked"
+    CLEAR = "clear"
+    NOT_ASSESSED = "not_assessed"
+
+
+@dataclass(frozen=True)
+class CadenceLockReading:
+    """The cadence-lock check's full verdict for one activity (Req 2.2, 2.5,
+    2.6, 2.7, 2.8, 2.9)."""
+
+    outcome: CadenceLockOutcome
+    locked_duration_s: float | None
+    """The summed duration of every span whose own ``locked`` flag is
+    ``True``. ``None`` only when ``outcome`` is ``NOT_ASSESSED`` -- nothing
+    was measured to sum. ``0.0``, never ``None``, when spans were assessed
+    and none locked (Req 1.8)."""
+    required_duration_s: int
+    paired_coverage: StreamCoverage | None
+    """The time-weighted heart-rate/cadence paired coverage, when it could
+    be computed -- carried on every outcome, including ``NOT_ASSESSED``
+    readings reached at or after the coverage gate, so the basis can state
+    the observed proportion (Req 2.7). ``None`` when the reading never
+    reached the coverage gate (non-running modality or no recorded cadence
+    value) or when ``stream_coverage`` itself returned ``None``."""
+    spans_assessed: int
+    """The number of full-width spans ``span_statistics`` produced. ``0``
+    whenever ``outcome`` is ``NOT_ASSESSED`` (Req 2.7)."""
+    not_assessed_reason: str | None
+    """``None`` unless ``outcome`` is ``NOT_ASSESSED``, in which case it
+    states the specific unmet precondition and no observed figure that was
+    not actually measured (Req 1.5)."""
+
+
+def detect(
+    samples: Samples, *, modality: Modality, settings: FlagSettings
+) -> CadenceLockReading:
+    """Decide the cadence-lock verdict for one activity (Req 2.2, 2.5, 2.6,
+    2.7, 2.8, 2.9).
+
+    Applies four not-assessed gates in a fixed order -- modality, absent
+    cadence stream, paired coverage, span formation -- each returning
+    immediately on failure, before comparing the summed locked-span duration
+    against the configured minimum. Never raises: every failure this
+    function can encounter is a ``NOT_ASSESSED`` reading, not an exception
+    (Req 1.10).
+
+    ``span.locked`` is consumed as already decided by :func:`span_statistics`
+    (the conjunctive correlation/closeness rule); this function only sums
+    locked spans' durations and applies the gates :func:`span_statistics`
+    has no scope to apply.
+    """
+    # Gate 1 (2.8): defined for running activities only -- a wrist sensor
+    # locking onto arm-swing frequency only equals stride frequency when
+    # running.
+    if modality is not Modality.RUN:
+        return CadenceLockReading(
+            outcome=CadenceLockOutcome.NOT_ASSESSED,
+            locked_duration_s=None,
+            required_duration_s=settings.cadence_lock_min_duration_s,
+            paired_coverage=None,
+            spans_assessed=0,
+            not_assessed_reason=(
+                "cadence-lock check is not defined for movement modality "
+                f"'{modality.value}'; it is defined for running activities only"
+            ),
+        )
+
+    # Gate 2 (2.6): no recorded cadence value anywhere in the activity.
+    if all(cadence is None for cadence in samples.cadence_rpm):
+        return CadenceLockReading(
+            outcome=CadenceLockOutcome.NOT_ASSESSED,
+            locked_duration_s=None,
+            required_duration_s=settings.cadence_lock_min_duration_s,
+            paired_coverage=None,
+            spans_assessed=0,
+            not_assessed_reason="cadence stream is absent for this activity",
+        )
+
+    # Gate 3 (2.7): time-weighted paired coverage at or above the configured
+    # minimum.
+    presence = paired_presence(samples)
+    coverage = stream_coverage(samples, presence, stream="cadence-lock-paired")
+    min_coverage = settings.cadence_lock_min_paired_coverage
+    if coverage is None or coverage.fraction < min_coverage:
+        observed = f"{coverage.fraction:.3f}" if coverage is not None else "undefined"
+        return CadenceLockReading(
+            outcome=CadenceLockOutcome.NOT_ASSESSED,
+            locked_duration_s=None,
+            required_duration_s=settings.cadence_lock_min_duration_s,
+            paired_coverage=coverage,
+            spans_assessed=0,
+            not_assessed_reason=(
+                "heart-rate/cadence paired coverage "
+                f"{observed} is below the configured minimum "
+                f"{settings.cadence_lock_min_paired_coverage:.3f}"
+            ),
+        )
+
+    # Gate 4 (2.7): at least one full-width span can be formed.
+    spans = span_statistics(
+        samples, window_s=settings.cadence_lock_window_s, settings=settings
+    )
+    if not spans:
+        return CadenceLockReading(
+            outcome=CadenceLockOutcome.NOT_ASSESSED,
+            locked_duration_s=None,
+            required_duration_s=settings.cadence_lock_min_duration_s,
+            paired_coverage=coverage,
+            spans_assessed=0,
+            not_assessed_reason=(
+                "no full span of the configured "
+                f"{settings.cadence_lock_window_s}s width could be formed "
+                "from the paired samples"
+            ),
+        )
+
+    # Gates 5/6 (2.2, 2.5): sum locked-span durations against the minimum.
+    locked_duration_s = sum((span.duration_s for span in spans if span.locked), 0.0)
+    outcome = (
+        CadenceLockOutcome.LOCKED
+        if locked_duration_s >= settings.cadence_lock_min_duration_s
+        else CadenceLockOutcome.CLEAR
+    )
+    return CadenceLockReading(
+        outcome=outcome,
+        locked_duration_s=locked_duration_s,
+        required_duration_s=settings.cadence_lock_min_duration_s,
+        paired_coverage=coverage,
+        spans_assessed=len(spans),
+        not_assessed_reason=None,
+    )

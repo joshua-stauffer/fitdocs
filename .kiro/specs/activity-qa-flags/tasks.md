@@ -262,7 +262,7 @@ does not add, reference or read a real file.
   - _Boundary: CadenceLockDetector_
   - _Depends: 1.1_
 
-- [ ] 2.2 Decide the cadence-lock verdict from the span statistics
+- [x] 2.2 Decide the cadence-lock verdict from the span statistics
   - Judge a span locked only when both the association and the closeness
     conditions hold together, and report the condition found when the summed
     locked duration reaches the configured minimum
