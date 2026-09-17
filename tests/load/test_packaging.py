@@ -188,6 +188,7 @@ _LOAD_MODULE_ALLOWLIST = frozenset(
         "fitdocs/load/qa/sources.py",
         "fitdocs/load/qa/cadence.py",
         "fitdocs/load/qa/divergence.py",
+        "fitdocs/load/qa/drift.py",
     }
 )
 

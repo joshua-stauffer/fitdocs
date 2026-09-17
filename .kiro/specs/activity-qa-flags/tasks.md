@@ -319,7 +319,7 @@ does not add, reference or read a real file.
   - _Boundary: DivergenceAnalysis_
   - _Depends: 1.1_
 
-- [ ] 2.4 (P) Turn the shipped aerobic-decoupling figure into a verdict
+- [x] 2.4 (P) Turn the shipped aerobic-decoupling figure into a verdict
   - Consume the decoupling percentage and the efficiency factor the derived
     metric layer already computes, restating and re-deriving neither, and
     compare the percentage against the configured reference point
