@@ -108,7 +108,7 @@ the skill *is* the feature, and distribution set the precedent (its tasks
 4.2, 5.x). Each is paired with the test that keeps it honest.
 
 - [ ] 1. Foundation: the by-name locator and the read-only command
-- [ ] 1.1 Land the skill registry and by-name locator, with the scaffold skill directory
+- [x] 1.1 Land the skill registry and by-name locator, with the scaffold skill directory
   - **Precondition, run first and recorded**: assert
     `src/fitdocs/agentskill.py` does not exist. If it does (distribution's
     major 4 shipped first), switch to the widen path: rename its single-name
@@ -552,3 +552,17 @@ the skill *is* the feature, and distribution set the precedent (its tasks
   - _Depends: 3.1, 3.2, 3.3_
   - _Requirements: 3.10, 3.11, 6.1, 6.2, 6.3, 7.1, 7.2, 7.4_
   - _Boundary: SkillE2E, PackagingPins_
+
+## Implementation Notes
+- 1.1 (round 2): **LANDED** -- `src/fitdocs/agentskill.py` and `src/fitdocs/skills/`
+  did not exist at base ea6f879 (distribution major 4 unstarted), so the
+  registry was created, not widened; task 3.3 records a landing. The locator's
+  `_resolved_directory` `is_dir()` guard is *unobservable* on Python 3.11/macOS
+  (`Path.is_file()` returns False on ENOTDIR rather than raising, so the later
+  `SKILL.md` check already rejects a file at the skill path) -- kept for the
+  design's literal wording, not pinned. Rejection species this round: an absence
+  fixture that asserted two of three resolvers (`skill_file` unpinned), and a
+  sort fixture whose four names ordered identically by basename and by relative
+  path -- a sort-order pin needs a nested file whose basename sorts *before* a
+  top-level name. Test files carry no process claims ("mutations recorded in
+  the Implementation Notes") -- they do not exist when the file is written.
