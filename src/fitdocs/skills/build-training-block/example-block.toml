@@ -1,0 +1,105 @@
+# --- the plan as first written ---
+title = "Example block"
+starts = 2030-01-07
+ends = 2030-02-17
+goal = """
+Build a durable aerobic base, then sharpen for a target tune-up race.
+Balance running volume with one weekly strength session and full recovery.
+"""
+mesocycle_days = 14
+
+[[mesocycle]]
+number = 1
+target_load = 600
+focus = "aerobic base"
+
+[[mesocycle]]
+number = 3
+focus = "sharpen"
+
+[[workout]]
+id = "w1-mon"
+date = 2030-01-07
+sport = "Run"
+title = "Easy aerobic run"
+summary = "Zone 2 easy effort"
+prescription = "40 minutes easy, conversational pace."
+
+[[workout]]
+id = "w1-wed"
+date = 2030-01-09
+sport = "Workout"
+modality = "strength"
+indoor = true
+title = "Strength circuit"
+summary = "Full body maintenance"
+prescription = "3 rounds of squat, row and plank, moderate load."
+
+[[workout]]
+id = "w1-sat"
+date = 2030-01-12
+sport = "Run"
+title = "Long run"
+summary = "Zone 2 endurance"
+prescription = "90 minutes steady, fuel every 30 minutes."
+
+[[workout]]
+id = "w2-tue"
+date = 2030-01-22
+sport = "Run"
+title = "Morning intervals"
+summary = "Threshold intervals"
+prescription = "6 x 3 minutes hard with 2 minutes easy between."
+
+[[workout]]
+id = "w2-tue-b"
+date = 2030-01-22
+sport = "Run"
+title = "Evening shakeout"
+summary = "Very easy shakeout"
+prescription = "20 minutes very easy."
+
+[[workout]]
+id = "w3-thu"
+date = 2030-02-07
+sport = "Ride"
+title = "Endurance ride"
+summary = "Zone 2 endurance"
+prescription = "75 minutes steady in the aero position."
+
+# --- amendments: appended, never edited ---
+[[amendment]]
+date = 2030-01-15
+reason = "Travel week"
+
+[[amendment.update]]
+id = "w1-sat"
+date = 2030-01-14
+
+[[amendment.add]]
+id = "w2-sun"
+date = 2030-01-27
+sport = "Walk"
+title = "Recovery walk"
+summary = "Easy recovery"
+prescription = "30 minutes easy walking."
+
+[[amendment.remove]]
+id = "w1-wed"
+
+[[amendment.mesocycle]]
+number = 2
+target_load = 650
+
+# --- overrides: appended when settling ---
+[[override]]
+date = 2030-01-23
+id = "w2-tue"
+stems = ["2030-01-22-run-0700"]
+reason = "the morning session was the intervals"
+
+[[override]]
+date = 2030-01-23
+id = "w2-tue-b"
+skipped = true
+reason = "shakeout dropped"

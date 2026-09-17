@@ -212,7 +212,7 @@ the skill *is* the feature, and distribution set the precedent (its tasks
   - _Boundary: SkillCommand_
 
 - [ ] 2. Core: the skill and its conformance test
-- [ ] 2.1 Write the example plan source and the skill body in the fixed nine-section order
+- [x] 2.1 Write the example plan source and the skill body in the fixed nine-section order
   - Write `example-block.toml` (block id `example-block`): title `Example
     block`, `starts = 2030-01-07`, `ends = 2030-02-17`, `mesocycle_days =
     14`, a two-line goal; a mesocycle entry with a target and a focus and one
@@ -579,3 +579,16 @@ the skill *is* the feature, and distribution set the precedent (its tasks
   alone; the mixed `result.output` stream cannot see a stdout/stderr swap; a
   files-only snapshot cannot see `mkdir`. Reversed registry order is UNPINNED
   by nature (one registered name).
+- 2.1 (round 2): the rejection was content truth, not structure -- four
+  sentences the tool contradicts survived a structurally perfect body:
+  `No source:` names an ORPHANED RENDERED PAGE (no matching source), not a
+  missing source entry; exit 0 does NOT mean nothing needs attention (an
+  ambiguous match exits 0 -- `ReconcileReport.failed` is only
+  invalid/blocked/failed blocks or override problems); `Problems:` is a block
+  PAGE header while the report prints bare indented lines under `reconciled`;
+  the default `plans/` directory must be named (it is deliberately outside
+  OWNED_PATHS). Verify every report/page sentence in a skill by running the
+  command and reading the page, never from the design's paraphrase. For 2.2:
+  strip code spans/fences before collecting link targets (line ~233 has the
+  design-mandated `[stem](...)` in a span), and grep OWNED_PATHS members as
+  fixed strings (the regex `.fitdocs/` matches the URL's `/fitdocs/`).
