@@ -288,7 +288,7 @@ does not add, reference or read a real file.
   - _Boundary: CadenceLockDetector_
   - _Depends: 2.1_
 
-- [ ] 2.3 (P) Compare the selected channel's intensity against the heart-rate channel's
+- [x] 2.3 (P) Compare the selected channel's intensity against the heart-rate channel's
   - Compare only the dimensionless threshold-relative intensities the two
     channels report — the single semantic under which the reported load equals
     the scored hours times the square of the reported intensity times one
@@ -564,3 +564,13 @@ does not add, reference or read a real file.
   is separately satisfied). `len(spans) * window_s` is therefore not the
   assessed wall-clock extent — do not use it as such when reasoning about
   what fraction of the activity 2.2's duration sum represents.
+- **2.3 → 3.1**: Req 3.9's sub-threshold regression case is provably unable to
+  distinguish a *symmetric* `.load`-for-`.intensity` field swap (both
+  channels' `load` and `intensity` fields are read backwards at once) —
+  proven mathematically, not just empirically: 3.9's own premise (same load,
+  same duration on both channels) forces equal intensities under the shared
+  relation, so a symmetric swap is observationally identical to the correct
+  read for that one fixture. It DOES catch a one-sided swap. If task 3.1's
+  end-to-end proof needs to rule out a symmetric field-reading defect
+  anywhere in the assembly, it needs its own fixture for that — Req 3.9's
+  case alone cannot certify it, by construction, not by omission.
