@@ -1637,3 +1637,37 @@ history page changes. The contract version does not move.
 - **`history/documents._read_load` stays** as a private duplicate of
   `contract.document_load`; adopting the reader there is queued
   (`.kiro/queue/2026-09-15-history-read-load-duplicates-document-load.md`).
+
+## Amendment 1 (2026-09-17): the wave-1 tests that actually moved, recorded by the implementation
+
+Cross-spec obligations item 6 and TrainingBlocksSpecUpdate above say that
+exactly two `training-blocks` tests move under this spec. Implementation
+(task 3.2, landed at `6ccab46` on `impl/plan-resolution`) found the claim
+incomplete, and the controller ruled rather than escalate, because the fix
+was mechanical and the design's intent (no criterion reworded, the fixture
+untouched) was preserved:
+
+- The `tests/test_plan_e2e.py` two-dates precondition was already present
+  at `training-blocks` `be6c936` (that spec's task 4.6), so task 3.2 added
+  no precondition. Its one edit to that test is the staging line below.
+- `tests/plans/fixtures/full.toml`'s `w1-mon` override names the stem
+  `run-2026-01-06-am`, which no wave-1 CLI test's corpus provided. Once the
+  resolver is chained (Req 8.2), a missing override stem is a per-file
+  failure (Req 8.7), so four wave-1 success-path tests exit 1:
+  `tests/test_cli_plan.py::test_success_prints_every_outcome_line_and_the_counts`
+  and, in `tests/test_plan_e2e.py`,
+  `test_two_sources_render_every_owned_page_with_report_and_frontmatter`,
+  `test_two_plain_runs_are_byte_identical_and_report_unchanged` and the
+  two-dates test itself. Ruling: each stages one synthetic logged page at
+  `workouts/run-2026-01-06-am.md` (`_stage_w1_mon_override_stem`) so the
+  fixture is coherent under reconciliation; the fixture and every existing
+  assertion are untouched.
+- `tests/load/test_settings.py::test_load_load_settings_is_called_the_documented_number_of_times_per_command`
+  (training-load Req 14.1) pinned `sync` and `regen` at one `[load]` read;
+  ReconcilePass reads `[load]` for `default_calculator`, so both are now
+  two, recorded in that test's docstring. Its sibling licensed-callers
+  guard admits `plans/reconcile.py` as the fourth pass (task 3.1).
+
+The list in "Shared source files" (tasks.md) and item 6 above should be read
+with these additions; the `training-blocks` record (its Amendment 1, task
+3.4) states the same facts from that spec's side.
