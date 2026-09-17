@@ -1,0 +1,161 @@
+# The reconciliation fixture (plan-resolution tasks.md 2.4). One block, four
+# mesocycles (2026-02-02..2026-03-01, mesocycle_days = 7), whose eleven rows
+# and paired corpus (built directly in `tests/plans/test_placement.py`,
+# never through a filesystem scan) exercise the row and mesocycle cases
+# tasks.md 2.4 enumerates for the goldens -- exact, absorbed three, an
+# ambiguous pair, overridden with one missing stem, skipped with a reason,
+# not logged with a same-day competitor, upcoming; one complete mesocycle
+# with a target, one lower bound with an exclusion, one not computed, one
+# with unplanned. Grammar rows this fixture does not reach (a no-pages
+# mesocycle, an unclaimed same-day bullet, a no-reason override or skip)
+# are covered by hand-built `BlockReconciliation`/`RowOutcome` values in
+# `test_placement.py`'s own unit tests, not by this fixture.
+#
+# - "w1-mon" (2026-02-02, Run): MATCHED exact.
+# - "w1-tue" (2026-02-03, Ride): MATCHED absorbed (three logged rides).
+# - "w1-wed-run" (2026-02-04, Run): NOT_LOGGED, same-day Ride taken by
+#   "w1-wed-ride" -- no logged Run that day at all, so no competitors.
+# - "w1-wed-ride" (2026-02-04, Ride): MATCHED exact.
+# - "w1-fri-a" / "w1-fri-b" (2026-02-06, Run): a competing pair -- one
+#   logged Run that day, "w1-fri-a" (declared first) wins it (MATCHED,
+#   confidence ambiguous); "w1-fri-b" is NOT_LOGGED (confidence is only set
+#   on a MATCHED row, so only "w1-fri-a" ever appears in `.ambiguous`),
+#   naming "w1-fri-a" as the assignee.
+# - "w2-mon" (2026-02-09, Run): OVERRIDDEN, naming one existing stem
+#   ("w2-existing-log") and one missing stem ("w2-missing-log", reported as
+#   a problem) -- with a reason.
+# - "w2-tue" (2026-02-10, Run): SKIPPED, with a reason.
+# - "w2-wed" (2026-02-11, Run): MATCHED exact, claims the mesocycle 2
+#   unscored page so it is never also "unplanned".
+# - "w2-thu" (2026-02-12, Run): MATCHED exact, claims the mesocycle 2
+#   excluded (other-methodology) page so it is never also "unplanned".
+# - "w4-thu" (2026-02-26, Run): UPCOMING -- dated on/after the fixture's
+#   `today` (2026-02-24), no logged workout and no same-day competitor.
+#
+# Mesocycle 1 (2026-02-02..2026-02-08, target 300): every dated page
+# scored under the chosen methodology -- "complete, with a target".
+# Mesocycle 2 (2026-02-09..2026-02-15, target 250): one scored, one
+# unscored, one excluded (scored under another methodology) -- "lower
+# bound, with an exclusion".
+# Mesocycle 3 (2026-02-16..2026-02-22, no target): two unscored, unclaimed
+# pages -- "none scored" (not computed) and "with unplanned".
+# Mesocycle 4 (2026-02-23..2026-03-01, no target): one scored, unclaimed
+# page -- "with unplanned" again, cleanly (no override, unplanned or
+# excluded workout in this fixture is dated 2026-02-24, the fixture's
+# `today` -- the no-today postcondition's own precondition).
+
+title = "Reconcile fixture block"
+starts = 2026-02-02
+ends = 2026-03-01
+goal = "A block built to exercise every reconciliation grammar row."
+mesocycle_days = 7
+
+[[mesocycle]]
+number = 1
+target_load = 300
+focus = "Base"
+
+[[mesocycle]]
+number = 2
+target_load = 250
+focus = "Build"
+
+[[workout]]
+id = "w1-mon"
+date = 2026-02-02
+sport = "Run"
+title = "Easy aerobic run"
+summary = "Zone 2"
+prescription = "45 minutes easy."
+
+[[workout]]
+id = "w1-tue"
+date = 2026-02-03
+sport = "Ride"
+title = "Endurance ride"
+summary = "Zone 2 spin"
+prescription = "60 minutes steady."
+
+[[workout]]
+id = "w1-wed-run"
+date = 2026-02-04
+sport = "Run"
+title = "Recovery run"
+summary = "Easy shakeout"
+prescription = "20 minutes very easy."
+
+[[workout]]
+id = "w1-wed-ride"
+date = 2026-02-04
+sport = "Ride"
+title = "Recovery spin"
+summary = "Easy spin"
+prescription = "30 minutes very easy."
+
+[[workout]]
+id = "w1-fri-a"
+date = 2026-02-06
+sport = "Run"
+title = "Tempo run A"
+summary = "Threshold work"
+prescription = "30 minutes tempo."
+
+[[workout]]
+id = "w1-fri-b"
+date = 2026-02-06
+sport = "Run"
+title = "Tempo run B"
+summary = "Threshold work, alternate"
+prescription = "30 minutes tempo."
+
+[[workout]]
+id = "w2-mon"
+date = 2026-02-09
+sport = "Run"
+title = "Planned long run"
+summary = "Long steady run"
+prescription = "90 minutes steady."
+
+[[workout]]
+id = "w2-tue"
+date = 2026-02-10
+sport = "Run"
+title = "Planned intervals"
+summary = "Speed work"
+prescription = "8x400m."
+
+[[workout]]
+id = "w2-wed"
+date = 2026-02-11
+sport = "Run"
+title = "Easy run"
+summary = "Zone 2"
+prescription = "40 minutes easy."
+
+[[workout]]
+id = "w2-thu"
+date = 2026-02-12
+sport = "Run"
+title = "Easy run"
+summary = "Zone 2"
+prescription = "40 minutes easy."
+
+[[workout]]
+id = "w4-thu"
+date = 2026-02-26
+sport = "Run"
+title = "Future tempo run"
+summary = "Threshold work"
+prescription = "35 minutes tempo."
+
+[[override]]
+date = 2026-02-09
+id = "w2-mon"
+stems = ["w2-existing-log", "w2-missing-log"]
+reason = "Swapped due to travel logistics"
+
+[[override]]
+date = 2026-02-10
+id = "w2-tue"
+skipped = true
+reason = "Illness"

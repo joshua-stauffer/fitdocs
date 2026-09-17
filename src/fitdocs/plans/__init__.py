@@ -91,6 +91,11 @@ from fitdocs.plans.page import (
     sport_phrase,
     yaml_string,
 )
+from fitdocs.plans.placement import (
+    BlockReconciliation,
+    actual_load_sentence,
+    place_resolution,
+)
 from fitdocs.plans.planned_page import render_planned_page
 from fitdocs.plans.resolution import (
     UNRESOLVED_ROW,
@@ -204,4 +209,8 @@ __all__: list[str] = [
     "ReconcileProblem",
     "MatchResult",
     "match_rows",
+    # -- plans.placement (plan-resolution task 2.4) --
+    "BlockReconciliation",
+    "place_resolution",
+    "actual_load_sentence",
 ]

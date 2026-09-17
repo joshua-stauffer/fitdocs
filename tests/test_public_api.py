@@ -92,6 +92,7 @@ import fitdocs.plans.engine
 import fitdocs.plans.matching
 import fitdocs.plans.model
 import fitdocs.plans.page
+import fitdocs.plans.placement
 import fitdocs.plans.planned_page
 import fitdocs.plans.resolution
 import fitdocs.plans.settings
@@ -1141,6 +1142,10 @@ _PLANS_SURFACE = {
     "ReconcileProblem",
     "MatchResult",
     "match_rows",
+    # -- plans.placement (plan-resolution 2.4) --
+    "BlockReconciliation",
+    "place_resolution",
+    "actual_load_sentence",
 }
 
 #: Which submodule defines each published name -- the object the identity
@@ -1230,6 +1235,9 @@ _PLANS_SURFACE_OWNERS = {
     "ReconcileProblem": fitdocs.plans.matching,
     "MatchResult": fitdocs.plans.matching,
     "match_rows": fitdocs.plans.matching,
+    "BlockReconciliation": fitdocs.plans.placement,
+    "place_resolution": fitdocs.plans.placement,
+    "actual_load_sentence": fitdocs.plans.placement,
 }
 
 

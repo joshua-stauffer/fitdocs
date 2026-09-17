@@ -93,6 +93,7 @@ PLANS_MODULE_NAMES: Final[tuple[str, ...]] = (
     "fitdocs.plans.corpus",
     "fitdocs.plans.aggregate",
     "fitdocs.plans.matching",
+    "fitdocs.plans.placement",
 )
 
 
@@ -228,6 +229,7 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
             "fitdocs.plans.matching",
             "fitdocs.plans.model",
             "fitdocs.plans.page",
+            "fitdocs.plans.placement",
             "fitdocs.plans.planned_page",
             "fitdocs.plans.resolution",
             "fitdocs.plans.settings",
@@ -365,6 +367,22 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
             "fitdocs.plans.model",
         }
     ),
+    "fitdocs.plans.placement": frozenset(
+        {
+            "__future__",
+            "collections.abc",
+            "dataclasses",
+            "fitdocs.history",
+            "fitdocs.layout",
+            "fitdocs.model",
+            "fitdocs.plans",
+            "fitdocs.plans.aggregate",
+            "fitdocs.plans.corpus",
+            "fitdocs.plans.matching",
+            "fitdocs.plans.model",
+            "fitdocs.plans.resolution",
+        }
+    ),
 }
 
 
@@ -428,6 +446,7 @@ def _matches_forbidden(target: str) -> str | None:
 #: append their own entry (2.4, 3.1) -- never widen another module's.
 _FORBIDDEN_EXEMPTIONS: Final[dict[str, frozenset[str]]] = {
     "fitdocs.plans.aggregate": frozenset({"fitdocs.history"}),
+    "fitdocs.plans.placement": frozenset({"fitdocs.history"}),
 }
 
 
