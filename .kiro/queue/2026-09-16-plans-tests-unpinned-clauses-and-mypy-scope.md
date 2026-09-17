@@ -2,8 +2,8 @@
 id: 2026-09-16-plans-tests-unpinned-clauses-and-mypy-scope
 title: Five test-side leftovers in the training-blocks suites (ever-present token, an unpinned "writes nothing", a count assertion, mypy scope)
 status: open
-importance: low
-importance_why: Each is a sentence the suite claims but cannot fail on, or a typed module mypy does not see; none changes behaviour, all are cheap and rot silently.
+importance: medium
+importance_why: Item 4 now has a consumer -- tests/test_skill_e2e.py imports _fake_system_date through importlib.import_module (an Any) because a static import pulls 18 strict errors from the untyped tests/test_history_e2e.py; every later typed e2e will copy the dodge.
 effort: S
 kind: gap
 area: training-blocks, tests/test_cli_plan.py, tests/plans/test_engine.py, tests/plans/test_settings.py, tests/test_declaration_refresh.py, pyproject.toml
@@ -67,3 +67,12 @@ tells every later session the behaviour is pinned while pinning nothing.
    module's typing.
 3. Done when `uv run pytest -q`, `uv run mypy` are green and each of the four
    named mutations reds.
+
+## Evidence (added 2026-09-18, build-training-block 3.4 review, pinned e45f114)
+- `tests/test_skill_e2e.py:46-53`: `_fake_system_date = importlib.import_module("tests.test_history_e2e")._fake_system_date`
+  with a comment explaining the dodge. Reviewer reproduced: switching to
+  `from tests.test_history_e2e import _fake_system_date` and running
+  `uv run mypy` -> `Found 18 errors in 1 file` (all in `tests/test_history_e2e.py`,
+  e.g. `:556: "object" has no attribute "output"`).
+- Resolution for item 4 above therefore also means: switch `tests/test_skill_e2e.py:53`
+  to the static import once `tests/test_history_e2e.py` is typed and listed.
