@@ -94,6 +94,7 @@ import fitdocs.plans.model
 import fitdocs.plans.page
 import fitdocs.plans.placement
 import fitdocs.plans.planned_page
+import fitdocs.plans.reconcile
 import fitdocs.plans.resolution
 import fitdocs.plans.settings
 import fitdocs.plans.source
@@ -1146,6 +1147,10 @@ _PLANS_SURFACE = {
     "BlockReconciliation",
     "place_resolution",
     "actual_load_sentence",
+    # -- plans.reconcile (plan-resolution 3.1) --
+    "ReconcileReport",
+    "reconcile_block",
+    "run_reconcile",
 }
 
 #: Which submodule defines each published name -- the object the identity
@@ -1238,6 +1243,9 @@ _PLANS_SURFACE_OWNERS = {
     "BlockReconciliation": fitdocs.plans.placement,
     "place_resolution": fitdocs.plans.placement,
     "actual_load_sentence": fitdocs.plans.placement,
+    "ReconcileReport": fitdocs.plans.reconcile,
+    "reconcile_block": fitdocs.plans.reconcile,
+    "run_reconcile": fitdocs.plans.reconcile,
 }
 
 

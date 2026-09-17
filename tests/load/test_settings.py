@@ -1548,27 +1548,30 @@ def _modules_calling_load_load_settings() -> set[Path]:
 
 
 def test_load_load_settings_is_called_from_exactly_the_licensed_modules() -> None:
-    """Req 14.1: the reader itself stays singular even though three *passes*
+    """Req 14.1: the reader itself stays singular even though four *passes*
     now consume it. Training-load's own pass (``load/engine.py``), the
     load-history engine (``history/engine.py``, which reads ``[load]``'s
     ``default_calculator`` as the configured methodology -- load-history
-    design, "Allowed Dependencies") and ``performance-benchmarks``'
+    design, "Allowed Dependencies"), ``performance-benchmarks``'
     derivation pass (``performance/engine.py``, landed by that spec's task
     4.2, which needs ``LoadSettings.sufficiency`` for the same
-    ``[load.sufficiency]`` table the load pass already reads) are the
-    exactly-three sanctioned callers -- Req 14.1's guarantee is "the
-    ``[load]`` table is parsed from exactly one place", not "called from
-    exactly one call site"; a further *pass* reading it through the same
-    single reader is the sanctioned resolution recorded in
+    ``[load.sufficiency]`` table the load pass already reads) and
+    ``plan-resolution``'s reconciling pass (``plans/reconcile.py``, landed
+    by that spec's task 3.1, which composes the configured methodology the
+    way the history engine does -- plan-resolution design, "Allowed
+    Dependencies") are the exactly-four sanctioned callers -- Req 14.1's
+    guarantee is "the ``[load]`` table is parsed from exactly one place",
+    not "called from exactly one call site"; a further *pass* reading it
+    through the same single reader is the sanctioned resolution recorded in
     ``.kiro/queue/closed/2026-09-11-performance-pass-sufficiency-read-vs-single-reader-guard.md``,
     not a violation of it. Nowhere else -- the command surface, the document
     editor, the profile store, or any other module tempted to read
     ``[load]`` directly -- may call it.
 
-    Mutation caught: adding a *fourth*, real call site (e.g. a guarded
+    Mutation caught: adding a *fifth*, real call site (e.g. a guarded
     ``load_load_settings(...)`` invocation added to ``fitdocs/load/docedit.py``,
     reached only behind an always-false condition so it changes no
-    behavior) reddens this test by naming all four callers, while leaving
+    behavior) reddens this test by naming all five callers, while leaving
     the rest of the suite green -- the same shape task 4.2's reviewer proved
     against the CLI-specific version of this guard.
     """
@@ -1577,10 +1580,11 @@ def test_load_load_settings_is_called_from_exactly_the_licensed_modules() -> Non
         Path("load/engine.py"),
         Path("history/engine.py"),
         Path("performance/engine.py"),
+        Path("plans/reconcile.py"),
     }, (
         f"load_load_settings is called from {sorted(str(p) for p in callers)}, "
         "expected exactly ['history/engine.py', 'load/engine.py', "
-        "'performance/engine.py']"
+        "'performance/engine.py', 'plans/reconcile.py']"
     )
 
 

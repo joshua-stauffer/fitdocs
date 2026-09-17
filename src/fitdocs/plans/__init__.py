@@ -97,6 +97,7 @@ from fitdocs.plans.placement import (
     place_resolution,
 )
 from fitdocs.plans.planned_page import render_planned_page
+from fitdocs.plans.reconcile import ReconcileReport, reconcile_block, run_reconcile
 from fitdocs.plans.resolution import (
     UNRESOLVED_ROW,
     MesocycleResolution,
@@ -213,4 +214,8 @@ __all__: list[str] = [
     "BlockReconciliation",
     "place_resolution",
     "actual_load_sentence",
+    # -- plans.reconcile (plan-resolution task 3.1) --
+    "ReconcileReport",
+    "reconcile_block",
+    "run_reconcile",
 ]

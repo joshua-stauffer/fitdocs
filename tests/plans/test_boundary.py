@@ -94,6 +94,7 @@ PLANS_MODULE_NAMES: Final[tuple[str, ...]] = (
     "fitdocs.plans.aggregate",
     "fitdocs.plans.matching",
     "fitdocs.plans.placement",
+    "fitdocs.plans.reconcile",
 )
 
 
@@ -231,6 +232,7 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
             "fitdocs.plans.page",
             "fitdocs.plans.placement",
             "fitdocs.plans.planned_page",
+            "fitdocs.plans.reconcile",
             "fitdocs.plans.resolution",
             "fitdocs.plans.settings",
             "fitdocs.plans.source",
@@ -383,6 +385,25 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
             "fitdocs.plans.resolution",
         }
     ),
+    "fitdocs.plans.reconcile": frozenset(
+        {
+            "__future__",
+            "dataclasses",
+            "datetime",
+            "pathlib",
+            "fitdocs.history",
+            "fitdocs.layout",
+            "fitdocs.load.settings",
+            "fitdocs.plans.aggregate",
+            "fitdocs.plans.corpus",
+            "fitdocs.plans.engine",
+            "fitdocs.plans.matching",
+            "fitdocs.plans.model",
+            "fitdocs.plans.placement",
+            "fitdocs.plans.resolution",
+            "fitdocs.settings",
+        }
+    ),
 }
 
 
@@ -435,18 +456,23 @@ def _matches_forbidden(target: str) -> str | None:
     return None
 
 
-#: The one expected exception to "forbidden": a module may import a
-#: forbidden package's **root** alone -- never a submodule of it, which
-#: stays forbidden for every module including these (design.md "Allowed
-#: Dependencies": "the history package root only"). Keyed by module name,
-#: valued by the exact (already-resolved) root target admitted; an entry
-#: never names a `fitdocs.history.<submodule>` or `fitdocs.load.<submodule>`
-#: target. `fitdocs.plans.aggregate` introduces this map with its own entry
-#: (task 2.3); `fitdocs.plans.placement` and `fitdocs.plans.reconcile` each
-#: append their own entry (2.4, 3.1) -- never widen another module's.
+#: The expected exceptions to "forbidden", keyed by module name and valued
+#: by the exact (already-resolved) targets admitted for it. Every entry
+#: admits the `fitdocs.history` package **root** alone -- never a
+#: `fitdocs.history.<submodule>` target, which stays forbidden for every
+#: module including these (design.md "Allowed Dependencies": "the history
+#: package root only"). `fitdocs.plans.reconcile`'s entry additionally
+#: admits the one `fitdocs.load` submodule design.md licenses for it,
+#: `fitdocs.load.settings` (design.md:99) -- every *other*
+#: `fitdocs.load.<submodule>` target stays forbidden everywhere, this
+#: module included. `fitdocs.plans.aggregate` introduces this map with its
+#: own entry (task 2.3); `fitdocs.plans.placement` and
+#: `fitdocs.plans.reconcile` each append their own entry (2.4, 3.1) --
+#: never widen another module's.
 _FORBIDDEN_EXEMPTIONS: Final[dict[str, frozenset[str]]] = {
     "fitdocs.plans.aggregate": frozenset({"fitdocs.history"}),
     "fitdocs.plans.placement": frozenset({"fitdocs.history"}),
+    "fitdocs.plans.reconcile": frozenset({"fitdocs.history", "fitdocs.load.settings"}),
 }
 
 
