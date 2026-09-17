@@ -26,6 +26,7 @@ same way -- a plain ``from .flags import evaluate_flags``.
 
 from __future__ import annotations
 
+from fitdocs.load.qa.flags import evaluate_flags as evaluate_flags
 from fitdocs.load.qa.types import (
     DEFAULT_AEROBIC_DRIFT_MAX_PCT as DEFAULT_AEROBIC_DRIFT_MAX_PCT,
 )

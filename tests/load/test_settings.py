@@ -1510,10 +1510,16 @@ def test_load_settings_error_is_a_settings_error() -> None:
 #   any spelling that does not literally write the four-token dotted name in
 #   the ``ImportFrom.module`` slot.
 # * A **runtime** guard (``test_settings_module_leaks_no_dynamic_import_of_load_types``)
-#   that pre-seeds stub packages and execs ``settings.py`` off disk, because
-#   a dynamic import (``importlib.import_module("fitdocs.load.types")``) has
-#   no distinguishing AST shape at all -- a static walk cannot see it by
-#   construction, regardless of how thorough its resolution logic is.
+#   that execs ``settings.py`` off disk twice, differentially (real source,
+#   then the same source with only its one sanctioned
+#   ``fitdocs.load.qa.types`` import replaced by a local stand-in), because a
+#   dynamic import (``importlib.import_module("fitdocs.load.types")``) has no
+#   distinguishing AST shape at all -- a static walk cannot see it by
+#   construction, regardless of how thorough its resolution logic is. (As of
+#   ``activity-qa-flags`` task 3.1, the sanctioned chain itself legitimately
+#   lands ``fitdocs.load.types`` in ``sys.modules``, so a bare presence/
+#   absence assertion can no longer discriminate on its own -- see that
+#   test's own docstring amendment.)
 
 
 def _forbidden_load_types_imports(
@@ -1721,38 +1727,88 @@ def test_settings_module_leaks_no_dynamic_import_of_load_types(
     walk can see (a dynamic ``importlib.import_module("fitdocs.load.types")``,
     a lazy function-body import).
 
-    Execs ``settings.py`` directly off disk under a synthetic module name in
-    a subprocess, with ``fitdocs.load`` and ``fitdocs.load.channels`` first
-    seeded in ``sys.modules`` as stub packages carrying their **real**
-    ``__path__`` (round 2 of remediation -- an empty ``__path__ = []`` made
-    every ``fitdocs.load.*`` resolution, forbidden or not, die with
-    ``ImportError``/``ModuleNotFoundError`` during ``exec_module`` itself,
-    so ``assert not leaked`` was unreachable for every violating spelling
-    and the guard's actual, sole discriminator was
-    ``completed.returncode == 0`` -- which reds identically for a genuine
-    violation, an unrelated ``fitdocs.load.*`` import, and a plain typo, so
-    it could not tell any of them apart. Measured: with the real path, a
-    forbidden module-level import resolves successfully, lands in
-    ``sys.modules``, and is caught by the actual ``assert not leaked`` this
-    docstring claims) and ``fitdocs.load.channels.types`` seeded with a
-    stand-in ``SufficiencySettings`` -- so this task's own sanctioned
-    ``from fitdocs.load.channels.types import SufficiencySettings`` resolves
-    against the stub rather than triggering the real package's own
-    ``registry -> types`` chain (which would otherwise land the real
-    ``fitdocs.load.types`` in ``sys.modules`` regardless of what
-    ``settings.py`` itself does, making this guard unable to discriminate --
-    exactly the defect the previous version of
-    :func:`test_settings_module_does_not_import_load_types_at_runtime`
-    round-tripped through). After exec, asserts ``fitdocs.load.types``
-    never landed in ``sys.modules``.
+    **Amendment (``activity-qa-flags`` task 3.1) -- the isolation technique
+    this test used is retired, not merely its final assertion.**
+    ``fitdocs.load.qa``'s package initializer now eagerly re-exports
+    ``evaluate_flags`` from ``qa/flags.py`` -- by explicit design (tasks.md's
+    3.1 bullet list, design.md's FlagAssembly component: "Re-export it
+    eagerly ... add no import guard of this feature's own") ``qa/flags.py``
+    is the one module in that package that imports ``fitdocs.load.types``
+    (for ``QualityFlag``). ``settings.py``'s own sanctioned ``from
+    fitdocs.load.qa.types import FlagSettings`` now transitively triggers
+    that package initializer, so ``fitdocs.load.types`` legitimately,
+    statically and by design lands in ``sys.modules`` as a side effect of
+    importing ``settings.py`` -- this is no longer a "leak" a bare
+    ``"fitdocs.load.types" not in sys.modules`` assertion can fail on, and a
+    bare ``"fitdocs.load.types" in sys.modules`` assertion (this test's own
+    first, now-superseded post-amendment revision) is satisfied by the
+    sanctioned chain regardless of what else ``settings.py`` imports --
+    proven by review: planting an unrelated, illegitimate
+    ``importlib.import_module("fitdocs.load.types")`` at ``settings.py``'s
+    own top level left that assertion green.
+
+    **The real cycle risk -- a runtime import back into
+    ``fitdocs.load.settings`` -- is not this test's to prove**; it is
+    ``tests/test_public_api.py``'s ``test_no_circular_import_in_a_fresh_interpreter``
+    and ``test_load_types_never_imports_load_settings_at_runtime``, neither
+    of which this file duplicates.
+
+    **What this test still can, and now does, prove: exclusivity.**
+    ``fitdocs.load.types`` must be reachable from ``settings.py`` through
+    *exactly one* route -- the sanctioned ``from fitdocs.load.qa.types
+    import FlagSettings`` line -- and no other, dynamic or lazy, route this
+    file's static AST walk cannot see. This is measured differentially, off
+    disk, in two fresh subprocesses:
+
+    1. Exec the real, unmodified ``settings.py`` source under a synthetic
+       module name; assert ``fitdocs.load.types`` lands in ``sys.modules``
+       (the sanctioned chain fired).
+    2. Exec the *same* source with only the one sanctioned import line
+       replaced by a local, import-free stand-in class of the same name (so
+       ``field(default_factory=FlagSettings)`` at ``settings.py``'s own
+       module level still resolves the name and the rest of the module still
+       execs to completion); assert ``fitdocs.load.types`` is now *absent*.
+
+    Both execs first seed ``sys.modules["fitdocs.load"]`` with an *empty*
+    stub ``ModuleType`` carrying the real package's own ``__path__`` --
+    **not** the previous round's additional stubs for
+    ``fitdocs.load.channels`` / ``fitdocs.load.channels.types``, which
+    measurement (below) shows are unneeded once the one real confound is
+    isolated. That one real confound: ``fitdocs.load/__init__.py`` itself
+    eagerly imports its ``registry -> types`` chain, so *any*
+    ``fitdocs.load.*`` submodule import -- ``fitdocs.load.channels.types``,
+    ``fitdocs.load.priority``, sanctioned or not -- would otherwise trigger
+    it and land ``fitdocs.load.types`` regardless of what ``settings.py``
+    itself does, exactly the failure mode
+    :func:`test_settings_module_does_not_import_load_types_at_runtime`'s
+    predecessor round-tripped through. Seeding only the top package as an
+    inert stub (real ``__path__``, no executed ``__init__.py`` body) lets
+    every real submodule settings.py needs -- ``fitdocs.load.channels.types``,
+    ``fitdocs.load.priority``, and (for the sanctioned exec only)
+    ``fitdocs.load.qa`` -- load for real off that same ``__path__`` without
+    ever running the parent's own eager import. Measured directly: with only
+    this one stub in place, importing real ``fitdocs.load.channels.types``
+    or real ``fitdocs.load.priority`` alone leaves ``fitdocs.load.types``
+    absent, while importing real ``fitdocs.load.qa.types`` alone lands it --
+    confirming the stub isolates exactly the one confound and nothing else.
+
+    A dynamic or lazy import anywhere else in ``settings.py`` -- exactly the
+    class of defect neither the static walk nor a bare presence assertion
+    can see -- makes step 2 still land ``fitdocs.load.types`` in
+    ``sys.modules``, reddening this test as designed. Measured directly: the
+    reviewer's own planted mutation (an unconditional
+    ``importlib.import_module("fitdocs.load.types")`` immediately after
+    ``from fitdocs.settings import SettingsError``) reds this version of the
+    test as a sole failure.
 
     A lazy, function-body import (``def f(): from fitdocs.load.types import
     X``) is caught by the static walk above (it inspects the whole AST, not
-    only module level) but is structurally invisible here: this guard only
-    execs the module's top level and never calls anything defined inside
-    it, so a deferred import inside a function body never runs. Measured
-    directly (not via a companion test below -- the only synthetic-source
-    companion in this module, at
+    only module level) but is structurally invisible to *this* runtime
+    guard's own execution: exec only runs the module's top level and never
+    calls anything defined inside it, so a deferred import inside a function
+    body never runs during either of the two execs above. Measured directly
+    (not via a companion test below -- the only synthetic-source companion
+    in this module, at
     :func:`test_literal_load_table_detection_catches_the_reported_spellings`,
     belongs to the sibling single-reader walk, not this one): inserting such
     a lazy import into ``settings.py`` reddens the static walk above as a
@@ -1762,62 +1818,81 @@ def test_settings_module_leaks_no_dynamic_import_of_load_types(
     """
     repo_root = Path(__file__).resolve().parents[2]
     settings_path = repo_root / "src" / "fitdocs" / "load" / "settings.py"
+    real_source = settings_path.read_text()
+
+    sanctioned_import = "from fitdocs.load.qa.types import FlagSettings"
+    assert real_source.count(sanctioned_import) == 1, (
+        "expected settings.py's sanctioned FlagSettings import to read "
+        f"exactly {sanctioned_import!r}, exactly once -- update this test's "
+        "string replacement if that import is ever reworded"
+    )
+    stand_in = (
+        "class FlagSettings:  # test-only stand-in -- see this test's own "
+        "docstring amendment\n"
+        "    def __init__(self, *args, **kwargs):\n"
+        "        pass\n"
+    )
+    neutralized_source = real_source.replace(sanctioned_import, stand_in, 1)
+    assert neutralized_source != real_source
+    assert sanctioned_import not in neutralized_source, (
+        "the sanctioned import line is still present after the replacement "
+        "-- the neutralized source no longer isolates settings.py from the "
+        "qa package the way this test needs"
+    )
+
     load_src_dir = repo_root / "src" / "fitdocs" / "load"
-    channels_src_dir = load_src_dir / "channels"
-    script = f"""
+
+    def _lands_in_sys_modules(*, source: str, tag: str) -> bool:
+        module_path = tmp_path / f"_settings_{tag}.py"
+        module_path.write_text(source)
+        marker = f"LOAD_TYPES_PRESENT_{tag}"
+        script = f"""
 import sys
 import types
 import importlib.util
 
+# Isolate the one real confound -- fitdocs.load/__init__.py's own eager
+# registry -> types chain -- without stubbing anything else. Every real
+# submodule settings.py needs still loads for real off this same __path__.
 pkg_load = types.ModuleType("fitdocs.load")
 pkg_load.__path__ = [{str(load_src_dir)!r}]
 sys.modules["fitdocs.load"] = pkg_load
 
-pkg_channels = types.ModuleType("fitdocs.load.channels")
-pkg_channels.__path__ = [{str(channels_src_dir)!r}]
-sys.modules["fitdocs.load.channels"] = pkg_channels
-
-stub_types_mod = types.ModuleType("fitdocs.load.channels.types")
-
-
-class SufficiencySettings:
-    def __init__(self, **kwargs):
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-
-
-import enum
-
-
-class ChannelId(str, enum.Enum):
-    POWER = "power"
-    HEART_RATE = "heart_rate"
-    PACE = "pace"
-
-
-stub_types_mod.SufficiencySettings = SufficiencySettings
-stub_types_mod.ChannelId = ChannelId
-sys.modules["fitdocs.load.channels.types"] = stub_types_mod
-
 spec = importlib.util.spec_from_file_location(
-    "_isolated_load_settings", {str(settings_path)!r}
+    "_isolated_load_settings_{tag}", {str(module_path)!r}
 )
 module = importlib.util.module_from_spec(spec)
-sys.modules["_isolated_load_settings"] = module
+sys.modules["_isolated_load_settings_{tag}"] = module
 spec.loader.exec_module(module)
-
-leaked = [m for m in sys.modules if m == "fitdocs.load.types"]
-assert not leaked, f"leaked={{leaked!r}}"
+print("{marker}=" + str("fitdocs.load.types" in sys.modules))
 print("OK")
 """
-    completed = subprocess.run(
-        [sys.executable, "-c", script],
-        capture_output=True,
-        text=True,
-        timeout=30,
+        completed = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert "OK" in completed.stdout
+        for line in completed.stdout.splitlines():
+            if line.startswith(f"{marker}="):
+                return line.split("=", 1)[1] == "True"
+        raise AssertionError(
+            f"no {marker}= marker in subprocess stdout: {completed.stdout!r}"
+        )
+
+    assert _lands_in_sys_modules(source=real_source, tag="real"), (
+        "expected fitdocs.load.types to legitimately land in sys.modules "
+        "via the sanctioned fitdocs.load.qa.types -> fitdocs.load.qa "
+        "(package init) -> fitdocs.load.qa.flags -> fitdocs.load.types "
+        "chain when settings.py's real, unmodified source runs"
     )
-    assert completed.returncode == 0, completed.stderr
-    assert "OK" in completed.stdout
+    assert not _lands_in_sys_modules(source=neutralized_source, tag="neutral"), (
+        "fitdocs.load.types landed in sys.modules even with the sanctioned "
+        "FlagSettings import replaced by a local, import-free stand-in -- "
+        "some other, unsanctioned (dynamic or lazy) import is pulling it in"
+    )
 
 
 # --- Single-reader rule (task 6.4, Req 14.1): package-wide, not just the CLI -

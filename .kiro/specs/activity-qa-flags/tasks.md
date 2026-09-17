@@ -382,7 +382,7 @@ does not add, reference or read a real file.
 
 - [ ] 3. Integration: assembly, the calculator call site, and the published surface
 
-- [ ] 3.1 Assemble the four readings into the contract's quality verdicts
+- [x] 3.1 Assemble the four readings into the contract's quality verdicts
   - Add the single entry point that runs all four checks unconditionally and
     emits one verdict per check in the fixed order, so a check's absence from the
     record never signals inapplicability
@@ -574,3 +574,48 @@ does not add, reference or read a real file.
   end-to-end proof needs to rule out a symmetric field-reading defect
   anywhere in the assembly, it needs its own fixture for that — Req 3.9's
   case alone cannot certify it, by construction, not by omission.
+- **3.1 → 1.3**: landing `qa/__init__.py`'s eager `from .flags import
+  evaluate_flags` (task 3.1, per this task's own explicit instruction) makes
+  `tests/load/test_settings.py::test_settings_module_leaks_no_dynamic_import_of_load_types`
+  (task 1.3's own guard) reproducibly red: that guard's premise —
+  `fitdocs.load.types` never lands in `sys.modules` as a side effect of
+  importing `settings.py` — is exactly what this amendment withdraws for
+  `qa/flags.py`'s sanctioned import of the load contract. The guard is
+  rewritten in place (task 3.1's own commit touches this file, since 1.3 has
+  already landed) into a differential exclusivity check: exec the real
+  `settings.py` off disk and assert `fitdocs.load.types` lands (expected,
+  via the sanctioned `fitdocs.load.qa.types` → `fitdocs.load.qa` (package
+  init) → `fitdocs.load.qa.flags` → `fitdocs.load.types` chain); exec the
+  same source with only that one sanctioned import line swapped for a local,
+  import-free `FlagSettings` stand-in and assert `fitdocs.load.types` is
+  then *absent*. Both execs seed only `sys.modules["fitdocs.load"]` as an
+  empty stub carrying the real package's `__path__` — the earlier stub set
+  (`fitdocs.load.channels`, `fitdocs.load.channels.types`) is dropped as
+  unneeded once measured: with only the top package stubbed, real
+  `fitdocs.load.channels.types` and real `fitdocs.load.priority` load
+  without leaking, and real `fitdocs.load.qa.types` does leak, confirming
+  the one stub isolates exactly the one real confound
+  (`fitdocs.load/__init__.py`'s own eager `registry -> types` chain) and
+  nothing else. Verified against the exact defect this guard exists to
+  catch: an unconditional `importlib.import_module("fitdocs.load.types")`
+  planted at `settings.py`'s own top level reds the differential check as a
+  sole failure, both on the real file and reproduced against a copy. The
+  companion static AST walk
+  (`test_settings_module_does_not_import_load_types_at_runtime`) and the
+  literal-spelling comment block above it were left as they already were —
+  only the runtime guard's technique and final assertion changed.
+- **3.1 → 3.2**: `fitdocs.load.qa.evaluate_flags(*, activity, metrics,
+  outcomes, selected, activity_date, staleness_window_days, settings)` exists
+  and is reachable from the package root. Task 3.2's calculator call site
+  threads `context.activity_date` and `context.settings.benchmark_staleness_days`
+  into the last two keyword arguments — do not construct a `LoadContext` or
+  reach into `context.settings.flags` yourself; pass `settings=context.settings.flags`
+  (the `FlagSettings` sub-value), not the whole `LoadSettings`.
+- **3.1 low-importance residual** (queued, not fixed here): the drift and
+  non-retroactive-staleness basis strings quote the *configured* threshold
+  (`reference_pct`, `window_days`) without a test proving that figure is
+  actually read from the reading rather than a hardcoded literal under a
+  non-default configuration — the *verdict* is independently proven
+  threaded (separate mutations), just not the basis text of the threshold
+  itself. Two one-line assertion additions would close it if a later task
+  touches this file.
