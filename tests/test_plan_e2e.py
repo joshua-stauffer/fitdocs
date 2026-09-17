@@ -34,7 +34,8 @@ from typer.testing import CliRunner
 import fitdocs.plans.engine as plans_engine_module
 from fitdocs import layout
 from fitdocs.cli import app
-from fitdocs.contract import document_date, parse_frontmatter
+from fitdocs.contract import DATE_KEY, document_date, parse_frontmatter
+from fitdocs.layout import WORKOUTS_DIR
 from fitdocs.plans.source import PlanValidationError, load_block
 from tests.test_history_e2e import _fake_system_date
 
@@ -49,6 +50,35 @@ def _plans_dir(root: Path, name: str = "plans") -> Path:
     directory = root / name
     directory.mkdir(parents=True, exist_ok=True)
     return directory
+
+
+def _stage_w1_mon_override_stem(root: Path) -> Path:
+    """A minimal, syntactically valid fitdocs workout document staged at
+    `workouts/run-2026-01-06-am.md` -- the fixture's `w1-mon` override
+    (`tests/plans/fixtures/full.toml`) names this stem; under
+    plan-resolution's chained resolver (Req 8.2/8.7) a missing override
+    stem is a per-file failure, so the page is staged to keep this a
+    success run. Shape copied from `tests/plans/test_reconcile.py::_page`."""
+    path = root / WORKOUTS_DIR / "run-2026-01-06-am.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "\n".join(
+            [
+                "---",
+                "title: Test Workout",
+                "type: workout",
+                f'{DATE_KEY}: "2026-01-06"',
+                "sport: Run",
+                "---",
+                "",
+                "# Test Workout",
+                "",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return path
 
 
 def _snapshot(directory: Path) -> dict[str, bytes]:
@@ -104,6 +134,7 @@ def test_two_sources_render_every_owned_page_with_report_and_frontmatter(
     minimal_source = source_dir / "minimal.toml"
     full_source.write_bytes(_FULL)
     minimal_source.write_bytes(_MINIMAL)
+    _stage_w1_mon_override_stem(tmp_path)
     before = _snapshot(source_dir)
 
     full_row_ids = _current_row_ids(full_source, block_id="full")
@@ -227,6 +258,7 @@ def test_two_plain_runs_are_byte_identical_and_report_unchanged(
     source_dir = _plans_dir(tmp_path)
     (source_dir / "full.toml").write_bytes(_FULL)
     (source_dir / "minimal.toml").write_bytes(_MINIMAL)
+    _stage_w1_mon_override_stem(tmp_path)
     before = _snapshot(source_dir)
 
     first = runner.invoke(app, ["plan", "--out", str(tmp_path)])
@@ -302,6 +334,7 @@ def test_two_fake_dates_and_timezones_are_byte_identical(tmp_path: Path) -> None
     source_dir = _plans_dir(tmp_path)
     (source_dir / "full.toml").write_bytes(_FULL)
     (source_dir / "minimal.toml").write_bytes(_MINIMAL)
+    _stage_w1_mon_override_stem(tmp_path)
     before = _snapshot(source_dir)
     blocks_dir = tmp_path / "blocks"
 

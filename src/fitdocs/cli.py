@@ -6,11 +6,13 @@ rendering or file-pipeline logic of its own. Four feature commands sit on top
 of the baseline ``--version`` / ``--help`` shell:
 
 * ``fitdocs sync SOURCE [--out PATH] [--force] [--no-prompt]`` -- turn every
-  ``.fit`` file under SOURCE into a workout document under the data root, then
-  run the training-load pass over those documents (Req 8.1).
+  ``.fit`` file under SOURCE into a workout document under the data root,
+  then run the training-load pass over those documents, then the plan
+  reconciling pass (Req 8.1, plan-resolution Req 8.1).
 * ``fitdocs regen [--out PATH]`` -- rebuild every document from the data root's
   archived sources alone, then run the load pass prompt-free so previously
-  computed load is restored without user interaction (Req 7.4).
+  computed load is restored without user interaction, then the plan
+  reconciling pass (Req 7.4, plan-resolution Req 8.1).
 * ``fitdocs load [--out PATH] [--recompute] [--calculator ID] [--no-prompt]`` --
   run the load pass standalone over the data root's workout documents, filling
   those that lack results (Req 8.2).
@@ -21,10 +23,12 @@ of the baseline ``--version`` / ``--help`` shell:
   or deleting anything (Req 8.1).
 * ``fitdocs plan [--out PATH]`` -- render every plan source under the
   plan-source directory into its block page and planned pages, reporting
-  rendered, unchanged, invalid, blocked and failed per source (training-blocks
-  Req 8.2, 8.3, 8.6, 8.9). Standalone: this command is never chained onto
-  ``sync``, ``regen``, ``load``, ``history`` or ``check``, and none of those
-  commands change because it exists (Req 8.8).
+  rendered, unchanged, invalid, blocked and failed per source, then run the
+  plan reconciling pass over the same sources -- resolving every planned row
+  against the workout corpus and printing the reconciliation (training-blocks
+  Req 8.2, 8.3, 8.6, 8.9; plan-resolution Req 4.3, 8.1). Standalone: this
+  command is never chained onto ``sync``, ``regen``, ``load``, ``history`` or
+  ``check``, and none of those commands change because it exists (Req 8.8).
 
 Every command, *before any processing* (Req 2.1), resolves the data root by the
 explicit precedence (``--out`` > ``FITDOCS_DATA`` > ``.fitdocs/data-root``
@@ -47,16 +51,20 @@ Exit codes (Req 1.5, 2.2, 8.5, 8.7):
   and/or skipped, nothing failed), a ``check`` run that reports nothing, or a
   ``plan`` run with no plan sources present;
 * ``1`` -- one or more per-file *or* per-document (load) failures occurred,
-  ``check`` reports one or more findings, or ``plan`` finds an invalid,
-  blocked, or failed block;
+  ``check`` reports one or more findings, ``plan`` finds an invalid, blocked,
+  or failed block, or the plan reconciling pass -- chained after ``sync``'s
+  and ``regen``'s load pass, and run standalone by ``plan`` -- finds an
+  override problem (plan-resolution Req 8.7);
 * ``2`` -- a configuration error: an unresolvable data root (its message lists
   the three configuration options), a malformed ``athlete.toml`` / profile, a
-  malformed ``fitdocs.toml`` ``[tiles]``, ``[load]`` or ``[plans]`` table, an
-  unknown ``--calculator``/configured-default id, or a missing source
-  directory -- including a configured plan-source directory that does not
-  exist or is not a directory. The ``[load]`` table is read inside the load
-  pass itself (task 4.1); this module reads none of it directly. A
-  configuration error writes nothing, and for ``check`` means nothing was
+  malformed ``fitdocs.toml`` ``[tiles]``, ``[load]``, ``[history]`` or
+  ``[plans]`` table (the reconciling pass reads ``[history]`` and ``[load]``
+  before it ever calls the plan engine, plan-resolution Req 8.7), an unknown
+  ``--calculator``/configured-default id, or a missing source directory --
+  including a configured plan-source directory that does not exist or is not
+  a directory. The ``[load]`` table is read inside the load pass itself (task
+  4.1); this module reads none of it directly. A configuration error writes
+  nothing, and for ``check`` means nothing was
   scanned either.
 
 Data-root posture (stated here because ``check`` is the first new command to
@@ -92,7 +100,7 @@ from __future__ import annotations
 
 import os
 import sys
-from datetime import datetime, tzinfo
+from datetime import date, datetime, tzinfo
 from importlib.metadata import version
 from pathlib import Path
 from typing import NoReturn
@@ -122,7 +130,14 @@ from fitdocs.load.prompts import NonInteractiveSession, RichInteractionSession
 from fitdocs.load.registry import UnknownCalculatorError
 from fitdocs.load.types import InteractionSession
 from fitdocs.performance.engine import DeriveReport, derive_benchmarks
-from fitdocs.plans import BlockStatus, PlanReport, run_plan
+from fitdocs.plans import (
+    BlockStatus,
+    PlanReport,
+    ReconcileReport,
+    RowState,
+    actual_load_sentence,
+    run_reconcile,
+)
 from fitdocs.plugins import (
     DEFAULT_PLUGIN_SETTINGS,
     BuiltIn,
@@ -237,7 +252,7 @@ def sync_command(
     no_prompt: bool = _NO_PROMPT_OPTION,
     retry_quarantined: bool = _RETRY_QUARANTINED_OPTION,
 ) -> None:
-    """Ingest .fit files into the data root, then compute load.
+    """Ingest .fit files into the data root, then compute load, then reconcile.
 
     With SOURCE: ingest every .fit file under it into the data root -- today's
     exact behavior (recursive discovery, a strictly read-only source, no
@@ -255,10 +270,14 @@ def sync_command(
 
     Either way, after processing the load pass runs over the data root,
     interactively unless --no-prompt is given or stdin is not a terminal, and
-    --out/--force/--no-prompt keep their exact meanings on both paths.
-    Third-party calculator discovery runs once, before any engine call
-    (plugin-api); a plugin load error is a warning, printed after the summaries
-    -- never a failure, and never changes the exit code.
+    --out/--force/--no-prompt keep their exact meanings on both paths. The
+    plan reconciling pass then runs, chained, over the same data root
+    (plan-resolution Req 8.1): its own report is printed only when it has
+    something to say, and an override problem it finds folds into this
+    command's exit status exactly like a per-file or load failure. Third-party
+    calculator discovery runs once, before any engine call (plugin-api); a
+    plugin load error is a warning, printed after the summaries -- never a
+    failure, and never changes the exit code.
     """
     tz = _local_tz()
     data_root = _resolved_data_root(out)
@@ -291,9 +310,17 @@ def sync_command(
         load_report = _run_load_pass(
             data_root, session=_build_session(no_prompt=no_prompt)
         )
+        # The plan reconciling pass runs after the load pass, chained
+        # (plan-resolution Req 8.1, 8.2, 8.5).
+        plan_report = _run_plan_pass(data_root, today=_today(), chained=True)
         _report_plugin_errors(plugin_report)
-        # Either a per-file OR a per-document (load) failure makes the run exit 1 (8.5).
-        _finish(failed=bool(report.failures) or bool(load_report.failures))
+        # A per-file OR a per-document (load) OR a reconciling-pass failure
+        # makes the run exit 1 (8.5, plan-resolution Req 8.7).
+        _finish(
+            failed=bool(report.failures)
+            or bool(load_report.failures)
+            or plan_report.failed
+        )
         return
 
     # No SOURCE: drain the configured inbox (inbox Req 2.1).
@@ -318,11 +345,18 @@ def sync_command(
     # The load pass runs after the drain (Req 2.1), honoring --no-prompt exactly
     # as the explicit-source path does (Req 2.5).
     load_report = _run_load_pass(data_root, session=_build_session(no_prompt=no_prompt))
+    # The plan reconciling pass runs after the load pass, chained
+    # (plan-resolution Req 8.1, 8.2, 8.5), same as the explicit-source path.
+    plan_report = _run_plan_pass(data_root, today=_today(), chained=True)
     _report_plugin_errors(plugin_report)
-    # Only per-file failures and load failures drive the failure outcome --
-    # deferrals, known-quarantined files, and failed moves never do (inbox Req
-    # 4.6, 5.3, 6.5, 7.2).
-    _finish(failed=bool(drain_report.sync.failures) or bool(load_report.failures))
+    # Per-file failures, load failures and a reconciling-pass failure drive
+    # the failure outcome -- deferrals, known-quarantined files, and failed
+    # moves never do (inbox Req 4.6, 5.3, 6.5, 7.2; plan-resolution Req 8.7).
+    _finish(
+        failed=bool(drain_report.sync.failures)
+        or bool(load_report.failures)
+        or plan_report.failed
+    )
 
 
 def _inbox_preflight(
@@ -375,10 +409,12 @@ def regen_command(
     """Rebuild every workout document from the data root's archived sources.
 
     Regeneration resets frontmatter to generated values; a following prompt-free
-    load pass restores previously computed load from the preserved region.
-    Third-party calculator discovery runs once, before any engine call
-    (plugin-api); a plugin load error is a warning, printed after the summaries
-    -- never a failure, and never changes the exit code.
+    load pass restores previously computed load from the preserved region, then
+    the plan reconciling pass runs, chained, over the same data root
+    (plan-resolution Req 8.1). Third-party calculator discovery runs once,
+    before any engine call (plugin-api); a plugin load error is a warning,
+    printed after the summaries -- never a failure, and never changes the exit
+    code.
     """
     tz = _local_tz()
     data_root = _resolved_data_root(out)
@@ -394,8 +430,13 @@ def regen_command(
     # regen is always non-interactive, which makes its load pass restore-only:
     # computed load is re-derived from the preserved payload, no prompting (7.4).
     load_report = _run_load_pass(data_root, session=NonInteractiveSession())
+    # The plan reconciling pass runs after the load pass, chained
+    # (plan-resolution Req 8.1, 8.2, 8.5).
+    plan_report = _run_plan_pass(data_root, today=_today(), chained=True)
     _report_plugin_errors(plugin_report)
-    _finish(failed=bool(report.failures) or bool(load_report.failures))
+    _finish(
+        failed=bool(report.failures) or bool(load_report.failures) or plan_report.failed
+    )
 
 
 @app.command("load")
@@ -493,31 +534,29 @@ def history_command(
 def plan_command(
     out: Path | None = _OUT_OPTION,
 ) -> None:
-    """Render every plan source into its block page and planned pages.
+    """Render every plan source into its block page and planned pages, then
+    reconcile every current row against the workout corpus.
 
     Rebuilds every block from whatever the plan-source directory currently
     holds (Req 8.1) -- there is no --force and no --dry-run, because the
     pages are always rebuilt and an unchanged block is detected by byte
     comparison alone (Req 8.5). Standalone (Req 8.8): this command is never
     chained onto sync, regen, load, history or check, and none of those
-    commands change because this command exists. A malformed ``[plans]``
-    settings table, or a configured plan-source directory that does not
-    exist or is not a directory, is a configuration error exactly like every
-    other malformed table this module reads (Req 8.3).
+    commands change because this command exists. After rendering, the plan
+    reconciling pass resolves every current row of every valid block against
+    the workout corpus and prints its own report in full -- unlike the
+    chained call sites, this command's own report is never suppressed
+    (plan-resolution Req 4.3, 8.6). A malformed ``[plans]``, ``[history]`` or
+    ``[load]`` settings table, or a configured plan-source directory that
+    does not exist or is not a directory, is a configuration error exactly
+    like every other malformed table this module reads (Req 8.3,
+    plan-resolution Req 8.3).
     """
     data_root = _resolved_data_root(out)
-    try:
-        report = run_plan(data_root)
-    except SettingsError as exc:
-        # Covers PlanSettingsError -- a malformed [plans] table, or a
-        # configured source directory that does not exist or is not a
-        # directory -- which subclasses the shared SettingsError this
-        # function already maps to the configuration exit; no new branch
-        # is needed (Req 8.3).
-        _config_error(str(exc))
-    _report_plan(report, data_root=data_root)
-    # Any invalid, blocked or failed block exits 1; a run with no plan
-    # sources -- or none configured at all -- is success (Req 8.9).
+    report = _run_plan_pass(data_root, today=_today(), chained=False)
+    # Any invalid, blocked or failed block, or a reconciled block carrying an
+    # override problem, exits 1; a run with no plan sources -- or none
+    # configured at all -- is success (Req 8.9, plan-resolution Req 8.7).
     _finish(failed=report.failed)
 
 
@@ -705,6 +744,45 @@ def _run_load_pass(
     return report
 
 
+def _run_plan_pass(data_root: Path, *, today: date, chained: bool) -> ReconcileReport:
+    """Run the plan reconciling pass, print its report, and return it
+    (plan-resolution Req 4.3, 8.1, 8.2, 8.5, 8.6, 8.7).
+
+    A configuration error raised by :func:`~fitdocs.plans.run_reconcile` (a
+    malformed ``[plans]``, ``[history]`` or ``[load]`` table, or a configured
+    plan-source directory that does not exist or is not a directory) is
+    classified exactly like every other settings fault this module reads --
+    an instructive message to stderr and exit ``2`` -- via
+    :func:`_config_error`; every one of those errors is a
+    :class:`~fitdocs.settings.SettingsError` subclass, so one ``except``
+    clause covers them all.
+
+    The wave-1 plan report (:func:`_report_plan`) prints in full when
+    ``chained`` is ``False`` -- including the absent-directory note wave 1
+    pins -- and is suppressed only when ``chained`` is ``True`` *and* the
+    plan report has no block, no unsourced path and no foreign declaration:
+    a chained run over an unconfigured or empty plan-source directory stays
+    silent about it, but a chained run that actually found something to
+    report still prints it. The reconciliation report
+    (:func:`_report_reconcile`) always prints, chained or not.
+    """
+    try:
+        report = run_reconcile(data_root, today=today)
+    except SettingsError as exc:
+        _config_error(str(exc))
+    plan = report.plan
+    quiet = (
+        chained
+        and not plan.blocks
+        and not plan.unsourced
+        and not plan.declarations_foreign
+    )
+    if not quiet:
+        _report_plan(plan, data_root=data_root)
+    _report_reconcile(report)
+    return report
+
+
 def _local_tz() -> tzinfo:
     """The system local timezone, threaded explicitly into the engine (Req 5.x).
 
@@ -715,6 +793,21 @@ def _local_tz() -> tzinfo:
     local = datetime.now().astimezone().tzinfo
     assert local is not None  # astimezone() always attaches the local tzinfo
     return local
+
+
+def _today() -> date:
+    """The local calendar date, for the plan reconciling pass (Req 5.5).
+
+    Deliberately ``date.today()`` and not ``datetime.now(_local_tz()).date()``:
+    ``date.today()`` reads the clock through the Python-level ``time.time`` and
+    honours ``TZ``/``tzset``, which is exactly what the fake-date context
+    manager the end-to-end tests reuse (``tests/test_history_e2e.py:211-245``)
+    hooks; ``datetime.now()`` reads the C clock and is invisible to it, so the
+    end-to-end tests could never move ``today`` if this read the clock that
+    way instead. This is the only clock read this feature makes; no guard
+    forbids a clock read in this module.
+    """
+    return date.today()  # deliberately date.today(), not datetime.now(...) -- see above
 
 
 def _resolved_data_root(out: Path | None) -> Path:
@@ -1334,6 +1427,94 @@ def _report_plan(report: PlanReport, *, data_root: Path) -> None:
 
     if report.note is not None:
         console.print(report.note, markup=False, highlight=False, soft_wrap=True)
+
+
+def _report_reconcile(report: ReconcileReport) -> None:
+    """Print the reconciling pass's own report: one summary line per block,
+    each block's mesocycle/ambiguous/problem detail, then the run's chosen
+    methodology once (plan-resolution Req 4.3, 6.3-6.7, 8.6).
+
+    Per block: ``reconciled <block_id>: N planned -- a matched (b
+    ambiguous), c overridden, d skipped, e not logged, f upcoming; g
+    unplanned`` -- the per-state list follows the block page's own
+    count-line rule (zero-count states omitted, the ambiguous parenthesis
+    only when there is at least one ambiguous row, and no list -- no
+    ``" -- "`` at all -- when the block has no rows); ``g unplanned`` always
+    prints. Beneath that: one indented ``mesocycle n: <actual_load_sentence>``
+    line per mesocycle, reusing :func:`~fitdocs.plans.actual_load_sentence`'s
+    own sentence verbatim; ``ambiguous: <ids>`` when the block has any; one
+    indented :meth:`~fitdocs.plans.ReconcileProblem.describe` line per
+    override problem. Once, after every block: ``methodology: <name>
+    (<source>)`` when the run chose one, or ``methodology: none chosen --
+    <detail>`` when it could not -- nothing when the resolver was never
+    called at all (no valid block existed). Detail lines print with
+    ``markup=False, highlight=False, soft_wrap=True``, matching every other
+    detail line this module prints.
+    """
+    console = Console()
+    for reconciliation in report.blocks:
+        counts = reconciliation.counts()
+        ambiguous = reconciliation.ambiguous
+        segments: list[str] = []
+        for state in RowState:
+            n = counts[state]
+            if n == 0:
+                continue
+            if state is RowState.MATCHED and ambiguous:
+                segments.append(f"{n} {state.value} ({len(ambiguous)} ambiguous)")
+            else:
+                segments.append(f"{n} {state.value}")
+        block_id = reconciliation.block_id
+        line = f"reconciled {block_id}: {len(reconciliation.rows)} planned"
+        if segments:
+            line += " -- " + ", ".join(segments)
+        line += f"; {reconciliation.unplanned_count} unplanned"
+        console.print(line, markup=False, highlight=False, soft_wrap=True)
+
+        for index, mesocycle in enumerate(reconciliation.mesocycles, start=1):
+            console.print(
+                f"  mesocycle {index}: {actual_load_sentence(mesocycle)}",
+                markup=False,
+                highlight=False,
+                soft_wrap=True,
+            )
+        if ambiguous:
+            console.print(
+                f"  ambiguous: {', '.join(ambiguous)}",
+                markup=False,
+                highlight=False,
+                soft_wrap=True,
+            )
+        for problem in reconciliation.problems:
+            console.print(
+                f"  {problem.describe()}", markup=False, highlight=False, soft_wrap=True
+            )
+
+    methodology = report.methodology
+    if methodology is not None:
+        # Distinguished by shape (via `getattr`), not by an `isinstance`
+        # against `fitdocs.history.MethodologyChoice`/`MethodologyProblem`:
+        # this module imports no `fitdocs.history` name beyond
+        # `fitdocs.history.engine`'s own (`test_no_other_command_
+        # implementation_reaches_run_history`'s module-wide import guard
+        # pins that surface to exactly one node).
+        source = getattr(methodology, "source", None)  # noqa: B009
+        if source is not None:
+            name = getattr(methodology, "methodology")  # noqa: B009
+            console.print(
+                f"methodology: {name} ({source})",
+                markup=False,
+                highlight=False,
+                soft_wrap=True,
+            )
+        else:
+            detail = getattr(methodology, "detail")  # noqa: B009
+            console.print(
+                f"methodology: none chosen -- {detail}",
+                markup=False,
+                highlight=False,
+                soft_wrap=True,
+            )
 
 
 def _finish(*, failed: bool) -> None:

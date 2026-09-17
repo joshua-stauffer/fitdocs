@@ -1906,15 +1906,23 @@ def test_literal_load_table_detection_catches_the_reported_spellings(
 def test_load_load_settings_is_called_the_documented_number_of_times_per_command(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Req 14.1, package-wide: ``load_load_settings`` is called exactly once
-    per ``fitdocs sync``, ``fitdocs regen``, ``fitdocs load``, and
-    ``fitdocs derive-benchmarks`` invocation (the single read inside
-    ``apply_load`` itself, task 4.1, and inside
-    ``fitdocs.performance.engine.derive_benchmarks`` itself,
+    """Req 14.1, package-wide, per command: ``fitdocs sync`` and
+    ``fitdocs regen`` each call ``load_load_settings`` exactly TWICE --
+    once inside ``apply_load`` itself (task 4.1) and a second time inside
+    the chained plan reconciling pass (``fitdocs.plans.reconcile.
+    run_reconcile``, which reads ``[load]`` for ``default_calculator``,
+    plan-resolution design § ReconcilePass / Req 8.1) that both commands
+    now run after the load pass (plan-resolution task 3.2 -- see the
+    controller ruling applied by this task, recorded against this test in
+    ``.kiro/specs/plan-resolution/tasks.md`` Implementation Notes
+    ``(3.2)``); ``fitdocs load`` calls it exactly ONCE (the single read
+    inside ``apply_load`` itself, task 4.1 -- ``load`` does not chain the
+    reconciling pass); ``fitdocs derive-benchmarks`` calls it exactly ONCE
+    (inside ``fitdocs.performance.engine.derive_benchmarks`` itself,
     performance-benchmarks task 4.2 -- see the controller ruling recorded
     against this test in ``.kiro/specs/performance-benchmarks/tasks.md``
-    Implementation Notes ``(4.1 -> 4.2)``) and exactly zero times for
-    ``fitdocs check`` (the command that runs the read-only contract audit,
+    Implementation Notes ``(4.1 -> 4.2)``); and ``fitdocs check`` calls it
+    exactly ZERO times (the command that runs the read-only contract audit,
     ``src/fitdocs/audit.py``) -- ``audit()`` never touches the load engine or
     the ``[load]`` table at all.
 
@@ -2012,15 +2020,15 @@ def test_load_load_settings_is_called_the_documented_number_of_times_per_command
 
     synced = runner.invoke(app, ["sync", str(source), "--out", str(data_root)])
     assert synced.exit_code == 0, synced.output
-    assert len(calls) == 1, (
-        f"fitdocs sync called load_load_settings {len(calls)} times, expected 1"
+    assert len(calls) == 2, (
+        f"fitdocs sync called load_load_settings {len(calls)} times, expected 2"
     )
     calls.clear()
 
     regenerated = runner.invoke(app, ["regen", "--out", str(data_root)])
     assert regenerated.exit_code == 0, regenerated.output
-    assert len(calls) == 1, (
-        f"fitdocs regen called load_load_settings {len(calls)} times, expected 1"
+    assert len(calls) == 2, (
+        f"fitdocs regen called load_load_settings {len(calls)} times, expected 2"
     )
     calls.clear()
 

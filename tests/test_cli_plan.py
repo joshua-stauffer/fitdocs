@@ -22,7 +22,8 @@ from typer.testing import CliRunner
 
 from fitdocs import cli as cli_module
 from fitdocs.cli import _report_plan, app
-from fitdocs.contract import GENERATED_PREFIX
+from fitdocs.contract import DATE_KEY, GENERATED_PREFIX
+from fitdocs.layout import WORKOUTS_DIR
 from fitdocs.plans.engine import BlockOutcome, BlockStatus, PlanReport
 from fitdocs.plans.model import PlanProblem
 from fitdocs.plans.source import PlanValidationError, load_block
@@ -38,6 +39,35 @@ def _plans_dir(root: Path, name: str = "plans") -> Path:
     directory = root / name
     directory.mkdir(parents=True, exist_ok=True)
     return directory
+
+
+def _stage_w1_mon_override_stem(root: Path) -> Path:
+    """A minimal, syntactically valid fitdocs workout document staged at
+    `workouts/run-2026-01-06-am.md` -- the fixture's `w1-mon` override
+    (`tests/plans/fixtures/full.toml`) names this stem; under
+    plan-resolution's chained resolver (Req 8.2/8.7) a missing override
+    stem is a per-file failure, so the page is staged to keep this a
+    success run. Shape copied from `tests/plans/test_reconcile.py::_page`."""
+    path = root / WORKOUTS_DIR / "run-2026-01-06-am.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "\n".join(
+            [
+                "---",
+                "title: Test Workout",
+                "type: workout",
+                f'{DATE_KEY}: "2026-01-06"',
+                "sport: Run",
+                "---",
+                "",
+                "# Test Workout",
+                "",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return path
 
 
 def _write_settings(root: Path, text: str) -> Path:
@@ -104,6 +134,7 @@ def test_success_prints_every_outcome_line_and_the_counts(tmp_path: Path) -> Non
     source_dir = _plans_dir(tmp_path)
     (source_dir / "full.toml").write_bytes(_FULL)
     (source_dir / "minimal.toml").write_bytes(_MINIMAL)
+    _stage_w1_mon_override_stem(tmp_path)
 
     result = runner.invoke(app, ["plan", "--out", str(tmp_path)])
 
@@ -662,27 +693,35 @@ def test_no_other_command_implementation_reaches_run_plan() -> None:
     """Structural absence test, closed module-wide (`ast.walk(tree)`
     everywhere below, never `tree.body` or a single function's own body), in
     the shape `tests/test_cli_history.py:660`'s `run_history` guard uses.
-    Written knowing it moves: `plan-resolution` re-anchors this exact guard
-    when it chains the pass and makes `plan_command` pass its resolver
-    (design.md, Cross-spec obligations (training-blocks <-> plan-resolution),
-    item 5) -- until then, this pins `run_plan` to exactly one call site.
 
-    Three independent, module-wide guards:
+    **Re-anchored by `plan-resolution` task 3.2** (design.md, Cross-spec
+    obligations (training-blocks <-> plan-resolution), item 5): the pass is
+    now chained after `sync`'s and `regen`'s load pass, and `plan_command`
+    runs it standalone through the same helper, so wave 1's engine function,
+    `run_plan`, is no longer named anywhere in this module at all --
+    `_run_plan_pass` calls `fitdocs.plans.run_reconcile` instead, which
+    itself threads a resolver into `run_plan` from inside `fitdocs.plans`,
+    not from `cli.py`. Three independent, module-wide guards:
 
     (a) Every `ast.Import`/`ast.ImportFrom` node anywhere in the module
         whose imported module or aliased name starts with `fitdocs.plans`
         is exactly one node: the module-level `from fitdocs.plans import
-        BlockStatus, PlanReport, run_plan`, pinned by equality on
+        BlockStatus, PlanReport, ReconcileReport, RowState,
+        actual_load_sentence, run_reconcile`, pinned by equality on
         `(module, [(name, asname), ...])`.
-    (b) Every `ast.Name` *load* of `run_plan` anywhere in the module numbers
-        exactly one, and that one sits inside `plan_command`'s own body.
+    (b) Every `ast.Name` *load* of `run_reconcile` anywhere in the module
+        numbers exactly one, and that one sits inside `_run_plan_pass`'s own
+        body. Every `ast.Name` *load* of `run_plan` anywhere in the module
+        numbers exactly zero.
     (c) Zero `ast.Attribute` nodes anywhere in the module have `attr ==
-        "run_plan"`.
+        "run_plan"` or `attr == "run_reconcile"`.
 
-    Named mutation (call `run_plan` from `sync_command` too): guard (b)
-    reds -- a second `ast.Name` load of `run_plan` now exists outside
-    `plan_command`, regardless of whether `sync_command`'s call is ever
-    reached."""
+    Named mutations: call `run_reconcile` from `plan_command` directly
+    (bypassing `_run_plan_pass`) -- guard (b) reds, since the one `ast.Name`
+    load of `run_reconcile` now sits outside `_run_plan_pass`. Re-add
+    `run_plan` to the module-level import and call it from `plan_command` --
+    guard (a) reds (the import set no longer equals the pinned one) and the
+    zero-`run_plan`-names half of guard (b) reds together."""
     source = inspect.getsource(cli_module)
     tree = ast.parse(source)
 
@@ -705,30 +744,93 @@ def test_no_other_command_implementation_reaches_run_plan() -> None:
     assert {(alias.name, alias.asname) for alias in only_plans_import.names} == {
         ("BlockStatus", None),
         ("PlanReport", None),
-        ("run_plan", None),
+        ("ReconcileReport", None),
+        ("RowState", None),
+        ("actual_load_sentence", None),
+        ("run_reconcile", None),
     }
 
-    plan_command = next(
+    run_plan_pass = next(
         node
         for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef) and node.name == "plan_command"
+        if isinstance(node, ast.FunctionDef) and node.name == "_run_plan_pass"
     )
     all_run_plan_names = [
         node
         for node in ast.walk(tree)
         if isinstance(node, ast.Name) and node.id == "run_plan"
     ]
-    assert len(all_run_plan_names) == 1
-    names_inside_plan_command = [
-        node
-        for node in ast.walk(plan_command)
-        if isinstance(node, ast.Name) and node.id == "run_plan"
-    ]
-    assert names_inside_plan_command == all_run_plan_names
+    assert all_run_plan_names == []
 
+    all_run_reconcile_names = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Name) and node.id == "run_reconcile"
+    ]
+    assert len(all_run_reconcile_names) == 1
+    names_inside_run_plan_pass = [
+        node
+        for node in ast.walk(run_plan_pass)
+        if isinstance(node, ast.Name) and node.id == "run_reconcile"
+    ]
+    assert names_inside_run_plan_pass == all_run_reconcile_names
+
+    forbidden_attrs = {"run_plan", "run_reconcile"}
     attribute_accesses = [
         node
         for node in ast.walk(tree)
-        if isinstance(node, ast.Attribute) and node.attr == "run_plan"
+        if isinstance(node, ast.Attribute) and node.attr in forbidden_attrs
     ]
     assert attribute_accesses == []
+
+
+def test_run_plan_pass_is_loaded_exactly_four_times() -> None:
+    """`_run_plan_pass` is loaded exactly four times, module-wide: inside
+    `sync_command` (twice -- the explicit-source branch and the drain
+    branch), `regen_command`, and `plan_command`, and nowhere else (design.md,
+    "CliChaining", the AST pin re-stated; plan-resolution task 3.2).
+
+    Named mutation (call `_run_plan_pass` from `load_command` too): the
+    count assertion below reds (5 != 4) and the containing-function-names
+    assertion reds together (`load_command` is not one of the four named
+    functions)."""
+    source = inspect.getsource(cli_module)
+    tree = ast.parse(source)
+
+    named_functions = {"sync_command", "regen_command", "plan_command"}
+    functions_by_name = {
+        node.name: node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name in named_functions
+    }
+    assert set(functions_by_name) == named_functions
+
+    all_loads = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Name) and node.id == "_run_plan_pass"
+    ]
+    assert len(all_loads) == 4
+
+    sync_loads = [
+        node
+        for node in ast.walk(functions_by_name["sync_command"])
+        if isinstance(node, ast.Name) and node.id == "_run_plan_pass"
+    ]
+    assert len(sync_loads) == 2
+    regen_loads = [
+        node
+        for node in ast.walk(functions_by_name["regen_command"])
+        if isinstance(node, ast.Name) and node.id == "_run_plan_pass"
+    ]
+    assert len(regen_loads) == 1
+    plan_loads = [
+        node
+        for node in ast.walk(functions_by_name["plan_command"])
+        if isinstance(node, ast.Name) and node.id == "_run_plan_pass"
+    ]
+    assert len(plan_loads) == 1
+
+    assert {id(node) for node in sync_loads + regen_loads + plan_loads} == {
+        id(node) for node in all_loads
+    }
