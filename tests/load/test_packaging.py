@@ -186,6 +186,7 @@ _LOAD_MODULE_ALLOWLIST = frozenset(
         "fitdocs/load/qa/__init__.py",
         "fitdocs/load/qa/types.py",
         "fitdocs/load/qa/sources.py",
+        "fitdocs/load/qa/cadence.py",
     }
 )
 

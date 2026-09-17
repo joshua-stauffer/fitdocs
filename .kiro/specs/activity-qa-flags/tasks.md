@@ -238,7 +238,7 @@ does not add, reference or read a real file.
 
 - [ ] 2. Core: the four checks, each a pure function over its own inputs
 
-- [ ] 2.1 (P) Measure the paired coverage and the per-span statistics of the two streams
+- [x] 2.1 (P) Measure the paired coverage and the per-span statistics of the two streams
   - Build the paired-presence view of the heart-rate and cadence streams and
     measure its coverage through the channel layer's existing time-weighted
     coverage function, so the load layer keeps exactly one coverage definition
@@ -546,3 +546,21 @@ does not add, reference or read a real file.
   `min_paired_coverage` cite neither, per Requirement 6.10's "or reasoning"
   clause). The code is right; the design sentence is stale prose and is
   queued for a spec-doc fix, not a re-implementation.
+- **1.3**: `src/fitdocs/load/settings.py`'s pre-existing `_setting_coverage`
+  helper (load-channels' own, same file) shares byte-identical admissible-
+  range wording with this task's new unit-float flag validators, and that
+  wording is itself unpinned by any load-channels test — same Req-6.5-shaped
+  defect, different owner. Queued at spec end, not this feature's to fix.
+- **2.1 → 2.2**: `span_statistics()` computes `SpanStatistic.locked` itself
+  (conjunctive rule: correlation ≥ `cadence_lock_min_correlation` AND
+  `median_delta_bpm` ≤ `cadence_lock_max_delta_bpm`, both boundaries now
+  pinned). Task 2.2 consumes `span.locked` as already decided — sums the
+  durations of locked spans, applies the modality/absent-stream/coverage/
+  span-count not-assessed gates, and compares the sum against
+  `cadence_lock_min_duration_s`. Do not recompute the conjunction in 2.2.
+- **2.1 → 2.2**: a span's `duration_s` is always the full `window_s`, even
+  when its interior pairing is sparse (a single paired sample near a window's
+  edge still yields a `window_s`-wide span once the paired-coverage minimum
+  is separately satisfied). `len(spans) * window_s` is therefore not the
+  assessed wall-clock extent — do not use it as such when reasoning about
+  what fraction of the activity 2.2's duration sum represents.
