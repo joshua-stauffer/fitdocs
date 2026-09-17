@@ -257,6 +257,12 @@ def _overridden_section(outcome: RowOutcome, corpus: Corpus) -> tuple[str, ...]:
 def _split_section(
     block: Block, row: PlannedWorkout, outcome: RowOutcome, corpus: Corpus
 ) -> tuple[str, ...]:
+    """The NOT_LOGGED/UPCOMING section: the state sentence, an optional
+    competitor sentence, and an optional `Logged on this day:` listing --
+    each paragraph-level entry separated from the next by a blank entry
+    (the same CommonMark lazy-continuation/soft-break reason `_block_lines`
+    and `_after_table_lines` separate theirs); the `Logged on this day:`
+    bullets follow their own header directly."""
     if outcome.state is RowState.NOT_LOGGED:
         lines = [
             f"Not logged: no logged workout on {row.date.isoformat()} is of this type."
@@ -273,6 +279,7 @@ def _split_section(
         ordered_claimants = [row_id for row_id in group if row_id in claimed]
         names = ", ".join(f"`{row_id}`" for row_id in ordered_claimants)
         m = len(ordered_claimants)
+        lines.append("")
         lines.append(
             f"{len(group)} planned workouts of this type on this day "
             f"competed for {m} {_plural(m, 'logged workout')}, assigned to "
@@ -280,6 +287,7 @@ def _split_section(
         )
 
     if outcome.same_day:
+        lines.append("")
         lines.append("Logged on this day:")
         for stem, claimant in outcome.same_day:
             workout = corpus.by_stem(stem)
@@ -374,7 +382,13 @@ def _mesocycle_bullet(workout: LoggedWorkout, methodology: str | None) -> str:
 
 def _after_table_lines(mesocycle: MesocycleLoad) -> tuple[str, ...]:
     """The unplanned and excluded listings after the day table (Req 6.6,
-    6.7)."""
+    6.7). When both listings are present, a blank entry separates the last
+    unplanned bullet from the `EXCLUDED` heading -- under CommonMark a
+    plain line directly after a list item is a lazy continuation of that
+    item, so without the blank line the heading and the excluded bullets
+    would be swallowed into the unplanned list (the same soft-break trap
+    the wave-1 renderers guard against; see `block_page.py`'s blank-line
+    separation between sections)."""
     lines: list[str] = []
     if mesocycle.unplanned:
         n = len(mesocycle.unplanned)
@@ -387,6 +401,8 @@ def _after_table_lines(mesocycle: MesocycleLoad) -> tuple[str, ...]:
             for workout in mesocycle.unplanned
         )
     if mesocycle.excluded:
+        if lines:
+            lines.append("")
         lines.append(EXCLUDED)
         lines.extend(
             _mesocycle_bullet(workout, mesocycle.methodology)
@@ -446,14 +462,29 @@ def _methodology_line(
 
 
 def _block_lines(reconciliation: BlockReconciliation) -> tuple[str, ...]:
+    """The block-level `## Resolution` lines: the count line, the
+    methodology line, an optional `Ambiguous:` sentence, and an optional
+    `Problems:` header -- each rendered as its own paragraph-level line, so a
+    blank entry separates every pair of them (CommonMark would otherwise
+    soft-wrap each consecutive plain line, including `Problems:` itself,
+    into one shared paragraph with the line above it; verified with
+    markdown-it-py, without the blank the `Problems:` text becomes the last
+    line of that merged paragraph's single inline token rather than its own
+    paragraph). The `Problems:` bullets themselves follow their header
+    directly: a list may interrupt a paragraph without a blank line between
+    the header and its own items, so no blank separates `Problems:` from the
+    bullets that follow it."""
     lines: list[str] = [
         _count_line(reconciliation),
+        "",
         _methodology_line(reconciliation.methodology),
     ]
     if reconciliation.ambiguous:
         ids = ", ".join(f"`{row_id}`" for row_id in reconciliation.ambiguous)
+        lines.append("")
         lines.append(f"Ambiguous: {ids} -- settle them with override entries.")
     if reconciliation.problems:
+        lines.append("")
         lines.append("Problems:")
         lines.extend(f"- {problem.describe()}" for problem in reconciliation.problems)
     return tuple(lines)

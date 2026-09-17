@@ -82,9 +82,10 @@ Actual load: not computed -- no methodology chosen (see Resolution below).
 | Sat 2026-02-21 | | _rest_ | | |
 | Sun 2026-02-22 | | _rest_ | | |
 
-Unplanned: 2 logged workouts in this window match no planned workout.
+Unplanned: 3 logged workouts in this window match no planned workout.
 - [m3-unscored-a](../workouts/m3-unscored-a.md) -- 2026-02-18, Run, unscored
 - [m3-unscored-b](../workouts/m3-unscored-b.md) -- 2026-02-19, Run, unscored
+- [m3-excluded-log](../workouts/m3-excluded-log.md) -- 2026-02-20, Run, load 80
 
 ## Mesocycle 4 -- 2026-02-23 to 2026-03-01 (7 days)
 
@@ -108,8 +109,11 @@ Unplanned: 1 logged workout in this window matches no planned workout.
 ## Resolution
 
 Planned workouts: 11 -- 6 matched (1 ambiguous), 1 overridden, 1 skipped, 2 not logged, 1 upcoming.
+
 Methodology: none chosen -- the archive records more than one methodology and none was requested or configured: 'banister' (1 pages), 'threshold' (7 pages). Pass --methodology, or set [history].methodology or [load].default_calculator, to choose one.
+
 Ambiguous: `w1-fri-a` -- settle them with override entries.
+
 Problems:
 - override[0] (id w2-mon): stem `w2-missing-log` not found among the logged workouts
 

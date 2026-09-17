@@ -37,8 +37,12 @@
 # Mesocycle 2 (2026-02-09..2026-02-15, target 250): one scored, one
 # unscored, one excluded (scored under another methodology) -- "lower
 # bound, with an exclusion".
-# Mesocycle 3 (2026-02-16..2026-02-22, no target): two unscored, unclaimed
-# pages -- "none scored" (not computed) and "with unplanned".
+# Mesocycle 3 (2026-02-16..2026-02-22, no target): three unclaimed pages --
+# two unscored ("none scored", not computed) and one scored under another
+# methodology, which is both unplanned (no row claims it) and excluded
+# (scored under "banister" rather than the chosen "threshold"): "with
+# unplanned" together with "with excluded" on the same mesocycle, the case
+# the after-table blank-line separation between the two listings pins.
 # Mesocycle 4 (2026-02-23..2026-03-01, no target): one scored, unclaimed
 # page -- "with unplanned" again, cleanly (no override, unplanned or
 # excluded workout in this fixture is dated 2026-02-24, the fixture's
