@@ -67,7 +67,7 @@
   - _Requirements: 1.1, 1.3, 1.4, 1.6, 1.8, 1.9, 1.10, 10.1_
   - _Boundary: PackageManifest_
 
-- [ ] 1.3 (P) Establish the changelog
+- [x] 1.3 (P) Establish the changelog
   - A changelog in the established human-written format: a standing unreleased section, releases newest first with version and date, and the six canonical change categories
   - An initial unreleased entry describing the work this phase delivers, written in terms of user-observable behavior rather than commit subjects
   - The convention recorded in the file itself that an entry touching a governed contract names the contract and the action the user or plugin author must take
@@ -287,3 +287,4 @@
 ## Implementation Notes
 - 1.1: the released-version scan (`tests/test_version_identity.py`) walks `git ls-files -co --exclude-standard` and keeps a count-exact allowlist of two pre-existing non-declaration lines (`docs/plugins.md` example snippet, `tests/load/test_packaging.py` comment). Any task that edits either line, or adds a `CHANGELOG.md` newest entry / a `SKILL.md` `metadata.version`, must keep that test green in the same change — a second whole-token copy of the literal anywhere else is a failure.
 - 1.2: hatchling ALWAYS adds `.gitignore` and `PKG-INFO` to the sdist regardless of `only-include`, and auto-ships README/LICENSE -- task 1.4's `[sdist].required` and 3.2's "member set equals the allowlist" must account for both extras. Mutating `pyproject.toml` under `uv run` silently re-resolves `uv.lock`; restore it with `git show HEAD:uv.lock > uv.lock` after any manifest mutation. A dangling symlink named in `only-include` is not shipped; only the default (no sdist table) build ships it -- the whole-table removal is the only meaningful mutation.
+- 1.3 (5 review rounds, zero production defects after round 1): for any guard/walker test, state the discrimination sweep criterion UP FRONT -- for every token of every rule, one case per relaxation class {absent, wrong text, case, whitespace, partial match, type (numeric vs string), scope/off-by-one} -- and report it as a table. Enumerating tokens without classes cost rounds 3 and 4 (patch-only ordering, separator, string-vs-int compare each surfaced one round at a time). Also: hand-authored prose bullets must be read against the CODE (regen re-decodes archived .fit bytes; only DECLARED_DIRS get AGENTS.md) -- two false bullets shipped from reading docs alone.

@@ -213,9 +213,11 @@ _NAMED_DOC_PAGES = frozenset(
 #: Files a *shipped or emitted* artifact can carry documentation links
 #: through: the README (rendered into the wheel's long description), every
 #: module under ``src/fitdocs`` (e.g. the ownership declaration emitted into
-#: a user's tree), and every packaged skill's ``SKILL.md`` (a wheel member).
+#: a user's tree), every packaged skill's ``SKILL.md`` (a wheel member), and
+#: the changelog (an sdist member, task 1.3).
 _DOC_URL_SOURCE_FILES: tuple[Path, ...] = (
     _PROJECT_ROOT / "README.md",
+    _PROJECT_ROOT / "CHANGELOG.md",
     *sorted((_PROJECT_ROOT / "src" / "fitdocs").rglob("*.py")),
     *sorted((_PROJECT_ROOT / "src" / "fitdocs" / "skills").rglob("SKILL.md")),
 )
@@ -247,8 +249,8 @@ def _project_urls() -> dict[str, str]:
 
 def test_every_referenced_documentation_page_has_a_declared_project_url() -> None:
     """Requirement 1.9: every documentation page a shipped or emitted
-    artifact references (README, ``src/fitdocs/**/*.py``, every packaged
-    skill's ``SKILL.md``) is a value in ``[project.urls]``.
+    artifact references (README, ``CHANGELOG.md``, ``src/fitdocs/**/*.py``,
+    every packaged skill's ``SKILL.md``) is a value in ``[project.urls]``.
 
     Positive control: the collected reference set itself must be non-empty
     -- otherwise the membership assertion below would pass having found

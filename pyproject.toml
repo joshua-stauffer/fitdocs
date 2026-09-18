@@ -147,6 +147,7 @@ files = [
     "tests/test_skill_wheel.py",
     "tests/test_skill_e2e.py",
     "tests/test_version_identity.py",
+    "tests/test_changelog.py",
 ]
 
 [tool.pytest.ini_options]
