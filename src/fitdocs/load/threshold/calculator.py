@@ -40,10 +40,14 @@ anything: the selected channel's ``load`` becomes ``value`` verbatim
 ``"Intensity"`` label because ``load-channels`` guarantees one intensity
 semantic across all three channels (Req 8.11), and every value is rendered
 through the deterministic formatters below so identical inputs produce
-byte-identical records (Req 8.9). It deliberately takes no ``flags``
-argument -- adding one later is an additive signature change, whereas an
-always-empty parameter today would be the anticipatory dead code the roadmap
-forbids (Req 8.8).
+byte-identical records (Req 8.9). At the time this docstring was first
+written it deliberately took no ``flags`` argument -- adding one later
+would be an additive signature change, whereas an always-empty parameter
+then would have been the anticipatory dead code the roadmap forbids
+(Req 8.8). The ``activity-qa-flags`` feature is that later, additive change:
+``build_result`` now takes a keyword-only ``flags`` argument defaulting to
+the empty tuple, assigned straight through to ``LoadResult.flags`` and no
+other field (see :func:`build_result`'s own docstring).
 
 Task 3.3 (``ThresholdCalculator``, Req 1.4-1.7, 2.2, 2.3, 2.5, 2.7, 4.2, 4.3,
 5.1-5.4, 6.7, 9.4-9.7, 10.1, 10.2, 10.5, 10.6) adds ``supports`` and
@@ -108,6 +112,7 @@ from fitdocs.load.channels.types import (
     InsufficiencyReason,
     StreamCoverage,
 )
+from fitdocs.load.qa import evaluate_flags
 from fitdocs.load.threshold.anchors import Borrowing, ResolvedAnchors, resolve
 from fitdocs.load.threshold.discipline import (
     DECLARED_MODALITIES,
@@ -131,6 +136,7 @@ from fitdocs.load.types import (
     MissingInputs,
     NotComputed,
     ProfileView,
+    QualityFlag,
     Unsupported,
 )
 from fitdocs.metrics.types import DerivedMetrics
@@ -435,12 +441,22 @@ class ThresholdCalculator:
         if selected_id is not None:
             selected_outcome = outcomes[selected_id]
             assert isinstance(selected_outcome, ChannelLoad)  # select()'s own guarantee
+            flags = evaluate_flags(
+                activity=activity,
+                metrics=metrics,
+                outcomes=outcomes,
+                selected=selected_id,
+                activity_date=context.activity_date,
+                staleness_window_days=context.settings.benchmark_staleness_days,
+                settings=context.settings.flags,
+            )
             result = build_result(
                 selected=selected_outcome,
                 outcomes=outcomes,
                 order=order,
                 anchors=anchors,
                 discipline=sport,
+                flags=flags,
             )
             return Computed(result=result)
 
@@ -548,6 +564,7 @@ def build_result(
     order: tuple[ChannelId, ...],
     anchors: ResolvedAnchors,
     discipline: Sport,
+    flags: tuple[QualityFlag, ...] = (),
 ) -> LoadResult:
     """Map a channel selection onto the contract's computed result, inventing
     nothing (design: ``ResultAssembly``, Req 3.7, 6.6, 8.1, 8.2, 8.6-8.12,
@@ -555,9 +572,12 @@ def build_result(
 
     ``value`` and ``basis`` are read only from ``selected`` -- never from
     ``outcomes`` or ``anchors`` -- so no field of the result can be derived
-    from a non-selected value (Req 8.10). ``flags`` is always the empty
-    tuple; this function takes no ``flags`` argument (Req 8.8, and see the
-    module docstring's extension-point note).
+    from a non-selected value (Req 8.10). ``LoadResult.flags`` is the
+    supplied ``flags`` tuple, verbatim and in order -- reaching no other
+    field of the result (design: ``CalculatorIntegration`` Postconditions,
+    Req 7.1, 7.2). ``flags`` defaults to the empty tuple, which keeps every
+    call site that predates this feature's ``compute`` integration additive
+    and unchanged.
     """
     channel_id = selected.channel
     label = CHANNEL_LABELS[channel_id]
@@ -594,7 +614,7 @@ def build_result(
         value=selected.load,
         basis=channel_id.value,
         non_selected=non_selected,
-        flags=(),
+        flags=flags,
         inputs_used=inputs_used,
         notes=notes,
     )

@@ -6,8 +6,11 @@
 :class:`~fitdocs.load.types.LoadResult` without inventing anything: the
 selected channel's ``load`` becomes ``value`` verbatim, the selected
 channel's identity becomes ``basis``, ``non_selected`` is delegated to
-:func:`~fitdocs.load.threshold.selection.non_selected_values`, ``flags`` is
-always the empty tuple, ``inputs_used`` opens with five fixed rows followed
+:func:`~fitdocs.load.threshold.selection.non_selected_values`, ``flags``
+defaults to the empty tuple and is otherwise assigned verbatim (the
+``activity-qa-flags`` feature's additive extension point, its own task
+3.2 -- design: ``CalculatorIntegration``), ``inputs_used`` opens with
+five fixed rows followed
 by the selected channel's own reported inputs verbatim, and ``notes`` opens
 with one entry per borrowed anchor followed by the selected channel's own
 notes, each prefixed with the channel's display label.
@@ -28,9 +31,11 @@ These tests are built to defeat, not merely exercise:
 - the coverage figure is asserted for the full string including
   ``"of recorded time"``, never by substring containment of ``"distance"``
   alone, since that word can appear for unrelated reasons (Req 8.12);
-- ``flags`` is pinned both by value (``== ()``) and, separately, by
-  ``inspect.signature`` showing ``build_result`` accepts no ``flags``
-  parameter at all (Req 8.8);
+- ``flags`` defaults to ``()`` (pinned by value) and, separately, by
+  ``inspect.signature`` showing ``build_result`` now accepts a ``flags``
+  parameter defaulting to the empty tuple, and a result built with real
+  flags differs from one built without only in the ``flags`` field
+  (Req 7.1, 7.2, 8.8);
 - a ``Borrowing``'s ``activity_discipline`` and ``anchor_discipline`` are
   distinct ``Sport`` values in every borrowing fixture, so a swap between
   them reds (Req 3.4).
@@ -38,6 +43,7 @@ These tests are built to defeat, not merely exercise:
 
 from __future__ import annotations
 
+import dataclasses
 import inspect
 from datetime import date
 
@@ -58,7 +64,7 @@ from fitdocs.load.threshold.calculator import (
     format_ratio,
 )
 from fitdocs.load.threshold.selection import non_selected_values
-from fitdocs.load.types import LoadResult
+from fitdocs.load.types import LoadResult, QualityFlag
 from fitdocs.model import Sport
 
 # ---------------------------------------------------------------------------
@@ -320,30 +326,88 @@ def test_non_selected_forwards_the_actual_configured_order_not_a_fixed_one() -> 
 
 
 # ---------------------------------------------------------------------------
-# flags (Req 8.8)
+# flags (Req 7.1, 7.2, 8.8 -- inverted by ``activity-qa-flags`` task 3.2,
+# design: ``CalculatorIntegration``. Prior to that feature ``build_result``
+# took no ``flags`` argument at all (Req 8.8's own anticipatory-dead-code
+# concern -- see calculator.py's module docstring); the feature's own
+# extension point is exactly this parameter, additive and defaulted, so it
+# keeps every call site that predates it -- including ``_happy_result``
+# below -- unchanged. End-to-end calculator behavior (``compute`` threading
+# real verdicts through) is ``tests/load/threshold/test_calculator.py``'s
+# concern, not this module's; the two tests below stay scoped to
+# ``build_result``'s own signature and its verbatim, no-other-field
+# assignment.
 # ---------------------------------------------------------------------------
 
 
-def test_flags_is_the_empty_tuple() -> None:
+def test_flags_defaults_to_the_empty_tuple() -> None:
+    """No ``flags`` argument supplied -- every call site that predates the
+    ``activity-qa-flags`` extension, including ``_happy_result`` here,
+    still gets ``()`` (Req 8.8's additivity guarantee)."""
     result = _happy_result()
     assert result.flags == ()
 
 
-def test_build_result_accepts_no_flags_parameter() -> None:
+def test_build_result_accepts_a_flags_parameter_defaulting_to_the_empty_tuple() -> None:
     """Structural pin, not vacuous introspection: the signature's parameter
-    *names* are checked, not merely ``hasattr`` on some unrelated object
-    (Req 8.8; see the roadmap decision-7 extension-point note in
-    calculator.py). Mutation probe: adding ``flags: tuple[QualityFlag,
-    ...] = ()`` to ``build_result``'s signature reds this assertion."""
+    *names* and the ``flags`` parameter's own default are checked, not
+    merely ``hasattr`` on some unrelated object (Req 7.1, 8.8; design:
+    ``CalculatorIntegration`` Service Interface). Mutation probes:
+    - removing ``flags`` from ``build_result``'s signature reds this
+      assertion (the parameter-name check);
+    - changing ``flags``' default from ``()`` to any other value reds the
+      default check without reddening the name check, proving the two
+      assertions are independent."""
     signature = inspect.signature(build_result)
-    assert "flags" not in signature.parameters
+    assert "flags" in signature.parameters
+    assert signature.parameters["flags"].default == ()
     assert set(signature.parameters) == {
         "selected",
         "outcomes",
         "order",
         "anchors",
         "discipline",
+        "flags",
     }
+
+
+def test_build_result_assigns_supplied_flags_verbatim_and_to_no_other_field() -> None:
+    """A caller who passes real flags gets them on the result, verbatim and
+    in order, with no other field of the result affected (Req 7.1, 7.2;
+    design: ``CalculatorIntegration`` Invariants -- "flags reaches no other
+    field. A test constructs one result with flags and one without from
+    otherwise identical inputs and asserts every field but flags is
+    equal")."""
+    supplied_flags = (
+        QualityFlag(
+            key="cadence-lock",
+            label="Cadence lock",
+            verdict="not-assessed",
+            detail="no cadence stream recorded",
+        ),
+        QualityFlag(
+            key="channel-divergence",
+            label="Channel divergence",
+            verdict="detected",
+            detail="pace and heart rate disagree by 0.4 intensity",
+        ),
+    )
+    without_flags = _happy_result()
+    with_flags = build_result(
+        selected=_PACE_LOAD,
+        outcomes=_OUTCOMES,
+        order=_ORDER,
+        anchors=_anchors(),
+        discipline=Sport.RUN,
+        flags=supplied_flags,
+    )
+    assert with_flags.flags == supplied_flags
+    for field in dataclasses.fields(LoadResult):
+        if field.name == "flags":
+            continue
+        assert getattr(with_flags, field.name) == getattr(without_flags, field.name), (
+            field.name
+        )
 
 
 # ---------------------------------------------------------------------------

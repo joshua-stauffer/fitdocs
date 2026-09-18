@@ -413,7 +413,7 @@ does not add, reference or read a real file.
   - _Boundary: FlagAssembly_
   - _Depends: 2.2, 2.3, 2.4, 2.5_
 
-- [ ] 3.2 Attach the verdicts to the computed result at the calculator's one call site
+- [x] 3.2 Attach the verdicts to the computed result at the calculator's one call site
   - Add a keyword-only quality-verdict argument defaulting to the empty
     collection to the calculator's result-assembly function, assigning it
     straight through to the result's verdict field and to no other field
@@ -619,3 +619,23 @@ does not add, reference or read a real file.
   threaded (separate mutations), just not the basis text of the threshold
   itself. Two one-line assertion additions would close it if a later task
   touches this file.
+- **3.2**: footprint expanded into two pre-existing `threshold-load`-owned
+  guards — `tests/load/threshold/test_boundary.py`'s import allowlist (did
+  not sanction `fitdocs.load.qa` at all) and
+  `tests/load/threshold/test_result_assembly.py`'s
+  `test_build_result_accepts_no_flags_parameter` (asserted the parameter
+  must not exist) — both pinned the literal pre-this-task state and had to
+  invert. The genuine, pre-existing warrant (not a sentence this diff wrote
+  about itself) is `calculator.py`'s own pre-task module docstring: "adding
+  [a `flags` parameter] later is an additive signature change, whereas an
+  always-empty parameter today would be the anticipatory dead code the
+  roadmap forbids" plus `build_result`'s pointer at "the module docstring's
+  extension-point note" — `threshold-load` deliberately left this door open.
+  `_ALLOWED_NAMES_BY_TARGET["fitdocs.load.qa"]` is now restricted to exactly
+  `{"evaluate_flags"}`, matching the existing `fitdocs.benchmarks`/
+  `fitdocs.load.channels` restricted-name pattern — not a blanket import hole.
+- **3.2 low-importance residual** (queued, not fixed here):
+  `.kiro/specs/threshold-load/design.md`'s traceability row for its own Req
+  8.8 still records `flags = ()` as that requirement's implementation; this
+  task's `flags=flags` supersedes it. Stale cross-spec documentation, not a
+  code defect.

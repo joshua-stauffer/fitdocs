@@ -43,10 +43,11 @@ import pytest
 
 from fitdocs import Activity, DerivedMetrics, Modality, Provenance, Samples, Sport
 from fitdocs.benchmarks import Benchmark, BenchmarkKind
-from fitdocs.load.channels import pace_compute
+from fitdocs.load.channels import heart_rate_compute, pace_compute, power_compute
 from fitdocs.load.channels.types import ChannelId, ChannelLoad, SufficiencySettings
 from fitdocs.load.priority import ChannelPriority
-from fitdocs.load.settings import LoadSettings
+from fitdocs.load.qa import FlagSettings, evaluate_flags
+from fitdocs.load.settings import DEFAULT_STALENESS_WINDOW_DAYS, LoadSettings
 from fitdocs.load.threshold.anchors import resolve
 from fitdocs.load.threshold.calculator import (
     ATHLETE_FIELDS,
@@ -54,6 +55,7 @@ from fitdocs.load.threshold.calculator import (
     DISPLAY_NAME,
     THRESHOLD_CALCULATOR,
     ThresholdCalculator,
+    build_result,
 )
 from fitdocs.load.threshold.discipline import DECLARED_MODALITIES, SUPPORTED_SPORTS
 from fitdocs.load.types import (
@@ -61,6 +63,7 @@ from fitdocs.load.types import (
     LoadContext,
     MissingInputs,
     NotComputed,
+    QualityFlag,
     Unsupported,
 )
 from fitdocs.model import SCHEMA_VERSION, SessionSummary
@@ -237,6 +240,8 @@ def _context(
     activity_date: date | None,
     channel_priority: ChannelPriority | None = None,
     sufficiency: SufficiencySettings | None = None,
+    benchmark_staleness_days: int | None = None,
+    flags: FlagSettings | None = None,
 ) -> LoadContext:
     settings = LoadSettings(
         default_calculator=None,
@@ -244,6 +249,12 @@ def _context(
         channel_priority=(
             channel_priority if channel_priority is not None else ChannelPriority()
         ),
+        benchmark_staleness_days=(
+            benchmark_staleness_days
+            if benchmark_staleness_days is not None
+            else DEFAULT_STALENESS_WINDOW_DAYS
+        ),
+        flags=flags if flags is not None else FlagSettings(),
     )
     return LoadContext(activity_date=activity_date, settings=settings)
 
@@ -1087,3 +1098,267 @@ def test_not_computed_becomes_computed_once_the_missing_benchmark_is_supplied() 
 # dependency set at this module's own level is asserted in test_boundary.py
 # (task 5.4), out of this task's scope -- not duplicated here.
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# CalculatorIntegration (task 3.2, Req 7.1-7.3, 7.5)
+# ---------------------------------------------------------------------------
+
+
+def test_computed_result_carries_four_flags_matching_evaluate_flags_directly() -> None:
+    """Req 7.1: a computed result's ``flags`` is exactly what a direct call
+    to ``evaluate_flags`` produces from the same inputs -- reconstructed
+    independently here (not captured from the call ``compute`` itself made),
+    so this proves the threading is correct end to end, not merely that
+    *some* four flags were attached."""
+    activity = _run_activity()
+    metrics = _rich_metrics()
+    profile = StubProfile(_FULL_RUN_BENCHMARKS)
+    context = _context(activity_date=_DATE)
+
+    outcome = ThresholdCalculator().compute(
+        activity, metrics, profile, RaisingSession(), context
+    )
+    assert isinstance(outcome, Computed)
+    assert len(outcome.result.flags) == 4
+
+    anchors = resolve(profile, sport=Sport.RUN, on=_DATE)
+    sufficiency = context.settings.sufficiency
+    outcomes = {
+        ChannelId.POWER: power_compute(
+            activity, metrics, ftp=anchors.ftp, settings=sufficiency
+        ),
+        ChannelId.HEART_RATE: heart_rate_compute(
+            activity,
+            metrics,
+            lthr=anchors.lthr,
+            resting_hr=anchors.resting_hr,
+            max_hr=anchors.max_hr,
+            settings=sufficiency,
+        ),
+        ChannelId.PACE: pace_compute(
+            activity,
+            metrics,
+            threshold_pace=anchors.threshold_pace,
+            settings=sufficiency,
+        ),
+    }
+    expected = evaluate_flags(
+        activity=activity,
+        metrics=metrics,
+        outcomes=outcomes,
+        selected=ChannelId.PACE,  # default Run order selects pace
+        activity_date=_DATE,
+        staleness_window_days=context.settings.benchmark_staleness_days,
+        settings=context.settings.flags,
+    )
+    assert outcome.result.basis == ChannelId.PACE.value
+    assert outcome.result.flags == expected
+
+
+def test_flags_evaluated_only_on_the_computed_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Req 7.3: ``evaluate_flags`` is called exactly once, only on the path
+    that reaches ``Computed`` -- never for ``Unsupported``, ``MissingInputs``
+    or ``NotComputed``. Spies on the name ``calculator.py`` calls, so a
+    mutation that adds a call on any non-computed path is caught regardless
+    of what that call's arguments would be."""
+    import fitdocs.load.threshold.calculator as calculator_module
+
+    calls: list[object] = []
+    real_evaluate_flags = calculator_module.evaluate_flags
+
+    def _spy(**kwargs: object) -> tuple[QualityFlag, ...]:
+        calls.append(kwargs)
+        return real_evaluate_flags(**kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(calculator_module, "evaluate_flags", _spy)
+
+    # Unsupported: strength-labelled run, refused before any date/channel work.
+    unsupported_activity = _activity(
+        sport=Sport.RUN, modality=Modality.STRENGTH, samples=_rich_samples()
+    )
+    unsupported_outcome = ThresholdCalculator().compute(
+        unsupported_activity,
+        _rich_metrics(),
+        StubProfile(_FULL_RUN_BENCHMARKS),
+        RaisingSession(),
+        _context(activity_date=_DATE),
+    )
+    assert isinstance(unsupported_outcome, Unsupported)
+    assert calls == []
+
+    # NotComputed: no activity date at all.
+    no_date_outcome = ThresholdCalculator().compute(
+        _run_activity(),
+        _rich_metrics(),
+        StubProfile(_FULL_RUN_BENCHMARKS),
+        RaisingSession(),
+        _context(activity_date=None),
+    )
+    assert isinstance(no_date_outcome, NotComputed)
+    assert calls == []
+
+    # MissingInputs: nothing on file at all for the one configured channel.
+    order = ChannelPriority(by_discipline={Sport.RUN: (ChannelId.POWER,)})
+    missing_outcome = ThresholdCalculator().compute(
+        _run_activity(),
+        _rich_metrics(),
+        StubProfile(()),
+        RaisingSession(),
+        _context(activity_date=_DATE, channel_priority=order),
+    )
+    assert isinstance(missing_outcome, MissingInputs)
+    assert calls == []
+
+    # NotComputed (evaluated-but-none-selected): benchmark postdates activity.
+    late_ftp = _bm(BenchmarkKind.FTP_WATTS, Sport.RUN, 280.0, date(2030, 1, 1))
+    postdated_outcome = ThresholdCalculator().compute(
+        _run_activity(),
+        _rich_metrics(),
+        StubProfile((late_ftp,)),
+        RaisingSession(),
+        _context(activity_date=_DATE, channel_priority=order),
+    )
+    assert isinstance(postdated_outcome, NotComputed)
+    assert calls == []
+
+    # Computed: exactly one call, on the selected path.
+    computed_context = _context(activity_date=_DATE)
+    computed_outcome = ThresholdCalculator().compute(
+        _run_activity(),
+        _rich_metrics(),
+        StubProfile(_FULL_RUN_BENCHMARKS),
+        RaisingSession(),
+        computed_context,
+    )
+    assert isinstance(computed_outcome, Computed)
+    assert len(calls) == 1
+    call_kwargs = calls[0]
+    assert computed_outcome.result.flags == real_evaluate_flags(**call_kwargs)  # type: ignore[arg-type]
+
+    # Structural threading proof (Req 7.1): each of the three per-pass-context
+    # values reaches `evaluate_flags` genuinely, not defaulted or hardcoded.
+    # `settings` is checked by identity -- `context.settings.flags` is a
+    # single already-constructed `FlagSettings` instance, so substituting a
+    # fresh default construction in `compute` would still pass an
+    # *equality*-based check but fail this one.
+    assert call_kwargs["activity_date"] == computed_context.activity_date  # type: ignore[index]
+    assert (
+        call_kwargs["staleness_window_days"]  # type: ignore[index]
+        == computed_context.settings.benchmark_staleness_days
+    )
+    assert call_kwargs["settings"] is computed_context.settings.flags  # type: ignore[index]
+
+
+def test_build_result_flags_reach_only_the_flags_field() -> None:
+    """Req 7.2: two ``build_result`` calls with identical inputs except
+    ``flags`` differ in the ``flags`` field and in no other -- the exact
+    shape design.md's Invariants section calls for."""
+    activity = _run_activity()
+    metrics = _rich_metrics()
+    profile = StubProfile(_FULL_RUN_BENCHMARKS)
+    context = _context(activity_date=_DATE)
+    anchors = resolve(profile, sport=Sport.RUN, on=_DATE)
+    sufficiency = context.settings.sufficiency
+    outcomes = {
+        ChannelId.POWER: power_compute(
+            activity, metrics, ftp=anchors.ftp, settings=sufficiency
+        ),
+        ChannelId.HEART_RATE: heart_rate_compute(
+            activity,
+            metrics,
+            lthr=anchors.lthr,
+            resting_hr=anchors.resting_hr,
+            max_hr=anchors.max_hr,
+            settings=sufficiency,
+        ),
+        ChannelId.PACE: pace_compute(
+            activity,
+            metrics,
+            threshold_pace=anchors.threshold_pace,
+            settings=sufficiency,
+        ),
+    }
+    order = context.settings.channel_priority.for_discipline(Sport.RUN)
+    selected = outcomes[ChannelId.PACE]
+    assert isinstance(selected, ChannelLoad)
+
+    real_flags = (
+        QualityFlag(
+            key="cadence-lock", label="Cadence lock", verdict="not-assessed", detail="x"
+        ),
+    )
+
+    without_flags = build_result(
+        selected=selected,
+        outcomes=outcomes,
+        order=order,
+        anchors=anchors,
+        discipline=Sport.RUN,
+    )
+    with_flags = build_result(
+        selected=selected,
+        outcomes=outcomes,
+        order=order,
+        anchors=anchors,
+        discipline=Sport.RUN,
+        flags=real_flags,
+    )
+
+    assert without_flags.flags == ()
+    assert with_flags.flags == real_flags
+    for field_name in (
+        "calculator_id",
+        "display_name",
+        "value",
+        "basis",
+        "non_selected",
+        "inputs_used",
+        "notes",
+    ):
+        assert getattr(without_flags, field_name) == getattr(with_flags, field_name), (
+            field_name
+        )
+
+
+def test_non_default_staleness_window_flips_the_staleness_verdict_through_compute() -> (
+    None
+):
+    """Req 7.1, threading proof: ``context.settings.benchmark_staleness_days``
+    is genuinely read, not defaulted or hardcoded. The Run benchmarks are
+    measured 2026-01-01, the activity is dated 2026-06-01 (151 days) -- the
+    default 84-day window reads stale, a 400-day window reads current. If
+    ``compute`` ever substituted the default window for the configured one,
+    both calls would agree and this would red."""
+    activity = _run_activity()
+    metrics = _rich_metrics()
+    profile = StubProfile(_FULL_RUN_BENCHMARKS)
+
+    default_window_context = _context(activity_date=_DATE)
+    wide_window_context = _context(activity_date=_DATE, benchmark_staleness_days=400)
+    assert (
+        default_window_context.settings.benchmark_staleness_days
+        != wide_window_context.settings.benchmark_staleness_days
+    )
+
+    default_outcome = ThresholdCalculator().compute(
+        activity, metrics, profile, RaisingSession(), default_window_context
+    )
+    wide_outcome = ThresholdCalculator().compute(
+        activity, metrics, profile, RaisingSession(), wide_window_context
+    )
+    assert isinstance(default_outcome, Computed)
+    assert isinstance(wide_outcome, Computed)
+
+    def _staleness_verdict(result: object) -> str:
+        flag = next(
+            f
+            for f in result.flags
+            if f.key == "benchmark-staleness"  # type: ignore[attr-defined]
+        )
+        return flag.verdict
+
+    assert _staleness_verdict(default_outcome.result) == "detected"
+    assert _staleness_verdict(wide_outcome.result) == "not-detected"

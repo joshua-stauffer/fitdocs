@@ -266,13 +266,19 @@ _ALLOWED_FITDOCS_EXACT_TARGETS: frozenset[str] = frozenset(
         "fitdocs.load.channels",
         "fitdocs.load.channels.types",
         "fitdocs.load.types",
+        "fitdocs.load.qa",
     }
 )
 """Every non-sibling ``fitdocs.*`` target this feature may import (design.md
 "Allowed Dependencies"), matched exactly -- deliberately **not**
 prefix-matched, so that e.g. ``fitdocs.load.channels.grade`` (an internal
 arithmetic helper -- the Req 11.1 proxy) is not mistaken for a submodule of
-the sanctioned ``fitdocs.load.channels`` package import."""
+the sanctioned ``fitdocs.load.channels`` package import. ``fitdocs.load.qa``
+joined this set for the ``activity-qa-flags`` feature's own task 3.2 (design:
+``CalculatorIntegration`` Dependencies -- "Outbound -- ``qa.flags.
+evaluate_flags`` (P0)"), name-restricted below to the one assembly function
+``compute`` calls after a successful channel selection -- not a blanket hole
+onto every quality-condition-detection name this package exports."""
 
 _ALLOWED_SIBLING_PREFIX: str = "fitdocs.load.threshold"
 """Modules under this feature's own package may freely import each other
@@ -283,17 +289,22 @@ _ALLOWED_NAMES_BY_TARGET: dict[str, frozenset[str]] = {
     "fitdocs.load.channels": frozenset(
         {"heart_rate_compute", "pace_compute", "power_compute"}
     ),
+    "fitdocs.load.qa": frozenset({"evaluate_flags"}),
 }
 """Even where the *target* is sanctioned, only these *names* may be
 imported from it -- ``fitdocs.benchmarks`` restricted to the two plain data
 types (Req 11.4's proxy: no ``benchmark_age``, no ``parse_benchmarks``, no
 ``benchmarks_to_document``, so this feature cannot read, write, validate,
 migrate or compute a staleness verdict for the benchmark store even by
-accident), and ``fitdocs.load.channels`` restricted to the three top-level
+accident), ``fitdocs.load.channels`` restricted to the three top-level
 compute functions (Req 11.1's proxy: no internal grade/weighting/sufficiency
 helper is ever imported directly, so this feature implements no channel
 arithmetic of its own -- it only calls the channel layer's own public
-functions)."""
+functions), and ``fitdocs.load.qa`` restricted to ``evaluate_flags`` alone --
+no flag type, no per-check reading, no per-check module is ever imported
+directly, so this feature computes no quality condition of its own and
+consults the quality-flag layer only through its one sanctioned assembly
+entry point."""
 
 
 def _is_sanctioned_fitdocs_target(dotted: str) -> bool:
@@ -374,10 +385,16 @@ class TestImportBoundary:
     that structurally forecloses the CLI, the renderer, the load pass, the
     document editor, the load-section renderer, the calculator registry,
     calculator arbitration, the benchmark store's read/write/validate/
-    migrate/staleness surface, quality-condition detection and any
-    aggregation module -- none of those names is anywhere in the sanctioned
-    set, so importing any of them is a violation regardless of which
-    feature module does it or how deeply nested the import statement is.
+    migrate/staleness surface and any aggregation module -- none of those
+    names is anywhere in the sanctioned set, so importing any of them is a
+    violation regardless of which feature module does it or how deeply
+    nested the import statement is. Quality-condition detection is **not**
+    a blanket foreclosure any more: the ``activity-qa-flags`` feature's own
+    task 3.2 sanctions exactly one name, ``evaluate_flags``, through exactly
+    one target, ``fitdocs.load.qa`` -- every other name that package exports
+    (every flag type, every per-check reading, every per-check module) stays
+    foreclosed, so this feature still computes no quality condition of its
+    own (see ``_ALLOWED_NAMES_BY_TARGET``'s docstring).
     """
 
     def test_every_feature_module_has_no_import_violation(self) -> None:
@@ -449,6 +466,9 @@ class TestImportBoundary:
         offenders = _import_violations("import fitdocs.load.channels as ch\n")
         assert offenders != [], "import fitdocs.load.channels as ch was not caught"
 
+        offenders = _import_violations("import fitdocs.load.qa as qa\n")
+        assert offenders != [], "import fitdocs.load.qa as qa was not caught"
+
     def test_the_from_form_of_a_name_restricted_target_is_still_sanctioned(
         self,
     ) -> None:
@@ -466,6 +486,23 @@ class TestImportBoundary:
             ")\n"
         )
         assert offenders == []
+        offenders = _import_violations("from fitdocs.load.qa import evaluate_flags\n")
+        assert offenders == []
+
+    def test_qa_target_admits_only_evaluate_flags(self) -> None:
+        """The ``activity-qa-flags`` feature's own extension (task 3.2,
+        design: ``CalculatorIntegration``) is narrow, not a blanket hole onto
+        ``fitdocs.load.qa``'s whole re-export surface: every other name that
+        package exports -- a flag type, a per-check reading, a settings
+        value -- is still a violation, even though the *target* itself is
+        now sanctioned."""
+        offenders = _import_violations("from fitdocs.load.qa import FlagSettings\n")
+        assert offenders != [], (
+            "from fitdocs.load.qa import FlagSettings was not caught"
+        )
+
+        offenders = _import_violations("from fitdocs.load.qa import FlagKey\n")
+        assert offenders != [], "from fitdocs.load.qa import FlagKey was not caught"
 
     def test_sibling_whole_module_import_without_a_name_restriction_is_fine(
         self,
@@ -497,6 +534,7 @@ _ALLOWED_NAMESPACE_MODULES: frozenset[str] = frozenset(
         "fitdocs.load.channels",
         "fitdocs.load.channels.types",
         "fitdocs.load.types",
+        "fitdocs.load.qa.flags",
         "fitdocs.load.threshold",
         "fitdocs.load.threshold.discipline",
         "fitdocs.load.threshold.anchors",
@@ -504,6 +542,13 @@ _ALLOWED_NAMESPACE_MODULES: frozenset[str] = frozenset(
         "fitdocs.load.threshold.calculator",
     }
 )
+"""``fitdocs.load.qa.flags`` -- not ``fitdocs.load.qa`` -- is the entry here:
+``evaluate_flags``'s ``__module__`` is its *defining* submodule, the same
+reason ``heart_rate_compute`` et al. report ``fitdocs.load.channels.
+heart_rate`` rather than the ``fitdocs.load.channels`` package they are
+imported through (see the channels submodule-prefix carve-out in
+``_namespace_violations`` below). Exact, not prefix-matched: only this one
+submodule, for only this one name."""
 
 
 def _namespace_violations(module: ModuleType) -> list[tuple[str, str]]:
