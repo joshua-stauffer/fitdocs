@@ -1,0 +1,113 @@
+# release/artifact-policy.toml (design: ArtifactPolicy)
+#
+# Pure data read by scripts/artifact_policy.py and, through it, by the
+# release checker (task 2.2 and later). It declares three things and
+# nothing else:
+#
+#   [wheel] / [sdist]  -- the members each artifact kind must contain.
+#   [forbidden]        -- member-name glob patterns (matched with fnmatch
+#                          against the member path, sdist entries with
+#                          their `fitdocs-<version>/` prefix stripped) that
+#                          must never appear in either artifact.
+#   [metadata]         -- the distribution-metadata field names a release
+#                          must declare.
+#
+# This file is NOT shipped in any built artifact.
+#
+# It deliberately does NOT contain:
+#   - any record of a redistribution-permission decision for third-party
+#     material,
+#   - any named "profile" or build variant to choose between,
+#   - any list of members to prune from a build,
+#   - any list of content markers or tokens to scan for.
+# The definition of what removed material looks like lives outside this
+# repository, in data the release checker consults directly; this file
+# never names or describes that material in any form.
+#
+# The shape below is the end state: each required member is added by
+# whichever task creates the file it names, so this file's required lists
+# grow across tasks rather than being written once in full.
+#
+# Deviations from design.md's "ArtifactPolicy" Data Shape block (2.2 and
+# 3.2 should build against THIS shape, not the design snippet, for these
+# four points):
+#   +PKG-INFO in [sdist].required   -- the design snippet omits it, but a
+#     built sdist always carries it (the build backend writes it), and it
+#     is how a release's metadata is read; listing it keeps the checker to
+#     one required-member list instead of a list plus a remembered
+#     exception (see the [sdist] comment below).
+#   +".fitdocs/*" in [forbidden].members -- the design snippet has only
+#     "*/.fitdocs/*" (a nested `.fitdocs/` under some parent), which does
+#     not match a *top-level* ".fitdocs/quarantine.toml"; both patterns are
+#     needed to cover both positions.
+#   +"Author-email" in [metadata].required_fields -- present in every real
+#     build's METADATA (see the [metadata] comment below) and not covered
+#     by any of the design's six named fields, so a release that dropped
+#     author attribution would otherwise pass unnoticed.
+#   -"Description" from [metadata].required_fields -- the design snippet
+#     does not list it either, so this is not a removal from the design;
+#     noted here only because a later editor might reasonably expect the
+#     task's own working notes to have named it as a candidate. It is
+#     absent because hatchling never writes it as a header (see the
+#     [metadata] comment below).
+
+[wheel]
+required = [
+    "fitdocs/__init__.py",
+    "fitdocs/py.typed",
+    "fitdocs/skills/build-training-block/SKILL.md",
+    "fitdocs/skills/build-training-block/example-block.toml",
+]
+
+[sdist]
+# Sdist members are checked with the `fitdocs-<version>/` prefix stripped.
+# PKG-INFO is always present in a built sdist (the build backend writes it)
+# and is how a release's metadata is read; it is listed here so the checker
+# has one required-member list to consult, not a required list plus a
+# separately-remembered exception.
+required = [
+    "pyproject.toml",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "src/fitdocs/__init__.py",
+    "PKG-INFO",
+]
+
+[forbidden]
+# Glob patterns, matched with fnmatch against the prefix-stripped member
+# path. hatchling always ships `.gitignore` in the sdist; it is not a
+# forbidden category and no pattern here may match it.
+members = [
+    "tests/*",
+    ".kiro/*",
+    "scripts/*",
+    "release/*",
+    "docs/*",
+    "*.xlsx",
+    "*.fit",
+    "*.gpx",
+    "uv.lock",
+    "data/*",
+    "*/.fitdocs/*",
+    ".fitdocs/*",
+    "agent-log",
+]
+
+[metadata]
+# Field names as they appear as METADATA headers in a build of this project
+# (`uv build --wheel` then reading `*.dist-info/METADATA`). "Description"
+# is deliberately absent: hatchling's metadata builder
+# (`hatchling/metadata/spec.py`) unconditionally writes the long
+# description as the message BODY, never as a `Description:` header, so a
+# header-presence check for it could never pass regardless of the
+# description's length.
+required_fields = [
+    "Name",
+    "Version",
+    "Summary",
+    "License-Expression",
+    "Requires-Python",
+    "Project-URL",
+    "Author-email",
+]
