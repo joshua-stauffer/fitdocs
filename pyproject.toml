@@ -156,6 +156,7 @@ files = [
     "tests/test_install_docs.py",
     "tests/test_upgrading_docs.py",
     "tests/test_wiki_integration_docs.py",
+    "tests/test_contributing_doc.py",
     "scripts",
 ]
 
