@@ -6,19 +6,19 @@
 
 **Users**: anyone who wants to run fitdocs without cloning it; existing users deciding whether an upgrade is safe; plugin authors who need a version range to depend on; LLM wiki maintainers adopting fitdocs as an input path; and the maintainer, who needs a release procedure whose gates cannot be skipped by inattention.
 
-**Impact**: `pyproject.toml` gains complete metadata and, for the first time, explicit artifact-content control. Three unguarded `importlib.metadata.version("fitdocs")` call sites converge on one leaf that degrades to *unknown* instead of raising. The built-in calculator registration becomes tolerant of a package built without a bundled methodology — including its export list, so a star-import of `fitdocs.load` keeps working in an unencumbered wheel — which makes "released with no methodology" a supported, tested configuration rather than a crash. Two project scripts — a build driver and an artifact-conformance checker — become the executable form of the release gates, invoked identically by a maintainer and by the tag-triggered workflow. Nothing in `sync`, `regen`, `load`, `check`, or `plugins` changes behavior, and generated documents are byte-identical.
+**Impact**: `pyproject.toml` gains complete metadata and, for the first time, explicit artifact-content control. Three unguarded `importlib.metadata.version("fitdocs")` call sites converge on one leaf that degrades to *unknown* instead of raising. Two project scripts — a build driver and an artifact-conformance checker — become the executable form of the release gates, invoked identically by a maintainer and by the tag-triggered workflow; the checker's encumbered-content gate reuses the purge's two guard cores rather than carrying a marker list of its own, and fails closed when its match data is absent. *(Amendment 2, 2026-09-18: the sentence that stood here — "the built-in calculator registration becomes tolerant of a package built without a bundled methodology" — is retired. The encumbered methodology was withdrawn on 2026-07-25 and purged, with every identifying token, on 2026-08-23; the built-in is the unencumbered `threshold` engine and every release bundles it. Requirement 6 is now the encumbered-content release gate: one artifact set, out-of-repository match data, fail-closed, no symbolic-link members. Every block below that changed says so.)* Nothing in `sync`, `regen`, `load`, `check`, or `plugins` changes behavior, and generated documents are byte-identical.
 
 ### Goals
 
 - One command installs a working `fitdocs` from the public index, with artifacts whose contents are declared rather than inherited from build-backend defaults.
 - One version declaration, reported identically by the CLI, the tile user-agent, and the built-in calculator listing, and provably equal to the changelog entry and the release tag.
 - A compatibility policy that names the three public contracts as the thing version numbers govern, and a changelog that reports against it.
-- A release procedure whose every gate is executable, testable, and identical by hand and in automation — including a licensing gate that inspects built artifacts and refuses to publish encumbered material.
+- A release procedure whose every gate is executable, testable, and identical by hand and in automation — including an encumbered-content gate that inspects built artifacts and refuses to publish the removed third-party material, by any path it might return.
 - Documentation that carries a reader from install to a generated document, states exactly what upgrade and uninstall touch, and packages the wiki-integration path as an agent skill locked to the release.
 
 ### Non-Goals
 
-- Resolving the methodology's licensing question, negotiating permission, or replacing the methodology. This design consumes a recorded answer; it does not produce one.
+- Defining what the removed third-party material *is*. `encumbered-content-purge` owns that definition — the out-of-repository match data its token guard reads and the digest set its value oracle carries — and this design consumes both guard cores unchanged. *(Amendment 2: formerly "resolving the methodology's licensing question, negotiating permission, or replacing the methodology"; the replacement happened.)*
 - Changing the content or semantics of the three public contracts, or of any command the siblings define.
 - Plugin-marketplace packaging of the agent skill for a specific agent client — the standard defines no install location and the plugin-root-to-skills mapping could not be verified; distribution is by documented copy from a path the tool prints.
 - Any self-update or auto-update mechanism; a hosted service; an MCP server; an editor plugin; a documentation site generator.
@@ -34,7 +34,7 @@
 - **The compatibility policy**: which contracts version numbering governs, what breaking / additive / internal mean for each, the pre-1.0 and post-1.0 rules, the deprecation window, and the statement that everything undocumented is internal.
 - **The changelog**: its format, its obligations, and the release-time gate that its newest entry matches the version being released.
 - **The release procedure**: its ordered steps, its quality gates, its artifact verification in a clean environment, its tagging, its rehearsal target, its credential posture, its post-publication check, and the project automation that runs the same gates.
-- **The licensing release gate**: the recorded permission state, the artifact inspection that enforces it, the unencumbered build profile, and the tolerance of a package with no bundled methodology.
+- **The encumbered-content release gate**: the artifact-side inspection that refuses to publish the removed material, its fail-closed posture when the match data is absent, the rule that no artifact carries a symbolic-link member, and the binding of that inspection to both the manual procedure and the tag-triggered workflow. *(Amendment 2: formerly "the recorded permission state, … the unencumbered build profile, and the tolerance of a package with no bundled methodology".)*
 - **User-facing documentation structure**: the entry point, install, configuration, inbox, upgrade, uninstall, wiki-integration, compatibility, releasing, and contribution documents, plus the README rewrite — including preserving every behavior statement the project and its siblings publish at the time of the rewrite. The rewrite **relocates or keeps** the sections wiki-contract, inbox, and plugin-api publish in the README; it never drops them (10.7).
 - **The project-wide statements that need one home**: what is public versus internal (by reference to plugin-api's enumeration, which is the authority), the governance of the user-facing settings schema including `[tiles]`, and the rule deciding which commands require a resolved data root. All three live in `docs/compatibility.md` (3.8, 3.9, 3.10).
 - **The agent skill**: its packaged location, its frontmatter contract, its body's scope, its version locking, the read-only command that reports its installed path, and the conformance test binding it to the CLI's real command surface.
@@ -46,7 +46,8 @@
 - The **settings file's plumbing**: the settings-file constant, the data-root-relative path resolver, the shared parse-once loader, and its single file-level error — the pre-wave settings foundation owns them, and each `[table]` reader stays with its owning feature. This design governs the resulting *schema* in the compatibility policy (3.8) and classifies the loader and the layout module as internal (3.9); it changes neither.
 - **Plugin discovery mechanics**: the entry-point group, the local-plugin channel, the `[plugins]` table, the `plugins` command, the `py.typed` marker, the documented public import surface, and the plugin-author guide — plugin-api owns them. This design verifies the marker reaches the artifact and carries plugin-api's compatibility statement into one project-wide policy; it does not restate the authoring instructions.
 - The **calculator-authoring guide** (`docs/contributing-calculators.md`) — training-load owns it.
-- The **methodology itself**: its formulas, tables, zone model, and correctness. This design may prune it from a build and must not modify its computation.
+- The **two guard cores** the gate reuses — `tests/_forbidden_strings.py` (token match data from outside the repository, Req 11.7–11.10 of the purge) and `tests/_content_oracle.py` with `tests/_content_fingerprints.py` (digest-keyed value scan) — and the definition of the removed material they encode. `encumbered-content-purge` owns them; this design imports them and changes neither. *(Amendment 2: formerly "the methodology itself … this design may prune it from a build".)*
+- The **built-in calculator** (`threshold`) and the load package's public names: plugin-api's enumerated surface is the authority and is unconditional. This design registers, guards, or conditionally exports nothing in `fitdocs.load`. *(Amendment 2.)*
 - Any **new product capability**: no new pipeline stage, renderer, metric, or engine behavior. The one command this design adds prints a path and writes nothing.
 - The **route-maps tile behavior** and its network carve-out — documented, not changed.
 
@@ -55,10 +56,9 @@
 - `version.py` is a pure leaf: `importlib.metadata` and typing only. It imports nothing from `fitdocs`.
 - `agentskill.py` depends on `importlib.resources` only.
 - `cli → {version, agentskill}` plus its existing dependencies; `tiles → version`; `plugins → version`. Nothing imports `cli`.
-- `load/__init__.py` may import its bundled methodology package only through a guarded import; no other module may import `fitdocs.load.withdrawn` directly.
-- The release scripts live outside the package, import nothing from `fitdocs`, and use only the standard library (`zipfile`, `tarfile`, `tomllib`, `subprocess`, `shutil`, `pathlib`, `email`). They are invoked as scripts, never imported by the package.
+- The release scripts live outside the package and import nothing from `fitdocs`. They use the standard library (`zipfile`, `tarfile`, `tomllib`, `subprocess`, `shutil`, `pathlib`, `email`) plus exactly two repository-local imports — the purge's guard cores `tests._forbidden_strings` (its pure `load`/`matches`/`ForbiddenStringsSourceError`; the module also imports `pytest` for its skip helper, which the dev environment always provides) and `tests._content_oracle` / `tests._content_fingerprints` — so the gate has one matcher, not two. They are invoked as modules from the repository root (`python -m scripts.check_artifacts`), never imported by the package, and never ship. *(Amendment 2: the "use only the standard library" clause is relaxed by exactly those two imports, which is what Requirement 6.3 demands; the guarded-import rule for `load/__init__.py` is retired with the package it guarded.)*
 - The workflows depend on `uv`, the project's own scripts, and the standard publishing action. No project code runs at build time beyond the build backend.
-- Direction, violations are errors: `{version, agentskill} → {cli, tiles, plugins}`; `scripts → artifacts` (never `scripts → src`); `workflows → scripts`.
+- Direction, violations are errors: `{version, agentskill} → {cli, tiles, plugins}`; `scripts → artifacts` and `scripts → tests.{_forbidden_strings, _content_oracle, _content_fingerprints}` (never `scripts → src`); `workflows → scripts`.
 - **No new runtime dependency at any layer** (10.1). No new development dependency beyond what `uv` and the build backend already provide.
 
 ### Revalidation Triggers
@@ -66,7 +66,8 @@
 - Changing the artifact required/forbidden sets, the sdist allowlist, or the wheel contents → the conformance checker, its policy file, and the packaging tests all change together; plugin authors relying on shipped type information must be re-checked.
 - Changing the version declaration's location or the runtime resolution rule → the CLI, the tile user-agent, and the plugin listing's built-in version all change; the equality tests must be re-derived.
 - Changing the compatibility policy's contract list, its breaking-change definition, or its deprecation window → the changelog's obligations, the contribution documentation, and plugin-api's published plugin-surface statement must be reconciled.
-- Changing the recorded methodology permission state, or the prune list for the unencumbered profile → both build profiles must be rebuilt and re-verified, and the changelog must record the resulting contract change.
+- Changing either guard core's public functions, the match-data file format, or the environment variable that names the match data (all `encumbered-content-purge`'s) → the checker's encumbered-content check and its fixture tests must be re-derived; a change that makes the token core's `load` return `None` in any new circumstance turns a fail-closed gate into a silent one and must be caught by the `GATE_NOT_RUN` test. *(Amendment 2.)*
+- Removing the built-in calculator from a release, or adding a second one → a public-contract change the changelog records (6.6); the artifact policy's required members are re-checked. *(Amendment 2.)*
 - Changing the CLI's registered command surface (any sibling adding or removing a command), or the drain report's channel set (any sibling adding, renaming, or removing a reported channel) → the agent skill's body and its conformance test must be re-checked.
 - Adding a settings table, or a key to one → the compatibility policy's settings-schema section and the documentation that publishes the key must be updated in the same change (3.8).
 - Changing plugin-api's enumerated public import surface → the compatibility policy's public-versus-internal statement points at it and must be re-read; `tests/test_public_api.py` stays plugin-api's to change.
@@ -78,8 +79,8 @@
 
 - **`pyproject.toml` is minimal but sound**: hatchling, src-layout, `version = "0.1.0"` static, five runtime dependencies, one console script, `packages = ["src/fitdocs"]`. It declares no `authors`, `keywords`, `classifiers`, `[project.urls]`, `license-files`, or sdist target — so the sdist today would inherit hatchling's defaults and carry `tests/`, `.kiro/`, `uv.lock`, and `docs/reference/`.
 - **Version reporting already half-exists.** `cli.py` registers an eager `--version` callback on `@app.callback()`; `importlib.metadata.version("fitdocs")` is called at `cli.py:57,94` and at `tiles.py:54,242` for the tile user-agent. None of the three call sites guards `PackageNotFoundError`, so `--version` raises from an uninstalled source tree. plugin-api adds a fourth consumer (the built-in calculator's reported version).
-- **Packaging tests already exist and are the right shape.** `tests/test_packaging.py` performs an offline `uv tool install` into a temporary `UV_TOOL_DIR`/`UV_TOOL_BIN_DIR`, runs the installed console script, and compares `--version` against the `pyproject.toml` value. `tests/load/test_packaging.py` builds a wheel and asserts both methodology CSVs are present with their licensing header; `tests/load/test_install_smoke.py` installs a wheel into a venv and asserts the tables load from the installed location. This design extends that established pattern rather than inventing one.
-- **The encumbered material is committed and packaged by design.** `.gitignore` carries a deliberate re-include for `src/fitdocs/load/withdrawn/data/*.csv`; the same two tables plus the extracted methodology also sit under `docs/reference/`. The branded terms reach user-visible strings (`_DISPLAY_NAME = "Withdrawn Methodology"`, the `Unsupported` reason text, a prompt label) and the rendered document body, and the CLI's `--calculator` help text names `'withdrawn'` as its example.
+- **Packaging tests already exist and are the right shape.** `tests/test_packaging.py` performs an offline `uv tool install` into a temporary `UV_TOOL_DIR`/`UV_TOOL_BIN_DIR`, runs the installed console script, and compares `--version` against the `pyproject.toml` value. `tests/load/test_packaging.py` builds a wheel and an sdist and scans every regular member of each with the purge's two guard cores — the digest-keyed value oracle and the out-of-repository token matcher — asserting the removed material is absent and that the fresh-interpreter registry holds exactly the `threshold` built-in. This design extends that established pattern rather than inventing one. *(Amendment 2: rewritten — at the original base this bullet described a wheel guard asserting two methodology CSVs were present.)*
+- **The encumbered material is gone, and the guards that keep it gone already scan artifacts — but only when someone runs them.** *(Amendment 2: this bullet formerly read "The encumbered material is committed and packaged by design", describing the 2026-07-21 tree. Since 2026-08-23 no tracked file, path, or commit carries an identifying token; the guards read their match data from outside the repository and skip, distinguishably, when it is absent.)* There is no continuous integration and no `[tool.hatch.build.targets.sdist]` section at all, so hatchling's default sdist ships `.kiro/`, `tests/`, and the root `agent-log` symlink — a dangling link to the shared agent log, which is untracked, un-ignored, invisible to the content scan by construction (`member.isfile()` is false for a link), and whose target carries exactly the identity the purge erases. `uv build && uv publish` on any checkout would ship all of that with no mechanism objecting.
 - **The CLI is a thin typer shell** with three commands today and two more arriving from siblings (`check`, `plugins`), a fixed 0/1/2 exit-code contract, and an established `_config_error` path for anything the user can fix. A read-only command that prints a path fits that shell without disturbing it.
 - **`src/fitdocs/__init__.py`** re-exports 19 names lazily under PEP 562 and is guarded by `tests/test_public_api.py`; `tests/test_determinism.py` already asserts no writes and no network with patched `open`/`socket`. Both are the natural homes for this feature's preserved-guarantee assertions.
 - **Nothing exists for release**: no `.github/`, no `LICENSE` file despite the declared MIT terms, no `CHANGELOG.md`, no `CONTRIBUTING.md`, no git tags, no CI.
@@ -99,8 +100,9 @@ graph TB
         ArtifactChecker[ArtifactChecker check_artifacts py]
     end
     subgraph PolicyData
-        LicensingRecord[LicensingRecord licensing toml]
         ArtifactPolicy[ArtifactPolicy artifact-policy toml]
+        MatchData[MatchData out of repository]
+        GuardCores[GuardCores tests forbidden strings and content oracle]
         Changelog[Changelog CHANGELOG md]
         PackageManifest[PackageManifest pyproject toml]
     end
@@ -111,7 +113,6 @@ graph TB
         CliApp[CliApp cli py]
         TileStore[TileStore tiles py]
         PluginDiscovery[PluginDiscovery plugins py]
-        BuiltInRegistration[BuiltInRegistration load init py]
     end
     subgraph Documentation
         DocsEntry[DocsEntry index md]
@@ -125,10 +126,10 @@ graph TB
     CiWorkflow --> ArtifactChecker
     ReleaseWorkflow --> ReleaseBuilder
     ReleaseWorkflow --> ArtifactChecker
-    ReleaseBuilder --> LicensingRecord
     ReleaseBuilder --> PackageManifest
     ArtifactChecker --> ArtifactPolicy
-    ArtifactChecker --> LicensingRecord
+    ArtifactChecker --> GuardCores
+    GuardCores --> MatchData
     ArtifactChecker --> Changelog
     ArtifactChecker --> PackageManifest
     CliApp --> VersionSource
@@ -136,7 +137,6 @@ graph TB
     TileStore --> VersionSource
     PluginDiscovery --> VersionSource
     AgentSkillLocator --> AgentSkillPackage
-    BuiltInRegistration --> PackageManifest
     DocsEntry --> CompatibilityPolicy
     DocsEntry --> InstallDocs
     DocsEntry --> WikiIntegrationDocs
@@ -148,9 +148,9 @@ graph TB
 
 **Architecture Integration**:
 
-- **Domain boundaries**: policy is *data* (`licensing.toml`, `artifact-policy.toml`, the manifest, the changelog); enforcement is *scripts* that read that data and inspect artifacts; the package gains only version resolution, skill location, and a print-a-path command. No component co-owns a decision: the checker never decides whether permission was granted, it reads the record; the builder never decides what is forbidden, it prunes what the record names.
+- **Domain boundaries**: policy is *data* (`artifact-policy.toml`, the manifest, the changelog, and — for the removed material — the match data outside the repository and the digest set the purge owns); enforcement is *scripts* that read that data and inspect artifacts; the package gains only version resolution, skill location, and a print-a-path command. No component co-owns a decision: the checker never defines what the removed material is, it asks the purge's guard cores; the builder never decides what is forbidden, it builds the working tree and the checker judges the result. *(Amendment 2: `licensing.toml` and the prune list are gone with the permission question.)*
 - **Existing patterns preserved**: absent data is `None` and never fabricated (an unresolvable version is *unknown*); frozen dataclasses with tuple fields; loud configuration failure before any effect; read-only diagnostic commands that write nothing; the offline-by-default posture with the tile carve-out untouched; the `uv tool install` into an isolated tool directory that `tests/test_packaging.py` already established.
-- **New components rationale**: `version.py` exists because four modules need one answer and the current three copies each raise on an uninstalled tree. `agentskill.py` exists so the packaged skill has one resolution path shared by the command and its tests. The two scripts exist because the licensing gate must reason over *built artifacts*, which neither a manifest nor a workflow step can do in a testable way.
+- **New components rationale**: `version.py` exists because four modules need one answer and the current three copies each raise on an uninstalled tree. `agentskill.py` exists so the packaged skill has one resolution path shared by the command and its tests. The two scripts exist because the encumbered-content gate must reason over *built artifacts*, which neither a manifest nor a workflow step can do in a testable way — and because the two guards that already scan a built wheel and sdist (`tests/load/test_packaging.py`) are pytest tests that nothing forces onto the publish path: a checker the workflow *must* run, that cannot skip, is the difference between a guard and a test.
 - **Steering compliance**: no new runtime dependency; `mypy --strict` over the two new package modules; nothing written outside the data root by any new code path (the skill command prints, it does not install); personal data cannot reach an artifact because the sdist is an allowlist and the checker fails on any undeclared member.
 
 ### Technology Stack
@@ -160,8 +160,8 @@ graph TB
 | Build backend | `hatchling` (existing) | Builds wheel and sdist from declared targets | Explicit sdist allowlist replaces default inclusion; no build hooks, no code generation |
 | Packaging front end | `uv` (existing dev tool) | `uv build`, `uv tool install` for clean-environment verification | Already the project's tool and already used by the packaging tests |
 | Version resolution | stdlib `importlib.metadata` | Runtime version of the installed distribution | Guarded for `PackageNotFoundError`; called lazily, never at import time |
-| Skill location | stdlib `importlib.resources` | Resolves the packaged skill directory in an installed tool | Same mechanism the methodology tables already use |
-| Release scripts | stdlib `zipfile`, `tarfile`, `tomllib`, `email`, `subprocess`, `shutil` | Build profile selection; artifact member and metadata inspection | No new dependency; scripts import nothing from `fitdocs` |
+| Skill location | stdlib `importlib.resources` | Resolves the packaged skill directory in an installed tool | Package-data resource resolution *(Amendment 2: "the mechanism the methodology tables already use" — those tables are gone)* |
+| Release scripts | stdlib `zipfile`, `tarfile`, `tomllib`, `email`, `subprocess`, `shutil` + the purge's two guard cores under `tests/` | Deterministic build; artifact member, link, content and metadata inspection | No new dependency; scripts import nothing from `fitdocs`; invoked as `python -m scripts.<name>` from the repository root *(Amendment 2)* |
 | Automation | GitHub Actions | CI on push/PR; tag-triggered release | Publish job inline (Trusted Publishing is unavailable from reusable workflows) |
 | Publication | `pypa/gh-action-pypi-publish` (pinned tag) | Uploads to TestPyPI then PyPI via OIDC | `permissions: id-token: write` scoped to the publish job; PEP 740 attestations are default-on since v1.11.0; no API token anywhere |
 | Skill format | Agent Skills open standard | `SKILL.md` frontmatter + body | `name` must equal the directory name; `description` 1–1024 chars; version carried under `metadata` (the standard has no top-level `version` field) |
@@ -178,20 +178,22 @@ CONTRIBUTING.md                    # Contributor path, changelog duty, public/in
                                    #   calculator-publisher guidance, encumbered-material rule (9.1-9.5)
 
 release/
-├── licensing.toml                 # The single recorded methodology-permission state,
-│                                  #   the bundled methodology's identity, and the prune
-│                                  #   list the unencumbered profile applies (6.3)
-└── artifact-policy.toml           # Required members, forbidden member patterns,
-                                   #   forbidden content markers, required metadata
-                                   #   fields — the checker's declarative input (1.5, 1.6, 5.4)
+└── artifact-policy.toml           # Required members per artifact kind, forbidden member
+                                   #   patterns, required metadata fields — the checker's
+                                   #   declarative input (1.5, 1.6, 5.4). Amendment 2: no
+                                   #   licensing.toml, no marker list, no when-bundled split
 
 scripts/
-├── build_release.py               # Profile selection from the licensing record; builds
-│                                  #   wheel + sdist (pruned copy for the unencumbered
-│                                  #   profile); deterministic timestamps (1.4, 6.2, 10.2, 10.5)
-└── check_artifacts.py             # Artifact conformance + licensing gate + version/changelog
-                                   #   consistency; exit 0 clean / 1 violations (1.5-1.7, 2.6,
-                                   #   4.7, 5.4, 6.1, 6.2, 6.7, 10.3)
+├── __init__.py                    # Makes `python -m scripts.<name>` resolvable from the
+│                                  #   repository root; never ships (Amendment 2)
+├── build_release.py               # Builds wheel + sdist from the working tree into a
+│                                  #   cleared directory; deterministic timestamps
+│                                  #   (1.4, 6.10, 10.2, 10.5). Amendment 2: no profiles
+└── check_artifacts.py             # Artifact conformance + encumbered-content gate (via the
+                                   #   purge's guard cores; fails closed) + link-member rule +
+                                   #   version/changelog consistency; exit 0 clean / 1
+                                   #   violations (1.3, 1.5-1.8, 1.10, 2.6, 4.7, 5.4, 6.1,
+                                   #   6.2, 6.3, 6.7, 6.9, 10.3)
 
 .github/workflows/
 ├── ci.yml                         # Push/PR: tests, lint, strict types, artifact build +
@@ -203,8 +205,9 @@ scripts/
 src/fitdocs/
 ├── version.py                     # Pure leaf: tool_version() -> str | None,
 │                                  #   version_display() -> str, DIST_NAME (2.1-2.4)
-├── agentskill.py                  # SKILL_NAME, skill_root() -> Path | None,
-│                                  #   skill_file() -> Path | None (8.1, 8.6)
+├── agentskill.py                  # PACKAGED_SKILLS registry, skill_root(name),
+│                                  #   skill_file(name), skill_files(name) (8.1, 8.6, 8.9)
+│                                  #   -- landed by build-training-block (Amendment 1)
 └── skills/
     └── fitdocs-workouts/
         └── SKILL.md               # The published agent skill: inbox workflow, outcome
@@ -233,13 +236,15 @@ docs/
 tests/
 ├── test_version_identity.py       # One declaration; unknown fallback; equality across
 │                                  #   manifest, changelog, tag, installed tool (2.1-2.6)
-├── test_release_artifacts.py      # Both build profiles built and checked; required and
-│                                  #   forbidden members; encumbered-marker scan; metadata
-│                                  #   completeness; reproducibility (1.3-1.6, 5.4, 6.1,
-│                                  #   6.2, 6.7, 10.3, 10.5)
-├── test_unencumbered_install.py   # Install the unencumbered wheel into a clean
-│                                  #   environment; commands run; no calculator available;
-│                                  #   exit codes unchanged (6.4)
+├── test_release_artifacts.py      # The one artifact set built and checked; required and
+│                                  #   forbidden members; a planted link member is a
+│                                  #   violation; a planted synthetic token (test-supplied
+│                                  #   match file) and a planted fingerprinted value are
+│                                  #   each caught; unset match data is GATE_NOT_RUN, never
+│                                  #   a pass; metadata completeness; reproducibility
+│                                  #   (1.3-1.6, 1.10, 5.4, 6.1, 6.2, 6.3, 6.7, 6.9, 6.10,
+│                                  #   10.3, 10.5). Amendment 2: test_unencumbered_install.py
+│                                  #   is not created -- there is no such profile
 ├── test_agent_skill.py            # Frontmatter conformance; name equals directory;
 │                                  #   version matches release; every named command and
 │                                  #   option exists in the CLI surface (8.1, 8.5, 8.8)
@@ -260,16 +265,16 @@ and that spec's task 4.2 extends its per-skill map.
 
 ### Modified Files
 
-- `pyproject.toml` — complete `[project]` metadata (`authors`, `keywords`, `classifiers`, `license-files`, `[project.urls]` for source, documentation, changelog, issues); explicit `[tool.hatch.build.targets.sdist]` allowlist; wheel target unchanged in intent but stated explicitly. Version stays static and stays the single declaration. `[project.urls]` must additionally resolve every documentation page a *shipped or emitted* artifact points at — the ownership contract, the plugin platform, the inbox, and the configuration document — because the sdist excludes `docs/` and wiki-contract's emitted `AGENTS.md` lands in a tree that has no repository (1.9).
-- `src/fitdocs/cli.py` — `--version` and any other version output read `version.version_display()`; a new read-only `skill` command printing the packaged skill's path and the copy recipe; the `--calculator` help example replaced with a methodology-neutral one so an unencumbered artifact carries no branding; docstring amended for the new command.
+- `pyproject.toml` — complete `[project]` metadata (`authors`, `keywords`, `classifiers`, `license-files`, `[project.urls]` for source, documentation, changelog, issues); explicit `[tool.hatch.build.targets.sdist]` allowlist *(Amendment 2: there is no sdist section at all today — the purge deleted the exclude-only one — so the default ships `.kiro/`, `tests/`, `scripts/` and the root `agent-log` symlink; the allowlist excludes all four by construction, and 1.10 asserts the link stays out)*; wheel target unchanged in intent but stated explicitly. Version stays static and stays the single declaration. `[project.urls]` must additionally resolve every documentation page a *shipped or emitted* artifact points at — the ownership contract, the plugin platform, the inbox, and the configuration document — because the sdist excludes `docs/` and wiki-contract's emitted `AGENTS.md` lands in a tree that has no repository (1.9).
+- `src/fitdocs/cli.py` — `--version` and any other version output read `version.version_display()`; the read-only `skill [NAME]` command (landed by build-training-block, Amendment 1); docstring amended. *(Amendment 2: the "`--calculator` help example replaced with a methodology-neutral one" clause is retired — the help text is already neutral, "Use only the calculator with this id.")*
 - `src/fitdocs/tiles.py` — the tile user-agent composes from `version.version_display()` instead of calling `importlib.metadata` directly, so an uninstalled tree still produces a valid identification string.
 - `src/fitdocs/plugins.py` — the built-in calculator's reported version comes from `version.tool_version()`; an unknown version stays `None` rather than becoming a fabricated string (plugin-api Req 4.3 already forbids fabrication).
-- `src/fitdocs/load/__init__.py` — the bundled methodology is registered through a guarded import; its absence leaves the registry empty and is not an error. The methodology's calculator name is *conditionally exported* and is removed from `__all__` when the methodology package is absent, so a star-import and every documented public name keep working in an unencumbered build (6.8).
+- ~~`src/fitdocs/load/__init__.py`~~ — **not modified** *(Amendment 2: the guarded import and conditional export of 6.8 are withdrawn; the package registers the unencumbered `threshold` built-in unconditionally and this design does not touch it)*.
 - `README.md` — rewritten: what fitdocs is, install, a minimal first run, and links into `docs/index.md`. The rewrite is a **reorganization, not a replacement** (10.7): the route-maps privacy, opt-out, and attribution statements move to `docs/configuration.md` intact; wiki-contract's ownership section, inbox's inbox section, and plugin-api's plugins section are each either kept in place or relocated verbatim into `docs/ownership-contract.md`, `docs/inbox.md`, and `docs/plugins.md` with the README linking to them. Dropping any of those statements is a defect the preserved-guarantee test catches (10.6).
 - `tests/test_packaging.py` — extended with the metadata completeness assertions and the no-side-effect assertion (installing creates no data root).
 - `tests/test_cli.py` — the `skill` command's output and exit code; `--version` reporting *unknown* rather than raising when the distribution is not installed.
 - `tests/test_determinism.py` — the existing offline guard extended to assert this feature introduced no new runtime network access (10.4).
-- `tests/test_public_api.py` — **not** extended with new names. plugin-api's enumeration is the authoritative public surface; this feature only asserts, in `tests/test_unencumbered_install.py`, that the enumerated `fitdocs.load` names and `from fitdocs.load import *` both still work when the methodology package is absent (6.8), and that the two new package modules are absent from the documented surface (they are internal by the policy's own rule).
+- `tests/test_public_api.py` — **not** extended with new names. plugin-api's enumeration is the authoritative public surface; this feature only asserts that its new package module (`version.py`) is absent from the documented surface (it is internal by the policy's own rule). *(Amendment 2: the unencumbered-install assertions of 6.8 are withdrawn with the criterion.)*
 - `docs/plugins.md` — plugin-api writes this page and owns its content; this feature replaces its
   self-contained version-policy paragraph with a pointer to `docs/compatibility.md`, so the project
   has exactly one compatibility statement rather than two that can drift (3.7). No other content changes.
@@ -285,9 +290,9 @@ flowchart TB
     Gates -->|fail| Stop[Stop nothing published]
     Gates --> Version[Compare tag manifest and changelog versions]
     Version -->|mismatch| Stop
-    Version --> Profile[Select build profile from licensing record]
-    Profile --> Build[Build wheel and sdist]
-    Build --> Check[Run artifact conformance and licensing gate]
+    Version --> Build[Build wheel and sdist from the working tree]
+    Build --> Check[Run artifact conformance and encumbered content gate]
+    Check -->|match data absent| Stop
     Check -->|violations| Stop
     Check --> Clean[Install artifact into a clean environment and run it]
     Clean -->|fail| Stop
@@ -300,20 +305,24 @@ flowchart TB
 
 Flow decisions worth stating: (a) every gate that can fail runs **before** the rehearsal publish, so a failure never spends a version number (5.8); (b) the version equality check happens before the build, because a mismatched tag is the cheapest failure to detect (2.6, 4.7); (c) the clean-environment install exercises the *artifact*, never the working tree, so a file missing from the wheel fails here rather than for the first user (5.3); (d) the public publish is guarded by an environment approval, which is also what makes a hand-run publish cross a recorded gate (5.7); (e) the post-publication install is the only step that runs after the version is spent, and its failure is a defect report, not a rollback — a released version is never altered (2.5).
 
-### Licensing gate decision
+### Encumbered-content gate decision *(Amendment 2: formerly "Licensing gate decision")*
 
 ```mermaid
 flowchart TD
-    Start[Artifacts built] --> Read[Read the recorded permission state]
-    Read --> Scan[Enumerate every artifact member and read the distribution metadata]
-    Scan --> Marker{Encumbered tables names or trademarked terms present}
-    Marker -- no --> Clean[Gate passes for the licensing concern]
-    Marker -- yes --> Granted{Permission recorded as granted}
-    Granted -- yes --> Clean
-    Granted -- no --> Fail[Report each offending member and stop the release]
+    Start[Artifacts built] --> Load[Load the token match data from outside the repository]
+    Load -- unset --> NotRun[GATE_NOT_RUN violation stop the release]
+    Load -- set but unusable --> Error[Hard error stop the release]
+    Load -- loaded --> Scan[Enumerate every member and read the distribution metadata]
+    Scan --> Link{Any member is a symbolic link}
+    Link -- yes --> Fail[Report each offending member and stop the release]
+    Link -- no --> Tokens{Token match in any text member or the metadata}
+    Tokens -- yes --> Fail
+    Tokens -- no --> Values{Fingerprinted value in any text member}
+    Values -- yes --> Fail
+    Values -- no --> Clean[Gate passes for the encumbered content concern]
 ```
 
-The gate is deliberately artifact-side (6.7): the encumbered material reaches a distribution by two different mechanisms — package data inside the wheel and the build backend's default inclusion in the sdist — and only the built archive shows what actually happened. The check covers archive members *and* the distribution metadata, because the long description is the README rendered into `METADATA` and would otherwise carry branded text past a member-name-only scan.
+The gate is deliberately artifact-side (6.7): material reaches a distribution by two different mechanisms — package data inside the wheel and the build backend's inclusion rules for the sdist — and only the built archive shows what actually happened. The check covers archive members *and* the distribution metadata, because the long description is the README rendered into `METADATA` and would otherwise carry a token past a member-name-only scan. There is no permission branch: the material was withdrawn and purged, so any match is a violation (6.1, 6.2). The gate's definition of the material is not its own — the token match data lives outside the repository and is read through the purge's `tests/_forbidden_strings.py` core, and the value scan uses the purge's digest set through `tests/_content_oracle.py` (6.3) — so the repository retains no forbidden term in any readable form and the release gate and the repository guard cannot disagree. An unset match-data source is a `GATE_NOT_RUN` violation, not a skip and not a pass (6.9): the purge's guards may skip in an ordinary developer run, but a release step that did not scan has not gated anything. A symbolic-link member is a violation in its own right (1.10), because a link's bytes are its target path, not its target's content, and every content scan is blind to it by construction.
 
 ### Version resolution
 
@@ -336,8 +345,8 @@ The lookup is performed lazily at the point of use, never at import time, becaus
 | 1.2 | Console entry point; documented commands run | PackageManifest, InstalledToolVerification | `[project.scripts]`, clean-environment install | Release pipeline |
 | 1.3 | Complete declared metadata | PackageManifest, ArtifactChecker | `[project]`, `required_metadata` | — |
 | 1.4 | Both sdist and wheel each release | ReleaseBuilder | `build()` | Release pipeline |
-| 1.5 | Artifacts contain every runtime file | ArtifactPolicy, ArtifactChecker | `required_members` | Licensing gate |
-| 1.6 | Artifacts contain no development-only material | PackageManifest, ArtifactPolicy, ArtifactChecker | sdist allowlist, `forbidden_members` | Licensing gate |
+| 1.5 | Artifacts contain every runtime file (packaged skills, `py.typed`) | ArtifactPolicy, ArtifactChecker | `required_members` | Encumbered-content gate |
+| 1.6 | Artifacts contain no development-only material | PackageManifest, ArtifactPolicy, ArtifactChecker | sdist allowlist, `forbidden_members` | Encumbered-content gate |
 | 1.7 | Install creates nothing on the user's machine | InstalledToolVerification | packaging test assertion | — |
 | 1.8 | License file matches declared license | LicenseFile, PackageManifest, ArtifactChecker | `license-files`, `required_members` | — |
 | 1.9 | Shipped and emitted doc references use project URLs | PackageManifest, DocsGuaranteeTest | `[project.urls]`, URL-form assertion | — |
@@ -367,21 +376,24 @@ The lookup is performed lazily at the point of use, never at import time, becaus
 | 5.1 | Documented end-to-end procedure | ReleaseProcedure | `docs/releasing.md` | Release pipeline |
 | 5.2 | Tests, lint, strict types before publication | CiWorkflow, ReleaseWorkflow | gate jobs | Release pipeline |
 | 5.3 | Verify by installing the artifact in a clean environment | ReleaseWorkflow, InstalledToolVerification | install-and-run job | Release pipeline |
-| 5.4 | Artifacts contain exactly what is required | ArtifactChecker, ArtifactPolicy | `check()` | Licensing gate |
+| 5.4 | Artifacts contain exactly what is required | ArtifactChecker, ArtifactPolicy | `check()` | Encumbered-content gate |
 | 5.5 | Version tag records the released revision | ReleaseWorkflow, ReleaseProcedure | tag trigger | Release pipeline |
 | 5.6 | Rehearsal path not touching the public index | ReleaseWorkflow | rehearsal publish job | Release pipeline |
 | 5.7 | Short-lived per-release credentials | ReleaseWorkflow | OIDC publish, `id-token: write` | Release pipeline |
 | 5.8 | Any gate failure stops before publication | ReleaseWorkflow | job dependency chain | Release pipeline |
 | 5.9 | Post-publication install and version check | ReleaseWorkflow, ReleaseProcedure | verification job | Release pipeline |
 | 5.10 | Automation runs the same gates as a maintainer | ReleaseWorkflow, ReleaseBuilder, ArtifactChecker | shared scripts | Release pipeline |
-| 6.1 | No encumbered artifact without recorded permission | LicensingRecord, ArtifactChecker | `permission`, marker scan | Licensing gate |
-| 6.2 | Gate inspects artifacts and stops the release | ArtifactChecker, ReleaseWorkflow | `check()` exit status | Licensing gate |
-| 6.3 | Permission recorded in one place | LicensingRecord | `release/licensing.toml` | Licensing gate |
-| 6.4 | Unbundled build stays functional and honest | BuiltInRegistration, UnencumberedInstallTest | guarded import | — |
-| 6.5 | Documented route to obtain a methodology | InstallDocs, WikiIntegrationDocs | `docs/install.md` | — |
-| 6.6 | Bundling change is a contract change in the changelog | Changelog, CompatibilityPolicy | `CHANGELOG.md` | — |
-| 6.7 | Gate reads artifacts, not the source tree | ArtifactChecker | archive member and metadata scan | Licensing gate |
-| 6.8 | Calculator name conditionally exported; star-import intact | BuiltInRegistration, UnencumberedInstallTest | guarded `__all__` | — |
+| 1.10 | No symbolic-link member; a link is a violation, never skipped | PackageManifest, ArtifactChecker | sdist allowlist, `LINK_MEMBER` | Encumbered-content gate |
+| 6.1 | No artifact carries the removed material | ArtifactChecker, GuardCores | token + value scan | Encumbered-content gate |
+| 6.2 | Gate inspects artifacts and stops the release | ArtifactChecker, ReleaseWorkflow | `check()` exit status | Encumbered-content gate |
+| 6.3 | Match data from the purge guard's single out-of-repository source | ArtifactChecker, GuardCores, MatchData | `tests._forbidden_strings.load` | Encumbered-content gate |
+| 6.4 | *withdrawn (Amendment 2)* | — | — | — |
+| 6.5 | *withdrawn (Amendment 2)* | — | — | — |
+| 6.6 | Built-in calculator change is a contract change in the changelog | Changelog, CompatibilityPolicy | `CHANGELOG.md` | — |
+| 6.7 | Gate reads artifacts, not the source tree | ArtifactChecker | archive member and metadata scan | Encumbered-content gate |
+| 6.8 | *withdrawn (Amendment 2)* | — | — | — |
+| 6.9 | Absent match data stops the release as "gate did not run" | ArtifactChecker, ReleaseWorkflow, ReleaseProcedure | `GATE_NOT_RUN` | Encumbered-content gate |
+| 6.10 | One artifact set per release, no profiles | ReleaseBuilder | `build()` | Release pipeline |
 | 7.1 | First-run path from install to a document | InstallDocs | `docs/install.md` | — |
 | 7.2 | Standalone and wiki-hosted data roots | InstallDocs | `docs/install.md` | — |
 | 7.3 | Exact upgrade and uninstall commands | UpgradeDocs | `docs/upgrading.md` | — |
@@ -403,10 +415,10 @@ The lookup is performed lazily at the point of use, never at import time, becaus
 | 9.2 | Changelog duty and policy application | ContributionDocs | `CONTRIBUTING.md` | — |
 | 9.3 | Public versus internal, by reference | ContributionDocs, CompatibilityPolicy | `CONTRIBUTING.md` | — |
 | 9.4 | Guidance for calculator publishers | ContributionDocs | `CONTRIBUTING.md` | — |
-| 9.5 | Encumbered material must not be added | ContributionDocs, LicensingRecord | `CONTRIBUTING.md` | — |
+| 9.5 | Encumbered material must not be added | ContributionDocs, GuardCores | `CONTRIBUTING.md` | — |
 | 10.1 | No new runtime dependency | Technology Stack, PackageManifest | dependency list unchanged | — |
 | 10.2 | Artifact behaves as the tested revision | ReleaseBuilder | no build hooks, no codegen | Release pipeline |
-| 10.3 | No personal data in any artifact | ArtifactPolicy, ArtifactChecker | sdist allowlist, undeclared-member rule | Licensing gate |
+| 10.3 | No personal data in any artifact | ArtifactPolicy, ArtifactChecker | sdist allowlist, undeclared-member rule | Encumbered-content gate |
 | 10.4 | No new runtime network access | DeterminismGuard | existing offline test extended | — |
 | 10.5 | Same revision builds to identical contents | ReleaseBuilder, ReleaseArtifactTest | deterministic timestamps | Release pipeline |
 | 10.6 | Documentation reorganization loses nothing, siblings included | DocsGuaranteeTest, ConfigurationDocs, InboxDocs | statement assertions | — |
@@ -421,16 +433,15 @@ The lookup is performed lazily at the point of use, never at import time, becaus
 | AgentSkillLocator | package (leaf) | Resolve the packaged skill directory | 8.1, 8.6 | `importlib.resources` (P0) | Service |
 | AgentSkillPackage | package data | The published agent skill | 8.1–8.5, 8.8 | AgentSkillLocator (P1) | State |
 | CliApp additions | cli | Version display and the read-only `skill` command | 2.2, 2.3, 8.6 | VersionSource (P0), AgentSkillLocator (P0) | Service |
-| BuiltInRegistration | load | Tolerate a package built without a methodology | 6.4, 6.8 | — | Service |
-| LicensingRecord | policy data | The single recorded permission state and prune list | 6.1, 6.3, 6.4, 9.5 | — | State |
-| ArtifactPolicy | policy data | Required, forbidden, and marker declarations | 1.5, 1.6, 5.4, 10.3 | — | State |
-| ReleaseBuilder | release tooling | Profile selection and deterministic builds | 1.4, 6.2, 10.2, 10.5 | LicensingRecord (P0), hatchling (P0) | Batch |
-| ArtifactChecker | release tooling | Conformance, licensing, and version consistency gates | 1.3, 1.5–1.8, 2.6, 4.7, 5.4, 6.1, 6.2, 6.7, 10.3 | ArtifactPolicy (P0), LicensingRecord (P0), Changelog (P0) | Batch |
+| GuardCores | purge-owned test helpers | The one definition of the removed material: token matcher over out-of-repository data, digest-keyed value oracle | 6.1, 6.3 | MatchData (P0) | Service (consumed, not owned) |
+| ArtifactPolicy | policy data | Required members per artifact kind, forbidden patterns, required metadata fields | 1.5, 1.6, 5.4, 10.3 | — | State |
+| ReleaseBuilder | release tooling | One deterministic build of the working tree | 1.4, 6.10, 10.2, 10.5 | hatchling (P0) | Batch |
+| ArtifactChecker | release tooling | Conformance, link-member, encumbered-content (fail-closed), and version consistency gates | 1.3, 1.5–1.8, 1.10, 2.6, 4.7, 5.4, 6.1, 6.2, 6.3, 6.7, 6.9, 10.3 | ArtifactPolicy (P0), GuardCores (P0), Changelog (P0) | Batch |
 | CiWorkflow | automation | Quality gates on every change | 5.2 | ReleaseBuilder (P1), ArtifactChecker (P1) | Batch |
 | ReleaseWorkflow | automation | Tag-triggered gated publication | 2.5, 5.2, 5.3, 5.5–5.10 | ReleaseBuilder (P0), ArtifactChecker (P0), publishing action (P0) | Batch |
 | Changelog | documentation | Per-release account against the policy | 4.1–4.6, 6.6 | CompatibilityPolicy (P1) | State |
 | CompatibilityPolicy | documentation | What version numbering promises; what is public; who needs a data root | 3.1–3.10, 6.6 | — | — |
-| InstallDocs / ConfigurationDocs / UpgradeDocs | documentation | Install, configure, upgrade, uninstall | 6.5, 7.1–7.8, 10.6 | — | — |
+| InstallDocs / ConfigurationDocs / UpgradeDocs | documentation | Install, configure, upgrade, uninstall | 7.1–7.8, 10.6 | — | — |
 | InboxDocs | documentation | The inbox interface as a linked, user-facing document | 7.9, 10.6, 10.7 | inbox spec's published section (P1) | — |
 | WikiIntegrationDocs | documentation | Skill installation and the adoption recipe | 8.6, 8.7 | AgentSkillPackage (P1) | — |
 | ReleaseProcedure | documentation | The ordered, gated procedure | 5.1, 5.3, 5.5, 5.6, 5.9, 5.10 | ReleaseBuilder (P0), ArtifactChecker (P0) | — |
@@ -498,9 +509,9 @@ above allows exactly those alongside the changelog's newest entry.
 
 **Responsibilities & Constraints**
 
-- Resolves the packaged skill directory inside an installed distribution using the same resource mechanism the methodology tables already use, so it works from a wheel install, a source checkout, and a `uv tool` environment alike.
+- Resolves a packaged skill directory inside an installed distribution through package-data resource resolution, so it works from a wheel install, a source checkout, and a `uv tool` environment alike.
 - Returns `None` when the skill data is absent rather than raising, so a packaging defect surfaces as an instructive command message instead of a traceback.
-- Holds the skill's canonical name as a constant, because the Agent Skills standard requires the directory name and the frontmatter `name` to be equal — the constant is what the conformance test asserts both against.
+- Holds every packaged skill's canonical name in the `PACKAGED_SKILLS` registry, because the Agent Skills standard requires the directory name and the frontmatter `name` to be equal — the registry entry is what the conformance test asserts both against *(Amendment 2: "the constant" → the registry, per Amendment 1)*.
 - Reads nothing else and writes nothing.
 
 **Dependencies**
@@ -511,17 +522,21 @@ above allows exactly those alongside the changelog's newest entry.
 **Contracts**: Service [x]
 
 ```python
-SKILL_NAME: Final[str] = "fitdocs-workouts"
+INBOX_SKILL_NAME: Final[str] = "fitdocs-workouts"        # appended by task 4.2
+PACKAGED_SKILLS: Final[tuple[str, ...]] = ("build-training-block", INBOX_SKILL_NAME)
 
-def skill_root() -> Path | None:
-    """The packaged skill directory, or None when it is not present."""
+def skill_root(name: str) -> Path | None:
+    """The packaged skill directory for a registered name, or None when absent."""
 
-def skill_file() -> Path | None:
-    """The packaged SKILL.md, or None when it is not present."""
+def skill_file(name: str) -> Path | None:
+    """The packaged SKILL.md for a registered name, or None when absent."""
+
+def skill_files(name: str) -> tuple[Path, ...]:
+    """Every regular file under a packaged skill's directory."""
 ```
 
 - Postconditions: any returned path exists and is readable; nothing is created.
-- Invariants: `skill_root()`'s final path component equals `SKILL_NAME`.
+- Invariants: `skill_root(name)`'s final path component equals `name`, and `name` is a `PACKAGED_SKILLS` entry. *(Amendment 2: the block above formerly showed the single-name `SKILL_NAME` shape Amendment 1 retired; it now shows the shape as landed.)*
 
 **Amendment 1 (2026-09-16, landed by build-training-block)**: `SKILL_NAME` is
 retired in favour of a registry `PACKAGED_SKILLS: tuple[str, ...]` holding
@@ -542,7 +557,7 @@ import time, nothing from `fitdocs` imported, nothing written.
 
 **Responsibilities & Constraints**
 
-- Frontmatter conforms to the open standard's field contract: `name` equal to the directory name and to `SKILL_NAME`; a `description` within the published length limit that states both what the skill does and when to use it; `license`; a `compatibility` note naming the requirement that the `fitdocs` command be installed and on the agent's path; and the release version carried under `metadata`, because the standard defines no top-level version field (8.8).
+- Frontmatter conforms to the open standard's field contract: `name` equal to the directory name and to its `PACKAGED_SKILLS` entry (`INBOX_SKILL_NAME`); a `description` within the published length limit that states both what the skill does and when to use it; `license`; a `compatibility` note naming the requirement that the `fitdocs` command be installed and on the agent's path; and the release version carried under `metadata`, because the standard defines no top-level version field (8.8).
 - The body covers, in order: when this applies (new `.fit` files have arrived, or the wiki's workouts look stale); the commands to run and in what order; how to read **every** reported channel — written, skipped, failed, deferred, quarantined, moved, **move failures**, and warnings; what to do about each exceptional channel, including that a deferred file needs no action, a quarantined file needs the user rather than the agent, and a move failure means the file was processed successfully and will be retried on the next drain, so it is not a reason to reprocess anything; and the ownership boundary (8.2). The channel list is the drain report's own set — inbox reports `move_failures` as a row of its own, and an enumeration that omits it teaches an agent to misread a clean run as a partial one.
 - The ownership section states the boundary and then **defers**: it names the in-tree ownership declaration as the authority and the published contract as the detail, and does not enumerate owned paths, region ids, or managed frontmatter keys (8.3, 8.4). This is what keeps the skill from drifting when wiki-contract's enumerations change.
 - The body is ordinary markdown with no client-specific syntax, so a human or a non-supporting agent environment can follow it directly (8.5). No `allowed-tools` field, which the standard still flags experimental and which would not port.
@@ -556,7 +571,7 @@ import time, nothing from `fitdocs` imported, nothing written.
 **Implementation Notes**
 
 - Integration: shipping the skill *inside the package* is what locks it to the release and makes it reachable from an index-only install; the `skill` command prints where it landed, and the documentation gives the copy and symlink recipes for the common agent clients.
-- Validation: `tests/test_agent_skill.py` parses the frontmatter against the field constraints, asserts `name` equals both the directory name and `SKILL_NAME`, asserts the recorded version matches the manifest, and extracts every `fitdocs <command>` and `--option` occurrence from the body, asserting each exists in the typer application's registered surface. A second binding covers the **channels**: the set of channel names the body documents is compared against the drain report's own field set, so a channel added, renamed, or dropped by inbox fails this test rather than silently leaving the skill incomplete. Command binding alone would not catch it (8.8).
+- Validation: `tests/test_agent_skill.py` parses the frontmatter against the field constraints, asserts `name` equals both the directory name and its `PACKAGED_SKILLS` entry, asserts the recorded version matches the manifest, and extracts every `fitdocs <command>` and `--option` occurrence from the body, asserting each exists in the typer application's registered surface. A second binding covers the **channels**: the set of channel names the body documents is compared against the drain report's own field set, so a channel added, renamed, or dropped by inbox fails this test rather than silently leaving the skill incomplete. Command binding alone would not catch it (8.8).
 - Risks: the standard is versionless and evolving, so a future field could become required — mitigated by keeping the frontmatter to the documented required-plus-stable set and by the conformance test failing loudly rather than silently accepting an unknown shape.
 
 **Amendment 1 (2026-09-16, landed by build-training-block)**: a second
@@ -580,7 +595,6 @@ entry to that map when it lands — the frame is not re-written.
 - The existing eager `--version` callback prints `version_display()` and exits 0. From an uninstalled source tree it prints the unknown token rather than raising (2.4) — today it raises.
 - A new `skill` command prints the packaged skill directory's absolute path plus a one-line recipe for copying it into an agent's skills directory, and exits 0. It resolves no data root, loads no profile, constructs no tile store, runs no engine, and **writes nothing** — the tool never installs into a location it does not own.
 - If the skill data is absent from the installed package, the command reports that through the existing configuration-error path (an instructive message, exit 2), because it means the install is incomplete rather than that the user did something wrong.
-- The `--calculator` help text's example is replaced with a methodology-neutral one, so an artifact built without a bundled methodology carries no branded string (6.1, 6.7).
 - The module docstring's command list and exit-code contract are amended for the new command; the 0/1/2 contract itself is unchanged. The docstring also records the project-wide data-root posture rule in code — *commands that describe the installed tool need no data root; commands that describe or change a tree require one* (3.10) — with `skill` as an instance of the first half: it resolves nothing, so it cannot fail for want of a data root, which is exactly the posture `plugins` takes and the opposite of `check`'s.
 
 **Contracts**: Service [x]
@@ -599,89 +613,53 @@ above are the `NAME`-omitted case of this widened command, not a second one.
 
 ### Load
 
-#### BuiltInRegistration (`src/fitdocs/load/__init__.py`)
+#### BuiltInRegistration — retired *(Amendment 2, 2026-09-18)*
 
-| Field | Detail |
-|-------|--------|
-| Intent | Make "no bundled methodology" a supported configuration rather than an import error |
-| Requirements | 6.4, 6.8 |
-
-**Responsibilities & Constraints**
-
-- Registers the bundled methodology through a guarded import: when the methodology package is absent from the installed distribution, the registry simply starts empty and the import succeeds. Absence is never an error and is never reported as a failure.
-- The methodology's calculator name is **conditionally exported** (6.8). Today `load/__init__.py` imports `WithdrawnCalculator`, lists it in `__all__`, and registers it at import time; in an unencumbered wheel all three would fail. Under the guard the name is bound only when the import succeeded, and `__all__` is assembled so the name is present exactly when the object is. The consequences that must hold in the unencumbered profile: `from fitdocs.load import *` succeeds, every name in plugin-api's enumerated `fitdocs.load` surface imports, and `from fitdocs.load import WithdrawnCalculator` fails with an ordinary `ImportError` rather than a partially-initialized package. The bundled calculator is not part of the public surface (plugin-api Req 5.2 excludes it), so its absence from `__all__` is not a contract change — but *whether a methodology is bundled at all* is, and the changelog records it (6.6).
-- Every other consequence is already handled by the existing design: the load engine's calculator selection finds no candidate, the document's load region carries the established not-computed placeholder, the run reports no load results, and the exit-code contract is unchanged.
-- No other module may import the methodology package directly, so the guard is the single point of tolerance.
-- When the methodology *is* present, registration order, selection, and computed results are bit-for-bit what they are today (plugin-api Req 7.4).
-
-**Contracts**: Service [x]
-
-**Implementation Notes**
-
-- Integration: this is what makes the unencumbered build profile viable, and therefore what makes the licensing gate a release decision rather than a project blocker.
-- Validation: `tests/test_unencumbered_install.py` builds the unencumbered wheel, installs it into a clean environment, and asserts the tool runs a full sync, reports that no calculator is available, writes documents whose load region carries the not-computed placeholder, and exits 0. The same test asserts the import surface in that profile: `from fitdocs.load import *` succeeds, every enumerated public `fitdocs.load` name is importable, and `WithdrawnCalculator` is absent from `__all__` rather than present-and-broken (6.8).
-- Risks: a silent guard hiding a genuine packaging defect in a bundled build — mitigated by the artifact checker's required-member set, which fails a bundled-profile build whose methodology package is missing.
+This block designed a guarded import of the bundled methodology package and a conditionally-assembled `__all__` for `src/fitdocs/load/__init__.py` (former 6.4, 6.8). Both criteria are withdrawn: the methodology was withdrawn on 2026-07-25 and purged on 2026-08-23, and the package now registers the unencumbered `threshold` built-in unconditionally — `available()` returns exactly that one calculator in a fresh interpreter, which `tests/load/test_packaging.py` already pins. This design does not modify `fitdocs.load`. The tool's behaviour when a *configured* calculator is absent belongs to plugin-api and threshold-load, not to a build configuration this spec produces.
 
 ### Policy Data
 
-#### LicensingRecord (`release/licensing.toml`) and ArtifactPolicy (`release/artifact-policy.toml`)
+#### ArtifactPolicy (`release/artifact-policy.toml`) *(Amendment 2: formerly "LicensingRecord and ArtifactPolicy")*
 
 | Field | Detail |
 |-------|--------|
-| Intent | Make the release's two judgement calls — what may be published, and what must be in it — reviewable data rather than script internals |
-| Requirements | 1.5, 1.6, 5.4, 6.1, 6.3, 6.4, 10.3 |
+| Intent | Make the release's one remaining judgement call — what an artifact must and must not contain — reviewable data rather than script internals |
+| Requirements | 1.5, 1.6, 5.4, 10.3 |
 
 **Responsibilities & Constraints**
 
-- `licensing.toml` records exactly one decision: whether redistribution permission for the bundled methodology has been granted, together with the evidence reference, the methodology's identity, and the paths the unencumbered profile prunes (6.3). It is human-edited, reviewed like code, and read by both scripts.
-- `artifact-policy.toml` declares what an artifact must contain, what it must never contain, the content markers that indicate encumbered material, and the metadata fields a release must declare. Required members are matched per artifact kind, because a wheel and an sdist legitimately differ.
-- Both files are pure data: no expressions, no code, no environment lookups. A gate decision must be readable by a person who does not read Python.
-- Neither file is shipped in any artifact.
+- `artifact-policy.toml` declares what an artifact must contain, what it must never contain, and the metadata fields a release must declare. Required members are matched per artifact kind, because a wheel and an sdist legitimately differ.
+- It carries **no content marker list** (6.3). What the removed material *is* lives in the purge's match data outside the repository and in its digest set; a marker list inside the repository could only ever name the redaction placeholder (queue item `2026-08-04-distribution-forbidden-markers-scan-for-the-placeholder`), and the purge forbids retaining any forbidden term in the tree in any readable form.
+- It carries **no permission state and no prune list** (6.10). `release/licensing.toml` is not created. *(Amendment 2: that file recorded a permission decision for a methodology that no longer exists.)*
+- The symbolic-link rule (1.10) is **not** policy data: the checker applies it unconditionally, so no policy edit can declare a link acceptable.
+- Pure data: no expressions, no code, no environment lookups. A gate decision must be readable by a person who does not read Python. Not shipped in any artifact.
 
 **Contracts**: State [x]
 
 ##### Data Shape
 
 ```toml
-# release/licensing.toml
-[methodology]
-id = "withdrawn"                               # the bundled calculator's registered id
-display_name = "Withdrawn Methodology"         # the branded name the gate protects
-permission = "not-granted"                     # "not-granted" | "granted"
-evidence = ""                                  # required and non-empty when granted
-reference = ""                                 # the reference writeup was removed; the record lives in the purge's provenance record
-prune = ["src/fitdocs/load/withdrawn"]         # removed for the unencumbered profile
-```
-
-```toml
 # release/artifact-policy.toml
 [wheel]
 required = ["fitdocs/__init__.py", "fitdocs/py.typed",
-            "fitdocs/skills/fitdocs-workouts/SKILL.md"]
-required_when_bundled = ["fitdocs/load/withdrawn/data/paces_by_zones.csv",
-                         "fitdocs/load/withdrawn/data/withdrawn_performance_levels.csv"]
+            "fitdocs/skills/build-training-block/SKILL.md",
+            "fitdocs/skills/build-training-block/example-block.toml",
+            "fitdocs/skills/fitdocs-workouts/SKILL.md"]       # last entry arrives with task 4.2
 
 [sdist]
 required = ["pyproject.toml", "README.md", "LICENSE", "CHANGELOG.md",
             "src/fitdocs/__init__.py"]
 
 [forbidden]
-members = ["tests/*", ".kiro/*", "docs/reference/*", "*.xlsx", "*.fit", "*.gpx",
-           "uv.lock", "data/*", "*/.fitdocs/*"]
-markers = ["the withdrawn methodology", "the third party's Performance Level", "HPL"]
+members = ["tests/*", ".kiro/*", "scripts/*", "release/*", "docs/*", "*.xlsx", "*.fit",
+           "*.gpx", "uv.lock", "data/*", "*/.fitdocs/*", "agent-log"]
 
 [metadata]
 required_fields = ["Name", "Version", "Summary", "License-Expression",
                    "Requires-Python", "Project-URL"]
 ```
 
-- Invariants: `permission = "granted"` requires a non-empty `evidence`, and the checker treats a granted record with no evidence as a violation; the marker list contains the redacted marker set and never a bare identifier, because the calculator id is not a trademark and must remain usable.
-- The split between `required` and `required_when_bundled` is what makes an unencumbered artifact legal under 1.5 rather than a missing-member violation. The shape above is the **end state**: each required member is declared by whichever task creates the file it names, so the packaged skill's entry arrives with the skill and not before.
-
-**Amendment 1 (2026-09-16, landed by build-training-block)**: `[wheel]
-required` gains `fitdocs/skills/build-training-block/SKILL.md` and
-`fitdocs/skills/build-training-block/example-block.toml`, landed alongside
-that skill rather than by this spec's own tasks.
+- Invariants: the shape above is the **end state**; each required member is declared by whichever task creates the file it names, so the inbox skill's entry arrives with the skill and not before. `agent-log` appears in `forbidden.members` as belt-and-braces beside the sdist allowlist and the unconditional link rule — three independent reasons the symlink cannot ship. *(Amendment 2: `required_when_bundled` and `[forbidden].markers` are gone with the profile split and the in-repository marker list.)*
 
 ### Release Tooling
 
@@ -689,69 +667,63 @@ that skill rather than by this spec's own tasks.
 
 | Field | Detail |
 |-------|--------|
-| Intent | Produce the release's artifacts from a profile the recorded licensing state selects |
-| Requirements | 1.4, 6.2, 10.2, 10.5 |
+| Intent | Produce the release's one artifact set, deterministically, from the working tree |
+| Requirements | 1.4, 6.10, 10.2, 10.5 |
 
 **Responsibilities & Constraints**
 
-- Selects a profile from `licensing.toml`: **bundled** when permission is granted, **unencumbered** otherwise. The profile is reported before anything is built, so the operator always knows which artifact they are producing (6.2).
-- The bundled profile builds from the working tree. The unencumbered profile copies the tree to a temporary location, removes every path the record's prune list names, and builds from the copy — the working tree is never modified, which keeps a release build side-effect-free and the profile trivially testable.
+- Builds from the working tree, always. There is no profile, no prune list, and no per-release selection between variants (6.10). *(Amendment 2: the bundled/unencumbered profile selection this block used to own is retired with the permission question.)*
 - Produces both a wheel and a source distribution in one invocation (1.4), through the project's existing build front end with no build hooks and no code generation, so the installed artifact is the tested revision (10.2).
-- Sets a deterministic timestamp source for the build so that two builds of the same revision under the same profile produce archives with identical member sets and identical member contents (10.5).
-- Writes only into the output directory and its own temporary tree. It performs no network access and never publishes.
+- Sets a deterministic timestamp source for the build so that two builds of the same revision produce archives with identical member sets and identical member contents (10.5).
+- Writes only into the output directory. It performs no network access and never publishes.
 
 **Dependencies**
 
 - Inbound: ReleaseWorkflow (P0), ReleaseProcedure (P0), ReleaseArtifactTest (P1).
-- Outbound: LicensingRecord (P0).
-- External: the build front end and backend (P0); stdlib `shutil`, `subprocess`, `tempfile`, `tomllib` (P0).
+- External: the build front end and backend (P0); stdlib `subprocess`, `shutil`, `pathlib` (P0).
 
 **Contracts**: Batch [x]
 
 ##### Batch / Job Contract
 
 ```python
-class Profile(StrEnum):
-    BUNDLED = "bundled"
-    UNENCUMBERED = "unencumbered"
-
-def select_profile(record: LicensingRecord) -> Profile: ...
-def build(profile: Profile, *, out_dir: Path, source_date_epoch: int | None) -> tuple[Path, ...]: ...
+def build(*, out_dir: Path, source_date_epoch: int | None) -> tuple[Path, ...]: ...
 def main(argv: Sequence[str]) -> int: ...   # 0 built, 1 build failed
 ```
 
 - Trigger: a maintainer running the documented step, or the release workflow's build job.
-- Input / validation: a readable licensing record; a granted record missing its evidence is a hard error before any build.
-- Output: exactly one wheel and one sdist in the output directory, plus the selected profile on standard output.
+- Output: exactly one wheel and one sdist in the output directory.
 - Idempotency & recovery: the output directory is cleared before building, so a re-run replaces rather than accumulates; a failed build leaves no partial artifact behind.
 
 **Implementation Notes**
 
-- Validation: tests build both profiles into temporary directories and assert the wheel's member set differs by exactly the pruned paths; a reproducibility test builds the same profile twice and compares member names and content digests.
-- Risks: the prune list drifting behind a new encumbered file — mitigated because the artifact checker's marker scan, not the prune list, is what actually decides whether the release may proceed.
+- Validation: a reproducibility test builds twice and compares member names and content digests; the artifact test asserts exactly one wheel and one sdist result.
+- Risks: none specific to the builder — every judgement about the artifact's *contents* is the checker's, which is the point of the split.
 
 #### ArtifactChecker (`scripts/check_artifacts.py`)
 
 | Field | Detail |
 |-------|--------|
 | Intent | Decide, from the artifacts alone, whether this release may be published |
-| Requirements | 1.3, 1.5, 1.6, 1.7, 1.8, 2.6, 4.7, 5.4, 6.1, 6.2, 6.7, 10.3 |
+| Requirements | 1.3, 1.5, 1.6, 1.7, 1.8, 1.10, 2.6, 4.7, 5.4, 6.1, 6.2, 6.3, 6.7, 6.9, 10.3 |
 
 **Responsibilities & Constraints**
 
 - Opens each artifact in the output directory, enumerates its members, and reads its distribution metadata. Everything the gate decides is decided from that evidence; the source tree is never consulted for content (6.7).
-- Applies four independent checks and reports **all** violations rather than stopping at the first, so one run fixes the whole release: required members present per artifact kind; no forbidden member present; no encumbered marker present in any member's text or in the distribution metadata unless permission is recorded as granted; every required metadata field declared and non-empty.
+- Applies five independent checks and reports **all** violations rather than stopping at the first, so one run fixes the whole release: required members present per artifact kind; no forbidden member present; **no member is a symbolic link** (1.10); no removed material in any text-like member's content or in the distribution metadata (6.1); every required metadata field declared and non-empty.
+- The encumbered-content check has **no matcher of its own** (6.3). It calls the purge's token core — `tests._forbidden_strings.load(repo_root)` for the match data and `matches(text, forbidden_strings)` per member — and the purge's value core — `tests._content_oracle.scan(text, FINGERPRINTS, WINDOW_LENGTHS, SALT)` with the constants from `tests._content_fingerprints`. Both are exactly what `tests/load/test_packaging.py` already runs over a built artifact; the checker adds the binding to the release path, not a second definition.
+- **Fails closed** (6.9): `load` returning `None` — the token source unset — is a `GATE_NOT_RUN` violation naming the environment variable to set, never a skip and never a pass; `ForbiddenStringsSourceError` (set but missing, unreadable, empty, or inside the working tree) is a hard error. In an ordinary developer run the purge's guards skip distinguishably; a *release* step that did not scan has gated nothing, and the checker is only ever run as a release step or in CI.
 - Runs one consistency check that needs no artifact opened: the manifest version, the changelog's newest released entry, and — when supplied — the release tag must all agree (2.6, 4.7).
-- The metadata scan matters because the long description is the readme rendered into the distribution metadata; a member-name-only scan would let branded prose past the gate.
-- Text scanning is confined to text-like members (source, markdown, data, metadata); binary members are matched by name only, so the check stays fast and cannot produce spurious matches.
+- The metadata scan matters because the long description is the readme rendered into the distribution metadata; a member-name-only scan would let a token in prose past the gate.
+- Text scanning is confined to text-like members (source, markdown, data, metadata); binary members are matched by name only. A link member is never opened — its bytes are its target path — which is why it is a violation of its own kind rather than a scanned member.
 - Reports each violation with the subject it concerns, what was observed, and the action that resolves it — the same finding shape the project's other read-only inspection uses. Exit 0 when clean, 1 when any violation was found. It never modifies, deletes, or publishes anything.
-- **Report vocabulary (project-wide convention for Phase 3 report types)**: fields are named `(subject, detail[, remedy])` — `subject` is what the finding is about (here, the artifact filename), `detail` is what was observed, `remedy` is the action that resolves it. Classification enums are `StrEnum`, so a finding renders without a conversion step and sorts by its member value. `ViolationKind` and `Profile` already follow this; `Violation`'s leading field is `subject`, not `artifact`, so the shape reads the same as the siblings' report types.
+- **Report vocabulary (project-wide convention for Phase 3 report types)**: fields are named `(subject, detail[, remedy])` — `subject` is what the finding is about (here, the artifact filename), `detail` is what was observed, `remedy` is the action that resolves it. Classification enums are `StrEnum`, so a finding renders without a conversion step and sorts by its member value. `Violation`'s leading field is `subject`, not `artifact`, so the shape reads the same as the siblings' report types.
 
 **Dependencies**
 
 - Inbound: ReleaseWorkflow (P0), CiWorkflow (P0), ReleaseProcedure (P0), ReleaseArtifactTest (P1).
-- Outbound: ArtifactPolicy (P0), LicensingRecord (P0), Changelog (P0), PackageManifest (P0).
-- External: stdlib `zipfile`, `tarfile`, `tomllib`, `email` (P0).
+- Outbound: ArtifactPolicy (P0), GuardCores — `tests._forbidden_strings`, `tests._content_oracle`, `tests._content_fingerprints` (P0), Changelog (P0), PackageManifest (P0).
+- External: stdlib `zipfile`, `tarfile`, `tomllib`, `email` (P0). Invoked as `python -m scripts.check_artifacts` from the repository root so the `tests` package resolves; `scripts/__init__.py` exists for that reason and nothing else.
 
 **Contracts**: Batch [x]
 
@@ -761,34 +733,36 @@ def main(argv: Sequence[str]) -> int: ...   # 0 built, 1 build failed
 class ViolationKind(StrEnum):
     MISSING_REQUIRED     # a required member is absent from the artifact
     FORBIDDEN_MEMBER     # a member matches a forbidden pattern
-    ENCUMBERED_CONTENT   # a marker appears and permission is not granted
+    LINK_MEMBER          # a member is a symbolic link, whatever its target (1.10)
+    ENCUMBERED_CONTENT   # the removed material matched in a member or the metadata (6.1)
+    GATE_NOT_RUN         # the token match data is unset; the content gate did not run (6.9)
     METADATA_INCOMPLETE  # a required metadata field is missing or empty
     VERSION_MISMATCH     # manifest, changelog, and tag do not agree
 
 @dataclass(frozen=True)
 class Violation:
-    subject: str    # the artifact filename, or "" for the version consistency check
+    subject: str    # the artifact filename, or "" for the version consistency check and GATE_NOT_RUN
     kind: ViolationKind
     detail: str     # what was observed, naming the member where applicable
     remedy: str     # the action that resolves it
 
 def check_artifacts(dist_dir: Path, *, policy: ArtifactPolicy,
-                    licensing: LicensingRecord) -> tuple[Violation, ...]: ...
+                    repo_root: Path) -> tuple[Violation, ...]: ...
 def check_version_consistency(manifest: Path, changelog: Path,
                               tag: str | None) -> tuple[Violation, ...]: ...
 def main(argv: Sequence[str]) -> int: ...   # 0 clean, 1 violations found
 ```
 
 - Trigger: the documented manual step, the release workflow's gate job, and the CI workflow on every change.
-- Input / validation: an output directory containing exactly one wheel and one sdist; a missing or malformed policy or licensing file is a hard error, never a silently-skipped check.
+- Input / validation: an output directory containing exactly one wheel and one sdist; a missing or malformed policy file is a hard error, never a silently-skipped check; `repo_root` is passed to the token core's `load`, which refuses match data that resolves inside it.
 - Output: a violation listing on standard error and a process exit status. Nothing is written.
 - Idempotency & recovery: read-only and repeatable; running it twice on the same artifacts yields the same violations in the same order (sorted by subject, then kind, then detail).
 
 **Implementation Notes**
 
-- Integration: CI runs the builder and the checker on every change, so a manifest edit that would break a release fails on the pull request rather than at release time.
-- Validation: fixture-driven tests construct artifacts that trip each violation kind exactly once, plus a clean artifact that trips none; a test asserts a granted record with empty evidence is itself a violation; a test asserts the marker scan catches branded text that appears only in the distribution metadata.
-- Risks: a false positive blocking a legitimate release (a marker term appearing in unrelated prose) — accepted deliberately: the gate fails closed, and the remedy is to reword rather than to weaken the marker list.
+- Integration: CI runs the builder and the checker on every change, so a manifest edit that would break a release fails on the pull request rather than at release time. CI and the release workflow supply the token match data as a repository secret written to a runner-local file outside the checkout; a workflow that cannot supply it fails on `GATE_NOT_RUN`, which is the intended outcome.
+- Validation: fixture-driven tests construct artifacts that trip each violation kind exactly once, plus a clean artifact that trips none. The `ENCUMBERED_CONTENT` fixtures plant a **synthetic** needle supplied through a test-written match file (the same technique `tests/test_forbidden_strings.py` already uses — never a real token) and a **fingerprinted control value** (the same technique `tests/load/test_packaging.py`'s positive control uses); the `GATE_NOT_RUN` fixture unsets the variable and asserts a violation, not a skip; the `LINK_MEMBER` fixture plants a symlink member and asserts it is reported even when its target text is clean.
+- Risks: a false positive blocking a legitimate release (a match in unrelated prose) — accepted deliberately: the gate fails closed, and the remedy is to reword rather than to weaken the match data. The residual risk is the one 6.9 exists for: a runner without the secret would otherwise pass an unscanned artifact.
 
 ### Automation
 
@@ -862,14 +836,14 @@ def main(argv: Sequence[str]) -> int: ...   # 0 clean, 1 violations found
 
 ### Release policy data
 
-Two TOML documents, both human-edited and both read by the release scripts, shown under Policy Data above. Neither is shipped. Their shapes are fixed by the checker's schema validation: an unknown key is tolerated, a missing required key or a wrongly-typed value is a hard error, and `permission = "granted"` with empty `evidence` is itself a violation.
+One TOML document, human-edited and read by the checker, shown under Policy Data above. It is not shipped. Its shape is fixed by the checker's schema validation: an unknown key is tolerated, a missing required key or a wrongly-typed value is a hard error. *(Amendment 2: the second document, `licensing.toml`, and its granted-without-evidence rule are retired.)* The definition of the removed material is not repository data at all: the token match data lives outside the repository and the value digests are the purge's `tests/_content_fingerprints.py`.
 
 ### Artifact contents
 
 | Artifact | Contains | Never contains |
 |----------|----------|----------------|
-| Wheel | the package tree, the type-information marker, the packaged skill, the bundled methodology and its tables *when the profile is bundled*, and the distribution metadata | tests, specifications, steering documents, reference material, lockfiles, spreadsheets, any `.fit`/`.gpx` file, any data-root content |
-| Source distribution | the manifest, the readme, the license, the changelog, and the package tree | everything in the wheel's *never* column, plus documentation (linked from metadata instead) |
+| Wheel | the package tree, the type-information marker, every packaged skill's files, and the distribution metadata | tests, specifications, steering documents, reference material, lockfiles, spreadsheets, any `.fit`/`.gpx` file, any data-root content, any symbolic link |
+| Source distribution | the manifest, the readme, the license, the changelog, and the package tree | everything in the wheel's *never* column, plus documentation (linked from metadata instead), the release scripts and policy, and the root `agent-log` link |
 
 The sdist is an explicit allowlist rather than an exclusion list, so a file added later is absent by default. That is what makes 10.3 a structural property rather than a vigilance exercise.
 
@@ -889,17 +863,17 @@ that violates "no other literal copy".
 
 | Field | Presence | Constraint |
 |-------|----------|-----------|
-| `name` | required | equals the containing directory and `SKILL_NAME`; lowercase alphanumeric and hyphens |
+| `name` | required | equals the containing directory and its `PACKAGED_SKILLS` entry; lowercase alphanumeric and hyphens |
 | `description` | required | non-empty, within the standard's length limit, states both what and when |
 | `license` | present | the project's license identifier |
-| `compatibility` | present | states that the `fitdocs` command must be installed and reachable |
+| `compatibility` | present | states that the `fitdocs` command must be installed and reachable. That is the contract for every packaged skill; a skill may add clauses of its own (`build-training-block` adds "a fitdocs data root already configured"), and the inbox skill does **not** carry that clause — configuring the data root is part of the workflow its body teaches (8.7), not a precondition of reading it *(decided by Amendment 2, closing the open question in queue item `2026-09-18-distribution-design-leftovers-after-amendment-1`)* |
 | `metadata.version` | present | equals the released version (8.8) |
 
 ## Error Handling
 
 ### Error Strategy
 
-Two postures, matching the codebase. **Release-time failures are loud and total**: any gate violation stops the procedure before publication, reports every violation it found, and leaves the index untouched. **Runtime degradations are quiet and honest**: an unresolvable version reports *unknown*, and a package built without a methodology reports that no calculator is available. Neither runtime case is an error, and neither changes an exit code.
+Two postures, matching the codebase. **Release-time failures are loud and total**: any gate violation stops the procedure before publication, reports every violation it found, and leaves the index untouched. **Runtime degradations are quiet and honest**: an unresolvable version reports *unknown*. That is not an error and does not change an exit code. *(Amendment 2: the "package built without a methodology" degradation is retired with 6.4.)*
 
 ### Error Categories and Responses
 
@@ -908,15 +882,16 @@ Two postures, matching the codebase. **Release-time failures are loud and total*
 | Tag, manifest, and changelog versions disagree (2.6, 4.7) | release gate | Report all three values, stop before the build |
 | Required member missing from an artifact (1.5) | release gate | Name the artifact and the member, stop before publication |
 | Forbidden member present in an artifact (1.6, 10.3) | release gate | Name the artifact and the member, stop before publication |
-| Encumbered marker present without recorded permission (6.1, 6.2) | release gate | Name every offending member, state the recorded permission, stop before publication |
-| Licensing record says granted but carries no evidence (6.3) | release gate | Refuse the record itself; treat as not granted |
+| Removed material matched in a member or the metadata (6.1, 6.2) | release gate | Name every offending member, stop before publication |
+| Token match data unset when the checker runs (6.9) | release gate | `GATE_NOT_RUN`: name the variable to set, stop before publication; never a skip |
+| Token match data set but unusable (6.9) | hard error | Stop before publication with the source error's own message |
+| A member is a symbolic link (1.10) | release gate | Name the artifact and the member, stop before publication, whatever the link's target |
 | Required metadata field missing (1.3) | release gate | Name the field, stop before publication |
 | Clean-environment install or smoke run fails (5.3) | release gate | Stop before publication; the artifact, not the tree, is at fault |
 | Rehearsal publication fails (5.6) | release gate | Stop before the public publish |
 | Public publication rejected because the version exists (2.5) | release gate | Fail; never skip, never overwrite |
 | Post-publication verification fails (5.9) | defect report | The version is spent; fix forward in the next release, never re-publish |
 | Distribution not installed, version unresolvable (2.4) | runtime degradation | Report *unknown*, continue normally, exit code unchanged |
-| Package built without a bundled methodology (6.4) | runtime degradation | Report no calculator available, write the not-computed placeholder, exit 0 |
 | Packaged skill absent from the installed distribution | configuration error | Instructive message naming the incomplete install, exit 2 |
 
 ### Monitoring
@@ -933,23 +908,22 @@ No telemetry and no logging framework, consistent with the project. Observabilit
     `PACKAGED_SKILLS` entry's recorded version — one `SKILL.md` per entry —
     and nowhere else.
 - **Skill location**: the resolved directory's final component equals the canonical name; an absent skill resolves to `None` rather than raising (8.1, 8.6).
-- **Licensing and policy readers**: each required key missing raises; a wrongly-typed value raises; an unknown key is tolerated; `granted` with empty evidence is a violation (6.3).
-- **Artifact checker rules**: fixture archives trip `MISSING_REQUIRED`, `FORBIDDEN_MEMBER`, `ENCUMBERED_CONTENT`, and `METADATA_INCOMPLETE` exactly once each; a clean archive trips none; violations sort deterministically; a marker present only in the distribution metadata is caught (1.3, 1.5, 1.6, 5.4, 6.1, 6.7).
+- **Policy reader**: each required key missing raises; a wrongly-typed value raises; an unknown key is tolerated (5.4).
+- **Artifact checker rules**: fixture archives trip `MISSING_REQUIRED`, `FORBIDDEN_MEMBER`, `LINK_MEMBER`, `ENCUMBERED_CONTENT`, `GATE_NOT_RUN`, and `METADATA_INCOMPLETE` exactly once each; a clean archive trips none; violations sort deterministically; a synthetic token present only in the distribution metadata is caught; a link member whose target text is clean is still a violation; with the match variable unset the result is a `GATE_NOT_RUN` violation and not a skip (1.3, 1.5, 1.6, 1.10, 5.4, 6.1, 6.3, 6.7, 6.9).
 - **Version consistency**: agreement passes; each of the three pairwise disagreements produces one violation naming both values (2.6, 4.7).
-- **Skill frontmatter**: required fields present, within length limits, `name` equal to the directory and the constant, recorded version equal to the manifest's (8.5, 8.8).
+- **Skill frontmatter**: required fields present, within length limits, `name` equal to the directory and its `PACKAGED_SKILLS` entry, recorded version equal to the manifest's (8.5, 8.8).
 
 ### Integration Tests
 
-- **Both build profiles**: each builds one wheel and one sdist; the unencumbered wheel's member set differs from the bundled one by exactly the pruned paths; the unencumbered artifacts pass the licensing gate with permission not granted, and the bundled ones fail it (1.4, 6.1, 6.2).
-- **Artifact conformance end to end**: build, then check, then assert zero violations for the profile the recorded state selects — the exact sequence the release workflow runs (5.4, 5.10).
-- **Reproducibility**: the same revision built twice under the same profile yields archives with identical member names and identical member digests (10.5).
+- **The one build**: exactly one wheel and one sdist result; the sdist's member set is the allowlist and nothing else — no `tests/`, `.kiro/`, `scripts/`, `release/`, `docs/`, and no `agent-log` (1.4, 1.6, 1.10, 6.10).
+- **Artifact conformance end to end**: build, then check, then assert zero violations — the exact sequence the release workflow runs — with the token match data supplied through the same mechanism the purge's guards use (`tests._forbidden_strings.require`, so the test skips distinguishably in an environment without it, while the checker it exercises would have failed closed) (5.4, 5.10, 6.2, 6.3).
+- **Reproducibility**: the same revision built twice yields archives with identical member names and identical member digests (10.5).
 - **Skill/CLI conformance**: every `fitdocs` command and option named in the skill body exists in the registered command surface, and every reported channel the body names — including move failures — matches the drain report's own field set; removing a command from the application, or renaming a channel, makes the test fail (8.8).
 - **Documentation guarantees**: the entry point's links all resolve to existing files and cover install, configuration, **the inbox**, upgrading, wiki integration, the ownership contract, the plugin platform, compatibility, releasing, and contributing (7.9); the preserved statements are still published somewhere in the documentation set — data-root resolution order, the persistent tile opt-out, provider attribution, **the inbox never-delete guarantee**, **the "no watching and no scheduling" statement**, and **a pointer to the published ownership contract** (10.6); and the README still reaches every section its siblings publish, whether in place or by link (10.7). Shipped and emitted documentation references use the project-URL form rather than a repo-relative path (1.9).
 
 ### E2E Tests
 
 - **Installed tool from the built artifact** (extends the existing packaging test): install into an isolated tool directory, assert the console script exists, `--version` matches the manifest, `--help` lists every released command, and **no data root, configuration file, or profile was created anywhere** during install (1.2, 1.7, 2.2).
-- **Unencumbered install**: install the unencumbered wheel into a clean environment, run a full sync over a fixture source, and assert documents are written, the load region carries the not-computed placeholder, the output states that no calculator is available, and the run exits 0 (6.4). In the same environment, assert the import surface holds: `from fitdocs.load import *` succeeds, every name in plugin-api's enumerated `fitdocs.load` surface imports, and the bundled calculator's name is absent from `__all__` rather than present and unresolvable (6.8).
 - **Source-tree version**: running the CLI from an uninstalled checkout prints the unknown token and exits 0 (2.4).
 - **Skill command**: the installed tool prints an existing skill path; copying that directory into a skills location yields a valid skill directory whose name matches its frontmatter (8.6).
 
@@ -963,7 +937,7 @@ No telemetry and no logging framework, consistent with the project. Observabilit
 ## Security Considerations
 
 - **No long-lived publishing credential exists.** Publication authenticates by short-lived OIDC exchange scoped to a single job; there is no API token in the repository, in a secret store, or on a maintainer's machine to leak (5.7). The public publish environment additionally requires manual approval.
-- **The gate fails closed.** Every unknown is a violation: an undeclared metadata field, a member matching no allowlist, a granted permission record with no evidence. A weakened marker list is a reviewable diff to a data file, not a subtle code change.
+- **The gate fails closed.** Every unknown is a violation: an undeclared metadata field, a member matching no allowlist, a link member, and — above all — match data that is not there (`GATE_NOT_RUN`). The match data cannot be weakened by a diff to this repository at all, because it does not live here (6.3, 6.9).
 - **Third-party licensed material is treated as a security-grade boundary**, not a documentation footnote: it is enforced against the artifact, and the contribution documentation states the rule for future contributors (6.1, 9.5).
 - **No new execution surface.** The release scripts run only in a maintainer's or the automation's context, import nothing from the package, and execute no artifact content. The package gains one command that prints a path and one function that reads metadata.
 - **Personal data cannot reach an artifact structurally**, because the source distribution is an allowlist and the checker rejects any member matching the forbidden patterns — including `.fit`, `.gpx`, and data-root paths (10.3).
@@ -976,12 +950,12 @@ There is no user-facing data migration: no released version exists, so no instal
 ```mermaid
 flowchart LR
     S1[Stage 1 version leaf and manifest metadata] --> S2[Stage 2 artifact policy and checker]
-    S2 --> S3[Stage 3 build profiles and unencumbered tolerance]
+    S2 --> S3[Stage 3 encumbered content gate bound to the release path]
     S3 --> S4[Stage 4 changelog compatibility policy and documentation]
     S4 --> S5[Stage 5 agent skill and its conformance]
     S5 --> S6[Stage 6 automation and a rehearsal release]
 ```
 
 - **Rollback trigger**: any stage that changes generated-document bytes is a defect, not expected churn — this feature must not alter rendering at any point.
-- **Validation checkpoint**: stage 3 is the gate that matters. Before it, the project can build artifacts it must not publish; after it, an unpublishable artifact is a failing check rather than a judgement call. No publication of any kind may be attempted before stage 3 passes.
-- **First release**: the first published version is produced by a full rehearsal on the rehearsal index followed by the real procedure, with the recorded permission state deciding which profile ships. If permission is still not granted at that point, the first release is unencumbered — a supported outcome, recorded in the changelog as such, with the documentation directing users to supply a calculator through the plugin route.
+- **Validation checkpoint**: stage 3 is the gate that matters. Before it, the project can build artifacts it must not publish; after it, an unpublishable artifact is a failing check rather than a judgement call — including an artifact that was never scanned. No publication of any kind may be attempted before stage 3 passes.
+- **First release**: the first published version is produced by a full rehearsal on the rehearsal index followed by the real procedure, from the working tree, with the `threshold` built-in bundled. *(Amendment 2: there is no profile to select and no permission state to consult.)*

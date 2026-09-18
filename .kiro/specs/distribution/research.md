@@ -63,6 +63,10 @@
   - `docs/` holds `contributing-calculators.md` (training-load owns it),
     `reference/fitdocs-ai-reference.md`, the reference writeup, and
     the extracted tables (a second copy of the encumbered tables).
+    *(Superseded 2026-08-23: `encumbered-content-purge` deleted the writeup
+    and the extracted tables from the tree and from history; `docs/` no
+    longer holds either. Recorded per queue item
+    `2026-08-04-present-tense-claims-about-removed-material-survive-redaction`.)*
 - **Implications**: version work is a *consolidation plus fallback*, not a
   rebuild; artifact-content control is the real packaging work; the licensing
   gate must cover `docs/reference/` as well as the package data.
@@ -233,7 +237,7 @@
   methodology example at all, so that half of this follow-up is discharged by
   removal rather than by substitution.
 
-### Decision: an unencumbered build is a supported, tested profile
+### Decision: an unencumbered build is a supported, tested profile *(superseded by Amendment 2, 2026-09-18 — see below)*
 
 - **Context**: Requirement 6.4 and the brief's observation that the plugin API
   makes shipping without a bundled methodology viable.
@@ -254,6 +258,71 @@
 - **Follow-up**: an end-to-end test must install the unencumbered wheel and
   assert the tool runs, reports no available calculator, and keeps its exit-code
   contract.
+
+### Decision (Amendment 2, 2026-09-18): one artifact set; the gate reuses the purge's guard cores and fails closed
+
+- **Context**: Requirement 6 was written against a tree that bundled an
+  encumbered methodology. The methodology was withdrawn on 2026-07-25 and
+  purged, with every identifying token, on 2026-08-23; the built-in is now
+  the unencumbered `threshold` engine. The two decisions above — a marker
+  list in policy data cross-referenced with a permission state, and a
+  pruned unencumbered profile — have no subject. Maintainer decisions
+  2026-09-18: keep the artifact scan as a standing property; no
+  bundled/unencumbered distinction; exclude the root `agent-log` symlink.
+- **Investigation (current tree, `bdabd9b`)**: `available()` returns exactly
+  `ThresholdCalculator`; no data files ship under `src/fitdocs/` except
+  `py.typed` and the `build-training-block` skill; the `--calculator` help
+  text is already neutral; `pyproject.toml` has **no**
+  `[tool.hatch.build.targets.sdist]` section (the purge deleted the
+  exclude-only one), so hatchling's default sdist ships `.kiro/`, `tests/`
+  and the root `agent-log` symlink (untracked, un-ignored, dangling, target
+  carries the identity the purge erases; `member.isfile()` is false for it,
+  so every content scan skips it by construction); there is no `.github/`
+  and no workflow file anywhere. The removed material's definition already
+  exists in exactly two places, both purge-owned: `tests/_forbidden_strings.py`
+  (token match data read from a file named by one neutrally-named
+  environment variable, required to resolve outside the working tree;
+  `load` returns `None` only when unset, raises on every other broken state;
+  `matches` is wrap-tolerant) and `tests/_content_oracle.py` +
+  `tests/_content_fingerprints.py` (digest-keyed value scan, stdlib-only).
+  `tests/load/test_packaging.py` already runs both over a built wheel and
+  sdist — as pytest tests nothing forces onto the publish path.
+- **Alternatives Considered**: (1) reimplement a marker scan in the checker
+  from a list in `artifact-policy.toml` — rejected: inside the repository the
+  list can only name the redaction placeholder (queue item
+  `2026-08-04-distribution-forbidden-markers-scan-for-the-placeholder`), and
+  two matchers drift; (2) make the existing pytest guards *the* gate and have
+  the release workflow run them — rejected: a skipped test is green to a
+  workflow unless extra machinery turns skips into failures, and the checker
+  already exists as the one release-time binary; (3) the checker imports the
+  two guard cores and applies them itself, failing closed when the token
+  source is unset — **selected**.
+- **Selected Approach**: `scripts/check_artifacts.py` gains `LINK_MEMBER`
+  and `GATE_NOT_RUN` violation kinds, calls `tests._forbidden_strings.load`
+  / `matches` and `tests._content_oracle.scan` over every text-like member
+  and the metadata, treats `load() is None` as `GATE_NOT_RUN` and
+  `ForbiddenStringsSourceError` as a hard error. `release/licensing.toml`,
+  `Profile`, `required_when_bundled`, `[forbidden].markers`,
+  `BuiltInRegistration` and `tests/test_unencumbered_install.py` are
+  retired. `scripts/__init__.py` makes `python -m scripts.check_artifacts`
+  resolvable from the repository root so the `tests` package imports. The
+  "scripts use only the standard library" rule is relaxed by exactly those
+  imports (`_forbidden_strings` also imports `pytest` for its skip helper —
+  always present in the dev environment the scripts run in).
+- **Rationale**: Requirement 6.3 wants one definition of the removed
+  material, and the purge already put it where the repository cannot read
+  it back. Reusing the cores is the only design under which the release
+  gate and the repository guard cannot disagree. Failing closed is what
+  makes it a gate: the purge's guards may skip in a developer run, but a
+  release step that did not scan has gated nothing.
+- **Trade-offs**: CI and the release workflow must supply the match data as
+  a secret written to a runner-local file outside the checkout; a runner
+  without it fails on `GATE_NOT_RUN` — intended. A false positive on a
+  match in unrelated prose blocks a release; the remedy is to reword.
+- **Follow-up**: task 2.3's fixtures must plant a *synthetic* needle through
+  a test-written match file and a fingerprinted control value — the
+  techniques `tests/test_forbidden_strings.py` and
+  `tests/load/test_packaging.py` already use — never a real token.
 
 ### Decision: one version helper, three existing call sites converge on it
 
