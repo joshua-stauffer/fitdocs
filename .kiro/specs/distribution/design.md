@@ -231,7 +231,7 @@ docs/
 │                                  #   the settings schema including [tiles], the one
 │                                  #   public-versus-internal statement, and the data-root
 │                                  #   posture rule (3.1-3.10)
-└── releasing.md                   # The ordered release procedure and its gates (5.1, 5.3, 5.6, 5.9, 6.5)
+└── releasing.md                   # The ordered release procedure and its gates (5.1, 5.3, 5.6, 5.9, 6.9)
 
 tests/
 ├── test_version_identity.py       # One declaration; unknown fallback; equality across
@@ -444,7 +444,7 @@ The lookup is performed lazily at the point of use, never at import time, becaus
 | InstallDocs / ConfigurationDocs / UpgradeDocs | documentation | Install, configure, upgrade, uninstall | 7.1–7.8, 10.6 | — | — |
 | InboxDocs | documentation | The inbox interface as a linked, user-facing document | 7.9, 10.6, 10.7 | inbox spec's published section (P1) | — |
 | WikiIntegrationDocs | documentation | Skill installation and the adoption recipe | 8.6, 8.7 | AgentSkillPackage (P1) | — |
-| ReleaseProcedure | documentation | The ordered, gated procedure | 5.1, 5.3, 5.5, 5.6, 5.9, 5.10 | ReleaseBuilder (P0), ArtifactChecker (P0) | — |
+| ReleaseProcedure | documentation | The ordered, gated procedure | 5.1, 5.3, 5.5, 5.6, 5.9, 5.10, 6.9 | ReleaseBuilder (P0), ArtifactChecker (P0) | — |
 | ContributionDocs | documentation | Contributor and calculator-publisher expectations | 9.1–9.5 | CompatibilityPolicy (P1) | — |
 | DocsEntry | documentation | The single entry point | 7.9, 3.7 | — | — |
 
@@ -816,7 +816,7 @@ def main(argv: Sequence[str]) -> int: ...   # 0 clean, 1 violations found
 #### Changelog (`CHANGELOG.md`)
 
 - Keep a Changelog 1.1.2: a standing `## [Unreleased]` section, releases newest first as `## [X.Y.Z] - YYYY-MM-DD`, and the six canonical sections (4.1, 4.2, 4.4).
-- A release entry that touches a governed contract names the contract and the user's required action inline in the entry, not in a footnote (4.3) — including a change to whether a methodology is bundled, which is a contract change by definition (6.6).
+- A release entry that touches a governed contract names the contract and the user's required action inline in the entry, not in a footnote (4.3) — including removing the built-in calculator from a release or adding one (6.6).
 - Entries describe user-observable behavior; the contribution documentation states that commit subjects are not changelog entries (4.5).
 - The changelog ships inside the source distribution and is linked from the package metadata, so it is reachable from the artifact either way (4.6).
 - The newest released entry's version is a release gate, checked by the artifact checker (4.7).
@@ -825,7 +825,7 @@ def main(argv: Sequence[str]) -> int: ...   # 0 clean, 1 violations found
 
 - `docs/index.md` is the single entry point (7.9): install, configuration, **the inbox interface**, upgrading, wiki integration, the ownership contract (wiki-contract's document), the plugin platform (plugin-api's document), compatibility, releasing, and contributing. The readme links here rather than growing. The inbox was the one contract missing from an earlier draft of this list; since the agent skill's whole job is draining the inbox, an entry point that does not reach it is a hole rather than an omission.
 - `docs/inbox.md` receives inbox's published interface material — the default location and how it resolves, every `[inbox]` key with its default and meaning, drain semantics, the safeguards, the disposition policy with its **never-delete guarantee**, and the plain statement that **fitdocs performs no watching and no scheduling** (10.6). The content is inbox's, moved verbatim, not restated: this feature owns *where it lives and that it stays reachable*, not what it says. A clearly named inbox section inside `docs/configuration.md` would satisfy 7.9 only if `docs/index.md` links that section separately; a dedicated document is preferred because the agent skill and the wiki-integration recipe both point at it.
-- `docs/install.md` carries the first-run path — install command, choosing a data root and pointing at it, getting `.fit` files where fitdocs will find them, the first run, and the resulting document (7.1) — with a standalone section and a wiki-hosted section stating exactly what differs (7.2), plus the route to obtaining a methodology when the release bundles none (6.5).
+- `docs/install.md` carries the first-run path — install command, choosing a data root and pointing at it, getting `.fit` files where fitdocs will find them, the first run, and the resulting document (7.1) — with a standalone section and a wiki-hosted section stating exactly what differs (7.2), plus.
 - `docs/configuration.md` receives the data-root contract with its resolution order and loud failure (7.7) and the offline/network material currently in the readme — what leaves the machine and when, the persistent opt-out, provider choice, attribution, and the cache (7.8, 10.6).
 - `docs/upgrading.md` gives the upgrade and uninstall commands for both supported installers (7.3), states what an upgrade does not touch — user-owned regions, the settings file, the athlete profile, local plugin files, the archive (7.4) — names the single regeneration command when the document format moved and states that nothing else is required (7.5), and states what remains on disk after uninstalling and why (7.6).
 - `docs/wiki-integration.md` covers the skill: where it lands, how to copy or symlink it into an agent's skills directory, how to confirm it is active, and that upgrading fitdocs means re-copying it (8.6); then the adoption recipe end to end — install, point the data root at the wiki, configure the inbox, run the first drain, confirm the documents and the emitted ownership declaration (8.7).
@@ -957,5 +957,5 @@ flowchart LR
 ```
 
 - **Rollback trigger**: any stage that changes generated-document bytes is a defect, not expected churn — this feature must not alter rendering at any point.
-- **Validation checkpoint**: stage 3 is the gate that matters. Before it, the project can build artifacts it must not publish; after it, an unpublishable artifact is a failing check rather than a judgement call — including an artifact that was never scanned. No publication of any kind may be attempted before stage 3 passes.
+- **Validation checkpoint**: stage 3 — task 2.3 builds the gate, task 3.2 is the checkpoint that proves it against the real artifacts — is the gate that matters. Before it, the project can build artifacts it must not publish; after it, an unpublishable artifact is a failing check rather than a judgement call — including an artifact that was never scanned. No publication of any kind may be attempted before stage 3 passes.
 - **First release**: the first published version is produced by a full rehearsal on the rehearsal index followed by the real procedure, from the working tree, with the `threshold` built-in bundled. *(Amendment 2: there is no profile to select and no permission state to consult.)*

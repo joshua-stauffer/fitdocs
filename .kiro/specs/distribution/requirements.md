@@ -382,5 +382,7 @@ name. Requirement 6 is retitled. No criterion is renumbered; the withdrawn
 ones keep their numbers, struck through, so that design and task references
 to them remain resolvable. `design.md` and `tasks.md` are regenerated
 against this amendment in the same change: majors 2 and 3 of the plan are
-where the churn lands, and the sequencing rule "no publication before the
-gate can refuse an artifact" moves from task 3.2 to the gate task itself.
+where the churn lands. The sequencing rule "no publication before the gate
+can refuse an artifact" stays pinned to task 3.2, which now proves — against
+the real built artifacts — that the gate refuses the removed material and
+refuses to pass an artifact it never scanned.
