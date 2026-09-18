@@ -763,12 +763,14 @@ limitation in `training-load` and `threshold-load`._
   sufficient data, select one by configurable priority with fallback, emit the
   selection and the diagnostics. Dependencies: athlete-benchmarks,
   load-channels, and the training-load contract update
-- [ ] activity-qa-flags — cadence-lock detection (HR-vs-cadence temporal
-  correlation), cross-channel divergence (Efficiency Factor / aerobic
-  decoupling), and threshold-staleness surfacing. Dependencies:
-  athlete-benchmarks, load-channels, threshold-load, training-load (it
-  consumes `QualityFlag`, payload v2 and the flags renderer — an implicit
-  dependency the first pass omitted, though the spec's own tasks.md lists it)
+- [x] activity-qa-flags — **implemented 2026-09-18 at d26b682, 14/14 tasks** —
+  cadence-lock detection (HR-vs-cadence temporal correlation), cross-channel
+  divergence (Efficiency Factor / aerobic decoupling), and
+  threshold-staleness surfacing. Dependencies: athlete-benchmarks,
+  load-channels, threshold-load, training-load (it consumes `QualityFlag`,
+  payload v2 and the flags renderer — an implicit dependency the first pass
+  omitted, though the spec's own tasks.md lists it). Phase 4 (the threshold
+  load engine) is now complete: all four specs shipped.
 
 ### Phase 5 — going public (discovery 2026-07-30)
 
