@@ -128,7 +128,7 @@ The athlete's real `.fit` corpus never enters this repository. Task 4.1 encodes
 the *measured statistics* recorded in `research.md` as constructed streams; it
 does not add, reference or read a real file.
 
-- [ ] 1. Foundation: the flag vocabulary, its provenance, and its configuration
+- [x] 1. Foundation: the flag vocabulary, its provenance, and its configuration
 
 - [x] 1.1 Create the flag vocabulary, its emission order and its tunable defaults
   - Add a leaf module holding the four check identifiers — cadence lock, channel
@@ -236,7 +236,7 @@ does not add, reference or read a real file.
   - _Boundary: FlagSettingsReader_
   - _Depends: 1.1_
 
-- [ ] 2. Core: the four checks, each a pure function over its own inputs
+- [x] 2. Core: the four checks, each a pure function over its own inputs
 
 - [x] 2.1 (P) Measure the paired coverage and the per-span statistics of the two streams
   - Build the paired-presence view of the heart-rate and cadence streams and
@@ -380,7 +380,7 @@ does not add, reference or read a real file.
   - _Boundary: StalenessSurfacing_
   - _Depends: 1.1_
 
-- [ ] 3. Integration: assembly, the calculator call site, and the published surface
+- [x] 3. Integration: assembly, the calculator call site, and the published surface
 
 - [x] 3.1 Assemble the four readings into the contract's quality verdicts
   - Add the single entry point that runs all four checks unconditionally and
@@ -447,7 +447,7 @@ does not add, reference or read a real file.
   - _Boundary: PublicSurfacePin_
   - _Depends: 3.2_
 
-- [ ] 4. Validation: false-positive headroom, end-to-end behavior, and the boundary
+- [x] 4. Validation: false-positive headroom, end-to-end behavior, and the boundary
 
 - [x] 4.1 Pin the false-positive headroom against the measured corpus statistics
   - Encode as constructed streams the statistics recorded in the research log —
@@ -574,10 +574,15 @@ does not add, reference or read a real file.
   end-to-end proof needs to rule out a symmetric field-reading defect
   anywhere in the assembly, it needs its own fixture for that — Req 3.9's
   case alone cannot certify it, by construction, not by omission.
-- **3.1 → 1.3**: landing `qa/__init__.py`'s eager `from .flags import
-  evaluate_flags` (task 3.1, per this task's own explicit instruction) makes
+- **3.1 → load-channels** (ownership correction, feature-validation pass):
+  landing `qa/__init__.py`'s eager `from .flags import evaluate_flags` (task
+  3.1, per this task's own explicit instruction) makes
   `tests/load/test_settings.py::test_settings_module_leaks_no_dynamic_import_of_load_types`
-  (task 1.3's own guard) reproducibly red: that guard's premise —
+  reproducibly red. This entry originally attributed that guard to "task
+  1.3's own guard" — `git log -S` shows the guard was introduced by
+  `load-channels` (`ae0790d`); this spec's actual task 1.3 (`d807fc3`) never
+  touched it. The unresolved-ownership follow-up (queued at spec close) is
+  therefore with `load-channels`, not `training-load`. That guard's premise —
   `fitdocs.load.types` never lands in `sys.modules` as a side effect of
   importing `settings.py` — is exactly what this amendment withdraws for
   `qa/flags.py`'s sanctioned import of the load contract. The guard is

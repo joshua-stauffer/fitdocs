@@ -446,6 +446,32 @@ def test_drift_coupled_reaches_not_detected() -> None:
     assert "aerobic decoupling 2.0% vs configured reference 5.0%" in drift_flag.detail
 
 
+def test_drift_detail_reference_pct_reflects_non_default_setting() -> None:
+    """The `_drift_detail` basis's `reference_pct` is read from the reading
+    (`FlagSettings.aerobic_drift_max_pct` threaded through `drift.evaluate`),
+    never the module's shipped default. Every other drift-detail fixture in
+    this module uses the default 5.0%, which cannot distinguish a correctly
+    threaded reading from a hardcoded `5.0` literal -- this fixture uses a
+    non-default `aerobic_drift_max_pct` and asserts the configured figure
+    the detail reports.
+
+    Mutation (named, applied, confirmed red, reverted, confirmed green): in
+    `flags.py`'s `_drift_detail`, hardcode the module's default constant
+    (5.0) in place of `reading.reference_pct`.
+    """
+    metrics = DerivedMetrics(decoupling_pct=2.0, efficiency_factor=None)
+    settings = FlagSettings(aerobic_drift_max_pct=8.0)
+    kwargs = _default_kwargs(metrics=metrics, settings=settings)
+
+    flags = evaluate_flags(**kwargs)  # type: ignore[arg-type]
+
+    by_key = {flag.key: flag for flag in flags}
+    drift_flag = by_key[FlagKey.AEROBIC_DRIFT.value]
+    assert drift_flag.verdict == "not-detected"
+    assert "aerobic decoupling 2.0% vs configured reference 8.0%" in drift_flag.detail
+    assert "reference 5.0%" not in drift_flag.detail
+
+
 def test_staleness_current_reaches_not_detected() -> None:
     kwargs = _default_kwargs()  # default anchor is 10 days old, window 90
 
@@ -458,6 +484,47 @@ def test_staleness_current_reaches_not_detected() -> None:
     # age (10 days) is distinct from configured window (90 days), and this
     # phrase is broken by swapping the two, not just by removing one.
     assert "10 day(s) old (configured window 90 days)" in staleness_flag.detail
+
+
+def test_staleness_basis_reports_the_selected_channels_own_anchor() -> None:
+    """Req 5.1 integration-level guard: the staleness verdict reports on the
+    benchmark that anchored the SELECTED channel, never a benchmark that
+    anchored a non-selected channel. Every other fixture in this module
+    gives every channel the SAME anchor `measured_on` date, which cannot
+    distinguish "read the selected channel's anchor" from "read some other
+    channel's anchor" -- this fixture gives the selected channel (POWER) and
+    a non-selected channel (HEART_RATE) DIFFERENT `measured_on` dates, far
+    enough apart that both the reported age and the reported date diverge.
+
+    Mutation (named, applied, confirmed red, reverted, confirmed green): in
+    `flags.py`, read a different channel's `ChannelLoad.anchor` instead of
+    `outcomes[selected].anchor` inside `evaluate_flags`'s staleness call --
+    e.g. hardcode `outcomes[ChannelId.HEART_RATE]` regardless of `selected`.
+    """
+    selected_measured_on = ACTIVITY_DATE - timedelta(days=10)
+    other_measured_on = ACTIVITY_DATE - timedelta(days=200)
+    selected_anchor = _benchmark(selected_measured_on)
+    other_anchor = _benchmark(other_measured_on)
+    selected_load = _channel_load(
+        channel=ChannelId.POWER, intensity=0.9, load=200.0, anchor=selected_anchor
+    )
+    other_load = _channel_load(
+        channel=ChannelId.HEART_RATE, intensity=0.2, load=5.0, anchor=other_anchor
+    )
+    kwargs = _default_kwargs(
+        outcomes={ChannelId.POWER: selected_load, ChannelId.HEART_RATE: other_load},
+        selected=ChannelId.POWER,
+    )
+
+    flags = evaluate_flags(**kwargs)  # type: ignore[arg-type]
+
+    by_key = {flag.key: flag for flag in flags}
+    staleness_flag = by_key[FlagKey.BENCHMARK_STALENESS.value]
+    assert staleness_flag.verdict == "not-detected"
+    assert selected_measured_on.isoformat() in staleness_flag.detail
+    assert "10 day(s) old (configured window 90 days)" in staleness_flag.detail
+    assert other_measured_on.isoformat() not in staleness_flag.detail
+    assert "200 day(s) old" not in staleness_flag.detail
 
 
 # ---------------------------------------------------------------------------
