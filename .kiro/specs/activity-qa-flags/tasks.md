@@ -449,7 +449,7 @@ does not add, reference or read a real file.
 
 - [ ] 4. Validation: false-positive headroom, end-to-end behavior, and the boundary
 
-- [ ] 4.1 Pin the false-positive headroom against the measured corpus statistics
+- [x] 4.1 Pin the false-positive headroom against the measured corpus statistics
   - Encode as constructed streams the statistics recorded in the research log —
     the highest whole-activity association observed on a real file, the smallest
     per-file median separation between heart rate and full-cycle cadence, and
