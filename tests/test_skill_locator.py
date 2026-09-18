@@ -17,6 +17,7 @@ import fitdocs
 from fitdocs import agentskill
 from fitdocs.agentskill import (
     BLOCK_SKILL_NAME,
+    INBOX_SKILL_NAME,
     PACKAGED_SKILLS,
     SKILL_FILENAME,
     SKILLS_DIR,
@@ -29,6 +30,7 @@ _PUBLIC_NAMES = {
     "SKILLS_DIR",
     "SKILL_FILENAME",
     "BLOCK_SKILL_NAME",
+    "INBOX_SKILL_NAME",
     "PACKAGED_SKILLS",
     "skill_root",
     "skill_file",
@@ -45,6 +47,15 @@ def _installed_skills_dir() -> Path:
 
 def test_registry_contains_the_block_skill_name() -> None:
     assert BLOCK_SKILL_NAME in PACKAGED_SKILLS
+
+
+def test_registry_contains_the_inbox_skill_name() -> None:
+    assert INBOX_SKILL_NAME in PACKAGED_SKILLS
+    assert INBOX_SKILL_NAME == "fitdocs-workouts"
+
+
+def test_registry_order_is_block_then_inbox() -> None:
+    assert PACKAGED_SKILLS == (BLOCK_SKILL_NAME, INBOX_SKILL_NAME)
 
 
 def test_skill_root_is_a_real_directory_named_for_the_skill() -> None:

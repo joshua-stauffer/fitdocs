@@ -1,12 +1,22 @@
 """Bind every name a packaged skill teaches to the object that makes it true
-(design: SkillConformance, task 2.2).
+(design: SkillConformance, task 2.2; extended by distribution task 4.2).
 
 Parametrized over :data:`fitdocs.agentskill.PACKAGED_SKILLS` for the shared
-contract (frontmatter, references, command/option binding, fenced-command
-set, no ``allowed-tools``); ``_SKILL_PROFILES`` supplies what differs per
-skill -- today, only the heading tuple. Distribution's task 4.2 appends the
-inbox skill's entry to that map (its heading tuple, later its channel
-binding) without touching this frame.
+contract that every packaged skill must satisfy regardless of subject matter
+(frontmatter, heading order against its own profile, command/option binding,
+published-URL references, no owned-path/managed-key spelled in the ownership
+section, no ``allowed-tools``); ``_SKILL_PROFILES`` supplies what differs per
+skill -- the heading tuple, and, for a skill whose body reports drain
+channels, the channel binding.
+
+A handful of tests below are pinned to ``build-training-block`` by name
+rather than parametrized over every registered skill: they assert content
+specific to that skill's own domain (its outcome/state/label/exit tables,
+its sports/modality vocabularies, its byte-identical TOML example, and its
+`regen`-scoping rule) that no other packaged skill is required to carry.
+Distribution task 4.2 adds the inbox skill's entry to ``_SKILL_PROFILES``
+(its heading tuple and its channel binding) and its own channel-binding
+test, without touching the shared-contract tests above it.
 
 See change-protocol § Fixture Discrimination for the mutation each
 assertion here is meant to red.
@@ -14,6 +24,7 @@ assertion here is meant to red.
 
 from __future__ import annotations
 
+import dataclasses
 import re
 import tomllib
 from collections import Counter
@@ -26,7 +37,13 @@ import typer.core
 import typer.main
 import yaml
 
-from fitdocs.agentskill import PACKAGED_SKILLS, skill_file, skill_root
+from fitdocs.agentskill import (
+    BLOCK_SKILL_NAME,
+    INBOX_SKILL_NAME,
+    PACKAGED_SKILLS,
+    skill_file,
+    skill_root,
+)
 from fitdocs.cli import (
     _EXIT_CONFIG_ERROR,
     _EXIT_FILE_FAILURES,
@@ -41,6 +58,7 @@ from fitdocs.plans.engine import BlockStatus
 from fitdocs.plans.matching import Confidence, RowState
 from fitdocs.plans.model import RowAdded, RowChanged, RowRemoved, TargetChanged
 from fitdocs.plans.source import parse_block
+from fitdocs.sync import DrainReport, SyncReport
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _URL_PREFIX = "https://github.com/joshua-stauffer/fitdocs/"
@@ -57,22 +75,89 @@ _BLOCK_HEADINGS: tuple[str, ...] = (
     "What this skill never does",
 )
 
+_INBOX_HEADINGS: tuple[str, ...] = (
+    "When this applies",
+    "Commands to run",
+    "Reading the report",
+    "Ownership boundary",
+    "Further reading",
+)
+
+#: The drain report's own channel fields, minus the two explicitly excluded
+#: names that are not channels at all (a nested report and a path). Computed
+#: by introspecting the real dataclasses -- not hardcoded -- so a channel
+#: added, renamed, or dropped by :mod:`fitdocs.sync` changes this set without
+#: anyone editing this file. Compared below against the profile's own
+#: hardcoded literal (``_SkillProfile.channels``), which is what actually
+#: catches such a change: the literal stays fixed while this derived set
+#: moves.
+_CHANNEL_EXCLUSIONS = frozenset({"inbox", "sync"})
+_DRAIN_REPORT_CHANNELS = (
+    frozenset(field.name for field in dataclasses.fields(DrainReport))
+    - _CHANNEL_EXCLUSIONS
+)
+_SYNC_REPORT_CHANNELS = frozenset(
+    field.name for field in dataclasses.fields(SyncReport)
+)
+_EXPECTED_CHANNELS = _DRAIN_REPORT_CHANNELS | _SYNC_REPORT_CHANNELS
+
+#: Hardcoded literal -- the channel names the inbox skill's body is
+#: *expected* to document, spelled out independently of the dataclass
+#: introspection above so the two can disagree when the dataclasses change.
+_INBOX_CHANNELS_LITERAL: frozenset[str] = frozenset(
+    {
+        "written",
+        "skipped",
+        "failures",
+        "warnings",
+        "deferred",
+        "quarantined",
+        "moved",
+        "move_failures",
+    }
+)
+
 
 @dataclass(frozen=True)
 class _SkillProfile:
     """What differs between packaged skills for the shared contract.
 
-    Distribution 4.2 appends the inbox skill's entry here (its heading
-    tuple; later its eight-channel binding) without touching the frame this
-    module defines.
+    ``channels`` is ``None`` for a skill whose body does not report drain
+    channels at all (``build-training-block``); a skill that does carries
+    the frozen set of channel names its own ``## Reading the report``
+    section is expected to document.
     """
 
     headings: tuple[str, ...]
+    channels: frozenset[str] | None = None
 
 
 _SKILL_PROFILES: dict[str, _SkillProfile] = {
-    "build-training-block": _SkillProfile(headings=_BLOCK_HEADINGS),
+    BLOCK_SKILL_NAME: _SkillProfile(headings=_BLOCK_HEADINGS),
+    INBOX_SKILL_NAME: _SkillProfile(
+        headings=_INBOX_HEADINGS, channels=_INBOX_CHANNELS_LITERAL
+    ),
 }
+
+
+def test_channel_exclusion_set_is_non_vacuous() -> None:
+    """``inbox`` and ``sync`` are real :class:`DrainReport` field names --
+    the exclusion set actually removes something, rather than naming fields
+    that were never going to be counted anyway."""
+    all_drain_fields = {field.name for field in dataclasses.fields(DrainReport)}
+    assert all_drain_fields >= _CHANNEL_EXCLUSIONS
+    assert "inbox" in all_drain_fields
+    assert "sync" in all_drain_fields
+
+
+def test_literal_channel_set_matches_the_derived_dataclass_union() -> None:
+    """The hardcoded literal the inbox profile is built from agrees with
+    the independently-derived union of the two dataclasses' fields. A
+    rename/add/drop on either dataclass moves ``_EXPECTED_CHANNELS`` without
+    moving ``_INBOX_CHANNELS_LITERAL``, so the two go out of sync and this
+    test is what catches it."""
+    assert _INBOX_CHANNELS_LITERAL == _EXPECTED_CHANNELS
+    assert len(_EXPECTED_CHANNELS) == 8
 
 
 # --- registry <-> profile map, both ways ----------------------------------
@@ -319,6 +404,26 @@ def test_frontmatter_contract(name: str) -> None:
     }
 
 
+def test_inbox_compatibility_omits_the_data_root_clause_block_carries_it() -> None:
+    """Amendment 2's decision, pinned directly: `build-training-block`'s
+    compatibility clause requires a configured data root because its body
+    teaches a workflow that reads one; the inbox skill's body teaches
+    configuring the data root as part of its own workflow (Req 8.7), so its
+    compatibility note must not presuppose one. Checking both skills in one
+    test is the positive control -- a `"data root" not in text` assertion by
+    itself would also pass if the whole frontmatter contract test were
+    vacuous."""
+    inbox_text = _skill_text(INBOX_SKILL_NAME)
+    inbox_frontmatter, _ = _split_frontmatter(inbox_text)
+    inbox_compatibility = yaml.safe_load(inbox_frontmatter)["compatibility"]
+    assert "data root" not in inbox_compatibility
+
+    block_text = _skill_text(BLOCK_SKILL_NAME)
+    block_frontmatter, _ = _split_frontmatter(block_text)
+    block_compatibility = yaml.safe_load(block_frontmatter)["compatibility"]
+    assert "data root" in block_compatibility
+
+
 # --- order (Req 3.1) --------------------------------------------------------
 
 
@@ -330,11 +435,117 @@ def test_heading_order_matches_the_profile(name: str) -> None:
     assert order == _SKILL_PROFILES[name].headings
 
 
+# --- channel binding (Req 8.2, 8.8) -----------------------------------------
+
+_CHANNEL_SKILLS = tuple(
+    name for name, profile in _SKILL_PROFILES.items() if profile.channels is not None
+)
+
+
+def test_channel_skills_is_non_vacuous() -> None:
+    """At least one registered skill declares a channel binding -- the
+    parametrized test below is not silently walking zero cases."""
+    assert _CHANNEL_SKILLS
+    assert INBOX_SKILL_NAME in _CHANNEL_SKILLS
+    assert BLOCK_SKILL_NAME not in _CHANNEL_SKILLS
+
+
+@pytest.mark.parametrize("name", _CHANNEL_SKILLS)
+def test_channel_binding_matches_the_drain_and_sync_report_fields(name: str) -> None:
+    """Every channel name the body's ``## Reading the report`` table
+    documents (its backticked field-name column) is compared against the
+    profile's declared channel set, which in turn is pinned against the
+    dataclasses above (`test_literal_channel_set_matches_the_derived_
+    dataclass_union`). A channel added, renamed, or dropped from either
+    dataclass, or a row added/dropped/mis-spelled in the body, breaks this
+    chain at the point it actually diverges."""
+    text = _skill_text(name)
+    _frontmatter, body = _split_frontmatter(text)
+    sections = _sections(body)
+    rows = _table_rows(sections["Reading the report"], "Channel")
+    assert rows, "vacuous walk: no channel row found"
+
+    field_names = {_cell_token(row[1]) for row in rows}
+    assert len(field_names) == len(rows), "duplicate field name in the channel table"
+
+    expected = _SKILL_PROFILES[name].channels
+    assert expected is not None
+    assert field_names == expected
+
+    for row in rows:
+        assert row[0].strip(), f"empty Channel label cell: {row!r}"
+        assert row[2].strip(), f"empty Meaning cell: {row!r}"
+        assert row[3].strip(), f"empty Do cell: {row!r}"
+
+
+def _channel_rows_by_field(name: str) -> dict[str, list[str]]:
+    """The inbox skill's ``## Reading the report`` table, keyed by the
+    backticked field name in each row's second cell -- so a claim can be
+    pinned against the *specific* row it belongs to rather than the body as
+    a whole (a whole-body substring check cannot tell a claim in the right
+    row from the same claim relocated to the wrong one)."""
+    text = _skill_text(name)
+    _frontmatter, body = _split_frontmatter(text)
+    sections = _sections(body)
+    rows = _table_rows(sections["Reading the report"], "Channel")
+    return {_cell_token(row[1]): row for row in rows}
+
+
+def test_move_failures_row_states_processed_and_retried_never_reprocess() -> None:
+    """Sentence-level pins for the task's three called-out claims, each
+    asserted against the specific row's own cells (not the body as a
+    whole) so a claim relocated to the wrong row is caught rather than
+    satisfying a whole-file substring scan. Each phrase is also asserted
+    ABSENT from the *other* packaged skill's body, as a positive control
+    that the assertion is not simply always true of any markdown file."""
+    inbox_rows = _channel_rows_by_field(INBOX_SKILL_NAME)
+    block_text = _skill_text(BLOCK_SKILL_NAME)
+
+    move_failure_do = inbox_rows["move_failures"][3]
+    deferred_do = inbox_rows["deferred"][3]
+    quarantined_do = inbox_rows["quarantined"][3]
+
+    move_failure_claim = "retried automatically on the next drain"
+    reprocess_claim = "never a reason to reprocess"
+    quarantine_claim = "needs the user, not the agent"
+    deferred_claim = "No action -- it is reconsidered automatically"
+
+    assert move_failure_claim in move_failure_do
+    assert reprocess_claim in move_failure_do
+    assert quarantine_claim in quarantined_do
+    assert deferred_claim in deferred_do
+    # The Deferred Do cell must never suggest deleting the file -- fitdocs's
+    # inbox never deletes anything, and a "no action" claim that is merely
+    # appended after some other imperative sentence must not satisfy this
+    # test by substring alone.
+    assert "delete" not in deferred_do.lower()
+
+    # Negative control on the move-failures Do cell specifically: it must
+    # never suggest reprocessing, in any letter case (the only permitted occurrence of
+    # "reprocess" is inside "never a reason to reprocess") and must never
+    # mention `--force`, which is exactly how one would reprocess a file.
+    assert move_failure_do.lower().count("reprocess") == 1
+    assert "--force" not in move_failure_do
+
+    for phrase in (
+        move_failure_claim,
+        reprocess_claim,
+        quarantine_claim,
+        deferred_claim,
+    ):
+        assert phrase not in block_text, (
+            f"positive control failed -- {phrase!r} found in the other skill too"
+        )
+
+
 # --- positive controls: nothing scanned nothing ----------------------------
 
 
 @pytest.mark.parametrize("name", PACKAGED_SKILLS)
 def test_positive_controls_are_reached(name: str) -> None:
+    """Shared across every packaged skill: the section walk actually found
+    every heading its profile declares, and the body carries at least one
+    fenced ``bash`` command."""
     text = _skill_text(name)
     _frontmatter, body = _split_frontmatter(text)
 
@@ -343,12 +554,21 @@ def test_positive_controls_are_reached(name: str) -> None:
 
     stripped, fences = _strip_fences(body)
     assert any(lang == "bash" for lang, _content in fences), "no bash fence found"
-    assert any(lang == "toml" for lang, _content in fences), "no toml fence found"
 
     spans = _code_spans_in(stripped)
     assert any(re.match(r"^fitdocs [a-z]", span.strip()) for span in spans), (
         "no inline `fitdocs <command>` span found"
     )
+
+
+def test_positive_controls_block_skill_also_carries_a_toml_example() -> None:
+    """``build-training-block`` alone teaches a TOML plan-source example;
+    that requirement is this skill's own, not the shared contract every
+    packaged skill carries."""
+    text = _skill_text(BLOCK_SKILL_NAME)
+    _frontmatter, body = _split_frontmatter(text)
+    _stripped, fences = _strip_fences(body)
+    assert any(lang == "toml" for lang, _content in fences), "no toml fence found"
 
 
 # --- commands and options: code scope only (Req 4.1, 4.2) ------------------
@@ -412,15 +632,127 @@ def test_every_named_command_and_option_is_bound_to_the_tool(name: str) -> None:
                 fence_commands.add(command_name)
 
     assert span_commands or fence_commands, "no fitdocs command mention scanned"
+
+
+def test_block_skill_fenced_commands_are_exactly_plan() -> None:
+    """``build-training-block``'s own body only ever fences ``fitdocs
+    plan`` -- this is that skill's own command surface, not a property
+    every packaged skill shares (the inbox skill fences ``sync``, ``check``,
+    and ``regen`` instead)."""
+    text = _skill_text(BLOCK_SKILL_NAME)
+    _frontmatter, body = _split_frontmatter(text)
+    _stripped, fences = _strip_fences(body)
+
+    fence_commands = set()
+    for lang, content in fences:
+        if lang not in ("bash", "sh"):
+            continue
+        for line in content.splitlines():
+            command_name = _validate_fitdocs_mention(line)
+            if command_name is not None:
+                fence_commands.add(command_name)
+
     assert fence_commands == {"plan"}
 
 
-# --- scoping of `regen` (Req 4.2) -------------------------------------------
+def _inbox_bash_fence_command_sets() -> list[frozenset[str]]:
+    """The commands named in each individual fenced ``bash``/``sh`` block of
+    the inbox skill's body, one frozenset per fence -- kept per-fence rather
+    than unioned, because *which* commands share a fence is exactly what
+    distinguishes the routine pair from the conditional ``regen`` fence."""
+    text = _skill_text(INBOX_SKILL_NAME)
+    _frontmatter, body = _split_frontmatter(text)
+    _stripped, fences = _strip_fences(body)
+
+    fence_sets: list[frozenset[str]] = []
+    for lang, content in fences:
+        if lang not in ("bash", "sh"):
+            continue
+        commands = set()
+        for line in content.splitlines():
+            command_name = _validate_fitdocs_mention(line)
+            if command_name is not None:
+                commands.add(command_name)
+        if commands:
+            fence_sets.append(frozenset(commands))
+    return fence_sets
 
 
-@pytest.mark.parametrize("name", PACKAGED_SKILLS)
-def test_regen_is_scoped_to_the_chaining_line_and_the_last_section(name: str) -> None:
-    text = _skill_text(name)
+def test_inbox_skill_routine_fence_is_exactly_sync_and_check() -> None:
+    """The routine drain pair lives in one fence together, and that fence
+    names exactly ``sync`` and ``check`` -- never ``regen``, which an agent
+    that blindly executes every fenced block in a skill would otherwise run
+    on every drain (the defect this rewrite fixes)."""
+    fence_sets = _inbox_bash_fence_command_sets()
+    assert frozenset({"sync", "check"}) in fence_sets
+
+
+def test_inbox_skill_regen_is_never_in_the_routine_fence() -> None:
+    """``regen`` is fenced too (so the command/option binding scan still
+    reaches it), but never in the same fence as the routine pair -- an agent
+    that runs only the routine fence must never run ``regen`` as a side
+    effect."""
+    fence_sets = _inbox_bash_fence_command_sets()
+    assert any("regen" in commands for commands in fence_sets), (
+        "vacuous walk: regen is not fenced anywhere"
+    )
+    for commands in fence_sets:
+        if "regen" in commands:
+            assert commands == {"regen"}, (
+                f"regen shares a fence with other commands: {commands!r}"
+            )
+
+
+_BARE_OPTION_RE = re.compile(r"^--[a-zA-Z][a-zA-Z0-9-]*$")
+
+
+def test_inbox_bare_option_spans_are_valid_for_a_fenced_command() -> None:
+    """A bare ``--option`` code span (not attached to a ``fitdocs <command>``
+    mention on the same span/line, so :func:`_validate_fitdocs_mention` never
+    reaches it) is otherwise invisible to the shared command/option binding
+    scan. This test closes that gap for the inbox skill by checking every
+    bare option span against the union of options belonging to a command the
+    body actually fences -- a misspelled option here (an extra letter, a
+    missing letter) is caught even though it is never attached to a
+    ``fitdocs`` mention."""
+    text = _skill_text(INBOX_SKILL_NAME)
+    _frontmatter, body = _split_frontmatter(text)
+    stripped, fences = _strip_fences(body)
+
+    fence_commands: set[str] = set()
+    for commands in _inbox_bash_fence_command_sets():
+        fence_commands |= commands
+    assert fence_commands, "vacuous walk: no fenced command found"
+
+    allowed_opts: set[str] = set()
+    for command_name in fence_commands:
+        command = _COMMAND_MAP[command_name]
+        allowed_opts |= {
+            opt for param in command.params for opt in getattr(param, "opts", ())
+        }
+
+    bare_option_spans = [
+        span
+        for span in _code_spans_in(stripped)
+        if _BARE_OPTION_RE.fullmatch(span.strip())
+    ]
+    assert bare_option_spans, "vacuous walk: no bare option span found"
+    for span in bare_option_spans:
+        assert span.strip() in allowed_opts, (
+            f"{span!r} is not an option of any fenced command "
+            f"({sorted(fence_commands)}; allowed: {sorted(allowed_opts)})"
+        )
+
+
+# --- scoping of `regen` (Req 4.2, build-training-block only) ---------------
+
+
+def test_regen_is_scoped_to_the_chaining_line_and_the_last_section() -> None:
+    """``build-training-block`` never runs ``regen`` itself; the inbox
+    skill's own body runs it deliberately (as a fenced command, in its
+    ``## Commands to run`` section), so this scoping rule is
+    ``build-training-block``'s own and not shared."""
+    text = _skill_text(BLOCK_SKILL_NAME)
     _frontmatter, body = _split_frontmatter(text)
     stripped, fences = _strip_fences(body)
 
@@ -443,7 +775,7 @@ def test_regen_is_scoped_to_the_chaining_line_and_the_last_section(name: str) ->
 # --- tables (Req 3.8, 3.9, 3.11, 4.3, 4.4) ----------------------------------
 
 
-@pytest.mark.parametrize("name", PACKAGED_SKILLS)
+@pytest.mark.parametrize("name", (BLOCK_SKILL_NAME,))
 def test_outcome_table_matches_block_status(name: str) -> None:
     text = _skill_text(name)
     _frontmatter, body = _split_frontmatter(text)
@@ -456,7 +788,7 @@ def test_outcome_table_matches_block_status(name: str) -> None:
         assert row[2].strip(), f"empty Do cell: {row!r}"
 
 
-@pytest.mark.parametrize("name", PACKAGED_SKILLS)
+@pytest.mark.parametrize("name", (BLOCK_SKILL_NAME,))
 def test_state_table_matches_row_state(name: str) -> None:
     text = _skill_text(name)
     _frontmatter, body = _split_frontmatter(text)
@@ -469,7 +801,7 @@ def test_state_table_matches_row_state(name: str) -> None:
         assert row[2].strip(), f"empty Do cell: {row!r}"
 
 
-@pytest.mark.parametrize("name", PACKAGED_SKILLS)
+@pytest.mark.parametrize("name", (BLOCK_SKILL_NAME,))
 def test_label_table_matches_confidence(name: str) -> None:
     text = _skill_text(name)
     _frontmatter, body = _split_frontmatter(text)
@@ -483,7 +815,7 @@ def test_label_table_matches_confidence(name: str) -> None:
         assert row[2].strip(), f"empty Do cell: {row!r}"
 
 
-@pytest.mark.parametrize("name", PACKAGED_SKILLS)
+@pytest.mark.parametrize("name", (BLOCK_SKILL_NAME,))
 def test_exit_table_matches_cli_exit_constants(name: str) -> None:
     text = _skill_text(name)
     _frontmatter, body = _split_frontmatter(text)
@@ -505,7 +837,7 @@ def test_exit_table_matches_cli_exit_constants(name: str) -> None:
 # --- vocabularies (Req 3.6, 4.5) ---------------------------------------------
 
 
-@pytest.mark.parametrize("name", PACKAGED_SKILLS)
+@pytest.mark.parametrize("name", (BLOCK_SKILL_NAME,))
 def test_sports_and_modalities_vocabularies(name: str) -> None:
     text = _skill_text(name)
     _frontmatter, body = _split_frontmatter(text)
@@ -548,7 +880,7 @@ _MARKERS: tuple[str, ...] = (
 )
 
 
-@pytest.mark.parametrize("name", PACKAGED_SKILLS)
+@pytest.mark.parametrize("name", (BLOCK_SKILL_NAME,))
 def test_example_is_byte_identical_and_parses(name: str) -> None:
     text = _skill_text(name)
     _frontmatter, body = _split_frontmatter(text)
@@ -644,7 +976,15 @@ def test_no_owned_path_or_managed_key_is_spelled(name: str) -> None:
         assert owned_path not in body, f"owned path spelled in the body: {owned_path!r}"
 
     sections = _sections(body)
-    ownership_text = sections["Ownership"]
+    # The ownership heading's exact wording differs per skill ("Ownership"
+    # vs. "Ownership boundary"); found by content rather than hardcoded
+    # against one skill's spelling, so this test keeps applying once a
+    # second skill's heading differs (a vacuous walk if no such heading
+    # existed at all is guarded by the assert on the match).
+    ownership_headings = [h for h in sections if "Ownership" in h]
+    assert ownership_headings, f"no Ownership heading found among {list(sections)!r}"
+    assert len(ownership_headings) == 1, ownership_headings
+    ownership_text = sections[ownership_headings[0]]
     tokens = set(_code_spans_in(ownership_text))
 
     assert PRESERVED_REGIONS, "PRESERVED_REGIONS is unexpectedly empty"
@@ -656,3 +996,20 @@ def test_no_owned_path_or_managed_key_is_spelled(name: str) -> None:
     )
     offending_keys = tokens & MANAGED_KEYS
     assert not offending_keys, f"managed key in Ownership: {offending_keys}"
+
+
+def test_inbox_ownership_names_declaration_contract_and_never_hand_edits() -> None:
+    """Req 8.3: the ownership section must state the boundary and point at
+    the in-tree declaration and the published contract as its authority --
+    pinned as three separate, specific assertions on the section's own text
+    rather than on the whole body, so a section that states the boundary
+    vaguely (with no declaration name, no contract link, and no never-edit
+    statement) is caught rather than passing on adjacent body content."""
+    text = _skill_text(INBOX_SKILL_NAME)
+    _frontmatter, body = _split_frontmatter(text)
+    sections = _sections(body)
+    ownership_text = sections["Ownership boundary"]
+
+    assert "AGENTS.md" in ownership_text
+    assert CONTRACT_DOCUMENTATION_URL in ownership_text
+    assert "never hand-edits" in ownership_text

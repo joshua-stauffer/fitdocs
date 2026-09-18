@@ -8,7 +8,8 @@ tasks (2.1-2.3) extend this file with the builder and checker.
 Six groups of assertions:
 
 * the real policy file loads, and its content matches the design's declared
-  end-state shape (minus the not-yet-added inbox skill entry);
+  end-state shape, including the inbox skill's `SKILL.md` (distribution
+  task 4.2);
 * every `[forbidden].members` pattern is exercised with fnmatch against both
   a positive control (something it must catch) and a negative control
   (something it must never catch);
@@ -139,17 +140,16 @@ def test_real_policy_loads() -> None:
     assert isinstance(policy, ArtifactPolicy)
 
 
-def test_wheel_required_has_the_four_design_members_and_not_the_inbox_skill() -> None:
+def test_wheel_required_has_the_five_design_members_including_the_inbox_skill() -> None:
     policy = load_policy(REAL_POLICY_PATH)
     for member in (
         "fitdocs/__init__.py",
         "fitdocs/py.typed",
         "fitdocs/skills/build-training-block/SKILL.md",
         "fitdocs/skills/build-training-block/example-block.toml",
+        "fitdocs/skills/fitdocs-workouts/SKILL.md",
     ):
         assert member in policy.wheel_required
-    # Not yet: task 4.2 adds this entry when the inbox skill lands.
-    assert "fitdocs/skills/fitdocs-workouts/SKILL.md" not in policy.wheel_required
 
 
 def test_sdist_required_has_the_six_named_members() -> None:
@@ -979,6 +979,7 @@ _CLEAN_WHEEL_MEMBERS = {
     "fitdocs/py.typed": b"",
     "fitdocs/skills/build-training-block/SKILL.md": b"# skill",
     "fitdocs/skills/build-training-block/example-block.toml": b"",
+    "fitdocs/skills/fitdocs-workouts/SKILL.md": b"# skill",
 }
 
 _CLEAN_SDIST_MEMBERS = {

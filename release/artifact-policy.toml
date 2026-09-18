@@ -57,6 +57,7 @@ required = [
     "fitdocs/py.typed",
     "fitdocs/skills/build-training-block/SKILL.md",
     "fitdocs/skills/build-training-block/example-block.toml",
+    "fitdocs/skills/fitdocs-workouts/SKILL.md",
 ]
 
 [sdist]

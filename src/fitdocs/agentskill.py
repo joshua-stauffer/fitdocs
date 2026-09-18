@@ -9,6 +9,13 @@ silently fall out of the wheel while a scan-based listing still looks
 "correct". The CLI's ``skill`` command and every test that needs a skill's
 installed location resolve it here.
 
+Two skills are registered today: :data:`BLOCK_SKILL_NAME`
+(``build-training-block``, an athlete-facing plan-authoring workflow) and
+:data:`INBOX_SKILL_NAME` (``fitdocs-workouts``, the turnkey inbox-drain
+workflow for an LLM-managed wiki, distribution task 4.2). Both live under
+:data:`PACKAGED_SKILLS` in registration order; nothing about resolution
+distinguishes one registered name from another.
+
 Resolution goes through :func:`importlib.resources.files`, bound at module
 level (rather than imported and called inline) so a test has exactly one
 attribute to monkeypatch: ``fitdocs.agentskill.files``. Nothing happens at
@@ -36,7 +43,8 @@ from typing import Final
 SKILLS_DIR: Final[str] = "skills"
 SKILL_FILENAME: Final[str] = "SKILL.md"
 BLOCK_SKILL_NAME: Final[str] = "build-training-block"
-PACKAGED_SKILLS: Final[tuple[str, ...]] = (BLOCK_SKILL_NAME,)
+INBOX_SKILL_NAME: Final[str] = "fitdocs-workouts"
+PACKAGED_SKILLS: Final[tuple[str, ...]] = (BLOCK_SKILL_NAME, INBOX_SKILL_NAME)
 
 
 def _resolved_directory(name: str) -> Path | None:
