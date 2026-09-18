@@ -68,6 +68,7 @@ from scripts.check_artifacts import (
     Violation,
     ViolationKind,
     check_artifacts,
+    check_version_consistency,
 )
 from scripts.check_artifacts import (
     main as check_artifacts_main,
@@ -1049,6 +1050,24 @@ def clean_dist(tmp_path: Path) -> Path:
     return dist_dir
 
 
+@pytest.fixture
+def agreeing_manifest_and_changelog(tmp_path: Path) -> tuple[Path, Path]:
+    """A synthetic `pyproject.toml` (version `9.9.9`) and `CHANGELOG.md`
+    (newest released entry `## [9.9.9] - 2026-01-01`) that agree with each
+    other and with `_CLEAN_METADATA` / `clean_dist`'s version -- so a test
+    exercising `main`'s artifact-side behavior can pass `--manifest` /
+    `--changelog` and get a no-op from the version-consistency gate.
+    """
+    manifest_path = tmp_path / "agreeing-pyproject.toml"
+    manifest_path.write_text('[project]\nname = "fitdocs"\nversion = "9.9.9"\n')
+    changelog_path = tmp_path / "agreeing-CHANGELOG.md"
+    changelog_path.write_text(
+        "# Changelog\n\n## [Unreleased]\n\n"
+        "## [9.9.9] - 2026-01-01\n\n### Added\n\n- x\n"
+    )
+    return manifest_path, changelog_path
+
+
 # --- report shape ------------------------------------------------------
 
 
@@ -1616,12 +1635,29 @@ def test_main_malformed_policy_returns_2(
 
 
 def test_main_on_a_clean_dir_returns_0_and_names_both_filenames(
-    clean_dist: Path, capsys: pytest.CaptureFixture[str]
+    clean_dist: Path,
+    agreeing_manifest_and_changelog: tuple[Path, Path],
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
+    # task 2.4: main now also runs the version-consistency gate FIRST, using
+    # a synthetic manifest/changelog agreeing with `clean_dist`'s "9.9.9" --
+    # the real repo's pyproject.toml/CHANGELOG.md would otherwise trip the
+    # real no-released-entry violation here (see the dedicated real-files
+    # test below), which is not what THIS test is pinning.
+    manifest_path, changelog_path = agreeing_manifest_and_changelog
     before = sorted(clean_dist.iterdir())
 
     exit_code = check_artifacts_main(
-        ["--dist-dir", str(clean_dist), "--policy", str(REAL_POLICY_PATH)]
+        [
+            "--dist-dir",
+            str(clean_dist),
+            "--policy",
+            str(REAL_POLICY_PATH),
+            "--manifest",
+            str(manifest_path),
+            "--changelog",
+            str(changelog_path),
+        ]
     )
 
     assert exit_code == 0
@@ -1633,8 +1669,11 @@ def test_main_on_a_clean_dir_returns_0_and_names_both_filenames(
 
 
 def test_main_on_a_violating_dir_returns_1_and_lists_every_violation(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    agreeing_manifest_and_changelog: tuple[Path, Path],
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
+    manifest_path, changelog_path = agreeing_manifest_and_changelog
     dist_dir = tmp_path / "dist"
     dist_dir.mkdir()
     _make_wheel(dist_dir, {}, metadata="Name: x\n\nbody\n")
@@ -1645,9 +1684,22 @@ def test_main_on_a_violating_dir_returns_1_and_lists_every_violation(
     assert len(expected_violations) > 1, (
         "the fixture must trip more than one violation for this test to mean anything"
     )
+    # falsity-before / independence check: the agreeing manifest/changelog
+    # contribute nothing of their own here, so the exit-code and count
+    # assertions below are pinning ONLY the artifact-side violations.
+    assert check_version_consistency(manifest_path, changelog_path, None) == ()
 
     exit_code = check_artifacts_main(
-        ["--dist-dir", str(dist_dir), "--policy", str(REAL_POLICY_PATH)]
+        [
+            "--dist-dir",
+            str(dist_dir),
+            "--policy",
+            str(REAL_POLICY_PATH),
+            "--manifest",
+            str(manifest_path),
+            "--changelog",
+            str(changelog_path),
+        ]
     )
 
     assert exit_code == 1
@@ -1655,6 +1707,29 @@ def test_main_on_a_violating_dir_returns_1_and_lists_every_violation(
     assert f"{len(expected_violations)} violation(s)" in err
     # One line per violation plus the summary line.
     assert err.count("\n") == len(expected_violations) + 1
+
+
+def test_main_with_real_manifest_and_changelog_reports_only_the_no_entry_violation(
+    clean_dist: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`main` with its DEFAULT `--manifest`/`--changelog` (the real
+    `pyproject.toml` / `CHANGELOG.md`) against an otherwise-clean artifact
+    set: today the real changelog has no released entry (task 1.3's pinned
+    state), so this is exit 1 with EXACTLY one violation -- the no-entry
+    finding -- and the artifact checks report nothing on top of it. This
+    will need updating the day the first release entry is written (see
+    `tests/test_changelog.py::test_real_changelog_has_no_released_version_literal`,
+    which pins the same real-file state from the changelog's side).
+    """
+    exit_code = check_artifacts_main(
+        ["--dist-dir", str(clean_dist), "--policy", str(REAL_POLICY_PATH)]
+    )
+
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert "1 violation(s)" in err
+    assert "version_mismatch" in err
+    assert "no released entry" in err
 
 
 # --- real-artifact smoke -----------------------------------------------
@@ -2406,3 +2481,721 @@ def test_forbidden_strings_and_content_oracle_modules_import_nothing_from_fitdoc
             elif isinstance(node, ast.ImportFrom) and node.module:
                 imported_names.add(node.module.split(".")[0])
         assert "fitdocs" not in imported_names, f"{relative} must not import fitdocs"
+
+
+# ---------------------------------------------------------------------------
+# Task 2.4: check_version_consistency (the version-consistency gate)
+# ---------------------------------------------------------------------------
+#
+# THE RULE IS PURE PAIRWISE (round-1 review correction): each of the three
+# possible comparisons -- manifest-vs-changelog, manifest-vs-tag,
+# changelog-vs-tag -- runs and is reported INDEPENDENTLY, with NO
+# deduplication when two of the three sources happen to already agree with
+# each other. `manifest == changelog != tag` and `manifest == tag !=
+# changelog` both produce 2 violations (the odd one out disagrees with BOTH
+# of the other two, and BOTH disagreements are reported); all three distinct
+# produces 3; no tag produces at most 1. A changelog with no released entry
+# is its own violation, reported ADDITIONALLY to a manifest-vs-tag
+# comparison when a tag is supplied (changelog-vs-tag is the only
+# comparison skipped there, since there is no changelog value at all).
+#
+# Discrimination sweep for the version-consistency gate's every relaxation
+# class, per `.kiro/steering/change-protocol.md` -- {absent, wrong text,
+# case, whitespace, partial match, type, scope/off-by-one}:
+#
+# | class      | test                                                              |
+# |-------------|--------------------------------------------------------------------|
+# | absent      | test_no_released_entry_with_agreeing_tag_is_exactly_one_violation  |
+# |             | (no entry at all); test_agreement_with_no_tag_supplied_returns_no_ |
+# |             | violations (a tag that is absent is tolerated, not a mismatch);    |
+# |             | test_empty_string_tag_is_treated_as_no_tag_supplied                |
+# | wrong text  | test_all_three_distinct_produces_three_violations                 |
+# | case        | test_tag_capital_v_is_not_normalized_and_is_a_mismatch             |
+# | whitespace  | test_tag_whitespace_padded_is_stripped_before_comparison           |
+# | partial     | test_manifest_version_prefix_of_changelog_is_still_a_mismatch;     |
+# | match       | test_agreeing_manifest_and_changelog_prefix_extension_tag_is_two_  |
+# |             | violations; test_tag_with_prerelease_suffix_is_a_mismatch;         |
+# |             | test_tag_with_refs_prefix_is_a_mismatch_not_normalized (a wrong-   |
+# |             | text case in disguise -- see the comment above the real partial-   |
+# |             | match tests); test_version_looking_prose_in_unreleased_is_not_an_  |
+# |             | entry                                                              |
+# | type/regex  | test_malformed_date_heading_is_not_an_entry;                       |
+# | anchoring   | test_v_prefixed_heading_is_not_an_entry;                           |
+# |             | test_heading_with_trailing_text_after_the_date_is_not_an_entry     |
+# | scope/      | test_newest_entry_is_first_listed_not_highest_or_last (first       |
+# | off-by-one  | heading wins, not sorted-highest, not last-in-document)            |
+
+
+def _write_manifest(dir_: Path, version: str, *, name: str = "manifest.toml") -> Path:
+    path = dir_ / name
+    path.write_text(f'[project]\nname = "fitdocs"\nversion = "{version}"\n')
+    return path
+
+
+def _write_changelog(
+    dir_: Path, *release_headings: str, name: str = "CHANGELOG.md"
+) -> Path:
+    """A changelog with a standing `## [Unreleased]` section followed by
+    `release_headings` in the given order (document order -- callers control
+    which heading is "first", i.e. "newest" by this gate's rule).
+    """
+    lines = ["# Changelog", "", "## [Unreleased]", ""]
+    for heading in release_headings:
+        lines.append(heading)
+        lines.append("")
+        lines.append("### Added")
+        lines.append("")
+        lines.append("- x")
+        lines.append("")
+    path = dir_ / name
+    path.write_text("\n".join(lines))
+    return path
+
+
+# --- agreement: no violations -----------------------------------------------
+
+
+@pytest.mark.parametrize("tag", ["v9.9.9", "9.9.9"])
+def test_agreement_all_three_sources_returns_no_violations(
+    tmp_path: Path, tag: str
+) -> None:
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    # newest entry (9.9.9) listed above an older one (9.9.8) -- the older
+    # entry is present so this fixture cannot be satisfied by a "there is
+    # only one entry" coincidence.
+    changelog = _write_changelog(
+        tmp_path,
+        "## [9.9.9] - 2026-01-02",
+        "## [9.9.8] - 2026-01-01",
+    )
+    assert check_version_consistency(manifest, changelog, tag) == ()
+
+
+def test_agreement_with_no_tag_supplied_returns_no_violations(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog = _write_changelog(tmp_path, "## [9.9.9] - 2026-01-01")
+    assert check_version_consistency(manifest, changelog, None) == ()
+
+
+# --- the four disagreement shapes -------------------------------------------
+
+
+def test_all_three_distinct_produces_three_violations(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog = _write_changelog(tmp_path, "## [9.9.8] - 2026-01-01")
+    violations = check_version_consistency(manifest, changelog, "9.9.7")
+
+    assert len(violations) == 3
+    assert all(v.kind == ViolationKind.VERSION_MISMATCH for v in violations)
+    assert all(v.subject == "" for v in violations)
+    details = [v.detail for v in violations]
+    assert any("9.9.9" in d and "9.9.8" in d for d in details)
+    assert any("9.9.9" in d and "9.9.7" in d for d in details)
+    assert any("9.9.8" in d and "9.9.7" in d for d in details)
+    # Exact detail order, pinned: lexicographic sort of the detail strings
+    # puts "changelog..." before "manifest version...", and between the two
+    # manifest-prefixed details, "...changelog newest entry..." sorts
+    # before "...tag..." ('c' < 't'). A missing-sort or wrong-sort-key
+    # mutation would emit these in construction order instead
+    # (manifest-vs-changelog, manifest-vs-tag, changelog-vs-tag).
+    assert details == [
+        "changelog newest entry 9.9.8 != tag 9.9.7",
+        "manifest version 9.9.9 != changelog newest entry 9.9.8",
+        "manifest version 9.9.9 != tag 9.9.7",
+    ]
+
+
+def test_manifest_agrees_with_tag_changelog_differs_produces_two_violations(
+    tmp_path: Path,
+) -> None:
+    # PURE PAIRWISE: manifest==tag, changelog is the odd one out. Both the
+    # manifest-vs-changelog pair AND the changelog-vs-tag pair disagree, so
+    # BOTH are reported -- no deduplication just because manifest and tag
+    # happen to already agree with each other.
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog = _write_changelog(tmp_path, "## [9.9.8] - 2026-01-01")
+    violations = check_version_consistency(manifest, changelog, "9.9.9")
+
+    assert len(violations) == 2
+    details = [v.detail for v in violations]
+    assert any("9.9.9" in d and "9.9.8" in d and "manifest" in d for d in details)
+    assert any("9.9.9" in d and "9.9.8" in d and "changelog" in d for d in details)
+
+
+def test_manifest_agrees_with_changelog_tag_differs_produces_two_violations(
+    tmp_path: Path,
+) -> None:
+    # PURE PAIRWISE, mirror image of the case above: manifest==changelog,
+    # tag is the odd one out. Both the manifest-vs-tag pair AND the
+    # changelog-vs-tag pair disagree, so BOTH are reported -- manifest and
+    # changelog already agreeing with each other does NOT collapse the two
+    # tag-mismatch findings into one.
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog = _write_changelog(tmp_path, "## [9.9.9] - 2026-01-01")
+    violations = check_version_consistency(manifest, changelog, "9.9.8")
+
+    assert len(violations) == 2
+    details = [v.detail for v in violations]
+    assert any("9.9.9" in d and "9.9.8" in d and "manifest" in d for d in details)
+    assert any("9.9.9" in d and "9.9.8" in d and "changelog" in d for d in details)
+
+
+def test_tag_none_manifest_and_changelog_differ_produces_one_violation(
+    tmp_path: Path,
+) -> None:
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog = _write_changelog(tmp_path, "## [9.9.8] - 2026-01-01")
+    violations = check_version_consistency(manifest, changelog, None)
+
+    assert len(violations) == 1
+    assert violations[0].subject == ""
+    assert "9.9.9" in violations[0].detail
+    assert "9.9.8" in violations[0].detail
+    assert violations[0].remedy.strip()
+
+
+# --- no released entry -------------------------------------------------
+
+
+def test_no_released_entry_with_agreeing_tag_is_exactly_one_violation(
+    tmp_path: Path,
+) -> None:
+    # No-entry is reported ADDITIONALLY to, never instead of, a
+    # manifest-vs-tag comparison -- but here the tag AGREES with the
+    # manifest, so there is nothing for the manifest-vs-tag comparison to
+    # report: exactly the no-entry finding, alone.
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog = _write_changelog(tmp_path)  # Unreleased only, like the real file
+    violations = check_version_consistency(manifest, changelog, "9.9.9")
+
+    assert len(violations) == 1
+    assert violations[0].subject == ""
+    assert violations[0].kind == ViolationKind.VERSION_MISMATCH
+    assert "9.9.9" in violations[0].detail
+    assert "no released entry" in violations[0].detail
+
+
+def test_no_released_entry_with_disagreeing_tag_is_exactly_two_violations(
+    tmp_path: Path,
+) -> None:
+    # No-entry is reported ADDITIONALLY to a manifest-vs-tag comparison when
+    # the supplied tag actually disagrees with the manifest: the no-entry
+    # finding AND the manifest-vs-tag finding, both present -- changelog-vs-
+    # tag is the only comparison skipped, since there is no changelog value
+    # to compare against.
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog = _write_changelog(tmp_path)  # Unreleased only, like the real file
+    violations = check_version_consistency(manifest, changelog, "9.9.8")
+
+    assert len(violations) == 2
+    no_entry = [v for v in violations if "no released entry" in v.detail]
+    manifest_vs_tag = [v for v in violations if "no released entry" not in v.detail]
+    assert len(no_entry) == 1
+    assert "9.9.9" in no_entry[0].detail
+    assert len(manifest_vs_tag) == 1
+    assert "9.9.9" in manifest_vs_tag[0].detail
+    assert "9.9.8" in manifest_vs_tag[0].detail
+    assert "manifest" in manifest_vs_tag[0].detail
+    assert "changelog" not in manifest_vs_tag[0].detail
+
+
+def test_real_repository_state_pins_the_no_entry_violation() -> None:
+    """Pins Requirement 4.7 against the REAL `pyproject.toml` and
+    `CHANGELOG.md`: nothing has been released yet (task 1.3's state), so
+    this must yield exactly the no-entry violation today. Update this test
+    the day the first `## [X.Y.Z] - YYYY-MM-DD` entry is written --
+    `tests/test_changelog.py::test_real_changelog_has_no_released_version_literal`
+    pins the same real-file fact from the changelog side and will need the
+    same update.
+    """
+    real_manifest = REPO_ROOT / "pyproject.toml"
+    real_changelog = REPO_ROOT / "CHANGELOG.md"
+    with real_manifest.open("rb") as handle:
+        real_version = tomllib.load(handle)["project"]["version"]
+
+    violations = check_version_consistency(real_manifest, real_changelog, None)
+
+    assert len(violations) == 1
+    assert violations[0].kind == ViolationKind.VERSION_MISMATCH
+    assert real_version in violations[0].detail
+    assert "no released entry" in violations[0].detail
+
+
+# --- newest-entry selection: first-listed, not highest, not last -----------
+
+
+def test_newest_entry_is_first_listed_not_highest_or_last(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, "9.9.8")
+    # Out-of-order: the SMALLER version is listed first. "Newest" means
+    # "first heading in document order" for this gate, not "highest
+    # version" and not "last heading" -- the manifest agrees with the FIRST
+    # entry (9.9.8) but not the highest (9.9.9) and not the last (9.9.7).
+    changelog = _write_changelog(
+        tmp_path,
+        "## [9.9.8] - 2026-01-01",
+        "## [9.9.9] - 2026-01-02",
+        "## [9.9.7] - 2025-12-31",
+    )
+    assert check_version_consistency(manifest, changelog, None) == ()
+
+
+# --- heading and prose that must NOT be treated as a released entry --------
+
+
+def test_version_looking_prose_in_unreleased_is_not_an_entry(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog_path = tmp_path / "CHANGELOG.md"
+    changelog_path.write_text(
+        "# Changelog\n\n## [Unreleased]\n\n### Added\n\n"
+        "- mentions version 9.9.9 in prose, not a heading\n"
+    )
+    # Falsity-before: a real entry for 9.9.9 WOULD agree.
+    real_entry_changelog = _write_changelog(
+        tmp_path, "## [9.9.9] - 2026-01-01", name="real-entry.md"
+    )
+    assert check_version_consistency(manifest, real_entry_changelog, None) == ()
+
+    violations = check_version_consistency(manifest, changelog_path, None)
+    assert len(violations) == 1
+    assert "no released entry" in violations[0].detail
+
+
+def test_unanchored_heading_shaped_text_mid_line_is_not_an_entry(
+    tmp_path: Path,
+) -> None:
+    """Pins the regex's leading `^` anchor: a line whose release-heading
+    shape does not start the line (a bullet referencing it, `- see ## [...]
+    - ...`) must NOT be treated as a released entry. `re.match` (used in
+    production) is anchored at position 0 by construction; a change to
+    `re.search` (which finds a match anywhere in the line) would wrongly
+    treat this as an entry.
+    """
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog_path = tmp_path / "CHANGELOG.md"
+    changelog_path.write_text(
+        "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- see ## [9.9.9] - 2026-01-01\n"
+    )
+    violations = check_version_consistency(manifest, changelog_path, None)
+    assert len(violations) == 1
+    assert "no released entry" in violations[0].detail
+
+
+def test_malformed_date_heading_is_not_an_entry(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog = _write_changelog(tmp_path, "## [9.9.9] - 2026-1-1")
+    violations = check_version_consistency(manifest, changelog, None)
+    assert len(violations) == 1
+    assert "no released entry" in violations[0].detail
+
+
+def test_v_prefixed_heading_is_not_an_entry(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog = _write_changelog(tmp_path, "## [v9.9.9] - 2026-01-01")
+    violations = check_version_consistency(manifest, changelog, None)
+    assert len(violations) == 1
+    assert "no released entry" in violations[0].detail
+
+
+def test_heading_with_trailing_text_after_the_date_is_not_an_entry(
+    tmp_path: Path,
+) -> None:
+    # Pins the regex's trailing `$` anchor: a well-formed `X.Y.Z` version and
+    # date followed by extra text must NOT be treated as a released entry.
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog = _write_changelog(tmp_path, "## [9.9.9] - 2026-01-01 draft")
+    violations = check_version_consistency(manifest, changelog, None)
+    assert len(violations) == 1
+    assert "no released entry" in violations[0].detail
+
+
+# --- tag normalization -------------------------------------------------
+
+
+def test_tag_capital_v_is_not_normalized_and_is_a_mismatch(tmp_path: Path) -> None:
+    # manifest == changelog, so under pure pairwise BOTH the manifest-vs-tag
+    # AND changelog-vs-tag comparisons fire (2 violations), not 1 -- 'V' is
+    # not stripped, so the un-normalized "V9.9.9" is what both must name.
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog = _write_changelog(tmp_path, "## [9.9.9] - 2026-01-01")
+    violations = check_version_consistency(manifest, changelog, "V9.9.9")
+    assert len(violations) == 2
+    assert all("V9.9.9" in v.detail for v in violations)
+    assert any("manifest" in v.detail for v in violations)
+    assert any("changelog" in v.detail for v in violations)
+
+
+def test_tag_with_refs_prefix_is_a_mismatch_not_normalized(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog = _write_changelog(tmp_path, "## [9.9.9] - 2026-01-01")
+    violations = check_version_consistency(manifest, changelog, "refs/tags/v9.9.9")
+    assert len(violations) == 2
+    assert all("refs/tags/v9.9.9" in v.detail for v in violations)
+    assert any("manifest" in v.detail for v in violations)
+    assert any("changelog" in v.detail for v in violations)
+
+
+def test_tag_whitespace_padded_is_stripped_before_comparison(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog = _write_changelog(tmp_path, "## [9.9.9] - 2026-01-01")
+    assert check_version_consistency(manifest, changelog, " 9.9.9") == ()
+    assert check_version_consistency(manifest, changelog, " v9.9.9 ") == ()
+    # A trailing newline (e.g. from a shell command substitution the caller
+    # forgot to strip) must be stripped exactly like leading/trailing
+    # spaces -- `str.strip()` handles all whitespace, not only spaces.
+    assert check_version_consistency(manifest, changelog, "v9.9.9\n") == ()
+
+
+def test_empty_string_tag_is_treated_as_no_tag_supplied(tmp_path: Path) -> None:
+    # `--tag ""` (e.g. a CI step whose tag-detection produced nothing) must
+    # behave exactly like omitting `--tag` entirely -- never as a tag that
+    # mismatches every real version.
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog = _write_changelog(tmp_path, "## [9.9.8] - 2026-01-01")
+    with_empty_tag = check_version_consistency(manifest, changelog, "")
+    with_no_tag = check_version_consistency(manifest, changelog, None)
+    assert with_empty_tag == with_no_tag
+    assert len(with_empty_tag) == 1  # only the manifest-vs-changelog mismatch
+
+
+# --- partial match: substring/prefix relationships are NOT equality --------
+
+
+def test_manifest_version_prefix_of_changelog_is_still_a_mismatch(
+    tmp_path: Path,
+) -> None:
+    # "9.9.90" is a superstring of "9.9.9" -- `"9.9.90".startswith("9.9.9")`
+    # is True, so a comparison weakened from equality to `startswith` would
+    # wrongly treat these as matching. No tag supplied, so this isolates the
+    # manifest-vs-changelog comparison alone.
+    manifest = _write_manifest(tmp_path, "9.9.90")
+    changelog = _write_changelog(tmp_path, "## [9.9.9] - 2026-01-01")
+    violations = check_version_consistency(manifest, changelog, None)
+    assert len(violations) == 1
+    assert "9.9.90" in violations[0].detail
+    assert "9.9.9 " in violations[0].detail or violations[0].detail.endswith("9.9.9")
+
+
+def test_agreeing_manifest_and_changelog_prefix_extension_tag_is_two_violations(
+    tmp_path: Path,
+) -> None:
+    # manifest == changelog == "9.9.9"; tag "9.9.90" is a superstring of
+    # both. Isolates the tag comparisons (manifest-vs-tag AND
+    # changelog-vs-tag): a `startswith`-weakened comparison would wrongly
+    # report zero violations here since "9.9.90".startswith("9.9.9") is True.
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog = _write_changelog(tmp_path, "## [9.9.9] - 2026-01-01")
+    violations = check_version_consistency(manifest, changelog, "9.9.90")
+    assert len(violations) == 2
+    details = [v.detail for v in violations]
+    assert any("manifest" in d and "9.9.90" in d for d in details)
+    assert any("changelog" in d and "9.9.90" in d for d in details)
+
+
+def test_tag_with_prerelease_suffix_is_a_mismatch(tmp_path: Path) -> None:
+    # manifest == changelog == "9.9.9"; tag "9.9.9-rc1" has "9.9.9" as a
+    # genuine prefix (`"9.9.9-rc1".startswith("9.9.9")` is True) -- a real
+    # pre-release tag must still mismatch a release version, not be treated
+    # as equal because one is a prefix of the other.
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog = _write_changelog(tmp_path, "## [9.9.9] - 2026-01-01")
+    violations = check_version_consistency(manifest, changelog, "9.9.9-rc1")
+    assert len(violations) == 2
+    details = [v.detail for v in violations]
+    assert any("manifest" in d and "9.9.9-rc1" in d for d in details)
+    assert any("changelog" in d and "9.9.9-rc1" in d for d in details)
+
+
+# --- hard errors ---------------------------------------------------------
+
+
+def test_missing_manifest_raises_checker_error(tmp_path: Path) -> None:
+    changelog = _write_changelog(tmp_path, "## [9.9.9] - 2026-01-01")
+    with pytest.raises(CheckerError):
+        check_version_consistency(tmp_path / "does-not-exist.toml", changelog, None)
+
+
+def test_manifest_without_project_version_raises_checker_error(tmp_path: Path) -> None:
+    manifest = tmp_path / "manifest.toml"
+    manifest.write_text('[project]\nname = "fitdocs"\n')
+    changelog = _write_changelog(tmp_path, "## [9.9.9] - 2026-01-01")
+    with pytest.raises(CheckerError):
+        check_version_consistency(manifest, changelog, None)
+
+
+def test_manifest_malformed_toml_raises_checker_error(tmp_path: Path) -> None:
+    manifest = tmp_path / "manifest.toml"
+    manifest.write_text("[project\nversion = ")
+    changelog = _write_changelog(tmp_path, "## [9.9.9] - 2026-01-01")
+    with pytest.raises(CheckerError):
+        check_version_consistency(manifest, changelog, None)
+
+
+def test_missing_changelog_raises_checker_error(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    with pytest.raises(CheckerError):
+        check_version_consistency(manifest, tmp_path / "does-not-exist.md", None)
+
+
+def test_manifest_version_not_a_string_raises_checker_error(tmp_path: Path) -> None:
+    # `version = 1` (an int, not a string) -- TOML happily parses this, so
+    # the reader must reject it explicitly rather than let a later
+    # `str`-only operation (e.g. `.strip()`) raise something other than
+    # `CheckerError`.
+    manifest = tmp_path / "manifest.toml"
+    manifest.write_text('[project]\nname = "fitdocs"\nversion = 1\n')
+    changelog = _write_changelog(tmp_path, "## [9.9.9] - 2026-01-01")
+    with pytest.raises(CheckerError):
+        check_version_consistency(manifest, changelog, None)
+
+
+def test_manifest_version_empty_string_raises_checker_error(tmp_path: Path) -> None:
+    manifest = tmp_path / "manifest.toml"
+    manifest.write_text('[project]\nname = "fitdocs"\nversion = ""\n')
+    changelog = _write_changelog(tmp_path, "## [9.9.9] - 2026-01-01")
+    with pytest.raises(CheckerError):
+        check_version_consistency(manifest, changelog, None)
+
+
+# --- ordering and determinism -------------------------------------------
+
+
+def test_main_reports_version_violations_before_artifact_violations(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Integration-level pin of the design's ordering, exercised through
+    `main` with a fixture that trips BOTH a version violation (subject "")
+    AND an artifact violation (a non-empty subject): the version line must
+    come first in the printed listing. This is a genuine end-to-end
+    observable of the combined `violations` list `main` builds -- unlike a
+    standalone `sorted()` call over a hand-picked artifact subject, which
+    would be pre-satisfied no matter what production code does (an empty
+    string sorts before ANY non-empty string in Python, so that shape of
+    test cannot fail).
+    """
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog = _write_changelog(tmp_path, "## [9.9.8] - 2026-01-01")
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    _make_wheel(dist_dir, {}, metadata="Name: x\n\nbody\n")
+    _make_sdist(dist_dir, {}, pkg_info="Name: x\n\nbody\n")
+
+    exit_code = check_artifacts_main(
+        [
+            "--manifest",
+            str(manifest),
+            "--changelog",
+            str(changelog),
+            "--policy",
+            str(REAL_POLICY_PATH),
+            "--dist-dir",
+            str(dist_dir),
+        ]
+    )
+
+    assert exit_code == 1
+    lines = capsys.readouterr().err.splitlines()
+    kind_lines = [line for line in lines if "\t" in line]
+    assert kind_lines, "no violation lines printed -- fixture produced nothing"
+    assert kind_lines[0].startswith("version_mismatch\t")
+    assert any(not line.startswith("version_mismatch\t") for line in kind_lines)
+
+
+def test_check_version_consistency_is_deterministic_across_runs(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog = _write_changelog(tmp_path, "## [9.9.8] - 2026-01-01")
+    first = check_version_consistency(manifest, changelog, "9.9.7")
+    second = check_version_consistency(manifest, changelog, "9.9.7")
+    assert first == second
+
+
+# ---------------------------------------------------------------------------
+# Task 2.4: wiring into main() -- --tag / --manifest / --changelog /
+# --no-artifacts
+# ---------------------------------------------------------------------------
+
+
+def test_main_no_artifacts_agreeing_files_returns_0_and_never_opens_dist_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog = _write_changelog(tmp_path, "## [9.9.9] - 2026-01-01")
+
+    def _must_not_be_called(dist_dir: Path) -> tuple[Path, Path]:
+        raise AssertionError("--no-artifacts must never open the dist directory")
+
+    monkeypatch.setattr(check_artifacts_module, "_find_artifacts", _must_not_be_called)
+
+    exit_code = check_artifacts_main(
+        [
+            "--no-artifacts",
+            "--manifest",
+            str(manifest),
+            "--changelog",
+            str(changelog),
+            "--tag",
+            "v9.9.9",
+            "--dist-dir",
+            str(tmp_path / "does-not-exist-at-all"),
+        ]
+    )
+
+    assert exit_code == 0
+    assert capsys.readouterr().out.strip()
+
+
+def test_main_no_artifacts_disagreeing_files_returns_1_with_both_values_named(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    manifest = _write_manifest(tmp_path, "9.9.9")
+    changelog = _write_changelog(tmp_path, "## [9.9.8] - 2026-01-01")
+
+    exit_code = check_artifacts_main(
+        [
+            "--no-artifacts",
+            "--manifest",
+            str(manifest),
+            "--changelog",
+            str(changelog),
+            "--dist-dir",
+            str(tmp_path / "does-not-exist-at-all"),
+        ]
+    )
+
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    lines = [line for line in err.splitlines() if line.startswith("version_mismatch")]
+    assert len(lines) == 1
+    assert "9.9.9" in lines[0]
+    assert "9.9.8" in lines[0]
+
+
+def test_main_hard_error_from_version_check_returns_2(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    missing_manifest = tmp_path / "does-not-exist.toml"
+    changelog = _write_changelog(tmp_path, "## [9.9.9] - 2026-01-01")
+
+    exit_code = check_artifacts_main(
+        [
+            "--no-artifacts",
+            "--manifest",
+            str(missing_manifest),
+            "--changelog",
+            str(changelog),
+        ]
+    )
+
+    assert exit_code == 2
+    assert str(missing_manifest) in capsys.readouterr().err
+
+
+def test_main_version_check_error_reported_before_a_missing_dist_dir_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Both a hard version-check error (missing manifest) AND a hard
+    artifact error (nonexistent dist dir) are possible in the same call --
+    with the version check running FIRST (design: cheapest failure first),
+    its own error message is what gets reported, never the dist-directory
+    one. A production reordering that ran the artifact check first would
+    report the dist-directory message instead, which this pins by asserting
+    the ABSENCE of that message alongside the presence of the manifest one.
+    """
+    missing_manifest = tmp_path / "does-not-exist.toml"
+    changelog = _write_changelog(tmp_path, "## [9.9.9] - 2026-01-01")
+    missing_dist_dir = tmp_path / "does-not-exist-at-all"
+
+    exit_code = check_artifacts_main(
+        [
+            "--manifest",
+            str(missing_manifest),
+            "--changelog",
+            str(changelog),
+            "--policy",
+            str(REAL_POLICY_PATH),
+            "--dist-dir",
+            str(missing_dist_dir),
+        ]
+    )
+
+    assert exit_code == 2
+    err = capsys.readouterr().err
+    assert str(missing_manifest) in err
+    assert str(missing_dist_dir) not in err
+
+
+# ---------------------------------------------------------------------------
+# Task 2.4 remediation (round 1): --no-version-check
+# ---------------------------------------------------------------------------
+#
+# CI (task 6.2) runs the artifact checks on every commit, but there is no
+# released changelog entry until the first release -- so `main`'s DEFAULT
+# behavior (both gates) would exit 1 on every pre-release commit if CI ran
+# it unmodified. `--no-version-check` lets CI run the artifact checks alone;
+# `--no-artifacts` (already covered above) lets the release workflow run
+# the version gate alone before a dist directory exists; the default runs
+# both. The two flags are mutually exclusive: together they would run
+# nothing at all, so `main` treats that combination as a usage error via
+# `argparse`'s own `parser.error` (exit 2, same mechanism `--help` uses).
+
+
+def test_main_no_version_check_with_real_manifest_changelog_and_clean_dist_returns_0(
+    clean_dist: Path,
+) -> None:
+    """`--no-version-check` against the REAL manifest/changelog (no
+    released entry -- see `test_main_with_real_manifest_and_changelog_
+    reports_only_the_no_entry_violation` for the same files WITHOUT this
+    flag, which is exit 1) must skip the version gate entirely and pass on
+    an otherwise-clean artifact set: exit 0. This also pins the
+    "flag ignored" mutation -- an implementation that parses but never
+    consults `--no-version-check` would run the version check anyway
+    against these real, disagreeing files and exit 1 instead.
+    """
+    exit_code = check_artifacts_main(
+        [
+            "--no-version-check",
+            "--dist-dir",
+            str(clean_dist),
+            "--policy",
+            str(REAL_POLICY_PATH),
+        ]
+    )
+    assert exit_code == 0
+
+
+def test_main_no_version_check_and_no_artifacts_together_is_an_argparse_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        check_artifacts_main(["--no-version-check", "--no-artifacts"])
+    assert exc_info.value.code == 2
+    err = capsys.readouterr().err
+    assert "mutually exclusive" in err
+
+
+def test_main_default_mode_runs_both_the_version_and_artifact_checks(
+    clean_dist: Path, agreeing_manifest_and_changelog: tuple[Path, Path]
+) -> None:
+    """Falsity-before / independence check for `--no-version-check`: with
+    NEITHER flag supplied, `main` must still run BOTH checks -- proven by
+    showing the version check's own violation (a real disagreement) reaches
+    the exit code even though the artifact set is clean, which distinguishes
+    "default runs both" from "default silently runs artifacts only".
+    """
+    manifest_path, _ = agreeing_manifest_and_changelog
+    disagreeing_changelog = _write_changelog(
+        manifest_path.parent, "## [9.9.8] - 2026-01-01", name="disagreeing-CHANGELOG.md"
+    )
+
+    exit_code = check_artifacts_main(
+        [
+            "--dist-dir",
+            str(clean_dist),
+            "--policy",
+            str(REAL_POLICY_PATH),
+            "--manifest",
+            str(manifest_path),
+            "--changelog",
+            str(disagreeing_changelog),
+        ]
+    )
+    assert exit_code == 1

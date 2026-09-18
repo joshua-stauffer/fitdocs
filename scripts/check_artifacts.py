@@ -2,9 +2,8 @@
 
 Opens the release's one wheel and one source distribution, enumerates their
 members, and reads their distribution metadata -- the source tree is never
-consulted. Applies five checks and reports every violation it finds rather
-than stopping at the first (tasks 2.2 and 2.3; the design's sixth check --
-version consistency -- is added by task 2.4):
+consulted. Applies six checks and reports every violation it finds rather
+than stopping at the first (tasks 2.2, 2.3, and 2.4):
 
 * ``MISSING_REQUIRED`` -- a member `release/artifact-policy.toml` requires is
   absent from the artifact's regular files.
@@ -51,6 +50,26 @@ imports `tests`, this module must be invoked from the repository root (as
   HARD ERROR -- `ForbiddenStringsSourceError` propagates out of
   `check_artifacts` uncaught, and `main` reports it exactly as it reports a
   malformed policy file.
+* ``VERSION_MISMATCH`` (task 2.4) -- a PURE PAIRWISE comparison across the
+  manifest's declared version, the changelog's newest RELEASED entry, and
+  (when supplied) the release tag: each disagreeing pair is reported
+  independently (up to three violations at once), with no deduplication
+  when two of the three happen to already agree with each other. A
+  changelog with no released entry for the manifest's version is ALSO a
+  violation in its own right (4.7), reported ADDITIONALLY to -- never
+  instead of -- a manifest-vs-tag comparison when a tag is supplied. See
+  `check_version_consistency`'s docstring for the exact counting rule.
+  Needs no artifact opened at all -- `check_version_consistency` reads only
+  `pyproject.toml` and `CHANGELOG.md` (by default; both paths are
+  configurable). `main` runs this check FIRST, before the policy load or
+  any artifact is opened (the design's cheapest-failure-first ordering).
+  Three flags govern which checks `main` runs: the default runs both the
+  version-consistency gate and the artifact checks; `--no-artifacts` runs
+  only the version-consistency gate (for a release step with no dist
+  directory yet); `--no-version-check` runs only the artifact checks (for
+  CI on a pre-release commit, where the changelog legitimately has no
+  released entry yet); the two flags are mutually exclusive (`argparse`
+  rejects both together, exit 2) since together they would run nothing.
 """
 
 from __future__ import annotations
@@ -59,8 +78,10 @@ import argparse
 import email
 import email.message
 import fnmatch
+import re
 import sys
 import tarfile
+import tomllib
 import zipfile
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -134,10 +155,10 @@ class ViolationKind(StrEnum):
     Values are the lowercased member names -- a `StrEnum` so a finding
     renders without a conversion step and sorts by its member value. Task
     2.2 implements the first, second, third, and sixth checks below; the
-    fourth and fifth belong to task 2.3 (the encumbered-content gate) and
-    the seventh to task 2.4 (the version-consistency gate). All seven are
-    declared here, in the design's order, so later tasks add behavior
-    without touching the enum's shape.
+    fourth and fifth belong to task 2.3 (the encumbered-content gate); the
+    seventh, `VERSION_MISMATCH`, is implemented by task 2.4 (the
+    version-consistency gate). All seven are declared here, in the design's
+    order.
     """
 
     MISSING_REQUIRED = "missing_required"
@@ -531,6 +552,187 @@ def _check_encumbered_content(
     return violations
 
 
+# ---------------------------------------------------------------------------
+# Task 2.4: the version-consistency gate
+# ---------------------------------------------------------------------------
+
+_RELEASE_HEADING_RE = re.compile(r"^## \[(\d+\.\d+\.\d+)\] - \d{4}-\d{2}-\d{2}$")
+"""A RELEASED entry's heading -- the same shape `tests/test_changelog.py`
+pins, but capturing the whole `X.Y.Z` version as one group rather than three
+parts (this module only ever compares the string, never its parts). The
+standing `## [Unreleased]` heading never matches this pattern by
+construction (it has no version and no date), so it needs no special-casing
+to be skipped -- unlike a malformed release heading (`## [9.9.9] - 2026-1-1`,
+`## [v9.9.9] - ...`), which also never matches and is therefore never
+mistaken for a released entry either.
+"""
+
+
+def _read_manifest_version(manifest: Path) -> str:
+    """Read `[project].version` from `manifest` (`tomllib`, stdlib-only).
+
+    A missing file, unparsable TOML, a missing `[project]` table, a missing
+    `version` key, or a non-string/empty value are all hard errors -- this
+    check needs no artifact opened at all, so "the manifest cannot be read"
+    is exactly as fatal here as "the dist directory does not exist" is for
+    `_find_artifacts`.
+    """
+    try:
+        with manifest.open("rb") as handle:
+            document = tomllib.load(handle)
+    except FileNotFoundError as exc:
+        raise CheckerError(f"{manifest}: manifest file not found") from exc
+    except tomllib.TOMLDecodeError as exc:
+        raise CheckerError(f"{manifest}: malformed TOML ({exc})") from exc
+
+    project = document.get("project")
+    if not isinstance(project, dict) or "version" not in project:
+        raise CheckerError(f"{manifest}: missing [project].version")
+    version = project["version"]
+    if not isinstance(version, str) or not version.strip():
+        raise CheckerError(f"{manifest}: [project].version is not a non-empty string")
+    return version
+
+
+def _read_newest_changelog_version(changelog: Path) -> str | None:
+    """The FIRST released-entry heading's version in `changelog`, in
+    document order -- "newest" means "listed first", not "highest"; a
+    changelog whose entries are out of order is `test_changelog.py`'s
+    concern, not this one's. Returns `None` when no released entry exists
+    at all (only `## [Unreleased]`, or nothing).
+
+    A missing changelog file is a hard error: this check cannot decide
+    anything without it, exactly like a missing manifest.
+    """
+    if not changelog.is_file():
+        raise CheckerError(f"{changelog}: changelog file not found")
+
+    text = changelog.read_text(encoding="utf-8")
+    for line in text.splitlines():
+        match = _RELEASE_HEADING_RE.match(line)
+        if match:
+            return match.group(1)
+    return None
+
+
+def _normalize_tag(tag: str) -> str:
+    """Normalize a release tag for comparison: surrounding whitespace is
+    stripped, and exactly one leading lowercase `v` is stripped (`v9.9.9` ->
+    `9.9.9`). Deliberately narrow: a leading `V` (capital) is NOT stripped,
+    so `V9.9.9` compares unequal to `9.9.9` rather than silently matching a
+    tag no CI convention here actually produces; a `refs/...`-prefixed
+    value is likewise left untouched and simply compares unequal.
+    """
+    stripped = tag.strip()
+    if stripped.startswith("v"):
+        return stripped[1:]
+    return stripped
+
+
+def _version_violation(
+    label_a: str, value_a: str, label_b: str, value_b: str
+) -> Violation:
+    return Violation(
+        subject="",
+        kind=ViolationKind.VERSION_MISMATCH,
+        detail=f"{label_a} {value_a} != {label_b} {value_b}",
+        remedy=(
+            f"make the {label_a} and the {label_b} agree -- update whichever "
+            "one is wrong so all released-version sources match"
+        ),
+    )
+
+
+def check_version_consistency(
+    manifest: Path, changelog: Path, tag: str | None
+) -> tuple[Violation, ...]:
+    """Compare the manifest version, the changelog's newest released entry,
+    and (when supplied) the release tag -- a check that needs no artifact
+    opened at all (design: "Runs one consistency check that needs no
+    artifact opened").
+
+    **The rule is PURE PAIRWISE** (design.md: "each of the three pairwise
+    disagreements produces one violation naming both values"; Error
+    Handling: "report all three values"). Up to three independent
+    comparisons run, each reported independently, with no cross-comparison
+    deduplication:
+
+    * manifest vs. changelog newest entry -- whenever a released entry
+      exists.
+    * manifest vs. tag -- whenever a tag is supplied.
+    * changelog newest entry vs. tag -- whenever a tag is supplied AND a
+      released entry exists.
+
+    A changelog with no released entry for the manifest's version is ALSO a
+    violation in its own right (4.7) -- reported ADDITIONALLY to, never
+    instead of, a manifest-vs-tag comparison when a tag is supplied (there
+    is simply no changelog value to compare against tag in that case, so
+    that one comparison is the only one skipped).
+
+    Because every comparison is independent, the violation count for a
+    given input shape is exactly the number of pairs that disagree, with NO
+    special-casing when two sources happen to already agree with each
+    other: `manifest == changelog != tag` and `manifest == tag != changelog`
+    both produce 2 violations (the tag disagrees with BOTH of the other two,
+    each reported separately); all three distinct produces 3; a run with no
+    tag produces at most 1 (manifest-vs-changelog only); no released entry
+    plus a disagreeing tag produces 2 (the no-entry finding, independently,
+    plus manifest-vs-tag).
+
+    An empty-string tag (`""`) is treated the same as `tag=None` -- no tag
+    was effectively supplied -- since an empty string can never be
+    a real git tag.
+    """
+    manifest_version = _read_manifest_version(manifest)
+    changelog_version = _read_newest_changelog_version(changelog)
+    normalized_tag = _normalize_tag(tag) if tag else None
+
+    violations: list[Violation] = []
+
+    if changelog_version is None:
+        violations.append(
+            Violation(
+                subject="",
+                kind=ViolationKind.VERSION_MISMATCH,
+                detail=(
+                    f"changelog has no released entry for version {manifest_version}"
+                ),
+                remedy=(
+                    f"add a '## [{manifest_version}] - YYYY-MM-DD' entry to the "
+                    "changelog"
+                ),
+            )
+        )
+    elif manifest_version != changelog_version:
+        violations.append(
+            _version_violation(
+                "manifest version",
+                manifest_version,
+                "changelog newest entry",
+                changelog_version,
+            )
+        )
+
+    if normalized_tag is not None:
+        if manifest_version != normalized_tag:
+            violations.append(
+                _version_violation(
+                    "manifest version", manifest_version, "tag", normalized_tag
+                )
+            )
+        if changelog_version is not None and changelog_version != normalized_tag:
+            violations.append(
+                _version_violation(
+                    "changelog newest entry",
+                    changelog_version,
+                    "tag",
+                    normalized_tag,
+                )
+            )
+
+    return tuple(sorted(violations))
+
+
 def check_artifacts(
     dist_dir: Path, *, policy: ArtifactPolicy, repo_root: Path
 ) -> tuple[Violation, ...]:
@@ -624,6 +826,46 @@ def _build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_POLICY_PATH,
         help="Path to the release policy TOML file",
     )
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=Path("pyproject.toml"),
+        help="Path to the project manifest read for [project].version",
+    )
+    parser.add_argument(
+        "--changelog",
+        type=Path,
+        default=Path("CHANGELOG.md"),
+        help="Path to the changelog read for its newest released entry",
+    )
+    parser.add_argument(
+        "--tag",
+        type=str,
+        default=None,
+        help=(
+            "Release tag to compare against the manifest and changelog "
+            "versions; an empty string is treated the same as omitting it"
+        ),
+    )
+    parser.add_argument(
+        "--no-artifacts",
+        action="store_true",
+        help=(
+            "Run only the version-consistency gate; skip the artifact "
+            "conformance and encumbered-content checks, and never open the "
+            "dist directory. Mutually exclusive with --no-version-check."
+        ),
+    )
+    parser.add_argument(
+        "--no-version-check",
+        action="store_true",
+        help=(
+            "Run only the artifact conformance and encumbered-content "
+            "checks; skip the version-consistency gate. For CI on a "
+            "pre-release commit, where the changelog legitimately has no "
+            "released entry yet. Mutually exclusive with --no-artifacts."
+        ),
+    )
     return parser
 
 
@@ -631,26 +873,61 @@ def main(argv: Sequence[str]) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
-    policy_path = args.policy if args.policy.is_absolute() else REPO_ROOT / args.policy
+    if args.no_artifacts and args.no_version_check:
+        parser.error(
+            "--no-artifacts and --no-version-check are mutually exclusive "
+            "(together they would run no check at all)"
+        )
 
-    try:
-        policy = load_policy(policy_path)
-    except PolicyError as exc:
-        print(str(exc), file=sys.stderr)
-        return 2
+    manifest_path = (
+        args.manifest if args.manifest.is_absolute() else REPO_ROOT / args.manifest
+    )
+    changelog_path = (
+        args.changelog if args.changelog.is_absolute() else REPO_ROOT / args.changelog
+    )
 
-    try:
-        violations = check_artifacts(args.dist_dir, policy=policy, repo_root=REPO_ROOT)
-    except CheckerError as exc:
-        print(str(exc), file=sys.stderr)
-        return 2
-    except ForbiddenStringsSourceError as exc:
-        print(str(exc), file=sys.stderr)
-        return 2
+    violations: list[Violation] = []
+
+    # The version-consistency check runs FIRST and needs no artifact opened
+    # at all -- the design's cheapest-failure-first ordering. A hard error
+    # here (missing/malformed manifest or changelog) reports and stops
+    # exactly like a hard artifact error, before anything else runs.
+    if not args.no_version_check:
+        try:
+            violations += list(
+                check_version_consistency(manifest_path, changelog_path, args.tag)
+            )
+        except CheckerError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+
+    if not args.no_artifacts:
+        policy_path = (
+            args.policy if args.policy.is_absolute() else REPO_ROOT / args.policy
+        )
+        try:
+            policy = load_policy(policy_path)
+        except PolicyError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+
+        try:
+            violations += list(
+                check_artifacts(args.dist_dir, policy=policy, repo_root=REPO_ROOT)
+            )
+        except CheckerError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        except ForbiddenStringsSourceError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
 
     if not violations:
-        wheel_path, sdist_path = _find_artifacts(args.dist_dir)
-        print(f"clean: {wheel_path.name} {sdist_path.name}")
+        if args.no_artifacts:
+            print("clean: version consistency")
+        else:
+            wheel_path, sdist_path = _find_artifacts(args.dist_dir)
+            print(f"clean: {wheel_path.name} {sdist_path.name}")
         return 0
 
     for violation in violations:
