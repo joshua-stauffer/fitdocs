@@ -42,6 +42,8 @@ import ast
 import dataclasses
 import hashlib
 import io
+import os
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -49,6 +51,7 @@ import tomllib
 import zipfile
 from collections import Counter
 from collections.abc import Iterator, Mapping
+from datetime import date
 from enum import StrEnum
 from fnmatch import fnmatch
 from pathlib import Path
@@ -74,12 +77,29 @@ from scripts.check_artifacts import (
     main as check_artifacts_main,
 )
 
+from fitdocs import Sport
+from fitdocs.benchmarks import BenchmarkKind
+from fitdocs.load.profile import AthleteProfile, save_profile
 from tests._content_fingerprints import SALT as REAL_SALT
 from tests._content_oracle import ENTROPY_FLOOR_BITS, digest, tokens, windows
-from tests._forbidden_strings import ENV_VAR, ForbiddenStringsSourceError
+from tests._forbidden_strings import ENV_VAR, ForbiddenStringsSourceError, require
+from tests.fixtures import builder
+from tests.test_packaging import _run
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 REAL_POLICY_PATH = REPO_ROOT / DEFAULT_POLICY_PATH
+
+#: The environment's REAL `FITDOCS_FORBIDDEN_STRINGS` value at module import
+#: time -- i.e. whatever the invoking shell set (or did not) BEFORE this
+#: module's autouse `_default_forbidden_strings_env` fixture ever runs. The
+#: autouse fixture below unconditionally overrides the variable for every
+#: test in this module (so the rest of the suite never trips a spurious
+#: GATE_NOT_RUN); task 3.2's checkpoint test needs to observe the environment
+#: as it *actually* is, so it captures this value once, at import time --
+#: before any fixture has touched `os.environ` -- and restores exactly this
+#: value inside its own body, overriding the autouse default the same way
+#: the module's other unset/broken-source tests already do.
+_REAL_ENV_FORBIDDEN_STRINGS: str | None = os.environ.get(ENV_VAR)
 
 
 # ---------------------------------------------------------------------------
@@ -3199,3 +3219,462 @@ def test_main_default_mode_runs_both_the_version_and_artifact_checks(
         ]
     )
     assert exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# Task 3.2: the release-path checkpoint (ReleaseArtifactTest)
+# ---------------------------------------------------------------------------
+#
+# The migration's stage-3 validation checkpoint, proved against the REAL
+# built artifacts rather than a synthetic fixture: the real gate passes with
+# real match data supplied through the SAME mechanism the purge's own guards
+# use (`tests._forbidden_strings.require`); the same real artifacts fail
+# closed with the gate unset; the real sdist's member set equals the task
+# 1.2 allowlist exactly (both directions); and a clean, isolated install of
+# the built wheel completes a full ingestion, with the `threshold` built-in
+# computing load (Req 1.10, 6.2, 6.3, 6.9, 6.10).
+#
+# The planted-link non-vacuity proof is task 1.2's own
+# (`tests/test_packaging.py::
+# test_sdist_allowlist_excludes_forbidden_paths_and_the_agent_log_symlink`)
+# and is not repeated here; this section proves the REAL build's member set
+# against the REAL allowlist instead.
+
+
+# --- 1: real gate pass with match data supplied via `require` --------------
+
+
+def test_checkpoint_real_gate_pass_with_match_data_via_require(
+    build_a: tuple[Path, ...], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The real artifact set, gated with match data supplied through
+    `tests._forbidden_strings.require` -- the exact call the purge's own
+    guards make -- passes cleanly, both through `check_artifacts` directly
+    and through `main` (`--no-version-check`: the real changelog carries no
+    released entry yet; 2.4's own tests pin that state, not repeated here).
+
+    `require(REPO_ROOT)` is called against the environment's REAL state
+    (`_REAL_ENV_FORBIDDEN_STRINGS`, captured at module import -- before this
+    module's autouse `_default_forbidden_strings_env` fixture ever touches
+    `os.environ`), overriding that autouse default the same way the module's
+    other unset/broken-source tests already do. So in a shell without
+    `FITDOCS_FORBIDDEN_STRINGS` set, THIS test skips distinguishably (a real
+    `pytest.skip`, never a silent pass) -- see
+    `test_checkpoint_requires_own_skip_names_the_env_var` below for the
+    proof that the skip is the core's own -- while `check_artifacts`/`main`
+    exercised here would have failed closed instead (see
+    `test_checkpoint_fail_closed_against_real_artifacts_gate_not_run`).
+    """
+    if _REAL_ENV_FORBIDDEN_STRINGS is None:
+        monkeypatch.delenv(ENV_VAR, raising=False)
+    else:
+        monkeypatch.setenv(ENV_VAR, _REAL_ENV_FORBIDDEN_STRINGS)
+
+    forbidden = require(REPO_ROOT)
+    assert forbidden.values, "require() returned match data with no values"
+
+    dist_dir = build_a[0].parent
+    policy = load_policy(REAL_POLICY_PATH)
+
+    violations_1 = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+    assert violations_1 == (), f"real build failed the real gate: {violations_1!r}"
+
+    exit_code = check_artifacts_main(
+        [
+            "--no-version-check",
+            "--dist-dir",
+            str(dist_dir),
+            "--policy",
+            str(REAL_POLICY_PATH),
+        ]
+    )
+    assert exit_code == 0
+
+    # --- 6: determinism over the real artifacts, real match data ----------
+    violations_2 = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+    assert violations_2 == violations_1
+
+
+def test_checkpoint_requires_own_skip_names_the_env_var(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pins that `require(REPO_ROOT)` -- the exact call the checkpoint test
+    above makes -- is what produces "skip distinguishably": with the
+    variable genuinely unset, `require` raises pytest's own skip exception
+    naming `FITDOCS_FORBIDDEN_STRINGS` in the reason, never a bare `None`
+    return and never a plain exception a caller could swallow silently.
+    """
+    monkeypatch.delenv(ENV_VAR, raising=False)
+    with pytest.raises(pytest.skip.Exception) as exc_info:
+        require(REPO_ROOT)
+    assert ENV_VAR in str(exc_info.value), (
+        f"the skip reason does not name {ENV_VAR!r}: {exc_info.value!r}"
+    )
+
+
+# --- 2: fail-closed against the REAL artifacts, gate genuinely unset -------
+
+
+def test_checkpoint_fail_closed_against_real_artifacts_gate_not_run(
+    build_a: tuple[Path, ...], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The real built artifacts, checked with `FITDOCS_FORBIDDEN_STRINGS`
+    truly unset, report exactly one GATE_NOT_RUN violation and `main` exits
+    1 -- never a skip, never a pass. Deliberately calls `check_artifacts`/
+    `main` directly, never `require` -- this test itself must not skip, so
+    the unset case is observed as a violation, not dodged.
+    """
+    monkeypatch.delenv(ENV_VAR, raising=False)
+    dist_dir = build_a[0].parent
+    policy = load_policy(REAL_POLICY_PATH)
+
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+    assert violations != (), "an unset gate against the real build must be a violation"
+    assert len(violations) == 1
+    assert violations[0].kind == ViolationKind.GATE_NOT_RUN
+
+    exit_code = check_artifacts_main(
+        [
+            "--no-version-check",
+            "--dist-dir",
+            str(dist_dir),
+            "--policy",
+            str(REAL_POLICY_PATH),
+        ]
+    )
+    assert exit_code == 1
+
+
+# --- 3: the real sdist's member set equals the allowlist, exactly ----------
+
+
+def _tracked_or_untracked_not_ignored(*relative_paths: str) -> tuple[str, ...]:
+    """`git ls-files -co --exclude-standard <relative_paths>` from
+    REPO_ROOT: every tracked file plus every untracked-but-not-gitignored
+    file under the given paths -- what hatchling's default sdist directory
+    scan actually ships for a directory named in `only-include` (hatchling
+    honors `.gitignore` the same way `git ls-files` does for the "untracked"
+    half). The plain tracked-only form (`git ls-files` with no `-co`) is NOT
+    equivalent in general -- it would silently miss an untracked-and-not-
+    ignored file hatchling would still ship -- even though, verified
+    empirically against this tree, the two forms currently agree (both list
+    the same 116 paths under `src/fitdocs`).
+    """
+    result = subprocess.run(
+        ["git", "ls-files", "-co", "--exclude-standard", *relative_paths],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return tuple(line for line in result.stdout.splitlines() if line)
+
+
+def _expected_sdist_member_set() -> frozenset[str]:
+    """The sdist member set `[tool.hatch.build.targets.sdist].only-include`
+    implies: every entry listed directly, every file under an entry that is
+    a directory (`src/fitdocs`), plus the two members hatchling ALWAYS adds
+    regardless of `only-include` (`PKG-INFO`, `.gitignore`; task 1.2's
+    Implementation Note)."""
+    manifest = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    only_include = manifest["tool"]["hatch"]["build"]["targets"]["sdist"][
+        "only-include"
+    ]
+
+    expected: set[str] = set()
+    for entry in only_include:
+        path = REPO_ROOT / entry
+        if path.is_dir():
+            expected.update(_tracked_or_untracked_not_ignored(entry))
+        else:
+            expected.add(entry)
+
+    expected.add("PKG-INFO")
+    expected.add(".gitignore")
+    return frozenset(expected)
+
+
+def test_checkpoint_sdist_member_set_equals_the_allowlist_exactly(
+    build_a: tuple[Path, ...],
+) -> None:
+    """The REAL sdist's member set -- regular files only, prefix-stripped --
+    equals, in both directions, the allowlist `_expected_sdist_member_set`
+    derives from the manifest plus hatchling's two always-added extras. No
+    directory entry counted on either side; no link member at all; and
+    specifically none of `agent-log`, `tests/`, `.kiro/`, `scripts/`,
+    `release/`, `docs/`, `uv.lock` (Req 1.6, 1.10, 6.10).
+    """
+    expected = _expected_sdist_member_set()
+    assert expected, "the expected set is empty -- the allowlist derivation is broken"
+    assert "src/fitdocs/__init__.py" in expected
+    assert "LICENSE" in expected
+    assert "CHANGELOG.md" in expected
+
+    sdist_path = _artifact(build_a, ".tar.gz")
+    with tarfile.open(sdist_path) as archive:
+        members = archive.getmembers()
+        assert members, "the real sdist has no members -- wrong archive opened"
+        prefix = members[0].name.split("/", 1)[0]
+        regular = [m for m in members if m.isfile()]
+        actual = frozenset(m.name[len(prefix) + 1 :] for m in regular)
+        link_names = [m.name for m in members if m.issym() or m.islnk()]
+
+    assert not link_names, f"the real sdist ships a link member: {link_names!r}"
+
+    missing = sorted(expected - actual)
+    unexpected = sorted(actual - expected)
+    assert not missing and not unexpected, (
+        f"real sdist member set differs from the allowlist: "
+        f"missing={missing!r} unexpected={unexpected!r}"
+    )
+
+    forbidden_prefixes = ("tests/", ".kiro/", "scripts/", "release/", "docs/")
+    forbidden_hits = [
+        n
+        for n in actual
+        if n.startswith(forbidden_prefixes) or n in ("uv.lock", "agent-log")
+    ]
+    assert not forbidden_hits, (
+        f"forbidden path(s) in the real sdist: {forbidden_hits!r}"
+    )
+
+
+# --- 4: clean isolated install + full ingestion (the E2E) ------------------
+
+
+def _project_manifest_version() -> str:
+    manifest = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    version = manifest["project"]["version"]
+    assert isinstance(version, str) and version
+    return version
+
+
+def _install_offline_from_wheel(
+    uv: str, env: dict[str, str], wheel_path: Path
+) -> subprocess.CompletedProcess[str]:
+    """Install `fitdocs` offline FROM THE BUILT WHEEL FILE (not the
+    checkout) into the isolated tool dirs `env` names -- the cold-cache
+    warm-then-retry technique `tests/test_packaging.py::_install_offline`
+    uses, adapted to a `--from <wheel path>` spec. The returned result is
+    always the OFFLINE install."""
+    from_spec = str(wheel_path)
+    offline = _run(
+        [uv, "tool", "install", "--offline", "--from", from_spec, "fitdocs"], env
+    )
+    if offline.returncode == 0:
+        return offline
+    warm = _run([uv, "tool", "install", "--from", from_spec, "fitdocs"], env)
+    assert warm.returncode == 0, (
+        "could not install the built wheel offline (cold cache) and warming "
+        f"the uv cache online also failed:\n{warm.stdout}\n{warm.stderr}"
+    )
+    _run([uv, "tool", "uninstall", "fitdocs"], env)
+    return _run(
+        [uv, "tool", "install", "--offline", "--from", from_spec, "fitdocs"], env
+    )
+
+
+_CHECKPOINT_RECORD_COUNT = 90
+"""Comfortably above the threshold built-in's default 60s minimum duration
+(`fitdocs.load.channels.types.DEFAULT_MIN_DURATION_S`) at 1 record/second --
+`tests/fixtures/builder.ride_fit_bytes`/`hike_fit_bytes` are far too short
+(a handful of records) and land in `NotComputed`, not `Computed`."""
+_CHECKPOINT_SPEED_MPS = 3.0
+
+
+def _checkpoint_fit_bytes(
+    serial: int, fit_sport: str, *, power_w: int | None = None, hr_base: int = 140
+) -> bytes:
+    """A no-GPS, long-enough synthetic FIT fixture for this checkpoint's
+    E2E: continuous heart rate and (when `power_w` is given) continuous
+    power over `_CHECKPOINT_RECORD_COUNT` seconds -- long enough for the
+    threshold built-in to reach `Computed` rather than refuse for
+    insufficient duration, and with no GPS so no tile fetch is ever
+    attempted. Built from the same low-level `tests.fixtures.builder`
+    primitives `tests/load/threshold/test_feature_e2e.py::_long_fit_bytes`
+    uses, kept local and minimal here.
+    """
+    mesgs: list[builder.Mesg] = [
+        builder._file_id(serial),
+        builder._device_info(serial, f"Checkpoint{fit_sport.title()}Watch"),
+        {"mesg_num": builder._MESG_SPORT, "sport": fit_sport, "sub_sport": "generic"},
+    ]
+    for i in range(_CHECKPOINT_RECORD_COUNT):
+        record: builder.Mesg = {
+            "mesg_num": builder._MESG_RECORD,
+            "timestamp": builder.FIT_TIMESTAMP_BASE + i,
+            "distance": _CHECKPOINT_SPEED_MPS * i,
+            "heart_rate": hr_base + (i % 5),
+        }
+        if power_w is not None:
+            record["power"] = power_w
+        mesgs.append(record)
+    session: builder.Mesg = {
+        "mesg_num": builder._MESG_SESSION,
+        "start_time": builder.FIT_TIMESTAMP_BASE,
+        "timestamp": builder.FIT_TIMESTAMP_BASE + (_CHECKPOINT_RECORD_COUNT - 1),
+        "sport": fit_sport,
+        "sub_sport": "generic",
+        "total_elapsed_time": float(_CHECKPOINT_RECORD_COUNT - 1),
+        "total_timer_time": float(_CHECKPOINT_RECORD_COUNT - 1),
+        "total_distance": _CHECKPOINT_SPEED_MPS * (_CHECKPOINT_RECORD_COUNT - 1),
+        "avg_heart_rate": hr_base,
+        "max_heart_rate": hr_base + 4,
+    }
+    if power_w is not None:
+        session["avg_power"] = power_w
+        session["max_power"] = power_w
+    mesgs.append(session)
+    mesgs.append(
+        builder._activity(
+            _CHECKPOINT_RECORD_COUNT - 1, float(_CHECKPOINT_RECORD_COUNT - 1)
+        )
+    )
+    return builder.encode(mesgs)
+
+
+def _write_release_checkpoint_profile(data_root: Path) -> None:
+    """A real `athlete.toml`, written through the real profile store, with
+    just enough benchmarks for the threshold built-in to COMPUTE (not
+    refuse as `MissingInputs`) for a no-GPS ride (power channel) and a
+    no-GPS hike (heart-rate channel), non-interactively -- the same shape
+    `tests/load/threshold/test_feature_e2e.py::_populated_profile` uses,
+    narrowed to only the two disciplines this checkpoint's fixtures need.
+    """
+    measured_on = date(2021, 1, 1)  # well before the ~2021-09-07 fixture date
+    profile = AthleteProfile(data={})
+    profile = profile.with_benchmark(
+        BenchmarkKind.FTP_WATTS,
+        discipline=Sport.RIDE,
+        value=210.0,
+        measured_on=measured_on,
+    )
+    profile = profile.with_benchmark(
+        BenchmarkKind.LTHR_BPM,
+        discipline=Sport.RIDE,
+        value=160.0,
+        measured_on=measured_on,
+    )
+    profile = profile.with_benchmark(
+        BenchmarkKind.LTHR_BPM,
+        discipline=Sport.HIKE,
+        value=115.0,
+        measured_on=measured_on,
+    )
+    profile = profile.with_benchmark(
+        BenchmarkKind.MAX_HR_BPM,
+        discipline=None,
+        value=190.0,
+        measured_on=measured_on,
+    )
+    profile = profile.with_benchmark(
+        BenchmarkKind.RESTING_HR_BPM,
+        discipline=None,
+        value=50.0,
+        measured_on=measured_on,
+    )
+    save_profile(data_root, profile)
+
+
+def test_checkpoint_installed_wheel_syncs_and_computes_load(
+    build_a: tuple[Path, ...], tmp_path: Path
+) -> None:
+    """The E2E the migration checkpoint names: install the REAL built wheel
+    into a clean, isolated environment, run a full ingestion over a
+    synthetic source there, and confirm the installed tool wrote documents
+    with the `threshold` built-in computing load, exiting successfully (Req
+    1.10, 6.2, 6.3, 6.9, 6.10; design.md "E2E Tests -> Installed tool from
+    the built artifact").
+
+    Both fixtures (`_checkpoint_fit_bytes` for ride/hike) carry no GPS -- so
+    no tile fetch is ever attempted -- and are long enough (90s, above the
+    threshold built-in's 60s minimum) with continuous heart rate (both) and
+    continuous power (ride) so the built-in reaches `Computed`, never
+    `NotComputed`/`Unsupported`, non-interactively; `[tiles] enabled =
+    false` is set anyway, so the isolated install can perform no network
+    access even if a future fixture change adds GPS.
+    """
+    uv = shutil.which("uv")
+    assert uv is not None, (
+        "uv is required for this checkpoint's install but was not found on PATH"
+    )
+
+    tool_dir = tmp_path / "uv-tool-dir"
+    bin_dir = tmp_path / "uv-tool-bin"
+    tool_dir.mkdir()
+    bin_dir.mkdir()
+    install_env = os.environ.copy()
+    install_env["UV_TOOL_DIR"] = str(tool_dir)
+    install_env["UV_TOOL_BIN_DIR"] = str(bin_dir)
+
+    wheel_path = _artifact(build_a, ".whl")
+
+    try:
+        install = _install_offline_from_wheel(uv, install_env, wheel_path)
+        assert install.returncode == 0, (
+            f"offline install of the built wheel failed:\n"
+            f"{install.stdout}\n{install.stderr}"
+        )
+
+        exe = bin_dir / "fitdocs"
+        if not exe.exists():  # console scripts are `.exe` on Windows
+            exe = bin_dir / "fitdocs.exe"
+        assert exe.exists(), f"installed fitdocs console script not found in {bin_dir}"
+
+        version_result = _run([str(exe), "--version"], install_env)
+        assert version_result.returncode == 0, (
+            f"--version failed:\n{version_result.stderr}"
+        )
+        assert version_result.stdout.strip() == _project_manifest_version()
+
+        # --- build a data root + synthetic source, isolated from HOME ----
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+        data_root = tmp_path / "data"
+        data_root.mkdir()
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+
+        # Falsity-before: no workouts/ exists prior to the sync.
+        assert not (data_root / "workouts").exists()
+
+        _write_release_checkpoint_profile(data_root)
+        (data_root / "fitdocs.toml").write_text(
+            "[tiles]\nenabled = false\n", encoding="utf-8"
+        )
+        (source_dir / "ride.fit").write_bytes(
+            _checkpoint_fit_bytes(9101, "cycling", power_w=200, hr_base=150)
+        )
+        (source_dir / "hike.fit").write_bytes(
+            _checkpoint_fit_bytes(9102, "hiking", hr_base=115)
+        )
+
+        sync_env = dict(install_env)
+        sync_env["FITDOCS_DATA"] = str(data_root)
+        sync_env["HOME"] = str(home_dir)
+
+        sync_result = _run([str(exe), "sync", str(source_dir), "--no-prompt"], sync_env)
+        assert sync_result.returncode == 0, (
+            f"installed `fitdocs sync` failed:\n"
+            f"{sync_result.stdout}\n{sync_result.stderr}"
+        )
+
+        workouts_dir = data_root / "workouts"
+        assert workouts_dir.is_dir(), "sync wrote no workouts/ directory at all"
+        doc_paths = sorted(
+            p for p in workouts_dir.glob("*.md") if p.name != "AGENTS.md"
+        )
+        assert len(doc_paths) >= 2, (
+            f"expected at least 2 workout documents, found {doc_paths!r}"
+        )
+        assert (workouts_dir / "AGENTS.md").is_file(), (
+            "the ownership declaration (AGENTS.md) was not emitted under workouts/"
+        )
+
+        doc_texts = [p.read_text(encoding="utf-8") for p in doc_paths]
+        assert any("load_methodology: threshold" in text for text in doc_texts), (
+            "no installed-tool-written document shows the threshold built-in "
+            f"having computed load: {doc_texts!r}"
+        )
+    finally:
+        _run([uv, "tool", "uninstall", "fitdocs"], install_env)
