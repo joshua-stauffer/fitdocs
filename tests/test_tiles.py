@@ -27,22 +27,24 @@ from __future__ import annotations
 import dataclasses
 import urllib.error
 import urllib.request
+from importlib.metadata import PackageNotFoundError
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+import fitdocs.version as version_module
 from fitdocs.layout import tile_cache_path
 from fitdocs.render.charts.map import TileRef
 from fitdocs.settings import SettingsError
 from fitdocs.tiles import (
     DEFAULT_TILE_SETTINGS,
-    USER_AGENT,
     TileSettings,
     TileSettingsError,
     TileSource,
     TileStore,
     TileUnavailableError,
+    _user_agent,
     load_tile_settings,
 )
 
@@ -534,7 +536,16 @@ def test_fully_cached_resolve_performs_zero_fetches(tmp_path: Path) -> None:
 def test_default_fetch_sends_descriptive_user_agent_and_timeout(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The default opener sets the mandatory UA and a 10 s timeout (Req 3.4)."""
+    """The default opener sets the mandatory UA and a 10 s timeout (Req 3.4).
+
+    The installed version is patched to a distinguishable, non-real value
+    (``fitdocs.version.version`` is the name :mod:`fitdocs.version` binds)
+    and the header is asserted against the literal composed string -- not
+    against a fresh call to :func:`_user_agent`, which would pass trivially
+    for any implementation that merely repeats whatever the real function
+    returns (self-referential compare).
+    """
+    monkeypatch.setattr(version_module, "version", lambda name: "9.9.9-fetch-patched")
     settings = DEFAULT_TILE_SETTINGS
     captured: dict[str, Any] = {}
 
@@ -551,9 +562,10 @@ def test_default_fetch_sends_descriptive_user_agent_and_timeout(
 
     request = captured["request"]
     assert request.full_url == _tile_url(settings, ref)
-    assert request.get_header("User-agent") == USER_AGENT
-    assert USER_AGENT.startswith("fitdocs/")
-    assert USER_AGENT.endswith("(+https://github.com/joshua-stauffer/fitdocs)")
+    assert (
+        request.get_header("User-agent")
+        == "fitdocs/9.9.9-fetch-patched (+https://github.com/joshua-stauffer/fitdocs)"
+    )
     assert captured["timeout"] == 10
     # Bytes from the opener are returned and written through to the cache.
     assert result[ref] == b"real-network-bytes"
@@ -561,6 +573,33 @@ def test_default_fetch_sends_descriptive_user_agent_and_timeout(
         tile_cache_path(tmp_path, settings.name, ref.z, ref.x, ref.y).read_bytes()
         == b"real-network-bytes"
     )
+
+
+def test_user_agent_degrades_to_unknown_token_when_version_unresolved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """From an uninstalled source tree the User-Agent still names the project
+    and carries the unknown token, rather than raising (Req 2.3, 2.4).
+
+    ``_user_agent()`` composes from :func:`fitdocs.version.version_display`
+    fresh on every call (no module-level caching, matching
+    :mod:`fitdocs.version`'s own rule), so patching the underlying metadata
+    lookup and calling it directly is sufficient -- no module reload needed.
+    """
+    real_agent = _user_agent()  # captured before patching, for the diff below
+
+    def _raise(name: str) -> str:
+        raise PackageNotFoundError(name)
+
+    monkeypatch.setattr(version_module, "version", _raise)
+
+    degraded_agent = _user_agent()
+
+    assert degraded_agent.startswith("fitdocs/unknown ")
+    assert degraded_agent.endswith("(+https://github.com/joshua-stauffer/fitdocs)")
+    # The real, resolved value differs -- proving this is not merely the
+    # literal token embedded regardless of what version_display() returns.
+    assert degraded_agent != real_agent
 
 
 # --- Opt-out gate, both directions (Req 5.4) --------------------------------

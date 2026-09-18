@@ -49,7 +49,7 @@
 > (which has no such section).
 
 - [ ] 1. Foundation: version identity, package manifest, and policy data
-- [ ] 1.1 Consolidate version resolution behind one leaf
+- [x] 1.1 Consolidate version resolution behind one leaf
   - A pure module holding the distribution name, a resolver returning the installed version or an absent value, and a display form that falls back to a fixed unknown token; the lookup happens at the point of use, never at import time, because reading distribution metadata is measurably slow for a command-line start-up
   - The three existing unguarded call sites converge on it: the version flag, the tile user-agent, and the plugin listing's built-in version. The listing keeps an absent version absent rather than substituting the token, because the plugin surface forbids fabricating one
   - The module imports nothing from the package and is not added to the documented public import surface — it is internal
@@ -283,3 +283,6 @@
   - Observable: the rehearsal artifact installs from the rehearsal index and reports the expected version, and the deliberately failed run publishes nothing
   - _Requirements: 5.1, 5.3, 5.6, 5.8, 5.9, 5.10, 6.2_
   - _Depends: 5.6, 6.1, 6.4, 7.1, 7.2_
+
+## Implementation Notes
+- 1.1: the released-version scan (`tests/test_version_identity.py`) walks `git ls-files -co --exclude-standard` and keeps a count-exact allowlist of two pre-existing non-declaration lines (`docs/plugins.md` example snippet, `tests/load/test_packaging.py` comment). Any task that edits either line, or adds a `CHANGELOG.md` newest entry / a `SKILL.md` `metadata.version`, must keep that test green in the same change — a second whole-token copy of the literal anywhere else is a failure.

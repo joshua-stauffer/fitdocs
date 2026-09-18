@@ -50,13 +50,13 @@ import tempfile
 import urllib.request
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from importlib.metadata import version
 from pathlib import Path
 from typing import Any, Final, Protocol
 
 from fitdocs.layout import settings_path, tile_cache_path
 from fitdocs.render.charts.map import TileRef
 from fitdocs.settings import SettingsError, load_settings_document
+from fitdocs.version import version_display
 
 TILES_TABLE: Final[str] = "tiles"
 
@@ -248,15 +248,28 @@ def _setting_url(table: dict[str, Any], path: Path) -> str:
 # on a miss, the configured provider over HTTPS.
 # ===========================================================================
 
-#: The mandatory descriptive User-Agent every tile request carries (Req 3.4).
-#: OSM actively blocks the default library UA, so identifying fitdocs (with its
-#: installed version and project URL) is load-bearing, not cosmetic. Derived
-#: from the installed distribution version -- the same accessor the CLI
-#: ``--version`` flag uses -- so it tracks releases automatically. Exposed as a
-#: module constant so a test can assert the exact header value.
-USER_AGENT: Final[str] = (
-    f"fitdocs/{version('fitdocs')} (+https://github.com/joshua-stauffer/fitdocs)"
-)
+
+def _user_agent() -> str:
+    """The mandatory descriptive User-Agent every tile request carries (Req
+    3.4).
+
+    OSM actively blocks the default library UA, so identifying fitdocs (with
+    its installed version and project URL) is load-bearing, not cosmetic.
+    Derived from :func:`fitdocs.version.version_display` -- the same leaf the
+    CLI ``--version`` flag reads -- so it tracks releases automatically and,
+    from an uninstalled source tree, degrades to the unknown token instead of
+    raising (Req 2.4), unlike the previous direct
+    ``importlib.metadata.version`` call this replaced, which propagated
+    ``PackageNotFoundError``.
+
+    A function, not a module-level constant: resolved fresh at the point of
+    use (matching :mod:`fitdocs.version`'s own no-import-time-work,
+    no-module-level-cache rule) rather than once when this module first
+    imports, so a version that becomes resolvable later in the same process
+    is picked up on the very next tile request.
+    """
+    return f"fitdocs/{version_display()} (+https://github.com/joshua-stauffer/fitdocs)"
+
 
 #: Per-request network timeout, in seconds. One attempt per tile per run (no
 #: retries), so this bounds the wait before a miss degrades to a warning.
@@ -302,7 +315,7 @@ class TileStore:
     a true miss touches the network, and a cached tile is never re-requested
     (Req 3.2), so a fully-cached resolve makes zero network calls (Req 3.2,
     4.2). A miss is fetched *sequentially* with the mandatory descriptive
-    :data:`USER_AGENT` and a bounded timeout -- one attempt per tile per run, no
+    :func:`_user_agent` and a bounded timeout -- one attempt per tile per run, no
     retries (Req 3.4) -- and written through to the cache atomically *before*
     the bytes are used, so an interrupted run never leaves a torn tile and
     already-fetched tiles survive a later failure (Req 3.1).
@@ -392,14 +405,14 @@ def _default_fetch(url: str) -> bytes:
     """Fetch *url* over HTTPS with the mandatory UA and timeout (Req 3.4, 4.2).
 
     The package's only network call. Issues a single GET carrying
-    :data:`USER_AGENT` (OSM blocks default library UAs) and a
+    :func:`_user_agent` (OSM blocks default library UAs) and a
     :data:`_FETCH_TIMEOUT_SECONDS`-second timeout, returning the raw response
     bytes. Any failure (offline, HTTP error, timeout) surfaces as the underlying
     ``urllib`` exception, which :meth:`TileStore._tile_bytes` maps to
     :class:`TileUnavailableError`. ``urlopen`` is referenced through the
     ``urllib.request`` module so a test can substitute the opener.
     """
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    request = urllib.request.Request(url, headers={"User-Agent": _user_agent()})
     with urllib.request.urlopen(request, timeout=_FETCH_TIMEOUT_SECONDS) as response:
         payload: bytes = response.read()
     return payload

@@ -659,6 +659,37 @@ def test_builtin_records_builtin_origin_and_installed_fitdocs_version() -> None:
     assert builtin_info.modalities == tuple(sorted(builtin_info.modalities))
 
 
+def test_builtin_version_is_none_rather_than_unknown_token_when_unresolved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The built-in's reported version stays ``None`` -- never the fabricated
+    ``"unknown"`` display token -- when the distribution is not installed
+    (Req 2.4, plugin-api Req 4.3: the listing forbids fabricating a version).
+
+    ``_plugin_info`` must call :func:`fitdocs.version.tool_version` directly,
+    not :func:`fitdocs.version.version_display`, which would substitute the
+    token here.
+    """
+    import importlib.metadata
+
+    import fitdocs.version as version_module
+
+    def _raise(name: str) -> str:
+        raise importlib.metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr(version_module, "version", _raise)
+
+    report = discover(
+        None,
+        PluginSettings(enabled=True, path=None),
+        entry_points_fn=_entry_points_fn([]),
+    )
+    builtin_info = next(
+        info for info in report.calculators if info.calculator_id == _BUILTIN_ID
+    )
+    assert builtin_info.version is None
+
+
 # --- Disable switch (Req 1.8) ------------------------------------------------
 
 

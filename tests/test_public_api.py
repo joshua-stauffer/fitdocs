@@ -412,6 +412,26 @@ def test_contract_is_not_re_exported_from_the_package_root() -> None:
     assert not set(fitdocs.__all__) & _CONTRACT_SURFACE
 
 
+# `fitdocs.version` (design: VersionSource, Req 2.1-2.4) is internal: the one
+# leaf `cli.py`, `tiles.py`, and `plugins.py` read version identity from, not a
+# surface a plugin author or wiki consumer imports. Unlike `contract`,
+# `declaration`, `audit`, and `docio` above, its own `__all__` is deliberately
+# NOT pinned here -- it has none of their "a caller names our published
+# symbol" justification, so pinning its shape would only make an internal
+# refactor fail a test it need not touch.
+_VERSION_MODULE_SURFACE = frozenset(
+    {"version", "DIST_NAME", "UNKNOWN_VERSION", "tool_version", "version_display"}
+)
+
+
+def test_version_module_is_not_re_exported_from_the_package_root() -> None:
+    """None of ``fitdocs.version``'s module name or its four members is a
+    package-root name -- it stays reachable only via ``fitdocs.version``,
+    never ``fitdocs.tool_version`` or similar.
+    """
+    assert not set(fitdocs.__all__) & _VERSION_MODULE_SURFACE
+
+
 # Every name the in-tree ownership-declaration module publishes: the
 # conventional filename, the published-contract documentation URL, the
 # declaration-state enum, the outcome type, and the text-composition and

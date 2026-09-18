@@ -24,7 +24,7 @@ import ast
 import inspect
 from collections.abc import Callable, Sequence
 from datetime import UTC
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import pytest
@@ -121,6 +121,29 @@ def test_version_flag_reports_installed_version() -> None:
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
     assert version("fitdocs") in result.stdout
+
+
+def test_version_flag_reports_unknown_token_from_an_uninstalled_tree(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """From an uninstalled source tree, ``--version`` prints the unknown
+    token and exits 0 -- it no longer raises ``PackageNotFoundError`` (Req
+    2.4). Patches the metadata lookup :mod:`fitdocs.version` binds, since
+    that (not ``importlib.metadata`` directly) is now the eager
+    ``--version`` callback's only route to the version.
+    """
+    import fitdocs.version as version_module
+
+    def _raise(name: str) -> str:
+        raise PackageNotFoundError(name)
+
+    monkeypatch.setattr(version_module, "version", _raise)
+
+    result = runner.invoke(app, ["--version"])
+
+    assert result.exit_code == 0
+    assert version_module.UNKNOWN_VERSION in result.stdout
+    assert version("fitdocs") not in result.stdout
 
 
 def test_help_flag_documents_the_tool() -> None:
@@ -1071,7 +1094,7 @@ def test_plugins_lists_load_errors_and_still_exits_zero(
             PluginInfo(
                 calculator_id="stub-calc",
                 display_name="Stub Calculator",
-                version="0.1.0",
+                version="2.3.4",
                 origin=BuiltIn(),
                 modalities=("run",),
             ),

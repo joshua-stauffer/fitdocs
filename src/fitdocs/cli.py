@@ -109,7 +109,6 @@ from __future__ import annotations
 import os
 import sys
 from datetime import date, datetime, tzinfo
-from importlib.metadata import version
 from pathlib import Path
 from typing import NoReturn
 
@@ -161,6 +160,7 @@ from fitdocs.quarantine import QuarantineError, QuarantineRecord, load_quarantin
 from fitdocs.settings import SettingsError, load_settings_document
 from fitdocs.sync import DrainReport, SyncReport, drain, regen, sync
 from fitdocs.tiles import TileStore, load_tile_settings, tile_settings_from_document
+from fitdocs.version import UNKNOWN_VERSION, version_display
 
 _EXIT_SUCCESS: int = 0
 """Everything written and/or skipped; no failures (an all-skipped run, too)."""
@@ -178,9 +178,14 @@ app = typer.Typer(
 
 
 def _print_version(value: bool) -> None:
-    """Print the installed package version and exit (eager ``--version``)."""
+    """Print the installed package version and exit (eager ``--version``).
+
+    Reads :func:`fitdocs.version.version_display`, which never raises: from
+    an uninstalled source tree this prints the unknown token and exits 0
+    rather than propagating ``PackageNotFoundError`` (Req 2.4).
+    """
     if value:
-        typer.echo(version("fitdocs"))
+        typer.echo(version_display())
         raise typer.Exit
 
 
@@ -748,7 +753,7 @@ def _report_plugins(report: PluginReport, *, data_root_resolved: bool) -> None:
         table.add_row(
             calculator.calculator_id,
             calculator.display_name,
-            calculator.version if calculator.version is not None else "unknown",
+            calculator.version if calculator.version is not None else UNKNOWN_VERSION,
             _origin_text(calculator),
             ", ".join(calculator.modalities),
         )

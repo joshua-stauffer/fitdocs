@@ -60,6 +60,7 @@ from typing import Any, Final, cast
 from fitdocs.load import registry
 from fitdocs.load.types import LoadCalculator
 from fitdocs.settings import SettingsError
+from fitdocs.version import tool_version
 
 PLUGINS_TABLE: Final[str] = "plugins"
 
@@ -509,7 +510,12 @@ def _plugin_info(calculator: LoadCalculator) -> PluginInfo:
     entry = _plugin_origins.get(calculator.calculator_id)
     if entry is None:
         origin: Origin = BuiltIn()
-        version: str | None = importlib.metadata.version("fitdocs")
+        # `tool_version()`, not `version_display()`: an unresolved version
+        # stays `None` here rather than becoming the fabricated "unknown"
+        # token -- the plugin listing forbids fabricating a version
+        # (Req 4.3), while the CLI's `--version` output and the tile
+        # User-Agent, which must render *something*, use the display form.
+        version: str | None = tool_version()
     else:
         origin, version = entry
     return PluginInfo(

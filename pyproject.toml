@@ -110,6 +110,7 @@ files = [
     "tests/test_agent_skill.py",
     "tests/test_skill_wheel.py",
     "tests/test_skill_e2e.py",
+    "tests/test_version_identity.py",
 ]
 
 [tool.pytest.ini_options]
