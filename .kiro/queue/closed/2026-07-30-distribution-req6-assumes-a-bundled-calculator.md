@@ -1,7 +1,7 @@
 ---
 id: 2026-07-30-distribution-req6-assumes-a-bundled-calculator
 title: distribution's Requirement 6 and tasks 2.1/3.1/3.2 are premised on a bundled calculator that no longer exists
-status: open
+status: done
 importance: high
 importance_why: distribution is the only unstarted Phase 3 spec and its dependencies are all met, so it is the next thing a session could pick up in parallel — and it would spend three tasks building a bundled/unencumbered profile split for a methodology withdrawn five days before. The stale half must be separated from the live half before implementation, not during it.
 effort: M
@@ -175,3 +175,33 @@ amendment with a named subject that still exists in the tree.
   `2026-07-29-sdist-guard-rename-evadable` is open against the first. Whichever
   session amends Requirement 6 should say which spec owns the gate, or the
   hardening work will be done twice or not at all.
+
+## Resolution (2026-09-18) -- done
+
+Distribution **Amendment 2** (requirements `87936b7`, design `219e7bf`, tasks `69fbb43` (+ review-round fixes) on `chore/distribution-amend2`; merged to `main` in the
+same change). Verified in the amended tree by the closing script, not on
+assertion:
+
+- `requirements.md` Requirement 6 is retitled "Encumbered-Content Release
+  Gate"; 6.1-6.3 and 6.6 re-scoped to the removed material as the purge's
+  out-of-repository guard defines it; 6.4, 6.5, 6.8 withdrawn (struck,
+  numbers kept); 6.9 (fail closed when match data is absent) and 6.10 (one
+  artifact set, no profiles) added; 1.5's "bundled calculator lookup data"
+  retired; 1.10 (no symbolic-link member) added.
+- `tasks.md`: no open task's text names a bundled calculator, a profile
+  distinction, a prune list, or a conditional export (regex over every
+  `- [ ]` line). 3.1 withdrawn; 2.1, 2.2, 2.3, 3.2 rewritten; 1.4 declares
+  no licensing record.
+- The artifact-scanning gate survives with a named subject that exists in
+  the tree: the purge's `tests/_forbidden_strings.py` (token match data
+  outside the repository) and `tests/_content_oracle.py` (digest-keyed
+  values), which the checker imports rather than reimplements (design
+  section ArtifactChecker).
+
+Both halves of this item's "Done looks like" hold. The two open questions
+are answered by the maintainer: the profile distinction has no remaining
+use (one artifact set, 6.10); the gate is owned by `distribution` and
+reuses the cores `encumbered-content-purge` owns, so the hardening happens
+once. The item's own evidence was also stale by close: the registry is no
+longer empty -- `available()` returns the `threshold` built-in -- which the
+amendment records.

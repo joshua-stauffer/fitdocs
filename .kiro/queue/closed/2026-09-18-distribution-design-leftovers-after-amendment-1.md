@@ -1,7 +1,7 @@
 ---
 id: 2026-09-18-distribution-design-leftovers-after-amendment-1
 title: distribution design.md still names the retired single-skill constant in three places, and the compatibility-note clause is undecided for the shared frontmatter contract
-status: open
+status: done
 importance: low
 importance_why: distribution 4.2's implementer reads these lines; two contradict Amendment 1 and one is a decision nobody has made.
 effort: S
@@ -34,3 +34,18 @@ distribution 4.2 must decide whether its inbox skill carries the clause.
 Read Amendment 1's notes in that file first (grep `Amendment 1`), then fix
 the four lines by content. Record the compatibility decision in the same
 amendment block.
+
+## Resolution (2026-09-18) -- done
+
+Folded into distribution Amendment 2's design rewrite (`219e7bf`). The
+AgentSkillLocator block shows the landed `PACKAGED_SKILLS` /
+`INBOX_SKILL_NAME` / `skill_root(name)` shape; "the constant" is now "the
+registry entry"; the AgentSkillPackage frontmatter bullet, its validation
+note, the Skill-frontmatter data-model row and the unit-test bullet all say
+"its `PACKAGED_SKILLS` entry" (closing script: no `SKILL_NAME: Final` and
+no "equals `SKILL_NAME`" remain). The compatibility-note clause is decided
+in the Skill-frontmatter table: the contract for every packaged skill is
+"the `fitdocs` command must be installed and reachable"; a skill may add
+clauses (`build-training-block` does); the inbox skill does **not** carry
+"a data root already configured", because configuring the data root is
+part of the workflow its body teaches (8.7).

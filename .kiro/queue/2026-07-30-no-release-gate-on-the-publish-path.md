@@ -10,7 +10,7 @@ area: distribution, tests/load/test_packaging.py, pyproject.toml
 created: 2026-07-30
 surfaced_by: adversarial review of chore/sdist-content-keyed-guard (queue-tier1 batch)
 pinned_at: c3d2201
-resume_command: "/kiro-impl distribution [queue: .kiro/queue/2026-07-30-no-release-gate-on-the-publish-path.md] Implement the licensing gate that inspects built artifacts and refuses to publish encumbered material, which distribution/design.md already specifies"
+resume_command: "/kiro-impl distribution [queue: .kiro/queue/2026-07-30-no-release-gate-on-the-publish-path.md] Land the encumbered-content gate (tasks 2.2, 2.3, 3.2) and bind it to the release path (6.1, 6.2, 6.3) as distribution Amendment 2 specifies -- the gate must fail closed on absent match data"
 context:
   - .kiro/specs/distribution/design.md
   - tests/load/test_packaging.py
@@ -110,3 +110,19 @@ The specified-but-unbuilt gate: `.kiro/specs/distribution/design.md:16`,
 - Does this want to wait for the `distribution` spec to be worked properly
   (0/33 tasks, `phase: tasks-generated`), or land standalone first given it
   protects a licensing surface today?
+
+## Update (2026-09-18) -- spec text resolved, gate still unbuilt
+
+Distribution **Amendment 2** (requirements `87936b7`, design `219e7bf`, tasks `69fbb43` (+ review-round fixes) on `chore/distribution-amend2`) answers this item's two
+open questions and its "whether the concern still has a subject" note: the
+gate is kept as a standing property (Req 6.1, 6.2, 6.7), reads the purge's
+out-of-repository match data through `tests/_forbidden_strings.py` and the
+value oracle (6.3), and **fails closed** when that data is absent (6.9,
+new) -- a runner without the secret reports `GATE_NOT_RUN`, never a pass.
+Where it binds: the checker script (`python -m scripts.check_artifacts`),
+run by the manual procedure (5.6), by CI on every change (6.2) and by the
+tag-triggered release chain before any publish job (6.3); the build itself
+is not refused, publication is. Still true at this update: no `.github/`,
+no workflow files, no sdist section in `pyproject.toml`, and
+`tests/load/test_packaging.py` remains a pytest test nothing forces onto a
+publish path. Stays open until tasks 2.3 and 6.3 land.

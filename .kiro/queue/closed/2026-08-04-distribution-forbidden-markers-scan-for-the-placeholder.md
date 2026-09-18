@@ -1,7 +1,7 @@
 ---
 id: 2026-08-04-distribution-forbidden-markers-scan-for-the-placeholder
 title: The distribution forbidden-markers gate now scans artifacts for the redaction placeholder, never for the real terms
-status: open
+status: done
 importance: medium
 importance_why: Implemented literally from the redacted design, the release gate would pass an artifact containing the actual encumbered terms.
 effort: S
@@ -82,3 +82,16 @@ Whether `distribution` should consume `tests/_forbidden_strings.py` directly or
 declare its own reader. The purge's module lives under `tests/` and is written
 for the test tree; a release gate is production tooling and may not want that
 dependency direction. That is a design call for whoever picks this up.
+
+## Resolution (2026-09-18) -- done
+
+Distribution Amendment 2 (requirements `87936b7`, design `219e7bf`, tasks `69fbb43` (+ review-round fixes) on `chore/distribution-amend2`). `design.md` section
+ArtifactPolicy states the policy carries **no content marker list** and
+cites this item; the `[forbidden].markers` key is gone from the data shape
+(checked by the closing script). Section ArtifactChecker and the
+"Encumbered-content gate decision" flow re-base the scan onto
+`tests/_forbidden_strings.load` / `matches` -- match data from the single
+out-of-repository source -- plus the value oracle, and Requirement 6.3 makes
+that sourcing a criterion. The recursion this item names (a repository
+document cannot name what it forbids) is resolved by not naming it anywhere
+in the repository.

@@ -123,3 +123,14 @@ session reading `design.md` to implement packaging will plan around a state
 that no longer exists. Fold them into distribution's owed amendments rather
 than fixing them in isolation; roadmap.md's Phase 5 entry already records that
 two amendments are owed and should be written once against the final state.
+
+## Update (2026-09-18) -- the two distribution-owned files are corrected
+
+Distribution Amendment 2 (`219e7bf`) corrected `distribution/research.md`
+("`docs/` holds ... the reference writeup, and the extracted tables" now
+carries a dated supersession note) and `distribution/design.md` ("The
+encumbered material is committed and packaged by design" rewritten as a
+past-state note with the current facts). Remaining: the
+`encumbered-content-purge/brief.md` claim about `CLAUDE.md` and the
+`threshold-load/brief.md` "stays registered and untouched" claim -- both
+outside distribution's files, so this item stays open for them.

@@ -1,7 +1,7 @@
 ---
 id: 2026-07-31-agent-log-symlink-ships-in-sdist
 title: The root `agent-log` symlink ships in the sdist, and its target now carries the identity the purge erases
-status: open
+status: done
 importance: medium
 importance_why: Not a leak today (dangling symlink, no content archived), but it is invisible to the Req 10.4 artifact scan by construction, so nothing would catch it turning into one.
 effort: S
@@ -136,3 +136,21 @@ recorded per `change-protocol.md` › Fixture Discrimination.
   defaults it establishes are the baseline any fix must be written against.
   If the chosen option is (b), the block may not be real — check before
   deferring on it.
+
+## Resolution (2026-09-18) -- done (decision taken; the exclusion lands with distribution tasks 1.2 / 1.4 / 2.2)
+
+The decision this item asked for is made by the maintainer and recorded as
+spec text in distribution Amendment 2 (requirements `87936b7`, design `219e7bf`, tasks `69fbb43` (+ review-round fixes) on `chore/distribution-amend2`): **excluded, and
+asserted absent**. Requirement 1.10: the published distribution contains no
+symbolic link, and a link member is a violation the artifact verification
+reports rather than skips. Three independent owners in the plan: task 1.2's
+sdist allowlist excludes it by construction (its observable plants a link
+into a temporary copy of the tree, because the link exists only in the
+primary checkout -- never in a worktree or CI -- so the assertion cannot be
+vacuous); task 1.4's forbidden patterns name `agent-log`; task 2.2's
+checker reports `LINK_MEMBER` regardless of target. The guard blindness
+this item found (`member.isfile()` is false for a link) is why 1.10 makes a
+link its own violation kind instead of a scanned member. Closed as a queue
+item because the remaining work is tracked in
+`.kiro/specs/distribution/tasks.md` (exempt per the queue README); reopen
+only if those tasks land without it.

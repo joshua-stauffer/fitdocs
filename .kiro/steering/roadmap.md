@@ -888,7 +888,13 @@ the encumbered blobs, which is the thing this phase exists to prevent).
   unbuilt — is the only thing that would stop a `uv build && uv publish` from
   shipping encumbered material, since there is no CI at all (queue item
   `2026-07-30-no-release-gate-on-the-publish-path`, high). Dependencies:
-  encumbered-content-purge
+  encumbered-content-purge. **Both amendments landed 2026-09-18 as
+  distribution Amendment 2** (Requirement 6 re-based: the artifact scan
+  stays as a standing property reading the purge's out-of-repository match
+  data and failing closed; one artifact set, no bundled/unencumbered
+  profiles; the root `agent-log` symlink excluded and any link member a
+  violation). The spec is `ready_for_implementation` again; the release
+  half itself is still unstarted, which is what this checkbox tracks.
 
 #### Direct Implementation Candidates
 
