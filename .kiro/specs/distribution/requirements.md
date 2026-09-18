@@ -74,6 +74,15 @@ package, "released with no bundled methodology" is a first-class supported
 configuration rather than a degraded one, and this spec requires it to work and
 to be documented.
 
+*(Amendment 2, 2026-09-18: the paragraph above describes the tree of
+2026-07-21. The encumbered methodology was withdrawn on 2026-07-25 and every
+trace of it — implementation, tables, writeup, name — was removed from the
+tree and its history by `encumbered-content-purge` on 2026-08-23; the
+built-in calculator is now `threshold`, unencumbered. The gate survives as a
+standing property: no published artifact may carry the removed material back
+in, by any path. There is no permission to record, no methodology to make
+optional, and no second build profile. Requirement 6 is amended below.)*
+
 ## Boundary Context
 
 - **In scope**: the published package and its metadata; what the built
@@ -82,8 +91,10 @@ to be documented.
   contracts and the version-numbering rules that back it; the changelog and its
   obligations; the end-to-end release procedure, its quality gates, its
   artifact verification, its tagging, its rehearsal path, its credential
-  posture, and its post-publication check; the licensing release gate and the
-  supported no-bundled-methodology configuration; install, upgrade, and
+  posture, and its post-publication check; the encumbered-content release gate over
+  the built artifacts *(Amendment 2: formerly "the licensing release gate and
+  the supported no-bundled-methodology configuration"; the second half has no
+  subject since the withdrawal)*; install, upgrade, and
   uninstall documentation for standalone and wiki-hosted data roots; the agent
   skill that packages the inbox workflow for an LLM-managed wiki and the
   integration recipe that accompanies it; contribution documentation for the
@@ -137,11 +148,12 @@ knowing anything about its build.
 2. When a user installs the published distribution, the fitdocs command shall be available as a single console entry point and every documented command shall run without further setup.
 3. The published distribution shall declare its supported Python versions, its runtime dependencies, its license, its summary and long description, and links to its source and its documentation.
 4. The fitdocs project shall publish, for every release, both a source distribution and a built distribution.
-5. The published distribution shall contain every file the installed tool reads at runtime, including bundled calculator lookup data and the type-information marker that the plugin API requires.
+5. The published distribution shall contain every file the installed tool reads at runtime, including every packaged agent skill's files and the type-information marker that the plugin API requires. *(amended by Amendment 2: "bundled calculator lookup data" retired — the built-in calculator ships no data files, and the withdrawn one no longer exists)*
 6. The published distribution shall contain no development-only material: no tests, no specification or steering documents, no dependency lockfile, no methodology source spreadsheets, and no personal fitness data.
 7. Installing or upgrading the published distribution shall create no directory, configuration file, profile, or data root anywhere on the user's machine.
 8. The published distribution shall carry a license file whose terms match the license the package metadata declares.
 9. Any documentation reference carried inside a published artifact, or emitted by the tool into a user's tree, shall address the documentation by its published project URL rather than by a repository-relative path, and the package metadata shall declare the project URLs those references depend on.
+10. *(added by Amendment 2)* The published distribution shall contain no symbolic link, and the artifact verification shall report a link member as a violation rather than skipping it, so that a member whose content lives outside the archive can never pass the content checks by construction.
 
 ### Requirement 2: Version Identity and Self-Reporting
 **Objective:** As a user or plugin author diagnosing behavior, I want the
@@ -205,20 +217,34 @@ traceable, and a failed step never reaches the public index.
 9. After publication, the release procedure shall confirm that the published version installs from the public index and reports the expected version.
 10. The release procedure shall be runnable as project automation triggered by the release tag, and its gates shall be the same gates a maintainer running it by hand would apply.
 
-### Requirement 6: Methodology Licensing Release Gate
-**Objective:** As the maintainer, I want publication mechanically blocked while
-the bundled methodology's redistribution permission is unresolved, so that a
-licensing question can never be lost to a moment of inattention.
+### Requirement 6: Encumbered-Content Release Gate *(retitled by Amendment 2; formerly "Methodology Licensing Release Gate")*
+**Objective:** As the maintainer, I want publication mechanically blocked when
+a built artifact carries any of the removed third-party material back in, so
+that the purge's guarantee extends to every published artifact and never
+depends on a maintainer remembering to run a test before publishing.
+
+*(Amendment 2, 2026-09-18: the original objective — "publication mechanically
+blocked while the bundled methodology's redistribution permission is
+unresolved" — has no subject. The methodology was withdrawn, and the material
+and every identifying token were purged from the tree and its history. What
+remains is the standing risk that the material returns by any path — a
+re-added file, a pasted table, a branded phrase in the readme rendered into
+the distribution metadata — and reaches the public index through a publish
+path that today runs no check at all. Criteria 6.1–6.3 and 6.6 are re-scoped
+to that subject; 6.4, 6.5 and 6.8 are withdrawn; 6.9 and 6.10 are added. No
+criterion is renumbered.)*
 
 #### Acceptance Criteria
-1. The fitdocs project shall publish no artifact containing the encumbered training-load methodology's lookup tables, its name, or its trademarked terms unless permission covering redistribution has been recorded as granted, or the methodology has been replaced with an unencumbered one.
-2. The release procedure shall inspect the built artifacts for that encumbered material and shall stop the release before publication when the material is present and permission is not recorded as granted.
-3. The fitdocs project shall record the state of that permission in a single place that the release gate reads, so that the gate's decision is explicit rather than remembered.
-4. Where no training-load methodology is bundled, the fitdocs tool shall remain fully functional for every capability except load computation, shall state in its output that no calculator is available rather than failing, and shall keep its exit-code contract unchanged.
-5. The fitdocs documentation shall explain how a user obtains and installs a training-load methodology when the release bundles none.
-6. Removing a bundled methodology from a release, or restoring one, shall be treated as a change to a public contract and recorded in the changelog with the action the user must take.
+1. The fitdocs project shall publish no artifact containing the removed third-party material: an identifying token of the withdrawn methodology or its author, its lookup tables, its copyright or trademark notice, or a removed-path fragment. *(amended by Amendment 2: the permission clause and the "replaced with an unencumbered one" clause are retired — the replacement happened, and there is no permission to record)*
+2. The release procedure shall inspect the built artifacts for that material and shall stop the release before publication when any of it is present. *(amended by Amendment 2: "and permission is not recorded as granted" retired)*
+3. The release gate shall take its definition of the removed material from the single out-of-repository source the repository's existing re-introduction guard reads, so that no forbidden term is retained in the repository in any form and the release gate and the repository guard cannot disagree about what is forbidden. *(amended by Amendment 2: formerly the recorded permission state; the gate now reads match data, not a decision)*
+4. ~~Where no training-load methodology is bundled, the fitdocs tool shall remain fully functional for every capability except load computation, shall state in its output that no calculator is available rather than failing, and shall keep its exit-code contract unchanged.~~ *(withdrawn by Amendment 2: every release bundles the unencumbered built-in calculator; the tool's behaviour when a configured calculator is absent is plugin-api's and threshold-load's, not a build configuration this spec produces)*
+5. ~~The fitdocs documentation shall explain how a user obtains and installs a training-load methodology when the release bundles none.~~ *(withdrawn by Amendment 2: no release bundles none; installing an additional calculator is documented by plugin-api's plugin guide)*
+6. Removing the built-in calculator from a release, or adding one, shall be treated as a change to a public contract and recorded in the changelog with the action the user must take. *(amended by Amendment 2: subject re-scoped from "a bundled methodology" to "the built-in calculator")*
 7. The release gate shall inspect the artifacts themselves rather than the source tree, so that material reaching a distribution by an unexpected path is still caught.
-8. Where no training-load methodology is bundled, the load package shall not export the bundled calculator's name and shall omit it from its declared public names, while every other documented public name of that package remains importable — including by wildcard import.
+8. ~~Where no training-load methodology is bundled, the load package shall not export the bundled calculator's name and shall omit it from its declared public names, while every other documented public name of that package remains importable — including by wildcard import.~~ *(withdrawn by Amendment 2: there is no conditionally-present calculator; the load package's public names are plugin-api's enumerated surface, unconditionally)*
+9. *(added by Amendment 2)* If the match data the release gate depends on is unavailable when the gate runs, the release procedure shall stop before publication and report that the gate did not run, and shall never treat an unrun gate as a pass.
+10. *(added by Amendment 2)* The fitdocs project shall build exactly one artifact set per release — one source distribution and one built distribution from the working tree — with no build profile, prune list, or per-release selection between variants.
 
 ### Requirement 7: Install, Upgrade, and Uninstall Documentation
 **Objective:** As a new or existing user, I want documentation that takes me
@@ -303,3 +329,58 @@ copy of the released version, not a second declaration — recorded here as
 Requirement 8 criterion 8.9. No criterion is renumbered. This is the
 roadmap's Phase 7
 Existing Spec Update for this spec.
+
+## Amendment 2 (2026-09-18): Requirement 6 re-based on the post-withdrawal, post-purge tree
+
+This spec was generated and approved on 2026-07-21 against a tree that
+bundled an encumbered training-load methodology. Four days later,
+`training-load` Amendment 2 withdrew it; on 2026-08-23
+`encumbered-content-purge` removed its implementation, its tables, its
+writeup and every identifying token from the working tree and from history,
+and the built-in calculator became the unencumbered `threshold` engine.
+Nothing revisited this spec until now, so Requirement 6 and the parts of
+Requirements 1 and 10 that lean on it still described a bundled/unencumbered
+build split, a recorded permission state, a guarded import and a
+conditionally-exported name — all for an object that no longer exists
+(queue item `2026-07-30-distribution-req6-assumes-a-bundled-calculator`).
+
+Three decisions, taken by the maintainer on 2026-09-18:
+
+- **The artifact scan stays, as a standing property.** The material is gone
+  from the tree, but nothing stops it coming back: there is no continuous
+  integration and no release gate, so `uv build && uv publish` on any checkout
+  ships whatever the checkout holds (queue item
+  `2026-07-30-no-release-gate-on-the-publish-path`). The repository's own
+  re-introduction guard is a pytest test that reads its match data from a
+  single out-of-repository source, because the purge forbids retaining any
+  forbidden term in the tree in any readable form (`encumbered-content-purge`
+  Req 11.7, 11.8, 11.10). The release gate reads the same source (6.3), fails
+  closed when it is absent (6.9), and inspects the built artifacts and their
+  metadata rather than the tree (6.7). This also resolves queue item
+  `2026-08-04-distribution-forbidden-markers-scan-for-the-placeholder`: a
+  marker list inside the repository could only ever name the redaction
+  placeholder, never the terms it exists to catch.
+- **There is no bundled/unencumbered distinction.** One artifact set per
+  release, from the working tree (6.10). The licensing record, the profile
+  selection, the prune list, the `required_when_bundled` member split and the
+  unencumbered-install validation all go with it. Criteria 6.4, 6.5 and 6.8
+  are withdrawn rather than rewritten: each stated a property of a "no
+  calculator bundled" configuration this spec no longer produces.
+- **The root `agent-log` symlink is excluded from the sdist**, and a link
+  member of any artifact is a violation (1.10). The link is untracked and
+  un-ignored, so the build backend's default sdist contents include it; it
+  archives as a dangling link whose target — the shared agent log — carries
+  the identity the purge erases, and the content scan skips link members by
+  construction (queue item `2026-07-31-agent-log-symlink-ships-in-sdist`).
+  The sdist allowlist Requirement 1.6 already implies excludes it
+  mechanically; 1.10 is the assertion that keeps it excluded.
+
+Criterion 1.5's "bundled calculator lookup data" is retired on the same
+axis: no data files ship with the built-in calculator, and the packaged
+agent skills' files are the runtime-read package data the criterion should
+name. Requirement 6 is retitled. No criterion is renumbered; the withdrawn
+ones keep their numbers, struck through, so that design and task references
+to them remain resolvable. `design.md` and `tasks.md` are regenerated
+against this amendment in the same change: majors 2 and 3 of the plan are
+where the churn lands, and the sequencing rule "no publication before the
+gate can refuse an artifact" moves from task 3.2 to the gate task itself.
