@@ -264,7 +264,7 @@ LoadSettings, LoadSettingsError, DEFAULT_LOAD_SETTINGS, NonSelectedValue,
 QualityFlag, supports_activity, register, get, available, for_modality,
 UnknownCalculatorError, InvalidCalculatorError, DuplicateCalculatorIdError,
 Benchmark, BenchmarkKind, BenchmarkRef, BenchmarkAge, benchmark_age,
-THRESHOLD_CALCULATOR
+THRESHOLD_CALCULATOR, FlagKey, FlagSettings
 ```
 
 `Benchmark`, `BenchmarkKind`, `BenchmarkRef`, `BenchmarkAge` and

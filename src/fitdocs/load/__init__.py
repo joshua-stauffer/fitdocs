@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from fitdocs.benchmarks import Benchmark, BenchmarkAge, BenchmarkKind, benchmark_age
 from fitdocs.load import registry
+from fitdocs.load.qa import FlagKey, FlagSettings
 from fitdocs.load.registry import (
     DuplicateCalculatorIdError,
     InvalidCalculatorError,
@@ -71,6 +72,8 @@ __all__ = [
     "Computed",
     "DEFAULT_LOAD_SETTINGS",
     "DuplicateCalculatorIdError",
+    "FlagKey",
+    "FlagSettings",
     "InteractionSession",
     "InvalidCalculatorError",
     "LoadCalculator",

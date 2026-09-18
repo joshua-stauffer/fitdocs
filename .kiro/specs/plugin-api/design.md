@@ -809,8 +809,12 @@ def unregister(calculator_id: str) -> None: ...            # no-op when absent
   `QualityFlag`, `supports_activity`, `register`, `get`, `available`,
   `for_modality`, `UnknownCalculatorError`, `InvalidCalculatorError`,
   `DuplicateCalculatorIdError`, `Benchmark`, `BenchmarkKind`, `BenchmarkRef`,
-  `BenchmarkAge`, `benchmark_age`, `THRESHOLD_CALCULATOR`) (5.2). `THRESHOLD_CALCULATOR`
+  `BenchmarkAge`, `benchmark_age`, `THRESHOLD_CALCULATOR`, `FlagKey`,
+  `FlagSettings`) (5.2). `THRESHOLD_CALCULATOR`
   was added by `threshold-load` task 4.1 (`BuiltInRegistration`/`PublicSurfacePin`).
+  `FlagKey` and `FlagSettings` were added by `activity-qa-flags` task 3.3
+  (`PublicSurfacePin`); `evaluate_flags` is deliberately not part of this
+  surface.
   Everything else
   is internal (5.3); `tests/test_public_api.py` guards the shipped `__all__`
   list (5.5), and `tests/test_docs_guarantees.py`'s

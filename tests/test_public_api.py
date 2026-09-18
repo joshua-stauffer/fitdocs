@@ -74,6 +74,7 @@ import fitdocs.ingest
 import fitdocs.ingest.errors
 import fitdocs.load
 import fitdocs.load.channels
+import fitdocs.load.qa
 import fitdocs.load.registry
 import fitdocs.load.settings
 import fitdocs.load.threshold.calculator
@@ -224,6 +225,8 @@ _LOAD_EXPECTED = {
     "BenchmarkRef": fitdocs.load.types.BenchmarkRef,
     "benchmark_age": fitdocs.benchmarks.benchmark_age,
     "THRESHOLD_CALCULATOR": fitdocs.load.threshold.calculator.THRESHOLD_CALCULATOR,
+    "FlagKey": fitdocs.load.qa.FlagKey,
+    "FlagSettings": fitdocs.load.qa.FlagSettings,
 }
 
 
@@ -261,6 +264,8 @@ def test_load_plugin_surface_direct_from_import_binds_the_public_names() -> None
         BenchmarkRef,
         Computed,
         DuplicateCalculatorIdError,
+        FlagKey,
+        FlagSettings,
         InteractionSession,
         InvalidCalculatorError,
         LoadCalculator,
@@ -299,6 +304,18 @@ def test_load_plugin_surface_direct_from_import_binds_the_public_names() -> None
     assert (
         THRESHOLD_CALCULATOR is fitdocs.load.threshold.calculator.THRESHOLD_CALCULATOR
     )
+    assert FlagKey is fitdocs.load.qa.FlagKey
+    assert FlagSettings is fitdocs.load.qa.FlagSettings
+
+
+def test_evaluate_flags_is_not_on_the_load_plugin_surface() -> None:
+    """``evaluate_flags`` is exported from ``fitdocs.load.qa`` but is
+    deliberately absent from ``fitdocs.load.__all__`` (design:
+    PublicSurfacePin) -- it is the threshold calculator's internal
+    collaborator, not part of the plugin-author surface.
+    """
+    assert "evaluate_flags" not in fitdocs.load.__all__
+    assert not hasattr(fitdocs.load, "evaluate_flags")
 
 
 # Every name the document contract publishes: the vocabulary, the versions, the
@@ -711,13 +728,16 @@ def _discovered_load_subpackages() -> list[str]:
 
     Discovered rather than named: the ruling that introduced this guard first
     wrote it as "at minimum ``import fitdocs.load.qa`` and ``import
-    fitdocs.load.types``" -- but the quality-assurance sub-package belongs to
-    ``activity-qa-flags`` and does not exist in this checkout, so a literal
-    name reddens the gate the day it is written. Enumerating what is actually
-    on disk means today's assertion covers exactly the sub-packages that
-    exist (``channels``), and each of ``load-channels``, ``threshold-load``
-    and ``activity-qa-flags``' sub-packages is covered the moment it lands --
-    with no edit to this test required.
+    fitdocs.load.types``" -- but at the time, the quality-assurance
+    sub-package belonged to ``activity-qa-flags`` and did not yet exist in
+    this checkout, so a literal name would have reddened the gate the day it
+    was written. Enumerating what is actually on disk meant the assertion
+    covered exactly the sub-packages that existed then (``channels``), and
+    each of ``load-channels``, ``threshold-load`` and ``activity-qa-flags``'
+    sub-packages was covered the moment it landed -- with no edit to this
+    test required. ``activity-qa-flags`` task 1.1 has since landed
+    ``fitdocs/load/qa/``, so today's discovery covers ``channels``,
+    ``qa`` and ``threshold`` without any change here.
     """
     load_dir = Path(fitdocs.__file__).resolve().parent / "load"
     return sorted(

@@ -433,7 +433,7 @@ does not add, reference or read a real file.
   - _Boundary: CalculatorIntegration_
   - _Depends: 3.1_
 
-- [ ] 3.3 Publish the flag identifiers and settings on the plugin-author surface
+- [x] 3.3 Publish the flag identifiers and settings on the plugin-author surface
   - Export the flag identifiers and the settings value from the load package's
     public names, alongside the sibling settings value types, because the
     settings value is reachable from the per-pass context a calculator receives
