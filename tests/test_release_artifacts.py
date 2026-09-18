@@ -5,7 +5,7 @@ artifact tests generally; this task covers only the policy *data* and its
 reader (`release/artifact-policy.toml`, `scripts/artifact_policy.py`). Later
 tasks (2.1-2.3) extend this file with the builder and checker.
 
-Four groups of assertions:
+Five groups of assertions:
 
 * the real policy file loads, and its content matches the design's declared
   end-state shape (minus the not-yet-added inbox skill entry);
@@ -17,18 +17,30 @@ Four groups of assertions:
 * the real policy file is scanned for the categories of key it must never
   carry (permission state, a profile/variant, a prune list, a content-marker
   list, a licensing record), with a synthetic positive control proving the
-  scan can actually catch one.
+  scan can actually catch one;
+* task 2.1's `ReleaseBuilder` (`scripts/build_release.py`): the build's
+  command line, its environment, its cwd, its output-directory clearing and
+  failure cleanup, its refusal to clear the repository root, its
+  reproducibility, and its command surface -- exercised both against real
+  `uv build` invocations and, for the command/environment/cleanup contracts,
+  against a fake `subprocess.run` recording exactly what it was called with.
 """
 
 from __future__ import annotations
 
+import ast
+import hashlib
+import subprocess
+import tarfile
 import tomllib
+import zipfile
 from collections.abc import Iterator, Mapping
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
 import pytest
+import scripts.build_release as build_release
 from scripts.artifact_policy import (
     DEFAULT_POLICY_PATH,
     ArtifactPolicy,
@@ -464,3 +476,402 @@ def test_sdist_allowlist_excludes_scripts_and_release() -> None:
     ]
     assert "scripts" not in only_include
     assert "release" not in only_include
+
+
+# ---------------------------------------------------------------------------
+# Task 2.1: ReleaseBuilder (`scripts/build_release.py`)
+# ---------------------------------------------------------------------------
+
+_EPOCH_A = 1_700_000_000
+_EPOCH_B = 1_600_000_000
+
+
+def _sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _zip_manifest(path: Path) -> dict[str, str]:
+    with zipfile.ZipFile(path) as archive:
+        return {name: _sha256(archive.read(name)) for name in archive.namelist()}
+
+
+def _tar_manifest(path: Path) -> dict[str, str]:
+    with tarfile.open(path, "r:gz") as archive:
+        manifest = {}
+        for member in archive.getmembers():
+            if member.isfile():
+                extracted = archive.extractfile(member)
+                assert extracted is not None
+                manifest[member.name] = _sha256(extracted.read())
+        return manifest
+
+
+def _artifact(paths: tuple[Path, ...], suffix: str) -> Path:
+    matches = [p for p in paths if p.name.endswith(suffix)]
+    assert len(matches) == 1, f"expected exactly one {suffix!r} artifact in {paths!r}"
+    return matches[0]
+
+
+@pytest.fixture(scope="module")
+def build_a(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, ...]:
+    out_dir = tmp_path_factory.mktemp("dist_a")
+    return build_release.build(out_dir=out_dir, source_date_epoch=_EPOCH_A)
+
+
+@pytest.fixture(scope="module")
+def build_a_repeat(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, ...]:
+    out_dir = tmp_path_factory.mktemp("dist_a_repeat")
+    return build_release.build(out_dir=out_dir, source_date_epoch=_EPOCH_A)
+
+
+@pytest.fixture(scope="module")
+def build_b(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, ...]:
+    out_dir = tmp_path_factory.mktemp("dist_b")
+    return build_release.build(out_dir=out_dir, source_date_epoch=_EPOCH_B)
+
+
+def test_build_yields_exactly_one_wheel_and_one_sdist(
+    build_a: tuple[Path, ...],
+) -> None:
+    assert len(build_a) == 2
+    suffixes = sorted(".whl" if p.name.endswith(".whl") else ".tar.gz" for p in build_a)
+    assert suffixes == [".tar.gz", ".whl"]
+    for path in build_a:
+        assert path.exists()
+
+
+def test_build_clears_a_stale_artifact_first(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    out_dir = tmp_path / "dist"
+    out_dir.mkdir()
+    stale = out_dir / "stale.whl"
+    stale.write_text("not a real wheel")
+    stale_other = out_dir / "stale.txt"
+    stale_other.write_text("not an artifact at all")
+    # falsity-before: both stale files are really there
+    assert stale.exists()
+    assert stale_other.exists()
+
+    def fake_run(
+        cmd: list[str],
+        *,
+        cwd: str,
+        capture_output: bool,
+        text: bool,
+        env: dict[str, str],
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        (out_dir / "fitdocs-0.0.0-py3-none-any.whl").write_bytes(b"whl")
+        (out_dir / "fitdocs-0.0.0.tar.gz").write_bytes(b"tgz")
+        returncode = 0
+        if check and returncode != 0:
+            raise subprocess.CalledProcessError(returncode, cmd)
+        return subprocess.CompletedProcess(cmd, returncode, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = build_release.build(out_dir=out_dir, source_date_epoch=_EPOCH_A)
+
+    assert not stale.exists()
+    assert not stale_other.exists()
+    assert stale not in result
+    assert all(p.exists() for p in result)
+
+
+def test_build_removes_partial_output_on_build_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    out_dir = tmp_path / "dist"
+
+    def failing_run(
+        cmd: list[str],
+        *,
+        cwd: str,
+        capture_output: bool,
+        text: bool,
+        env: dict[str, str],
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        # A real failed `uv build` can still leave partial files behind --
+        # both artifact kinds, so a cleanup that only unlinks one kind
+        # (e.g. `*.whl` alone) still leaves visible wreckage.
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "partial.whl").write_bytes(b"partial")
+        (out_dir / "partial.tar.gz").write_bytes(b"partial")
+        if check:
+            raise subprocess.CalledProcessError(1, cmd)
+        return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="boom")
+
+    monkeypatch.setattr(subprocess, "run", failing_run)
+    with pytest.raises(build_release.BuildError):
+        build_release.build(out_dir=out_dir, source_date_epoch=_EPOCH_A)
+
+    assert not out_dir.exists() or not any(out_dir.iterdir())
+
+
+def test_build_rejects_a_wrong_artifact_count(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    out_dir = tmp_path / "dist"
+
+    def two_wheels_run(
+        cmd: list[str],
+        *,
+        cwd: str,
+        capture_output: bool,
+        text: bool,
+        env: dict[str, str],
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "a-0.0.0-py3-none-any.whl").write_bytes(b"a")
+        (out_dir / "b-0.0.0-py3-none-any.whl").write_bytes(b"b")
+        (out_dir / "a-0.0.0.tar.gz").write_bytes(b"tgz")
+        returncode = 0
+        if check and returncode != 0:
+            raise subprocess.CalledProcessError(returncode, cmd)
+        return subprocess.CompletedProcess(cmd, returncode, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", two_wheels_run)
+    with pytest.raises(build_release.BuildError):
+        build_release.build(out_dir=out_dir, source_date_epoch=_EPOCH_A)
+
+    assert not out_dir.exists() or not any(out_dir.iterdir())
+
+
+def test_build_invokes_uv_with_expected_command_env_and_cwd(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The exact command line, cwd, and SOURCE_DATE_EPOCH the build issues.
+
+    Uses a fake `subprocess.run` (no real `uv build`) so it stays fast and
+    can assert on the literal recorded values rather than inferring them
+    indirectly from archive contents.
+    """
+    out_dir = tmp_path / "dist"
+    calls: list[dict[str, Any]] = []
+
+    def _record_and_succeed(
+        cmd: list[str],
+        *,
+        cwd: str,
+        capture_output: bool,
+        text: bool,
+        env: dict[str, str],
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append({"cmd": cmd, "cwd": cwd, "env": env, "check": check})
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", _record_and_succeed)
+
+    # First call: explicit epoch. The fake never writes artifacts, so
+    # `build()` will raise on the post-build count check -- that is fine,
+    # this test only cares about what `subprocess.run` was called with.
+    with pytest.raises(build_release.BuildError):
+        build_release.build(out_dir=out_dir, source_date_epoch=_EPOCH_A)
+
+    assert len(calls) == 1
+    call = calls[0]
+    assert call["cmd"][1:] == [
+        "build",
+        "--sdist",
+        "--wheel",
+        "--out-dir",
+        str(out_dir.resolve()),
+    ]
+    assert call["cwd"] == str(build_release.REPO_ROOT.resolve())
+    # Literal strings, not `str(_EPOCH_A)` -- a reader constructing the
+    # expected value the same way the production code does would not
+    # notice a wrong constant on either side.
+    assert call["env"]["SOURCE_DATE_EPOCH"] == "1700000000"
+
+    calls.clear()
+    out_dir_default = tmp_path / "dist_default"
+    with pytest.raises(build_release.BuildError):
+        build_release.build(out_dir=out_dir_default, source_date_epoch=None)
+
+    assert len(calls) == 1
+    assert calls[0]["env"]["SOURCE_DATE_EPOCH"] == "315532800"
+
+
+def test_build_refuses_a_relative_out_dir_that_resolves_to_the_repo_root(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    fake_root = tmp_path / "fake_repo"
+    fake_root.mkdir()
+    marker = fake_root / "marker.txt"
+    marker.write_text("x")
+    monkeypatch.setattr(build_release, "REPO_ROOT", fake_root)
+    monkeypatch.chdir(fake_root)
+
+    def _must_not_be_called(
+        cmd: list[str],
+        *,
+        cwd: str,
+        capture_output: bool,
+        text: bool,
+        env: dict[str, str],
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        raise AssertionError(
+            "subprocess.run must not be called once the repo-root guard trips"
+        )
+
+    monkeypatch.setattr(subprocess, "run", _must_not_be_called)
+
+    with pytest.raises(ValueError):
+        build_release.build(out_dir=Path("."), source_date_epoch=_EPOCH_A)
+
+    assert marker.exists()
+
+
+def test_build_refuses_to_clear_the_repo_root(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    fake_root = tmp_path / "nested" / "fake_repo"
+    fake_root.mkdir(parents=True)
+    marker = fake_root / "marker.txt"
+    marker.write_text("x")
+    monkeypatch.setattr(build_release, "REPO_ROOT", fake_root)
+
+    with pytest.raises(ValueError):
+        build_release.build(out_dir=fake_root, source_date_epoch=_EPOCH_A)
+
+    assert marker.exists()
+
+
+@pytest.mark.parametrize("levels_up", [1, 2])
+def test_build_refuses_to_clear_an_ancestor_of_the_repo_root(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, levels_up: int
+) -> None:
+    fake_root = tmp_path / "nested" / "fake_repo"
+    fake_root.mkdir(parents=True)
+    marker = tmp_path / "marker.txt"
+    marker.write_text("x")
+    monkeypatch.setattr(build_release, "REPO_ROOT", fake_root)
+
+    ancestor = fake_root.parents[levels_up - 1]
+    with pytest.raises(ValueError):
+        build_release.build(out_dir=ancestor, source_date_epoch=_EPOCH_A)
+
+    assert marker.exists()
+
+
+def test_build_runs_regardless_of_process_cwd(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    out_dir = tmp_path / "dist"
+    other_cwd = tmp_path / "elsewhere"
+    other_cwd.mkdir()
+    monkeypatch.chdir(other_cwd)
+    result = build_release.build(out_dir=out_dir, source_date_epoch=_EPOCH_A)
+    assert len(result) == 2
+
+
+def test_reproducible_build_same_epoch_matches_member_names_and_digests(
+    build_a: tuple[Path, ...], build_a_repeat: tuple[Path, ...]
+) -> None:
+    wheel_a = _artifact(build_a, ".whl")
+    wheel_a2 = _artifact(build_a_repeat, ".whl")
+    sdist_a = _artifact(build_a, ".tar.gz")
+    sdist_a2 = _artifact(build_a_repeat, ".tar.gz")
+
+    manifest_a = _zip_manifest(wheel_a)
+    manifest_a2 = _zip_manifest(wheel_a2)
+    assert manifest_a, "the wheel manifest is empty -- nothing was actually scanned"
+    assert sorted(manifest_a) == sorted(manifest_a2)
+    assert manifest_a == manifest_a2
+    assert _sha256(wheel_a.read_bytes()) == _sha256(wheel_a2.read_bytes())
+
+    tar_manifest_a = _tar_manifest(sdist_a)
+    tar_manifest_a2 = _tar_manifest(sdist_a2)
+    assert tar_manifest_a, "the sdist manifest is empty -- nothing was actually scanned"
+    assert sorted(tar_manifest_a) == sorted(tar_manifest_a2)
+    assert tar_manifest_a == tar_manifest_a2
+    assert _sha256(sdist_a.read_bytes()) == _sha256(sdist_a2.read_bytes())
+
+
+def test_different_epoch_changes_whole_archive_digest_but_not_member_names(
+    build_a: tuple[Path, ...], build_b: tuple[Path, ...]
+) -> None:
+    wheel_a = _artifact(build_a, ".whl")
+    wheel_b = _artifact(build_b, ".whl")
+    sdist_a = _artifact(build_a, ".tar.gz")
+    sdist_b = _artifact(build_b, ".tar.gz")
+
+    assert sorted(_zip_manifest(wheel_a)) == sorted(_zip_manifest(wheel_b))
+    assert _sha256(wheel_a.read_bytes()) != _sha256(wheel_b.read_bytes())
+
+    assert sorted(_tar_manifest(sdist_a)) == sorted(_tar_manifest(sdist_b))
+    assert _sha256(sdist_a.read_bytes()) != _sha256(sdist_b.read_bytes())
+
+
+def test_help_mentions_out_dir_and_epoch_but_no_profile_variant_or_prune(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        build_release.main(["--help"])
+    assert exc_info.value.code == 0
+    output = capsys.readouterr().out
+    assert "--out-dir" in output
+    assert "--source-date-epoch" in output
+    for forbidden in ("profile", "variant", "prune"):
+        assert forbidden not in output.lower()
+
+
+def test_parser_option_strings_are_exactly_the_expected_set() -> None:
+    parser = build_release._build_parser()
+    option_strings = {
+        opt for action in parser._actions for opt in action.option_strings
+    }
+    assert option_strings == {"-h", "--help", "--out-dir", "--source-date-epoch"}
+
+
+def test_main_returns_0_and_prints_both_paths_on_success(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    fake_wheel = tmp_path / "fitdocs-0.0.0-py3-none-any.whl"
+    fake_sdist = tmp_path / "fitdocs-0.0.0.tar.gz"
+    fake_wheel.write_bytes(b"w")
+    fake_sdist.write_bytes(b"t")
+
+    def fake_build(*, out_dir: Path, source_date_epoch: int | None) -> tuple[Path, ...]:
+        return (fake_sdist, fake_wheel)
+
+    monkeypatch.setattr(build_release, "build", fake_build)
+    exit_code = build_release.main(["--out-dir", str(tmp_path)])
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert str(fake_wheel) in output
+    assert str(fake_sdist) in output
+
+
+def test_main_returns_1_and_prints_stderr_on_build_failure(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    def failing_build(
+        *, out_dir: Path, source_date_epoch: int | None
+    ) -> tuple[Path, ...]:
+        raise RuntimeError("synthetic build failure -- distinguishable in stderr")
+
+    monkeypatch.setattr(build_release, "build", failing_build)
+    exit_code = build_release.main(["--out-dir", str(tmp_path)])
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "synthetic build failure" in captured.err
+    assert captured.out == ""
+
+
+def test_build_release_module_imports_nothing_from_fitdocs() -> None:
+    source = (REPO_ROOT / "scripts" / "build_release.py").read_text()
+    tree = ast.parse(source)
+    imported_names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                imported_names.add(alias.name.split(".")[0])
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_names.add(node.module.split(".")[0])
+    assert imported_names, "the import scan found no imports -- wrong file parsed"
+    assert "fitdocs" not in imported_names
