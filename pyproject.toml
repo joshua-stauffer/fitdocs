@@ -149,6 +149,7 @@ files = [
     "tests/test_version_identity.py",
     "tests/test_changelog.py",
     "tests/test_release_artifacts.py",
+    "tests/test_compatibility_policy.py",
     "scripts",
 ]
 

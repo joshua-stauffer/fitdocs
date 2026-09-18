@@ -313,30 +313,14 @@ annotations your own `mypy`/`pyright` can check against.
 
 ## Compatibility policy
 
-**Before `1.0`, this surface is unstable and carries no
-backward-compatibility obligation.** Within any `0.x` release, names may be
-added, removed or renamed, and signatures may change. This is deliberate: the
-contract is still being designed, and the alternative — bolting optional
-fields onto a shape we already know is wrong — would make the surface worse
-permanently in order to keep a promise made too early. From `1.0` onward the
-surface follows SemVer, and removals are confined to **major** releases. (The
-release mechanics that enforce that — versioning, changelog discipline —
-belong to the project's distribution process, not to this guide.)
-
-In practice, before `1.0`: pin the fitdocs version your calculator is built
-against, and expect to make changes when you upgrade. `tests/test_public_api.py`
-pins the surface inside this repository, so a change is always deliberate and
-visible in the diff rather than accidental — but it is a guard against drift,
-not a freeze.
-
-<!-- historical-note: pre-1.0 rename; NotConfirmed here is a record of what
-     changed, not published surface. A name-absence guard scanning this
-     corpus should exempt this paragraph. -->
-
-This has already happened at least once, and the guide you are reading
-reflects the result: the load result contract was redefined and the
-`NotConfirmed` outcome renamed to `NotComputed`. A calculator written against
-the earlier shape does not run against this one.
+What version numbering promises for this surface — before and after the
+first stable release, what counts as breaking, additive, or internal, and
+the deprecation window — is stated once, in
+[`docs/compatibility.md`](compatibility.md), not here. That page also names
+this page's own [public import surface](#the-public-import-surface) as the
+authority for the public names. `tests/test_public_api.py` pins the surface
+inside this repository, so a change is always deliberate and visible in the
+diff.
 
 ## Diagnosis: what each failure looks like
 
