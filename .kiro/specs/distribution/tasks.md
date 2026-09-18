@@ -57,7 +57,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4_
   - _Boundary: VersionSource, CliApp, TileStore, PluginDiscovery_
 
-- [ ] 1.2 Complete the package manifest and add the license file
+- [x] 1.2 Complete the package manifest and add the license file
   - Full package metadata: authors, keywords, classifiers, the license file declaration, and project links for source, documentation, changelog, and issues; the version stays static and stays the single declaration
   - The project links must additionally resolve every documentation page that a **shipped or emitted** artifact points at — the ownership contract, the plugin platform, the inbox, and configuration — because no artifact ships `docs/` and the ownership declaration is emitted into a user's tree that has no repository; the rule those references follow is project-URL form, never a repository-relative path
   - An explicit source-distribution allowlist replacing the build backend's default inclusion, so the archive carries the manifest, the readme, the license, the changelog, and the package tree and nothing else — in particular not `tests/`, `.kiro/`, `scripts/`, `release/`, `docs/`, and not the root `agent-log` symbolic link, which today ships as a dangling link member because there is no sdist section at all *(Amendment 2)*; the wheel target's contents stated explicitly rather than implied
@@ -286,3 +286,4 @@
 
 ## Implementation Notes
 - 1.1: the released-version scan (`tests/test_version_identity.py`) walks `git ls-files -co --exclude-standard` and keeps a count-exact allowlist of two pre-existing non-declaration lines (`docs/plugins.md` example snippet, `tests/load/test_packaging.py` comment). Any task that edits either line, or adds a `CHANGELOG.md` newest entry / a `SKILL.md` `metadata.version`, must keep that test green in the same change — a second whole-token copy of the literal anywhere else is a failure.
+- 1.2: hatchling ALWAYS adds `.gitignore` and `PKG-INFO` to the sdist regardless of `only-include`, and auto-ships README/LICENSE -- task 1.4's `[sdist].required` and 3.2's "member set equals the allowlist" must account for both extras. Mutating `pyproject.toml` under `uv run` silently re-resolves `uv.lock`; restore it with `git show HEAD:uv.lock > uv.lock` after any manifest mutation. A dangling symlink named in `only-include` is not shipped; only the default (no sdist table) build ships it -- the whole-table removal is the only meaningful mutation.

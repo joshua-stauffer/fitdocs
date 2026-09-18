@@ -297,9 +297,9 @@ def test_frontmatter_contract(name: str) -> None:
     assert "when" in description.lower()
 
     project = _project_metadata()
-    license_block = project["license"]
-    assert isinstance(license_block, dict)
-    assert frontmatter["license"] == license_block["text"]
+    license_expression = project["license"]
+    assert isinstance(license_expression, str)
+    assert frontmatter["license"] == license_expression
 
     compatibility = frontmatter["compatibility"]
     assert isinstance(compatibility, str)

@@ -207,22 +207,26 @@ def test_repository_scan_finds_release_literal_only_in_permitted_locations() -> 
     manifest itself, the newest ``CHANGELOG.md`` entry (tolerated absent),
     and each packaged skill's recorded version.
 
-    Two occurrences elsewhere in this tree are legitimate non-declarations
-    -- decided by reading each one, not guessed -- and are explicitly
-    allowlisted by file, line text, and exact occurrence count rather than
-    silently ignored:
+    One occurrence elsewhere in this tree is a legitimate non-declaration
+    -- decided by reading it, not guessed -- and is explicitly allowlisted
+    by file, line text, and exact occurrence count rather than silently
+    ignored:
 
     * ``docs/plugins.md`` -- an example third-party plugin's own
       ``pyproject.toml`` snippet (package name ``fitdocs-mycalc``), unrelated
       to this project's own version.
-    * ``tests/load/test_packaging.py`` -- a comment illustrating the sdist's
-      ``fitdocs-X.Y.Z/`` member-name prefix format, not a live declaration.
 
-    (``tests/test_cli.py`` previously carried a third, in-boundary
+    (``tests/load/test_packaging.py`` previously carried a second, in-boundary
+    non-declaration -- a comment illustrating the sdist's member-name prefix
+    format using the literal released version. That comment now uses the
+    generic ``fitdocs-X.Y.Z/`` form the neighbouring line already uses, so it
+    no longer needs an allowlist entry.
+
+    ``tests/test_cli.py`` previously carried a third, in-boundary
     non-declaration -- a ``PluginInfo`` fixture's arbitrary stub calculator
     version that happened to collide with the released literal. That fixture
     now uses a non-colliding stub version, so it no longer needs an
-    allowlist entry.)
+    allowlist entry either.)
     """
     released_version = _released_version(_REPO_ROOT)
     scan_files = _tracked_scan_files(_REPO_ROOT)
@@ -250,14 +254,8 @@ def test_repository_scan_finds_release_literal_only_in_permitted_locations() -> 
     # allowlisted text appearing in the file (an out-of-boundary duplicate
     # that would otherwise slip through unnoticed since its text is already
     # known) is caught too, not just text absent from the allowlist.
-    packaging_comment_text = (
-        f'# ``"fitdocs-{released_version}/docs/reference/some_table.csv"``), not a bare'
-    )
     known_non_declaration_line_counts: dict[Path, dict[str, int]] = {
         _REPO_ROOT / "docs" / "plugins.md": {f'version = "{released_version}"': 1},
-        _REPO_ROOT / "tests" / "load" / "test_packaging.py": {
-            packaging_comment_text: 1
-        },
     }
 
     unexpected: list[tuple[Path, int]] = []

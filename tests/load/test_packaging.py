@@ -435,7 +435,7 @@ def test_wheel_contains_no_stray_data_or_module_under_load(
 # file -- do not let this list grow to explain away a build that ships
 # something it should not. Entries must carry the archive's top-level
 # ``fitdocs-X.Y.Z/`` prefix (matching ``tarfile.getnames()`` below, e.g.
-# ``"fitdocs-0.1.0/docs/reference/some_table.csv"``), not a bare
+# ``"fitdocs-X.Y.Z/docs/reference/some_table.csv"``), not a bare
 # repo-relative path -- a plain path would never match a member name and
 # would silently fail to exempt anything. That prefix embeds the project
 # version, so an entry added here would also need updating at every version
