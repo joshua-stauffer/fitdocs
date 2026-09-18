@@ -404,5 +404,5 @@ A malformed `[plugins]` table itself (e.g. `enabled` set to something other
 than a boolean) is different in kind from all of the above: it is a
 **configuration** error, reported before anything is written, and does exit
 `2` — the same treatment `fitdocs` gives a malformed `[tiles]` table (see
-[`README.md`](../README.md#choosing-a-provider)), rather than a
-silently-ignored setting.
+[`docs/configuration.md`](configuration.md#tiles-the-map-tile-provider-and-the-offline-opt-out)),
+rather than a silently-ignored setting.

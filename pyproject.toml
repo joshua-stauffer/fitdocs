@@ -39,6 +39,8 @@ Issues = "https://github.com/joshua-stauffer/fitdocs/issues"
 "Plugin Platform" = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/plugins.md"
 Inbox = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/inbox.md"
 Configuration = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/configuration.md"
+Install = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/install.md"
+Compatibility = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/compatibility.md"
 
 [project.scripts]
 fitdocs = "fitdocs.cli:app"
@@ -150,6 +152,7 @@ files = [
     "tests/test_changelog.py",
     "tests/test_release_artifacts.py",
     "tests/test_compatibility_policy.py",
+    "tests/test_install_docs.py",
     "scripts",
 ]
 

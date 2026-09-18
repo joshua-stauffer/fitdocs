@@ -7,17 +7,28 @@ running, cycling, and weight training, with charts and computed training load.
 Built to plug into a larger markdown PKM (wiki-style, Obsidian-compatible) as a
 first-class path, while remaining feature-complete standalone.
 
-## Status
+## Install
 
-Early discovery / spec phase. No installable package yet.
+fitdocs installs as a single console entry point with either standard
+isolated-application installer:
 
-- `.kiro/steering/` — persistent project knowledge (product, tech, structure, roadmap)
-- `.kiro/specs/` — feature specs (requirements → design → tasks → implementation)
-- `docs/reference/` — research and methodology references backing the specs
+```sh
+uv tool install fitdocs
+```
 
-## What it will do (first pass)
+```sh
+pipx install fitdocs
+```
 
-1. **Ingest** `.fit` files from a watched/target directory (user drops files in).
+See [Install](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/install.md)
+for the full first-run path — installing from a checkout before the package
+is published, choosing a data root, getting `.fit` files where fitdocs finds
+them, the first run, and what differs between a standalone data root and one
+inside an existing markdown wiki.
+
+## What it does
+
+1. **Ingest** `.fit` files from a target directory or the standing inbox (user drops files in; fitdocs never watches for them).
 2. **Render** one markdown doc per activity — summary metrics, laps/splits or
    sets/reps, and embedded charts (e.g. the power-vs-heart-rate hero graph) —
    modeled on [fitdocs.ai](https://github.com/joshua-stauffer/fitdocs.ai)'s
@@ -51,99 +62,11 @@ is not yet shipped.
 
 ## Route maps
 
-Outdoor activities (runs, rides, and other workouts whose samples carry GPS
-positions) get a **Map** section in their document: the route drawn over real
-basemap tiles. Rendering that map is the *only* time fitdocs touches the
-network — every other operation runs fully offline.
-
-### What leaves your machine, and when
-
-To draw the basemap, fitdocs fetches the map tiles that cover your route from
-the configured tile provider (OpenStreetMap by default). A tile request is a
-standard slippy-map URL of the form `.../{z}/{x}/{y}.png`, so it reveals your
-**approximate activity location, at basemap-tile granularity**, to that
-provider — along with fitdocs' descriptive user agent:
-
-```
-fitdocs/<version> (+https://github.com/joshua-stauffer/fitdocs)
-```
-
-No GPS coordinates, credentials, or personal data are ever sent — only the
-tile-URL requests the provider needs to serve the basemap.
-
-This happens **only on a cache miss**, and **only during `sync`/`regen`** while
-a map is being rendered. Each tile is fetched at most once and then cached (see
-below), so a warm cache — like every other fitdocs operation — is fully
-offline.
-
-### Turning tile requests off (the persistent opt-out)
-
-To stop fitdocs from ever making a tile request, set `enabled = false` under
-`[tiles]` in `<data-root>/fitdocs.toml`. This is a persistent opt-out: it
-disables all tile fetching permanently.
-
-With it off, maps render **only from tiles already in the cache**. When a map
-needs a tile that isn't cached, fitdocs omits that document's Map section, emits
-a warning, and renders the rest of the document normally — the run still
-succeeds. This is the same warn-and-skip behavior used when the provider is
-unreachable; no document or run is ever failed because a map couldn't be drawn.
-
-### Choosing a provider
-
-The tile provider is configured in the `[tiles]` table of
-`<data-root>/fitdocs.toml` — a user-owned file that fitdocs only ever reads (it
-never creates or writes it). Every key is optional; omit the file or the table
-entirely to accept the OpenStreetMap defaults.
-
-| Key | Meaning |
-|-----|---------|
-| `enabled` | `true` / `false` — the opt-out above. Default `true`. |
-| `name` | Cache slug for this provider (path-safe: `[a-z0-9][a-z0-9-]*`). Keys the on-disk cache, so switching providers never mixes basemaps. Default `"osm"`. |
-| `url` | Tile-URL template; must contain the `{z}`, `{x}`, and `{y}` placeholders. Default is the OSM standard layer. |
-| `attribution` | Attribution text rendered on every map image. Default `© OpenStreetMap contributors`. |
-
-The default (OpenStreetMap standard layer), written out explicitly, with the
-built-in OpenTopoMap alternative shown commented below:
-
-```toml
-# <data-root>/fitdocs.toml — user-owned; fitdocs only reads it.
-[tiles]
-enabled = true
-name = "osm"
-url = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-attribution = "© OpenStreetMap contributors"
-
-# To use OpenTopoMap (topographic style) instead, replace the three lines
-# above with:
-#   name = "opentopomap"
-#   url = "https://tile.opentopomap.org/{z}/{x}/{y}.png"
-#   attribution = "Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)"
-```
-
-A malformed `[tiles]` table — a `url` missing a placeholder, a non-slug `name`,
-or a non-boolean `enabled` — fails loudly (exit code 2) rather than silently
-misdirecting tile traffic.
-
-### Attribution
-
-The configured provider's `attribution` text is rendered legibly on every map
-image — by default `© OpenStreetMap contributors`. When you switch providers,
-set `attribution` to the credit that provider requires (for example, the
-OpenTopoMap string shown above).
-
-### Tile cache
-
-Fetched tiles are cached under the data root at:
-
-```
-<data-root>/.cache/tiles/<name>/<z>/<x>/<y>.png
-```
-
-where `<name>` is the provider's cache slug. The cache always lives under your
-data root — never inside this repository or the installed package. It is
-**append-only and never pruned**: fitdocs only ever adds tiles, never deletes
-them. Deleting the cache is safe — the only effect is that its tiles are
-re-fetched on the next render.
+Outdoor activities get a **Map** section drawn over real basemap tiles —
+the only time fitdocs touches the network. What leaves your machine and
+when, the persistent opt-out, choosing a provider, attribution, and the tile
+cache all now live in
+[Configuration](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/configuration.md#tiles-the-map-tile-provider-and-the-offline-opt-out).
 
 ## Plugins
 
@@ -160,11 +83,10 @@ warning, never a run failure.
 privileges — fitdocs applies no sandboxing.** Only point `[plugins].path` at
 code you trust.
 
-See [`docs/plugins.md`](docs/plugins.md) for the full guide — the worked
-packaged example, the local-file alternative, the public API surface, the
-compatibility policy, and diagnosis of every rejection reason — and
-[`docs/contributing-calculators.md`](docs/contributing-calculators.md) for how
-to write the calculator itself.
+See [`docs/plugins.md`](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/plugins.md)
+for the full guide — the worked packaged example, the local-file alternative,
+the public API surface, the compatibility policy, diagnosis of every
+rejection reason, and (linked from there) how to write the calculator itself.
 
 ## Agent skills
 
@@ -192,104 +114,12 @@ ambiguous matches.
 
 ## Inbox
 
-fitdocs defines a standing inbox: get `.fit` files there, however you like —
-HealthFit → iCloud, watch sync, a manual drop, your own script — and
-`fitdocs sync`, run with no arguments, drains it. `fitdocs sync SOURCE` keeps
-working exactly as before and never reads the inbox or its settings.
-
-**Delivering files is entirely your concern. fitdocs performs no watching and
-no scheduling of any kind** — there is no daemon, no filesystem watcher, and
-no background process. A drain happens only when `fitdocs sync` is invoked,
-one shot, by you, your cron job, or your wiki agent.
-
-### Default location and configuration
-
-The inbox is configured in the `[inbox]` table of `<data-root>/fitdocs.toml` —
-the same user-owned, fitdocs-only-reads settings file `[tiles]` and
-`[plugins]` share. Every key is optional and defaults independently; omit the
-table entirely to accept every default below.
-
-| Key | Meaning | Default |
-|-----|---------|---------|
-| `path` | The inbox location. An absolute path is used as given; a relative path resolves against the data root. Created automatically if it lies inside the data root and is missing; an absent path outside the data root is a configuration error (guarding against typos and unmounted cloud storage). | `"inbox"` (i.e. `<data-root>/inbox/`) |
-| `settle_seconds` | The stability-check settle interval, in seconds. `0` disables the wait entirely. | `2` |
-| `ignore` | Additional glob patterns to ignore, matched against a candidate's basename or inbox-relative path (case-normalized). Applied *in addition to* the built-in ignore rules described under Safeguards below, never in place of them. | `[]` (no additional patterns) |
-| `disposition` | What happens to a file once it has been successfully processed: `"leave"` (never touch it) or `"move"` (relocate it to `processed_dir`). Deletion is not a disposition fitdocs offers under any configuration. | `"leave"` |
-| `processed_dir` | The processed-files destination; required when `disposition = "move"`, and must not equal or be nested inside the inbox. Same resolution and auto-creation rule as `path`. | `null` (unset) |
-
-### Drain semantics
-
-Bare `fitdocs sync` drains the resolved inbox exactly once: it selects
-eligible candidates, applies the stability check, processes each stable
-candidate through the same per-file pipeline an explicit-source `sync` uses,
-then applies the configured disposition and runs the usual training-load
-pass. The run's output names the inbox path being drained alongside the
-existing written/skipped/failed summary, extended with deferred, quarantined,
-moved, and failed-move counts. An inbox with no eligible files completes
-successfully, reporting nothing written. `--out`, `--force`, and
-`--no-prompt` all keep their explicit-source meanings on a drain.
-
-### Safeguards
-
-**Ignore rules.** Only regular files with a `.fit` extension (case-insensitive)
-are candidates. Any candidate whose inbox-relative path has a path component
-starting with a dot is ignored — this covers hidden files, AppleDouble `._*`
-companions, and everything inside a hidden sync-tool staging directory (for
-example `.stversions/`). A configured `ignore` pattern is checked in addition
-to that dot-component rule and does exclude matching candidates. Ignored
-files are excluded from processing entirely; they are never reported as
-failures.
-
-**Stability check.** Before a candidate is processed, fitdocs verifies it is
-stable: its size and modification time are observed twice, separated by the
-`settle_seconds` interval (once per drain for the whole batch of candidates,
-never once per file). A candidate that changes or disappears between the two
-observations is deferred — left completely untouched and reported by name —
-and is simply re-considered, with no memory of the deferral, on the next
-drain. `settle_seconds = 0` disables the wait and admits every candidate that
-can be observed once.
-
-**Quarantine record.** A file that fails processing because of a
-source-level fault — the `.fit` bytes themselves cannot be decoded or
-parsed — is recorded by content hash, name, and failure reason in
-`<data-root>/.fitdocs/quarantine.toml`. A subsequent drain reports it once
-from that record, in its own `quarantined` channel, without re-processing it
-or failing the run on its account — so a known-bad file is surfaced once and
-then remembered rather than looping as a fresh failure on every scheduled
-run. The record is keyed on content, not name: a same-named file with
-different bytes is treated as new. A failure that is instead a property of
-an *existing document* — a damaged preserved region being the representative
-case — is reported as a failure but is **not** recorded in the quarantine, so
-simply repairing the document is enough to make the next drain succeed. Pass
-`--retry-quarantined` to re-attempt every currently quarantined inbox file: a
-renewed success clears its entry, and a renewed failure updates it.
-
-### Disposition policy
-
-The default disposition, `"leave"`, never writes, moves, renames, or deletes
-an inbox file — processed files are simply left where they are, and the
-archive's content dedupe makes subsequent drains skip them. **No configuration
-ever deletes an inbox file: deletion is not an option fitdocs offers, under
-any disposition.** The opt-in `"move"` disposition relocates a file out
-of the inbox to `processed_dir` only once its content is confirmed present in
-the archive, preserving both files on a name collision rather than ever
-overwriting. A file that failed, was deferred, was quarantined, or whose
-processing was skipped without an archived copy — including a document whose
-existing `doc_version` is newer than this fitdocs produces — is never moved:
-**it stays in the inbox and is retried on the next drain.** That includes a
-file whose document could not be updated for any reason; leaving it in place
-is what makes the retry possible.
-
-### Ownership of the locations the inbox uses
-
-The inbox directory and its optional `processed_dir` destination are
-**user-configured locations fitdocs may create**, exactly as the
-[published ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md)
-defines that category: fitdocs may create and write there because your
-settings name them, not because they are part of the fixed owned-path set.
-The quarantine record's directory, `<data-root>/.fitdocs/`, is **tool-owned
-state** — one of the fixed paths the ownership contract already lists fitdocs
-as owning outright.
+fitdocs defines a standing inbox: get `.fit` files there however you like,
+and `fitdocs sync`, run with no arguments, drains it — performing no
+watching and no scheduling of any kind. See
+[Inbox](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/inbox.md)
+for the full interface: every settings key and its default, drain semantics,
+the safeguards, and the disposition policy's never-delete guarantee.
 
 ## Training blocks
 
@@ -362,4 +192,17 @@ restating the same contract for LLM agents maintaining the wiki.
 
 All feature work follows Kiro-style Spec-Driven Development via
 [cc-sdd](https://github.com/gotalab/cc-sdd) (`/kiro-*` skills in Claude Code).
-Start with `.kiro/steering/roadmap.md` for the current plan.
+Start with `.kiro/steering/roadmap.md` for the current plan; `.kiro/specs/`
+holds every feature spec (requirements → design → tasks → implementation),
+and `docs/reference/` holds the research and methodology references backing
+them.
+
+## Learn more
+
+- [Documentation index](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/index.md) — the single entry point into every page below.
+- [Install](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/install.md) — the full first-run path, standalone or wiki-hosted.
+- [Configuration](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/configuration.md) — the data-root contract, the settings file, and the network/offline behavior.
+- [Inbox](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/inbox.md) — the full inbox interface.
+- [Compatibility policy](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/compatibility.md) — what a version number promises.
+- [Plugin platform](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/plugins.md) — the calculator plugin API.
+- [Ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md) — what fitdocs owns in your data root and what you own.
