@@ -2,10 +2,9 @@
 
 Opens the release's one wheel and one source distribution, enumerates their
 members, and reads their distribution metadata -- the source tree is never
-consulted. Applies four checks and reports every violation it finds rather
-than stopping at the first (task 2.2; the design's fifth and sixth checks --
-the encumbered-content scan and the version-consistency check -- are added by
-tasks 2.3 and 2.4):
+consulted. Applies five checks and reports every violation it finds rather
+than stopping at the first (tasks 2.2 and 2.3; the design's sixth check --
+version consistency -- is added by task 2.4):
 
 * ``MISSING_REQUIRED`` -- a member `release/artifact-policy.toml` requires is
   absent from the artifact's regular files.
@@ -29,10 +28,29 @@ contain exactly one wheel and one sdist). Writes nothing to disk; prints a
 violation listing to stderr, or a one-line confirmation to stdout when clean.
 
 This module is stdlib-only (`zipfile`, `tarfile`, `fnmatch`, `email`,
-`dataclasses`, `enum`, `pathlib`, `argparse`, `sys`) plus
-`scripts.artifact_policy`; it imports nothing from `fitdocs` and, for this
-task, nothing from `tests` (task 2.3 adds exactly two such imports for the
-encumbered-content gate).
+`dataclasses`, `enum`, `pathlib`, `argparse`, `sys`) plus two non-standard
+import groups: `scripts.artifact_policy` (the release policy reader) and,
+for the fifth check below (task 2.3, the encumbered-content gate), the
+purge's own guard cores -- `tests._forbidden_strings` (the token matcher)
+and `tests._content_fingerprints` / `tests._content_oracle` (the digest-keyed
+value oracle). Those two groups are the only non-standard-library imports
+this module makes; it imports nothing from `fitdocs`. Because the gate
+imports `tests`, this module must be invoked from the repository root (as
+``python -m scripts.check_artifacts``) so that package resolves.
+
+* ``ENCUMBERED_CONTENT`` -- a text-like member's decoded content, a binary
+  member's NAME, or the distribution metadata (itself just another regular
+  member named `METADATA`/`PKG-INFO`) matches a forbidden-string value or a
+  fingerprinted numeric value. **Fails closed**: this check never silently
+  skips. See ``GATE_NOT_RUN`` below for the one case it does not run at all.
+* ``GATE_NOT_RUN`` -- `FITDOCS_FORBIDDEN_STRINGS` is unset, so the
+  encumbered-content gate above did not run at all. This is a violation of
+  its own kind, never a skip and never a pass: a release step that did not
+  scan has gated nothing. A source that is SET but unusable (missing,
+  unreadable, empty, or inside the repository working tree) is instead a
+  HARD ERROR -- `ForbiddenStringsSourceError` propagates out of
+  `check_artifacts` uncaught, and `main` reports it exactly as it reports a
+  malformed policy file.
 """
 
 from __future__ import annotations
@@ -49,6 +67,16 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from tests._content_fingerprints import FINGERPRINTS, SALT, WINDOW_LENGTHS
+from tests._content_oracle import scan as oracle_scan
+from tests._forbidden_strings import (
+    ENV_VAR,
+    ForbiddenStrings,
+    ForbiddenStringsSourceError,
+)
+from tests._forbidden_strings import load as load_forbidden_strings
+from tests._forbidden_strings import matches as forbidden_matches
+
 from scripts.artifact_policy import (
     DEFAULT_POLICY_PATH,
     ArtifactPolicy,
@@ -57,6 +85,47 @@ from scripts.artifact_policy import (
 )
 
 REPO_ROOT: Path = Path(__file__).resolve().parents[1]
+
+_TEXT_LIKE_SUFFIXES = frozenset(
+    {
+        ".py",
+        ".pyi",
+        ".md",
+        ".txt",
+        ".toml",
+        ".cfg",
+        ".ini",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".csv",
+        ".rst",
+        ".typed",
+    }
+)
+"""File extensions this gate decodes and scans. Anything else is treated as
+binary -- matched by member NAME only, never opened -- so the scan stays
+fast and cannot produce a spurious content match on opaque bytes."""
+
+_TEXT_LIKE_EXACT_NAMES = frozenset(
+    {"METADATA", "PKG-INFO", "RECORD", "WHEEL", "entry_points.txt", "SKILL.md"}
+)
+_TEXT_LIKE_NAME_PREFIXES = ("LICENSE", "README", "CHANGELOG")
+
+
+def _is_text_like(member_name: str) -> bool:
+    """Whether `member_name` (an archive member's full path) is text-like.
+
+    Compared on the member's basename, so a match applies regardless of
+    which directory the member lives under (`fitdocs-9.9.9.dist-info/METADATA`
+    is text-like exactly as a bare `METADATA` would be).
+    """
+    base = member_name.rsplit("/", 1)[-1]
+    if base in _TEXT_LIKE_EXACT_NAMES:
+        return True
+    if base.startswith(_TEXT_LIKE_NAME_PREFIXES):
+        return True
+    return Path(base).suffix in _TEXT_LIKE_SUFFIXES
 
 
 class ViolationKind(StrEnum):
@@ -115,6 +184,11 @@ class _Member:
     entries (so a forbidden pattern like `tests/*` -- which fnmatch also
     matches against the bare `tests/` string, `*` matching zero characters
     -- can still catch a directory entry, not only the files under it).
+
+    `content` holds a regular member's raw bytes -- empty for a directory or
+    a link, which the encumbered-content gate never opens (task 2.3: a
+    link's bytes are its target path, already reported by `LINK_MEMBER`, and
+    a directory entry has no content to scan).
     """
 
     name: str
@@ -122,6 +196,7 @@ class _Member:
     is_dir: bool
     is_regular: bool
     link_target: str = ""
+    content: bytes = b""
 
 
 def _find_artifacts(dist_dir: Path) -> tuple[Path, Path]:
@@ -188,6 +263,7 @@ def _load_wheel(path: Path) -> tuple[tuple[_Member, ...], email.message.Message]
             is_link = mode == 0o120000
             is_regular = not is_dir and not is_link
             link_target = _wheel_link_target(mode, zf, info)
+            content = zf.read(info) if is_regular else b""
             members.append(
                 _Member(
                     name=name,
@@ -195,10 +271,11 @@ def _load_wheel(path: Path) -> tuple[tuple[_Member, ...], email.message.Message]
                     is_dir=is_dir,
                     is_regular=is_regular,
                     link_target=link_target,
+                    content=content,
                 )
             )
             if is_regular and name.endswith(".dist-info/METADATA"):
-                metadata_bytes = zf.read(info)
+                metadata_bytes = content
 
     if metadata_bytes is None:
         raise CheckerError(f"{path.name}: no '*.dist-info/METADATA' member found")
@@ -242,6 +319,14 @@ def _load_sdist(path: Path) -> tuple[tuple[_Member, ...], email.message.Message]
             is_link = info.issym() or info.islnk()
             is_regular = info.isfile()
             link_target = info.linkname if is_link else ""
+            content = b""
+            if is_regular:
+                extracted = tf.extractfile(info)
+                if extracted is None:
+                    raise CheckerError(
+                        f"{path.name}: {stripped!r} member is unreadable"
+                    )
+                content = extracted.read()
             members.append(
                 _Member(
                     name=stripped,
@@ -249,13 +334,11 @@ def _load_sdist(path: Path) -> tuple[tuple[_Member, ...], email.message.Message]
                     is_dir=is_dir,
                     is_regular=is_regular,
                     link_target=link_target,
+                    content=content,
                 )
             )
             if is_regular and stripped == "PKG-INFO":
-                extracted = tf.extractfile(info)
-                if extracted is None:
-                    raise CheckerError(f"{path.name}: PKG-INFO member is unreadable")
-                pkg_info_bytes = extracted.read()
+                pkg_info_bytes = content
 
     if pkg_info_bytes is None:
         raise CheckerError(f"{path.name}: no 'PKG-INFO' member found")
@@ -372,21 +455,93 @@ def _check_metadata(
     return violations
 
 
+def _check_encumbered_content(
+    subject: str,
+    members: tuple[_Member, ...],
+    *,
+    forbidden: ForbiddenStrings,
+    fingerprints: frozenset[str],
+    window_lengths: frozenset[int],
+    salt: bytes,
+) -> list[Violation]:
+    """Scan every regular member for the removed third-party material, as
+    the purge's own guard cores define it (task 2.3).
+
+    A text-like member (by name -- see `_is_text_like`) is decoded
+    permissively (`errors="replace"`, the same technique
+    `tests/load/test_packaging.py::_decode_and_scan` uses, so one stray
+    non-UTF-8 byte does not blind the scan to the rest of the member) and
+    checked against BOTH the token matcher and the digest-keyed value
+    oracle. A binary member is matched by NAME only against the token
+    matcher -- its content is never opened, so the scan stays fast and
+    cannot produce a spurious content match on opaque bytes. A link member
+    is skipped entirely: task 2.2's `LINK_MEMBER` check already reports it,
+    and a link's bytes are its target path, not content to scan.
+
+    The distribution metadata is not special-cased here: `METADATA` /
+    `PKG-INFO` is already one of `members` (task 2.2's loaders capture it
+    there), and its basename is text-like by name, so it is scanned by the
+    same loop as everything else -- including its body, since `member.content`
+    holds the metadata file's raw bytes in full, headers and message body
+    alike.
+    """
+    violations: list[Violation] = []
+    for member in members:
+        if not member.is_regular:
+            continue
+        if _is_text_like(member.name):
+            text = member.content.decode("utf-8", errors="replace")
+            for _value in forbidden_matches(text, forbidden):
+                violations.append(
+                    Violation(
+                        subject=subject,
+                        kind=ViolationKind.ENCUMBERED_CONTENT,
+                        detail=(
+                            f"member {member.name!r} contains a forbidden-string "
+                            "token match -- see the FITDOCS_FORBIDDEN_STRINGS "
+                            "source for which value(s)"
+                        ),
+                        remedy="remove or reword the matched content",
+                    )
+                )
+            if oracle_scan(text, fingerprints, window_lengths, salt):
+                violations.append(
+                    Violation(
+                        subject=subject,
+                        kind=ViolationKind.ENCUMBERED_CONTENT,
+                        detail=(
+                            f"member {member.name!r} contains a fingerprinted value"
+                        ),
+                        remedy="remove or replace the matched numeric content",
+                    )
+                )
+        else:
+            for _value in forbidden_matches(member.name, forbidden):
+                violations.append(
+                    Violation(
+                        subject=subject,
+                        kind=ViolationKind.ENCUMBERED_CONTENT,
+                        detail=(
+                            f"binary member {member.name!r} name matches a "
+                            "forbidden-string token match"
+                        ),
+                        remedy="rename or remove the matched member",
+                    )
+                )
+    return violations
+
+
 def check_artifacts(
     dist_dir: Path, *, policy: ArtifactPolicy, repo_root: Path
 ) -> tuple[Violation, ...]:
     """Run every implemented check over the dist directory's one artifact set.
 
-    ``repo_root`` is accepted now, unused, so the signature matches the
-    design's `check_artifacts` contract; the encumbered-content gate (task
-    2.3) passes it to the purge's token core, which refuses match data that
-    resolves inside it.
+    ``repo_root`` is passed to `tests._forbidden_strings.load`, which
+    refuses match data that resolves inside it (task 2.3).
 
     Returns every violation found, sorted by `(subject, kind, detail)` --
     deterministic across repeated runs over the same artifacts.
     """
-    del repo_root  # reserved for the encumbered-content gate (task 2.3)
-
     wheel_path, sdist_path = _find_artifacts(dist_dir)
     wheel_subject = wheel_path.name
     sdist_subject = sdist_path.name
@@ -415,6 +570,36 @@ def check_artifacts(
     violations += _check_metadata(
         sdist_subject, sdist_metadata, policy.required_metadata_fields
     )
+
+    forbidden = load_forbidden_strings(repo_root)
+    if forbidden is None:
+        violations.append(
+            Violation(
+                subject="",
+                kind=ViolationKind.GATE_NOT_RUN,
+                detail=f"{ENV_VAR} is unset; the encumbered-content gate did not run",
+                remedy=(
+                    f"set {ENV_VAR} to the out-of-repository match-data file and re-run"
+                ),
+            )
+        )
+    else:
+        violations += _check_encumbered_content(
+            wheel_subject,
+            wheel_members,
+            forbidden=forbidden,
+            fingerprints=FINGERPRINTS,
+            window_lengths=WINDOW_LENGTHS,
+            salt=SALT,
+        )
+        violations += _check_encumbered_content(
+            sdist_subject,
+            sdist_members,
+            forbidden=forbidden,
+            fingerprints=FINGERPRINTS,
+            window_lengths=WINDOW_LENGTHS,
+            salt=SALT,
+        )
 
     return tuple(sorted(violations))
 
@@ -457,6 +642,9 @@ def main(argv: Sequence[str]) -> int:
     try:
         violations = check_artifacts(args.dist_dir, policy=policy, repo_root=REPO_ROOT)
     except CheckerError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    except ForbiddenStringsSourceError as exc:
         print(str(exc), file=sys.stderr)
         return 2
 

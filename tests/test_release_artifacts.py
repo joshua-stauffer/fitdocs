@@ -43,6 +43,7 @@ import dataclasses
 import hashlib
 import io
 import subprocess
+import sys
 import tarfile
 import tomllib
 import zipfile
@@ -55,6 +56,7 @@ from typing import Any
 
 import pytest
 import scripts.build_release as build_release
+import scripts.check_artifacts as check_artifacts_module
 from scripts.artifact_policy import (
     DEFAULT_POLICY_PATH,
     ArtifactPolicy,
@@ -71,8 +73,39 @@ from scripts.check_artifacts import (
     main as check_artifacts_main,
 )
 
+from tests._content_fingerprints import SALT as REAL_SALT
+from tests._content_oracle import ENTROPY_FLOOR_BITS, digest, tokens, windows
+from tests._forbidden_strings import ENV_VAR, ForbiddenStringsSourceError
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 REAL_POLICY_PATH = REPO_ROOT / DEFAULT_POLICY_PATH
+
+
+# ---------------------------------------------------------------------------
+# Task 2.3: default environment for every test in this module
+# ---------------------------------------------------------------------------
+#
+# Every test above this point (and most below it) calls `check_artifacts`
+# not caring about the encumbered-content gate at all -- without a default,
+# each would trip a spurious GATE_NOT_RUN violation the moment task 2.3's
+# gate is wired in, purely because a developer shell has
+# `FITDOCS_FORBIDDEN_STRINGS` unset. This autouse fixture points the
+# variable at a throwaway, out-of-repository match file (so `load`'s
+# inside-the-tree rule never fires for it) holding one needle that never
+# occurs in any fixture elsewhere in this module. Tests that must exercise
+# the unset / broken-source paths override it within their own body via the
+# SAME `monkeypatch` instance (pytest caches a function-scoped fixture once
+# per test, so a second request for `monkeypatch` is the identical object).
+
+
+@pytest.fixture(autouse=True)
+def _default_forbidden_strings_env(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source_dir = tmp_path_factory.mktemp("default_forbidden_strings")
+    match_file = source_dir / "match.txt"
+    match_file.write_text("DefaultAutouseSyntheticNeedleNeverPlanted\n")
+    monkeypatch.setenv(ENV_VAR, str(match_file))
 
 
 # ---------------------------------------------------------------------------
@@ -1636,10 +1669,10 @@ def test_real_build_with_the_real_policy_has_zero_violations(
     assert violations == (), f"real build failed conformance: {violations!r}"
 
 
-# --- import isolation --------------------------------------------------
+# --- import isolation (superseded by the task 2.3 import-audit test below) -
 
 
-def test_check_artifacts_module_imports_nothing_from_fitdocs_or_tests() -> None:
+def test_check_artifacts_module_imports_nothing_from_fitdocs() -> None:
     source = (REPO_ROOT / "scripts" / "check_artifacts.py").read_text()
     tree = ast.parse(source)
     imported_names: set[str] = set()
@@ -1651,4 +1684,725 @@ def test_check_artifacts_module_imports_nothing_from_fitdocs_or_tests() -> None:
             imported_names.add(node.module.split(".")[0])
     assert imported_names, "the import scan found no imports -- wrong file parsed"
     assert "fitdocs" not in imported_names
-    assert "tests" not in imported_names
+
+
+# ---------------------------------------------------------------------------
+# Task 2.3: the encumbered-content gate (ENCUMBERED_CONTENT / GATE_NOT_RUN)
+# ---------------------------------------------------------------------------
+#
+# Discrimination sweep for the token matcher's every relaxation class, per
+# `.kiro/steering/change-protocol.md` -- {absent, wrong text, case,
+# whitespace, partial match, type, scope/off-by-one}:
+#
+# | class           | test                                                        |
+# |------------------|--------------------------------------------------------------|
+# | absent           | test_needle_absent_from_a_member_trips_no_encumbered_content |
+# | wrong text       | test_needle_absent_from_a_member_trips_no_encumbered_content |
+# | case             | test_case_variant_needle_is_still_caught                     |
+# | whitespace       | test_wrapped_multiword_needle_across_a_line_break_is_caught  |
+# | partial match    | test_needle_absent_from_a_member_trips_no_encumbered_content |
+# |                  | (member content shares no substring with the needle)         |
+# | type (name-only  | test_needle_in_binary_member_name_is_caught_by_name_only,    |
+# | vs content scan) | test_needle_in_binary_member_content_only_is_not_caught      |
+# | scope/off-by-one | test_metadata_body_only_needle_is_caught_... tests (member-  |
+# |                  | name-only fixtures leave the body clean; body-only fixtures  |
+# |                  | leave every non-metadata member clean -- the two cannot be   |
+# |                  | confused); test_needle_in_binary_member_directory_component_ |
+# |                  | is_caught (a directory component, not only the basename,     |
+# |                  | must match)                                                   |
+#
+# Additional round-1 rejection follow-ups, not a distinct relaxation class:
+# test_needle_deep_in_a_large_member_is_still_caught (no truncated read),
+# test_needle_beside_an_undecodable_byte_is_still_caught (no strict-decode
+# skip), test_needle_in_an_ordinary_sdist_text_member_is_caught and
+# test_needle_in_an_sdist_binary_member_name_is_caught_by_name_only (the
+# sdist side of both the text and binary paths, not only the wheel side).
+#
+# Round-2 rejection follow-up, not a distinct relaxation class:
+# test_fingerprinted_control_value_in_the_sdist_is_caught (the sdist side
+# of the value-oracle control, not only the wheel side).
+
+_NEEDLE = "PlantedForbiddenValue"
+
+
+def _write_match_file(tmp_path: Path, *values: str) -> Path:
+    match_file = tmp_path / "synthetic-match-data.txt"
+    match_file.write_text("\n".join(values) + "\n")
+    return match_file
+
+
+# --- GATE_NOT_RUN: fails closed, never a skip -------------------------------
+
+
+def test_gate_not_run_on_clean_fixture_is_exactly_one_violation(
+    clean_dist: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv(ENV_VAR, raising=False)
+    policy = load_policy(REAL_POLICY_PATH)
+
+    violations = check_artifacts(clean_dist, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1, (
+        "an unset FITDOCS_FORBIDDEN_STRINGS must be reported as a violation, "
+        f"not silently skipped or passed: {violations!r}"
+    )
+    violation = violations[0]
+    assert violation.kind == ViolationKind.GATE_NOT_RUN
+    assert violation.subject == ""
+    assert ENV_VAR in violation.detail
+
+
+def test_gate_not_run_main_exits_1_never_0(
+    clean_dist: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv(ENV_VAR, raising=False)
+    exit_code = check_artifacts_main(
+        ["--dist-dir", str(clean_dist), "--policy", str(REAL_POLICY_PATH)]
+    )
+    assert exit_code == 1
+
+
+def test_gate_not_run_does_not_suppress_the_forbidden_member_and_link_checks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv(ENV_VAR, raising=False)
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    wheel_path = _make_wheel(
+        dist_dir,
+        _CLEAN_WHEEL_MEMBERS,
+        metadata=_CLEAN_METADATA,
+        links={"fitdocs/extra.md": "LICENSE"},
+    )
+    sdist_members = dict(_CLEAN_SDIST_MEMBERS)
+    sdist_members["tests/x.py"] = b""
+    _make_sdist(dist_dir, sdist_members, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    kinds = {v.kind for v in violations}
+    assert kinds == {
+        ViolationKind.FORBIDDEN_MEMBER,
+        ViolationKind.LINK_MEMBER,
+        ViolationKind.GATE_NOT_RUN,
+    }, "an unset gate must not suppress the other checks that already ran"
+    assert any(v.subject == wheel_path.name for v in violations)
+
+
+def test_gate_not_run_against_the_real_build_reuses_the_module_fixture(
+    build_a: tuple[Path, ...], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv(ENV_VAR, raising=False)
+    dist_dir = build_a[0].parent
+    policy = load_policy(REAL_POLICY_PATH)
+
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert violations == (
+        Violation(
+            subject="",
+            kind=ViolationKind.GATE_NOT_RUN,
+            detail=f"{ENV_VAR} is unset; the encumbered-content gate did not run",
+            remedy=f"set {ENV_VAR} to the out-of-repository match-data file and re-run",
+        ),
+    )
+
+
+# --- set but unusable: a hard error, never GATE_NOT_RUN ---------------------
+
+
+def test_source_inside_the_repo_raises_forbidden_strings_source_error(
+    clean_dist: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(REPO_ROOT / "tests" / "_forbidden_strings.py"))
+    policy = load_policy(REAL_POLICY_PATH)
+
+    with pytest.raises(ForbiddenStringsSourceError):
+        check_artifacts(clean_dist, policy=policy, repo_root=REPO_ROOT)
+
+
+def test_main_source_inside_the_repo_returns_2_with_the_cores_own_message(
+    clean_dist: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(REPO_ROOT / "tests" / "_forbidden_strings.py"))
+    exit_code = check_artifacts_main(
+        ["--dist-dir", str(clean_dist), "--policy", str(REAL_POLICY_PATH)]
+    )
+    assert exit_code == 2
+    assert "inside the repository working tree" in capsys.readouterr().err
+
+
+def test_main_source_nonexistent_path_returns_2(
+    clean_dist: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv(ENV_VAR, "/does/not/exist/at-all.txt")
+    exit_code = check_artifacts_main(
+        ["--dist-dir", str(clean_dist), "--policy", str(REAL_POLICY_PATH)]
+    )
+    assert exit_code == 2
+    assert capsys.readouterr().err  # the core's own message, not silence
+
+
+# --- clean fixture with a real synthetic match file set: zero violations ---
+
+
+def test_clean_fixture_with_gate_enabled_trips_no_violations(
+    clean_dist: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(clean_dist, policy=policy, repo_root=REPO_ROOT)
+    assert violations == ()
+
+
+def test_real_build_with_gate_enabled_trips_no_violations(
+    build_a: tuple[Path, ...], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = build_a[0].parent
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+    assert violations == (), (
+        f"real build failed the encumbered-content gate: {violations!r}"
+    )
+
+
+# --- needle in a text-like member --------------------------------------
+
+
+def test_needle_in_a_member_is_caught_and_does_not_echo_the_needle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    members = dict(_CLEAN_WHEEL_MEMBERS)
+    members["fitdocs/x.py"] = f"# {_NEEDLE} lives here\n".encode()
+    wheel_path = _make_wheel(dist_dir, members, metadata=_CLEAN_METADATA)
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.ENCUMBERED_CONTENT
+    assert violation.subject == wheel_path.name
+    assert "fitdocs/x.py" in violation.detail
+    assert _NEEDLE not in violation.detail
+
+
+def test_needle_absent_from_a_member_trips_no_encumbered_content(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    members = dict(_CLEAN_WHEEL_MEMBERS)
+    members["fitdocs/x.py"] = b"# nothing forbidden lives here\n"
+    _make_wheel(dist_dir, members, metadata=_CLEAN_METADATA)
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert violations == ()
+
+
+def test_case_variant_needle_is_still_caught(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    members = dict(_CLEAN_WHEEL_MEMBERS)
+    members["fitdocs/x.py"] = f"# {_NEEDLE.lower()} lives here\n".encode()
+    _make_wheel(dist_dir, members, metadata=_CLEAN_METADATA)
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    assert violations[0].kind == ViolationKind.ENCUMBERED_CONTENT
+
+
+def test_wrapped_multiword_needle_across_a_line_break_is_caught(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A multi-word value whose words land either side of a line break is
+    still a match -- the checker calls the core's `matches()` unmodified,
+    which is wrap-tolerant for a multi-word value (see
+    `tests/_forbidden_strings.py::matches`'s own docstring). Pins that this
+    module does not substitute a flat substring test for it.
+    """
+    wrapped_needle = "Planted Wrapped Needle"
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, wrapped_needle)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    members = dict(_CLEAN_WHEEL_MEMBERS)
+    members["fitdocs/x.py"] = b"# Planted Wrapped\nNeedle here\n"
+    wheel_path = _make_wheel(dist_dir, members, metadata=_CLEAN_METADATA)
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.ENCUMBERED_CONTENT
+    assert violation.subject == wheel_path.name
+
+
+def test_needle_deep_in_a_large_member_is_still_caught(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A needle placed after 64+ KiB of clean filler is still caught --
+    pins that the member's content is decoded and scanned in full, not
+    truncated to some short prefix.
+    """
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    filler = b"# clean filler line, nothing forbidden here\n" * 2000
+    assert len(filler) >= 64 * 1024, "the filler must actually clear 64 KiB"
+    members = dict(_CLEAN_WHEEL_MEMBERS)
+    members["fitdocs/x.py"] = filler + f"# {_NEEDLE}\n".encode()
+    wheel_path = _make_wheel(dist_dir, members, metadata=_CLEAN_METADATA)
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.ENCUMBERED_CONTENT
+    assert violation.subject == wheel_path.name
+
+
+def test_needle_beside_an_undecodable_byte_is_still_caught(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A member whose bytes are not valid UTF-8 must still be scanned for a
+    needle elsewhere in its content -- the same technique and the same
+    defect class `tests/load/test_packaging.py
+    ::test_decode_and_scan_flags_a_value_beside_an_undecodable_byte`
+    documents: a strict decode that skips the whole member on
+    `UnicodeDecodeError` would blind the scan to a genuinely present value.
+    """
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    undecodable_content = b"# \xff " + f"{_NEEDLE}\n".encode()
+    with pytest.raises(UnicodeDecodeError):
+        undecodable_content.decode("utf-8")
+    members = dict(_CLEAN_WHEEL_MEMBERS)
+    members["fitdocs/x.py"] = undecodable_content
+    wheel_path = _make_wheel(dist_dir, members, metadata=_CLEAN_METADATA)
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.ENCUMBERED_CONTENT
+    assert violation.subject == wheel_path.name
+    assert "fitdocs/x.py" in violation.detail
+
+
+# --- needle only in the distribution metadata body ----------------------
+
+
+def test_metadata_body_only_needle_is_caught_naming_metadata_in_the_wheel(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    metadata_with_needle = _CLEAN_METADATA + f"\n{_NEEDLE} in the long description.\n"
+    wheel_path = _make_wheel(
+        dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=metadata_with_needle
+    )
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.ENCUMBERED_CONTENT
+    assert violation.subject == wheel_path.name
+    assert "METADATA" in violation.detail
+
+
+def test_metadata_body_only_needle_is_caught_naming_pkg_info_in_the_sdist(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    _make_wheel(dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=_CLEAN_METADATA)
+    pkg_info_with_needle = _CLEAN_METADATA + f"\n{_NEEDLE} in the long description.\n"
+    sdist_path = _make_sdist(
+        dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=pkg_info_with_needle
+    )
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.ENCUMBERED_CONTENT
+    assert violation.subject == sdist_path.name
+    assert "PKG-INFO" in violation.detail
+
+
+# --- binary members: matched by NAME only, content never scanned -----------
+
+
+def test_needle_in_binary_member_name_is_caught_by_name_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    members = dict(_CLEAN_WHEEL_MEMBERS)
+    members[f"fitdocs/data/{_NEEDLE}.bin"] = bytes(range(256))
+    wheel_path = _make_wheel(dist_dir, members, metadata=_CLEAN_METADATA)
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.ENCUMBERED_CONTENT
+    assert violation.subject == wheel_path.name
+    assert _NEEDLE in violation.detail  # the member NAME, not the needle-as-value
+
+
+def test_needle_in_binary_member_content_only_is_not_caught(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    members = dict(_CLEAN_WHEEL_MEMBERS)
+    members["fitdocs/data/asset.bin"] = _NEEDLE.encode() + bytes(range(256))
+    _make_wheel(dist_dir, members, metadata=_CLEAN_METADATA)
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert violations == (), (
+        "binary member CONTENT must not be scanned -- by design, matched by name only"
+    )
+
+
+def test_needle_in_binary_member_directory_component_is_caught(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A binary member whose NAME carries the needle only in a directory
+    component -- not its basename -- is still caught: a name-only match
+    must be evaluated against the member's full path, never its basename
+    alone.
+    """
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    members = dict(_CLEAN_WHEEL_MEMBERS)
+    members[f"fitdocs/{_NEEDLE}/asset.bin"] = bytes(range(256))
+    wheel_path = _make_wheel(dist_dir, members, metadata=_CLEAN_METADATA)
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.ENCUMBERED_CONTENT
+    assert violation.subject == wheel_path.name
+    assert _NEEDLE in violation.detail
+
+
+# --- sdist-side twins: the same checks, exercised on the sdist -------------
+
+
+def test_needle_in_an_ordinary_sdist_text_member_is_caught(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    _make_wheel(dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=_CLEAN_METADATA)
+    sdist_members = dict(_CLEAN_SDIST_MEMBERS)
+    sdist_members["src/fitdocs/x.py"] = f"# {_NEEDLE} lives here\n".encode()
+    sdist_path = _make_sdist(dist_dir, sdist_members, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.ENCUMBERED_CONTENT
+    assert violation.subject == sdist_path.name
+    assert "src/fitdocs/x.py" in violation.detail
+    assert _NEEDLE not in violation.detail
+
+
+def test_needle_in_an_sdist_binary_member_name_is_caught_by_name_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    _make_wheel(dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=_CLEAN_METADATA)
+    sdist_members = dict(_CLEAN_SDIST_MEMBERS)
+    sdist_members[f"src/fitdocs/assets/{_NEEDLE}.bin"] = bytes(range(256))
+    sdist_path = _make_sdist(dist_dir, sdist_members, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.ENCUMBERED_CONTENT
+    assert violation.subject == sdist_path.name
+    assert _NEEDLE in violation.detail
+
+
+# --- fingerprinted control value ------------------------------------------
+
+
+def _build_control_fingerprints(sentence: str) -> tuple[frozenset[str], frozenset[int]]:
+    toks = tokens(sentence)
+    emitted = windows(toks, ENTROPY_FLOOR_BITS)
+    assert emitted, (
+        "the invented control sentence does not clear the entropy floor -- "
+        "strengthen the fixture rather than weakening the assertion below"
+    )
+    fps = frozenset(
+        digest(toks[start : start + length], REAL_SALT) for start, length in emitted
+    )
+    lengths = frozenset(length for _, length in emitted)
+    return fps, lengths
+
+
+def test_fingerprinted_control_value_is_caught_via_monkeypatched_constants(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    invented_sentence = (
+        "distance 741.309285 km over 4:52:31 at a rate of 0.837162945 "
+        "across 209581473 intervals"
+    )
+    control_fps, control_lengths = _build_control_fingerprints(invented_sentence)
+    monkeypatch.setattr(check_artifacts_module, "FINGERPRINTS", control_fps)
+    monkeypatch.setattr(check_artifacts_module, "WINDOW_LENGTHS", control_lengths)
+
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    members = dict(_CLEAN_WHEEL_MEMBERS)
+    members["fitdocs/x.py"] = f"# {invented_sentence}\n".encode()
+    wheel_path = _make_wheel(dist_dir, members, metadata=_CLEAN_METADATA)
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.ENCUMBERED_CONTENT
+    assert violation.subject == wheel_path.name
+    assert "fitdocs/x.py" in violation.detail
+    assert "fingerprinted value" in violation.detail
+
+
+def test_fingerprinted_control_value_in_the_sdist_is_caught(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The sdist-side twin of
+    `test_fingerprinted_control_value_is_caught_via_monkeypatched_constants`
+    -- pins that the value oracle runs over the sdist too, not only the
+    wheel.
+    """
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    invented_sentence = (
+        "distance 741.309285 km over 4:52:31 at a rate of 0.837162945 "
+        "across 209581473 intervals"
+    )
+    control_fps, control_lengths = _build_control_fingerprints(invented_sentence)
+    monkeypatch.setattr(check_artifacts_module, "FINGERPRINTS", control_fps)
+    monkeypatch.setattr(check_artifacts_module, "WINDOW_LENGTHS", control_lengths)
+
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    _make_wheel(dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=_CLEAN_METADATA)
+    sdist_members = dict(_CLEAN_SDIST_MEMBERS)
+    sdist_members["src/fitdocs/x.py"] = f"# {invented_sentence}\n".encode()
+    sdist_path = _make_sdist(dist_dir, sdist_members, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.ENCUMBERED_CONTENT
+    assert violation.subject == sdist_path.name
+    assert "src/fitdocs/x.py" in violation.detail
+    assert "fingerprinted value" in violation.detail
+
+
+def test_fingerprinted_control_clean_sibling_trips_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    invented_sentence = (
+        "distance 741.309285 km over 4:52:31 at a rate of 0.837162945 "
+        "across 209581473 intervals"
+    )
+    control_fps, control_lengths = _build_control_fingerprints(invented_sentence)
+    monkeypatch.setattr(check_artifacts_module, "FINGERPRINTS", control_fps)
+    monkeypatch.setattr(check_artifacts_module, "WINDOW_LENGTHS", control_lengths)
+
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    _make_wheel(dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=_CLEAN_METADATA)
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert violations == ()
+
+
+# --- multiplicity: violations are per-occurrence, never deduplicated -------
+
+
+def test_two_members_each_carrying_the_needle_is_two_violations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    members = dict(_CLEAN_WHEEL_MEMBERS)
+    members["fitdocs/a.py"] = f"# {_NEEDLE}\n".encode()
+    members["fitdocs/b.py"] = f"# {_NEEDLE}\n".encode()
+    _make_wheel(dist_dir, members, metadata=_CLEAN_METADATA)
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 2
+    assert {v.kind for v in violations} == {ViolationKind.ENCUMBERED_CONTENT}
+    members_named = {v.detail for v in violations}
+    assert len(members_named) == 2, "both members must be individually named"
+
+
+def test_one_member_with_both_token_and_fingerprint_hit_is_two_violations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    invented_sentence = (
+        "distance 741.309285 km over 4:52:31 at a rate of 0.837162945 "
+        "across 209581473 intervals"
+    )
+    control_fps, control_lengths = _build_control_fingerprints(invented_sentence)
+    monkeypatch.setattr(check_artifacts_module, "FINGERPRINTS", control_fps)
+    monkeypatch.setattr(check_artifacts_module, "WINDOW_LENGTHS", control_lengths)
+
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    members = dict(_CLEAN_WHEEL_MEMBERS)
+    members["fitdocs/x.py"] = f"# {_NEEDLE} -- {invented_sentence}\n".encode()
+    wheel_path = _make_wheel(dist_dir, members, metadata=_CLEAN_METADATA)
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 2
+    assert all(v.subject == wheel_path.name for v in violations)
+    assert all(v.kind == ViolationKind.ENCUMBERED_CONTENT for v in violations)
+    details = {v.detail for v in violations}
+    assert len(details) == 2, "the two hits must be distinguishable by detail"
+    assert any("token" in d for d in details)
+    assert any("fingerprinted value" in d for d in details)
+
+
+# --- determinism -------------------------------------------------------
+
+
+def test_encumbered_content_check_is_deterministic_across_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    members = dict(_CLEAN_WHEEL_MEMBERS)
+    members["fitdocs/a.py"] = f"# {_NEEDLE}\n".encode()
+    members["fitdocs/b.py"] = f"# {_NEEDLE}\n".encode()
+    _make_wheel(dist_dir, members, metadata=_CLEAN_METADATA)
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    first = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+    second = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert first == second
+
+
+# --- import audit: exactly two non-stdlib import groups --------------------
+
+
+def test_check_artifacts_import_audit_is_exactly_scripts_and_tests() -> None:
+    source = (REPO_ROOT / "scripts" / "check_artifacts.py").read_text()
+    tree = ast.parse(source)
+    roots: set[str] = set()
+    tests_modules: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                roots.add(alias.name.split(".")[0])
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            root = node.module.split(".")[0]
+            roots.add(root)
+            if root == "tests":
+                tests_modules.add(node.module)
+
+    non_stdlib_roots = roots - set(sys.stdlib_module_names)
+    assert non_stdlib_roots, "the import scan found no non-stdlib imports"
+    assert non_stdlib_roots == {"scripts", "tests"}
+    assert tests_modules == {
+        "tests._forbidden_strings",
+        "tests._content_oracle",
+        "tests._content_fingerprints",
+    }
+
+
+def test_forbidden_strings_and_content_oracle_modules_import_nothing_from_fitdocs() -> (
+    None
+):
+    for relative in (
+        "tests/_forbidden_strings.py",
+        "tests/_content_oracle.py",
+        "tests/_content_fingerprints.py",
+    ):
+        source = (REPO_ROOT / relative).read_text()
+        tree = ast.parse(source)
+        imported_names: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    imported_names.add(alias.name.split(".")[0])
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported_names.add(node.module.split(".")[0])
+        assert "fitdocs" not in imported_names, f"{relative} must not import fitdocs"
