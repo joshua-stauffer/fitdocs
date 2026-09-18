@@ -470,7 +470,7 @@ does not add, reference or read a real file.
   - _Boundary: CadenceLockDetector_
   - _Depends: 2.2_
 
-- [ ] 4.2 Verify the verdicts end to end through a load pass
+- [x] 4.2 Verify the verdicts end to end through a load pass
   - Run a load pass over a fixture data root that reaches the computed path —
     reusing the one the threshold calculator's own end-to-end test builds, and
     constructing it here if that spec has not yet produced one
