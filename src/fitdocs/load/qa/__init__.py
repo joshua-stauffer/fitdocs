@@ -19,9 +19,9 @@ reproduced on every entry point -- is cut upstream by ``training-load``'s
 ``TYPE_CHECKING``-only import of ``LoadSettings`` in
 ``src/fitdocs/load/types.py``, so nothing here needs to guard against it.
 
-Task 1.1 (this task) re-exports only ``qa/types.py``'s leaf vocabulary. Task
-3.1 later adds ``evaluate_flags`` from ``qa/flags.py`` to this same file, the
-same way -- a plain ``from .flags import evaluate_flags``.
+This module re-exports ``qa/types.py``'s leaf vocabulary alongside
+``evaluate_flags`` from ``qa/flags.py``, both the same way -- a plain
+``from .flags import evaluate_flags``.
 """
 
 from __future__ import annotations

@@ -1205,8 +1205,9 @@ def evaluate(
   is `window_days < 1`, which the settings reader rejects before any document
   is read (`athlete-benchmarks` 5.3).
 
-**Dependencies**: Outbound — `fitdocs.benchmarks` (P0), `channels.types` (P0),
-`qa.types` (P0). Inbound — `qa.flags` (P0).
+**Dependencies**: Outbound — `fitdocs.benchmarks` (P0), `channels.types` (P0).
+Inbound — `qa.flags` (P0). (`staleness.py` takes `window_days: int` as a
+scalar parameter, not `FlagSettings`, so it does not import `qa.types`.)
 
 **Contracts**: Service [x]
 

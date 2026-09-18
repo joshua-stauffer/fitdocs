@@ -17,9 +17,9 @@ constant's docstring states what justifies it: a measurement over the
 athlete's real activity corpus, a published figure, or fitdocs' own choice
 where neither applies. The divergence tolerance alone rests on neither a
 measurement nor a publication and is marked PROVISIONAL, naming the entry
-``qa/sources.py`` will define --
-``PROVISIONAL_DEFAULTS['divergence_max_intensity_delta']`` -- in a later
-task (1.2), rather than being described as measured (Req 6.10, 6.11).
+``qa/sources.py`` defines --
+``PROVISIONAL_DEFAULTS['divergence_max_intensity_delta']`` -- rather than
+being described as measured (Req 6.10, 6.11).
 
 **No staleness window lives here.** The benchmark store already computes and
 carries its own configured staleness window; introducing a second one on
@@ -27,8 +27,7 @@ carries its own configured staleness window; introducing a second one on
 none (Req 6.9).
 
 This module names ``qa/sources.py`` and its ``PROVISIONAL_DEFAULTS`` registry
-prospectively, in prose only -- that module does not exist yet (task 1.2) and
-this module does not import it.
+in prose only -- this module does not import it.
 """
 
 from __future__ import annotations
