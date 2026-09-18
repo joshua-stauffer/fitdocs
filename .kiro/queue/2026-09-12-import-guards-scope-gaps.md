@@ -16,6 +16,7 @@ context:
   - tests/performance/test_reachability.py
   - tests/test_contract_consumers.py
   - tests/load/channels/test_purity.py
+  - tests/load/qa/test_purity.py
   - tests/load/threshold/test_boundary.py
   - src/fitdocs/performance/engine.py
 blocked_by: []
@@ -125,3 +126,38 @@ clean under both. Pick-up: add `os` to the forbidden-modules tuple (one
 line, `S` effort); the dynamic-route gap is the same unsolved problem this
 item's `How to pick it up` already describes and doesn't need a separate
 plan, just wider `area` coverage when someone takes this item.
+
+## Additional gap (2026-09-18, /kiro-validate-impl activity-qa-flags post-merge pass)
+
+Same guard, same family, one more missing entry class — **the project's own
+configuration readers**. Requirement 6.8 ("shall not read, locate, or
+re-read any settings file itself") and 1.9 ("read no configuration of its
+own") are pinned on the positive side —
+`tests/load/threshold/test_calculator.py:1252` asserts
+`call_kwargs["settings"] is computed_context.settings.flags` — but on the
+negative side only by the absence of `open(...)` calls and of `pathlib`
+imports. `tests/load/qa/test_purity.py` is a **denylist** (`_ALWAYS_FORBIDDEN`
+at :110-126 names engine, render, docedit, registry, contract, threshold,
+profile; `_LOAD_CONTRACT`; `_NAME_RESTRICTED_TARGETS` for `fitdocs.benchmarks`),
+not an allowlist of permitted `fitdocs.*` targets, so a
+`from fitdocs.settings import load_settings_document` or
+`from fitdocs.load.settings import load_load_settings` in any qa module —
+called with a `str` data root, which dodges
+`test_no_function_signature_names_a_filesystem_path` — passes every purity
+test. Likewise `tomllib` and `io` are absent from
+`_FORBIDDEN_IO_OR_RANDOM_MODULES` (:555-571) alongside the `os` gap above.
+
+Verified at `e16acc3`:
+```
+$ grep -n "fitdocs.settings\|fitdocs.load.settings\|tomllib\|\"io\"" tests/load/qa/test_purity.py
+(no matches)
+```
+No live defect — none of the eight qa modules imports any of these
+(reviewer read all eight; controller confirmed the denylist shape). Pick-up
+for this piece: add `fitdocs.settings` and `fitdocs.load.settings` to
+`_ALWAYS_FORBIDDEN` (note `settings.py` legitimately imports **from** qa —
+`from fitdocs.load.qa.types import FlagSettings` — so the edge is inbound
+only and the reverse must stay forbidden), and `os`, `io`, `tomllib` to
+`_FORBIDDEN_IO_OR_RANDOM_MODULES`; the existing injected-spelling self-test
+(`test_boundary_scanner_catches_every_reported_spelling`) should be extended
+with one of the new names so the addition is proven live.
