@@ -41,6 +41,7 @@ Inbox = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/inbox.md"
 Configuration = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/configuration.md"
 Install = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/install.md"
 Compatibility = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/compatibility.md"
+"Wiki Integration" = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/wiki-integration.md"
 
 [project.scripts]
 fitdocs = "fitdocs.cli:app"
@@ -154,6 +155,7 @@ files = [
     "tests/test_compatibility_policy.py",
     "tests/test_install_docs.py",
     "tests/test_upgrading_docs.py",
+    "tests/test_wiki_integration_docs.py",
     "scripts",
 ]
 

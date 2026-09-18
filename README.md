@@ -107,10 +107,14 @@ skills; the packaged skill appears under its frontmatter `name`.
 one; the copied `SKILL.md`'s `metadata.version` says which fitdocs release
 it came from.
 
-`build-training-block` is the one packaged skill shipped today — it walks an
-agent through building a training block from the athlete's answers as a plan
+Two packaged skills ship today: `build-training-block` walks an agent
+through building a training block from the athlete's answers as a plan
 source, rendering it with `fitdocs plan`, amending it, and settling
-ambiguous matches.
+ambiguous matches; `fitdocs-workouts` drains the inbox into workout
+documents and reads the drain report. See
+[Wiki Integration](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/wiki-integration.md)
+for where each skill lands, how to confirm it is active, how to update it,
+and an end-to-end recipe for adopting fitdocs into an existing wiki.
 
 ## Inbox
 
