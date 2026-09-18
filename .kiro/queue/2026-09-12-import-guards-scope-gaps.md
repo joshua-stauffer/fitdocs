@@ -6,7 +6,7 @@ importance: medium
 importance_why: Several purity and single-writer guards only scan import statements, so importlib/attribute-chain/string-literal routes into the same forbidden surface pass undetected today.
 effort: M
 kind: gap
-area: performance-benchmarks, tests/performance/test_single_writer.py, test_reachability.py, tests/test_contract_consumers.py, tests/load/channels/test_purity.py, tests/load/threshold/test_boundary.py
+area: performance-benchmarks, activity-qa-flags, tests/performance/test_single_writer.py, test_reachability.py, tests/test_contract_consumers.py, tests/load/channels/test_purity.py, tests/load/threshold/test_boundary.py, tests/load/qa/test_purity.py
 created: 2026-09-12
 surfaced_by: /kiro-impl performance-benchmarks (adversarial reviews, 2026-09-11/12)
 pinned_at: d4fbc6f
@@ -83,3 +83,45 @@ undetected by the very test written to catch it.
   pure modules, so `src/fitdocs/performance/engine.py`'s import surface is
   unguarded. Add an engine-level import allowlist (no `render`, `sync`, `cli`,
   `load.prompts`).
+
+## Additional gaps (2026-09-18, activity-qa-flags task 4.3 review + feature-level validation)
+
+The same class recurs in `tests/load/qa/test_purity.py` (new,
+`activity-qa-flags` task 4.3), notable because that guard's *import-boundary*
+half is otherwise unusually strong — a fresh adversarial reviewer wrote 12
+relative-import spellings not in the implementer's own 18 parametrized cases
+and all 12 were caught, matching this item's own recommended technique. The
+gaps below are specifically in the categories this item already tracks:
+
+- **Dynamic/attribute route, confirmed by mutation**: `getattr(importlib
+  .import_module("fitdocs.load"), "engine")`, an f-string import target, and
+  a variable import target all pass `tests/load/qa/test_purity.py`'s
+  `_boundary_violations` scanner undetected — the same limitation class this
+  item's opening paragraph describes for `test_single_writer.py`. Verified
+  the spelling itself parses (`ast.parse` succeeds); the evasion was
+  reported by the review subagent, re-run and independently confirmed by
+  the review's own second pass, not independently re-verified in this
+  session.
+- **Missing forbidden-module entry, not the dynamic-route class but the same
+  general "guard scope narrower than requirement text" family**: `_FORBIDDEN
+  _IO_OR_RANDOM_MODULES` in `tests/load/qa/test_purity.py:555-571` lists
+  `pathlib`, `random`, `secrets`, `time`, and several network/LLM modules,
+  but not `os` — `os.urandom(...)`, `os.environ`, `os.open(...)` all pass
+  the I/O/random-source exclusion (Req 1.9) undetected. Verified directly:
+  ```
+  $ grep -n "_FORBIDDEN_IO_OR_RANDOM_MODULES" -A 16 tests/load/qa/test_purity.py
+  _FORBIDDEN_IO_OR_RANDOM_MODULES: tuple[str, ...] = (
+      "pathlib", "random", "secrets", "time", "requests", "urllib", "http",
+      "socket", "ftplib", "smtplib", "httpx", "subprocess", "openai",
+      "anthropic", "langchain",
+  )
+  ```
+  No live defect: the real 8-file package imports none of `os`/`tempfile`/
+  `shutil`/`io` today (checked at `d26b682`); this is a guard-strength gap
+  against future drift, matching this item's own framing.
+
+Neither gap is a live production defect — the `activity-qa-flags` package is
+clean under both. Pick-up: add `os` to the forbidden-modules tuple (one
+line, `S` effort); the dynamic-route gap is the same unsolved problem this
+item's `How to pick it up` already describes and doesn't need a separate
+plan, just wider `area` coverage when someone takes this item.
