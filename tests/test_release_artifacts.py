@@ -5,7 +5,7 @@ artifact tests generally; this task covers only the policy *data* and its
 reader (`release/artifact-policy.toml`, `scripts/artifact_policy.py`). Later
 tasks (2.1-2.3) extend this file with the builder and checker.
 
-Five groups of assertions:
+Six groups of assertions:
 
 * the real policy file loads, and its content matches the design's declared
   end-state shape (minus the not-yet-added inbox skill entry);
@@ -23,18 +23,32 @@ Five groups of assertions:
   failure cleanup, its refusal to clear the repository root, its
   reproducibility, and its command surface -- exercised both against real
   `uv build` invocations and, for the command/environment/cleanup contracts,
-  against a fake `subprocess.run` recording exactly what it was called with.
+  against a fake `subprocess.run` recording exactly what it was called with;
+* task 2.2's `ArtifactChecker` (`scripts/check_artifacts.py`): synthetic
+  wheel/sdist fixtures (built with `zipfile`/`tarfile` directly, never a real
+  `uv build`, for the per-rule tests) trip each of the four implemented
+  violation kinds exactly once -- in the wheel AND, separately, in the sdist,
+  so a check wired to only one artifact kind cannot pass by accident -- a
+  clean fixture trips none, ordering is deterministic and pinned against
+  both a missing-sort and a wrong-sort-key mutation, hard errors (wrong
+  artifact counts, a missing/malformed policy file) are distinguished from
+  violations by exit code, and a real `build_release.build()` output passes
+  the real policy with zero violations.
 """
 
 from __future__ import annotations
 
 import ast
+import dataclasses
 import hashlib
+import io
 import subprocess
 import tarfile
 import tomllib
 import zipfile
+from collections import Counter
 from collections.abc import Iterator, Mapping
+from enum import StrEnum
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
@@ -46,6 +60,15 @@ from scripts.artifact_policy import (
     ArtifactPolicy,
     PolicyError,
     load_policy,
+)
+from scripts.check_artifacts import (
+    CheckerError,
+    Violation,
+    ViolationKind,
+    check_artifacts,
+)
+from scripts.check_artifacts import (
+    main as check_artifacts_main,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -875,3 +898,757 @@ def test_build_release_module_imports_nothing_from_fitdocs() -> None:
             imported_names.add(node.module.split(".")[0])
     assert imported_names, "the import scan found no imports -- wrong file parsed"
     assert "fitdocs" not in imported_names
+
+
+# ---------------------------------------------------------------------------
+# Task 2.2: ArtifactChecker (`scripts/check_artifacts.py`)
+# ---------------------------------------------------------------------------
+
+# A metadata document satisfying the REAL policy's `[metadata].required_fields`
+# plus the checker's own always-on checks (`Requires-Dist` present, a
+# non-empty body).
+_CLEAN_METADATA = """Metadata-Version: 2.1
+Name: fitdocs
+Version: 9.9.9
+Summary: Turn .fit files into rich per-workout markdown documents.
+License-Expression: MIT
+Requires-Python: >=3.11
+Project-URL: Source, https://github.com/joshua-stauffer/fitdocs
+Author-email: Josh Stauffer <x@example.com>
+Requires-Dist: typer>=0.12
+
+This is the long description body.
+"""
+
+_CLEAN_WHEEL_MEMBERS = {
+    "fitdocs/__init__.py": b"",
+    "fitdocs/py.typed": b"",
+    "fitdocs/skills/build-training-block/SKILL.md": b"# skill",
+    "fitdocs/skills/build-training-block/example-block.toml": b"",
+}
+
+_CLEAN_SDIST_MEMBERS = {
+    "pyproject.toml": b"[project]\nname = 'fitdocs'\n",
+    "README.md": b"# fitdocs",
+    "LICENSE": b"MIT License",
+    "CHANGELOG.md": b"# Changelog",
+    "src/fitdocs/__init__.py": b"",
+}
+
+
+def _make_wheel(
+    dir_: Path,
+    members: dict[str, bytes],
+    *,
+    metadata: str,
+    links: dict[str, str] | None = None,
+    name: str = "fitdocs",
+    version: str = "9.9.9",
+) -> Path:
+    """Write a valid-shaped wheel: `<name>-<version>-py3-none-any.whl` with a
+    `<name>-<version>.dist-info/METADATA` entry, `members`, and, for each
+    `links` entry, a symlink member whose data is the target path (the
+    Unix-mode bits packed into `ZipInfo.external_attr`'s upper 16 bits mark
+    it as a link -- `0o120777`: S_IFLNK plus rwxrwxrwx permission bits).
+    """
+    links = links or {}
+    path = dir_ / f"{name}-{version}-py3-none-any.whl"
+    with zipfile.ZipFile(path, "w") as zf:
+        for member_name, data in members.items():
+            zf.writestr(member_name, data)
+        zf.writestr(f"{name}-{version}.dist-info/METADATA", metadata)
+        for link_name, target in links.items():
+            info = zipfile.ZipInfo(link_name)
+            info.external_attr = 0o120777 << 16
+            zf.writestr(info, target)
+    return path
+
+
+def _make_sdist(
+    dir_: Path,
+    members: dict[str, bytes],
+    *,
+    pkg_info: str,
+    links: dict[str, str] | None = None,
+    dirs: tuple[str, ...] = (),
+    name: str = "fitdocs",
+    version: str = "9.9.9",
+) -> Path:
+    """Write a valid-shaped sdist: `<name>-<version>.tar.gz` with every
+    member under a `<name>-<version>/` top directory, a `PKG-INFO` entry at
+    that directory's root, `members`, `links` symlink members, and `dirs`
+    explicit directory entries.
+    """
+    links = links or {}
+    prefix = f"{name}-{version}"
+    path = dir_ / f"{prefix}.tar.gz"
+    with tarfile.open(path, "w:gz") as tf:
+        for member_name, data in members.items():
+            info = tarfile.TarInfo(name=f"{prefix}/{member_name}")
+            info.size = len(data)
+            tf.addfile(info, io.BytesIO(data))
+
+        pkg_info_bytes = pkg_info.encode("utf-8")
+        pkg_info_info = tarfile.TarInfo(name=f"{prefix}/PKG-INFO")
+        pkg_info_info.size = len(pkg_info_bytes)
+        tf.addfile(pkg_info_info, io.BytesIO(pkg_info_bytes))
+
+        for link_name, target in links.items():
+            link_info = tarfile.TarInfo(name=f"{prefix}/{link_name}")
+            link_info.type = tarfile.SYMTYPE
+            link_info.linkname = target
+            tf.addfile(link_info)
+
+        for dir_name in dirs:
+            dir_info = tarfile.TarInfo(name=f"{prefix}/{dir_name}")
+            dir_info.type = tarfile.DIRTYPE
+            dir_info.mode = 0o755
+            tf.addfile(dir_info)
+    return path
+
+
+@pytest.fixture
+def clean_dist(tmp_path: Path) -> Path:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    _make_wheel(dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=_CLEAN_METADATA)
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+    return dist_dir
+
+
+# --- report shape ------------------------------------------------------
+
+
+def test_violation_field_order_is_subject_kind_detail_remedy() -> None:
+    assert tuple(f.name for f in dataclasses.fields(Violation)) == (
+        "subject",
+        "kind",
+        "detail",
+        "remedy",
+    )
+
+
+def test_violation_kind_is_a_strenum_with_the_seven_members_in_design_order() -> None:
+    assert issubclass(ViolationKind, StrEnum)
+    assert [member.name for member in ViolationKind] == [
+        "MISSING_REQUIRED",
+        "FORBIDDEN_MEMBER",
+        "LINK_MEMBER",
+        "ENCUMBERED_CONTENT",
+        "GATE_NOT_RUN",
+        "METADATA_INCOMPLETE",
+        "VERSION_MISMATCH",
+    ]
+
+
+# --- clean fixture: trips nothing ---------------------------------------
+
+
+def test_clean_fixture_against_the_real_policy_trips_no_violations(
+    clean_dist: Path,
+) -> None:
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(clean_dist, policy=policy, repo_root=REPO_ROOT)
+    assert violations == ()
+
+
+# --- MISSING_REQUIRED ----------------------------------------------------
+
+
+def test_missing_required_wheel_member_reported_exactly_once(tmp_path: Path) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    # The required member is MOVED (to "src/fitdocs/py.typed"), not deleted:
+    # it is still present as a suffix/substring of another member's path,
+    # only absent as an exact match. A membership check weakened to
+    # `any(m.endswith(name) for m in present)` would wrongly treat the moved
+    # file as satisfying the requirement and stay green here. A
+    # differently-cased path ("fitdocs/PY.TYPED") is also present, pinning
+    # exact-match case-sensitivity the same way: a check weakened to
+    # case-insensitive membership would treat it as satisfying the
+    # requirement too.
+    members = dict(_CLEAN_WHEEL_MEMBERS)
+    del members["fitdocs/py.typed"]
+    members["src/fitdocs/py.typed"] = b""
+    members["fitdocs/PY.TYPED"] = b""
+    wheel_path = _make_wheel(dist_dir, members, metadata=_CLEAN_METADATA)
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.MISSING_REQUIRED
+    assert violation.subject == wheel_path.name  # the filename, not a full path
+    assert "py.typed" in violation.detail
+
+
+def test_missing_required_sdist_member_reported_exactly_once(tmp_path: Path) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    _make_wheel(dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=_CLEAN_METADATA)
+    sdist_members = dict(_CLEAN_SDIST_MEMBERS)
+    del sdist_members["CHANGELOG.md"]
+    sdist_path = _make_sdist(dist_dir, sdist_members, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.MISSING_REQUIRED
+    assert violation.subject == sdist_path.name  # not the wheel -- the sdist is clean
+    assert "CHANGELOG.md" in violation.detail
+
+
+# --- FORBIDDEN_MEMBER ------------------------------------------------------
+
+
+def test_forbidden_member_reported_exactly_once(tmp_path: Path) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    _make_wheel(dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=_CLEAN_METADATA)
+    sdist_members = dict(_CLEAN_SDIST_MEMBERS)
+    sdist_members["tests/x.py"] = b""
+    sdist_path = _make_sdist(dist_dir, sdist_members, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.FORBIDDEN_MEMBER
+    assert violation.subject == sdist_path.name
+    assert "tests/x.py" in violation.detail
+
+
+def test_forbidden_directory_entry_is_reported(tmp_path: Path) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    policy = ArtifactPolicy(
+        wheel_required=(),
+        sdist_required=("PKG-INFO",),
+        forbidden_members=("bad/*",),
+        required_metadata_fields=(),
+    )
+    metadata = "Name: x\nRequires-Dist: y\n\nbody text\n"
+    _make_wheel(dist_dir, {}, metadata=metadata)
+    _make_sdist(dist_dir, {}, pkg_info=metadata, dirs=("bad/",))
+
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    assert violations[0].kind == ViolationKind.FORBIDDEN_MEMBER
+    assert "bad/" in violations[0].detail
+
+
+def test_fnmatchcase_positive_control_a_lowercase_match_is_caught(
+    tmp_path: Path,
+) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    policy = ArtifactPolicy(
+        wheel_required=(),
+        sdist_required=("PKG-INFO",),
+        forbidden_members=("tests/*",),
+        required_metadata_fields=(),
+    )
+    metadata = "Name: x\nRequires-Dist: y\n\nbody text\n"
+    _make_wheel(dist_dir, {"tests/x.py": b""}, metadata=metadata)
+    _make_sdist(dist_dir, {}, pkg_info=metadata)
+
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+    assert len(violations) == 1
+    assert violations[0].kind == ViolationKind.FORBIDDEN_MEMBER
+
+
+def test_fnmatchcase_is_case_sensitive_a_capital_t_is_not_forbidden(
+    tmp_path: Path,
+) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    policy = ArtifactPolicy(
+        wheel_required=(),
+        sdist_required=("PKG-INFO",),
+        forbidden_members=("tests/*",),
+        required_metadata_fields=(),
+    )
+    metadata = "Name: x\nRequires-Dist: y\n\nbody text\n"
+    _make_wheel(dist_dir, {"Tests/x.py": b""}, metadata=metadata)
+    _make_sdist(dist_dir, {}, pkg_info=metadata)
+
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+    assert violations == ()
+
+
+# --- LINK_MEMBER -----------------------------------------------------------
+
+
+def test_link_member_reported_even_when_its_target_text_is_clean(
+    tmp_path: Path,
+) -> None:
+    dist_dir_without_link = tmp_path / "dist_without_link"
+    dist_dir_without_link.mkdir()
+    _make_wheel(dist_dir_without_link, _CLEAN_WHEEL_MEMBERS, metadata=_CLEAN_METADATA)
+    _make_sdist(dist_dir_without_link, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+    policy = load_policy(REAL_POLICY_PATH)
+
+    # Falsity-before: the same fixture minus the link is clean.
+    assert (
+        check_artifacts(dist_dir_without_link, policy=policy, repo_root=REPO_ROOT) == ()
+    )
+
+    dist_dir_with_link = tmp_path / "dist_with_link"
+    dist_dir_with_link.mkdir()
+    wheel_path = _make_wheel(
+        dist_dir_with_link,
+        _CLEAN_WHEEL_MEMBERS,
+        metadata=_CLEAN_METADATA,
+        links={"fitdocs/extra.md": "LICENSE"},
+    )
+    _make_sdist(dist_dir_with_link, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    violations = check_artifacts(dist_dir_with_link, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.LINK_MEMBER
+    assert violation.subject == wheel_path.name
+    assert "fitdocs/extra.md" in violation.detail
+    assert "LICENSE" in violation.detail
+
+
+def test_link_member_in_sdist_reported_when_wheel_is_clean(tmp_path: Path) -> None:
+    dist_dir_without_link = tmp_path / "dist_without_link"
+    dist_dir_without_link.mkdir()
+    _make_wheel(dist_dir_without_link, _CLEAN_WHEEL_MEMBERS, metadata=_CLEAN_METADATA)
+    _make_sdist(dist_dir_without_link, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+    policy = load_policy(REAL_POLICY_PATH)
+
+    # Falsity-before: the same fixture minus the link is clean.
+    assert (
+        check_artifacts(dist_dir_without_link, policy=policy, repo_root=REPO_ROOT) == ()
+    )
+
+    dist_dir_with_link = tmp_path / "dist_with_link"
+    dist_dir_with_link.mkdir()
+    _make_wheel(dist_dir_with_link, _CLEAN_WHEEL_MEMBERS, metadata=_CLEAN_METADATA)
+    sdist_path = _make_sdist(
+        dist_dir_with_link,
+        _CLEAN_SDIST_MEMBERS,
+        pkg_info=_CLEAN_METADATA,
+        links={"extra.md": "LICENSE"},
+    )
+
+    violations = check_artifacts(dist_dir_with_link, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.LINK_MEMBER
+    assert violation.subject == sdist_path.name  # not the wheel -- the wheel is clean
+    assert "extra.md" in violation.detail
+    assert "LICENSE" in violation.detail
+
+
+def test_link_named_as_a_required_member_is_both_link_and_missing_required(
+    tmp_path: Path,
+) -> None:
+    """A link whose name IS a required member's path satisfies neither
+    check: it must still be reported as LINK_MEMBER (a link is never
+    scanned for what it names), AND the required member is still MISSING
+    (`present` only counts `is_regular` members, so a link can never
+    silently stand in for the file the policy requires).
+    """
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    members = dict(_CLEAN_WHEEL_MEMBERS)
+    del members["fitdocs/py.typed"]
+    wheel_path = _make_wheel(
+        dist_dir,
+        members,
+        metadata=_CLEAN_METADATA,
+        links={"fitdocs/py.typed": "LICENSE"},
+    )
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 2
+    kinds = {v.kind for v in violations}
+    assert kinds == {ViolationKind.LINK_MEMBER, ViolationKind.MISSING_REQUIRED}
+    assert all(v.subject == wheel_path.name for v in violations)
+    link_violation = next(v for v in violations if v.kind == ViolationKind.LINK_MEMBER)
+    missing_violation = next(
+        v for v in violations if v.kind == ViolationKind.MISSING_REQUIRED
+    )
+    assert "fitdocs/py.typed" in link_violation.detail
+    assert "py.typed" in missing_violation.detail
+
+
+# --- METADATA_INCOMPLETE ----------------------------------------------------
+
+
+def test_metadata_incomplete_missing_field_reported_exactly_once(
+    tmp_path: Path,
+) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    metadata_missing_author = _CLEAN_METADATA.replace(
+        "Author-email: Josh Stauffer <x@example.com>\n", ""
+    )
+    wheel_path = _make_wheel(
+        dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=metadata_missing_author
+    )
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.METADATA_INCOMPLETE
+    assert violation.subject == wheel_path.name
+    assert "Author-email" in violation.detail
+
+
+def test_metadata_incomplete_empty_value_is_treated_as_absent(tmp_path: Path) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    metadata_empty_author = _CLEAN_METADATA.replace(
+        "Author-email: Josh Stauffer <x@example.com>\n", "Author-email: \n"
+    )
+    _make_wheel(dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=metadata_empty_author)
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    assert violations[0].kind == ViolationKind.METADATA_INCOMPLETE
+    assert "Author-email" in violations[0].detail
+
+
+def test_metadata_incomplete_missing_requires_dist_reported(tmp_path: Path) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    metadata_no_requires_dist = _CLEAN_METADATA.replace(
+        "Requires-Dist: typer>=0.12\n", ""
+    )
+    wheel_path = _make_wheel(
+        dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=metadata_no_requires_dist
+    )
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.METADATA_INCOMPLETE
+    assert violation.subject == wheel_path.name
+    assert "Requires-Dist" in violation.detail
+
+
+def test_metadata_incomplete_empty_body_reported(tmp_path: Path) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    metadata_no_body = _CLEAN_METADATA.split("\n\n", 1)[0] + "\n\n"
+    wheel_path = _make_wheel(dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=metadata_no_body)
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.METADATA_INCOMPLETE
+    assert violation.subject == wheel_path.name
+    assert "body" in violation.detail
+
+
+def test_metadata_incomplete_in_sdist_reported_when_wheel_is_clean(
+    tmp_path: Path,
+) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    _make_wheel(dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=_CLEAN_METADATA)
+    sdist_pkg_info_missing_requires_dist = _CLEAN_METADATA.replace(
+        "Requires-Dist: typer>=0.12\n", ""
+    )
+    sdist_path = _make_sdist(
+        dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=sdist_pkg_info_missing_requires_dist
+    )
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.kind == ViolationKind.METADATA_INCOMPLETE
+    assert violation.subject == sdist_path.name  # not the wheel -- the wheel is clean
+    assert "Requires-Dist" in violation.detail
+
+
+# --- ordering ---------------------------------------------------------------
+
+
+def test_violations_sort_deterministically_by_subject_then_kind(
+    tmp_path: Path,
+) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    policy = ArtifactPolicy(
+        wheel_required=("required.txt",),
+        sdist_required=("required.txt", "PKG-INFO"),
+        forbidden_members=("bad/*",),
+        required_metadata_fields=(),
+    )
+    metadata = "Name: x\nRequires-Dist: y\n\nbody text\n"
+    # "aaa..." sdist: missing "required.txt" -> exactly one MISSING_REQUIRED.
+    _make_sdist(dist_dir, {}, pkg_info=metadata, name="aaa")
+    # "zzz..." wheel: missing "required.txt" (MISSING_REQUIRED) AND carrying
+    # "bad/y.py" (FORBIDDEN_MEMBER) -- two violations on the SAME subject,
+    # so the expected sequence also pins the (kind, detail) tiebreak
+    # *within* one subject, not merely subject-vs-subject ordering.
+    #
+    # Natural emission order -- the order `check_artifacts` appends findings
+    # in, before any sort -- is [(zzz, MISSING_REQUIRED), (aaa,
+    # MISSING_REQUIRED), (zzz, FORBIDDEN_MEMBER)] (missing-required runs
+    # wheel-then-sdist, then forbidden-member runs wheel-then-sdist): this
+    # does not equal the sorted sequence asserted below on any of its three
+    # positions, so the fixture cannot be satisfied by a no-op "sort".
+    _make_wheel(dist_dir, {"bad/y.py": b""}, metadata=metadata, name="zzz")
+
+    violations_first_run = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+    violations_second_run = check_artifacts(
+        dist_dir, policy=policy, repo_root=REPO_ROOT
+    )
+
+    assert violations_first_run == violations_second_run
+
+    subjects_and_kinds = [(v.subject, v.kind) for v in violations_first_run]
+    assert subjects_and_kinds == [
+        ("aaa-9.9.9.tar.gz", ViolationKind.MISSING_REQUIRED),
+        ("zzz-9.9.9-py3-none-any.whl", ViolationKind.FORBIDDEN_MEMBER),
+        ("zzz-9.9.9-py3-none-any.whl", ViolationKind.MISSING_REQUIRED),
+    ]
+
+
+# --- every violation within each check, not only the first -----------------
+
+
+def test_every_violation_within_each_check_is_reported_not_only_the_first(
+    tmp_path: Path,
+) -> None:
+    """One artifact (the wheel) trips every implemented check TWICE OR MORE
+    at once, while the sdist is entirely clean -- so a check that silently
+    stops after its first finding (`break`, or slicing the result to one
+    element) reds this test even though every single-violation fixture
+    elsewhere in this file stays green (a fixture with only one trigger per
+    check cannot distinguish "reports one" from "reports all").
+    """
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    policy = ArtifactPolicy(
+        wheel_required=("a.txt", "b.txt"),
+        sdist_required=("PKG-INFO",),
+        forbidden_members=("bad/*",),
+        required_metadata_fields=("Alpha", "Beta"),
+    )
+    wheel_path = _make_wheel(
+        dist_dir,
+        {"bad/one.py": b"", "bad/two.py": b""},
+        metadata="Name: x\n\n",
+        links={"extra_link_one": "target_one", "extra_link_two": "target_two"},
+        name="x",
+    )
+    # The sdist satisfies its own policy entirely -- required member
+    # present, no forbidden member, no link, and metadata with both
+    # required fields, `Requires-Dist`, and a non-empty body -- so every
+    # violation below must be attributed to the wheel alone.
+    _make_sdist(
+        dist_dir,
+        {"a.txt": b"", "b.txt": b""},
+        pkg_info="Name: x\nAlpha: 1\nBeta: 2\nRequires-Dist: y\n\nbody\n",
+        name="x",
+    )
+
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert violations, "the fixture must trip at least one violation"
+    assert all(v.subject == wheel_path.name for v in violations), (
+        f"expected every violation on the wheel only (the sdist is clean): "
+        f"{violations!r}"
+    )
+
+    kind_counts = Counter(v.kind for v in violations)
+    assert kind_counts == Counter(
+        {
+            ViolationKind.MISSING_REQUIRED: 2,
+            ViolationKind.FORBIDDEN_MEMBER: 2,
+            ViolationKind.LINK_MEMBER: 2,
+            ViolationKind.METADATA_INCOMPLETE: 4,
+        }
+    )
+    assert all(v.remedy.strip() for v in violations)
+
+
+# --- hard errors -------------------------------------------------------
+
+
+def test_two_wheels_is_a_hard_checker_error(tmp_path: Path) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    metadata = "Name: x\nRequires-Dist: y\n\nbody text\n"
+    _make_wheel(dist_dir, {}, metadata=metadata, name="a")
+    _make_wheel(dist_dir, {}, metadata=metadata, name="b")
+    _make_sdist(dist_dir, {}, pkg_info=metadata, name="c")
+    policy = ArtifactPolicy(
+        wheel_required=(),
+        sdist_required=(),
+        forbidden_members=(),
+        required_metadata_fields=(),
+    )
+
+    with pytest.raises(CheckerError):
+        check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+
+def test_zero_sdists_is_a_hard_checker_error(tmp_path: Path) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    metadata = "Name: x\nRequires-Dist: y\n\nbody text\n"
+    _make_wheel(dist_dir, {}, metadata=metadata)
+    policy = ArtifactPolicy(
+        wheel_required=(),
+        sdist_required=(),
+        forbidden_members=(),
+        required_metadata_fields=(),
+    )
+
+    with pytest.raises(CheckerError):
+        check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+
+def test_zero_wheels_is_a_hard_checker_error(tmp_path: Path) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    metadata = "Name: x\nRequires-Dist: y\n\nbody text\n"
+    _make_sdist(dist_dir, {}, pkg_info=metadata)
+    policy = ArtifactPolicy(
+        wheel_required=(),
+        sdist_required=(),
+        forbidden_members=(),
+        required_metadata_fields=(),
+    )
+
+    with pytest.raises(CheckerError):
+        check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+
+def test_main_missing_policy_returns_2_and_names_the_path(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    missing_policy = tmp_path / "does-not-exist.toml"
+
+    exit_code = check_artifacts_main(
+        ["--dist-dir", str(dist_dir), "--policy", str(missing_policy)]
+    )
+
+    assert exit_code == 2
+    assert str(missing_policy) in capsys.readouterr().err
+
+
+def test_main_malformed_policy_returns_2(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    bad_policy = tmp_path / "bad.toml"
+    bad_policy.write_text("[wheel\nrequired = [")
+
+    exit_code = check_artifacts_main(
+        ["--dist-dir", str(dist_dir), "--policy", str(bad_policy)]
+    )
+
+    assert exit_code == 2
+    assert capsys.readouterr().err  # a message was printed, not silence
+
+
+# --- main() ----------------------------------------------------------------
+
+
+def test_main_on_a_clean_dir_returns_0_and_names_both_filenames(
+    clean_dist: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    before = sorted(clean_dist.iterdir())
+
+    exit_code = check_artifacts_main(
+        ["--dist-dir", str(clean_dist), "--policy", str(REAL_POLICY_PATH)]
+    )
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "fitdocs-9.9.9-py3-none-any.whl" in out
+    assert "fitdocs-9.9.9.tar.gz" in out
+    # Writes nothing: the directory listing is unchanged across the call.
+    assert sorted(clean_dist.iterdir()) == before
+
+
+def test_main_on_a_violating_dir_returns_1_and_lists_every_violation(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    _make_wheel(dist_dir, {}, metadata="Name: x\n\nbody\n")
+    _make_sdist(dist_dir, {}, pkg_info="Name: x\n\nbody\n")
+
+    policy = load_policy(REAL_POLICY_PATH)
+    expected_violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+    assert len(expected_violations) > 1, (
+        "the fixture must trip more than one violation for this test to mean anything"
+    )
+
+    exit_code = check_artifacts_main(
+        ["--dist-dir", str(dist_dir), "--policy", str(REAL_POLICY_PATH)]
+    )
+
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert f"{len(expected_violations)} violation(s)" in err
+    # One line per violation plus the summary line.
+    assert err.count("\n") == len(expected_violations) + 1
+
+
+# --- real-artifact smoke -----------------------------------------------
+
+
+def test_real_build_with_the_real_policy_has_zero_violations(
+    build_a: tuple[Path, ...],
+) -> None:
+    dist_dir = build_a[0].parent
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+    assert violations == (), f"real build failed conformance: {violations!r}"
+
+
+# --- import isolation --------------------------------------------------
+
+
+def test_check_artifacts_module_imports_nothing_from_fitdocs_or_tests() -> None:
+    source = (REPO_ROOT / "scripts" / "check_artifacts.py").read_text()
+    tree = ast.parse(source)
+    imported_names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                imported_names.add(alias.name.split(".")[0])
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_names.add(node.module.split(".")[0])
+    assert imported_names, "the import scan found no imports -- wrong file parsed"
+    assert "fitdocs" not in imported_names
+    assert "tests" not in imported_names
