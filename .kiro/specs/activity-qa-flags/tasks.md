@@ -484,7 +484,7 @@ does not add, reference or read a real file.
   - _Requirements: 7.1, 7.3, 7.4, 7.6_
   - _Depends: 3.2_
 
-- [ ] 4.3 Guard the purity of the layer and its permanent exclusions
+- [x] 4.3 Guard the purity of the layer and its permanent exclusions
   - Assert the package performs no input or output, accepts and returns no file
     path, consults no clock or random source, and invokes no language model
   - Assert no module in the package imports the load engine, the renderer, the
