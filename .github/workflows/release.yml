@@ -1,5 +1,6 @@
 # Release (task 6.3, task 6.4; design.md "CiWorkflow and ReleaseWorkflow",
-# "Release pipeline"; Requirements 5.2, 5.3, 5.5, 5.8, 5.10).
+# "Release pipeline"; Requirements 2.5, 5.2, 5.3, 5.5, 5.6, 5.7, 5.8, 5.9,
+# 5.10).
 #
 # Triggered by a version tag. A chain of dependent jobs, each `needs:` the
 # one before it, so any job's failure prevents every later job from running
@@ -8,23 +9,26 @@
 # docs/releasing.md's manual procedure names step by step (5.10), so the
 # automated path and the documented manual path execute identical logic.
 #
-# THIS FILE (task 6.3) IS THE GATE CHAIN ONLY -- `gates`, `version`, `build`,
-# `check`, `verify-artifact`. It publishes nothing and requires no
-# credential; it is independently runnable and independently verifiable.
-# Task 6.4 appends three more jobs to the end of THIS SAME file for the
-# rehearsal upload, the public release, and the post-release check, and is
-# the one that adds an OIDC identity-token permission, scoped to those
-# upload jobs only, never to this file's top-level `permissions:` block
-# below.
+# `gates`, `version`, `build`, `check`, `verify-artifact` (task 6.3) are the
+# gate chain: they publish nothing and require no credential, so they are
+# independently runnable and independently verifiable. `publish-testpypi`,
+# `publish-pypi`, `verify-published` (task 6.4) publish the rehearsal
+# artifact, publish the public artifact behind the `pypi` environment's
+# manual approval, and confirm the public index serves the tagged version --
+# each authenticates by a short-lived, per-release OIDC identity-token
+# exchange scoped to that job alone (Req 5.7), never to this file's
+# top-level `permissions:` block below, and the publish jobs stay inline
+# rather than a reusable workflow, because trusted publishing does not work
+# from one.
 
 on:
   push:
     tags:
       - "v*"
 
-# Scoped to read-only for every job task 6.3 adds. Task 6.4's upload jobs
-# each declare their own job-scoped identity-token permission for the
-# short-lived OIDC credential exchange (Req 5.7) -- this top-level block is
+# Scoped to read-only for every job. Each of the three task 6.4 jobs
+# declares its own job-scoped `permissions:` for the short-lived OIDC
+# credential exchange or its absence (Req 5.7) -- this top-level block is
 # never widened for them.
 permissions:
   contents: read
@@ -180,8 +184,112 @@ jobs:
           "$UV_TOOL_BIN_DIR/fitdocs" plugins
           test "$("$UV_TOOL_BIN_DIR/fitdocs" --version)" = "${GITHUB_REF_NAME#v}"
 
-  # Task 6.4 appends the rehearsal-upload job (needs: verify-artifact), the
-  # public-release job (needs the rehearsal job, behind the
-  # public-publication environment's manual approval), and the
-  # post-release-verification job (needs the public-release job) here, each
-  # with its own job-scoped identity-token permission.
+  publish-testpypi:
+    needs: verify-artifact
+    runs-on: ubuntu-latest
+    # The rehearsal environment carries no required reviewer (task 6.1), so
+    # this job runs automatically once the whole gate chain has passed
+    # (design decision (a): every failing gate runs before any publish, so a
+    # failure never spends a version number).
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/fitdocs/
+    # Job-scoped identity-token permission for the short-lived, per-release
+    # OIDC credential exchange (Req 5.7) -- no `contents` grant, and no
+    # long-lived secret anywhere in or alongside the project.
+    permissions:
+      id-token: write
+    steps:
+      - name: Download the built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      # Pinned to the immutable release tag v1.14.2 -- verified via
+      # `gh api repos/pypa/gh-action-pypi-publish/git/ref/tags/v1.14.2`
+      # (reports SHA a892a5a61159132606e93a2fa6f4358831b04d26) and
+      # `gh api repos/pypa/gh-action-pypi-publish/releases/tags/v1.14.2`
+      # (reports `"immutable": true` on that release), never the floating
+      # `release/v1` alias. Uses trusted publishing (no `password:` input),
+      # so this step alone needs `id-token: write` above. `skip-existing` is
+      # explicit `false` here too -- the action's own default -- so a
+      # rehearsal re-run of an already-spent rehearsal version fails rather
+      # than silently skipping, matching docs/releasing.md step 8's "a spent
+      # rehearsal version is not reused" (2.5 applies to the rehearsal index
+      # too, not only the public one). PEP 740 attestations are generated
+      # and uploaded by default since v1.11.0; pinned explicitly `true` so a
+      # future default flip cannot silently disable them.
+      - name: Publish to the rehearsal index (TestPyPI)
+        uses: pypa/gh-action-pypi-publish@v1.14.2
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: dist/
+          skip-existing: false
+          attestations: true
+
+  publish-pypi:
+    needs: publish-testpypi
+    runs-on: ubuntu-latest
+    # The approval gate lives on the ENVIRONMENT, not on this job's YAML
+    # (design decision (d)): the `pypi` environment (task 6.1) requires a
+    # maintainer's manual approval in the repository's Actions UI before any
+    # step below runs -- there is no manual publish command to run by hand.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/fitdocs/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download the built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      # Default repository (PyPI, no repository-url override). skip-existing
+      # is set explicitly to false -- the action's own default -- so a
+      # re-run of an already-published version number FAILS rather than
+      # silently skipping (Req 2.5, design decision "does not tolerate an
+      # already-present version"). attestations pinned explicitly `true`
+      # for the same reason as the rehearsal job above.
+      - name: Publish to the public index (PyPI)
+        uses: pypa/gh-action-pypi-publish@v1.14.2
+        with:
+          packages-dir: dist/
+          skip-existing: false
+          attestations: true
+
+  verify-published:
+    needs: publish-pypi
+    runs-on: ubuntu-latest
+    # No identity-token permission: this job authenticates nothing and
+    # publishes nothing, it only installs a public, already-released
+    # artifact. Explicit `contents: read` (redundant with the top-level
+    # block) rather than an omitted key, so the "no id-token anywhere
+    # outside the two publish jobs" property is visible on this job too.
+    permissions:
+      contents: read
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.1.0
+
+      - name: Install Python 3.11
+        run: uv python install 3.11
+
+      # No checkout of the source and no download of the built artifact
+      # (design decision (c) applies here too, at the far end of the
+      # pipeline): this job proves the PUBLIC INDEX now serves the tagged
+      # version, not that yesterday's local wheel still works. The bounded
+      # retry tolerates ordinary index-propagation delay right after a
+      # publish; a failure after the retries is a defect report, never a
+      # re-publish, because the version is already spent (design decision
+      # (e), Req 2.5).
+      - name: Install and verify the published version from the public index
+        run: |
+          export UV_TOOL_DIR=$(mktemp -d)
+          export UV_TOOL_BIN_DIR=$(mktemp -d)
+          for i in 1 2 3 4 5 6; do uv tool install --no-cache "fitdocs==${GITHUB_REF_NAME#v}" && break; sleep 30; done
+          test -x "$UV_TOOL_BIN_DIR/fitdocs"
+          test "$("$UV_TOOL_BIN_DIR/fitdocs" --version)" = "${GITHUB_REF_NAME#v}"
+          "$UV_TOOL_BIN_DIR/fitdocs" --help
