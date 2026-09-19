@@ -226,8 +226,8 @@
   - _Requirements: 1.9, 3.7, 7.9, 10.6, 10.7_
   - _Depends: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
 
-- [ ] 6. Release automation
-- [ ] 6.1 Establish the publication prerequisites
+- [x] 6. Release automation
+- [x] 6.1 Establish the publication prerequisites
   - Confirm the distribution name is available on both the public index and the rehearsal index, and reserve it on each **by registering a pending publisher only** — no placeholder upload, because a released version number can never be spent twice and nothing may be published before task 3.2 passes
   - The pending publisher on each index names this repository, the release workflow's filename, and its environment; the workflow file itself arrives in task 6.3, and naming it ahead of time is exactly how a pending publisher works
   - Create the two deployment environments the release workflow targets: a rehearsal environment with no approval, and a public-publication environment that requires manual approval
@@ -262,7 +262,7 @@
   - _Requirements: 2.5, 5.6, 5.7, 5.9_
   - _Depends: 6.1, 6.3_
 
-- [ ] 7. Feature validation
+- [x] 7. Feature validation
 - [x] 7.1 Validate installed-tool behavior and version identity end to end
   - Extend the existing installed-tool coverage: install the built artifact into an isolated tool directory, assert the console script exists, the reported version equals the manifest's, the help output lists every released command, and the declared metadata fields are all present and non-empty
   - Assert that installing creates no data root, configuration file, or profile anywhere on the machine, and that running the tool from an uninstalled checkout reports the unknown version and exits successfully
@@ -278,7 +278,7 @@
   - _Requirements: 10.1, 10.2, 10.4, 10.5_
   - _Depends: 3.2, 4.2, 6.2_
 
-- [ ] 7.3 Rehearse a full release
+- [x] 7.3 Rehearse a full release
   - Follow the release procedure end to end against the rehearsal index: gates, version consistency, build, conformance and encumbered-content checks with the match data supplied, clean-environment verification, rehearsal publication, and installation of the rehearsal artifact from that index into a fresh environment
   - Deliberately trip one gate — a stale changelog entry — and confirm the run stops before any publication and leaves both indexes untouched
   - Observable: the rehearsal artifact installs from the rehearsal index and reports the expected version, and the deliberately failed run publishes nothing
@@ -311,3 +311,5 @@
 - 6.2/6.3 fix (CI portability): typer 0.27 forces rich's terminal rendering whenever `GITHUB_ACTIONS` is set (`rich_utils.py` FORCE_TERMINAL), so `--help` on the runner carries ANSI styling; both workflows now set top-level `env: {TERM: dumb, NO_COLOR: "1"}` (`TERM=dumb` is the operative one -- `NO_COLOR` alone leaves bold). Run the suite under `GITHUB_ACTIONS=true TERM=dumb NO_COLOR=1` to reproduce the runner locally. SEPARATE defect: `_config_error` (`cli.py`) hard-wraps at 80 columns on non-tty stderr, and the runner's `/tmp/pytest-of-runner/pytest-0/<name>0/` prefix puts the wrap inside asserted tokens (`tests/test_cli_sync_inbox.py:292,309,338`) -- passes locally only by tmp-path length.
 - 6.2 fix (runner wrap): `_config_error` and `_report_drain`'s `Inbox:` line now pass `soft_wrap=True` like every other path-bearing print in `cli.py`; rich hard-wraps plain prints at 80 columns on any non-tty, and the runner-shaped full suite (`--basetemp=/tmp/pytest-of-runner/pytest-0` + `GITHUB_ACTIONS=true TERM=dumb NO_COLOR=1`) went 19 failed -> 0. Reproduce runner-only failures with that basetemp, not by guessing. Test-insertion trap: inserting a test ABOVE another test's trailing assertion silently re-homes it -- after adding tests, `git diff -U0 HEAD -- <file> | grep '^-'` must be empty.
 - 7.2 (3 rounds): `tests/test_preserved_guarantees.py` + `tests/fixtures/pre_distribution_e74af37{.py,_blobs.txt}`. CI checks out at `fetch-depth: 1`, so ANY `git show <sha>:` / `git diff <sha>` / `git rev-list` in a test fails on the runner -- vendor the base revision as committed fixtures (literals for deps/`__all__`, a `git ls-tree -r <sha>` blob manifest compared against `git hash-object` of the WORKING tree, which also makes uncommitted edits visible). Enumerate files with `git ls-files --cached --others --exclude-standard` or a stray `.DS_Store` false-reds the pin. Public-surface pins need three layers: `__all__`, runtime `AttributeError`, and an import scan covering `from .x`, `from . import x`, `from fitdocs import x`, `import fitdocs.x`. Under `_no_socket` the uninstalled-version branch is unreachable in the dev venv -- patch `version()` to raise. `importlib.reload(scripts.check_artifacts)` rebinds `CheckerError` and breaks `pytest.raises` elsewhere in the same run: probe imports in a subprocess. Offline build tests: real `uv cache dir` under dead proxies FIRST, warm online only on failure, assert the retried call's env. Do not pin third-party defaults (hatchling is unpinned in `build-system.requires`). Runner-shape recipe now also needs `git clone --depth 1`.
+- 6.1 (DONE 2026-09-19, Josh + release-0.1.0 session): pending Trusted Publishers on pypi.org (env `pypi`) and test.pypi.org (env `testpypi`); GitHub environments `testpypi` (no reviewers) and `pypi` (required reviewer joshua-stauffer); repository secret `FITDOCS_FORBIDDEN_STRINGS_CONTENT`. Repo made public the same day (environment protection rules are unavailable on a private free-plan repo, and every `[project.urls]` doc link is a blob/main URL). Evidence: CI run 35429286599 (re-run of a pre-secret failure) green with "Write the match data outside the checkout" / "Check the artifacts" / "Prove the gate fails closed" all success.
+- 7.3 (DONE 2026-09-19): trip test first -- tag `v0.1.0` on c983eec (changelog `[Unreleased]` only) -> run 35445757304: `gates` success, `version` failure (`version_mismatch: changelog has no released entry for version 0.1.0`), build/check/verify-artifact/all publish jobs skipped; tag deleted. Release commit 3c5281b (branch release/0.1.0, ff-merged): CHANGELOG `[0.1.0] - 2026-09-19`, six real-state pins flipped to the post-release form, releasing.md step 2 rewritten. Local steps 1/3/4/6 green; real tag `v0.1.0` -> run 35446284407: all eight jobs success (TestPyPI auto, `pypi` approved by Josh, `verify-published` green). Independent checks: `uv tool install --no-cache fitdocs==0.1.0` from pypi.org in a fresh UV_TOOL_DIR prints `0.1.0`. RUNBOOK DEFECT FOUND: releasing.md step 10's TestPyPI command fails to resolve under uv's default `first-index` strategy (TestPyPI carries stale `pyyaml`, so uv refuses to fall through to pypi.org for it); `--index-strategy unsafe-best-match` made it work -- queued.
