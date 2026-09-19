@@ -643,6 +643,111 @@ def test_fail_closed_guard_rejects_a_non_one_exit_code_even_with_the_right_text(
 # --- (k) actionlint, when present -------------------------------------------
 
 
+# --- (l) portability: workflow-level TERM/NO_COLOR, no job-level override --
+#
+# typer's rich_utils.py forces styled terminal rendering whenever
+# GITHUB_ACTIONS is set, inserting ANSI codes into `--help` output that
+# break the plain-text help assertions in tests/test_cli*.py and
+# tests/load/test_cli_load.py on the runner (never locally, where
+# GITHUB_ACTIONS is unset). A dumb terminal disables that styling; NO_COLOR
+# is kept alongside it as the public convention for the same intent.
+
+
+def test_top_level_env_sets_term_dumb_and_no_color() -> None:
+    doc = _workflow()
+    env = doc.get("env")
+    assert isinstance(env, dict), "ci.yml has no top-level env: mapping"
+    assert env.get("TERM") == "dumb", f"expected TERM: dumb, got {env.get('TERM')!r}"
+    # YAML parses an unquoted `1` as an int; the workflow's own text must
+    # quote it, so pin the exact string, not merely `== 1`.
+    assert env.get("NO_COLOR") == "1", (
+        f'expected NO_COLOR: "1" (string), got {env.get("NO_COLOR")!r}'
+    )
+
+
+def test_no_job_or_step_overrides_term_away_from_dumb() -> None:
+    doc = _workflow()
+    job = _gates_job(doc)
+    job_env = job.get("env", {})
+    assert job_env.get("TERM", "dumb") == "dumb", (
+        f"the gates job overrides TERM to {job_env.get('TERM')!r}"
+    )
+    for step in _steps(job):
+        step_env = step.get("env", {})
+        assert step_env.get("TERM", "dumb") == "dumb", (
+            f"step {step.get('name')!r} overrides TERM to {step_env.get('TERM')!r}"
+        )
+
+
+# --- execution: prove the defect is reachable, then prove the fix ----------
+
+
+def test_workflow_env_fixes_the_real_ansi_help_defect_on_this_runner() -> None:
+    """First proves the defect is reachable in THIS environment (falsity):
+    with GITHUB_ACTIONS=true and TERM/NO_COLOR stripped from the inherited
+    environment, the two help-text tests fail with raw ANSI escapes in their
+    captured stdout -- exactly the runner-observed failure this fix
+    addresses. Then proves the workflow's own top-level env (parsed out of
+    the YAML, not re-typed) makes the same invocation pass. A workflow edit
+    that removes or weakens `TERM: dumb` reds this test."""
+    doc = _workflow()
+    workflow_env = {str(k): str(v) for k, v in doc.get("env", {}).items()}
+
+    cmd = [
+        "uv",
+        "run",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "tests/test_cli.py::test_regen_help_documents_flag",
+        "tests/test_cli.py::test_sync_help_documents_flags",
+    ]
+
+    broken_env = os.environ.copy()
+    broken_env.pop("TERM", None)
+    broken_env.pop("NO_COLOR", None)
+    # typer's own escape hatch would defeat the positive control if exported.
+    broken_env.pop("_TYPER_FORCE_DISABLE_TERMINAL", None)
+    broken_env["GITHUB_ACTIONS"] = "true"
+    broken_result = subprocess.run(
+        cmd,
+        cwd=str(_REPO_ROOT),
+        capture_output=True,
+        text=True,
+        env=broken_env,
+        check=False,
+    )
+    assert broken_result.returncode != 0, (
+        "positive control failed -- the ANSI help defect is not reachable "
+        "in this environment without the workflow's TERM/NO_COLOR env: "
+        f"stdout={broken_result.stdout!r}"
+    )
+    # pytest's own assertion-rewriting reprs the failing string in its
+    # captured output, so the ANSI escape appears as the four literal
+    # characters backslash-x-1-b (`\x1b`), not the raw ESC byte -- checked
+    # as that literal substring, which is what a human reading the runner's
+    # log actually sees.
+    assert "\\x1b[" in broken_result.stdout, (
+        "positive control failed -- expected raw ANSI escapes in stdout "
+        f"without the workflow env: stdout={broken_result.stdout!r}"
+    )
+
+    fixed_env = os.environ.copy() | {"GITHUB_ACTIONS": "true"} | workflow_env
+    fixed_result = subprocess.run(
+        cmd,
+        cwd=str(_REPO_ROOT),
+        capture_output=True,
+        text=True,
+        env=fixed_env,
+        check=False,
+    )
+    assert fixed_result.returncode == 0, (
+        "the workflow's top-level env did not fix the ANSI help defect: "
+        f"stdout={fixed_result.stdout!r} stderr={fixed_result.stderr!r}"
+    )
+
+
 def test_actionlint_if_available() -> None:
     actionlint = shutil.which("actionlint")
     if actionlint is None:

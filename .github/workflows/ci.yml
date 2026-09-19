@@ -27,6 +27,15 @@ on:
 permissions:
   contents: read
 
+env:
+  # typer forces rich's terminal rendering whenever GITHUB_ACTIONS is set,
+  # which inserts ANSI styling into `--help` output and breaks the plain-text
+  # help assertions in tests/. A dumb terminal renders the same plain text
+  # a developer's non-tty pytest run sees. NO_COLOR is the public convention
+  # for the same intent and is kept alongside it.
+  TERM: dumb
+  NO_COLOR: "1"
+
 jobs:
   gates:
     runs-on: ubuntu-latest

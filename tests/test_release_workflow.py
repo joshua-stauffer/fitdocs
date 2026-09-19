@@ -1183,6 +1183,41 @@ def test_verify_artifact_body_exits_zero_and_version_matches_the_tag(
 # --- publish-testpypi/publish-pypi: no run: bodies exist to execute --------
 
 
+# --- portability: workflow-level TERM/NO_COLOR, no job-level override -----
+#
+# Mirrors tests/test_ci_workflow.py's own structural assertions (see there
+# for the full defect explanation): typer forces styled `--help` rendering
+# whenever GITHUB_ACTIONS is set, breaking plain-text help assertions. The
+# `gates` job here is the same shape as ci.yml's own `gates` job, so the same
+# top-level env fix applies to release.yml.
+
+
+def test_top_level_env_sets_term_dumb_and_no_color() -> None:
+    doc = _workflow()
+    env = doc.get("env")
+    assert isinstance(env, dict), "release.yml has no top-level env: mapping"
+    assert env.get("TERM") == "dumb", f"expected TERM: dumb, got {env.get('TERM')!r}"
+    assert env.get("NO_COLOR") == "1", (
+        f'expected NO_COLOR: "1" (string), got {env.get("NO_COLOR")!r}'
+    )
+
+
+def test_no_job_or_step_anywhere_overrides_term_away_from_dumb() -> None:
+    doc = _workflow()
+    jobs = _jobs(doc)
+    for job_name, job in jobs.items():
+        job_env = job.get("env", {})
+        assert job_env.get("TERM", "dumb") == "dumb", (
+            f"job {job_name!r} overrides TERM to {job_env.get('TERM')!r}"
+        )
+        for step in job.get("steps", []):
+            step_env = step.get("env", {})
+            assert step_env.get("TERM", "dumb") == "dumb", (
+                f"job {job_name!r} step {step.get('name')!r} overrides TERM "
+                f"to {step_env.get('TERM')!r}"
+            )
+
+
 def test_publish_job_steps_have_no_run_bodies() -> None:
     """Both publish jobs are `uses:`-only steps (download-artifact, then the
     pinned publish action) -- there is no shell body of theirs to execute
