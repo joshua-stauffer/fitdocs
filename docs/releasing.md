@@ -6,6 +6,8 @@ step below names the exact command that performs it, and which automation
 job (task 6.3, task 6.4) runs the identical command when the process is
 triggered by a version tag instead of run by hand — so the manual path and
 the automated path can never quietly diverge (Req 5.1, 5.10).
+Every `python -m scripts.*` command below must be run from the repository
+root: the `scripts` package is importable only from there.
 
 The plan's rule, stated once here rather than repeated at every step:
 nothing is published before step 5 passes. If any step stops the release,
@@ -109,19 +111,33 @@ below reports a `version_mismatch` violation until this step has run for the
 first time — that is the expected state before this step is done, not a
 defect to work around.
 
-**Before the first release:** two of this project's own tests currently pin
+**Before the first release:** seven of this project's own tests currently pin
 the *pre-release* state and must change in the same commit as the first cut,
-not after it: `tests/test_changelog.py::test_real_changelog_has_no_released_version_literal`
-(which asserts no `## [X.Y.Z]` heading exists yet) and
-`tests/test_changelog.py::test_real_changelog_has_added_entries_under_unreleased`
-(which reads the `Added` entries from the standing `[Unreleased]` section,
-where they will no longer live once this step moves them under the new
-release heading). `tests/test_version_identity.py`'s
-[`docs/plugins.md`](../docs/plugins.md) allowlist also pins the released-
-version literal's example-snippet occurrence to today's version, and will
-need updating the moment the manifest version diverges from that snippet.
-Fixing these tests is not this step's job; they are named here so the first
-maintainer to run this step is not surprised by them.
+not after it -- every one of them runs inside `uv run pytest`, so a tag whose
+tests still pin the old state stops at step 1:
+
+- `tests/test_changelog.py::test_real_changelog_has_no_released_version_literal`
+  (asserts no `## [X.Y.Z]` heading exists yet) and
+  `tests/test_changelog.py::test_real_changelog_has_added_entries_under_unreleased`
+  (reads the `Added` entries from the standing `[Unreleased]` section, where
+  they will no longer live once this step moves them under the new heading);
+- `tests/test_release_artifacts.py::test_real_repository_state_pins_the_no_entry_violation`
+  and
+  `tests/test_release_artifacts.py::test_main_with_real_manifest_and_changelog_reports_only_the_no_entry_violation`
+  (assert the version gate reports exactly the no-released-entry violation
+  against the real manifest and changelog);
+- `tests/test_release_workflow.py::test_version_body_exits_one_with_version_mismatch_today`
+  and
+  `tests/test_release_workflow.py::test_check_body_exits_one_with_exactly_one_version_mismatch_and_no_other_kind`
+  (execute the workflow's `version` and `check` bodies and expect today's
+  mismatch);
+- `tests/test_version_identity.py`'s [`docs/plugins.md`](../docs/plugins.md)
+  allowlist, which pins the released-version literal's example-snippet
+  occurrence to today's version and needs updating the moment the manifest
+  version diverges from that snippet.
+
+Fixing these tests is part of the release commit; they are named here so the
+first maintainer to run this step is not surprised by them.
 
 ## 3. Version consistency
 

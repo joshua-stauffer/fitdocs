@@ -322,6 +322,15 @@ authority for the public names. `tests/test_public_api.py` pins the surface
 inside this repository, so a change is always deliberate and visible in the
 diff.
 
+<!-- historical-note: pre-1.0 rename; NotConfirmed here is a record of what
+     changed, not published surface. A name-absence guard scanning this
+     corpus should exempt this paragraph. -->
+
+This has already happened at least once, and the guide you are reading
+reflects the result: the load result contract was redefined and the
+`NotConfirmed` outcome renamed to `NotComputed`. A calculator written against
+the earlier shape does not run against this one.
+
 ## Diagnosis: what each failure looks like
 
 Every discovery failure is isolated per plugin — one broken plugin never

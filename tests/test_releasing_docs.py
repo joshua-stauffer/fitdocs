@@ -597,8 +597,18 @@ def test_step2_states_the_change_is_committed_and_step1_is_rerun() -> None:
 
 def test_step2_before_first_release_note_names_the_pinned_tests_and_allowlist() -> None:
     section = _step2_section()
-    assert "test_real_changelog_has_no_released_version_literal" in section
-    assert "test_real_changelog_has_added_entries_under_unreleased" in section
+    # Every test that pins the pre-release state and therefore goes red at the
+    # first version cut -- an under-count here sent a maintainer to a red
+    # `gates` job with three of seven named (validation finding, 2026-09-19).
+    for pinned in (
+        "test_real_changelog_has_no_released_version_literal",
+        "test_real_changelog_has_added_entries_under_unreleased",
+        "test_real_repository_state_pins_the_no_entry_violation",
+        "test_main_with_real_manifest_and_changelog_reports_only_the_no_entry_violation",
+        "test_version_body_exits_one_with_version_mismatch_today",
+        "test_check_body_exits_one_with_exactly_one_version_mismatch_and_no_other_kind",
+    ):
+        assert section.count(pinned) == 1, pinned
     assert "docs/plugins.md" in section
 
 
