@@ -1,0 +1,187 @@
+# Release (task 6.3, task 6.4; design.md "CiWorkflow and ReleaseWorkflow",
+# "Release pipeline"; Requirements 5.2, 5.3, 5.5, 5.8, 5.10).
+#
+# Triggered by a version tag. A chain of dependent jobs, each `needs:` the
+# one before it, so any job's failure prevents every later job from running
+# at all (5.8) -- publication is unreachable unless every gate passed. Every
+# gate invokes the project's own script or test command, the same ones
+# docs/releasing.md's manual procedure names step by step (5.10), so the
+# automated path and the documented manual path execute identical logic.
+#
+# THIS FILE (task 6.3) IS THE GATE CHAIN ONLY -- `gates`, `version`, `build`,
+# `check`, `verify-artifact`. It publishes nothing and requires no
+# credential; it is independently runnable and independently verifiable.
+# Task 6.4 appends three more jobs to the end of THIS SAME file for the
+# rehearsal upload, the public release, and the post-release check, and is
+# the one that adds an OIDC identity-token permission, scoped to those
+# upload jobs only, never to this file's top-level `permissions:` block
+# below.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+# Scoped to read-only for every job task 6.3 adds. Task 6.4's upload jobs
+# each declare their own job-scoped identity-token permission for the
+# short-lived OIDC credential exchange (Req 5.7) -- this top-level block is
+# never widened for them.
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.1.0
+
+      - name: Install Python 3.11
+        run: uv python install 3.11
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Run the test suite
+        run: uv run pytest
+
+      - name: Lint and check formatting
+        run: uv run ruff check . && uv run ruff format --check .
+
+      - name: Run the strict type check
+        run: uv run mypy
+
+  version:
+    needs: gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.1.0
+
+      - name: Install Python 3.11
+        run: uv python install 3.11
+
+      - name: Sync dependencies
+        run: uv sync
+
+      # Before any build: the tag, the manifest, and the changelog's newest
+      # released entry must all agree (design.md decision (b)). GITHUB_REF_NAME
+      # is the tag name for a tag-triggered run (e.g. "v0.1.0").
+      - name: Check the version against the tag
+        run: uv run python -m scripts.check_artifacts --no-artifacts --tag "${GITHUB_REF_NAME}"
+
+  build:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.1.0
+
+      - name: Install Python 3.11
+        run: uv python install 3.11
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Build the artifacts
+        run: uv run python -m scripts.build_release --out-dir dist
+
+      - name: Upload the built artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  check:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.1.0
+
+      - name: Install Python 3.11
+        run: uv python install 3.11
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Download the built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      # Same guard as the CI workflow's `gates` job: an absent secret is
+      # never a silent pass. Written OUTSIDE the checkout so the guard never
+      # reads its own match data from inside the repository (Req 6.3, 6.9).
+      - name: Write the match data outside the checkout
+        env:
+          FITDOCS_FORBIDDEN_STRINGS_CONTENT: ${{ secrets.FITDOCS_FORBIDDEN_STRINGS_CONTENT }}
+        run: |
+          if [ -z "$FITDOCS_FORBIDDEN_STRINGS_CONTENT" ]; then
+            echo "::error::gate_not_run: FITDOCS_FORBIDDEN_STRINGS_CONTENT secret is not set; the encumbered-content gate cannot run"
+            exit 1
+          fi
+          printf '%s' "$FITDOCS_FORBIDDEN_STRINGS_CONTENT" > "$RUNNER_TEMP/forbidden-strings.txt"
+
+      # The full default checker: both the artifact-conformance gate and the
+      # version-consistency gate run again here, against the tag, this time
+      # with the real artifacts on disk (neither --no-version-check nor
+      # --no-artifacts) -- docs/releasing.md step 5's exact command.
+      - name: Check the artifacts
+        run: FITDOCS_FORBIDDEN_STRINGS="$RUNNER_TEMP/forbidden-strings.txt" uv run python -m scripts.check_artifacts --tag "${GITHUB_REF_NAME}" --dist-dir dist
+
+  verify-artifact:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.1.0
+
+      - name: Install Python 3.11
+        run: uv python install 3.11
+
+      - name: Download the built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      # Installs from the BUILT ARTIFACT, never the working tree (design.md
+      # decision (c)) -- no checkout, no `uv sync`, nothing beyond uv itself
+      # and the downloaded wheel. The tool-directory variables are exported
+      # BEFORE the install so both the install and every later invocation in
+      # this same step see them; the binary is invoked by its full path
+      # inside $UV_TOOL_BIN_DIR (never bareword), exactly as
+      # docs/releasing.md's step 6 does, because $UV_TOOL_BIN_DIR is
+      # deliberately not on PATH. Kept to --version/--help/plugins to stay
+      # hermetic (needs no data root); the full ingestion checkpoint is
+      # `tests/test_release_artifacts.py -k checkpoint`, which the `gates`
+      # job above already ran as part of the full test suite.
+      - name: Install and smoke-test the built artifact
+        run: |
+          export UV_TOOL_DIR=$(mktemp -d)
+          export UV_TOOL_BIN_DIR=$(mktemp -d)
+          uv tool install --from dist/fitdocs-*.whl fitdocs
+          "$UV_TOOL_BIN_DIR/fitdocs" --version
+          "$UV_TOOL_BIN_DIR/fitdocs" --help
+          "$UV_TOOL_BIN_DIR/fitdocs" plugins
+          test "$("$UV_TOOL_BIN_DIR/fitdocs" --version)" = "${GITHUB_REF_NAME#v}"
+
+  # Task 6.4 appends the rehearsal-upload job (needs: verify-artifact), the
+  # public-release job (needs the rehearsal job, behind the
+  # public-publication environment's manual approval), and the
+  # post-release-verification job (needs the public-release job) here, each
+  # with its own job-scoped identity-token permission.

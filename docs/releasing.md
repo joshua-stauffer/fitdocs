@@ -170,7 +170,7 @@ itself be edited away.
 
 ```
 FITDOCS_FORBIDDEN_STRINGS=/absolute/path/outside/the/repository/match-data.txt \
-    uv run python -m scripts.check_artifacts --tag vX.Y.Z
+    uv run python -m scripts.check_artifacts --tag vX.Y.Z --dist-dir dist
 ```
 
 This runs both gates at once: the artifact conformance checks (required and
