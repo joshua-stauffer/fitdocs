@@ -1002,9 +1002,11 @@ def _config_error(message: str) -> NoReturn:
 
     Nothing has been written at any call site (data-root resolution, athlete
     loading, and the source-directory check all precede every engine call), so a
-    configuration error leaves the data root untouched.
+    configuration error leaves the data root untouched. Printed with
+    ``soft_wrap=True`` so a long path embedded in the message is never split
+    across a line break.
     """
-    Console(stderr=True).print(message, markup=False, highlight=False)
+    Console(stderr=True).print(message, markup=False, highlight=False, soft_wrap=True)
     raise typer.Exit(code=_EXIT_CONFIG_ERROR)
 
 
@@ -1075,10 +1077,14 @@ def _report_drain(report: DrainReport, *, command: str) -> None:
     deferred entries, quarantined entries, and failed moves, and finally the
     list of moved destinations. Detail lines use ``soft_wrap`` with markup
     disabled, matching :func:`_report`, so long paths/reasons are never
-    truncated and bracketed text is never reinterpreted as markup.
+    truncated and bracketed text is never reinterpreted as markup. The
+    leading ``Inbox:`` line is likewise printed with ``soft_wrap=True`` so a
+    long configured inbox path is never split across a line break.
     """
     console = Console()
-    console.print(f"Inbox: {report.inbox}", markup=False, highlight=False)
+    console.print(
+        f"Inbox: {report.inbox}", markup=False, highlight=False, soft_wrap=True
+    )
 
     sync = report.sync
     table = Table(title=f"fitdocs {command}")

@@ -296,6 +296,38 @@ def test_inbox_outside_data_root_and_missing_exits_two_before_any_write(
     assert not outside_missing.exists()
 
 
+def test_inbox_path_error_message_is_not_wrapped_across_lines(
+    tmp_path: Path,
+) -> None:
+    """Pins the CI failure in
+    ``test_inbox_outside_data_root_and_missing_exits_two_before_any_write``,
+    ``test_malformed_quarantine_record_exits_two_before_any_write`` and
+    ``test_inbox_path_error_is_reported_before_the_quarantine_error``:
+    ``_config_error`` printed via a plain
+    ``Console(stderr=True).print`` without ``soft_wrap=True``, so rich
+    hard-wraps the message at 80 columns whenever stderr is not a tty --
+    which is every GitHub Actions runner. The runner's long tmp prefix put
+    column 80 inside the asserted path token, splitting it across a line
+    break so ``str(path) in result.output`` failed there even though the
+    same assertion passed locally under macOS's shorter tmp prefix. This
+    test builds a path long enough to force the wrap regardless of the tmp
+    prefix, and asserts the full path survives as one contiguous string.
+    """
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    long_name = "x" * 100 + "-does-not-exist-inbox"
+    outside_missing = tmp_path / long_name
+    assert len(str(outside_missing)) > 80  # the wrap point is inside the path
+    (data_root / "fitdocs.toml").write_text(
+        f'[inbox]\npath = "{outside_missing.as_posix()}"\n', encoding="utf-8"
+    )
+
+    result = runner.invoke(app, ["sync", "--out", str(data_root)])
+
+    assert result.exit_code == 2
+    assert str(outside_missing) in result.output
+
+
 def test_malformed_quarantine_record_exits_two_before_any_write(tmp_path: Path) -> None:
     data_root = tmp_path / "data"
     data_root.mkdir()
@@ -590,6 +622,34 @@ def test_drain_uses_the_configured_inbox_path_and_ignore_patterns(
     assert _row_count(table, "Failed") == 0
     assert "skip-me.fit" not in result.output
     assert "decoy.fit" not in result.output
+
+
+def test_drain_inbox_path_line_is_not_wrapped_across_lines(tmp_path: Path) -> None:
+    """Pins a second instance of the same defect: ``_report_drain`` prints
+    ``f"Inbox: {report.inbox}"`` via a plain ``console.print`` without
+    ``soft_wrap=True``, so rich hard-wraps it at 80 columns whenever stdout
+    is not a tty (every GitHub Actions runner) -- the same class of failure
+    fixed for ``_config_error``, here breaking
+    ``test_drain_uses_the_configured_inbox_path_and_ignore_patterns``'s
+    ``"incoming" in result.output`` assertion on the runner (the wrap lands
+    inside the word: ``inco\\nming``). This test forces the wrap regardless
+    of tmp prefix by configuring an inbox directory name long enough that
+    the full inbox path exceeds 80 characters on its own.
+    """
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    long_name = "x" * 100 + "-incoming"
+    (data_root / "fitdocs.toml").write_text(
+        f'[inbox]\npath = "{long_name}"\n', encoding="utf-8"
+    )
+    inbox = data_root / long_name
+    assert len(str(inbox)) > 80  # the wrap point is inside the path
+    _put(inbox, "run.fit", builder.run_fit_bytes())
+
+    result = runner.invoke(app, ["sync", "--out", str(data_root), "--no-prompt"])
+
+    assert result.exit_code == 0
+    assert str(inbox) in result.output
 
 
 def test_drain_receives_the_configured_settings_and_loaded_athlete(
