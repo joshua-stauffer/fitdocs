@@ -15,6 +15,8 @@ recorded as one.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-19
+
 ### Added
 
 - `fitdocs` is installable as a Python package with a single console

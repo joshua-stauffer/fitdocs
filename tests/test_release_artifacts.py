@@ -1730,27 +1730,26 @@ def test_main_on_a_violating_dir_returns_1_and_lists_every_violation(
     assert err.count("\n") == len(expected_violations) + 1
 
 
-def test_main_with_real_manifest_and_changelog_reports_only_the_no_entry_violation(
+def test_main_with_real_manifest_and_changelog_reports_no_violation(
     clean_dist: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """`main` with its DEFAULT `--manifest`/`--changelog` (the real
     `pyproject.toml` / `CHANGELOG.md`) against an otherwise-clean artifact
-    set: today the real changelog has no released entry (task 1.3's pinned
-    state), so this is exit 1 with EXACTLY one violation -- the no-entry
-    finding -- and the artifact checks report nothing on top of it. This
-    will need updating the day the first release entry is written (see
-    `tests/test_changelog.py::test_real_changelog_has_no_released_version_literal`,
-    which pins the same real-file state from the changelog's side).
+    set: since the first release entry was cut, the real changelog's
+    newest entry agrees with the manifest, so this is exit 0 with no
+    violation at all -- the artifact checks report nothing on top of it.
+    (`tests/test_changelog.py::
+    test_real_changelog_newest_released_heading_is_the_manifest_version`
+    pins the same real-file state from the changelog's side.)
     """
     exit_code = check_artifacts_main(
         ["--dist-dir", str(clean_dist), "--policy", str(REAL_POLICY_PATH)]
     )
 
-    assert exit_code == 1
+    assert exit_code == 0
     err = capsys.readouterr().err
-    assert "1 violation(s)" in err
-    assert "version_mismatch" in err
-    assert "no released entry" in err
+    assert "version_mismatch" not in err
+    assert "violation(s)" not in err
 
 
 # --- real-artifact smoke -----------------------------------------------
@@ -2720,14 +2719,12 @@ def test_no_released_entry_with_disagreeing_tag_is_exactly_two_violations(
     assert "changelog" not in manifest_vs_tag[0].detail
 
 
-def test_real_repository_state_pins_the_no_entry_violation() -> None:
+def test_real_repository_state_pins_version_consistency() -> None:
     """Pins Requirement 4.7 against the REAL `pyproject.toml` and
-    `CHANGELOG.md`: nothing has been released yet (task 1.3's state), so
-    this must yield exactly the no-entry violation today. Update this test
-    the day the first `## [X.Y.Z] - YYYY-MM-DD` entry is written --
-    `tests/test_changelog.py::test_real_changelog_has_no_released_version_literal`
-    pins the same real-file fact from the changelog side and will need the
-    same update.
+    `CHANGELOG.md`: the first release entry has been cut, so the manifest
+    version and the changelog's newest released entry agree and the gate
+    reports nothing. A version bump that forgets the changelog entry (or
+    the reverse) turns this red before any tag is pushed.
     """
     real_manifest = REPO_ROOT / "pyproject.toml"
     real_changelog = REPO_ROOT / "CHANGELOG.md"
@@ -2736,10 +2733,8 @@ def test_real_repository_state_pins_the_no_entry_violation() -> None:
 
     violations = check_version_consistency(real_manifest, real_changelog, None)
 
-    assert len(violations) == 1
-    assert violations[0].kind == ViolationKind.VERSION_MISMATCH
-    assert real_version in violations[0].detail
-    assert "no released entry" in violations[0].detail
+    assert violations == ()
+    assert f"## [{real_version}] - " in real_changelog.read_text(encoding="utf-8")
 
 
 # --- newest-entry selection: first-listed, not highest, not last -----------
@@ -3162,14 +3157,12 @@ def test_main_version_check_error_reported_before_a_missing_dist_dir_error(
 def test_main_no_version_check_with_real_manifest_changelog_and_clean_dist_returns_0(
     clean_dist: Path,
 ) -> None:
-    """`--no-version-check` against the REAL manifest/changelog (no
-    released entry -- see `test_main_with_real_manifest_and_changelog_
-    reports_only_the_no_entry_violation` for the same files WITHOUT this
-    flag, which is exit 1) must skip the version gate entirely and pass on
-    an otherwise-clean artifact set: exit 0. This also pins the
-    "flag ignored" mutation -- an implementation that parses but never
-    consults `--no-version-check` would run the version check anyway
-    against these real, disagreeing files and exit 1 instead.
+    """`--no-version-check` against the REAL manifest/changelog must skip
+    the version gate entirely and pass on an otherwise-clean artifact set:
+    exit 0. (See `test_main_with_real_manifest_and_changelog_reports_no_
+    violation` for the same files WITHOUT this flag; the "flag ignored"
+    mutation is pinned by the synthetic disagreeing-files case below rather
+    than by the real files, which agree since the first release.)
     """
     exit_code = check_artifacts_main(
         [
@@ -3251,8 +3244,9 @@ def test_checkpoint_real_gate_pass_with_match_data_via_require(
     """The real artifact set, gated with match data supplied through
     `tests._forbidden_strings.require` -- the exact call the purge's own
     guards make -- passes cleanly, both through `check_artifacts` directly
-    and through `main` (`--no-version-check`: the real changelog carries no
-    released entry yet; 2.4's own tests pin that state, not repeated here).
+    and through `main` (`--no-version-check`: the version gate is 2.4's
+    concern and its real-file state is pinned by 2.4's own tests, not
+    repeated here).
 
     `require(REPO_ROOT)` is called against the environment's REAL state
     (`_REAL_ENV_FORBIDDEN_STRINGS`, captured at module import -- before this

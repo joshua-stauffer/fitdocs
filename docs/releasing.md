@@ -105,39 +105,33 @@ this step produces — a passing gate run from before the version bump does
 not satisfy Req 5.2, which requires the gates to pass on "the exact revision
 being released" — before you continue to step 3.
 
-**Today's state:** `CHANGELOG.md` carries only `## [Unreleased]`; there is no
-released entry yet, because fitdocs has not published a version. Step 3
-below reports a `version_mismatch` violation until this step has run for the
-first time — that is the expected state before this step is done, not a
-defect to work around.
+**Tests that pin the real repository's release state:** six of this
+project's own tests assert, against the real `pyproject.toml` and
+`CHANGELOG.md`, that the manifest version and the changelog's newest
+released entry agree -- so a version bump that forgets the changelog entry
+(or the reverse) goes red in step 1, before any tag is pushed. They need no
+edit on an ordinary release; they are named here so a red `gates` job on a
+half-done step 2 is recognizable:
 
-**Before the first release:** seven of this project's own tests currently pin
-the *pre-release* state and must change in the same commit as the first cut,
-not after it -- every one of them runs inside `uv run pytest`, so a tag whose
-tests still pin the old state stops at step 1:
-
-- `tests/test_changelog.py::test_real_changelog_has_no_released_version_literal`
-  (asserts no `## [X.Y.Z]` heading exists yet) and
-  `tests/test_changelog.py::test_real_changelog_has_added_entries_under_unreleased`
-  (reads the `Added` entries from the standing `[Unreleased]` section, where
-  they will no longer live once this step moves them under the new heading);
-- `tests/test_release_artifacts.py::test_real_repository_state_pins_the_no_entry_violation`
+- `tests/test_changelog.py::test_real_changelog_newest_released_heading_is_the_manifest_version`
   and
-  `tests/test_release_artifacts.py::test_main_with_real_manifest_and_changelog_reports_only_the_no_entry_violation`
-  (assert the version gate reports exactly the no-released-entry violation
-  against the real manifest and changelog);
-- `tests/test_release_workflow.py::test_version_body_exits_one_with_version_mismatch_today`
+  `tests/test_changelog.py::test_real_changelog_newest_release_has_added_entries`;
+- `tests/test_release_artifacts.py::test_real_repository_state_pins_version_consistency`
   and
-  `tests/test_release_workflow.py::test_check_body_exits_one_with_exactly_one_version_mismatch_and_no_other_kind`
-  (execute the workflow's `version` and `check` bodies and expect today's
-  mismatch);
+  `tests/test_release_artifacts.py::test_main_with_real_manifest_and_changelog_reports_no_violation`;
+- `tests/test_release_workflow.py::test_version_body_exits_zero_against_the_manifest_tag`
+  and
+  `tests/test_release_workflow.py::test_check_body_exits_zero_with_no_violation_of_any_kind`
+  (execute the workflow's `version` and `check` bodies against the real
+  files);
 - `tests/test_version_identity.py`'s [`docs/plugins.md`](../docs/plugins.md)
-  allowlist, which pins the released-version literal's example-snippet
-  occurrence to today's version and needs updating the moment the manifest
+  allowlist pins the released-version literal's example-snippet occurrence
+  to the manifest version and needs updating the moment the manifest
   version diverges from that snippet.
 
-Fixing these tests is part of the release commit; they are named here so the
-first maintainer to run this step is not surprised by them.
+(Before the first release, on 2026-09-19, the same six tests pinned
+the opposite state -- no released entry -- and were rewritten in the first
+release commit.)
 
 ## 3. Version consistency
 

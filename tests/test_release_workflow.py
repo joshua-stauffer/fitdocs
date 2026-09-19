@@ -1065,7 +1065,7 @@ def _run_body(steps: list[dict[str, Any]], name: str) -> str:
     return run
 
 
-def test_version_body_exits_one_with_version_mismatch_today(tmp_path: Path) -> None:
+def test_version_body_exits_zero_against_the_manifest_tag(tmp_path: Path) -> None:
     doc = _workflow()
     steps = _job_steps(doc, "version")
     body = [s for s in steps if "scripts.check_artifacts" in (s.get("run") or "")][0][
@@ -1075,12 +1075,12 @@ def test_version_body_exits_one_with_version_mismatch_today(tmp_path: Path) -> N
     env = os.environ.copy()
     env["GITHUB_REF_NAME"] = f"v{version}"
     result = _run_bash_body(body, cwd=_REPO_ROOT, env=env)
-    assert result.returncode == 1, (
-        f"expected exit 1 (no released changelog entry for {version} yet), "
+    assert result.returncode == 0, (
+        f"expected exit 0 (manifest, changelog and tag v{version} agree), "
         f"got {result.returncode}: stdout={result.stdout!r} "
         f"stderr={result.stderr!r}"
     )
-    assert "version_mismatch" in result.stdout + result.stderr
+    assert "version_mismatch" not in result.stdout + result.stderr
 
 
 def test_build_body_actually_builds(tmp_path: Path) -> None:
@@ -1105,7 +1105,7 @@ def _built_dist(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return out_dir
 
 
-def test_check_body_exits_one_with_exactly_one_version_mismatch_and_no_other_kind(
+def test_check_body_exits_zero_with_no_violation_of_any_kind(
     tmp_path: Path, _built_dist: Path
 ) -> None:
     doc = _workflow()
@@ -1131,14 +1131,14 @@ def test_check_body_exits_one_with_exactly_one_version_mismatch_and_no_other_kin
     check_env["RUNNER_TEMP"] = str(runner_temp)
     check_env["GITHUB_REF_NAME"] = f"v{version}"
     check_result = _run_bash_body(check_body, cwd=_REPO_ROOT, env=check_env)
-    assert check_result.returncode == 1, (
-        f"expected exit 1 (no released changelog entry for {version} yet), "
-        f"got {check_result.returncode}: stdout={check_result.stdout!r} "
-        f"stderr={check_result.stderr!r}"
+    assert check_result.returncode == 0, (
+        f"expected exit 0 (manifest, changelog and tag v{version} agree; "
+        f"artifacts clean), got {check_result.returncode}: "
+        f"stdout={check_result.stdout!r} stderr={check_result.stderr!r}"
     )
     output = check_result.stdout + check_result.stderr
-    assert output.count("version_mismatch") == 1, (
-        f"expected exactly one version_mismatch violation, got: {output!r}"
+    assert "version_mismatch" not in output, (
+        f"unexpected version_mismatch violation in: {output!r}"
     )
     assert "gate_not_run" not in output, (
         "the artifact gates did not pass cleanly against the real match "

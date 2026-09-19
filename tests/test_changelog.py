@@ -16,6 +16,7 @@ discrimination does not depend on ever mutating the real file; the real
 from __future__ import annotations
 
 import re
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -644,22 +645,32 @@ def test_real_changelog_heading_scan_is_non_vacuous() -> None:
     assert sections, "the changelog heading scan found nothing -- check the path"
 
 
-def test_real_changelog_has_added_entries_under_unreleased() -> None:
+def test_real_changelog_newest_release_has_added_entries() -> None:
+    """The first release cut moved the standing ``[Unreleased]`` ``Added``
+    entries under the newest released heading; ``[Unreleased]`` itself is
+    now empty until the next round of work."""
     sections = _parse_sections(_real_changelog_text())
-    unreleased = next(s for s in sections if s.heading == _UNRELEASED_HEADING)
-    assert "Added" in unreleased.categories
+    newest = next(s for s in sections if s.heading != _UNRELEASED_HEADING)
+    assert "Added" in newest.categories
 
 
 def test_real_changelog_carries_the_convention_note() -> None:
     assert CONVENTION_PHRASE in _real_changelog_text()
 
 
-def test_real_changelog_has_no_released_version_literal() -> None:
-    """Requirement 4.7 / task 1.3: nothing has been released yet, so no
-    ``## [X.Y.Z] - YYYY-MM-DD`` heading may appear -- only ``[Unreleased]``.
-    (``tests/test_version_identity.py`` separately scans for the manifest's
-    version literal across the whole repository; this pins the changelog's
-    own release-heading count independent of that scan.)"""
+def test_real_changelog_newest_released_heading_is_the_manifest_version() -> None:
+    """Requirement 4.7 / task 1.3, post-first-release form: the newest
+    ``## [X.Y.Z] - YYYY-MM-DD`` heading names exactly the manifest's
+    version, and it sits directly below ``[Unreleased]``. (``tests/
+    test_version_identity.py`` separately scans for the manifest's version
+    literal across the whole repository; this pins the changelog's own
+    newest-release heading independent of that scan.)"""
+    with (_CHANGELOG_PATH.parent / "pyproject.toml").open("rb") as handle:
+        manifest_version = tomllib.load(handle)["project"]["version"]
     headings = [s.heading for s in _parse_sections(_real_changelog_text())]
     released_headings = [h for h in headings if h != _UNRELEASED_HEADING]
-    assert released_headings == []
+    assert released_headings, "no released heading in the real changelog"
+    assert released_headings[0].startswith(f"## [{manifest_version}] - ")
+    assert headings.index(released_headings[0]) == (
+        headings.index(_UNRELEASED_HEADING) + 1
+    )
