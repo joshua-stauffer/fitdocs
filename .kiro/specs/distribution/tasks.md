@@ -48,7 +48,7 @@
 > "If distribution major 4 shipped first" bullet, not in this spec's design.md
 > (which has no such section).
 
-- [ ] 1. Foundation: version identity, package manifest, and policy data
+- [x] 1. Foundation: version identity, package manifest, and policy data
 - [x] 1.1 Consolidate version resolution behind one leaf
   - A pure module holding the distribution name, a resolver returning the installed version or an absent value, and a display form that falls back to a fixed unknown token; the lookup happens at the point of use, never at import time, because reading distribution metadata is measurably slow for a command-line start-up
   - The three existing unguarded call sites converge on it: the version flag, the tile user-agent, and the plugin listing's built-in version. The listing keeps an absent version absent rather than substituting the token, because the plugin surface forbids fabricating one
@@ -85,7 +85,7 @@
   - _Boundary: ArtifactPolicy_
   - _Depends: 1.2, 1.3_
 
-- [ ] 2. Release tooling
+- [x] 2. Release tooling
 - [x] 2.1 (P) Build the release artifact builder *(rewritten by Amendment 2: no profiles)*
   - One invocation builds the working tree — always the working tree, never a copy, never a variant — into both a wheel and a source distribution in a cleared output directory, through the existing build front end with no build hooks and no code generation, so the artifact is the tested revision
   - A deterministic timestamp source so the same revision builds to identical archive contents
@@ -123,7 +123,7 @@
   - _Requirements: 2.6, 4.7_
   - _Depends: 1.3, 2.2_
 
-- [ ] 3. The release-path checkpoint *(retitled by Amendment 2; formerly "Shipping without a bundled methodology")*
+- [x] 3. The release-path checkpoint *(retitled by Amendment 2; formerly "Shipping without a bundled methodology")*
 - [x] ~~3.1 Make the bundled methodology optional at the package level~~ — **withdrawn by Amendment 2 (2026-09-18)**; ticked so it is not counted as remaining work
   - This task built a guarded import and a conditionally-assembled `__all__` in `src/fitdocs/load/__init__.py` for former criteria 6.4 and 6.8, and neutralized a branded `--calculator` help example. The methodology package it guarded was deleted on 2026-07-25 and purged on 2026-08-23; the package registers the unencumbered `threshold` built-in unconditionally, its public names are plugin-api's enumerated surface, and the help text is already neutral. Nothing in `fitdocs.load` is modified by this plan. Number kept so that design and review references resolve
   - _Requirements: none (6.4 and 6.8 withdrawn)_
@@ -138,7 +138,7 @@
   - _Boundary: ReleaseArtifactTest_
   - _Depends: 1.2, 2.1, 2.3_
 
-- [ ] 4. Agent skill packaging
+- [x] 4. Agent skill packaging
 - [x] 4.1 Add the skill locator and the read-only skill command — **landed by build-training-block** *(Amendment 1, 2026-09-16)*
   - A leaf holding the skill's canonical name and resolving the packaged skill directory through package-data resource resolution, so it works from a wheel install, a source checkout, and an isolated tool environment alike; an absent skill resolves to an absent value rather than raising
   - A command that prints the packaged skill directory's absolute path plus a one-line copy recipe and exits successfully; it resolves no data root, loads no profile, builds no tile store, runs no engine, and writes nothing — the tool never installs into a location it does not own
@@ -160,7 +160,7 @@
   - Observable: a conformance test extends `tests/test_agent_skill.py`'s per-skill map with this skill's heading tuple and its eight-channel binding — the frame is not re-written — asserting the name matches both the directory and `INBOX_SKILL_NAME` and the recorded version matches the manifest, extracting every command and option the body names and asserting each exists in the registered command surface, and comparing the set of reported channel names the body documents against the union of the drain report's own channel fields and the nested sync report's channel fields (eight in total — the drain report carries the deferred, quarantined, moved, and move-failure channels, while written, skipped, failures, and warnings live on the nested sync report) — removing a command from the application, or adding, renaming, or dropping a channel, makes the test fail, which binding commands alone would not catch
   - _Requirements: 1.9, 8.1, 8.2, 8.3, 8.4, 8.5, 8.8, 8.9_
 
-- [ ] 5. Policy and user documentation
+- [x] 5. Policy and user documentation
 - [x] 5.1 (P) Publish the compatibility policy
   - The three governed contracts named explicitly — the generated-document and ownership contract, the inbox interface, and the plugin API with its documented import surface — together with the rule that documented means public and everything else, including anything undocumented, is internal and may change in any release
   - Per contract, what breaking, additive, and internal mean; the numbering rules that hold before and after the first stable release; how a document-format, ownership-contract, or settings-schema version change maps onto a released version number and what action it costs the user; the deprecation model with its announcement channel and its minimum notice before removal; and the guarantee that a compatible upgrade requires no edit to the settings file, the athlete profile, or a local plugin
