@@ -1,0 +1,90 @@
+# Committed manifest of blob sha1s for tests/test_preserved_guarantees.py.
+#
+# Provenance: `git ls-tree -r e74af37 --format='%(path)%x09%(objectname)' --
+# tests/golden tests/declaration_golden tests/history/golden tests/plans/golden
+# tests/render/charts/golden tests/render/golden_docs src/fitdocs/render`,
+# sorted by path -- the pre-feature revision's exact blob content for every
+# golden-document tree and the render package. Vendored (not read from git
+# history at test time) for the same fetch-depth-1 reason as
+# pre_distribution_e74af37.py in this directory: a shallow clone does not
+# carry the e74af37 commit, so `git show`/`git diff` against it fails there.
+# Comparison at test time uses `git hash-object` against the WORKING TREE
+# (needs no history) -- never a history read -- against these committed
+# shas, plus a same-file-set check so an added or removed file is also
+# caught, not just a changed one.
+#
+# Format: one `<repo-relative-path>\t<blob-sha1>` per line, sorted by path.
+# Do not hand-edit; regenerate with the `git ls-tree` command above if a
+# deliberate, approved change to the pre-feature baseline is ever needed.
+src/fitdocs/render/__init__.py	a153ed0484a626577d23f03c94ec31f515912528
+src/fitdocs/render/charts/__init__.py	4c0fa2ccb73f8c557d5f8422cc30fdfc5619b690
+src/fitdocs/render/charts/calendar.py	e516f04e110095a595bf6c7b0264d879b65ce6ba
+src/fitdocs/render/charts/hero.py	1fa34bc3563fb1ddd10a528892ebbe1d0990a88f
+src/fitdocs/render/charts/map.py	d604a8350dcbbc06db859ce3cbd55f67e16a6031
+src/fitdocs/render/charts/palette.py	3ea7080aabe970cfb8915b71ed35ed58d4724941
+src/fitdocs/render/charts/series.py	f065d999a1335382fedbe9e5c07eaf35c5489e31
+src/fitdocs/render/charts/svg.py	e3c56ced817c68f163ec3451b6db9fe38604bf97
+src/fitdocs/render/charts/zones.py	e142cbe006eb7fc973bb21103fbe67be200fab23
+src/fitdocs/render/format.py	3cbb8012a57f462ece68f215b96a9d71e3c457d4
+src/fitdocs/render/frontmatter.py	59a9bff2f40e934d0f477095da9513eaa719864e
+src/fitdocs/render/sections.py	f4881d8ae60344aa480d61578649b939621490d5
+src/fitdocs/render/splits.py	c63dc46dd5aff862b0b4bfe5b42eac0995feda64
+src/fitdocs/render/strength.py	c838adc490b151dcdb221c9ecd9846a5bce7d6e2
+src/fitdocs/render/views.py	e69aa65af8a834fb1f917e3ef2b9c7d567431b85
+tests/declaration_golden/blocks.AGENTS.md	9e358bb08c0db62da8f81eb23807a931224d0bcb
+tests/declaration_golden/fit-archive.AGENTS.md	ff7bf48e8cb9e9a7b67b0218a71a0bf5c85d2331
+tests/declaration_golden/history.AGENTS.md	8d80b2fae2aa4b10b307416d7327fc3f9cdfd00f
+tests/declaration_golden/workouts.AGENTS.md	b48504b3a4f547dd0a6cd94f039975fd61931848
+tests/golden/__init__.py	e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+tests/golden/_serialize.py	9c0734e388d0b8c214a27d0cd09073ac66d7cce3
+tests/golden/generate.py	8de24ac8fb53d3df9e720562d3e38548c5187958
+tests/golden/minimal.json	9850371be8238b422530b83a3818ff142167fa93
+tests/golden/ride.json	7053f81cb99d29aca34a7b4aca902c55bfc3337f
+tests/golden/run.json	f3e78de9512404989c66cce10e19e480b6f5627e
+tests/golden/strength.json	bf492f8db3397957d62d5e4cbab13f8f006b4387
+tests/history/golden/training_load_history_chart.svg	21c2243dd49b1f5e28a114fa40bf50ff308fc90a
+tests/history/golden/training_load_history.md	f5a35625dce381737ddc1c94346326df4c9955c3
+tests/plans/golden/block-empty.md	64c673e1d8cebe433e0299c3952332a70471e6e4
+tests/plans/golden/block.md	41ad35abb87994e5d5fd8e9adb04ed70f09ce547
+tests/plans/golden/planned.md	d61d313c3713ddbe3f22fcfe3e6511c7557b831a
+tests/plans/golden/reconciled-block-problem.md	9a8d517e147e0d25e3e943aa8e3910e448902f67
+tests/plans/golden/reconciled-block.md	74531f3e20464a34e8e574a68eee7de0806d1270
+tests/plans/golden/reconciled-planned-w1-fri-a.md	2ff8645b4e542a859cc69bfed30ee49debd8e7e5
+tests/plans/golden/reconciled-planned-w2-mon.md	f36a9226138e2dda3f96dd90bfd08330ab906506
+tests/render/charts/golden/backdrop_less.svg	a8c0a7466258d37a215b6ef1653c72669ae18d97
+tests/render/charts/golden/calendar_small_span.svg	4c6f54c360dcfde4e2da062c06d27968f0b32f47
+tests/render/charts/golden/map_attribution.svg	f85c09fb363f2ff23ba0e1c5e2f5d8ed6e0c6775
+tests/render/charts/golden/map_gap_split.svg	e4ad76e5754196e51d5f45b5481dde4de16bbe4c
+tests/render/charts/golden/map_neutral_tint.svg	ec0f6159eb6dd5cb3131ea0b65233537a6d2f993
+tests/render/charts/golden/map_ride_tint.svg	7c170bd522145bcace96d9741b3cdcb0e184e633
+tests/render/charts/golden/map_run_tint.svg	84325c348d126a6580733a2a54a70dc1de4757c0
+tests/render/charts/golden/map_single_point.svg	c627bd644b1c2dcfe0c010fc3162624b791db145
+tests/render/charts/golden/single_series.svg	c8e7e3d48b1cff3b2b04e3faf0471fbdaacf051f
+tests/render/charts/golden/sparse_hr.svg	8f29ca52175382f2049ee5109f8e23837a1f5ba1
+tests/render/charts/golden/tiles/fixture_tile.png	99dc2dfbd61ceecba9e389c7234d48ff6bd088c7
+tests/render/charts/golden/two_series.svg	95aedba251e57f0d9c076f27b369af6f1dd1a507
+tests/render/charts/golden/zone_strip_five.svg	448bbe7a6cb8ebe6dd5579facdbd339211f44612
+tests/render/golden_docs/map_generic-map.svg	ec0f6159eb6dd5cb3131ea0b65233537a6d2f993
+tests/render/golden_docs/map_generic.md	d074d2755c17e999ae89f93252a0100d68debd0c
+tests/render/golden_docs/map_ride-map.svg	7c170bd522145bcace96d9741b3cdcb0e184e633
+tests/render/golden_docs/map_ride.md	845a0180053ddc0adc2a232e7b829ac4ef142756
+tests/render/golden_docs/map_run-map.svg	84325c348d126a6580733a2a54a70dc1de4757c0
+tests/render/golden_docs/map_run.md	cbd56abe253fb7b98ab42ed89310d8086cfee5ea
+tests/render/golden_docs/minimal-hero.svg	29a7e3bc21dc9ef3c33597217fa82eebc614966f
+tests/render/golden_docs/minimal-zones.svg	095efe7eb956fee77d47462ed4b70e2c0c68a701
+tests/render/golden_docs/minimal.md	022c70789ffa9b8dbfe65857b6d78a5e3fe0d74d
+tests/render/golden_docs/ride_no_power-hero.svg	f781a1ada3087b31bfd62103016e3204c73a005e
+tests/render/golden_docs/ride_no_power-zones.svg	17ae7f252796a566c3e565caa7c847c109b5bcaa
+tests/render/golden_docs/ride_no_power.md	3a0febe88b38d0d9ca8c5150a82e1372d8acee3b
+tests/render/golden_docs/ride_power_dropout-hero.svg	3c1bf73249793c243ff2952df12c27508826979e
+tests/render/golden_docs/ride_power_dropout-zones.svg	9439a4767c51336a39692c22d956ee8df0e7c342
+tests/render/golden_docs/ride_power_dropout.md	93685e85e2b6a530a0937e6c3fa09e3a0030ae6e
+tests/render/golden_docs/run_native_power_sparse_hr-hero.svg	4c0d72a4ee445baab30e9ce531035eee0f5bf4b3
+tests/render/golden_docs/run_native_power_sparse_hr-zones.svg	d30e01089ee56c49064e69fb089ab8708c851778
+tests/render/golden_docs/run_native_power_sparse_hr.md	4be1a7bdf67719868b53c1f1ff04c4c61c977ace
+tests/render/golden_docs/run_no_gps-hero.svg	070e502081adc2a7f4fcc70f7b83802603237cd5
+tests/render/golden_docs/run_no_gps-zones.svg	4ed064012beb781d931242e89cf4bb7c403b2ce4
+tests/render/golden_docs/run_no_gps.md	278d28ad0c0f042d8426fb5d24ae00681086eb03
+tests/render/golden_docs/strength_no_sets-hero.svg	ee324c26efd28acc4d37791da0a9a809cd68f650
+tests/render/golden_docs/strength_no_sets-zones.svg	dd3fe6bcb1d52a730058e47700b5626f4afc4b0f
+tests/render/golden_docs/strength_no_sets.md	6ee6d878a6176c561455d458f9605d3dc5a123c7
