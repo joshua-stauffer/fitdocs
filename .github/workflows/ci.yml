@@ -1,0 +1,97 @@
+# Continuous integration (task 6.2; design.md "CiWorkflow and
+# ReleaseWorkflow"; Requirements 5.2, 6.9).
+#
+# Runs on every push and pull request: the same three quality gates
+# CONTRIBUTING.md's "The three quality gates" section documents, then a
+# build and the artifact conformance / encumbered-content checks, so a
+# manifest edit that would break a release fails here rather than at
+# release time. This is the `gates` job docs/releasing.md's "1. Quality
+# gates" step names as the automation that runs those exact three
+# commands; the build and check steps here mirror steps 4-5 of that
+# procedure, run with `--no-version-check` because the real CHANGELOG.md
+# has no released entry until the first release (task 2.4's note).
+#
+# Publishes nothing: no publishing credential, no OIDC identity-token
+# permission grant, no publish job. The encumbered-content gate's match
+# data is supplied from the `FITDOCS_FORBIDDEN_STRINGS_CONTENT` repository
+# secret (task 6.1), written to a runner-local file OUTSIDE the checkout so
+# the guard never reads from inside the repository -- and the last step in
+# this job re-proves, on every run, that an absent secret fails the gate
+# closed (`gate_not_run`) rather than silently passing (Requirement 6.9,
+# Amendment 2).
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.1.0
+
+      - name: Install Python 3.11
+        run: uv python install 3.11
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Run the test suite
+        run: uv run pytest
+
+      - name: Lint and check formatting
+        run: uv run ruff check . && uv run ruff format --check .
+
+      - name: Run the strict type check
+        run: uv run mypy
+
+      - name: Build the artifacts
+        run: uv run python -m scripts.build_release --out-dir dist
+
+      # A pull request from a fork never sees this repository's secrets --
+      # GitHub redacts them to an empty string for fork-triggered runs. That
+      # means a fork PR fails here, by design: the encumbered-content gate
+      # cannot run without its match data, and an unrun gate is exactly the
+      # `gate_not_run` failure this step reports (Requirement 6.9). There is
+      # no fork-specific skip; the gate is fail-closed for every trigger.
+      - name: Write the match data outside the checkout
+        env:
+          FITDOCS_FORBIDDEN_STRINGS_CONTENT: ${{ secrets.FITDOCS_FORBIDDEN_STRINGS_CONTENT }}
+        run: |
+          if [ -z "$FITDOCS_FORBIDDEN_STRINGS_CONTENT" ]; then
+            echo "::error::gate_not_run: FITDOCS_FORBIDDEN_STRINGS_CONTENT secret is not set; the encumbered-content gate cannot run"
+            exit 1
+          fi
+          printf '%s' "$FITDOCS_FORBIDDEN_STRINGS_CONTENT" > "$RUNNER_TEMP/forbidden-strings.txt"
+
+      - name: Check the artifacts
+        run: FITDOCS_FORBIDDEN_STRINGS="$RUNNER_TEMP/forbidden-strings.txt" uv run python -m scripts.check_artifacts --no-version-check --dist-dir dist
+
+      - name: Prove the gate fails closed
+        run: |
+          set +e
+          out=$(env -u FITDOCS_FORBIDDEN_STRINGS uv run python -m scripts.check_artifacts --no-version-check --dist-dir dist 2>&1)
+          rc=$?
+          set -e
+          echo "$out"
+          if [ "$rc" -ne 1 ]; then
+            echo "::error::expected exit 1 with the match data unset, got $rc"
+            exit 1
+          fi
+          if ! grep -q gate_not_run <<<"$out"; then
+            echo "::error::expected gate_not_run in the output when the match data is unset"
+            exit 1
+          fi
+
+      - name: Upload the built artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
