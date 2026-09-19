@@ -15,10 +15,13 @@ checked the moment that rewrite moves the text into a dedicated
 `docs/inbox.md` page.
 
 So each assertion below searches the *concatenation* of every markdown file in
-the shipped documentation set -- the project README plus every file under
-`docs/` -- rather than one named path. The phrasing survives the text moving
-between files, being split across sections, or being indexed from a new entry
-point, as long as the guarantee sentence itself keeps shipping somewhere.
+the shipped documentation set -- the project README plus every top-level
+`docs/*.md` file (task 5.7 scopes this to top-level `docs/` pages, excluding
+`docs/reference/`, which is retained research/provenance material rather than
+user documentation) -- rather than one named path. The phrasing survives the
+text moving between files, being split across sections, or being indexed from
+a new entry point, as long as the guarantee sentence itself keeps shipping
+somewhere.
 """
 
 from __future__ import annotations
@@ -30,22 +33,36 @@ from pathlib import Path
 
 import fitdocs
 import fitdocs.load
+from fitdocs.config import DATA_ROOT_ENV, POINTER_RELPATH
+from fitdocs.declaration import CONTRACT_DOCUMENTATION_URL
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
+_PROJECT_URL_PREFIX = "https://github.com/joshua-stauffer/fitdocs/blob/main/"
 
 
 def _shipped_documentation_text(root: Path = _REPO_ROOT) -> str:
     """The concatenated, whitespace-normalized text of every markdown file
-    fitdocs ships to users, read from under ``root``.
+    fitdocs ships to users as *user-facing* documentation, read from under
+    ``root``.
 
-    ``root`` plus every ``*.md`` file under ``root / "docs"`` (recursively),
-    joined with blank lines. Deliberately *not* a single named path: a
-    guarantee sentence that moves from ``README.md`` into a new
-    ``docs/inbox.md`` page -- the documented plan for the ``distribution``
-    spec -- is still found here without this test changing. Runs of
-    whitespace (including markdown's hard line wraps) are collapsed to a
-    single space before matching, so a substring assertion is not sensitive
-    to where in the prose a paragraph happens to wrap.
+    ``root / "README.md"`` plus every top-level ``*.md`` file directly inside
+    ``root / "docs"`` -- **not** recursive, and in particular **not**
+    ``root / "docs" / "reference"``, which is retained research material
+    (task 5.7's docstring/README note), not user documentation. Task 5.7
+    (5.2 review, mutation M10) found this corpus builder previously walked
+    ``docs/**/*.md`` recursively, so the never-delete guarantee's guard test
+    below was satisfied by a meta-mention of the guarantee's own wording
+    inside ``docs/reference/history-rewrites.md`` -- a durable record
+    *describing* the guard, not the guard's own subject matter -- regardless
+    of whether the real inbox documentation still stated the guarantee at
+    all. Scoping to top-level ``docs/*.md`` closes that: a subject-matter
+    sentence that moves between the README and any top-level ``docs/`` page
+    is still found here without this test changing, but a page under
+    ``docs/reference/`` can no longer stand in for it.
+
+    Runs of whitespace (including markdown's hard line wraps) are collapsed
+    to a single space before matching, so a substring assertion is not
+    sensitive to where in the prose a paragraph happens to wrap.
 
     ``root`` defaults to the real repository root and is a parameter (task
     4.2's corpus-builder collapse) so a positive control can point it at a
@@ -56,9 +73,12 @@ def _shipped_documentation_text(root: Path = _REPO_ROOT) -> str:
     ``_shipped_documentation_text_excluding_reference_writeup``, that
     additionally filtered out the retained research writeup; that
     exclusion's only caller was retired at the same task (Req 11.7), so the
-    second builder is gone rather than kept as an unused variant.
+    second builder is gone rather than kept as an unused variant. Task 5.7
+    reintroduces the exclusion, generalized to the whole ``docs/reference/``
+    tree rather than one named writeup file, directly inside the builder
+    itself rather than as an opt-in second function.
     """
-    paths = [root / "README.md", *sorted((root / "docs").rglob("*.md"))]
+    paths = [root / "README.md", *sorted((root / "docs").glob("*.md"))]
     # Joined with a period sentinel, not a blank line: the whitespace collapse
     # below would turn "\n\n" into a single space, letting a bounded ``[^.]``
     # window in a guarantee regex straddle two documents and match a phrase
@@ -80,31 +100,76 @@ def test_shipped_documentation_corpus_builder_reads_from_the_supplied_root(
     when that file was deleted from the working tree (Req 1.1). This control
     depends on no removed file: it plants markers under a fresh ``tmp_path``.
 
-    Builds a synthetic tree with a README and a nested docs file, each
+    Builds a synthetic tree with a README and a top-level docs file, each
     holding a distinct marker string that appears nowhere in the real
     repository, and asserts both markers are found when ``root`` points at
     the synthetic tree.
 
+    Task 5.7 re-based this control's second marker from a *nested*
+    ``docs/nested/guide.md`` to a *top-level* ``docs/guide.md``: the corpus
+    builder is deliberately non-recursive now (5.7's corpus-scoping fix,
+    below), so a marker one directory level below ``docs/`` would no longer
+    be found and this control would wrongly report the builder broken. The
+    sibling test below,
+    ``test_shipped_documentation_corpus_builder_excludes_docs_reference``,
+    is what now pins the exclusion of anything below ``docs/`` itself.
+
     Mutation caught (verified, then reverted byte-identically): ignoring
     ``root`` and hard-coding ``_REPO_ROOT`` inside
     ``_shipped_documentation_text`` (the exact mutation design.md names for
-    this guard) reds both assertions below as the sole failure in this file
-    (1 failed, 13 passed), because the real repository's README and docs
-    never contain either synthetic marker; reverting restores green.
+    this guard) reds both assertions below as the sole failure in this file,
+    because the real repository's README and docs never contain either
+    synthetic marker; reverting restores green.
     """
-    (tmp_path / "docs" / "nested").mkdir(parents=True)
+    (tmp_path / "docs").mkdir(parents=True)
     marker_readme = "zzqv-marker-readme-70142"
     marker_doc = "zzqv-marker-doc-58203"
     (tmp_path / "README.md").write_text(marker_readme, encoding="utf-8")
-    # One directory level below `docs/`, not directly inside it: pins the
-    # walk's recursion. `docs.glob("*.md")` (dropping the `r`) would miss
-    # this file while still finding a same-level one, so a shallow-only walk
-    # is distinguishable from a recursive one.
-    (tmp_path / "docs" / "nested" / "guide.md").write_text(marker_doc, encoding="utf-8")
+    (tmp_path / "docs" / "guide.md").write_text(marker_doc, encoding="utf-8")
 
     synthetic_corpus = _shipped_documentation_text(root=tmp_path)
     assert marker_readme in synthetic_corpus
     assert marker_doc in synthetic_corpus
+
+
+def test_shipped_documentation_corpus_builder_excludes_docs_reference(
+    tmp_path: Path,
+) -> None:
+    """Task 5.7's corpus-scoping fix (5.2 review, mutation M10): a file under
+    ``docs/reference/`` never enters :func:`_shipped_documentation_text`'s
+    corpus, even though it sits inside ``docs/``.
+
+    Extends the synthetic-tree pattern the sibling positive control above
+    uses: plants a marker inside ``docs/reference/x.md`` -- one directory
+    level below ``docs/``, exactly where the real
+    ``docs/reference/history-rewrites.md`` meta-mention lived -- and asserts
+    the marker is *absent* from the corpus, alongside a second, top-level
+    marker asserted *present* so the same run also proves the builder is not
+    simply reading nothing at all (the vacuous-exclusion failure mode: a
+    builder that excludes everything would also make the reference marker
+    "absent" without discriminating anything).
+
+    Mutation caught (verified, then reverted byte-identically): reverting
+    :func:`_shipped_documentation_text` to its pre-5.7 recursive walk
+    (``(root / "docs").rglob("*.md")``) makes the reference marker assertion
+    fail as the sole failure in this file -- the exact regression this test
+    exists to close.
+    """
+    (tmp_path / "docs" / "reference").mkdir(parents=True)
+    marker_top_level = "zzqv-marker-top-level-40917"
+    marker_reference = "zzqv-marker-reference-83271"
+    (tmp_path / "README.md").write_text("readme", encoding="utf-8")
+    (tmp_path / "docs" / "guide.md").write_text(marker_top_level, encoding="utf-8")
+    (tmp_path / "docs" / "reference" / "x.md").write_text(
+        marker_reference, encoding="utf-8"
+    )
+
+    corpus = _shipped_documentation_text(root=tmp_path)
+    assert marker_top_level in corpus, (
+        "the builder excluded a top-level docs/*.md file too -- it should "
+        "only exclude docs/reference/, not everything under docs/"
+    )
+    assert marker_reference not in corpus
 
 
 def test_inbox_never_delete_guarantee_is_published_somewhere_in_the_docs() -> None:
@@ -1032,3 +1097,595 @@ def test_agent_skills_readme_section_documents_install_verify_and_update() -> No
         "looking at the wrong place"
     )
     assert next_heading_after_plugins.group(1) == "Agent skills"
+
+
+# --- the documentation entry point (task 5.7, Req 1.9, 3.7, 7.9, 10.6, 10.7) -
+
+
+_ENTRY_POINT = _REPO_ROOT / "docs" / "index.md"
+
+# The ten pages 7.9/design.md's docs/index.md bullet names, exactly as
+# docs/index.md's own links must spell them (relative to docs/index.md
+# itself, so the CONTRIBUTING.md target climbs one directory).
+_REQUIRED_ENTRY_POINT_LINKS = [
+    "install.md",
+    "configuration.md",
+    "inbox.md",
+    "upgrading.md",
+    "wiki-integration.md",
+    "ownership-contract.md",
+    "plugins.md",
+    "compatibility.md",
+    "releasing.md",
+    "../CONTRIBUTING.md",
+]
+
+
+def _plain_link_targets(markdown: str) -> list[str]:
+    """Every markdown link target in ``markdown``, external URLs excluded and
+    any ``#anchor`` fragment stripped.
+
+    Complements ``_anchor_links`` above: that function only extracts links
+    carrying a ``#`` fragment (built for the intra-documentation anchor
+    walker), and every link ``docs/index.md`` carries to a sibling page is a
+    bare file reference with no anchor at all -- ``_anchor_links`` would find
+    none of them.
+    """
+    targets = re.findall(r"\]\(([^)\s]+)\)", markdown)
+    return [
+        target.split("#", 1)[0]
+        for target in targets
+        if not target.startswith(("http://", "https://"))
+    ]
+
+
+def test_documentation_entry_point_links_every_required_page() -> None:
+    """7.9/design.md's ``docs/index.md`` bullet: a single entry point linking
+    install, configuration, the inbox interface, upgrading, wiki integration,
+    the ownership contract, the plugin platform, compatibility, releasing,
+    and contributing.
+
+    Each of the ten targets is checked both for presence in the parsed link
+    list (a renamed or dropped link is caught even if the file it would have
+    pointed at still exists) and for actually resolving to a file on disk (a
+    stale link to a renamed page is caught even though the link text is
+    still present).
+
+    The inbox link is asserted a second time, by itself and by name: 7.9's
+    own text singles it out ("one documentation entry point, inbox
+    included") because the inbox is a governed contract and the whole
+    subject of the agent skill's workflow -- an entry point that does not
+    reach it is a hole, not a spot check.
+
+    Mutation caught (verified, then reverted byte-identically): deleting the
+    ``inbox.md`` row from ``docs/index.md`` fails only this test (the
+    intra-documentation anchor walker never sees this link at all, because
+    none of docs/index.md's links carry a ``#`` fragment); deleting the
+    ``compatibility.md`` row is likewise this test's sole failure.
+    """
+    text = _ENTRY_POINT.read_text(encoding="utf-8")
+    targets = _plain_link_targets(text)
+
+    # Positive control: parsing must find at least the ten required links,
+    # or the loop below would pass having checked a target list emptied by a
+    # broken regex.
+    assert len(targets) >= 10, (
+        f"expected at least 10 links parsed from docs/index.md, found {targets}"
+    )
+
+    for required in _REQUIRED_ENTRY_POINT_LINKS:
+        assert required in targets, f"docs/index.md does not link {required!r}"
+        resolved = (_ENTRY_POINT.parent / required).resolve()
+        assert resolved.is_file(), (
+            f"docs/index.md links {required!r}, which does not resolve to a "
+            f"real file at {resolved}"
+        )
+
+    # 7.9's own "inbox included" clause, pinned by name rather than only via
+    # the loop above, so a future edit to _REQUIRED_ENTRY_POINT_LINKS that
+    # accidentally dropped "inbox.md" from the list itself would not silently
+    # stop checking it.
+    assert "inbox.md" in targets, (
+        "docs/index.md does not reach the inbox interface -- the inbox is a "
+        "governed contract and the whole subject of the agent skill's "
+        "workflow (Req 7.9)"
+    )
+
+
+def test_readme_links_the_entry_point_by_project_url() -> None:
+    """3.7/7.9: the readme links the documentation entry point by its
+    published project URL rather than growing to restate everything itself.
+
+    Mutation caught: deleting the ``docs/index.md`` project-URL link from
+    README.md fails only this test.
+    """
+    readme_text = (_REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    assert f"{_PROJECT_URL_PREFIX}docs/index.md" in readme_text, (
+        "README.md does not link the documentation entry point "
+        f"({_PROJECT_URL_PREFIX}docs/index.md) by project URL"
+    )
+
+
+# --- preserved statements, scoped to the specific page they live on (10.6) --
+#
+# 10.6 names six statements. Two already have a dedicated corpus-wide guard
+# above (test_inbox_never_delete_guarantee_is_published_somewhere_in_the_docs,
+# test_inbox_no_watching_guarantee_is_published_somewhere_in_the_docs) --
+# this section does not duplicate them. The other four get a page-scoped
+# assertion here: not merely "published somewhere in the corpus" (which the
+# corpus-wide tests above already establish the *pattern* for) but pinned to
+# the *specific* page 5.2/design.md relocated each statement to, so a
+# statement that moved off its intended page without vanishing from the
+# corpus entirely (e.g. duplicated into some unrelated file) still reads as
+# a defect against the page it is supposed to live on.
+
+
+def _configuration_doc_text() -> str:
+    return (_REPO_ROOT / "docs" / "configuration.md").read_text(encoding="utf-8")
+
+
+def _normalized(text: str) -> str:
+    """Whitespace-collapsed ``text``, mirroring
+    ``_shipped_documentation_text``'s own collapse -- so a page-level token
+    search is not sensitive to where in the prose a paragraph happens to
+    hard-wrap (e.g. "rendered\\nlegibly" in the real
+    ``docs/configuration.md`` source)."""
+    return re.sub(r"\s+", " ", text)
+
+
+#: Mirrors tests/test_install_docs.py's `_RESOLUTION_ORDER_RE`, built from
+#: the same real `fitdocs.config` tokens rather than a hand-typed copy that
+#: could drift from either the code or that sibling test. Anchored to
+#: newlines and heading numbers, so it only matches the real page text
+#: (unwrapped, with real line breaks) -- not the whitespace-collapsed corpus
+#: (see `_resolution_order_present_in_order` below for that check).
+_RESOLUTION_ORDER_RE = re.compile(
+    r"^1\. .*--out.*\n^2\. .*"
+    + re.escape(DATA_ROOT_ENV)
+    + r".*\n^3\. .*"
+    + re.escape(POINTER_RELPATH),
+    re.M,
+)
+
+
+def _ordered_tokens_within(text: str, tokens: list[str], *, max_span: int) -> bool:
+    """Whether every string in ``tokens`` appears in ``text``, each one
+    starting no earlier than the previous token's own start, with the whole
+    run spanning no more than ``max_span`` characters end to end.
+
+    Deliberately a plain-string, index-based check rather than a regex:
+    ``docs/configuration.md``'s real prose crosses more than one literal
+    period between these tokens (the code span `` `<data-root>/fitdocs.toml`
+    `` itself contains a period, ahead of the sentence-ending period), so a
+    ``[^.]``-bounded regex window -- the pattern the inbox guarantees above
+    use safely, because those statements never cross a period at all -- is
+    the wrong tool here: it stops at the first accidental period and never
+    reaches the real one. Bounding by total character span instead of
+    period-count keeps this from matching two unrelated tokens on opposite
+    ends of the (very large, multi-file) corpus, without caring how many
+    literal periods sit in between.
+    """
+    pos = 0
+    first: int | None = None
+    for token in tokens:
+        idx = text.index(token, pos)
+        if first is None:
+            first = idx
+        pos = idx + len(token)
+    assert first is not None  # tokens is always non-empty at call sites below
+    return (pos - first) <= max_span
+
+
+#: Single, polarity-bearing phrases rather than a pair of separately-located
+#: tokens checked only for order/proximity (task 5.7 round-1 review, findings
+#: 2 and 3). A two-token ordered-proximity check is blind to what sits
+#: *between* the tokens: inserting "never" between "`enabled = false`" and
+#: "persistent opt-out" (turning the guarantee into its own negation), or
+#: relocating the guarantee into a hedged table cell that still happens to
+#: contain both tokens somewhere nearby, would leave a two-token check green.
+#: A single contiguous phrase, matched verbatim against the whitespace-
+#: normalized text, does not have this hole -- either the exact guarantee
+#: sentence (or its exact table-row form) is present, or it is not.
+#:
+#: The opt-out phrase reuses the identical literal
+#: ``tests/test_install_docs.py`` already pins (task 5.7 round-1 review,
+#: finding 5): that sibling test's phrase is already the stronger, hedge-
+#: resistant page-level pin, so this module's own corpus/page checks now
+#: assert the exact same text rather than a weaker proximity approximation.
+_PERSISTENT_TILE_OPT_OUT_PHRASE = "is a persistent opt-out: it"
+
+#: The full sentence, not the bare "`attribution`" token: that bare token
+#: also names the table row (~line 117) documenting the key itself, which
+#: sits well before this prose sentence -- matching on it alone (or on it
+#: plus a separately-located "rendered legibly..." token) would make either
+#: an ordered-proximity check compare the wrong occurrence, or -- the
+#: round-1 defect -- stay green with "never" inserted between the two
+#: tokens or with the guarantee relocated into a hedged, altered sentence
+#: that still contains both tokens somewhere nearby.
+_TILE_ATTRIBUTION_PHRASE = (
+    "configured provider's `attribution` text is rendered legibly on every map image"
+)
+
+
+def test_preserved_statement_resolution_order_lives_on_configuration_doc() -> None:
+    """10.6: the data-root resolution order (``--out`` > ``FITDOCS_DATA`` >
+    the pointer file, in that order) is still published on
+    ``docs/configuration.md`` specifically.
+
+    Mutation caught (verified, then reverted byte-identically): removing the
+    numbered resolution list from ``docs/configuration.md`` fails this test
+    and ``tests/test_install_docs.py::test_configuration_doc_states_the_
+    resolution_order_and_no_code_repo_guarantee`` -- the two tests
+    deliberately share reach here, since both pin the same real statement on
+    the same real page; this one additionally requires the statement to
+    survive in the whole-corpus concatenation, which the sibling test does
+    not check.
+    """
+    page_text = _configuration_doc_text()
+    assert _RESOLUTION_ORDER_RE.search(page_text), (
+        "docs/configuration.md no longer states the --out > FITDOCS_DATA > "
+        "pointer-file resolution order as a numbered list"
+    )
+    assert _ordered_tokens_within(
+        _shipped_documentation_text(),
+        ["1. The `--out PATH` flag", DATA_ROOT_ENV, POINTER_RELPATH],
+        max_span=400,
+    ), (
+        "the data-root resolution order no longer appears, in order, in the "
+        "shipped documentation corpus"
+    )
+
+
+def test_preserved_statement_persistent_tile_opt_out_lives_on_configuration_doc() -> (
+    None
+):
+    """10.6: the persistent tile opt-out (``enabled = false`` under
+    ``[tiles]`` disables *all* tile requests, not just the default provider)
+    is still published on ``docs/configuration.md``.
+
+    Uses the exact literal ``_PERSISTENT_TILE_OPT_OUT_PHRASE`` --
+    round-1 review found the prior two-token ordered-proximity check blind
+    to what sits *between* the tokens (an inserted "never", or the
+    guarantee relocated into a hedged form that still contains both tokens
+    nearby); a single verbatim phrase closes both holes.
+
+    Mutations caught (verified, then reverted byte-identically):
+    - deleting "This is a persistent opt-out" from ``docs/configuration.md``
+      fails this test as the sole failure in this file;
+    - inserting "never" between "enabled = false" and "persistent opt-out"
+      (so the sentence reads "...fitdocs.toml`. This is never a persistent
+      opt-out: it disables...") fails this test as the sole failure in this
+      file -- the two-token proximity check this replaces stayed green
+      under this exact mutation.
+    """
+    page_text = _normalized(_configuration_doc_text())
+    assert _PERSISTENT_TILE_OPT_OUT_PHRASE in page_text, (
+        "docs/configuration.md no longer states the persistent tile opt-out "
+        f"({_PERSISTENT_TILE_OPT_OUT_PHRASE!r})"
+    )
+    assert _PERSISTENT_TILE_OPT_OUT_PHRASE in _shipped_documentation_text(), (
+        "the persistent tile opt-out no longer appears in the shipped "
+        "documentation corpus"
+    )
+
+
+def test_preserved_statement_tile_provider_attribution_lives_on_configuration_doc() -> (
+    None
+):
+    """10.6: the tile-provider attribution statement (the configured
+    provider's ``attribution`` text is rendered on every map image) is still
+    published on ``docs/configuration.md``.
+
+    Uses the exact literal ``_TILE_ATTRIBUTION_PHRASE`` -- round-1 review
+    found the prior two-token ordered-proximity check
+    (``"configured provider's \\`attribution\\`"`` ... ``"rendered legibly on
+    every map image"``) blind to what sits *between* the tokens: inserting
+    "never" ("...text is never rendered legibly...") or relocating the
+    guarantee into a hedged table row that still contains both tokens nearby
+    both left the prior check green. A single verbatim phrase closes both
+    holes.
+
+    Mutations caught (verified, then reverted byte-identically):
+    - deleting "rendered legibly on every map image" from
+      ``docs/configuration.md`` fails this test as the sole failure in this
+      file;
+    - inserting "never" between "attribution" and "rendered" (so the
+      sentence reads "...text is never rendered legibly on every map
+      image") fails this test as the sole failure in this file -- the
+      two-token proximity check this replaces stayed green under this
+      exact mutation.
+    """
+    page_text = _normalized(_configuration_doc_text())
+    assert _TILE_ATTRIBUTION_PHRASE in page_text, (
+        "docs/configuration.md no longer states that the configured "
+        f"provider's attribution text is rendered on every map image "
+        f"({_TILE_ATTRIBUTION_PHRASE!r})"
+    )
+    assert _TILE_ATTRIBUTION_PHRASE in _shipped_documentation_text(), (
+        "the tile-provider attribution statement no longer appears in the "
+        "shipped documentation corpus"
+    )
+
+
+def test_preserved_statement_ownership_contract_pointer_lives_on_readme() -> None:
+    """10.6: a pointer to the published ownership contract. README carries
+    the project URL to ``docs/ownership-contract.md`` directly, and
+    ``docs/index.md`` links it too (already pinned by
+    ``test_documentation_entry_point_links_every_required_page``, so not
+    duplicated here).
+
+    Mutation caught (verified, then reverted byte-identically): deleting
+    every ``docs/ownership-contract.md`` project-URL occurrence from
+    README.md fails this test as the sole failure in this file.
+    """
+    readme_text = (_REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    ownership_url = f"{_PROJECT_URL_PREFIX}docs/ownership-contract.md"
+    assert ownership_url in readme_text, (
+        "README.md no longer points at the published ownership contract by project URL"
+    )
+    assert ownership_url in _shipped_documentation_text(), (
+        "the published ownership contract pointer no longer appears in the "
+        "shipped documentation corpus"
+    )
+
+
+# --- shipped/emitted documentation references use the project-URL form -----
+# --- (Req 1.9) ---------------------------------------------------------------
+
+
+def _forbidden_relative_doc_link_targets(text: str) -> list[str]:
+    """Every markdown link target in ``text`` that is a repository-relative
+    documentation reference: starts with ``docs/``, ``./``, ``../``, or is a
+    bare ``*.md`` path with no scheme -- exactly the forms 1.9 forbids inside
+    an artifact that ships without a repository, or a tree emitted into a
+    user's data root that has no repository at all.
+
+    External (``http``/``https``) targets are never flagged.
+    """
+    forbidden = []
+    for target in re.findall(r"\]\(([^)\s]+)\)", text):
+        if target.startswith(("http://", "https://")):
+            continue
+        no_anchor = target.split("#", 1)[0]
+        if (
+            target.startswith("docs/")
+            or target.startswith("./")
+            or target.startswith("../")
+            or no_anchor.endswith(".md")
+        ):
+            forbidden.append(target)
+    return forbidden
+
+
+def test_forbidden_relative_doc_link_target_helper_discriminates_every_relaxation() -> (
+    None
+):
+    """Unit pin on :func:`_forbidden_relative_doc_link_targets` itself,
+    against synthetic text, one case per relaxation class -- production docs
+    carry no violation today, so a test that only ever ran the helper
+    against real shipped files could not tell a genuinely discriminating
+    helper from one that always returns ``[]`` (the pre-satisfied-fixture
+    anti-pattern).
+
+    | token | relaxation class (no ``.md`` isolates the prefix) | case | expected |
+    | --- | --- | --- | --- |
+    | ``docs/`` prefix | present | ``docs/CHANGES`` | forbidden |
+    | ``docs/`` prefix | absent (URL) | ``https://.../docs/inbox.md`` | allowed |
+    | ``./`` prefix | present | ``./CHANGES`` | forbidden |
+    | ``../`` prefix | present | ``../CHANGES`` | forbidden |
+    | bare ``*.md`` | no folder | ``CHANGELOG.md`` | forbidden |
+    | bare ``*.md`` | with anchor | ``CHANGELOG.md#foo`` | forbidden (anchor stripped) |
+    | scheme | external non-md | ``https://example.com`` | allowed |
+    | scheme | external "docs/" segment | project URL to docs/inbox.md | allowed |
+
+    The first three rows use an extension-less target (``CHANGES``, no
+    ``.md``) rather than the more natural ``docs/inbox.md`` / ``./inbox.md``
+    / ``../CONTRIBUTING.md``: every one of those *also* ends in ``.md``, so
+    they would still be flagged by the bare-``*.md`` disjunct alone even if
+    the ``docs/``/``./``/``../`` prefix checks were deleted entirely --
+    confirmed by mutation (dropping the ``docs/`` disjunct left this test
+    green when the fixture was ``docs/inbox.md``, the confounded-fixture
+    failure mode this docstring exists to record). The extension-less form
+    is forbidden only because of its prefix, isolating each disjunct from
+    the bare-``*.md`` rule that would otherwise silently do all the work.
+    """
+    forbidden_cases = [
+        "[a](docs/CHANGES)",
+        "[b](./CHANGES)",
+        "[c](../CHANGES)",
+        "[d](CHANGELOG.md)",
+        "[e](CHANGELOG.md#foo)",
+    ]
+    allowed_cases = [
+        "[f](https://example.com)",
+        f"[g]({_PROJECT_URL_PREFIX}docs/inbox.md)",
+    ]
+
+    for case in forbidden_cases:
+        found = _forbidden_relative_doc_link_targets(case)
+        assert found, f"expected {case!r} to be flagged as a relative doc link"
+
+    for case in allowed_cases:
+        found = _forbidden_relative_doc_link_targets(case)
+        assert not found, f"expected {case!r} to be allowed, but got {found}"
+
+
+def test_bare_relative_doc_path_helper_discriminates_every_relaxation() -> None:
+    """Unit pin on :func:`_bare_relative_doc_paths` (round-1 review, finding
+    1): the sibling markdown-link-syntax detector above is vacuous against a
+    bare mention with no ``](...)`` syntax at all -- exactly the shape a
+    plain-string constant (``CONTRACT_DOCUMENTATION_URL``), a byte-golden
+    ``AGENTS.md`` text, or ordinary prose (no link markup) all use.
+
+    | relaxation class | case | expected |
+    | --- | --- | --- |
+    | bare path, no link syntax | ``see docs/inbox.md in the repository`` | forbidden |
+    | already the correct URL | ``https://.../blob/main/docs/inbox.md`` | allowed |
+    | link label, correct href (false positive, see below) | see below | allowed |
+    | a different repo-relative page | ``see docs/upgrading.md too`` | forbidden |
+    | non-doc path (``.py`` not ``.md``) | ``see docs/script.py`` | allowed |
+
+    The third row is the exact false positive round-1 review found at
+    README.md's real ``[`docs/plugins.md`](https://.../blob/main/docs/plugins.md)``
+    line: the backtick-quoted label is bare text identical in shape to the
+    violation, immediately followed by the correct href. Without
+    ``_GOOD_PROJECT_LINK_RE`` masking that whole construct out first, this
+    case is wrongly forbidden -- confirmed by mutation below.
+
+    Mutation caught (verified, then reverted byte-identically): removing the
+    ``_GOOD_PROJECT_LINK_RE.sub("", text)`` masking step from
+    :func:`_bare_relative_doc_paths` (so the bare-path regex runs directly
+    against the unmasked text) makes the third case wrongly forbidden here,
+    and also reproduces the exact real false positive this fixture is
+    modeled on: ``test_shipped_and_emitted_doc_references_use_project_urls``
+    fails too, flagging README.md's own real
+    ``[`docs/plugins.md`](.../blob/main/docs/plugins.md)`` line -- expected
+    shared reach, not a vacuous mutation, since both tests exercise the same
+    masking step against the same real shape.
+    """
+    forbidden_cases = [
+        "see docs/inbox.md in the repository",
+        "see docs/upgrading.md too",
+    ]
+    allowed_cases = [
+        f"see {_PROJECT_URL_PREFIX}docs/inbox.md for detail",
+        f"[`docs/plugins.md`]({_PROJECT_URL_PREFIX}docs/plugins.md)",
+        "see docs/script.py",
+    ]
+
+    for case in forbidden_cases:
+        found = _bare_relative_doc_paths(case)
+        assert found, f"expected {case!r} to be flagged as a bare relative doc path"
+
+    for case in allowed_cases:
+        found = _bare_relative_doc_paths(case)
+        assert not found, f"expected {case!r} to be allowed, but got {found}"
+
+
+_SCANNED_SHIPPED_OR_EMITTED_FILES = [
+    _REPO_ROOT / "README.md",
+    _REPO_ROOT / "CHANGELOG.md",
+    *sorted((_REPO_ROOT / "src" / "fitdocs" / "skills").glob("*/SKILL.md")),
+]
+
+#: A well-formed markdown link whose label names a doc page and whose href is
+#: the correct project URL, e.g. README.md's own
+#: ``[`docs/plugins.md`](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/plugins.md)``.
+#: The *label* half of that construct is bare text that happens to look like
+#: a repository-relative path -- masked out below before the bare-path scan
+#: runs, so a correctly-linked mention is never confused with the violation
+#: 1.9 forbids (a path used *as the link target itself*, or named in prose
+#: with no link at all).
+_GOOD_PROJECT_LINK_RE = re.compile(
+    r"\[[^\]]*\]\(" + re.escape(_PROJECT_URL_PREFIX) + r"[^)]+\)"
+)
+
+#: A repository-relative documentation path (``docs/....md``) not immediately
+#: preceded by ``blob/main/`` -- i.e. not part of an already-correct project
+#: URL. Round-1 review, finding 1: the markdown-link-syntax scan
+#: (``_forbidden_relative_doc_link_targets``) is vacuous against a *bare*
+#: mention with no ``](...)`` syntax at all -- the exact form both the
+#: emitted ``CONTRACT_DOCUMENTATION_URL``/goldens (a plain string, not
+#: markdown) and ``src/fitdocs/skills/fitdocs-workouts/SKILL.md:87``'s prose
+#: ("see docs/inbox.md in the repository") use. This is the second,
+#: independent detector that catches that form.
+_BARE_RELATIVE_DOC_PATH_RE = re.compile(r"(?<!blob/main/)\bdocs/[\w.\-/]+\.md\b")
+
+
+def _bare_relative_doc_paths(text: str) -> list[str]:
+    """Every bare, repository-relative ``docs/*.md`` mention in ``text`` that
+    is not the label half of an already-correct project-URL markdown link.
+
+    Verified against the real repository (round-1 remediation): without the
+    ``_GOOD_PROJECT_LINK_RE`` masking step, this flags a false positive at
+    README.md's own ``` [`docs/plugins.md`](https://.../blob/main/docs/plugins.md) ```
+    line -- the backtick-quoted *label* is bare text identical to the
+    violation form, immediately followed by the correct href. Masking every
+    well-formed project-URL link out first removes that label along with its
+    href before the bare-path regex ever sees it, while leaving true bare
+    mentions (no ``](...)`` at all) untouched.
+    """
+    masked = _GOOD_PROJECT_LINK_RE.sub("", text)
+    return _BARE_RELATIVE_DOC_PATH_RE.findall(masked)
+
+
+def test_shipped_and_emitted_doc_references_use_project_urls() -> None:
+    """1.9: any documentation reference carried inside a published artifact
+    (README, the packaged ``SKILL.md`` files) or emitted by the tool into a
+    user's tree (the ownership declaration's ``CONTRACT_DOCUMENTATION_URL``,
+    and the byte-golden ``AGENTS.md`` texts that constant renders into)
+    addresses the documentation by its published project URL rather than a
+    repository-relative path.
+
+    Two independent detectors run over every scanned text: markdown-link-
+    syntax targets (``_forbidden_relative_doc_link_targets``, for a
+    ``](docs/....md)``-style reference) and bare mentions with no link
+    syntax at all (``_bare_relative_doc_paths``, round-1 remediation --
+    the first detector alone is vacuous against a bare URL string like
+    ``CONTRACT_DOCUMENTATION_URL`` or a bare prose mention like
+    ``SKILL.md:87``'s "see docs/inbox.md in the repository", since neither
+    ever contains ``](...)`` syntax for the first detector to find).
+
+    ``tests/test_packaging.py`` already asserts the *declared*
+    ``[project.urls]`` values themselves; this test does not duplicate that
+    -- it scans the shipped/emitted surfaces for the repo-relative *form*
+    1.9 forbids, regardless of what ``pyproject.toml`` declares.
+
+    Mutations caught (verified, then reverted byte-identically):
+    - temporarily adding a ``[Inbox](docs/inbox.md)`` line to README.md's
+      Learn More section is flagged as the sole new violation (the
+      link-syntax detector);
+    - temporarily rewriting ``CONTRACT_DOCUMENTATION_URL`` to the bare path
+      ``"docs/ownership-contract.md"`` is flagged as the sole new violation
+      (the bare-path detector) -- the link-syntax detector alone left this
+      green, since a bare string has no ``](...)`` for it to match;
+    - temporarily rewriting one golden's attribution line from the full URL
+      to the bare path is flagged as the sole new violation, same reason;
+    - ``src/fitdocs/skills/fitdocs-workouts/SKILL.md:87``'s real bare-prose
+      mention ("see docs/inbox.md in the repository") is exactly the shape
+      the bare-path detector exists to catch -- confirmed clean today by
+      running the detector against the real file (no violation), then
+      confirmed it fires by temporarily reproducing that exact sentence in
+      isolation.
+    """
+    texts: dict[str, str] = {
+        str(path.relative_to(_REPO_ROOT)): path.read_text(encoding="utf-8")
+        for path in _SCANNED_SHIPPED_OR_EMITTED_FILES
+    }
+    texts["fitdocs.declaration.CONTRACT_DOCUMENTATION_URL"] = CONTRACT_DOCUMENTATION_URL
+    golden_dir = _REPO_ROOT / "tests" / "declaration_golden"
+    goldens = sorted(golden_dir.glob("*.AGENTS.md"))
+    for golden in goldens:
+        texts[str(golden.relative_to(_REPO_ROOT))] = golden.read_text(encoding="utf-8")
+
+    violations: dict[str, list[str]] = {}
+    for name, text in texts.items():
+        forbidden = [
+            *_forbidden_relative_doc_link_targets(text),
+            *_bare_relative_doc_paths(text),
+        ]
+        if forbidden:
+            violations[name] = forbidden
+
+    # Positive controls scoped to the emitted surfaces specifically (round-1
+    # review, finding 1): a project-URL count over the whole `texts` dict is
+    # satisfied by README.md alone, which would leave this control green even
+    # if the emitted constant/goldens were never read at all (an empty
+    # `goldens` list, or `CONTRACT_DOCUMENTATION_URL` silently excluded from
+    # `texts`) -- exactly the "checked zero files" vacuous-walk failure mode.
+    assert goldens, "no tests/declaration_golden/*.AGENTS.md files were read"
+    assert _PROJECT_URL_PREFIX in CONTRACT_DOCUMENTATION_URL, (
+        "CONTRACT_DOCUMENTATION_URL is not itself in project-URL form -- the "
+        "positive control below would be vacuous if it were"
+    )
+    for golden in goldens:
+        golden_text = texts[str(golden.relative_to(_REPO_ROOT))]
+        assert _PROJECT_URL_PREFIX in golden_text, (
+            f"{golden} does not carry the project-URL prefix at all -- "
+            "reading it proves nothing about the form this test pins"
+        )
+
+    assert not violations, (
+        "shipped or emitted documentation reference(s) use a "
+        f"repository-relative form instead of the project URL: {violations}"
+    )

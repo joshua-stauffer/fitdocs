@@ -9,9 +9,10 @@ Six properties, one per test group below:
 (b) the README no longer claims the project is unreleasable and states both
     install commands.
 (c) every documentation-page URL the README carries is in project-URL form,
-    and every such URL's page exists on disk -- except the known-future
-    ``docs/index.md``, which task 5.7 creates (encoded as a single named
-    exemption, not a blanket allowance).
+    and every such URL's page exists on disk. Task 5.7 created
+    ``docs/index.md``, retiring the single named exemption that used to cover
+    it (there is no blanket allowance -- every ``docs/*.md`` URL the README
+    carries must resolve to a real file).
 (d) the README still reaches every sibling-published section (Plugins,
     Ownership) and links to the relocated Inbox page.
 (e) preservation: a curated set of >=12 distinctive phrases copied verbatim
@@ -64,11 +65,6 @@ from fitdocs.load.settings import DEFAULT_LOAD_SETTINGS
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _REPO_URL = "https://github.com/joshua-stauffer/fitdocs"
-
-# The one exemption task 5.2 is told, explicitly, to leave in place: 5.7
-# creates docs/index.md. Every other docs/*.md URL the README carries must
-# resolve to a file that exists today.
-_FUTURE_EXEMPT_PAGES = frozenset({"docs/index.md"})
 
 _DOC_URL_RE = re.compile(re.escape(_REPO_URL) + r"/blob/main/(docs/[\w.\-/]+\.md)")
 
@@ -207,15 +203,10 @@ def test_readme_doc_urls_are_project_url_form_and_resolve_to_real_pages() -> Non
         f"expected at least 5 docs/*.md project-URL references in README, found {found}"
     )
 
-    missing = [
-        page
-        for page in sorted(set(found))
-        if page not in _FUTURE_EXEMPT_PAGES and not (_REPO_ROOT / page).is_file()
-    ]
+    missing = [page for page in sorted(set(found)) if not (_REPO_ROOT / page).is_file()]
     assert not missing, (
         f"README references these docs/*.md pages by project URL, but they "
-        f"do not exist on disk (and are not the docs/index.md exemption "
-        f"task 5.7 fills in): {missing}"
+        f"do not exist on disk: {missing}"
     )
 
     # A repo-relative reference to any of the same pages is the exact defect
