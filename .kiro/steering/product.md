@@ -9,9 +9,13 @@ inside a vendor platform.
 
 ## Core Capabilities
 
-1. **`.fit` → markdown, one-to-one.** Each activity file becomes one workout
+1. **`.fit` → markdown, one-to-one.** Each activity becomes one workout
    document. The user gets the files into a target directory (Garmin exports,
-   watch sync, etc.); fitdocs does the rest.
+   watch sync, etc.), or, from Phase 8 of the roadmap, a configured connector
+   fetches them. fitdocs does the rest. When several files record the same
+   session (a phone-side re-export and the device original, say), Phase 8
+   makes them one document: a base file plus extras that add only the
+   channels the base lacks, never a duplicate.
 2. **Strong workout-level documents.** Per-sport views for running, cycling,
    and weight training modeled on fitdocs.ai's activity pages: summary
    metrics, laps/splits or sets/reps, and rich embedded charts — headlined by
@@ -56,7 +60,13 @@ inside a vendor platform.
   longitudinal fitness/fatigue page is `load-history`'s.)* Still deferred at
   the plan level: forecasting form from a plan, and macrocycles spanning
   several blocks.
-- Automated `.fit` acquisition (device sync, platform APIs).
+- Automated `.fit` acquisition *(lifted 2026-09-23 by Phase 8 of the
+  roadmap: connectors pull files the athlete does not yet have into the
+  inbox (`connectors`, `intervals-connector`). A second file of an activity
+  already held enriches its document instead of duplicating it
+  (`activity-identity`, `channel-merge`, `running-dynamics`).)* Still
+  deferred: pushing to platforms (Strava posts, intervals.icu uploads and
+  planned workouts), pulling thresholds, wellness or plans, and device sync.
 
 ---
 _Focus on patterns and purpose, not exhaustive feature lists_

@@ -54,7 +54,9 @@ third delivers the differentiating feature (training load).
   `build-training-block` own the plan level)*; weekly load
   aggregation views *(lifted in Phase 6, 2026-09-09 — `load-history` owns the
   longitudinal page)*; automated `.fit`
-  acquisition; non-`.fit` formats
+  acquisition *(lifted in Phase 8, 2026-09-23 — `connectors` and
+  `intervals-connector` pull into the inbox; pushing to platforms stays
+  out)*; non-`.fit` formats
   (GPX/TCX — measured on real HealthFit exports 2026-07-16: GPX sidecars
   are the FIT track re-encoded, mm-level deltas only, so ingesting them
   gains nothing); web UI; cycling and weight-training load methodologies
@@ -266,7 +268,9 @@ work.)_
   would change behavior or contract beyond the approved spec — headed by the
   unguarded `save_quarantine` in `drain()`, the one path where completed work
   is reported nowhere. None blocked the gate; none is remaining spec work.
-- [ ] distribution — publishable package and wiki-integration packaging:
+- [x] distribution — **done 2026-09-19** (26/26; spec complete at `4f0ae00`;
+  fitdocs 0.1.0 released from tag `v0.1.0` on `3c5281b`, release run
+  35446284407). Publishable package and wiki-integration packaging:
   PyPI release process, semver + changelog, install/upgrade docs, SKILL.md
   (agent-skills packaging) and pkm integration recipe.
   Dependencies: wiki-contract, inbox, plugin-api
@@ -874,7 +878,9 @@ the encumbered blobs, which is the thing this phase exists to prevent).
 
 #### Existing Spec Updates
 
-- [ ] distribution — the release half of this phase, already approved and
+- [x] distribution — **done 2026-09-19** (spec complete at `4f0ae00`; 0.1.0
+  released from `3c5281b`). The status below is as written at the Phase 5
+  discovery: the release half of this phase, already approved and
   unstarted (0 of 33 checklist items). It owns everything the purge does not:
   the `LICENSE` file that `pyproject.toml:7` declares but does not ship,
   classifiers and project URLs (neither present), the `.kiro/` and `tests/`
@@ -1392,18 +1398,400 @@ model, needs none of it).
 
 #### Specs (dependency order)
 
-- [ ] training-blocks — **spec written 2026-09-16** (Phase 7 batch, `tasks-generated`, all approvals set; 8 requirements / 73 criteria, 4 majors / 15 executable tasks; cross-spec reviewed, two rounds, PASS). the plan-source format and validation, the block page
+- [x] training-blocks — **implemented 2026-09-16 at `68fe42e`**; **spec written 2026-09-16** (Phase 7 batch, `tasks-generated`, all approvals set; 8 requirements / 73 criteria, 4 majors / 15 executable tasks; cross-spec reviewed, two rounds, PASS). the plan-source format and validation, the block page
   and planned-workout pages, the user-owned source location and the owned
   rendered location with their declaration, guards and contract version, the
   `Resolution` seam rendered unresolved, and the `fitdocs plan` command.
   Dependencies: none
-- [ ] plan-resolution — **spec written 2026-09-16** (Phase 7 batch, `tasks-generated`, all approvals set; 8 requirements / 58 criteria, 3 majors / 12 executable tasks; cross-spec reviewed, two rounds, PASS). matching logged workouts to planned rows by date and
+- [x] plan-resolution — **implemented 2026-09-17 at `fbba78b`**; **spec written 2026-09-16** (Phase 7 batch, `tasks-generated`, all approvals set; 8 requirements / 58 criteria, 3 majors / 12 executable tasks; cross-spec reviewed, two rounds, PASS). matching logged workouts to planned rows by date and
   type with confidence labels, the split-session and same-day-ambiguity
   rules, overrides from the source, the per-mesocycle actual-load sum with
   one methodology and a coverage statement, the unplanned-workout listing,
   and chaining after `sync`, `drain` and `regen`. Dependencies:
   training-blocks
-- [ ] build-training-block — **spec written 2026-09-16** (Phase 7 batch, `tasks-generated`, all approvals set; 7 requirements / 48 criteria, 3 majors / 8 executable tasks; cross-spec reviewed, two rounds, PASS). the packaged skill that builds, amends and
+- [x] build-training-block — **implemented 2026-09-17 at `e45f114`** (Phase 7 complete); **spec written 2026-09-16** (Phase 7 batch, `tasks-generated`, all approvals set; 7 requirements / 48 criteria, 3 majors / 8 executable tasks; cross-spec reviewed, two rounds, PASS). the packaged skill that builds, amends and
   disambiguates a block through `fitdocs plan`, its conformance and
   wheel-member tests, and the by-name skill locator (distribution's update)
   it is found through. Dependencies: training-blocks, plan-resolution
+
+### Phase 8 — source connectors (discovery 2026-09-23)
+
+**Goal**: stop moving `.fit` files by hand, and stop losing the data that
+phone-side copies never carried. Until now the athlete put every file into
+the inbox themselves. For the maintainer that meant HealthFit's exports of
+Apple Health as the canonical store, plus hand exports from Garmin Connect
+for rides. The Health round trip loses data. Against the device original, a
+HealthFit copy of a Garmin ride lacks altitude, temperature and pedal
+dynamics, and in 4 of 5 measured pairs lacks GPS. A HealthFit copy of a
+Stryd run lacks every running-dynamics channel. Phase 8 adds connectors that
+fetch what the athlete does not yet have into the inbox. It also teaches the
+engine that a second file of an activity it already holds is the same
+activity: a source of extra channels, not a duplicate page.
+
+**Approach decision: connectors fill the inbox, and the engine reconciles.**
+A connector is a thin fetcher. It lists remote activities, fetches their
+bytes, delivers them atomically into the configured inbox, and records what
+it fetched in a ledger under `.fitdocs/`. Everything after delivery is the
+existing drain, which gains two abilities:
+
+- **Cross-source identity.** A file whose session start, elapsed time and
+  distance agree with an existing page belongs to that page.
+- **Composition.** There is one page per activity. It is rendered from a
+  base file, and extra files contribute only the channels the base lacks.
+
+Because reconciliation lives in the engine, a hand-dropped file, a HealthFit
+export and a connector download behave identically. The 761-document
+adoption gap (queue item
+`2026-09-12-adopting-a-higher-fidelity-re-export-needs-a-hand-edit`) closes
+as a side effect.
+
+Rejected:
+
+- *Connector-aware direct attach*, where connectors match remote metadata
+  against pages themselves. It is a second ingestion path beside the drain,
+  hand-dropped files would still duplicate, and every future push connector
+  would have to understand documents.
+- *Best file wins*, where the richest file replaces the others wholesale.
+  Measured, it loses the watch's HR on a ride recorded without a chest
+  strap. It also adds nothing to a run: the Stryd file's value is the
+  channels the HealthFit copy lacks, while only the HealthFit copy carries
+  the session UUID, the session summaries and the HR laps.
+- *A direct Garmin Connect login.* Garmin's developer program is
+  business-only. `garth` was deprecated on 2026-03-27 after Garmin added
+  TLS fingerprinting. `garminconnect` needs Python ≥3.12 and a native
+  `curl_cffi` wheel, against fitdocs's ≥3.11 and its frozen dependency
+  list. The discovery probe's single login drew HTTP 429. Garmin rides come
+  through intervals.icu instead, which receives them over Garmin's official
+  partner API.
+- *A Garmin export-zip importer as the only path.* Robust, but a manual step
+  per batch, so it is kept as a follow-on.
+
+#### Decisions taken at discovery (2026-09-23)
+
+- **Path E: five new specs and five existing-spec updates** (maintainer,
+  2026-09-23):
+  - `activity-identity`: which page a file belongs to, and which file is its
+    base.
+  - `running-dynamics`: the channels a Stryd file carries.
+  - `connectors`: the framework, the pull, and the folder connector.
+  - `channel-merge`: base plus extras.
+  - `intervals-connector`: the activity pull only.
+- **Connectors fill the inbox, and the engine reconciles** (maintainer,
+  2026-09-23), over direct attach.
+- **Garmin rides come via intervals.icu** (maintainer, 2026-09-23), over a
+  direct Garmin login and over an export-zip-only path. The intervals.icu
+  connector's pull capability moves into this phase. Its push,
+  planned-workout, threshold and plan capabilities stay follow-ons. The
+  viability check (2026-09-24) found intervals.icu's copy is Garmin's
+  partner-API file, not the device's. Garmin strips undocumented messages
+  and fields and workout steps before sending, and in 2026-03 briefly
+  stripped more. Documented record fields (power, pedal dynamics, developer
+  fields) survive. A device original, when one exists, therefore outranks
+  the intervals.icu copy of the same ride.
+- **Base plus extras** (maintainer, 2026-09-23): one page per activity,
+  rendered from a base file chosen by a configurable source precedence.
+  Other files of the same activity contribute only channels the base lacks,
+  and the base wins every channel both carry.
+- **Running dynamics are in this phase, as their own spec** (maintainer,
+  2026-09-23). Without them, a Stryd file is archived and read by nothing.
+- **No shipped Stryd connector; a connector plugin slot instead**
+  (maintainer, 2026-09-24). Stryd has no public API. Its Terms of Use
+  (revised 2021-04-06, the only terms file in Stryd's public legal folder)
+  permit connecting only through Stryd's own applications or "approved
+  third-party applications", and prohibit encouraging or assisting others to
+  do otherwise. fitdocs is public, so it ships no Stryd connector and
+  documents no Stryd endpoint. Stryd files arrive by manual download from
+  Stryd's site, or through a connector plugin the athlete installs and owns
+  themselves. The slot is plugin-api's second plugin kind.
+- Taken without asking, consistent with the above:
+  - **A folder connector** ships as the reference connector and the
+    network-free test bed for the framework. It copies from a local
+    directory into the inbox, keeping a ledger. Pointed at HealthFit's
+    iCloud export folder, it makes HealthFit stop being a manual move.
+  - **Credentials and tokens never live under the data root.** The data root
+    may be a git repository (`docs/ownership-contract.md:671-693`).
+  - **The pull is a one-shot command,** safe under cron or launchd, never a
+    daemon (`tech.md`: no background jobs).
+  - **No new runtime dependencies.** Stdlib `urllib`, `gzip` and `json` are
+    enough, so the frozen dependency list stays green
+    (`tests/test_determinism.py:672-712`,
+    `tests/test_packaging.py:503-519`).
+
+#### Scope
+
+- **In**:
+  - the connector protocol and its capability vocabulary;
+  - the ledger;
+  - credential and token storage;
+  - a connect command and a pull command (names provisional: `sync` is taken
+    by the inbox drain);
+  - atomic delivery into the inbox;
+  - the folder connector;
+  - the intervals.icu connector's activity pull;
+  - the connector plugin kind;
+  - cross-source activity identity, with base selection and page rename;
+  - base-plus-extras composition;
+  - record-level developer fields and running dynamics, in ingest and on run
+    pages;
+  - "Garmin <model>" attribution on pages rendered from Garmin data;
+  - the packaged skill's routine learning the pull.
+- **Out**:
+  - any push: Strava posts, intervals.icu uploads or descriptions, planned
+    workouts;
+  - pulling thresholds, wellness, workout libraries or plans;
+  - a direct Garmin Connect connector, and a Garmin export-zip importer;
+  - a shipped Stryd connector (see the decisions above);
+  - a daemon, watcher or scheduler (the OS schedules the one-shot command);
+  - cycling dynamics in the model (pedal dynamics, gears, training effect);
+  - GPX-only activities (queue
+    `2026-09-12-gpx-only-activities-in-a-garmin-export-are-unrepresentable`);
+  - joining recordings that are not the same session.
+
+#### Constraints
+
+- **The network is used only by explicit connector commands.**
+  - `sync`, `regen`, `load`, `history`, `plan` and rendering stay offline,
+    apart from the existing map tiles. Connectors never import render, load
+    or metrics.
+  - The "only network module" statements (`cli.py:98-102`, `sync.py:41-52`,
+    `tiles.py:7`) and their guards are revised to name the connector
+    package, not deleted. The guards are the import-purity guards
+    (`tests/test_contract.py:1345`,
+    `tests/performance/test_purity.py:525`) and the socket guard
+    (`tests/test_determinism.py:124, 226`).
+- **Every request sends an explicit User-Agent.** intervals.icu sits behind
+  Cloudflare, which answers urllib's default `Python-urllib/3.x` agent with
+  403 "error code: 1010" (viability check, 2026-09-24). The precedent is
+  `tiles._user_agent()` (`tiles.py:252`).
+- **Secrets never live under the data root and are never logged.**
+  - Tokens and keys live in a per-user config location, as 0600 files
+    written atomically.
+  - A service with a refresh flow never has its password persisted.
+  - Environment variables override the stored values for unattended runs.
+  - A signed download URL is a secret too.
+- **Authentication is never retried.** A 429, an MFA challenge or a lockout
+  at login is reported, and the connector stops. Retries with backoff apply
+  only to data calls, and are bounded. Garmin's login rate limit, hit during
+  discovery, is reported to last 48–72 h and to extend on retry.
+- **Terms first.**
+  - fitdocs ships a connector only for a service whose terms permit the
+    access it makes: a documented API with a personal key or OAuth.
+  - Pages rendered from Garmin data carry "Garmin <model>" attribution
+    (intervals.icu API terms §1.1; Garmin API Brand Guidelines, v6.30.2025).
+  - When a Strava connector exists, nothing read from Strava ever reaches a
+    page. The Strava API agreement effective 2026-06-01 bars use in
+    "ingestion into a context window", and an agent-read wiki is one.
+- **Identity never guesses.**
+  - A match is one-to-one. Two candidates is ambiguity: it is reported and
+    left unmerged, never settled by arrival order.
+  - The rule is calibrated on measured pairs:
+    - Stryd↔HealthFit copies agree on start time to the second and on
+      distance to 0.01 m, but differ by 8–9 s in elapsed time.
+    - Garmin↔HealthFit copies agree on start time to the second, on
+      distance within 5 m and on elapsed time within about 1 s. Their timer
+      times differ by up to 400 s, because HealthFit sets timer = elapsed.
+    - 244 older HealthFit re-exports are shifted by whole hours.
+    - Under a 90 s / 300 m rule, two similar 10 k runs matched falsely.
+- **Arrival order never changes the page.** The page for a set of files is a
+  function of the set. The base is chosen by precedence and the extras by
+  rule, with the same result whichever file arrived first.
+- **Absent is `None`.** Stryd writes zeros at pauses and at the first
+  sample, and developer values arrive raw with no sentinel filtering.
+  Neither becomes a value.
+- **Personal data never enters the repository.**
+  - Fixtures are synthesized FIT files with the measured shapes.
+  - Connector tests run against an injected fetch seam, never the network.
+  - Service specifics a public repository may not document (see the Stryd
+    decision) stay out of specs, docs and tests.
+- **Real use waits for identity.** Until `activity-identity` has merged, a
+  pull against a real corpus that already holds phone-side copies writes
+  duplicates. `connectors` may merge first, but no connector is pointed at a
+  real data root before identity lands.
+
+#### Boundary Strategy
+
+- **Why this split.** Each part has a different kind of input and a
+  different way of being tested:
+  - Identity is about pages: which page a file belongs to and which file is
+    its base. It changes the contract (keys, version, filenames), so it is
+    one spec.
+  - Composition is about samples: aligning two decoded activities and
+    donating channels between them. It is pure and golden-testable, so it
+    is another.
+  - Running dynamics widen the model and the run page. They are useful on a
+    single Stryd file with no merge at all.
+  - The connector framework is network, credentials and state, with no
+    knowledge of pages.
+  - Each service's connector is then a small spec against a fixed protocol,
+    so a service that breaks costs one module.
+- **Shared seams to watch**:
+  - `model.py` `Samples` (97) and `Activity` receive append-only edits,
+    landing in dependency order:
+    - `running-dynamics` adds channels;
+    - `activity-identity` adds file identity (the `file_id` serial, time
+      created, manufacturer and product; `file_id` is not read today,
+      `ingest/__init__.py:56-66`);
+    - `channel-merge` composes over the channel set, and must be generic
+      over it or cover `running-dynamics`' channels by name.
+  - The contract versions and managed keys: `DOC_VERSION` (5,
+    `contract.py:174`), `CONTRACT_VERSION` ("4", `contract.py:275`) and
+    `MANAGED_KEYS` (`contract.py:364`).
+    - `activity-identity` records source roles on the page.
+    - `channel-merge` may record which file each channel came from.
+    - Each bump lands once, in merge order, and the second lander re-pins.
+  - `sync.py`:
+    - `find_document` (236) and `_process_file` (1126) carry identity and
+      base selection, which are `activity-identity`'s;
+    - the composition call and the archive reads of the extras are
+      `channel-merge`'s;
+    - the stem left stale for a matched page (1269-1272) is
+      `activity-identity`'s to fix.
+  - `cli.py` and confinement: `connectors` adds the connect and pull
+    commands and registers them in `WRITING_ENTRY_POINTS`
+    (`tests/test_confinement.py:815`). The ledger is owned tool state under
+    `.fitdocs/`.
+  - The inbox. Connectors deliver under dot-prefixed temporary names, which
+    `select_candidates` already skips (`inbox.py:563`). `connectors` must
+    decide what LEAVE disposition means for pulled files: today every drain
+    re-reads and re-hashes them (queue
+    `2026-09-17-inbox-drain-leaves-source-fit-in-inbox`).
+  - `plugins.py` is hard-wired to one kind (`ENTRY_POINT_GROUP =
+    "fitdocs.load_calculators"`, 207; `PluginInfo` carries calculator
+    fields). The plugin-api update generalizes it by kind, against the
+    protocol `connectors` publishes.
+  - The packaged `fitdocs-workouts` skill's routine fence is pinned to
+    exactly `sync` and `check` (`tests/test_agent_skill.py:681`). The pull
+    is added there by `connectors`.
+  - Garmin device names: `DeviceInfo.product_name` is `None` for every
+    Garmin device, because a numeric product code is never turned into a
+    name (`ingest/summary.py:372-385`). The SDK resolves it (e.g.
+    `edge_1040`). Attribution needs the model name, so
+    `intervals-connector` owns that change to fit-ingest.
+
+#### Existing Spec Updates
+
+- [ ] plugin-api — a second plugin kind. Connectors are:
+  - discovered from an entry-point group and from the local plugin-file
+    fallback;
+  - validated against the published protocol, with per-plugin failure
+    isolation;
+  - listed by `fitdocs plugins` with their kind and capabilities.
+
+  The machinery in `plugins.py` is parameterized by kind, not copied. This
+  is the slot a user-installed connector lives in. Dependencies: connectors
+- [ ] wiki-contract — Amendment 4:
+  - source roles (base and extras) on the page;
+  - which file each channel came from, if `channel-merge` records it;
+  - the version advances;
+  - the ownership contract states that credentials never live under the data
+    root and that the connector ledger is owned tool state.
+
+  Landed by `activity-identity`, `connectors` and `channel-merge`, the way
+  Amendment 3 was landed by `training-blocks`. Dependencies: none
+- [ ] fit-ingest — `file_id` identity fields (landed by
+  `activity-identity`); record-level developer fields and running dynamics
+  (landed by `running-dynamics`); Garmin product names (landed by
+  `intervals-connector`). Dependencies: none
+- [ ] workout-docs — a running-dynamics section on run pages (landed by
+  `running-dynamics`); Garmin attribution (landed by
+  `intervals-connector`). Dependencies: none
+- [ ] distribution — the packaged `fitdocs-workouts` skill's routine learns
+  the pull, and its pins move (`tests/test_agent_skill.py:614, 681`). Landed
+  by `connectors`. Dependencies: connectors
+
+#### Direct Implementation Candidates
+
+- [x] `product.md`'s "Explicitly deferred" line on automated acquisition,
+  its first-capability line, and the roadmap's Scope copy: lifted in this
+  discovery change.
+- [x] Roadmap bookkeeping: Phase 7's three specs and distribution ticked
+  with their merge SHAs, in this discovery change.
+
+#### Follow-on candidates (not scheduled)
+
+This is the connector ecosystem the phase is shaped for. The candidates are
+named here so that the protocol's capability vocabulary, the ledger and the
+credential store are designed for them now and built later.
+
+- **intervals.icu, the rest of the connector.** Auth is a personal API key
+  (HTTP Basic, athlete `0`); OAuth would need an approved app. The
+  capabilities:
+  - push an activity with post text;
+  - update the name and description of an activity already there;
+  - push planned workouts, including future ones, from the `training-blocks`
+    plan source. Upsert by `external_id` works only for OAuth apps; an
+    API-key client upserts on `uid` or keeps the event id in the ledger;
+  - pull thresholds: the current sport settings, plus per-activity
+    snapshots for history, into athlete benchmarks through a new benchmark
+    source kind (the vocabulary is closed today, `benchmarks.py:85-95`);
+  - pull workout plans and library items as a proposal the plan-source
+    skill can adopt (fitdocs never writes the plan source,
+    `docs/ownership-contract.md:444-449`);
+  - pull wellness and fitness series.
+- **Strava, push only.**
+  - Auth: OAuth2 with the athlete's own registered app. A Strava
+    subscription is required to register one since 2026-06-01. The access
+    token lasts 6 h, and the refresh token rotates and must be saved
+    atomically.
+  - The API has no delete, so every post is irreversible: dry-run by
+    default, and confirm.
+  - Garmin's auto-sync usually lands first. "Post" is therefore mostly
+    *find the synced activity by time window and set its name and
+    description*, with an upload only when none exists.
+  - That lookup is a read. Its result may be used only to address the post,
+    never rendered, and kept no longer than the terms allow.
+- **Post text.** One templating seam shared by Strava and intervals.icu,
+  rendering from a workout page's frontmatter and regions. A skill can have
+  the curating LLM write it instead.
+- **A direct Garmin Connect connector, and a Garmin export-zip importer,**
+  for athletes without intervals.icu. The importer is the no-login fallback
+  (the maintainer's 2026-09-12 backfill route).
+- **Stryd data beyond files**: CP history and stress. These arrive through
+  whatever channel Stryd's terms allow, and map onto athlete benchmarks.
+- **Cycling dynamics**: pedal dynamics, power phase, gears and training
+  effect. Every Edge original carries them, and the model drops them today.
+- **Connector authoring as an ecosystem**: a guide and an example plugin,
+  once the plugin kind has been used by at least one out-of-tree connector.
+
+#### Specs (dependency order)
+
+- [ ] activity-identity — the file-identity fields from `file_id`; the
+  cross-source match rule (one-to-one, calibrated on measured pairs,
+  ambiguity reported and never merged); source roles on the page; base
+  selection by configurable precedence (a device original outranks a
+  partner-API or phone-side copy of the same session); re-render on a base
+  change, with the stem recomputed, the page renamed and the old assets
+  removed; the session UUID kept when the base changes; `check` findings for
+  ambiguous and orphaned sources. Promoted from queue
+  `2026-09-12-adopting-a-higher-fidelity-re-export-needs-a-hand-edit`.
+  Dependencies: none
+- [ ] running-dynamics — record-level developer fields read by field
+  description (name, units, declared scale, invalid values filtered), and
+  native running dynamics (step length, vertical oscillation, stance time and
+  its balance, vertical ratio) as sample channels. Stryd's channels (form
+  power, air power, leg spring stiffness, impact, the balance channels) are
+  recognized by name. Stryd-file quirks are handled: zeros at pauses, no
+  session HR summary, a wrong lap count, a session timestamp that is not the
+  end. A running-dynamics section and chart on run pages. Dependencies: none
+- [ ] connectors — the connector protocol and its capability vocabulary
+  (pull activities now; the follow-ons' kinds named and reserved, with an
+  irreversible flag); the built-in registry and the published surface the
+  plugin kind validates against; per-user credential and token storage
+  outside the data root; the ledger under `.fitdocs/`; the HTTP seam
+  (stdlib, explicit User-Agent, timeouts, no auth retries); atomic inbox
+  delivery; the connect and pull commands, the pull optionally chaining the
+  drain; the folder connector; the revised network statements and guards;
+  the packaged skill's routine. Dependencies: none
+- [ ] channel-merge — composing one activity from a base and its extras.
+  Alignment is by timestamp, with a per-stretch lag between pauses (Stryd
+  and HealthFit copies drift between 0 and +1 s from one stretch to the
+  next, measured). Extras donate only the channels the base lacks, and the
+  base wins every shared channel. The page states which file each channel
+  came from, and summaries are recomputed only where a donated channel
+  feeds them. Dependencies: activity-identity, running-dynamics
+- [ ] intervals-connector — the intervals.icu activity pull. Auth is a
+  personal API key. Listing is by date range; Strava-sourced stubs are
+  skipped, and a source filter is configurable. The original file is
+  downloaded (gzip) and checked for a FIT header. Garmin product names are
+  resolved, and "Garmin <model>" attribution is rendered. Dependencies:
+  connectors

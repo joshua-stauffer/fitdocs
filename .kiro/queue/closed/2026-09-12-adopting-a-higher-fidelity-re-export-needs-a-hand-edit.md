@@ -1,7 +1,7 @@
 ---
 id: 2026-09-12-adopting-a-higher-fidelity-re-export-needs-a-hand-edit
 title: A device-original .fit for an activity already ingested from a degraded third-party export can only be adopted by hand-editing the document's sources list
-status: open
+status: promoted
 importance: medium
 importance_why: Real case, 761 documents. Activity identity is session UUID or exact bytes; a Garmin original has neither in common with HealthFit's re-export of the same session, so `fitdocs sync` would have written 761 duplicate documents. The only working path was appending the new archive ref to each document's `sources` frontmatter by script and then syncing -- a hand edit of a fitdocs-managed key that the ownership contract says fitdocs owns.
 effort: M
@@ -79,3 +79,16 @@ behaviour a re-export *should* get, reached only by editing a managed key.
   session `uuid`? Today the re-render drops it (the Garmin file has none),
   so a later HealthFit re-export of the same session would match only by
   its archived sha.
+
+## Resolution (2026-09-23) — promoted
+
+Promoted to the `activity-identity` spec by the Phase 8 discovery
+(`.kiro/steering/roadmap.md` § Phase 8, `.kiro/specs/activity-identity/brief.md`).
+The brief carries this item's match rule, its measured tolerances and its
+counter-example (two similar 10 k runs), the stale-stem/orphaned-asset
+defect, the stem-collision ordering, and the open question on keeping the
+session `uuid` (answered in the brief: a HealthFit extra's UUID is kept).
+Its option (a), an automatic bounded third identity path, is the chosen
+direction, because connectors deliver unattended. Option (b), an explicit
+adopt command, is not built. Ambiguity is reported and never merged, which
+keeps the contract's "never guess" stance.
