@@ -37,9 +37,10 @@ This spec delivers:
   GitHub Pages from `main` only, behind a forbidden-strings check over staged
   content and built output that fails closed, with its own workflow test;
 - `Homepage = "https://fitdocs.ai"` in `[project.urls]`;
-- a `CONTRIBUTING.md` build-and-preview section;
-- a maintainer runbook: DNS, Pages settings, content import, and the Zensical
-  pin bump.
+- one new `docs/` page, linked from `docs/index.md`, documenting the site:
+  the content contract, build and preview, and the maintainer runbook (DNS,
+  Pages settings, content import, the Zensical pin bump);
+- a `CONTRIBUTING.md` build-and-preview section pointing at that page.
 
 A broken link or anchor, a bad frontmatter key, an unknown config key or a
 forbidden string fails the build before anything publishes. The spec is

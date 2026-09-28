@@ -1960,10 +1960,13 @@ Rejected:
   - the GitHub Pages deploy workflow with its forbidden-strings gate and
     workflow test;
   - `Homepage` in `[project.urls]`;
-  - `CONTRIBUTING.md` build instructions.
+  - `CONTRIBUTING.md` build instructions;
+  - the site's own documentation (content contract, build and preview,
+    maintainer runbook) as one new `docs/` page linked from
+    `docs/index.md` (maintainer, 2026-09-28).
 - **Out**:
   - the site's copy (the maintainer's own commit);
-  - `docs/` content and its guards;
+  - existing `docs/` content and its guards;
   - API reference via mkdocstrings (a follow-on);
   - versioned docs;
   - analytics of any kind;

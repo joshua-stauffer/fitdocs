@@ -186,16 +186,21 @@ anchor in the draft all worked. The build took about 0.3 s and produced
       the existing secret, failing closed as `ci.yml` does;
     - a matching `tests/test_docs_workflow.py`;
   - `Homepage = "https://fitdocs.ai"` in `[project.urls]`;
-  - a `CONTRIBUTING.md` section on building and previewing the site;
-  - a maintainer runbook, in `docs/releasing.md` or a new page:
-    - DNS records;
-    - Pages settings and domain verification;
-    - the content import step;
-    - the Zensical pin-bump procedure.
+  - **the docs-site documentation, in `docs/`** (maintainer, 2026-09-28):
+    one new page (working name `docs/website.md`), linked from
+    `docs/index.md`, holding:
+    - the content contract above;
+    - building and previewing the site, including out-of-repo content;
+    - the maintainer runbook: DNS records, Pages settings and domain
+      verification, the content import step, the Zensical pin-bump
+      procedure;
+  - a short `CONTRIBUTING.md` section on building and previewing the site
+    that points at that page.
 - **Out**:
   - the site's copy: the maintainer's own commit into `website/content/`;
-  - any change to `docs/` pages, their guards, or `Documentation` in
-    `[project.urls]`;
+  - any change to existing `docs/` pages other than the one new link in
+    `docs/index.md`; any change to existing docs guards; any change to
+    `Documentation` in `[project.urls]`;
   - API reference via mkdocstrings (a follow-on);
   - versioned docs, i18n, a blog, analytics, comments;
   - DNS, domain verification and repo Pages settings (maintainer-only
@@ -215,13 +220,16 @@ anchor in the draft all worked. The build took about 0.3 s and produced
   from publishing (the Pages job on `main`, gated on forbidden strings).
 - **Site vs `docs/`.** The site links to `docs/` by absolute GitHub URL. It
   never includes, copies or re-states the contract, so `docs/` guards stay
-  the sole authority.
+  the sole authority. The site's own documentation (content contract, build,
+  runbook) is the one thing this spec adds to `docs/`: a new page that the
+  existing guards cover like any other.
 
 ## Out of Boundary
 
 - Writing, editing or importing the maintainer's page copy. A fixture page
   is test data, not site content.
-- Anything under `docs/`, and any existing docs guard.
+- Existing `docs/` pages (apart from one link in `docs/index.md`) and any
+  existing docs guard.
 - Renaming or rewording "fitdocs.ai" in README, steering or runtime
   provenance. That is a Phase 9 direct-implementation candidate.
 - Fixing `fitdocs plan`'s `--methodology` hint, or amending the CHANGELOG
@@ -249,11 +257,14 @@ anchor in the draft all worked. The build took about 0.3 s and produced
 
 - **Extends**: distribution. `Homepage` in `[project.urls]`,
   `CONTRIBUTING.md` build instructions beside its pinned `uv sync` text
-  (`tests/test_contributing_doc.py:111-118`), and runbook text in
-  `docs/releasing.md` if the runbook lands there. Carried out inside this
-  spec, and recorded under Phase 9 › Existing Spec Updates.
+  (`tests/test_contributing_doc.py:111-118`), and a new `docs/` page for the
+  site's documentation, linked from the `docs/index.md` entry point
+  (`tests/test_docs_guarantees.py:1105-1190`). Carried out inside this spec,
+  and recorded under Phase 9 › Existing Spec Updates.
 - **Adjacent**:
-  - wiki-contract and the docs guard tests: `docs/` is not touched;
+  - wiki-contract and the docs guard tests: no existing `docs/` page or
+    guard changes; the new page must pass them (corpus pins, anchor walk,
+    the `docs/index.md` link check);
   - `ci.yml` and `release.yml`: not touched; the new workflow mirrors
     their pin and permission conventions.
 
