@@ -1795,3 +1795,202 @@ credential store are designed for them now and built later.
   downloaded (gzip) and checked for a FIT header. Garmin product names are
   resolved, and "Garmin <model>" attribution is rendered. Dependencies:
   connectors
+
+### Phase 9 — the docs site (discovery 2026-09-28)
+
+**Goal**: give the published tool a front door. 0.1.0 is on PyPI
+(2026-09-19), but everything a newcomer reads is either the README or the
+contract-grade pages under `docs/`, which are written to be exact rather
+than welcoming. The maintainer wants fitdocs.ai to be a standard Python docs
+site: what fitdocs is, how to install and set it up, copy-paste LLM prompts,
+and the philosophy behind it (local first, private first, own your data
+forever, first-class LLM compatible). The site's copy is authored and edited
+by hand. A first draft of 21 pages exists outside the repo, and the
+maintainer revises it while the build is implemented. The copy lands in the
+repo later, as its own commit, once edited.
+
+**Approach decision — Zensical plus a generator-agnostic build script.** A
+small `scripts/` build step does the custom work:
+- stage the content into a build directory, stripping each file's trailing
+  iA Writer annotation block and excluding `_`-prefixed files;
+- generate the nav from each page's `section` and `order` frontmatter;
+- inject the home page's `template`;
+- write `llms.txt` and `llms-full.txt`;
+- allowlist the config keys it writes.
+
+A pinned Zensical then builds the staged tree in strict mode, from a
+Material-compatible `mkdocs.yml`. Falling back to Material for MkDocs is a
+dependency swap, not a rewrite, because no logic lives in generator hooks.
+
+Rejected:
+- *Material for MkDocs 9.7 on MkDocs 1.6.* Mature, and uv/Ruff/Pydantic
+  still use it, but it is in maintenance mode with end of life on 2027-05-05
+  (zensical.org/upcoming-changes, checked 2026-09-28), and MkDocs 1.x has
+  not released since 1.6.1 (2024-08-30). Choosing it schedules a migration.
+- *MkDocs 2.0.* Pre-release (2.0.dev6, 2026-09-15). It removes the plugin
+  system and Material cannot run on it.
+- *Sphinx + Furo + MyST.* The most stable governance, but the wrong shape for
+  a small CLI site: toctree nav, hero and admonitions all need extra work.
+- *Nav from awesome-nav.* It sorts only by path, filename or title, not by
+  arbitrary frontmatter keys. Zensical has no `hooks:`, so a hook is out too.
+
+#### Decisions taken at discovery (2026-09-28)
+
+- **Path E: one new spec (`docs-site`) plus direct fixes** (maintainer,
+  2026-09-28).
+- **The site is a friendly layer, and `docs/` stays canonical**
+  (maintainer, 2026-09-28). The site links out to
+  `https://github.com/joshua-stauffer/fitdocs/blob/main/docs/...` for full
+  detail. `docs/` keeps its guards, its "documented means public" status
+  (`docs/compatibility.md`) and its pinned GitHub URLs in shipped surfaces.
+  The site never becomes a second contract.
+- **GitHub Pages, deployed from an Actions workflow in this repo**
+  (maintainer, 2026-09-28). The custom domain is set in repo Settings →
+  Pages, and a CNAME file is not required for Actions publishing. DNS
+  records and domain verification are maintainer-only steps, like Trusted
+  Publishers for the release.
+- **Brand is a brief in the spec** (maintainer, 2026-09-28): palette,
+  typeface, and a hero driven by `index.md` frontmatter, with the
+  power-vs-HR hero chart as its image. A later design pass can restyle
+  templates without touching content.
+- **Zensical, pinned exactly** (maintainer, 2026-09-28). The pin is
+  `zensical==0.0.65`, alpha, releasing every few days. 0.1.0, "a dependable
+  release line", is due 2026-11-05. A pin bump is a deliberate change that
+  must pass the site smoke test. It never floats.
+- **Content and build are separate deliverables** (maintainer,
+  2026-09-28). The spec builds and tests against fixture pages. Its build
+  reads content from a configurable directory, so the maintainer can preview
+  the real draft from outside the repo. It never reads, commits or rewrites
+  the maintainer's copy. Importing the edited copy is the maintainer's own
+  step. It goes through the same staging and validation the build uses.
+- **Viability (2026-09-28)**: a throwaway prototype built the actual 21-page
+  draft with `zensical==0.0.65` (Python 3.14.6). The staging script was
+  55 lines and used only PyYAML. It confirmed:
+  - nav order from frontmatter;
+  - `strict: true` exits 1 on a missing page and on a missing anchor,
+    cross-page and same-page;
+  - copy button, light/dark toggle, admonitions, edit links, search;
+  - a `custom_dir` home template reading `page.meta.hero_*`, which needs
+    `template: home.html` in the page frontmatter (injected by the script);
+  - every cross-page anchor in the draft resolves (`` `[load]` `` → `#load`);
+  - the build runs in about 0.3 s and the output is 1.5 MB.
+
+  Caveats the spec must own:
+  - unknown config keys, plugins and theme features are silently ignored,
+    even under strict;
+  - a strict failure prints a Python traceback;
+  - `zensical serve` watches only the staged tree, and `serve --strict` is
+    unsupported;
+  - Zensical has no llms.txt support (backlog#83, open).
+- Taken without asking, consistent with the above:
+  - **The source directory is `website/`, not `site/`.** MkDocs and
+    Zensical build into `site/` by default, and `.gitignore` has no
+    `site/` entry today. Content lives in `website/content/`, templates in
+    `website/overrides/`, and build output in a gitignored directory.
+  - **Docs dependencies go in `[dependency-groups] docs`.** Using
+    `optional-dependencies` fails `tests/test_determinism.py:715`, and the
+    runtime list is frozen (`tests/test_determinism.py:672-712`,
+    `tests/test_packaging.py:503-519`). The sdist stays exact by
+    construction: its allowlist is derived from `only-include`
+    (`tests/test_release_artifacts.py:3366-3433`).
+  - **The deploy workflow runs its own forbidden-strings check** over the
+    content and the built output before publishing. CI's pytest run skips
+    the tracked-tree scan (the `FITDOCS_FORBIDDEN_STRINGS` variable is unset
+    in `ci.yml`). Published pages are a distribution surface exactly as the
+    wheel is.
+  - **Workflow action refs are pinned by exact tag or SHA,** and
+    `docs.yml` gets its own workflow test in the style of
+    `tests/test_ci_workflow.py`. No existing test globs
+    `.github/workflows/`.
+  - **`Documentation` in `[project.urls]` keeps pointing at
+    `docs/index.md` on GitHub.** Repointing it breaks
+    `tests/test_packaging.py:302`, `tests/test_docs_guarantees.py:1203`,
+    `tests/test_install_docs.py:69,202` and the `CONTRACT_DOCUMENTATION_URL`
+    goldens. `Homepage = "https://fitdocs.ai"` is added instead, and no
+    test pins the key set.
+  - **"fitdocs.ai" is disambiguated.** Until now the name meant the
+    reference application (github.com/joshua-stauffer/fitdocs.ai): README
+    line 34, `product.md`, `tech.md`, this roadmap and `CLAUDE.md`. Prose
+    is to say "the fitdocs.ai reference app" where it means the app (a
+    direct-implementation candidate below, not done in this discovery). The
+    runtime provenance strings ("inherited from fitdocs.ai",
+    `src/fitdocs/metrics/sources.py`, pinned by
+    `tests/metrics/test_sources.py:1155-1173`) stay. They are historically
+    accurate, and re-pinning them buys nothing.
+
+#### Scope
+
+- **In**:
+  - the `website/` source layout;
+  - the build script: staging, annotation stripping, nav, home template
+    injection, llms files, config allowlist, readable failures;
+  - the `mkdocs.yml` template and theme overrides, including the hero and
+    brand brief;
+  - the `docs` dependency group;
+  - a local preview command that can point at an out-of-repo content
+    directory and rebuild on change;
+  - the content contract (frontmatter keys, layout, link form, annotation
+    block) as a published page for the maintainer;
+  - fixture-based tests and a smoke test over built output;
+  - the GitHub Pages deploy workflow with its forbidden-strings gate and
+    workflow test;
+  - `Homepage` in `[project.urls]`;
+  - `CONTRIBUTING.md` build instructions.
+- **Out**:
+  - the site's copy (the maintainer's own commit);
+  - `docs/` content and its guards;
+  - API reference via mkdocstrings (a follow-on);
+  - versioned docs;
+  - analytics of any kind;
+  - DNS and Pages settings (maintainer steps).
+
+#### Existing Spec Updates
+
+- [ ] distribution — `Homepage = "https://fitdocs.ai"` in `[project.urls]`,
+  and `CONTRIBUTING.md` gains the site build beside its pinned `uv sync`
+  text (`tests/test_contributing_doc.py:111-118`). Carried out inside
+  `docs-site`. It is listed here because the files are distribution's.
+  Dependencies: docs-site
+
+#### Direct Implementation Candidates
+
+- [ ] `docs/install.md:23-32` and `docs/wiki-integration.md:96-99` still say
+  "Until the package is published to PyPI…" and "before the package is
+  published". Stale since 0.1.0 (2026-09-19), and no test pins either
+  sentence.
+- [ ] README line 34 and steering prose: say "the fitdocs.ai reference app"
+  where the old application is meant (see the decision above). The snapshot
+  `tests/fixtures/readme_pre_5_2.md` is a historical fixture and stays
+  unchanged.
+- [ ] `fitdocs plan` prints "Pass --methodology, set [history].methodology,
+  or [load].default_calculator" (`src/fitdocs/history/series.py:314-328`,
+  reached through `src/fitdocs/plans/reconcile.py:169-171`), but `plan` has
+  no `--methodology` option (`src/fitdocs/cli.py:547-549`). Either make the
+  hint caller-aware or give `plan` the option. Pinned by
+  `tests/plans/test_placement.py:174-177` and the golden
+  `tests/plans/golden/reconciled-block-problem.md:113`.
+- [ ] `CHANGELOG.md` 0.1.0 lists the platform but omits the headline
+  features that shipped in it: route maps, `fitdocs history`, effort tags
+  and `derive-benchmarks`, training blocks and `fitdocs plan`, data-quality
+  flags. Amend it so the site's changelog page can be a pure projection.
+  Check the `test_changelog` pins first.
+
+#### Follow-on candidates (not scheduled)
+
+- API reference for the plugin surface (`fitdocs`, `fitdocs.load`) via
+  mkdocstrings, which Zensical supports.
+- A GitHub Release object for each tag. `v0.1.0` exists only as a tag.
+- A Claude Design pass on the brand and hero, once the brief-built site is
+  live.
+- Rendering `docs/` on the site as a read-only "Specification" section, if
+  the friendly-layer split proves too thin.
+
+#### Specs (dependency order)
+
+- [ ] docs-site — the fitdocs.ai build: `website/` layout, a
+  generator-agnostic build script (staging, annotation strip, frontmatter
+  nav, home template injection, llms.txt, config allowlist), a pinned
+  Zensical strict build, theme overrides with a frontmatter-driven hero,
+  preview against an out-of-repo content directory, fixture and smoke tests,
+  and a GitHub Pages workflow gated on forbidden strings. Builds and tests
+  without the maintainer's copy. Dependencies: none
