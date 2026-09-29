@@ -105,7 +105,7 @@ reaches consumers without fitdocs guessing what it means.
 6. If every element of a recorded developer array equals its base type's invalid value, then fitdocs shall treat the array as not recorded; an array with at least one valid element shall pass through unchanged, element for element.
 7. When a developer field's base type is a 32-bit float, fitdocs shall express each value as the shortest decimal number that denotes the same 32-bit value (a recorded 11.369999885559082 is exposed as 11.37).
 8. If a file describes the same developer data index and field definition number twice, then fitdocs shall decode that field's values against the first description and shall not expose the later description's name.
-9. If two described fields that are both recorded share a name, then fitdocs shall expose the one described first in the file under that name and omit the other.
+9. If two described fields that are both recorded share a name, then fitdocs shall expose the one described last in the file under that name and omit the other, the same rule the session-level reader applies.
 10. fitdocs shall ignore any native message or native field number a field description carries: a developer field shall never fill, replace or override a native channel.
 11. If a described field is recorded on no sample, or every value it records is treated as not recorded under criteria 5 and 6, then fitdocs shall omit it; an activity with no such field shall expose an empty collection, and this shall not be an error.
 12. fitdocs shall not infer a scale, unit, or other convention that a field's description does not declare.
@@ -164,7 +164,7 @@ number.
 1. If a file's session records no average or maximum heart rate while its records carry heart rate, then fitdocs shall report the page's average and maximum heart rate from the recorded heart-rate samples, excluding the placeholder zeros of Requirement 5.
 2. fitdocs shall render one device-lap row per lap the file records, whatever lap count the session message states.
 3. fitdocs shall take the page's elapsed and moving time from the session's elapsed and timer totals, and shall not derive either from the session message's timestamp.
-4. If a lap records no heart rate or cadence, then fitdocs shall show the absence marker in that lap's cells, never a zero.
+4. If a lap records no heart rate or cadence, then fitdocs shall present each missing lap value it shows with the absence marker, never as a zero or a value taken from elsewhere.
 5. fitdocs shall render no record-level environmental developer value (Stryd's temperature or humidity) on any page, so a recorded value outside its physical range, such as humidity above 100%, never reaches a page; such values shall remain available on the activity model as decoded.
 6. When a file reproducing every measured Stryd shape is synced as its activity's only file, fitdocs shall write a run page carrying the Running Dynamics section, without error.
 

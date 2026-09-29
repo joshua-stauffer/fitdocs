@@ -1,16 +1,16 @@
 {
   "feature_name": "running-dynamics",
   "created_at": "2026-09-29T15:18:35Z",
-  "updated_at": "2026-09-29T15:40:00Z",
+  "updated_at": "2026-09-29T16:30:00Z",
   "language": "en",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {
