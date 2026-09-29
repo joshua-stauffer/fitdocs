@@ -327,3 +327,112 @@ def test_conftest_exposes_real_shaped_variant_fixtures(
     ):
         assert isinstance(data, bytes)
         assert _is_fit(data) is True
+
+
+# --- byte pins ----------------------------------------------------------------
+
+# SHA-256 of the fixtures the new keyword-only ``file_id`` / ``device_info`` /
+# ``time_created`` parameters must not move (each default equals the value
+# written before).
+_UNMOVED_DIGESTS: dict[str, str] = {
+    "bad_message_fit_bytes": (
+        "185484c1db1c7a8e6c075494e324794df1f879c34ca0fc028486853bf7a1eb11"
+    ),
+    "hike_fit_bytes": (
+        "2f1f30099a9d3676075f44149829a0c3377ad13b727a28712a886743c0daed25"
+    ),
+    "minimal_fit_bytes": (
+        "41f7b7a3161b321b3ef05b7178f9f241392d94701660499c20d037a0c893cbb6"
+    ),
+    "non_fit_bytes": (
+        "d5d4ac1405aa90456b222d73ac375a9e2e7073bf0b113e0b7022784f703eee64"
+    ),
+    "reexport_a_fit_bytes": (
+        "9c331142f4c1ae30170c2e3caec598199ae6b1eb5a72ea7d1b3629571cd59651"
+    ),
+    "ride_fit_bytes": (
+        "197d49726bec77432b9d0ab6a87ce482169489da0e4a834f516c23cdd2737bcb"
+    ),
+    "ride_no_power_fit_bytes": (
+        "233c91935d99b5b445fe98a28dab43bc445c298c24acf238a6933f50216a834b"
+    ),
+    "ride_power_dropout_fit_bytes": (
+        "4320b4c8ce607e161ab03f4ac35465b5f15e9a76f7d4abe565912f0ab2166ebe"
+    ),
+    "run_fit_bytes": (
+        "399c333ece990fe8fb43b28e27afd7ba841f510b67194d1593a73a810302214f"
+    ),
+    "run_native_power_sparse_hr_fit_bytes": (
+        "14a1609d981926d005f9ef2e910be6c453355360a3c37a833d6e7b90e807663d"
+    ),
+    "run_no_gps_fit_bytes": (
+        "2babe570f8dbed08a99fe864dc7574d7b2f014e4304aa0a4de3e4e3210b7d0c9"
+    ),
+    "session_dev_fields_declared_scale_fit_bytes": (
+        "3b882f9f3397b5d62768dfed14597f30b1159fe75a6deb098b27a788da1d7267"
+    ),
+    "session_dev_fields_fit_bytes": (
+        "67f1d1d5dfb78e0f23bd462985513d20995be6a3428acc27413c024c13fe4737"
+    ),
+    "strength_fit_bytes": (
+        "641c44d08e5427752f455977c6bec2b8e1837c8a43ed742843017bfb165d9ee5"
+    ),
+    "strength_no_sets_fit_bytes": (
+        "34a74ef0447d99195d0d3bfcfb2b2273b447e9e90708645a88b76ab298c8fe94"
+    ),
+    "strength_with_gps_fit_bytes": (
+        "b1e403de2d605b0b4c5c9cd63da6555d6b7c7b56acb9b71057976c505ea51157"
+    ),
+    "truncated_fit_bytes": (
+        "460ea39b74122f555eaa33ca75a542cd798f66145779420cee658343b59b32fa"
+    ),
+    "small_sport_cycling_serial_7_offset_99": (
+        "4ddfa0547aa12249c482fc1a00f3fb20c918bc0946bbaec1dfe140fd460c3315"
+    ),
+}
+
+# ``reexport_b`` alone carries a later ``file_id`` creation time now; its digest
+# before that change, and after.
+_REEXPORT_B_DIGEST_BEFORE = (
+    "e691ffc18cceebfb36df35d0487b99d52e06c657a7ed0d3ddac174cf93a92d70"
+)
+_REEXPORT_B_DIGEST_AFTER = (
+    "f54c4876f2c5774d2c43a90a47ddbcefc8ea546dac483641fbf3d3a1f6f7ec9f"
+)
+
+
+def _unmoved_fixture_bytes(name: str) -> bytes:
+    if name == "small_sport_cycling_serial_7_offset_99":
+        return builder.small_sport_fit_bytes(7, "cycling", timestamp_offset=99)
+    return getattr(builder, name)()  # type: ignore[no-any-return]
+
+
+@pytest.mark.parametrize("name", sorted(_UNMOVED_DIGESTS))
+def test_fixture_bytes_did_not_move(name: str) -> None:
+    digest = hashlib.sha256(_unmoved_fixture_bytes(name)).hexdigest()
+    assert digest == _UNMOVED_DIGESTS[name]
+
+
+def test_every_zero_argument_fit_bytes_builder_is_pinned_or_reexport_b() -> None:
+    """A new ``*_fit_bytes`` builder must join the pin table, not slip past it."""
+    public = {
+        n
+        for n, f in vars(builder).items()
+        if n.endswith("_fit_bytes") and callable(f) and n != "small_sport_fit_bytes"
+    }
+    pinned = {n for n in _UNMOVED_DIGESTS if n.endswith("_fit_bytes")}
+    assert public
+    assert public - pinned == {"reexport_b_fit_bytes"}
+
+
+def test_only_reexport_b_bytes_moved_and_its_creation_time_is_later() -> None:
+    data = builder.reexport_b_fit_bytes()
+    digest = hashlib.sha256(data).hexdigest()
+    assert digest == _REEXPORT_B_DIGEST_AFTER
+    assert digest != _REEXPORT_B_DIGEST_BEFORE
+
+    created_a = _read(builder.reexport_a_fit_bytes())[0]["file_id_mesgs"][0]
+    created_b = _read(data)[0]["file_id_mesgs"][0]
+    assert isinstance(created_a["time_created"], int)
+    assert isinstance(created_b["time_created"], int)
+    assert created_b["time_created"] > created_a["time_created"]

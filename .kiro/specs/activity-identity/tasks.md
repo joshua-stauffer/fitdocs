@@ -216,7 +216,7 @@ never co-varies two keys a rule distinguishes.
 
 - [ ] 1. Foundation: file identity at ingest and the synthesized identity fixtures
 
-- [ ] 1.1 Synthesize the measured file shapes as fixtures
+- [x] 1.1 Synthesize the measured file shapes as fixtures
   - Add a parameterized builder for one session (sport, start, elapsed, timer,
     distance, manufacturer, product, serial, creation time, optional HealthFit
     session UUID with its developer-field registration, optional position) with
