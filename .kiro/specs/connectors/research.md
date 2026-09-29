@@ -196,7 +196,7 @@
   re-hashed by intervening drains. The inbox spec gains an amendment record,
   which the roadmap's Phase 8 Existing Spec Updates list did not name.
 - **Follow-up**: the controller should add an `inbox` line to the roadmap's
-  Phase 8 Existing Spec Updates (task 7.3 records it on the inbox spec).
+  Phase 8 Existing Spec Updates (task 9.1 records it on the inbox spec; the roadmap line was added at the Phase 8 spec batch, 2026-09-29).
 
 ### Decision: Named instances, not one table per connector id
 - **Context**: Req 3. An athlete may point two folder connectors at two
