@@ -113,6 +113,16 @@ def _docs(data_root: Path) -> list[str]:
     )
 
 
+def _only_doc(data_root: Path) -> Path:
+    """The single workout document under ``workouts/``. Never a bare
+    ``next(glob("*.md"))``: that returns whichever of the document and
+    ``AGENTS.md`` the filesystem lists first, which on the CI runner's
+    ext4 was the declaration from a5792f2 onward (queue
+    2026-09-29-main-red-since-agents-skills-symlinks)."""
+    (name,) = _docs(data_root)
+    return data_root / "workouts" / name
+
+
 # --- baseline shell (Req 14.1, 14.2, 14.3) ----------------------------------
 
 
@@ -340,7 +350,7 @@ def test_malformed_load_table_exits_two_and_writes_nothing(tmp_path: Path) -> No
     _put(source, "run.fit", builder.run_fit_bytes())
     first = runner.invoke(app, ["sync", str(source), "--out", str(data_root)])
     assert first.exit_code == 0
-    doc_path = next((data_root / "workouts").glob("*.md"))
+    doc_path = _only_doc(data_root)
     before = doc_path.read_bytes()
 
     (data_root / "fitdocs.toml").write_text(
@@ -397,7 +407,7 @@ def test_invalid_staleness_window_exits_two_and_writes_nothing(
     _put(source, "run.fit", builder.run_fit_bytes())
     first = runner.invoke(app, ["sync", str(source), "--out", str(data_root)])
     assert first.exit_code == 0
-    doc_path = next((data_root / "workouts").glob("*.md"))
+    doc_path = _only_doc(data_root)
     before = doc_path.read_bytes()
     # Precondition: the document is genuinely computable-and-uncomputed, not
     # merely unchanged by coincidence -- the bare sync's built-in threshold
@@ -470,7 +480,7 @@ def test_malformed_benchmark_entry_exits_two_and_writes_nothing(
     _put(source, "run.fit", builder.run_fit_bytes())
     first = runner.invoke(app, ["sync", str(source), "--out", str(data_root)])
     assert first.exit_code == 0
-    doc_path = next((data_root / "workouts").glob("*.md"))
+    doc_path = _only_doc(data_root)
     before = doc_path.read_bytes()
     # Precondition: the document is genuinely computable-and-uncomputed, not
     # merely unchanged by coincidence -- the bare sync's built-in threshold
@@ -520,7 +530,7 @@ def test_configured_default_unregistered_calculator_exits_two_and_writes_nothing
         _put(source, "run.fit", builder.run_fit_bytes())
         first = runner.invoke(app, ["sync", str(source), "--out", str(data_root)])
         assert first.exit_code == 0
-        doc_path = next((data_root / "workouts").glob("*.md"))
+        doc_path = _only_doc(data_root)
         before = doc_path.read_bytes()
 
         (data_root / "fitdocs.toml").write_text(

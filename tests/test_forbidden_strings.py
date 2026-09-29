@@ -658,6 +658,34 @@ def _tracked_files(repo_root: Path) -> tuple[Path, ...]:
     return tuple(repo_root / name for name in names)
 
 
+def _in_tree_symlink_target(
+    path: Path, root: Path, files: Sequence[Path]
+) -> str | None:
+    """For a symlink in the walk: its link text (the blob git stores for mode
+    ``120000``) when its fully resolved target lies inside ``root`` AND is
+    itself covered by ``files`` -- the target file, or a directory holding at
+    least one listed file -- so the target's bytes are scanned under their
+    own names and the link adds nothing but its link text. ``None`` for a
+    non-symlink or for any other link (broken, outside ``root``, or aimed at
+    something the walk does not list); those stay the caller's to report.
+
+    Exists because the 19 ``.agents/skills/*`` links (a6f5af2) point at
+    ``.claude/skills/*`` directories: without this, a directory link is
+    "not a regular file" to one walker and ``IsADirectoryError`` to the
+    other, and both guards redden on content they already scan."""
+    if not path.is_symlink():
+        return None
+    target = path.resolve()
+    if not target.is_relative_to(root.resolve()):
+        return None
+    listed = {candidate.resolve() for candidate in files if not candidate.is_symlink()}
+    if target not in listed and not any(
+        candidate.is_relative_to(target) for candidate in listed
+    ):
+        return None
+    return os.readlink(path)
+
+
 def _synthetic_files(root: Path) -> tuple[Path, ...]:
     """Every file under a synthetic control tree, for the same shared
     content-and-path scanner `_tracked_files` feeds against the real repo."""
@@ -697,8 +725,16 @@ def _scan_content_and_path(
         if path_matches:
             hits.append(Hit(path=relative, surface="path", found=path_matches))
 
+        link_text = _in_tree_symlink_target(path, root, files)
+        if link_text is None and path.is_symlink():
+            unreadable.append(relative)
+            continue
         try:
-            raw = path.read_bytes()
+            raw = (
+                link_text.encode("utf-8")
+                if link_text is not None
+                else path.read_bytes()
+            )
         except OSError:
             unreadable.append(relative)
             continue
@@ -970,6 +1006,93 @@ def test_scan_content_and_path_reports_a_genuinely_unreadable_file(
         f"expected no hits (the clean file is clean and the broken symlink "
         f"contributed no content match), got {hits}"
     )
+
+
+def test_symlinks_are_accounted_only_when_aimed_at_listed_in_tree_content(
+    tmp_path: Path,
+) -> None:
+    """`_in_tree_symlink_target` accepts a link only when its resolved target
+    is inside the root AND covered by the walk; the accepted link's own text
+    is still scanned, and every other link stays unreadable -- a link out of
+    the tree must never pass as accounted-for."""
+    fs = ForbiddenStrings(values=("PlantedToken",), source=tmp_path / "src.txt")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("PlantedToken\n")
+    root = tmp_path / "tree"
+    (root / "real").mkdir(parents=True)
+    listed_file = root / "real" / "SKILL.md"
+    listed_file.write_text("clean\n")
+    (root / "unlisted").mkdir()
+    (root / "unlisted" / "x.txt").write_text("PlantedToken\n")
+    dir_link = root / "dir-link"
+    dir_link.symlink_to(Path("real"))
+    file_link = root / "file-link.md"
+    file_link.symlink_to(Path("real") / "SKILL.md")
+    out_link = root / "out-link"
+    out_link.symlink_to(outside)
+    out_file_link = root / "out-file-link.txt"
+    out_file_link.symlink_to(outside / "secret.txt")
+    unlisted_link = root / "unlisted-link"
+    unlisted_link.symlink_to(Path("unlisted"))
+    named_link = root / "PlantedToken-link"
+    named_link.symlink_to(Path("PlantedToken-dir") / ".." / "real")
+    (root / "PlantedToken-dir").mkdir()
+    files = (
+        listed_file,
+        dir_link,
+        file_link,
+        out_link,
+        out_file_link,
+        unlisted_link,
+        named_link,
+    )
+
+    assert _in_tree_symlink_target(dir_link, root, files) == "real"
+    assert _in_tree_symlink_target(file_link, root, files) == "real/SKILL.md"
+    assert _in_tree_symlink_target(listed_file, root, files) is None
+    assert _in_tree_symlink_target(out_link, root, files) is None
+    assert _in_tree_symlink_target(out_file_link, root, files) is None
+    assert _in_tree_symlink_target(unlisted_link, root, files) is None
+
+    hits, unreadable = _scan_content_and_path(files, root, fs)
+
+    # An out-of-tree FILE link is readable, but following it would scan (and
+    # vouch for) bytes the tree does not own: reported, never read.
+    assert set(unreadable) == {
+        Path("out-link"),
+        Path("out-file-link.txt"),
+        Path("unlisted-link"),
+    }, unreadable
+    # The accepted link's link text is scanned as content (git's blob for a
+    # mode-120000 entry), and its path as a path, like any other entry.
+    assert {(h.path, h.surface) for h in hits} == {
+        (Path("PlantedToken-link"), "path"),
+        (Path("PlantedToken-link"), "content"),
+    }, hits
+
+
+def test_the_notice_guard_accounts_for_every_tracked_symlink() -> None:
+    """Real-tree pin: every tracked mode-120000 entry lands in the notice
+    guard's scanned texts (as its link text), none in its unreadable map --
+    and the walk still sees at least the 19 `.agents/skills` links, so a
+    change that stopped tracking them does not pass this vacuously."""
+    repo_root = _repo_root()
+    staged = subprocess.run(
+        ["git", "ls-files", "-s", "-z"], cwd=repo_root, capture_output=True, check=True
+    ).stdout.decode("utf-8")
+    links = [
+        entry.split("\t", 1)[1]
+        for entry in staged.split("\0")
+        if entry.startswith("120000 ")
+    ]
+    assert len([name for name in links if name.startswith(".agents/skills/")]) >= 19
+
+    texts, unreadable = _notice_guard_tracked_texts()
+
+    for name in links:
+        assert name not in unreadable, (name, unreadable.get(name))
+        assert texts.get(name) == os.readlink(repo_root / name), name
 
 
 # --- Req 3.1: undecodable bytes are scanned, never skipped -----------------
@@ -1284,8 +1407,16 @@ def _notice_guard_tracked_texts() -> tuple[dict[str, str], dict[str, str]]:
     repo_root = _repo_root()
     texts: dict[str, str] = {}
     unreadable: dict[str, str] = {}
-    for path in _tracked_files(repo_root):
+    files = _tracked_files(repo_root)
+    for path in files:
         relative = str(path.relative_to(repo_root))
+        link_text = _in_tree_symlink_target(path, repo_root, files)
+        if link_text is not None:
+            texts[relative] = link_text
+            continue
+        if path.is_symlink():
+            unreadable[relative] = "symlink not aimed at tracked in-repo content"
+            continue
         if not path.is_file():
             unreadable[relative] = "not a regular file"
             continue
