@@ -122,6 +122,7 @@ _EXPECTED = {
     "FitDecodeError": fitdocs.ingest.errors.FitDecodeError,
     "NotFitFileError": fitdocs.ingest.errors.NotFitFileError,
     "FitIntegrityError": fitdocs.ingest.errors.FitIntegrityError,
+    "DeveloperChannel": fitdocs.model.DeveloperChannel,
 }
 
 

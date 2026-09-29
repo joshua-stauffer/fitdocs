@@ -11,16 +11,21 @@ from __future__ import annotations
 import dataclasses
 import subprocess
 import sys
+import typing
 from datetime import UTC, datetime
 
 import fitdocs.model as model
 from fitdocs.model import (
+    DYNAMICS_CHANNELS,
     FIT_EPOCH,
     SCHEMA_VERSION,
+    Activity,
+    DeveloperChannel,
     DeviceInfo,
     Lap,
     Modality,
     Provenance,
+    Samples,
     SessionSummary,
     Sport,
     StrengthSet,
@@ -213,3 +218,138 @@ def pytest_raises_frozen() -> object:
     import pytest
 
     return pytest.raises((dataclasses.FrozenInstanceError, AttributeError))
+
+
+# --- running-dynamics channels (running-dynamics 1.1, 1.3, 3.3, 3.4) ---------
+
+_TEN_EXISTING = {
+    "heart_rate_bpm": (),
+    "power_w": (),
+    "cadence_rpm": (),
+    "speed_mps": (),
+    "distance_m": (),
+    "altitude_m": (),
+    "latitude_deg": (),
+    "longitude_deg": (),
+    "temperature_c": (),
+}
+
+
+def _samples(
+    time_s: tuple[float, ...], **dynamics: tuple[float | None, ...]
+) -> Samples:
+    """A Samples with the ten existing channels sized to ``time_s``."""
+    n = len(time_s)
+    existing: dict[str, tuple[typing.Any, ...]] = {
+        name: (None,) * n for name in _TEN_EXISTING
+    }
+    return Samples(time_s=time_s, **existing, **dynamics)
+
+
+def test_dynamics_channels_are_the_twelve_names_in_design_order() -> None:
+    assert DYNAMICS_CHANNELS == (
+        "stance_time_ms",
+        "stance_time_balance_pct",
+        "vertical_oscillation_mm",
+        "vertical_oscillation_balance_pct",
+        "vertical_ratio_pct",
+        "step_length_mm",
+        "leg_spring_stiffness_kn_m",
+        "leg_spring_stiffness_balance_pct",
+        "form_power_w",
+        "air_power_w",
+        "impact_bw",
+        "impact_loading_rate_balance_pct",
+    )
+    assert len(set(DYNAMICS_CHANNELS)) == len(DYNAMICS_CHANNELS) == 12
+
+
+def test_dynamics_channels_are_samples_fields_after_temperature_with_default() -> None:
+    fields = dataclasses.fields(Samples)
+    by_name = {f.name: f for f in fields}
+    hints = typing.get_type_hints(Samples)
+    for name in DYNAMICS_CHANNELS:
+        assert name in by_name, name
+        assert hints[name] == tuple[float | None, ...], name
+        assert by_name[name].default == (), name
+    names = [f.name for f in fields]
+    assert names[names.index("temperature_c") + 1 :] == list(DYNAMICS_CHANNELS)
+
+
+def test_empty_dynamics_channels_fill_to_none_per_sample() -> None:
+    samples = _samples((0.0, 1.0, 2.0))
+    assert samples.time_s == (0.0, 1.0, 2.0)  # non-vacuous: three samples
+    for name in DYNAMICS_CHANNELS:
+        assert getattr(samples, name) == (None, None, None), name
+
+
+def test_dynamics_channels_stay_empty_with_zero_samples() -> None:
+    samples = _samples(())
+    for name in DYNAMICS_CHANNELS:
+        assert getattr(samples, name) == (), name
+
+
+def test_supplied_dynamics_channel_is_kept_and_only_the_empty_ones_fill() -> None:
+    samples = _samples((0.0, 1.0, 2.0), stance_time_ms=(241.5, 0.0, 250.25))
+    assert samples.stance_time_ms == (241.5, 0.0, 250.25)
+    others = [n for n in DYNAMICS_CHANNELS if n != "stance_time_ms"]
+    for name in others:
+        assert getattr(samples, name) == (None, None, None), name
+
+
+def test_dynamics_channel_length_mismatch_raises_naming_the_field() -> None:
+    import pytest
+
+    for name in DYNAMICS_CHANNELS:
+        with pytest.raises(ValueError, match=name):
+            _samples((0.0, 1.0, 2.0), **{name: (1.0, 2.0)})
+    # A non-empty channel beside zero samples is also neither 0 nor len(time_s).
+    with pytest.raises(ValueError, match="form_power_w"):
+        _samples((), form_power_w=(1.0, 2.0))
+
+
+def test_developer_channel_is_a_frozen_dataclass_of_seven_fields() -> None:
+    assert [f.name for f in dataclasses.fields(DeveloperChannel)] == [
+        "name",
+        "units",
+        "developer_data_index",
+        "field_definition_number",
+        "application_id",
+        "declared_scale",
+        "values",
+    ]
+    channel = DeveloperChannel(
+        name="Power",
+        units="watts",
+        developer_data_index=0,
+        field_definition_number=3,
+        application_id="ab" * 16,
+        declared_scale=False,
+        values=(1, None),
+    )
+    with pytest_raises_frozen():
+        channel.name = "x"  # type: ignore[misc]
+
+
+def test_activity_without_record_developer_fields_has_empty_read_only_mapping() -> None:
+    import pytest
+
+    activity = Activity(
+        schema_version=SCHEMA_VERSION,
+        provenance=Provenance(sha256="0", source_path=None, decode_errors=()),
+        sport=Sport.RUN,
+        modality=Modality.RUN,
+        is_indoor=False,
+        start_time=None,
+        summary=_sample_summary(),
+        laps=(),
+        samples=_samples(()),
+        sets=(),
+        devices=(),
+    )
+    assert len(activity.record_developer_fields) == 0
+    with pytest.raises(TypeError):
+        activity.record_developer_fields["x"] = None  # type: ignore[index]
+    names = [f.name for f in dataclasses.fields(Activity)]
+    assert names[-1] == "record_developer_fields"
+    assert names[-2] == "developer_fields_declared_scale"

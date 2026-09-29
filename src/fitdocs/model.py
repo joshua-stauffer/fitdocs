@@ -21,7 +21,9 @@ Contract highlights:
   (Req 2.5, 12.3).
 - **Units** — seconds (``s``), metres (``m``), metres per second (``mps``),
   kilograms (``kg``), degrees Celsius (``c``), beats per minute (``bpm``),
-  watts (``w``), revolutions per minute (``rpm``), degrees (``deg``).
+  watts (``w``), revolutions per minute (``rpm``), degrees (``deg``),
+  millimetres (``mm``), milliseconds (``ms``), percent (``pct``), kilonewtons
+  per metre (``kn_m``) and bodyweights (``bw``).
 
 Invariants documented here are *enforced* by the ingest extractors, not by the
 dataclasses themselves; the model states the contract those extractors uphold:
@@ -93,6 +95,23 @@ class Provenance:
     """Stringified message-level decoder errors, surfaced not swallowed (Req 1.4)."""
 
 
+DYNAMICS_CHANNELS: Final[tuple[str, ...]] = (
+    "stance_time_ms",
+    "stance_time_balance_pct",
+    "vertical_oscillation_mm",
+    "vertical_oscillation_balance_pct",
+    "vertical_ratio_pct",
+    "step_length_mm",
+    "leg_spring_stiffness_kn_m",
+    "leg_spring_stiffness_balance_pct",
+    "form_power_w",
+    "air_power_w",
+    "impact_bw",
+    "impact_loading_rate_balance_pct",
+)
+"""The twelve running-dynamics :class:`Samples` channel names, in field order."""
+
+
 @dataclass(frozen=True)
 class Samples:
     """Parallel per-sample channel arrays of equal length (Req 3.1).
@@ -113,6 +132,37 @@ class Samples:
     latitude_deg: tuple[float | None, ...]
     longitude_deg: tuple[float | None, ...]
     temperature_c: tuple[float | None, ...]
+    stance_time_ms: tuple[float | None, ...] = ()
+    stance_time_balance_pct: tuple[float | None, ...] = ()
+    vertical_oscillation_mm: tuple[float | None, ...] = ()
+    vertical_oscillation_balance_pct: tuple[float | None, ...] = ()
+    vertical_ratio_pct: tuple[float | None, ...] = ()
+    step_length_mm: tuple[float | None, ...] = ()
+    leg_spring_stiffness_kn_m: tuple[float | None, ...] = ()
+    leg_spring_stiffness_balance_pct: tuple[float | None, ...] = ()
+    form_power_w: tuple[float | None, ...] = ()
+    air_power_w: tuple[float | None, ...] = ()
+    impact_bw: tuple[float | None, ...] = ()
+    impact_loading_rate_balance_pct: tuple[float | None, ...] = ()
+
+    def __post_init__(self) -> None:
+        """Size the dynamics channels to ``time_s``.
+
+        An empty dynamics channel beside a non-empty ``time_s`` becomes all
+        ``None`` (not recorded); a dynamics channel whose length is neither
+        ``0`` nor ``len(time_s)`` raises :class:`ValueError` naming it. The ten
+        original channels are not validated here.
+        """
+        n = len(self.time_s)
+        for name in DYNAMICS_CHANNELS:
+            length = len(getattr(self, name))
+            if length == 0 and n > 0:
+                object.__setattr__(self, name, (None,) * n)
+            elif length not in (0, n):
+                raise ValueError(
+                    f"Samples.{name} has {length} entries; expected 0 or "
+                    f"len(time_s) == {n}"
+                )
 
 
 @dataclass(frozen=True)
@@ -200,6 +250,27 @@ class DeviceInfo:
 
 
 @dataclass(frozen=True)
+class DeveloperChannel:
+    """One record-level developer-defined channel, index-aligned to the samples.
+
+    ``values`` has ``len(Activity.samples.time_s)`` entries; ``None`` marks a
+    sample where the field was not recorded.
+    """
+
+    name: str
+    """The description's ``field_name``, verbatim."""
+    units: str | None
+    """The description's ``units``, verbatim."""
+    developer_data_index: int | None
+    field_definition_number: int | None
+    application_id: str | None
+    """32 lowercase hex characters of the 16-byte application id."""
+    declared_scale: bool
+    """A scale and/or offset was declared and has been applied to ``values``."""
+    values: tuple[object, ...]
+
+
+@dataclass(frozen=True)
 class Activity:
     """The root aggregate: a fully normalized, versioned activity.
 
@@ -239,3 +310,10 @@ class Activity:
     example ``render/sections.py``'s hundredths guess for ``AVG METs``) is
     still choosing an interpretation, not double-decoding. The default keeps
     this field additive; the ingest orchestrator populates it explicitly."""
+    record_developer_fields: Mapping[str, DeveloperChannel] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
+    """Record-level developer-defined channels keyed by described field name,
+    each index-aligned to :attr:`samples`. A read-only mapping that is *empty*
+    -- never ``None`` -- when the file records none. The default keeps this
+    field additive; the ingest orchestrator populates it explicitly."""
