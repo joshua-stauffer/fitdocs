@@ -17,6 +17,7 @@ from datetime import timedelta, timezone, tzinfo
 from fitdocs import (
     AthleteInputs,
     DerivedMetrics,
+    Samples,
     ZoneSpec,
     compute_metrics,
     parse_fit,
@@ -30,6 +31,8 @@ from fitdocs.docmerge import (
 from fitdocs.layout import asset_rel_path
 from fitdocs.render import Asset, DocContext
 from fitdocs.render.sections import (
+    ChartAxis,
+    chart_axis,
     devices_section,
     hero_chart,
     hero_chart_spec,
@@ -402,3 +405,67 @@ def test_sections_are_deterministic(ride_fit_bytes: bytes) -> None:
     assert first is not None and second is not None
     assert first[0] == second[0]
     assert first[1] == second[1]
+
+
+# --- chart_axis: the shared x-axis rule (running-dynamics 8.2) --------------
+
+
+def _axis_samples(
+    *,
+    time_s: tuple[float, ...],
+    distance_m: tuple[float | None, ...],
+) -> Samples:
+    """Hand-built samples; only time and distance matter to the axis."""
+    n = len(time_s)
+    blank: tuple[None, ...] = (None,) * n
+    return Samples(
+        time_s=time_s,
+        heart_rate_bpm=blank,
+        power_w=blank,
+        cadence_rpm=blank,
+        speed_mps=blank,
+        distance_m=distance_m,
+        altitude_m=blank,
+        latitude_deg=blank,
+        longitude_deg=blank,
+        temperature_c=blank,
+    )
+
+
+def test_chart_axis_is_km_and_drops_samples_lacking_distance() -> None:
+    """Distance exists: x is km, and the sample without distance is dropped."""
+    # Index 1 has no distance. At the kept indices (0, 2, 3) the km values are
+    # 1.0, 5.0, 7.5 and the elapsed minutes would be 0.0, 2.0, 3.0, so the two
+    # units share no value at any kept index.
+    samples = _axis_samples(
+        time_s=(0.0, 60.0, 120.0, 180.0),
+        distance_m=(1000.0, None, 5000.0, 7500.0),
+    )
+    assert None in samples.distance_m
+    assert any(d is not None for d in samples.distance_m)
+    axis = chart_axis(samples)
+    assert axis == ChartAxis(unit="km", indices=(0, 2, 3), x=(1.0, 5.0, 7.5))
+
+
+def test_chart_axis_is_minutes_when_no_distance() -> None:
+    """No distance channel data: x is elapsed minutes, every sample kept."""
+    samples = _axis_samples(time_s=(0.0, 30.0, 150.0), distance_m=(None, None, None))
+    assert chart_axis(samples) == ChartAxis(
+        unit="min", indices=(0, 1, 2), x=(0.0, 0.5, 2.5)
+    )
+
+
+def test_chart_axis_is_none_when_no_sample_has_an_x_value() -> None:
+    """No samples at all: nothing to plot, so no axis."""
+    assert chart_axis(_axis_samples(time_s=(), distance_m=())) is None
+
+
+def test_hero_chart_spec_x_matches_chart_axis(run_fit_bytes: bytes) -> None:
+    """The hero spec's x values are the shared axis' values."""
+    ctx = _ctx(run_fit_bytes)
+    axis = chart_axis(ctx.activity.samples)
+    spec = hero_chart_spec(ctx)
+    assert axis is not None
+    assert spec is not None
+    assert spec.x == axis.x
+    assert spec.x_unit == axis.unit

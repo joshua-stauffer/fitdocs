@@ -47,10 +47,16 @@ ALTITUDE_COLOR: Final = "#1c8742"  # oklch(0.55 0.14 150) -- green
 
 # Three more series colors for the calendar chart (`charts/calendar.py`):
 # fitness, fatigue and form. Hues chosen well clear of the six above (14, 60,
-# 240, 200, 60, 150) so all nine stay mutually distinguishable.
+# 240, 200, 60, 150) so those nine stay mutually distinguishable.
 FITNESS_COLOR: Final = "#5a66c7"  # oklch(0.55 0.15 275) -- indigo
 FATIGUE_COLOR: Final = "#bf50a0"  # oklch(0.6 0.17 340)  -- magenta
 FORM_COLOR: Final = "#849b11"  # oklch(0.65 0.15 120)  -- olive/lime
+
+# Two more series colors for the Running Dynamics chart (`render/dynamics.py`).
+# Hues (175, 307) sit clear of the nine above (14, 60, 240, 200, 60, 150, 275,
+# 340, 120), so all eleven stay mutually distinguishable.
+DYNAMICS_PRIMARY_COLOR: Final = "#008b6d"  # oklch(0.55 0.14 175) -- sea green
+DYNAMICS_SECONDARY_COLOR: Final = "#8955b5"  # oklch(0.55 0.15 307) -- violet
 
 #: Runtime-inspectable provenance: series name -> (sRGB hex, oklch source).
 SERIES_COLORS: Final[dict[str, tuple[str, str]]] = {
@@ -63,6 +69,8 @@ SERIES_COLORS: Final[dict[str, tuple[str, str]]] = {
     "fitness": (FITNESS_COLOR, "oklch(0.55 0.15 275)"),
     "fatigue": (FATIGUE_COLOR, "oklch(0.6 0.17 340)"),
     "form": (FORM_COLOR, "oklch(0.65 0.15 120)"),
+    "dynamics_primary": (DYNAMICS_PRIMARY_COLOR, "oklch(0.55 0.14 175)"),
+    "dynamics_secondary": (DYNAMICS_SECONDARY_COLOR, "oklch(0.55 0.15 307)"),
 }
 
 # --- route colors (map section) ---------------------------------------------

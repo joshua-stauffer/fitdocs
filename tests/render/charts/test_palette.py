@@ -26,6 +26,8 @@ import math
 import re
 
 from fitdocs.render.charts.palette import (
+    DYNAMICS_PRIMARY_COLOR,
+    DYNAMICS_SECONDARY_COLOR,
     ROUTE_BIKE_TINT,
     ROUTE_COLORS,
     ROUTE_RUN_TINT,
@@ -137,6 +139,20 @@ def test_required_series_are_present_with_their_reference_sources() -> None:
     for name, source in expected.items():
         assert name in SERIES_COLORS, f"missing series color {name!r}"
         assert SERIES_COLORS[name][1] == source
+
+
+def test_dynamics_series_colors_are_present_with_their_sources() -> None:
+    """The two running-dynamics series colors carry their design sources (8.4)."""
+    assert SERIES_COLORS["dynamics_primary"] == (
+        DYNAMICS_PRIMARY_COLOR,
+        "oklch(0.55 0.14 175)",
+    )
+    assert SERIES_COLORS["dynamics_secondary"] == (
+        DYNAMICS_SECONDARY_COLOR,
+        "oklch(0.55 0.15 307)",
+    )
+    assert DYNAMICS_PRIMARY_COLOR == "#008b6d"
+    assert DYNAMICS_SECONDARY_COLOR == "#8955b5"
 
 
 # --- route colors: oklch-derived provenance + reference-hex exemption -------

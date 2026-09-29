@@ -35,8 +35,9 @@ asset; nothing here touches the filesystem, Req 4.1).
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 
-from fitdocs import Activity, DerivedMetrics, Modality
+from fitdocs import Activity, DerivedMetrics, Modality, Samples
 from fitdocs.contract import (
     LOAD_NOT_COMPUTED,
     LOAD_REGION,
@@ -70,6 +71,8 @@ from fitdocs.render.format import (
 )
 
 __all__ = [
+    "ChartAxis",
+    "chart_axis",
     "devices_section",
     "hero_chart",
     "hero_chart_spec",
@@ -363,19 +366,11 @@ def hero_chart_spec(ctx: DocContext) -> HeroChartSpec | None:
     if not selected:
         return None
 
-    # X-axis: cumulative distance km when present, else elapsed minutes.
-    if _has_data(s.distance_m):
-        x_unit = "km"
-        raw_x: list[float | None] = [
-            d / 1000.0 if d is not None else None for d in s.distance_m
-        ]
-    else:
-        x_unit = "min"
-        raw_x = [t / 60.0 for t in s.time_s]
-
-    kept = [(i, xv) for i, xv in enumerate(raw_x) if xv is not None]
-    if not kept:
+    axis = chart_axis(s)
+    if axis is None:
         return None
+    x_unit = axis.unit
+    kept = list(zip(axis.indices, axis.x, strict=True))
 
     altitude = _floats(s.altitude_m)
     backdrop_present = _has_data(s.altitude_m)
@@ -410,6 +405,39 @@ def _add_candidate(
     """Register a candidate series only when the channel carries real data."""
     if _has_data(values):
         candidates.append((label, unit, color, values))
+
+
+@dataclass(frozen=True)
+class ChartAxis:
+    """The x-axis every telemetry-style chart shares."""
+
+    unit: str  # "km" or "min"
+    indices: tuple[int, ...]  # sample indices that have an x value, in order
+    x: tuple[float, ...]  # aligned with ``indices``
+
+
+def chart_axis(samples: Samples) -> ChartAxis | None:
+    """Cumulative distance in km when the distance channel has data, else
+    elapsed minutes; samples with no x value are dropped; ``None`` when none
+    remain (Req 8.2 of running-dynamics, Req 7.3 of workout-docs)."""
+    s = samples
+    if _has_data(s.distance_m):
+        x_unit = "km"
+        raw_x: list[float | None] = [
+            d / 1000.0 if d is not None else None for d in s.distance_m
+        ]
+    else:
+        x_unit = "min"
+        raw_x = [t / 60.0 for t in s.time_s]
+
+    kept = [(i, xv) for i, xv in enumerate(raw_x) if xv is not None]
+    if not kept:
+        return None
+    return ChartAxis(
+        unit=x_unit,
+        indices=tuple(i for i, _ in kept),
+        x=tuple(xv for _, xv in kept),
+    )
 
 
 def _has_data(values: Sequence[float | None]) -> bool:
