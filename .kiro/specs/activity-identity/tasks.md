@@ -13,8 +13,12 @@
   `sync._render_activity`. A task that finds it must change one of those shapes
   stops and reports rather than changing it.
 - **Siblings in flight** (`running-dynamics`, `connectors`, wave 1): no code
-  dependency either way; the shared files are listed below under "Cross-spec
-  shared files".
+  dependency either way, except that if `connectors` is on `main` when this
+  plan lands, 5.2 wires `[identity]` through connectors'
+  `_run_drain_passes` and `pull`'s preflight (controller ruling R3); the
+  shared files are listed below under "Cross-spec shared files". The
+  controller's cross-spec rulings of 2026-09-29 (R1, R3, R4, R6-R9, R11) are
+  binding and are restated in the tasks they govern.
 
 **Hard rules for every task**
 
@@ -33,10 +37,11 @@
   `tests/fixtures/builder.py` or `tests/fixtures/identity.py`; no value comes
   from the athlete's archive.
 - `DOC_VERSION` and `CONTRACT_VERSION` each advance by **one from the value on
-  the branch when the task runs**; before merge, after the rebase, the
-  implementer checks that each equals `main`'s value plus one and re-pins if a
-  sibling landed a bump first. No task hard-codes the resulting number as if
-  this plan landed first.
+  the branch when the task runs** -- every Phase 8 lander advances each
+  version it moves, no sharing (controller ruling R1); before merge, after
+  the final rebase, the implementer asserts that each equals `main`'s value
+  plus one and re-pins (goldens included) if a sibling landed a bump first.
+  No task hard-codes the resulting number as if this plan landed first.
 - No module under `src/fitdocs` other than `contract.py` names `uuid` as an
   identifier -- not a dataclass field, a parameter, a local or an import:
   `tests/test_contract_consumers.py:502-529` reads any `ast.Name` `uuid` as a
@@ -93,34 +98,70 @@ sibling's):
 
 - `src/fitdocs/model.py` (`Activity`, `Provenance`; running-dynamics also
   appends) and `tests/golden/*.json` (the second lander regenerates).
+- `src/fitdocs/ingest/__init__.py` (`parse_fit` wiring and docstring; 1.2
+  here, running-dynamics' ingest task there) and `src/fitdocs/__init__.py`
+  (lazy exports and `__all__`: `FileIdentity` here, `DeveloperChannel` there).
+- `docs/plugins.md`'s public import surface list (controller ruling R11):
+  1.2 appends `FileIdentity`, running-dynamics appends `DeveloperChannel`;
+  the second lander keeps both.
 - `DOC_VERSION` literal sites both specs move (second lander re-pins):
   `tests/test_cli_check.py:196, 198` (this plan rewrites them as
   `f"doc_version: {DOC_VERSION}"`), `tests/render/test_frontmatter.py:44,
   101`, `tests/metrics/test_sources.py:2270`; running-dynamics'
   `_PRE_RUNNING_DYNAMICS_DOC_VERSION` constant keeps the value it recorded.
-- `tests/fixtures/builder.py` `_file_id`: running-dynamics' task 1.2 gives it
-  keyword-only, defaulted `manufacturer`, `product` and `time_created`
-  parameters -- the shape 1.1 needs. Whichever lands first adds them; the
-  other reuses them; every default equals today's value.
+- `tests/render/test_frontmatter.py:317-324` (the `DocContext` field-order
+  pin): 3.1 rewrites it position-relative (`user_frontmatter` directly after
+  `map_data`; `identity` last); channel-merge later appends
+  `channel_provenance` after `identity` and moves the last-field assertion.
+- `src/fitdocs/cli.py` (connectors extracts `_run_drain_passes` from
+  `sync_command`'s no-source branch and adds `pull`; 5.2 here). Whichever of
+  the two lands second carries `precedence` through `_run_drain_passes` as a
+  required keyword-only parameter (no default) and adds the `[identity]` and
+  hold-record checks to `pull --sync`'s preflight (controller ruling R3).
+- `src/fitdocs/layout.py` (2.5's `held_path()`; connectors' ledger path) and
+  `docs/inbox.md` (6.1's held-file sentence; connectors' carve-out).
+- `src/fitdocs/sync.py`'s module docstring: its "Offline guarantee"
+  paragraph (`:41-52`) is connectors' to edit; 4.1-4.5 edit only the
+  paragraphs their own change makes false (the `sources` bullet's
+  "append-ordered", "Match precedence", `regen`'s "rendering any
+  unreferenced archive fresh") and the `SyncReport` docstring.
+- `tests/fixtures/builder.py` `_file_id` and `_device_info`: running-dynamics'
+  task 1.2 gives `_file_id` keyword-only, defaulted `manufacturer`, `product`
+  and `time_created` parameters and `_device_info(serial, product_name, *,
+  manufacturer="garmin")` its keyword-only `manufacturer` -- the shapes 1.1
+  needs. Whichever lands first adds them; the other reuses them; every
+  default equals today's value.
 - `src/fitdocs/contract.py` (`DOC_VERSION`, `CONTRACT_VERSION`,
   `MANAGED_KEYS`; running-dynamics, connectors, channel-merge also advance or
   append).
 - `tests/test_contract_consumers.py`, `tests/test_confinement.py`,
   `tests/test_public_api.py` (appended registrations).
 - `docs/ownership-contract.md` (connectors appends `.fitdocs/` and credential
-  statements), `docs/compatibility.md` and
-  `tests/test_compatibility_policy.py` (connectors adds a table: the count
-  advances once per lander), `docs/configuration.md`, `CHANGELOG.md`
-  `[Unreleased]`.
+  statements; each lander replaces the "What changed at this version"
+  paragraph with its own, ruling R1), `docs/configuration.md`,
+  `docs/compatibility.md` and `tests/test_compatibility_policy.py`
+  (connectors adds `[connectors]`: each count advances by one from `main`'s
+  value per lander, and the first lander renames the `:270` test to the
+  count-free `test_settings_schema_subsection_names_every_table`, ruling R4),
+  `CHANGELOG.md` `[Unreleased]` (append under an existing category heading,
+  ruling R8).
+- `docs/connectors.md` (connectors' page, plus intervals-connector's
+  `## intervals.icu` section; 6.1 replaces every duplicate-page caution in it
+  only if the page is on `main` when this plan lands, ruling R7).
 - `.kiro/specs/wiki-contract/requirements.md` Amendment 4 (created by the
-  first lander, appended by the others), `.kiro/specs/fit-ingest/requirements.md`
+  first of activity-identity, connectors and channel-merge to land, under the
+  single title of ruling R6; each lander appends its own paragraph),
+  `.kiro/specs/fit-ingest/requirements.md`
   (running-dynamics and intervals-connector also amend it: take the next free
   amendment number on the branch).
+- `.kiro/steering/structure.md`'s dependency line (6.3 adds `identity`;
+  connectors adds its package, channel-merge adds `compose`; append-only,
+  ruling R9).
 
 ## Test File Ownership
 
 - `tests/fixtures/identity.py`, `tests/fixtures/test_identity_fixtures.py`,
-  the `builder.py` parameter and its `tests/fixtures/test_builder.py` pin → 1.1.
+  the `builder.py` parameters and their `tests/fixtures/test_builder.py` pin → 1.1.
 - `tests/ingest/test_file_id.py`, `tests/golden/*.json` (regenerated) → 1.2;
   `tests/test_public_api.py` `_EXPECTED` entry → 1.2.
 - `tests/identity/__init__.py`, `tests/identity/test_kinds.py` → 2.1.
@@ -146,7 +187,9 @@ sibling's):
   report.
 - `tests/test_audit.py` → 5.1. `tests/test_cli_identity.py` (new) → 5.2.
 - `tests/test_compatibility_policy.py`, `tests/identity/test_settings_docs.py`
-  → 6.1.
+  → 6.1 (and, only if `docs/connectors.md` is on `main`, any assertion of
+  connectors' or intervals-connector's docs tests that names a duplicate-page
+  caution 6.1 replaces).
 - `tests/test_ownership_contract.py`, `tests/test_declaration.py`,
   `tests/declaration_golden/*` (regenerated),
   `tests/identity/test_contract_docs.py` → 6.2.
@@ -176,8 +219,13 @@ never co-varies two keys a rule distinguishes.
     hour and whose newer export carries the corrected start, Stryd-style file,
     and the two-10 k counter-example pair -- as synthetic constants
   - Give `builder._file_id` keyword-only, defaulted `manufacturer`, `product`
-    and `time_created` parameters unless running-dynamics already added them on
-    the branch (then reuse them), and `builder._encode_run_with_developer_fields`
+    and `time_created` parameters, and `builder._device_info` a keyword-only
+    `manufacturer="garmin"`, unless running-dynamics already added them on
+    the branch (then reuse them); each species writes one `device_info`
+    through `_device_info` -- the Stryd-style file with `manufacturer="stryd"`
+    in both `file_id` and `device_info`, the HealthFit-style copies with
+    `"garmin"` (a copy of a Garmin recording) -- and give
+    `builder._encode_run_with_developer_fields`
     a keyword-only `time_created`; every default equals today's value, so every
     existing fixture's bytes stay identical. Pass a later creation time for
     `reexport_b`, so the canonical rank of 4.1 keeps the re-export pair in its
@@ -185,11 +233,12 @@ never co-varies two keys a rule distinguishes.
     `reexport_b`'s bytes moved
   - Tests (`tests/fixtures/test_identity_fixtures.py`): each species decodes
     with `builder.decode_messages` without decode errors, passes the SDK's
-    integrity check, and carries exactly the stated `file_id`, session values
-    and undocumented-message count
+    integrity check, and carries exactly the stated `file_id`, `device_info`
+    manufacturer, session values and undocumented-message count
   - Named mutations: skip the CRC recomputation (integrity check reds); splice
     one message fewer (count pin reds); give the partner copy a different serial
-    (its `file_id` pin reds)
+    (its `file_id` pin reds); leave the Stryd-style file's `device_info` at the
+    builder default `garmin` (its `device_info` pin reds)
   - Observable: `uv run pytest tests/fixtures` green; `uv run mypy
     tests/fixtures/identity.py tests/fixtures/test_identity_fixtures.py` clean;
     every other fixture's bytes unchanged except `reexport_b`
@@ -208,7 +257,9 @@ never co-varies two keys a rule distinguishes.
     `parse_fit` passes both explicitly
   - Export the file-identity type from the package root (lazy export,
     `__all__`, the public-API pin's `_EXPECTED`, and `docs/plugins.md`'s public
-    import surface list)
+    import surface list -- "documented means public", controller ruling R11;
+    running-dynamics appends `DeveloperChannel` to the same four places, so
+    append and keep its entry on rebase)
   - Regenerate `tests/golden/*.json` with `tests/golden/generate.py`; the diff
     adds the two new fields and changes no existing value
   - Record fit-ingest's amendment: `## Amendment N (date): file identity,
@@ -258,10 +309,13 @@ never co-varies two keys a rule distinguishes.
 
 - [ ] 2.2 Implement the match rule with its stated tolerances
   - Add the tolerance constants with their measured sources exactly as
-    design.md's table states, the evidence vocabulary, the comparable session
-    key (no timer field) built from an activity, and the symmetric pair-evidence
-    function with the device, strict and shifted tiers and their absent-value
-    rules; comparisons inclusive
+    design.md's table states (`SHIFT_STEP_S` and `SHIFT_MAX_HOURS` typed
+    `Final[int]`, because channel-merge's `hour_shift_s` returns an `int`
+    built from them; every other constant `Final[float]`), the evidence
+    vocabulary, the comparable session key (no timer field) built from an
+    activity, and the symmetric pair-evidence function with the device,
+    strict and shifted tiers and their absent-value rules; comparisons
+    inclusive
   - Tests (`tests/identity/test_matching.py`, over session-key values): one
     just-inside and one just-outside pair per constant; a same-everything pair
     of different sports; a whole-hour shift where neither side is a phone copy;
@@ -356,9 +410,10 @@ never co-varies two keys a rule distinguishes.
     directory created on demand, nothing written when the bytes are unchanged,
     entries sorted by hash, no clock value)
   - Append the `identity/holds.py` site to
-    `.kiro/queue/2026-09-15-atomic-write-helper-copied-per-engine.md` (its
-    title and resume command count the private atomic-write copies; this is
-    another)
+    `.kiro/queue/2026-09-15-atomic-write-helper-copied-per-engine.md` and
+    increment the count in its title and resume command from its current
+    value (connectors adds a copy too, so the number depends on landing
+    order; never write a fixed ordinal)
   - Tests (`tests/identity/test_holds.py`, `tests/test_layout.py`): round trip;
     write-if-different leaves the mtime unchanged; each malformed shape raises;
     loading an absent record creates no directory
@@ -395,14 +450,22 @@ never co-varies two keys a rule distinguishes.
     `tests/test_public_api.py`'s `_CONTRACT_SURFACE` gains the new contract
     names (`:324-398`); `tests/test_cli_check.py:196-198` becomes
     `f"doc_version: {DOC_VERSION}"`; `tests/render/test_frontmatter.py:44, 101`
-    follow the advanced version; any other exact-frontmatter assertion the full
-    suite shows red is re-pinned and listed in the report
+    follow the advanced version; `tests/render/test_frontmatter.py:317-324`
+    (`test_doc_context_field_order_has_user_frontmatter_after_map_data`,
+    `field_names[-2:] == ["map_data", "user_frontmatter"]`), which appending
+    `identity` reds, is rewritten position-relative -- `user_frontmatter`'s
+    index is `map_data`'s plus one, and `identity` is the last field
+    (channel-merge later appends `channel_provenance` after it); any other
+    exact-frontmatter assertion the full suite shows red is re-pinned and
+    listed in the report
   - Regenerate every golden document with `tests/render/test_golden_docs.py`'s
     own generator; the only diffs are `doc_version` and the new keys
   - Named mutations: emit a key through a helper instead of a direct assignment
     (the anti-drift test reds); emit `source_device` when the serial is absent;
     let the reader accept `True` as an elapsed time; derive `uuid` from the
-    activity even when the context carries identity
+    activity even when the context carries identity; declare `identity`
+    before `user_frontmatter` in `DocContext` (both field-order assertions
+    red)
   - Observable: a synced run page's frontmatter carries `source_kind`,
     `source_elapsed_s`, `source_distance_m` and `source_device` before
     `sources`; the full `uv run pytest` green
@@ -612,13 +675,39 @@ never co-varies two keys a rule distinguishes.
     mirroring the tile-store helper, before any engine call; pass the precedence
     to `sync`, `drain` and `regen`; a hold-record error from `sync` or the drain
     becomes a configuration error naming the file and `fitdocs regen`
+  - If `connectors` is on `main` (controller ruling R3; this plan then lands
+    second and does the wiring): `sync_command`'s no-source branch lives in
+    connectors' `_run_drain_passes`, so the precedence and hold-record-error
+    wiring go through it -- `_run_drain_passes` gains a required keyword-only
+    `precedence: Precedence` (no default, so dropping `precedence=` at any
+    call site is a `TypeError`) that it passes to `drain`, and maps a
+    hold-record error to the configuration error; `pull`'s preflight gains `_identity_settings` and `load_holds`
+    (with `--sync`, beside the drain checks it already makes) before any
+    connector request or write, and passes the precedence on. If connectors
+    is not on `main`, skip this bullet: connectors does it when it lands
   - Tests (`tests/test_cli_identity.py`): a malformed table exits 2 and writes
     nothing; a configured precedence changes the base end to end; a damaged
-    hold record exits 2 on `sync` and `fitdocs regen` then succeeds
+    hold record exits 2 on `sync` and `fitdocs regen` then succeeds; when
+    connectors is on `main`, `fitdocs pull --sync` over a configured folder
+    connector with a file to deliver exits 2 on a malformed `[identity]`
+    table, and on a damaged hold record, with the data root and the inbox
+    byte-unchanged; a spy on `drain` sees the configured precedence under
+    both `pull --sync` and `sync`; `_run_drain_passes`'s `precedence`
+    parameter is keyword-only with no default (`inspect.signature`)
   - Named mutations: skip passing the precedence to `regen`; load the settings
-    after the engine call
+    after the engine call; when connectors is on `main`: drop
+    `_identity_settings` from `pull`'s preflight (the pull exits 0 on the
+    default precedence: its exit-2 assertion reds), move it after the pull's
+    fetch (the folder connector has delivered: the unchanged-inbox assertion
+    reds), drop `load_holds` from `pull`'s preflight (the drain still raises,
+    but after the delivery: the unchanged-inbox assertion reds), give
+    `precedence` a default of the built-in precedence (the signature pin
+    reds; with `precedence=` then dropped from `pull`'s call, the
+    `pull --sync` drain-spy pin reds too)
   - Observable: `uv run pytest tests/test_cli_identity.py tests/test_cli.py`
-    green; `uv run mypy tests/test_cli_identity.py` clean
+    green (plus connectors' CLI tests, `tests/connectors/test_cli_connectors.py`,
+    when connectors is on `main`); `uv run mypy tests/test_cli_identity.py`
+    clean
   - _Requirements: 2.7_
   - _Boundary: CliIdentityWiring_
 
@@ -634,27 +723,60 @@ never co-varies two keys a rule distinguishes.
   - `docs/configuration.md` gains `[identity]` (vocabulary, `original:<m>`
     entries, the default `original:garmin`, `phone_copy`, `original`, `unknown`
     as the maintainer decision of 2026-09-29, validation and exit status, and an
-    example that lets every original outrank the phone copy);
-    `docs/compatibility.md` adds `[identity]` to both table enumerations and
-    advances the count by one from the branch's value, with
-    `tests/test_compatibility_policy.py` in the same change;
-    `docs/upgrading.md` states regenerate-before-first-pull; `docs/inbox.md`
-    states that a held file is archived and disposed; `CHANGELOG.md`
-    `[Unreleased]` names the document contract and settings changes with the
-    action, referencing docs only by `https://github.com/joshua-stauffer/fitdocs/blob/main/...`
+    example that lets every original outrank the phone copy), an `[identity]`
+    row in the table of the settings file's tables (`:53-60`), and the count
+    before that table ("carries six tables today" at `:51` on `main` at
+    a5792f2) advanced by one from `main`'s value (controller ruling R4)
+  - `docs/compatibility.md` adds `[identity]` to both table enumerations and
+    advances both counts (`:24`, `:64`) by one from `main`'s value;
+    `tests/test_compatibility_policy.py` in the same change:
+    `SETTINGS_TABLE_LITERALS` gains `"[identity]"` (append-only), every count
+    in its messages and comments advances by one (none is left if connectors
+    landed first and made them count-free), and if connectors has not
+    landed, `test_settings_schema_subsection_names_all_six_tables` (`:270`)
+    is renamed to the count-free
+    `test_settings_schema_subsection_names_every_table` (if connectors landed
+    first and renamed it, only the counts are re-pinned)
+  - `docs/upgrading.md` states regenerate-before-first-pull; if
+    `docs/connectors.md` exists on `main`, replace every duplicate-page
+    caution in it (the framework's and, if present, the `## intervals.icu`
+    section's) with the regenerate-before-pull statement (controller ruling
+    R7) and re-pin any connectors or intervals-connector docs test that names
+    a caution; `docs/inbox.md` states that a held file is archived and
+    disposed
+  - `CHANGELOG.md` `[Unreleased]` names the document contract and settings
+    changes with the action, referencing docs only by
+    `https://github.com/joshua-stauffer/fitdocs/blob/main/...`; the entries
+    are appended under the existing `### Added` / `### Changed` heading, and
+    a heading is created only if absent (controller ruling R8;
+    `tests/test_changelog.py:516` rejects a repeated category within one
+    section)
   - Tests (`tests/identity/test_settings_docs.py`): the documented default and
-    vocabulary equal the code's
+    vocabulary equal the code's; the settings table has an `[identity]` row;
+    the count word before the table equals the table's row count
   - Named mutations: swap two tiers of the default precedence (the doc pin
-    reds); drop `[identity]` from the compatibility list (its pin reds)
+    reds); drop `[identity]` from the compatibility list (its pin reds);
+    delete the `[identity]` row from the configuration table (the row and
+    count pins red); leave the configuration count at `main`'s value (the
+    count pin reds); add a second `### Added` heading to `[Unreleased]` (the
+    changelog check reds)
   - Observable: `uv run pytest tests/test_compatibility_policy.py
     tests/identity/test_settings_docs.py tests/test_changelog.py
-    tests/test_docs_guarantees.py` green; `uv run mypy
-    tests/identity/test_settings_docs.py` clean
+    tests/test_docs_guarantees.py` green (plus `tests/connectors/` when
+    `docs/connectors.md` was edited); `uv run mypy
+    tests/identity/test_settings_docs.py` clean; the settings-table count
+    reads `main`'s value plus one at all three places
+    (`docs/configuration.md:51`, `docs/compatibility.md:24, 64`)
   - _Requirements: 9.7, 9.8_
 
 - [ ] 6.2 Publish the roles, renames and held files in the ownership contract and advance its version
-  - Advance `CONTRACT_VERSION` by one with its docstring paragraph; update the
-    contract document's version line and "What changed at this version"
+  - Advance `CONTRACT_VERSION` by one from `main`'s value with its own
+    docstring paragraph (controller ruling R1: every lander advances, no
+    sharing); update the contract document's version line and **replace** its
+    "What changed at this version" paragraph with this spec's changes (the
+    CHANGELOG is the cumulative record); after the final rebase assert
+    `CONTRACT_VERSION` equals `main`'s value plus one and re-pin (version
+    line, docstring, declaration goldens) if a sibling landed a bump first
   - Add the section "Source Files and Their Roles" (roles, kinds, the
     precedence pointer linked to 6.1's `[identity]` heading in
     `configuration.md` with its anchor, the four keys and the digest, UUID
@@ -667,8 +789,9 @@ never co-varies two keys a rule distinguishes.
     linked `ownership-contract.md` without an anchor, this task may add the
     anchor to the new section
   - Add the two declaration sentences (workouts: renames; archive: held files)
-    with their claim anchors and no quantifier word; regenerate
-    `tests/declaration_golden/*` with its own generator
+    with their claim anchors and no quantifier word; always regenerate
+    `tests/declaration_golden/*` with its own generator (they carry the
+    contract version, ruling R1)
   - Tests (`tests/identity/test_contract_docs.py`): the tolerance table's values
     and sources equal the constants and `TOLERANCE_SOURCES`, parsed from the
     document; `tests/test_ownership_contract.py`'s version pin moves with the
@@ -683,20 +806,35 @@ never co-varies two keys a rule distinguishes.
   - _Requirements: 3.11, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.8_
 
 - [ ] 6.3 Record the wiki-contract and workout-docs amendments and annotate the roadmap
-  - wiki-contract: create Amendment 4's section if no sibling has, else append
-    this spec's paragraph to it; Requirement 2 and Requirement 6 each gain the
-    next free criterion, tagged `_(added by Amendment 4)_`; `design.md`'s
-    `DocumentContract` gains an amendment note; `spec.json` an `amendments`
-    entry
+  - wiki-contract (controller ruling R6): if neither connectors nor
+    channel-merge has created it on `main`, create `## Amendment 4 (<this
+    landing date>): source roles, connector state and channel provenance,
+    landed by activity-identity, connectors and channel-merge`; either way
+    append this spec's own paragraph, recording its own `CONTRACT_VERSION`
+    `"X"` to `"Y"` (the values of 6.2's advance, in the form of Amendments
+    1-3); Requirement 2 and Requirement 6 each gain the next free criterion,
+    tagged `_(added by Amendment 4)_`; `design.md`'s `DocumentContract` gains
+    an amendment note; `spec.json` an `amendments` entry
   - workout-docs: a note recording that Req 3.4's provenance is the base (the
     last `sources` entry) and that Req 3.6 is generalized by this spec's
     Requirements 3 and 4; no criterion renumbered or reworded; `spec.json`
     entry
-  - Roadmap Phase 8 `#### Existing Spec Updates`: annotate the fit-ingest and
-    wiki-contract entries with the parts landed here; tick a checkbox only if
-    every part it names has landed on `main`
+  - Roadmap Phase 8 `#### Existing Spec Updates`: annotate the fit-ingest,
+    wiki-contract and workout-docs entries "(activity-identity part landed)"
+    (the workout-docs line names this spec's provenance note); tick each
+    checkbox only if every other part its line names is already on `main`
+  - `.kiro/steering/structure.md` (controller ruling R9): the dependency line
+    (`cli → render → load/metrics → ingest → model`, `:64` on `main` at
+    a5792f2) gains `identity` -- it imports only `model`, `contract`,
+    `docio`, `layout` and `settings`; `render`, `sync`, `audit`, `cli` and
+    `layout` (for `SESSION_UUID_FIELD` only) import it -- appended without
+    rewording the existing chain or connectors' and channel-merge's
+    (`compose`) additions
   - Observable: `/kiro-spec-status wiki-contract`, `fit-ingest` and
-    `workout-docs` clean; the annotations name this spec
+    `workout-docs` clean; the annotations name this spec; the Amendment 4
+    heading is exactly ruling R6's title and this spec's paragraph names its
+    own `CONTRACT_VERSION` values; `structure.md`'s dependency line names
+    `identity` and keeps every sibling's addition
   - _Requirements: 9.1, 9.2, 9.6_
 
 - [ ] 7. Validation: guards and the measured-shape scenarios
@@ -706,15 +844,24 @@ never co-varies two keys a rule distinguishes.
     (allowed and forbidden targets from the hard rules, alias forms included),
     only `pages` and `holds` touching the filesystem, only `kinds` and `pages`
     importing the contract, no clock name; a positive control that the walk
-    scanned every module
+    scanned every module. It pins only what identity modules import, never
+    which modules import `fitdocs.identity`: channel-merge's `compose.*` and
+    `render/provenance.py` import it
   - `tests/test_public_api.py`: `_IDENTITY_SURFACE` asserts the package marker
-    re-exports nothing and no identity name is re-exported from the root
+    re-exports nothing and no identity name is re-exported from the root, and
+    pins the channel-merge seam by name: `fitdocs.identity.roles`
+    (`SourceMember`, `PageRoles`, `rank_members`), `fitdocs.identity.kinds`
+    (`SourceKind`, `source_kind`), `fitdocs.identity.matching`
+    (`START_TOLERANCE_S`, `SHIFT_STEP_S`, `SHIFT_MAX_HOURS`, the last two
+    asserted `int` and not `bool`)
   - `pyproject.toml` `[tool.mypy].files` gains every typed test and fixture
     module the earlier tasks created and type-checked clean; if registering one
     surfaces an error, its creating task's observable was false -- report it
     rather than editing that module here
   - Named mutations: add an `import fitdocs.sync` to `planning.py` (the closure
-    reds); add a `Path.write_text` to `roles.py` (the filesystem pin reds)
+    reds); add a `Path.write_text` to `roles.py` (the filesystem pin reds);
+    rename `SHIFT_STEP_S` (the seam name pin reds); declare it `3600.0` (the
+    seam type pin reds)
   - Observable: `uv run mypy` and `uv run pytest tests/identity/test_boundary.py
     tests/test_public_api.py` green
   - _Requirements: 1.1, 3.10, 9.2_

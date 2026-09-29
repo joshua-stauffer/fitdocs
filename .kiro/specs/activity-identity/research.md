@@ -180,7 +180,14 @@
     owned paths, the regions and the managed and user-owned keys against
     `docs/ownership-contract.md`.
   - `tests/test_compatibility_policy.py:270` and `docs/compatibility.md:24,
-    64` enumerate the settings file's tables ("six tables today").
+    64` enumerate the settings file's tables ("six tables today"), and
+    `docs/configuration.md:51-60` states the same count above a table with
+    one row per table (a third site, found by the Phase 8 cross-spec review
+    of 2026-09-29; controller ruling R4 advances all three per lander).
+  - `tests/render/test_frontmatter.py:317-324` pins `DocContext`'s trailing
+    field order (`field_names[-2:] == ["map_data", "user_frontmatter"]`), so
+    appending `identity` reds it (found by the same review; task 3.1
+    rewrites it position-relative).
   - `tests/golden/_serialize.py` walks every dataclass field of the model, so
     a new `Activity`/`Provenance` field changes `tests/golden/*.json`.
   - `tests/test_confinement.py:815-864` registers writing entry points; a

@@ -243,5 +243,5 @@ are, so that I can rely on them instead of inferring them.
 4. The ownership contract shall state that a page keeps a phone-side copy's session UUID when a file without one becomes its base.
 5. The ownership contract shall state that an ambiguous file is archived and held rather than added to a page, where the hold is recorded, and how the athlete resolves it.
 6. The published contract version and the document-format version shall each advance by one from the values current when this feature lands.
-7. The configuration documentation shall document the source-precedence setting, its vocabulary, its default and its validation, and the compatibility statement shall list its settings table among the settings file's tables.
+7. The configuration documentation shall document the source-precedence setting, its vocabulary, its default and its validation, and shall list its settings table among the settings file's tables with a table count that matches that list; the compatibility statement shall list the table among the settings file's tables likewise.
 8. The documentation shall state that a data root holding pages written before this feature must be regenerated before files of already-held sessions are added from another source, so that those pages can be recognized.
