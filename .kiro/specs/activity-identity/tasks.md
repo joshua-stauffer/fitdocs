@@ -236,8 +236,9 @@ never co-varies two keys a rule distinguishes.
     through `_device_info` -- the Stryd-style file with `manufacturer="stryd"`
     in both `file_id` and `device_info`, the HealthFit-style copies with
     `"garmin"` (a copy of a Garmin recording). That HealthFit choice is a
-    synthetic variant pending intervals-connector's maintainer live-check TBC
-    (its task 1.1; controller ruling R15) on what a real HealthFit copy
+    synthetic variant pending intervals-connector's maintainer live-check TBC-9
+    (its task 1.1; controller ruling R15; either finding, Garmin device or not,
+    is handled by its task 5.2) on what a real HealthFit copy
     records at `device_info` index 0; no value changes until then. Identity's
     classification, digest, rank and match read only `file_id`, never the
     device list, so the choice moves no identity pin: if the TBC contradicts

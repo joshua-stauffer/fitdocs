@@ -1735,7 +1735,8 @@ complete).
   `garmin_fit_sdk.crc_calculator.CrcCalculator`).
 - The HealthFit species' `device_info` index-0 manufacturer `garmin` is a
   **synthetic variant** pending intervals-connector's maintainer live-check
-  TBC (its task 1.1; controller ruling R15) on what a real HealthFit copy
+  TBC-9 (its task 1.1; controller ruling R15; either finding is handled by
+  its task 5.2) on what a real HealthFit copy
   records at `device_info` index 0 (the Garmin device, or
   `development`/Apple); no value changes until then. Identity's
   classification, device digest, rank key and match rule read only the
