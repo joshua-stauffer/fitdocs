@@ -17,8 +17,9 @@
   plan lands, 5.2 wires `[identity]` through connectors'
   `_run_drain_passes` and `pull`'s preflight (controller ruling R3); the
   shared files are listed below under "Cross-spec shared files". The
-  controller's cross-spec rulings of 2026-09-29 (R1, R3, R4, R6-R9, R11) are
-  binding and are restated in the tasks they govern.
+  controller's cross-spec rulings of 2026-09-29 (R1, R3, R4, R6-R9, R11, and
+  the round-2 amendments: R4 as amended, R15, R16, R18) are binding and are
+  restated in the tasks they govern.
 
 **Hard rules for every task**
 
@@ -64,26 +65,33 @@
 
 ## Shared source files
 
-Each file below has more than one writer in this plan; the owners are
-strictly sequential (none is marked `(P)`).
+Each file below has more than one writer in this plan; no two writers of one
+file run in parallel (where a writer is marked `(P)`, none of the tasks it
+runs beside writes that file).
 
 - `src/fitdocs/sync.py` -- 3.2 (`find_document` delegates to the page index),
   4.1 (roles and render from the base), 4.2 (rename, cleanup, settle), 4.3
   (planned runs in `sync`), 4.4 (planned runs in `drain`), 4.5 (regeneration).
-- `src/fitdocs/contract.py` -- 3.1 (keys, reader, managed set,
-  `DOC_VERSION`), 6.2 (`CONTRACT_VERSION`).
+- `src/fitdocs/contract.py` -- 2.1 (`SESSION_UUID_FIELD` beside
+  `format_session_uuid`, outside `__all__`; controller ruling R16; 2.1 runs
+  before 2.2 and the parallel 2.3-2.5, none of which writes this file), 3.1
+  (keys, reader, managed set, `DOC_VERSION`, and `SESSION_UUID_FIELD` into
+  `__all__`), 6.2 (`CONTRACT_VERSION`).
 - `docs/ownership-contract.md` -- 3.1 (the four keys in the "Managed
   Frontmatter Keys" list only, because `tests/test_ownership_contract.py:131-134`
   holds that list equal to `MANAGED_KEYS`), 6.2 (everything else).
 - `tests/test_public_api.py` -- 1.2 (`_EXPECTED` gains `FileIdentity`), 3.1
-  (`_CONTRACT_SURFACE` gains the new contract names), 7.1
-  (`_IDENTITY_SURFACE`); each edits only its own table.
-- `tests/test_contract_consumers.py` -- 2.1 (registers `identity.kinds`), 3.1
-  (`FORBIDDEN_LITERALS` and the frontmatter bindings), 3.2 (registers
-  `identity.pages`; `sync`'s bindings), 4.1-4.5 and 5.1 (only the binding
-  tuple of a module the task changed). Rule: a task that changes which
-  contract names a registered module binds updates that module's
-  `CONTRACT_BINDINGS` entry in the same task, and nothing else in the file.
+  (`_CONTRACT_SURFACE` gains the new contract names, `SESSION_UUID_FIELD`
+  among them), 7.1 (`_IDENTITY_SURFACE`); each edits only its own table.
+- `tests/test_contract_consumers.py` -- 2.1 (registers `identity.kinds`,
+  binding `SESSION_UUID_FIELD` and `format_session_uuid`), 2.5 (`layout`'s
+  entry gains `SESSION_UUID_FIELD`; the only writer of this file among the
+  parallel 2.3-2.5), 3.1 (`FORBIDDEN_LITERALS` and the frontmatter bindings,
+  `SESSION_UUID_FIELD` among them), 3.2 (registers `identity.pages`;
+  `sync`'s bindings), 4.1-4.5 and 5.1 (only the binding tuple of a module
+  the task changed). Rule: a task that changes which contract names a
+  registered module binds updates that module's `CONTRACT_BINDINGS` entry
+  in the same task, and nothing else in the file.
 - `src/fitdocs/layout.py` -- 2.5 only. `src/fitdocs/model.py` -- 1.2 only.
   `src/fitdocs/render/*` -- 3.1 only. `src/fitdocs/audit.py` -- 5.1 only.
   `src/fitdocs/cli.py` -- 5.2 only. `src/fitdocs/declaration.py` -- 6.2 only.
@@ -140,9 +148,12 @@ sibling's):
   statements; each lander replaces the "What changed at this version"
   paragraph with its own, ruling R1), `docs/configuration.md`,
   `docs/compatibility.md` and `tests/test_compatibility_policy.py`
-  (connectors adds `[connectors]`: each count advances by one from `main`'s
-  value per lander, and the first lander renames the `:270` test to the
-  count-free `test_settings_schema_subsection_names_every_table`, ruling R4),
+  (connectors adds `[connectors]`; ruling R4 as amended: if this plan lands
+  first, rename the `:270` test to
+  `test_settings_schema_subsection_names_every_table` and make its messages
+  and comments count-free; counts stay only in docs prose
+  (`docs/configuration.md:51`, `docs/compatibility.md:24, 64`), each
+  advanced by one from `main`),
   `CHANGELOG.md` `[Unreleased]` (append under an existing category heading,
   ruling R8).
 - `docs/connectors.md` (connectors' page, plus intervals-connector's
@@ -224,7 +235,16 @@ never co-varies two keys a rule distinguishes.
     the branch (then reuse them); each species writes one `device_info`
     through `_device_info` -- the Stryd-style file with `manufacturer="stryd"`
     in both `file_id` and `device_info`, the HealthFit-style copies with
-    `"garmin"` (a copy of a Garmin recording) -- and give
+    `"garmin"` (a copy of a Garmin recording). That HealthFit choice is a
+    synthetic variant pending intervals-connector's maintainer live-check TBC
+    (its task 1.1; controller ruling R15) on what a real HealthFit copy
+    records at `device_info` index 0; no value changes until then. Identity's
+    classification, digest, rank and match read only `file_id`, never the
+    device list, so the choice moves no identity pin: if the TBC contradicts
+    it, every identity pin keeps its expected value, this task's own
+    `device_info` pin for those species follows the new value if they are
+    re-shaped to match, and 2.1's device-list case sets its Garmin device
+    list itself. Also give
     `builder._encode_run_with_developer_fields`
     a keyword-only `time_created`; every default equals today's value, so every
     existing fixture's bytes stay identical. Pass a later creation time for
@@ -290,21 +310,30 @@ never co-varies two keys a rule distinguishes.
     serial and UTC creation time; absent unless all three are recorded), and
     the base-identity value (kind, recorded elapsed, recorded distance,
     digest, own session UUID)
-  - Publish the session-UUID developer-field name here once
-  - Register the module as a contract consumer (it binds the session-UUID
-    formatter) in `tests/test_contract_consumers.py`
+  - Add the session-UUID developer-field name to the document contract as
+    `SESSION_UUID_FIELD`, beside the session-UUID formatter (controller
+    ruling R16), outside `__all__` until 3.1 so the exact contract-surface
+    pin stays green; the kinds module binds it from the contract, never
+    defining its own
+  - Register the module as a contract consumer in
+    `tests/test_contract_consumers.py`, its `CONTRACT_BINDINGS` entry naming
+    exactly `SESSION_UUID_FIELD` and `format_session_uuid`
   - Tests (`tests/identity/test_kinds.py`): the three kinds from activities
     built with and without the marker and each manufacturer shape, including a
     HealthFit copy of a Garmin ride (its `file_id` says `development`; its
-    devices say `garmin`) classified `phone_copy`; the digest's absence rules,
+    devices say `garmin`, set by the test whatever 1.1's species record)
+    classified `phone_copy`; the digest's absence rules,
     determinism, and that it differs when only the creation time differs
   - Named mutations: accept the marker without `development`; classify
     `development` without the marker as `phone_copy`; classify by the device
     list's manufacturer instead of `file_id`'s (the HealthFit-copy-of-a-Garmin-ride
     case reds); leave the creation time out of the digest; take elapsed from the
-    timer
+    timer; define a local `SESSION_UUID_FIELD = "SESSION UUID"` in the kinds
+    module instead of binding the contract's (the `CONTRACT_BINDINGS` identity
+    check reds)
   - Observable: `uv run pytest tests/identity/test_kinds.py
-    tests/test_contract_consumers.py` green; `uv run mypy tests/identity` clean
+    tests/test_contract_consumers.py tests/test_public_api.py` green; `uv run
+    mypy tests/identity` clean
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 5.4_
 
 - [ ] 2.2 Implement the match rule with its stated tolerances
@@ -402,8 +431,11 @@ never co-varies two keys a rule distinguishes.
 
 - [ ] 2.5 (P) Store held files in owned tool state
   - Add the held-record path helper to the layout leaf (inside `.fitdocs/`) and
-    rebind the layout's session-UUID field name to the kinds module's constant,
-    removing the private copy
+    bind the layout's session-UUID field name from the contract's
+    `SESSION_UUID_FIELD` (2.1), removing the private copy; the layout imports
+    nothing from the identity package (controller ruling R16); `layout`'s
+    `CONTRACT_BINDINGS` entry in `tests/test_contract_consumers.py` gains
+    `SESSION_UUID_FIELD` in this task
   - Add the hold store: entry and record values, load (absent file is an empty
     record and creates nothing; unreadable, invalid, wrong shape or duplicate
     hash raise an error naming the file), save (temp file then replace,
@@ -418,10 +450,13 @@ never co-varies two keys a rule distinguishes.
     write-if-different leaves the mtime unchanged; each malformed shape raises;
     loading an absent record creates no directory
   - Named mutations: skip the unchanged-bytes check; accept a duplicate hash;
-    create `.fitdocs/` on load
+    create `.fitdocs/` on load; keep the layout's private `_SESSION_UUID_FIELD`
+    instead of binding the contract's (`layout`'s `CONTRACT_BINDINGS`
+    identity check reds)
   - Observable: a saved record re-loads equal and a second save reports no
-    write; `uv run pytest tests/identity/test_holds.py tests/test_layout.py`
-    green; `uv run mypy tests/identity/test_holds.py` clean
+    write; `uv run pytest tests/identity/test_holds.py tests/test_layout.py
+    tests/test_contract_consumers.py` green; `uv run mypy
+    tests/identity/test_holds.py` clean
   - _Requirements: 4.7, 4.10, 8.4_
   - _Boundary: HoldStore_
 
@@ -441,14 +476,18 @@ never co-varies two keys a rule distinguishes.
     (the anti-drift test reads them from the function's AST), after
     `calories_kcal` and before `sources`, with the stated rounding; when the
     context carries none, derive it from the context's activity; bind the
-    session-UUID field name from the kinds module
-  - Add the four keys to `FORBIDDEN_LITERALS` and to the frontmatter module's
-    `CONTRACT_BINDINGS`; update `tests/test_contract.py`'s published-key set
+    session-UUID field name from the contract's `SESSION_UUID_FIELD`,
+    removing the frontmatter module's private copy; add `SESSION_UUID_FIELD`
+    to the contract's `__all__` (controller ruling R16)
+  - Add the four keys to `FORBIDDEN_LITERALS`, and the four keys and
+    `SESSION_UUID_FIELD` to the frontmatter module's `CONTRACT_BINDINGS`;
+    update `tests/test_contract.py`'s published-key set
   - Move, in this task, every pin the new keys or the version advance turn red:
     `docs/ownership-contract.md`'s "Managed Frontmatter Keys" list gains the
     four keys (`tests/test_ownership_contract.py:131-134`);
     `tests/test_public_api.py`'s `_CONTRACT_SURFACE` gains the new contract
-    names (`:324-398`); `tests/test_cli_check.py:196-198` becomes
+    names, `SESSION_UUID_FIELD` among them (`:324-398`);
+    `tests/test_cli_check.py:196-198` becomes
     `f"doc_version: {DOC_VERSION}"`; `tests/render/test_frontmatter.py:44, 101`
     follow the advanced version; `tests/render/test_frontmatter.py:317-324`
     (`test_doc_context_field_order_has_user_frontmatter_after_map_data`,
@@ -465,7 +504,10 @@ never co-varies two keys a rule distinguishes.
     let the reader accept `True` as an elapsed time; derive `uuid` from the
     activity even when the context carries identity; declare `identity`
     before `user_frontmatter` in `DocContext` (both field-order assertions
-    red)
+    red); leave `SESSION_UUID_FIELD` out of the contract's `__all__` (the
+    `_CONTRACT_SURFACE` equality pin reds); keep the frontmatter module's
+    private `_SESSION_UUID_FIELD` instead of binding the contract's (its
+    `CONTRACT_BINDINGS` identity check reds)
   - Observable: a synced run page's frontmatter carries `source_kind`,
     `source_elapsed_s`, `source_distance_m` and `source_device` before
     `sources`; the full `uv run pytest` green
@@ -730,13 +772,17 @@ never co-varies two keys a rule distinguishes.
   - `docs/compatibility.md` adds `[identity]` to both table enumerations and
     advances both counts (`:24`, `:64`) by one from `main`'s value;
     `tests/test_compatibility_policy.py` in the same change:
-    `SETTINGS_TABLE_LITERALS` gains `"[identity]"` (append-only), every count
-    in its messages and comments advances by one (none is left if connectors
-    landed first and made them count-free), and if connectors has not
-    landed, `test_settings_schema_subsection_names_all_six_tables` (`:270`)
-    is renamed to the count-free
-    `test_settings_schema_subsection_names_every_table` (if connectors landed
-    first and renamed it, only the counts are re-pinned)
+    `SETTINGS_TABLE_LITERALS` gains `"[identity]"` (append-only), and, if
+    this plan lands first, rename
+    `test_settings_schema_subsection_names_all_six_tables` (`:270`) to
+    `test_settings_schema_subsection_names_every_table` and make its messages
+    and comments count-free (the "tile/inbox/plugin/load/plans/history
+    tables" message and the "six tables" comment at `:178-179` name no count
+    and no fixed list); counts stay only in docs prose
+    (`docs/configuration.md:51`, `docs/compatibility.md:24, 64`), each
+    advanced by one from `main` (controller ruling R4 as amended). If
+    connectors landed first and made the test count-free, edit only
+    `SETTINGS_TABLE_LITERALS` there
   - `docs/upgrading.md` states regenerate-before-first-pull; if
     `docs/connectors.md` exists on `main`, replace every duplicate-page
     caution in it (the framework's and, if present, the `## intervals.icu`
@@ -821,17 +867,19 @@ never co-varies two keys a rule distinguishes.
     entry
   - Roadmap Phase 8 `#### Existing Spec Updates`: annotate the fit-ingest,
     wiki-contract and workout-docs entries "(activity-identity part landed)"
+    -- that wording exactly, with no commit SHA (controller ruling R18) --
     (the workout-docs line names this spec's provenance note); tick each
     checkbox only if every other part its line names is already on `main`
   - `.kiro/steering/structure.md` (controller ruling R9): the dependency line
     (`cli → render → load/metrics → ingest → model`, `:64` on `main` at
     a5792f2) gains `identity` -- it imports only `model`, `contract`,
-    `docio`, `layout` and `settings`; `render`, `sync`, `audit`, `cli` and
-    `layout` (for `SESSION_UUID_FIELD` only) import it -- appended without
+    `docio`, `layout` and `settings`; `render`, `sync`, `audit` and `cli`
+    import it -- appended without
     rewording the existing chain or connectors' and channel-merge's
     (`compose`) additions
   - Observable: `/kiro-spec-status wiki-contract`, `fit-ingest` and
-    `workout-docs` clean; the annotations name this spec; the Amendment 4
+    `workout-docs` clean; each annotation reads exactly "(activity-identity
+    part landed)" with no SHA; the Amendment 4
     heading is exactly ruling R6's title and this spec's paragraph names its
     own `CONTRACT_VERSION` values; `structure.md`'s dependency line names
     `identity` and keeps every sibling's addition

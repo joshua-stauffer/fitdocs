@@ -183,7 +183,9 @@
     64` enumerate the settings file's tables ("six tables today"), and
     `docs/configuration.md:51-60` states the same count above a table with
     one row per table (a third site, found by the Phase 8 cross-spec review
-    of 2026-09-29; controller ruling R4 advances all three per lander).
+    of 2026-09-29; controller ruling R4 advances the three docs counts per
+    lander, and, as amended in round 2, the first lander makes the test's
+    name, messages and comments count-free).
   - `tests/render/test_frontmatter.py:317-324` pins `DocContext`'s trailing
     field order (`field_names[-2:] == ["map_data", "user_frontmatter"]`), so
     appending `identity` reds it (found by the same review; task 3.1

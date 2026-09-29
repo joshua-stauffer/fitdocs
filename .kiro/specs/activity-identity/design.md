@@ -126,12 +126,16 @@ sources in a canonical order, and renames a page whose base changes.
   a dataclass field, a local, an import -- as a second UUID formatter), so
   every field and local here is `session_uuid`, `page_uuid` or similar; and
   no registered contract consumer (`identity.kinds`, `identity.pages`, and the
-  already-registered `sync`, `audit`, `render.frontmatter`) defines a name in
-  `FORBIDDEN_LOCAL_NAMES` (`:149-163`, e.g. `_session_uuid`, `_sources`).
+  already-registered `sync`, `audit`, `render.frontmatter`, `layout`)
+  defines a name in `FORBIDDEN_LOCAL_NAMES` (`:149-163`, e.g.
+  `_session_uuid`, `_sources`).
 - The engine (`sync.py`), audit (`audit.py`), CLI (`cli.py`) and render
   (`render/__init__.py`, `render/frontmatter.py`) import the identity package;
   the identity package imports none of them, nor `ingest`, `metrics`, `load`,
-  `history`, `plans`, `tiles`, `inbox`. Which modules import the identity
+  `history`, `plans`, `tiles`, `inbox`. `layout` does not import the identity
+  package (it binds `SESSION_UUID_FIELD` from `contract`, controller ruling
+  R16), so `identity.pages`/`identity.holds` → `layout` has no back-edge.
+  Which modules import the identity
   package is deliberately **not** fenced: `channel-merge`'s `compose.*` and
   `render/provenance.py` import `identity.kinds` and `identity.matching`, so
   the boundary guard pins only what the package itself imports.
@@ -221,17 +225,19 @@ parallel. A cross-spec reviewer reconciles all five.
   `.fitdocs/` (`held.toml` here; the ledger there). The ownership contract's
   `.fitdocs/` bullet names each file without an exhaustive "only"/count
   claim.
-- Settings-table count (controller ruling R4): each spec advances the count
-  at `docs/configuration.md:51` ("carries six tables today" on `main` at
-  a5792f2), `docs/compatibility.md:24, 64` and in
-  `tests/test_compatibility_policy.py`'s messages by one from `main`'s value
-  at landing, and appends its table to `SETTINGS_TABLE_LITERALS`. The
-  **first** lander renames
-  `test_settings_schema_subsection_names_all_six_tables`
-  (`tests/test_compatibility_policy.py:270`) to the count-free
-  `test_settings_schema_subsection_names_every_table`; the second lander
-  re-pins (keeps the new name, advances the counts). This spec also adds the
-  `[identity]` row to `docs/configuration.md`'s table of tables (`:53-60`).
+- Settings-table count (controller ruling R4, as amended in round 2): each
+  spec appends its table to `SETTINGS_TABLE_LITERALS`. If this spec lands
+  first, it renames `test_settings_schema_subsection_names_all_six_tables`
+  (`tests/test_compatibility_policy.py:270`) to
+  `test_settings_schema_subsection_names_every_table` and makes its messages
+  and comments count-free; counts stay only in docs prose
+  (`docs/configuration.md:51`, "carries six tables today" on `main` at
+  a5792f2, and `docs/compatibility.md:24, 64`), each advanced by one from
+  `main` by each lander. If connectors landed first, this spec keeps the
+  new name and advances only the three docs counts. This spec also adds the
+  `[identity]` row to `docs/configuration.md`'s table of tables (`:53-60`);
+  its count-equals-rows pin (`tests/identity/test_settings_docs.py`) guards
+  configuration.md's count.
 - wiki-contract Amendment 4 is shared (roadmap Phase 8, Existing Spec Updates;
   controller ruling R6): whichever of this spec, connectors and channel-merge
   lands first creates, in `.kiro/specs/wiki-contract/requirements.md`,
@@ -288,9 +294,9 @@ parallel. A cross-spec reviewer reconciles all five.
   activities to one seam in `sync.py`:
   `_render_activity(roles: PageRoles, parsed: Mapping[str, Activity]) ->
   Activity`, which returns `parsed[roles.base.ref]`. channel-merge replaces
-  that body with its composition; it performs no second archive read of the
-  extras (the roadmap's "archive reads of the extras are channel-merge's" is
-  satisfied by the parsed mapping this spec passes in).
+  that body with its composition. `sync` makes no second archive read; the
+  extras' archive reads are channel-merge's, in the load and benchmark
+  passes (roadmap Boundary Strategy, corrected 2026-09-29).
 - The page's identity keys and `uuid` are computed from the base's **own**
   parse (`source_identity(parsed[roles.base.ref])` plus retention) **before**
   `_render_activity` runs, and reach the render through `DocContext.identity`.
@@ -446,7 +452,7 @@ graph TB
 src/fitdocs/
 ├── identity/                    # NEW package: which page, which base
 │   ├── __init__.py              # package marker only: re-exports nothing (__all__ == []); consumers import the submodules
-│   ├── kinds.py                 # SourceKind, SESSION_UUID_FIELD, source_kind(), SourceIdentity, source_identity(), device_digest()
+│   ├── kinds.py                 # SourceKind, DEVELOPMENT_MANUFACTURER, source_kind(), SourceIdentity, source_identity(), device_digest() (binds contract.SESSION_UUID_FIELD)
 │   ├── matching.py              # tolerance constants + TOLERANCE_SOURCES, Evidence, SessionKey, session_key(), pair_evidence()
 │   ├── roles.py                 # PrecedenceEntry, Precedence, DEFAULT_PRECEDENCE, resolve_precedence(), SourceMember, rank_key(), PageRoles, rank_members(), page_session_uuid()
 │   ├── planning.py              # PageRecord, PageIndex.exact_match(), RunFile, Join/Fresh/Hold, PageTaskPlan, RunPlan, plan_run(), DuplicateSet, duplicate_sets()
@@ -483,7 +489,9 @@ tests/
   running-dynamics, append-only).
 - `src/fitdocs/__init__.py` -- `FileIdentity` joins the lazy public exports and
   `__all__` (running-dynamics appends `DeveloperChannel`; keep both).
-- `src/fitdocs/contract.py` -- four key constants, `SOURCE_IDENTITY_KEYS`,
+- `src/fitdocs/contract.py` -- `SESSION_UUID_FIELD` beside
+  `format_session_uuid` (controller ruling R16; task 2.1), four key
+  constants, `SOURCE_IDENTITY_KEYS`,
   `MANAGED_KEYS`, `SourceIdentityReading`, `document_source_identity()`,
   `source_refs` docstring (base last), `DOC_VERSION` +1, `CONTRACT_VERSION` +1
   (each from `main`'s value at merge, each with its docstring paragraph).
@@ -491,9 +499,10 @@ tests/
   None = None`; docstring on `source_refs` (canonical order, base last).
 - `src/fitdocs/render/frontmatter.py` -- `uuid` and the four identity keys from
   `ctx.identity` (or `source_identity(ctx.activity)` when absent); the private
-  `_SESSION_UUID_FIELD` removed in favour of `identity.kinds.SESSION_UUID_FIELD`.
+  `_SESSION_UUID_FIELD` removed in favour of `contract.SESSION_UUID_FIELD`.
 - `src/fitdocs/layout.py` -- `held_path()`; `activity_uid` binds
-  `SESSION_UUID_FIELD` from `identity.kinds` (its private copy removed).
+  `SESSION_UUID_FIELD` from `fitdocs.contract` (its private copy removed;
+  `layout` imports nothing from the identity package, ruling R16).
   Cross-spec shared with connectors (its ledger path), append-only.
 - `src/fitdocs/sync.py` -- run preparation, run planning, page tasks, hold
   tasks, rename and cleanup, settle pass, regeneration of roles, `precedence`
@@ -525,8 +534,9 @@ tests/
 - Test re-pins and registrations: `tests/test_contract.py`,
   `tests/test_contract_consumers.py`, `tests/test_confinement.py`,
   `tests/test_public_api.py`, `tests/test_ownership_contract.py`,
-  `tests/test_compatibility_policy.py` (counts, `SETTINGS_TABLE_LITERALS`, and
-  the `:270` rename if this spec lands first), `tests/metrics/test_sources.py:2270`,
+  `tests/test_compatibility_policy.py` (`SETTINGS_TABLE_LITERALS`; if this
+  spec lands first, the `:270` rename and count-free messages and comments),
+  `tests/metrics/test_sources.py:2270`,
   `tests/test_cli_check.py:196-198`, `tests/render/test_frontmatter.py:44, 101`
   and `:317-324` (the `DocContext` field-order pin, rewritten
   position-relative),
@@ -828,9 +838,12 @@ def count_undocumented_messages(messages: Mapping[str, list[dict[str, object]]])
 **Responsibilities & Constraints**
 - `SourceKind(StrEnum)`: `ORIGINAL = "original"`, `PHONE_COPY = "phone_copy"`,
   `UNKNOWN = "unknown"`. Closed.
-- `SESSION_UUID_FIELD = "SESSION UUID"` and `DEVELOPMENT_MANUFACTURER =
-  "development"` are published here once; `layout.py` and
-  `render/frontmatter.py` bind them instead of their private copies.
+- `DEVELOPMENT_MANUFACTURER = "development"` is published here once. The
+  session developer-field name is not defined here: `kinds` binds
+  `SESSION_UUID_FIELD` from `fitdocs.contract`, beside `format_session_uuid`
+  (controller ruling R16), as `layout.py` and `render/frontmatter.py` do in
+  place of their private copies, so `layout` never imports the identity
+  package.
 - `source_kind(activity)`: `PHONE_COPY` when `file_identity.manufacturer ==
   "development"` and `format_session_uuid(developer_fields.get(SESSION_UUID_FIELD))`
   is not `None` -- whatever device recorded the activity, because HealthFit
@@ -864,7 +877,9 @@ def source_identity(activity: Activity) -> SourceIdentity: ...
 **Implementation Notes**
 - Validation: named mutations -- classifying `development` without the marker
   as `phone_copy`; accepting the marker without `development`; dropping the
-  creation time from the digest (two recordings of one device collide).
+  creation time from the digest (two recordings of one device collide);
+  defining a local `SESSION_UUID_FIELD = "SESSION UUID"` in `kinds` instead of
+  binding the contract's (the `CONTRACT_BINDINGS` identity check reds).
 
 #### MatchRule (`src/fitdocs/identity/matching.py`)
 
@@ -963,7 +978,8 @@ def pair_evidence(a: SessionKey, b: SessionKey) -> Evidence | None: ...
   (Req 2.6).
 - `SourceMember`: `ref`, `sha`, `kind`, `manufacturer`, `undocumented_messages`,
   `time_created`, `session_uuid`; `source_member(ref, sha, activity)` builds
-  one from the parsed file.
+  one from the parsed file (`manufacturer` and `time_created` from
+  `activity.file_identity`, never from the device list).
 - `rank_key(member, precedence)`: the position of the entry
   `original:<member's manufacturer>` when the member is `original` and the
   precedence contains that entry, else the position of its kind's entry; then `-undocumented_messages` (`None` after every count); then
@@ -1163,7 +1179,9 @@ def load_identity_settings(document: Mapping[str, object], settings_file: Path) 
 
 **Responsibilities & Constraints**
 - Path: `layout.held_path(data_root)` = `<data_root>/.fitdocs/held.toml`
-  (inside `TOOL_STATE_DIR`, already owned).
+  (inside `TOOL_STATE_DIR`, already owned). The same change binds
+  `layout.activity_uid`'s field name from `contract.SESSION_UUID_FIELD`
+  (ruling R16) and adds it to `layout`'s `CONTRACT_BINDINGS` entry.
 - Format: `held_version = 1` and one `[[held]]` table per entry with
   `sha256`, `name` (the label the file arrived under, or its archive ref),
   `candidates` (data-root-relative page paths), `evidence` (tier names);
@@ -1215,7 +1233,19 @@ def save_holds(data_root: Path, record: HoldRecord) -> bool: ...
 - Constants `SOURCE_KIND_KEY = "source_kind"`, `SOURCE_ELAPSED_KEY =
   "source_elapsed_s"`, `SOURCE_DISTANCE_KEY = "source_distance_m"`,
   `SOURCE_DEVICE_KEY = "source_device"`; `SOURCE_IDENTITY_KEYS` (that order);
-  all four join `MANAGED_KEYS`; `__all__` gains them and the reader.
+  all four join `MANAGED_KEYS`; `__all__` gains them, the reader and
+  `SESSION_UUID_FIELD`.
+- `SESSION_UUID_FIELD: Final[str] = "SESSION UUID"` beside
+  `format_session_uuid` (controller ruling R16): the one spelling of the
+  HealthFit session developer-field name, bound by `identity.kinds`,
+  `layout` and `render/frontmatter.py`, whose private `_SESSION_UUID_FIELD`
+  copies are removed. Task 2.1 adds it, outside `__all__`, so
+  `tests/test_public_api.py`'s exact-surface pin stays green; task 3.1 adds
+  it to `__all__` and `_CONTRACT_SURFACE` with the other new names. Each
+  module that binds it lists it in its `CONTRACT_BINDINGS` entry in the
+  task that adds the binding (2.1 `identity.kinds`, 2.5 `layout`, 3.1
+  `render.frontmatter`), so a same-valued local copy fails the identity
+  check.
 - `SourceIdentityReading(kind, elapsed_s, distance_m, device)` and
   `document_source_identity(frontmatter)`: a non-empty `str` kind; a genuine
   finite non-negative `int`/`float` (never `bool`) elapsed and distance; a
@@ -1538,13 +1568,17 @@ complete).
 - `compatibility.md`: `[identity]` joins both table enumerations (`:24`,
   `:64`); each count advances by one from its value on `main`;
   `tests/test_compatibility_policy.py` in the same change --
-  `SETTINGS_TABLE_LITERALS` gains `"[identity]"` (append-only), every count
-  in its messages and comments advances by one from `main`'s value (none is
-  left if connectors landed first and made them count-free), and, if
-  this spec lands before connectors, it renames
-  `test_settings_schema_subsection_names_all_six_tables` (`:270`) to the
-  count-free `test_settings_schema_subsection_names_every_table` (if
-  connectors landed first and renamed it, this spec only re-pins the counts).
+  `SETTINGS_TABLE_LITERALS` gains `"[identity]"` (append-only), and, if this
+  spec lands first, it renames the test to
+  `test_settings_schema_subsection_names_every_table` and makes its messages
+  and comments count-free (controller ruling R4 as amended: the
+  `test_settings_schema_subsection_names_all_six_tables` test at `:270`, its
+  "tile/inbox/plugin/load/plans/history tables" message and the "six tables"
+  comment at `:178-179`); counts stay only in docs prose
+  (`docs/configuration.md:51`, `docs/compatibility.md:24, 64`), each advanced
+  by one from `main`. If connectors landed first and made the test
+  count-free, this spec edits only `SETTINGS_TABLE_LITERALS` there and
+  advances the three docs counts.
 - `upgrading.md` "When a release moves the document format": regenerate before
   the first pull from a connector.
 - `connectors.md` (controller ruling R7): if `docs/connectors.md` exists on
@@ -1618,14 +1652,15 @@ complete).
   Requirements 3-4; no criterion renumbered or reworded; `spec.json` entry.
 - roadmap Phase 8 `#### Existing Spec Updates`: annotate the fit-ingest,
   wiki-contract and workout-docs entries "(activity-identity part landed)"
+  -- that wording exactly, with no commit SHA (controller ruling R18) --
   (the workout-docs line names this spec's provenance note since the
   controller's roadmap correction of 2026-09-29); tick each checkbox only if
   every other part its line names is already on `main` at merge time.
 - `.kiro/steering/structure.md` (controller ruling R9): the dependency line
   (`cli → render → load/metrics → ingest → model`, `:64` on `main` at
   a5792f2) gains `identity` -- it imports only `model`, `contract`,
-  `docio`, `layout` and `settings`; `render`, `sync`, `audit`, `cli` and
-  `layout` (for `SESSION_UUID_FIELD` only) import it -- appended without
+  `docio`, `layout` and `settings`; `render`, `sync`, `audit` and `cli`
+  import it -- appended without
   rewording the existing chain or connectors' and channel-merge's
   (`compose`) additions.
 - The promoted queue item is already in `.kiro/queue/closed/` (status
@@ -1641,7 +1676,10 @@ complete).
 **Responsibilities & Constraints**
 - `tests/test_contract_consumers.py`: `fitdocs.identity.pages` and
   `fitdocs.identity.kinds` join `CONVERTED_MODULES` with exact
-  `CONTRACT_BINDINGS`; `fitdocs.sync`'s and `fitdocs.audit`'s binding tuples
+  `CONTRACT_BINDINGS` (`kinds`: `SESSION_UUID_FIELD`, `format_session_uuid`);
+  `fitdocs.layout`'s entry gains `SESSION_UUID_FIELD` (task 2.5) and
+  `fitdocs.render.frontmatter`'s gains it with the four identity keys (task
+  3.1); `fitdocs.sync`'s and `fitdocs.audit`'s binding tuples
   are updated to what they bind after the change; `FORBIDDEN_LITERALS` gains
   the four identity keys.
 - `tests/test_confinement.py`: `EntryPoint(id="sync-base-change",
@@ -1662,7 +1700,10 @@ complete).
   `yaml`, `urllib`, `socket`), with a positive control that the walk scanned
   files. It pins what identity modules import, never which modules import
   `fitdocs.identity`: channel-merge's `compose.*` and `render/provenance.py`
-  import it, and the engine, audit, CLI, render and `layout` already do.
+  import it, and the engine, audit, CLI and render already do. `kinds`
+  already imports `fitdocs.contract` (for `format_session_uuid`), so binding
+  `SESSION_UUID_FIELD` there changes no allowed target: the guard needs no
+  change for ruling R16.
 - `pyproject.toml` `[tool.mypy].files`: the new test modules under
   `tests/identity/`, `tests/ingest/test_file_id.py`,
   `tests/fixtures/identity.py`, `tests/fixtures/test_identity_fixtures.py`,
@@ -1692,6 +1733,19 @@ complete).
   `undocumented`
   spliced messages (`0xFF01`, header size and both CRCs recomputed with
   `garmin_fit_sdk.crc_calculator.CrcCalculator`).
+- The HealthFit species' `device_info` index-0 manufacturer `garmin` is a
+  **synthetic variant** pending intervals-connector's maintainer live-check
+  TBC (its task 1.1; controller ruling R15) on what a real HealthFit copy
+  records at `device_info` index 0 (the Garmin device, or
+  `development`/Apple); no value changes until then. Identity's
+  classification, device digest, rank key and match rule read only the
+  file's own `file_id` (`Activity.file_identity`, Req 2.2-2.4, 2.6, 3.2) and
+  never `Activity.devices`, so the choice moves no identity pin. If the TBC
+  contradicts it, every identity pin keeps its expected value; 1.1's own
+  `device_info` pin for these species follows the new value if the species
+  are re-shaped to match; and task 2.1's HealthFit-copy-of-a-Garmin-ride
+  case sets its Garmin device list itself, so its device-list mutation
+  still reds.
 - Named species: `garmin_original` (garmin, product 3843, creation time =
   start, timer < elapsed, 3 undocumented messages), `partner_copy` (same
   `file_id`, 0 undocumented), `healthfit_copy` (development, its own serial,
