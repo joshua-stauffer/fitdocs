@@ -17,6 +17,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fitdocs.ingest.decode import decode_fit
+from fitdocs.ingest.file_id import count_undocumented_messages, extract_file_identity
 from fitdocs.ingest.laps import extract_laps
 from fitdocs.ingest.records import extract_samples
 from fitdocs.ingest.sets import extract_sets
@@ -64,6 +65,7 @@ def parse_fit(source: str | Path | bytes) -> Activity:
     device_info_mesgs = messages.get("device_info_mesgs", [])
     sport_mesgs = messages.get("sport_mesgs", [])
     field_description_mesgs = messages.get("field_description_mesgs", [])
+    file_id_mesgs = messages.get("file_id_mesgs", [])
 
     summary = extract_summary(session_mesgs, activity_mesgs)
 
@@ -104,6 +106,7 @@ def parse_fit(source: str | Path | bytes) -> Activity:
         sha256=result.sha256,
         source_path=result.source_path,
         decode_errors=result.errors,
+        undocumented_messages=count_undocumented_messages(messages),
     )
 
     return Activity(
@@ -120,6 +123,7 @@ def parse_fit(source: str | Path | bytes) -> Activity:
         devices=devices,
         developer_fields=developer_fields,
         developer_fields_declared_scale=developer_fields_declared_scale,
+        file_identity=extract_file_identity(file_id_mesgs),
     )
 
 

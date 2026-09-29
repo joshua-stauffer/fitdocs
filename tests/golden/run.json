@@ -4,7 +4,8 @@
     "provenance": {
       "sha256": "399c333ece990fe8fb43b28e27afd7ba841f510b67194d1593a73a810302214f",
       "source_path": null,
-      "decode_errors": []
+      "decode_errors": [],
+      "undocumented_messages": 0
     },
     "sport": "Run",
     "modality": "run",
@@ -216,7 +217,13 @@
       }
     ],
     "developer_fields": {},
-    "developer_fields_declared_scale": []
+    "developer_fields_declared_scale": [],
+    "file_identity": {
+      "manufacturer": "garmin",
+      "product": 1,
+      "serial_number": 1001,
+      "time_created": "2021-09-08T01:46:40+00:00"
+    }
   },
   "metrics_no_athlete": {
     "moving_time_s": 9.0,

@@ -265,7 +265,7 @@ never co-varies two keys a rule distinguishes.
     every other fixture's bytes unchanged except `reexport_b`
   - _Requirements: 2.2, 2.3, 3.2, 3.3, 3.4, 3.5_
 
-- [ ] 1.2 Read the file-identity record and count undocumented messages at ingest
+- [x] 1.2 Read the file-identity record and count undocumented messages at ingest
   - Add the file-identity value to the model (manufacturer, product code,
     serial number, creation time, each absent when not recorded), append it to
     the activity with an all-absent default, and append an undocumented-message
