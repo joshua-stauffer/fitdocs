@@ -1554,11 +1554,14 @@ Rejected:
     apart from the existing map tiles. Connectors never import render, load
     or metrics.
   - The "only network module" statements (`cli.py:98-102`, `sync.py:41-52`,
-    `tiles.py:7`) and their guards are revised to name the connector
-    package, not deleted. The guards are the import-purity guards
-    (`tests/test_contract.py:1345`,
-    `tests/performance/test_purity.py:525`) and the socket guard
-    (`tests/test_determinism.py:124, 226`).
+    `tiles.py:7`) are revised to name the connector package, not deleted.
+    *(Corrected at the Phase 8 spec batch, 2026-09-29: no existing test pins
+    those statements. `tests/test_contract.py:1345` bans `urllib` from
+    `contract.py` only, `tests/performance/test_purity.py:525` covers the
+    pure performance modules only, and `tests/test_determinism.py:124, 226`
+    guard sockets during parse and compute only. `connectors` adds the real
+    guard: a tree-wide network allow-list in
+    `tests/connectors/test_boundary.py`, task 6.1.)*
 - **Every request sends an explicit User-Agent.** intervals.icu sits behind
   Cloudflare, which answers urllib's default `Python-urllib/3.x` agent with
   403 "error code: 1010" (viability check, 2026-09-24). The precedent is
@@ -1642,8 +1645,13 @@ Rejected:
   - `sync.py`:
     - `find_document` (236) and `_process_file` (1126) carry identity and
       base selection, which are `activity-identity`'s;
-    - the composition call and the archive reads of the extras are
-      `channel-merge`'s;
+    - the composition call is `channel-merge`'s. *(Corrected at the Phase 8
+      spec batch, 2026-09-29: the page task already holds every listed file
+      parsed, so `sync.py` makes no second archive read. The archive reads
+      of the extras land in `load/engine.py` and `performance/engine.py`,
+      which re-parse a page's last listed file rather than reading the page;
+      `channel-merge` composes the listed files there through
+      `compose.archive.compose_listed`.)*
     - the stem left stale for a matched page (1269-1272) is
       `activity-identity`'s to fix.
   - `cli.py` and confinement: `connectors` adds the connect and pull
@@ -1694,10 +1702,27 @@ Rejected:
   `intervals-connector`). Dependencies: none
 - [ ] workout-docs — a running-dynamics section on run pages (landed by
   `running-dynamics`); Garmin attribution (landed by
-  `intervals-connector`). Dependencies: none
+  `intervals-connector`); a note that a page's provenance is its base
+  (landed by `activity-identity`); channel provenance on composed pages
+  (landed by `channel-merge`). Dependencies: none
 - [ ] distribution — the packaged `fitdocs-workouts` skill's routine learns
-  the pull, and its pins move (`tests/test_agent_skill.py:614, 681`). Landed
-  by `connectors`. Dependencies: connectors
+  the pull, and its pins move (`tests/test_agent_skill.py:614, 681`); Req
+  8.1/8.2 (the skill also pulls) and Req 10.4 (network beyond tiles is the
+  explicit connector commands) are amended. Landed by `connectors`.
+  Dependencies: connectors
+- [ ] inbox — Req 6.1/6.6 read as the drain's guarantees; a connector's own
+  delivery is removed by the next pull once identical bytes are archived.
+  Landed by `connectors`. Dependencies: connectors *(added at the Phase 8
+  spec batch, 2026-09-29)*
+- [ ] route-maps — an amendment note on Req 4.2 ("only to fetch missing
+  basemap tiles") naming the connector commands. Landed by `connectors`.
+  Dependencies: connectors *(added at the Phase 8 spec batch, 2026-09-29)*
+- [ ] training-load — a document listing several archived files is scored
+  from their composition (Req 9). Landed by `channel-merge`. Dependencies:
+  channel-merge *(added at the Phase 8 spec batch, 2026-09-29)*
+- [ ] performance-benchmarks — the same, for benchmark derivation (Req 1).
+  Landed by `channel-merge`. Dependencies: channel-merge *(added at the
+  Phase 8 spec batch, 2026-09-29)*
 
 #### Direct Implementation Candidates
 
