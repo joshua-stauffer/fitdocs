@@ -1,9 +1,9 @@
 {
   "feature_name": "connectors",
   "created_at": "2026-09-29T15:21:42Z",
-  "updated_at": "2026-09-29T17:05:00Z",
+  "updated_at": "2026-09-29T19:40:00Z",
   "language": "en",
-  "phase": "design-generated",
+  "phase": "tasks-generated",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -11,12 +11,13 @@
     },
     "design": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "tasks": {
-      "generated": false,
-      "approved": false
+      "generated": true,
+      "approved": true
     }
   },
-  "ready_for_implementation": false
+  "ready_for_implementation": true,
+  "phase_note": "Generated 2026-09-29 by the Phase 8 spec batch (wave 1) in auto-approve mode. 15 requirements / 122 acceptance criteria; 25 rows in design.md's component summary table; 9 major tasks / 28 executable tasks (major 7 is a single collapsed task). Research ran in-context (no research subagents available to the spec writer); stdlib behaviour relied on was checked against the worktree interpreter, and no network request was made. Step 3.5 task-graph sanity review ran as an independent reviewer dispatched by the controller, twice: round 1 NEEDS_FIXES (5 important, 8 minor), all 13 applied in one repair pass, including splitting old 1.1; under a controller override on finding 1, design.md Allowed Dependencies was corrected in this change (tomli_w is the one permitted third-party import, in connectors/ledger.py and connectors/credentials.py only) rather than deferred to landing. Round 2: PASS with one residual wording fix (1.1's named mutation targets the isolation helper), applied without re-review as instructed. Decision on the inbox LEAVE disposition (queue 2026-09-17-inbox-drain-leaves-source-fit-in-inbox): the next fitdocs pull removes its own deliveries once identical bytes are archived; the drain still never deletes. This adds inbox, distribution and route-maps amendment records that the roadmap's Phase 8 Existing Spec Updates list does not name (task 9.1). Accepted trade-off: design.md is ~1880 lines, over the template's 1000-line advisory, because one spec carries a protocol, a transport, two state files, two engines, a connector, two commands, four guard surfaces and edits to three governed contracts."
 }

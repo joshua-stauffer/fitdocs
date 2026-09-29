@@ -98,7 +98,9 @@ version (shared with the rest of Amendment 4).
 ### Allowed Dependencies
 - `fitdocs.connectors.*` may import only: the standard library;
   `fitdocs.layout`, `fitdocs.settings`, `fitdocs.inbox`, `fitdocs.version`;
-  and each other, in the direction
+  `tomli_w` (an existing runtime dependency, `pyproject.toml:30`, the
+  writer `quarantine.py` already uses) in `connectors/ledger.py` and
+  `connectors/credentials.py` only; and each other, in the direction
   `_atomic, secrets → errors → http → protocol → {registry, credentials,
   ledger} → delivery → settings → folder → {pull, connect} → __init__`.
 - `fitdocs.connectors.http` is the only connectors module that may import
@@ -108,7 +110,8 @@ version (shared with the rest of Amendment 4).
   `fitdocs.metrics*`, `fitdocs.ingest*`, `fitdocs.sync`, `fitdocs.audit`,
   `fitdocs.plans*`, `fitdocs.history*`, `fitdocs.performance*`,
   `fitdocs.contract`, `fitdocs.docio`, `fitdocs.docmerge`, `fitdocs.tiles`,
-  `fitdocs.plugins`, `fitdocs.cli`, and any third-party package.
+  `fitdocs.plugins`, `fitdocs.cli`, and every third-party package other
+  than `tomli_w` in the two modules named above.
 - `fitdocs.cli` imports the package; nothing else in `src/` does.
 
 ### Revalidation Triggers
@@ -228,7 +231,8 @@ graph TB
 
 ### Dependency Direction
 `fitdocs.connectors` modules import only leftward in this chain, never
-upward; the boundary guard (task 6.1) pins it per module by equality:
+upward; the boundary guard (task 6.1) pins each module's direct imports by
+equality:
 
 ```
 _atomic, secrets  →  errors  →  http  →  protocol  →  registry, credentials, ledger
@@ -273,7 +277,9 @@ src/fitdocs/connectors/
 docs/connectors.md   # User documentation for connectors (new page)
 tests/connectors/
 ├── __init__.py
-├── conftest.py      # autouse socket guard; FakeTransport; registry snapshot/restore; synthetic connectors
+├── conftest.py      # autouse socket guard and environment isolation (a plain helper, also imported by
+│                    #   tests/test_confinement.py); FakeTransport; registry snapshot/restore; synthetic connectors
+├── test_isolation.py
 ├── test_secrets.py
 ├── test_atomic.py
 ├── test_errors.py
@@ -1007,8 +1013,8 @@ def resolve_credentials(instance_name: str, connector: Connector, store: Credent
   absolute path; else `<home>/.config/fitdocs/credentials`.
 - `check_outside_data_root` raises when the directory, after `resolve()`, is
   the data root or inside it (4.2).
-- `save`: creates the directory with mode `0o700` when missing; writes via
-  `write_atomic` (file mode `0o600`) (4.3).
+- `save`: serializes with `tomli_w`; creates the directory with mode
+  `0o700` when missing; writes via `write_atomic` (file mode `0o600`) (4.3).
 - `load`: on POSIX, a file whose mode has any group/other bit is refused with
   "…is accessible by other users; run: chmod 600 <path>" (4.4); a newer
   `credentials_version` is refused (4.9).
@@ -1229,7 +1235,10 @@ Per instance, in order:
    exception or a `KeyboardInterrupt` still saves what was recorded (7.4);
    `KeyboardInterrupt` is re-raised after saving.
 
-Every `detail` string passes `redactor.redact`. Exceptions are reported as
+Every `detail` string passes `redactor.redact` — the note details in the
+report and the `detail` recorded in a `SKIPPED` ledger entry alike (a
+`Declined` reason or an `unavailable_reason` can quote a key as easily as an
+error can) (10.1, 10.5). Exceptions are reported as
 `<ExceptionType>: <redacted message>`, never with a traceback (10.2). Entries
 in each channel are sorted (by remote id, or by path for `delivered` and
 `removed`) (11.5). No page, archive content, render, load or metrics code is
@@ -1380,10 +1389,13 @@ selected (unknown → 6.2); when a selected instance's style is not `NONE`,
 also `_loaded_athlete`, `_plugin_report`, `tile_settings_from_document` and
 `load_quarantine` (the checks `sync`'s drain path makes before its first
 write). Then, unless `--dry-run`, `create_inbox_paths`. With no instance
-configured: print "No connectors are configured …" (6.3). Then `run_pull`,
-`_report_pull`, and with `--sync` `_run_drain_passes(…, command="pull")`
-(12.1-12.3); exit `1` when `report.failed` or the drain helper reports a
-failure (11.4, 12.5).
+configured: print "No connectors are configured …" (6.3) and do not return
+early — with `--sync` the drain still runs, so `pull --sync --no-prompt`
+with no `[connectors]` table produces exactly what `sync --no-prompt` does
+and exits by the drain's outcome (the packaged skill's claim rests on
+this). Then `run_pull`, `_report_pull`, and with `--sync`
+`_run_drain_passes(…, command="pull")` (12.1-12.3); exit `1` when
+`report.failed` or the drain helper reports a failure (11.4, 12.5).
 
 **`connect` flow**: data root; settings, inbox validation (no creation),
 `load_connectors_settings`; unknown name (5.3); `NONE` → "nothing to connect",
@@ -1416,12 +1428,21 @@ highlight=False, soft_wrap=True`, as `_report_drain` does.
 
 #### BoundaryGuard (`tests/connectors/test_boundary.py`)
 Four layers, each with a positive control:
-1. **Import closure**: every module under `src/fitdocs/connectors/` parsed;
-   its `fitdocs.*` imports equal a hand-pinned allowed set per module; the
-   pinned module list equals the directory listing both ways.
-2. **Forbidden names**: no connectors module imports any name listed under
-   Allowed Dependencies as forbidden (equality or dotted descent, including
-   `from X import y` forms).
+1. **Direct imports per module**: every module under
+   `src/fitdocs/connectors/` parsed; its *direct* (not transitive)
+   non-stdlib imports — `fitdocs.*` targets and third-party top-level names
+   (stdlib decided by `sys.stdlib_module_names`) — equal a hand-pinned
+   allowed set per module; `tomli_w` appears only in `ledger.py`'s and
+   `credentials.py`'s sets; the pinned module list equals the directory
+   listing both ways. Transitive reach is deliberately not pinned:
+   `fitdocs.layout` itself imports `fitdocs` and `fitdocs.contract`
+   (`layout.py:47-48`).
+2. **Forbidden names**: no connectors module directly imports any name
+   listed under Allowed Dependencies as forbidden (equality or dotted
+   descent, including `from X import y` forms), nor any third-party
+   top-level name other than `tomli_w` in its two permitted modules.
+   Because layer 1 pins by equality, a mutation that adds a forbidden import
+   reds both layers; layer 2 is the one that names the rule.
 3. **Tree-wide network allow-list** (14.2): every module under `src/fitdocs/`
    is scanned for imports of `socket`, `ssl`, `http` (any submodule),
    `urllib.request`, `urllib.error`, `ftplib`, `smtplib`, `xmlrpc`; offenders
@@ -1429,6 +1450,26 @@ Four layers, each with a positive control:
    control: the scan finds both allowed modules and more than 100 files.
 4. **Clock scan**: no `datetime.now`, `date.today`, `time.time`,
    `datetime.utcnow` spelling in the package (the clock is injected).
+
+#### NetworkStatementsPin (`tests/connectors/test_network_statements.py`)
+The retired phrases, each forbidden (after collapsing whitespace) in
+`src/fitdocs/**/*.py`, `README.md` and `docs/*.md`, with its location on this
+branch's base:
+- "Network access is confined to :mod:`fitdocs.tiles`" (`cli.py:98`)
+- "That is the *only* network access" (`sync.py:44`)
+- "**only** network-touching code" (`tiles.py:7`)
+- "The only network-touching code in the package" (`tiles.py:246`)
+- "The package's only network call" (`tiles.py:407`)
+- "the only time fitdocs touches the network" (`README.md:66`)
+- "the *only* time fitdocs touches the network" (`docs/configuration.md:73-74`,
+  across a line break)
+
+The list is exact phrases, not words: true statements elsewhere that the plan
+must not edit ("Fully offline" at `load/engine.py:32`, `audit.py:10-14`,
+`docs/contributing-calculators.md:466`, `docs/plugins.md:26`) stay green. The
+positive half: each rewritten place names both the map tiles and
+`fitdocs pull`. No rewritten statement links `docs/connectors.md` until task 7
+declares it in `[project.urls]` (`tests/test_packaging.py:263-285`).
 
 #### ConfinementRegistration (`tests/test_confinement.py`)
 - `_stage_pull_folder(data_root, source_dir)`: writes `fitdocs.toml` with
@@ -1442,6 +1483,10 @@ Four layers, each with a positive control:
   directory staying untouched proves 13.5 as a side effect.
 - `test_pull_is_a_registered_writing_entry_point` (the named mutation: drop
   the registration).
+- The connector test doubles are imported as plain classes from
+  `tests.connectors.conftest` (`tests/__init__.py` makes it importable);
+  that conftest's autouse fixtures do not reach this module, so its connector
+  cases apply the environment isolation (see Testing Strategy) locally.
 - `test_connect_writes_only_the_credentials_file`: a synthetic `API_KEY`
   connector, a `FakeTransport` answering 200, the credentials directory at
   `<sandbox>/user-config`; snapshot the whole sandbox; after `run_connect`
@@ -1537,8 +1582,10 @@ each name identical to its defining module's object.
 - `CHANGELOG.md` `[Unreleased]`: Added (the two commands, the folder
   connector, the `[connectors]` table — settings schema, additive); Changed
   (inbox interface: connector deliveries are removed once archived — no
-  action; ownership contract advanced — no action); each naming the contract
-  and the user action (15.8).
+  action; the ownership contract's statements on credentials, the ledger
+  and the two commands — no action); each naming the contract and the user
+  action, and none naming a contract-version number, so the entry is right
+  whichever Amendment 4 part advanced the value (15.8).
 
 #### PackagedSkill (`src/fitdocs/skills/fitdocs-workouts/SKILL.md`)
 - `description`: pulls new `.fit` files from the athlete's configured
@@ -1664,6 +1711,15 @@ Reports only; fitdocs has no logging subsystem. Nothing is written to any log
 file.
 
 ## Testing Strategy
+
+**Environment isolation.** `tests/connectors/conftest.py` carries an autouse
+fixture that points `FITDOCS_CREDENTIALS_DIR` at a per-test temporary
+directory outside any sandbox data root, points `HOME` at a temporary
+directory, and deletes `XDG_CONFIG_HOME` and every `FITDOCS_CONNECTOR_*`
+variable, so a developer's real credentials or overrides can neither be
+written nor change an outcome. The isolation is a plain helper the fixture
+calls; `tests/test_confinement.py`'s connector cases import and call it
+themselves (they are outside that conftest).
 
 Every new assertion owes a named mutation (`change-protocol.md` § Fixture
 Discrimination); the items below name the behavior and the mutation it dies on.
