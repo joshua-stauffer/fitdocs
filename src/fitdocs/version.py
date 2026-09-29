@@ -10,6 +10,13 @@ User-Agent, and the plugin listing's built-in-calculator version. Each called
 module is the single place that lookup happens; every consumer reads
 :func:`tool_version` or :func:`version_display` instead.
 
+:func:`user_agent` (connectors design.md VersionUA, Req 9.1) is this leaf's
+one composed fitdocs User-Agent, built from :func:`version_display` and
+:data:`PROJECT_URL`. ``fitdocs.tiles``'s tile fetcher returns it rather than
+holding its own literal, and it has a fourth consumer besides the three call
+sites above: the connector transport (``fitdocs/connectors/http.py``), which
+sends it with every connector request.
+
 The lookup is performed lazily, at the point of use, every time -- never at
 import time, and never cached at module scope beyond the distribution name
 constant. Metadata reads are slow enough to matter for a command-line
@@ -39,6 +46,11 @@ DIST_NAME: Final[str] = "fitdocs"
 #: (Req 2.4).
 UNKNOWN_VERSION: Final[str] = "unknown"
 
+#: The project's public home, embedded in every fitdocs User-Agent (connectors
+#: design.md VersionUA, Req 9.1) so a service operator can identify and
+#: contact the tool behind a request.
+PROJECT_URL: Final[str] = "https://github.com/joshua-stauffer/fitdocs"
+
 
 def tool_version() -> str | None:
     """The installed ``fitdocs`` distribution's version, or ``None`` when the
@@ -62,3 +74,21 @@ def version_display() -> str:
     User-Agent -- rather than propagate an absent value.
     """
     return tool_version() or UNKNOWN_VERSION
+
+
+def user_agent() -> str:
+    """The one fitdocs User-Agent (design.md VersionUA, Req 9.1): every
+    request any connector or the tile fetcher makes carries this string,
+    naming the installed version and :data:`PROJECT_URL`, and never the HTTP
+    library's default agent.
+
+    Composed at call time from :func:`version_display` -- no module-level
+    cache, matching this module's own no-import-time-work,
+    no-module-level-cache rule -- so a version that becomes resolvable later
+    in the same process is reflected on the very next call, and the
+    installed-vs-unknown degradation (Req 2.4) flows through automatically.
+    There is exactly one definition of this string in the package;
+    ``fitdocs.tiles``'s own agent function returns it rather than composing
+    a second literal.
+    """
+    return f"fitdocs/{version_display()} (+{PROJECT_URL})"

@@ -33,9 +33,17 @@ from pathlib import Path
 
 import pytest
 
+import fitdocs.tiles as tiles_module
 import fitdocs.version as version_module
 from fitdocs.agentskill import PACKAGED_SKILLS
-from fitdocs.version import DIST_NAME, UNKNOWN_VERSION, tool_version, version_display
+from fitdocs.version import (
+    DIST_NAME,
+    PROJECT_URL,
+    UNKNOWN_VERSION,
+    tool_version,
+    user_agent,
+    version_display,
+)
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -118,6 +126,118 @@ def test_lookup_happens_lazily_not_cached_across_calls(
     assert first == "first-call-value"
     assert second == "second-call-value"
     assert first != second
+
+
+# --- VersionUA: the one fitdocs User-Agent definition (design.md VersionUA,
+# Req 7.1, 9.1) --------------------------------------------------------------
+
+
+def test_user_agent_equals_the_literal_format_with_a_patched_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``user_agent()`` is composed at call time from ``version_display()`` and
+    :data:`PROJECT_URL` -- pinned against the exact literal format with a
+    value patched to differ from the real installed version, so a stub that
+    ignores the patch (e.g. one that reads the real version, or one that
+    cached the string at import) cannot pass.
+    """
+    monkeypatch.setattr(version_module, "version", lambda name: "9.9.9-ua-patched")
+
+    assert (
+        user_agent()
+        == "fitdocs/9.9.9-ua-patched (+https://github.com/joshua-stauffer/fitdocs)"
+    )
+
+
+def test_user_agent_degrades_to_the_unknown_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """From an uninstalled source tree ``user_agent()`` still names the
+    project and degrades to :data:`UNKNOWN_VERSION` rather than raising
+    (Req 2.4 inherited via :func:`version_display`).
+    """
+
+    def _raise(name: str) -> str:
+        raise PackageNotFoundError(name)
+
+    monkeypatch.setattr(version_module, "version", _raise)
+
+    assert user_agent() == f"fitdocs/{UNKNOWN_VERSION} (+{PROJECT_URL})"
+
+
+def test_user_agent_not_cached_at_import_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two successive calls within one process, under one patch whose
+    version reader returns a different value on each call, each recompute
+    the agent -- pinning that it is composed at call time, never cached.
+
+    Under the task's named mutation (the agent computed once at import),
+    both calls return the import-time version, so both equality assertions
+    below fail.
+    """
+    values = iter(["first-ua-value", "second-ua-value"])
+    monkeypatch.setattr(version_module, "version", lambda name: next(values))
+
+    first = user_agent()
+    second = user_agent()
+
+    assert (
+        first == "fitdocs/first-ua-value (+https://github.com/joshua-stauffer/fitdocs)"
+    )
+    assert (
+        second
+        == "fitdocs/second-ua-value (+https://github.com/joshua-stauffer/fitdocs)"
+    )
+    assert first != second
+
+
+def test_tiles_module_spells_no_user_agent_format_of_its_own() -> None:
+    """``src/fitdocs/tiles.py`` contains no string constant (f-string parts
+    included) beginning ``fitdocs/`` -- the User-Agent's format lives only in
+    :func:`fitdocs.version.user_agent`. The patched-URL test below cannot see
+    a second copy of the format that reads the version leaf's attributes at
+    call time, because such a copy follows the patch; this one can.
+    """
+    import ast
+
+    source = Path(tiles_module.__file__).read_text(encoding="utf-8")
+    offending = [
+        node.value
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and node.value.startswith("fitdocs/")
+    ]
+    assert offending == []
+
+
+def test_tile_fetcher_delegates_to_the_one_user_agent_definition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``fitdocs.tiles``'s own User-Agent function returns exactly
+    :func:`fitdocs.version.user_agent`'s string -- there is one definition,
+    not two literals that happen to agree today.
+
+    Both the version *and* :data:`fitdocs.version.PROJECT_URL` are patched
+    to values that differ from the real ones, and the tile fetcher's agent
+    is asserted to carry the patched project URL. A tile-side copy of the
+    format string -- even one that starts out byte-identical to today's
+    literal -- has its own, separately-spelled URL, so it cannot follow a
+    change made only in the version leaf; only genuine delegation re-reads
+    :data:`PROJECT_URL` from :mod:`fitdocs.version` on every call. (Patching
+    only the version, as the sibling tests above do, is not sufficient here:
+    an exact-copy literal in ``tiles.py`` would still contain the *real*
+    project URL and pass a version-only patch, which is why this is a
+    second, distinct assertion rather than a restatement of the version
+    patch.)
+    """
+    monkeypatch.setattr(version_module, "version", lambda name: "9.9.9-tile-patched")
+    monkeypatch.setattr(
+        version_module, "PROJECT_URL", "https://example.invalid/ua-sentinel"
+    )
+
+    agent = tiles_module._user_agent()
+
+    assert agent == "fitdocs/9.9.9-tile-patched (+https://example.invalid/ua-sentinel)"
 
 
 # --- repository scan: the released version literal appears nowhere else ----

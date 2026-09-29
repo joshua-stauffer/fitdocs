@@ -56,7 +56,7 @@ from typing import Any, Final, Protocol
 from fitdocs.layout import settings_path, tile_cache_path
 from fitdocs.render.charts.map import TileRef
 from fitdocs.settings import SettingsError, load_settings_document
-from fitdocs.version import version_display
+from fitdocs.version import user_agent as _fitdocs_user_agent
 
 TILES_TABLE: Final[str] = "tiles"
 
@@ -251,16 +251,17 @@ def _setting_url(table: dict[str, Any], path: Path) -> str:
 
 def _user_agent() -> str:
     """The mandatory descriptive User-Agent every tile request carries (Req
-    3.4).
+    3.4, connectors Req 9.1).
 
     OSM actively blocks the default library UA, so identifying fitdocs (with
     its installed version and project URL) is load-bearing, not cosmetic.
-    Derived from :func:`fitdocs.version.version_display` -- the same leaf the
-    CLI ``--version`` flag reads -- so it tracks releases automatically and,
-    from an uninstalled source tree, degrades to the unknown token instead of
-    raising (Req 2.4), unlike the previous direct
-    ``importlib.metadata.version`` call this replaced, which propagated
-    ``PackageNotFoundError``.
+    Delegates to :func:`fitdocs.version.user_agent` -- the one fitdocs
+    User-Agent definition (design.md VersionUA) also used by every
+    connector -- rather than composing a second literal here, so it tracks
+    releases automatically and, from an uninstalled source tree, degrades to
+    the unknown token instead of raising (Req 2.4), unlike the previous
+    direct ``importlib.metadata.version`` call this replaced, which
+    propagated ``PackageNotFoundError``.
 
     A function, not a module-level constant: resolved fresh at the point of
     use (matching :mod:`fitdocs.version`'s own no-import-time-work,
@@ -268,7 +269,7 @@ def _user_agent() -> str:
     imports, so a version that becomes resolvable later in the same process
     is picked up on the very next tile request.
     """
-    return f"fitdocs/{version_display()} (+https://github.com/joshua-stauffer/fitdocs)"
+    return _fitdocs_user_agent()
 
 
 #: Per-request network timeout, in seconds. One attempt per tile per run (no
