@@ -180,6 +180,7 @@ files = [
     "tests/test_cli_identity.py",
     "tests/test_docs_workflow.py",
     "tests/sitebuild",
+    "tests/connectors",
     "scripts",
 ]
 
