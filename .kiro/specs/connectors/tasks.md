@@ -164,7 +164,7 @@
     item lists the connectors site
   - _Requirements: 4.3, 5.6_
 
-- [ ] 1.3 (P) Define the one fitdocs User-Agent in the version leaf, delegate the tile fetcher to it, and add the ledger path to the layout leaf
+- [x] 1.3 (P) Define the one fitdocs User-Agent in the version leaf, delegate the tile fetcher to it, and add the ledger path to the layout leaf
   - The version leaf gains the project URL constant and a User-Agent
     composed at call time from the display version and that URL; the tile
     fetcher's own User-Agent function returns it, so there is one
