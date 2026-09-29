@@ -44,7 +44,9 @@ version.
   `fit-ingest`).
 - Averaging, blending, gap-filling or correcting any value; merging laps.
 - Showing an extra's devices, decode errors, session values or generic
-  record-level developer fields.
+  record-level developer fields. (Each contribution carries its file's own
+  devices so that `intervals-connector`'s attribution line can word the
+  donating files; that line and its wording are `intervals-connector`'s.)
 - A frontmatter key for provenance.
 - Rescoring a page whose load was already computed (the athlete's
   `fitdocs load --recompute`).
@@ -74,7 +76,8 @@ version.
   statements with the alignment-constant table, the release note.
 - **Amendment records**: wiki-contract Amendment 4's channel part;
   `workout-docs`, `training-load` and `performance-benchmarks` amendments;
-  roadmap annotations.
+  the roadmap's Phase 8 Existing Spec Updates annotations and ticks; the
+  `compose` entry on `.kiro/steering/structure.md`'s dependency line.
 - **The synthesized pair fixtures** (`tests/fixtures/merge.py`).
 
 ### Out of Boundary
@@ -89,7 +92,9 @@ version.
   flags, benchmark derivation rules (`training-load`, `threshold-load`,
   `load-channels`, `activity-qa-flags`, `performance-benchmarks`): unchanged;
   they receive a composed activity.
-- The Garmin attribution line (`intervals-connector`); see Cross-spec seams.
+- The Garmin attribution line and its wording (`intervals-connector`); this
+  spec publishes each contributing file's devices for it and, if it lands
+  second, wires the one call site (see Cross-spec seams).
 - Any network access, clock read or new runtime dependency.
 
 ### Allowed Dependencies
@@ -147,6 +152,10 @@ version.
   change with them (they are final at ingest); nothing here moves.
 - A `SessionSummary` field added that a donated channel should feed: the
   metric's own "session, else channel" rule decides; nothing here moves.
+- A change to `SourceContribution`'s fields (`devices` and `channels` are read
+  by `render/views.py::_head`) or to `intervals-connector`'s
+  `attribution_line(base, donor_devices)` signature: both specs revalidate the
+  `_head` wiring and the ride-pair attribution pin.
 
 ### Cross-spec seams
 
@@ -163,15 +172,18 @@ version.
   stem stay computed from `parsed[roles.base.ref]` **before** the call
   (Req 1.6). A test of identity's that spies on `_render_activity`'s return
   value is updated to read `.activity`.
-- **No second archive read in `sync`**: the roadmap's "the archive reads of the
-  extras are channel-merge's" is discharged in the two passes that hold only a
-  page's `sources` (`compose_listed`), not in the page task, which already has
-  every member parsed.
+- **No second archive read in `sync`**: the page task already has every member
+  parsed; the archive reads of the extras happen in the two passes that hold
+  only a page's `sources` (`compose_listed`), as the roadmap's Phase 8
+  `sync.py` seam states.
 - Identity's Req 5.8 ("until channel composition exists, render from the base
   alone") is conditional and is fulfilled by this spec, not amended. Any
   identity test pinning "an extra contributes nothing to the body" is updated
   to the composed expectation by task 4.1, which lists each one.
-- `DocContext` gains `channel_provenance` appended after identity's `identity`.
+- `DocContext` gains `channel_provenance` appended after identity's `identity`;
+  identity's position-relative field-order pin (`user_frontmatter` directly
+  after `map_data`, `identity` last) becomes `channel_provenance` last with
+  `identity` directly before it.
 - The whole-hour shift reuses `identity.matching`'s `SHIFT_STEP_S`,
   `SHIFT_MAX_HOURS` and `START_TOLERANCE_S` by import, so a file identity joins
   by SHIFTED evidence is aligned by the same arithmetic.
@@ -194,43 +206,71 @@ version.
   extra's generic developer channels are not carried (no page renders them).
 - The Running Dynamics section reads `ctx.activity.samples`, which is the
   composed activity, so donated dynamics reach it with no change there.
-- Fixtures reuse running-dynamics' developer-field encoding helper in
-  `tests/fixtures/builder.py` (its task 1.2) and `_file_id`'s keyword-only
-  `manufacturer`/`product`/`time_created` parameters; no second Encoder
-  sequence for developer fields is written. A file that carries no developer
-  field (the Garmin ride original) may instead be built from the existing
-  `builder.encode(mesgs)` primitives. The fixtures need the helper to control,
-  per file: the laps (count and per-lap values, heart rate included), the
-  session's start, elapsed time and distance, the session developer fields
-  (HealthFit's `SESSION UUID`), and the sport (a cycling session). For each of
-  these the published helper does not already take, this spec appends to it
-  one keyword-only parameter whose default is the helper's current behaviour
-  -- `laps`, `session_start`, `session_elapsed_s`, `session_distance_m`,
-  `session_developer_fields`, `sport` -- and pins in
+- Fixtures reuse running-dynamics' developer-field encoding helper
+  `developer_field_run_fit_bytes` in `tests/fixtures/builder.py` (its task
+  1.2) and `_file_id`'s keyword-only `manufacturer`/`product`/`time_created`
+  parameters; no second Encoder sequence for developer fields is written. A
+  file that carries no developer field (the Garmin ride original) may instead
+  be built from the existing `builder.encode(mesgs)` primitives. The fixtures
+  need the helper to control, per file: the laps (count and per-lap values,
+  heart rate included), the session's start, elapsed time and distance, the
+  session developer fields (HealthFit's `SESSION UUID`), the sport (a
+  cycling session) and the recording device's manufacturer (the ride copy's
+  is not Garmin). The `SESSION UUID` goes through the helper's existing
+  keyword-only `session_fields` option and the recording device through its
+  existing `device_manufacturer`. For each of the others the published
+  helper does not already take, this spec appends to it one keyword-only
+  parameter whose default is the helper's current behaviour -- `laps`,
+  `session_start`, `session_elapsed_s`, `session_distance_m`, `sport` (the
+  pre-authorized list; each only if absent) -- and pins in
   `tests/fixtures/test_builder.py` that the helper's default output bytes are
   unchanged. Any other missing capability is a stop-and-report.
+- Shared files: `render/views.py` (running-dynamics appends its Running
+  Dynamics section call; this spec appends the Channel Sources call after
+  Device & Data Quality) and `render/__init__.py`, append-only; a rebase keeps
+  both.
 
 **intervals-connector (wave 2 peer)**
-- Its "Garmin <model>" attribution is decided in render. Under the default
-  precedence a Garmin file is always the base when present. Under a configured
-  precedence a Garmin file can be an extra that donates channels; this spec
-  publishes `ChannelProvenance.extras[i].manufacturer` and `.channels` on
-  `DocContext.channel_provenance` so attribution can cover a donated channel.
-  Whether it does is intervals-connector's decision.
-- Shared files: `render/views.py` and `render/__init__.py` (append-only: this
-  spec appends one field and one section call per view).
+- Garmin attribution on composed pages (ratified at the Phase 8 cross-spec
+  review, 2026-09-29). Its "Garmin <model>" line is decided in render by
+  `attribution_line(base: Activity, donor_devices:
+  Sequence[Sequence[DeviceInfo]] = ())`, whose `recording_device` operates on
+  a device tuple. Render holds no donor `Activity`, so this spec publishes, on
+  `DocContext.channel_provenance`, each contribution's `manufacturer`,
+  `channels` and `devices` -- the contributing file's own `Activity.devices`
+  (ComposeTypes). The composed activity's own `devices` stay the base's
+  (Composer step 3), so `ctx.activity` is `attribution_line`'s base.
+- **Whichever of channel-merge / intervals-connector lands second** wires
+  `render/views.py::_head` to pass, when `ctx.channel_provenance` is not
+  `None`, `tuple(c.devices for c in ctx.channel_provenance.extras if
+  c.channels)` as `donor_devices` to `attribution_line(ctx.activity,
+  donor_devices)`, and adds the ride-pair pin: the ride pair (a Garmin-original
+  base plus a HealthFit copy donating heart rate, `tests/fixtures/merge.py`)
+  renders `Data sources: Garmin <model> and other devices`. In this plan that
+  is task 3.3's conditional step (or, if intervals-connector lands while this
+  branch is open, the same step after the final rebase). `attribution_line`
+  words every case; this spec adds no wording.
+- Shared files: `render/views.py` and `render/__init__.py`, append-only (this
+  spec appends one field, one section call per view and, as second lander,
+  the `donor_devices` argument at `_head`'s one call).
 
-**connectors (wave 1)**: no code seam. Shared: wiki-contract Amendment 4 and
-the `CONTRACT_VERSION` rule (see research.md, Decision: Contract version rule,
-and the follow-up it records).
+**connectors (wave 1)**: no code seam. Shared: wiki-contract Amendment 4
+(created by whichever of activity-identity, connectors and channel-merge
+lands first; SpecRecords), the `.kiro/steering/structure.md` dependency line
+(each appends its own package), and the `CONTRACT_VERSION` rule (one advance
+per lander, ratified at the Phase 8 cross-spec review; see research.md,
+Decision: Contract version rule).
 
 **docs-site (Phase 9 peer)**: this spec adds no `docs/` page and does not edit
 `docs/index.md`.
 
 **Shared version and golden rules**: `DOC_VERSION` and `CONTRACT_VERSION` each
 advance by one from `main`'s value when this spec lands (never a hard-coded
-result). Literal pins of the old `DOC_VERSION` are found by grep at landing (at
-design time `tests/render/test_frontmatter.py:44, 101`,
+result; every Phase 8 lander advances each once, none shares another's
+advance); after the final rebase each is asserted equal to `main`'s value plus
+one and re-pinned if a sibling landed first. Literal pins of the old
+`DOC_VERSION` are found by grep at landing (at design time
+`tests/render/test_frontmatter.py:44, 101`,
 `tests/metrics/test_sources.py:2270`, and every
 `tests/render/golden_docs/*.md` `doc_version` line; `tests/test_cli_check.py:196,
 198` is rewritten by activity-identity to `f"doc_version: {DOC_VERSION}"`).
@@ -343,6 +383,7 @@ tests/
 ├── compose/                     # NEW test package
 │   ├── __init__.py
 │   ├── builders.py              # hand-built Activity values for the pure unit tests
+│   ├── test_types.py            # SourceContribution's field names and order (the render/attribution seam)
 │   ├── test_stretches.py
 │   ├── test_alignment.py
 │   ├── test_donation.py
@@ -361,7 +402,9 @@ tests/
 - `src/fitdocs/render/views.py` — each of the three views appends
   `## Channel Sources` after `## Device & Data Quality` when
   `channel_sources_section(ctx)` is not `None`; module and view docstrings
-  name the section.
+  name the section; when `intervals-connector` is already on `main`, `_head`
+  passes the donating extras' devices to `attribution_line` (Cross-spec
+  seams).
 - `src/fitdocs/sync.py` — `_render_activity` body and return type; the page
   task's metrics, map plan and `DocContext` read the composition.
 - `src/fitdocs/load/engine.py` — `_compute_document` composes the parsed base
@@ -372,9 +415,10 @@ tests/
 - `src/fitdocs/contract.py` — `DOC_VERSION` +1 and `CONTRACT_VERSION` +1, each
   with a docstring paragraph.
 - `docs/ownership-contract.md` — composition statements, the alignment
-  constants table, "What changed at this version", Overwrite Semantics for
-  `regen`/`load`/`derive-benchmarks`.
-- `CHANGELOG.md` — `[Unreleased]` `### Changed` entry.
+  constants table, "What changed at this version" (replaced with this spec's
+  changes), Overwrite Semantics for `regen`/`load`/`derive-benchmarks`.
+- `CHANGELOG.md` — `[Unreleased]` `### Changed` entry, appended under the
+  existing heading (created only if absent).
 - `tests/test_contract_consumers.py` — `fitdocs.compose.archive` registered.
 - `tests/render/test_golden_docs.py` — a `composed_run` golden case;
   `tests/render/golden_docs/composed_run*` (new) and every existing golden's
@@ -384,10 +428,11 @@ tests/
   `tests/metrics/test_sources.py:2270`.
 - `tests/render/test_frontmatter.py:317-324`
   (`test_doc_context_field_order_has_user_frontmatter_after_map_data`), which
-  pins `DocContext`'s trailing field order: moved with the appended
-  `channel_provenance`, keeping its intent (`user_frontmatter` directly after
-  `map_data`; `channel_provenance` last), from whatever shape
-  `activity-identity` leaves it in.
+  pins `DocContext`'s field order: `activity-identity` rewrites it
+  position-relative (`user_frontmatter` directly after `map_data`, `identity`
+  last); this spec moves it with the appended field to `user_frontmatter`
+  directly after `map_data`, `channel_provenance` last, and `identity`
+  directly before it.
 - `tests/declaration_golden/*` — regenerated for the contract version.
 - Tests whose page now legitimately carries composed channels or a Channel
   Sources section (identity's e2e tests with multi-file pages,
@@ -398,11 +443,18 @@ tests/
   listed, including one task 4.1 already updated (the two tasks are
   sequential).
 - `pyproject.toml` `[tool.mypy].files` — the new typed test modules.
+- `tests/fixtures/builder.py` — only the keyword-only, defaulted parameters on
+  `developer_field_run_fit_bytes` that Cross-spec seams pre-authorizes, each
+  only if absent, each pinned in `tests/fixtures/test_builder.py` as leaving
+  the helper's default output bytes unchanged.
 - Spec records: `.kiro/specs/wiki-contract/{requirements.md,design.md,spec.json}`,
   `.kiro/specs/workout-docs/{requirements.md,spec.json}`,
   `.kiro/specs/training-load/{requirements.md,spec.json}`,
   `.kiro/specs/performance-benchmarks/{requirements.md,spec.json}`,
-  `.kiro/steering/roadmap.md` (annotations only).
+  `.kiro/steering/roadmap.md` (Phase 8 Existing Spec Updates annotations and
+  ticks only).
+- Steering: `.kiro/steering/structure.md` — the dependency line gains
+  `compose`, append-only (SpecRecords).
 
 ## System Flows
 
@@ -517,19 +569,19 @@ sequenceDiagram
 
 | Component | Domain/Layer | Intent | Req Coverage | Key Dependencies | Contracts |
 |-----------|--------------|--------|--------------|------------------|-----------|
-| ComposeTypes | compose (pure) | The composition result and provenance values | 3.7, 4.2, 4.4 | model, identity.kinds (P0) | State |
+| ComposeTypes | compose (pure) | The composition result and provenance values (each contribution's devices for attribution) | 3.7, 4.2, 4.4 | model, identity.kinds (P0) | State |
 | Stretches | compose (pure) | Instants, pauses, stretches | 3.1, 3.2 | model (P0) | Service |
 | Alignment | compose (pure) | Hour shift, per-stretch lag, placement | 2.6, 3.3-3.10 | Stretches, identity.matching (P0) | Service |
 | Donation | compose (pure) | Units, base-wins, placed values | 2.1-2.8 | ComposeTypes (P0) | Service |
 | Composer | compose (pure) | One composed activity plus provenance | 1.1-1.5, 2.x, 5.2-5.4, 7.1 | Donation, Alignment (P0) | Service |
 | ArchiveComposition | compose (I/O) | Compose a page's listed files | 6.1-6.3, 7.2 | Composer, contract, layout, ingest (P0) | Service |
 | ChannelSourcesSection | render | The `## Channel Sources` body | 4.1-4.6, 4.8 | ComposeTypes (P0), layout (P1) | Service |
-| ViewWiring | render | Placement in all three views; `DocContext` field | 4.6, 4.7 | ChannelSourcesSection (P0) | State |
+| ViewWiring | render | Placement in all three views; `DocContext` field; `_head`'s donor devices when second lander | 4.6, 4.7 | ChannelSourcesSection (P0), intervals-connector `attribution_line` (P1) | State |
 | EngineWiring | engine | `_render_activity` composes; page task reads it | 1.1, 1.3, 1.6, 5.1, 7.1 | Composer (P0), identity roles (P0) | Service |
 | PassWiring | load, performance | Both passes read the composed activity | 6.1-6.6 | ArchiveComposition (P0) | Service |
 | FormatVersion | contract | Version advances and pins | 8.1, 8.2, 8.4, 8.5 | -- | State |
 | ContractDocs | docs | Contract statements, table, release note | 6.6, 8.3, 8.4, 8.6 | Alignment constants (P1) | -- |
-| SpecRecords | process | Amendment records, roadmap notes | 8.3 (recorded) | -- | -- |
+| SpecRecords | process | Amendment records, roadmap annotations and ticks, steering dependency line | 8.3 (recorded) | -- | -- |
 | Guards | tests | Boundary, consumer registration, mypy list | 7.2, 7.3 | -- | -- |
 | MergeFixtures | tests | Synthesized pairs with measured shapes | 9.1, 9.3 | builder helpers (P0) | -- |
 
@@ -567,6 +619,7 @@ class SourceContribution:
     sha256: str                        # the file's Provenance.sha256
     kind: SourceKind                   # identity.kinds.source_kind of the file
     manufacturer: str | None           # the file's FileIdentity.manufacturer
+    devices: tuple[DeviceInfo, ...]    # the file's own Activity.devices (read by intervals-connector's attribution)
     channels: tuple[str, ...]          # Samples field names this file supplies with data, in field order
     alignment: ExtraAlignment | None   # None for the base, and for an extra that supplies nothing
 
@@ -583,7 +636,12 @@ class Composition:
 - Invariants: every channel name appears in at most one contribution's
   `channels`; an extra's `alignment` is non-`None` exactly when its `channels`
   is non-empty; the base's `channels` are exactly the channels the base
-  records.
+  records; every contribution's `devices` is its own file's `Activity.devices`
+  (the base's included, an extra that supplies nothing included), never
+  another file's.
+- `SourceContribution`'s field names and order are a cross-spec seam
+  (`render/views.py::_head` reads `.devices` and `.channels`), pinned by
+  `tests/compose/test_types.py`.
 
 #### Stretches (`src/fitdocs/compose/stretches.py`)
 
@@ -755,7 +813,9 @@ def compose_activity(base: Activity, extras: Sequence[Activity]) -> Composition:
      start are the base's (Req 1.4, 1.5, 5.2, 5.4).
   4. Provenance: the base's contribution lists the channels it records; each
      extra's lists the channels donated from it, with its `placement.alignment`
-     when it donated and `None` otherwise.
+     when it donated and `None` otherwise. Every contribution carries its own
+     file's `sha256`, source kind, `FileIdentity.manufacturer` and
+     `Activity.devices`, whether or not it donated.
 - Pure, total over parsed activities, never raises for data; deterministic.
 
 **Implementation Notes**
@@ -764,7 +824,7 @@ def compose_activity(base: Activity, extras: Sequence[Activity]) -> Composition:
   first; position per channel instead of per unit; take the extra's laps; take
   a session summary value from a donated channel; carry the extra's
   `record_developer_fields`; return a rebuilt activity instead of `base` when
-  there is no extra.
+  there is no extra; give every contribution the base's `devices`.
 
 ### Composition adapter (I/O)
 
@@ -851,6 +911,20 @@ def channel_sources_section(ctx: DocContext) -> str | None: ...
   `_section("Channel Sources", body)` immediately after their
   `## Device & Data Quality` block when `channel_sources_section(ctx)` returns
   a body (Req 4.7). No asset.
+- Attribution wiring, only when `intervals-connector` (its `_head` and
+  `attribution_line(base, donor_devices)`) is on `main` before this spec lands
+  (Cross-spec seams): `_head` passes `tuple(c.devices for c in
+  ctx.channel_provenance.extras if c.channels)` as `donor_devices` when
+  `ctx.channel_provenance` is not `None`, and `()` otherwise. Pins in
+  `tests/render/test_provenance.py`'s views section: the ride pair composed
+  and rendered reads `Data sources: Garmin <model> and other devices` (`<model>`
+  the Garmin original's recording-device label as `intervals-connector`
+  derives it); a hand-built composition whose only extra is non-Garmin and
+  donates nothing reads `Data source: Garmin <model>`. Named mutations: pass
+  `()` as `donor_devices` (the ride-pair pin reds, M25); drop the
+  `if c.channels` filter (the non-donating pin reds, M26). If
+  `intervals-connector` lands second, it does this wiring and adds the
+  ride-pair pin instead.
 
 ### Engine and passes
 
@@ -909,10 +983,13 @@ def _render_activity(roles: PageRoles, parsed: Mapping[str, Activity]) -> Compos
   paragraph: a page holding extras takes the channels its base lacks from them
   and gains a Channel Sources section; a page without extras renders
   identically apart from this line (Req 8.1, 8.2).
-- `CONTRACT_VERSION` advances by one from `main`'s value at landing (under the
-  ratified batch rule; see research.md), with a paragraph: what an extra
-  contributes; the Channel Sources section; the load and benchmark passes read
-  the composed activity (Req 8.4).
+- `CONTRACT_VERSION` advances by one from `main`'s value at landing -- every
+  Phase 8 lander advances it once, none shares another's advance (research.md,
+  Decision: Contract version rule) -- with a docstring paragraph added: what
+  an extra contributes; the Channel Sources section; the load and benchmark
+  passes read the composed activity (Req 8.4). The declaration goldens are
+  always regenerated. After the final rebase the value is asserted equal to
+  `main`'s plus one and re-pinned if a sibling landed first.
 - `MANAGED_KEYS` unchanged (Req 8.5); `tests/test_ownership_contract.py`'s
   equality with the published list stays green unedited.
 - The e2e module records `_PRE_CHANNEL_MERGE_DOC_VERSION: int` = the value read
@@ -930,7 +1007,9 @@ def _render_activity(roles: PageRoles, parsed: Mapping[str, Activity]) -> Compos
   the Channel Sources section; no frontmatter key; the load and benchmark
   passes compose the listed files the same way; a computed load is kept until
   `fitdocs load --recompute` (Req 6.6, 8.3).
-- Header version and "What changed at this version" paragraph (Req 8.4).
+- Header version, and the "What changed at this version" paragraph
+  **replaced** with this spec's changes (a sibling's earlier paragraph is not
+  kept; `CHANGELOG.md` is the cumulative record) (Req 8.4).
 - Overwrite Semantics: `regen` composes; `load` and `derive-benchmarks` read
   the composed activity.
 - `CHANGELOG.md` `[Unreleased]` `### Changed`: the generated document contract
@@ -938,12 +1017,21 @@ def _render_activity(roles: PageRoles, parsed: Mapping[str, Activity]) -> Compos
   others and name each channel's file) with the actions `fitdocs regen` and
   `fitdocs load --recompute`; docs referenced only by
   `https://github.com/joshua-stauffer/fitdocs/blob/main/...` URLs; no version
-  number named (Req 8.6).
+  number named (Req 8.6). The entry is appended under the existing
+  `### Changed` heading in `[Unreleased]`; the heading is created only if
+  absent (`tests/test_changelog.py:516` rejects a repeated category in one
+  section).
 
 #### SpecRecords
-- wiki-contract: append this spec's paragraph to `## Amendment 4 (...)`
-  (created by `activity-identity`) and one criterion to Requirement 2 (the
-  published contract states the composition), next free number, marked
+- wiki-contract: Amendment 4 is created by whichever of `activity-identity`,
+  `connectors` and `channel-merge` lands first, titled `## Amendment 4 (<first
+  landing date>): source roles, connector state and channel provenance, landed
+  by activity-identity, connectors and channel-merge`; this spec creates it
+  with that title if no sibling has, else appends its own paragraph to it.
+  The paragraph records this spec's own `CONTRACT_VERSION` `"X"` to `"Y"`
+  (the values read at landing; precedent: wiki-contract `requirements.md`
+  Amendments 1-3). One criterion to Requirement 2 (the published contract
+  states the composition), next free number, tagged
   `_(added by Amendment 4)_`; `design.md` DocumentContract note; `spec.json`
   `amendments` entry. No Requirement 6 criterion (no new key).
 - workout-docs: a new `## Amendment N (<date>): channel provenance, landed by
@@ -956,9 +1044,19 @@ def _render_activity(roles: PageRoles, parsed: Mapping[str, Activity]) -> Compos
   entry. performance-benchmarks: `## Amendment N` appending to Requirement 1
   (the same, for derivation); `spec.json` entry.
 - roadmap Phase 8 Existing Spec Updates: annotate the wiki-contract and
-  workout-docs lines with the parts landed here; tick a checkbox only if every
-  part it names is on `main`. Amendment and criterion numbers are the next
-  free ones on `main` at landing, never taken from this document.
+  workout-docs lines with the parts landed here, and tick either only if
+  every part it names is on `main`; tick the training-load and
+  performance-benchmarks lines (landed by channel-merge alone) once every part
+  of each is on `main`. The Boundary Strategy's `sync.py` seam already states
+  where the archive reads of the extras happen; this spec does not edit it.
+  Amendment and criterion numbers are the next free ones on `main` at
+  landing, never taken from this document.
+- `.kiro/steering/structure.md`: the dependency line ("Dependencies point one
+  way") gains `compose` append-only, without rewording the existing chain:
+  `compose` imports `model` and `identity`, and in `compose.archive` alone
+  `contract`, `layout` and `ingest`; it is imported by `sync`, the load and
+  benchmark passes, and `render.provenance` (types and alignment constants
+  only). `activity-identity` and `connectors` append their own packages.
 
 ### Tests
 
@@ -1033,6 +1131,10 @@ M1-M5 are Req 9.2's five.
 | M20 | Claim a unit for an extra whose placed values are all `None` | Extra with no overlapping instant then a second extra: the second donates |
 | M21 | Re-gate a donated balance on the base's stance time | A donated stance-time balance keeps its value where the base's stance time is `None` |
 | M22 | Carry the extra's `record_developer_fields` | Composed `record_developer_fields` equals the base's |
+| M23 | Give every contribution the base's `devices` (or the composed activity's) | Hand-built base and two extras with pairwise-distinct device tuples, one extra donating nothing: each contribution's `devices` equals its own file's `Activity.devices` |
+| M24 | Drop `devices` from `SourceContribution`, or move it | `tests/compose/test_types.py`: the field names, in order, are `sha256, kind, manufacturer, devices, channels, alignment` |
+| M25 | (only when this spec wires `_head`) pass `()` as `donor_devices` | Ride pair composed and rendered: `Data sources: Garmin <model> and other devices` |
+| M26 | (same condition) drop the `if c.channels` filter | Garmin base with one non-Garmin extra that donates nothing: `Data source: Garmin <model>` |
 
 - **Unit (`tests/compose/test_stretches.py`, `test_alignment.py`,
   `test_donation.py`, `test_composer.py`)**: hand-built activities with
@@ -1041,7 +1143,9 @@ M1-M5 are Req 9.2's five.
   `Samples` field but `time_s` with position paired, and contains every
   `DYNAMICS_CHANNELS` name (positive control); `compose_activity(base, ())
   .activity is base`; composed `time_s` equals the base's; every unfed
-  `compute_metrics` field equals the base-only value.
+  `compute_metrics` field equals the base-only value; each contribution's
+  `devices` is its own file's (M23); `SourceContribution`'s field order
+  (`tests/compose/test_types.py`, M24).
 - **Unit (`tests/compose/test_archive.py`)**: reverse order; unresolvable,
   duplicate, traversal-shaped and missing refs skipped; a decode error
   propagates.
@@ -1050,6 +1154,10 @@ M1-M5 are Req 9.2's five.
   `None` without extras; label table equality and completeness; `GPS` once.
 - **Golden (`tests/render/test_golden_docs.py`)**: `composed_run` (the run pair
   composed); every existing golden unchanged but its `doc_version` line.
+- **Attribution (only when this spec lands second to `intervals-connector`,
+  `tests/render/test_provenance.py` views section)**: the ride-pair pin and
+  the non-donating-extra pin (M25, M26); otherwise `intervals-connector` adds
+  the ride-pair pin when it lands.
 - **E2E (`tests/test_compose_e2e.py`, `tests/test_compose_passes_e2e.py`)**:
   sync the run trio in every arrival order, in one run and across runs,
   byte-identical page and assets with form power from `stryd_b` (Req 1.3); the page's
@@ -1111,10 +1219,14 @@ Returns `(healthfit, stryd)` bytes of one synthetic run.
 
 ### Ride pair (`ride_pair_fit_bytes(*, copy_power=True, copy_shift_h=0)`)
 Returns `(garmin, healthfit)` bytes of one synthetic ride.
-- **Garmin original**: manufacturer `garmin`; three stretches of 34 samples at
+- **Garmin original**: manufacturer `garmin`, its recording device
+  (`device_info` index 0) a Garmin device; three stretches of 34 samples at
   1 Hz; power on every sample, distance, speed, altitude, temperature,
   position, cadence; no heart rate and no session heart rate.
-- **HealthFit copy**: `development` plus `SESSION UUID`; the same instants
+- **HealthFit copy**: `development` plus `SESSION UUID`; its recording device
+  (`device_info` index 0) names manufacturer `development` through the
+  helper's keyword-only `device_manufacturer`, so it is not Garmin and the
+  attribution line counts it among "other devices"; the same instants
   (start identical to the second) moved by `copy_shift_h` hours; heart rate on
   every sample; power equal to the Garmin power at the same instant on every
   sample but one (about 99% coverage) when `copy_power`; a per-sample distance

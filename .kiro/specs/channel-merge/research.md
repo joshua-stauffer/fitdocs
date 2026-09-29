@@ -49,8 +49,9 @@
 - **Implications**: `_render_activity` keeps its name and parameters; its
   return type becomes the composition result so the page task can pass both the
   composed activity and its provenance on. No archive read happens in `sync`
-  for composition (the roadmap's "archive reads of the extras" land in the load
-  and benchmark passes instead, finding 1).
+  for composition; the archive reads of the extras land in the load and
+  benchmark passes (finding 1), as the roadmap's Phase 8 `sync.py` seam states
+  since its correction at the spec batch.
 
 ### What the channel set is after running-dynamics
 - **Context**: The roadmap requires composition to be generic over the channel
@@ -204,6 +205,24 @@
 - **Rationale**: see the pattern table above. The Amendment 4 part this spec
   lands is therefore a published-contract statement, not a key.
 
+### Decision: Each contribution carries its own file's devices
+- **Context**: `intervals-connector` attributes a page to "Garmin <model>"
+  and words a page with other contributors as "... and other devices"
+  (its Req 8.4). On the default ride pair (a Garmin-original base, a HealthFit
+  copy donating heart rate) render needs the donating file's recording
+  device, but render holds only `DocContext`, whose activity is the composed
+  one and whose devices are the base's (Req 1.5).
+- **Selected Approach** (ratified at the Phase 8 cross-spec review,
+  2026-09-29): `SourceContribution` gains `devices: tuple[DeviceInfo, ...]`,
+  the contributing file's own `Activity.devices`; the composed activity's
+  devices stay the base's. Whichever of this spec and `intervals-connector`
+  lands second wires `render/views.py::_head` to pass the donating extras'
+  device tuples to `attribution_line(base, donor_devices)` and adds the
+  ride-pair pin.
+- **Rationale**: the attribution's wording stays `intervals-connector`'s;
+  this spec only carries the data it cannot otherwise reach, with no model
+  change and no donor `Activity` in render.
+
 ### Decision: The load and benchmark passes compose by the page's recorded order
 - **Context**: Finding 1.
 - **Alternatives Considered**:
@@ -223,16 +242,28 @@
 
 ### Decision: Contract version rule
 - **Context**: The batch rule relayed to this spec: each spec advances each
-  version at most once, from the value on `main` when it lands.
-  `activity-identity` Req 9.6 advances `CONTRACT_VERSION` by one per lander;
-  `connectors` design (§ ContractVersion and OwnershipContractDocs) keeps
-  `main`'s value when a sibling already advanced it since the 0.1.0 release.
-- **Selected Approach**: this spec changes a stated guarantee (what an extra
+  version at most once, from the value on `main` when it lands. At writing,
+  `activity-identity` advanced `CONTRACT_VERSION` by one per lander while
+  `connectors` kept `main`'s value when a sibling had already advanced it
+  since the 0.1.0 release. The Phase 8 cross-spec review (2026-09-29) ratified
+  one rule for all five specs.
+- **Selected Approach (the ratified rule)**: `CONTRACT_VERSION` advances by one
+  from the value on `main` when this spec lands -- every lander advances it,
+  none shares another's advance. Precedent: effort-tags `"1"` to `"2"`
+  (1b940b1), load-history `"2"` to `"3"` the same day (a6a0cfc),
+  training-blocks `"3"` to `"4"` (022db69); the roadmap's Phase 8 shared seams
+  say "Each bump lands once, in merge order, and the second lander re-pins";
+  `docs/compatibility.md:101-102` states a bump costs users nothing. The
+  landing task (5.2) therefore: replaces `docs/ownership-contract.md`'s "What
+  changed at this version" paragraph with this spec's changes (the
+  `CHANGELOG.md` is the cumulative record); adds a paragraph to the
+  `CONTRACT_VERSION` docstring; always regenerates the declaration goldens;
+  and, after the final rebase, asserts the value equals `main`'s plus one,
+  re-pinning if a sibling landed first. `DOC_VERSION` follows the same
+  one-per-lander rule (task 5.1).
+- **Rationale**: this spec changes a stated guarantee (what an extra
   contributes to a page, and what the load and benchmark passes read), so it
-  advances `CONTRACT_VERSION` by one from `main`'s value at landing, like
-  `activity-identity`. The divergence from `connectors`' rule is recorded as a
-  cross-spec follow-up for the controller; whichever rule is ratified, this
-  spec's landing task re-reads `main` and the ratified rule before editing.
+  advances the version like every other guarantee change.
 
 ## Synthesis Outcomes
 - **Generalization**: donation is one rule over "donation units" derived from
@@ -263,9 +294,10 @@
 - Upstream identity tests pinning "an extra contributes nothing" (its
   Req 5.8) turn red by design when composition lands — the wiring task
   updates them to the composed expectation and lists each.
-- `CONTRACT_VERSION` rule divergence between `activity-identity` and
-  `connectors` — recorded as a follow-up; the landing task follows the
-  ratified rule.
+- Two or more Phase 8 specs advancing `CONTRACT_VERSION` and `DOC_VERSION` in
+  one release window — each advances by one from `main` at landing; after the
+  final rebase task 5.1 and task 5.2 assert `main`'s value plus one and re-pin
+  the literals if a sibling landed first (Decision: Contract version rule).
 
 ## References
 - `.kiro/specs/channel-merge/brief.md` — measured alignment facts (2026-09-24).

@@ -84,9 +84,10 @@ files themselves by the same rule; Requirement 6 makes that so.
   `fit-ingest`); averaging, blending or correcting two values of one channel;
   composing files of different sessions; merging or re-deriving laps;
   showing an extra's devices, decode errors, session values or generic
-  developer fields; any frontmatter key for channel provenance; rescoring a
-  page whose load was already computed without the athlete asking; any network
-  access.
+  developer fields (the attribution line's wording for a donating file is
+  `intervals-connector`'s); any frontmatter key for channel provenance;
+  rescoring a page whose load was already computed without the athlete
+  asking; any network access.
 - **Adjacent expectations**:
   - `activity-identity` supplies each page's roles (the base and its extras in
     rank order) and every file of the page decoded, and computes the page's
@@ -99,6 +100,10 @@ files themselves by the same rule; Requirement 6 makes that so.
     otherwise unchanged; `load-history` and plan reconciliation read pages,
     not files, and are unchanged.
   - The route map is planned from the composed position channel.
+  - `intervals-connector` owns the Garmin attribution line and its wording; it
+    reads, for each file that supplies at least one channel, that file's own
+    recorded devices, which the composition carries for it, while the
+    composed activity's devices stay the base's (Requirement 1.5).
 
 ## Requirements
 

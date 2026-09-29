@@ -5,14 +5,20 @@
 - **Both upstream specs must be merged to `main` before task 1.1 starts**:
   `activity-identity` (roles, the page task, `_render_activity(roles, parsed)`,
   `DocContext.identity`, the identity fixtures in `tests/fixtures/identity.py`,
-  the wiki-contract Amendment 4 section) and `running-dynamics` (the 22-channel
-  `Samples`, `DYNAMICS_CHANNELS`, `Activity.record_developer_fields`, the
+  its part of the wiki-contract Amendment 4 section) and `running-dynamics`
+  (the 22-channel `Samples`, `DYNAMICS_CHANNELS`,
+  `Activity.record_developer_fields`, the
   Running Dynamics section, `stryd_run_fit_bytes` and the developer-field
-  encoding helper in `tests/fixtures/builder.py`). A task that finds a
+  encoding helper `developer_field_run_fit_bytes`, with its keyword-only
+  `session_fields` option, in `tests/fixtures/builder.py`). A task that finds a
   published upstream shape different from design.md § "Cross-spec seams" stops
   and reports rather than adapting silently.
 - **Siblings in flight** (`connectors`, `intervals-connector`, `docs-site`):
-  no code dependency; the shared files are listed below.
+  no code dependency; the shared files are listed below. One seam is decided
+  by landing order: whichever of this spec and `intervals-connector` lands
+  second wires `render/views.py::_head` to pass the donating extras' devices
+  to `attribution_line` and adds the ride-pair attribution pin (design.md
+  § "Cross-spec seams"; task 3.3).
 
 **Hard rules for every task**
 
@@ -40,6 +46,10 @@
   the branch when the task runs**; after the final rebase the implementer checks
   each equals `main`'s value plus one and re-pins if a sibling landed a bump
   first. No task hard-codes a resulting number.
+- After the final rebase, if `intervals-connector` landed on `main` while this
+  branch was open and `render/views.py::_head` does not yet pass donor
+  devices, task 3.3's attribution step runs then, with its pins and named
+  mutations (this spec is the second lander).
 - No Stryd web or service address anywhere (Req 9.3): before a task is done,
   `grep -rniE "https?://[^ )]*stryd" <files the task changed>` prints nothing.
   Stryd developer-field names are file-format knowledge and are fine.
@@ -70,7 +80,8 @@ sequential (never both `(P)` at once).
   and keep any extra helper local to their own test module.
 - `tests/compose/test_boundary.py` -- 1.2 (created, subset positive control),
   3.1 (tightened to the exact seven-module set).
-- `src/fitdocs/render/views.py` -- 3.3 only. `src/fitdocs/render/__init__.py`
+- `src/fitdocs/render/views.py` -- 3.3 only (its attribution step, when
+  deferred to the final rebase, is still 3.3's). `src/fitdocs/render/__init__.py`
   -- 3.2 only. `src/fitdocs/sync.py` -- 4.1 only.
   `src/fitdocs/load/engine.py`, `src/fitdocs/performance/engine.py` -- 4.3
   only.
@@ -88,30 +99,43 @@ sequential (never both `(P)` at once).
 
 **Cross-spec shared files** (append a field, a row, an entry or a block; never
 rewrite or reorder a sibling's):
-- `src/fitdocs/render/__init__.py` (`DocContext`: identity appended
-  `identity`; this plan appends `channel_provenance`), `src/fitdocs/render/views.py`
-  (`intervals-connector` adds its attribution line).
+- `src/fitdocs/render/__init__.py` and `src/fitdocs/render/views.py`, shared
+  with `activity-identity`, `running-dynamics` and `intervals-connector`,
+  append-only: `DocContext` (identity appended `identity`; this plan appends
+  `channel_provenance`); the views (running-dynamics adds its Running
+  Dynamics section call, `intervals-connector` its `_head` and attribution
+  line; this plan appends the Channel Sources call per view and, as second
+  lander only, the `donor_devices` argument at `_head`'s one call).
 - `src/fitdocs/contract.py` (`DOC_VERSION`, `CONTRACT_VERSION`; every Phase 8
-  spec advances), `tests/test_contract_consumers.py`, the golden directories,
-  `tests/declaration_golden/*`.
-- `docs/ownership-contract.md`, `CHANGELOG.md` `[Unreleased]`.
+  spec advances each once), `tests/test_contract_consumers.py`, the golden
+  directories, `tests/declaration_golden/*`.
+- `docs/ownership-contract.md` (each lander replaces "What changed at this
+  version" with its own changes), `CHANGELOG.md` `[Unreleased]` (append under
+  an existing category heading; create it only if absent).
 - `.kiro/specs/wiki-contract/requirements.md` Amendment 4 (created by
-  `activity-identity`; `connectors` also appends), and the amendment records
-  of `workout-docs` (running-dynamics and intervals-connector also amend it):
-  numbers are taken on the branch at landing.
+  whichever of `activity-identity`, `connectors` and `channel-merge` lands
+  first; each appends its own paragraph), and the amendment records of
+  `workout-docs` (running-dynamics, activity-identity and intervals-connector
+  also amend it): numbers are taken on the branch at landing.
+- `.kiro/steering/structure.md` (the dependency line: `activity-identity`
+  appends `identity`, `connectors` its package, this plan `compose`) and
+  `.kiro/steering/roadmap.md` (Phase 8 Existing Spec Updates annotations and
+  ticks).
 - `tests/fixtures/builder.py`: this plan appends to running-dynamics'
-  developer-field encoding helper only the keyword-only, defaulted parameters
-  design.md § "Cross-spec seams" names (`laps`, `session_start`,
-  `session_elapsed_s`, `session_distance_m`, `session_developer_fields`,
-  `sport`), each only if the merged helper lacks that capability, each default
-  equal to the helper's current behaviour.
+  `developer_field_run_fit_bytes` only the keyword-only, defaulted parameters
+  design.md § "Cross-spec seams" pre-authorizes (`laps`, `session_start`,
+  `session_elapsed_s`, `session_distance_m`, `sport`), each only if the
+  merged helper lacks that capability, each default equal to the helper's
+  current behaviour; the `SESSION UUID` goes through the helper's existing
+  `session_fields` option.
 
 ## Test File Ownership
 
 - `tests/fixtures/merge.py`, `tests/fixtures/test_merge_fixtures.py`, and the
   `tests/fixtures/test_builder.py` pin for any appended helper parameter → 1.1.
 - `tests/compose/__init__.py`, `tests/compose/builders.py`,
-  `tests/compose/test_boundary.py` → 1.2 (3.1 tightens `test_boundary.py`).
+  `tests/compose/test_types.py`, `tests/compose/test_boundary.py` → 1.2 (3.1
+  tightens `test_boundary.py`).
 - `tests/compose/test_stretches.py` → 2.1; `test_donation.py` → 2.2;
   `test_alignment.py` → 2.3; `test_composer.py` → 2.4 (unit section) and 2.5
   (measured-pair section; 2.5 adds its own headed section and edits nothing of
@@ -121,7 +145,8 @@ rewrite or reorder a sibling's):
 - `tests/render/test_provenance.py` (section and reverse-direction guard),
   `tests/render/test_frontmatter.py:317-324` (the field-order pin) → 3.2.
 - `tests/render/test_golden_docs.py` (`composed_run`), a views section in
-  `tests/render/test_provenance.py` → 3.3.
+  `tests/render/test_provenance.py` (with the attribution pins when this spec
+  is the second lander) → 3.3.
 - `tests/test_compose_e2e.py` → 4.1 (seam section), 4.2 (arrival order, regen,
   drain, ride average heart rate, filename and `uuid`), 5.1 (aged page).
 - The pre-existing multi-file page tests whose body moves → 4.1; whose load or
@@ -137,14 +162,20 @@ rewrite or reorder a sibling's):
 - [ ] 1. Foundation: measured-shape fixtures and the package skeleton
 
 - [ ] 1.1 Synthesize the run, trio and ride fixtures with the measured alignment shapes
-  - First, check the merged developer-field helper in `tests/fixtures/builder.py`
-    against what these fixtures need through it: per-file laps (count and
-    values, heart rate included), session start, elapsed time and distance,
-    session developer fields (HealthFit's `SESSION UUID`), and a cycling sport.
-    For each capability it lacks, append the keyword-only parameter design.md
-    § "Cross-spec seams" names for it, defaulting to the helper's current
-    behaviour, and pin in `tests/fixtures/test_builder.py` that the helper's
-    default output bytes are unchanged. Any other missing capability: stop and
+  - First, check the merged developer-field helper
+    `developer_field_run_fit_bytes` in `tests/fixtures/builder.py` against
+    what these fixtures need through it: per-file laps (count and values,
+    heart rate included), session start, elapsed time and distance, a cycling
+    sport, the HealthFit `SESSION UUID` session developer field (through the
+    helper's existing keyword-only `session_fields` option), and a recording
+    device that is not Garmin for the ride's HealthFit copy (through its
+    existing `device_manufacturer`, set to `development`). For each of
+    `laps`, `session_start`, `session_elapsed_s`, `session_distance_m` and
+    `sport` the helper lacks, append that keyword-only parameter, defaulting
+    to the helper's current behaviour, and pin in
+    `tests/fixtures/test_builder.py` that the helper's default output bytes
+    are unchanged (named mutation: change one appended parameter's default --
+    the default-bytes pin reds). Any other missing capability: stop and
     report. The Garmin ride original, which carries no developer field, may be
     built from the existing `builder.encode(mesgs)` primitives instead
   - In a new fixture module, build the run pair (a HealthFit-shaped copy and a
@@ -173,8 +204,11 @@ rewrite or reorder a sibling's):
     instant elsewhere; in every ride stretch, at every lag in −2..+2, the copy's
     distance matches the original's (to 0.005 m) at fewer than
     `MIN_MATCHED_SAMPLES` samples or at no more than half of the compared ones,
-    while the session totals are within 5 m; building each fixture twice gives
-    identical bytes
+    while the session totals are within 5 m; the ride original's `device_info`
+    at index 0 names manufacturer `garmin` and the ride copy's names
+    `development` (the premise of the ride-pair attribution pin, design.md
+    § "Cross-spec seams"); building each fixture
+    twice gives identical bytes
   - Assert that `activity-identity`'s rule joins each pair and the trio
     (`pair_evidence` between every two files' session keys is not `None`: STRICT
     for the run files and the unshifted ride, SHIFTED for the shifted ride), and
@@ -184,7 +218,8 @@ rewrite or reorder a sibling's):
   - Discrimination: no production code is involved; for each self-test, record
     in Implementation Notes the fixture edit that makes it fail (e.g. setting
     `L_3` to +1 reds the per-stretch lag self-test; dropping speed from the
-    HealthFit copy reds the subset self-test)
+    HealthFit copy reds the subset self-test; giving the ride copy a Garmin
+    recording device reds the recording-device self-test)
   - Observable: `uv run pytest tests/fixtures/` green; `uv run mypy
     tests/fixtures/merge.py tests/fixtures/test_merge_fixtures.py` clean; ruff
     check and format clean on the changed files; no file under `src/` changed;
@@ -196,11 +231,18 @@ rewrite or reorder a sibling's):
     module with the stretch lag, extra alignment, placement, source
     contribution, channel provenance and composition values exactly as
     design.md § ComposeTypes states (frozen, typed, `SourceKind` from
-    `activity-identity`)
+    `activity-identity`), the source contribution carrying `devices:
+    tuple[DeviceInfo, ...]` (the contributing file's own `Activity.devices`,
+    which `intervals-connector`'s attribution reads) between `manufacturer`
+    and `channels`
+  - A seam pin (`tests/compose/test_types.py`): the source contribution's
+    field names, in order, are `sha256, kind, manufacturer, devices,
+    channels, alignment`, and `devices` is annotated
+    `tuple[DeviceInfo, ...]`; its value is pinned by 2.4
   - Add the hand-built activity builders the pure unit tests use: an activity
     from a recorded start, a list of per-sample offsets and keyword channel
     arrays (every omitted channel all-`None`), with optional laps, session
-    values and file identity; no FIT bytes
+    values, file identity and devices; no FIT bytes
   - Add the import-closure guard over `src/fitdocs/compose/`: a per-module
     allowlist for all seven planned modules (design.md § Allowed Dependencies),
     the forbidden-import and clock-name checks, and a positive control that
@@ -209,7 +251,9 @@ rewrite or reorder a sibling's):
   - Pin the package marker's `__all__` as empty and that the root package
     re-exports no composition name
   - Named mutations: add `import fitdocs.sync` to the types module (the guard
-    reds); point the walk at an empty directory (the positive control reds)
+    reds); point the walk at an empty directory (the positive control reds);
+    drop `devices` from the source contribution, or move it after `channels`
+    (the seam pin reds, design.md M24)
   - Observable: `uv run pytest tests/compose/` green; `uv run mypy
     src/fitdocs/compose tests/compose` clean; ruff check and format clean; the
     full suite still green with no existing test edited
@@ -308,8 +352,8 @@ rewrite or reorder a sibling's):
     sport, start) is the base's
   - Provenance: the base's contribution lists the channels it records; each
     extra's lists the channels donated from it, with its alignment only when it
-    donated; every contribution carries its content hash, source kind and
-    recorded manufacturer
+    donated; every contribution carries its own file's content hash, source
+    kind, recorded manufacturer and devices, whether or not it donated
   - Tests (hand-built, pairwise-distinct values): the composed offsets equal the
     base's; a channel the base records stays the base's; a base channel on 51%
     of samples keeps its gaps while an extra records all of it; two extras
@@ -319,7 +363,10 @@ rewrite or reorder a sibling's):
     higher-ranked extra records only latitude; a donated balance keeps its
     values where the base's stance time is `None`; laps, session values and
     record developer fields equal the base's; an extra donating nothing has no
-    channels and no alignment; the same inputs compose to equal results twice
+    channels and no alignment; with a base and two extras holding
+    pairwise-distinct device tuples, one extra donating nothing, each
+    contribution's devices equal its own file's and the composed activity's
+    devices equal the base's; the same inputs compose to equal results twice
   - Named mutations: skip the base-keeps check; require every sample for the
     base to keep a unit; fill base gaps (keep the base's values and fill its
     `None` samples from the extra's placed values; the 51% test reds); iterate
@@ -329,7 +376,8 @@ rewrite or reorder a sibling's):
     carry the extra's record developer fields; insert a pass that nulls a
     donated balance where the composed stance time is `None`; return a rebuilt
     activity instead of the base object when there is no extra; attach an
-    alignment to an extra that donated nothing
+    alignment to an extra that donated nothing; give every contribution the
+    base's devices (the per-contribution devices test reds, design.md M23)
   - Observable: `uv run pytest tests/compose/test_composer.py` green with every
     mutation observed red; `uv run mypy` clean; ruff check and format clean
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.10, 5.2, 5.4, 7.1_
@@ -402,9 +450,11 @@ rewrite or reorder a sibling's):
 - [ ] 3.2 (P) Render the Channel Sources section from a composition's provenance
   - Append the provenance field to the render context (defaulting to `None` so
     every existing construction stays valid), and move the field-order pin
-    `tests/render/test_frontmatter.py:317-324` from whatever shape
-    `activity-identity` left it in, keeping its intent: `user_frontmatter`
-    directly after `map_data`, and `channel_provenance` the last field
+    `tests/render/test_frontmatter.py:317-324` from the position-relative
+    shape `activity-identity` leaves it in (`user_frontmatter` directly after
+    `map_data`, `identity` last) to: `user_frontmatter` directly after
+    `map_data`, `channel_provenance` the last field, and `identity` directly
+    before it
   - The section body exactly as design.md § ChannelSourcesSection states: the
     fixed sentence, the File / Role / Kind / Channels / Alignment table, one row
     for the base then one per extra in rank order, archive refs from the layout
@@ -430,7 +480,8 @@ rewrite or reorder a sibling's):
     write "stretches"; delete one label (the completeness test reds); change a
     label's case (the equality test reds); add `import fitdocs.compose.archive`
     to the provenance module (the reverse-direction guard reds); insert the new
-    field before `user_frontmatter` (the field-order pin reds)
+    field before `user_frontmatter` (the field-order pin reds); insert it
+    before `identity` (the field-order pin reds)
   - Observable: `uv run pytest tests/render/` green with each mutation observed
     red; `uv run mypy` clean; ruff check and format clean
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.8_
@@ -449,9 +500,29 @@ rewrite or reorder a sibling's):
   - Named mutations: place the section before Device & Data Quality (the
     placement tests red); append it in the run/ride view only (the strength and
     generic tests red)
+  - Garmin attribution on composed pages (design.md § "Cross-spec seams";
+    `intervals-connector` Req 8.4): whichever of this spec and
+    `intervals-connector` lands second does this step. If
+    `intervals-connector`'s `_head` and `attribution_line(base,
+    donor_devices)` are on `main` when this task runs (or when the final
+    rebase brings them in), wire `_head` to pass `tuple(c.devices for c in
+    ctx.channel_provenance.extras if c.channels)` as `donor_devices` to
+    `attribution_line(ctx.activity, donor_devices)` when
+    `ctx.channel_provenance` is not `None` (`()` otherwise), and add, in the
+    views section of the provenance tests, the ride-pair pin: the ride pair
+    (Garmin-original base, HealthFit copy donating heart rate) composed and
+    rendered reads `Data sources: Garmin <model> and other devices`, `<model>`
+    the original's recording-device label as `intervals-connector` derives
+    it; plus a hand-built Garmin base whose only extra is non-Garmin and
+    donates nothing, which reads `Data source: Garmin <model>`. Named
+    mutations: pass `()` as `donor_devices` (the ride-pair pin reds, M25);
+    drop the `if c.channels` filter (the non-donating pin reds, M26). If
+    `intervals-connector` is not on `main`, leave `_head` untouched and record
+    in Implementation Notes that `intervals-connector` wires it when it lands
   - Observable: `uv run pytest tests/render/` green; `git diff --stat
     tests/render/golden_docs/` shows only the new `composed_run` files; ruff
-    check and format clean
+    check and format clean; Implementation Notes record which branch of the
+    attribution step ran
   - _Requirements: 4.6, 4.7, 8.2_
 
 - [ ] 4. Integration: the engine and the two passes
@@ -539,7 +610,9 @@ rewrite or reorder a sibling's):
   - Read `DOC_VERSION` on the branch rebased onto `main`, advance it by one and
     append its docstring paragraph (pages with extras take the channels their
     base lacks and gain a Channel Sources section; pages without extras change
-    only this line); record the old and new values in Implementation Notes
+    only this line); record the old and new values in Implementation Notes.
+    After the final rebase, assert it equals `main`'s value plus one and, if a
+    sibling landed a bump first, re-pin it with every literal below
   - Move every literal pin of the old value (a repository grep for
     `doc_version: <old>` and `DOC_VERSION == <old>` decides; at design time
     `tests/render/test_frontmatter.py:44, 101` and
@@ -563,10 +636,14 @@ rewrite or reorder a sibling's):
 
 - [ ] 5.2 Advance the contract version and publish the composition guarantees
   - Advance `CONTRACT_VERSION` by one from the branch's value, as Req 8.4
-    states, with its docstring paragraph; regenerate the declaration goldens.
-    If the rule ratified for the Phase 8 batch at landing is not "+1 per
-    lander" (research.md, Decision: Contract version rule), stop and report it
-    as a requirements amendment to Req 8.4 rather than following it
+    states (every Phase 8 lander advances it once; research.md, Decision:
+    Contract version rule), adding a paragraph to its docstring (what an extra
+    contributes, the Channel Sources section, the two passes reading the
+    composed activity); record the old and new values in Implementation Notes;
+    always regenerate `tests/declaration_golden/*` with its own generator.
+    After the final rebase, assert the value equals `main`'s plus one and, if
+    a sibling landed a bump first, re-pin it and every literal that moved with
+    it (the ownership contract's header, the declaration goldens)
   - In the ownership contract's section on source files and roles, add the
     subsection on channels a page takes from its extras (design.md
     § ContractDocs): donation and partial coverage, position, what stays the
@@ -574,13 +651,18 @@ rewrite or reorder a sibling's):
     shift, the Channel Sources section, no frontmatter key, the two passes
     composing by the page's rule, and that `fitdocs load --recompute` rescores a
     page whose composition changed after its load was computed; the header
-    version, the "what changed at this version" paragraph, and the overwrite
-    semantics of `regen`, `load` and `derive-benchmarks`
+    version; the "What changed at this version" paragraph **replaced** with
+    this spec's changes (a sibling's earlier paragraph is not kept; the
+    changelog is the cumulative record); and the overwrite semantics of
+    `regen`, `load` and `derive-benchmarks`
   - A docs pin holds the published alignment table equal to the constants and
     their sources
   - `CHANGELOG.md` `[Unreleased]` `### Changed`: the generated document
     contract change with the actions `fitdocs regen` and
-    `fitdocs load --recompute`, no version number, docs by project URL only
+    `fitdocs load --recompute`, no version number, docs by project URL only;
+    appended under the existing `### Changed` heading in `[Unreleased]`, the
+    heading created only if absent (`tests/test_changelog.py:516` rejects a
+    repeated category in one section)
   - Named mutations: change the lag window to 3 (the docs pin reds); leave the
     contract version unadvanced (the ownership-contract header pin reds)
   - Observable: full `uv run pytest` green, `tests/test_changelog.py`,
@@ -588,9 +670,15 @@ rewrite or reorder a sibling's):
     included; ruff check and format clean
   - _Requirements: 6.6, 8.3, 8.4, 8.6_
 
-- [ ] 5.3 (P) Land the amendment records and roadmap annotations
-  - wiki-contract: append this spec's paragraph to Amendment 4 and one criterion
-    to Requirement 2 (next free number, marked as added by Amendment 4); a
+- [ ] 5.3 (P) Land the amendment records, roadmap annotations and the steering dependency line
+  - wiki-contract: if no sibling has created Amendment 4, create it titled
+    `## Amendment 4 (<first landing date>): source roles, connector state and
+    channel provenance, landed by activity-identity, connectors and
+    channel-merge`; else append to it. This spec's paragraph records its own
+    `CONTRACT_VERSION` `"X"` to `"Y"` (`main`'s value before this spec's
+    advance and that value plus one; after the final rebase, re-checked
+    against the values 5.2 recorded and re-pinned with them). One criterion
+    to Requirement 2 (next free number, tagged `_(added by Amendment 4)_`); a
     DocumentContract note in its design; an `amendments` entry in its spec.json
   - workout-docs: a new amendment appending one criterion each to
     Requirements 3, 6 and 13 (design.md § SpecRecords); training-load: a new
@@ -598,11 +686,17 @@ rewrite or reorder a sibling's):
     a new amendment appending one criterion to Requirement 1; each with its
     spec.json entry; numbers are the next free ones on the branch
   - Roadmap Phase 8 Existing Spec Updates: annotate the wiki-contract and
-    workout-docs lines with the parts landed here; tick a line only if every
-    part it names is on `main`
-  - Observable: `git diff` of every amended spec adds lines only (nothing
-    renumbered or reworded); every spec.json parses; `/kiro-spec-status` clean
-    for the four amended specs
+    workout-docs lines with the parts landed here, ticking either only if
+    every part it names is on `main`; tick the training-load and
+    performance-benchmarks lines (landed by channel-merge alone) when every
+    part of each is on `main`. Leave the Boundary Strategy's `sync.py` seam
+    as it stands (it already states where the extras are read)
+  - `.kiro/steering/structure.md`: append `compose` to the dependency line
+    ("Dependencies point one way") as design.md § SpecRecords states, without
+    rewording the existing chain or a sibling's appended package
+  - Observable: `git diff` of every amended spec and of `structure.md` adds
+    lines or appends only (nothing renumbered or reworded); every spec.json
+    parses; `/kiro-spec-status` clean for the four amended specs
   - _Requirements: 8.3, 8.4_
   - _Boundary: SpecRecords_
 
@@ -615,9 +709,14 @@ rewrite or reorder a sibling's):
     PRESERVED-ONLY by the frozen-dependency tests
     (`tests/test_determinism.py:672-712`, `tests/test_packaging.py:503-519`);
     1.6 is recorded as held by activity-identity
-  - Re-run M1-M22 and M15b (design.md § Testing Strategy) on the finished tree
-    through `uv run pytest` and record the test each reds; Req 9.2's five must
+  - Re-run M1-M24 and M15b (design.md § Testing Strategy) on the finished tree
+    through `uv run pytest` and record the test each reds, plus M25 and M26
+    when this spec wired `_head` (3.3's attribution step); Req 9.2's five must
     each red at least one test
+  - After the final rebase: `DOC_VERSION` and `CONTRACT_VERSION` each equal
+    `main`'s value plus one (re-pinned by 5.1/5.2 if a sibling landed first);
+    if `intervals-connector` landed while this branch was open, 3.3's
+    attribution step has run
   - Register every new typed test and fixture module in `pyproject.toml`
     `[tool.mypy].files`
   - Run the prose-claim grep from `change-protocol.md` over every changed test
