@@ -241,8 +241,8 @@ never co-varies two keys a rule distinguishes.
     is handled by its task 5.2) on what a real HealthFit copy
     records at `device_info` index 0; no value changes until then. Identity's
     classification, digest, rank and match read only `file_id`, never the
-    device list, so the choice moves no identity pin: if the TBC contradicts
-    it, every identity pin keeps its expected value, this task's own
+    device list, so the choice moves no identity pin: if the check finds a
+    non-Garmin device (TBC-9 confirmed; this variant is then unmatched), every identity pin keeps its expected value, this task's own
     `device_info` pin for those species follows the new value if they are
     re-shaped to match, and 2.1's device-list case sets its Garmin device
     list itself. Also give

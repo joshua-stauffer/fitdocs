@@ -26,7 +26,7 @@
   6.2 here; identity's `_identity_settings()`, `precedence=` and
   hold-record mapping there — whichever lands second carries the join,
   task 5.3); `src/fitdocs/layout.py` (task 1.3 here; identity's
-  `held_path()`); `docs/inbox.md` (task 8.2 here; identity's own
+  `held_path()` and its `SESSION_UUID_FIELD` import from `contract`); `docs/inbox.md` (task 8.2 here; identity's own
   paragraph); `src/fitdocs/sync.py`'s module docstring (task 6.2 rewrites
   only the "Offline guarantee" paragraph at `:41-52`; identity edits
   `sync.py` widely and must keep that paragraph). Also shared by landing

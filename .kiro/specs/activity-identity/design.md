@@ -1741,8 +1741,8 @@ complete).
   `development`/Apple); no value changes until then. Identity's
   classification, device digest, rank key and match rule read only the
   file's own `file_id` (`Activity.file_identity`, Req 2.2-2.4, 2.6, 3.2) and
-  never `Activity.devices`, so the choice moves no identity pin. If the TBC
-  contradicts it, every identity pin keeps its expected value; 1.1's own
+  never `Activity.devices`, so the choice moves no identity pin. If the check finds a non-Garmin
+  device (TBC-9 confirmed; this variant is then unmatched), every identity pin keeps its expected value; 1.1's own
   `device_info` pin for these species follows the new value if the species
   are re-shaped to match; and task 2.1's HealthFit-copy-of-a-Garmin-ride
   case sets its Garmin device list itself, so its device-list mutation

@@ -2000,7 +2000,7 @@ stated for the cross-spec reviewer.
   carries `precedence` through the helper and adds the `[identity]` and
   hold-record checks to `pull --sync`'s preflight, see CliCommands
   "Identity wiring"); `src/fitdocs/layout.py` (identity adds
-  `held_path()`, this spec `CONNECTOR_STATE_DIR` and
+  `held_path()` and binds `SESSION_UUID_FIELD` from `contract`, this spec `CONNECTOR_STATE_DIR` and
   `connector_ledger_path()`); `docs/inbox.md` (each adds its own
   paragraph); `src/fitdocs/sync.py`'s module docstring, whose "Offline
   guarantee" paragraph (`:41-52`) this spec rewrites and identity must keep
