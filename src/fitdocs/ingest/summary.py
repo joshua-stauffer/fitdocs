@@ -19,7 +19,11 @@ model's recorded-value contracts:
   to a read-only ``name -> value`` mapping, keyed by the described field names
   verbatim, empty when the file describes none (Req 14.1-14.4). The value is
   decoded per that field's own description -- a declared scale/offset is
-  applied (Req 14.2, as amended); a field with neither declared is unchanged.
+  applied (Req 14.2, as amended). The value passes through
+  :func:`fitdocs.ingest.developer.decode_developer_value` (the invalid-value,
+  array and float32 rules shared with the record-level reader, Req 2.1 of
+  running-dynamics), and a key whose result is ``None`` is omitted; a field
+  with neither declared is otherwise unchanged.
   It is a thin wrapper over :func:`extract_developer_fields_with_declared_scale`,
   kept for callers that only need the values (every existing test and caller
   before this amendment). A description declaring ``scale=0`` is unrepresentable
@@ -55,8 +59,9 @@ step. Any OTHER non-integer recorded index (an exotic string enum the ``int``-ty
 field cannot hold) still maps to ``None`` in the field while its raw value keys
 deduplication, preserving that device's identity.
 
-This module depends only on :mod:`fitdocs.model`; it never imports the SDK, the
-metrics layer, or sibling ingest modules.
+This module depends only on :mod:`fitdocs.model` and the ingest modules
+:mod:`fitdocs.ingest._fields` and :mod:`fitdocs.ingest.developer`; it never
+imports the SDK or the metrics layer.
 """
 
 from __future__ import annotations
@@ -71,6 +76,7 @@ from fitdocs.ingest._fields import (
     prefer_enhanced,
     str_or_none,
 )
+from fitdocs.ingest.developer import decode_developer_value, parse_field_descriptions
 from fitdocs.model import DeviceInfo, SessionSummary, fit_datetime
 
 _EMPTY_DEVELOPER_FIELDS: Mapping[str, object] = MappingProxyType({})
@@ -160,6 +166,14 @@ def extract_developer_fields_with_declared_scale(
     name is taken verbatim from each ``field_description`` message's
     ``field_name`` (no renaming).
 
+    Shared decoding (Req 2.1-2.3): each recorded value passes through
+    :func:`fitdocs.ingest.developer.decode_developer_value`, the one rule the
+    record-level reader uses too. A value equal to its declared base type's
+    invalid value (or a non-finite float) is "not recorded", so the key is
+    OMITTED (Req 14.4); a float32 is exposed as its shortest decimal; every other
+    value is exposed as before, a 16-entry identifier containing ``255``
+    included, intact.
+
     SDK exposure convention (verified by round-trip in the tests): the decoder
     stamps each decoded ``field_description`` message with an integer ``key`` equal
     to its position in ``field_description_mesgs``, and exposes the values recorded
@@ -171,7 +185,9 @@ def extract_developer_fields_with_declared_scale(
     Decoding, not interpretation (Req 14.2): a description may declare a
     ``scale`` and/or ``offset`` for its field -- ``garmin-fit-sdk`` parses both
     but never applies them to a developer field (only to native profile
-    fields), so this function applies them itself, per :func:`_developer_value`.
+    fields), so this function applies them itself, through
+    :func:`fitdocs.ingest.developer.decode_developer_value` (which ends in
+    :func:`fitdocs.ingest.developer.apply_declared_scale`).
     Applying a scale/offset the file ITSELF declares is decoding the value the
     file recorded, not an fitdocs-supplied interpretation of it; inferring an
     UNDECLARED convention (for example, guessing that an integer field is
@@ -208,97 +224,23 @@ def extract_developer_fields_with_declared_scale(
 
     resolved: dict[str, object] = {}
     declared_scale: set[str] = set()
-    for description in field_description_mesgs:
-        name = description.get("field_name")
-        if not isinstance(name, str):
-            continue  # a description without a usable name cannot be keyed
-        key = description.get("key")
-        if key not in recorded:
+    for description in parse_field_descriptions(field_description_mesgs):
+        # A description without a usable name or key cannot be paired; the
+        # parser skips it.
+        if description.key not in recorded:
             continue  # described but not recorded on the session (Req 14.4)
-        scale = description.get("scale")
-        offset = description.get("offset")
-        if scale == 0:
+        if description.scale == 0:
             continue  # unrepresentable declared scale: omit, never fabricate
-        resolved[name] = _developer_value(recorded[key], scale, offset)
-        if scale is not None or offset is not None:
-            declared_scale.add(name)
+        value = decode_developer_value(recorded[description.key], description)
+        if value is None:
+            continue  # an invalid sentinel is "not recorded" (Req 14.4, 2.1)
+        resolved[description.name] = value
+        if description.scale is not None or description.offset is not None:
+            declared_scale.add(description.name)
 
     if not resolved:
         return _EMPTY_DEVELOPER_FIELDS, frozenset()
     return MappingProxyType(resolved), frozenset(declared_scale)
-
-
-def _developer_value(value: object, scale: object, offset: object) -> object:
-    """Decode a developer-field value, applying a declared scale/offset (Req 14.2).
-
-    Req 14.2 (as amended) draws the decoding/interpretation line: a scale or
-    offset the file's OWN ``field_description`` declares is part of the
-    encoding, so applying it is decoding, not interpretation, and is done here.
-    ``garmin-fit-sdk`` parses both into its field profile but never applies
-    them to a developer field -- only to native profile fields
-    (``decoder.py``'s ``__apply_scale_and_offset``, called only from
-    ``__apply_profile``) -- so this function closes that gap using the SAME
-    FIT-protocol formula the SDK applies to native fields, confirmed by
-    reading that method: ``value / scale - offset``.
-
-    * A declared ``scale`` divides the value; a declared ``offset`` is then
-      subtracted. Either left undeclared defaults to the FIT-protocol
-      identity for that term -- an undeclared ``scale`` behaves as 1, an
-      undeclared ``offset`` as 0 -- so a description declaring NEITHER (the
-      shape of every field in the current corpus, and the only shape before
-      this change) reduces to a no-op: division by an effective scale of 1
-      is skipped entirely, and subtracting an effective offset of 0 leaves an
-      ``int`` an ``int`` -- so the value is unchanged and byte-identical to
-      the pre-existing pass-through behavior. ``offset`` declared alone (an
-      unusual but legal description) still applies, against that implicit
-      scale of 1. An array value is scaled ELEMENT-WISE, matching the SDK's
-      own per-element treatment of a native array field, and still becomes a
-      ``tuple``.
-    * A declared ``scale`` of ``0`` never reaches this function: the caller
-      (:func:`extract_developer_fields_with_declared_scale`) OMITS such a
-      field before calling here, so ``scale`` is always either ``None`` or
-      nonzero by this point (see that function's docstring for why omission
-      rather than a raw-value fallback).
-    * A non-numeric raw value under a declared scale (for example a
-      ``string``-typed developer field, or a ``None`` array element) passes
-      through un-scaled rather than raising or defaulting -- the malformed
-      part is the declaration, not the value, and the value is real data
-      worth keeping (see :func:`_scale_one`).
-    * A ``bool`` raw value (an unusual but possible developer-field type) is
-      preserved as a ``bool``, not silently widened to ``int``, when there is
-      nothing to actually apply -- see :func:`_scale_one`.
-    """
-    if isinstance(value, list):
-        return tuple(_scale_one(item, scale, offset) for item in value)
-    return _scale_one(value, scale, offset)
-
-
-def _scale_one(value: object, scale: object, offset: object) -> object:
-    """Apply one declared scale/offset to a single value (Req 14.2, see caller).
-
-    A non-numeric ``value`` (including ``None``, an absent array element) is
-    returned unchanged: it fails the ``isinstance`` check below before any
-    arithmetic is attempted, so it can never raise here. ``scale`` is never
-    ``0`` here -- the caller omits that field before this is reached.
-
-    When there is nothing to actually apply -- an undeclared (or explicitly
-    identity: ``scale=1``, ``offset=0``) scale/offset pair -- ``value`` is
-    returned UNCHANGED rather than computed as ``value / 1 - 0``, so its exact
-    type is preserved. This matters for ``bool``: ``bool`` is an ``int``
-    subclass, so ``True - 0`` would silently return the ``int`` ``1``,
-    defeating ``sections.py``'s own ``isinstance(value, bool)`` guard. No real
-    developer field is boolean-typed today, but preserving identity here keeps
-    this function byte-identical to the pre-existing pass-through for every
-    type, not just the numeric ones the current corpus exercises.
-    """
-    if not isinstance(value, (int, float)):
-        return value  # non-numeric under a declared scale: cannot decode, pass through
-    divisor = scale if isinstance(scale, (int, float)) else 1
-    subtrahend = offset if isinstance(offset, (int, float)) else 0
-    if divisor == 1 and subtrahend == 0:
-        return value  # nothing declared (or declared as identity): preserve type
-    scaled = value if divisor == 1 else value / divisor
-    return scaled - subtrahend
 
 
 def _session_summary(session: dict[str, object]) -> SessionSummary:

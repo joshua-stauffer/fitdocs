@@ -29,8 +29,9 @@ import pytest
 from garmin_fit_sdk import Encoder
 from garmin_fit_sdk.fit import BASE_TYPE
 
+from fitdocs.contract import format_session_uuid
+from fitdocs.ingest.developer import apply_declared_scale as _developer_value
 from fitdocs.ingest.summary import (
-    _developer_value,
     extract_developer_fields,
     extract_developer_fields_with_declared_scale,
     extract_devices,
@@ -46,7 +47,11 @@ from fitdocs.model import (
     Sport,
     fit_datetime,
 )
-from tests.fixtures.builder import decode_messages
+from tests.fixtures.builder import (
+    DevFieldSpec,
+    decode_messages,
+    developer_field_run_fit_bytes,
+)
 
 # A fixed FIT-epoch second used as t0 (never wall-clock time).
 TS0 = 1_000_000_000
@@ -939,3 +944,103 @@ def test_activity_stores_populated_declared_scale_names() -> None:
     )
 
     assert activity.developer_fields_declared_scale == frozenset({"AVG METs"})
+
+
+# --- Session values share the developer decoding (running-dynamics 2.1-2.3) ---
+#
+# Built with ``developer_field_run_fit_bytes(session_fields=...)`` and read with
+# the real decoder, so the raw value each case starts from is the value the SDK
+# hands the session reader.
+
+
+def _session_developer_file(
+    descriptions: list[DevFieldSpec], session_fields: Mapping[int, object]
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    data = developer_field_run_fit_bytes(
+        descriptions=descriptions,
+        records=[({}, {})],
+        session_fields=session_fields,
+    )
+    messages, errors = decode_messages(data)
+    assert not errors
+    return messages["field_description_mesgs"], messages["session_mesgs"]
+
+
+def test_session_uint16_recorded_as_its_invalid_value_is_omitted() -> None:
+    """A uint16 session value of ``65535`` is "not recorded": its key is omitted."""
+    descriptions, sessions = _session_developer_file(
+        [
+            DevFieldSpec("SENTINEL", BASE_TYPE["UINT16"], 0),
+            DevFieldSpec("SCALED SENTINEL", BASE_TYPE["UINT16"], 1, scale=10),
+            DevFieldSpec("VALID", BASE_TYPE["UINT16"], 2),
+        ],
+        {0: 65535, 1: 65535, 2: 1234},
+    )
+    # Precondition: the SDK really delivers the sentinel to the reader.
+    assert sessions[0]["developer_fields"] == {0: 65535, 1: 65535, 2: 1234}
+
+    values, declared = extract_developer_fields_with_declared_scale(
+        descriptions, sessions
+    )
+
+    assert dict(values) == {"VALID": 1234}
+    assert declared == frozenset()
+
+
+def test_session_identifier_containing_255_comes_back_as_the_same_tuple() -> None:
+    """A 16-entry uint8 identifier with a ``255`` entry is kept intact (2.2, 2.3)."""
+    identifier = [1, 2, 3, 4, 255, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    descriptions, sessions = _session_developer_file(
+        [DevFieldSpec("SESSION UUID", BASE_TYPE["UINT8"], 0, array=16)],
+        {0: identifier},
+    )
+    assert sessions[0]["developer_fields"] == {0: identifier}  # precondition
+
+    values = extract_developer_fields(descriptions, sessions)
+
+    assert values["SESSION UUID"] == tuple(identifier)
+    assert (
+        format_session_uuid(values["SESSION UUID"])
+        == "01020304-ff06-0708-090a-0b0c0d0e0f10"
+    )
+
+
+def test_session_float32_value_comes_back_as_its_shortest_decimal() -> None:
+    """A float32 session value 11.37 is exposed as ``11.37``, not the widened bits."""
+    descriptions, sessions = _session_developer_file(
+        [DevFieldSpec("VALUE", BASE_TYPE["FLOAT32"], 0)], {0: 11.37}
+    )
+    raw = sessions[0]["developer_fields"][0]  # type: ignore[index]
+    assert raw != 11.37  # precondition: the decoded raw is float32-inexact
+
+    values = extract_developer_fields(descriptions, sessions)
+
+    assert values["VALUE"] == 11.37
+
+
+def test_session_last_described_field_wins_a_shared_name() -> None:
+    """Two described fields sharing a name: the later description's value is exposed."""
+    descriptions, sessions = _session_developer_file(
+        [
+            DevFieldSpec("DUP", BASE_TYPE["UINT16"], 0),
+            DevFieldSpec("DUP", BASE_TYPE["UINT16"], 1),
+        ],
+        {0: 111, 1: 222},
+    )
+    assert sessions[0]["developer_fields"] == {0: 111, 1: 222}  # precondition
+
+    assert extract_developer_fields(descriptions, sessions)["DUP"] == 222
+
+
+def test_session_later_same_named_sentinel_leaves_the_earlier_value() -> None:
+    """A later same-named field recorded as its sentinel keeps the earlier value."""
+    descriptions, sessions = _session_developer_file(
+        [
+            DevFieldSpec("DUP", BASE_TYPE["UINT16"], 0),
+            DevFieldSpec("DUP", BASE_TYPE["UINT16"], 1),
+        ],
+        {0: 111, 1: 65535},
+    )
+    assert sessions[0]["developer_fields"] == {0: 111, 1: 65535}  # precondition
+
+    assert extract_developer_fields(descriptions, sessions)["DUP"] == 111
