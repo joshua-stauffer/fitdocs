@@ -385,7 +385,7 @@
   - _Requirements: 6.5, 7.2, 7.3, 7.4, 7.5, 7.6, 8.1, 8.3, 8.4, 8.5_
   - _Depends: 1.1, 3.1_
 
-- [ ] 3.3 Place the section on run pages, and only there
+- [x] 3.3 Place the section on run pages, and only there
   - In `render_run_ride`, after the Telemetry block and before Splits, add
     `## Running Dynamics` and its assets for run modality only; update the
     view docstrings' section order
