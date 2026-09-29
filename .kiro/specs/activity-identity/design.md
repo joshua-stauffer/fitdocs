@@ -676,7 +676,7 @@ regeneration (Req 4.10, 8.4).
 | 4.3 | one claim joins | RunPlanner, SyncEngine | `Join`, page task | Writing run |
 | 4.4 | no page: new page | RunPlanner, SyncEngine | `Fresh`, page task | Writing run |
 | 4.5 | two pages: hold | RunPlanner | `Hold` | Writing run |
-| 4.6 | two claims: hold | RunPlanner | `Hold` | Writing run |
+| 4.6 | page matched by two or more groups (a bridge counts): hold | RunPlanner | `Hold` | Writing run |
 | 4.7 | held: archive, warn, record | SyncEngine, HoldStore | hold task, `save_holds` | Writing run |
 | 4.8 | order-independent assignment | RunPlanner | `plan_run` | -- |
 | 4.9 | never merge pages, never un-join | RunPlanner, SyncEngine | `plan_run` | -- |
@@ -1060,9 +1060,13 @@ def page_session_uuid(roles: PageRoles, recorded: str | None) -> str | None: ...
   5. Zero candidates → `Fresh(group)` (Req 4.4); two or more → `Hold`
      (candidates, evidence) for every member (Req 4.5); exactly one → a
      **claim**.
-  6. A page claimed by two or more groups → `Hold` for every member of those
-     groups (Req 4.6); a page claimed by one group → `Join(page, strongest
-     evidence)` for its members (Req 4.3).
+  6. A page matched by two or more groups -- a bridging group of step 5
+     counts as matching each of its candidates -- → `Hold` for every member of
+     those groups (Req 4.6); a page claimed by one group and matched by no
+     other → `Join(page, strongest evidence)` for its members (Req 4.3).
+     _(Controller ruling 2026-09-30, activity-identity 2.4 review: Req 4.2
+     defines "matches" over every candidate page, so a claiming group beside a
+     bridging group on the same page is held, not joined.)_
   7. **Tasks**: one `PageTaskPlan` per target page (pinned files and joined
      groups together) and per fresh group; held files as `holds`. Task order
      is the smallest input position among members; members keep input order.
@@ -1108,8 +1112,9 @@ def duplicate_sets(index: PageIndex) -> tuple[DuplicateSet, ...]: ...
 **Implementation Notes**
 - Validation: permutation tests (every order of a 3–4 file input yields equal
   decisions); two groups claiming one page are both held; a group bridging two
-  pages is held; a pinned re-export and a strict-matching original in one run
-  join the same page. Named mutation: resolving a two-page group to the first
+  pages is held, and so is any group claiming one of the bridged pages; a
+  pinned re-export and a strict-matching original in one run join the same
+  page. Named mutation: resolving a two-page group to the first
   page reddens the ambiguity test; resolving a double claim to the first group
   reddens the claim test.
 
