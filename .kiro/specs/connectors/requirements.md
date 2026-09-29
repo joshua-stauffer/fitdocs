@@ -287,7 +287,7 @@ athlete's own tools put in the inbox is ever removed.
 3. The connector package shall not depend on rendering, training load, metrics, `.fit` ingestion, or the sync engine, and an automated guard shall enforce it.
 4. Every statement in the shipped code, the README, and the documentation that describes where fitdocs touches the network shall name both the map tiles and the connector commands, and none shall claim the map tiles are the only network access.
 5. The fitdocs CLI shall add no runtime dependency for connectors, so that the frozen runtime dependency list stays unchanged.
-6. The connector framework, its tests, and its documentation shall be service-neutral: they shall name no online service's endpoint, and this spec shall ship no connector for an online service.
+6. The connector framework modules, their tests, and the framework sections of the connectors documentation shall name no online service's endpoint; a shipped service connector's own module, tests and documentation section are exempt; this spec ships no online-service connector.
 7. The project's technology steering shall state the network rule, the credential rule, and the stdlib-only rule for connectors.
 
 ### Requirement 15: Contracts, Confinement, Documentation, and the Packaged Skill
@@ -295,10 +295,10 @@ athlete's own tools put in the inbox is ever removed.
 
 #### Acceptance Criteria
 1. The ownership contract shall state that credentials never live under the data root, that each connector ledger is fitdocs-owned tool state in the tool-state directory, what `fitdocs pull` writes and removes (its deliveries in the configured inbox and its ledgers), and that `fitdocs connect` writes nothing under the data root.
-2. The ownership contract's version shall advance for these statements, sharing one advance with the other parts of the same contract amendment that land before the next release.
+2. The ownership contract's version shall advance by one from the value current when this feature lands.
 3. `fitdocs pull` shall be registered with the write-confinement guard as a writing entry point with its own proof that the measured run wrote, and an automated test shall prove that `fitdocs connect` writes only its credentials file and nothing inside the data root or the source tree.
 4. The inbox documentation and the compatibility policy shall state that the drain never deletes an inbox file, that nothing the athlete or the athlete's tools put in the inbox is ever deleted, and that a connector's own delivery is removed by the next pull once identical bytes are archived, keeping every existing never-delete statement true.
-5. The shipped documentation shall describe connectors: configuring instances, the folder connector, connecting, where credentials live and their environment overrides, the pull and its options and report, delivery and removal, the ledger, what leaves the machine and how to switch that access off, the terms-first policy, and — while cross-source identity has not shipped — that pulling into a data root that already holds other copies of the same activities creates duplicate pages.
+5. The shipped documentation shall describe connectors: configuring instances, the folder connector, connecting, where credentials live and their environment overrides, the pull and its options and report, delivery and removal, the ledger, what leaves the machine and how to switch that access off, the terms-first policy, and — while cross-source identity has not shipped — that pulling into a data root that already holds other copies of the same activities creates duplicate pages, or, once it has shipped, that a data root whose pages predate it is regenerated before its first pull.
 6. The settings documentation, the ownership contract, and the compatibility policy shall name the connectors table among the settings file's tables.
 7. The packaged `fitdocs-workouts` skill's routine shall pull and drain in one command and then check the tree; the skill shall document the pull report's channels in a table an automated test binds to the pull report's fields, and shall tell the agent never to run `fitdocs connect` itself and never to retry a failed authentication.
 8. The changelog's unreleased section shall record the two commands, the connectors table, and each governed-contract change together with the action a user must take.

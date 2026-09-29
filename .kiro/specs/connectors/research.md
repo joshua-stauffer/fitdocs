@@ -150,8 +150,10 @@
     reported by name, and 429 backoff "within the bounds `connectors` sets".
     Every one maps onto this design's protocol, transport and ledger (see
     design.md "Cross-spec seams").
-  - Amendment 4 of `wiki-contract` is landed by three specs; the contract
-    version advances once per unreleased cycle (design.md "Contract version").
+  - Amendment 4 of `wiki-contract` is landed by three specs; each lander
+    advances the contract version by one from `main`'s value and the second
+    re-pins (cross-spec ruling 2026-09-29, superseding this spec's earlier
+    once-per-release sharing rule; design.md "Contract version").
 
 ## Architecture Pattern Evaluation
 
@@ -271,12 +273,18 @@
   target directory with a dot prefix, fsync, `os.replace`, cleanup) used by
   the ledger, the credentials store and delivery. This is one more private
   copy of the idiom queue item `2026-09-15-atomic-write-helper-copied-per-engine`
-  tracks; consolidating it is that item's work, not this spec's.
+  tracks (activity-identity's `identity/holds.py` is another); consolidating
+  it is that item's work, not this spec's. Task 1.2 appends the
+  `connectors/_atomic.py` site to that item, noting that its resume command
+  puts the shared helper in `fitdocs.docio`, which this package's boundary
+  guard forbids, so the consolidation must widen that guard to admit the
+  helper's module.
 
 ## Risks & Mitigations
 - Real use before `activity-identity` duplicates pages — documented caution in
-  `docs/connectors.md`; no connector is pointed at a real data root before
-  identity lands (roadmap constraint, operator rule).
+  `docs/connectors.md` (replaced by the regenerate-before-first-pull
+  statement when identity is on `main` first); no connector is pointed at a
+  real data root before identity lands (roadmap constraint, operator rule).
 - Two overlapping pulls (cron overlap) — last ledger write wins; lost entries
   cause a re-fetch that records "already held" (hash dedupe). No lock is
   introduced (no other fitdocs command locks). Documented.

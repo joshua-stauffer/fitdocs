@@ -21,9 +21,9 @@ hand or from cron/launchd; the wiki's agent, whose packaged routine becomes
 **Impact**: two new commands (eleven registered in all); a new
 `fitdocs.connectors` package; the second network-capable module in the tree;
 the inbox gains one producer and one narrowly scoped removal (the pull removes
-its own archived deliveries); the settings schema gains a seventh table; the
-ownership contract gains credential and ledger statements and advances its
-version (shared with the rest of Amendment 4).
+its own archived deliveries); the settings schema gains one table
+(`[connectors]`); the ownership contract gains credential and ledger
+statements and advances its version by one from `main`'s value at landing.
 
 ### Goals
 - A protocol `intervals-connector` implements without amendment, and whose
@@ -73,8 +73,8 @@ version (shared with the rest of Amendment 4).
   `docs/inbox.md`, `docs/compatibility.md`, `docs/ownership-contract.md`,
   `docs/index.md`, `docs/wiki-integration.md`, `README.md`, `CHANGELOG.md`.
 - This spec's part of wiki-contract Amendment 4 (credential and ledger
-  ownership statements, the two commands' overwrite semantics) and the
-  contract-version advance rule below.
+  ownership statements, the two commands' overwrite semantics) and this
+  spec's contract-version advance (rule below).
 - The packaged `fitdocs-workouts` skill's routine, report table and pins.
 - Spec bookkeeping: amendment records on `inbox`, `distribution`,
   `route-maps` and `wiki-contract`; the technology steering's network and
@@ -93,7 +93,12 @@ version (shared with the rest of Amendment 4).
   dispositions (`inbox`). The drain is not edited beyond the docstring
   statement at `sync.py:41-52`.
 - Consolidating the private atomic-write copies (queue
-  `2026-09-15-atomic-write-helper-copied-per-engine`).
+  `2026-09-15-atomic-write-helper-copied-per-engine`). `connectors/_atomic.py`
+  is one more copy (as is activity-identity's `identity/holds.py`); task 1.2
+  appends its site to that queue item, noting that the item's consolidation
+  into `fitdocs.docio` (its resume command) must widen this package's
+  boundary guard — which forbids `fitdocs.docio` below — to admit the shared
+  helper's module.
 
 ### Allowed Dependencies
 - `fitdocs.connectors.*` may import only: the standard library;
@@ -296,7 +301,7 @@ tests/connectors/
 ├── test_connect.py
 ├── test_boundary.py # package import closure + forbidden names + clock scan + tree-wide network allow-list
 ├── test_network_statements.py  # stale "only network" phrases absent from code, README and docs; new statements present
-├── test_docs.py     # connectors page, service-neutral scan, inbox carve-out and settings-table pins
+├── test_docs.py     # connectors page, service-neutral scan (+ its exemption table, empty here), inbox carve-out and settings-table pins
 └── test_cli_connectors.py  # CLI: connect, pull, --sync chaining, exit codes, output, socket guard
 ```
 
@@ -307,7 +312,11 @@ tests/connectors/
   `_connector_transport`, `_stdin_is_interactive`, `_ask_secret`,
   `_ask_value` (monkeypatched in tests); `pretty_exceptions_show_locals=False`
   on `app`; docstring: "Eleven commands", the two command bullets, the network
-  paragraph (`:98-102`) rewritten, exit-code paragraph extended.
+  paragraph (`:98-102`) rewritten, exit-code paragraph extended. Shared with
+  `activity-identity` (its `_identity_settings()` and `precedence=`
+  wiring): whichever of the two lands second carries `precedence` through
+  `_run_drain_passes` and adds the `[identity]` and hold-record checks to
+  `pull --sync`'s preflight (see CliCommands).
 - `src/fitdocs/version.py` — `PROJECT_URL` and `user_agent()`; module docstring
   names the fourth consumer.
 - `src/fitdocs/tiles.py` — `_user_agent()` returns `version.user_agent()`;
@@ -317,8 +326,9 @@ tests/connectors/
   the engine makes no connector request; nothing else.
 - `src/fitdocs/layout.py` — `CONNECTOR_STATE_DIR`, `connector_ledger_path()`;
   `TOOL_STATE_DIR`'s docstring names the ledger as its second tenant.
-- `src/fitdocs/contract.py` — `CONTRACT_VERSION` per "Contract version" below,
-  with a docstring line for this spec's part.
+- `src/fitdocs/contract.py` — `CONTRACT_VERSION` advanced by one from
+  `main`'s value per "Contract version" below, with a docstring paragraph
+  for this spec's changes.
 - `src/fitdocs/skills/fitdocs-workouts/SKILL.md` — description, routine,
   pull-report table, connect/never-retry instructions, further-reading link.
 - `pyproject.toml` — `[project.urls]` gains `Connectors`; `[tool.mypy].files`
@@ -328,13 +338,20 @@ tests/connectors/
   channel literal and binding; stale "fences sync, check, and regen" prose.
 - `tests/test_cli_skill.py` — `len(commands) == 11`, `"Eleven"` (`:262-269`).
 - `tests/test_compatibility_policy.py` — `SETTINGS_TABLE_LITERALS` gains
-  `"[connectors]"`; the "six" test name and messages become "seven".
+  `"[connectors]"`; if `main` still carries
+  `test_settings_schema_subsection_names_all_six_tables` (`:270`), this spec
+  is the first of `activity-identity`/`connectors` to land and renames it to
+  the count-free `test_settings_schema_subsection_names_every_table`, with
+  count-free messages; if `activity-identity` renamed it first, the name
+  stays and this spec re-pins only the literal list (settings-table count
+  rule under CompatibilityDocs).
 - `tests/test_docs_guarantees.py` — `_REQUIRED_ENTRY_POINT_LINKS` gains
   `"connectors.md"` (the delivery-removal carve-out and the settings-table
   pins live in the new `tests/connectors/test_docs.py`, so parallel doc tasks
   never share a test file).
-- `tests/declaration_golden/*.AGENTS.md` — regenerated only if
-  `CONTRACT_VERSION` changes in this merge.
+- `tests/declaration_golden/*.AGENTS.md` — always regenerated (this merge
+  advances `CONTRACT_VERSION`; regenerated again if a re-pin follows a
+  sibling's landing).
 - Docs: `docs/configuration.md`, `docs/inbox.md`, `docs/compatibility.md`,
   `docs/ownership-contract.md`, `docs/index.md`, `docs/wiki-integration.md`;
   `README.md`; `CHANGELOG.md`.
@@ -502,7 +519,7 @@ sequenceDiagram
 | 14.1, 14.2, 14.3 | Network confinement and boundary | BoundaryGuard, CliCommands | — | — |
 | 14.4, 14.7 | Honest statements, steering | NetworkStatements, SteeringUpdate | — | — |
 | 14.5 | No runtime dependency | (whole design) | frozen dependency tests | — |
-| 14.6 | Service-neutral | (whole design), ConnectorsDoc | — | — |
+| 14.6 | Service-neutral framework; a shipped service connector's own files exempt | (whole design), ConnectorsDoc, NeutralScan | `NEUTRAL_SCAN_EXEMPTIONS` | — |
 | 15.1, 15.2 | Ownership contract, version | OwnershipContractDocs, ContractVersion | `CONTRACT_VERSION` | — |
 | 15.3 | Confinement registration | ConfinementRegistration | `EntryPoint(id="pull")` | — |
 | 15.4 | Inbox carve-out wording | InboxDocs, CompatibilityDocs | — | — |
@@ -534,6 +551,7 @@ sequenceDiagram
 | NetworkStatements | cli.py, sync.py, tiles.py, README, docs | True statements | 14.4 | — | — |
 | BoundaryGuard | tests/connectors/test_boundary.py | Network allow-list, package closure | 1.9, 2.8, 14.1-14.3 | — | — |
 | SurfacePin | tests/connectors/test_surface.py | `__all__` pin | 2.7 | — | — |
+| NeutralScan | tests/connectors/test_docs.py | No online-service endpoint outside an exempted connector's own files | 14.6 | — | — |
 | ConfinementRegistration | tests/test_confinement.py | `pull` entry point, `connect` test | 5.9, 15.3 | — | — |
 | ContractVersion + OwnershipContractDocs | contract.py, docs/ownership-contract.md, goldens | Ownership statements, version | 15.1, 15.2 | — | — |
 | InboxDocs, CompatibilityDocs, ConfigurationDocs, ConnectorsDoc, ReadmeAndIndex, ChangelogEntry | docs, README, CHANGELOG | User-facing statements | 8.9, 14.4, 15.4-15.6, 15.8 | — | — |
@@ -1093,6 +1111,12 @@ def save_ledger(data_root: Path, instance: str, ledger: Ledger) -> bool: ...
   `tempfile.mkstemp(dir=path.parent, prefix=f".{prefix}-", suffix=".tmp")`
   (dot-prefixed, mode `0o600`), write, `flush` + `os.fsync`, `os.replace`;
   the temp file is removed on any failure.
+- A private copy of the idiom, deliberately: the package may not import
+  `fitdocs.docio` or any engine. Task 1.2 appends this site to queue item
+  `2026-09-15-atomic-write-helper-copied-per-engine` (beside
+  activity-identity's `identity/holds.py` copy), recording that its
+  consolidation must widen the connectors boundary guard (task 6.1) to
+  admit the shared helper's module.
 
 ### Delivery layer
 
@@ -1372,6 +1396,8 @@ def pull_command(
 
 def _run_drain_passes(data_root: Path, *, tz: tzinfo, athlete: AthleteInputs | None,
                       force: bool, retry_quarantined: bool, no_prompt: bool, command: str) -> bool: ...
+    # once activity-identity is on `main`: also a required keyword
+    # `precedence: Precedence`, passed to `drain(...)` (see "Identity wiring" below)
 
 def _connector_transport() -> Transport: ...     # returns urllib_transport; tests monkeypatch
 def _stdin_is_interactive() -> bool: ...         # sys.stdin.isatty()
@@ -1388,9 +1414,11 @@ selected (unknown → 6.2); when a selected instance's style is not `NONE`,
 `resolve_credentials_dir` + `check_outside_data_root` (4.2); with `--sync`,
 also `_loaded_athlete`, `_plugin_report`, `tile_settings_from_document` and
 `load_quarantine` (the checks `sync`'s drain path makes before its first
-write). Then, unless `--dry-run`, `create_inbox_paths`. With no instance
-configured: print "No connectors are configured …" (6.3) and do not return
-early — with `--sync` the drain still runs, so `pull --sync --no-prompt`
+write), and — once activity-identity is on `main` — `_identity_settings`
+and `load_holds` (see "Identity wiring" below). Then, unless `--dry-run`,
+`create_inbox_paths`. With no instance configured: print "No connectors are
+configured …" (6.3) and do not return early — with `--sync` the drain still
+runs, so `pull --sync --no-prompt`
 with no `[connectors]` table produces exactly what `sync --no-prompt` does
 and exits by the drain's outcome (the packaged skill's claim rests on
 this). Then `run_pull`, `_report_pull`, and with `--sync`
@@ -1414,6 +1442,25 @@ written under the data root (5.9).
 errors — returning the combined failure flag. `sync_command` calls it with
 `command="sync"` and then `_finish`, so `sync`'s output and exit codes are
 byte-identical (pinned by the existing inbox CLI tests).
+
+**Identity wiring (shared with `activity-identity`; cross-spec ruling
+2026-09-29)**: activity-identity adds `precedence=` to `drain()`/`sync()`,
+`cli._identity_settings(data_root)` (a malformed `[identity]` table →
+`_config_error`, exit 2) and the mapping of `HoldRecordError` (a damaged
+`.fitdocs/held.toml`) to `_config_error` naming the file and
+`fitdocs regen`; its Req 2.7 requires that configuration error before
+anything is written. Whichever of the two specs lands second carries the
+join. When this spec's task runs — and again after its final rebase —
+with activity-identity on `main` (`src/fitdocs/identity/` and
+`cli._identity_settings` exist): `_run_drain_passes` takes a required
+keyword `precedence` and passes it to `drain`, the `[identity]` load
+staying ahead of the helper in `sync_command`; `pull --sync`'s preflight
+calls `_identity_settings(data_root)` and
+`fitdocs.identity.holds.load_holds(data_root)` (its `HoldRecordError`
+mapped exactly as `sync` maps it) before any request or write, and passes
+the loaded precedence to the helper. Without `--sync` the pull reads
+neither: it never drains. When activity-identity is not yet on `main`, its
+own CLI task carries the same join when it lands.
 
 **`_report_pull`**: prints `Inbox: <path>` (or "Dry run — nothing fetched or
 written." first under `--dry-run`), then per instance a table titled
@@ -1471,6 +1518,37 @@ positive half: each rewritten place names both the map tiles and
 `fitdocs pull`. No rewritten statement links `docs/connectors.md` until task 7
 declares it in `[project.urls]` (`tests/test_packaging.py:263-285`).
 
+#### NeutralScan (`tests/connectors/test_docs.py`, 14.6)
+- Scope: every file under `src/fitdocs/connectors/` and `tests/connectors/`,
+  and `docs/connectors.md` split into its `##` sections. Every URL found
+  must be the project's own (under a declared `[project.urls]` value) or on
+  a reserved example host (`example.com`/`.org`/`.net`, `.example`,
+  `.test`, `.invalid`, `localhost`), unless the exemption table admits its
+  host in that file.
+- The exemption table is an explicit module-level constant,
+  `NEUTRAL_SCAN_EXEMPTIONS: dict[str, frozenset[str]]`, mapping a host to
+  the files that may name it — a shipped service connector's own module and
+  tests, and, for the documentation page, its own section, written
+  `docs/connectors.md#<section heading>` (a framework section never gains
+  an exemption). This spec ships it **empty** (no online-service
+  connector); `intervals-connector` appends its entry (cross-spec ruling
+  2026-09-29), with no amendment to 14.6.
+- The scan is one function over (files, exemptions), pinned on synthetic
+  inputs independent of the real table: an unreserved host with no entry is
+  a violation; the same host admitted for that file is not; a host admitted
+  for one `##` section of a page and named in another section is.
+- Positive controls: always, the real-tree scan's file set equals the
+  package's and its tests' directory listings and includes at least one
+  section of the page; **only when the table is non-empty** — a loop over its
+  entries, zero iterations here — for each host the scan finds it in at
+  least one of its admitted files (so an exemption is exercised, never
+  vacuous). No pin asserts the table empty, so the later entry is a pure
+  append.
+- Named mutations: add a non-reserved URL to a connectors test (the
+  real-tree scan reds); add an entry for a host none of its admitted files
+  names (the conditional control reds); treat a section-scoped entry as
+  admitting the whole page (the synthetic other-section pin reds).
+
 #### ConfinementRegistration (`tests/test_confinement.py`)
 - `_stage_pull_folder(data_root, source_dir)`: writes `fitdocs.toml` with
   `[inbox] path = "inbox"`, `settle_seconds = 0`, and
@@ -1521,14 +1599,19 @@ each name identical to its defining module's object.
 
 #### ContractVersion and OwnershipContractDocs
 - **Contract version (15.2)**: `CONTRACT_VERSION` is `"4"` on this branch's
-  base and in the latest release (0.1.0). At landing time: if `main` still
-  reads the latest release's value, advance it by one; if a sibling's
-  Amendment 4 part has already advanced it since that release, keep `main`'s
-  value. Either way, append this spec's changes to the "What changed at this
-  version" paragraph of `docs/ownership-contract.md`, add a docstring line to
-  `CONTRACT_VERSION`, and regenerate the declaration goldens only when the
-  value changed in this merge. Never hard-code a resulting number in a test
-  or prose outside those three places.
+  base. Every lander advances it by one from the value on `main` when it
+  lands; no advance is shared (cross-spec ruling 2026-09-29; precedent
+  1b940b1 effort-tags 1→2, a6a0cfc load-history 2→3, 022db69
+  training-blocks 3→4; roadmap "Each bump lands once, in merge order, and
+  the second lander re-pins"). This spec: read `main`'s value, advance it
+  by one, **replace** the "What changed at this version" paragraph of
+  `docs/ownership-contract.md` (and its version line) with this spec's
+  changes, add a paragraph to `CONTRACT_VERSION`'s docstring, and always
+  regenerate the declaration goldens; `CHANGELOG.md` is the cumulative
+  record. After the final rebase the value must equal `main`'s + 1; if a
+  sibling landed first, re-pin (value, paragraph, docstring, goldens).
+  Never hard-code the resulting number in a test or in prose outside those
+  places.
 - `docs/ownership-contract.md`: the `.fitdocs/` bullet names the connector
   ledgers (`.fitdocs/connectors/<name>.toml`) beside the quarantine record,
   keeping `.fitdocs/` the bullet's first backticked token (the Owned Paths
@@ -1551,11 +1634,23 @@ each name identical to its defining module's object.
   `<inbox>/<name>/` is fitdocs's own copy and the next pull removes it once
   identical bytes are archived; nothing the athlete or the athlete's tools
   put in the inbox is ever removed (15.4).
+- **Settings-table count (15.6; cross-spec ruling 2026-09-29)**: both
+  `activity-identity` (`[identity]`) and this spec add a table. The count
+  in prose at `docs/configuration.md:51` and `docs/compatibility.md:24, 64`
+  advances by one from the count `main` states when this spec lands, never
+  to a number fixed now; the first of the two to land renames
+  `test_settings_schema_subsection_names_all_six_tables`
+  (`tests/test_compatibility_policy.py:270`) to the count-free
+  `test_settings_schema_subsection_names_every_table` with count-free
+  messages, and the second lander re-pins (count and literal list) after
+  its rebase.
 - `docs/compatibility.md`: the inbox governed-contract item and its
-  subsection name the delivery-removal carve-out (additive); "six tables" →
-  "seven tables" at `:24` and `:64`, adding `[connectors]` (15.6).
-- `docs/configuration.md`: "six" → "seven" at `:51`, a `[connectors]` table
-  row, a short `[connectors]` section pointing at `docs/connectors.md`; the
+  subsection name the delivery-removal carve-out (additive); the table
+  count at `:24` and `:64` advances per the rule above, adding
+  `[connectors]` (15.6).
+- `docs/configuration.md`: the table count at `:51` advances per the rule
+  above, a `[connectors]` table row, a short `[connectors]` section pointing
+  at `docs/connectors.md`; the
   network paragraph at `:72-74` and `:92-93` names the connector commands; the
   data-root paragraph's command list gains `connect` and `pull`.
 - `docs/connectors.md` (new): what a connector is; `[connectors.<name>]`
@@ -1569,9 +1664,16 @@ each name identical to its defining module's object.
   (fitdocs ships connectors only for services whose terms permit the access;
   no endpoint of any other service is documented); the caution that until
   cross-source identity ships, pulling into a data root that already holds
-  other copies of the same activities creates duplicate pages; a cron/launchd
-  example of `fitdocs pull --sync --no-prompt`. No protocol names are
-  documented here (see Non-Goals).
+  other copies of the same activities creates duplicate pages — or, if
+  `activity-identity` is on `main` when this page is written (and again
+  after the final rebase), in its place the statement that a data root
+  whose pages predate cross-source identity is regenerated
+  (`fitdocs regen`) before its first pull (cross-spec ruling 2026-09-29;
+  activity-identity replaces the caution the same way if it lands second);
+  a cron/launchd example of `fitdocs pull --sync --no-prompt`. Every section
+  written here is a framework section: it names no online service's
+  endpoint (NeutralScan). No protocol names are documented here (see
+  Non-Goals).
 - `docs/index.md`: one row for `docs/connectors.md` (append-only; the
   `docs-site` spec adds its own row to the same table — rebase, keep both).
 - `docs/wiki-integration.md`: the `fitdocs-workouts` summary line reflects
@@ -1584,8 +1686,12 @@ each name identical to its defining module's object.
   (inbox interface: connector deliveries are removed once archived — no
   action; the ownership contract's statements on credentials, the ledger
   and the two commands — no action); each naming the contract and the user
-  action, and none naming a contract-version number, so the entry is right
-  whichever Amendment 4 part advanced the value (15.8).
+  action, and none naming a contract-version number, so a re-pin after a
+  sibling lands first never touches the entry (15.8). Each entry is
+  appended under the existing `### Added` / `### Changed` heading of
+  `[Unreleased]`, creating the heading only when absent: a sibling may have
+  created it, and `check_changelog` rejects a repeated category within one
+  section (`tests/test_changelog.py:516`).
 
 #### PackagedSkill (`src/fitdocs/skills/fitdocs-workouts/SKILL.md`)
 - `description`: pulls new `.fit` files from the athlete's configured
@@ -1620,12 +1726,23 @@ each name identical to its defining module's object.
   missing basemap tiles") naming the connector commands.
 - `.kiro/specs/wiki-contract`: this spec's part of Amendment 4 (criteria on
   the published ownership contract: credentials never under the data root; the
-  ledger is owned tool state; the two commands' overwrite semantics), appended
-  to the Amendment 4 block if a sibling already created it.
-- `.kiro/steering/roadmap.md`: tick `distribution` under Phase 8 Existing Spec
-  Updates ("landed by connectors"); add a ticked `inbox` line (landed by
-  connectors); tick `wiki-contract` only if the other two Amendment 4 parts
-  are already on `main`.
+  ledger is owned tool state; the two commands' overwrite semantics). The
+  section is titled `## Amendment 4 (<first landing date>): source roles,
+  connector state and channel provenance, landed by activity-identity,
+  connectors and channel-merge` and is created by whichever of the three
+  lands first; if a sibling created it, this spec appends its paragraph.
+  The paragraph records this spec's own `CONTRACT_VERSION` `"X"` to `"Y"`
+  (precedent: wiki-contract requirements.md Amendments 1-3); each new
+  criterion takes the next free number in its requirement, tagged
+  `_(added by Amendment 4)_`.
+- `.kiro/steering/roadmap.md` Phase 8 Existing Spec Updates: the
+  `distribution`, `inbox` and `route-maps` lines already exist (the
+  controller added `inbox` and `route-maps` and widened `distribution` at
+  the spec batch); at landing, tick each line whose every named part is on
+  `main` — all three name only this spec — annotated with the merge SHA;
+  the `wiki-contract` line is ticked only when all three Amendment 4 parts
+  are on `main`, otherwise annotated "(connectors part landed at
+  `<sha>`)".
 
 ## Data Models
 
@@ -1682,7 +1799,9 @@ api_key = "…"
 ### Error Strategy
 - **Configuration errors (exit 2, nothing written, no request)**: data root;
   malformed `[connectors]`, `[inbox]`, and (with `--sync`) `[plugins]`,
-  `[tiles]`, quarantine record, athlete profile; unknown instance names;
+  `[tiles]`, quarantine record, athlete profile, and — once
+  activity-identity is on `main` — `[identity]` and the hold record;
+  unknown instance names;
   `--since` unparseable; `--sync` with `--dry-run`; credentials directory
   relative-override or inside the data root; `connect` on a reserved style or
   without a terminal or with an empty answer.
@@ -1790,11 +1909,21 @@ Discrimination); the items below name the behavior and the mutation it dies on.
   prints scopes (5.5).
 - `sync`, `regen`, `load`, `check`, `history`, `plan` with `[connectors]`
   configured and `socket.socket` patched to raise: all succeed (14.1).
+- Once activity-identity is on `main` (CliCommands "Identity wiring"):
+  `pull --sync` with a malformed `[identity]` table, and with a damaged
+  `.fitdocs/held.toml`, each exits 2 naming the file, with no request made
+  and the sandbox unchanged (no delivery, no ledger) (mutations: load
+  `[identity]` inside `_run_drain_passes` instead of the preflight; drop
+  `load_holds` from the preflight — each lets the pull deliver before the
+  exit); a spy on `drain` sees the configured precedence under
+  `pull --sync` and under `sync` (mutation: drop `precedence=` from the
+  helper's `drain` call).
 
 ### Guards
-- BoundaryGuard, SurfacePin, ConfinementRegistration, SkillPins as above;
-  `tests/test_cli_skill.py` count 11; compatibility literal list includes
-  `[connectors]`; docs index link.
+- BoundaryGuard, SurfacePin, NeutralScan, ConfinementRegistration, SkillPins
+  as above; `tests/test_cli_skill.py` count 11; compatibility literal list
+  includes `[connectors]` (under the count-free test name, per the
+  settings-table count rule); docs index link.
 
 ## Security Considerations
 - Threats addressed: a key committed with the wiki (store outside the data
@@ -1831,13 +1960,20 @@ stated for the cross-spec reviewer.
   with `auth_failure_from`; `list_activities(session, since)` pages its date
   windows itself (it chooses its own earliest date when `since` is `None`)
   and returns `original_available=False` with a reason for stubs;
-  `fetch_activity` decompresses with `gzip` and may `Declined("original is
-  GPX")`, the framework's `is_fit` check remaining a backstop. 429s on its
-  data calls are retried by `HttpClient` (3 attempts, `Retry-After` ≤ 60 s).
+  `fetch_activity` decompresses with `gzip` (any bounded read through the
+  stdlib `gzip` module conforms, e.g. a size-capped `GzipFile` read) and
+  may `Declined("original is GPX")`, the framework's `is_fit` check
+  remaining a backstop. 429s on its data calls are retried by `HttpClient`
+  (3 attempts, `Retry-After` ≤ 60 s); a data-call status that survives
+  retries is the connector's to map; `AuthFailure` is for 401/403 and
+  sign-in, `ConnectorError` ends the instance.
   It registers itself by appending one line to
-  `src/fitdocs/connectors/__init__.py` and adds its own entry to the boundary
-  guard's per-module allowed set (both append-only). Its Garmin product-name
-  and attribution work touches ingest/render, never this package.
+  `src/fitdocs/connectors/__init__.py`, adds its own entry to the boundary
+  guard's per-module allowed set, and appends its `intervals.icu` entry to
+  the NeutralScan exemption table (its module, its tests, its own section
+  of `docs/connectors.md`) — all append-only, with no amendment to 14.6.
+  Its Garmin product-name and attribution work touches ingest/render, never
+  this package.
 - **`activity-identity` (wave 1)** — assumed: it derives a file's source kind
   from the file's own bytes and never from delivery. This design delivers
   bytes unmodified (8.2) under `<inbox>/<instance>/`; the drain's report
@@ -1845,14 +1981,30 @@ stated for the cross-spec reviewer.
   instance, remote id, revision, sha256)` and is readable with
   `fitdocs.connectors.ledger.load_ledger`, but identity is not expected to
   read it and this design exposes no classification for it. Shared touches:
-  `CONTRACT_VERSION` (one advance per unreleased cycle, rule above),
-  `docs/ownership-contract.md` (different sections; the "What changed"
-  paragraph is appended by each), the declaration goldens, and the
-  wiki-contract Amendment 4 block (appended by each; new criteria take the
-  next free numbers at landing). If identity changes `sync.py`'s docstring,
-  this spec's edit is confined to `:41-52`.
+  `CONTRACT_VERSION` (each lander advances it by one from `main`'s value and
+  the second re-pins, rule above), `docs/ownership-contract.md` (different
+  sections; the "What changed at this version" paragraph is replaced by
+  each lander with its own changes), the declaration goldens (regenerated by
+  each), the wiki-contract Amendment 4 section (created by the first of the
+  three landers under the joint title; each appends its own paragraph and
+  next-free-number criteria), and the settings-table count (each advances
+  it by one from `main`'s; the first renames the count-free test, rule
+  under CompatibilityDocs). Shared files, append-only and rebased keeping
+  both sides: `src/fitdocs/cli.py` (identity adds `_identity_settings()`,
+  `precedence=` and the `HoldRecordError` mapping; this spec extracts
+  `_run_drain_passes` and adds two commands — whichever lands second
+  carries `precedence` through the helper and adds the `[identity]` and
+  hold-record checks to `pull --sync`'s preflight, see CliCommands
+  "Identity wiring"); `src/fitdocs/layout.py` (identity adds
+  `held_path()`, this spec `CONNECTOR_STATE_DIR` and
+  `connector_ledger_path()`); `docs/inbox.md` (each adds its own
+  paragraph); `src/fitdocs/sync.py`'s module docstring, whose "Offline
+  guarantee" paragraph (`:41-52`) this spec rewrites and identity must keep
+  when it edits the docstring (identity's other `sync.py` changes are
+  its own).
 - **`channel-merge` (wave 2)** — assumed: no overlap beyond the shared
-  Amendment 4 block and contract-version rule.
+  Amendment 4 section (joint title, own paragraph) and each lander's own
+  contract-version advance.
 - **`running-dynamics` (wave 1)** — assumed: no overlap.
 - **`docs-site` (Phase 9, live peer)** — `docs/index.md` gains one row from
   each spec (append-only; rebase and keep both); `pyproject.toml`
@@ -1866,16 +2018,27 @@ Append-only: `src/fitdocs/layout.py`, `src/fitdocs/version.py`,
 (`[Unreleased]`), `docs/index.md`, `tests/test_confinement.py`
 (`WRITING_ENTRY_POINTS` + one test), `tests/test_docs_guarantees.py`
 (`_REQUIRED_ENTRY_POINT_LINKS`), `tests/test_compatibility_policy.py`
-(`SETTINGS_TABLE_LITERALS`). Edited in place: `src/fitdocs/cli.py`
+(`SETTINGS_TABLE_LITERALS`; the count-free rename if this spec lands first).
+Edited in place: `src/fitdocs/cli.py`
 (docstring, `app`, `sync_command`'s no-source branch, new commands),
 `src/fitdocs/sync.py` (`:41-52` only), `src/fitdocs/tiles.py` (`_user_agent`
 body and three statements), `src/fitdocs/contract.py` (`CONTRACT_VERSION`),
 the docs pages listed above, the packaged skill, `tests/test_agent_skill.py`,
 `tests/test_cli_skill.py`.
 
+Shared with `activity-identity` (append-only; rebase keeping both sides):
+`src/fitdocs/cli.py`, `src/fitdocs/layout.py`, `docs/inbox.md`, and
+`src/fitdocs/sync.py`'s module docstring (this spec's edit is the
+`:41-52` paragraph; identity must keep it) — details in the
+activity-identity bullet above. Also shared with it: `contract.py`'s
+`CONTRACT_VERSION`, `docs/ownership-contract.md`, the declaration goldens,
+`docs/configuration.md`/`docs/compatibility.md`'s table count and
+`tests/test_compatibility_policy.py`, each by the landing rules above.
+
 ## Open Questions / Risks
 - Real use waits for `activity-identity` (documented; operator rule).
 - Concurrent pulls are not locked (documented; hash dedupe bounds the harm).
-- The inbox, distribution and route-maps amendments are not listed in the
-  roadmap's Phase 8 Existing Spec Updates; this spec lands them as records
-  and the roadmap line for `inbox` (task 9.1).
+- The inbox, distribution and route-maps amendments this spec lands as
+  records each have a Phase 8 Existing Spec Updates line (the controller
+  added `inbox` and `route-maps` and widened `distribution` at the spec
+  batch); task 9.1 ticks them at landing, annotated with the merge SHA.

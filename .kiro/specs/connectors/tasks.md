@@ -17,8 +17,23 @@
   environment-variable naming) stops and reports rather than changing it.
 - **Sibling specs in flight** (`activity-identity`, `running-dynamics`,
   `channel-merge`, `docs-site`): see design.md "Cross-spec seams" and
-  "Shared-file touches". Task 8.1 applies the contract-version rule; task 7
+  "Shared-file touches". Task 8.1 advances the contract version by one from
+  `main`'s value (re-pinned after the final rebase if a sibling landed
+  first); task 8.2 advances the settings-table count the same way; task 7
   adds the one `docs/index.md` row (append-only; rebase and keep a peer's row).
+- **Cross-spec shared files** (append-only, shared with `activity-identity`;
+  rebase keeping both sides): `src/fitdocs/cli.py` (tasks 1.4, 5.1-5.3,
+  6.2 here; identity's `_identity_settings()`, `precedence=` and
+  hold-record mapping there — whichever lands second carries the join,
+  task 5.3); `src/fitdocs/layout.py` (task 1.3 here; identity's
+  `held_path()`); `docs/inbox.md` (task 8.2 here; identity's own
+  paragraph); `src/fitdocs/sync.py`'s module docstring (task 6.2 rewrites
+  only the "Offline guarantee" paragraph at `:41-52`; identity edits
+  `sync.py` widely and must keep that paragraph). Also shared by landing
+  rule: `CONTRACT_VERSION`, `docs/ownership-contract.md` and the
+  declaration goldens (8.1), the wiki-contract Amendment 4 section (8.1),
+  the settings-table count and `tests/test_compatibility_policy.py` (8.2),
+  `CHANGELOG.md` `[Unreleased]` headings (8.3).
 
 ## Hard rules for every task
 
@@ -60,9 +75,13 @@
   secrets that would appear if unredacted).
 - **Counts in prose move with the sets they count** (training-blocks WARN):
   `cli.py`'s "Nine commands" (`:5`) and `tests/test_cli_skill.py:266`, the
-  "six tables" at `docs/configuration.md:51`, `docs/compatibility.md:24, 64`
-  and `tests/test_compatibility_policy.py:270`, and the skill tests' channel
-  counts are each moved by the task that grows the set.
+  settings-table count at `docs/configuration.md:51`,
+  `docs/compatibility.md:24, 64` and `tests/test_compatibility_policy.py:270`,
+  and the skill tests' channel counts are each moved by the task that grows
+  the set. The settings-table count is shared with `activity-identity`: it
+  advances by one from the count on `main` when this spec lands, never to a
+  number fixed in this plan, and is re-pinned after the final rebase if
+  identity landed first (task 8.2).
 
 ## Shared files inside this plan
 
@@ -127,6 +146,12 @@
   - The atomic writer: a dot-prefixed temporary file in the target's
     directory, flushed and synced, replaced over the target, removed on any
     failure; the resulting file readable and writable only by its owner
+  - Append the `src/fitdocs/connectors/_atomic.py` site to queue item
+    `.kiro/queue/2026-09-15-atomic-write-helper-copied-per-engine.md`
+    (beside activity-identity's `identity/holds.py` if it is there), noting
+    that its consolidation into `fitdocs.docio` (the item's resume command)
+    must widen the connectors boundary guard (task 6.1), which forbids
+    `fitdocs.docio`, to admit the shared helper's module
   - Pins: each next step names the instance and, for rate-limited with a
     known wait, the wait (and no wait when unknown); a failing write leaves
     no temporary file and the old target intact; a written file's mode is
@@ -135,7 +160,8 @@
     reds); remove the cleanup in the writer's failure path (the no-temp pin
     reds)
   - Observable: `uv run pytest tests/connectors/test_errors.py
-    tests/connectors/test_atomic.py` green; `uv run mypy` green
+    tests/connectors/test_atomic.py` green; `uv run mypy` green; the queue
+    item lists the connectors site
   - _Requirements: 4.3, 5.6_
 
 - [ ] 1.3 (P) Define the one fitdocs User-Agent in the version leaf, delegate the tile fetcher to it, and add the ledger path to the layout leaf
@@ -167,7 +193,11 @@
     load pass, the plan pass, plugin errors) into one helper taking the data
     root, timezone, athlete inputs, force, retry-quarantined, no-prompt and
     the report's command label, and returning whether anything failed;
-    `sync_command` calls it and then exits as before
+    `sync_command` calls it and then exits as before. If activity-identity
+    is already on `main`, its `[identity]` load stays in `sync_command`
+    ahead of the helper and the helper takes a required `precedence`
+    keyword it passes to the drain (design.md CliCommands "Identity
+    wiring"); `pull`'s side of that join is task 5.3
   - No behavior change: same output bytes, same exit codes, same order of
     configuration errors
   - Named mutations: drop the plan pass from the helper
@@ -577,6 +607,15 @@
     failed and even when no connector is configured (no early return),
     honoring `--no-prompt`; the exit is `1` when the pull or the chained
     passes failed
+  - The join with activity-identity (design.md CliCommands "Identity
+    wiring"; whichever of the two lands second carries it): if
+    activity-identity is on `main` when this task runs — checked again after
+    the final rebase — carry `precedence` in the drain helper (a required
+    keyword passed to the drain; `sync_command` passes its loaded
+    precedence) and add `_identity_settings` and `load_holds` to the
+    `--sync` preflight, before any request or write, with the hold-record
+    error mapped as `sync` maps it; if it is not, record in the task report
+    that activity-identity's CLI task carries the join
   - Pins: `--sync` produces workout documents from delivered files and
     prints the drain table after the pull table; a malformed `[plugins]`
     table under `--sync` exits `2` with no request made (the fake
@@ -587,14 +626,25 @@
     no-connectors line and then the drain table, writes the same workout
     documents a `sync --no-prompt` over the same inbox writes (compared in
     two sandboxes), and exits by the drain's outcome (`0`, and `1` with a
-    per-file failure in the inbox)
+    per-file failure in the inbox); with activity-identity on `main`:
+    `pull --sync` with a malformed `[identity]` table exits `2` naming the
+    settings file, and with a damaged `.fitdocs/held.toml` exits `2` naming
+    the file and `fitdocs regen`, each with no request made and the sandbox
+    unchanged (no delivery, no ledger), and a spy on the drain sees the
+    configured precedence under both `pull --sync` and `sync`
   - Named mutations: run the drain before the pull report (the ordering pin
     reds); skip the drain when an instance failed (its pin reds); validate
     `[plugins]` only inside the helper (the no-request pin reds); return
-    early when no instance is configured (the no-connectors pin reds)
+    early when no instance is configured (the no-connectors pin reds); with
+    activity-identity on `main`: load `[identity]` inside the drain helper
+    instead of the preflight (the malformed-`[identity]` pin reds — the
+    pull delivers before the exit); drop `load_holds` from the preflight
+    (the damaged-hold pin reds the same way); drop `precedence=` from the
+    helper's drain call (the spy pin reds)
   - Observable: `uv run pytest tests/connectors/test_cli_connectors.py
-    tests/test_cli_sync_inbox.py` green
-  - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5_
+    tests/test_cli_sync_inbox.py` green (and `tests/test_cli_identity.py`
+    when activity-identity is on `main`)
+  - _Requirements: 11.4, 12.1, 12.2, 12.3, 12.4, 12.5_
 
 - [ ] 6. Guards and true network statements
 
@@ -689,22 +739,40 @@
     pull and its options and report channels, delivery and removal, the
     ledger, what leaves the machine and how to switch it off, the
     terms-first policy, the duplicate-page caution while identity has not
-    shipped, a cron/launchd example); no protocol names documented
+    shipped, a cron/launchd example); no protocol names documented; every
+    section is a framework section, naming no online service's endpoint.
+    If activity-identity is on `main` when this task runs — checked again
+    after the final rebase — state regenerate-before-first-pull (a data
+    root whose pages predate cross-source identity is regenerated with
+    `fitdocs regen` before its first pull) instead of the duplicate-page
+    caution
   - One `docs/index.md` row (append-only; keep a peer's row on rebase);
     `[project.urls]` gains `Connectors`; `_REQUIRED_ENTRY_POINT_LINKS` gains
     the page
   - A new docs test: the page's headings; the look-back default equals the
     code constant; every variable name it shows is what the naming function
-    produces; a service-neutral scan over the connectors package, its tests
-    and the page (every URL is the project's own or a reserved example
-    host)
+    produces; the service-neutral scan design.md "NeutralScan" states — over
+    the connectors package, its tests and the page's `##` sections, every
+    URL the project's own or on a reserved example host unless the
+    explicit exemption table (host → admitted files, a page entry naming
+    its own section) admits its host; the table ships empty here and
+    `intervals-connector` appends to it; the scan function pinned on
+    synthetic inputs (unadmitted host, admitted host, host admitted in one
+    section and named in another); an always-on positive control (the
+    scan's file set equals the package's and its tests' directory listings
+    and includes a section of the page) and a conditional one that loops
+    over the table's entries (zero iterations while it is empty), requiring
+    each host to be found in one of its admitted files
   - Named mutations: change the documented look-back default (its pin
     reds); add an external URL to a connectors test (the neutral scan reds);
-    drop the index row
-    (`test_documentation_entry_point_links_every_required_page` reds)
+    add a table entry for a host none of its admitted files names (the
+    conditional control reds); treat a section-scoped entry as admitting
+    the whole page (the synthetic other-section pin reds); drop the index
+    row (`test_documentation_entry_point_links_every_required_page` reds)
   - Observable: `uv run pytest tests/connectors/test_docs.py
     tests/test_docs_guarantees.py tests/test_packaging.py` green
   - _Requirements: 14.6, 15.5_
+  - _Boundary: ConnectorsDoc, NeutralScan_
 
 - [ ] 8. Contracts, documentation, and the packaged skill (four independent documents)
 
@@ -714,47 +782,65 @@
     credentials store outside the data root; `[connectors]` in the
     settings-file bullet; overwrite-semantics bullets for `pull` and
     `connect`
-  - The contract-version rule: read `CONTRACT_VERSION` on the rebased
-    branch; if it equals the latest release's value (`"4"`, 0.1.0), advance
-    it by one, add its docstring line, update the document's version line,
-    and regenerate the declaration goldens; if a sibling already advanced it
-    since that release, keep it and append this spec's changes to the "What
-    changed at this version" paragraph only
-  - Add this spec's part of wiki-contract Amendment 4: criteria on the
-    published-ownership-contract requirement taking the next free numbers,
-    appended to the Amendment 4 block if a sibling created it, else creating
-    the block titled for the joint landing; the design note and the
-    amendments entry in that spec's metadata
+  - The contract-version rule (design.md "Contract version"),
+    unconditional: read `CONTRACT_VERSION` on `main`, advance it by one,
+    add a paragraph for this spec's changes to its docstring, update the
+    document's version line, **replace** the "What changed at this version"
+    paragraph with this spec's changes, and regenerate the declaration
+    goldens. After the final rebase, check the value equals `main`'s + 1;
+    if a sibling landed first, re-pin (value, docstring paragraph, version
+    line, "What changed" paragraph, goldens). No test or other prose
+    hard-codes the number
+  - Add this spec's part of wiki-contract Amendment 4: if no sibling has
+    created it, create the section titled `## Amendment 4 (<first landing
+    date>): source roles, connector state and channel provenance, landed by
+    activity-identity, connectors and channel-merge`, else append to it;
+    this spec's paragraph records its own `CONTRACT_VERSION` `"X"` to `"Y"`;
+    its criteria on the published-ownership-contract requirement take the
+    next free numbers, each tagged `_(added by Amendment 4)_`; the design
+    note and the amendments entry in that spec's metadata
   - Named mutations: add `.fitdocs/connectors/` as its own list item (the
     owned-paths equality pin reds); leave the document's version line behind
-    the code (`test_contract_version_matches_code` reds)
+    the code (`test_contract_version_matches_code` reds); skip the golden
+    regeneration (`test_declaration_text_matches_committed_golden` reds on
+    the goldens' "Ownership contract version" line)
   - Observable: `uv run pytest tests/test_ownership_contract.py
     tests/test_declaration.py tests/test_declaration_goldens.py
-    tests/test_contract.py` green; `/kiro-spec-status wiki-contract` clean
+    tests/test_contract.py` green; `CONTRACT_VERSION` equals `main`'s value
+    + 1 after the final rebase; `/kiro-spec-status wiki-contract` clean
   - _Requirements: 15.1, 15.2, 15.6_
   - _Boundary: ContractVersion, OwnershipContractDocs_
 
-- [ ] 8.2 (P) State the delivery-removal carve-out and the seventh settings table in the inbox, configuration and compatibility pages
+- [ ] 8.2 (P) State the delivery-removal carve-out and the connectors settings table in the inbox, configuration and compatibility pages
   - `docs/inbox.md`: the opening bold sentence keeps "fitdocs performs no
     watching and no scheduling of any kind" and says delivering files is
     the athlete's concern unless a connector is configured; the disposition
     policy keeps both pinned sentences and adds the carve-out paragraph
     design.md states
   - `docs/compatibility.md`: the inbox item and subsection name the
-    carve-out; "six tables" becomes "seven tables" at both places, adding
-    `[connectors]`; `docs/configuration.md`: "six" becomes "seven", a table
-    row and a short section pointing at the connectors page, and the
+    carve-out; the settings-table count at both places (`:24`, `:64`)
+    advances by one from the count `main` states, adding `[connectors]`;
+    `docs/configuration.md`: the count at `:51` advances the same way, a
+    table row and a short section pointing at the connectors page, and the
     data-root paragraph's command list gains `connect` and `pull`
-  - Tests: `SETTINGS_TABLE_LITERALS` gains `"[connectors]"`, the "six" test
-    name and messages become "seven"; the docs test gains the carve-out pin
-    (the three statements present on the inbox page and the pinned
-    never-delete sentences still present)
+    (`docs/inbox.md` and both count sites are shared with
+    activity-identity, which adds `[identity]`: append-only; after the
+    final rebase, re-pin the count if identity landed first)
+  - Tests: `SETTINGS_TABLE_LITERALS` gains `"[connectors]"`; if `main` still
+    names the test `test_settings_schema_subsection_names_all_six_tables`,
+    this spec lands first and renames it to the count-free
+    `test_settings_schema_subsection_names_every_table` with count-free
+    messages; if activity-identity already renamed it, keep the name; the
+    docs test gains the carve-out pin (the three statements present on the
+    inbox page and the pinned never-delete sentences still present)
   - Named mutations: delete the carve-out paragraph (its pin reds); leave
     `[connectors]` out of the compatibility subsection
-    (`test_settings_schema_subsection_names_all_seven_tables` reds)
+    (`test_settings_schema_subsection_names_every_table` reds)
   - Observable: `uv run pytest tests/test_compatibility_policy.py
     tests/test_install_docs.py tests/test_docs_guarantees.py
-    tests/connectors/test_docs.py` green
+    tests/connectors/test_docs.py` green; the count stated at all three
+    prose sites equals the number of tables the configuration page lists
+    (checked again after the final rebase)
   - _Requirements: 8.9, 15.4, 15.6_
   - _Boundary: InboxDocs, CompatibilityDocs, ConfigurationDocs_
 
@@ -765,13 +851,19 @@
   - `docs/wiki-integration.md`: the `fitdocs-workouts` summary line names
     the pull
   - `CHANGELOG.md` `[Unreleased]`: the Added and Changed entries design.md
-    lists, each naming the contract and the user action; the ownership
-    entry names the new statements and no contract-version number, so it is
-    right whichever Amendment 4 part (8.1 here, or a sibling spec) advanced
-    the value — this task does not depend on 8.1's decision
+    lists, each naming the contract and the user action, appended under an
+    existing `### Added` / `### Changed` heading in `[Unreleased]` and
+    creating that heading only if absent (a sibling may have created it;
+    `tests/test_changelog.py:516` rejects a repeated category within one
+    section); the ownership entry names the new statements and no
+    contract-version number, so a re-pin of 8.1's value after a sibling
+    lands first never touches it — this task does not depend on 8.1
   - Named mutations: link the connectors page by a relative path from the
     README (`test_shipped_and_emitted_doc_references_use_project_urls`
-    reds); add a non-canonical category (the changelog test reds)
+    reds); add a non-canonical category (the changelog test reds); open a
+    second `### Added` heading in `[Unreleased]` instead of appending
+    under the existing one (`test_real_changelog_has_no_violations` reds
+    with "repeats category")
   - Observable: `uv run pytest tests/test_changelog.py
     tests/test_install_docs.py tests/test_docs_guarantees.py
     tests/test_packaging.py tests/test_wiki_integration_docs.py` green
@@ -810,10 +902,13 @@
     guarantees; the pull's removal of its own archived deliveries);
     `distribution` Amendment 3 (Req 8.1, 8.2 and 10.4); `route-maps` (Req
     4.2)
-  - Roadmap Phase 8 Existing Spec Updates: tick `distribution` "landed by
-    connectors"; add a ticked `inbox` line "landed by connectors"; tick
-    `wiki-contract` only when the other two Amendment 4 parts are on `main`,
-    otherwise append "(connectors part landed)"
+  - Roadmap Phase 8 Existing Spec Updates: the `distribution`, `inbox` and
+    `route-maps` lines already exist (added or widened by the controller at
+    the spec batch); tick each at landing, annotated with the merge SHA,
+    and only if every part the line names is on `main` (each names only
+    this spec today; re-read the line at landing); add no line. Tick
+    `wiki-contract` only when all three Amendment 4 parts are on `main`,
+    otherwise append "(connectors part landed at `<sha>`)"
   - Observable: `/kiro-spec-status inbox`, `distribution`, `route-maps` and
     `wiki-contract` clean; the steering grep for "only network" and
     "fully offline" finds no contradicted statement
@@ -833,6 +928,14 @@
   - The exhaustive sweep: every acceptance criterion classified PINNED
     (test and mutation), PRESERVED-ONLY (existing test) or UNPINNED (with
     the mutation run that proves it), recorded in the task's report
+  - Landing checks after the final rebase onto `main` (cross-spec rulings
+    of 2026-09-29), recorded in the task's report: `CONTRACT_VERSION`
+    equals `main`'s value + 1 (8.1); the settings-table count equals
+    `main`'s + 1 and the count-free test name is in place (8.2); if
+    activity-identity is on `main`, the `pull --sync` identity wiring and
+    its pins (5.3) and the regenerate-before-first-pull statement in place
+    of the duplicate-page caution (7) are present; `[Unreleased]` has no
+    repeated category (8.3)
   - Named mutations: have `sync` import and call a connector (the offline
     test reds); remove a hand-dropped file in the sweep (the hand-drop pin
     reds)
