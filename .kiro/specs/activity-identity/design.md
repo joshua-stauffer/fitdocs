@@ -329,7 +329,7 @@ graph TB
 ```
 src/fitdocs/
 ├── identity/                    # NEW package: which page, which base
-│   ├── __init__.py              # internal surface (__all__ pinned); no logic
+│   ├── __init__.py              # package marker only: re-exports nothing (__all__ == []); consumers import the submodules
 │   ├── kinds.py                 # SourceKind, SESSION_UUID_FIELD, source_kind(), SourceIdentity, source_identity(), device_digest()
 │   ├── matching.py              # tolerance constants + TOLERANCE_SOURCES, Evidence, SessionKey, session_key(), pair_evidence()
 │   ├── roles.py                 # PrecedenceEntry, Precedence, DEFAULT_PRECEDENCE, resolve_precedence(), SourceMember, rank_key(), PageRoles, rank_members(), page_session_uuid()
@@ -352,7 +352,8 @@ tests/
 │   ├── test_pages.py
 │   ├── test_settings.py
 │   ├── test_holds.py
-│   ├── test_docs.py             # tolerance table + default precedence pinned to code
+│   ├── test_contract_docs.py    # the ownership contract's tolerance table pinned to TOLERANCE_SOURCES and the constants
+│   ├── test_settings_docs.py    # configuration.md's default precedence and vocabulary pinned to code
 │   └── test_boundary.py         # import closure of the package, both directions
 └── test_identity_e2e.py         # NEW: sync/drain/regen/check scenarios with measured shapes
 ```
@@ -619,6 +620,9 @@ regeneration (Req 4.10, 8.4).
   counted": only a hand-built `Provenance` omits it; `parse_fit` always sets an
   `int`, `0` included).
 - `SCHEMA_VERSION` does not move: the change is additive.
+- `FileIdentity` joins the package root's lazy exports and `__all__`, the
+  public-API pin (`tests/test_public_api.py`) and `docs/plugins.md`'s public
+  import surface list, in the same change.
 
 **Contracts**: State [x]
 
@@ -738,7 +742,7 @@ def source_identity(activity: Activity) -> SourceIdentity: ...
 - Tolerance constants, each with its measured source in
   `TOLERANCE_SOURCES: Mapping[str, str]` (constant name → one-line source)
   and restated in `docs/ownership-contract.md` (pinned by
-  `tests/identity/test_docs.py`):
+  `tests/identity/test_contract_docs.py`):
 
 | Constant | Value | Measured source |
 |----------|-------|-----------------|
@@ -1205,7 +1209,8 @@ complete).
 - Integration: `tests/test_drain.py:519-546` spies `_process_isolated`; it keeps
   its name and is still called after `refresh_declarations`.
 - Validation: `tests/test_identity_e2e.py` (below); the fixture sweep of
-  Testing Strategy.
+  Testing Strategy. Each write step of a page task is one private helper, so a
+  test injects a fault after any step (Req 6.7).
 - Risks: the three entry points change together; the tasks land roles first,
   renames second, the planner third, each reviewer-gated.
 
@@ -1272,7 +1277,7 @@ complete).
   kinds and the precedence setting (linking `configuration.md`); the four
   identity keys and the digest; UUID retention; the match rule with a tolerance
   table (value and measured source, pinned to `TOLERANCE_SOURCES` by
-  `tests/identity/test_docs.py`); held files and how to resolve them.
+  `tests/identity/test_contract_docs.py`); held files and how to resolve them.
 - Managed-key list gains the four keys (pinned by
   `tests/test_ownership_contract.py`).
 - Overwrite Semantics: `sync` -- a file of a known session joins its page; a
@@ -1285,7 +1290,7 @@ complete).
   only by exact content or session UUID until regenerated; regenerate before
   pulling from a connector (Req 9.8).
 
-#### SettingsDocs (`docs/configuration.md`, `docs/compatibility.md`, `docs/upgrading.md`, `docs/inbox.md`, `docs/plugins.md`, `CHANGELOG.md`)
+#### SettingsDocs (`docs/configuration.md`, `docs/compatibility.md`, `docs/upgrading.md`, `docs/inbox.md`, `CHANGELOG.md`)
 
 | Field | Detail |
 |-------|--------|
@@ -1294,7 +1299,8 @@ complete).
 
 **Responsibilities & Constraints**
 - `configuration.md`: `### [identity]: source precedence` -- vocabulary,
-  `original:<manufacturer>` entries, default (pinned to `DEFAULT_PRECEDENCE`),
+  `original:<manufacturer>` entries, default (pinned to `DEFAULT_PRECEDENCE`
+  and the vocabulary to `SourceKind` by `tests/identity/test_settings_docs.py`),
   validation and exit status, the channel-merge-style example.
 - `compatibility.md`: `[identity]` joins both table enumerations; the count
   advances by one from its value on `main`; `tests/test_compatibility_policy.py`
@@ -1302,7 +1308,6 @@ complete).
 - `upgrading.md` "When a release moves the document format": regenerate before
   the first pull from a connector.
 - `inbox.md`: a held file is archived and disposed like any processed file.
-- `plugins.md`: `FileIdentity` joins the public import surface list.
 - `CHANGELOG.md` `[Unreleased]`: the document contract (new keys, `sources`
   order, renames, held files) and the settings schema (`[identity]`), each with
   the action (run `fitdocs regen`); docs referenced only by
@@ -1373,8 +1378,9 @@ complete).
   prepare=<sync a shifted phone copy>, run=<sync its device original>,
   non_vacuous=<a workouts/*.md was deleted and another created>)`.
 - `tests/test_public_api.py`: `FileIdentity` in `_EXPECTED`; an
-  `_IDENTITY_SURFACE` pin of `fitdocs.identity.__all__`, nothing of it
-  re-exported from the root.
+  `_IDENTITY_SURFACE` pin asserting `fitdocs.identity.__all__ == []` and that
+  no identity name is re-exported from the root; the channel-merge seam is
+  the submodule `fitdocs.identity.roles`, pinned by name there.
 - `tests/identity/test_boundary.py`: the package's import closure (allowed
   targets per module; forbidden `fitdocs.sync`, `render`, `audit`, `cli`,
   `ingest`, `metrics`, `load`, `history`, `plans`, `tiles`, `inbox`, `yaml`,
@@ -1403,7 +1409,9 @@ complete).
   `file_id`, 0 undocumented), `healthfit_copy` (development, its own serial,
   creation time hours later, timer = elapsed, a session UUID, elapsed within
   1 s and distance within 5 m of the original), `healthfit_shifted` (the same,
-  start +2 h), `stryd_file` (stryd, start equal to the HealthFit copy's,
+  start +2 h), `healthfit_reexport_pair` (one session UUID; the older export
+  shifted +1 h, the newer with the corrected start and a later creation time),
+  `stryd_file` (stryd, start equal to the HealthFit copy's,
   distance equal to 0.01 m, elapsed +8.5 s), `ten_k_pair` (the
   counter-example). Values are synthetic constants, never from the athlete's
   archive.
