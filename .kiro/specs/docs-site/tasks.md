@@ -74,7 +74,7 @@
   - Read the agent log and write a `TOUCHING` line before editing them.
   - On rebase, keep both sides.
 
-- [ ] 1. Foundation: tooling, the contract model, the fixture site
+- [x] 1. Foundation: tooling, the contract model, the fixture site
 
 - [x] 1.1 Add the site-tooling dependency group and the repository wiring every later task relies on
   - **`pyproject.toml`.**
@@ -142,7 +142,7 @@
     are green with named mutations.
   - _Requirements: 2.1, 2.2, 2.3, 2.9_
 
-- [ ] 1.3 Build the valid fixture site every later test derives from
+- [x] 1.3 Build the valid fixture site every later test derives from
   - Create `tests/sitebuild/fixtures/site/` as design.md § Testing Strategy
     describes. It contains:
     - `index.md` in `Home`, with `hero_title`, two `hero_actions` (one
@@ -816,3 +816,4 @@
 
 - 1.1 (4 review rounds): a test that guards "plain `uv sync` installs no Zensical" must cover every manifest route to a default install: direct entries in any non-`docs` group, PEP 735 `{include-group = ...}` chains, `[tool.uv] default-groups` (list or `"all"`), and the deprecated `[tool.uv] dev-dependencies`, which uv 0.11 still merges into `dev`. `uv export --no-hashes --format requirements.txt` shows what a default sync installs. A cyclic group manifest cannot reach pytest, because uv fails first. The `git ls-files website/build` half of the 6.7 test is pinned: it was checked by force-adding a file in a disposable index. The `requires_zensical` tests spawn an inner pytest through a symlinked interpreter in a fake `bin/`, and that passed in a Linux container (uv-managed 3.11, non-root, `GITHUB_ACTIONS=true TERM=dumb`). The general `build/` ignore rule also covers `website/build/`, so the explicit line is pinned only by `git check-ignore -v`. Restore `uv.lock` after a mutation with `cp` from a snapshot, not `git show HEAD:uv.lock`, while the task's own lock additions are uncommitted.
 - 1.2 (2 rounds): `Problem.render()` builds each field with `" ".join(field.splitlines())`, drops a field that is empty after that, and joins the rest with `": "`. All other whitespace is kept exactly (a whitespace-only field is not empty and stays). Later tasks inherit this line format. **For 2.2:** PyYAML's `str(e)` spans several lines (context, the snippet line, a caret line); it never *ends* in a newline. `render()` flattens it into one long line with the snippet's indentation kept, so ContentLoader should choose what YAML error text goes into `Problem.message` (e.g. `problem_mark` line and column plus `problem`) instead of the raw multi-line `str(e)`.
+- 1.3 (3 rounds): `tests/sitebuild/fixtures/site/` has 6 included pages (index, why, get-started/{install,first-run}, guides/nested/deep, llms/prompts), a drafted `reference/cli.md` titled "Command reference" (sentinel DRAFTSENTINELCOBALT), `_notes.md`, `_private/secret.md` (PRIVATESENTINELONYX), `.editor-state` (DOTFILESENTINELWILLOW) and `images/diagram.svg`. The Why link anchor is `#load-calculator-selection-and-training-load-computation`. The self-test reads bytes (no universal newlines), refuses CR and BOM, validates frontmatter against the model constants with a duplicate-refusing SafeLoader, and is fence-aware (column-0 fences only). Derived fixtures must not be named `build/` or `data/` (gitignored). A test that checks a string is absent must search the whole file, not compare whole frontmatter values. Known non-blocking survivor: a home link written in a code span.
