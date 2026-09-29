@@ -1,16 +1,16 @@
 ---
 id: 2026-09-15-atomic-write-helper-copied-per-engine
-title: The temp-file-then-os.replace write is a private copy in five modules, and training-blocks adds a sixth
+title: The temp-file-then-os.replace write is a private copy in seven modules (the count at the latest lander, see the last Update), and connectors adds another
 status: open
 importance: low
 importance_why: Each copy is ten lines and correct today; the cost is that a fix to one (a missing fsync, a temp-file leak on a signal) has to be found and repeated in every other, and nothing pins that the copies agree.
 effort: S
 kind: chore
-area: wiki-contract, src/fitdocs/docio.py, src/fitdocs/load/engine.py, src/fitdocs/history/engine.py, src/fitdocs/tiles.py, src/fitdocs/quarantine.py, src/fitdocs/load/profile.py, training-blocks
+area: wiki-contract, src/fitdocs/docio.py, src/fitdocs/load/engine.py, src/fitdocs/history/engine.py, src/fitdocs/tiles.py, src/fitdocs/quarantine.py, src/fitdocs/load/profile.py, src/fitdocs/identity/holds.py, training-blocks
 created: 2026-09-15
 surfaced_by: /kiro-spec-batch (training-blocks design, Phase 7 wave 1)
 pinned_at: 5dff756
-resume_command: "do: once training-blocks has shipped, add a shared write_text_atomic(path, text, *, prefix) to src/fitdocs/docio.py (the one enforcement point for document I/O, per wiki-contract's amendment of 2026-07-22), switch the six private copies to it, keep each caller's temp-file prefix, and widen the per-package boundary allow-lists (tests/history/test_boundary.py, tests/plans/test_boundary.py, tests/load/threshold/test_boundary.py) to admit fitdocs.docio where they do not already"
+resume_command: "do: once training-blocks has shipped, add a shared write_text_atomic(path, text, *, prefix) to src/fitdocs/docio.py (the one enforcement point for document I/O, per wiki-contract's amendment of 2026-07-22), switch every private copy (seven live, see the last Update) to it, keep each caller's temp-file prefix, and widen the per-package boundary allow-lists (tests/history/test_boundary.py, tests/plans/test_boundary.py, tests/load/threshold/test_boundary.py) to admit fitdocs.docio where they do not already"
 context:
   - src/fitdocs/docio.py
   - src/fitdocs/load/engine.py
@@ -18,6 +18,7 @@ context:
   - src/fitdocs/tiles.py
   - src/fitdocs/quarantine.py
   - src/fitdocs/load/profile.py
+  - src/fitdocs/identity/holds.py
   - .kiro/specs/training-blocks/design.md
 blocked_by: [training-blocks]
 ---
@@ -86,3 +87,12 @@ importing a leaf; a leaf helper satisfies both.
 - Timing: consolidating after both specs land covers all eight sites in one
   change; doing it sooner makes both implementers add copies against a
   moving helper.
+
+## Update 2026-09-30 (activity-identity task 2.5)
+
+- activity-identity's hold store has landed its copy: `src/fitdocs/identity/holds.py`
+  `save_holds` (mkstemp prefix `.held-`, `os.replace`, no fsync). The live count
+  is now seven (`grep -rn "os.replace(" src/fitdocs`: the six listed in the
+  2026-09-29 update plus `identity/holds.py`); the title and the resume command
+  were advanced from six to seven. The connectors copy (`connectors/_atomic.py`,
+  fsyncing) is still pending and takes the count to eight when it lands.
