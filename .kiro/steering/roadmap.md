@@ -2015,7 +2015,7 @@ Rejected:
 
 #### Specs (dependency order)
 
-- [ ] docs-site — the fitdocs.ai build: `website/` layout, a
+- [ ] docs-site — **spec written 2026-09-30** (`/kiro-spec-quick --auto`, `tasks-generated`, all approvals set; 11 requirements / 72 criteria, 7 majors / 22 executable tasks; independent Step 3.5 review two rounds -> PASS; brand values and `hero_actions` shape await maintainer confirmation, queue `2026-09-30-docs-site-design-proposals-await-maintainer`). the fitdocs.ai build: `website/` layout, a
   generator-agnostic build script (staging, annotation strip, frontmatter
   nav, home template injection, llms.txt, config allowlist), a pinned
   Zensical strict build, theme overrides with a frontmatter-driven hero,

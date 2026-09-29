@@ -702,8 +702,10 @@ def count_included_pages(content_dir: Path) -> int: ...
   page, the line, the URL and which half failed.
 - **`github_slugs`** implements github-slugger v2 semantics:
   - lowercase;
-  - remove every character in Unicode categories P* (except `-`), S*, Cc, Cf,
-    Co, Cn, No, and Z* other than U+0020;
+  - remove every non-alphabetic character in the Unicode categories
+    Pe, Pf, Pi, Ps, Po, Pd (except `-`), S*, Cc, Cf, Co, Cn, No, and Z*
+    (except U+0020). This is github-slugger's `generate-regex.js` list.
+    Connector punctuation, including `_`, is **kept**, as GitHub keeps it;
   - each space becomes `-`, with no collapsing;
   - duplicates get `-1`, `-2`, …;
   - ATX headings only, outside fenced code;

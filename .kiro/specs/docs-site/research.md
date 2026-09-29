@@ -240,10 +240,17 @@
 - **Sources**: https://github.com/Flet/github-slugger (`index.js`,
   `script/generate-regex.js`, v2.0.0), plus a measured Zensical build.
 - **Findings**:
-  - **GitHub (github-slugger).** Lowercase the text; remove punctuation
-    except `-`, symbols (including emoji), control and format characters, and
-    separators other than the plain space; turn each space into `-` without
-    collapsing hyphens; suffix duplicates `-1`, `-2`, …; keep code-span text.
+  - **GitHub (github-slugger).** Lowercase the text. Remove the
+    non-alphabetic characters of these Unicode categories: Other_Number;
+    Close, Final, Initial, Open and Other punctuation; Dash_Punctuation
+    except `-`; Symbol (including emoji); Control, Private_Use, Format and
+    Unassigned; and Separator except the plain space. Turn each space into `-`
+    without collapsing hyphens, suffix duplicates `-1`, `-2`, …, and keep
+    code-span text. **Connector_Punctuation (`_`) is kept.** Verified
+    2026-09-30 against
+    https://raw.githubusercontent.com/Flet/github-slugger/master/script/generate-regex.js;
+    the probe summary's "all punctuation except `-`" was wrong on this
+    point.
   - **Zensical** uses Python-Markdown's toc slugify (ASCII fold, collapse
     hyphens, `_1` for duplicates), which differs on duplicates, `&`, `—`,
     emoji and accents.

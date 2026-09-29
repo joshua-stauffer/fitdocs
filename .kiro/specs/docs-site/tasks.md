@@ -426,7 +426,8 @@
     - a `docs/` URL with a missing file, a missing anchor, and valid;
     - `.md` links not reported;
     - a slugger conformance table: `[load]`, a repeated heading gives `-1`,
-      `C++ & Python` gives `c--python`, `TSS / hrTSS — load`, an emoji
+      `C++ & Python` gives `c--python`, `snake_case name` gives
+      `snake_case-name` (the underscore kept), `TSS / hrTSS — load`, an emoji
       heading, `Café résumé`, a code-span heading, and a heading inside a
       fence is ignored.
   - **Done when** the tests are green with mutations recorded, and the
