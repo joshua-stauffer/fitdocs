@@ -84,3 +84,29 @@ name its former location, `~/code/fitdocs-demo`, which no longer exists.
 
 - Does `distribution` intend fitdocs for non-HealthFit exporters at all? That
   answer decides whether this is worth any work.
+
+## Update 2026-09-29 (Phase 8 spec batch)
+
+running-dynamics adds a second instance of the same single-writer risk. It
+recognises Stryd's running-dynamics developer fields by exact name alone --
+`Form Power`, `Air Power`, `Leg Spring Stiffness`, `Impact` and the three
+`... Balance` fields -- "whichever application wrote the file" (its Req 4.4),
+with no writer check. A non-Stryd writer using one of those names with a
+different meaning would be promoted to a running-dynamics channel and
+rendered in the Running Dynamics section. The spec records this and points
+here rather than solving it.
+
+- `.kiro/specs/running-dynamics/requirements.md:141` (Req 4.1, the seven
+  names) and `:144` (Req 4.4, any writer).
+- `.kiro/specs/running-dynamics/design.md` requirements table row 4.4
+  ("DynamicsPolicy | no writer check") and `DEVELOPER_DYNAMICS_NAMES`
+  (~:685); § Out of Boundary (~:76-78) leaves `_SUPPLEMENTALS` and this item
+  "exactly as they are".
+- `.kiro/specs/running-dynamics/research.md` § Risks (~:260-263): "the same
+  single-writer risk the open supplemental-scale queue item records for
+  HealthFit's names. Recorded, not solved."
+
+Scope note: this item's trigger condition ("a second FIT writer emitting
+these keys") now covers both name tables. If a writer-identity concept is
+ever added, activity-identity's source classification (file_id manufacturer,
+its Req 2) is the natural input; it did not exist when this item was filed.

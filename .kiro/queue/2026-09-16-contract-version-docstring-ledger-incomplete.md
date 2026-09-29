@@ -40,3 +40,19 @@ or say nothing. Half a ledger is worse than none.
 1. Read the existing paragraph and the two amendments.
 2. Add two paragraphs; no test pins the docstring, so read it back once.
 3. Done when the three bumps read as one ledger. Owner: wiki-contract.
+
+## Update 2026-09-29 (Phase 8 spec batch)
+
+Still true at f500dc1: `src/fitdocs/contract.py:275` is
+`CONTRACT_VERSION: Final[str] = "4"` and its docstring (`:276-289`) records
+only the `1` -> `2` bump (`grep -n Bumped src/fitdocs/contract.py` -> `:284`).
+
+Phase 8 makes the gap more visible: three specs each advance
+`CONTRACT_VERSION` by one at landing and **append a paragraph for their own
+bump** to this docstring -- activity-identity task 6.2, connectors task
+8.1 and channel-merge task 5.2 (each spec's tasks.md). After they land
+the ledger will read 1 -> 2, then a gap, then three Phase 8 paragraphs. The
+two missing paragraphs (2 -> 3 load-history, 3 -> 4 training-blocks) are
+best added before or with the first Phase 8 landing so the ledger stays in
+order; a later session can still insert them between, but must not
+renumber anything the Phase 8 paragraphs state.

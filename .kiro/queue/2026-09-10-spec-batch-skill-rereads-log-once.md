@@ -50,3 +50,31 @@ batch that overlaps an implementation session repeats this.
    before the CLAIM snippet); consider the same for the cross-spec review
    dispatch, which should also see peer shape statements.
 3. Validate per the skills row of change-protocol.md's table.
+
+## Update 2026-09-29 (Phase 8 spec batch)
+
+The Phase 8 controller applied the proposed rule by hand: it re-read the
+log before each wave's CLAIM and before the cross-spec review (no new peer
+lines arrived during the run; the only live peer was `spec-docs-site`,
+claimed 2026-09-28) and relayed relevant peer lines verbatim into the
+writers' prompts. That surfaced a second lesson the fix should carry:
+
+**Relay log lines as claims to verify, not as facts.** One relayed line was
+stale: the `2026-09-11T23:52:02Z impl-performance-benchmarks NOTE` says
+"Keep 'wrote', drop your 'non_vacuous'", but the reconciliation that
+actually shipped kept `non_vacuous`
+(`tests/test_confinement.py:811`,
+`non_vacuous: Callable[[Sequence[str]], bool] = _wrote_a_workout_document`;
+the `2026-09-11T23:56:15Z impl-load-history MERGED` line reopened the
+choice -- "keep ONE EntryPoint field (yours 'wrote' or mine 'non_vacuous')"
+-- and the merge that followed kept `non_vacuous`).
+A wave-1 writer caught it by checking the tree
+(`.kiro/specs/connectors/research.md:56-59`: "`EntryPoint` field is
+`non_vacuous`, not `wrote` ... the relayed peer note paraphrased it").
+The log is append-only and never corrected in place, so a later MERGED
+line can supersede an earlier NOTE.
+
+For the fix: the relay paragraph in Step 3 should say that each relayed
+line is prefixed "peer claim at <timestamp>; verify against the tree before
+relying on it", and that the controller relays the latest line on a topic,
+not only the first match.

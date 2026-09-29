@@ -91,3 +91,27 @@ order)` (singular H2) and has no gated/already-generated rules. Items (1)-(3)
 above stand. Also for the fix: the roadmap checkbox means *implemented*
 (commit `b370406`'s message), so Step 5's "mark completed specs as `[x]`"
 should become "annotate as spec-written", the way b370406 and this run did.
+
+## Update 2026-09-29 (Phase 8 spec batch)
+
+The Phase 8 batch used the same workaround: the invocation was scoped by
+name ("limited to phase 8"; log `2026-09-29T15:02:15Z spec-batch CLAIM`
+"scoped by name to Phase 8"). The controller parsed only Phase 8's
+`#### Specs (dependency order)` and dispatched exactly activity-identity,
+running-dynamics, connectors (wave 1) and channel-merge,
+intervals-connector (wave 2). It left Phase 6's gated
+`performance-model-fit` (roadmap `:1152`, `brief.md` only) and Phase 9's
+`docs-site` untouched. Step 5's roadmap update is an annotation of the
+Phase 8 bullets as spec-written, not an `[x]` tick (the log's "roadmap.md
+annotated at the end"; at f500dc1 the Phase 8 bullets were still `[ ]` and
+the annotation not yet written).
+
+New for the fix: the roadmap now has seven `Specs (dependency order)`
+sections (`grep -n 'Specs (dependency order)' .kiro/steering/roadmap.md` ->
+`106` H2; `685`, `919`, `1138`, `1399`, `1781`, `2013` H4). A scan of all of
+them would also pick up `docs-site`, whose spec is being written right now
+by a peer on another branch (log `2026-09-28T08:25:06Z spec-docs-site CLAIM`,
+spec.json on `impl/docs-site`, not in this tree). The proposed
+"never regenerate a feature whose spec.json exists" rule would not catch
+that, because the spec.json is on the peer's branch; the skill also needs
+"skip a feature named in a live peer CLAIM" from the shared log.

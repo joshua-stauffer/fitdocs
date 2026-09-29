@@ -57,3 +57,32 @@ importing a leaf; a leaf helper satisfies both.
    temp file and no partial target; switch the six callers; run each
    package's boundary test and widen its allow-list to `fitdocs.docio`.
 3. Done when `grep -rn "os.replace" src/fitdocs` hits `docio.py` only.
+
+## Update 2026-09-29 (Phase 8 spec batch)
+
+- training-blocks has shipped, so its copy is live and the live count is
+  six: `grep -rn "os.replace(" src/fitdocs` at f500dc1 -> `load/engine.py:667`,
+  `history/engine.py:246`, `tiles.py:435`, `quarantine.py:241`,
+  `load/profile.py:550`, `plans/engine.py:268` (prefix `.plans-`). The
+  `blocked_by: [training-blocks]` precondition is met; the frontmatter is
+  left as written.
+- Two more private copies are now specified: activity-identity's hold store
+  `src/fitdocs/identity/holds.py` (AI task 2.5, "temp file then replace") and
+  connectors' `src/fitdocs/connectors/_atomic.py`
+  `write_atomic(path, data, *, prefix)` (CN task 1.2; `connectors/design.md`
+  § AtomicWriter, ~:1109-1118). Each task appends its own site here and
+  advances the count in the title and resume command when it lands, so the
+  count moves then; this update deliberately leaves both unchanged.
+- The connectors copy is not identical to the six: it `flush`es and
+  `os.fsync`s before `os.replace` (no live copy fsyncs; `grep -rn fsync
+  src/fitdocs` has no hits). All copies share mkstemp's owner-only mode and a
+  dot-prefixed temp name. A shared helper has to offer fsync or adopt it for
+  every caller; decide that when consolidating.
+- Boundaries: connectors' boundary guard (CN task 6.1) forbids
+  `fitdocs.docio`, so consolidating into `fitdocs.docio` must widen it
+  (`connectors/design.md` ~:97-100). activity-identity already allows
+  `fitdocs.docio` from `identity/holds.py` (`activity-identity/design.md`
+  ~:116-119), so nothing widens there.
+- Timing: consolidating after both specs land covers all eight sites in one
+  change; doing it sooner makes both implementers add copies against a
+  moving helper.

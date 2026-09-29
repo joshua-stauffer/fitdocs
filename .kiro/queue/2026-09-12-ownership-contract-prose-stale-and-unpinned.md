@@ -56,3 +56,17 @@ three assertions; reword the two sentences; amend Req 7.6.
   (`src/fitdocs/sync.py:738`); and the `.gitattributes` example enumerates
   generated locations per directory but has never listed `workouts/assets/*`
   (training-blocks 1.3 added the `blocks/` lines).
+
+## Update 2026-09-29 (Phase 8 spec batch)
+
+One more stale sentence, reported by the Phase 8 spec writers:
+`docs/ownership-contract.md:63-67`, the `.fitdocs/` bullet, still gives as
+its example "a future ingestion feature's quarantine record"; quarantine
+shipped (`src/fitdocs/quarantine.py`). Likely absorbed by Phase 8:
+activity-identity's contract task rewrites this bullet to name "the
+quarantine record and the hold record without an exhaustive claim"
+(`.kiro/specs/activity-identity/design.md` DocumentContract section; task
+6.2), and
+connectors 8.1 names its ledgers "beside the quarantine record"
+(`.kiro/specs/connectors/design.md` ~:1615-1617). Check after either lands
+and drop this bullet from the item's scope if the word "future" is gone.
