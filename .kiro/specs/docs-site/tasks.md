@@ -56,7 +56,7 @@
     **nothing**", "is empty on a fresh interpreter" or "two minor releases"
     (`tests/test_docs_guarantees.py:1018-1031`,
     `tests/test_compatibility_policy.py:65`).
-  - No file carries the reserved-rights notice phrase or `™`.
+  - No file carries the reserved-rights notice phrase or the trademark sign (U+2122).
 - **Tracked files are UTF-8 regular files.** Never add `.woff2`, `.ico`,
   `.jpg` or `.webp`. Symbolic-link test cases are created in `tmp_path` only.
 - **Tests never write into the repository tree.** Build roots, preview roots

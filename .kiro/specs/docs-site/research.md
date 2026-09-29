@@ -167,7 +167,7 @@
     `website/`, `scripts/`, `.github/` and `.kiro/` are not scanned.
   - **Notice/mark guard** (ungated, runs everywhere). Every tracked file must
     be a regular file and valid UTF-8 unless it ends `.fit`/`.png`/`.gz`, so
-    `.woff2`, `.ico` and `.jpg` fail. The reserved-rights phrase and `™` are
+    `.woff2`, `.ico` and `.jpg` fail. The reserved-rights phrase and the trademark sign (U+2122) are
     forbidden.
   - **CONTRIBUTING.** Its 8 H2s stay in order and new H2s are allowed. The
     fenced blocks in "The three quality gates" must equal the ci.yml gate
