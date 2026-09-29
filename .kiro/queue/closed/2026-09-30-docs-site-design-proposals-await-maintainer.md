@@ -1,7 +1,7 @@
 ---
 id: 2026-09-30-docs-site-design-proposals-await-maintainer
 title: Confirm or amend the docs-site design proposals the --auto run approved on the maintainer's behalf
-status: open
+status: done
 importance: medium
 importance_why: Brand, hero shape and two contract rules become code and fixtures in /kiro-impl docs-site tasks 1.3 and 3.1; changing them after that is rework across tests, fixtures and docs/website.md.
 effort: S
@@ -85,3 +85,6 @@ choices therefore stand unconfirmed:
 ## Open questions
 - Does the maintainer's draft `index.md` already carry `hero_actions`, and in
   what shape?
+
+## Resolution
+2026-09-30: the maintainer approved the docs-site spec as written, including all five items, and accepted the visual design as proposed, to be iterated on later. Their out-of-repo draft `index.md` carries no `hero_actions` key, so the proposed shape conflicts with nothing. Recorded in design.md § Theme.

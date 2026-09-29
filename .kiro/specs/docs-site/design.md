@@ -1145,8 +1145,9 @@ def main(argv: Sequence[str]) -> int: ...   # python -m scripts.check_site ROOT 
     `theme.font: false`, no font is fetched from a third-party host.
   - The hero layout rules, and a light card behind the hero chart in both
     schemes.
-  - *These values are proposed; the maintainer approves them at design
-    review.*
+  - *Confirmed by the maintainer 2026-09-30, together with the
+    `hero_actions` shape, the dotfile and symlink rules and the 2026-09-30
+    requirement amendments. Visual design stays open to later iteration.*
 - **`logo.svg`**: a placeholder monochrome mark (a page outline with a pulse
   line), used as logo and favicon.
 - The template carries the required values listed under SiteConfig.
