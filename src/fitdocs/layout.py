@@ -45,7 +45,7 @@ from pathlib import Path
 from typing import Final
 
 from fitdocs import Activity, Modality
-from fitdocs.contract import format_session_uuid
+from fitdocs.contract import SESSION_UUID_FIELD, format_session_uuid
 
 WORKOUTS_DIR: Final[str] = "workouts"
 """Documents directory under the data root: ``<data-root>/workouts/``."""
@@ -173,9 +173,6 @@ they are dot-prefixed machine state nobody reads. Writing the files is task
 4.2's (and the history package's) job; this constant only names their
 directories."""
 
-_SESSION_UUID_FIELD: Final[str] = "SESSION UUID"
-"""Developer-field key carrying the recorded 16-byte session identifier."""
-
 
 def sport_slug(activity: Activity) -> str:
     """The document name's sport component (Req 2.4).
@@ -208,7 +205,7 @@ def activity_uid(activity: Activity, sha256: str) -> str:
     agree on every edge -- and a same-named local copy would satisfy every
     behavioral test while quietly disagreeing on one (wiki-contract Req 1.1).
     """
-    formatted = format_session_uuid(activity.developer_fields.get(_SESSION_UUID_FIELD))
+    formatted = format_session_uuid(activity.developer_fields.get(SESSION_UUID_FIELD))
     return formatted if formatted is not None else sha256
 
 
@@ -343,6 +340,17 @@ def quarantine_path(data_root: Path) -> Path:
     writes into it (``quarantine.py``), not to this I/O-free leaf.
     """
     return data_root / TOOL_STATE_DIR / "quarantine.toml"
+
+
+def held_path(data_root: Path) -> Path:
+    """The hold record's path: ``<data_root>/.fitdocs/held.toml``.
+
+    The record of held files (activity-identity Req 4.7, 8.4). Lives under
+    :data:`TOOL_STATE_DIR`, already owned. Pure path composition only --
+    creating the directory belongs to the store that writes into it
+    (``identity/holds.py``), not to this I/O-free leaf.
+    """
+    return data_root / TOOL_STATE_DIR / "held.toml"
 
 
 def source_ref(sha256: str) -> str:

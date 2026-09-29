@@ -226,7 +226,7 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
         "NOTES_REGION",
         "region_block",
     ),
-    "fitdocs.layout": ("format_session_uuid",),
+    "fitdocs.layout": ("SESSION_UUID_FIELD", "format_session_uuid"),
     "fitdocs.docio": ("parse_frontmatter",),
     "fitdocs.declaration": (
         "CONTRACT_VERSION",

@@ -86,6 +86,7 @@ from fitdocs.layout import (
     block_rel_link,
     doc_path,
     doc_stem,
+    held_path,
     history_asset_path,
     history_asset_rel_path,
     history_doc_path,
@@ -808,6 +809,18 @@ def test_quarantine_path_resolves_under_the_tool_state_directory() -> None:
     assert path == root / TOOL_STATE_DIR / "quarantine.toml"
     assert path.parent == root / TOOL_STATE_DIR
     assert _is_owned(path, root)
+
+
+def test_held_path_resolves_under_the_tool_state_directory(tmp_path: Path) -> None:
+    """The hold record's path lives under ``.fitdocs/`` and is owned (Req 4.7, 8.4).
+
+    ``held_path`` is pure path composition: computing it creates nothing.
+    """
+    path = held_path(tmp_path)
+    assert path == tmp_path / TOOL_STATE_DIR / "held.toml"
+    assert path != quarantine_path(tmp_path)
+    assert _is_owned(path, tmp_path)
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_declared_dirs_are_the_top_level_owned_directories() -> None:
