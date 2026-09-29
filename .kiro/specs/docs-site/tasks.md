@@ -119,7 +119,7 @@
     green, and the full suite, ruff, format and mypy are green.
   - _Requirements: 6.7, 8.1, 8.2, 9.3, 9.4, 9.5_
 
-- [ ] 1.2 Define the content contract and the shared value types
+- [x] 1.2 Define the content contract and the shared value types
   - Create `scripts/sitebuild/model.py` exactly as design.md § SiteModel
     specifies:
     - the constants `SECTIONS`, `REQUIRED_KEYS`, `OPTIONAL_KEYS`,
@@ -815,3 +815,4 @@
 ## Implementation Notes
 
 - 1.1 (4 review rounds): a test that guards "plain `uv sync` installs no Zensical" must cover every manifest route to a default install: direct entries in any non-`docs` group, PEP 735 `{include-group = ...}` chains, `[tool.uv] default-groups` (list or `"all"`), and the deprecated `[tool.uv] dev-dependencies`, which uv 0.11 still merges into `dev`. `uv export --no-hashes --format requirements.txt` shows what a default sync installs. A cyclic group manifest cannot reach pytest, because uv fails first. The `git ls-files website/build` half of the 6.7 test is pinned: it was checked by force-adding a file in a disposable index. The `requires_zensical` tests spawn an inner pytest through a symlinked interpreter in a fake `bin/`, and that passed in a Linux container (uv-managed 3.11, non-root, `GITHUB_ACTIONS=true TERM=dumb`). The general `build/` ignore rule also covers `website/build/`, so the explicit line is pinned only by `git check-ignore -v`. Restore `uv.lock` after a mutation with `cp` from a snapshot, not `git show HEAD:uv.lock`, while the task's own lock additions are uncommitted.
+- 1.2 (2 rounds): `Problem.render()` builds each field with `" ".join(field.splitlines())`, drops a field that is empty after that, and joins the rest with `": "`. All other whitespace is kept exactly (a whitespace-only field is not empty and stays). Later tasks inherit this line format. **For 2.2:** PyYAML's `str(e)` spans several lines (context, the snippet line, a caret line); it never *ends* in a newline. `render()` flattens it into one long line with the snippet's indentation kept, so ContentLoader should choose what YAML error text goes into `Problem.message` (e.g. `problem_mark` line and column plus `problem`) instead of the raw multi-line `str(e)`.
