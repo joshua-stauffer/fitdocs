@@ -20,9 +20,8 @@ Three rules govern every view:
 - **Honest omission.** A ``## Splits`` / ``## Recorded Sets`` / ``## Telemetry``
   / ``## Running Dynamics`` section whose body would be empty is omitted
   entirely -- heading and all (Req 9.6, 13.2; running-dynamics 7.6).
-  ``## Summary``,
-  ``## Training Load``, ``## Device & Data Quality``, and the ``notes`` region
-  are always present.
+  ``## Summary``, ``## Training Load``, ``## Device & Data Quality``, and the
+  ``notes`` region are always present.
 - **Portable, plugin-free markdown.** The only PKM affordances are the YAML
   frontmatter, the HTML-comment region markers, and the HTML-comment provenance
   banner -- all invisible or harmless in a vanilla renderer (Req 5.4). Charts
