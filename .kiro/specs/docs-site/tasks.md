@@ -76,7 +76,7 @@
 
 - [ ] 1. Foundation: tooling, the contract model, the fixture site
 
-- [ ] 1.1 Add the site-tooling dependency group and the repository wiring every later task relies on
+- [x] 1.1 Add the site-tooling dependency group and the repository wiring every later task relies on
   - **`pyproject.toml`.**
     - Add `docs = ["zensical==0.0.65"]` under `[dependency-groups]`, then
       `uv lock`.
@@ -811,3 +811,7 @@
     each requirement ID with its covering test. A partial or unpinned clause
     is stated as such.
   - _Requirements: 8.1, 8.3, 9.1, 11.9_
+
+## Implementation Notes
+
+- 1.1 (4 review rounds): a test that guards "plain `uv sync` installs no Zensical" must cover every manifest route to a default install: direct entries in any non-`docs` group, PEP 735 `{include-group = ...}` chains, `[tool.uv] default-groups` (list or `"all"`), and the deprecated `[tool.uv] dev-dependencies`, which uv 0.11 still merges into `dev`. `uv export --no-hashes --format requirements.txt` shows what a default sync installs. A cyclic group manifest cannot reach pytest, because uv fails first. The `git ls-files website/build` half of the 6.7 test is pinned: it was checked by force-adding a file in a disposable index. The `requires_zensical` tests spawn an inner pytest through a symlinked interpreter in a fake `bin/`, and that passed in a Linux container (uv-managed 3.11, non-root, `GITHUB_ACTIONS=true TERM=dumb`). The general `build/` ignore rule also covers `website/build/`, so the explicit line is pinned only by `git check-ignore -v`. Restore `uv.lock` after a mutation with `cp` from a snapshot, not `git show HEAD:uv.lock`, while the task's own lock additions are uncommitted.
