@@ -183,7 +183,7 @@
 
 - [ ] 2. Core ingest: one developer decoding rule, record-level developer fields, the placeholder rules, the dynamics channels
 
-- [ ] 2.1 Build the shared developer-value decoder and move the session reader onto it
+- [x] 2.1 Build the shared developer-value decoder and move the session reader onto it
   - Create `src/fitdocs/ingest/developer.py` per design.md
     § DeveloperDecoding: `FieldDescription`, `parse_field_descriptions`, the
     FIT base-type invalid-value table, `decode_developer_value` (sentinel,
@@ -567,3 +567,12 @@
     `uv run pytest && uv run ruff check . && uv run ruff format --check . && uv run mypy`
     is green
   - _Requirements: 10.1, 10.2, 10.4, 10.5_
+
+## Implementation Notes
+
+- Main at 20e97a0 (maintainer-approved 2026-09-30) retired distribution's e74af37 `__all__`, golden-tree and render-package snapshot pins in `tests/test_preserved_guarantees.py`; before that they redded tasks 1.1 and 3.1 and would have redded every golden regen.
+- 1.2: Stryd fixture = 44 records, placeholders (HR 0, dynamics 0) at record 0 and 20-22, uint16 sentinel at 10, VO Balance 0.0 at 12 (the one float32-exact developer value, by design), Air Power 0 at 14, humidity 104 at 30; laps (0,10),(11,21),(22,32),(33,43); serials 1201 helper / 1202 Stryd / 1203 native. Every other float32 developer series (positions 2-8) is float32-inexact. Native fixture: 20 records, `SESSION UUID` (255, 40..54). `device_info` index 0 decodes as `"creator"`; a `garmin` manufacturer adds a derived `garmin_product` key. `_file_id`/`_device_info` kwargs collide with activity-identity's (807c996): second lander keeps one set.
+- 2.1: `ingest/developer.py` exposes `parse_field_descriptions`, `decode_developer_value` (returns `None` for a sentinel, a tuple for a list value), `application_ids`, `apply_declared_scale`, `INVALID_VALUES`; the caller omits scale 0. When 2.2 adds the record reader, name it as a second caller in `apply_declared_scale`'s scale-0 docstring bullet.
+- 3.1: `chart_axis(samples) -> ChartAxis(unit, indices, x) | None`; pick series values by `axis.indices`.
+- 3.2 / M11 (design § Testing Strategy, task 3.2, task 6.1): `math.ceil(k / 100 * n)` is an EQUIVALENT mutant of the integer nearest-rank rule (`10/100*30 == 3.0` exactly; identical for k in {10, 90}, n 1..1999). Use `(k*n)//100 + 1` as M11.
+
