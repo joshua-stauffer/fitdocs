@@ -9,7 +9,7 @@ kind: spec-work
 area: docs-site, .kiro/specs/docs-site/design.md
 created: 2026-09-30
 surfaced_by: /kiro-spec-quick docs-site --auto
-pinned_at: 9881cab
+pinned_at: 73a4ea5
 resume_command: "do: Read .kiro/specs/docs-site/design.md § Theme, § SiteModel and § Data Models, then have the maintainer confirm or amend the four proposals in this item before /kiro-impl docs-site reaches tasks 1.3 and 3.1; record the answer in design.md and close this item"
 context:
   - .kiro/specs/docs-site/design.md

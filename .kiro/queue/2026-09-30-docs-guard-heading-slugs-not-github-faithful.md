@@ -9,7 +9,7 @@ kind: bug
 area: tests/test_docs_guarantees.py, tests/test_releasing_docs.py, tests/test_contributing_doc.py
 created: 2026-09-30
 surfaced_by: /kiro-spec-quick docs-site --auto (design discovery)
-pinned_at: 9881cab
+pinned_at: 73a4ea5
 resume_command: "do: Make tests/test_docs_guarantees.py::_heading_slugs (and its copy at tests/test_releasing_docs.py:171) follow github-slugger v2 -- keep '_', add -1/-2 duplicate suffixes, skip headings inside fenced code -- then run the docs guard suite and show each fix with a mutation"
 context:
   - tests/test_docs_guarantees.py
