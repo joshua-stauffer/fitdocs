@@ -97,8 +97,9 @@ version.
   only the standard library, `fitdocs.model`, `fitdocs.identity.kinds`
   (`SourceKind`, `source_kind`) and `fitdocs.identity.matching`
   (`START_TOLERANCE_S`, `SHIFT_STEP_S`, `SHIFT_MAX_HOURS`), and each other
-  leftward in the order `types` → `stretches` → `alignment` → `donation` →
-  `composer`.
+  as follows: `stretches` and `donation` import only `types` (so they can be
+  built in parallel); `alignment` imports `types` and `stretches`; `composer`
+  imports `types`, `alignment` and `donation`.
 - `fitdocs.compose.archive` additionally imports `fitdocs.contract`
   (`sha_of_ref`), `fitdocs.layout` (`archive_path`) and `fitdocs.ingest`
   (`parse_fit`), and `pathlib`.
@@ -120,8 +121,9 @@ version.
   `FORBIDDEN_LOCAL_NAMES` (`:149-163`) and spells no `FORBIDDEN_LITERALS`
   value (`:298`).
 - Dependency direction (an arrow reads "is imported by"): `model` →
-  `identity.{kinds, matching}` → `compose.types` → `compose.stretches` →
-  `compose.alignment` → `compose.donation` → `compose.composer` →
+  `identity.{kinds, matching}` → `compose.types` → `compose.stretches` and
+  `compose.donation`; `compose.stretches` → `compose.alignment`;
+  `compose.alignment` and `compose.donation` → `compose.composer` →
   `compose.archive`; `compose.types` and `compose.alignment` →
   `render.provenance` → `render.views`; `compose.composer` → `sync`;
   `compose.archive` → `load.engine` and `performance.engine`. An import
@@ -271,7 +273,8 @@ graph TB
     Model[activity model]
     Model --> Types
     Kinds --> Types
-    Types --> Stretches --> Alignment --> Donation --> Composer
+    Types --> Stretches --> Alignment --> Composer
+    Types --> Donation --> Composer
     Matching --> Alignment
     Composer --> Archive
     Types --> Provenance --> Views
@@ -315,10 +318,10 @@ graph TB
 src/fitdocs/
 ├── compose/                     # NEW package: one page's activity from its files
 │   ├── __init__.py              # package marker only: __all__ == []; consumers import submodules
-│   ├── types.py                 # StretchLag, ExtraAlignment, SourceContribution, ChannelProvenance, Composition
+│   ├── types.py                 # StretchLag, ExtraAlignment, Placement, SourceContribution, ChannelProvenance, Composition
 │   ├── stretches.py             # PAUSE_GAP_S, instants(), resume_instants(), split_stretches()
 │   ├── alignment.py             # AlignmentKey, ALIGNMENT_KEYS, MAX_LAG_S, MIN_MATCHED_SAMPLES, ALIGNMENT_SOURCES,
-│   │                            #   hour_shift_s(), establish_lag(), Placement, align_extra()
+│   │                            #   hour_shift_s(), establish_lag(), align_extra()
 │   ├── donation.py              # POSITION_UNIT, DONATION_UNITS, records(), base_keeps(), placed_values()
 │   ├── composer.py              # compose_activity()
 │   └── archive.py               # compose_listed() -- the one module here touching the filesystem (contract consumer)
@@ -339,7 +342,8 @@ tests/
 │   ├── test_boundary.py         # import closure of the package, both directions, with a positive control
 │   └── test_contract_docs.py    # the ownership contract's alignment table pinned to the constants
 ├── render/test_provenance.py    # NEW
-└── test_compose_e2e.py          # NEW: sync, drain, regen, order, check, load and derive-benchmarks over data roots
+├── test_compose_e2e.py          # NEW: sync, drain, regen, order and check over data roots
+└── test_compose_passes_e2e.py   # NEW: the load and derive-benchmarks passes over composed pages
 ```
 
 ### Modified Files
@@ -496,7 +500,7 @@ sequenceDiagram
 | ComposeTypes | compose (pure) | The composition result and provenance values | 3.7, 4.2, 4.4 | model, identity.kinds (P0) | State |
 | Stretches | compose (pure) | Instants, pauses, stretches | 3.1, 3.2 | model (P0) | Service |
 | Alignment | compose (pure) | Hour shift, per-stretch lag, placement | 2.6, 3.3-3.10 | Stretches, identity.matching (P0) | Service |
-| Donation | compose (pure) | Units, base-wins, placed values | 2.1-2.8 | Alignment (P0) | Service |
+| Donation | compose (pure) | Units, base-wins, placed values | 2.1-2.8 | ComposeTypes (P0) | Service |
 | Composer | compose (pure) | One composed activity plus provenance | 1.1-1.5, 2.x, 5.2-5.4, 7.1 | Donation, Alignment (P0) | Service |
 | ArchiveComposition | compose (I/O) | Compose a page's listed files | 6.1-6.3, 7.2 | Composer, contract, layout, ingest (P0) | Service |
 | ChannelSourcesSection | render | The `## Channel Sources` body | 4.1-4.6, 4.8 | ComposeTypes (P0), layout (P1) | Service |
@@ -532,6 +536,11 @@ class StretchLag:
 class ExtraAlignment:
     hour_shift_s: int                  # 0, or k * SHIFT_STEP_S subtracted from every extra instant
     stretches: tuple[StretchLag, ...]  # in file order
+
+@dataclass(frozen=True)
+class Placement:
+    alignment: ExtraAlignment
+    extra_index: tuple[int | None, ...]   # per base sample: the extra sample placed there, or None
 
 @dataclass(frozen=True)
 class SourceContribution:
@@ -625,13 +634,7 @@ def establish_lag(
     base_values: Sequence[float | int | None],
     resolution: float,
 ) -> int | None: ...
-
-@dataclass(frozen=True)
-class Placement:
-    alignment: ExtraAlignment
-    extra_index: tuple[int | None, ...]   # per base sample: the extra sample placed there, or None
-
-def align_extra(base: Activity, extra: Activity) -> Placement: ...
+def align_extra(base: Activity, extra: Activity) -> Placement: ...   # Placement from compose.types
 ```
 
 | Constant | Value | Source (restated in the ownership contract) |
@@ -943,7 +946,9 @@ def _render_activity(roles: PageRoles, parsed: Mapping[str, Activity]) -> Compos
 - `tests/compose/test_boundary.py`: each `fitdocs.compose` module's imports
   against the Allowed Dependencies above (per-module allowlist; `archive` the
   only one allowed `contract`, `layout`, `ingest`, `pathlib`); no clock name;
-  a positive control asserting the walk scanned all seven files.
+  a positive control: every scanned module has an allowlist entry and the walk
+  found `types.py`; once the package is complete (task 3.1) the scanned set
+  equals the allowlist's seven modules exactly.
 - `tests/test_contract_consumers.py`: `fitdocs.compose.archive` in
   `CONVERTED_MODULES` and `CONTRACT_BINDINGS`.
 - `pyproject.toml` `[tool.mypy].files`: every new typed test module, each
@@ -997,6 +1002,7 @@ M1-M5 are Req 9.2's five.
 | M13 | Cut stretches on the extra's pauses only | A base pause inside a continuous extra run with different lags either side: both lags applied |
 | M14 | Place at `t - lag` | Any +1 stretch: values one sample late |
 | M15 | Compose from the base alone in `_render_activity` | Sync of the run pair: the page's Running Dynamics section has form power |
+| M15b | `_render_activity` takes extras in `parsed` (arrival) order instead of `roles.extras` | Run trio in each arrival order: form power is `stryd_b`'s, and `regen` reproduces the synced bytes |
 | M16 | Load pass uses the parsed base without `compose_listed` | Ride pair synced, then `apply_load`: the activity the pass hands to `compute_metrics` (a spy on `fitdocs.load.engine.compute_metrics`) records heart rate equal to the donated values |
 | M17 | Benchmark pass uses the parsed base without `compose_listed` | Tagged ride pair, then `derive_benchmarks`: the activity the pass hands to `derive` (a spy on `fitdocs.performance.engine.derive`) records the donated heart rate |
 | M18 | Render the section when there are no extras | Every pre-existing golden byte-identical but its `doc_version` line |
@@ -1021,8 +1027,9 @@ M1-M5 are Req 9.2's five.
   `None` without extras; label table equality and completeness; `GPS` once.
 - **Golden (`tests/render/test_golden_docs.py`)**: `composed_run` (the run pair
   composed); every existing golden unchanged but its `doc_version` line.
-- **E2E (`tests/test_compose_e2e.py`)**: sync the run pair in both orders, in
-  one run and in two, byte-identical page and assets (Req 1.3); the page's
+- **E2E (`tests/test_compose_e2e.py`, `tests/test_compose_passes_e2e.py`)**:
+  sync the run trio in every arrival order, in one run and across runs,
+  byte-identical page and assets with form power from `stryd_b` (Req 1.3); the page's
   filename and `uuid` equal the HealthFit copy's own (Req 1.6); `regen`
   reproduces it (Req 7.1); the ride pair's Avg HR and Channel Sources; `drain`
   of the pair; a page aged to `_PRE_CHANNEL_MERGE_DOC_VERSION` is stale in
@@ -1089,3 +1096,12 @@ Returns `(garmin, healthfit)` bytes of one synthetic ride.
   lag and power does); no position.
 - `copy_power=False` gives the exact-timestamp fallback; `copy_shift_h=1` the
   whole-hour shift (identity joins it by SHIFTED evidence).
+
+### Run trio (`run_trio_fit_bytes`)
+Returns `(healthfit, stryd_a, stryd_b)`: the run pair plus a second Stryd file
+of the same run (`stryd_b`), identical to `stryd_a` except for a later
+`file_id` creation time (so `activity-identity`'s rank key places it above
+`stryd_a`) and form power one watt higher at every sample. Both Stryd files are
+extras that record form power; the page must take it from `stryd_b` whatever
+order the three files arrive in, so composing in arrival order is
+falsifiable.
