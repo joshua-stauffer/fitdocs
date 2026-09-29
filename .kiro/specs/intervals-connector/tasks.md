@@ -20,10 +20,13 @@
   that already holds other copies of the same rides until identity has merged
   (roadmap Phase 8 constraint; documented by 4.2).
 - **Siblings touching the same files** (`running-dynamics`,
-  `activity-identity`, `channel-merge`): `src/fitdocs/render/views.py`,
+  `activity-identity`, `channel-merge`): `src/fitdocs/render/views.py`
+  (shared with `running-dynamics` and `channel-merge`, append-only),
+  `src/fitdocs/render/__init__.py` (shared with `channel-merge` and
+  `activity-identity`, append-only; read, not edited, by this plan),
   `tests/fixtures/builder.py`, `src/fitdocs/contract.py`'s `DOC_VERSION` and
-  its pins, `tests/render/golden_docs/`. Rebase and keep both sides; the
-  version rule is below.
+  its pins, `tests/render/golden_docs/`, `CHANGELOG.md` `[Unreleased]`.
+  Rebase and keep both sides; the version rule is below.
 - **Task 1.1 belongs to the maintainer** and carries a `_Blocked:_` line,
   which is what `/kiro-impl` skips (`.claude/skills/kiro-impl/SKILL.md:86`):
   it needs an intervals.icu key that no agent holds and that this repository
@@ -58,9 +61,12 @@
   (`tests/test_determinism.py:672-712`, `tests/test_packaging.py:503-519`).
 - **Absent is `None`**: no default, `0` or empty string for a value the
   service or the file did not state.
-- **Versions**: `DOC_VERSION` advances once, in 2.3, by one from the value on
-  the branch when that task runs; after the final rebase 5.1 checks it equals
-  `main`'s value plus one and re-pins if a sibling landed a bump first. No
+- **Versions** (cross-spec ruling R1, `DOC_VERSION` half): every lander
+  advances `DOC_VERSION` by one from `main`'s value when it lands, never
+  sharing a sibling's bump. It advances once, in 2.3, by one from the value
+  on the branch when that task runs; after the final rebase 5.1 checks it
+  equals `main`'s value plus one and, if a sibling landed a bump first,
+  re-pins every site and regenerates the goldens. No
   task hard-codes the resulting number outside `contract.py`'s docstring and
   the re-pin sites. `CONTRACT_VERSION` and `MANAGED_KEYS` never move here.
 - **Contract-consumer guards**: no module under `src/fitdocs` other than
@@ -70,8 +76,9 @@
 - **`connectors`-owned files** are edited only where design.md "Shared-file
   touches" says, append-only: one import and one registration in
   `src/fitdocs/connectors/__init__.py`, two set entries in
-  `tests/connectors/test_boundary.py`, the heading pin and the scoped
-  exemption in `tests/connectors/test_docs.py`, one section of
+  `tests/connectors/test_boundary.py`, the heading pin and the
+  `intervals.icu` entry in the service-neutral scan's exemption table in
+  `tests/connectors/test_docs.py`, one section of
   `docs/connectors.md`, any registry-exactness assertion 3.1 names, and any
   statement 4.2's sweep corrects (in `docs/connectors.md`, the connectors
   package's docstrings or a sentence `tests/connectors/test_docs.py` pins),
@@ -87,11 +94,13 @@
 
 - `src/fitdocs/connectors/intervals.py` and `tests/connectors/test_intervals.py`:
   created by 3.1, extended by 3.2, 3.3 and 3.4, strictly in that order.
-- `tests/connectors/test_docs.py`: 3.1 (the scoped exemption), then 4.2 (the
-  heading pin).
+- `tests/connectors/test_docs.py`: 3.1 (the exemption-table entry), then 4.2
+  (the heading pin).
 - `tests/fixtures/builder.py`: 2.1 only (append).
 - `src/fitdocs/render/views.py`, `src/fitdocs/contract.py`, the `DOC_VERSION`
-  re-pin sites and `tests/render/golden_docs/`: 2.3 only.
+  re-pin sites and `tests/render/golden_docs/`: 2.3, and after the final
+  rebase 5.1 (the `DOC_VERSION` re-pin, and the donor wiring if
+  `channel-merge` landed while this branch was open).
 
 - [ ] 1. The live viability check (maintainer only)
 
@@ -153,40 +162,55 @@
   - _Boundary: ProductNameResolution_
 
 - [ ] 2.2 (P) Word the Garmin attribution for a page's contributing files
-  - A pure module: the recording device (the first device with index 0); a
-    Garmin label from it (exact manufacturer `garmin`; the model with every
-    whitespace run collapsed to one space; `Garmin` alone when the model is
-    absent or blank; a model already reading `Garmin` or starting `Garmin ` in
-    any case used as is); the line for a base and its donors exactly as
-    design.md "GarminAttribution" words it (labels deduplicated, base first;
-    `Data source:` for one label with no other contributor, `Data sources:`
-    with commas and a final "and" for several; `and other devices` whenever a
-    contributor has no Garmin label; no line without a Garmin label)
-  - Pins (`tests/render/test_attribution.py`, activities built by replacing
-    the devices of a parsed `builder.ride_fit_bytes()`): Garmin creator
-    `edge_1040` gives `Data source: Garmin edge_1040`; absent model gives
-    `Data source: Garmin`; a `stryd` creator gives no line, and so does a
-    Garmin device at index 1 listed before a `stryd` recording device; an
-    empty device list and a lone index-1 Garmin device each give no line; a
-    model `Edge\n1040` gives one line `Data source: Garmin Edge 1040`; a model `Garmin Edge 1040` is not doubled;
-    two index-0 devices, Garmin first then `stryd`, attribute the Garmin one;
-    base Garmin with a `stryd` donor, and base `stryd` with a Garmin donor,
-    give `Data sources: Garmin … and other devices`; base `fr965` with donor
-    `edge_1040` gives `Data sources: Garmin fr965 and Garmin edge_1040` (a
-    fixture in reverse alphabetical order); three Garmin models give `A, B and
-    C`; a donor repeating the base's model gives one label; an import pin: the
-    module imports nothing from `fitdocs` but `fitdocs.model`
+  - A pure module with design.md "GarminAttribution"'s three functions and
+    signatures: the recording device of a device tuple (the first device with
+    index 0); a Garmin label from a device tuple (its recording device's exact
+    manufacturer `garmin`; the model with every whitespace run collapsed to
+    one space; `Garmin` alone when the model is absent or blank; a model
+    already reading `Garmin` or starting `Garmin ` in any case used as is);
+    the line for a base activity and its donors' device tuples
+    (`attribution_line(base: Activity, donor_devices: Sequence[Sequence[DeviceInfo]] = ())`),
+    exactly as design.md words it (contributors are the base's devices then
+    each donor tuple; labels deduplicated, base first; `Data source:` for one
+    label with no other contributor, `Data sources:` with commas and a final
+    "and" for several; `and other devices` whenever a contributor, an empty
+    donor tuple included, has no Garmin label; no line without a Garmin
+    label)
+  - Pins (`tests/render/test_attribution.py`; `recording_device` and
+    `garmin_label` called on hand-built device tuples, `attribution_line` on
+    a base built by replacing the devices of a parsed
+    `builder.ride_fit_bytes()` plus hand-built donor device tuples): Garmin
+    creator `edge_1040` gives `Data source: Garmin edge_1040`; absent model
+    gives `Data source: Garmin`; a `stryd` creator gives no line, and so does
+    a Garmin device at index 1 listed before a `stryd` recording device; an
+    empty device tuple and a lone index-1 Garmin device each give no
+    recording device and no line; a model `Edge\n1040` gives one line
+    `Data source: Garmin Edge 1040`; a model `Garmin Edge 1040` is not
+    doubled; two index-0 devices, Garmin first then `stryd`, attribute the
+    Garmin one; base Garmin with a `stryd` donor tuple, and base `stryd` with
+    a Garmin donor tuple, give `Data sources: Garmin … and other devices`;
+    base Garmin with a donor tuple whose index-1 Garmin device precedes its
+    index-0 `stryd` device gives `Data sources: Garmin edge_1040 and other
+    devices`; base Garmin with an empty donor tuple gives the same; base
+    `fr965` with donor `edge_1040` gives `Data sources: Garmin fr965 and
+    Garmin edge_1040` (a fixture in reverse alphabetical order); three Garmin
+    models give `A, B and C`; a donor repeating the base's model gives one
+    label; an import pin: the module imports nothing from `fitdocs` but
+    `fitdocs.model`
   - Named mutations: iterate the devices in reverse (the two-creators pin
     reds); drop the index check (the index-1 pin reds); fall back to the
     first device when none has index 0 (the lone index-1 pin reds); take the
-    first device without checking the list is non-empty (the empty-list pin
-    reds); drop the whitespace
-    collapse (the one-line pin reds); always prefix `Garmin ` (the not-doubled
-    pin reds); format an absent model into the label (the `Data source:
-    Garmin` pin reds); drop the others clause (both mixed-donor pins red); sort
-    the labels (the reverse-order pin reds); drop the deduplication (the
+    first device without checking the tuple is non-empty (the empty-tuple pin
+    reds); drop the whitespace collapse (the one-line pin reds); always
+    prefix `Garmin ` (the not-doubled pin reds); format an absent model into
+    the label (the `Data source: Garmin` pin reds); drop the others clause
+    (both mixed-donor pins red); label a donor from its first device instead
+    of through the recording-device rule (the donor-recording-device pin
+    reds); skip empty donor tuples (the empty-donor pin reds); sort the
+    labels (the reverse-order pin reds); drop the deduplication (the
     repeated-model pin reds); join every label with " and " (the three-model
-    pin reds); import `fitdocs.connectors` in the module (the import pin reds)
+    pin reds); import `fitdocs.connectors` in the module (the import pin
+    reds)
   - Observable: `uv run pytest tests/render/test_attribution.py` green; the
     module has no caller yet
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.6_
@@ -197,19 +221,37 @@
     yields one, the attribution line; the run/ride, strength and generic views
     all start from it, so the line sits directly beneath the H1, before the
     notes region and every section, outside every region; the module docstring
-    names the line
+    names the line. `render/views.py` is shared with `running-dynamics` and
+    `channel-merge`: append-only toward their sections and fields
+  - Donor wiring (cross-spec ruling R2; design.md "ViewHead"): whichever of
+    `channel-merge` and this spec lands second wires the head helper to pass
+    `tuple(c.devices for c in ctx.channel_provenance.extras if c.channels)`
+    as the donor device tuples (`()` when `ctx.channel_provenance` is `None`)
+    and adds the ride-pair and non-donating pins below. If `SourceContribution.devices` and
+    `DocContext.channel_provenance` are on the branch when this task runs,
+    wire it here; if not, pass no donor devices and record in the report
+    that `channel-merge` wires it (or that 5.1 does, should `channel-merge`
+    land before this branch merges). The base's recording device stays the
+    index-0 device of `ctx.activity.devices` (`channel-merge` keeps the
+    composed activity's devices as the base's)
   - Advance `DOC_VERSION` by one from the branch's value with a docstring
     paragraph (the attribution line and the resolved device names); re-pin, in
     whatever form the branch holds them, `tests/test_cli_check.py:196,198`,
     `tests/render/test_frontmatter.py:44,101` and
     `tests/metrics/test_sources.py:2270`; regenerate the render goldens with
-    `uv run python -m tests.render.test_golden_docs`: all nine goldens gain
-    the new version; the seven rendered from a fixture with a device list also
-    gain one `Data source: Garmin Synthetic…` line beneath the H1;
-    `minimal.md` and `map_generic.md`, rendered from the device-less minimal
-    file (`tests/fixtures/builder.py:579-590`), change only in the version;
-    any further exact pin the full suite turns red is moved and listed in the
-    report
+    `uv run python -m tests.render.test_golden_docs`: every golden on the
+    branch gains the new version; each whose recording device is Garmin also
+    gains one attribution line beneath the H1 (`Data source: Garmin
+    Synthetic…` for the builder's default device); `minimal.md` and
+    `map_generic.md`, rendered from the device-less minimal file
+    (`tests/fixtures/builder.py:579-590`), are the device-less cases and
+    change only in the version; a golden whose recording device is not
+    Garmin — `running-dynamics`' `stryd_run`, whose fixture writes its
+    index-0 device with manufacturer `stryd`, if it is on the branch — gains
+    no line; a composed golden (`channel-merge`'s `composed_run`, if on the
+    branch) carries whatever line its base's and donors' devices give. No
+    golden count is written in a test or the report's claims; any further
+    exact pin the full suite turns red is moved and listed in the report
   - Pins (`tests/render/test_views.py`): for a Garmin-recorded activity in
     each of the three views — the run/ride and strength views from their
     builder fixtures, the generic view from the parsed minimal activity, each
@@ -217,23 +259,37 @@
     first non-blank line after the H1 (asserted present once) is `Data source:
     Garmin edge_1040` and precedes the notes begin marker; the line lies in
     no region's content (regions read with the region parser); a
-    `stryd`-recorded activity renders no line starting `Data source`; rendering `builder.garmin_devices_ride_fit_bytes()` gives the line
+    `stryd`-recorded activity renders no line starting `Data source`;
+    rendering `builder.garmin_devices_ride_fit_bytes()` gives the line
     `Data source: Garmin edge_1040` and a devices table whose rows name
     `edge_1040` and `hrm_pro`; the committed `minimal.md` and
     `map_generic.md` goldens (no device list) carry no `Data source` line —
-    the golden case of 8.3's "the file names no recording device"
+    the golden case of 8.3's "the file names no recording device"; when the
+    donor wiring lands here, the ride-pair pin: `channel-merge`'s ride pair
+    (`tests/fixtures/merge.py`, a Garmin-original base and a HealthFit copy
+    donating heart rate), composed and rendered as the drain renders it,
+    after asserting as a precondition that the donor's recording device is
+    not Garmin-made, gives `Data sources: Garmin <model> and other devices`
+    beneath the H1; and a hand-built Garmin base whose only extra is
+    non-Garmin and donates no channel gives `Data source: Garmin <model>`
+    (the same two pins `channel-merge` 3.3 adds when it lands second)
   - Named mutations: emit the line after the notes region (the placement pin
     reds); start only the run/ride view from the head helper (the strength and
     generic pins red); emit the line inside the notes region block (the
     outside-regions pin reds); delete 2.1's branch (the devices-table pin
     reds); leave `DOC_VERSION` at its previous value after regenerating (the
     golden and frontmatter pins red); label an activity with no recording
-    device `Garmin` instead of giving no label (the two device-less goldens
-    gain a line and red)
-  - Observable: the seven device-bearing goldens carry the line beneath their
-    H1, all nine the advanced version, and the two device-less ones no line;
-    the full `uv run pytest` green
-  - _Requirements: 8.1, 8.3, 8.5, 8.7, 8.8_
+    device `Garmin` instead of giving no label (the device-less goldens
+    `minimal.md` and `map_generic.md` gain a line and red); when the donor
+    wiring lands here, pass no donor devices from the head helper (the
+    ride-pair pin reds: the line reads `Data source: Garmin <model>`) and
+    drop the `if c.channels` filter (the non-donating pin reds)
+  - Observable: every Garmin-recorded golden carries the line beneath its
+    H1, every golden the advanced version, and the device-less and
+    non-Garmin-recorded ones no line; the full `uv run pytest` green; the
+    report states whether the donor wiring landed here or is left to
+    `channel-merge` / 5.1
+  - _Requirements: 8.1, 8.3, 8.4, 8.5, 8.7, 8.8_
   - _Depends: 2.1, 2.2_
 
 - [ ] 3. The intervals.icu connector
@@ -250,9 +306,21 @@
   - Register it in the package after the folder connector (one import, one
     call; not in the published surface, which stays at 46 names); append this
     module's allowed-import set and the package initializer's new entry to the
-    boundary guard; add the scoped `intervals.icu` exemption with its positive
-    control to the service-neutral scan (design.md "BoundaryGuardEntry and
-    NeutralScanExemption"); move any `tests/connectors` assertion that pins the
+    boundary guard; append the `intervals.icu` entry (host →
+    `connectors/intervals.py`, its test modules, and the intervals.icu
+    section of `docs/connectors.md`) to the service-neutral scan's exemption
+    table `NEUTRAL_SCAN_EXEMPTIONS`, under the host `intervals.icu`, with
+    the files `src/fitdocs/connectors/intervals.py`,
+    `tests/connectors/test_intervals.py`,
+    `tests/connectors/test_intervals_pull.py`,
+    `tests/connectors/test_intervals_docs.py` and the section key
+    `docs/connectors.md#intervals.icu` (matching 4.2's `## intervals.icu`
+    heading), keeping the check that the exemption is actually used:
+    `connectors`' conditional positive control now runs, and one assertion
+    beside it pins that the scan finds `intervals.icu` in `intervals.py`
+    itself (design.md "BoundaryGuardEntry and NeutralScanExemption"); no
+    other part of the scan changes and no `connectors` spec record is
+    touched; move any `tests/connectors` assertion that pins the
     built-in registry, or the registered-ids message, as the folder connector
     alone, and list each in the report
   - Pins (`tests/connectors/test_intervals.py`): after a fresh import the
@@ -283,8 +351,10 @@
     `import urllib.request` to the module (the guard's network allow-list
     reds); add `from fitdocs import layout` (the per-module import pin reds);
     put an `https://intervals.icu/` address in `connectors/pull.py` (the
-    neutral scan reds); change the module's service host to `example.org` (the
-    exemption's positive control reds)
+    neutral scan reds); put one in the folder connector's section of
+    `docs/connectors.md` (the neutral scan reds: the entry admits only the
+    intervals.icu section); change the module's service host to `example.org`
+    (the finds-it-in-`intervals.py` assertion reds)
   - Observable: `uv run pytest tests/connectors` green (the whole package:
     a second built-in changes what the registry and settings tests see);
     importing the package registers `folder` and `intervals`; `uv run mypy`
@@ -441,13 +511,22 @@
 - [ ] 4.2 (P) Document the connector for the athlete and record it in the changelog
   - The `## intervals.icu` section of `docs/connectors.md` with the four
     subsections and every subject design.md "ConnectorsDocSection" lists;
-    the heading pin in `tests/connectors/test_docs.py` gains the five headings;
-    `CHANGELOG.md` `[Unreleased]` gains the Added and Changed entries
-    design.md "ChangelogEntry" lists, naming no version number; a sweep of
-    `README.md`, `docs/*.md`, the connectors package's docstrings, the packaged
-    skill and the changelog for any statement that the folder connector is the
-    only built-in connector or that no connector for an online service ships,
-    each corrected and listed in the report
+    the heading pin in `tests/connectors/test_docs.py` gains the five headings
+  - Cross-source identity (cross-spec ruling R7): if `activity-identity` is
+    on `main`, state regenerate-before-first-pull instead of the
+    duplicate-page caution (design.md "ConnectorsDocSection"); otherwise
+    write the caution, which `activity-identity`'s task 6.1 replaces when it
+    lands. The report says which was written and why
+  - `CHANGELOG.md` `[Unreleased]`: the Added and Changed entries design.md
+    "ChangelogEntry" lists, naming no version number, each appended under
+    the existing `### Added` / `### Changed` heading in `[Unreleased]`; a
+    heading is created only if absent (cross-spec ruling R8;
+    `tests/test_changelog.py:516` rejects a category repeated within one
+    section)
+  - A sweep of `README.md`, `docs/*.md`, the connectors package's
+    docstrings, the packaged skill and the changelog for any statement that
+    the folder connector is the only built-in connector or that no connector
+    for an online service ships, each corrected and listed in the report
   - Pins (`tests/connectors/test_intervals_docs.py`, reading the section by
     its heading): the variable it names equals the connectors naming
     function's result for instance `intervals` and field `api_key`; its
@@ -458,7 +537,10 @@
     reds); add `UPLOAD` to the default (the default pin reds); delete the
     `### Garmin attribution` heading (the heading pin reds); add a Garmin web
     address to the section (the address pin and the neutral scan red); add a
-    non-canonical changelog category (`tests/test_changelog.py` reds)
+    non-canonical changelog category (`tests/test_changelog.py` reds); give
+    the Added entry a second `### Added` heading of its own in
+    `[Unreleased]` (`test_real_changelog_has_no_violations` reds: "repeats
+    category")
   - Observable: `uv run pytest tests/connectors/test_docs.py
     tests/connectors/test_intervals_docs.py tests/test_changelog.py
     tests/test_install_docs.py tests/test_docs_guarantees.py
@@ -467,20 +549,21 @@
   - _Boundary: ConnectorsDocSection, ChangelogEntry_
   - _Depends: 3.1_
 
-- [ ] 4.3 (P) Record the amendments on fit-ingest, workout-docs and connectors
+- [ ] 4.3 (P) Record the amendments on fit-ingest and workout-docs
   - `fit-ingest`: an Amendment block taking the next free number at landing,
     appending to Requirement 4 criteria equivalent to Req 7.1-7.5, each
     tagged with the amendment, and a `spec.json` `amendments` entry
   - `workout-docs`: an Amendment block appending to Requirement 5 criteria
     equivalent to Req 8.1-8.4, 8.6, 8.7 and to Requirement 6 one equivalent to
     8.5, with a `spec.json` `amendments` key or entry
-  - `connectors`: an Amendment block reading Req 14.6 as design.md
-    "SpecRecords" states, with a `spec.json` entry
+  - No record on `connectors`: its Req 14.6 already exempts a shipped
+    service connector's own module, tests and documentation section, and
+    this spec's only touch there is 3.1's exemption-table entry
   - No roadmap line changes here: this branch has not merged yet, so its own
     part is not on `main`; 5.1 does the bookkeeping at the merge
-  - Observable: `/kiro-spec-status fit-ingest`, `workout-docs` and
-    `connectors` clean; each amendment names this spec; no existing criterion
-    renumbered or reworded
+  - Observable: `/kiro-spec-status fit-ingest` and `workout-docs` clean;
+    each amendment names this spec; no existing criterion renumbered or
+    reworded; `.kiro/specs/connectors/` unchanged by this branch
   - _Requirements: 10.4_
   - _Boundary: SpecRecords_
 
@@ -489,7 +572,19 @@
 - [ ] 5.1 Whole-suite gate and the exhaustive sweep
   - After rebasing onto `main`: `uv run pytest && uv run ruff check . && uv
     run ruff format --check . && uv run mypy` green; `DOC_VERSION` equals
-    `main`'s value plus one, re-pinned if a sibling landed first
+    `main`'s value plus one (cross-spec ruling R1), and if a sibling landed a
+    bump first, every re-pin site is re-pinned and the goldens regenerated
+    under 2.3's golden rule (every golden on `main` gains the version, each
+    Garmin-recorded one the line)
+  - Siblings that landed while this branch was open, re-checked after the
+    rebase: if `channel-merge` is now on `main` and did not wire the head
+    helper's donor devices (it landed first), wire them and add the
+    ride-pair and non-donating pins exactly as 2.3 states, with 2.3's two
+    donor-wiring mutations observed red (ruling R2); if `activity-identity`
+    is now on `main` and the intervals.icu section still carries the
+    duplicate-page caution, replace it with the regenerate-before-first-pull
+    statement (ruling R7); the `[Unreleased]` changelog keeps one heading per
+    category (ruling R8). Each is listed in the report
   - The exhaustive sweep: every one of the 57 acceptance criteria classified
     PINNED (test and mutation), PRESERVED-ONLY (the existing test), UNPINNED
     (with the mutation run that shows it), or MAINTAINER (9.1-9.3), recorded in
@@ -506,7 +601,7 @@
     blocked
   - Observable: the gate green; the sweep table in the report; every task but
     1.1 and 5.2 ticked; the two roadmap lines updated in the merged commit
-  - _Requirements: 5.8_
+  - _Requirements: 5.8, 8.4, 8.8, 10.1, 10.3_
 
 - [ ] 5.2 Completion gate: reconcile the live check with the design
   - Runs after the merge, on its own branch under change-protocol, once 1.1's

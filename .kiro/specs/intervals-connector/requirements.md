@@ -59,8 +59,9 @@ real account before the connector is used on a real data root.
   its `[connectors.<name>]` settings; the live viability check; Garmin
   product-name resolution in ingest; Garmin attribution on workout pages and
   the resolved names in the devices table; the documentation for setting the
-  connector up; the amendment records on `fit-ingest`, `workout-docs` and
-  `connectors`.
+  connector up; the amendment records on `fit-ingest` and `workout-docs`;
+  this connector's entry in the exemption table of `connectors`'
+  service-neutral scan.
 - **Out of scope**: every other intervals.icu capability (uploads, names and
   descriptions, planned workouts, thresholds, wellness, workout libraries and
   plans), which are the roadmap's Phase 8 follow-ons and use the capability
@@ -84,8 +85,10 @@ real account before the connector is used on a real data root.
     puts the file with more undocumented messages first) and adds no marker to
     the file. Until identity has merged, pulling into a data root that already
     holds other copies of the same rides creates duplicate pages.
-  - `channel-merge` decides which extras donate channels to a page; the
-    combined-source attribution wording is exercised once it supplies them.
+  - `channel-merge` decides which extras donate channels to a page and
+    publishes each contributing file's own devices; the combined-source
+    attribution wording is exercised on a composed page once whichever of the
+    two specs lands second passes the donating files' devices to it.
   - `activity-qa-flags` reads sample channels and load outcomes only, so the
     messages Garmin strips from a partner-API copy (undocumented messages,
     workout steps) never reach a quality flag.
@@ -196,7 +199,7 @@ real account before the connector is used on a real data root.
 **Objective:** As an athlete setting the connector up, and as a maintainer relying on the project's records, I want the connector documented and every contract it touches restated, so that setup needs no guesswork and no statement contradicts the code.
 
 #### Acceptance Criteria
-1. The connectors documentation shall describe the intervals.icu connector: where the athlete finds the personal key, connecting it, the environment variable that overrides it for an instance named `intervals`, the source filter and its default, the 30-day first pull and backfilling with `--since`, what is skipped and why (Strava stubs, non-FIT originals, activities without a file), how rate limits and a refused key are reported, what leaves the machine, the Garmin attribution on pages, and that pulling into a data root holding other copies of the same rides creates duplicate pages until cross-source identity has shipped.
+1. The connectors documentation shall describe the intervals.icu connector: where the athlete finds the personal key, connecting it, the environment variable that overrides it for an instance named `intervals`, the source filter and its default, the 30-day first pull and backfilling with `--since`, what is skipped and why (Strava stubs, non-FIT originals, activities without a file), how rate limits and a refused key are reported, what leaves the machine, the Garmin attribution on pages, and, while cross-source identity has not shipped, that pulling into a data root holding other copies of the same rides creates duplicate pages — or, once it has shipped, that a data root's existing documents are regenerated before the first pull.
 2. The connectors documentation shall cite intervals.icu's API terms §1.1 and Garmin's API Brand Guidelines (by title and version) as the reason for the attribution, and shall give no web address of any online service other than intervals.icu.
 3. The changelog's unreleased section shall record the intervals.icu connector, the Garmin product names, and the attribution line together with the action a user must take (regenerating existing documents).
-4. The `fit-ingest` and `workout-docs` specs shall each carry an amendment record for the product-name and attribution changes, and the `connectors` spec shall carry an amendment record admitting intervals.icu's address in exactly this connector's module, its tests and its documentation while every other part of the connector framework stays service-neutral.
+4. The `fit-ingest` and `workout-docs` specs shall each carry an amendment record for the product-name and attribution changes, and the exemption table of the connectors service-neutral scan shall carry one entry admitting intervals.icu's address in exactly this connector's module, its tests and its section of the connectors documentation, so that every other part of the connector framework stays service-neutral.

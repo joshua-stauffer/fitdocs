@@ -167,16 +167,21 @@
 ### Codebase integration points
 - **Findings**:
   - The protocol, transport, credential store, ledger, delivery and commands
-    are `connectors`' (design.md there, "Cross-spec seams" `:1822-1840`),
-    unimplemented on this branch; this design consumes their published
-    shapes.
+    are `connectors`' (design.md there, "Cross-spec seams", the
+    `intervals-connector` bullet), unimplemented on this branch; this design
+    consumes their published shapes.
   - `connectors` task 7 pins a service-neutral scan over "the connectors
     package, its tests and the page (every URL is the project's own or a
-    reserved example host)" (`.kiro/specs/connectors/tasks.md:696-700`),
-    and Req 14.6 says the framework, its tests and documentation "shall name
+    reserved example host)" (`.kiro/specs/connectors/tasks.md` task 7, as
+    written before the cross-spec review), and Req 14.6 then said the
+    framework, its tests and documentation "shall name
     no online service's endpoint". This connector lives in that package and
-    must name `intervals.icu`: a scoped exemption and an amendment record
-    are required.
+    must name `intervals.icu`. Resolved at the cross-spec review
+    (2026-09-29, ruling R5): `connectors` Req 14.6 now exempts a shipped
+    service connector's own module, tests and documentation section, and
+    its scan reads an explicit exemption table (host → allowed files) that
+    it ships empty; this spec appends the `intervals.icu` entry and records
+    no amendment on `connectors`.
   - Render: every view emits the H1 then the bare `notes` region
     (`src/fitdocs/render/views.py:156-157, 191-192, 225-226`); docmerge
     recognizes a region marker only as a whole line at column zero
@@ -194,8 +199,10 @@
     `tests/test_cli_check.py:196,198`, `tests/render/test_frontmatter.py:44,
     101`, `tests/metrics/test_sources.py:2270`
     (`CONSTANT_REGISTRY_ASOF_DOC_VERSION`, which tracks the current version
-    while the constant registry is clean) and the nine render goldens under
-    `tests/render/golden_docs/`. No doc page states the number.
+    while the constant registry is clean) and the render goldens under
+    `tests/render/golden_docs/` (nine on this branch at 13e165a; siblings
+    add more before this spec lands, so its tasks name no count). No doc
+    page states the number.
   - `activity-identity` exposes the raw `FileIdentity.product`, never reads
     `garmin_product` and never reads a product name; running-dynamics edits
     only the developer-field functions of `ingest/summary.py` (`:129-301`).
@@ -263,6 +270,8 @@
 - **Rationale**: `gzip.decompress` (the brief's wording) has no output bound,
   so a small hostile body could expand without limit; `GzipFile` is the same
   stdlib codec with a bounded read and handles multi-member streams.
+  Conforms to `connectors`' seam, which says the connector "decompresses
+  with `gzip`" (cross-spec review 2026-09-29, ruling R5).
 
 ### Decision: Data-call 429 and 5xx end the instance with a connector error
 - **Selected Approach**: after the transport's bounded retries, a 429 or 5xx
@@ -271,7 +280,10 @@
   `AuthFailure` `auth_failure_from` builds.
 - **Rationale**: the framework's rate-limited next step speaks of a sign-in;
   a data-call rate limit is a different situation, and further downloads in
-  the same run would meet the same limit.
+  the same run would meet the same limit. Conforms to `connectors`' seam: a
+  data-call status that survives retries is the connector's to map;
+  `AuthFailure` is for 401/403 and sign-in, and `ConnectorError` ends the
+  instance (cross-spec review 2026-09-29, ruling R5).
 
 ### Decision: Verify with a one-entry listing
 - **Selected Approach**: `verify` makes one `GET
@@ -295,10 +307,15 @@
   `DOC_VERSION` advance so existing pages are regenerated into compliance.
 
 ### Synthesis outcomes
-- **Generalization**: the attribution function takes the base and the
-  donating files, so the one wording rule covers today's single-file pages
-  and `channel-merge`'s composed pages; the interface is general, the only
-  caller today passes no donors.
+- **Generalization**: the attribution function takes the base activity and
+  the donating files' device tuples
+  (`attribution_line(base, donor_devices: Sequence[Sequence[DeviceInfo]])`),
+  so the one wording rule covers today's single-file pages and
+  `channel-merge`'s composed pages. Render sees no donor `Activity`, only
+  `DocContext.channel_provenance`, so the donor side is device tuples,
+  which `channel-merge` publishes as `SourceContribution.devices`
+  (cross-spec review 2026-09-29, ruling R2); whichever of the two specs
+  lands second wires the call site.
 - **Build vs adopt**: product names are adopted from the SDK's profile;
   decompression, JSON, Basic credentials and URL encoding from the stdlib;
   transport, retries, credentials, ledger and delivery from `connectors`.
