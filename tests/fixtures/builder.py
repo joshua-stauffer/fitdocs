@@ -995,6 +995,8 @@ _SESSION_DEV_FIELD_VALUES: dict[str, object] = {
 def _encode_run_with_developer_fields(
     serial: int,
     scale_overrides: dict[str, tuple[int | None, int | None]] | None = None,
+    *,
+    time_created: int = FIT_TIMESTAMP_BASE,
 ) -> bytes:
     """Encode a valid run whose session carries the HealthFit developer fields.
 
@@ -1010,7 +1012,7 @@ def _encode_run_with_developer_fields(
     named field's description (either element ``None`` leaves that term
     UNDECLARED on the wire, matching ``field_description``'s real shape); a
     name absent from the mapping declares neither, as every field does by
-    default.
+    default. ``time_created`` is the ``file_id`` creation time (FIT-epoch seconds).
     """
     dev_data_id: Mesg = {
         "mesg_num": _MESG_DEVELOPER_DATA_ID,
@@ -1043,7 +1045,7 @@ def _encode_run_with_developer_fields(
 
     session: Mesg = {**_run_session(), "developer_fields": recorded_values}
     ordered: list[Mesg] = [
-        _file_id(serial),
+        _file_id(serial, time_created=time_created),
         dev_data_id,
         *field_description_mesgs,
         _device_info(serial, "SyntheticDevFieldWatch"),
@@ -1512,14 +1514,23 @@ def session_dev_fields_declared_scale_fit_bytes() -> bytes:
     )
 
 
+_REEXPORT_B_CREATED_LATER_S = 1
+
+
 def reexport_a_fit_bytes() -> bytes:
     """Re-export pair, file A: fixed ``SESSION UUID``, serial 1015."""
     return _encode_run_with_developer_fields(1015)
 
 
 def reexport_b_fit_bytes() -> bytes:
-    """Re-export pair, file B: SAME ``SESSION UUID``, serial 1016 -> different bytes."""
-    return _encode_run_with_developer_fields(1016)
+    """Re-export pair, file B: SAME ``SESSION UUID``, serial 1016 -> different bytes.
+
+    Its ``file_id`` creation time is one second later than file A's, so a
+    canonical rank keyed on creation time keeps the pair in order A, B.
+    """
+    return _encode_run_with_developer_fields(
+        1016, time_created=FIT_TIMESTAMP_BASE + _REEXPORT_B_CREATED_LATER_S
+    )
 
 
 # --- Corrupt / degenerate variants ------------------------------------------
