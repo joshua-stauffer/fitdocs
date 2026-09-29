@@ -160,6 +160,7 @@ files = [
     "tests/test_releasing_docs.py",
     "tests/test_ci_workflow.py",
     "tests/test_release_workflow.py",
+    "tests/connectors",
     "scripts",
 ]
 
