@@ -439,7 +439,7 @@ class IntervalsConnector:                           # Connector + KeyVerifier + 
 - **`verify`** (1.2-1.4): exactly one `session.http.get` (AUTH mode) of
   `{API_BASE}/athlete/0/activities?oldest=<UTC date of now − 1 day>&limit=1&fields=id`
   with the credential. `200` → `Granted(scopes=None)`. Otherwise
-  `auth_failure_from(response, service_message=_service_message(response))`
+  `auth_failure_from(response, service_message=_service_message(session, response))`
   is raised when it returns a failure (401 rejected, 403 blocked, 429
   rate-limited with `Retry-After`, 5xx unavailable); any other status raises
   `AuthFailure(UNAVAILABLE)` whose message is `"HTTP <status>: <service
@@ -499,9 +499,11 @@ class IntervalsConnector:                           # Connector + KeyVerifier + 
   `ConnectorError(LISTING_STATUS_MESSAGE)` when `listing`, else
   `IntervalsDownloadError(DOWNLOAD_STATUS_MESSAGE)`. Status codes are plain
   `int`s (the stdlib `http` package is never imported).
-- **`_service_message(response)`**: the first 4096 body bytes decoded as
-  UTF-8 with replacement, whitespace collapsed, cut to 300 characters;
-  `"HTTP <status>"` when empty. The framework redacts it before display.
+- **`_service_message(session, response)`**: the first 4096 body bytes
+  decoded as UTF-8 with replacement, whitespace collapsed, passed through
+  `session.redactor.redact` (so a service that echoes the credential or its
+  encoded form never puts it into an exception this module raises), then cut
+  to 300 characters; `"HTTP <status>"` when empty (5.7).
 
 **User-facing texts** (constants; the tests bind to them, the docs quote their substance):
 
@@ -794,8 +796,7 @@ logged.
 
 Every new assertion owes a named production mutation it dies on
 (`change-protocol.md` § Fixture Discrimination). Fixtures: a synthetic key
-(`"ik-synthetic-7Q2x9"`, containing characters that percent-encode
-differently), synthetic activity ids (`"i9000001"`…), dates derived from
+(`"ik-synthetic-7Q2x9"`), synthetic activity ids (`"i9000001"`…), dates derived from
 `tests/fixtures/builder.py`'s fixed epoch, JSON listings built in the test,
 FIT bytes from the builder, GPX/TCX text written in the test. No value from
 any real account.
@@ -848,9 +849,11 @@ any real account.
   listing → `ConnectorError` naming 418, on a download →
   `IntervalsDownloadError` naming 418 (mutations: raise `AuthFailure` for
   429; treat a download 418 as instance-ending).
-- Secrets: no recorded request URL contains the key or its encoded form; a
-  403 body echoing the encoded token is reported with `<redacted>` and
-  without the token (mutation: skip `session.secret(token)`).
+- Secrets: no recorded request URL contains the key or its encoded form
+  (mutation: add the key as a query parameter); a 403 at `verify` and a 418 on
+  a download whose bodies echo the bare encoded token raise failures whose
+  messages carry `<redacted>` and not the token (mutations: skip
+  `session.secret(token)`; drop the `redact` call in `_service_message`).
 
 ### Integration (`tests/connectors/test_intervals_pull.py`)
 - Engine level (`run_pull` with the registered connector, `FakeTransport`,
@@ -860,9 +863,12 @@ any real account.
   as not a FIT file (4.6); a second pull makes listing requests only and
   delivers nothing (6.2); an original byte-identical to an archived file
   recorded as already held (6.3); every recorded request carries
-  `version.user_agent()` and none contains `Python-urllib` (5.6); a byte scan
-  of every file under the data root and the inbox finds neither the key nor
-  its encoded form (5.7).
+  `version.user_agent()` and none contains `Python-urllib` (5.6). No
+  file-level secret scan is added here: every reason this connector returns is
+  a constant (at most with a format name inserted) and the framework redacts
+  before recording, so no connector
+  mutation could red one; 5.7 is pinned at unit level (request URLs, the
+  encoded token, service messages).
 - CLI (`fitdocs pull intervals --sync --no-prompt`, transport seam patched,
   `FITDOCS_CONNECTOR_INTERVALS_API_KEY` set): the delivered ride becomes a
   workout page whose line beneath the H1 reads `Data source: Garmin edge_1040`
@@ -882,8 +888,9 @@ any real account.
 
 ### Render (`tests/render/test_attribution.py`, `tests/render/test_views.py`)
 - Wording over hand-built activities: Garmin creator `edge_1040` → `Data
-  source: Garmin edge_1040`; blank model → `Data source: Garmin`; `stryd`
-  creator, and a Garmin device at index 1 only → `None`; model text with a
+  source: Garmin edge_1040`; blank model → `Data source: Garmin`; a `stryd`
+  creator → `None`, and so does a Garmin device at index 1 listed before a
+  `stryd` recording device; model text with a
   newline → one line; `Garmin Edge 1040` → not doubled; base Garmin plus a
   `stryd` donor → `Data sources: Garmin edge_1040 and other devices`; base
   `stryd` plus a Garmin donor → same form; two Garmin models → `Data sources:
@@ -907,8 +914,9 @@ any real account.
   unredirected Basic header to `https://intervals.icu`; its encoded form is
   registered for redaction; never in a URL, report, ledger, exception or file
   under the data root.
-- The service's text: status messages are truncated and redacted before
-  display.
+- The service's text: status messages are redacted by the connector itself
+  (the run's redactor already holds the key, the encoded token and the header
+  value) and truncated, so no exception it raises carries a secret.
 - Hostile bodies: decompression is bounded to the transport's response bound;
   the remote id is percent-quoted into the download path, so a listing cannot
   steer a request to another endpoint; device-recorded text on the page is
