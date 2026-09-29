@@ -132,8 +132,8 @@ that each page renders from the best file I have.
 3. When a file records a manufacturer other than `development`, the fitdocs CLI shall classify the file `original`.
 4. When a file records no manufacturer, or records `development` without a recognized phone-side writer marker, the fitdocs CLI shall classify the file `unknown`.
 5. Where the settings file configures no source precedence, the fitdocs CLI shall rank `original` above `phone_copy` above `unknown`.
-6. Where the settings file configures a source precedence, the fitdocs CLI shall rank the listed kinds first, in the listed order, followed by every unlisted kind in the default order.
-7. If the source-precedence setting is not a list, names a kind outside the vocabulary, or names a kind twice, or if its table is not a table, the fitdocs CLI shall report a configuration error naming the settings file and the offending key and shall exit with the configuration-error status before writing anything.
+6. Where the settings file configures a source precedence, the fitdocs CLI shall rank each file at the position of the first listed entry that names it -- an entry `original:<manufacturer>` naming the recorded manufacturer of an `original` file, otherwise the entry naming its kind -- and shall rank a file no listed entry names after every listed entry, in the default order of its kind.
+7. If the source-precedence setting is not a list of strings, contains an entry that is neither a kind of the vocabulary nor `original:` followed by a non-empty manufacturer name other than `development`, or contains an entry twice, or if its table is not a table, the fitdocs CLI shall report a configuration error naming the settings file and the offending key and shall exit with the configuration-error status before writing anything.
 8. The fitdocs CLI shall rank files of the same kind by the number of messages the FIT profile does not define, more first; then by creation time, later first, with an absent creation time last; then by content hash in ascending lexicographic order, so that the ranking of any set of files is a total order independent of arrival.
 
 ### Requirement 3: The cross-source match rule
@@ -181,10 +181,10 @@ provenance is visible and later files are matched against the right values.
 1. The fitdocs CLI shall render every page from exactly one of its files, the base: the highest-ranked file of the page under Requirement 2.
 2. The fitdocs CLI shall list every file of a page in the page's source list in ascending rank, so that the base is always the last entry and every other entry is an extra.
 3. If an entry of a page's source list cannot be resolved to an archived file, the fitdocs CLI shall keep it in the list ahead of every resolved entry, in its existing relative order, and shall never choose it as the base.
-4. The fitdocs CLI shall record on every page, as managed frontmatter keys, its base file's source kind, and the base file's recorded elapsed time, recorded distance and device identity, omitting each value the base does not record.
+4. The fitdocs CLI shall record on every page, as managed frontmatter keys, its base file's source kind, recorded elapsed time and recorded distance, and a digest of the base file's device identity that does not reveal its serial number, omitting each value the base does not record.
 5. When a page's base records no session UUID and another file of the page does, the fitdocs CLI shall record the session UUID of the highest-ranked file of the page that carries one.
 6. When a file joins a page and ranks below the page's base, the fitdocs CLI shall add it as an extra, keep the base, and keep the page's filename.
-7. When the same set of files reaches a page in any order, across one run or several, the fitdocs CLI shall produce a byte-identical page under the same filename with the same chart assets.
+7. When the same set of files reaches a page in any order, across one run or several, the fitdocs CLI shall produce a byte-identical page under the same filename with the same chart assets, except where the filename computed for the page is held by a page of a different session, when the collision rule of Requirement 6 criterion 6 applies.
 8. Until channel composition exists, the fitdocs CLI shall render a page from its base file's data alone and record its extras without drawing any value from them.
 
 ### Requirement 6: Base change, rename and asset cleanup
@@ -196,7 +196,7 @@ so that correcting a page never needs a hand edit.
 1. When a file added to a page outranks the page's current base, the fitdocs CLI shall re-render the page from the new base, carrying every user-owned region and every user-owned frontmatter key verbatim.
 2. When a page's base changes and the filename computed from the new base differs from the page's current filename, the fitdocs CLI shall rename the page to the computed filename.
 3. When a page's base does not change, the fitdocs CLI shall keep the page's current filename, including a filename the user chose.
-4. When the name a page's chart assets carry changes, the fitdocs CLI shall remove every chart asset the page's previous generated content linked that the new render does not write, and shall remove no other file.
+4. When the fitdocs CLI renames a page, it shall remove every chart asset the page's previous generated content linked that the new render does not write and no user-owned region of the page links, and shall remove no other file.
 5. The fitdocs CLI shall report every rename as a warning naming the page's previous and new paths.
 6. If the filename computed for a page is held by a different page, the fitdocs CLI shall apply the existing collision suffix; and after every file of a run has been processed, the fitdocs CLI shall rename each page the run wrote under a collision-suffixed filename to its unsuffixed filename when that filename is free, repeating until no such rename remains.
 7. If a run is interrupted part-way through a rename, the fitdocs CLI shall leave the page at exactly one path, and the next run over the same inputs shall complete the rename and the asset cleanup.
