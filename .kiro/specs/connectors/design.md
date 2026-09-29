@@ -256,7 +256,8 @@ src/fitdocs/connectors/
 ├── __init__.py      # Published surface (__all__); registers the built-in folder connector at import
 ├── _atomic.py       # write_atomic(): dot-prefixed temp in target dir, fsync, os.replace, owner-only mode
 ├── secrets.py       # Secret (redacting str/repr), Redactor (per-invocation value scrubber), REDACTED
-├── errors.py        # AuthFailure + AuthFailureKind, ConnectorError, ConnectorSettingsError, NotConnectedError
+├── errors.py        # AuthFailure + AuthFailureKind, ConnectorError, ConnectorSettingsError, NotConnectedError,
+│                    #   NEXT_STEPS + next_step() (shared by connect and pull)
 ├── http.py          # HttpRequest/HttpResponse, TransportError, Transport, urllib_transport, CallMode, HttpClient, auth_failure_from
 ├── protocol.py      # Capability/CapabilityInfo/CAPABILITIES, AuthStyle, CredentialField, RemoteActivity, Listing,
 │                    #   ListingDeferral, Fetched/Declined/Deferred, Granted, TokenSet, SettingsContext,
@@ -268,12 +269,14 @@ src/fitdocs/connectors/
 ├── settings.py      # [connectors] reader: ConnectorInstance, ConnectorsSettingsError, load_connectors_settings
 ├── folder.py        # FolderConnector, FolderSettings (built-in, network-free)
 ├── pull.py          # PullOptions, run_pull, PullReport, InstancePullReport, PullNote, Delivered
-└── connect.py       # run_connect, Connected, ConnectFailed, NEXT_STEPS
+└── connect.py       # run_connect, Connected, ConnectFailed
 docs/connectors.md   # User documentation for connectors (new page)
 tests/connectors/
 ├── __init__.py
-├── conftest.py      # registry snapshot/restore fixture; synthetic connectors (api-key, login, puller); FakeTransport
+├── conftest.py      # autouse socket guard; FakeTransport; registry snapshot/restore; synthetic connectors
 ├── test_secrets.py
+├── test_atomic.py
+├── test_errors.py
 ├── test_http.py
 ├── test_protocol.py # vocabulary, flags, value-type invariants
 ├── test_registry.py
@@ -286,6 +289,8 @@ tests/connectors/
 ├── test_pull.py
 ├── test_connect.py
 ├── test_boundary.py # package import closure + forbidden names + clock scan + tree-wide network allow-list
+├── test_network_statements.py  # stale "only network" phrases absent from code, README and docs; new statements present
+├── test_docs.py     # connectors page, service-neutral scan, inbox carve-out and settings-table pins
 └── test_cli_connectors.py  # CLI: connect, pull, --sync chaining, exit codes, output, socket guard
 ```
 
@@ -319,7 +324,9 @@ tests/connectors/
 - `tests/test_compatibility_policy.py` — `SETTINGS_TABLE_LITERALS` gains
   `"[connectors]"`; the "six" test name and messages become "seven".
 - `tests/test_docs_guarantees.py` — `_REQUIRED_ENTRY_POINT_LINKS` gains
-  `"connectors.md"`; a pinned guarantee for the delivery-removal carve-out.
+  `"connectors.md"` (the delivery-removal carve-out and the settings-table
+  pins live in the new `tests/connectors/test_docs.py`, so parallel doc tasks
+  never share a test file).
 - `tests/declaration_golden/*.AGENTS.md` — regenerated only if
   `CONTRACT_VERSION` changes in this merge.
 - Docs: `docs/configuration.md`, `docs/inbox.md`, `docs/compatibility.md`,
@@ -469,7 +476,7 @@ sequenceDiagram
 | 4.6, 4.7 | Tokens only; rotation persisted before use | CredentialStore, PullEngine, ConnectEngine | `TokenSet`, `CredentialAccess.replace` | pull, connect |
 | 4.8, 4.9 | Connector id and scopes recorded; mismatch = not connected | CredentialStore | `StoredCredentials` | — |
 | 5.1, 5.2, 5.3, 5.4 | Prompting, nothing-to-connect, unknown/reserved, non-terminal | CliCommands | `connect_command`, `_ask_secret`, `_stdin_is_interactive` | connect |
-| 5.5, 5.6, 5.7, 5.8, 5.9 | Verify-then-store, failure kinds and next steps, one attempt, replace, no data-root write | ConnectEngine, HttpClient, CredentialStore, ConfinementRegistration | `run_connect`, `AuthFailure`, `NEXT_STEPS` | connect |
+| 5.5, 5.6, 5.7, 5.8, 5.9 | Verify-then-store, failure kinds and next steps, one attempt, replace, no data-root write | ConnectEngine, ConnectorErrors, HttpClient, CredentialStore, ConfinementRegistration | `run_connect`, `AuthFailure`, `NEXT_STEPS` | connect |
 | 6.1, 6.2, 6.3 | Instance selection, unknown names, none configured | CliCommands | `pull_command` | pull |
 | 6.4 | Listing window | PullEngine | `PullOptions`, `_window_start` | pull |
 | 6.5, 6.6, 6.7, 6.8 | New-by-ledger, unavailable, FIT header, already held | PullEngine, Delivery, Ledger | `run_pull`, `is_fit`, `Ledger.is_final` | per-activity decision |
@@ -714,7 +721,13 @@ class NotConnectedError(ConnectorError)
 class ConnectorSettingsError(Exception):
     key: str
     message: str
+
+NEXT_STEPS: Final[Mapping[AuthFailureKind, str]]   # "{name}" and "{retry}" placeholders
+def next_step(kind: AuthFailureKind, *, name: str, retry_after_s: float | None) -> str: ...
 ```
+- `NEXT_STEPS` lives here, not in `connect.py`, so `pull.py` and `connect.py`
+  share it without importing each other; its text is the table under
+  ConnectEngine.
 
 ### Transport layer
 
@@ -1244,7 +1257,6 @@ class ConnectFailed:
     message: str        # the service's message, redacted
     next_step: str
 
-NEXT_STEPS: Final[Mapping[AuthFailureKind, str]]   # "{name}" and "{retry}" placeholders
 
 def run_connect(
     instance: ConnectorInstance, answers: Mapping[str, str], *, store: CredentialStore,
@@ -1810,4 +1822,4 @@ the docs pages listed above, the packaged skill, `tests/test_agent_skill.py`,
 - Concurrent pulls are not locked (documented; hash dedupe bounds the harm).
 - The inbox, distribution and route-maps amendments are not listed in the
   roadmap's Phase 8 Existing Spec Updates; this spec lands them as records
-  and the roadmap line for `inbox` (task 7.3).
+  and the roadmap line for `inbox` (task 9.1).
