@@ -41,7 +41,7 @@
 
 - [ ] 1. Foundation: the model's channel set and the synthesized fixtures
 
-- [ ] 1.1 Add the twelve running-dynamics channels, their registry and the developer-channel type to the activity model
+- [x] 1.1 Add the twelve running-dynamics channels, their registry and the developer-channel type to the activity model
   - In `src/fitdocs/model.py`: `DYNAMICS_CHANNELS` (the twelve names, in the
     design's order); the twelve `Samples` fields appended after
     `temperature_c`, each `tuple[float | None, ...] = ()`;
@@ -85,7 +85,7 @@
     `_EXPECTED`, and no golden document changed; `mypy` clean
   - _Requirements: 1.1, 1.3, 3.3, 3.4_
 
-- [ ] 1.2 (P) Build the synthesized fixture families and the developer-field encoding helper
+- [x] 1.2 (P) Build the synthesized fixture families and the developer-field encoding helper
   - In `tests/fixtures/builder.py`, `_file_id`'s keyword parameters: add them
     unless `activity-identity` already added them on the branch; reuse them.
     They are keyword-only and defaulted, `manufacturer: str = "garmin"`,
