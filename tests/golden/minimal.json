@@ -4,7 +4,8 @@
     "provenance": {
       "sha256": "41f7b7a3161b321b3ef05b7178f9f241392d94701660499c20d037a0c893cbb6",
       "source_path": null,
-      "decode_errors": []
+      "decode_errors": [],
+      "undocumented_messages": 0
     },
     "sport": "Workout",
     "modality": "other",
@@ -168,7 +169,13 @@
     "devices": [],
     "developer_fields": {},
     "developer_fields_declared_scale": [],
-    "record_developer_fields": {}
+    "record_developer_fields": {},
+    "file_identity": {
+      "manufacturer": "garmin",
+      "product": 1,
+      "serial_number": 1004,
+      "time_created": "2021-09-08T01:46:40+00:00"
+    }
   },
   "metrics_no_athlete": {
     "moving_time_s": 3.0,

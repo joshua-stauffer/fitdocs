@@ -821,6 +821,12 @@ def test_helper_bytes_are_reproducible() -> None:
 # ``time_created`` parameters must not move (each default equals the value
 # written before).
 _UNMOVED_DIGESTS: dict[str, str] = {
+    "run_native_dynamics_fit_bytes": (
+        "29327f7926996543bc743ae011a9bd703a73aa5430404800225d0f88421ad2f6"
+    ),
+    "stryd_run_fit_bytes": (
+        "3506ce4f743256b30a8b69a1a4e585cefcc5c7f69ca8c8c186216055b4033899"
+    ),
     "bad_message_fit_bytes": (
         "185484c1db1c7a8e6c075494e324794df1f879c34ca0fc028486853bf7a1eb11"
     ),
@@ -904,7 +910,9 @@ def test_every_zero_argument_fit_bytes_builder_is_pinned_or_reexport_b() -> None
     public = {
         n
         for n, f in vars(builder).items()
-        if n.endswith("_fit_bytes") and callable(f) and n != "small_sport_fit_bytes"
+        if n.endswith("_fit_bytes")
+        and callable(f)
+        and n not in {"small_sport_fit_bytes", "developer_field_run_fit_bytes"}
     }
     pinned = {n for n in _UNMOVED_DIGESTS if n.endswith("_fit_bytes")}
     assert public

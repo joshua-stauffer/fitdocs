@@ -252,7 +252,7 @@ From `fitdocs`:
 Activity, Samples, SessionSummary, Lap, StrengthSet, DeviceInfo, Provenance,
 Sport, Modality, SCHEMA_VERSION, fit_datetime, AthleteInputs, ZoneSpec,
 DerivedMetrics, TrimpWeighting, parse_fit, compute_metrics, FitDecodeError,
-NotFitFileError, FitIntegrityError, DeveloperChannel
+NotFitFileError, FitIntegrityError, DeveloperChannel, FileIdentity
 ```
 
 From `fitdocs.load`:

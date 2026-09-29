@@ -49,6 +49,7 @@ if TYPE_CHECKING:
     from fitdocs.model import Activity as Activity
     from fitdocs.model import DeveloperChannel as DeveloperChannel
     from fitdocs.model import DeviceInfo as DeviceInfo
+    from fitdocs.model import FileIdentity as FileIdentity
     from fitdocs.model import Lap as Lap
     from fitdocs.model import Modality as Modality
     from fitdocs.model import Provenance as Provenance
@@ -74,6 +75,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "Modality": ("fitdocs.model", "Modality"),
     "SCHEMA_VERSION": ("fitdocs.model", "SCHEMA_VERSION"),
     "fit_datetime": ("fitdocs.model", "fit_datetime"),
+    "FileIdentity": ("fitdocs.model", "FileIdentity"),
     "AthleteInputs": ("fitdocs.metrics.types", "AthleteInputs"),
     "ZoneSpec": ("fitdocs.metrics.types", "ZoneSpec"),
     "DerivedMetrics": ("fitdocs.metrics.types", "DerivedMetrics"),
@@ -90,6 +92,7 @@ __all__ = [
     "DerivedMetrics",
     "DeveloperChannel",
     "DeviceInfo",
+    "FileIdentity",
     "FitDecodeError",
     "FitIntegrityError",
     "Lap",

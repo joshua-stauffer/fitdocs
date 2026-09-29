@@ -97,6 +97,10 @@ class Provenance:
     """Source file path, or ``None`` when decoded from an in-memory buffer."""
     decode_errors: tuple[str, ...]
     """Stringified message-level decoder errors, surfaced not swallowed (Req 1.4)."""
+    undocumented_messages: int | None = None
+    """How many messages the file carries whose type the installed FIT profile does
+    not define. ``None`` means "not counted" (only a hand-built provenance omits
+    it); ingest always sets an ``int``, ``0`` included."""
 
 
 DYNAMICS_CHANNELS: Final[tuple[str, ...]] = (
@@ -275,6 +279,31 @@ class DeveloperChannel:
 
 
 @dataclass(frozen=True)
+class FileIdentity:
+    """What a file's own ``file_id`` message declares about it.
+
+    Each field is ``None`` when the file did not record it (or carries no
+    ``file_id`` at all); none is ever defaulted to ``0`` or an empty string.
+    """
+
+    manufacturer: str | None
+    """The profile's name for the manufacturer (``"garmin"``, ``"development"``,
+    ``"stryd"``), or the recorded number as text when the profile names none."""
+    product: int | None
+    """The raw recorded product code; never resolved to a model name."""
+    serial_number: int | None
+    """The recorded device serial number."""
+    time_created: datetime | None
+    """When the file was created, as a timezone-aware UTC instant."""
+
+
+def _absent_file_identity() -> FileIdentity:
+    return FileIdentity(
+        manufacturer=None, product=None, serial_number=None, time_created=None
+    )
+
+
+@dataclass(frozen=True)
 class Activity:
     """The root aggregate: a fully normalized, versioned activity.
 
@@ -321,3 +350,7 @@ class Activity:
     each index-aligned to :attr:`samples`. A read-only mapping that is *empty*
     -- never ``None`` -- when the file records none. The default keeps this
     field additive; the ingest orchestrator populates it explicitly."""
+    file_identity: FileIdentity = field(default_factory=_absent_file_identity)
+    """The identity the file's first ``file_id`` message declares; every value
+    ``None`` when the file records none. The default keeps this field additive;
+    the ingest orchestrator populates it explicitly."""

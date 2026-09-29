@@ -248,6 +248,24 @@ offset is applied only where the file's own description declares it
 The implementing spec is `.kiro/specs/running-dynamics/`; the tests pinning
 each new criterion are listed in this spec's `spec.json` `amendments` array.
 
+## Amendment 4 (2026-09-30): file identity, landed by activity-identity
+
+fit-ingest decoded a file's `device_info` messages but never read its own
+`file_id` message: the manufacturer, product code, serial number and creation
+time a file declares about itself. The activity-identity spec (Phase 8) needs
+them to tell which device or app produced a file and to recognize several
+files of one session, so ingest now exposes them on the activity, and counts
+the messages the installed FIT profile does not define (a further signal of
+what produced a file).
+
+Requirement 4 gains criteria 4.6 and 4.7. **No existing criterion is
+renumbered, and every value the activity exposed before is unchanged for the
+same input bytes**: the change is additive (`Activity.file_identity`,
+`Provenance.undocumented_messages`), `SCHEMA_VERSION` does not move, and the
+golden snapshots gain the two new keys and change no other value. Absence
+follows Requirement 2.5's rule: a value the file did not record is `None`,
+never `0` or an empty string.
+
 ## Introduction
 
 fit-ingest is the foundation layer of fitdocs: a pure library that decodes a
@@ -362,6 +380,8 @@ tables come straight from the model.
 3. When lap messages are present, the fit-ingest library shall expose each lap's recorded summary fields and shall project each lap onto the record stream as an inclusive start/end sample index range derived from matching lap start times to record timestamps.
 4. If a lap cannot be matched to any record samples, the fit-ingest library shall set that lap's sample index range to `None` while preserving its recorded summary fields.
 5. When device information messages are present, the fit-ingest library shall expose the reporting devices — including manufacturer, product, and battery status where recorded — with absent fields as `None`.
+6. _(added by Amendment 4)_ When a file's first file-identity message (`file_id`) records them, the fit-ingest library shall expose its manufacturer (the FIT profile's name, or the recorded number as text when the profile names none), its product as the recorded integer code (never resolved to a model name), its serial number, and its creation time as a timezone-aware UTC instant, each as `None` when the file did not record it or carries no such message.
+7. _(added by Amendment 4)_ The fit-ingest library shall expose, for every decoded file, the number of messages it carries whose message type the installed FIT profile does not define, as an integer (`0` when there are none).
 
 ### Requirement 5: Sport and Modality Detection
 **Objective:** As a downstream consumer, I want a normalized sport label and
