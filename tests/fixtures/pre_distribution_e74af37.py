@@ -1,12 +1,10 @@
 # Vendored baseline for tests/test_preserved_guarantees.py.
 #
 # Provenance: these constants are the literal values read from
-# `pyproject.toml`'s `[project]` table and `src/fitdocs/__init__.py`'s
-# `__all__` at commit e74af37 -- the pre-feature revision this distribution
-# plan's worktree branched from -- extracted with:
+# `pyproject.toml`'s `[project]` table at commit e74af37 -- the pre-feature
+# revision this distribution plan's worktree branched from -- extracted with:
 #
 #     git show e74af37:pyproject.toml
-#     git show e74af37:src/fitdocs/__init__.py
 #
 # Vendored here rather than read from git history at test time, because a
 # depth-limited clone (GitHub Actions' default `actions/checkout` at
@@ -21,8 +19,8 @@
 # Do not regenerate these constants against a moving target (e.g. "whatever
 # HEAD currently has"): they exist to catch a regression relative to the
 # *fixed* pre-feature point. If a future, deliberate change to the pre-1.0
-# dependency set or the public surface is approved, re-vendor from the new
-# baseline commit explicitly -- do not silently edit these to match HEAD.
+# dependency set is approved, re-vendor from the new baseline commit
+# explicitly -- do not silently edit these to match HEAD.
 
 from __future__ import annotations
 
@@ -39,28 +37,3 @@ DEPENDENCIES: tuple[str, ...] = (
 #: `git show e74af37:pyproject.toml`'s `[project].optional-dependencies` --
 #: empty at the pre-feature revision.
 OPTIONAL_DEPENDENCIES: dict[str, list[str]] = {}
-
-#: `git show e74af37:src/fitdocs/__init__.py`'s `__all__`, in the exact
-#: order it was declared (alphabetical, matching the source).
-PUBLIC_ALL: tuple[str, ...] = (
-    "SCHEMA_VERSION",
-    "Activity",
-    "AthleteInputs",
-    "DerivedMetrics",
-    "DeviceInfo",
-    "FitDecodeError",
-    "FitIntegrityError",
-    "Lap",
-    "Modality",
-    "NotFitFileError",
-    "Provenance",
-    "Samples",
-    "SessionSummary",
-    "Sport",
-    "StrengthSet",
-    "TrimpWeighting",
-    "ZoneSpec",
-    "compute_metrics",
-    "fit_datetime",
-    "parse_fit",
-)

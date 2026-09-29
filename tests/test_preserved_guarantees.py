@@ -1,34 +1,37 @@
 """Task 7.2: preserved guarantees, re-asserted at the *feature* level (Req
-10.1, 10.2, 10.4, 10.5).
+10.1, 10.4, 10.5).
 
 This feature (distribution) must cost nothing in behavior: no new runtime
-dependency, no new runtime network access, byte-identical goldens, a stable
-public import surface, and reproducible builds. Every one of these
-properties already has *some* coverage from an earlier task in this plan
-(``tests/test_determinism.py``, ``tests/test_release_artifacts.py``,
-``tests/test_public_api.py``, ``tests/test_version_identity.py``, the golden
-suites). This module does not re-derive that coverage; it adds the one
-assertion each earlier task's own scope did not need: a pin against the
-*pre-feature revision* (``e74af37``, the commit this plan's worktree branched
-from) rather than only against the current baseline in the tree, so a
-regression introduced anywhere across the whole plan -- not just within a
-single task's boundary -- is caught here.
+dependency, no new runtime network access, a stable public import surface,
+and reproducible builds. Every one of these properties already has *some*
+coverage from an earlier task in this plan (``tests/test_determinism.py``,
+``tests/test_release_artifacts.py``, ``tests/test_public_api.py``,
+``tests/test_version_identity.py``, the golden suites). This module does not
+re-derive that coverage; it adds the one assertion each earlier task's own
+scope did not need: a pin against the *pre-feature revision* (``e74af37``,
+the commit this plan's worktree branched from) for the runtime dependency
+set.
+
+**Retired after the feature landed (2026-09-30, maintainer-approved).** Three
+further pins held ``fitdocs.__all__``, every golden-document tree and
+``src/fitdocs/render/`` byte-identical to ``e74af37``. They guarded the
+distribution plan while it was in flight; once it shipped they could only
+red on every later feature that adds a public name, a sample channel or
+a page section (Phase 8, first met by running-dynamics). The standing
+guarantees are held where they always were: ``tests/test_public_api.py``'s
+``_EXPECTED`` for the public surface and each golden suite for its documents.
 
 **Fetch-depth-1 safety (round-1 rejection).** CI checks out at
 ``actions/checkout@v4``'s default ``fetch-depth: 1`` and that workflow
 setting is not being changed for this task. A shallow clone does not carry
 the ``e74af37`` commit object, so ``git show e74af37:...``, ``git diff
 e74af37 HEAD``, and ``git rev-list --max-parents=0`` all fail there even
-though they work in this full-history worktree. Every "compare against the
-pre-feature revision" assertion below instead compares the WORKING TREE
-(via ``git hash-object``, which reads only the file on disk and needs no
-history) against a committed snapshot of what ``e74af37`` held:
+though they work in this full-history worktree. The dependency comparison
+below instead reads a committed snapshot of what ``e74af37`` held:
 ``tests/fixtures/pre_distribution_e74af37.py`` (dependency list, optional-
-dependencies, ``__all__``) and
-``tests/fixtures/pre_distribution_e74af37_blobs.txt`` (golden-tree and
-render-package blob shas). No test in this module reads git history.
+dependencies). No test in this module reads git history.
 
-Six groups below:
+Five groups below:
 
 1. Runtime dependencies unchanged vs the pre-feature snapshot (10.1).
 2. No new runtime network access from the two runtime surfaces this feature
@@ -36,14 +39,10 @@ Six groups below:
    CLI paths that read it (10.4).
 3. Reproducibility re-asserted at the feature level: two full builds of HEAD,
    member names AND per-member digests (10.5).
-4. The public import surface is unchanged vs the pre-feature snapshot, and
-   neither new package module is reachable from the package root -- as an
+4. Neither new package module is reachable from the package root -- as an
    ``__all__`` member, as a runtime attribute, or as a top-level import
    (10.1, policy's documented-is-public rule).
-5. Golden documents (every golden tree in the repository) and the render
-   package are byte-identical, via committed blob-sha snapshots, vs the
-   pre-feature revision (10.2).
-6. Observable: a build attempted offline against the real ``uv`` cache
+5. Observable: a build attempted offline against the real ``uv`` cache
    first, falling back to a real-network warm-up and offline retry only
    when that cache turns out cold, plus a subprocess import check.
 """
@@ -72,10 +71,6 @@ from fitdocs.version import UNKNOWN_VERSION, tool_version, version_display
 from tests.test_determinism import _no_socket
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-_BLOB_MANIFEST_PATH = (
-    REPO_ROOT / "tests" / "fixtures" / "pre_distribution_e74af37_blobs.txt"
-)
-
 runner = CliRunner()
 
 
@@ -335,7 +330,7 @@ def test_reproducibility_assertion_is_sensitive_to_a_different_epoch(
 
 
 # ---------------------------------------------------------------------------
-# 4. Public import surface unchanged; two new modules unreachable (10.1)
+# 4. Two new modules unreachable from the package root (10.1)
 # ---------------------------------------------------------------------------
 
 #: The two package modules this feature added/extended -- ``fitdocs.version``
@@ -353,12 +348,6 @@ _NEW_MODULE_RUNTIME_NAMES = (
     "skill_file",
     "skill_files",
 )
-
-
-def test_public_all_unchanged_from_pre_feature_snapshot() -> None:
-    import fitdocs
-
-    assert sorted(fitdocs.__all__) == sorted(pre_distribution.PUBLIC_ALL)
 
 
 def test_two_new_package_modules_absent_from_all_and_unreachable_at_runtime() -> None:
@@ -444,144 +433,7 @@ def test_import_hit_scanner_is_non_vacuous() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 5. Golden documents and the render package: byte-identical vs the
-#    pre-feature snapshot (10.2)
-# ---------------------------------------------------------------------------
-
-#: Every golden-document tree in the repository (confirmed via
-#: ``find tests -type d -name '*golden*'``). Document composition OUTSIDE
-#: ``src/fitdocs/render`` -- ``history/``, ``plans/``, ``declaration.py``,
-#: ``docio.py``, ``sync.py`` -- is covered here, by the golden-tree pin, not
-#: by the render-package pin below.
-_GOLDEN_DIRS = (
-    "tests/golden",
-    "tests/declaration_golden",
-    "tests/history/golden",
-    "tests/plans/golden",
-    "tests/render/charts/golden",
-    "tests/render/golden_docs",
-)
-
-#: The rendering package this feature must not have touched (structure.md's
-#: `render/` layer: per-sport markdown composition and chart generation).
-_RENDER_DIR = "src/fitdocs/render"
-
-
-def _load_blob_manifest() -> dict[str, str]:
-    manifest: dict[str, str] = {}
-    for line in _BLOB_MANIFEST_PATH.read_text().splitlines():
-        if not line or line.startswith("#"):
-            continue
-        path, sha = line.split("\t")
-        manifest[path] = sha
-    assert manifest, "blob manifest parsed as empty -- wrong file or format"
-    return manifest
-
-
-def _live_blob_shas(dirs: tuple[str, ...]) -> dict[str, str]:
-    """``git hash-object`` of every tracked or untracked-but-not-ignored
-    file under ``dirs`` in the WORKING TREE -- no history read, works
-    identically at fetch-depth 1.
-
-    Enumerated via ``git ls-files --cached --others --exclude-standard``
-    (round-2 finding: a plain ``rglob`` walk does not honor ``.gitignore``,
-    so a macOS developer's stray ``tests/golden/.DS_Store`` -- itself
-    gitignored -- falsely reddened the golden-tree pin). ``--others`` keeps
-    an added-but-not-yet-``git add``-ed file participating in the file-set
-    check (the same reason ``tests/test_version_identity.py``'s repo-wide
-    scan uses ``-co`` rather than a bare ``git ls-files``); ``--exclude-
-    standard`` drops anything ``.gitignore`` excludes, `__pycache__/` and
-    `.DS_Store` included.
-    """
-    result = subprocess.run(
-        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", *dirs],
-        cwd=str(REPO_ROOT),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    relative_paths = sorted(line for line in result.stdout.splitlines() if line)
-    assert relative_paths, "the walk found no files -- looking at the wrong directory"
-
-    hash_result = subprocess.run(
-        ["git", "hash-object", "--stdin-paths"],
-        input="\n".join(relative_paths) + "\n",
-        cwd=str(REPO_ROOT),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    shas = hash_result.stdout.splitlines()
-    assert len(shas) == len(relative_paths)
-    return dict(zip(relative_paths, shas, strict=True))
-
-
-def test_golden_trees_are_byte_identical_to_the_pre_feature_snapshot() -> None:
-    manifest = _load_blob_manifest()
-    base = {
-        path: sha
-        for path, sha in manifest.items()
-        if any(path.startswith(f"{prefix}/") for prefix in _GOLDEN_DIRS)
-    }
-    assert base, "manifest has no golden-tree entries -- wrong manifest or prefixes"
-
-    live = _live_blob_shas(_GOLDEN_DIRS)
-
-    assert set(live) == set(base), (
-        "golden-tree file set changed vs the pre-feature snapshot (added/removed)"
-    )
-    assert live == base
-
-
-def test_render_package_is_byte_identical_to_the_pre_feature_snapshot() -> None:
-    manifest = _load_blob_manifest()
-    base = {
-        path: sha
-        for path, sha in manifest.items()
-        if path.startswith(f"{_RENDER_DIR}/")
-    }
-    assert base, "manifest has no render-package entries -- wrong manifest or prefix"
-
-    live = _live_blob_shas((_RENDER_DIR,))
-
-    assert set(live) == set(base), (
-        "render-package file set changed vs the pre-feature snapshot (added/removed)"
-    )
-    assert live == base
-
-
-def test_blob_manifest_is_compared_not_the_live_file_against_itself(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """Falsifies the vacuous-introspection failure mode: corrupt one
-    committed sha in a SCRATCH COPY of the manifest and confirm the
-    comparison goes red against the (unchanged) live tree -- proving the
-    assertion reads the committed snapshot, not merely the live file
-    compared against a hash freshly recomputed from itself (round-1's
-    explicit ask: "the fixture constant edited")."""
-    real_manifest = _BLOB_MANIFEST_PATH.read_text()
-    lines = [
-        line for line in real_manifest.splitlines() if line and not line.startswith("#")
-    ]
-    assert lines, "manifest has no data lines -- wrong file"
-    path, sha = lines[0].split("\t")
-    corrupted_sha = ("f" if sha[0] != "f" else "0") + sha[1:]
-    corrupted_lines = [f"{path}\t{corrupted_sha}", *lines[1:]]
-
-    scratch_manifest = tmp_path / "corrupted_blobs.txt"
-    scratch_manifest.write_text("\n".join(corrupted_lines) + "\n")
-
-    monkeypatch.setattr(
-        "tests.test_preserved_guarantees._BLOB_MANIFEST_PATH", scratch_manifest
-    )
-    manifest = _load_blob_manifest()
-    live = _live_blob_shas(_GOLDEN_DIRS + (_RENDER_DIR,))
-
-    assert manifest[path] != live[path]  # the corruption really diverges
-
-
-# ---------------------------------------------------------------------------
-# 6. Observable: the build stays offline once its uv cache is warm
+# 5. Observable: the build stays offline once its uv cache is warm
 # ---------------------------------------------------------------------------
 
 
