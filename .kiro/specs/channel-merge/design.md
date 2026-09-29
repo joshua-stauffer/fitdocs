@@ -196,10 +196,19 @@ version.
   composed activity, so donated dynamics reach it with no change there.
 - Fixtures reuse running-dynamics' developer-field encoding helper in
   `tests/fixtures/builder.py` (its task 1.2) and `_file_id`'s keyword-only
-  `manufacturer`/`product`/`time_created` parameters. If the helper cannot
-  express a cycling session, this spec appends one keyword-only, defaulted
-  `sport` parameter to it (default = its current value, so no existing byte
-  moves); no second Encoder sequence is written.
+  `manufacturer`/`product`/`time_created` parameters; no second Encoder
+  sequence for developer fields is written. A file that carries no developer
+  field (the Garmin ride original) may instead be built from the existing
+  `builder.encode(mesgs)` primitives. The fixtures need the helper to control,
+  per file: the laps (count and per-lap values, heart rate included), the
+  session's start, elapsed time and distance, the session developer fields
+  (HealthFit's `SESSION UUID`), and the sport (a cycling session). For each of
+  these the published helper does not already take, this spec appends to it
+  one keyword-only parameter whose default is the helper's current behaviour
+  -- `laps`, `session_start`, `session_elapsed_s`, `session_distance_m`,
+  `session_developer_fields`, `sport` -- and pins in
+  `tests/fixtures/test_builder.py` that the helper's default output bytes are
+  unchanged. Any other missing capability is a stop-and-report.
 
 **intervals-connector (wave 2 peer)**
 - Its "Garmin <model>" attribution is decided in render. Under the default
@@ -373,10 +382,21 @@ tests/
 - DOC_VERSION literal pins (grep decides at landing):
   `tests/render/test_frontmatter.py:44, 101`,
   `tests/metrics/test_sources.py:2270`.
+- `tests/render/test_frontmatter.py:317-324`
+  (`test_doc_context_field_order_has_user_frontmatter_after_map_data`), which
+  pins `DocContext`'s trailing field order: moved with the appended
+  `channel_provenance`, keeping its intent (`user_frontmatter` directly after
+  `map_data`; `channel_provenance` last), from whatever shape
+  `activity-identity` leaves it in.
 - `tests/declaration_golden/*` — regenerated for the contract version.
 - Tests whose page now legitimately carries composed channels or a Channel
   Sources section (identity's e2e tests with multi-file pages,
   `tests/test_sync.py` re-export cases): updated by task 4.1, each listed.
+  Tests whose load or benchmark outcome for a multi-file page moves because
+  the passes compose (CLI-level runs chain the load pass after every `sync`
+  and drain, `src/fitdocs/cli.py:321-324, 358-360`): updated by task 4.3, each
+  listed, including one task 4.1 already updated (the two tasks are
+  sequential).
 - `pyproject.toml` `[tool.mypy].files` — the new typed test modules.
 - Spec records: `.kiro/specs/wiki-contract/{requirements.md,design.md,spec.json}`,
   `.kiro/specs/workout-docs/{requirements.md,spec.json}`,
@@ -949,6 +969,9 @@ def _render_activity(roles: PageRoles, parsed: Mapping[str, Activity]) -> Compos
   a positive control: every scanned module has an allowlist entry and the walk
   found `types.py`; once the package is complete (task 3.1) the scanned set
   equals the allowlist's seven modules exactly.
+- The reverse direction, in `tests/render/test_provenance.py`: no module under
+  `fitdocs/render` imports `fitdocs.compose.archive`, and `render/provenance.py`
+  imports from `fitdocs.compose` only `types` and `alignment`.
 - `tests/test_contract_consumers.py`: `fitdocs.compose.archive` in
   `CONVERTED_MODULES` and `CONTRACT_BINDINGS`.
 - `pyproject.toml` `[tool.mypy].files`: every new typed test module, each
@@ -1072,10 +1095,14 @@ Returns `(healthfit, stryd)` bytes of one synthetic run.
   power at instant `t + L_k` equal the Stryd values at `t` in stretch `k`, with
   `(L_1..L_5) = (+1, +1, 0, +1, 0)`; heart rate at `t - 1` equals the Stryd
   heart rate at `t`; step length = Stryd's / 1.008 (rounded to the field's
-  resolution); cadence = Stryd's ± 1 alternating; vertical oscillation, stance
-  time, vertical ratio, position and altitude; no stance time balance and no
-  developer channels; five laps with heart rate; session start `S`, elapsed
-  `E`, distance `D`.
+  resolution); cadence = Stryd's ± 1 alternating; enhanced speed; vertical
+  oscillation, stance time, vertical ratio, position and altitude; no stance
+  time balance and no developer channels; five laps with heart rate; session
+  start `S`, elapsed `E`, distance `D`. It records every non-dynamics channel
+  the Stryd file records (heart rate, power, distance, speed, cadence), so the
+  channels the Stryd file records and the copy does not are all
+  running-dynamics channels, and no metric of the run is fed by a donated
+  channel.
 - Values within each channel are pairwise distinct across a stretch, so a
   one-sample misplacement changes every compared value; the HealthFit distance
   and power at the first instant of a +1 stretch equal no Stryd value of that

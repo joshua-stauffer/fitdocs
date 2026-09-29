@@ -1,0 +1,629 @@
+# Implementation Plan
+
+## Upstream Prerequisites
+
+- **Both upstream specs must be merged to `main` before task 1.1 starts**:
+  `activity-identity` (roles, the page task, `_render_activity(roles, parsed)`,
+  `DocContext.identity`, the identity fixtures in `tests/fixtures/identity.py`,
+  the wiki-contract Amendment 4 section) and `running-dynamics` (the 22-channel
+  `Samples`, `DYNAMICS_CHANNELS`, `Activity.record_developer_fields`, the
+  Running Dynamics section, `stryd_run_fit_bytes` and the developer-field
+  encoding helper in `tests/fixtures/builder.py`). A task that finds a
+  published upstream shape different from design.md § "Cross-spec seams" stops
+  and reports rather than adapting silently.
+- **Siblings in flight** (`connectors`, `intervals-connector`, `docs-site`):
+  no code dependency; the shared files are listed below.
+
+**Hard rules for every task**
+
+- No module under `src/fitdocs/compose/` imports `fitdocs.sync`,
+  `fitdocs.render`, `fitdocs.load`, `fitdocs.metrics`, `fitdocs.performance`,
+  `fitdocs.history`, `fitdocs.plans`, `fitdocs.audit`, `fitdocs.cli`,
+  `fitdocs.tiles`, `fitdocs.inbox`, `fitdocs.connectors`, `yaml`, `urllib`,
+  `socket` or `time`, or names a clock function. Only `compose/archive.py`
+  touches the filesystem or imports `fitdocs.contract`, `fitdocs.layout` or
+  `fitdocs.ingest`. No module under `src/fitdocs/render/` imports
+  `fitdocs.compose.archive`.
+- No alignment constant (`PAUSE_GAP_S`, `MAX_LAG_S`, `MIN_MATCHED_SAMPLES`,
+  `ALIGNMENT_KEYS`) is changed to make a test pass; a fixture the rule does not
+  read as intended is re-shaped so the test's premise holds.
+- Absent is `None`: no task writes a default, a `0`, an interpolated or a
+  carried-forward value for a sample no file recorded at that instant.
+- No fixture holds personal data: every `.fit` input is synthesized through
+  `tests/fixtures/builder.py`, `tests/fixtures/identity.py` or
+  `tests/fixtures/merge.py`; no value comes from the athlete's archive.
+- No module under `src/fitdocs` other than `contract.py` names `uuid` as an
+  identifier (`tests/test_contract_consumers.py:502-529`); no registered
+  contract consumer defines a name in `FORBIDDEN_LOCAL_NAMES` (`:149-163`) or
+  spells a `FORBIDDEN_LITERALS` value (`:298`).
+- `DOC_VERSION` and `CONTRACT_VERSION` each advance by **one from the value on
+  the branch when the task runs**; after the final rebase the implementer checks
+  each equals `main`'s value plus one and re-pins if a sibling landed a bump
+  first. No task hard-codes a resulting number.
+- No Stryd web or service address anywhere (Req 9.3): before a task is done,
+  `grep -rniE "https?://[^ )]*stryd" <files the task changed>` prints nothing.
+  Stryd developer-field names are file-format knowledge and are fine.
+- Mutations run through `uv run pytest` only (`change-protocol.md`
+  § Fixture Discrimination); each named mutation is applied, observed red,
+  reverted, observed green, and recorded in the task's Implementation Notes.
+  A task that cannot make a listed mutation red stops and reports it as
+  UNPINNED rather than weakening the assertion's wording.
+- Every task that creates a typed test or fixture module type-checks it clean
+  with `uv run mypy <its paths>`; task 6.1 registers them all in
+  `pyproject.toml` (the file's own rule, `pyproject.toml:97-98`), so parallel
+  tasks never share `pyproject.toml`.
+- Every task's Observable includes `uv run ruff check <files it changed>` and
+  `uv run ruff format --check <files it changed>` clean, so lint and format
+  debt never accumulates for the final task.
+- A task that finds it needs a new runtime dependency, a new command, a new
+  owned path, a frontmatter key, or a change to an upstream seam's shape beyond
+  what design.md § "Cross-spec seams" authorizes stops and reports.
+
+## Shared source files
+
+Each file below has more than one writer in this plan; its writers are
+sequential (never both `(P)` at once).
+
+- `src/fitdocs/compose/types.py` -- 1.2 only; later tasks import it and never
+  edit it (a missing field is a stop-and-report).
+- `tests/compose/builders.py` -- 1.2 only; later tasks build activities with it
+  and keep any extra helper local to their own test module.
+- `tests/compose/test_boundary.py` -- 1.2 (created, subset positive control),
+  3.1 (tightened to the exact seven-module set).
+- `src/fitdocs/render/views.py` -- 3.3 only. `src/fitdocs/render/__init__.py`
+  -- 3.2 only. `src/fitdocs/sync.py` -- 4.1 only.
+  `src/fitdocs/load/engine.py`, `src/fitdocs/performance/engine.py` -- 4.3
+  only.
+- `src/fitdocs/contract.py` -- 5.1 (`DOC_VERSION`), 5.2 (`CONTRACT_VERSION`).
+- `tests/render/test_frontmatter.py` -- 3.2 (the `DocContext` field-order pin),
+  5.1 (the `DOC_VERSION` literal pins).
+- `tests/render/test_golden_docs.py` and `tests/render/golden_docs/*` -- 3.3
+  (the `composed_run` case), 5.1 (every golden's `doc_version` line).
+- `tests/test_compose_e2e.py` -- 4.1 (seam section), 4.2 (composed-page
+  sections), 5.1 (aged-page section); each edits only its own headed section.
+- Pre-existing tests of multi-file pages -- 4.1 updates those whose page body
+  moves; 4.3 updates those whose load or benchmark outcome moves. 4.3 runs after
+  4.2 and may amend a test 4.1 already updated, listing it.
+- `pyproject.toml` -- 6.1 only.
+
+**Cross-spec shared files** (append a field, a row, an entry or a block; never
+rewrite or reorder a sibling's):
+- `src/fitdocs/render/__init__.py` (`DocContext`: identity appended
+  `identity`; this plan appends `channel_provenance`), `src/fitdocs/render/views.py`
+  (`intervals-connector` adds its attribution line).
+- `src/fitdocs/contract.py` (`DOC_VERSION`, `CONTRACT_VERSION`; every Phase 8
+  spec advances), `tests/test_contract_consumers.py`, the golden directories,
+  `tests/declaration_golden/*`.
+- `docs/ownership-contract.md`, `CHANGELOG.md` `[Unreleased]`.
+- `.kiro/specs/wiki-contract/requirements.md` Amendment 4 (created by
+  `activity-identity`; `connectors` also appends), and the amendment records
+  of `workout-docs` (running-dynamics and intervals-connector also amend it):
+  numbers are taken on the branch at landing.
+- `tests/fixtures/builder.py`: this plan appends to running-dynamics'
+  developer-field encoding helper only the keyword-only, defaulted parameters
+  design.md § "Cross-spec seams" names (`laps`, `session_start`,
+  `session_elapsed_s`, `session_distance_m`, `session_developer_fields`,
+  `sport`), each only if the merged helper lacks that capability, each default
+  equal to the helper's current behaviour.
+
+## Test File Ownership
+
+- `tests/fixtures/merge.py`, `tests/fixtures/test_merge_fixtures.py`, and the
+  `tests/fixtures/test_builder.py` pin for any appended helper parameter → 1.1.
+- `tests/compose/__init__.py`, `tests/compose/builders.py`,
+  `tests/compose/test_boundary.py` → 1.2 (3.1 tightens `test_boundary.py`).
+- `tests/compose/test_stretches.py` → 2.1; `test_donation.py` → 2.2;
+  `test_alignment.py` → 2.3; `test_composer.py` → 2.4 (unit section) and 2.5
+  (measured-pair section; 2.5 adds its own headed section and edits nothing of
+  2.4's).
+- `tests/compose/test_archive.py`, the `fitdocs.compose.archive` entries in
+  `tests/test_contract_consumers.py` → 3.1.
+- `tests/render/test_provenance.py` (section and reverse-direction guard),
+  `tests/render/test_frontmatter.py:317-324` (the field-order pin) → 3.2.
+- `tests/render/test_golden_docs.py` (`composed_run`), a views section in
+  `tests/render/test_provenance.py` → 3.3.
+- `tests/test_compose_e2e.py` → 4.1 (seam section), 4.2 (arrival order, regen,
+  drain, ride average heart rate, filename and `uuid`), 5.1 (aged page).
+- The pre-existing multi-file page tests whose body moves → 4.1; whose load or
+  benchmark outcome moves → 4.3.
+- `tests/test_compose_passes_e2e.py` → 4.3.
+- `tests/compose/test_contract_docs.py`, `tests/declaration_golden/*`
+  (regenerated) → 5.2.
+- DOC_VERSION literal re-pins (`tests/render/test_frontmatter.py:44, 101`,
+  `tests/metrics/test_sources.py:2270`, grep decides) → 5.1.
+
+---
+
+- [ ] 1. Foundation: measured-shape fixtures and the package skeleton
+
+- [ ] 1.1 Synthesize the run, trio and ride fixtures with the measured alignment shapes
+  - First, check the merged developer-field helper in `tests/fixtures/builder.py`
+    against what these fixtures need through it: per-file laps (count and
+    values, heart rate included), session start, elapsed time and distance,
+    session developer fields (HealthFit's `SESSION UUID`), and a cycling sport.
+    For each capability it lacks, append the keyword-only parameter design.md
+    § "Cross-spec seams" names for it, defaulting to the helper's current
+    behaviour, and pin in `tests/fixtures/test_builder.py` that the helper's
+    default output bytes are unchanged. Any other missing capability: stop and
+    report. The Garmin ride original, which carries no developer field, may be
+    built from the existing `builder.encode(mesgs)` primitives instead
+  - In a new fixture module, build the run pair (a HealthFit-shaped copy and a
+    Stryd-shaped file of one synthetic run), the run trio (the pair plus a
+    second Stryd file with a later creation time and form power one watt higher
+    everywhere) and the ride pair (a Garmin-shaped original without heart rate
+    and a HealthFit-shaped copy carrying heart rate, with keyword options for
+    the copy's power and a whole-hour shift), exactly as design.md
+    § "Supporting References" specifies: five stretches with lags +1, +1, 0,
+    +1, 0 on distance and power; heart rate at −1; three trailing base samples;
+    step length 0.8% higher and cadence ±1 in the extra; the HealthFit copy
+    recording every non-dynamics channel the Stryd file records (heart rate,
+    power, distance, speed, cadence); pairwise-distinct values within every
+    channel of every stretch; the ride's identical start, ~99% copy power
+    coverage, per-sample distance that never agrees with the original's
+  - Shape self-tests decode the raw messages (no fitdocs code between) and
+    assert every premise later tasks rely on: per stretch, the HealthFit
+    distance and power at `t + L_k` equal the Stryd values at `t` for every
+    compared sample and at no other lag in −2..+2 for at least half of them;
+    heart rate agrees at −1 and at neither 0 nor +1; the three trailing
+    instants; the step-length ratio and cadence offsets; the channels the Stryd
+    file records and the HealthFit copy does not are a subset of
+    `DYNAMICS_CHANNELS`; the Stryd file has no position; lap counts differ
+    (Stryd 4, HealthFit 5, HealthFit's with heart rate); the ride copy's power
+    is missing on exactly one sample and equals the original's at the same
+    instant elsewhere; in every ride stretch, at every lag in −2..+2, the copy's
+    distance matches the original's (to 0.005 m) at fewer than
+    `MIN_MATCHED_SAMPLES` samples or at no more than half of the compared ones,
+    while the session totals are within 5 m; building each fixture twice gives
+    identical bytes
+  - Assert that `activity-identity`'s rule joins each pair and the trio
+    (`pair_evidence` between every two files' session keys is not `None`: STRICT
+    for the run files and the unshifted ride, SHIFTED for the shifted ride), and
+    that under the default precedence the HealthFit copy ranks above both Stryd
+    files, `stryd_b` above `stryd_a`, and the Garmin original above the ride
+    copy
+  - Discrimination: no production code is involved; for each self-test, record
+    in Implementation Notes the fixture edit that makes it fail (e.g. setting
+    `L_3` to +1 reds the per-stretch lag self-test; dropping speed from the
+    HealthFit copy reds the subset self-test)
+  - Observable: `uv run pytest tests/fixtures/` green; `uv run mypy
+    tests/fixtures/merge.py tests/fixtures/test_merge_fixtures.py` clean; ruff
+    check and format clean on the changed files; no file under `src/` changed;
+    every pre-existing fixture test unchanged
+  - _Requirements: 9.1, 9.3_
+
+- [ ] 1.2 Create the composition package, its result types and its boundary guard
+  - Create the package as a marker that re-exports nothing, and its types
+    module with the stretch lag, extra alignment, placement, source
+    contribution, channel provenance and composition values exactly as
+    design.md § ComposeTypes states (frozen, typed, `SourceKind` from
+    `activity-identity`)
+  - Add the hand-built activity builders the pure unit tests use: an activity
+    from a recorded start, a list of per-sample offsets and keyword channel
+    arrays (every omitted channel all-`None`), with optional laps, session
+    values and file identity; no FIT bytes
+  - Add the import-closure guard over `src/fitdocs/compose/`: a per-module
+    allowlist for all seven planned modules (design.md § Allowed Dependencies),
+    the forbidden-import and clock-name checks, and a positive control that
+    every scanned module has an allowlist entry and the walk found the types
+    module
+  - Pin the package marker's `__all__` as empty and that the root package
+    re-exports no composition name
+  - Named mutations: add `import fitdocs.sync` to the types module (the guard
+    reds); point the walk at an empty directory (the positive control reds)
+  - Observable: `uv run pytest tests/compose/` green; `uv run mypy
+    src/fitdocs/compose tests/compose` clean; ruff check and format clean; the
+    full suite still green with no existing test edited
+  - _Requirements: 7.2_
+
+- [ ] 2. Core: the pure composition rules
+
+- [ ] 2.1 (P) Put samples on a whole-second clock and cut stretches at the pauses of either file
+  - Instants: each sample's recorded start plus its offset as a whole POSIX
+    second; `None` when the activity records no start or the instant is not a
+    whole second
+  - Resume instants: the first instant after every gap of more than 1 second
+  - Stretches of an extra: cut points are the resume instants of the extra and
+    of the base; a sample belongs to the stretch numbered by how many cut
+    points are at or before its instant; samples without an instant belong to
+    none
+  - Tests (hand-built, pairwise-distinct instants): a 1 s step never splits and
+    a 2 s step does; a base pause splits an otherwise continuous extra run; an
+    extra pause the base lacks splits it; the sample exactly at a resume
+    instant opens the new stretch; a non-whole offset has no instant; two
+    activities with different starts and equal offsets have different instants
+  - Named mutations: cut on the extra's pauses only; `>=` for the gap test;
+    count cut points with `<`; compute instants from the offset without the
+    start; round a non-whole instant instead of dropping it
+  - Observable: `uv run pytest tests/compose/test_stretches.py` green with each
+    mutation observed red; `uv run mypy` clean on the module and its test; ruff
+    check and format clean
+  - _Requirements: 3.1, 3.2_
+  - _Boundary: Stretches_
+
+- [ ] 2.2 (P) Define the donation units and the base-wins rule
+  - Donation units derived from the model's per-sample channel set at import:
+    every channel but the time offset, in field order, each its own unit except
+    latitude and longitude, which form one position unit at latitude's place
+  - The base keeps a unit when it records any channel of it at any sample (the
+    base-wins and partial-coverage rule in one test); an extra's placed values
+    are, per base sample, the extra's value at the placed index or `None`
+  - Tests: the units cover exactly every channel but the time offset, and
+    contain every running-dynamics channel name (the positive control that the
+    upstream channel set is enumerated); position is one unit of two; the base
+    keeps a channel recorded on 51% of samples and one recorded at a single
+    sample; placed values follow a non-identity placement and leave unplaced
+    base samples `None`, never `0`
+  - Named mutations: require every sample recorded for the base to keep a unit
+    (the 51% test reds); split position into two units; drop one channel from
+    the units (the coverage test reds); index placed values by base position
+    instead of the placement; fill unplaced samples with `0`
+  - Observable: `uv run pytest tests/compose/test_donation.py` green with each
+    mutation observed red; the module imports only the types module, the model
+    and the standard library (the boundary guard stays green); ruff check and
+    format clean
+  - _Requirements: 2.1, 2.2, 2.4, 2.5, 2.6, 2.8_
+  - _Boundary: Donation_
+
+- [ ] 2.3 Establish each stretch's lag and place an extra on the base's timeline
+  - The alignment keys (distance at 0.01 m resolution, then power at 1 W), the
+    lag window −2..+2 s, the minimum of 5 matched samples, and a one-line source
+    for each constant, as design.md § Alignment tabulates
+  - The whole-hour shift from the two recorded starts, reusing identity's shift
+    and start-tolerance constants by import
+  - The lag rule: the unique lag with the most matches, at least 5 of them and
+    more than half of the samples compared at that lag; distance first, then
+    power; otherwise the stretch falls back to lag 0 and records no key
+  - Placement: stretches and samples in file order; a sample lands on the first
+    base sample holding its instant plus the stretch's lag, when that base
+    sample exists and nothing was placed there before; otherwise it is dropped
+  - Tests (hand-built): two stretches with lags +1 and 0 each placed by their
+    own lag; heart rate matching at −1 against distance at +1 (the distance lag
+    wins); distance establishing +1 where power would give 0; power used when
+    the extra has no distance; a stationary stretch (distance constant) falls
+    back; power matching 5 of 20 compared samples falls back; 4 matches fall
+    back; duplicated base instants take the first index; two samples claiming
+    one base sample (a base pause cutting a continuous extra run) keep the
+    first; the hour shift at k = 1 and 36 applied, at 37 not, 1 s off a whole
+    hour applied and 2 s off not
+  - Named mutations: apply the first stretch's lag to every stretch; lead the
+    keys with heart rate; put power before distance; drop the uniqueness
+    condition; drop the majority condition; set the minimum to 0; place at
+    instant minus lag; take the last index of a duplicated instant; let a later
+    sample overwrite an earlier placement; drop the hour shift; allow k up to 37
+  - Observable: `uv run pytest tests/compose/test_alignment.py` green with every
+    mutation observed red; a test asserts the alignment keys are exactly
+    distance then power; ruff check and format clean
+  - _Requirements: 2.6, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9_
+  - _Depends: 2.1_
+
+- [ ] 2.4 Compose one activity and its channel provenance from a base and ranked extras
+  - With no extra, return a composition whose activity is the base object
+    itself and whose provenance lists the base's recorded channels
+  - Otherwise: open units are those the base does not keep; each extra in rank
+    order that records any open unit's channel is aligned against the base
+    alone, and every still-open unit whose placed values record every channel
+    of the unit is donated from it and closed; donated channels replace the
+    base's in a copy of the base's samples; everything else (laps, sets,
+    devices, session values, session and record developer fields, provenance,
+    sport, start) is the base's
+  - Provenance: the base's contribution lists the channels it records; each
+    extra's lists the channels donated from it, with its alignment only when it
+    donated; every contribution carries its content hash, source kind and
+    recorded manufacturer
+  - Tests (hand-built, pairwise-distinct values): the composed offsets equal the
+    base's; a channel the base records stays the base's; a base channel on 51%
+    of samples keeps its gaps while an extra records all of it; two extras
+    recording one open channel donate the higher-ranked one's values; an extra
+    whose values land on no base instant is skipped for the next extra; position
+    comes whole from the one extra recording both coordinates when a
+    higher-ranked extra records only latitude; a donated balance keeps its
+    values where the base's stance time is `None`; laps, session values and
+    record developer fields equal the base's; an extra donating nothing has no
+    channels and no alignment; the same inputs compose to equal results twice
+  - Named mutations: skip the base-keeps check; require every sample for the
+    base to keep a unit; fill base gaps (keep the base's values and fill its
+    `None` samples from the extra's placed values; the 51% test reds); iterate
+    extras worst first; donate a unit when the extra records any (not every)
+    channel of it; decide donation on the extra's raw values instead of its
+    placed values; take the extra's laps; take the extra's session summary;
+    carry the extra's record developer fields; insert a pass that nulls a
+    donated balance where the composed stance time is `None`; return a rebuilt
+    activity instead of the base object when there is no extra; attach an
+    alignment to an extra that donated nothing
+  - Observable: `uv run pytest tests/compose/test_composer.py` green with every
+    mutation observed red; `uv run mypy` clean; ruff check and format clean
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.10, 5.2, 5.4, 7.1_
+  - _Depends: 2.2, 2.3_
+
+- [ ] 2.5 Prove the composition on the measured-shape fixtures
+  - In its own headed section of the composer tests, parse the run pair, the
+    run trio and the ride pair from `tests/fixtures/merge.py` and compose them
+  - Run pair: at every stretch's first and last placed base sample, the composed
+    form power equals the Stryd value at that instant minus the stretch's own
+    lag; the stretches report key `distance` five times and lags +1, +1, 0, +1,
+    0; the three trailing base samples hold `None` in every donated channel;
+    composed step length and cadence equal the HealthFit values; composed laps
+    equal the HealthFit laps; every donated channel is a running-dynamics
+    channel, and `compute_metrics` of the composition equals that of the base
+    alone in every field (no metric is fed by a dynamics channel)
+  - Ride pair: heart rate is donated with every stretch aligned by power at lag
+    0; the composition's average heart rate from `compute_metrics` equals the
+    mean of the donated values while the base alone has none; every metric
+    field not computed from heart rate equals the base-only value (the test
+    names the heart-rate-fed fields it excludes, read from the metrics code);
+    with no copy power every stretch falls back; with the copy shifted +1 h the
+    alignment records `hour_shift_s == 3600` and heart rate lands on the same
+    base samples as unshifted
+  - Partial coverage on measured shapes: the run pair's HealthFit copy with its
+    heart rate trimmed to 51% of samples composes to exactly the trimmed heart
+    rate, gaps `None`
+  - Named mutations, with Req 9.2's five mapped in Implementation Notes: apply
+    one lag to every stretch (M1); skip the base-keeps check (M2); lead the keys
+    with heart rate (M3); take the extra's laps (M4); fill base gaps from the
+    extra's placed values (M5, the trimmed heart-rate test reds); require every
+    sample for the base to keep a unit (the trimmed test reds too); return the
+    base without donating (the average-heart-rate assertion reds); drop the
+    hour shift (the shifted ride's heart rate reds)
+  - Observable: the measured-pair section green with every mutation observed
+    red; ruff check and format clean
+  - _Requirements: 2.1, 2.2, 3.3, 3.5, 3.6, 3.8, 5.1, 5.3, 9.1, 9.2_
+  - _Depends: 1.1_
+
+- [ ] 3. The archive adapter and the Channel Sources section
+
+- [ ] 3.1 (P) Compose a page's listed archived files for the passes that hold only `sources`
+  - Given the data root, a page's listed refs and the activity the caller
+    already parsed from the last ref: extras are the other refs in reverse list
+    order; a ref that does not resolve to an archive ref, repeats the base's or
+    an earlier extra's content hash, or names a missing archive file is
+    skipped; each remaining one is parsed, with read and decode errors
+    propagating; the result is the composition of the base and those extras
+  - Register the module as a contract consumer binding only the archive-ref
+    reader, and tighten the boundary guard so the scanned set equals the seven
+    allowlisted modules exactly
+  - Tests over temporary data roots holding fixture archives: two listed extras
+    compose in reverse list order (distinct values decide); a missing file, a
+    traversal-shaped ref and a foreign ref are skipped; a ref duplicating the
+    base's hash and a ref duplicating an earlier extra's hash each leave
+    `provenance.extras` without that duplicate (asserted on its length and
+    hashes, since a duplicate never donates); a truncated extra raises the
+    decode error; a page listing only its base returns the base object
+  - Named mutations: keep list order instead of reversing; stop skipping missing
+    files; drop the duplicate-of-the-base skip; drop the duplicate-of-an-earlier-
+    extra skip; catch and skip decode errors; define a local `_sha_of_ref` (the
+    consumer guard reds)
+  - Observable: `uv run pytest tests/compose/ tests/test_contract_consumers.py`
+    green with each mutation observed red; the boundary guard reports exactly
+    seven modules; ruff check and format clean
+  - _Requirements: 6.3, 7.2_
+  - _Boundary: ArchiveComposition, Guards_
+  - _Depends: 2.4_
+
+- [ ] 3.2 (P) Render the Channel Sources section from a composition's provenance
+  - Append the provenance field to the render context (defaulting to `None` so
+    every existing construction stays valid), and move the field-order pin
+    `tests/render/test_frontmatter.py:317-324` from whatever shape
+    `activity-identity` left it in, keeping its intent: `user_frontmatter`
+    directly after `map_data`, and `channel_provenance` the last field
+  - The section body exactly as design.md § ChannelSourcesSection states: the
+    fixed sentence, the File / Role / Kind / Channels / Alignment table, one row
+    for the base then one per extra in rank order, archive refs from the layout
+    helper, kind text, labels in model order with position once as GPS, the
+    absence marker for an extra that supplies nothing, the alignment text with
+    its optional whole-hour prefix and zero counts omitted; `None` when there is
+    no provenance or no extra
+  - The channel label table for every channel but the time offset; tests hold
+    it equal to the coverage table's labels and the Running Dynamics section's
+    labels for every channel those name, and its key set equal to the model's
+    channels
+  - The reverse-direction guard (design.md § Guards): no module under
+    `fitdocs/render` imports `fitdocs.compose.archive`, and the provenance
+    module imports from `fitdocs.compose` only `types` and `alignment`, and
+    nothing from `fitdocs.contract`, `render.sections` or `render.dynamics`; a
+    positive control that the render walk scanned the provenance module
+  - Tests with hand-built compositions: the exact text for a run composition,
+    for a shifted ride with one stretch (singular), for a mix of distance, power
+    and fallback stretches, and for a non-donating extra; `None` for a
+    provenance without extras
+  - Named mutations: render when the provenance has no extras; drop the label
+    de-duplication (GPS twice); flip the shift sign; print zero counts; always
+    write "stretches"; delete one label (the completeness test reds); change a
+    label's case (the equality test reds); add `import fitdocs.compose.archive`
+    to the provenance module (the reverse-direction guard reds); insert the new
+    field before `user_frontmatter` (the field-order pin reds)
+  - Observable: `uv run pytest tests/render/` green with each mutation observed
+    red; `uv run mypy` clean; ruff check and format clean
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.8_
+  - _Boundary: ChannelSourcesSection, ViewWiring_
+  - _Depends: 2.4_
+
+- [ ] 3.3 Place the section in every view and add the composed golden
+  - The run/ride, strength and generic views each append the Channel Sources
+    section immediately after Device & Data Quality when it has a body
+  - Add a `composed_run` golden case: the run pair composed and rendered with
+    its provenance and its two refs, pinned timezone and athlete inputs as the
+    other goldens; regenerate only the new golden files
+  - Tests: in each of the three views a composed context places the section as
+    the last `##` section, directly after Device & Data Quality; every
+    pre-existing golden stays byte-identical and unregenerated
+  - Named mutations: place the section before Device & Data Quality (the
+    placement tests red); append it in the run/ride view only (the strength and
+    generic tests red)
+  - Observable: `uv run pytest tests/render/` green; `git diff --stat
+    tests/render/golden_docs/` shows only the new `composed_run` files; ruff
+    check and format clean
+  - _Requirements: 4.6, 4.7, 8.2_
+
+- [ ] 4. Integration: the engine and the two passes
+
+- [ ] 4.1 Render every page from its composition, and move the upstream tests that pin a base-only body
+  - The render seam composes the base with the extras in the roles' rank order
+    and returns the composition; the page task keeps computing identity, uid
+    and stem from the base's own parse before the call, and takes metrics, the
+    map plan and the render context's activity and provenance from the
+    composition; `sync`, `drain`, `regen` and the settle pass all reach it
+  - Run the full suite; update every pre-existing test whose multi-file page
+    body now legitimately carries donated channels or a Channel Sources section
+    (activity-identity's end-to-end tests of multi-file pages, any
+    `tests/test_sync.py` re-export assertion on exact body text, identity's
+    Req 5.8 "an extra contributes nothing" pin, a spy on the seam's return
+    value) to the composed expectation, never weakening an identity rule; list
+    each updated test in Implementation Notes
+  - In the seam section of the composed-sync e2e module: the run pair synced
+    gives one page whose Running Dynamics section has form power and whose
+    Channel Sources section names both files; a single-file page is
+    byte-identical to its render without provenance
+  - Named mutations: compose from the base alone in the seam (the form-power
+    test reds); pass no provenance to the render context (the Channel Sources
+    assertion reds)
+  - Observable: the full `uv run pytest` green; the updated-test list recorded;
+    ruff check and format clean
+  - _Requirements: 1.1, 5.1, 5.4_
+  - _Depends: 3.3_
+
+- [ ] 4.2 Prove composed pages end to end: arrival order, regeneration, drain and summaries
+  - In their own sections of the composed-sync e2e module, over temporary data
+    roots with the default precedence
+  - The run trio synced in every arrival order, in one run and across three,
+    gives byte-identical pages and assets with form power from `stryd_b`;
+    `regen` reproduces the synced bytes; `drain` of the run pair gives the same
+    page as `sync`; the ride pair's page shows the average heart rate of the
+    donated values and its Channel Sources section states power alignment
+  - The page's filename and `uuid` equal those the HealthFit copy alone
+    produces: a regression check held by `activity-identity`'s ordering,
+    recorded as reached by no mutation of this plan
+  - Named mutations: take extras in arrival (`parsed`) order instead of rank
+    order in the seam (the trio and regen tests red); compute metrics from the
+    base instead of the composition (the average-heart-rate test reds)
+  - Observable: the full `uv run pytest` green with each mutation observed red;
+    ruff check and format clean
+  - _Requirements: 1.3, 1.6, 5.1, 7.1_
+
+- [ ] 4.3 Score load and derive benchmarks from the composed activity
+  - The load pass keeps resolving and parsing the page's last listed file as
+    today, then composes it with the page's other listed files through the
+    archive adapter before metrics and arbitration; the benchmark pass does the
+    same inside its existing read and decode failure handling; neither base
+    resolver changes, and the shared resolver test stays green unedited
+  - Run after 4.2 (not in parallel with 4.1 or 4.2): the CLI chains the load
+    pass after every sync and drain (`src/fitdocs/cli.py:321-324, 358-360`), so
+    composing in the passes can move the load or benchmark outcome of any
+    pre-existing multi-file page test (identity's, load's, performance's, e.g.
+    `tests/performance/test_engine.py:869-906`); run the full suite, update each
+    one to the composed expectation, and list it in Implementation Notes
+  - E2E over data roots (the ride pair synced, then the pass run directly): a
+    spy on the load pass's metrics call and one on the benchmark pass's
+    derivation call each receive an activity whose heart rate equals the donated
+    values; the ride page's load is computed with heart rate available; with the
+    ride copy's archive file removed after the sync, both passes compose from
+    the base alone and neither fails; with the copy's archive truncated, each
+    pass reports the page as a per-document failure and the page is
+    byte-unchanged; a page whose load was computed before the copy arrived
+    keeps its load region byte-identical through a later sync and its chained
+    load pass
+  - Update the two modules' docstrings that state the pass re-parses "the last
+    `sources` entry" to say it composes the listed files by the page's rule
+  - Named mutations: skip the adapter in the load pass (its spy test reds); skip
+    it in the benchmark pass (its spy test reds); catch the adapter's decode
+    error in the load pass (the load failure test reds); call the adapter
+    outside the benchmark pass's existing `try` (the benchmark truncated-extra
+    failure test reds, the error escaping the pass)
+  - Observable: the full `uv run pytest` green with each mutation observed red;
+    the updated-test list recorded; ruff check and format clean
+  - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
+  - _Depends: 3.1_
+
+- [ ] 5. Contract advance, published statements and spec records
+
+- [ ] 5.1 Advance the document-format version and bring every pin with it
+  - Read `DOC_VERSION` on the branch rebased onto `main`, advance it by one and
+    append its docstring paragraph (pages with extras take the channels their
+    base lacks and gain a Channel Sources section; pages without extras change
+    only this line); record the old and new values in Implementation Notes
+  - Move every literal pin of the old value (a repository grep for
+    `doc_version: <old>` and `DOC_VERSION == <old>` decides; at design time
+    `tests/render/test_frontmatter.py:44, 101` and
+    `tests/metrics/test_sources.py:2270`); regenerate every golden document; the
+    diff of each pre-existing golden is its `doc_version` line alone
+  - In the composed-sync e2e module's own section, record
+    `_PRE_CHANNEL_MERGE_DOC_VERSION` as the old value with a provenance
+    docstring (the precedent is `_PRE_RUNNING_DYNAMICS_DOC_VERSION`); age the
+    run pair's page to it and remove its Channel Sources section, assert the
+    precondition `DOC_VERSION > _PRE_CHANNEL_MERGE_DOC_VERSION`, see
+    `fitdocs check` report it out of date, `fitdocs regen` restore the section
+    and the current version, and a second `fitdocs check` report it current
+  - Confirm `MANAGED_KEYS` is unchanged (`git diff` of `contract.py` touches
+    only `DOC_VERSION` and its docstring)
+  - Named mutations: advance by two (the moved pins red); revert the advance (the
+    aged-page precondition reds)
+  - Observable: full `uv run pytest` green; each pre-existing golden's diff is
+    one line; ruff check and format clean
+  - _Requirements: 8.1, 8.2, 8.5_
+  - _Depends: 4.1, 4.2, 4.3_
+
+- [ ] 5.2 Advance the contract version and publish the composition guarantees
+  - Advance `CONTRACT_VERSION` by one from the branch's value, as Req 8.4
+    states, with its docstring paragraph; regenerate the declaration goldens.
+    If the rule ratified for the Phase 8 batch at landing is not "+1 per
+    lander" (research.md, Decision: Contract version rule), stop and report it
+    as a requirements amendment to Req 8.4 rather than following it
+  - In the ownership contract's section on source files and roles, add the
+    subsection on channels a page takes from its extras (design.md
+    § ContractDocs): donation and partial coverage, position, what stays the
+    base's, the alignment table (constants, values, sources), the whole-hour
+    shift, the Channel Sources section, no frontmatter key, the two passes
+    composing by the page's rule, and that `fitdocs load --recompute` rescores a
+    page whose composition changed after its load was computed; the header
+    version, the "what changed at this version" paragraph, and the overwrite
+    semantics of `regen`, `load` and `derive-benchmarks`
+  - A docs pin holds the published alignment table equal to the constants and
+    their sources
+  - `CHANGELOG.md` `[Unreleased]` `### Changed`: the generated document
+    contract change with the actions `fitdocs regen` and
+    `fitdocs load --recompute`, no version number, docs by project URL only
+  - Named mutations: change the lag window to 3 (the docs pin reds); leave the
+    contract version unadvanced (the ownership-contract header pin reds)
+  - Observable: full `uv run pytest` green, `tests/test_changelog.py`,
+    `tests/test_ownership_contract.py` and `tests/test_docs_guarantees.py`
+    included; ruff check and format clean
+  - _Requirements: 6.6, 8.3, 8.4, 8.6_
+
+- [ ] 5.3 (P) Land the amendment records and roadmap annotations
+  - wiki-contract: append this spec's paragraph to Amendment 4 and one criterion
+    to Requirement 2 (next free number, marked as added by Amendment 4); a
+    DocumentContract note in its design; an `amendments` entry in its spec.json
+  - workout-docs: a new amendment appending one criterion each to
+    Requirements 3, 6 and 13 (design.md § SpecRecords); training-load: a new
+    amendment appending one criterion to Requirement 9; performance-benchmarks:
+    a new amendment appending one criterion to Requirement 1; each with its
+    spec.json entry; numbers are the next free ones on the branch
+  - Roadmap Phase 8 Existing Spec Updates: annotate the wiki-contract and
+    workout-docs lines with the parts landed here; tick a line only if every
+    part it names is on `main`
+  - Observable: `git diff` of every amended spec adds lines only (nothing
+    renumbered or reworded); every spec.json parses; `/kiro-spec-status` clean
+    for the four amended specs
+  - _Requirements: 8.3, 8.4_
+  - _Boundary: SpecRecords_
+
+- [ ] 6. Validation
+
+- [ ] 6.1 Classify every criterion, re-run the named mutations and validate the whole change
+  - For each of the 54 criteria record PINNED (test and mutation),
+    PRESERVED-ONLY (the existing test) or UNPINNED (with the mutation run that
+    shows it), per `change-protocol.md` § The completeness half; 7.3 is
+    PRESERVED-ONLY by the frozen-dependency tests
+    (`tests/test_determinism.py:672-712`, `tests/test_packaging.py:503-519`);
+    1.6 is recorded as held by activity-identity
+  - Re-run M1-M22 and M15b (design.md § Testing Strategy) on the finished tree
+    through `uv run pytest` and record the test each reds; Req 9.2's five must
+    each red at least one test
+  - Register every new typed test and fixture module in `pyproject.toml`
+    `[tool.mypy].files`
+  - Run the prose-claim grep from `change-protocol.md` over every changed test
+    file and re-test each surviving claim; run the no-Stryd-address grep over
+    every changed file
+  - Observable: the classification table in Implementation Notes, and
+    `uv run pytest && uv run ruff check . && uv run ruff format --check . &&
+    uv run mypy` green
+  - _Requirements: 7.3, 9.2, 9.3_
