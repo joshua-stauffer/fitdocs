@@ -1,16 +1,16 @@
 {
   "feature_name": "connectors",
   "created_at": "2026-09-29T15:21:42Z",
-  "updated_at": "2026-09-29T15:52:00Z",
+  "updated_at": "2026-09-29T17:05:00Z",
   "language": "en",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {
