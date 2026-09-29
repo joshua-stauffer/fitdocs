@@ -360,7 +360,7 @@ never co-varies two keys a rule distinguishes.
     mypy tests/identity/test_matching.py` clean
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.11_
 
-- [ ] 2.3 (P) Rank a page's files by precedence and read the precedence setting
+- [x] 2.3 (P) Rank a page's files by precedence and read the precedence setting
   - Add the precedence entries (a kind, or `original:<manufacturer>`), the
     default `original:garmin`, `phone_copy`, `original`, `unknown` (maintainer
     decision 2026-09-29), resolution of a configured list (it replaces the
