@@ -402,7 +402,7 @@ never co-varies two keys a rule distinguishes.
   - _Requirements: 2.5, 2.6, 2.7, 2.8, 5.1, 5.2, 5.3, 5.5, 7.7_
   - _Boundary: PrecedenceAndRoles, IdentitySettings_
 
-- [ ] 2.4 (P) Plan a run's files onto pages and find duplicate pages
+- [x] 2.4 (P) Plan a run's files onto pages and find duplicate pages
   - Add the page record (`path`, `sources`, `session_uuid`, `key`), the page
     index with the exact match reproducing `find_document`'s semantics (session
     UUID first, then source-list membership, each first in path order), the run
