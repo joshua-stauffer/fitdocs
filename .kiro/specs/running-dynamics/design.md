@@ -151,6 +151,13 @@ A cross-spec reviewer reconciles these against the siblings' own designs.
   - It advances `DOC_VERSION` for source roles. See the version rule below.
   - It may amend `fit-ingest` (identity fields). Amendment and criterion
     numbers are taken at landing time (next free), never assumed.
+  - Shared fixture seam, append-only: this spec gives
+    `tests/fixtures/builder.py`'s `_file_id` keyword-only, defaulted
+    `manufacturer`, `product` and `time_created` parameters beside its
+    positional serial (defaults are today's values, so no existing fixture's
+    bytes change). `activity-identity` may use them for its `file_id`
+    fixtures; either spec may append parameters, and neither changes a
+    default.
 - **`intervals-connector` (wave 2)**: owns `_product_name`
   (`ingest/summary.py:372-385`) and attribution. This spec edits
   `ingest/summary.py` only in the developer-field functions (currently
@@ -280,6 +287,9 @@ tests/
 - `src/fitdocs/contract.py` — `DOC_VERSION` and a docstring paragraph.
 - `tests/ingest/test_summary.py` — `_developer_value` import repointed to
   `fitdocs.ingest.developer.apply_declared_scale`; new session-level cases.
+- `tests/ingest/test_records.py` — the heart-rate placeholder and the
+  recorded-zero cases (power, cadence, speed, distance, altitude,
+  temperature).
 - `tests/test_public_api.py` — `_EXPECTED` gains `DeveloperChannel`.
 - `tests/render/test_golden_docs.py` — `FIXTURES` (`:102-108`) gains
   `stryd_run` and `run_native_dynamics`.
@@ -774,9 +784,18 @@ def dynamics_section(ctx: DocContext) -> tuple[str, tuple[Asset, ...]] | None: .
 ### Tests
 
 #### StrydFixtures (`tests/fixtures/builder.py`)
-- `stryd_run_fit_bytes()` and `run_native_dynamics_fit_bytes()`; shapes in
-  Supporting References. Deterministic constants only, built with the shared
-  private helpers and `garmin_fit_sdk.Encoder`, like every other family.
+- `stryd_run_fit_bytes(*, manufacturer: str = "stryd")` and
+  `run_native_dynamics_fit_bytes()`; shapes in Supporting References.
+  Deterministic constants only, built with the shared private helpers and
+  `garmin_fit_sdk.Encoder`, like every other family.
+- `_file_id` gains keyword-only, defaulted `manufacturer`, `product` and
+  `time_created` parameters (the shared seam noted under Cross-spec seams).
+- One helper encodes a small running activity whose records, and optionally
+  its session, carry developer fields from a caller-given description list
+  (name, base type, definition number, optional units, scale, offset, native
+  message number, developer data index), so every synthetic developer-field
+  test shares one correct Encoder sequence (fields registered before the
+  first write).
 
 ## Data Models
 
@@ -825,9 +844,13 @@ Every assertion names the production mutation it dies on
   (including a value needing 9 digits); declared scale after rounding;
   `application_ids`; record-level key pairing, provenance, omission,
   shadowed definition, last-described name.
+- **Unit (`tests/ingest/test_records.py`)**: heart rate 0 is `None` and 1 is
+  kept; a record's recorded 0 power, cadence, speed, distance, altitude and
+  temperature are kept; the Stryd fixture's heart-rate placeholders and the
+  derived average heart rate.
 - **Unit (`tests/ingest/test_dynamics.py`)**: table partitions; each native
   field; each Stryd name and a near-miss name; placeholder and gate
-  behavior; a recorded 0 kept for power, cadence and speed; heart rate 0.
+  behavior.
 - **Unit (`tests/render/test_dynamics.py`)**: rows, order, formatting,
   negative zero, coverage; chart precedence and axis; omission; run-only.
 - **Golden (`tests/render/test_golden_docs.py`)**: `stryd_run` and
