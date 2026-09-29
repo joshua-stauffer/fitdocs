@@ -102,7 +102,7 @@
 - `README.md` and `docs/configuration.md`: 6.2 (network sentences) before
   8.2/8.3 (the rest). Sequential by group.
 
-- [ ] 1. Foundation: the package's leaves, the User-Agent, the ledger path, and the shared drain helper
+- [x] 1. Foundation: the package's leaves, the User-Agent, the ledger path, and the shared drain helper
 
 - [x] 1.1 Scaffold the connectors package and its test package, isolate every connector test from the network and the developer's credentials, and add the secret type and the redactor
   - Create the package with a module docstring stating its boundary and an
@@ -136,7 +136,7 @@
     `tests/connectors` in scope
   - _Requirements: 10.1, 10.2, 10.3_
 
-- [ ] 1.2 Add the typed failures with their next steps, and the atomic writer
+- [x] 1.2 Add the typed failures with their next steps, and the atomic writer
   - The failure vocabulary: the six authentication-failure kinds, the
     authentication failure (kind, the service's message, an optional
     retry-after), the instance-ending connector error, the not-connected
@@ -952,3 +952,4 @@
 - 1.3: `fitdocs.version.user_agent()` / `PROJECT_URL` is the one User-Agent; an AST pin forbids any `"fitdocs/"` string constant in `tiles.py`, so the transport (2.1) must call `user_agent()`, never re-spell it. Ledger path: `fitdocs.layout.connector_ledger_path(data_root, instance)` -> `.fitdocs/connectors/<instance>.toml`.
 - 1.4: the helper is `cli._run_drain_passes(data_root, *, tz, athlete, force, retry_quarantined, no_prompt, command)`. Two AST call-site pins (`tests/test_cli.py::test_apply_load_call_sites_pass_no_default_calculator_argument`, `tests/test_cli_plan.py::test_run_plan_pass_is_loaded_exactly_four_times`) count `_run_load_pass`/`_run_plan_pass`/`_run_drain_passes` calls per function -- 5.2/5.3 adding a `_run_drain_passes` call in `pull_command` must update both pins (controller ruling from 1.4).
 - Recurring review species (tasks 1.1-1.4): fixtures confounded by a coincidental order (prefix / alphabetical), self-referential compares against an imported constant, and docstrings naming a mutation's red set that was never observed. Every one cost a round.
+- 1.2: `connectors.errors` (AuthFailureKind, AuthFailure, ConnectorError, NotConnectedError, ConnectorSettingsError, NEXT_STEPS, next_step) and `connectors._atomic.write_atomic` (0o600 from creation via mkstemp, fsync, cleanup on BaseException). Reviewer mutation harnesses revert from their own snapshots -- a later round reusing an earlier round's harness clobbers fixes; always take fresh snapshots.
