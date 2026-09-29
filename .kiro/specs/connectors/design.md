@@ -342,9 +342,9 @@ tests/connectors/
   `test_settings_schema_subsection_names_all_six_tables` (`:270`), this spec
   is the first of `activity-identity`/`connectors` to land and renames it to
   the count-free `test_settings_schema_subsection_names_every_table`, with
-  count-free messages; if `activity-identity` renamed it first, the name
-  stays and this spec re-pins only the literal list (settings-table count
-  rule under CompatibilityDocs).
+  count-free messages and comments; if `activity-identity` renamed it
+  first (making them count-free too), the name stays and this spec re-pins
+  only the literal list (settings-table count rule under CompatibilityDocs).
 - `tests/test_docs_guarantees.py` — `_REQUIRED_ENTRY_POINT_LINKS` gains
   `"connectors.md"` (the delivery-removal carve-out and the settings-table
   pins live in the new `tests/connectors/test_docs.py`, so parallel doc tasks
@@ -1641,9 +1641,10 @@ each name identical to its defining module's object.
   to a number fixed now; the first of the two to land renames
   `test_settings_schema_subsection_names_all_six_tables`
   (`tests/test_compatibility_policy.py:270`) to the count-free
-  `test_settings_schema_subsection_names_every_table` with count-free
-  messages, and the second lander re-pins (count and literal list) after
-  its rebase.
+  `test_settings_schema_subsection_names_every_table` and makes its
+  messages and comments count-free, so a count survives only in the docs
+  prose; after its rebase the second lander keeps the name, re-pins the
+  test's literal list and advances the prose count from `main`'s value.
 - `docs/compatibility.md`: the inbox governed-contract item and its
   subsection name the delivery-removal carve-out (additive); the table
   count at `:24` and `:64` advances per the rule above, adding
@@ -1739,10 +1740,12 @@ each name identical to its defining module's object.
   `distribution`, `inbox` and `route-maps` lines already exist (the
   controller added `inbox` and `route-maps` and widened `distribution` at
   the spec batch); at landing, tick each line whose every named part is on
-  `main` — all three name only this spec — annotated with the merge SHA;
-  the `wiki-contract` line is ticked only when all three Amendment 4 parts
-  are on `main`, otherwise annotated "(connectors part landed at
-  `<sha>`)".
+  `main` — all three name only this spec; the `wiki-contract` line is
+  ticked only when all three Amendment 4 parts are on `main`, otherwise
+  annotated "(connectors part landed)". The merged commit writes no SHA,
+  since it cannot know its own merge SHA (cross-spec ruling 2026-09-29);
+  a SHA, if recorded at all, goes in a roadmap-only follow-up commit on
+  `main` after the merge (precedent `e16acc3`).
 
 ## Data Models
 
@@ -1988,10 +1991,11 @@ stated for the cross-spec reviewer.
   each), the wiki-contract Amendment 4 section (created by the first of the
   three landers under the joint title; each appends its own paragraph and
   next-free-number criteria), and the settings-table count (each advances
-  it by one from `main`'s; the first renames the count-free test, rule
-  under CompatibilityDocs). Shared files, append-only and rebased keeping
-  both sides: `src/fitdocs/cli.py` (identity adds `_identity_settings()`,
-  `precedence=` and the `HoldRecordError` mapping; this spec extracts
+  it by one from `main`'s; the first makes the test count-free in name,
+  messages and comments, rule under CompatibilityDocs). Shared files,
+  append-only and rebased keeping both sides: `src/fitdocs/cli.py`
+  (identity adds `_identity_settings()`, `precedence=` and the
+  `HoldRecordError` mapping; this spec extracts
   `_run_drain_passes` and adds two commands — whichever lands second
   carries `precedence` through the helper and adds the `[identity]` and
   hold-record checks to `pull --sync`'s preflight, see CliCommands
@@ -2041,4 +2045,5 @@ activity-identity bullet above. Also shared with it: `contract.py`'s
 - The inbox, distribution and route-maps amendments this spec lands as
   records each have a Phase 8 Existing Spec Updates line (the controller
   added `inbox` and `route-maps` and widened `distribution` at the spec
-  batch); task 9.1 ticks them at landing, annotated with the merge SHA.
+  batch); task 9.1 ticks them at landing (no SHA in the merged commit;
+  cross-spec ruling 2026-09-29).

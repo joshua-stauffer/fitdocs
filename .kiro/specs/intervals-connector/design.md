@@ -656,6 +656,29 @@ def attribution_line(
   inputs give the same string (8.6).
 - The caller is `render/views.py::_head`; it passes donor device tuples only
   once `channel-merge` is on `main` (ViewHead; Cross-spec seams).
+- HealthFit copies (TBC-9; cross-spec ruling R15): the rule reads only the
+  index-0 device, and what a real HealthFit copy records there is
+  unconfirmed. The pins take `channel-merge`'s synthetic choice, a
+  non-Garmin (`development`) device: a page whose only file is a HealthFit
+  copy gets no line (8.3), and a HealthFit copy donating a channel to a
+  Garmin original adds "and other devices" (8.4; the ride-pair pin). If
+  the live check records a Garmin device at index 0 instead, the rule and
+  its wording stand but these consequences change: a HealthFit-only page of
+  a Garmin ride is attributed `Data source: Garmin <model>` (8.1); a
+  HealthFit copy donating heart rate to a Garmin original is
+  Garmin-labelled itself, so the ride-pair page names Garmin only, with no
+  "and other devices" (`Data source: Garmin <model>` when the copy records
+  the same model, its label kept once); and `channel-merge`'s
+  `composed_run` page, whose base is its HealthFit run copy, would read
+  `Data sources: Garmin <model> and other devices` rather than no line.
+  That is a contradicted TBC item, handled by task 5.2's contradiction
+  path: this marker is amended and new numbered repair tasks
+  (6.1, 6.2, …) re-point the ride-pair pin, `channel-merge`'s HealthFit
+  fixtures and the `composed_run` golden, each with its own named
+  mutations. A confirming finding changes no pin; the sibling fixtures that
+  record `garmin` there (`activity-identity`'s HealthFit species,
+  `running-dynamics`' `run_native_dynamics`, whose golden carries the line)
+  remain stated synthetic variants, and 5.2 records whether to align them.
 
 #### ViewHead (`src/fitdocs/render/views.py`)
 - `_head(ctx) -> list[str]`: `[f"# {_title(ctx)}"]` plus
@@ -712,7 +735,8 @@ def attribution_line(
   device is not Garmin gains no line — `running-dynamics`' `stryd_run`, whose
   fixture writes its index-0 `device_info` with manufacturer `stryd`, is
   that case once it is on `main`. A composed golden (`channel-merge`'s
-  `composed_run`) carries whatever line its base's and donors' devices give.
+  `composed_run`) carries no `Data source` line (`channel-merge`'s run pair
+  records no Garmin device).
   No golden count is written anywhere in this spec's tasks or tests. A
   sibling's recorded "pre-this-spec" constant (e.g. running-dynamics'
   `_PRE_RUNNING_DYNAMICS_DOC_VERSION`) keeps its value. No number is written in
@@ -724,7 +748,7 @@ def attribution_line(
 
 | Field | Detail |
 |-------|--------|
-| Intent | Confirm TBC-1..8 and the brief's three questions on a real account |
+| Intent | Confirm TBC-1..9 and the brief's three questions on a real account |
 | Requirements | 9.1, 9.2, 9.3, 9.4, 9.5 |
 
 Run by the maintainer only, with their own key, in a temporary directory
@@ -749,7 +773,12 @@ outside the repository and the data root, deleted afterwards:
    file's count of undocumented messages — decoded keys that consist only of
    digits, `activity-identity`'s definition (TBC-8).
 6. `/file` for an activity without a file, if one exists (TBC-6).
-7. Append the findings to `research.md` "Live check findings": dates of the
+7. Locally, with no intervals.icu request (TBC-9; cross-spec ruling R15):
+   open one HealthFit copy of a Garmin ride and one HealthFit run copy from
+   the athlete's own files, read-only where they are, and record each
+   file's `device_info` index-0 manufacturer and product (shape only; the
+   files are never copied into the repository or committed).
+8. Append the findings to `research.md` "Live check findings": dates of the
    check and of the viewed vocabulary, statuses, field names, vocabulary
    values, booleans and counts only — never an id, athlete id, activity date,
    name, location, file or key (9.3). A contradicted TBC item amends
@@ -1106,8 +1135,9 @@ any real account.
   `Data sources: Garmin <model> and other devices`) with the non-donating
   pin beside it (ViewHead). This spec's side is task
   2.3 (or 5.1, if `channel-merge` lands while this branch is open). Its
-  `composed_run` golden carries whatever line its base's and donors' devices
-  give. Both advance `DOC_VERSION` by one when each lands.
+  `composed_run` golden carries no `Data source` line (`channel-merge`'s run
+  pair records no Garmin device). Both advance `DOC_VERSION` by one when
+  each lands.
 - **`docs-site` (Phase 9 peer)** — this spec adds no docs page and does not
   edit `docs/index.md`; it edits only its section of `docs/connectors.md`.
 
@@ -1139,7 +1169,8 @@ each view's block list, and adds the donor wiring when it lands second of
 - **Model display names**: the profile identifier (`edge_1040`) is shown
   verbatim; a maintained display-name table would read better and is not in
   the SDK.
-- **Live-check contradictions** (TBC-1..8): each has a bounded blast radius
-  (one mapping function and its tests) and must be resolved before
+- **Live-check contradictions** (TBC-1..9): each has a bounded blast radius
+  (TBC-1..8 one mapping function and its tests; TBC-9 the attribution pins
+  and fixtures GarminAttribution names) and must be resolved before
   completion.
 - **Real use waits for `activity-identity`** (roadmap constraint; documented).

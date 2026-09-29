@@ -211,7 +211,7 @@
 
 | Option | Description | Strengths | Risks / Limitations | Notes |
 |--------|-------------|-----------|---------------------|-------|
-| Attribute by the recording device (selected) | The device the file names as its creator (`device_index` 0) decides; its manufacturer `garmin` means Garmin data | Uses today's model only; a function of the bytes; HealthFit and Stryd files (creator `development`, `stryd`) are not attributed | A Garmin-written file with no `device_info` at all is not attributed | No dependency on `activity-identity` landing first |
+| Attribute by the recording device (selected) | The device the file names as its creator (`device_index` 0) decides; its manufacturer `garmin` means Garmin data | Uses today's model only; a function of the bytes; HealthFit and Stryd files (creator `development`, `stryd`) are not attributed (a HealthFit copy's index-0 device is TBC-9) | A Garmin-written file with no `device_info` at all is not attributed | No dependency on `activity-identity` landing first |
 | Attribute by `file_id` manufacturer | `FileIdentity.manufacturer == "garmin"` | The canonical "who wrote the file" | Needs `activity-identity`'s `FileIdentity`, and a second resolution of `file_id`'s product | Rejected: couples two wave specs' merge order |
 | Attribute by delivery route | Mark pages whose file came through intervals.icu | Mirrors the terms' literal scope | Arrival order changes the page; a hand-exported Garmin original is unattributed; the ledger would reach render | Rejected: breaks "arrival order never changes the page" |
 | Attribute by listing `device_name` | intervals.icu's forum advice | Available in the listing | Needs the connector to write page metadata; unavailable for hand drops | Rejected: connectors never know pages |
@@ -344,6 +344,18 @@ Assumptions the design takes from the public description and marks
 - **TBC-8**: the intervals.icu copy carries fewer undocumented messages than
   the device's own original of the same ride (`activity-identity`'s
   within-kind rank), unless the two are byte-identical.
+- **TBC-9** (local, no intervals.icu request; cross-spec ruling R15): a
+  HealthFit copy's recording device (`device_info` index 0) is not made by
+  Garmin. The attribution pins rely on it: the ride-pair pin (a HealthFit
+  copy donating heart rate to a Garmin original adds "and other devices")
+  and `channel-merge`'s `composed_run` golden carrying no `Data source`
+  line; `channel-merge`'s HealthFit copies record `development` there.
+  `activity-identity`'s HealthFit species and `running-dynamics`'
+  `run_native_dynamics` fixture record `garmin` there; every one of these
+  choices is a synthetic variant until this item is checked. The check:
+  open one HealthFit copy of a Garmin ride and one HealthFit run copy
+  locally and record each file's `device_info` index-0 manufacturer and
+  product (shape only; the files are never committed).
 
 ## Live check findings
 _Not yet run (2026-09-29): the maintainer's `.env` holds no intervals.icu

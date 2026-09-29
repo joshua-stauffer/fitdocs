@@ -105,12 +105,14 @@
     Sequence[tuple[Mapping[str, object], Mapping[int, object]]]`,
     `session_fields: Mapping[int, object] | None = None`, `serial: int =
     _DEV_FIELD_RUN_SERIAL`, `manufacturer: str = "garmin"`, `product: int =
-    1`, `time_created: int = FIT_TIMESTAMP_BASE`, `device_manufacturer: str =
-    "garmin"`. Session developer fields are supported through
-    `session_fields` (position in `descriptions` -> value on the session;
-    `None` writes none). It assembles its default message list in one place
-    (no lap message; one running session spanning the records) and hands it
-    to one private Encoder routine that registers every field with
+    1`, `time_created: int = FIT_TIMESTAMP_BASE`, `device_manufacturer: str |
+    None = None`, where `None` follows `manufacturer` (cross-spec ruling R17,
+    matching `activity-identity`'s `session_fit_bytes`). Session developer
+    fields are supported through `session_fields` (position in
+    `descriptions` -> value on the session; `None` writes none). It
+    assembles its default message list in one place (no lap message; one
+    running session spanning the records) and hands it to one private
+    Encoder routine that registers every field with
     `Encoder.add_developer_field` before the first write, as
     `_encode_run_with_developer_fields` does, so `channel-merge` can later
     append `laps`, `session_start`, `session_elapsed_s`,
@@ -155,15 +157,21 @@
     decodes each given name at its given key and definition number; given
     `session_fields`, the session message carries
     each given value under its description's key, and without it the session
-    carries no developer field; `device_manufacturer="stryd"` puts `stryd` on
-    device index 0 while the default decodes `garmin`. Building each fixture
-    twice yields identical bytes
+    carries no developer field; `device_manufacturer="stryd"` alone puts
+    `stryd` on device index 0 and leaves `garmin` in `file_id`;
+    `manufacturer="stryd"` alone (`device_manufacturer` left `None`) puts
+    `stryd` in both `file_id` and device index 0; the all-default output
+    decodes `garmin` in both. Building each fixture twice yields identical
+    bytes
   - Named mutations (in the builder, the code these self-tests test): put the
     hard-coded `"garmin"` back in `_device_info` (the Stryd `device_info`
     pin reds); write `manufacturer` into the Stryd fixture's `file_id` only
     (the `manufacturer="garmin"` equality pin reds on `device_info_mesgs`);
     drop `session_fields` from the helper's session message (the
-    session-field pin reds); ignore `device_manufacturer` (its pin reds)
+    session-field pin reds); ignore `device_manufacturer`, always writing
+    `manufacturer` to device index 0 (the `device_manufacturer="stryd"` pin
+    reds); default `device_manufacturer` back to `"garmin"` (the
+    `manufacturer="stryd"`-alone pin reds on device index 0)
   - Done: the three builders exist and their self-tests pass; the existing
     fixture tests and every golden stay green unchanged, which is the
     evidence that the new `_file_id` and `_device_info` defaults move no

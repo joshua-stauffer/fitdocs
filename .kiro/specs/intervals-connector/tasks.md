@@ -106,7 +106,7 @@
 
 - [ ] 1.1 Run the live viability check against the athlete's own intervals.icu account and record what it finds
   - Performed by the maintainer with their own key, following design.md
-    "LiveCheckProcedure" steps 1-7, in a temporary directory outside the
+    "LiveCheckProcedure" steps 1-8, in a temporary directory outside the
     repository and the data root, deleted afterwards; the key is read without
     echo and never written anywhere. No agent performs, records or ticks this
     task
@@ -114,9 +114,14 @@
     from Garmin directly, not through Strava; the original is a gzip FIT
     carrying power, pedal dynamics and the full record set; whether its bytes
     equal the Garmin Connect export's original) and confirms or contradicts
-    each of TBC-1 to TBC-8
+    each of TBC-1 to TBC-9
+  - TBC-9, locally and with no intervals.icu request (design.md
+    "LiveCheckProcedure" step 7; cross-spec ruling R15): open one HealthFit
+    copy of a Garmin ride and one HealthFit run copy locally and record the
+    `device_info` index-0 manufacturer/product of each (shape only, never
+    committed)
   - Observable: `research.md` "Live check findings" names the check date and
-    each of TBC-1 to TBC-8 as confirmed or contradicted, with shapes,
+    each of TBC-1 to TBC-9 as confirmed or contradicted, with shapes,
     vocabulary values, booleans and counts only — no activity or athlete id,
     date of an activity, name, location, file or key. This record is the only
     place a TBC item is marked; 5.2 reads it and does not re-mark it
@@ -249,9 +254,10 @@
     Garmin — `running-dynamics`' `stryd_run`, whose fixture writes its
     index-0 device with manufacturer `stryd`, if it is on the branch — gains
     no line; a composed golden (`channel-merge`'s `composed_run`, if on the
-    branch) carries whatever line its base's and donors' devices give. No
-    golden count is written in a test or the report's claims; any further
-    exact pin the full suite turns red is moved and listed in the report
+    branch) carries no `Data source` line (`channel-merge`'s run pair
+    records no Garmin device). No golden count is written in a test or the
+    report's claims; any further exact pin the full suite turns red is
+    moved and listed in the report
   - Pins (`tests/render/test_views.py`): for a Garmin-recorded activity in
     each of the three views — the run/ride and strength views from their
     builder fixtures, the generic view from the parsed minimal activity, each
@@ -612,6 +618,15 @@
     own pins and named mutations is appended to this plan; those tasks are
     implemented and pass 5.1's gate before this task is ticked. A TBC item
     recorded as confirmed needs no change
+  - TBC-9 (design.md "GarminAttribution", HealthFit copies): a Garmin
+    device at index 0 contradicts it, and its repair tasks re-point the
+    ride-pair pin, `channel-merge`'s HealthFit fixtures and the
+    `composed_run` golden. Either finding, the report states which sibling
+    fixtures now record a device the finding does not match
+    (`activity-identity`'s HealthFit species and `running-dynamics`'
+    `run_native_dynamics` record `garmin`, `channel-merge`'s copies
+    `development`) and whether each is aligned or kept as a stated
+    synthetic variant
   - Then the roadmap's `intervals-connector` Specs line is ticked with the
     implementation's merge SHA, and `spec.json` records the completion
   - Observable: every TBC item recorded as contradicted has an amended design

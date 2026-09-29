@@ -216,8 +216,10 @@ version.
   heart rate included), the session's start, elapsed time and distance, the
   session developer fields (HealthFit's `SESSION UUID`), the sport (a
   cycling session) and the `file_id` and recording-device manufacturers
-  (the helper defaults both to `garmin`; no file this spec builds through it
-  is Garmin: each Stryd file passes `manufacturer="stryd"` and
+  (the helper's `manufacturer` defaults to `garmin`, and its
+  `device_manufacturer` defaults to `None`, which follows `manufacturer`;
+  no file this spec builds through it is Garmin, and each passes both
+  explicitly: each Stryd file `manufacturer="stryd"` and
   `device_manufacturer="stryd"`, each HealthFit copy `"development"` for
   both). The `SESSION UUID` goes through the helper's existing keyword-only
   `session_fields` option, the manufacturers through its existing
@@ -258,6 +260,9 @@ version.
   References), so the composed run page and the `composed_run` golden carry
   no `Data source` line in either landing order, while the ride pair carries
   `Data sources: Garmin <model> and other devices` once `_head` is wired.
+  Both rest on the HealthFit copies' `development` device, a synthetic
+  variant pending `intervals-connector`'s live-check TBC-9 (Supporting
+  References, Ride pair, "HealthFit recording device").
 - Shared files: `render/views.py` and `render/__init__.py`, append-only (this
   spec appends one field, one section call per view and, as second lander,
   the `donor_devices` argument at `_head`'s one call).
@@ -1052,10 +1057,11 @@ def _render_activity(roles: PageRoles, parsed: Mapping[str, Activity]) -> Compos
   entry. performance-benchmarks: `## Amendment N` appending to Requirement 1
   (the same, for derivation); `spec.json` entry.
 - roadmap Phase 8 Existing Spec Updates: annotate the wiki-contract and
-  workout-docs lines with the parts landed here, and tick either only if
+  workout-docs lines "(channel-merge part landed)", and tick either only if
   every part it names is on `main`; tick the training-load and
   performance-benchmarks lines (landed by channel-merge alone) once every part
-  of each is on `main`. The Boundary Strategy's `sync.py` seam already states
+  of each is on `main`. No merge SHA is written: the merged commit cannot
+  know its own. The Boundary Strategy's `sync.py` seam already states
   where the archive reads of the extras happen; this spec does not edit it.
   Amendment and criterion numbers are the next free ones on `main` at
   landing, never taken from this document.
@@ -1203,9 +1209,10 @@ M1-M5 are Req 9.2's five.
 Returns `(healthfit, stryd)` bytes of one synthetic run.
 - **Stryd file**: `file_id` manufacturer `stryd` and recording device
   (`device_info` index 0) manufacturer `stryd`, through the helper's
-  `manufacturer="stryd"` and `device_manufacturer="stryd"` (both default to
-  `garmin`); five stretches of at least 12 samples at 1 Hz separated by gaps
-  of at least 3 s; native heart rate, power, distance, enhanced speed,
+  `manufacturer="stryd"` and `device_manufacturer="stryd"` (`manufacturer`
+  defaults to `garmin`; `device_manufacturer`'s `None` default follows
+  `manufacturer`); five stretches of at least 12 samples at 1 Hz separated
+  by gaps of at least 3 s; native heart rate, power, distance, enhanced speed,
   cadence, step length, vertical oscillation, stance time and stance time
   balance; the seven Stryd developer channels through the shared
   developer-field helper; no position; four laps with values distinct from
@@ -1233,8 +1240,11 @@ Returns `(healthfit, stryd)` bytes of one synthetic run.
   equal distance).
 - Neither file's recording device is Garmin, so the composed run page (and
   the `composed_run` golden) carries no `Data source` line once
-  `intervals-connector`'s attribution is wired; a Stryd file left at the
-  helper's `garmin` default would wrongly attribute the page to Garmin.
+  `intervals-connector`'s attribution is wired; a Stryd file whose
+  recording device were `garmin` (both keywords left at their defaults, or
+  `device_manufacturer="garmin"`) would wrongly attribute the page to
+  Garmin. The HealthFit copy's `development` device is a synthetic variant
+  (Ride pair, "HealthFit recording device").
 
 ### Ride pair (`ride_pair_fit_bytes(*, copy_power=True, copy_shift_h=0)`)
 Returns `(garmin, healthfit)` bytes of one synthetic ride.
@@ -1255,6 +1265,21 @@ Returns `(garmin, healthfit)` bytes of one synthetic ride.
   lag and power does); no position.
 - `copy_power=False` gives the exact-timestamp fallback; `copy_shift_h=1` the
   whole-hour shift (identity joins it by SHIFTED evidence).
+- **HealthFit recording device (run and ride pair)**: the HealthFit copies'
+  `development` recording device is a synthetic variant. What a real
+  HealthFit copy records at `device_info` index 0 — the Garmin device it
+  copied, or an entry of its own — is unconfirmed; it is TBC-9 of
+  `intervals-connector`'s maintainer-only live check (its task 1.1), and no
+  fixture value changes before that check reports. If it finds a Garmin
+  device there, two pins rest on a false premise and are revisited through
+  `intervals-connector`'s task 5.2 contradiction path: the ride-pair
+  attribution pin (M25 when this spec wires `_head`, else
+  `intervals-connector`'s 2.3 pin), whose `Data sources: Garmin <model> and
+  other devices` would name Garmin only (`Data source: Garmin <model>` for
+  a copy recording the same model); and the `composed_run` golden's
+  no-`Data source`-line claim (3.3), since its HealthFit base would then
+  give `Data sources: Garmin <model> and other devices`. 1.1's
+  recording-device self-tests, which assert those premises, move with them.
 
 ### Run trio (`run_trio_fit_bytes`)
 Returns `(healthfit, stryd_a, stryd_b)`: the run pair plus a second Stryd file

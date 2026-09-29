@@ -212,7 +212,10 @@ A cross-spec reviewer reconciles these against the siblings' own designs.
     (StrydFixtures, cross-spec ruling R12), so once it lands the
     `stryd_run` golden gains no `Data source` line; the
     `run_native_dynamics` golden, whose device keeps the builder's `garmin`
-    default, gains its line like every other Garmin-device golden.
+    default, gains its line like every other Garmin-device golden. That
+    `garmin` device is a synthetic variant pending the live check's
+    HealthFit recording-device item, TBC-9 (ruling R15; Supporting
+    References, Native-dynamics fixture).
   - Both specs edit `render/views.py` (its `_head`, this spec's run-view
     insertion) and append to `tests/fixtures/builder.py` without changing a
     default; a rebase keeps both.
@@ -970,7 +973,7 @@ def developer_field_run_fit_bytes(
     manufacturer: str = "garmin",
     product: int = 1,
     time_created: int = FIT_TIMESTAMP_BASE,
-    device_manufacturer: str = "garmin",
+    device_manufacturer: str | None = None,
 ) -> bytes: ...
 ```
 
@@ -989,8 +992,13 @@ def developer_field_run_fit_bytes(
   session. One description may be recorded on records, on the session, or
   both.
 - `serial`, `manufacturer`, `product` and `time_created` go to `_file_id`;
-  `serial` and `device_manufacturer` go to `_device_info` (device index 0,
-  a fixed synthetic product name). `_DEV_FIELD_RUN_SERIAL` is a module
+  `serial` and the recording device's manufacturer go to `_device_info`
+  (device index 0, a fixed synthetic product name). That manufacturer is
+  `device_manufacturer` when given; `None`, the default, follows
+  `manufacturer`, as `activity-identity`'s `session_fit_bytes` does
+  (cross-spec ruling R17), so a caller that sets only `manufacturer` gets a
+  file whose `file_id` and recording device agree, and the all-default
+  output records `garmin` in both. `_DEV_FIELD_RUN_SERIAL` is a module
   constant no other family uses.
 - The default message list, assembled in one place: `file_id`, the
   developer data ids, the descriptions, `device_info`, a running/generic
@@ -1051,9 +1059,10 @@ Every assertion names the production mutation it dies on
   later assertions rely on, decoded before any fitdocs code sees them;
   `developer_field_run_fit_bytes` writes each description at its key and
   definition number, `session_fields` values on the session only when given,
-  and `device_manufacturer` on device index 0; the Stryd fixture's
-  `device_info` index 0 is `stryd`. Their mutations are in the builder
-  (tasks.md 1.2), since the builder is the code those pins test.
+  and `device_manufacturer` on device index 0, following `manufacturer`
+  when it is `None`; the Stryd fixture's `device_info` index 0 is `stryd`.
+  Their mutations are in the builder (tasks.md 1.2), since the builder is
+  the code those pins test.
 - **Unit (`tests/ingest/test_developer.py`)**: sentinel table vs the SDK's;
   scalar and array sentinel rules per base type; float32 shortest decimal
   (including a value needing 9 digits); declared scale after rounding;
@@ -1149,3 +1158,17 @@ Every assertion names the production mutation it dies on
   `255`.
 - `file_id` and `device_info` keep the builder's `garmin` defaults, so this
   golden, unlike `stryd_run`, has a Garmin recording device.
+- That device choice is a synthetic variant (cross-spec ruling R15). What a
+  real HealthFit copy records at `device_info` index 0 — the Garmin device
+  it copied, or a `development`/Apple entry of its own — is unconfirmed; it
+  is TBC-9 of `intervals-connector`'s maintainer-only live check (its task
+  1.1), and no fixture value changes before that check reports. No
+  assertion of this spec depends on this fixture's recording device except
+  the golden's own bytes. If the check finds a non-Garmin device at index
+  0, what changes is this golden once `intervals-connector` lands: under
+  the current choice it gains a `Data source: Garmin …` line like every
+  other Garmin-device golden, and a fixture matching the finding would
+  carry no `Data source` line (its devices-table row changing with the
+  device). Whether to align the fixture is decided when
+  `intervals-connector`'s task 5.2 reconciles that check (it reports each
+  sibling fixture the finding does not match), not by a task of this spec.

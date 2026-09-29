@@ -1,7 +1,7 @@
 {
   "feature_name": "running-dynamics",
   "created_at": "2026-09-29T15:18:35Z",
-  "updated_at": "2026-09-29T20:50:00Z",
+  "updated_at": "2026-09-29T21:20:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -19,5 +19,5 @@
     }
   },
   "ready_for_implementation": true,
-  "phase_note": "Cross-spec review round 1 fixes applied 2026-09-29 (controller rulings R1 DOC_VERSION half, R8, R10, R11, R12, R14; reviewer issues 6, 8, 12, 13, 15, 16, 17)."
+  "phase_note": "Cross-spec review round 1 fixes applied 2026-09-29 (controller rulings R1 DOC_VERSION half, R8, R10, R11, R12, R14; reviewer issues 6, 8, 12, 13, 15, 16, 17). Cross-spec review round 2 minors applied 2026-09-29: developer_field_run_fit_bytes' device_manufacturer defaults to None, following manufacturer (ruling R17; task 1.2 pins and mutations updated); the run_native_dynamics fixture's garmin device stated as a synthetic variant pending intervals-connector's HealthFit recording-device TBC (ruling R15)."
 }

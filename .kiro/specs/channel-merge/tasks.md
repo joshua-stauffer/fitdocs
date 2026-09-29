@@ -169,9 +169,10 @@ rewrite or reorder a sibling's):
     sport, the HealthFit `SESSION UUID` session developer field (through the
     helper's existing keyword-only `session_fields` option), and `file_id`
     and recording-device manufacturers that are not Garmin (through its
-    existing `manufacturer` and `device_manufacturer`, both of which default
-    to `garmin`: each Stryd file passes `"stryd"` for both, each HealthFit
-    copy, run and ride, `"development"` for both). For each of
+    existing `manufacturer`, which defaults to `garmin`, and
+    `device_manufacturer`, whose `None` default follows `manufacturer`;
+    every file passes both explicitly: each Stryd file `"stryd"` for both,
+    each HealthFit copy, run and ride, `"development"` for both). For each of
     `laps`, `session_start`, `session_elapsed_s`, `session_distance_m` and
     `sport` the helper lacks, append that keyword-only parameter, defaulting
     to the helper's current behaviour, and pin in
@@ -217,6 +218,15 @@ rewrite or reorder a sibling's):
     `development` on the HealthFit copy -- and so are their `file_id`
     manufacturers (the premise that the `composed_run` golden carries no
     `Data source` line); building each fixture twice gives identical bytes
+  - The HealthFit copies' `development` recording device is a synthetic
+    variant pending `intervals-connector`'s live-check TBC-9 (what a real
+    HealthFit copy records at `device_info` index 0; design.md § "Supporting
+    References", Ride pair, "HealthFit recording device"); no value changes
+    now. Implementation Notes name the pins that rest on it and are
+    revisited if the check finds a Garmin device there: the ride-pair
+    attribution pin (M25, or `intervals-connector`'s 2.3 pin) and the
+    `composed_run` golden's no-`Data source`-line claim (3.3), with the
+    recording-device self-tests above
   - Assert that `activity-identity`'s rule joins each pair and the trio
     (`pair_evidence` between every two files' session keys is not `None`: STRICT
     for the run files and the unshifted ride, SHIFTED for the shifted ride), and
@@ -227,8 +237,8 @@ rewrite or reorder a sibling's):
     in Implementation Notes the fixture edit that makes it fail (e.g. setting
     `L_3` to +1 reds the per-stretch lag self-test; dropping speed from the
     HealthFit copy reds the subset self-test; giving the ride copy a Garmin
-    recording device reds the ride recording-device self-test; leaving a Stryd
-    file's `device_manufacturer` at the helper's `garmin` default reds the run
+    recording device reds the ride recording-device self-test; building a
+    Stryd file with `device_manufacturer="garmin"` reds the run
     recording-device self-test)
   - Observable: `uv run pytest tests/fixtures/` green; `uv run mypy
     tests/fixtures/merge.py tests/fixtures/test_merge_fixtures.py` clean; ruff
@@ -699,11 +709,12 @@ rewrite or reorder a sibling's):
     a new amendment appending one criterion to Requirement 1; each with its
     spec.json entry; numbers are the next free ones on the branch
   - Roadmap Phase 8 Existing Spec Updates: annotate the wiki-contract and
-    workout-docs lines with the parts landed here, ticking either only if
+    workout-docs lines "(channel-merge part landed)", ticking either only if
     every part it names is on `main`; tick the training-load and
     performance-benchmarks lines (landed by channel-merge alone) when every
-    part of each is on `main`. Leave the Boundary Strategy's `sync.py` seam
-    as it stands (it already states where the extras are read)
+    part of each is on `main`; write no merge SHA (the merged commit cannot
+    know its own). Leave the Boundary Strategy's `sync.py` seam as it stands
+    (it already states where the extras are read)
   - `.kiro/steering/structure.md`: append `compose` to the dependency line
     ("Dependencies point one way") as design.md § SpecRecords states, without
     rewording the existing chain or a sibling's appended package

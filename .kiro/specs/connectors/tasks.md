@@ -830,7 +830,8 @@
     names the test `test_settings_schema_subsection_names_all_six_tables`,
     this spec lands first and renames it to the count-free
     `test_settings_schema_subsection_names_every_table` with count-free
-    messages; if activity-identity already renamed it, keep the name; the
+    messages and comments; if activity-identity already renamed it (its
+    messages and comments are then count-free already), keep the name; the
     docs test gains the carve-out pin (the three statements present on the
     inbox page and the pinned never-delete sentences still present)
   - Named mutations: delete the carve-out paragraph (its pin reds); leave
@@ -904,11 +905,14 @@
     4.2)
   - Roadmap Phase 8 Existing Spec Updates: the `distribution`, `inbox` and
     `route-maps` lines already exist (added or widened by the controller at
-    the spec batch); tick each at landing, annotated with the merge SHA,
-    and only if every part the line names is on `main` (each names only
-    this spec today; re-read the line at landing); add no line. Tick
-    `wiki-contract` only when all three Amendment 4 parts are on `main`,
-    otherwise append "(connectors part landed at `<sha>`)"
+    the spec batch); tick each at landing, only if every part the line names
+    is on `main` (each names only this spec today; re-read the line at
+    landing); add no line. Tick `wiki-contract` only when all three
+    Amendment 4 parts are on `main`, otherwise append "(connectors part
+    landed)". No SHA is written in the merged commit, which cannot know
+    its own merge SHA (cross-spec ruling 2026-09-29); recording one, if
+    wanted, is a roadmap-only follow-up commit on `main` after the merge
+    (precedent: `e16acc3` recorded activity-qa-flags' merge at `d26b682`)
   - Observable: `/kiro-spec-status inbox`, `distribution`, `route-maps` and
     `wiki-contract` clean; the steering grep for "only network" and
     "fully offline" finds no contradicted statement
