@@ -36,11 +36,26 @@ choices therefore stand unconfirmed:
    is a trailing-slash site path, such as `get-started/install/`, not a `.md`
    path. The maintainer's out-of-repo draft may use another shape.
 3. **Dotfile exclusion**: names beginning with `.` are excluded like `_`
-   names. Requirements 1.4 and 1.5 name only `_`. The design argues it is
-   observably equivalent, because Zensical skips dotfiles and the Pages
+   names. Requirement 1.4 originally named only `_`, and was amended to
+   match (item 5). The design argues it is observably equivalent, because Zensical skips dotfiles and the Pages
    artifact excludes them.
 4. **Symbolic links refused**: a symlink anywhere in the content directory
    is a contract violation, rather than being followed or dropped.
+5. **Requirements amended to match** (2026-09-30, quick-spec sanity
+   review):
+   - 1.4 adds `.`-prefixed exclusion;
+   - 1.6 and 3.3 add the one `template` line injected into the home
+     page's built copy;
+   - 2.3 defines the `hero_actions` shape;
+   - 2.10 limits page links to markdown syntax;
+   - 6.5 reports each generator problem as one line;
+   - new 2.11 fails on symlinks and on a root `llms.txt` /
+     `llms-full.txt`;
+   - new 2.12 fails on a raw-HTML link to a `.md` page;
+   - the boundary names the `CHANGELOG.md` `[Unreleased]` entry.
+
+   These were applied to requirements.md after `--auto` approval, so they
+   too await the maintainer's confirmation.
 
 ## Why it matters
 - Task 1.3 bakes these choices into the fixture site, and task 3.1 into
@@ -60,11 +75,11 @@ choices therefore stand unconfirmed:
 - spec.json `phase_note` records that `--auto` approved without review.
 
 ## How to pick it up
-1. Show the maintainer the four items above, with the design.md sections
-   they live in.
-2. For each item, record "confirmed" or the new value in design.md. A change
-   to 3 or 4 that contradicts requirements.md 1.4/1.5 goes through
-   requirements first.
+1. Show the maintainer the five items above, with the design.md sections
+   they live in (requirements.md for item 5).
+2. For each item, record "confirmed" or the new value in design.md, and in
+   requirements.md for item 5. Reverting an item 5 amendment means
+   revisiting the design choice it records.
 3. Close this item with `/kiro-queue close`.
 
 ## Open questions

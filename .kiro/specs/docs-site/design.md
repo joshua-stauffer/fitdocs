@@ -353,7 +353,11 @@ flowchart TD
 ```
 - The generator runs only when every script-level check has passed, so a
   contract violation never produces a half-built site.
-- `html/` exists if and only if the last build in that root succeeded (6.6).
+- For every run that reaches `build()`, `html/` exists if and only if that
+  build succeeded (6.6). A run that exits 2 before `build()` (missing content
+  dir, missing generator, refused root) touches nothing, so an earlier
+  complete site may remain in that root. CI always starts from a fresh
+  checkout.
 
 ### Preview loop
 ```mermaid
@@ -410,7 +414,7 @@ flowchart LR
 | 1.1 | Content dir order: option, env, default | ContentLoader, BuildSiteCli | `resolve_content_dir` | Build |
 | 1.2 | Missing dir names dir + source | ContentLoader, BuildSiteCli | `ContentDirMissing` → exit 2 | Build |
 | 1.3 | Never modify content dir | ContentLoader, Stager, Preview | read-only discovery; writes only under build root | Build, Preview |
-| 1.4 | `_` names excluded with subtree | ContentLoader | `discover` | Build |
+| 1.4 | `_` and `.` names excluded with subtree | ContentLoader | `discover` | Build |
 | 1.5 | Non-md files carried at same path | ContentLoader, Stager | `Asset`, `plan_tree` | Build |
 | 1.6 | Annotation block removed, rest byte-exact | ContentLoader, Stager | `strip_annotation`, `plan_tree` | Build |
 | 1.7 | Plain `---` rule kept | ContentLoader | `strip_annotation` | Build |
@@ -424,7 +428,9 @@ flowchart LR
 | 2.7 | Pages but no `index.md` fails | ContentLoader | site-level check | Build |
 | 2.8 | No included page fails | ContentLoader | site-level check | Build |
 | 2.9 | All violations in one run | ContentLoader, LinkChecker, SiteConfig, BuildPipeline | collected `tuple[Problem, ...]` | Build |
-| 2.10 | Relative `.md` links with anchor accepted | LinkChecker, GeneratorAdapter | link form; generator resolves | Build |
+| 2.10 | Markdown-syntax relative `.md` links with anchor accepted | LinkChecker, GeneratorAdapter | link form; generator resolves | Build |
+| 2.11 | Symlink or root `llms.txt` / `llms-full.txt` in content fails | ContentLoader | `discover` | Build |
+| 2.12 | Raw-HTML link to a `.md` page fails | LinkChecker | `check_links` | Build |
 | 3.1 | Nav grouped by canonical section, empty omitted | Outline | `nav_structure` | Build |
 | 3.2 | Ascending `order` within a section | Outline | `ordered_pages` | Build |
 | 3.3 | Hero layout with hero keys | Theme, Stager | `home.html`, injected `template` | Build |
@@ -485,8 +491,8 @@ flowchart LR
 | Component | Domain/Layer | Intent | Req Coverage | Key Dependencies (P0/P1) | Contracts |
 |-----------|--------------|--------|--------------|--------------------------|-----------|
 | SiteModel | Build · model | Contract constants and shared value types | 2.1–2.3, 2.9 | — | Service |
-| ContentLoader | Build · content | Turn a content dir into validated `SiteContent` | 1.1–1.8, 2.1, 2.3–2.9 | SiteModel (P0), PyYAML (P0) | Service |
-| LinkChecker | Build · links | Check what the generator does not: assets, hero hrefs, `docs/` URLs | 2.10, 6.1, 6.3 | ContentLoader (P0) | Service |
+| ContentLoader | Build · content | Turn a content dir into validated `SiteContent` | 1.1–1.8, 2.1, 2.3–2.9, 2.11 | SiteModel (P0), PyYAML (P0) | Service |
+| LinkChecker | Build · links | Check what the generator does not: assets, hero hrefs, `docs/` URLs, raw-HTML page links | 2.10, 2.12, 6.1, 6.3 | ContentLoader (P0) | Service |
 | Outline | Build · outline | One ordering for nav and indexes; page URLs; llms text | 3.1, 3.2, 4.6, 5.1–5.4 | SiteModel (P0) | Service |
 | SiteConfig | Build · config | Render the final config from template + nav; enforce the allowlist | 4.1–4.4, 4.6, 6.4 | Outline (P0), PyYAML (P0) | Service |
 | Stager | Build · stage | Byte map of a build root; write fresh; sync in place | 1.3, 1.5, 1.6, 1.8, 3.3, 7.2 | all planning modules (P0) | Service |
@@ -593,7 +599,7 @@ class SiteContent:
 | Field | Detail |
 |-------|--------|
 | Intent | Resolve, discover, strip and validate a content directory into `SiteContent`, collecting every violation |
-| Requirements | 1.1–1.8, 2.1, 2.3–2.9 |
+| Requirements | 1.1–1.8, 2.1, 2.3–2.9, 2.11 |
 
 **Responsibilities & Constraints**
 - **Resolution order** (1.1): the explicit option, then `CONTENT_ENV_VAR`,
@@ -671,7 +677,7 @@ def count_included_pages(content_dir: Path) -> int: ...
 | Field | Detail |
 |-------|--------|
 | Intent | Validate every link the generator does not validate |
-| Requirements | 2.10, 6.1, 6.3 |
+| Requirements | 2.10, 2.12, 6.1, 6.3 |
 
 **Responsibilities & Constraints**
 - **Extraction.** A fence-aware scanner reads a page `body` and yields
@@ -687,8 +693,14 @@ def count_included_pages(content_dir: Path) -> int: ...
     URL, checked below.
   - Other absolute URLs, `mailto:` and pure `#anchor` links: not checked here.
     The generator checks same-page anchors.
-  - A relative target ending `.md` (with an optional `#anchor`): a page link,
-    left to the generator's strict check (2.10, 6.1, 6.2).
+  - A relative target ending `.md` (with an optional `#anchor`) in markdown
+    link syntax: a page link, left to the generator's strict check (2.10,
+    6.1, 6.2).
+  - The same kind of target in a raw-HTML `href` / `src`: a `Problem` naming
+    the page and line, telling the author to use markdown link syntax (2.12).
+    Whether the pinned generator validates raw-HTML links was never
+    verified. Refusing them keeps every page link inside the one strict check
+    that is verified.
   - Every other relative target is an asset link. After resolving `..` and
     stripping any query or fragment, its path must be an included asset or a
     page's directory URL. Otherwise it is a `Problem` naming the page, the
@@ -1351,6 +1363,12 @@ Summary-only.
 - A symbolic link anywhere is refused.
 - Root `llms.txt` and `llms-full.txt` are reserved.
 - `.md` files are pages; everything else is an asset copied at the same path.
+
+**Links**: links between pages use markdown link syntax with a relative
+path to the target's `.md` source, optionally with `#anchor`. A raw-HTML
+link to a `.md` page is refused (2.12). Assets are linked by relative path,
+and `docs/` pages by their `https://github.com/joshua-stauffer/fitdocs/blob/main/docs/…`
+URL.
 
 **Frontmatter**: the file is UTF-8 and begins with a line `---`. A YAML
 mapping follows, with no duplicate keys, closed by a line `---`.

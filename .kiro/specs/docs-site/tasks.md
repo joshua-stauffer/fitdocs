@@ -205,7 +205,7 @@
   - **Done when** these tests are green with each assertion's mutation
     recorded. The fixture tree's discovery yields exactly its expected page
     and asset sets.
-  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 2.11_
 
 - [ ] 2.2 Validate frontmatter and the site-level rules, reporting every violation in one run
   - In `scripts/sitebuild/content.py`:
@@ -414,7 +414,9 @@
     - `check_links`:
       - relative non-`.md` targets must resolve to an included asset or a
         page's directory URL;
-      - relative `.md` targets are left to the generator (2.10);
+      - relative `.md` targets in markdown link syntax are left to the
+        generator (2.10). In raw HTML they are a `Problem` naming the file
+        and line (2.12);
       - a relative hero href must equal an included page's `page_path`, and
         an absolute one must be `https://`;
       - a `docs/` GitHub URL's file must exist under `<repo>/docs/`, and its
@@ -424,7 +426,9 @@
     - targets inside fences and code spans ignored;
     - a bad hero href, and a good one;
     - a `docs/` URL with a missing file, a missing anchor, and valid;
-    - `.md` links not reported;
+    - markdown-syntax `.md` links not reported;
+    - a raw-HTML `<a href="other.md">` reported with its file and line
+      (2.12);
     - a slugger conformance table: `[load]`, a repeated heading gives `-1`,
       `C++ & Python` gives `c--python`, `snake_case name` gives
       `snake_case-name` (the underscore kept), `TSS / hrTSS — load`, an emoji
@@ -432,7 +436,7 @@
       fence is ignored.
   - **Done when** the tests are green with mutations recorded, and the
     fixture's `docs/` link passes against the real `docs/` tree.
-  - _Requirements: 2.10, 6.1, 6.3_
+  - _Requirements: 2.10, 2.12, 6.1, 6.3_
   - Not parallel: it needs `outline.page_path` (2.3) for hero hrefs and
     `load_content` (2.2) for its fixture check, so it runs after the (P)
     group.

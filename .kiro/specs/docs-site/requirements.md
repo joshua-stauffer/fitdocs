@@ -78,6 +78,13 @@ brand's concrete values (palette, typeface, logo treatment) are proposed in
 design and approved by the maintainer. These requirements fix only where
 those values are stated and how they must behave.
 
+**Amended 2026-09-30.** The quick-spec sanity review found that these
+criteria stated a broader contract than the one the design settled.
+Criteria 1.4, 1.6, 2.3, 2.10, 3.3 and 6.5 were reworded and 2.11 and 2.12
+added. Existing IDs are unchanged. The amendments await maintainer
+confirmation, together with the brand values (queue
+`2026-09-30-docs-site-design-proposals-await-maintainer`).
+
 ## Boundary Context
 
 - **In scope**:
@@ -109,10 +116,11 @@ those values are stated and how they must behave.
   - rewording "fitdocs.ai" where it names the reference app, and the other
     Phase 9 direct-implementation candidates.
 - **Adjacent expectations**:
-  - distribution owns `pyproject.toml`, `CONTRIBUTING.md` and the
-    forbidden-strings gate. This spec adds to the first two without breaking
-    any existing pin, and reuses the gate and its secret without changing
-    either;
+  - distribution owns `pyproject.toml`, `CONTRIBUTING.md`, `CHANGELOG.md`
+    and the forbidden-strings gate. This spec adds to the first three without
+    breaking any existing pin: in `CHANGELOG.md`, one `[Unreleased]` entry
+    that the Changelog duty owes for the new project URL. It reuses the gate
+    and its secret without changing either;
   - the wheel and sdist contents are unchanged;
   - the runtime dependency list is unchanged;
   - the new `docs/` page passes every existing docs guard as written.
@@ -126,9 +134,9 @@ those values are stated and how they must behave.
 1. The Site Build shall resolve its content directory in this order: an explicit command-line option, then an environment variable, then `website/content/` in the repository.
 2. When the resolved content directory does not exist, the Site Build shall fail with a message naming the directory and the source it was resolved from.
 3. The Site Build shall never create, modify, rename or delete any file in the content directory.
-4. When a file or directory name in the content directory begins with `_`, the Site Build shall exclude it, and everything beneath it, from the site.
+4. When a file or directory name in the content directory begins with `_` or `.`, the Site Build shall exclude it, and everything beneath it, from the site.
 5. The Site Build shall carry every included non-markdown file into the site at the same relative path it has in the content directory.
-6. When a page ends in an annotation block (the text from the last occurrence of a blank line, then `---`, then a line beginning `Annotations:`, to the end of the file), the Site Build shall remove that block and leave the rest of the page byte-for-byte unchanged.
+6. When a page ends in an annotation block (the text from the last occurrence of a blank line, then `---`, then a line beginning `Annotations:`, to the end of the file), the Site Build shall remove that block and leave the rest of the page byte-for-byte unchanged, except for the one line Requirement 3.3 adds to the home page.
 7. When a page contains a `---` horizontal rule that does not begin an annotation block, the Site Build shall keep it.
 8. The Site Build shall not include any part of an annotation block in any page, search index or site index it produces.
 
@@ -138,14 +146,16 @@ those values are stated and how they must behave.
 #### Acceptance Criteria
 1. The Site Build shall require every included page to carry frontmatter with `title` (non-empty text), `description` (non-empty text), `section` (one value from the canonical section list) and `order` (an integer).
 2. The Site Build shall use this canonical section list, in this order: Home, Why, Get started, Guides, Working with LLMs, Reference, Extend, Project.
-3. The Site Build shall accept `draft` (true or false) as an optional key on any page, and `hero_title`, `hero_tagline` and `hero_actions` as optional keys on the home page only.
+3. The Site Build shall accept `draft` (true or false) as an optional key on any page, and `hero_title`, `hero_tagline` and `hero_actions` as optional keys on the home page only. `hero_actions` is a list of entries, each with `label` and `href` and optionally `primary` (true or false); an `href` is an absolute `https://` URL or the trailing-slash site path of an included page (for example `get-started/install/`).
 4. When a page has `draft: true`, the Site Build shall exclude it from the navigation, the built site, search and both site indexes.
 5. If a page lacks a required key, carries a key the contract does not allow, carries a value of the wrong type, names a section outside the canonical list, or carries a hero key while not being the home page, then the Site Build shall fail.
 6. If two included pages in the same section share an `order` value, then the Site Build shall fail naming both files.
 7. If the content directory holds included pages but no home page (`index.md` at its root), then the Site Build shall fail.
 8. If the content directory holds no included page, then the Site Build shall fail with a message saying so.
 9. When the Site Build finds contract violations, it shall report every violation in one run, each naming the file and the key, before exiting unsuccessfully.
-10. The Site Build shall accept links between pages written as relative paths to the target's `.md` source file, optionally with a `#anchor`.
+10. The Site Build shall accept links between pages in a page body written in markdown link syntax as relative paths to the target's `.md` source file, optionally with a `#anchor`.
+11. If the content directory contains a symbolic link, or a file named `llms.txt` or `llms-full.txt` at its root, then the Site Build shall fail naming it.
+12. If a page links to another page's `.md` source from raw HTML rather than markdown link syntax, then the Site Build shall fail naming the file and line.
 
 ### Requirement 3: Navigation and home page
 **Objective:** As a site visitor, I want pages grouped and ordered the way the maintainer intends, with a proper landing page, so that I can find my way from "what is this" to the detail I need.
@@ -153,7 +163,7 @@ those values are stated and how they must behave.
 #### Acceptance Criteria
 1. The Site Build shall group the navigation by `section`, in canonical section order, omitting sections that have no included page.
 2. The Site Build shall order pages within a section by ascending `order`.
-3. The Site Build shall render the home page with the hero layout, showing `hero_title`, `hero_tagline` and `hero_actions` when present.
+3. The Site Build shall render the home page with the hero layout, showing `hero_title`, `hero_tagline` and `hero_actions` when present, by adding one `template` line to the frontmatter of the home page's built copy. That line is not a content key, and a page that sets `template` itself violates Requirement 2.5.
 4. Where the home page omits a hero key, the Site Build shall render the hero without that element rather than substituting default text.
 5. The Site Build shall show the power-vs-heart-rate hero chart on the home page from an image checked into the repository and generated from demo data, never from a real athlete's data.
 6. The repository shall record how the hero chart image was produced, so that it can be regenerated.
@@ -186,7 +196,7 @@ those values are stated and how they must behave.
 2. If a link's `#anchor` does not match a heading in its target page (the same page or another), then the Site Build shall fail.
 3. If a page links to a file or anchor under `docs/` by its GitHub URL (`https://github.com/joshua-stauffer/fitdocs/blob/main/docs/...`) and that file does not exist in the repository's `docs/` tree, or that anchor does not match a heading slug as GitHub generates it, then the Site Build shall fail.
 4. If the site configuration contains a key, theme feature or plugin that is not on the build's allowlist, then the Site Build shall fail naming it.
-5. When the site generator itself fails, the Site Build shall report a single-line failure naming the offending file where one is known, and shall keep the full generator output available on request.
+5. When the site generator itself fails, the Site Build shall report each generator problem as a single line naming the offending file where one is known, and shall keep the full generator output available on request.
 6. When the Site Build fails, it shall exit with a non-zero status and shall leave no partially built site in the output location.
 7. The Site Build shall write its output to a location that is ignored by git and is never tracked.
 
