@@ -18,9 +18,11 @@ Three rules govern every view:
   region lives under ``## Training Load``; the strength ``workout`` region lives
   under ``## Workout``.
 - **Honest omission.** A ``## Splits`` / ``## Recorded Sets`` / ``## Telemetry``
-  section whose body would be empty is omitted entirely -- heading and all (Req
-  9.6, 13.2). ``## Summary``, ``## Training Load``, ``## Device & Data Quality``,
-  and the ``notes`` region are always present.
+  / ``## Running Dynamics`` section whose body would be empty is omitted
+  entirely -- heading and all (Req 9.6, 13.2; running-dynamics 7.6).
+  ``## Summary``,
+  ``## Training Load``, ``## Device & Data Quality``, and the ``notes`` region
+  are always present.
 - **Portable, plugin-free markdown.** The only PKM affordances are the YAML
   frontmatter, the HTML-comment region markers, and the HTML-comment provenance
   banner -- all invisible or harmless in a vanilla renderer (Req 5.4). Charts
@@ -48,7 +50,9 @@ from fitdocs.contract import (
     WORKOUT_REGION,
     region_block,
 )
+from fitdocs.model import Modality
 from fitdocs.render import Asset, DocContext, RenderedDoc
+from fitdocs.render.dynamics import dynamics_section
 from fitdocs.render.frontmatter import build_frontmatter
 from fitdocs.render.sections import (
     devices_section,
@@ -147,10 +151,13 @@ def render_run_ride(ctx: DocContext) -> RenderedDoc:
     """Assemble a run/ride document (Req 6.1, route-maps 1.1, 1.2).
 
     Order: H1 → ``notes`` region → ``## Summary`` → ``## Map`` → ``## Telemetry``
-    → ``## Splits`` → ``## Training Load`` → ``## Device & Data Quality``. The Map
-    section sits immediately after Summary and before Telemetry, present only when
-    the context carries prepared map inputs; its asset leads the assets tuple.
-    The Map, Telemetry, and Splits sections are omitted when they would be empty.
+    → ``## Running Dynamics`` → ``## Splits`` → ``## Training Load`` →
+    ``## Device & Data Quality``. The Map section sits immediately after Summary
+    and before Telemetry, present only when the context carries prepared map
+    inputs; its asset leads the assets tuple. ``## Running Dynamics`` is emitted
+    for run modality only (never for a ride) and its asset follows the telemetry
+    assets. The Map, Telemetry, Running Dynamics, and Splits sections are omitted
+    when they would be empty.
     """
     blocks: list[str] = [
         f"# {_title(ctx)}",
@@ -170,6 +177,13 @@ def render_run_ride(ctx: DocContext) -> RenderedDoc:
         body, tel_assets = telemetry
         blocks.append(_section("Telemetry", body))
         assets = assets + tel_assets
+
+    if ctx.activity.modality is Modality.RUN:
+        dynamics = dynamics_section(ctx)
+        if dynamics is not None:
+            dyn_body, dyn_assets = dynamics
+            blocks.append(_section("Running Dynamics", dyn_body))
+            assets = assets + dyn_assets
 
     splits = splits_section(ctx.activity, ctx.activity.modality)
     if splits:

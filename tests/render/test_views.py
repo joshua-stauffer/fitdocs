@@ -29,7 +29,7 @@ from fitdocs.contract import DOC_BANNER, GENERATED_PREFIX, LOAD_NOT_COMPUTED
 from fitdocs.docmerge import extract_regions, merge_regions
 from fitdocs.metrics.types import AthleteInputs, ZoneSpec
 from fitdocs.model import Samples
-from fitdocs.render import DocContext, render_document
+from fitdocs.render import DocContext, MapData, plan_map, render_document
 
 # The run/ride/strength fixtures start 2021-09-08 01:46:40 UTC; at -06:00 that is
 # local 2021-09-07 19:46:40 -- pinned so titles and dates are deterministic.
@@ -274,6 +274,163 @@ def test_telemetry_section_omitted_when_no_content(minimal_fit_bytes: bytes) -> 
     assert "notes" in regions
     assert "load" in regions
     assert not doc.assets
+
+
+# --- running dynamics placement (running-dynamics task 3.3; 7.1, 7.6, 7.7) --
+
+_DYN_HEADING = "## Running Dynamics"
+_DYN_ASSET = "assets/2021-09-07-run-1946-dynamics.svg"
+
+
+def _dyn_channels(n: int) -> dict[str, object]:
+    """Pairwise-distinct values on the channels the section charts and tabulates."""
+    return {
+        "stance_time_ms": tuple(240.0 + i for i in range(n)),
+        "vertical_oscillation_mm": tuple(80.0 + i for i in range(n)),
+    }
+
+
+def _ctx_with_dynamics(
+    fit_bytes: bytes,
+    *,
+    activity_replace: dict[str, object] | None = None,
+    metrics: DerivedMetrics | None = None,
+    map_data: MapData | None = None,
+) -> DocContext:
+    """A context over the parsed fixture whose samples also carry dynamics."""
+    base = _ctx(fit_bytes, activity_replace=activity_replace, metrics=metrics)
+    samples = base.activity.samples
+    n = len(samples.time_s)
+    assert n > 0
+    assert not any(v is not None for v in samples.stance_time_ms)  # not pre-carried
+    carrying = dataclasses.replace(samples, **_dyn_channels(n))  # type: ignore[arg-type]
+    assert any(v is not None for v in carrying.stance_time_ms)
+    activity = dataclasses.replace(base.activity, samples=carrying)
+    return dataclasses.replace(base, activity=activity, map_data=map_data)
+
+
+def _map_data() -> MapData:
+    plan = plan_map([37.7749, 37.7752], [-122.4194, -122.4180])
+    assert plan is not None
+    return MapData(
+        plan=plan,
+        tiles=tuple((ref, b"tile") for ref in plan.tiles),
+        attribution="test attribution",
+    )
+
+
+def test_run_dynamics_sits_after_telemetry_and_before_splits(
+    run_fit_bytes: bytes,
+) -> None:
+    """A run carrying dynamics channels has the heading between Telemetry and
+    Splits, its chart asset after the telemetry assets, and its table/chart in
+    that section (7.1, 7.6)."""
+    without = render_document(_ctx(run_fit_bytes))
+    doc = render_document(_ctx_with_dynamics(run_fit_bytes))
+    md = doc.markdown
+
+    assert _DYN_HEADING not in without.markdown  # the section is what is added
+    assert _h2s(md) == [
+        "## Summary",
+        "## Telemetry",
+        _DYN_HEADING,
+        "## Splits",
+        "## Training Load",
+        "## Device & Data Quality",
+    ]
+    section = md.split(f"{_DYN_HEADING}\n", 1)[1].split("\n## ", 1)[0]
+    assert "| Ground contact time |" in section
+    assert f"]({_DYN_ASSET})" in section
+    # Telemetry's assets are untouched and lead; the dynamics asset is appended.
+    assert [a.rel_path for a in doc.assets] == [
+        *[a.rel_path for a in without.assets],
+        _DYN_ASSET,
+    ]
+    assert without.assets  # the telemetry assets exist, so "after" is a real order
+
+
+def test_run_dynamics_directly_after_summary_without_telemetry_or_map(
+    run_fit_bytes: bytes,
+) -> None:
+    """With no telemetry and no map, the section follows Summary directly."""
+    empty = Samples(
+        time_s=(0.0, 60.0, 120.0),
+        heart_rate_bpm=(None,) * 3,
+        power_w=(None,) * 3,
+        cadence_rpm=(None,) * 3,
+        speed_mps=(None,) * 3,
+        distance_m=(None,) * 3,
+        altitude_m=(None,) * 3,
+        latitude_deg=(None,) * 3,
+        longitude_deg=(None,) * 3,
+        temperature_c=(None,) * 3,
+        **_dyn_channels(3),  # type: ignore[arg-type]
+    )
+    ctx = _ctx(
+        run_fit_bytes,
+        activity_replace={"samples": empty},
+        metrics=DerivedMetrics(),
+    )
+    assert ctx.map_data is None
+    assert ctx.activity.modality is Modality.RUN
+    doc = render_document(ctx)
+    md = doc.markdown
+
+    assert "## Telemetry" not in md  # precondition: nothing sits between them
+    assert "## Map" not in md
+    assert _h2s(md)[:2] == ["## Summary", _DYN_HEADING]
+    assert [a.rel_path for a in doc.assets] == [_DYN_ASSET]
+
+
+def test_run_dynamics_follows_map_and_telemetry(run_fit_bytes: bytes) -> None:
+    """Map, Telemetry, then Running Dynamics; the map asset still leads."""
+    doc = render_document(_ctx_with_dynamics(run_fit_bytes, map_data=_map_data()))
+    assert _h2s(doc.markdown)[:4] == [
+        "## Summary",
+        "## Map",
+        "## Telemetry",
+        _DYN_HEADING,
+    ]
+    assert doc.assets[0].rel_path.endswith("-map.svg")
+    assert doc.assets[-1].rel_path == _DYN_ASSET
+
+
+def test_run_without_dynamics_has_no_section(run_fit_bytes: bytes) -> None:
+    """A run whose dynamics channels hold no value gets no heading (7.6)."""
+    ctx = _ctx(run_fit_bytes)
+    assert not any(
+        v is not None for v in ctx.activity.samples.stance_time_ms
+    )  # nothing recorded
+    assert _DYN_HEADING not in render_document(ctx).markdown
+
+
+@pytest.mark.parametrize(
+    ("fixture", "replace", "expected_h2"),
+    [
+        ("ride_no_power_fit_bytes", None, "## Splits"),
+        ("strength_fit_bytes", None, "## Workout"),
+        ("minimal_fit_bytes", None, "## Telemetry"),
+        ("run_fit_bytes", {"modality": Modality.OTHER}, "## Telemetry"),
+    ],
+    ids=["ride", "strength", "generic", "run-degraded-to-generic"],
+)
+def test_non_run_modalities_never_show_running_dynamics(
+    request: pytest.FixtureRequest,
+    fixture: str,
+    replace: dict[str, object] | None,
+    expected_h2: str,
+) -> None:
+    """Ride, strength and generic activities carrying dynamics channels get no
+    Running Dynamics heading and no dynamics asset (7.7)."""
+    fit_bytes = request.getfixturevalue(fixture)
+    ctx = _ctx_with_dynamics(fit_bytes, activity_replace=replace)
+    assert ctx.activity.modality is not Modality.RUN
+    assert any(v is not None for v in ctx.activity.samples.stance_time_ms)
+    doc = render_document(ctx)
+    assert expected_h2 in _h2s(doc.markdown)  # the view really rendered
+    assert _DYN_HEADING not in doc.markdown
+    assert not any(a.rel_path.endswith("-dynamics.svg") for a in doc.assets)
+    assert "Ground contact time" not in doc.markdown
 
 
 # --- assets + portability + determinism -------------------------------------
