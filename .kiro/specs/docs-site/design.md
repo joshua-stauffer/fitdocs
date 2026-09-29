@@ -275,7 +275,7 @@ scripts/
     ├── config.py              # Template load; allowlist; build-owned keys; render final config; referenced assets
     ├── stage.py               # plan_tree (byte map of a build root); write_tree; sync_tree (in place)
     ├── generator.py           # Locate zensical; run build/serve; translate output into Problems
-    ├── pipeline.py            # build() orchestration; content_status(); build-root guard and cleanup
+    ├── pipeline.py            # build() orchestration; build-root guard and cleanup
     └── preview.py             # Poll, rebuild into check root, sync into live root, supervise serve
 
 .github/workflows/
@@ -290,17 +290,21 @@ tests/
     ├── __init__.py
     ├── conftest.py            # requires_zensical fixture (skip, or fail under FITDOCS_REQUIRE_SITE_TOOLING=1); fixture-copy helper
     ├── fixtures/site/         # The valid fixture content tree (see Testing Strategy)
+    ├── test_model.py          # Contract constants and Problem line format
+    ├── test_fixture_site.py   # Fixture self-test: every species present, UTF-8, no version literal
     ├── test_content.py        # Req 1, 2 (no generator)
     ├── test_links.py          # 6.1 assets/hero, 6.3 docs URLs, GitHub slugger
     ├── test_outline.py        # 3.1, 3.2, 5.1–5.4, 4.6 URL form
     ├── test_config.py         # 6.4 allowlist; template pins (4.2, 4.4, 4.6)
     ├── test_stage.py          # 1.3, 1.5–1.8 byte-exactness, home injection, sync_tree semantics
     ├── test_generator.py      # 6.5 translation over canned Zensical output (no generator)
-    ├── test_pipeline.py       # 6.6, 6.7, 2.9 end-to-end short of the generator; status (10.6)
+    ├── test_pipeline.py       # 6.6, 6.7, 2.9 end-to-end short of the generator
+    ├── test_cli.py            # 1.1, 1.2, 6.5 exit codes and messages; status (10.6)
     ├── test_build_smoke.py    # 9.2 real build (requires_zensical)
-    ├── test_preview.py        # Req 7 real serve (requires_zensical)
+    ├── test_preview.py        # Req 7: unit part with stubs; real serve part (requires_zensical)
     ├── test_check_site.py     # 10.3–10.5 gate behavior
-    ├── test_theme.py          # 3.3–3.6, 4.5: overrides, brand.css, hero chart drift
+    ├── test_hero_chart.py     # 3.5, 3.6 hero chart drift and demo-data-only
+    ├── test_theme.py          # 3.3–3.4, 4.5: overrides, brand.css
     ├── test_website_doc.py    # 11.2–11.7, 11.9 checks specific to the new page
     └── test_repo_wiring.py    # 8.1–8.4, 9.3, 11.1, 11.8: pyproject, .gitignore, CONTRIBUTING, CHANGELOG, import guard, Dies-on convention
 ```
@@ -311,8 +315,10 @@ tests/
     **first** key, so it is not adjacent to `connectors`' appended
     `Connectors` key.
   - `[dependency-groups]`: `docs = ["zensical==0.0.65"]`.
-  - `[tool.mypy].files`: adds `tests/sitebuild` and
-    `tests/test_docs_workflow.py`, following the listed-test convention.
+  - `[tool.mypy].files`: adds `tests/sitebuild` (with the package) and
+    `tests/test_docs_workflow.py` (in the change that creates it, because
+    mypy refuses a listed path that does not exist), following the
+    listed-test convention.
 - **`uv.lock`**: re-locked for the `docs` group only. The resolution of the
   runtime and `dev` groups is unchanged.
 - **`.gitignore`**: an explicit `/website/build/` entry with a comment. The
@@ -337,10 +343,10 @@ flowchart TD
     Resolve -->|missing| Exit2[exit 2 naming dir and source]
     Resolve --> Clean[clear build root managed paths]
     Clean --> Load[load content and template]
-    Load --> Checks[contract, links, allowlist, config assets]
+    Load --> Plan[links, config, llms, plan_tree in memory]
+    Plan --> Checks[collect contract, link, allowlist, config asset problems]
     Checks -->|any problem| Report1[report every problem, html absent, exit 1]
-    Checks -->|clean| Plan[plan_tree byte map]
-    Plan --> Write[write_tree into build root]
+    Checks -->|clean| Write[write_tree into build root]
     Write --> Gen[zensical build strict]
     Gen -->|nonzero| Translate[translate output, delete html, exit 1]
     Gen -->|zero| Done[report page count, exit 0]
@@ -485,7 +491,7 @@ flowchart LR
 | SiteConfig | Build · config | Render the final config from template + nav; enforce the allowlist | 4.1–4.4, 4.6, 6.4 | Outline (P0), PyYAML (P0) | Service |
 | Stager | Build · stage | Byte map of a build root; write fresh; sync in place | 1.3, 1.5, 1.6, 1.8, 3.3, 7.2 | all planning modules (P0) | Service |
 | GeneratorAdapter | Build · generator | Run Zensical; translate its output | 6.1, 6.2, 6.5 | Zensical 0.0.65 (P0) | Service |
-| BuildPipeline | Build · pipeline | Orchestrate a build into one root; status | 2.9, 6.6, 6.7, 10.6 | all above (P0) | Batch |
+| BuildPipeline | Build · pipeline | Orchestrate a build into one root | 2.9, 6.6, 6.7 | all above (P0) | Batch |
 | Preview | Build · preview | Rebuild on change; serve the last good tree | 7.1–7.4 | BuildPipeline (P0), GeneratorAdapter (P0) | State |
 | BuildSiteCli | Build · entry | `build` / `serve` / `status` commands and exit codes | 1.1, 1.2, 6.5, 7.1, 10.6 | BuildPipeline (P0), Preview (P0) | Batch |
 | SiteGate | Gate | Forbidden strings over directory trees, fail closed | 10.3–10.5 | purge guard cores (P0) | Batch |
@@ -928,7 +934,7 @@ def start_serve(root: Path, addr: str) -> subprocess.Popen[bytes]: ...
 | Field | Detail |
 |-------|--------|
 | Intent | Orchestrate one build into one root, with the failure and location guarantees |
-| Requirements | 2.9, 6.6, 6.7, 10.6 |
+| Requirements | 2.9, 6.6, 6.7 |
 
 **Responsibilities & Constraints**
 - **Build-root guard** (6.7, 7.4). The root is resolved. If it lies inside
@@ -939,13 +945,15 @@ def start_serve(root: Path, addr: str) -> subprocess.Popen[bytes]: ...
   1. The root's managed paths are removed first, so no earlier site survives
      into a failed run.
   2. `load_content` and `load_template` run next. If the content loaded,
-     `check_links`, `render_config`, `check_config` and the referenced-asset
-     check follow.
-  3. All script-level problems are collected (2.9). If any exist, the build
+     `check_links`, `render_config` and `check_config` follow. The llms texts
+     are rendered from the template's `site_name`, `site_description` and
+     `site_url`, and `plan_tree` builds the tree in memory. It is pure and
+     writes nothing.
+  3. The config's referenced assets are checked against that planned tree.
+  4. All script-level problems are collected (2.9). If any exist, the build
      fails without writing anything or running the generator.
-  4. Otherwise `plan_tree` and `write_tree`, then `run_build`. On generator
-     failure `html/` is deleted, since the generator repopulates it even when
-     it fails.
+  5. Otherwise `write_tree`, then `run_build`. On generator failure `html/`
+     is deleted, since the generator repopulates it even when it fails.
 - **Atomic outcome** (6.6). `html/` exists after `build` returns if and only
   if the outcome is success.
 
@@ -1062,7 +1070,10 @@ def main(argv: Sequence[str]) -> int: ...
     and its root-relative path through `matches`.
   - A file that cannot be read is a finding, never a skip.
 - **No matcher of its own.** The cores are imported exactly as
-  `scripts/check_artifacts.py` imports them.
+  `scripts/check_artifacts.py` imports them. The fingerprint constants are
+  bound with `from tests._content_fingerprints import …` and read at call
+  time, so tests can monkeypatch a fingerprinted control value the way
+  `tests/test_release_artifacts.py:2279-2302` does.
 - **Fail closed** (10.4). If `load(repo_root) is None`, one `GATE_NOT_RUN`
   finding is raised and the exit is 1; its message contains `gate_not_run` and
   names `FITDOCS_FORBIDDEN_STRINGS`. `ForbiddenStringsSourceError` exits 2.
@@ -1140,9 +1151,12 @@ def main(argv: Sequence[str]) -> int: ...   # python -m scripts.check_site ROOT 
   - power: a warm-up ramp, three work/recovery intervals and a cool-down;
   - heart rate: a first-order lag response to power;
   - backdrop: a smooth synthetic elevation profile.
-- `render()` returns `render_hero_chart(demo_spec())`. `main` writes
-  `website/assets/hero-chart.svg`. With `--check` it compares instead, and
-  exits 1 on drift.
+- Every series value is rounded to fixed decimals inside `demo_spec`, so
+  the SVG is byte-identical across platforms whose libm may differ in the
+  last bit of `exp` / `sin`.
+- `render()` returns `render_hero_chart(demo_spec())`. `main` writes to
+  `--output PATH`, default `website/assets/hero-chart.svg`. With `--check`
+  it compares against that path instead, and exits 1 on drift.
 
 **Contracts**: Batch [x]
 
@@ -1150,7 +1164,7 @@ def main(argv: Sequence[str]) -> int: ...   # python -m scripts.check_site ROOT 
 OUTPUT: Final = Path("website/assets/hero-chart.svg")
 def demo_spec() -> HeroChartSpec: ...
 def render() -> str: ...
-def main(argv: Sequence[str]) -> int: ...   # 0 written or matching; 1 drift under --check
+def main(argv: Sequence[str]) -> int: ...   # [--output PATH] [--check]; 0 written or matching; 1 drift under --check
 ```
 
 ### Automation
@@ -1449,9 +1463,12 @@ tracked, because the tracked-file guard refuses any non-regular file.
   - canonical order with empty sections omitted (3.1);
   - ascending `order` against alphabetical order (3.2);
   - the URL scheme for `index.md`, nested index and leaf pages (4.6);
-  - golden `llms.txt` / `llms-full.txt` for the fixture (5.1, 5.2);
-  - draft and `_` absence (5.3);
+  - exact expected `llms.txt` / `llms-full.txt` for a hand-built
+    `SiteContent` (5.1, 5.2);
   - two runs byte-identical (5.4).
+
+  Draft and `_` absence from both indexes (5.3) is pinned end to end over
+  the real fixture in `test_build_smoke.py`.
 - **`test_config.py`** covers:
   - an unknown top-level key, an unknown feature, an unknown plugin and
     `markdown_extensions`, each named (6.4);
@@ -1471,12 +1488,14 @@ tracked, because the tracked-file guard refuses any non-regular file.
     tail) into the exact `Problem`s, with the traceback absent (6.5);
   - the executable resolved next to `sys.executable`.
 - **`test_pipeline.py`** covers:
-  - script-level failure: exit 1, `html/` absent, and the generator not
-    invoked (monkeypatched sentinel) (6.6);
+  - script-level failure: `html/` absent and the generator not invoked
+    (monkeypatched sentinel) (6.6);
   - a build-root inside the repository outside `website/build/` refused
-    (6.7);
+    (6.7).
+- **`test_cli.py`** covers:
+  - CLI exit codes 0/1/2, and the 1.2 message;
   - `status` output for empty, drafts-only and populated trees (10.6);
-  - CLI exit codes 0/1/2.
+  - `--verbose` (6.5).
 - **`test_check_site.py`** covers:
   - a synthetic needle via a test-written match file, in content and in a
     path (10.5);
@@ -1520,9 +1539,10 @@ tracked, because the tracked-file guard refuses any non-regular file.
 - **`test_theme.py`**:
   - `home.html` references each hero key only inside a conditional (3.4);
   - `brand.css` defines the palette and font properties for both schemes and
-    is the only file defining them (4.5);
-  - `make_hero_chart.render()` equals the checked-in SVG byte-for-byte, and
-    the generator module imports no file-reading API (3.5, 3.6).
+    is the only file defining them (4.5).
+- **`test_hero_chart.py`**: `make_hero_chart.render()` equals the checked-in
+  SVG byte-for-byte, `--check` detects drift, and `demo_spec` reads no file
+  (3.5, 3.6).
 - **`test_website_doc.py`**:
   - every `SECTIONS`, `REQUIRED_KEYS`, `OPTIONAL_KEYS`, `HERO_KEYS` and
     `HERO_ACTION_KEYS` value, the env var and the default content dir appear
