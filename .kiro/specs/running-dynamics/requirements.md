@@ -58,7 +58,8 @@ does not declare.
   - the Running Dynamics section and its chart on run pages;
   - the document-format version advance;
   - synthesized fixtures reproducing the measured Stryd shapes;
-  - the amendment records for `fit-ingest` and `workout-docs`.
+  - the amendment records for `fit-ingest` and `workout-docs`, and this
+    feature's part of the roadmap bookkeeping for those two updates.
 - **Out of scope**:
   - composing a Stryd file with a HealthFit copy of the same run
     (`channel-merge`), and deciding that two files are the same run

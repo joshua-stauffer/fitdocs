@@ -58,7 +58,12 @@ from that version line.
 - One `DOC_VERSION` advance and the re-pinning of every literal pin of it.
 - The Existing Spec Update records: a `fit-ingest` amendment (record-level
   developer fields and running dynamics) and a `workout-docs` amendment
-  (the Running Dynamics section and chart).
+  (the Running Dynamics section and chart), and this spec's part of the
+  roadmap bookkeeping for those two lines (AmendmentRecords).
+- The developer-field fixture helper `developer_field_run_fit_bytes` and the
+  two fixture families (StrydFixtures), with the keyword-only, defaulted
+  parameters this spec adds to `tests/fixtures/builder.py`'s `_file_id` and
+  `_device_info`.
 
 ### Out of Boundary
 - Which file a composed page takes each channel from, lag alignment, and
@@ -74,8 +79,18 @@ from that version line.
 - The coverage table (`render/sections.py:117-128`): unchanged. Dynamics
   coverage appears in the section's own table.
 - `CONTRACT_VERSION`, `MANAGED_KEYS`, frontmatter keys, the ownership
-  contract, `docs/` pages, `fitdocs.toml` tables.
-- Roadmap and steering bookkeeping.
+  contract, `fitdocs.toml` tables.
+- `docs/` pages, with one stated exception: `DeveloperChannel` is appended to
+  `docs/plugins.md`'s public import surface list (the ``From `fitdocs`:``
+  block), because documented means public (`docs/compatibility.md` names
+  that list as the authority for the public names) and `activity-identity`
+  lists `FileIdentity` there the same way (cross-spec ruling R11). No other
+  `docs/` line changes.
+- Steering, and the roadmap, with one stated exception: the Phase 8
+  `#### Existing Spec Updates` `fit-ingest` and `workout-docs` lines. At the
+  merge this spec annotates each "(running-dynamics part landed)", or ticks
+  it when every other part it names is already on `main` (cross-spec ruling
+  R14; AmendmentRecords). No other roadmap line changes.
 
 ### Allowed Dependencies
 - `model.py` imports nothing internal and never the SDK (pinned by
@@ -106,6 +121,9 @@ from that version line.
 - A new chart asset kind or a renamed one: `activity-identity`'s old-asset
   removal must re-check.
 - A further `DOC_VERSION` advance by a sibling: the second lander re-pins.
+- A change to `developer_field_run_fit_bytes`'s signature or to one of its
+  defaults: `channel-merge`'s fixtures, which extend and call it, must
+  re-check.
 
 ### Cross-spec seams
 
@@ -136,14 +154,38 @@ A cross-spec reviewer reconciles these against the siblings' own designs.
     `Samples`. Whether a composed activity carries an extra's generic developer
     channels (re-aligned) or none is `channel-merge`'s decision; no page
     renders them.
+  - Fixture helper seam, append-only: `channel-merge` builds its
+    developer-field fixtures with `developer_field_run_fit_bytes`
+    (StrydFixtures, task 1.2) and writes a session developer field, HealthFit's
+    `SESSION UUID` included, through the helper's existing `session_fields`
+    keyword (no second session-field parameter). It will append keyword-only,
+    defaulted `laps`, `session_start`, `session_elapsed_s`,
+    `session_distance_m` and `sport` parameters, each only if the merged
+    helper lacks it, each defaulting to the helper's current behaviour and
+    each with a `tests/fixtures/test_builder.py` pin that the default output
+    bytes are unchanged. The helper is shaped for that: it assembles its
+    default message list (records, then no lap message, then one running
+    session spanning the records, then the activity message) in one place
+    and hands the list to a single private Encoder routine, so each appended
+    parameter changes one default of that list (the lap messages, one
+    session field, or the sport) and nothing else.
+  - `render/views.py` is shared (see Shared files below): `channel-merge`
+    appends `## Channel Sources` to each view; this spec inserts
+    `## Running Dynamics` into the run view only. A rebase keeps both.
 - **`activity-identity` (wave 1, parallel)**
   - It adds file-identity fields to the model as append-only, defaulted
     fields on `Activity` (or on a type `Activity` holds), and does not touch
     `Samples`. Both specs append to `Activity`; the second lander keeps both
     and regenerates `tests/golden/{run,ride,strength,minimal}.json`.
-  - Both may append a name to `fitdocs.__all__`, `_LAZY_EXPORTS`, the
-    `TYPE_CHECKING` block of `src/fitdocs/__init__.py` and `_EXPECTED` in
-    `tests/test_public_api.py`; the second lander keeps both.
+  - Both append a name to `fitdocs.__all__`, `_LAZY_EXPORTS`, the
+    `TYPE_CHECKING` block of `src/fitdocs/__init__.py`, `_EXPECTED` in
+    `tests/test_public_api.py`, and `docs/plugins.md`'s public import surface
+    list (``From `fitdocs`:``): `FileIdentity` there, `DeveloperChannel`
+    here (cross-spec ruling R11). The second lander keeps both.
+  - Both wire `parse_fit` in `src/fitdocs/ingest/__init__.py`: it passes its
+    file-identity values, this spec the developer-data ids, the retained
+    records and the record developer fields. Each change is an appended
+    read and keyword; the second lander keeps both.
   - Its page rename removes a renamed page's old assets. This spec adds the
     asset kind `dynamics`, written at `assets/<stem>-dynamics.svg` by
     `layout.asset_rel_path(stem, "dynamics")`. Removal by the `<stem>-` prefix
@@ -151,26 +193,73 @@ A cross-spec reviewer reconciles these against the siblings' own designs.
   - It advances `DOC_VERSION` for source roles. See the version rule below.
   - It may amend `fit-ingest` (identity fields). Amendment and criterion
     numbers are taken at landing time (next free), never assumed.
-  - Shared fixture seam, append-only: this spec gives
-    `tests/fixtures/builder.py`'s `_file_id` keyword-only, defaulted
-    `manufacturer`, `product` and `time_created` parameters beside its
-    positional serial (defaults are today's values, so no existing fixture's
-    bytes change). `activity-identity` may use them for its `file_id`
-    fixtures; either spec may append parameters, and neither changes a
-    default.
+  - Shared fixture seam, append-only: `tests/fixtures/builder.py`'s
+    `_file_id` gains keyword-only, defaulted `manufacturer`, `product` and
+    `time_created` parameters beside its positional serial (defaults are
+    today's values, so no existing fixture's bytes change). Whichever of the
+    two specs' fixture tasks runs first on a branch that lacks them adds
+    them; the other finds them on its branch and reuses them (this spec's
+    task 1.2, `activity-identity`'s task 1.1). Either spec may append
+    parameters, and neither changes a default. This spec also gives
+    `_device_info` a keyword-only `manufacturer` parameter defaulting to
+    `"garmin"` (StrydFixtures), under the same rule.
 - **`intervals-connector` (wave 2)**: owns `_product_name`
   (`ingest/summary.py:372-385`) and attribution. This spec edits
   `ingest/summary.py` only in the developer-field functions (currently
   `:129-301`) and may amend `workout-docs`; numbers are taken at landing time.
+  - Its attribution line reads the recording device (`device_info` index 0).
+    The Stryd fixture writes that device with manufacturer `stryd`
+    (StrydFixtures, cross-spec ruling R12), so once it lands the
+    `stryd_run` golden gains no `Data source` line; the
+    `run_native_dynamics` golden, whose device keeps the builder's `garmin`
+    default, gains its line like every other Garmin-device golden.
+  - Both specs edit `render/views.py` (its `_head`, this spec's run-view
+    insertion) and append to `tests/fixtures/builder.py` without changing a
+    default; a rebase keeps both.
 - **`connectors` (wave 1)**: no seam. This spec imports nothing from it and
   adds no command, setting or network access.
 - **Contract versions**: this spec advances `DOC_VERSION` by exactly one from
   the value on `main` when it lands (`5` at `src/fitdocs/contract.py:174`
   when this design was written), re-pins every literal pin of the old value
-  and regenerates every golden document in the same change. It does not
+  (`tests/metrics/test_sources.py:2270`'s `CONSTANT_REGISTRY_ASOF_DOC_VERSION`
+  included; FormatVersion) and regenerates every golden document in the same
+  change. Every lander advances by one, none shares a bump (cross-spec
+  ruling R1): after the final rebase the implementer checks the value equals
+  `main`'s plus one and re-pins if a sibling landed a bump first. It does not
   touch `CONTRACT_VERSION` or `MANAGED_KEYS`.
 - **`docs-site` (Phase 9 peer)**: this spec adds no `docs/` page and does not
-  edit `docs/index.md`.
+  edit `docs/index.md`. Its one `docs/` edit is the `DeveloperChannel` name in
+  `docs/plugins.md`'s public import surface list (Out of Boundary).
+- **Shared files** (append-only; whichever spec lands second keeps both
+  sides on rebase):
+  - `src/fitdocs/model.py` (`Activity` fields) and
+    `tests/golden/{run,ride,strength,minimal}.json`: `activity-identity`.
+  - `src/fitdocs/__init__.py`, `tests/test_public_api.py` and
+    `docs/plugins.md`'s surface list: `activity-identity`.
+  - `src/fitdocs/ingest/__init__.py` (`parse_fit` wiring):
+    `activity-identity`.
+  - `src/fitdocs/render/views.py`: `channel-merge` (Channel Sources on every
+    view; per cross-spec ruling R2, whichever of it and `intervals-connector`
+    lands second also wires `_head`'s donor devices) and
+    `intervals-connector` (`_head`); `tests/render/test_views.py`:
+    `intervals-connector`.
+  - `tests/render/test_golden_docs.py` `FIXTURES`: `channel-merge`
+    (`composed_run`).
+  - `src/fitdocs/ingest/summary.py`: `intervals-connector` (`_product_name`
+    only; this spec only the developer-field functions).
+  - `tests/fixtures/builder.py`: `_file_id`'s keyword parameters
+    (`activity-identity`), `_device_info`'s `manufacturer` parameter (this
+    spec; any sibling reuses it), `developer_field_run_fit_bytes`'s appended
+    parameters (`channel-merge`), appended builders (`intervals-connector`).
+  - `src/fitdocs/contract.py` (`DOC_VERSION` and its docstring), its literal
+    pins and every `tests/render/golden_docs/*` `doc_version` line: every
+    sibling that advances `DOC_VERSION`.
+  - `CHANGELOG.md` `[Unreleased]`: every sibling; entries go under the
+    existing category heading (FormatVersion).
+  - `.kiro/specs/fit-ingest/` and `.kiro/specs/workout-docs/` amendment
+    records, and their two roadmap lines: `activity-identity` and
+    `intervals-connector` also amend both, `channel-merge` `workout-docs`
+    only.
 
 ## Architecture
 
@@ -259,7 +348,9 @@ src/fitdocs/
 ├── contract.py               # DOC_VERSION + 1 and its docstring paragraph
 └── __init__.py               # + DeveloperChannel export
 tests/
-├── fixtures/builder.py       # + stryd_run_fit_bytes, run_native_dynamics_fit_bytes
+├── fixtures/builder.py       # + stryd_run_fit_bytes, run_native_dynamics_fit_bytes,
+│                             #   developer_field_run_fit_bytes, DevFieldSpec;
+│                             #   keyword params on _file_id and _device_info
 ├── ingest/test_developer.py  # NEW
 ├── ingest/test_dynamics.py   # NEW
 ├── render/test_dynamics.py   # NEW
@@ -291,17 +382,34 @@ tests/
   recorded-zero cases (power, cadence, speed, distance, altitude,
   temperature).
 - `tests/test_public_api.py` — `_EXPECTED` gains `DeveloperChannel`.
+- `docs/plugins.md` — `DeveloperChannel` appended to the ``From `fitdocs`:``
+  public import surface list, the one stated `docs/` exception (Out of
+  Boundary); `tests/test_docs_guarantees.py`'s
+  `test_every_name_in_the_plugins_doc_public_surface_list_actually_imports`
+  then covers it.
+- `tests/fixtures/builder.py` — `_file_id` gains keyword-only, defaulted
+  `manufacturer`, `product` and `time_created` (unless `activity-identity`
+  already added them on the branch; then they are reused); `_device_info`
+  gains a keyword-only `manufacturer` defaulting to `"garmin"`; the new
+  builders and `DevFieldSpec` (StrydFixtures). No existing fixture's bytes
+  change. `tests/fixtures/test_builder.py` gains their self-tests.
 - `tests/render/test_golden_docs.py` — `FIXTURES` (`:102-108`) gains
   `stryd_run` and `run_native_dynamics`.
 - `tests/render/golden_docs/*` — two new goldens with their assets; every
   golden's `doc_version` line at the advance.
 - `tests/golden/{run,ride,strength,minimal}.json` — regenerated for the model
   shape (new keys only).
-- `tests/test_cli_check.py:196,198`, `tests/render/test_frontmatter.py:44,101`
-  — literal `DOC_VERSION` pins moved.
-- `CHANGELOG.md` — `[Unreleased]` entries.
+- `tests/test_cli_check.py:196,198`, `tests/render/test_frontmatter.py:44,101`,
+  `tests/metrics/test_sources.py:2270` — literal `DOC_VERSION` pins moved
+  (FormatVersion).
+- `CHANGELOG.md` — `[Unreleased]` entries, appended under the existing
+  `### Added` / `### Changed` headings, each heading created only if absent
+  (FormatVersion).
 - `.kiro/specs/fit-ingest/{requirements.md,spec.json}`,
   `.kiro/specs/workout-docs/{requirements.md,spec.json}` — amendment records.
+- `.kiro/steering/roadmap.md` — the Phase 8 Existing Spec Updates
+  `fit-ingest` and `workout-docs` lines only, annotated or ticked at the
+  merge (AmendmentRecords).
 
 ## System Flows
 
@@ -385,7 +493,7 @@ graph TB
 | 9.5 | Release notes | FormatVersion | `CHANGELOG.md` | Review |
 | 10.1 | Deterministic model, document and images | all | goldens | Golden |
 | 10.2 | No runtime dependency | all | frozen dependency tests | Existing |
-| 10.3 | Synthesized fixtures with the measured shapes | StrydFixtures | `stryd_run_fit_bytes`, `run_native_dynamics_fit_bytes` | Tests |
+| 10.3 | Synthesized fixtures with the measured shapes | StrydFixtures | `stryd_run_fit_bytes`, `run_native_dynamics_fit_bytes`, `developer_field_run_fit_bytes` | Tests |
 | 10.4 | Three named mutations each red | Testing Strategy | mutation table | Tests |
 | 10.5 | No Stryd web address anywhere | all | review grep | Review |
 
@@ -405,7 +513,7 @@ graph TB
 | DynamicsPalette | render.charts | Two series colors | 8.4 | none | State |
 | FormatVersion | contract, tests, changelog | Version advance and pins | 9.1-9.5 | all (P0) | State |
 | StrydFixtures | tests | Measured shapes, synthesized | 6.x, 10.3 | SDK encoder (P0) | Batch |
-| AmendmentRecords | spec docs | Existing Spec Update records | boundary | all | none |
+| AmendmentRecords | spec docs, roadmap | Existing Spec Update records and their two roadmap lines | boundary | all | none |
 
 ### Model
 
@@ -756,14 +864,36 @@ def dynamics_section(ctx: DocContext) -> tuple[str, tuple[Asset, ...]] | None: .
 - `DOC_VERSION` advances by one from `main` at landing, with a docstring
   paragraph naming the three causes: run pages gain the section; a 0 bpm
   heart-rate sample is not recorded; a session developer sentinel or float32
-  value is decoded.
+  value is decoded. Every sibling that advances it does so by one of its own
+  (cross-spec ruling R1); after the final rebase the implementer checks the
+  value equals `main`'s plus one and, if a sibling landed a bump first,
+  re-pins every site below (and re-records
+  `_PRE_RUNNING_DYNAMICS_DOC_VERSION` as `main`'s value) before merging.
 - Every literal pin of the old value moves in the same change (at design time:
-  `tests/test_cli_check.py:196,198`, `tests/render/test_frontmatter.py:44,101`
-  and every golden document's `doc_version` line); a grep for the old
-  literal decides, not this list.
-- `CHANGELOG.md` `[Unreleased]`: `### Added` names the section; `### Changed`
-  names the generated document format and the action `fitdocs regen`, per the
-  changelog's convention.
+  `tests/test_cli_check.py:196,198`, in whatever form `main` holds it (a
+  sibling may already have rewritten it as `f"doc_version: {DOC_VERSION}"`);
+  `tests/render/test_frontmatter.py:44,101`;
+  `tests/metrics/test_sources.py:2270`; and every golden document's
+  `doc_version` line); a grep for the old literal decides, not this list.
+- `tests/metrics/test_sources.py:2270`, `CONSTANT_REGISTRY_ASOF_DOC_VERSION:
+  Final[int] = 5`, is a literal that moves with the advance, not an as-of
+  constant that stays. While `CONSTANT_SOURCES` is clean (no binding carries
+  a `previous_value`, as today), `_assert_constant_registry_asof_matches_reality`
+  requires it to equal `contract.DOC_VERSION`, and
+  `test_constant_trigger_is_quiet_against_the_real_registry` calls that
+  check on the real registry. The advance alone therefore reds that test
+  until the constant is re-pinned to the new value. This spec moves no cited
+  constant, so the registry stays clean and equality stays the rule. The
+  grep patterns (`doc_version: <old>`, `DOC_VERSION == <old>`) do not match
+  this line, which is why it is named here. `activity-identity`,
+  `channel-merge` and `intervals-connector` re-pin it the same way.
+- `CHANGELOG.md` `[Unreleased]`: an entry under `### Added` names the
+  section; an entry under `### Changed` names the generated document format
+  and the action `fitdocs regen`, per the changelog's convention. Each entry
+  is appended under the section's existing heading of that category, and the
+  heading is created only when the section lacks it
+  (`tests/test_changelog.py:516` rejects a category repeated within one
+  section; cross-spec ruling R8).
 
 #### AmendmentRecords
 - `fit-ingest`: a new `## Amendment N (<date>): record-level developer fields
@@ -779,7 +909,17 @@ def dynamics_section(ctx: DocContext) -> tuple[str, tuple[Asset, ...]] | None: .
 - `workout-docs`: `## Amendment N (<date>): the Running Dynamics section,
   landed by running-dynamics`, appending criteria to Requirement 6 (placement,
   rows, units, omission, run-only) and Requirement 7 (the chart), plus a
-  `spec.json` `amendments` key and entry (none exists today).
+  `spec.json` `amendments` key and entry (none exists today), or an appended
+  entry if a sibling has created the key by then.
+- Roadmap, the one stated exception to Out of Boundary (cross-spec ruling
+  R14): at the merge, after the final rebase onto `main`, when `main`'s state
+  is known, the Phase 8 `#### Existing Spec Updates` `fit-ingest` and
+  `workout-docs` lines are each ticked if every other part they name is
+  already on `main`, and otherwise annotated "(running-dynamics part
+  landed)". Each line names several landers (`activity-identity`,
+  `intervals-connector`, and on `workout-docs` also `channel-merge`); when
+  this spec's part is the last to reach `main`, this spec is the one that
+  ticks it. No other roadmap line changes here.
 
 ### Tests
 
@@ -787,15 +927,83 @@ def dynamics_section(ctx: DocContext) -> tuple[str, tuple[Asset, ...]] | None: .
 - `stryd_run_fit_bytes(*, manufacturer: str = "stryd")` and
   `run_native_dynamics_fit_bytes()`; shapes in Supporting References.
   Deterministic constants only, built with the shared private helpers and
-  `garmin_fit_sdk.Encoder`, like every other family.
-- `_file_id` gains keyword-only, defaulted `manufacturer`, `product` and
-  `time_created` parameters (the shared seam noted under Cross-spec seams).
-- One helper encodes a small running activity whose records, and optionally
-  its session, carry developer fields from a caller-given description list
-  (name, base type, definition number, optional units, scale, offset, native
-  message number, developer data index), so every synthetic developer-field
-  test shares one correct Encoder sequence (fields registered before the
-  first write).
+  `garmin_fit_sdk.Encoder`, like every other family. `manufacturer` names
+  the writer: it is written into both the `file_id` and the `device_info`
+  at device index 0, so the `manufacturer="garmin"` variant differs from the
+  default in those two messages' manufacturer and nowhere else, and a writer
+  check keyed on either message is caught by the any-writer pins (5.6).
+- `_file_id` gains keyword-only, defaulted `manufacturer: str = "garmin"`,
+  `product: int = 1` and `time_created: int = FIT_TIMESTAMP_BASE` parameters
+  beside its positional serial (the shared seam noted under Cross-spec
+  seams): added unless `activity-identity` already added them on the branch,
+  in which case they are reused, never re-declared.
+- `_device_info(serial, product_name, *, manufacturer: str = "garmin")`: the
+  hard-coded `"garmin"` (`builder.py:157-168`) becomes a keyword-only,
+  defaulted parameter, so no existing fixture's bytes change and the Stryd
+  fixture can record a Stryd device (cross-spec ruling R12).
+- `developer_field_run_fit_bytes` is the one developer-field encoding helper
+  (cross-spec ruling R10), so every synthetic developer-field test shares
+  one correct Encoder sequence (every field registered with
+  `Encoder.add_developer_field` before the first write, as
+  `_encode_run_with_developer_fields` does):
+
+```python
+@dataclass(frozen=True)
+class DevFieldSpec:
+    """One field_description, in file order; its position is its SDK key."""
+    name: str
+    base_type: int                        # a garmin_fit_sdk BASE_TYPE code
+    definition_number: int
+    units: str | None = None              # None: not written
+    scale: int | float | None = None      # None: undeclared on the wire
+    offset: int | float | None = None     # None: undeclared on the wire
+    native_mesg_num: int | None = None    # None: not written
+    developer_data_index: int = 0
+    array: int | None = None              # element count; None: a scalar field
+
+def developer_field_run_fit_bytes(
+    *,
+    descriptions: Sequence[DevFieldSpec],
+    records: Sequence[tuple[Mapping[str, object], Mapping[int, object]]],
+    session_fields: Mapping[int, object] | None = None,
+    serial: int = _DEV_FIELD_RUN_SERIAL,
+    manufacturer: str = "garmin",
+    product: int = 1,
+    time_created: int = FIT_TIMESTAMP_BASE,
+    device_manufacturer: str = "garmin",
+) -> bytes: ...
+```
+
+- `descriptions` are written in the given order after one
+  `developer_data_id` per distinct `developer_data_index` (a fixed synthetic
+  16-byte application id per index).
+- Each `records` entry is one record message: its first mapping holds the
+  native record fields in real-world units (`mesg_num` is added; `timestamp`
+  defaults to `FIT_TIMESTAMP_BASE + i`); its second maps a description's
+  position in `descriptions` to the value that record carries for it. A
+  position absent from it is not recorded on that record.
+- `session_fields` is supported: it maps a description's position to the
+  value the session message carries (the "optionally its session"
+  capability; the 16-entry `SESSION UUID` is written this way, with `array`
+  set on its spec). `None`, the default, writes no developer field on the
+  session. One description may be recorded on records, on the session, or
+  both.
+- `serial`, `manufacturer`, `product` and `time_created` go to `_file_id`;
+  `serial` and `device_manufacturer` go to `_device_info` (device index 0,
+  a fixed synthetic product name). `_DEV_FIELD_RUN_SERIAL` is a module
+  constant no other family uses.
+- The default message list, assembled in one place: `file_id`, the
+  developer data ids, the descriptions, `device_info`, a running/generic
+  `sport`, the records, no lap message, one running session whose start and
+  end are the first and last record timestamps and whose elapsed and timer
+  totals are their difference, then the `activity` message. The list goes to
+  one private Encoder routine that `stryd_run_fit_bytes` also uses, so the
+  Stryd fixture's laps and session quirks need no parameter on the public
+  helper. `channel-merge`'s appended parameters (`laps`, `session_start`,
+  `session_elapsed_s`, `session_distance_m`, `sport`) each change one
+  default of that list (the lap messages, one session field, or the sport
+  written on the `sport` and session messages) and nothing else (Cross-spec
+  seams).
 
 ## Data Models
 
@@ -839,6 +1047,13 @@ Every assertion names the production mutation it dies on
 | M11 | Percentile rank off by one | `dynamics_rows` on pairwise-distinct values |
 | M12 | Recognize names case-insensitively or by substring | `Form power` and `Stryd Form Power` stay generic |
 
+- **Fixture self-tests (`tests/fixtures/test_builder.py`)**: the raw shapes
+  later assertions rely on, decoded before any fitdocs code sees them;
+  `developer_field_run_fit_bytes` writes each description at its key and
+  definition number, `session_fields` values on the session only when given,
+  and `device_manufacturer` on device index 0; the Stryd fixture's
+  `device_info` index 0 is `stryd`. Their mutations are in the builder
+  (tasks.md 1.2), since the builder is the code those pins test.
 - **Unit (`tests/ingest/test_developer.py`)**: sentinel table vs the SDK's;
   scalar and array sentinel rules per base type; float32 shortest decimal
   (including a value needing 9 digits); declared scale after rounding;
@@ -878,8 +1093,12 @@ Every assertion names the production mutation it dies on
 ## Supporting References
 
 ### Stryd fixture (`stryd_run_fit_bytes`)
-- `file_id` manufacturer `stryd`; one `developer_data_id` (index 0, a fixed
-  synthetic 16-byte application id); session sport `running`.
+- `file_id` manufacturer `stryd`; `device_info` at device index 0 with
+  manufacturer `stryd`, through `_device_info`'s keyword-only
+  `manufacturer` (cross-spec ruling R12: with the builder's `garmin` default
+  a Stryd page would be attributed to Garmin once `intervals-connector`
+  lands); one `developer_data_id` (index 0, a fixed synthetic 16-byte
+  application id); session sport `running`.
 - Field descriptions, written before the records (key = order):
 
 | Key | Name | Definition | Base type | Native message slot |
@@ -928,3 +1147,5 @@ Every assertion names the production mutation it dies on
 - The session carries HealthFit's developer fields
   (`_SESSION_DEV_FIELD_SPECS`), with a `SESSION UUID` that contains the byte
   `255`.
+- `file_id` and `device_info` keep the builder's `garmin` defaults, so this
+  golden, unlike `stryd_run`, has a Garmin recording device.

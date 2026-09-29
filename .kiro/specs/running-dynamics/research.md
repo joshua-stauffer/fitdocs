@@ -121,10 +121,34 @@
 - Literal pins of that value: `tests/test_cli_check.py:196,198` and
   `tests/render/test_frontmatter.py:44,101`, plus the `doc_version: 5` line
   in each of the 9 golden documents under `tests/render/golden_docs/`.
+- One more, found by the Phase 8 cross-spec review (2026-09-29):
+  `tests/metrics/test_sources.py:2270`,
+  `CONSTANT_REGISTRY_ASOF_DOC_VERSION: Final[int] = 5`. It reads like an
+  as-of constant, but while the cited-constant registry is clean
+  `test_constant_trigger_is_quiet_against_the_real_registry` asserts it
+  equals `contract.DOC_VERSION`, so it moves with every advance. The
+  `doc_version: <old>` / `DOC_VERSION == <old>` greps miss it; the design
+  names it.
 - `tests/golden/{run,ride,strength,minimal}.json` serialize every model field
   generically (`tests/golden/_serialize.py`), so any model field addition
   changes them; the serializer already handles dataclasses and mappings.
 - `tests/test_public_api.py` pins `fitdocs.__all__` exactly.
+- `docs/plugins.md`'s ``From `fitdocs`:`` list is the documented public
+  surface; `tests/test_docs_guarantees.py` checks every listed name imports
+  (no reverse check exists for `fitdocs`, only for `fitdocs.load`), so
+  listing `DeveloperChannel` there is what makes it public (cross-spec
+  ruling R11).
+
+### Fixture builder facts the fixtures depend on
+- `tests/fixtures/builder.py`'s `_device_info` hard-codes
+  `manufacturer: "garmin"` (`:157-168`), and every family's device index 0
+  comes from it. `intervals-connector`'s attribution line names Garmin when
+  that device is a Garmin one, so a Stryd fixture built with the unchanged
+  `_device_info` would render as a Garmin recording. Hence the keyword-only,
+  defaulted `manufacturer` parameter (cross-spec ruling R12).
+- `_file_id` and `_device_info` are also called directly by five test
+  modules outside `builder.py`; keyword-only, defaulted parameters keep all
+  of them valid and every existing fixture's bytes unchanged.
 
 ## Architecture Pattern Evaluation
 
@@ -243,7 +267,9 @@
   defaulted fields; the second lander regenerates the model goldens and
   re-pins `fitdocs.__all__`.
 - `DOC_VERSION` contention. Mitigation: advance by one from `main` at landing
-  and move every literal pin in the same change.
+  and move every literal pin in the same change; after the final rebase,
+  check the value is `main`'s plus one and re-pin if a sibling landed first
+  (cross-spec ruling R1).
 
 ## References
 - `garmin-fit-sdk` 21.208.0 (project venv): `decoder.py`, `fit.py`,
