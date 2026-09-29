@@ -331,7 +331,7 @@
 
 - [ ] 3. Core render: the shared axis, the section and chart, the run view
 
-- [ ] 3.1 (P) Extract the shared chart axis and add the two dynamics series colors
+- [x] 3.1 (P) Extract the shared chart axis and add the two dynamics series colors
   - In `src/fitdocs/render/sections.py`, add `ChartAxis` and `chart_axis`
     holding the x-axis block of `hero_chart_spec` (`:366-378`) verbatim, and
     make `hero_chart_spec` call it
