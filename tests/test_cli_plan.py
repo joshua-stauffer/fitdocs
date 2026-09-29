@@ -786,18 +786,34 @@ def test_no_other_command_implementation_reaches_run_plan() -> None:
 
 def test_run_plan_pass_is_loaded_exactly_four_times() -> None:
     """`_run_plan_pass` is loaded exactly four times, module-wide: inside
-    `sync_command` (twice -- the explicit-source branch and the drain
-    branch), `regen_command`, and `plan_command`, and nowhere else (design.md,
-    "CliChaining", the AST pin re-stated; plan-resolution task 3.2).
+    `sync_command`'s explicit-source branch, `_run_drain_passes` -- the
+    helper `sync_command`'s inbox-drain branch delegates to (connectors task
+    1.4), so sync's two branches still each make exactly one call, now split
+    across the command and its helper -- `regen_command`, and `plan_command`,
+    and nowhere else (design.md, "CliChaining", the AST pin re-stated;
+    plan-resolution task 3.2; connectors task 1.4).
 
-    Named mutation (call `_run_plan_pass` from `load_command` too): the
-    count assertion below reds (5 != 4) and the containing-function-names
-    assertion reds together (`load_command` is not one of the four named
-    functions)."""
+    Named mutations (each observed in isolation; the assertions below run in
+    sequence, so only the first one a mutation falsifies is ever seen to
+    red): calling `_run_plan_pass` from `load_command` too reds only the
+    module-wide count assertion (5 != 4); dropping the call from
+    `_run_drain_passes` entirely reds only the module-wide count assertion
+    (3 != 4), before the drain-branch assertion is ever reached; moving (not
+    dropping) the helper's call into `load_command` instead reds only the
+    drain-branch count assertion (0 != 1), since the module-wide count of 4
+    is unaffected by a move; renaming `sync_command`'s call to the helper
+    reds the dedicated `_run_drain_passes`-call-count assertion below;
+    dropping the `chained` keyword from `_run_drain_passes`'s call reds the
+    keyword-completeness assertion."""
     source = inspect.getsource(cli_module)
     tree = ast.parse(source)
 
-    named_functions = {"sync_command", "regen_command", "plan_command"}
+    named_functions = {
+        "sync_command",
+        "regen_command",
+        "plan_command",
+        "_run_drain_passes",
+    }
     functions_by_name = {
         node.name: node
         for node in ast.walk(tree)
@@ -817,7 +833,13 @@ def test_run_plan_pass_is_loaded_exactly_four_times() -> None:
         for node in ast.walk(functions_by_name["sync_command"])
         if isinstance(node, ast.Name) and node.id == "_run_plan_pass"
     ]
-    assert len(sync_loads) == 2
+    assert len(sync_loads) == 1
+    drain_loads = [
+        node
+        for node in ast.walk(functions_by_name["_run_drain_passes"])
+        if isinstance(node, ast.Name) and node.id == "_run_plan_pass"
+    ]
+    assert len(drain_loads) == 1
     regen_loads = [
         node
         for node in ast.walk(functions_by_name["regen_command"])
@@ -831,6 +853,34 @@ def test_run_plan_pass_is_loaded_exactly_four_times() -> None:
     ]
     assert len(plan_loads) == 1
 
-    assert {id(node) for node in sync_loads + regen_loads + plan_loads} == {
-        id(node) for node in all_loads
-    }
+    assert {
+        id(node) for node in sync_loads + drain_loads + regen_loads + plan_loads
+    } == {id(node) for node in all_loads}
+
+    # sync_command's inbox-drain branch must delegate to _run_drain_passes by
+    # that name -- a rename of the call site would leave every count above
+    # unaffected, so it is checked separately.
+    drain_helper_calls_in_sync = [
+        call
+        for call in ast.walk(functions_by_name["sync_command"])
+        if isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Name)
+        and call.func.id == "_run_drain_passes"
+    ]
+    assert len(drain_helper_calls_in_sync) == 1
+
+    # Every call site -- including the helper's -- must still pass both
+    # required (no-default) keywords.
+    all_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "_run_plan_pass"
+    ]
+    assert len(all_calls) == 4
+    for call in all_calls:
+        call_keywords = {kw.arg for kw in call.keywords if kw.arg is not None}
+        assert {"today", "chained"} <= call_keywords, (
+            f"_run_plan_pass call missing a required keyword: {call_keywords}"
+        )
