@@ -644,8 +644,12 @@ def attribution_line(base: Activity, donors: Sequence[Activity] = ()) -> str | N
   101`, `tests/metrics/test_sources.py:2270`
   (`CONSTANT_REGISTRY_ASOF_DOC_VERSION`, which tracks the current version while
   the registry is clean), and every `tests/render/golden_docs/*.md`
-  (regenerated with `uv run python -m tests.render.test_golden_docs`; each
-  gains its `Data source: Garmin Synthetic…` line and the new version). A
+  (regenerated with `uv run python -m tests.render.test_golden_docs`). All
+  nine gain the new version; the seven rendered from a fixture with a device
+  list also gain their `Data source: Garmin Synthetic…` line; `minimal.md`
+  and `map_generic.md`, rendered from the device-less minimal file
+  (`tests/fixtures/builder.py:579-590`), change only in the version and are
+  the golden case of 8.3's "the file names no recording device". A
   sibling's recorded "pre-this-spec" constant (e.g. running-dynamics'
   `_PRE_RUNNING_DYNAMICS_DOC_VERSION`) keeps its value. No number is written in
   any doc page or test prose.
@@ -738,10 +742,13 @@ Every web address in the section is the project's own or on `intervals.icu`.
   tests and its documentation, other than a shipped service connector's own
   module, tests and documentation section, name no online service's
   endpoint", with a `spec.json` entry.
-- `.kiro/steering/roadmap.md` Phase 8: the `fit-ingest` and `workout-docs`
-  Existing Spec Updates lines tick when every part is on `main`, otherwise
-  gain "(intervals-connector part landed)"; the `intervals-connector` Specs
-  line ticks with its merge SHA.
+- `.kiro/steering/roadmap.md` Phase 8, updated at the merge (after the final
+  rebase, when `main`'s state is known): the `fit-ingest` and `workout-docs`
+  Existing Spec Updates lines tick if every other part they name is already
+  on `main`, otherwise gain "(intervals-connector part landed)". The
+  `intervals-connector` Specs line ticks, with the implementation's merge SHA,
+  only when the completion gate that follows the maintainer's live check
+  closes, on its own later branch.
 
 ## Data Models
 
@@ -822,7 +829,10 @@ any real account.
   gives exactly two; no `since` gives one request whose `oldest` is 31 days
   before the injected `now` (mutations: drop the one-day overlap; drop the
   one-day widening; `≤` for `<` in the window condition — the `D = 180` case
-  reds; `FIRST_PULL_DAYS = 31`).
+  reds; `FIRST_PULL_DAYS = 31`). A settings table carrying `athlete = "i5"`
+  and `api_base = "https://example.org"` changes no request: every one still
+  goes to `API_BASE` for athlete `0` (1.5; mutation: honour an `athlete`
+  key).
 - Entry mapping, one fixture listing whose entries vary one property each
   against the others: an id present in two windows listed once; a source
   outside the filter and a missing source omitted; an entry starting before
@@ -842,7 +852,8 @@ any real account.
   gzip and a gzip expanding past a patched `MAX_FILE_BYTES` →
   `IntervalsDownloadError`; the request path is `/file`, never `/fit-file`,
   with the id percent-quoted (mutations: return the compressed body; drop the
-  size bound; request `/fit-file`).
+  size bound; request `/fit-file`; drop GPX recognition; drop TCX
+  recognition).
 - Status mapping on data calls: 401/403 raise `AuthFailure`
   (rejected/blocked); persistent 429 and 503 raise `ConnectorError` with the
   two messages after exactly three requests (the client's retries); 418 on the
@@ -861,7 +872,9 @@ any real account.
   `<inbox>/intervals/`; a GPX-typed entry recorded skipped with no download
   request; a download whose bytes are neither FIT nor GPX/TCX recorded skipped
   as not a FIT file (4.6); a second pull makes listing requests only and
-  delivers nothing (6.2); an original byte-identical to an archived file
+  delivers nothing (6.2); an original byte-identical to a file seeded under
+  `fit-archive/` (a second builder ride, asserted to match no pending ledger
+  entry's hash, so the engine's pending-delivery branch cannot answer first)
   recorded as already held (6.3); every recorded request carries
   `version.user_agent()` and none contains `Python-urllib` (5.6). No
   file-level secret scan is added here: every reason this connector returns is
@@ -890,7 +903,9 @@ any real account.
 - Wording over hand-built activities: Garmin creator `edge_1040` → `Data
   source: Garmin edge_1040`; blank model → `Data source: Garmin`; a `stryd`
   creator → `None`, and so does a Garmin device at index 1 listed before a
-  `stryd` recording device; model text with a
+  `stryd` recording device; an empty device list and a lone index-1 Garmin
+  device → `None` (mutation: fall back to the first device when none has
+  index 0); model text with a
   newline → one line; `Garmin Edge 1040` → not doubled; base Garmin plus a
   `stryd` donor → `Data sources: Garmin edge_1040 and other devices`; base
   `stryd` plus a Garmin donor → same form; two Garmin models → `Data sources:
@@ -900,8 +915,11 @@ any real account.
 - Placement in all three views: the line is the first non-blank line after the
   H1, precedes the `notes` begin marker, and is absent for a non-Garmin
   recording device (mutation: append the line after the notes region).
-- Goldens: every `tests/render/golden_docs/*.md` carries the line and the new
-  version; `test_render_twice_is_byte_identical` stays green.
+- Goldens: the seven goldens with a device list carry the line and the new
+  version; `minimal.md` and `map_generic.md` (no device list) carry the new
+  version and no line (8.3); `test_render_twice_is_byte_identical` stays
+  green. The generic view's Garmin placement pin uses the parsed minimal
+  activity with its devices replaced by a Garmin index-0 device.
 
 ### Docs (`tests/connectors/test_intervals_docs.py`)
 - The section's variable name equals `env_var_name("intervals", "api_key")`;
