@@ -70,6 +70,8 @@ dev = [
     "types-PyYAML>=6.0",
     "markdown-it-py>=3.0",
 ]
+# Website tooling, kept out of `dev` so a plain `uv sync` does not install it.
+docs = ["zensical==0.0.65"]
 
 [tool.ruff]
 target-version = "py311"
@@ -160,6 +162,7 @@ files = [
     "tests/test_releasing_docs.py",
     "tests/test_ci_workflow.py",
     "tests/test_release_workflow.py",
+    "tests/sitebuild",
     "scripts",
 ]
 

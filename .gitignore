@@ -42,3 +42,7 @@ Morton*Modeling*human*performance*in*running*.pdf
 
 # local secrets (Final Surge creds etc.) -- never committed
 .env
+
+# Website build output (docs-site 6.7); written by scripts/build_site.py.
+# Explicit even though the general `build/` rule above also matches.
+/website/build/
