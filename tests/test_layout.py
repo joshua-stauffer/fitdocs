@@ -65,6 +65,7 @@ from fitdocs.layout import (
     ASSETS_SUBDIR,
     BLOCKS_DIR,
     CACHE_DIR,
+    CONNECTOR_STATE_DIR,
     DECLARED_DIRS,
     DEFAULT_INBOX_DIR,
     DEFAULT_PLANS_DIR,
@@ -84,6 +85,7 @@ from fitdocs.layout import (
     block_doc_path,
     block_pages_dir,
     block_rel_link,
+    connector_ledger_path,
     doc_path,
     doc_stem,
     history_asset_path,
@@ -808,6 +810,54 @@ def test_quarantine_path_resolves_under_the_tool_state_directory() -> None:
     assert path == root / TOOL_STATE_DIR / "quarantine.toml"
     assert path.parent == root / TOOL_STATE_DIR
     assert _is_owned(path, root)
+
+
+def test_connector_ledger_path_resolves_under_the_connector_state_directory() -> None:
+    """The per-instance ledger's path lives under
+    ``.fitdocs/connectors/`` (design.md LayoutPaths, Req 7.1).
+
+    Two distinct instances get two distinct paths (pairwise-distinct
+    instance names, not a single fixed name repeated), so a mutation that
+    ignores ``instance`` and always names one fixed file cannot pass both
+    assertions.
+    """
+    root = Path("/data/root")
+
+    healthfit_path = connector_ledger_path(root, "healthfit")
+    intervals_path = connector_ledger_path(root, "intervals-primary")
+
+    assert healthfit_path == root / TOOL_STATE_DIR / "connectors" / "healthfit.toml"
+    assert intervals_path == (
+        root / TOOL_STATE_DIR / "connectors" / "intervals-primary.toml"
+    )
+    assert healthfit_path != intervals_path
+    assert healthfit_path.parent == intervals_path.parent
+    assert f"{TOOL_STATE_DIR}/connectors" == CONNECTOR_STATE_DIR
+    assert _is_owned(healthfit_path, root)
+
+
+def test_connector_state_dir_does_not_widen_owned_paths() -> None:
+    """Adding the connector-state directory does not add a second entry to
+    :data:`OWNED_PATHS` -- it is already covered by the ``.fitdocs/`` prefix
+    (design.md LayoutPaths: "``OWNED_PATHS`` is unchanged").
+
+    Pinned against the exact tuple (not merely membership), so a mutation
+    that appended a ``".fitdocs/connectors/"`` entry -- redundant but a
+    change to the published contract's tuple -- would red this while
+    ``test_owned_paths_name_every_fitdocs_owned_location``'s exact-tuple pin
+    also catches it.
+    """
+    assert OWNED_PATHS == (
+        "workouts/",
+        "workouts/assets/",
+        "history/",
+        "history/assets/",
+        "blocks/",
+        "fit-archive/",
+        ".cache/",
+        ".fitdocs/",
+    )
+    assert len(OWNED_PATHS) == 8
 
 
 def test_declared_dirs_are_the_top_level_owned_directories() -> None:

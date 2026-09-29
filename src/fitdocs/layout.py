@@ -88,10 +88,12 @@ TOOL_STATE_DIR: Final[str] = ".fitdocs"
 """Tool-owned state under the data root: ``<data-root>/.fitdocs/``.
 
 Where run state that is neither a document, an asset, an archived source, nor a
-cache entry lands -- the sibling ingestion spec's quarantine record is the first
-tenant. It is tool-owned (it is in :data:`OWNED_PATHS`) but carries **no**
-ownership declaration: it is dot-prefixed machine state that no human or agent
-browses, and a declaration there would only be noise.
+cache entry lands -- the sibling ingestion spec's quarantine record is the
+first tenant, and the connectors spec's per-instance ledger
+(:data:`CONNECTOR_STATE_DIR`, :func:`connector_ledger_path`) is the second.
+It is tool-owned (it is in :data:`OWNED_PATHS`) but carries **no** ownership
+declaration: it is dot-prefixed machine state that no human or agent browses,
+and a declaration there would only be noise.
 
 Not to be confused with the ``.fitdocs/data-root`` *pointer* file
 (:data:`~fitdocs.config.POINTER_RELPATH`). That one lives in a **source tree**,
@@ -343,6 +345,27 @@ def quarantine_path(data_root: Path) -> Path:
     writes into it (``quarantine.py``), not to this I/O-free leaf.
     """
     return data_root / TOOL_STATE_DIR / "quarantine.toml"
+
+
+CONNECTOR_STATE_DIR: Final[str] = f"{TOOL_STATE_DIR}/connectors"
+"""Per-instance connector ledger directory: ``<data-root>/.fitdocs/connectors/``
+(connectors design.md LayoutPaths, Req 7.1).
+
+Composed from :data:`TOOL_STATE_DIR` rather than a second dot-prefixed
+literal, so the owned prefix and this directory can never diverge; it is
+already covered by ``.fitdocs/`` in :data:`OWNED_PATHS`, which is therefore
+unchanged."""
+
+
+def connector_ledger_path(data_root: Path, instance: str) -> Path:
+    """A connector instance's ledger path (connectors design.md LayoutPaths,
+    Req 7.1): ``<data_root>/.fitdocs/connectors/<instance>.toml``.
+
+    Pure path composition only -- creating :data:`CONNECTOR_STATE_DIR` on
+    demand belongs to the ledger store that writes into it, not to this
+    I/O-free leaf.
+    """
+    return data_root / CONNECTOR_STATE_DIR / f"{instance}.toml"
 
 
 def source_ref(sha256: str) -> str:
