@@ -337,7 +337,7 @@ never co-varies two keys a rule distinguishes.
     mypy tests/identity` clean
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 5.4_
 
-- [ ] 2.2 Implement the match rule with its stated tolerances
+- [x] 2.2 Implement the match rule with its stated tolerances
   - Add the tolerance constants with their measured sources exactly as
     design.md's table states (`SHIFT_STEP_S` and `SHIFT_MAX_HOURS` typed
     `Final[int]`, because channel-merge's `hour_shift_s` returns an `int`
