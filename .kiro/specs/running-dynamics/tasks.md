@@ -354,7 +354,7 @@
   - Parallel: depends on nothing in majors 1-2 (render only, existing
     `Samples` fields only), so it may run alongside them
 
-- [ ] 3.2 Build the Running Dynamics section table and chart
+- [x] 3.2 Build the Running Dynamics section table and chart
   - Create `src/fitdocs/render/dynamics.py` per design.md § DynamicsSection:
     the display table, the chart precedence, `dynamics_rows`,
     `dynamics_chart_spec` and `dynamics_section`. It imports no ingest,
@@ -575,4 +575,4 @@
 - 2.1: `ingest/developer.py` exposes `parse_field_descriptions`, `decode_developer_value` (returns `None` for a sentinel, a tuple for a list value), `application_ids`, `apply_declared_scale`, `INVALID_VALUES`; the caller omits scale 0. When 2.2 adds the record reader, name it as a second caller in `apply_declared_scale`'s scale-0 docstring bullet.
 - 3.1: `chart_axis(samples) -> ChartAxis(unit, indices, x) | None`; pick series values by `axis.indices`.
 - 3.2 / M11 (design § Testing Strategy, task 3.2, task 6.1): `math.ceil(k / 100 * n)` is an EQUIVALENT mutant of the integer nearest-rank rule (`10/100*30 == 3.0` exactly; identical for k in {10, 90}, n 1..1999). Use `(k*n)//100 + 1` as M11.
-
+- 3.2: `dynamics_section(ctx)` returns `(body, assets)` with NO heading; the body ends with the image link when a chart exists. 3.3 prepends `## Running Dynamics` under `Modality.RUN` only and appends the assets after telemetry's. Round 3's two test-prose fixes were applied by the controller and re-reviewed (a downgrade from an implementer round).
