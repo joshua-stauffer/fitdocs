@@ -337,7 +337,41 @@ def sync_command(
         )
         return
 
-    # No SOURCE: drain the configured inbox (inbox Req 2.1).
+    # No SOURCE: drain the configured inbox (inbox Req 2.1), then run the
+    # load and plan passes -- extracted into a shared helper so a later
+    # `pull --sync` call can chain the identical drain (Req 12.1, 12.3).
+    failed = _run_drain_passes(
+        data_root,
+        tz=tz,
+        athlete=athlete,
+        force=force,
+        retry_quarantined=retry_quarantined,
+        no_prompt=no_prompt,
+        command="sync",
+    )
+    _finish(failed=failed)
+
+
+def _run_drain_passes(
+    data_root: Path,
+    *,
+    tz: tzinfo,
+    athlete: AthleteInputs | None,
+    force: bool,
+    retry_quarantined: bool,
+    no_prompt: bool,
+    command: str,
+) -> bool:
+    """Drain the configured inbox, then run the load and plan passes.
+
+    The body of ``sync_command``'s no-source branch, moved verbatim so a
+    later ``pull --sync`` call can chain the identical drain (design:
+    CliCommands "``_run_drain_passes``"; Req 12.1, 12.3): plugin discovery,
+    the inbox preflight, the drain, the drain report (titled with
+    ``command``), the load pass, the plan pass, then plugin errors. Returns
+    whether anything failed -- a per-file drain failure, a load failure, or
+    a reconciling-pass failure -- so the caller decides how to exit.
+    """
     # Discover plugins once, before any engine call (a malformed [plugins] table
     # exits 2 here, before any write) -- same position as the explicit-source
     # path (cross-spec landing order: plugin-api's edit lands first).
@@ -355,7 +389,7 @@ def sync_command(
         force=force,
         retry_quarantined=retry_quarantined,
     )
-    _report_drain(drain_report, command="sync")
+    _report_drain(drain_report, command=command)
     # The load pass runs after the drain (Req 2.1), honoring --no-prompt exactly
     # as the explicit-source path does (Req 2.5).
     load_report = _run_load_pass(data_root, session=_build_session(no_prompt=no_prompt))
@@ -366,8 +400,8 @@ def sync_command(
     # Per-file failures, load failures and a reconciling-pass failure drive
     # the failure outcome -- deferrals, known-quarantined files, and failed
     # moves never do (inbox Req 4.6, 5.3, 6.5, 7.2; plan-resolution Req 8.7).
-    _finish(
-        failed=bool(drain_report.sync.failures)
+    return (
+        bool(drain_report.sync.failures)
         or bool(load_report.failures)
         or plan_report.failed
     )

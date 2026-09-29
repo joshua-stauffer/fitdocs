@@ -1504,13 +1504,22 @@ def test_apply_load_call_sites_pass_no_default_calculator_argument() -> None:
     ``cli.py`` funnels every one of them through the single shared
     ``_run_load_pass`` helper, which is what actually calls ``apply_load``;
     reads ``cli.py``'s own AST for every ``_run_load_pass(...)`` call
-    (expecting one inside each of ``sync_command``, ``regen_command``, and
-    ``load_command``, with ``sync_command`` calling it on both its
-    explicit-source and inbox-drain branches) and for the sole ``apply_load``
-    call, and checks the latter's keyword set against ``apply_load``'s real
-    signature -- so a call site passing an unsupported keyword (e.g. a
-    resurrected ``default_calculator=``) is caught by inspecting the source
-    directly, without needing to execute any of the three commands."""
+    (expecting one inside each of ``sync_command``'s explicit-source branch,
+    ``regen_command``, and ``load_command``, plus exactly one inside
+    ``_run_drain_passes`` -- the helper ``sync_command``'s inbox-drain branch
+    delegates to (connectors task 1.4) -- so sync's two branches still each
+    make exactly one call, now split across the command and its helper) and
+    for the sole ``apply_load`` call, and checks the latter's keyword set
+    against ``apply_load``'s real signature -- so a call site passing an
+    unsupported keyword (e.g. a resurrected ``default_calculator=``) is
+    caught by inspecting the source directly, without needing to execute any
+    of the three commands. Every collected ``_run_load_pass`` call, including
+    the helper's, is also checked for its required ``session`` keyword, so a
+    call site (in particular the helper's, which a later ``pull --sync``
+    reuses) that dropped it would be caught here too. ``sync_command`` is
+    also checked for exactly one call to ``_run_drain_passes`` itself, so a
+    rename of that call site -- which would otherwise leave every count
+    above unaffected -- is caught here."""
     signature_params = set(inspect.signature(apply_load).parameters) - {"data_root"}
     source = inspect.getsource(cli_module)
     tree = ast.parse(source)
@@ -1534,9 +1543,15 @@ def test_apply_load_call_sites_pass_no_default_calculator_argument() -> None:
         node.name: node
         for node in ast.walk(tree)
         if isinstance(node, ast.FunctionDef)
-        and node.name in {"sync_command", "regen_command", "load_command"}
+        and node.name
+        in {"sync_command", "regen_command", "load_command", "_run_drain_passes"}
     }
-    assert set(command_functions) == {"sync_command", "regen_command", "load_command"}
+    assert set(command_functions) == {
+        "sync_command",
+        "regen_command",
+        "load_command",
+        "_run_drain_passes",
+    }
     run_pass_calls_by_command = {
         name: [
             call
@@ -1547,8 +1562,33 @@ def test_apply_load_call_sites_pass_no_default_calculator_argument() -> None:
         ]
         for name, func in command_functions.items()
     }
-    # sync_command calls it on both the explicit-source and inbox-drain
-    # branches; regen_command and load_command call it exactly once each.
-    assert len(run_pass_calls_by_command["sync_command"]) == 2
+    # sync_command's explicit-source branch calls it once directly; its
+    # inbox-drain branch delegates to _run_drain_passes, which must itself
+    # call it exactly once (a helper that stopped calling the pass would
+    # otherwise slip past this pin undetected); regen_command and
+    # load_command call it exactly once each.
+    assert len(run_pass_calls_by_command["sync_command"]) == 1
+    assert len(run_pass_calls_by_command["_run_drain_passes"]) == 1
     assert len(run_pass_calls_by_command["regen_command"]) == 1
     assert len(run_pass_calls_by_command["load_command"]) == 1
+
+    # sync_command's inbox-drain branch must delegate to _run_drain_passes by
+    # that name -- a rename of the call site would leave every count above
+    # unaffected, so it is checked separately.
+    drain_helper_calls_in_sync = [
+        call
+        for call in ast.walk(command_functions["sync_command"])
+        if isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Name)
+        and call.func.id == "_run_drain_passes"
+    ]
+    assert len(drain_helper_calls_in_sync) == 1
+
+    # Every call site -- including the helper's -- must still pass the
+    # required (no-default) `session` keyword.
+    for name, calls in run_pass_calls_by_command.items():
+        for call in calls:
+            call_keywords = {kw.arg for kw in call.keywords if kw.arg is not None}
+            assert "session" in call_keywords, (
+                f"_run_load_pass call in {name} is missing the required session keyword"
+            )
