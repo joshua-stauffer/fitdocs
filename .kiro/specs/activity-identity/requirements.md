@@ -26,8 +26,11 @@ elapsed within about 1 s, timer time up to 400 s apart; 244 older HealthFit
 re-exports shifted by whole hours; a 90 s / 300 m rule that matched two
 different 10 k runs as the counter-example); refuses to guess when a file is
 ambiguous; records each page's files with a role -- one base the page is
-rendered from, and extras -- chosen by a configurable source precedence in
-which a device original outranks a partner-API or phone-side copy; re-renders
+rendered from, and extras -- chosen by a configurable source precedence
+whose default ranks a Garmin original (the device's file, a Connect export or
+the partner-API copy) above the phone-side HealthFit copy, and the HealthFit
+copy above every other original, such as a Stryd file (maintainer decision
+2026-09-29); re-renders
 and renames a page cleanly when its base changes, keeping its session UUID;
 and reports ambiguous and orphaned sources through `fitdocs check`. It lands
 the fit-ingest update for the `file_id` fields and the source-roles part of
@@ -128,13 +131,13 @@ that each page renders from the best file I have.
 
 #### Acceptance Criteria
 1. The fitdocs CLI shall classify every file into exactly one source kind from the closed vocabulary `original`, `phone_copy`, `unknown`, derived from the file's own bytes and never from where or how the file arrived.
-2. When a file's recorded manufacturer is `development` and its session records the `SESSION UUID` developer field HealthFit writes, the fitdocs CLI shall classify the file `phone_copy`.
+2. When a file's recorded manufacturer is `development` and its session records the `SESSION UUID` developer field HealthFit writes, the fitdocs CLI shall classify the file `phone_copy`, whatever device recorded the activity it copies.
 3. When a file records a manufacturer other than `development`, the fitdocs CLI shall classify the file `original`.
 4. When a file records no manufacturer, or records `development` without a recognized phone-side writer marker, the fitdocs CLI shall classify the file `unknown`.
-5. Where the settings file configures no source precedence, the fitdocs CLI shall rank `original` above `phone_copy` above `unknown`.
-6. Where the settings file configures a source precedence, the fitdocs CLI shall rank each file at the position of the first listed entry that names it -- an entry `original:<manufacturer>` naming the recorded manufacturer of an `original` file, otherwise the entry naming its kind -- and shall rank a file no listed entry names after every listed entry, in the default order of its kind.
+5. Where the settings file configures no source precedence, the fitdocs CLI shall rank `original` files whose recorded manufacturer is `garmin` first, then `phone_copy` files, then every other `original` file, then `unknown` files (maintainer decision 2026-09-29).
+6. Where the settings file configures a source precedence, the fitdocs CLI shall use the configured list in place of the default, append every kind the list does not name in the order `original`, `phone_copy`, `unknown` (only a bare kind entry names a kind; an `original:<manufacturer>` entry never does), and rank an `original` file at the position of the entry `original:<its recorded manufacturer>` when the list contains one, and every other file at the position of the entry naming its kind.
 7. If the source-precedence setting is not a list of strings, contains an entry that is neither a kind of the vocabulary nor `original:` followed by a non-empty manufacturer name other than `development`, or contains an entry twice, or if its table is not a table, the fitdocs CLI shall report a configuration error naming the settings file and the offending key and shall exit with the configuration-error status before writing anything.
-8. The fitdocs CLI shall rank files of the same kind by the number of messages the FIT profile does not define, more first; then by creation time, later first, with an absent creation time last; then by content hash in ascending lexicographic order, so that the ranking of any set of files is a total order independent of arrival.
+8. The fitdocs CLI shall rank files that the precedence places at the same position by the number of messages the FIT profile does not define, more first; then by creation time, later first, with an absent creation time last; then by content hash in ascending lexicographic order, so that the ranking of any set of files is a total order independent of arrival.
 
 ### Requirement 3: The cross-source match rule
 **Objective:** As an athlete whose sessions arrive as several files, I want a

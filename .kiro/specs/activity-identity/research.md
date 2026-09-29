@@ -208,11 +208,17 @@
   HealthFit copy (the base ...) plus the Stryd file", and the roadmap's
   rejection of *best file wins* notes that only the HealthFit copy carries
   the session UUID, the session summaries and the HR laps.
-- **Implications**: the two statements conflict for Stryd runs. The design
-  follows this spec's brief for the default (a Stryd file is `original` and
-  outranks a HealthFit copy), makes the channel-merge arrangement one
-  settings line (`original:<manufacturer>` entries), and records the
-  conflict as a cross-spec seam for reconciliation.
+- **Implications**: the two statements conflict for Stryd runs. The writer
+  raised the conflict; the controller put it to the maintainer.
+- **Resolution (maintainer decision 2026-09-29)**: "HealthFit base, by the
+  reasoning that it's the source we got the fit file from. If garmin rides only
+  come through healthfit, i would expect that they're marked a phone copy
+  (HealthFit) as well." The default precedence is therefore `original:garmin`,
+  `phone_copy`, `original`, `unknown`: Garmin files (device original, Connect
+  export, partner-API copy) outrank the HealthFit copy on rides; the HealthFit
+  copy outranks a Stryd file on runs, matching channel-merge's brief; a
+  HealthFit copy is `phone_copy` whatever device recorded the activity, because
+  HealthFit writes its own `file_id` (`development`).
 
 ### Performance of one scan per run
 - **Findings**: `find_document` reads every page per incoming file; the
@@ -298,8 +304,8 @@
 - `sync.py` restructuring touches the three entry points at once -- mitigated
   by landing roles/rendering (no planner) first, then rename, then the
   planner, each reviewer-gated.
-- The Stryd default conflicts with `channel-merge`'s brief -- surfaced as a
-  cross-spec seam; one settings line reproduces the other arrangement.
+- The Stryd default once conflicted with `channel-merge`'s brief -- resolved
+  by the maintainer decision of 2026-09-29 (HealthFit copy above a Stryd file).
 - A partner copy with as many undocumented messages as the original ranks by
   hash -- no rendered value depends on it (fitdocs reads no stripped field).
 - Pages written before this feature match only by exact paths until

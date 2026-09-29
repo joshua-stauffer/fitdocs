@@ -65,8 +65,10 @@ sources in a canonical order, and renames a page whose base changes.
   writer marker (HealthFit: manufacturer `development` plus the `SESSION UUID`
   session developer field).
 - **Source precedence**: the `[identity]` table of `fitdocs.toml`, its
-  `precedence` key, the default order, validation, and the total rank order of
-  Req 2.8.
+  `precedence` key, the default order -- Garmin originals, then the HealthFit
+  phone copy, then every other original (a Stryd file), then unknown files
+  (**maintainer decision 2026-09-29**) -- validation, and the total rank order
+  of Req 2.8.
 - **The match rule**: the evidence tiers `DEVICE`, `STRICT`, `SHIFTED`, their
   tolerance constants and measured sources, and the absent-value rules.
 - **Run planning**: the one-scan page index, grouping of a run's files,
@@ -112,6 +114,14 @@ sources in a canonical order, and renames a page whose base changes.
 - `fitdocs.settings` (`SettingsError`) from `identity/settings.py`.
 - `tomllib` (stdlib) and `tomli_w` (already a runtime dependency, used by
   `quarantine.py`) from `identity/holds.py`. No new runtime dependency.
+- **Naming guards** (`tests/test_contract_consumers.py`): no module under
+  `src/fitdocs` other than `contract.py` names `uuid` as an identifier (the
+  single-implementation guard at `:502-529` treats any `ast.Name` `uuid` --
+  a dataclass field, a local, an import -- as a second UUID formatter), so
+  every field and local here is `session_uuid`, `page_uuid` or similar; and
+  no registered contract consumer (`identity.kinds`, `identity.pages`, and the
+  already-registered `sync`, `audit`, `render.frontmatter`) defines a name in
+  `FORBIDDEN_LOCAL_NAMES` (`:149-163`, e.g. `_session_uuid`, `_sources`).
 - The engine (`sync.py`), audit (`audit.py`), CLI (`cli.py`) and render
   (`render/__init__.py`, `render/frontmatter.py`) import the identity package;
   the identity package imports none of them, nor `ingest`, `metrics`, `load`,
@@ -157,11 +167,26 @@ parallel. A cross-spec reviewer reconciles all five.
   these fields and never rewrites them. If running-dynamics must rewrite one,
   the Stryd↔HealthFit calibration (elapsed 8–9 s apart) is re-measured before
   it lands.
-- A Stryd file (`file_id.manufacturer == "stryd"`) classifies `original`.
+- A Stryd file (`file_id.manufacturer == "stryd"`) classifies `original` and,
+  under the default precedence, ranks below a HealthFit copy of the same run
+  (maintainer decision 2026-09-29): a Stryd file is a page's base only when no
+  HealthFit copy or Garmin original of the session is on the page, which is
+  the "Stryd file as a page's only file" case running-dynamics makes safe.
 - The run-page chart running-dynamics adds needs no registration here: rename
   cleanup removes whatever chart links the previous generated content held.
 - Each spec advances `DOC_VERSION` by one from the value on `main` when it
-  lands; the second lander re-pins.
+  lands; the second lander re-pins. Shared second-lander re-pin sites:
+  `tests/test_cli_check.py:196, 198` and `tests/render/test_frontmatter.py:44,
+  101` (this spec rewrites the check literal as
+  `f"doc_version: {DOC_VERSION}"`), `tests/metrics/test_sources.py:2270`, and
+  running-dynamics' recorded `_PRE_RUNNING_DYNAMICS_DOC_VERSION` constant,
+  which stays at the value running-dynamics recorded.
+- `tests/fixtures/builder.py`'s `_file_id` is a shared fixture seam:
+  running-dynamics' task 1.2 gives it keyword-only, defaulted `manufacturer`,
+  `product` and `time_created` parameters. This spec needs exactly that shape
+  (plus a keyword-only `time_created` on `_encode_run_with_developer_fields`);
+  whichever spec lands first adds the parameters, the other reuses them, and
+  every default equals today's value so no existing fixture's bytes move.
 
 **connectors (wave 1)**
 - No code dependency either way. Source kind is never derived from the
@@ -199,14 +224,18 @@ parallel. A cross-spec reviewer reconciles all five.
   parse (`source_identity(parsed[roles.base.ref])` plus retention) **before**
   `_render_activity` runs, and reach the render through `DocContext.identity`.
   A composed activity never becomes the page's recorded identity.
-- **Conflict to reconcile**: `.kiro/specs/channel-merge/brief.md` describes a
-  run as "A HealthFit copy (the base ...) plus the Stryd file". This spec's
-  brief names a Stryd run file a device original and asks for a default that
-  ranks a device original above a phone-side copy, so under the default here
-  a Stryd file is the base of its run's page. The channel-merge arrangement is
-  one settings line: `[identity] precedence = ["original:garmin",
-  "phone_copy", "original", "unknown"]`. Either default composes correctly;
-  the choice is the maintainer's.
+- **Default base, aligned with channel-merge's brief (maintainer decision
+  2026-09-29)**: the default precedence is `original:garmin`, `phone_copy`,
+  `original`, `unknown`. On a run with a HealthFit copy and a Stryd file the
+  HealthFit copy is the base and the Stryd file an extra (it donates the
+  running dynamics; laps stay the base's); on a ride with a Garmin original and
+  a HealthFit copy the Garmin original is the base. The maintainer's reasoning,
+  verbatim: "HealthFit base, by the reasoning that it's the source we got the
+  fit file from. If garmin rides only come through healthfit, i would expect
+  that they're marked a phone copy (HealthFit) as well." A HealthFit copy is
+  `phone_copy` whatever device recorded the activity (its own `file_id` says
+  `development`), so a Garmin ride known only through HealthFit is a phone
+  copy.
 - channel-merge adds its own managed key(s), advances `DOC_VERSION` once, and
   registers any new reader in `FORBIDDEN_LITERALS`.
 
@@ -398,6 +427,7 @@ tests/
   `tests/test_contract_consumers.py`, `tests/test_confinement.py`,
   `tests/test_public_api.py`, `tests/test_ownership_contract.py`,
   `tests/test_compatibility_policy.py`, `tests/metrics/test_sources.py:2270`,
+  `tests/test_cli_check.py:196-198`, `tests/render/test_frontmatter.py:44, 101`,
   `tests/test_sync.py`, `tests/test_sync_e2e.py`, `tests/test_portability.py`,
   `tests/test_audit.py`, `tests/test_declaration.py`, goldens under
   `tests/golden/`, `tests/render/golden_docs/`, `tests/declaration_golden/`;
@@ -699,7 +729,8 @@ def count_undocumented_messages(messages: Mapping[str, list[dict[str, object]]])
   `render/frontmatter.py` bind them instead of their private copies.
 - `source_kind(activity)`: `PHONE_COPY` when `file_identity.manufacturer ==
   "development"` and `format_session_uuid(developer_fields.get(SESSION_UUID_FIELD))`
-  is not `None`; `ORIGINAL` when the manufacturer is recorded and is not
+  is not `None` -- whatever device recorded the activity, because HealthFit
+  writes its own `file_id` (a HealthFit copy of a Garmin ride is a phone copy); `ORIGINAL` when the manufacturer is recorded and is not
   `development`; otherwise `UNKNOWN`. Uses nothing but the file's own values.
 - `device_digest(file_identity)`: `None` unless manufacturer, serial and
   creation time are all recorded; else the first 16 hex digits of
@@ -809,15 +840,23 @@ def pair_evidence(a: SessionKey, b: SessionKey) -> Evidence | None: ...
 
 **Responsibilities & Constraints**
 - `PrecedenceEntry(kind, manufacturer=None)`; `manufacturer` only with
-  `ORIGINAL`. `DEFAULT_PRECEDENCE = (ORIGINAL, PHONE_COPY, UNKNOWN)` entries.
-- `resolve_precedence(entries)` appends every kind no entry names, in default
-  order (Req 2.6).
+  `ORIGINAL`. `DEFAULT_PRECEDENCE = (original:garmin, phone_copy, original,
+  unknown)` -- **maintainer decision 2026-09-29** (Req 2.5): a Garmin file
+  (device original, Connect export, partner-API copy) outranks the HealthFit
+  copy, which outranks every other original (a Stryd file).
+- `resolve_precedence(entries)`: a configured list replaces the default; every
+  kind it does not name is appended in the order `original`, `phone_copy`,
+  `unknown` -- only a bare kind entry names a kind, an `original:<m>` entry
+  never does, so `["original:stryd", "phone_copy"]` resolves to
+  `original:stryd, phone_copy, original, unknown` and every original has an
+  entry to rank at; the default's `original:garmin` entry is not appended
+  (Req 2.6).
 - `SourceMember`: `ref`, `sha`, `kind`, `manufacturer`, `undocumented_messages`,
   `time_created`, `session_uuid`; `source_member(ref, sha, activity)` builds
   one from the parsed file.
-- `rank_key(member, precedence)`: position of the first entry naming the
-  member (an `original:<manufacturer>` entry matching it, else its kind's
-  entry); then `-undocumented_messages` (`None` after every count); then
+- `rank_key(member, precedence)`: the position of the entry
+  `original:<member's manufacturer>` when the member is `original` and the
+  precedence contains that entry, else the position of its kind's entry; then `-undocumented_messages` (`None` after every count); then
   `-time_created` (absent last); then `sha` ascending (Req 2.8). Lower is
   better.
 - `rank_members(resolved, unresolved, precedence) -> PageRoles`: `base` the
@@ -858,8 +897,13 @@ def page_session_uuid(roles: PageRoles, recorded: str | None) -> str | None: ...
 - Validation: every permutation of a four-member input yields the same
   `PageRoles`; the fixture varies each key against the others (kind rank
   against undocumented count against creation time against sha) so no two
-  keys are confounded. Named mutations: dropping the undocumented key; reversing
-  the time key; placing `None` counts first; ignoring `original:<m>` entries.
+  keys are confounded. The default is pinned directly (maintainer decision
+  2026-09-29): Garmin original above HealthFit copy above Stryd file above an
+  unknown file. Named mutations: dropping the undocumented key; reversing the
+  time key; placing `None` counts first; ignoring `original:<m>` entries;
+  swapping the `original:garmin` and `phone_copy` tiers of the default;
+  swapping the `phone_copy` and `original` tiers of the default; appending the
+  default's `original:garmin` entry to a configured list.
 
 #### RunPlanner (`src/fitdocs/identity/planning.py`)
 
@@ -869,14 +913,15 @@ def page_session_uuid(roles: PageRoles, recorded: str | None) -> str | None: ...
 | Requirements | 3.7, 3.9, 3.10, 4.1-4.9, 5.7, 8.3 |
 
 **Responsibilities & Constraints**
-- `PageRecord`: data-root-relative `path`, `sources`, `uuid`, `key:
-  SessionKey` (built from the page's own keys by PageScan).
-- `PageIndex(records)` sorted by path; `exact_match(uuid, ref)` returns the
-  first record (path order) whose `uuid` equals `uuid`, else the first whose
-  `sources` contains `ref` -- `find_document`'s current semantics, one
-  implementation (Req 3.9).
-- `RunFile`: `id` (the run-unique label), `ref`, `uuid` (the file's own
-  session UUID), `key`.
+- `PageRecord`: data-root-relative `path`, `sources`, `session_uuid` (the
+  page's recorded `uuid` key), `key: SessionKey` (built from the page's own
+  keys by PageScan).
+- `PageIndex(records)` sorted by path; `exact_match(session_uuid, ref)` returns
+  the first record (path order) whose `session_uuid` equals the given one, else
+  the first whose `sources` contains `ref` -- `find_document`'s current
+  semantics, one implementation (Req 3.9).
+- `RunFile`: `id` (the run-unique label), `ref`, `session_uuid` (the file's
+  own formatted session UUID), `key`.
 - `plan_run(files, index) -> RunPlan`:
   1. **Pinned**: a file with `exact_match` → `Join(page, SOURCE|UUID)` in every
      case (Req 4.1).
@@ -899,7 +944,7 @@ def page_session_uuid(roles: PageRoles, recorded: str | None) -> str | None: ...
   index (Req 4.8, 5.7). Nothing in it merges two records or removes a ref
   (Req 4.9).
 - `duplicate_sets(index)`: every maximal set of two or more records connected by
-  a shared `sources` ref, an equal `uuid`, or `pair_evidence` between their
+  a shared `sources` ref, an equal `session_uuid`, or `pair_evidence` between their
   keys, with the evidence (Req 8.3). Records are bucketed by sport and sorted
   by start so the scan is near-linear.
 
@@ -952,8 +997,8 @@ def duplicate_sets(index: PageIndex) -> tuple[DuplicateSet, ...]: ...
 | Requirements | 3.9, 3.10, 7.4 |
 
 **Responsibilities & Constraints**
-- `page_record(path, frontmatter)`: sources via `contract.source_refs`, uuid via
-  `contract.document_uuid`, sport via `contract.document_sport`, start via
+- `page_record(path, frontmatter)`: sources via `contract.source_refs`,
+  `session_uuid` via `contract.document_uuid`, sport via `contract.document_sport`, start via
   `contract.document_start_time`, identity via
   `contract.document_source_identity`; `kind` parsed to `SourceKind` or `None`.
   A page lacking the identity keys yields a key with `elapsed_s`, `distance_m`,
@@ -964,6 +1009,9 @@ def duplicate_sets(index: PageIndex) -> tuple[DuplicateSet, ...]: ...
 - Registered contract consumer; spells none of `FORBIDDEN_LITERALS`.
 - `sync.find_document` becomes `scan_pages(data_root).exact_match(...)` wrapped
   in `DocumentMatch` -- its signature, return type and semantics are unchanged.
+- Validation asserts a legacy page's record key directly: `elapsed_s`,
+  `distance_m`, `device` and `kind` all `None` (so building the key from
+  `distance_km` reds), besides "matches nothing by rule".
 
 **Contracts**: Service [x]
 
@@ -977,7 +1025,7 @@ def duplicate_sets(index: PageIndex) -> tuple[DuplicateSet, ...]: ...
 **Responsibilities & Constraints**
 - `IDENTITY_TABLE = "identity"`, `PRECEDENCE_KEY = "precedence"`.
 - `load_identity_settings(document, settings_file)`: absent table or key →
-  `DEFAULT_PRECEDENCE`; a non-table `[identity]`, a non-list, a non-string
+  `DEFAULT_PRECEDENCE` (maintainer decision 2026-09-29); a non-table `[identity]`, a non-list, a non-string
   element, an unknown kind, `original:` with an empty name or `development`,
   or a duplicate entry → `IdentitySettingsError(SettingsError)` naming the file
   and `[identity] precedence` (Req 2.7). Unknown keys in the table are ignored
@@ -1015,8 +1063,10 @@ def load_identity_settings(document: Mapping[str, object], settings_file: Path) 
   the file.
 - `save_holds`: temp file in `.fitdocs/` then `os.replace`; creates the
   directory on demand; returns `False` and writes nothing when the bytes are
-  unchanged. A seventh private copy of the atomic-write idiom; the queue item
-  `2026-09-15-atomic-write-helper-copied-per-engine` counts copies and moves.
+  unchanged. A seventh private copy of the atomic-write idiom: the task that
+  adds it appends the `identity/holds.py` site to the queue item
+  `2026-09-15-atomic-write-helper-copied-per-engine` (whose title and resume
+  command count six).
 - The record is re-derivable: every entry is an archived file no page lists,
   and `regen` rewrites the record from that set.
 
@@ -1065,10 +1115,17 @@ def save_holds(data_root: Path, record: HoldRecord) -> bool: ...
   paragraph states the format delta: four keys, canonical `sources` order,
   retained `uuid`); `CONTRACT_VERSION` advances by one likewise (a new
   paragraph: roles, renames, held files, new managed keys).
-- Re-pins in the same change: `tests/test_contract.py` (`_PUBLISHED_KEYS`,
-  the named-constant list), `tests/metrics/test_sources.py:2270`
+- Re-pins in the same change (each would otherwise stay red until a later
+  task): `tests/test_contract.py` (`_PUBLISHED_KEYS`, the named-constant
+  list); `tests/metrics/test_sources.py:2270`
   (`CONSTANT_REGISTRY_ASOF_DOC_VERSION`, asserted equal to `DOC_VERSION` while
-  the registry is clean), every `tests/render/golden_docs/*.md`.
+  the registry is clean); every `tests/render/golden_docs/*.md`;
+  `tests/render/test_frontmatter.py:44, 101` (the literal `doc_version: 5` and
+  `== 5`); `tests/test_cli_check.py:196-198` (the literal `doc_version: 5`,
+  re-pinned to `f"doc_version: {DOC_VERSION}"`); `tests/test_public_api.py`'s
+  `_CONTRACT_SURFACE` (`:324-398`, the exact `fitdocs.contract.__all__`); and
+  `docs/ownership-contract.md`'s "Managed Frontmatter Keys" list, which
+  `tests/test_ownership_contract.py:131-134` holds equal to `MANAGED_KEYS`.
 
 **Contracts**: State [x]
 
@@ -1133,9 +1190,10 @@ together on an exception, each with the same reason):
    unresolvable refs are `unresolved`. New members parse from their bytes.
    No resolved member → `FileFailure` with today's "no archived source to
    regenerate from" reason (Req 7.6).
-3. `roles = rank_members(...)`; `uuid = page_session_uuid(roles,
-   document_uuid(existing frontmatter))`; `uid = uuid or roles.base.sha`;
-   `identity = source_identity(parsed[base])` with `session_uuid=uuid`.
+3. `roles = rank_members(...)`; `page_uuid = page_session_uuid(roles,
+   document_uuid(existing frontmatter))`; `uid = page_uuid or
+   roles.base.sha`; `identity = source_identity(parsed[base])` with
+   `session_uuid=page_uuid`.
 4. `base_changed` = existing page and its previous base (the last entry of
    its existing `sources`) differs from `roles.base.ref`.
 5. `stem = doc_stem(base activity, uid, tz, taken)` where `taken(s)` is "a file
@@ -1169,6 +1227,8 @@ together on an exception, each with the same reason):
 candidate page and the evidence, and that nothing was merged) (Req 4.7, 7.5).
 At the end of the run the record's candidate paths are rewritten through the
 run's rename map (one more `save_holds`, write-if-different).
+The order is observable: when `save_holds` fails, the file is not archived, so
+the next run re-plans it and holds it again (pinned by fault injection).
 
 *Settle pass* (sync, drain, regen): repeat until an iteration renames nothing
 -- for each recorded `(path, unsuffixed)` whose `doc_path(unsuffixed)` does not
@@ -1274,12 +1334,15 @@ complete).
   an exhaustive claim.
 - New section **"Source Files and Their Roles"**: `sources` holds every archived
   file of the page in ascending rank, base last; base and extra defined; source
-  kinds and the precedence setting (linking `configuration.md`); the four
+  kinds and the precedence setting (linking the `[identity]` heading of
+  `configuration.md`, which the settings documentation lands first); the four
   identity keys and the digest; UUID retention; the match rule with a tolerance
   table (value and measured source, pinned to `TOLERANCE_SOURCES` by
   `tests/identity/test_contract_docs.py`); held files and how to resolve them.
-- Managed-key list gains the four keys (pinned by
-  `tests/test_ownership_contract.py`).
+- The managed-key list already carries the four keys: they land with the
+  contract constants (ContractIdentityKeys), because
+  `tests/test_ownership_contract.py:131-134` holds that list equal to
+  `MANAGED_KEYS`.
 - Overwrite Semantics: `sync` -- a file of a known session joins its page; a
   base change re-renders, renames and removes the previous render's assets;
   links to the old filename are not updated; a page whose base does not change
@@ -1298,10 +1361,14 @@ complete).
 | Requirements | 9.7, 9.8 |
 
 **Responsibilities & Constraints**
+- Lands before OwnershipDocs; links to `ownership-contract.md` are unanchored
+  here (its new section does not exist yet); `tests/test_docs_guarantees.py`
+  (`:951-997`) requires every cross-file anchor to resolve.
 - `configuration.md`: `### [identity]: source precedence` -- vocabulary,
   `original:<manufacturer>` entries, default (pinned to `DEFAULT_PRECEDENCE`
   and the vocabulary to `SourceKind` by `tests/identity/test_settings_docs.py`),
-  validation and exit status, the channel-merge-style example.
+  validation and exit status, and an example that lets every original outrank
+  the phone copy (`["original", "phone_copy", "unknown"]`).
 - `compatibility.md`: `[identity]` joins both table enumerations; the count
   advances by one from its value on `main`; `tests/test_compatibility_policy.py`
   in the same change.
@@ -1387,7 +1454,12 @@ complete).
   `urllib`, `socket`), with a positive control that the walk scanned files.
 - `pyproject.toml` `[tool.mypy].files`: the new test modules under
   `tests/identity/`, `tests/ingest/test_file_id.py`,
-  `tests/fixtures/identity.py`, `tests/test_identity_e2e.py`.
+  `tests/fixtures/identity.py`, `tests/fixtures/test_identity_fixtures.py`,
+  `tests/test_identity_e2e.py`, `tests/test_cli_identity.py`. Each module is
+  type-checked clean (`uv run mypy <its paths>`) by the task that creates it,
+  so registering them all at once breaks nothing and keeps the parallel tasks
+  free of `pyproject.toml` conflicts (the file's own rule, `pyproject.toml:97-98`:
+  a module joins the list with its errors already fixed).
 
 #### IdentityFixtures (`tests/fixtures/identity.py`, `tests/fixtures/builder.py`)
 
@@ -1415,9 +1487,12 @@ complete).
   distance equal to 0.01 m, elapsed +8.5 s), `ten_k_pair` (the
   counter-example). Values are synthetic constants, never from the athlete's
   archive.
-- `builder._encode_run_with_developer_fields` gains `time_created` (default
-  the current constant, so existing bytes do not move); `reexport_b` passes a
-  later value so the canonical rank keeps `[ref_a, ref_b]`.
+- `builder._file_id` takes keyword-only, defaulted `manufacturer`, `product`
+  and `time_created` (the running-dynamics seam; added here only if absent on
+  the branch) and `builder._encode_run_with_developer_fields` a keyword-only
+  `time_created`, every default equal to today's value so existing bytes do
+  not move; `reexport_b` passes a later value so the canonical rank keeps
+  `[ref_a, ref_b]`.
 
 ## Data Models
 
@@ -1464,7 +1539,7 @@ evidence = ["strict", "strict"]
 **`fitdocs.toml`**
 ```toml
 [identity]
-precedence = ["original", "phone_copy", "unknown"]   # the default
+precedence = ["original:garmin", "phone_copy", "original", "unknown"]   # the default (maintainer decision 2026-09-29)
 ```
 
 ### Data Contracts & Integration
@@ -1518,13 +1593,21 @@ precedence = ["original", "phone_copy", "unknown"]   # the default
   warning names both paths (Req 6.2, 6.4, 6.5).
 - Every permutation of `{garmin_original, partner_copy, healthfit_copy}`, in one
   run and across three runs: byte-identical tree (Req 4.8, 5.7).
-- Stryd file and HealthFit copy: one page, base the Stryd file under the
-  default, base the copy under `["original:garmin", "phone_copy", "original",
-  "unknown"]` (Req 2.6).
+- The default pinned end to end (maintainer decision 2026-09-29): a Stryd
+  file and a HealthFit copy of one run → the HealthFit copy is the base; a
+  Garmin original and a HealthFit copy of one ride → the Garmin original is
+  the base; under `["original", "phone_copy", "unknown"]` the Stryd file
+  becomes the run's base (Req 2.5, 2.6).
 - Two pages matching one file: held, archived, recorded, warned, `skipped`; a
   re-run skips it; after one duplicate page is deleted, `regen` joins it (Req
   4.5, 4.7, 4.10, 4.11, 7.5).
 - Two corrections trading names in one run: both end unsuffixed (Req 6.6).
+- A planned group claiming a page that records a newer document-format
+  version: the page, its filename and its assets are untouched and no member is
+  archived (Req 6.8).
+- A damaged hold record makes `sync` and `drain` raise before any write; a
+  failing `save_holds` leaves the held file unarchived and the next run holds
+  it again (Req 4.7).
 - Interruption at each write step (fault injection on the write seam): the page
   is at one path and the next run completes the rename (Req 6.7).
 - `regen` after a precedence change renames; `regen` reproduces the synced tree
