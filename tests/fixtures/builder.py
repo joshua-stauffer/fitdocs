@@ -58,6 +58,19 @@ HealthFit corpus for the workout-docs layer (all byte-deterministic, Req 4.1):
   recording the SAME ``SESSION UUID`` yet different bytes (differing serial), so
   their sha256 hashes differ while the stable session identity is identical.
 
+Running-dynamics families (spec running-dynamics), the raw shapes measured in
+real Stryd and HealthFit files:
+
+* :func:`developer_field_run_fit_bytes` -- the one developer-field encoding helper:
+  given :class:`DevFieldSpec` descriptions and per-record values it writes a
+  valid run, every developer field registered before the first write.
+* :func:`stryd_run_fit_bytes` -- run with twelve Stryd-shaped field descriptions
+  (key != definition number), placeholder zeros at record 0 and across a pause,
+  a uint16 sentinel, float32 values, four laps without heart rate or cadence.
+* :func:`run_native_dynamics_fit_bytes` -- the HealthFit-copy shape: native
+  vertical oscillation, stance time and vertical ratio, and a ``SESSION UUID``
+  containing 255.
+
 Values passed to the Encoder are real-world units (m, m/s, m, bpm, W, kg); the
 Encoder un-applies FIT scale/offset internally, so decoding with
 ``apply_scale_and_offset=True`` returns the same real-world values. Positions are
@@ -71,7 +84,8 @@ synthetic message dicts directly, identical to what the real decoder produces.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 
 from garmin_fit_sdk import Decoder, Encoder, Stream  # type: ignore[import-untyped]
 from garmin_fit_sdk.fit import BASE_TYPE  # type: ignore[import-untyped]
@@ -143,23 +157,31 @@ def decode_messages(data: bytes) -> tuple[MessagesDict, list[object]]:
 # --- Shared message builders ------------------------------------------------
 
 
-def _file_id(serial: int) -> Mesg:
+def _file_id(
+    serial: int,
+    *,
+    manufacturer: str = "garmin",
+    product: int = 1,
+    time_created: int = FIT_TIMESTAMP_BASE,
+) -> Mesg:
     return {
         "mesg_num": _MESG_FILE_ID,
         "type": "activity",
-        "manufacturer": "garmin",
-        "product": 1,
+        "manufacturer": manufacturer,
+        "product": product,
         "serial_number": serial,
-        "time_created": FIT_TIMESTAMP_BASE,
+        "time_created": time_created,
     }
 
 
-def _device_info(serial: int, product_name: str) -> Mesg:
+def _device_info(
+    serial: int, product_name: str, *, manufacturer: str = "garmin"
+) -> Mesg:
     return {
         "mesg_num": _MESG_DEVICE_INFO,
         "timestamp": FIT_TIMESTAMP_BASE,
         "device_index": 0,
-        "manufacturer": "garmin",
+        "manufacturer": manufacturer,
         "serial_number": serial,
         "product": 1,
         "software_version": 4.2,
@@ -1033,6 +1055,385 @@ def _encode_run_with_developer_fields(
     for mesg in ordered:
         encoder.write_mesg(mesg)
     return bytes(encoder.close())
+
+
+# --- Developer-field run helper + running-dynamics families -----------------
+
+_DEV_FIELD_RUN_SERIAL = 1201
+_STRYD_SERIAL = 1202
+_NATIVE_DYNAMICS_SERIAL = 1203
+
+
+@dataclass(frozen=True)
+class DevFieldSpec:
+    """One field_description, in file order; its position is its SDK key."""
+
+    name: str
+    base_type: int  # a garmin_fit_sdk BASE_TYPE code
+    definition_number: int
+    units: str | None = None  # None: not written
+    scale: int | float | None = None  # None: undeclared on the wire
+    offset: int | float | None = None  # None: undeclared on the wire
+    native_mesg_num: int | None = None  # None: not written
+    developer_data_index: int = 0
+    array: int | None = None  # element count; None: a scalar field
+
+
+def _handle(position: int) -> str:
+    """The SDK handle a description's position is registered under."""
+    return f"k{position}"
+
+
+def _application_id(developer_data_index: int) -> list[int]:
+    """A fixed synthetic 16-byte application id, one per developer index."""
+    return [(developer_data_index * 16 + j) % 256 for j in range(16)]
+
+
+def _description_mesg(spec: DevFieldSpec) -> Mesg:
+    mesg: Mesg = {
+        "mesg_num": _MESG_FIELD_DESCRIPTION,
+        "developer_data_index": spec.developer_data_index,
+        "field_definition_number": spec.definition_number,
+        "fit_base_type_id": spec.base_type,
+        "field_name": spec.name,
+    }
+    if spec.units is not None:
+        mesg["units"] = spec.units
+    if spec.scale is not None:
+        mesg["scale"] = spec.scale
+    if spec.offset is not None:
+        mesg["offset"] = spec.offset
+    if spec.native_mesg_num is not None:
+        mesg["native_mesg_num"] = spec.native_mesg_num
+    if spec.array is not None:
+        mesg["array"] = spec.array
+    return mesg
+
+
+def _encode_with_developer_descriptions(
+    descriptions: Sequence[DevFieldSpec], file_id: Mesg, body: Sequence[Mesg]
+) -> bytes:
+    """The one Encoder sequence for every developer-field fixture.
+
+    Every description is registered with ``Encoder.add_developer_field`` BEFORE
+    the first write. The file then carries ``file_id``, one ``developer_data_id``
+    per distinct index, the descriptions in order, and ``body``. A ``body``
+    message's ``developer_fields`` maps a description's POSITION to its value;
+    it is rewritten to the SDK handles here.
+    """
+    indices = sorted({spec.developer_data_index for spec in descriptions})
+    data_ids: dict[int, Mesg] = {
+        index: {
+            "mesg_num": _MESG_DEVELOPER_DATA_ID,
+            "developer_data_index": index,
+            "application_id": _application_id(index),
+        }
+        for index in indices
+    }
+    encoder = Encoder()
+    description_mesgs: list[Mesg] = []
+    for position, spec in enumerate(descriptions):
+        mesg = _description_mesg(spec)
+        encoder.add_developer_field(
+            _handle(position), data_ids[spec.developer_data_index], mesg
+        )
+        description_mesgs.append(mesg)
+    encoder.write_mesg(file_id)
+    for index in indices:
+        encoder.write_mesg(data_ids[index])
+    for mesg in description_mesgs:
+        encoder.write_mesg(mesg)
+    for mesg in body:
+        written = dict(mesg)
+        positional = written.get("developer_fields")
+        if positional is not None:
+            assert isinstance(positional, Mapping)
+            written["developer_fields"] = {
+                _handle(position): value for position, value in positional.items()
+            }
+        encoder.write_mesg(written)
+    return bytes(encoder.close())
+
+
+def developer_field_run_fit_bytes(
+    *,
+    descriptions: Sequence[DevFieldSpec],
+    records: Sequence[tuple[Mapping[str, object], Mapping[int, object]]],
+    session_fields: Mapping[int, object] | None = None,
+    serial: int = _DEV_FIELD_RUN_SERIAL,
+    manufacturer: str = "garmin",
+    product: int = 1,
+    time_created: int = FIT_TIMESTAMP_BASE,
+    device_manufacturer: str | None = None,
+) -> bytes:
+    """Encode a valid run carrying arbitrary developer fields.
+
+    ``descriptions`` are written in order (a description's position is its SDK
+    key). Each ``records`` entry is ``(native_fields, developer_values)``: the
+    native record fields in real-world units (``timestamp`` defaults to
+    ``FIT_TIMESTAMP_BASE + i``), and a map from description position to the value
+    that record carries. A position absent from the map is not recorded.
+    ``session_fields`` maps position to a value on the session message; ``None``
+    writes no developer field on the session.
+
+    ``manufacturer`` goes to ``file_id``; the recording device (``device_info``
+    index 0) uses ``device_manufacturer``, which follows ``manufacturer`` when
+    ``None``.
+    """
+    if not records:
+        raise ValueError("developer_field_run_fit_bytes needs at least one record")
+    device = manufacturer if device_manufacturer is None else device_manufacturer
+    record_mesgs: list[Mesg] = []
+    for i, (native, recorded) in enumerate(records):
+        mesg: Mesg = {
+            "mesg_num": _MESG_RECORD,
+            "timestamp": FIT_TIMESTAMP_BASE + i,
+            **native,
+        }
+        if recorded:
+            mesg["developer_fields"] = dict(recorded)
+        record_mesgs.append(mesg)
+    first = record_mesgs[0]["timestamp"]
+    last = record_mesgs[-1]["timestamp"]
+    assert isinstance(first, int) and isinstance(last, int)
+    session: Mesg = {
+        "mesg_num": _MESG_SESSION,
+        "start_time": first,
+        "timestamp": last,
+        "sport": "running",
+        "sub_sport": "generic",
+        "total_elapsed_time": float(last - first),
+        "total_timer_time": float(last - first),
+    }
+    if session_fields:
+        session["developer_fields"] = dict(session_fields)
+    body: list[Mesg] = [
+        _device_info(serial, "SyntheticDevFieldWatch", manufacturer=device),
+        {"mesg_num": _MESG_SPORT, "sport": "running", "sub_sport": "generic"},
+        *record_mesgs,
+        session,
+        _activity(last - FIT_TIMESTAMP_BASE, float(last - first)),
+    ]
+    return _encode_with_developer_descriptions(
+        descriptions,
+        _file_id(
+            serial,
+            manufacturer=manufacturer,
+            product=product,
+            time_created=time_created,
+        ),
+        body,
+    )
+
+
+# --- Stryd-shaped fixture ---------------------------------------------------
+
+_STRYD_RECORD_COUNT = 44
+_STRYD_PAUSE = frozenset({20, 21, 22})  # a three-record pause
+_STRYD_PLACEHOLDERS = frozenset({0}) | _STRYD_PAUSE
+_STRYD_SENTINEL_INDEX = 10  # Form Power 65535, Air Power non-zero
+_STRYD_ZERO_BALANCE_INDEX = 12  # Vertical Oscillation Balance 0.0 mid-run
+_STRYD_ZERO_AIR_INDEX = 14  # Air Power 0 with non-zero Form Power
+_STRYD_HUMIDITY_104_INDEX = 30
+_STRYD_LAP_WINDOWS = ((0, 10), (11, 21), (22, 32), (33, 43))
+_STRYD_RUN_PROFILE = "Steady Run"
+
+_STRYD_DESCRIPTIONS: tuple[DevFieldSpec, ...] = (
+    DevFieldSpec("Air Power", BASE_TYPE["UINT16"], 11, units="W"),
+    DevFieldSpec("Form Power", BASE_TYPE["UINT16"], 2, units="W"),
+    DevFieldSpec("Leg Spring Stiffness", BASE_TYPE["FLOAT32"], 1, units="kN/m"),
+    DevFieldSpec("Impact", BASE_TYPE["FLOAT32"], 4, units="bw"),
+    DevFieldSpec("Leg Spring Stiffness Balance", BASE_TYPE["FLOAT32"], 3, units="%"),
+    DevFieldSpec("Impact Loading Rate Balance", BASE_TYPE["FLOAT32"], 6, units="%"),
+    DevFieldSpec("Vertical Oscillation Balance", BASE_TYPE["FLOAT32"], 5, units="%"),
+    DevFieldSpec("Speed", BASE_TYPE["FLOAT32"], 8, units="m/s", native_mesg_num=6),
+    DevFieldSpec("Distance", BASE_TYPE["FLOAT32"], 9, units="m", native_mesg_num=5),
+    DevFieldSpec(
+        "Stryd Temperature", BASE_TYPE["SINT8"], 10, units="C", native_mesg_num=13
+    ),
+    DevFieldSpec("Stryd Humidity", BASE_TYPE["UINT8"], 12, units="%"),
+    DevFieldSpec("Run Profile", BASE_TYPE["STRING"], 0),
+)
+_STRYD_RUN_PROFILE_POSITION = 11
+
+
+def _stryd_records() -> list[tuple[Mesg, dict[int, object]]]:
+    """Native record fields and developer values for every Stryd record."""
+    records: list[tuple[Mesg, dict[int, object]]] = []
+    distance = 0.0
+    for i in range(_STRYD_RECORD_COUNT):
+        placeholder = i in _STRYD_PLACEHOLDERS
+        speed = 0.0 if placeholder else round(3.0 + 0.05 * (i % 7), 3)
+        distance = round(distance + speed, 2)
+        native: Mesg = {
+            "position_lat": to_semicircles(40.0 + 0.0001 * i),
+            "position_long": to_semicircles(-105.0 + 0.0001 * i),
+            "distance": distance,
+            "enhanced_speed": speed,
+            "enhanced_altitude": 1600.0 + 0.2 * (i % 6),
+            "power": 0 if placeholder else 200 + 3 * (i % 9),
+            "heart_rate": 0 if placeholder else 140 + (i * 3) % 17,
+            "cadence": 0 if placeholder else 170 + i % 5,
+            "step_length": 0.0 if placeholder else 1000.0 + 12.5 * (i % 8),
+            "vertical_oscillation": 0.0 if placeholder else 80.0 + 1.5 * (i % 9),
+            "stance_time": 0.0 if placeholder else 240.0 + 2.5 * (i % 10),
+            "stance_time_balance": 0.0 if placeholder else 49.0 + 0.25 * (i % 6),
+        }
+        recorded: dict[int, object]
+        if placeholder:
+            recorded = {pos: 0 for pos in (0, 1)}
+            recorded.update({pos: 0.0 for pos in (2, 3, 4, 5, 6, 7)})
+        else:
+            recorded = {
+                0: 20 + 3 * (i % 6),
+                1: 50 + 2 * (i % 8),
+                # Two-decimal values (integer hundredths) that float32 cannot hold:
+                # no hundredths count here is a multiple of 25, the only two-decimal
+                # numbers a float32 represents exactly. Position 6 is recorded as
+                # 0.0 at _STRYD_ZERO_BALANCE_INDEX (below), an intended exemption.
+                2: (903 + 7 * (i % 13)) / 100,
+                3: (151 + 9 * (i % 7)) / 100,
+                4: (4851 + 25 * (i % 9)) / 100,
+                5: (5051 + 30 * (i % 7)) / 100,
+                6: (4901 + 20 * (i % 8)) / 100,
+                7: round(speed + 0.37, 2),
+            }
+            if i == _STRYD_SENTINEL_INDEX:
+                recorded[1] = 65535
+            if i == _STRYD_ZERO_BALANCE_INDEX:
+                recorded[6] = 0.0
+            if i == _STRYD_ZERO_AIR_INDEX:
+                recorded[0] = 0
+        # Developer Distance: off the native value everywhere, and off the
+        # float32-exact hundredths (multiples of 25) like the other float32 series.
+        hundredths = round((distance * 1.02 + 5.01) * 100)
+        if hundredths % 25 == 0:
+            hundredths += 1
+        recorded[8] = hundredths / 100
+        recorded[9] = 18 + i % 4
+        recorded[10] = 104 if i == _STRYD_HUMIDITY_104_INDEX else 60 + i % 5
+        records.append((native, recorded))
+    return records
+
+
+def _stryd_laps() -> list[Mesg]:
+    """Four laps without heart rate or cadence."""
+    laps: list[Mesg] = []
+    for start, end in _STRYD_LAP_WINDOWS:
+        laps.append(
+            {
+                "mesg_num": _MESG_LAP,
+                "start_time": FIT_TIMESTAMP_BASE + start,
+                "timestamp": FIT_TIMESTAMP_BASE + end,
+                "sport": "running",
+                "sub_sport": "generic",
+                "total_elapsed_time": float(end - start + 1),
+                "total_timer_time": float(end - start + 1),
+            }
+        )
+    return laps
+
+
+def stryd_run_fit_bytes(*, manufacturer: str = "stryd") -> bytes:
+    """Encoded run shaped like a Stryd developer-field file.
+
+    ``manufacturer`` names the writer: it is written into ``file_id`` and the
+    ``device_info`` at device index 0, and nowhere else.
+    """
+    record_mesgs: list[Mesg] = []
+    for i, (native, recorded) in enumerate(_stryd_records()):
+        record_mesgs.append(
+            {
+                "mesg_num": _MESG_RECORD,
+                "timestamp": FIT_TIMESTAMP_BASE + i,
+                **native,
+                "developer_fields": recorded,
+            }
+        )
+    laps = _stryd_laps()
+    last_lap_start = laps[-1]["start_time"]
+    assert isinstance(last_lap_start, int)
+    elapsed = float(_STRYD_RECORD_COUNT - 1)
+    session: Mesg = {
+        "mesg_num": _MESG_SESSION,
+        "start_time": FIT_TIMESTAMP_BASE,
+        # The session's timestamp is the fourth lap's START, as in the measured file.
+        "timestamp": last_lap_start,
+        "sport": "running",
+        "sub_sport": "generic",
+        "num_laps": 1,
+        "total_elapsed_time": elapsed,
+        "total_timer_time": elapsed,
+        "developer_fields": {_STRYD_RUN_PROFILE_POSITION: _STRYD_RUN_PROFILE},
+    }
+    body: list[Mesg] = [
+        _device_info(_STRYD_SERIAL, "SyntheticStrydPod", manufacturer=manufacturer),
+        {"mesg_num": _MESG_SPORT, "sport": "running", "sub_sport": "generic"},
+        *record_mesgs,
+        *laps,
+        session,
+        _activity(_STRYD_RECORD_COUNT - 1, elapsed),
+    ]
+    return _encode_with_developer_descriptions(
+        _STRYD_DESCRIPTIONS,
+        _file_id(_STRYD_SERIAL, manufacturer=manufacturer),
+        body,
+    )
+
+
+# --- Native-dynamics (HealthFit-copy) fixture -------------------------------
+
+_NATIVE_DYNAMICS_RECORD_COUNT = 20
+# A NEW identifier containing 255 (the byte value a per-element sentinel filter
+# would drop); ``_SESSION_UUID_BYTES`` is left as it was.
+_NATIVE_DYNAMICS_UUID_BYTES: tuple[int, ...] = (255, *range(40, 55))
+
+
+def run_native_dynamics_fit_bytes() -> bytes:
+    """Encoded run shaped like a HealthFit copy that carries native dynamics.
+
+    Records hold ``vertical_oscillation``, ``stance_time`` and ``vertical_ratio``
+    (no balance, no step length, no developer record fields); the session
+    carries HealthFit's developer fields with a ``SESSION UUID`` containing 255.
+    """
+    descriptions = tuple(
+        DevFieldSpec(name, base_type, index, array=array_len)
+        for index, (name, base_type, array_len) in enumerate(_SESSION_DEV_FIELD_SPECS)
+    )
+    values = {
+        **_SESSION_DEV_FIELD_VALUES,
+        "SESSION UUID": list(_NATIVE_DYNAMICS_UUID_BYTES),
+    }
+    session_fields = {
+        index: values[name]
+        for index, (name, _, _) in enumerate(_SESSION_DEV_FIELD_SPECS)
+    }
+    records: list[tuple[Mesg, dict[int, object]]] = []
+    distance = 0.0
+    for i in range(_NATIVE_DYNAMICS_RECORD_COUNT):
+        speed = round(3.1 + 0.05 * (i % 6), 3)
+        distance = round(distance + speed, 2)
+        records.append(
+            (
+                {
+                    "position_lat": to_semicircles(40.0 + 0.0001 * i),
+                    "position_long": to_semicircles(-105.0 + 0.0001 * i),
+                    "distance": distance,
+                    "enhanced_speed": speed,
+                    "heart_rate": 130 + (i * 2) % 9,
+                    "vertical_oscillation": 85.0 + 1.0 * (i % 7),
+                    "stance_time": 250.0 + 3.0 * (i % 5),
+                    "vertical_ratio": 7.0 + 0.1 * (i % 6),
+                },
+                {},
+            )
+        )
+    return developer_field_run_fit_bytes(
+        descriptions=descriptions,
+        records=records,
+        session_fields=session_fields,
+        serial=_NATIVE_DYNAMICS_SERIAL,
+    )
 
 
 # --- Encoded-byte builders --------------------------------------------------
