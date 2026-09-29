@@ -53,6 +53,7 @@ import fitdocs.declaration
 import fitdocs.docio
 import fitdocs.history.documents
 import fitdocs.history.page
+import fitdocs.identity.kinds
 import fitdocs.layout
 import fitdocs.load.docedit
 import fitdocs.load.engine
@@ -130,6 +131,9 @@ CONVERTED_MODULES: Final[tuple[ModuleType, ...]] = (
     # `tests/plans/test_boundary.py::TestContractImporters`'s pin from two
     # modules to three in the same change.
     fitdocs.plans.corpus,
+    # activity-identity (task 2.1): the kind derivation, which binds the
+    # session-UUID field name and formatter instead of defining its own.
+    fitdocs.identity.kinds,
 )
 
 #: The one converted module allowed to name ``yaml`` at all. The frontmatter
@@ -287,6 +291,7 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
         "document_start_time",
         "is_workout_document",
     ),
+    "fitdocs.identity.kinds": ("SESSION_UUID_FIELD", "format_session_uuid"),
 }
 
 #: Document vocabulary no converted module may spell for itself: the frontmatter

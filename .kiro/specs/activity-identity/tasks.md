@@ -303,7 +303,7 @@ never co-varies two keys a rule distinguishes.
 
 - [ ] 2. Core: the pure identity rule, the precedence, the planner and the hold record
 
-- [ ] 2.1 Classify files into source kinds and derive the identity a page records for its base
+- [x] 2.1 Classify files into source kinds and derive the identity a page records for its base
   - Create the identity package as a marker that re-exports nothing, and the
     kinds module: the closed vocabulary, the HealthFit writer marker, the kind
     derivation from the file's own manufacturer and session developer field,

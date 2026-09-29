@@ -1145,6 +1145,13 @@ def unmanaged_keys(frontmatter: Mapping[str, object]) -> tuple[str, ...]:
     )
 
 
+SESSION_UUID_FIELD: Final[str] = "SESSION UUID"
+"""Developer-field key carrying the recorded 16-byte session identifier.
+
+Kept outside ``__all__`` until the frontmatter task publishes it with the rest
+of the identity keys."""
+
+
 def format_session_uuid(value: object) -> str | None:
     """Format a recorded ``SESSION UUID`` value as a canonical UUID string.
 
