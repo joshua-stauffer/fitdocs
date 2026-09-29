@@ -748,6 +748,10 @@
       name appear;
     - the stated Zensical pin equals `pyproject.toml`'s `docs` pin;
     - the 11.6 and 11.7 sentences appear;
+    - the page states the symlink refusal, the reserved root names
+      `llms.txt` / `llms-full.txt`, and that page links use markdown link
+      syntax (raw-HTML page links refused), so the 2.11 and 2.12 rules are
+      part of the stated contract (11.3);
     - `docs/index.md` links `website.md`.
   - Run the existing docs guard suite unchanged (11.9):
     `tests/test_docs_guarantees.py`, `tests/test_install_docs.py`,

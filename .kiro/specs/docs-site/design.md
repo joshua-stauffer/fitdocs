@@ -416,7 +416,7 @@ flowchart LR
 | 1.3 | Never modify content dir | ContentLoader, Stager, Preview | read-only discovery; writes only under build root | Build, Preview |
 | 1.4 | `_` and `.` names excluded with subtree | ContentLoader | `discover` | Build |
 | 1.5 | Non-md files carried at same path | ContentLoader, Stager | `Asset`, `plan_tree` | Build |
-| 1.6 | Annotation block removed, rest byte-exact | ContentLoader, Stager | `strip_annotation`, `plan_tree` | Build |
+| 1.6 | Annotation block removed, rest byte-exact except the home `template` line (3.3) | ContentLoader, Stager | `strip_annotation`, `plan_tree` | Build |
 | 1.7 | Plain `---` rule kept | ContentLoader | `strip_annotation` | Build |
 | 1.8 | No annotation in pages, search or indexes | ContentLoader, Outline, Stager | stripped text is the only staged/indexed text | Build |
 | 2.1 | Required keys and types | ContentLoader, SiteModel | `validate_meta` | Build |
@@ -562,7 +562,7 @@ class Problem:
 @dataclass(frozen=True)
 class HeroAction:
     label: str
-    href: str                       # absolute https:// URL, or a site path in trailing-slash form ("" for home)
+    href: str                       # absolute https:// URL, or a non-empty site path in trailing-slash form
     primary: bool
 
 @dataclass(frozen=True)
@@ -1292,7 +1292,10 @@ Summary-only. It is one page with these H2 sections:
   - the eight sections in order;
   - the hero keys and `hero_actions` shape;
   - `draft`;
-  - the link form: relative `.md` with `#anchor`, and `docs/` by GitHub URL;
+  - the link form: markdown-syntax relative `.md` links with `#anchor`
+    (raw-HTML page links refused, 2.12), and `docs/` by GitHub URL;
+  - symlinks refused, and the reserved root names `llms.txt` /
+    `llms-full.txt` (2.11);
   - the annotation-block rule, verbatim.
 - **Building the site** (11.4): `uv sync --group docs`,
   `uv run --group docs python -m scripts.build_site build`, the output
@@ -1461,8 +1464,8 @@ tracked, because the tracked-file guard refuses any non-regular file.
 - **`test_content.py`** covers:
   - the resolution precedence, all three sources, with a missing-dir message
     naming dir and source (1.1, 1.2);
-  - `_` and `.` exclusion including subtrees, a refused symlink, and reserved
-    names (1.4);
+  - `_` and `.` exclusion including subtrees (1.4); a refused symlink and
+    reserved names (2.11);
   - annotation strip: the marker at the end, no marker, a plain rule, two
     markers (last wins), byte-exact remainder (1.6, 1.7);
   - each 2.5 violation class singly;
@@ -1478,7 +1481,8 @@ tracked, because the tracked-file guard refuses any non-regular file.
   - a `docs/` URL with a missing file, with a missing anchor, and valid
     (6.3);
   - a github-slugger conformance table: duplicates `-1`, `&`, `—`, emoji,
-    accents, code spans, fenced headings ignored.
+    accents, code spans, fenced headings ignored;
+  - a raw-HTML `.md` link refused, with file and line (2.12).
 - **`test_outline.py`** covers:
   - canonical order with empty sections omitted (3.1);
   - ascending `order` against alphabetical order (3.2);

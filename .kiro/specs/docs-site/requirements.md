@@ -91,8 +91,9 @@ confirmation, together with the brand values (queue
   - the site's source layout, its build and its local preview, including
     preview of a content directory outside the repository;
   - the content contract (frontmatter keys, the canonical section list, the
-    home page's hero keys, `draft`, the `_` exclusion, the link form, the
-    annotation block) and its validation;
+    home page's hero keys, `draft`, the `_` and `.` exclusions, the
+    symlink and reserved-name refusal, the link form, the annotation block)
+    and its validation;
   - navigation generated from frontmatter;
   - the machine-readable site indexes (`llms.txt`, `llms-full.txt`);
   - the theme configuration, brand and hero, the hero chart built from demo
