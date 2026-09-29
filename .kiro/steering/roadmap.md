@@ -1780,7 +1780,7 @@ credential store are designed for them now and built later.
 
 #### Specs (dependency order)
 
-- [ ] activity-identity — the file-identity fields from `file_id`; the
+- [ ] activity-identity — **spec written 2026-09-29** (Phase 8 batch, `tasks-generated`, all approvals set; 9 requirements / 73 criteria, 7 majors / 21 executable tasks; cross-spec reviewed, three rounds, READY; default base precedence `original:garmin > phone_copy > original > unknown`, maintainer decision 2026-09-29). the file-identity fields from `file_id`; the
   cross-source match rule (one-to-one, calibrated on measured pairs,
   ambiguity reported and never merged); source roles on the page; base
   selection by configurable precedence (a device original outranks a
@@ -1790,7 +1790,7 @@ credential store are designed for them now and built later.
   ambiguous and orphaned sources. Promoted from queue
   `2026-09-12-adopting-a-higher-fidelity-re-export-needs-a-hand-edit`.
   Dependencies: none
-- [ ] running-dynamics — record-level developer fields read by field
+- [ ] running-dynamics — **spec written 2026-09-29** (Phase 8 batch, `tasks-generated`, all approvals set; 10 requirements / 57 criteria, 6 majors / 15 executable tasks; cross-spec reviewed, three rounds, READY). record-level developer fields read by field
   description (name, units, declared scale, invalid values filtered), and
   native running dynamics (step length, vertical oscillation, stance time and
   its balance, vertical ratio) as sample channels. Stryd's channels (form
@@ -1798,7 +1798,7 @@ credential store are designed for them now and built later.
   recognized by name. Stryd-file quirks are handled: zeros at pauses, no
   session HR summary, a wrong lap count, a session timestamp that is not the
   end. A running-dynamics section and chart on run pages. Dependencies: none
-- [ ] connectors — the connector protocol and its capability vocabulary
+- [ ] connectors — **spec written 2026-09-29** (Phase 8 batch, `tasks-generated`, all approvals set; 15 requirements / 122 criteria, 9 majors / 28 executable tasks; cross-spec reviewed, three rounds, READY). the connector protocol and its capability vocabulary
   (pull activities now; the follow-ons' kinds named and reserved, with an
   irreversible flag); the built-in registry and the published surface the
   plugin kind validates against; per-user credential and token storage
@@ -1807,14 +1807,14 @@ credential store are designed for them now and built later.
   delivery; the connect and pull commands, the pull optionally chaining the
   drain; the folder connector; the revised network statements and guards;
   the packaged skill's routine. Dependencies: none
-- [ ] channel-merge — composing one activity from a base and its extras.
+- [ ] channel-merge — **spec written 2026-09-29** (Phase 8 batch, `tasks-generated`, all approvals set; 9 requirements / 54 criteria, 6 majors / 17 executable tasks; cross-spec reviewed, three rounds, READY; also composes the listed files in the load and benchmark passes). composing one activity from a base and its extras.
   Alignment is by timestamp, with a per-stretch lag between pauses (Stryd
   and HealthFit copies drift between 0 and +1 s from one stretch to the
   next, measured). Extras donate only the channels the base lacks, and the
   base wins every shared channel. The page states which file each channel
   came from, and summaries are recomputed only where a donated channel
   feeds them. Dependencies: activity-identity, running-dynamics
-- [ ] intervals-connector — the intervals.icu activity pull. Auth is a
+- [ ] intervals-connector — **spec written 2026-09-29** (Phase 8 batch, `tasks-generated`, all approvals set; 10 requirements / 57 criteria, 5 majors / 13 executable tasks; cross-spec reviewed, three rounds, READY; tasks 1.1 (live check) and 5.2 (completion gate) are maintainer-only, `_Blocked:_`). the intervals.icu activity pull. Auth is a
   personal API key. Listing is by date range; Strava-sourced stubs are
   skipped, and a source filter is configurable. The original file is
   downloaded (gzip) and checked for a FIT header. Garmin product names are
