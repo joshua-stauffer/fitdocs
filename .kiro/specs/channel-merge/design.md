@@ -215,14 +215,17 @@ version.
   need the helper to control, per file: the laps (count and per-lap values,
   heart rate included), the session's start, elapsed time and distance, the
   session developer fields (HealthFit's `SESSION UUID`), the sport (a
-  cycling session) and the recording device's manufacturer (the ride copy's
-  is not Garmin). The `SESSION UUID` goes through the helper's existing
-  keyword-only `session_fields` option and the recording device through its
-  existing `device_manufacturer`. For each of the others the published
-  helper does not already take, this spec appends to it one keyword-only
-  parameter whose default is the helper's current behaviour -- `laps`,
-  `session_start`, `session_elapsed_s`, `session_distance_m`, `sport` (the
-  pre-authorized list; each only if absent) -- and pins in
+  cycling session) and the `file_id` and recording-device manufacturers
+  (the helper defaults both to `garmin`; no file this spec builds through it
+  is Garmin: each Stryd file passes `manufacturer="stryd"` and
+  `device_manufacturer="stryd"`, each HealthFit copy `"development"` for
+  both). The `SESSION UUID` goes through the helper's existing keyword-only
+  `session_fields` option, the manufacturers through its existing
+  `manufacturer` and `device_manufacturer`. For each of the others the
+  published helper does not already take, this spec appends to it one
+  keyword-only parameter whose default is the helper's current behaviour --
+  `laps`, `session_start`, `session_elapsed_s`, `session_distance_m`, `sport`
+  (the pre-authorized list; each only if absent) -- and pins in
   `tests/fixtures/test_builder.py` that the helper's default output bytes are
   unchanged. Any other missing capability is a stop-and-report.
 - Shared files: `render/views.py` (running-dynamics appends its Running
@@ -250,6 +253,11 @@ version.
   is task 3.3's conditional step (or, if intervals-connector lands while this
   branch is open, the same step after the final rebase). `attribution_line`
   words every case; this spec adds no wording.
+- The run pair's files record no Garmin device (the HealthFit copy's
+  recording device is `development`, each Stryd file's `stryd`; Supporting
+  References), so the composed run page and the `composed_run` golden carry
+  no `Data source` line in either landing order, while the ride pair carries
+  `Data sources: Garmin <model> and other devices` once `_head` is wired.
 - Shared files: `render/views.py` and `render/__init__.py`, append-only (this
   spec appends one field, one section call per view and, as second lander,
   the `donor_devices` argument at `_head`'s one call).
@@ -1153,7 +1161,9 @@ M1-M5 are Req 9.2's five.
   run composition, a shifted ride, a fallback stretch, a non-donating extra;
   `None` without extras; label table equality and completeness; `GPS` once.
 - **Golden (`tests/render/test_golden_docs.py`)**: `composed_run` (the run pair
-  composed); every existing golden unchanged but its `doc_version` line.
+  composed; no `Data source` line in either landing order, since no run
+  file's recording device is Garmin); every existing golden unchanged but its
+  `doc_version` line.
 - **Attribution (only when this spec lands second to `intervals-connector`,
   `tests/render/test_provenance.py` views section)**: the ride-pair pin and
   the non-donating-extra pin (M25, M26); otherwise `intervals-connector` adds
@@ -1191,16 +1201,21 @@ M1-M5 are Req 9.2's five.
 
 ### Run pair (`tests/fixtures/merge.py`, `run_pair_fit_bytes`)
 Returns `(healthfit, stryd)` bytes of one synthetic run.
-- **Stryd file**: `file_id` manufacturer `stryd`; five stretches of at least 12
-  samples at 1 Hz separated by gaps of at least 3 s; native heart rate, power,
-  distance, enhanced speed, cadence, step length, vertical oscillation, stance
-  time and stance time balance; the seven Stryd developer channels through the
-  shared developer-field helper; no position; four laps with values distinct
-  from the HealthFit laps; session start `S`, elapsed `E + 8.5` s, distance
-  `D`.
-- **HealthFit copy**: `file_id` manufacturer `development`, a session
-  `SESSION UUID`; every Stryd instant plus 3 trailing instants; distance and
-  power at instant `t + L_k` equal the Stryd values at `t` in stretch `k`, with
+- **Stryd file**: `file_id` manufacturer `stryd` and recording device
+  (`device_info` index 0) manufacturer `stryd`, through the helper's
+  `manufacturer="stryd"` and `device_manufacturer="stryd"` (both default to
+  `garmin`); five stretches of at least 12 samples at 1 Hz separated by gaps
+  of at least 3 s; native heart rate, power, distance, enhanced speed,
+  cadence, step length, vertical oscillation, stance time and stance time
+  balance; the seven Stryd developer channels through the shared
+  developer-field helper; no position; four laps with values distinct from
+  the HealthFit laps; session start `S`, elapsed `E + 8.5` s, distance `D`.
+- **HealthFit copy**: `file_id` manufacturer `development` and recording
+  device (`device_info` index 0) manufacturer `development`, through
+  `manufacturer="development"` and `device_manufacturer="development"`
+  (matching the ride copy); a session `SESSION UUID`; every Stryd instant
+  plus 3 trailing instants; distance and power at instant `t + L_k` equal the
+  Stryd values at `t` in stretch `k`, with
   `(L_1..L_5) = (+1, +1, 0, +1, 0)`; heart rate at `t - 1` equals the Stryd
   heart rate at `t`; step length = Stryd's / 1.008 (rounded to the field's
   resolution); cadence = Stryd's ± 1 alternating; enhanced speed; vertical
@@ -1216,6 +1231,10 @@ Returns `(healthfit, stryd)` bytes of one synthetic run.
   and power at the first instant of a +1 stretch equal no Stryd value of that
   stretch. Identity's STRICT evidence holds (same start, elapsed 8.5 s apart,
   equal distance).
+- Neither file's recording device is Garmin, so the composed run page (and
+  the `composed_run` golden) carries no `Data source` line once
+  `intervals-connector`'s attribution is wired; a Stryd file left at the
+  helper's `garmin` default would wrongly attribute the page to Garmin.
 
 ### Ride pair (`ride_pair_fit_bytes(*, copy_power=True, copy_shift_h=0)`)
 Returns `(garmin, healthfit)` bytes of one synthetic ride.
@@ -1225,8 +1244,9 @@ Returns `(garmin, healthfit)` bytes of one synthetic ride.
   position, cadence; no heart rate and no session heart rate.
 - **HealthFit copy**: `development` plus `SESSION UUID`; its recording device
   (`device_info` index 0) names manufacturer `development` through the
-  helper's keyword-only `device_manufacturer`, so it is not Garmin and the
-  attribution line counts it among "other devices"; the same instants
+  helper's `manufacturer="development"` and `device_manufacturer="development"`
+  (as the run copy), so it is not Garmin and the attribution line counts it
+  among "other devices"; the same instants
   (start identical to the second) moved by `copy_shift_h` hours; heart rate on
   every sample; power equal to the Garmin power at the same instant on every
   sample but one (about 99% coverage) when `copy_power`; a per-sample distance

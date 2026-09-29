@@ -167,9 +167,11 @@ rewrite or reorder a sibling's):
     what these fixtures need through it: per-file laps (count and values,
     heart rate included), session start, elapsed time and distance, a cycling
     sport, the HealthFit `SESSION UUID` session developer field (through the
-    helper's existing keyword-only `session_fields` option), and a recording
-    device that is not Garmin for the ride's HealthFit copy (through its
-    existing `device_manufacturer`, set to `development`). For each of
+    helper's existing keyword-only `session_fields` option), and `file_id`
+    and recording-device manufacturers that are not Garmin (through its
+    existing `manufacturer` and `device_manufacturer`, both of which default
+    to `garmin`: each Stryd file passes `"stryd"` for both, each HealthFit
+    copy, run and ride, `"development"` for both). For each of
     `laps`, `session_start`, `session_elapsed_s`, `session_distance_m` and
     `sport` the helper lacks, append that keyword-only parameter, defaulting
     to the helper's current behaviour, and pin in
@@ -190,7 +192,10 @@ rewrite or reorder a sibling's):
     recording every non-dynamics channel the Stryd file records (heart rate,
     power, distance, speed, cadence); pairwise-distinct values within every
     channel of every stretch; the ride's identical start, ~99% copy power
-    coverage, per-sample distance that never agrees with the original's
+    coverage, per-sample distance that never agrees with the original's; the
+    Stryd files built with `manufacturer="stryd"` and
+    `device_manufacturer="stryd"`, the HealthFit copies with
+    `"development"` for both
   - Shape self-tests decode the raw messages (no fitdocs code between) and
     assert every premise later tasks rely on: per stretch, the HealthFit
     distance and power at `t + L_k` equal the Stryd values at `t` for every
@@ -207,8 +212,11 @@ rewrite or reorder a sibling's):
     while the session totals are within 5 m; the ride original's `device_info`
     at index 0 names manufacturer `garmin` and the ride copy's names
     `development` (the premise of the ride-pair attribution pin, design.md
-    § "Cross-spec seams"); building each fixture
-    twice gives identical bytes
+    § "Cross-spec seams"); the run pair's and trio's recording devices
+    (`device_info` index 0) are non-Garmin -- `stryd` on each Stryd file,
+    `development` on the HealthFit copy -- and so are their `file_id`
+    manufacturers (the premise that the `composed_run` golden carries no
+    `Data source` line); building each fixture twice gives identical bytes
   - Assert that `activity-identity`'s rule joins each pair and the trio
     (`pair_evidence` between every two files' session keys is not `None`: STRICT
     for the run files and the unshifted ride, SHIFTED for the shifted ride), and
@@ -219,7 +227,9 @@ rewrite or reorder a sibling's):
     in Implementation Notes the fixture edit that makes it fail (e.g. setting
     `L_3` to +1 reds the per-stretch lag self-test; dropping speed from the
     HealthFit copy reds the subset self-test; giving the ride copy a Garmin
-    recording device reds the recording-device self-test)
+    recording device reds the ride recording-device self-test; leaving a Stryd
+    file's `device_manufacturer` at the helper's `garmin` default reds the run
+    recording-device self-test)
   - Observable: `uv run pytest tests/fixtures/` green; `uv run mypy
     tests/fixtures/merge.py tests/fixtures/test_merge_fixtures.py` clean; ruff
     check and format clean on the changed files; no file under `src/` changed;
@@ -493,7 +503,10 @@ rewrite or reorder a sibling's):
     section immediately after Device & Data Quality when it has a body
   - Add a `composed_run` golden case: the run pair composed and rendered with
     its provenance and its two refs, pinned timezone and athlete inputs as the
-    other goldens; regenerate only the new golden files
+    other goldens; regenerate only the new golden files. No run file's
+    recording device is Garmin (1.1's self-test), so the golden carries no
+    `Data source` line in either landing order, while the ride pair carries
+    `Data sources: Garmin <model> and other devices` once `_head` is wired
   - Tests: in each of the three views a composed context places the section as
     the last `##` section, directly after Device & Data Quality; every
     pre-existing golden stays byte-identical and unregenerated
