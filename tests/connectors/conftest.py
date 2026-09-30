@@ -16,6 +16,12 @@ Two autouse fixtures run before every test in this package:
   -- in particular ``tests/test_confinement.py`` (task 6.3), which sits
   outside this conftest's reach -- can import and call it directly, passing
   their own base directory, to get the same isolation locally.
+
+:class:`FakeTransport` (task 2.1) is the scripted :data:`fitdocs.connectors.
+http.Transport` every ``HttpClient`` test and later connector test sends
+through instead of ``urllib_transport``: a fixed script of
+``HttpResponse``/``TransportError`` values, one per call, consumed in order;
+every call is recorded (the request and the timeout it was given).
 """
 
 from __future__ import annotations
@@ -26,6 +32,8 @@ from pathlib import Path
 from typing import NoReturn
 
 import pytest
+
+from fitdocs.connectors.http import HttpRequest, HttpResponse, TransportError
 
 
 def isolate_connector_environment(
@@ -71,3 +79,31 @@ def _isolated_connector_environment(
 ) -> None:
     base_dir = tmp_path_factory.mktemp("connector-env")
     isolate_connector_environment(monkeypatch, base_dir)
+
+
+class FakeTransport:
+    """A scripted :data:`fitdocs.connectors.http.Transport`.
+
+    ``script`` supplies one outcome per call, in order: an
+    :class:`~fitdocs.connectors.http.HttpResponse` is returned, a
+    :class:`~fitdocs.connectors.http.TransportError` instance is raised.
+    Every call is recorded in :attr:`requests` (the exact
+    :class:`~fitdocs.connectors.http.HttpRequest` handed to this transport)
+    and :attr:`timeouts` (the timeout given alongside it), so a test can
+    inspect what ``HttpClient`` actually sent on each attempt.
+    """
+
+    def __init__(self, script: list[HttpResponse | TransportError]) -> None:
+        self._script = list(script)
+        self.requests: list[HttpRequest] = []
+        self.timeouts: list[float] = []
+
+    def __call__(self, request: HttpRequest, timeout: float) -> HttpResponse:
+        self.requests.append(request)
+        self.timeouts.append(timeout)
+        if not self._script:
+            raise AssertionError("FakeTransport script exhausted")
+        outcome = self._script.pop(0)
+        if isinstance(outcome, TransportError):
+            raise outcome
+        return outcome
