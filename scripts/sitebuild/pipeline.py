@@ -62,13 +62,23 @@ def guard_root(root: Path, *, repo_root: Path) -> Path:
     ``..`` and symbolic links are resolved first. Containment is then decided by
     file identity (``os.path.samefile``) and not by path text, because
     ``Path.resolve`` does not fold letter case on a case-insensitive filesystem
-    or follow macOS firmlinks. A root outside the repository is allowed; one
+    or follow macOS firmlinks. A root that is the repository or one of its
+    ancestors is refused, since clearing its managed paths would reach outside
+    ``website/build/``. A root elsewhere outside the repository is allowed; one
     inside it must lie strictly under ``<repo_root>/website/build/``, where the
     ``build`` directory is named exactly as ``website/build`` names it.
     """
     resolved = root.resolve()
     chain = [resolved, *resolved.parents]
     website = repo_root / _BUILD_DIR.parent
+    if (
+        _index_of([repo_root.resolve(), *repo_root.resolve().parents], resolved)
+        is not None
+    ):
+        raise BuildRootRefused(
+            f"refusing to build into {resolved}: it is the repository or one of "
+            "its parent directories"
+        )
     if _index_of(chain, repo_root) is None:
         return resolved
     at = _index_of(chain, website)

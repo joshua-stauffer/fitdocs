@@ -441,7 +441,7 @@
     `load_content` (2.2) for its fixture check, so it runs after the (P)
     group.
 
-- [ ] 3. Integration: theme, staging, pipeline, preview, CLI
+- [x] 3. Integration: theme, staging, pipeline, preview, CLI
 
 - [x] 3.1 Create the theme: config template, home override and the brand in one place
   - **`website/mkdocs.template.yml`** carries:
@@ -574,7 +574,7 @@
   - **Done when** the tests are green with mutations recorded.
   - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-- [ ] 3.5 Expose build, serve and status as the one command, and guard the build logic's imports
+- [x] 3.5 Expose build, serve and status as the one command, and guard the build logic's imports
   - Create `scripts/build_site.py` in the `scripts/` entry-point shape, with
     subcommands:
     - `build [--content] [--build-dir] [--verbose]`;
@@ -935,3 +935,20 @@
     - map serve's return 2 to exit 2;
     - call `generator_executable()` before `serve()` and `build()`;
     - refuse a build root that lies inside the resolved content dir, since guard_root alone allows a root inside an out-of-repo content dir (checked by file identity).
+- 3.5 (3 rounds).
+  - **Commands.** `python -m scripts.build_site {build,serve,status}`:
+    - Exit codes: 0 on success; 1 on problems, one line each on stderr, with `--verbose` appending the generator output; 2 when it could not run.
+    - Relative paths (and a relative FITDOCS_SITE_CONTENT) anchor to REPO_ROOT.
+    - An empty FITDOCS_SITE_CONTENT is unset. `--content ""` exits 2.
+    - `status` prints `has_content=true|false` and works without the generator. Manual check: in the repo it prints `has_content=false`.
+  - **Checks run before any build or serve, so an exit-2 run writes nothing.** In order:
+    1. content;
+    2. `guard_root`;
+    3. overlap: a build root inside, equal to, or containing the content dir is refused, decided by file identity;
+    4. `generator_executable()`.
+  - **`guard_root` extension (controller addition, 3.5 round 1).** It now also refuses the repo root and any ancestor of it, by identity. `--build-dir ..` would otherwise clear `<parent>/{html,staged,overrides,mkdocs.yml}`.
+  - **Tests.**
+    - Identity rules are pinned on every filesystem by making `Path.resolve` a no-op.
+    - The import guard in test_repo_wiring.py covers exactly the 10 `scripts/sitebuild` files plus `build_site.py`.
+    - The reviewer ran the real CLI: case and firmlink spellings of the repo and its parents are refused; SIGINT exits 0; a taken port exits 2.
+  - **For 5.1.** `_build_parser()` parses the design's workflow commands.
