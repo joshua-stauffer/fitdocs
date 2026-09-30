@@ -294,7 +294,7 @@
     unchanged
   - _Requirements: 5.1, 5.5, 5.6, 6.1_
 
-- [ ] 2.4 Build the running-dynamics channel policy and wire it into the samples
+- [x] 2.4 Build the running-dynamics channel policy and wire it into the samples
   - Create `src/fitdocs/ingest/dynamics.py` per design.md § DynamicsPolicy:
     the native-field map, the seven-entry Stryd name table, the
     placeholder-zero set, the gate pairs and `extract_dynamics` (native values
@@ -578,3 +578,4 @@
 - 3.2: `dynamics_section(ctx)` returns `(body, assets)` with NO heading; the body ends with the image link when a chart exists. 3.3 prepends `## Running Dynamics` under `Modality.RUN` only and appends the assets after telemetry's. Round 3's two test-prose fixes were applied by the controller and re-reviewed (a downgrade from an implementer round).
 - 2.2: `parse_fit` computes `retained = retained_records(record_mesgs)` once (the SDK never emits a `timestamp: None` key -- a missing timestamp is an absent key); `extract_samples` re-applies the idempotent filter. `extract_record_developer_fields` returns a `MappingProxyType[str, DeveloperChannel]`, keeps zeros, `None` for a sentinel/unrecorded sample -- the placeholder rule belongs in `extract_dynamics` (2.4), which should read this mapping. It also accepts raw description dicts, so tests may call it directly. Three omission causes (unrecorded, all-sentinel, scale 0) each leave an earlier same-named channel exposed; no developer field fills a native channel (synthetic test covers slots 5/6/13). Record-level tests live in `tests/ingest/test_record_developer_fields.py` (design placed them in test_developer.py).
 - 2.3: `records._heart_rate` maps exactly 0 to `None` (value-only rule, any writer/sport/developer data). Reviewer-closed mutation classes: parse_fit gates (file_id/device_info manufacturer, developer data, session avg HR, sport) and HR coupled to power/speed/cadence/distance zero. `<= 0` is an unreachable equivalent (uint8).
+- 2.4: `ingest/dynamics.py` = `NATIVE_DYNAMICS_FIELDS`, `DEVELOPER_DYNAMICS_NAMES`, `PLACEHOLDER_ZERO_CHANNELS`, `GATES`, `extract_dynamics`; `extract_samples(..., *, developer=None)`; `parse_fit` computes `record_developer_fields` before the samples. The Stryd fixture is confounded (every placeholder/gate goes None together), so per-channel and per-pair discrimination lives in `tests/ingest/test_dynamics.py` unit cases; expected tables there are literals (a derived `_PARTNER` let three gate-pair swaps survive in round 1). Recognition ignores developer index, application id and declared scale. Equivalent mutants: `not gate_value`, `not value`, `zip(strict=False)`, and a `developer_data_index is None` drop (unreachable from a file).
