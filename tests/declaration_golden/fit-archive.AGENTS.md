@@ -3,10 +3,10 @@
 
 The contents of `fit-archive/` are written and tool-owned by fitdocs.
 
-These files are immutable inputs: they must not be edited, renamed, or deleted while a document still references them.
+These files are immutable inputs: they must not be edited, renamed, or deleted while a document still references them or fitdocs holds them for a decision (`fitdocs check` lists held files).
 
 ## Ownership
 
 Owner: `fitdocs`.
-Ownership contract version: `4`.
+Ownership contract version: `5`.
 Published ownership contract: https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md

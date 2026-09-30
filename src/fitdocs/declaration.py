@@ -229,14 +229,32 @@ _REDERIVABILITY_DOCS: Final[str] = (
 # (`load/engine.py:339` via `docedit.replace_load_region`), so the unqualified
 # form would be false of `load` (Req 3.2).
 
+_RENAMES: Final[str] = (
+    "A document may be renamed when a file that outranks the one it is "
+    "rendered from arrives for the same workout; links to its previous "
+    "filename are not updated."
+)
+# CLAIM ANCHOR: activity-identity Req 6.2-6.4 -- a page whose base changes is
+# re-rendered from the new base and, when the filename computed from that base
+# differs from its current one, moved to it (the claim says "may" because the
+# filename computed from the new base can equal the current one, Req 6.2); links
+# in other documents to the previous filename are not rewritten because no
+# fitdocs code rewrites links in other documents. "Outranks" is the total order of
+# `identity.roles.rank_key` under the configured source precedence. Workouts
+# only: no other directory's declaration selects this fragment.
+
 _IMMUTABILITY: Final[str] = (
     "These files are immutable inputs: they must not be edited, renamed, or "
-    "deleted while a document still references them."
+    "deleted while a document still references them or fitdocs holds them "
+    "for a decision (`fitdocs check` lists held files)."
 )
-# CLAIM ANCHOR: Req 3.3's mandated statement verbatim in substance. True
-# because `sync.regen` (sync.py:281-352) and `sync.sync` read an archived
-# source's bytes and never rewrite it; nothing in the module ever opens
-# `fit-archive/*.fit` for writing after the initial archive commit.
+# CLAIM ANCHOR: Req 3.3's mandated statement, extended by activity-identity Req
+# 9.5. True because `sync.regen` (sync.py:281-352) and `sync.sync` read an
+# archived source's bytes and never rewrite it; nothing in the module ever
+# opens `fit-archive/*.fit` for writing after the initial archive commit. The
+# held clause: an ambiguous file is archived and recorded in
+# `identity.holds.load_holds`'s record (`.fitdocs/held.toml`) with no page, and
+# `audit.audit` reports each entry as an `ambiguous_source` finding.
 
 _NEVER_ADD_MARKER: Final[str] = (
     "Never add a region marker to a document that does not already have "
@@ -370,7 +388,8 @@ def declaration_text(directory: str) -> str:
 
     For the directory holding generated workout documents (``workouts/``):
     the written-and-tool-owned statement, the user-owned region names, the
-    user-owned effort-tag frontmatter keys (Req 6.4), and re-derivability by
+    user-owned effort-tag frontmatter keys (Req 6.4), the rename a changed
+    base may cause (activity-identity Req 9.3), and re-derivability by
     regeneration (Req 3.2), plus the never-add-a-marker rule. For the
     longitudinal history directory (``history/``): the written-and-tool-owned
     statement, a statement that its one page and chart carry no user-owned
@@ -380,9 +399,10 @@ def declaration_text(directory: str) -> str:
     no frontmatter and no region the athlete owns, so this branch never
     selects those fragments. For the source archive (``fit-archive/``): the
     written-and-tool-owned statement and the immutable-inputs statement (Req
-    3.3) -- the re-derivability, user-owned-region, and user-owned-key
-    elements do not apply here either (Req 3.2a, 6.4), so this branch never
-    selects those fragments. For the generated training-blocks directory
+    3.3, which also names held files, activity-identity Req 9.5) -- the
+    re-derivability, user-owned-region, and user-owned-key elements do not
+    apply here either (Req 3.2a, 6.4), so this branch never selects those
+    fragments. For the generated training-blocks directory
     (``blocks/``): the written-and-tool-owned statement, a statement that it
     holds block pages and, per block, the planned-workout pages under a
     subdirectory named after that block, a statement that a block page's one
@@ -422,6 +442,7 @@ def declaration_text(directory: str) -> str:
             f"{_WRITTEN_AND_OWNED.format(directory=directory)}\n\n"
             f"{_REGIONS.format(user_regions_list=user_regions_list)}\n\n"
             f"{_USER_KEYS.format(user_keys_list=user_keys_list)}\n\n"
+            f"{_RENAMES}\n\n"
             f"{_REDERIVABILITY_DOCS.format(archive_dir=ARCHIVE_DIR)}\n\n"
             f"{_NEVER_ADD_MARKER}\n\n"
         )
