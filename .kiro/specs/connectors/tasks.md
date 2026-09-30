@@ -675,7 +675,7 @@
   - _Requirements: 1.9, 2.8, 14.2, 14.3_
   - _Boundary: BoundaryGuard_
 
-- [ ] 6.2 (P) Rewrite every network statement to name the connector commands and pin it
+- [x] 6.2 (P) Rewrite every network statement to name the connector commands and pin it
   - Rewrite `cli.py`'s network paragraph (`:98-102`), `sync.py`'s
     "Offline guarantee" paragraph (`:41-52`, adding that the engine makes
     no connector request), `tiles.py:7`, `:246` and `:407` (the tile code
@@ -962,3 +962,4 @@
 - 3.3: `connectors.settings` -- checks run in design order (shape, name, connector, lookback, credential keys, parse_settings; then collisions); names use `fullmatch` (a `.match` with `$` accepted a trailing newline -- registry patterns fixed the same way). Every error starts `f"{settings_file}: [connectors.{name}] {key}: "`. Tests put targets in the MIDDLE of a sequence (not first or last) to defeat both first-only and last-only loops.
 - 4.2: the folder connector registers at import, so `available()` always includes `folder`; registry tests filter to their own ids. Selection and settling are delegated to `fitdocs.inbox`. Tests needing a Path.stat failure wrap `inbox.settle` rather than counting stdlib calls (Python 3.14's `is_file` no longer calls `stat`).
 - 4.5: `connectors.connect.run_connect` never redacts the next step or path (they hold no user or service text); unexpected exceptions from verify/login propagate unredacted -- 5.1's CLI must map them (queued).
+- 6.2: every network statement names the map tiles AND both connector commands (`fitdocs connect` authenticates once; `fitdocs pull` fetches) -- round 1 wrongly wrote pull as the only other path. `tests/connectors/test_network_statements.py` scopes each positive check to a unique (start, end) anchor span; tasks 7, 8.2 and 8.3 rewording README.md or docs/configuration.md near those sentences must keep each anchor unique and present, or update the anchors.
