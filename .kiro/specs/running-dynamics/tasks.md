@@ -548,7 +548,7 @@
 
 - [ ] 6. Validation: the evidence sweep
 
-- [ ] 6.1 Classify every criterion, run the named mutations, and validate the whole change
+- [x] 6.1 Classify every criterion, run the named mutations, and validate the whole change
   - For each of the 57 criteria, record PINNED (test and mutation),
     PRESERVED-ONLY (the existing test) or UNPINNED (with the mutation run that
     shows it), per `change-protocol.md` § The completeness half. 10.2 is
@@ -584,3 +584,16 @@
 - 5.1 (from activity-identity's log WARN): `tests/load/test_render.py::test_payload_version_paired_with_doc_version` pins `(LOAD_PAYLOAD_VERSION, DOC_VERSION)` -- a DOC_VERSION literal site missing from 5.1's list; move it too.
 - 5.1: DOC_VERSION advanced 5 -> 6 (main's value 5 at 1c55e18); `_PRE_RUNNING_DYNAMICS_DOC_VERSION = 5`. Sites moved: contract.py, test_cli_check.py:196,198, test_frontmatter.py:44,101, test_sources.py:2270 (CONSTANT_REGISTRY_ASOF_DOC_VERSION), tests/load/test_render.py:169 (pair (2, 6)); 11 goldens, one doc_version line each. Final-rebase re-pin check: pending at merge (activity-identity's branch also moves 5 -> 6).
 - 5.2: aging deletes the first sync's `-dynamics.svg` too -- otherwise a regen that skips writing assets for an existing document (`sync._write_outputs`) survived the full suite (reviewer O7). Round 3's docstring fix was applied by the controller and re-reviewed.
+- 6.1 evidence sweep (2026-09-30, full suite 5892 passed):
+  - M1-M12 through the full suite, red counts: M1 44, M2 27, M3 heart-rate half 11, M3 stride half 20, M4 4, M5 13, M6 (stance-time-balance gate) 12, M7 Distance 4 / Speed 3, M8 2, M9 1, M10 5, M11 replacement `(k*n)//100 + 1` 3 (as written it is an equivalent mutant, green), M12 case-insensitive 1 / substring 1. M1, M2 and M3 each red (10.4).
+  - Classification of the 57 criteria:
+    - PINNED (52): 1.1-1.12, 2.1-2.3, 3.1-3.4, 4.1-4.4, 5.1-5.6, 6.1-6.3, 6.5, 6.6, 7.1-7.7, 8.1-8.5, 9.1-9.4, 10.1, 10.4.
+    - 6.3: the elapsed-versus-samples preference is PRESERVED-ONLY by tests/metrics/test_aggregates.py::test_elapsed_prefers_session_total_over_channel.
+    - 6.4: PINNED for heart rate. The lap-cadence clause is vacuous: no renderer reads a lap's avg_cadence_rpm, so `or 0` there is an equivalent mutant.
+    - 9.4: CONTRACT_VERSION is pinned only through the full suite (the declaration goldens).
+    - 10.2: PRESERVED-ONLY (tests/test_determinism.py:672-712, tests/test_packaging.py:503-519, test_preserved_guarantees dependency pin).
+    - 10.3: PINNED for the fixture shapes (builder mutations). The no-personal-data half is CONDITIONAL: it rests on tests/test_forbidden_strings.py, which skips locally and runs in CI only from a secret list.
+    - 9.5: UNPINNED. The CHANGELOG [Unreleased] content survives deletion. The pin cannot outlive a release cut, so it is accepted as review-only.
+    - 10.5: review grep, as design.md specifies. `grep -rniE "https?://[^ )]*stryd"` over every file the branch changes printed nothing. A repo-wide guard was drafted and dropped in review: its scope could be narrowed with nothing going red, it flagged harmless text, and its samples spelled real hosts. It is queued as a follow-up shared with channel-merge 9.3.
+    - Tally: 52 PINNED, 6.4 (heart rate pinned, cadence vacuous), 10.2 PRESERVED-ONLY, 10.3 fixture shapes pinned with the privacy half conditional, 9.5 UNPINNED (review), 10.5 review grep = 57.
+  - Greps: the prose-claim grep over added test lines found no false claim. The no-Stryd-address grep over every changed file printed nothing.
