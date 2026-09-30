@@ -18,11 +18,14 @@ from pathlib import Path
 
 import pytest
 import yaml
+from typer.testing import CliRunner
 
 import fitdocs.sync as sync_module
 from fitdocs import Activity, DerivedMetrics, Modality
+from fitdocs import cli as cli_module
 from fitdocs import compute_metrics as real_compute_metrics
 from fitdocs import parse_fit as real_parse_fit
+from fitdocs.cli import app
 from fitdocs.contract import DOC_VERSION, format_session_uuid
 from fitdocs.declaration import DECLARATION_FILENAME
 from fitdocs.docmerge import begin_marker, end_marker
@@ -45,6 +48,7 @@ from fitdocs.inbox import DEFAULT_INBOX_SETTINGS, Disposition
 from fitdocs.layout import (
     WORKOUTS_DIR,
     archive_path,
+    doc_stem,
     held_path,
     quarantine_path,
     source_ref,
@@ -2766,3 +2770,417 @@ def test_regeneration_writes_no_archive_file(
     # no-op write); the unreferenced files are the ones planned.
     assert planned.isdisjoint(calls)
     assert all(archive.exists() for archive in planned)
+
+
+# --- CLI scenarios (7.2) ---
+#
+# These drive the real ``fitdocs`` command (typer's runner) over a temp data
+# root, so the wiring -- settings, drain, planned sync, ``check``, ``regen`` --
+# is what is proved, not the engines alone. Page names are computed, not
+# hard-coded: the CLI names a page in the machine's local zone
+# (``fitdocs.cli._local_tz``), so each expected stem is ``doc_stem`` of the
+# parsed fixture in that same zone -- the suite passes under any ``TZ``.
+
+_CLI = CliRunner()
+# Listings are compared sorted: the zone decides whether the ride's stem sorts
+# before or after the run's.
+_RIDE_START = fx.garmin_original().start + 24 * 3600
+
+
+def _stem_of(data: bytes) -> str:
+    """The stem the CLI gives a page based on ``data``, in its local zone."""
+    return doc_stem(real_parse_fit(data), "", cli_module._local_tz(), lambda _s: False)
+
+
+def _run_stem() -> str:
+    return _stem_of(fx.garmin_original().data)
+
+
+def _shifted_run_stem() -> str:
+    return _stem_of(fx.healthfit_shifted().data)
+
+
+def _ride_stem() -> str:
+    return _stem_of(_ride(_RIDE_START)[0])
+
+
+_RIDE_UUID = tuple(range(60, 76))
+
+
+@pytest.fixture(autouse=True)
+def _cli_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """No inherited data root, an explicit cwd, and no network for tiles."""
+    monkeypatch.delenv("FITDOCS_DATA", raising=False)
+    cwd = tmp_path / "cwd"
+    cwd.mkdir(exist_ok=True)
+    monkeypatch.chdir(cwd)
+    monkeypatch.setattr(
+        "fitdocs.tiles._default_fetch", lambda _url: b"\x89PNG\r\n\x1a\n"
+    )
+
+
+def _cli(data_root: Path, *args: str) -> tuple[int, str]:
+    """Run ``fitdocs <args> --out <data_root>``; return (exit code, output with
+    every run of whitespace collapsed, so the padding of the report's table rows
+    and the line breaks between them do not matter to a substring check)."""
+    result = _CLI.invoke(app, [*args, "--out", str(data_root)])
+    return result.exit_code, " ".join(result.output.split())
+
+
+def _check(data_root: Path) -> tuple[int, str]:
+    """``fitdocs check``, requiring that it wrote nothing (Req 8.5)."""
+    before = _tree(data_root)
+    result = _cli(data_root, "check")
+    assert _tree(data_root) == before
+    return result
+
+
+def _workouts_tree(data_root: Path) -> dict[str, bytes]:
+    return {
+        path: data
+        for path, data in _tree(data_root).items()
+        if path.startswith(f"{WORKOUTS_DIR}/") and not path.endswith("AGENTS.md")
+    }
+
+
+def _cli_root(tmp_path: Path) -> Path:
+    data_root = tmp_path / "data"
+    data_root.mkdir(parents=True)
+    (data_root / "fitdocs.toml").write_text(
+        "[inbox]\nsettle_seconds = 0\n", encoding="utf-8"
+    )
+    return data_root
+
+
+def _cli_sync_dir(tmp_path: Path, data_root: Path, *blobs: bytes) -> str:
+    """``fitdocs sync <fresh dir holding blobs>``; require exit 0."""
+    source = tmp_path / f"cli-src-{len(list(tmp_path.glob('cli-src-*')))}"
+    source.mkdir()
+    for position, data in enumerate(blobs):
+        (source / f"{position}.fit").write_bytes(data)
+    code, output = _cli(data_root, "sync", str(source))
+    assert code == 0, output
+    return output
+
+
+def _ride(start: int) -> tuple[bytes, bytes]:
+    """(Garmin original, HealthFit copy) of a ride at ``start``."""
+    original = fx.session_fit_bytes(
+        sport="cycling",
+        start=start,
+        elapsed_s=3000.0,
+        timer_s=2900.0,
+        distance_m=30_000.0,
+        manufacturer="garmin",
+        product=3843,
+        serial=fx.garmin_original().serial + 5,
+        time_created=start,
+        undocumented=fx.UNDOCUMENTED_COUNT,
+    )
+    copy = fx.session_fit_bytes(
+        sport="cycling",
+        start=start,
+        elapsed_s=3000.5,
+        timer_s=3000.5,
+        distance_m=30_002.0,
+        manufacturer="development",
+        product=0,
+        serial=fx.healthfit_copy().serial,
+        time_created=start + 4 * 3600,
+        session_uuid=_RIDE_UUID,
+        device_manufacturer="garmin",
+    )
+    return original, copy
+
+
+def _page_names(data_root: Path) -> list[str]:
+    return [p.name for p in _pages(data_root)]
+
+
+def _asset_names(data_root: Path) -> list[str]:
+    return sorted(p.name for p in (data_root / WORKOUTS_DIR / "assets").iterdir())
+
+
+def _stage_cli_corpus(tmp_path: Path) -> tuple[Path, fx.Species, bytes, bytes]:
+    """A data root of two HealthFit-style pages, the run's shifted two hours,
+    each synced alone through the CLI; the originals wait in the inbox.
+
+    Returns (data_root, the shifted run copy, ride original, ride copy).
+    """
+    data_root = _cli_root(tmp_path)
+    shifted = fx.healthfit_shifted()
+    ride_original, ride_copy = _ride(_RIDE_START)
+    _cli_sync_dir(tmp_path, data_root, shifted.data)
+    _cli_sync_dir(tmp_path, data_root, ride_copy)
+    inbox = data_root / "inbox"
+    inbox.mkdir()
+    (inbox / "run.fit").write_bytes(fx.garmin_original().data)
+    (inbox / "ride.fit").write_bytes(ride_original)
+    return data_root, shifted, ride_original, ride_copy
+
+
+def _drain_cli_corpus(tmp_path: Path) -> tuple[Path, str, dict[str, object]]:
+    """Stage the corpus, drain the inbox with ``fitdocs sync`` (no source),
+    return (data_root, the sync output, each page's frontmatter before)."""
+    data_root, shifted, ride_original, ride_copy = _stage_cli_corpus(tmp_path)
+    # Preconditions: the pages sit at the shifted name and the ride's; the
+    # originals are in the inbox and in no page yet.
+    assert _page_names(data_root) == sorted(
+        [f"{_shifted_run_stem()}.md", f"{_ride_stem()}.md"]
+    )
+    assert _asset_names(data_root) == sorted(
+        [
+            f"{_shifted_run_stem()}-hero.svg",
+            f"{_ride_stem()}-hero.svg",
+        ]
+    )
+    assert sorted(p.name for p in (data_root / "inbox").iterdir()) == [
+        "ride.fit",
+        "run.fit",
+    ]
+    before = {page.name: _frontmatter(page)["sources"] for page in _pages(data_root)}
+    assert before == {
+        f"{_shifted_run_stem()}.md": [_ref(shifted)],
+        f"{_ride_stem()}.md": [_ref_of(ride_copy)],
+    }
+    code, output = _cli(data_root, "sync")
+    assert code == 0, output
+    return data_root, output, dict(before)
+
+
+def test_cli_drain_joins_originals_renames_the_shifted_page_and_check_is_clean(
+    tmp_path: Path,
+) -> None:
+    """Req 3.4, 4.3, 5.1, 5.2, 5.5, 6.2, 6.4, 6.5, 7.1, 7.2, 7.3, 8.5: HealthFit
+    pages (the run's shifted two hours) gain the Garmin originals through
+    ``fitdocs sync`` from the inbox -- one page per session, the shifted page
+    renamed to the original's start, its old chart gone, both copies' UUIDs
+    kept, ``fitdocs check`` clean and writing nothing, and ``fitdocs regen``
+    then reproducing the tree byte for byte.
+
+    Mutations: disable the shifted tier in matching (the shifted run gets a
+    second page: the page list reds); skip the rename (the run page keeps the
+    shifted-start name); drop UUID retention by giving the page identity no
+    session UUID (the ``uuid`` key is omitted: ``KeyError: 'uuid'``); ignoring
+    only the page's own recorded UUID survives here, since the copies (extras)
+    still carry it -- the engine suite owns that path; leave the old assets
+    behind (the asset list reds); reverse the precedence in regeneration's page
+    loop (the regen tree comparison reds).
+    """
+    data_root, output, _ = _drain_cli_corpus(tmp_path)
+    ride_original, _ = _ride(_RIDE_START)
+    shifted = fx.healthfit_shifted()
+    original = fx.garmin_original()
+
+    assert _page_names(data_root) == sorted([f"{_run_stem()}.md", f"{_ride_stem()}.md"])
+    assert not (data_root / WORKOUTS_DIR / f"{_shifted_run_stem()}.md").exists()
+    assert _asset_names(data_root) == sorted(
+        [
+            f"{_run_stem()}-hero.svg",
+            f"{_ride_stem()}-hero.svg",
+        ]
+    )
+    run_page = _frontmatter(data_root / WORKOUTS_DIR / f"{_run_stem()}.md")
+    ride_page = _frontmatter(data_root / WORKOUTS_DIR / f"{_ride_stem()}.md")
+    ride_copy = _ride(_RIDE_START)[1]
+    run_path = data_root / WORKOUTS_DIR / f"{_run_stem()}.md"
+    ride_path = data_root / WORKOUTS_DIR / f"{_ride_stem()}.md"
+    # Ascending rank, the base (the Garmin original) last.
+    assert _sources(run_path) == [_ref(shifted), _ref(original)]
+    assert _sources(ride_path) == [_ref_of(ride_copy), _ref_of(ride_original)]
+    assert run_page["source_kind"] == "original"
+    assert ride_page["source_kind"] == "original"
+    assert run_page["uuid"] == _uuid_text(shifted)
+    assert ride_page["uuid"] == format_session_uuid(_RIDE_UUID)
+    assert f"{_shifted_run_stem()}.md to workouts/{_run_stem()}.md" in output
+    assert len(list((data_root / "fit-archive").glob("*.fit"))) == 4
+
+    code, checked = _check(data_root)
+
+    assert code == 0, checked
+    assert "Findings │ 0 │" in checked
+    assert "No findings" in checked
+
+    settled = _tree(data_root)
+    code, regenerated = _cli(data_root, "regen")
+
+    assert code == 0, regenerated
+    assert _tree(data_root) == settled
+
+
+def test_cli_partner_copy_arriving_later_changes_nothing_but_sources(
+    tmp_path: Path,
+) -> None:
+    """Req 2.8, 4.3, 5.6, 8.5: the Garmin original's partner copy (same ``file_id``, no
+    undocumented messages) synced afterwards joins the run page and changes
+    nothing but its ``sources`` list -- every other byte of the page, the page
+    name and the charts are as they were, and ``check`` stays clean.
+
+    Mutations: rank the phone copy above a Garmin original in the default
+    precedence (this test and the drain scenario red); prefer the file with
+    fewer undocumented messages (the partner becomes the base: the ``sources``
+    order reds).
+    """
+    data_root, _, _ = _drain_cli_corpus(tmp_path)
+    run_path = data_root / WORKOUTS_DIR / f"{_run_stem()}.md"
+    other_path = data_root / WORKOUTS_DIR / f"{_ride_stem()}.md"
+    before = _tree(data_root)
+    partner = fx.partner_copy()
+    assert _sha(partner.data) not in {
+        p.stem for p in (data_root / "fit-archive").glob("*.fit")
+    }
+
+    output = _cli_sync_dir(tmp_path, data_root, partner.data)
+
+    after = _tree(data_root)
+    assert "Written │ 1 │" in output
+    assert _page_names(data_root) == sorted([f"{_run_stem()}.md", f"{_ride_stem()}.md"])
+    new_files = set(after) - set(before)
+    assert new_files == {f"fit-archive/{_sha(partner.data)}.fit"}
+    changed = {path for path in before if after[path] != before[path]}
+    assert changed == {f"{WORKOUTS_DIR}/{_run_stem()}.md"}
+    old_text = before[f"{WORKOUTS_DIR}/{_run_stem()}.md"].decode("utf-8")
+    new_text = after[f"{WORKOUTS_DIR}/{_run_stem()}.md"].decode("utf-8")
+    assert _SOURCES_BLOCK.subn("", old_text)[1] == 1
+    assert _SOURCES_BLOCK.sub("", new_text) == _SOURCES_BLOCK.sub("", old_text)
+    shifted, original = fx.healthfit_shifted(), fx.garmin_original()
+    old_front = yaml.safe_load(old_text.split("---\n", 2)[1])
+    assert old_front["sources"] == [_ref(shifted), _ref(original)]
+    # Ascending rank, the base last: the partner ranks above the copy and below
+    # the original (fewer undocumented messages), which stays the base.
+    assert _sources(run_path) == [_ref(shifted), _ref(partner), _ref(original)]
+    assert other_path.read_bytes() == before[f"{WORKOUTS_DIR}/{_ride_stem()}.md"]
+    code, checked = _check(data_root)
+    assert code == 0, checked
+    assert "Findings │ 0 │" in checked
+
+
+def test_cli_the_two_ten_k_runs_stay_two_pages(tmp_path: Path) -> None:
+    """Req 3.5, 4.4, 8.5: two different 10 k runs a day and 17 minutes apart, synced
+    in one CLI run, are two pages with one file each -- and stay two when synced
+    again -- and ``check`` finds nothing.
+
+    Mutation: widen the start, elapsed and distance tolerances until the pair
+    reads as one session (one page holding both files).
+    """
+    data_root = _cli_root(tmp_path)
+    first, second = fx.ten_k_pair()
+
+    _cli_sync_dir(tmp_path, data_root, first.data, second.data)
+
+    assert len(_pages(data_root)) == 2
+    assert sorted(len(_sources(p)) for p in _pages(data_root)) == [1, 1]
+    assert sorted(ref for p in _pages(data_root) for ref in _sources(p)) == sorted(
+        [_ref(first), _ref(second)]
+    )
+    before = _tree(data_root)
+    _cli_sync_dir(tmp_path, data_root, first.data, second.data)
+    assert _tree(data_root) == before
+    code, checked = _check(data_root)
+    assert code == 0, checked
+    assert "Findings │ 0 │" in checked
+
+
+def test_cli_an_ambiguous_file_is_reported_checked_and_resolved_by_regen(
+    tmp_path: Path,
+) -> None:
+    """Req 4.5, 4.7, 4.10, 6.6, 7.5, 8.1, 8.5: a file matching two pages is named,
+    with both candidate pages, in the sync report; ``fitdocs check`` reports the
+    held file (its subject and the keep-one-delete-one remedy) and exits 1;
+    after the duplicate page is deleted ``fitdocs regen`` joins the file, the
+    hold record is empty and ``check`` is clean. The held file is counted
+    skipped, never failed, and ``check`` writes nothing.
+
+    Mutations: skip the hold warning in the report (the sync output loses the
+    candidates); ``check`` dropping ambiguous findings (exit 0 and no subject);
+    ``regen`` skipping held files (the file stays out of the page and the hold
+    stays); ``regen`` merging with the old record (the entry stays).
+    """
+    data_root = _cli_root(tmp_path)
+    _cli_sync_dir(tmp_path, data_root, _garmin_run(elapsed_s=3000.0, serial=11))
+    _cli_sync_dir(tmp_path, data_root, _garmin_run(elapsed_s=3016.0, serial=12))
+    pages = _page_names(data_root)
+    assert len(pages) == 2  # precondition: two separate pages
+    unsuffixed = f"{_run_stem()}.md"  # freed below
+    assert unsuffixed in pages
+    (suffixed,) = [name for name in pages if name != unsuffixed]
+    assert suffixed.startswith(f"{_run_stem()}-")  # the collision-suffixed one
+    ambiguous = _garmin_run(elapsed_s=3008.0, serial=13)
+    archived = f"fit-archive/{_sha(ambiguous)}.fit"
+    assert not (data_root / archived).exists()
+
+    output = _cli_sync_dir(tmp_path, data_root, ambiguous)
+
+    assert _page_names(data_root) == pages  # nothing merged, nothing new
+    assert (data_root / archived).is_file()
+    assert f"{archived} held, not merged" in output
+    assert "Skipped │ 1 │" in output
+    assert "Failed │ 0 │" in output
+    for page in pages:
+        assert f"workouts/{page}" in output
+    assert len(load_holds(data_root).entries) == 1
+
+    code, checked = _check(data_root)
+
+    assert code == 1, checked
+    assert f"{archived} held " in checked
+    assert "could be a page of" in checked
+    for page in pages:
+        assert f"workouts/{page}" in checked
+    assert "delete the other, and run `fitdocs regen`" in checked
+
+    (data_root / WORKOUTS_DIR / unsuffixed).unlink()
+    code, regenerated = _cli(data_root, "regen")
+
+    assert code == 0, regenerated
+    assert _page_names(data_root) == sorted([unsuffixed])  # settled onto the freed name
+    assert len(_sources(_only_page(data_root))) == 3
+    assert _ref_of(ambiguous) in _sources(_only_page(data_root))
+    assert load_holds(data_root).entries == ()
+    assert "[[held]]" not in _held_text(data_root)
+    code, checked = _check(data_root)
+    assert code == 0, checked
+    assert "Findings │ 0 │" in checked
+
+
+def test_cli_the_four_files_in_any_arrival_give_the_incremental_workouts_tree(
+    tmp_path: Path,
+) -> None:
+    """Req 4.8, 5.7: the run's four files (Garmin run and ride originals, the
+    shifted run copy, the ride copy) synced all at once, in reverse order, or
+    drained from an inbox whose names sort in reverse, give a ``workouts/`` tree
+    byte-identical to the one the incremental staging gave.
+
+    Mutations run: disable the shifted tier, an asymmetric shifted tier (only
+    the first file of a pair may be the phone copy), leave stale assets behind
+    -- each reds this test, but each also reds the incremental staging that
+    feeds it, so none isolates arrival order. No rank tie exists in these
+    fixtures, so dropping the final content-hash key of the rank survives; the
+    arrival-order property is owned by the engine suites above.
+    """
+    incremental_root, _, _ = _drain_cli_corpus(tmp_path / "incremental")
+    expected = _workouts_tree(incremental_root)
+    assert len(expected) == 4  # two pages and their two charts
+    ride_original, ride_copy = _ride(_RIDE_START)
+    files = [
+        fx.garmin_original().data,
+        ride_original,
+        fx.healthfit_shifted().data,
+        ride_copy,
+    ]
+
+    forward = _cli_root(tmp_path / "forward")
+    _cli_sync_dir(tmp_path / "forward", forward, *files)
+    backward = _cli_root(tmp_path / "backward")
+    _cli_sync_dir(tmp_path / "backward", backward, *reversed(files))
+    drained = _cli_root(tmp_path / "drained")
+    (drained / "inbox").mkdir()
+    for position, data in enumerate(files):
+        (drained / "inbox" / f"{9 - position}.fit").write_bytes(data)
+    assert sorted(p.name for p in (drained / "inbox").iterdir())[0] == "6.fit"
+    code, output = _cli(drained, "sync")
+    assert code == 0, output
+
+    assert _workouts_tree(forward) == expected
+    assert _workouts_tree(backward) == expected
+    assert _workouts_tree(drained) == expected

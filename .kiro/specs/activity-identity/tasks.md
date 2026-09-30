@@ -215,7 +215,7 @@ observes red, reverts, observes green, and says so in the report. Boundary
 fixtures sit one unit inside and one unit outside each tolerance; a fixture
 never co-varies two keys a rule distinguishes.
 
-- [ ] 1. Foundation: file identity at ingest and the synthesized identity fixtures
+- [x] 1. Foundation: file identity at ingest and the synthesized identity fixtures
 
 - [x] 1.1 Synthesize the measured file shapes as fixtures
   - Add a parameterized builder for one session (sport, start, elapsed, timer,
@@ -302,7 +302,7 @@ never co-varies two keys a rule distinguishes.
     tests/ingest/test_file_id.py` clean
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7_
 
-- [ ] 2. Core: the pure identity rule, the precedence, the planner and the hold record
+- [x] 2. Core: the pure identity rule, the precedence, the planner and the hold record
 
 - [x] 2.1 Classify files into source kinds and derive the identity a page records for its base
   - Create the identity package as a marker that re-exports nothing, and the
@@ -462,7 +462,7 @@ never co-varies two keys a rule distinguishes.
   - _Requirements: 4.7, 4.10, 8.4_
   - _Boundary: HoldStore_
 
-- [ ] 3. Contract, render and the page scan
+- [x] 3. Contract, render and the page scan
 
 - [x] 3.1 Put the base identity on every page and advance the document format
   - Add the four key constants, their tuple, their membership in the managed
@@ -538,7 +538,7 @@ never co-varies two keys a rule distinguishes.
   - _Requirements: 3.9, 3.10, 7.4_
   - _Depends: 2.4_
 
-- [ ] 4. Engine: roles, renames and planned runs
+- [x] 4. Engine: roles, renames and planned runs
 
 - [x] 4.1 Render every page from its base, with its files in canonical order
   - Give `sync`, `drain` and `regen` a keyword `precedence` defaulting to the
@@ -695,7 +695,7 @@ never co-varies two keys a rule distinguishes.
     `regen` runs, `.fitdocs/held.toml` holds no entry
   - _Requirements: 4.10, 7.2, 7.3_
 
-- [ ] 5. Surfaces: inspection and the CLI
+- [x] 5. Surfaces: inspection and the CLI
 
 - [x] 5.1 (P) Report held, orphaned and duplicated sources in `fitdocs check`
   - Add the three finding kinds with design.md's subjects, details and
@@ -758,7 +758,7 @@ never co-varies two keys a rule distinguishes.
   - _Requirements: 2.7_
   - _Boundary: CliIdentityWiring_
 
-- [ ] 6. The published contract, the settings documentation and the spec records
+- [x] 6. The published contract, the settings documentation and the spec records
 
 - [x] 6.1 Document the precedence setting and the upgrade step
   - Lands before 6.2 (not parallel): `tests/test_docs_guarantees.py:951-997`
@@ -890,7 +890,7 @@ never co-varies two keys a rule distinguishes.
     `identity` and keeps every sibling's addition
   - _Requirements: 9.1, 9.2, 9.6_
 
-- [ ] 7. Validation: guards and the measured-shape scenarios
+- [x] 7. Validation: guards and the measured-shape scenarios
 
 - [x] 7.1 Pin the identity package's boundary and surfaces
   - `tests/identity/test_boundary.py`: the package's import closure per module
@@ -919,7 +919,7 @@ never co-varies two keys a rule distinguishes.
     tests/test_public_api.py` green
   - _Requirements: 1.1, 3.10, 9.2_
 
-- [ ] 7.2 Prove the queue item's case and the measured shapes end to end through the CLI
+- [x] 7.2 Prove the queue item's case and the measured shapes end to end through the CLI
   - `tests/test_identity_e2e.py`, CLI section: a data root with HealthFit-style
     pages (one shifted by two hours) gains the Garmin-style originals through
     `fitdocs sync` from the inbox -- one page per session, the shifted page
