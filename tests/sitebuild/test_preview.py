@@ -1,7 +1,8 @@
 """The preview loop: snapshots, the live root, and the serve process (7.1-7.4).
 
 Unit part. The build and the serve launcher are replaced by recording stubs, so
-no test here runs Zensical; task 4.2 adds the real-generator part. The loop is
+no test in the unit part runs Zensical; the integration part at the end of this
+module runs the real generator behind ``requires_zensical``. The loop is
 scripted: ``ScriptedStop`` is an ``Event`` whose ``wait`` runs the next scripted
 step (usually an edit) and reports "not stopped", then sets itself once the
 script is spent. ``drive`` runs the loop in a daemon thread with a bounded join,
@@ -18,15 +19,19 @@ import hashlib
 import io
 import os
 import shutil
+import socket
 import stat
 import subprocess
 import threading
+import time
+import urllib.error
+import urllib.request
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
-from scripts.sitebuild import pipeline, preview
+from scripts.sitebuild import generator, pipeline, preview
 from scripts.sitebuild.generator import GeneratorResult
 from scripts.sitebuild.model import Problem
 from scripts.sitebuild.pipeline import BuildOutcome, BuildRootRefused, build
@@ -966,3 +971,237 @@ def test_the_real_build_through_the_loop_writes_only_under_the_root(
     assert b"EDITMARKER" in live_why
     assert b"Nowhere" not in live_why
     assert out.getvalue().splitlines() == reference_lines
+
+
+# ------------------------------------------------ live preview, real generator
+
+WAIT_LIMIT = 20.0
+
+
+class LockedOut(io.StringIO):
+    """A ``StringIO`` that the preview thread writes and the test thread reads."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lock = threading.Lock()
+
+    def write(self, text: str) -> int:
+        with self.lock:
+            return super().write(text)
+
+    def text(self) -> str:
+        with self.lock:
+            return self.getvalue()
+
+
+def free_port() -> int:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+
+
+def fetch(addr: str, path: str) -> tuple[int | None, str]:
+    """``(status, body)`` of one GET; ``(None, reason)`` when nothing answers."""
+    try:
+        with urllib.request.urlopen(f"http://{addr}{path}", timeout=2) as reply:
+            return reply.status, reply.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as error:
+        return error.code, ""
+    except OSError as error:
+        return None, repr(error)
+
+
+def wait_for(what: str, ready: Callable[[], bool], thread: threading.Thread) -> None:
+    """Poll ``ready`` for ``WAIT_LIMIT`` seconds; fail naming ``what`` if it fails."""
+    end = time.monotonic() + WAIT_LIMIT
+    while time.monotonic() < end:
+        if ready():
+            return
+        if not thread.is_alive():
+            pytest.fail(f"the preview loop ended while waiting for: {what}")
+        time.sleep(0.1)
+    pytest.fail(f"not within {WAIT_LIMIT} s: {what}")
+
+
+def test_live_preview_serves_edits_adds_deletes_failures_and_fixes(
+    requires_zensical: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The real ``serve`` over a fixture copy, seen through HTTP, ``out`` and the disk.
+
+    One preview runs the whole sequence: an edit is served, an added page is
+    served, the deleted page answers 404, a page with a broken `section:` prints
+    its problem lines (identical to a direct ``build`` of the same content) while
+    the edited text is still served, and the fix is served. Each wait is a
+    bounded poll. Before the steps that add a page and print problems the test
+    asserts the page answers 404 and ``out`` is empty. The content copy, outside
+    the repository, hashes the same (bytes, modes, mtimes) before and after the
+    startup waits and each wait that follows one of the test's own edits. After
+    stop the recorded ``zensical serve`` process has a return code, read before
+    the test's own cleanup can kill it, and its pid is not alive.
+
+    Dies on: `sync_tree(tree, live)` replaced by a swap of `live/staged` for a
+    freshly written directory (the edit is never served: "not within 20.0 s");
+    the `sync_tree` call removed (no home page: "the preview loop ended");
+    the `print(problem.render(), ...)` removed (no problem lines);
+    `live/staged` removed before the failure lines are printed (`/why/` then
+    answers 404); `_terminate(process)` removed ("the serve process outlived
+    the stop").
+
+    Replacing it with `write_tree(tree, live)`, or deleting `live/` and
+    renaming a freshly written directory into its place, stays green here, because
+    `zensical serve` picks those up (`test_a_later_success_syncs_live_in_place`
+    reds both). Renaming `live/` aside and renaming a fresh directory in is a
+    rename-swap and goes red like the `live/staged` swap.
+    """
+    content = copy_fixture_tree(FIXTURE, tmp_path, "content")
+    broken = copy_fixture_tree(FIXTURE, tmp_path, "broken-reference")
+    why = "why.md"
+    pristine = (content / why).read_text(encoding="utf-8")
+    assert pristine.count("A single valid tree") == 1
+    assert pristine.count("section: Why\n") == 1
+    edited = pristine.replace(
+        "A single valid tree", "EDITMARKERONE a single valid tree"
+    )
+    breakage = edited.replace("section: Why\n", "section: Nowhere\n")
+    fixed = pristine.replace("A single valid tree", "EDITMARKERTWO a single valid tree")
+    write(broken / why, breakage)
+    reference = build(broken, tmp_path / "reference", repo_root=REPO_ROOT)
+    assert not reference.ok
+    reference_lines = [p.render() for p in reference.problems]
+    assert reference_lines
+
+    procs: list[subprocess.Popen[bytes]] = []
+
+    def recording_start(live: Path, addr: str) -> subprocess.Popen[bytes]:
+        process = generator.start_serve(live, addr)
+        procs.append(process)
+        return process
+
+    monkeypatch.setattr(preview, "start_serve", recording_start)
+    addr = f"127.0.0.1:{free_port()}"
+    stop = threading.Event()
+    out = LockedOut()
+    result: list[int] = []
+    raised: list[BaseException] = []
+
+    def target() -> None:
+        try:
+            result.append(
+                preview.serve(
+                    content,
+                    tmp_path / "preview",
+                    repo_root=REPO_ROOT,
+                    addr=addr,
+                    poll_interval=0.1,
+                    stop=stop,
+                    out=out,
+                )
+            )
+        except BaseException as error:
+            raised.append(error)
+
+    thread = threading.Thread(target=target, daemon=True)
+    pages: dict[str, str] = {}
+
+    def served(path: str, needle: str) -> Callable[[], bool]:
+        def check() -> bool:
+            status, body = fetch(addr, path)
+            pages[path] = body
+            return status == 200 and needle in body
+
+        return check
+
+    def status_is(path: str, code: int) -> Callable[[], bool]:
+        return lambda: fetch(addr, path)[0] == code
+
+    def unchanged_across(label: str, ready: Callable[[], bool]) -> Callable[[], bool]:
+        """Wrap a wait so the content copy is hashed before it and after it."""
+        before = dir_hash(content)
+        assert before[0] > 0
+
+        def check() -> bool:
+            done = ready()
+            assert dir_hash(content) == before, f"content changed during: {label}"
+            return done
+
+        return check
+
+    home = unchanged_across("startup", status_is("/", 200))
+    try:
+        thread.start()
+        wait_for("the home page", home, thread)
+        wait_for(
+            "the original text of /why/",
+            unchanged_across("startup", served("/why/", "A single valid tree")),
+            thread,
+        )
+        assert "EDITMARKERONE" not in pages["/why/"]
+
+        write(content / why, edited)
+        wait_for(
+            "the edited text of /why/",
+            unchanged_across("edit", served("/why/", "EDITMARKERONE")),
+            thread,
+        )
+
+        extra = content / "get-started" / "extra.md"
+        assert fetch(addr, "/get-started/extra/")[0] == 404
+        write(
+            extra,
+            "---\ntitle: Extra page\ndescription: An added page.\n"
+            "section: Get started\norder: 9\n---\n\nADDEDPAGEMARKER here.\n",
+        )
+        wait_for(
+            "the added page",
+            unchanged_across("add", served("/get-started/extra/", "ADDEDPAGEMARKER")),
+            thread,
+        )
+
+        extra.unlink()
+        wait_for(
+            "a 404 for the deleted page",
+            unchanged_across("delete", status_is("/get-started/extra/", 404)),
+            thread,
+        )
+        assert out.text() == ""
+
+        write(content / why, breakage)
+        wait_for(
+            "the problem lines",
+            unchanged_across(
+                "break", lambda: out.text().splitlines() == reference_lines
+            ),
+            thread,
+        )
+        time.sleep(1.0)
+        assert out.text().splitlines() == reference_lines
+        status, body = fetch(addr, "/why/")
+        assert status == 200
+        assert "EDITMARKERONE" in body
+        assert "Nowhere" not in body
+
+        write(content / why, fixed)
+        wait_for(
+            "the fixed text of /why/",
+            unchanged_across("fix", served("/why/", "EDITMARKERTWO")),
+            thread,
+        )
+        assert "EDITMARKERONE" not in pages["/why/"]
+        assert out.text().splitlines() == reference_lines
+        assert len(procs) == 1
+        assert procs[0].poll() is None
+    finally:
+        stop.set()
+        thread.join(30)
+        after_stop = [process.poll() for process in procs]
+        for process in procs:
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+    assert not thread.is_alive(), "the preview loop did not stop"
+    assert raised == []
+    assert result == [0]
+    assert len(procs) == 1
+    assert after_stop[0] is not None, "the serve process outlived the stop"
+    with pytest.raises(ProcessLookupError):
+        os.kill(procs[0].pid, 0)
