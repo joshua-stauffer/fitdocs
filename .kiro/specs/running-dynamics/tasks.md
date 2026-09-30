@@ -227,7 +227,7 @@
     import changed, and the new tests pass
   - _Requirements: 1.4, 1.5, 1.6, 1.7, 1.12, 2.1, 2.2, 2.3_
 
-- [ ] 2.2 Read record-level developer fields and put them on the activity, index-aligned with the samples
+- [x] 2.2 Read record-level developer fields and put them on the activity, index-aligned with the samples
   - Add `extract_record_developer_fields` to `ingest/developer.py` (omitting a
     description that declares scale 0, like the session reader), and
     `retained_records` (the existing drop-records-without-a-timestamp rule,
@@ -576,3 +576,4 @@
 - 3.1: `chart_axis(samples) -> ChartAxis(unit, indices, x) | None`; pick series values by `axis.indices`.
 - 3.2 / M11 (design § Testing Strategy, task 3.2, task 6.1): `math.ceil(k / 100 * n)` is an EQUIVALENT mutant of the integer nearest-rank rule (`10/100*30 == 3.0` exactly; identical for k in {10, 90}, n 1..1999). Use `(k*n)//100 + 1` as M11.
 - 3.2: `dynamics_section(ctx)` returns `(body, assets)` with NO heading; the body ends with the image link when a chart exists. 3.3 prepends `## Running Dynamics` under `Modality.RUN` only and appends the assets after telemetry's. Round 3's two test-prose fixes were applied by the controller and re-reviewed (a downgrade from an implementer round).
+- 2.2: `parse_fit` computes `retained = retained_records(record_mesgs)` once (the SDK never emits a `timestamp: None` key -- a missing timestamp is an absent key); `extract_samples` re-applies the idempotent filter. `extract_record_developer_fields` returns a `MappingProxyType[str, DeveloperChannel]`, keeps zeros, `None` for a sentinel/unrecorded sample -- the placeholder rule belongs in `extract_dynamics` (2.4), which should read this mapping. It also accepts raw description dicts, so tests may call it directly. Three omission causes (unrecorded, all-sentinel, scale 0) each leave an earlier same-named channel exposed; no developer field fills a native channel (synthetic test covers slots 5/6/13). Record-level tests live in `tests/ingest/test_record_developer_fields.py` (design placed them in test_developer.py).
