@@ -271,7 +271,7 @@
   - _Requirements: 3.1, 3.2, 4.6, 5.1, 5.2, 5.3, 5.4_
   - _Boundary: Outline_
 
-- [ ] 2.4 (P) Render the generator config and enforce the allowlist
+- [x] 2.4 (P) Render the generator config and enforce the allowlist
   - In `scripts/sitebuild/config.py`:
     - `TEMPLATE_PATH`, and the allowlist constants exactly as design.md §
       SiteConfig lists them. The theme features are the 29 names from
@@ -846,3 +846,8 @@
     - A broken Jinja template reports as `site generator: syntax error: ... (in bad.html:2)`.
 
     Test stubs are `#!/bin/sh`, which works because CI is ubuntu-only.
+- 2.4 (3 rounds, parallel stream `impl/ds-2-4`; round 3 was a one-sentence docstring fix applied by the controller and verified by the reviewer).
+  - `dump_config` follows the design's `sort_keys=False`, so it keeps the template's key order. It also uses a no-alias SafeDumper and `allow_unicode=True`, so **3.2/3.3 must write mkdocs.yml with `encoding="utf-8"`**.
+  - `check_config` problems use path `website/mkdocs.template.yml` with a dotted `where` (`theme.palette[1].bogus`, `theme.features.<name>`, `plugins.search.<opt>`). Names must match exactly: no case-folding and no stripping.
+  - Constraints on the 3.1 template: no `nav`, `docs_dir`, `site_dir` or `theme.custom_dir`; `plugins` must be a list; `theme` is a mapping or absent/null.
+  - A 3.1-shaped template was probed and passes.
