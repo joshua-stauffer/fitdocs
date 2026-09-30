@@ -487,7 +487,7 @@
   - _Requirements: 3.3, 3.4, 3.5, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
   - _Depends: 2.4, 2.7_
 
-- [ ] 3.2 Stage a build root as bytes, write it fresh, or sync it in place
+- [x] 3.2 Stage a build root as bytes, write it fresh, or sync it in place
   - In `scripts/sitebuild/stage.py`, implement:
     - `plan_tree`, producing:
       - `mkdocs.yml`;
@@ -908,3 +908,9 @@
     - reference definitions in containers;
     - relative llms.txt links refused.
 - 6.2 depends on 6.1 (undeclared in the plan): the CONTRIBUTING link to docs/website.md is checked by tests/test_contributing_doc.py::test_every_relative_link_in_contributing_doc_resolves. Run 6.2 after 6.1. CHANGELOG allows only https:// or # link targets, so the Homepage bullet names the URL as text.
+- 3.2 (4 rounds, parallel stream impl/ds-3-2).
+  - **Pinned.** `sync_tree` in-place behaviour was verified live: under a real `zensical serve`, pages updated about 0.26 s after a sync, while a rename-swap control went undetected. `write_tree` removes all four MANAGED paths, `html/` included, even when one is a symlink. A leftover `html` link otherwise fails every build with "site_dir must be within project root".
+  - **Symlink and path rules.** No writer follows a link out of the root: lstat everywhere, lexists for dangling links. `_check_keys` refuses any key outside mkdocs.yml/staged/overrides, plus `..`, `.`, empty parts and NUL. `plan_tree` raises ValueError on a duplicate key and on a home page without an opening `---\n`.
+  - **Source directories.** `_read_dir` skips dot-entries at any depth relative to the source dir.
+  - **Consumer contract.** 3.3 and 3.4 must pass only `plan_tree` output to the writers.
+  - **UNPINNED.** L20 and L21: symlinks and special files inside the repo-owned website/assets and website/overrides (queued).
