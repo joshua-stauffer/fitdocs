@@ -1,24 +1,36 @@
-"""Resolve, discover and strip a content directory (1.1-1.8, 2.11).
+"""Resolve, discover, strip and validate a content directory (1.1-1.8, 2.1-2.9, 2.11).
 
 Nothing here writes: files are only ever read, and the directory walk only
-lists. Frontmatter validation is added to this module by a later task.
+lists. `load_content` collects every violation it can find in one call (2.9).
 """
 
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
+from collections.abc import Hashable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
+
+import yaml
 
 from scripts.sitebuild.model import (
     ANNOTATION_MARKER,
     CONTENT_ENV_VAR,
+    HERO_ACTION_KEYS,
+    HERO_KEYS,
+    HOME_PAGE,
+    OPTIONAL_KEYS,
+    REQUIRED_KEYS,
     RESERVED_ROOT_NAMES,
+    SECTIONS,
     Asset,
     ContentSource,
+    HeroAction,
+    Page,
     Problem,
     ResolvedContent,
+    SiteContent,
 )
 
 
@@ -133,3 +145,324 @@ def strip_annotation(text: str) -> str:
     if i < 0:
         return text
     return text[: i + 1]
+
+
+# --- frontmatter (2.1, 2.3, 2.5) ---------------------------------------------
+
+_FENCE = "---"
+_YAML_ERRORS = (yaml.YAMLError, ValueError, OverflowError, RecursionError)
+
+
+class _StrictLoader(yaml.SafeLoader):
+    """A safe loader that refuses a repeated key and locates scalar errors."""
+
+    def construct_object(self, node: yaml.Node, deep: bool = False) -> Any:
+        try:
+            return super().construct_object(node, deep=deep)
+        except yaml.YAMLError:
+            raise
+        except Exception as error:
+            # PyYAML's constructors raise bare ValueError (`date: 2026-02-30`),
+            # IndexError (`!!int ""`), KeyError (`!!bool abc`) and
+            # AttributeError (`!!timestamp abc`): give any of them a position.
+            message = str(error)
+            if isinstance(error, KeyError):
+                # `!!bool abc`: str(KeyError) is only the bare key.
+                tag = node.tag.rsplit(":", 1)[-1]
+                message = f"not a valid {tag}: {error}"
+            raise yaml.constructor.ConstructorError(
+                None, None, message, node.start_mark
+            ) from error
+
+    def construct_mapping(
+        self, node: yaml.MappingNode, deep: bool = False
+    ) -> dict[Hashable, Any]:
+        self.flatten_mapping(node)
+        seen: set[Hashable] = set()
+        for key_node, _value_node in node.value:
+            key = self.construct_object(key_node, deep=True)
+            try:
+                repeated = key in seen
+                seen.add(key)
+            except TypeError:
+                continue  # unhashable: the base class refuses it below
+            if repeated:
+                raise yaml.constructor.ConstructorError(
+                    None, None, f"found duplicate key {key!r}", key_node.start_mark
+                )
+        return super().construct_mapping(node, deep=deep)
+
+
+@dataclass(frozen=True)
+class _Frontmatter:
+    """One page file, read and split. ``data`` is None when it has no mapping."""
+
+    staged_text: str
+    body: str
+    data: dict[Any, Any] | None
+    problems: tuple[Problem, ...]
+
+    @property
+    def drafted(self) -> bool:
+        return self.data is not None and self.data.get("draft") is True
+
+
+def _type_name(value: object) -> str:
+    return "null" if value is None else type(value).__name__
+
+
+def _yaml_problem(rel: str, error: Exception, block: str) -> Problem:
+    """One line for a YAML failure: the file line and column, then the problem.
+
+    The block starts on file line 2, after the opening fence, so a mark on
+    line ``n`` of the block is file line ``n + 2``. A reader error carries a
+    character offset into ``block`` instead of a mark.
+    """
+    mark = getattr(error, "problem_mark", None)
+    position = getattr(error, "position", None)
+    if mark is not None:
+        line, column = mark.line, mark.column
+    elif isinstance(position, int):
+        line = block.count("\n", 0, position)
+        column = position - (block.rfind("\n", 0, position) + 1)
+    else:
+        line = column = -1
+    where = "" if line < 0 else f"{line + 2}:{column + 1}"
+    problem = getattr(error, "problem", None)
+    if problem is None:
+        # `str(error)` spans several lines; the first is the reason.
+        problem = str(error).splitlines()[0] if str(error) else type(error).__name__
+    return Problem(rel, where, f"invalid frontmatter YAML: {problem}")
+
+
+def _read_frontmatter(content_dir: Path, rel: str) -> _Frontmatter:
+    """Read ``rel``, strip its annotation block, split and parse its frontmatter."""
+    try:
+        raw = (content_dir / rel).read_bytes()
+    except OSError as error:
+        detail = error.strerror or type(error).__name__
+        problem = Problem(rel, "", f"cannot read file: {detail}")
+        return _Frontmatter("", "", None, (problem,))
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return _Frontmatter("", "", None, (Problem(rel, "", "file is not UTF-8"),))
+    staged = strip_annotation(text)
+    lines = staged.split("\n")
+    if lines[0] != _FENCE:
+        message = "no frontmatter: the file must begin with a line ---"
+        return _Frontmatter(staged, staged, None, (Problem(rel, "", message),))
+    close = next((i for i in range(1, len(lines)) if lines[i] == _FENCE), None)
+    if close is None:
+        message = "unterminated frontmatter: no closing line ---"
+        return _Frontmatter(staged, staged, None, (Problem(rel, "", message),))
+    body = staged[sum(len(line) + 1 for line in lines[: close + 1]) :]
+    block = "\n".join(lines[1:close])
+    try:
+        data = yaml.load(block, Loader=_StrictLoader)
+    except _YAML_ERRORS as error:
+        return _Frontmatter(staged, body, None, (_yaml_problem(rel, error, block),))
+    if not isinstance(data, dict):
+        message = f"frontmatter must be a YAML mapping, not {_type_name(data)}"
+        return _Frontmatter(staged, body, None, (Problem(rel, "", message),))
+    return _Frontmatter(staged, body, data, ())
+
+
+def _text_field(
+    rel: str, data: dict[Any, Any], key: str, problems: list[Problem]
+) -> str | None:
+    value = data[key]
+    if isinstance(value, str) and value.strip():
+        return value
+    problems.append(
+        Problem(rel, key, f"must be non-empty text, not {_type_name(value)}")
+    )
+    return None
+
+
+def _hero_actions(
+    rel: str, value: object, problems: list[Problem]
+) -> tuple[HeroAction, ...] | None:
+    if not isinstance(value, list) or not value:
+        problems.append(
+            Problem(
+                rel,
+                "hero_actions",
+                f"must be a non-empty list, not {_type_name(value)}",
+            )
+        )
+        return None
+    actions: list[HeroAction] = []
+    start = len(problems)
+    for n, entry in enumerate(value, start=1):
+        where = "hero_actions"
+        if not isinstance(entry, dict):
+            message = f"entry {n} must be a mapping, not {_type_name(entry)}"
+            problems.append(Problem(rel, where, message))
+            continue
+        for key in sorted(map(str, entry.keys() - set(HERO_ACTION_KEYS))):
+            message = (
+                f"entry {n}: key {key!r} is not one of {', '.join(HERO_ACTION_KEYS)}"
+            )
+            problems.append(Problem(rel, where, message))
+        fields: dict[str, str] = {}
+        for key in ("label", "href"):
+            text = entry.get(key)
+            if isinstance(text, str) and text.strip():
+                fields[key] = text
+            else:
+                message = (
+                    f"entry {n}: {key} must be non-empty text, not {_type_name(text)}"
+                )
+                problems.append(Problem(rel, where, message))
+        primary = entry.get("primary", False)
+        if not isinstance(primary, bool):
+            message = (
+                f"entry {n}: primary must be true or false, not {_type_name(primary)}"
+            )
+            problems.append(Problem(rel, where, message))
+        if len(fields) == 2 and isinstance(primary, bool):
+            actions.append(HeroAction(fields["label"], fields["href"], primary))
+    return tuple(actions) if len(problems) == start else None
+
+
+def _validate(
+    rel: str, parsed: _Frontmatter
+) -> tuple[Page | None, list[Problem], tuple[str, int] | None]:
+    """Check one page's frontmatter.
+
+    Returns the page when it has no violation, the violations, and the page's
+    ``(section, order)`` slot whenever both are valid, whatever else is wrong.
+    """
+    data = parsed.data
+    assert data is not None
+    problems: list[Problem] = []
+    is_home = rel == HOME_PAGE
+    allowed = set(REQUIRED_KEYS) | set(OPTIONAL_KEYS) | set(HERO_KEYS)
+    for key in sorted(data, key=str):
+        if key not in allowed:
+            blank = isinstance(key, str) and not key.strip()
+            shown = repr(key) if blank else str(key)
+            problems.append(
+                Problem(rel, shown, "key is not allowed by the content contract")
+            )
+        elif key in HERO_KEYS and not is_home:
+            problems.append(
+                Problem(rel, key, f"hero key is only allowed on {HOME_PAGE}")
+            )
+    for key in REQUIRED_KEYS:
+        if key not in data:
+            problems.append(Problem(rel, key, "required key is missing"))
+    title = _text_field(rel, data, "title", problems) if "title" in data else None
+    description = (
+        _text_field(rel, data, "description", problems)
+        if "description" in data
+        else None
+    )
+    section = data.get("section")
+    if "section" in data and not (isinstance(section, str) and section in SECTIONS):
+        message = f"{section!r} is not a section; use one of: {', '.join(SECTIONS)}"
+        problems.append(Problem(rel, "section", message))
+        section = None
+    order = data.get("order")
+    if "order" in data and (type(order) is not int):
+        problems.append(
+            Problem(rel, "order", f"must be an integer, not {_type_name(order)}")
+        )
+        order = None
+    if "draft" in data and not isinstance(data["draft"], bool):
+        problems.append(
+            Problem(
+                rel, "draft", f"must be true or false, not {_type_name(data['draft'])}"
+            )
+        )
+    hero_title = hero_tagline = None
+    hero_actions = None
+    if is_home:
+        if "hero_title" in data:
+            hero_title = _text_field(rel, data, "hero_title", problems)
+        if "hero_tagline" in data:
+            hero_tagline = _text_field(rel, data, "hero_tagline", problems)
+        if "hero_actions" in data:
+            hero_actions = _hero_actions(rel, data["hero_actions"], problems)
+    slot = (section, order) if isinstance(section, str) and order is not None else None
+    if problems:
+        return None, problems, slot
+    assert title is not None and description is not None
+    assert isinstance(section, str) and isinstance(order, int)
+    page = Page(
+        path=rel,
+        title=title,
+        description=description,
+        section=section,
+        order=order,
+        staged_text=parsed.staged_text,
+        body=parsed.body,
+        hero_title=hero_title,
+        hero_tagline=hero_tagline,
+        hero_actions=hero_actions,
+    )
+    return page, problems, slot
+
+
+def load_content(content_dir: Path) -> tuple[SiteContent | None, tuple[Problem, ...]]:
+    """Validate every page and return the site, or every problem found (2.9).
+
+    The result is ``(SiteContent, ())`` or ``(None, problems)`` with the
+    problems sorted by ``(path, where, message)``. A page whose valid
+    frontmatter says ``draft: true`` is omitted (2.4). Site-level rules: a
+    duplicate ``(section, order)`` among included pages (2.6), no home page
+    among them (2.7) and no included page at all (2.8). A page that has
+    violations still counts as included for all three: it takes part in the
+    duplicate check whenever its own section and order are valid, and a broken
+    ``index.md`` is reported once, for what is wrong with it.
+    """
+    found = discover(content_dir)
+    problems: list[Problem] = list(found.problems)
+    included: list[str] = []
+    pages: list[Page] = []
+    by_slot: dict[tuple[str, int], list[str]] = {}
+    for rel in found.pages:
+        parsed = _read_frontmatter(content_dir, rel)
+        problems.extend(parsed.problems)
+        page: Page | None = None
+        slot: tuple[str, int] | None = None
+        if parsed.data is not None:
+            page, page_problems, slot = _validate(rel, parsed)
+            problems.extend(page_problems)
+        if parsed.drafted:
+            continue
+        included.append(rel)
+        if page is not None:
+            pages.append(page)
+        if slot is not None:
+            by_slot.setdefault(slot, []).append(rel)
+    for (section, order), paths in by_slot.items():
+        if len(paths) > 1:
+            message = (
+                f"duplicate order {order} in section {section!r}, also used by "
+                + (", ".join(paths[1:]))
+            )
+            problems.append(Problem(paths[0], "order", message))
+    if not included:
+        problems.append(Problem("", "", "the content directory holds no included page"))
+    elif HOME_PAGE not in included:
+        message = "no home page: the content root needs an index.md that is not a draft"
+        problems.append(Problem(HOME_PAGE, "", message))
+    if problems:
+        ordered = sorted(problems, key=lambda p: (p.path, p.where, p.message))
+        return None, tuple(ordered)
+    return SiteContent(content_dir, tuple(pages), found.assets), ()
+
+
+def count_included_pages(content_dir: Path) -> int:
+    """Count pages that are neither excluded by name nor drafted (10.6).
+
+    A page whose frontmatter cannot be read, for any reason, counts as
+    included: the count decides whether there is content to build, and such a
+    page is content that must fail the build rather than vanish from it.
+    """
+    found = discover(content_dir)
+    return sum(
+        1 for rel in found.pages if not _read_frontmatter(content_dir, rel).drafted
+    )
