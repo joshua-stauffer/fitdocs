@@ -453,6 +453,18 @@ is the move-disposition case (the drain moved the file) and a user deletion
 after archiving. A failed removal leaves the entry `Pending` and is reported as
 a deferral.
 
+Controller rulings (2026-09-30, connectors task 4.3):
+- *R1*: an `OSError` while the sweep reads or hashes a pending file is
+  treated like a failed removal: the entry stays `Pending`, the sweep
+  continues with the next entry, and the pull reports a deferral whose detail
+  is `<ExceptionType>: <redacted message>`.
+- *R2*: when a later pull fetches the same remote id at a new revision while
+  its earlier delivery is still `Pending`: identical bytes keep the pending
+  location (the entry stays `delivered`, its revision moves forward, and the
+  report lists the activity under `held`, since nothing is written); different
+  bytes release the old inbox copy at fetch time (it becomes an ordinary
+  untracked inbox file the drain ingests) and the new bytes are delivered.
+
 ### `fitdocs connect NAME`
 
 ```mermaid
