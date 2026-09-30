@@ -572,6 +572,45 @@ def test_a_repo_internal_root_outside_website_build_is_refused(tmp_path: Path) -
             guard_root(refused, repo_root=repo)
 
 
+def test_the_repo_and_its_ancestors_are_refused_as_roots(tmp_path: Path) -> None:
+    """A root equal to the repository, its parent or a grandparent is refused (6.7).
+
+    Clearing the managed paths of such a root would reach outside
+    ``website/build/``. A sibling of the repository stays allowed, and a link to
+    the parent is refused because ``resolve`` follows it.
+
+    Dies on: removing the ancestor check from `guard_root`.
+    """
+    repo = tmp_path / "parent" / "repo"
+    (repo / "website" / "build").mkdir(parents=True)
+    (tmp_path / "parent" / "sibling").mkdir()
+    (tmp_path / "up").symlink_to(tmp_path / "parent", target_is_directory=True)
+    for refused in (repo, repo.parent, tmp_path, tmp_path / "up", repo / ".." / ".."):
+        with pytest.raises(BuildRootRefused):
+            guard_root(refused, repo_root=repo)
+    sibling = tmp_path / "parent" / "sibling"
+    assert guard_root(sibling, repo_root=repo) == sibling.resolve()
+
+
+def test_an_ancestor_root_is_refused_by_identity_not_path_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With ``Path.resolve`` made a no-op, a link to the parent is still refused.
+
+    A comparison of the unresolved path text misses the link;
+    ``os.path.samefile`` does not.
+
+    Dies on: testing the ancestor check by path text, e.g.
+    `resolved in [repo_root.resolve(), *repo_root.resolve().parents]`.
+    """
+    repo = tmp_path / "parent" / "repo"
+    (repo / "website" / "build").mkdir(parents=True)
+    (tmp_path / "up").symlink_to(tmp_path / "parent", target_is_directory=True)
+    monkeypatch.setattr(Path, "resolve", lambda self, strict=False: self.absolute())
+    with pytest.raises(BuildRootRefused):
+        guard_root(tmp_path / "up", repo_root=repo)
+
+
 def test_roots_under_website_build_and_outside_the_repo_are_allowed(
     tmp_path: Path,
 ) -> None:

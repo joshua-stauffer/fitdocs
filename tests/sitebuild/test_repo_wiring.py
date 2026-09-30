@@ -295,3 +295,119 @@ def test_every_site_test_names_its_mutation() -> None:
         missing.extend(f"{path.name}::{n}" for n in _undocumented_tests(source))
     assert scanned >= len(own_tests)
     assert missing == []
+
+
+BUILD_LOGIC_FILES = [
+    "scripts/build_site.py",
+    "scripts/sitebuild/__init__.py",
+    "scripts/sitebuild/config.py",
+    "scripts/sitebuild/content.py",
+    "scripts/sitebuild/generator.py",
+    "scripts/sitebuild/links.py",
+    "scripts/sitebuild/model.py",
+    "scripts/sitebuild/outline.py",
+    "scripts/sitebuild/pipeline.py",
+    "scripts/sitebuild/preview.py",
+    "scripts/sitebuild/stage.py",
+]
+ALLOWED_TOP_LEVEL = {"yaml", "__future__"}
+
+
+def _foreign_imports(source: str, module: str) -> list[str]:
+    """Imports in ``source`` outside the build-logic allowance (8.4).
+
+    ``module`` is the dotted name of the module being scanned. An import is
+    allowed when its top-level package is standard library, ``yaml`` or
+    ``__future__``, or when it is ``scripts.sitebuild`` or a submodule. A
+    relative import is resolved against ``module`` first. ``import scripts`` and
+    a relative import that climbs to ``scripts`` are refused, and
+    ``from scripts import x`` is judged as ``scripts.x``.
+    """
+    package = module.rsplit(".", 1)[0] if "." in module else ""
+    found: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        names: list[str] = []
+        if isinstance(node, ast.Import):
+            names = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            base = node.module or ""
+            if node.level:
+                parts = package.split(".") if package else []
+                parts = parts[: len(parts) - (node.level - 1)]
+                base = ".".join([*parts, *([node.module] if node.module else [])])
+                names = [base]
+            elif base == "scripts":
+                names = [f"scripts.{alias.name}" for alias in node.names]
+            else:
+                names = [base]
+        for name in names:
+            top = name.split(".")[0]
+            if (
+                top in sys.stdlib_module_names
+                or top in ALLOWED_TOP_LEVEL
+                or name == "scripts.sitebuild"
+                or name.startswith("scripts.sitebuild.")
+            ):
+                continue
+            found.append(name)
+    return found
+
+
+def test_build_logic_imports_only_the_standard_library_yaml_and_the_package() -> None:
+    """No build-logic module imports anything else (8.4).
+
+    The scanned set is exactly the ten modules of `scripts/sitebuild/` named in
+    the design plus `scripts/build_site.py`, so a new module or a moved file
+    reds the set check instead of escaping the scan.
+
+    Dies on: adding `import fitdocs` (or any non-allowed import) to a scanned
+    module, or a scan that finds a different set of files.
+    """
+    scanned = sorted(
+        p.relative_to(ROOT).as_posix()
+        for p in [ROOT / "scripts" / "build_site.py"]
+        + list((ROOT / "scripts" / "sitebuild").rglob("*.py"))
+    )
+    assert scanned == BUILD_LOGIC_FILES, "the walk is looking at the wrong files"
+    offenders: dict[str, list[str]] = {}
+    for rel in scanned:
+        module = rel.removesuffix(".py").replace("/", ".")
+        bad = _foreign_imports((ROOT / rel).read_text(encoding="utf-8"), module)
+        if bad:
+            offenders[rel] = bad
+    assert offenders == {}
+
+
+def test_the_import_guard_refuses_each_kind_of_foreign_import() -> None:
+    """The guard flags absolute, from, submodule and relative-escape imports.
+
+    Every allowed spelling in the same source is passed, so a guard that flags
+    everything also fails.
+
+    Dies on: skipping `ast.ImportFrom` or `ast.Import`, judging
+    `from scripts import x` as `scripts`, ignoring relative imports, or
+    allowing an import whose top-level name is not on the allowance.
+    """
+    ok = (
+        "from __future__ import annotations\nimport os, yaml\nimport os.path\n"
+        "from collections.abc import Mapping\nimport scripts.sitebuild.model\n"
+        "from scripts.sitebuild.model import Problem\nfrom scripts import sitebuild\n"
+    )
+    assert _foreign_imports(ok, "scripts.build_site") == []
+    bad = (
+        "import fitdocs\nfrom tests import x\nimport markdown_it.token\n"
+        "import zensical\nfrom fitdocs.render import y\nimport scripts.check_site\n"
+        "from scripts import check_site\nfrom .. import sibling\n"
+        "from . import model\nfrom .model import Problem\nimport scripts\n"
+    )
+    assert _foreign_imports(bad, "scripts.sitebuild.stage") == [
+        "fitdocs",
+        "tests",
+        "markdown_it.token",
+        "zensical",
+        "fitdocs.render",
+        "scripts.check_site",
+        "scripts.check_site",
+        "scripts",
+        "scripts",
+    ]
