@@ -41,9 +41,12 @@ strictly read-only -- nothing under it is ever written, moved, or deleted (Req
 **Offline guarantee (narrowed, Req 4.2).** The engine is offline except for one
 carve-out: the per-file map path may fetch missing basemap tiles through the
 injected :class:`~fitdocs.tiles.TileSource` on a cache miss while resolving a
-route map. That is the *only* network access; every other operation --
-discovery, decode, identity, render, merge, write, archive -- stays fully
-offline, and the source directory remains strictly read-only. A tile that cannot
+route map. Every other operation this engine performs -- discovery, decode,
+identity, render, merge, write, archive -- stays fully offline, and the source
+directory remains strictly read-only; this engine makes no connector request
+of its own -- map tiles and the connector commands, ``fitdocs connect`` and
+``fitdocs pull`` (:mod:`fitdocs.connectors.http`), are the tool's only
+network-touching paths. A tile that cannot
 be resolved (offline, provider error, or the persistent opt-out) never fails a
 document or a run: the map is omitted and a :class:`DocWarning` naming the
 affected document rides alongside the report (Req 4.3, 4.4). The map path is run
