@@ -213,7 +213,7 @@
 
 - [ ] 2. The published protocol: transport, vocabulary, registry
 
-- [ ] 2.1 Build the transport and the HTTP client with the explicit User-Agent, the timeout, the bounded data-call retries and the single authentication attempt
+- [x] 2.1 Build the transport and the HTTP client with the explicit User-Agent, the timeout, the bounded data-call retries and the single authentication attempt
   - The request and response values; the transport error whose message
     names only scheme, host and path (or the signed-location marker); the
     transport seam type; the standard-library transport: ordinary headers
@@ -954,3 +954,4 @@
 - Recurring review species (tasks 1.1-1.4): fixtures confounded by a coincidental order (prefix / alphabetical), self-referential compares against an imported constant, and docstrings naming a mutation's red set that was never observed. Every one cost a round.
 - 1.2: `connectors.errors` (AuthFailureKind, AuthFailure, ConnectorError, NotConnectedError, ConnectorSettingsError, NEXT_STEPS, next_step) and `connectors._atomic.write_atomic` (0o600 from creation via mkstemp, fsync, cleanup on BaseException). Reviewer mutation harnesses revert from their own snapshots -- a later round reusing an earlier round's harness clobbers fixes; always take fresh snapshots.
 - 3.2: `connectors.ledger` -- one shared `_invariant_violation` is run by `load_ledger` (LedgerError naming the file) and `save_ledger` (ValueError before writing). Rulings: load rejects an unsorted file; watermark must be tz-aware; sha256 is 64 lowercase hex on any outcome; `pending` is a relative path whose every `/` segment is non-empty and not `.`/`..` (4.1's sweep can trust it). tomli_w writes `2026-09-20 07:12:00+00:00` and inline `entries = [...]` for short ledgers -- both accepted as equivalent TOML.
+- 2.1: `connectors.http` -- `HttpClient(transport, *, mode, redactor, sleep, timeout)`; `FakeTransport` in `tests/connectors/conftest.py` (scripted responses/errors; `.requests`, `.timeouts`). The client never redacts -- it registers secrets before the first call; every reporting engine (4.3/4.4/4.5) must `redactor.redact()` what it prints or stores. `TransportError` messages carry only `<scheme>://<host>[:port]<path>` or `<signed location>`.
