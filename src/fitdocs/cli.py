@@ -123,6 +123,8 @@ from fitdocs.audit import AuditReport, audit
 from fitdocs.benchmarks import BenchmarkKind
 from fitdocs.config import DataRootError, resolve_data_root
 from fitdocs.history.engine import HistoryReport, run_history
+from fitdocs.identity.holds import HoldRecordError
+from fitdocs.identity.settings import IdentitySettings, load_identity_settings
 from fitdocs.inbox import (
     InboxNote,
     InboxPaths,
@@ -316,9 +318,20 @@ def sync_command(
         # Build the tile store once (a malformed [tiles] table exits 2 here, before any
         # write); pass it to the engine as the always-supplied basemap-tile source.
         tiles = _tile_store(data_root)
-        report = sync(
-            source, data_root, athlete=athlete, tz=tz, tiles=tiles, force=force
-        )
+        # Load [identity] once (a malformed table exits 2 here, before any write).
+        identity = _identity_settings(data_root)
+        try:
+            report = sync(
+                source,
+                data_root,
+                athlete=athlete,
+                tz=tz,
+                tiles=tiles,
+                force=force,
+                precedence=identity.precedence,
+            )
+        except HoldRecordError as exc:
+            _hold_record_error(exc)
         _report(report, command="sync")
         # The load pass runs after writing documents (Req 8.1), honoring --no-prompt.
         load_report = _run_load_pass(
@@ -343,18 +356,23 @@ def sync_command(
     # path (cross-spec landing order: plugin-api's edit lands first).
     plugin_report = _plugin_report(data_root)
     inbox_settings, inbox_paths, quarantine, tiles = _inbox_preflight(data_root)
-    drain_report = drain(
-        inbox_paths.inbox,
-        data_root,
-        settings=inbox_settings,
-        processed_dir=inbox_paths.processed,
-        quarantine=quarantine,
-        athlete=athlete,
-        tz=tz,
-        tiles=tiles,
-        force=force,
-        retry_quarantined=retry_quarantined,
-    )
+    identity = _identity_settings(data_root)
+    try:
+        drain_report = drain(
+            inbox_paths.inbox,
+            data_root,
+            settings=inbox_settings,
+            processed_dir=inbox_paths.processed,
+            quarantine=quarantine,
+            athlete=athlete,
+            tz=tz,
+            tiles=tiles,
+            force=force,
+            retry_quarantined=retry_quarantined,
+            precedence=identity.precedence,
+        )
+    except HoldRecordError as exc:
+        _hold_record_error(exc)
     _report_drain(drain_report, command="sync")
     # The load pass runs after the drain (Req 2.1), honoring --no-prompt exactly
     # as the explicit-source path does (Req 2.5).
@@ -439,7 +457,14 @@ def regen_command(
     # Build the tile store once (a malformed [tiles] table exits 2 here, before any
     # write); pass it to the engine as the always-supplied basemap-tile source.
     tiles = _tile_store(data_root)
-    report = regen(data_root, athlete=athlete, tz=tz, tiles=tiles)
+    identity = _identity_settings(data_root)
+    report = regen(
+        data_root,
+        athlete=athlete,
+        tz=tz,
+        tiles=tiles,
+        precedence=identity.precedence,
+    )
     _report(report, command="regen")
     # regen is always non-interactive, which makes its load pass restore-only:
     # computed load is re-derived from the preserved payload, no prompting (7.4).
@@ -949,6 +974,32 @@ def _tile_store(data_root: Path) -> TileStore:
     except SettingsError as exc:
         _config_error(str(exc))
     return TileStore(data_root, settings)
+
+
+def _identity_settings(data_root: Path) -> IdentitySettings:
+    """Load the ``[identity]`` settings from the data root (Req 2.7).
+
+    Mirrors :func:`_tile_store`: a malformed ``[identity]`` table raises
+    :class:`~fitdocs.identity.settings.IdentitySettingsError` and a file-level
+    fault the shared :class:`~fitdocs.settings.SettingsError` it subclasses;
+    either becomes a configuration error (stderr message, exit ``2``). It runs
+    before the engine call, so a malformed table writes nothing. Absent table
+    or key yields the default precedence.
+    """
+    try:
+        document = load_settings_document(data_root)
+        return load_identity_settings(document, settings_path(data_root))
+    except SettingsError as exc:
+        _config_error(str(exc))
+
+
+def _hold_record_error(exc: HoldRecordError) -> NoReturn:
+    """Map a damaged hold record to a configuration error (exit ``2``).
+
+    The error message already names the file; the remedy is ``fitdocs regen``,
+    which rebuilds the record.
+    """
+    _config_error(f"{exc}\nRun `fitdocs regen` to rebuild the hold record.")
 
 
 def _plugin_report(data_root: Path) -> PluginReport:

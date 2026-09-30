@@ -403,9 +403,11 @@ def test_settings_document_is_parsed_once_during_the_inbox_preflight(
     result = runner.invoke(app, ["sync", "--out", str(data_root)])
 
     assert result.exit_code == 0
-    # One read for plugin discovery (pre-existing, separate concern) plus one
-    # read inside the inbox pre-flight -- never a third for the tile store.
-    assert len(calls) == 2
+    # One read for plugin discovery (pre-existing, separate concern), one read
+    # inside the inbox pre-flight -- never another for the tile store -- and one
+    # for the ``[identity]`` table (``_identity_settings``, activity-identity
+    # Req 2.7, a separate concern like plugin discovery).
+    assert len(calls) == 3
 
 
 # --- empty inbox drains successfully (Req 2.4) -------------------------------
