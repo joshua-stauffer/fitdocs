@@ -16,6 +16,7 @@ if you have not run fitdocs yet; otherwise jump straight to the page you need.
 | [The plugin platform](plugins.md) | How fitdocs discovers third-party training-load calculators and how to package or drop one in. Its authoring companion, [Contributing a load calculator](contributing-calculators.md), walks through writing one from scratch. |
 | [Compatibility policy](compatibility.md) | What fitdocs' version number promises, contract by contract, and what upgrading within a compatible range does and does not require of you. |
 | [Releasing](releasing.md) | The ordered release procedure a maintainer follows by hand, and the automation that runs the identical commands from a version tag. |
+| [The website](website.md) | The repository's website: its content contract, how to build and preview it, and the maintainer runbook for DNS, Pages settings and the generator pin. It is not a contract governed by the compatibility policy. |
 | [Contributing](../CONTRIBUTING.md) | The contributor path: environment setup, what must pass before a change is accepted, and the rule for third-party material. |
 
 ## Where things live
