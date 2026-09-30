@@ -446,7 +446,7 @@
 
 - [ ] 5. Contract advance, regeneration, and the spec records
 
-- [ ] 5.1 Advance the document-format version and move every pin of the old value
+- [x] 5.1 Advance the document-format version and move every pin of the old value
   - Read `DOC_VERSION` on the branch rebased onto `main`; advance it by one
     and append a docstring paragraph naming the three causes (run pages gain
     the section; a 0 bpm sample is not recorded; a session developer sentinel
@@ -582,3 +582,4 @@
 - 4.1: 10.1 is held by each golden's byte comparison plus `test_render_twice_is_byte_identical` (the e74af37 golden-tree pin was retired). The 6.5 structural pin asserts no `Humidity`/`Temperature` anywhere in the Stryd body plus the exact Summary label list -- a narrower `104%`/label pin let a record-mean Humidity row pass (reviewer R6/R7). Round 3's wording fixes were applied by the controller and re-reviewed.
 - 4.2: 6.5 is bounded by `test_record_developer_fields_change_nothing_in_the_rendered_page` (render with and without the two Stryd environmental record channels -> byte-identical markdown and assets); word/label absence pins alone let chips and in-row notes through for two rounds. Timer and elapsed are both 43 s in the Stryd fixture, so the swap is pinned only by older unit tests (cited in the test docstring).
 - 5.1 (from activity-identity's log WARN): `tests/load/test_render.py::test_payload_version_paired_with_doc_version` pins `(LOAD_PAYLOAD_VERSION, DOC_VERSION)` -- a DOC_VERSION literal site missing from 5.1's list; move it too.
+- 5.1: DOC_VERSION advanced 5 -> 6 (main's value 5 at 1c55e18); `_PRE_RUNNING_DYNAMICS_DOC_VERSION = 5`. Sites moved: contract.py, test_cli_check.py:196,198, test_frontmatter.py:44,101, test_sources.py:2270 (CONSTANT_REGISTRY_ASOF_DOC_VERSION), tests/load/test_render.py:169 (pair (2, 6)); 11 goldens, one doc_version line each. Final-rebase re-pin check: pending at merge (activity-identity's branch also moves 5 -> 6).
