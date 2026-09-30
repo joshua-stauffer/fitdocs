@@ -300,7 +300,7 @@
     diff
   - _Requirements: 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8_
 
-- [ ] 3. State: credentials, ledger, settings
+- [x] 3. State: credentials, ledger, settings
 
 - [x] 3.1 (P) Build the credential store: its location order, its refusal inside the data root, owner-only atomic files, environment overrides, and token replacement
   - Resolve the directory from the dedicated variable (absolute, else a
@@ -357,7 +357,7 @@
   - _Requirements: 7.1, 7.2, 7.3, 7.5, 7.6, 7.8_
   - _Boundary: Ledger_
 
-- [ ] 3.3 Read the connectors table into validated instances
+- [x] 3.3 Read the connectors table into validated instances
   - Project the table from the already-parsed settings document: absent is
     no instances; each sub-table is an instance named by its key; the
     connector defaults to the name and is resolved through the registry;
@@ -410,7 +410,7 @@
     nothing is removed that the ledger does not record as pending
   - _Requirements: 6.7, 6.8, 8.1, 8.2, 8.3, 8.5, 8.6, 8.7, 8.8_
 
-- [ ] 4.2 (P) Build the folder connector and register it as the built-in connector
+- [x] 4.2 (P) Build the folder connector and register it as the built-in connector
   - Its declaration (id `folder`, no authentication, pulls activities, no
     credential fields); its settings parser (required path resolved against
     the data root and normalized without filesystem access, refused when it
@@ -510,7 +510,7 @@
     `uv run mypy` green
   - _Requirements: 4.7, 6.10, 6.11, 10.1, 10.2, 10.5_
 
-- [ ] 4.5 (P) Make one authentication attempt at connect and store only on success
+- [x] 4.5 (P) Make one authentication attempt at connect and store only on success
   - The connected and connect-failed results; wrap every answer as a secret
     registered with the redactor; one authentication-mode session; a
     personal-key connector's verification then a store of the answers and
@@ -959,3 +959,6 @@
 - 2.3 (conftest closes to new fixtures after this task): the three synthetic connectors' script lists hold `T | BaseException` (a queued exception is raised, not returned) and raise `tests.connectors.conftest.UnscriptedCall` (a `BaseException`, so it escapes `validate_connector`'s `except Exception` boundary and any later engine's per-connector isolation) when asked with nothing queued; every one of `ScriptedPersonalKeyConnector`, `ScriptedLoginConnector`, and `ScriptedPuller` takes a `capabilities=` (the first two only) and `data_url: str | None` constructor override -- when `data_url` is set, `list_activities` calls `session.http.get(data_url)` before consuming its scripted answer. `registry.validate_connector` reads and checks every member inside one `except Exception` boundary around the whole function body (a `current` variable, updated before each member's read and check, names which member was being processed when the boundary catches something) -- a raising property *or* a raising post-read check (e.g. `CredentialField(5, ...)` breaking a regex match, or a `capabilities` value whose `__iter__` raises) is a reason, never an escaping exception. `register` builds its `InvalidConnectorError` message from `type(connector).__name__`, never `repr(connector)`, so a candidate with a raising `__repr__` still reports cleanly.
 - 3.1: `connectors.credentials` -- rulings: the credentials directory is created 0o700 only when missing (an existing directory's mode is never touched); a naive `expires_at` is refused on load and save; a reserved OAUTH_BROWSER style resolves to NotConnectedError. Every shape error is a `CredentialStoreError` naming the path and never printing a value. `replace()` on a store-less or no-auth access is unspecified and unpinned.
 - 4.1: `connectors.delivery` -- `sweep` visits only `ledger.pending_entries()`; resolved entries keep every field but `pending`. Known, queued: an identical file already at `<stem>-<h8>.fit` outside the ledger gets a duplicate write; an OSError while hashing a pending file aborts the sweep (4.3 must decide whether to catch it).
+- 3.3: `connectors.settings` -- checks run in design order (shape, name, connector, lookback, credential keys, parse_settings; then collisions); names use `fullmatch` (a `.match` with `$` accepted a trailing newline -- registry patterns fixed the same way). Every error starts `f"{settings_file}: [connectors.{name}] {key}: "`. Tests put targets in the MIDDLE of a sequence (not first or last) to defeat both first-only and last-only loops.
+- 4.2: the folder connector registers at import, so `available()` always includes `folder`; registry tests filter to their own ids. Selection and settling are delegated to `fitdocs.inbox`. Tests needing a Path.stat failure wrap `inbox.settle` rather than counting stdlib calls (Python 3.14's `is_file` no longer calls `stat`).
+- 4.5: `connectors.connect.run_connect` never redacts the next step or path (they hold no user or service text); unexpected exceptions from verify/login propagate unredacted -- 5.1's CLI must map them (queued).
