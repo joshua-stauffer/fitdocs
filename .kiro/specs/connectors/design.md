@@ -853,6 +853,12 @@ def auth_failure_from(response: HttpResponse, *, service_message: str | None = N
   again; a `Retry-After` above the maximum stops retrying and returns that
   response. The final response is returned; the final `TransportError`
   propagates. 401 and 403 are not in the retryable set.
+- *Retry-After as an HTTP-date* (controller ruling, 2026-09-30, connectors
+  task 2.1): the package reads no clock, so an HTTP-date is measured against
+  the response's own `Date` header (the server's clock). Without a parseable
+  `Date` the value is unparseable — DATA mode backs off, and
+  `auth_failure_from` sets `retry_after_s = None`. Published signatures are
+  unchanged.
 - `urllib_transport` builds `urllib.request.Request(url, data=body,
   method=...)` with ordinary headers, adds each secret header with
   `add_unredirected_header(name, secret.reveal())`, calls
