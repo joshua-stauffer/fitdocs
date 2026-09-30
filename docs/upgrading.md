@@ -97,15 +97,23 @@ document-format version changed. See the ownership contract's
 for the full migration story, including what happens to a document written
 by a newer fitdocs than the one you have installed.
 
-### Before the first connector pull
+### Before syncing a file of a workout you already have
 
 Pages written before source identity shipped lack the base-identity
 frontmatter keys (`source_kind`, `source_elapsed_s`, `source_distance_m` and
 `source_device`), so fitdocs recognizes such a page only by exact file content
 or its recorded session UUID until it is regenerated. **After
-upgrading, run `fitdocs regen` before the first connector pull.** Otherwise a
-file of a workout your wiki already has, arriving from another source, may not
-be recognized as belonging to that workout's page.
+upgrading, run `fitdocs regen` before syncing a file of a workout your wiki
+already has from another source.** Otherwise that file, such as a Garmin
+original of a run you have as a phone copy, may not be recognized as
+belonging to that workout's page. A connector or any other source added in a
+later release is another such source.
+
+The first `fitdocs sync` or `fitdocs regen` after upgrading may also rename
+pages, each with a rename warning: an older collision leftover at
+`<name>-<8 characters>.md` whose `<name>.md` is free is moved to
+`<name>.md`, and a page whose re-ranked base computes a different filename is
+moved to it. Links to the old names are not updated.
 
 The first `fitdocs check` after upgrading also reports as "orphaned" any
 archived source that no page lists — for example, the archive of a page you

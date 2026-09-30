@@ -1641,10 +1641,9 @@ def test_sync_proceeds_normally_for_non_newer_or_unusable_versions(
 # The value-recompute discriminator: `render.frontmatter.build_frontmatter`
 # takes every metric value from a freshly computed `DerivedMetrics` and never
 # reads an existing document's frontmatter as a value source. `regen` passes
-# `force=True` for every document it re-renders, so `sync._process_file` always
-# reaches `parse_fit`/`compute_metrics` on this path -- its only pre-parse
-# return is the already-archived dedup skip, which `force` disables -- and it
-# only ever reuses the existing text for its NOTES/WORKOUT/LOAD regions and its
+# every page from the archived files it lists: `sync._page_task` parses them
+# and calls `compute_metrics` on this path, and it only ever reuses the
+# existing text for its NOTES/WORKOUT/LOAD regions and its
 # version/key warnings. A document hand-tampered with an impossible `avg_hr_bpm` at the
 # pre-amendment version therefore has that value overwritten by regeneration
 # with the value a fresh, independent `parse_fit` + `compute_metrics` call
@@ -2532,7 +2531,7 @@ def test_sync_does_not_match_or_write_through_a_workouts_symlink(
 ) -> None:
     """A ``uuid``/``sources`` match must never be made against a symlinked
     document either -- ``find_document`` shares the same read helper as
-    ``_discover_documents`` (Req 7.5, 7.6)."""
+    ``scan_pages`` (Req 7.5, 7.6)."""
     data_root = tmp_path / "data"
     data_root.mkdir()
     a = builder.reexport_a_fit_bytes()

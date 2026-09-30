@@ -229,9 +229,9 @@ manufacturer wrote it:
 precedence = ["original", "phone_copy", "unknown"]
 ```
 
-A change to `precedence` takes effect on the next `fitdocs regen`, which
-re-ranks the files of every page and may rename a page whose base changes; see
-the [ownership contract](ownership-contract.md#source-files-and-their-roles).
+A change to `precedence` applies to every page on the next `fitdocs regen`,
+which re-ranks the files of every page and may rename a page whose base
+changes, and to the pages a `sync` adds files to; see the [ownership contract](ownership-contract.md#source-files-and-their-roles).
 
 ### `[load]`: calculator selection and training-load computation
 

@@ -30,6 +30,12 @@ recorded as one.
   placed on one page (`ambiguous_source`), an archived source that no page
   lists (`orphaned_source`), and one workout recorded on two or more pages
   (`duplicate_session`), each with the action that resolves it.
+- Plugin API (additive; no action needed): `FileIdentity`, the record of what
+  a file's own `file_id` message declares, is exported from the `fitdocs`
+  package root; `Activity.file_identity` carries it, and
+  `Provenance.undocumented_messages` counts the messages a file carries that
+  the installed FIT profile does not define (`None` when not counted). See
+  [the plugin guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/plugins.md).
 
 ### Changed
 
@@ -47,13 +53,15 @@ recorded as one.
   format advances again (`doc_version` 6 to 7). `sources` lists every archived file of the page in one
   canonical order, the base last. A page keeps a phone-side copy's session
   `uuid` when a file without one becomes its base, and a page may be renamed
-  when a file that outranks its base arrives for the same workout (when the
-  new base's start time or sport gives a different filename; links to its
-  previous filename are not updated). A file that cannot be placed on one page
+  when its base changes (a file that outranks it arrives, or the precedence
+  changes at `fitdocs regen`) and the new base gives a different filename, or
+  when a page written under a collision-suffixed name
+  `<name>-<8 characters>.md` finds `<name>.md` free (links to its previous
+  filename are not updated). A file that cannot be placed on one page
   is archived and held, recorded in `.fitdocs/held.toml`, and never written as
   a second page. Action: run `fitdocs regen` after
-  upgrading, and before the first connector pull, so pages written before
-  this release are recognized; see
+  upgrading, and before syncing a file of a workout you already have from
+  another source, so pages written before this release are recognized; see
   [the ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md).
 - `fitdocs.toml` settings schema: the new `[identity]` table is additive and
   optional; an invalid `[identity]` exits with status `2`. Action:

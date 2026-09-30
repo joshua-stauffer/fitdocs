@@ -10,7 +10,7 @@ task per target then renders, merges, writes and archives -- with per-file
 failures isolated so one bad file never aborts the batch (Req 1-4;
 activity-identity Req 4). :func:`regen` rebuilds documents from the data
 root alone -- re-rendering each page from its base archived source through the
-per-file pipeline (:func:`_process_isolated`), then planning every archived
+per-page task (:func:`_process_isolated`), then planning every archived
 file no page lists against the rebuilt pages exactly as :func:`sync` plans its
 run (Req 4.3, 4.4; activity-identity Req 4.10, 7.2, 7.3). :func:`drain` is the
 inbox spec's third entry point
@@ -198,7 +198,6 @@ from fitdocs.contract import (
     document_uuid,
     document_version,
     effort_tag,
-    is_workout_document,
     parse_frontmatter,
     sha_of_ref,
     source_refs,
@@ -212,7 +211,6 @@ from fitdocs.declaration import (
 )
 from fitdocs.docio import REMEDY_REPLACE_SYMLINK as _REMEDY_REPLACE_SYMLINK
 from fitdocs.docio import SYMLINK_DETAIL as _SYMLINK_DETAIL
-from fitdocs.docio import read_frontmatter as _read_frontmatter
 from fitdocs.docmerge import (
     RegionError,
     begin_marker,
@@ -253,7 +251,6 @@ from fitdocs.layout import (
     ARCHIVE_DIR,
     ASSETS_SUBDIR,
     WORKOUTS_DIR,
-    activity_uid,
     archive_path,
     doc_path,
     doc_stem,
@@ -330,7 +327,7 @@ def find_document(
     a resolution of each entry: a re-export must reattach to its document whenever
     the incoming ref appears anywhere in that history, including an entry the
     archive no longer holds. Resolving refs is the regeneration concern
-    (:func:`_last_source_archive`), not the matching one.
+    (:func:`_resolvable_source_archive`), not the matching one.
     """
     # One scan, then the index's exact match: the session UUID first, else the
     # sources history. ``activity_uid`` (a session UUID or a file sha) goes to
@@ -487,8 +484,9 @@ def _scan_symlinked_documents(data_root: Path) -> tuple[DocWarning, ...]:
 
     A symlinked ``workouts/*.md`` path is a property of the *data root*, not of
     any particular incoming file: it can never be a match candidate for
-    :func:`find_document` or :func:`_discover_documents` no matter which file
-    a given run happens to process (:func:`~fitdocs.docio.read_frontmatter`
+    :func:`find_document` or :func:`~fitdocs.identity.pages.scan_pages` no
+    matter which file a given run happens to process
+    (:func:`~fitdocs.docio.read_frontmatter`
     refuses it before either scan ever sees its content). So rather than
     re-detecting it once per incoming file -- which only warns when *some*
     file's per-file pipeline happens to re-scan ``workouts/`` -- both
@@ -1063,7 +1061,7 @@ def regen(
     archived ``.fit`` sources under ``fit-archive/`` plus the optional athlete
     inputs, so a data root with the original exports long deleted still rebuilds
     completely (Req 4.4). It runs in two parts: the first rebuilds each page
-    through the per-file pipeline (:func:`_process_isolated`), the second plans
+    through the per-page task (:func:`_process_isolated`), the second plans
     every archived file no page lists through the same planner :func:`sync`
     uses:
 
@@ -1072,10 +1070,10 @@ def regen(
       resolved to its archived file, parsed and ranked with the given
       ``precedence``, and the page is re-rendered from the highest-ranked one --
       its base -- with ``sources`` rewritten in ascending rank (activity-identity
-      Req 5.1, 5.2, 7.2, 7.3). Because those bytes are the archive the document was
-      rendered from, the pipeline's lookup matches this same document, so
-      ``merge_regions`` carries its ``notes``/``workout``/``load`` regions over
-      verbatim while the generated content is refreshed (Req 4.3, 10.2). A
+      Req 5.1, 5.2, 7.2, 7.3). Because the page task's match is the scan
+      record of this same document, ``merge_regions`` carries its
+      ``notes``/``workout``/``load`` regions over verbatim while the
+      generated content is refreshed (Req 4.3, 10.2). A
       document whose history is empty or none of whose listed files is in the
       archive cannot be regenerated -- it becomes a :class:`FileFailure` and is
       left untouched, the batch continuing.
@@ -1140,12 +1138,14 @@ def regen(
     refresh_declarations(data_root, warnings)
     warnings.extend(_scan_symlinked_documents(data_root))
 
-    # Re-render each document from its base source (roles rebuilt with the
-    # current precedence), one isolated task per page.
-    for document, sources in _discover_documents(data_root):
-        doc_ref = document.relative_to(data_root).as_posix()
-        archive = _resolvable_source_archive(data_root, sources)
-        if archive is None:
+    # Re-render each page from the files it lists (roles rebuilt with the
+    # current precedence), one isolated task per scan record. The record itself
+    # is the match: a page is never looked up again by its session UUID, so two
+    # pages that record the same UUID are each rebuilt from their own list and
+    # no file moves between them (Req 4.9, 7.2).
+    for record in scan_pages(data_root).records:
+        doc_ref = Path(record.path).relative_to(data_root).as_posix()
+        if _resolvable_source_archive(data_root, record.sources) is None:
             # No archived source to rebuild from: an empty history, or every
             # listed file unresolvable or missing from the archive. Fail this
             # document (left untouched) and keep going (an archive it lists, if
@@ -1162,12 +1162,11 @@ def regen(
             )
             continue
         _process_isolated(
-            archive,
+            DocumentMatch(path=Path(record.path), sources=record.sources),
             data_root,
             athlete=athlete,
             tz=tz,
             tiles=tiles,
-            force=True,
             precedence=precedence,
             source_label=doc_ref,
             written=written,
@@ -1236,13 +1235,12 @@ def regen(
 
 
 def _process_isolated(
-    source_file: Path,
+    match: DocumentMatch,
     data_root: Path,
     *,
     athlete: AthleteInputs | None,
     tz: tzinfo,
     tiles: TileSource,
-    force: bool,
     precedence: Precedence,
     source_label: str,
     written: list[str],
@@ -1251,44 +1249,46 @@ def _process_isolated(
     warnings: list[DocWarning],
     ledger: _RunLedger,
 ) -> None:
-    """Run the per-file pipeline for one item, isolating any failure (Req 1.3).
+    """Rebuild one page from its listed files, isolating any failure (Req 1.3).
 
     Used by :func:`regen` for the per-page rebuild (:func:`sync`, :func:`drain`
     and regeneration's unreferenced files are planned through
-    :func:`_run_planned` instead): the pipeline (``_process_file``) is identical
-    -- only discovery and the ``source_label`` recorded in the report differ.
-    Classifies the item into ``written`` (a document produced or updated),
-    ``skipped`` (already archived and not forcing, Req 3.2, **or** version-gated
-    because the matched document is newer, Req 5.5), or ``failures``. Expected
+    :func:`_run_planned` instead): a page task with the scan record as its match
+    and no incoming file. Classifies the page into ``written`` (a document
+    produced or updated), ``skipped`` (version-gated because the matched
+    document is newer, Req 5.5), or ``failures``. Expected
     per-file errors -- an undecodable source (Req 1.2, 1.3) or a damaged region in
     the existing document (Req 10.3) -- and any unexpected per-file exception all
     become a :class:`FileFailure`; the batch never aborts. (``BaseException`` --
     ``KeyboardInterrupt``, ``SystemExit`` -- deliberately propagates.)
 
-    Zero or more :class:`DocWarning`\\ s are something ``_process_file``
+    Zero or more :class:`DocWarning`\\ s are something ``_page_task``
     *returns*, so they can ride with either non-failing branch: a version-gate
     skip carries exactly one (Req 5.5) alongside its ``None`` outcome; a
     written file may carry a map omission (Req 4.3), an
     unmanaged-frontmatter-key notice (Req 6.3), an invalid-effort-tag notice
     (Req 1.4), a rename notice (activity-identity Req 6.5), any combination,
     or none -- most
-    written files and every already-archived skip carry none. The invariant is
+    written pages carry none. The invariant is
     one-directional: a *raising* file can never carry one, because when
-    ``_process_file`` raises (a :class:`FileFailure`) it returns nothing at all
+    ``_page_task`` raises (a :class:`FileFailure`) it returns nothing at all
     (Req 4.4). A ``workouts/*.md`` symlink is never among these -- it is not a
     per-file condition, so it never rides with any single file's outcome; see
     :func:`_scan_symlinked_documents`, which the caller (:func:`sync` or
     :func:`regen`) runs once per run instead.
     """
     try:
-        result = _process_file(
-            source_file,
+        result = _page_task(
             data_root,
+            match=match,
+            news=(),
             athlete=athlete,
             tz=tz,
             tiles=tiles,
-            force=force,
             precedence=precedence,
+            settling=False,
+            quiet=False,
+            expected_stem=None,
         )
     except (FitDecodeError, RegionError) as exc:
         failures.append(FileFailure(source=source_label, reason=_reason(exc)))
@@ -1669,81 +1669,6 @@ def _discover_fit_files(source_dir: Path) -> list[Path]:
         path
         for path in source_dir.rglob("*")
         if path.is_file() and path.suffix.lower() == ".fit"
-    )
-
-
-def _process_file(
-    source_file: Path,
-    data_root: Path,
-    *,
-    athlete: AthleteInputs | None,
-    tz: tzinfo,
-    tiles: TileSource,
-    force: bool,
-    precedence: Precedence,
-) -> _TaskResult:
-    """Run the per-file pipeline; return its :class:`_TaskResult`.
-
-    ``doc_ref`` is the data-root-relative POSIX path of the document written
-    or updated on success, or ``None`` when the file is skipped -- either because
-    its bytes are already archived and ``force`` is off (Req 3.2, 3.3), or because
-    a matched document records a document-format version newer than this fitdocs
-    can produce (Req 5.5, 5.8; see the module docstring's version-gate section).
-    ``warnings`` holds zero or more :class:`DocWarning`\\ s: a
-    version-gate skip carries exactly one and nothing else (the early return
-    below); a written document may carry a non-fatal map omission (Req 4.3,
-    4.4), an unmanaged-frontmatter-key notice (Req 6.3), an invalid-effort-tag
-    notice (Req 1.4), a rename notice (activity-identity Req 6.5), any
-    combination, or none.
-
-    **Map path (impure, Req 1.1, 3.5, 4.2, 4.3, 4.4).** When the activity is an
-    outdoor (non-strength) modality -- the exact set of views that render a
-    ``## Map`` section, so a fetched tile always corresponds to a rendered map (Req
-    3.5) -- the route is planned from the position channels and its exact tile set
-    is resolved through the injected ``tiles`` source *before* the pure render,
-    then injected as ``map_data``. A tile that is neither cached nor fetchable
-    raises :class:`~fitdocs.tiles.TileUnavailableError`, which becomes a
-    :class:`DocWarning` naming this document while the document renders *without* a
-    Map section (Req 4.3) -- never a failure (Req 4.4). The strength view renders
-    no Map section, so its map path is skipped entirely (Req 3.5).
-
-    Propagates the ingest decode errors and :class:`~fitdocs.docmerge.RegionError`
-    for the caller to isolate as a per-file failure (Req 1.3); crucially, every
-    filesystem write happens only *after* a successful merge, so a region conflict
-    leaves the existing document untouched (Req 10.3).
-    """
-    data = source_file.read_bytes()
-    sha = hashlib.sha256(data).hexdigest()
-
-    archive = archive_path(data_root, sha)
-    if archive.exists() and not force:
-        # Identical bytes are already archived: skip (dedups exact re-syncs and
-        # two identically-named-differently files with the same content) (3.2, 3.3).
-        return _TaskResult(None, ())
-
-    activity = parse_fit(data)
-
-    # ``match_uid`` is the *incoming file's* identity, used only to find its
-    # page; the page's own uid (in the page task) comes from its retained
-    # session UUID or its base's hash, which need not be this file's.
-    match_uid = activity_uid(activity, sha)
-    new_ref = source_ref(sha)
-    match = find_document(data_root, activity_uid=match_uid, source_ref=new_ref)
-    return _page_task(
-        data_root,
-        match=match,
-        news=(
-            _NewMember(
-                ref=new_ref, sha=sha, activity=activity, data=data, archive=archive
-            ),
-        ),
-        athlete=athlete,
-        tz=tz,
-        tiles=tiles,
-        precedence=precedence,
-        settling=False,
-        quiet=False,
-        expected_stem=None,
     )
 
 
@@ -2412,39 +2337,6 @@ def _reason(exc: Exception) -> str:
     message = str(exc).strip()
     kind = type(exc).__name__
     return f"{kind}: {message}" if message else kind
-
-
-def _discover_documents(data_root: Path) -> list[tuple[Path, tuple[str, ...]]]:
-    """Every fitdocs workout document under ``workouts/`` with its ``sources`` history.
-
-    Returns ``(path, sources)`` pairs sorted by path for a deterministic
-    regeneration order (Req 4.1). Uses the same read-only frontmatter scan as
-    :func:`find_document`: non-fitdocs pages and garbled ``.md`` files (missing or
-    unparseable frontmatter, not ``type: workout``) are skipped safely, and a
-    missing ``workouts/`` directory yields ``[]``.
-
-    A ``workouts/*.md`` symlink is never followed (wiki-contract Req 7.5, 7.6):
-    :func:`~fitdocs.docio.read_frontmatter` refuses it, so ``frontmatter`` is
-    ``None`` for that path here and it is skipped exactly like any other
-    unreadable file. Its sha history can therefore never be read, so its
-    archived source (if any) is invisible to the "which archives are
-    referenced" accounting in :func:`regen` and is planned as an unreferenced
-    file by :func:`_run_planned` -- so it can seed a *second*, separate
-    document -- unless nothing else references it either. This is not left
-    silent (task 7.2, F2) -- but the warning for it is not this function's concern: see
-    :func:`_scan_symlinked_documents`, which :func:`regen` runs once per run
-    instead of relying on this per-document scan to happen to encounter it.
-    """
-    workouts_dir = data_root / WORKOUTS_DIR
-    if not workouts_dir.is_dir():
-        return []
-    documents: list[tuple[Path, tuple[str, ...]]] = []
-    for path in sorted(workouts_dir.glob("*.md")):
-        frontmatter = _read_frontmatter(path)
-        if frontmatter is None or not is_workout_document(frontmatter):
-            continue
-        documents.append((path, source_refs(frontmatter)))
-    return documents
 
 
 def _resolvable_source_archive(

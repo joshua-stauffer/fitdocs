@@ -188,7 +188,7 @@ def _build_ctx(
 ) -> DocContext:
     """Build a :class:`DocContext` the way the sync per-file pipeline does.
 
-    Mirrors ``sync._process_file``: parse the bytes, compute metrics against the
+    Mirrors ``sync._page_task``: parse the bytes, compute metrics against the
     (pinned) athlete inputs, derive the stable activity uid and a realistic
     date-prefixed document stem from the pinned timezone (with a
     never-collides predicate), and assemble the single archive source ref. The

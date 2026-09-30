@@ -456,7 +456,8 @@ content hash, so the order of a set of files does not depend on the order they
 arrived in. The vocabulary, the default and the validation of the setting are
 documented under
 [`[identity]`: source precedence](configuration.md#identity-source-precedence).
-A change to it takes effect on the next `fitdocs regen`.
+A change to it applies to every page on the next `fitdocs regen`, and to the
+pages a `sync` adds files to.
 
 ### What a page records about its base
 
@@ -601,8 +602,11 @@ contract:
   user-owned region links is kept), and the run warns with the previous and
   new paths. Links to the previous filename, in other pages or in your own
   notes, are **not** updated by fitdocs. A page whose base does not change
-  keeps its filename, including one you chose. A file that cannot be placed on
-  one page is archived and held rather than added to a page.
+  keeps its filename, including one you chose, except that a page fitdocs
+  wrote under a collision-suffixed name `<name>-<8 characters>.md` is moved to
+  `<name>.md` once that name is free (with a rename warning). A file that
+  cannot be placed on one page is archived and held rather than added to a
+  page.
 - **`sync --force`** — re-processes every discovered file even when its
   source is already archived, but forced re-processing does **not** bypass
   the preserved-region or user-owned-key guarantee: `notes`, `workout`, and

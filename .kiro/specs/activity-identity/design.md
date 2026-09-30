@@ -1485,7 +1485,7 @@ complete).
   anything worth keeping out of the other's notes first), delete the other,
   and run `fitdocs regen`; fitdocs never merges pages or picks one"). A
   `HoldRecordError` is one finding with `subject` = `.fitdocs/held.toml`
-  and remedy "delete it and run `fitdocs regen`, which rebuilds it" (Req 8.4).
+  and remedy "run `fitdocs regen`, which rebuilds it" (Req 8.4).
 - `FindingKind.ORPHANED_SOURCE = "orphaned_source"`: one per
   `fit-archive/<sha>.fit` (hex stem) that no readable workout page lists and no
   hold names; remedy "run `fitdocs regen` to render it, or delete it if its page

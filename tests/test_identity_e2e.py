@@ -2574,6 +2574,90 @@ def test_a_precedence_change_re_bases_and_renames_at_regeneration(
     assert len(_rename_warnings(moved)) == 1
 
 
+def test_two_pages_recording_one_session_uuid_are_each_rebuilt_from_their_own_list(
+    tmp_path: Path,
+) -> None:
+    """Req 4.9, 7.2: regeneration takes each scanned page as it is, so a
+    session UUID two pages record never routes one page's files onto the other.
+
+    Fixture: two pages of one UUID (the pair's two exports), each listing one
+    file, the second a copy of the other's page under a name that sorts later
+    and holding a wrong generated value. Mutation: match each page by its
+    session UUID and last source instead of by its own record (the later page
+    is never rebuilt and keeps its wrong value).
+    """
+    older, newer = fx.healthfit_reexport_pair()
+    root_a, root_b = tmp_path / "a", tmp_path / "b"
+    root_a.mkdir()
+    root_b.mkdir()
+    _sync_one(root_a, tmp_path / "wa", older)
+    _sync_one(root_b, tmp_path / "wb", newer)
+    first = _only_page(root_a)
+    second = root_a / WORKOUTS_DIR / f"zz-{_only_page(root_b).name}"
+    text = _only_page(root_b).read_text(encoding="utf-8")
+    assert f"source_elapsed_s: {newer.elapsed_s}" in text  # the line to falsify
+    second.write_text(
+        text.replace(
+            f"source_elapsed_s: {newer.elapsed_s}", "source_elapsed_s: 1.0", 1
+        ),
+        encoding="utf-8",
+    )
+    archive_path(root_a, _sha(newer.data)).write_bytes(newer.data)
+    assert _frontmatter(first)["uuid"] == _frontmatter(second)["uuid"]  # staged
+    assert _frontmatter(second)["source_elapsed_s"] == 1.0
+    names = [first.name, second.name]
+
+    report = _regen(root_a)
+
+    assert report.failures == ()
+    assert [p.name for p in _pages(root_a)] == sorted(names)
+    assert _sources(first) == [_ref(older)]
+    assert _sources(second) == [_ref(newer)]
+    assert _frontmatter(second)["source_elapsed_s"] == newer.elapsed_s
+    assert _frontmatter(first)["source_elapsed_s"] == older.elapsed_s
+    assert _rename_warnings(report) == []
+    _code, output = _check(root_a)
+    assert output.count("the same session as") == 2, output  # both pages report it
+    assert "evidence: uuid" in output, output
+
+
+def test_user_owned_frontmatter_keys_survive_a_base_change_rename(
+    tmp_path: Path,
+) -> None:
+    """Req 6.1, 6.2: a page renamed because its base changed carries its
+    user-owned frontmatter keys onto the new name.
+
+    The rename really happens (the page name and the base change). Mutation:
+    carry no user-owned lines when the page is renamed.
+    """
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    shifted, original = fx.healthfit_shifted(), fx.garmin_original()
+    _sync_one(data_root, tmp_path, shifted)
+    _archive(data_root, original)
+    page = _only_page(data_root)
+    _set_sources(page, [_ref(shifted), _ref(original)])
+    phone_first = resolve_precedence([PrecedenceEntry(SourceKind.PHONE_COPY)])
+    assert _regen(data_root, phone_first).failures == ()  # the copy is the base
+    assert _only_page(data_root) == page
+    tag = "effort: race\neffort_distance_m: 42195\neffort_time_s: 10692\n"
+    text = page.read_text(encoding="utf-8")
+    page.write_text(text.replace("\n---\n", f"\n{tag}---\n", 1), encoding="utf-8")
+    assert _frontmatter(page)["effort"] == "race"  # staged
+
+    report = _regen(data_root)
+
+    assert report.failures == ()
+    moved = _only_page(data_root)
+    assert moved.name != page.name  # the rename happened
+    assert len(_rename_warnings(report)) == 1
+    front = _frontmatter(moved)
+    assert front["source_kind"] == "original"
+    assert front["effort"] == "race"
+    assert front["effort_distance_m"] == 42195
+    assert front["effort_time_s"] == 10692
+
+
 def test_unreferenced_files_are_planned_against_the_rebuilt_pages(
     tmp_path: Path,
 ) -> None:

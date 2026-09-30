@@ -6,7 +6,7 @@ the filesystem (its own module docstring states this as an invariant every
 module in the package may rely on), so *something* above it has to actually
 open the file. Before this module existed, that "something" was written out
 **twice**, byte-for-byte identically, in :mod:`fitdocs.sync` (behind
-:func:`~fitdocs.sync.find_document` and :func:`~fitdocs.sync._discover_documents`)
+:func:`~fitdocs.sync.find_document` and a per-regeneration document discovery)
 and in :mod:`fitdocs.load.engine` (behind
 :func:`~fitdocs.load.engine._discover_workout_docs`) -- and a review round
 caught that the second copy had silently fallen behind the first, missing the
@@ -30,7 +30,7 @@ leaving the far-end file untouched but destroying the user's symlink in place
 of leaving it alone. Neither outcome is acceptable, and refusing the symlink
 here, at the one read every discovery path shares, prevents both: it is never
 matched by :func:`~fitdocs.sync.find_document`, never enumerated by
-:func:`~fitdocs.sync._discover_documents`, and never scanned by
+:func:`~fitdocs.identity.pages.scan_pages`, and never scanned by
 :func:`~fitdocs.load.engine.apply_load`, so neither write site downstream ever
 gets the chance to reach it. (Nothing about this changes if a future writer
 uses a different write primitive: the point of refusing at the read is that

@@ -227,9 +227,7 @@ _REMEDY_ONE_WORKOUT: str = (
     "keeping out of the other's notes first), delete the other, and run "
     "`fitdocs regen`; fitdocs never merges pages or picks one"
 )
-_REMEDY_REBUILD_HOLD_RECORD: str = (
-    "delete it and run `fitdocs regen`, which rebuilds it"
-)
+_REMEDY_REBUILD_HOLD_RECORD: str = "run `fitdocs regen`, which rebuilds it"
 _REMEDY_RENDER_ORPHAN: str = (
     "run `fitdocs regen` to render it, or delete it if its page was removed on purpose"
 )

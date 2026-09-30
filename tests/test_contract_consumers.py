@@ -178,7 +178,6 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
     "fitdocs.sync": (
         "document_uuid",
         "effort_tag",
-        "is_workout_document",
         "parse_frontmatter",
         "sha_of_ref",
         "source_refs",

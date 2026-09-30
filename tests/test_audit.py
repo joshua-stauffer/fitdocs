@@ -765,7 +765,7 @@ _REMEDY_ONE_WORKOUT = (
 _REMEDY_ORPHAN = (
     "run `fitdocs regen` to render it, or delete it if its page was removed on purpose"
 )
-_REMEDY_HOLD_RECORD = "delete it and run `fitdocs regen`, which rebuilds it"
+_REMEDY_HOLD_RECORD = "run `fitdocs regen`, which rebuilds it"
 
 
 def _page(root: Path, name: str, *, sources: list[str], extra: str = "") -> str:

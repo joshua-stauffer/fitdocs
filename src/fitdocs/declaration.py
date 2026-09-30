@@ -189,7 +189,7 @@ _USER_KEYS: Final[str] = (
     "writes them and carries them unchanged through regeneration. The rest "
     "of the frontmatter block is tool-owned and rebuilt on regeneration."
 )
-# CLAIM ANCHOR: `contract.USER_KEYS`; `sync._process_file`'s carry of the
+# CLAIM ANCHOR: `contract.USER_KEYS`; `sync._page_task`'s carry of the
 # existing document's user-owned keys forward; `render.frontmatter.
 # build_frontmatter`'s append of the carried keys after the managed ones; the
 # unmanaged-key drop for everything else (`contract` docstring around
@@ -212,7 +212,7 @@ _REDERIVABILITY_DOCS: Final[str] = (
 # CLAIM ANCHOR: `sync.regen(data_root, *, athlete, tz, tiles)` (sync.py:281-287)
 # -- regeneration depends on all four inputs, not the archive and athlete
 # profile alone; `tz` and `tiles` are required parameters, not optional ones.
-# The second clause is anchored on `sync._process_file` (sync.py:554-559):
+# The second clause is anchored on `sync._page_task`:
 # `merge_regions(rendered.markdown, existing_text)` runs ONLY when
 # `find_document` matches, so region content is COPIED from the existing
 # document and is never derived from the four inputs above. Delete the
@@ -230,18 +230,23 @@ _REDERIVABILITY_DOCS: Final[str] = (
 # form would be false of `load` (Req 3.2).
 
 _RENAMES: Final[str] = (
-    "A document may be renamed when a file that outranks the one it is "
-    "rendered from arrives for the same workout; links to its previous "
-    "filename are not updated."
+    "A document may be renamed when the file it is rendered from changes "
+    "(for example, a file that outranks it arrives, or the precedence "
+    "changes at regeneration) or when the unsuffixed name it was written "
+    "in place of becomes free; links to its previous filename are not "
+    "updated."
 )
-# CLAIM ANCHOR: activity-identity Req 6.2-6.4 -- a page whose base changes is
+# CLAIM ANCHOR: activity-identity Req 6.2-6.4, 6.6 -- a page whose base changes is
 # re-rendered from the new base and, when the filename computed from that base
 # differs from its current one, moved to it (the claim says "may" because the
 # filename computed from the new base can equal the current one, Req 6.2); links
 # in other documents to the previous filename are not rewritten because no
 # fitdocs code rewrites links in other documents. "Outranks" is the total order of
 # `identity.roles.rank_key` under the configured source precedence. Workouts
-# only: no other directory's declaration selects this fragment.
+# only: no other directory's declaration selects this fragment. The second
+# trigger is the settle pass (`sync._settle_pass`, Req 6.6): a page fitdocs
+# wrote under a collision-suffixed name `<name>-<8 characters>.md` is moved to
+# `<name>.md` once that name is free.
 
 _IMMUTABILITY: Final[str] = (
     "These files are immutable inputs: they must not be edited, renamed, or "
@@ -263,7 +268,7 @@ _NEVER_ADD_MARKER: Final[str] = (
 )
 # CLAIM ANCHOR: `docmerge.merge_regions` (docmerge.py:130-149) raises
 # `RegionError` when `existing` holds a region id `fresh` lacks; that call
-# happens in `sync._process_file` (sync.py:554-559) BEFORE
+# happens in `sync._page_task` BEFORE
 # `_write_outputs` -- so nothing is written for that document, and removing
 # the stray marker (leaving nothing for `merge_regions` to object to) fully
 # restores regeneration on the next run. "Permanently break" would be false;

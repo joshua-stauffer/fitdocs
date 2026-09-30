@@ -123,7 +123,7 @@ from fitdocs.audit import AuditReport, audit
 from fitdocs.benchmarks import BenchmarkKind
 from fitdocs.config import DataRootError, resolve_data_root
 from fitdocs.history.engine import HistoryReport, run_history
-from fitdocs.identity.holds import HoldRecordError
+from fitdocs.identity.holds import HoldRecordError, load_holds
 from fitdocs.identity.settings import IdentitySettings, load_identity_settings
 from fitdocs.inbox import (
     InboxNote,
@@ -355,8 +355,15 @@ def sync_command(
     # exits 2 here, before any write) -- same position as the explicit-source
     # path (cross-spec landing order: plugin-api's edit lands first).
     plugin_report = _plugin_report(data_root)
-    inbox_settings, inbox_paths, quarantine, tiles = _inbox_preflight(data_root)
+    # The [identity] table and the hold record are validated before the inbox
+    # pre-flight, which creates the inbox (and processed) directory: a
+    # malformed table or a damaged record writes nothing (identity Req 2.7).
     identity = _identity_settings(data_root)
+    try:
+        load_holds(data_root)
+    except HoldRecordError as exc:
+        _hold_record_error(exc)
+    inbox_settings, inbox_paths, quarantine, tiles = _inbox_preflight(data_root)
     try:
         drain_report = drain(
             inbox_paths.inbox,
@@ -418,7 +425,9 @@ def _inbox_preflight(
     message and exit 2. Every check that can fail runs before the inbox (and,
     under the move disposition, the processed-files destination) is created,
     so a configuration error -- including a malformed quarantine record --
-    writes nothing (inbox Req 1.4, 1.6, 5.6, 7.2).
+    writes nothing (inbox Req 1.4, 1.6, 5.6, 7.2). The ``[identity]`` table
+    and the hold record are not this helper's: :func:`sync_command` validates
+    both before calling it, because it is the step that creates directories.
     """
     try:
         document = load_settings_document(data_root)

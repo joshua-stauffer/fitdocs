@@ -171,9 +171,14 @@ def test_compatibility_enumerations_name_the_identity_table() -> None:
 
 
 def test_upgrading_states_regenerate_before_the_first_pull() -> None:
-    section = _section(_read(_UPGRADING), "### Before the first connector pull")
+    section = _section(
+        _read(_UPGRADING), "### Before syncing a file of a workout you already have"
+    )
     prose = _paragraph(section, "Pages written before")
-    assert "run `fitdocs regen` before the first connector pull" in prose
+    assert (
+        "run `fitdocs regen` before syncing a file of a workout your wiki already has "
+        "from another source"
+    ) in prose
     orphan = _paragraph(section, "The first `fitdocs check`")
     assert '"orphaned"' in orphan
     assert "Run `fitdocs regen` to render it" in orphan

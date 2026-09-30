@@ -260,6 +260,37 @@ def test_damaged_hold_record_exits_2_naming_the_file_and_regen(
     assert "fitdocs regen" in result.output
 
 
+_MOVE_INBOX = (
+    '[inbox]\nsettle_seconds = 0\ndisposition = "move"\nprocessed_dir = "done"\n'
+)
+
+
+@pytest.mark.parametrize("fault", ["identity_table", "damaged_holds"])
+@pytest.mark.parametrize("disposition", ["default", "move"])
+def test_drain_config_fault_creates_no_inbox_or_processed_directory(
+    tmp_path: Path, fault: str, disposition: str
+) -> None:
+    """The drain has no inbox yet, so the inbox pre-flight would create one."""
+    data_root = tmp_path / "data"
+    _settings(data_root, _MALFORMED if fault == "identity_table" else None)
+    if disposition == "move":
+        text = (data_root / "fitdocs.toml").read_text(encoding="utf-8")
+        text = text.replace("[inbox]\nsettle_seconds = 0\n", _MOVE_INBOX)
+        assert 'processed_dir = "done"' in text
+        (data_root / "fitdocs.toml").write_text(text, encoding="utf-8")
+    if fault == "damaged_holds":
+        _damage_holds(data_root)
+    before = _snapshot(data_root)
+    assert not (data_root / "inbox").exists()  # the precondition
+
+    result = runner.invoke(app, ["sync", "--out", str(data_root)])
+
+    assert result.exit_code == 2, result.output
+    assert _snapshot(data_root) == before
+    assert not (data_root / "inbox").exists()
+    assert not (data_root / "done").exists()
+
+
 def test_regen_succeeds_after_the_damaged_hold_record_failed_sync(
     tmp_path: Path,
 ) -> None:
