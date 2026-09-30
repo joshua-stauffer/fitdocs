@@ -1647,6 +1647,7 @@ complete).
   the one it is rendered from arrives for the same workout; links to its
   previous filename are not updated." (no quantifier word;
   `tests/test_declaration.py::test_no_declaration_quantifies_over_documents`).
+- *Implementation note (2026-09-30):* the shipped declaration says a document "may be renamed when" a file that outranks its base arrives, where the sentence above says "is renamed when" (Req 6.2, 6.3; accepted in the 6.2 review).
 - Archive declaration's immutability sentence becomes "... while a document
   references them or fitdocs holds them for a decision (`fitdocs check` lists
   held files)."

@@ -103,6 +103,16 @@ re-syncing the same exports never duplicates a workout.
 5. The fitdocs CLI shall never modify an archived source file after it is written.
 6. When a discovered file records the same stable session identifier as an existing document but its bytes differ (a re-export of the same activity), the fitdocs CLI shall update that document in place — preserving user-authored regions per Requirement 10 — and archive the new source, rather than creating a duplicate document.
 
+> **Note (2026-09-30), recorded by `activity-identity`:** a page may now be
+> rendered from one of several archived files of the same workout, listed in
+> its `sources` with the **base** last. Criterion 4's "the archived source
+> file it was rendered from" is therefore the base -- the last entry of
+> `sources`. Criterion 6's update-in-place on a recorded session identifier is
+> generalized by `activity-identity`'s Requirements 3 and 4, which decide by a
+> stated rule whether a file is the same session as an existing page, and hold
+> a file that cannot be placed on one page. No criterion here is renumbered or
+> reworded.
+
 ### Requirement 4: Idempotent and Deterministic Rendering
 **Objective:** As a user re-running sync freely, I want identical inputs to
 produce identical outputs, so that re-runs are safe, diffs are meaningful, and

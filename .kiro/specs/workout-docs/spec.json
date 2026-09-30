@@ -1,7 +1,7 @@
 {
   "feature_name": "workout-docs",
   "created_at": "2026-07-14T22:41:40Z",
-  "updated_at": "2026-07-14T23:52:08Z",
+  "updated_at": "2026-09-30T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -18,5 +18,13 @@
       "approved": true
     }
   },
-  "ready_for_implementation": true
+  "ready_for_implementation": true,
+  "amendments": [
+    {
+      "date": "2026-09-30",
+      "requirement": "3.4, 3.6 (note only) -- recorded by the activity-identity spec",
+      "reason": "activity-identity spec task 6.3, its part of the roadmap's Phase 8 Existing Spec Update for workout-docs: a page's provenance (3.4) is its base, the last entry of sources, and 3.6's same-session update is generalized by activity-identity Requirements 3 and 4.",
+      "also": "requirements.md gains a note under Requirement 3. No criterion renumbered or reworded."
+    }
+  ]
 }
