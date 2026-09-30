@@ -445,6 +445,10 @@ def test_verify_and_pull_ops_missing_reports_verify_first() -> None:
         pytest.param("a" * 64, True, id="64-chars-accepted"),
         pytest.param("a" * 65, False, id="65-chars-rejected"),
         pytest.param("-abc", False, id="leading-hyphen-rejected"),
+        # `.match` anchors only the start; `$` matches immediately before a
+        # trailing "\n" too, so "a\n" would wrongly pass a `.match`-based
+        # check. `.fullmatch` closes that gap.
+        pytest.param("a\n", False, id="trailing-newline-rejected"),
     ],
 )
 def test_connector_id_length_and_leading_character_boundaries(
@@ -465,6 +469,8 @@ def test_connector_id_length_and_leading_character_boundaries(
         pytest.param("_key", False, id="leading-underscore-rejected"),
         pytest.param("a" * 64, True, id="64-chars-accepted"),
         pytest.param("a" * 65, False, id="65-chars-rejected"),
+        # Same `.match`-vs-`$` trap as the connector id pattern.
+        pytest.param("a\n", False, id="trailing-newline-rejected"),
     ],
 )
 def test_credential_field_name_boundaries(
