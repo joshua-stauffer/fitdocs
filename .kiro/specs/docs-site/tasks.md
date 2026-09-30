@@ -907,3 +907,4 @@
     - escaped destinations;
     - reference definitions in containers;
     - relative llms.txt links refused.
+- 6.2 depends on 6.1 (undeclared in the plan): the CONTRIBUTING link to docs/website.md is checked by tests/test_contributing_doc.py::test_every_relative_link_in_contributing_doc_resolves. Run 6.2 after 6.1. CHANGELOG allows only https:// or # link targets, so the Homepage bullet names the URL as text.
