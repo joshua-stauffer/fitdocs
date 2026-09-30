@@ -498,7 +498,7 @@
   - Done: full suite green, `tests/test_changelog.py` included
   - _Requirements: 9.1, 9.2, 9.4, 9.5_
 
-- [ ] 5.2 Prove that regeneration brings a pre-feature run page current
+- [x] 5.2 Prove that regeneration brings a pre-feature run page current
   - In `tests/test_running_dynamics_e2e.py`: sync the native-dynamics fixture;
     age its page by removing the Running Dynamics section and its image link
     and setting `doc_version` to `_PRE_RUNNING_DYNAMICS_DOC_VERSION`; write text
@@ -583,3 +583,4 @@
 - 4.2: 6.5 is bounded by `test_record_developer_fields_change_nothing_in_the_rendered_page` (render with and without the two Stryd environmental record channels -> byte-identical markdown and assets); word/label absence pins alone let chips and in-row notes through for two rounds. Timer and elapsed are both 43 s in the Stryd fixture, so the swap is pinned only by older unit tests (cited in the test docstring).
 - 5.1 (from activity-identity's log WARN): `tests/load/test_render.py::test_payload_version_paired_with_doc_version` pins `(LOAD_PAYLOAD_VERSION, DOC_VERSION)` -- a DOC_VERSION literal site missing from 5.1's list; move it too.
 - 5.1: DOC_VERSION advanced 5 -> 6 (main's value 5 at 1c55e18); `_PRE_RUNNING_DYNAMICS_DOC_VERSION = 5`. Sites moved: contract.py, test_cli_check.py:196,198, test_frontmatter.py:44,101, test_sources.py:2270 (CONSTANT_REGISTRY_ASOF_DOC_VERSION), tests/load/test_render.py:169 (pair (2, 6)); 11 goldens, one doc_version line each. Final-rebase re-pin check: pending at merge (activity-identity's branch also moves 5 -> 6).
+- 5.2: aging deletes the first sync's `-dynamics.svg` too -- otherwise a regen that skips writing assets for an existing document (`sync._write_outputs`) survived the full suite (reviewer O7). Round 3's docstring fix was applied by the controller and re-reviewed.
