@@ -209,6 +209,45 @@ The non-numeric passthrough (a malformed declaration on a real value, e.g. a
 string-typed field) is unchanged in behavior but is now stated in Criterion
 14.2 itself rather than only in `summary.py`'s docstrings.
 
+## Amendment 3 (2026-09-30): record-level developer fields and running dynamics, landed by running-dynamics
+
+Phase 8's Existing Spec Updates name an update to this library (record-level
+developer fields and running dynamics); `running-dynamics` lands that part of it.
+Today the library reads developer-defined fields only from the session message
+(Requirement 14), carries ten per-sample channels (Requirement 3), and treats
+every recorded zero as a genuine measurement (Requirement 12.3). Three gaps
+follow. A runner's running-form data (ground contact time and its balance,
+vertical oscillation, vertical ratio, step length from native fields; form
+power, air power, leg spring stiffness, impact and three balance channels from
+a footpod's developer fields) never reaches the activity model. A developer
+field recorded on every sample is dropped. And a device that writes a zero
+where it has no reading (a footpod at a pause or at its first sample; a
+heart-rate sensor with no beat) is indistinguishable, under 12.3, from a true
+zero, so the zero becomes data.
+
+This amendment appends criteria only. **No existing criterion is renumbered,
+reworded or withdrawn.** Requirement 3 gains 3.7-3.10 (the dynamics channels,
+the published channel set, the footpod names, the placeholder and gate rules).
+Requirement 12 gains 12.4, which states that a zero where zero is not a
+physically possible measurement is a placeholder and not the "true zero" of
+12.3; 12.3 itself is unchanged and still governs power, cadence, speed,
+distance, altitude and temperature. Requirement 14 gains 14.5-14.11:
+record-level developer fields with their provenance, the invalid-value,
+non-finite and 32-bit float rules shared with the session-level reader, the
+declared scale and offset at both levels, the native-slot rule, and the
+duplicate rules. Requirement 14.1-14.4 keep their session-level scope; 14.5
+onward add the record level beside them. The session-level reader's outputs
+change only where a value is an invalid-value sentinel or a 32-bit float
+(14.7, 14.8); every other session value is exposed exactly as before.
+
+Nothing here infers a convention a file does not declare: the running-dynamics
+channels are recognized by exact declared name (3.8), and a scale, unit or
+offset is applied only where the file's own description declares it
+(14.2, 14.9).
+
+The implementing spec is `.kiro/specs/running-dynamics/`; the tests pinning
+each new criterion are listed in this spec's `spec.json` `amendments` array.
+
 ## Introduction
 
 fit-ingest is the foundation layer of fitdocs: a pure library that decodes a
@@ -307,6 +346,10 @@ plotting need no FIT-message handling.
 4. When position coordinates are recorded in semicircles, the fit-ingest library shall convert them to decimal degrees.
 5. The fit-ingest library shall express speed in meters per second, distance in meters, altitude in meters, and temperature in degrees Celsius after scale/offset normalization.
 6. The fit-ingest library shall preserve raw sample values in the channel arrays without smoothing or resampling; smoothing is a concern of individual metric formulas and downstream renderers.
+7. _(added by Amendment 3)_ When record messages carry the native running-dynamics fields step length, vertical oscillation, stance time, stance time balance or vertical ratio, the fit-ingest library shall extract each as a per-sample channel aligned with, and of equal length to, the other channels: step length and vertical oscillation in millimetres, stance time in milliseconds, and stance time balance and vertical ratio in percent. A value absent at a sample shall be `None` at that index; an activity whose records carry no running-dynamics data shall hold `None` in every running-dynamics channel at every sample.
+8. _(added by Amendment 3)_ When record-level developer fields are named exactly `Form Power`, `Air Power`, `Leg Spring Stiffness`, `Impact`, `Leg Spring Stiffness Balance`, `Impact Loading Rate Balance` or `Vertical Oscillation Balance`, the fit-ingest library shall extract them as the running-dynamics channels form power and air power (watts), leg spring stiffness (kilonewtons per metre), impact (body weights), and leg spring stiffness balance, impact loading rate balance and vertical oscillation balance (percent), whichever application wrote the file, taking each value from the decoded developer field with no conversion beyond the scale and offset the field's own description declares. A developer field with any other name (for example `Power`, `Speed`, `Distance` or a temperature) shall fill no running-dynamics channel and no native channel.
+9. _(added by Amendment 3)_ The fit-ingest activity model shall publish the set of running-dynamics channel names, and each named channel shall be a member of the same per-sample channel set as heart rate, power and speed, so that a consumer can enumerate every channel without naming each one.
+10. _(added by Amendment 3)_ The fit-ingest library shall treat a recorded zero as not recorded (`None`) at that sample for heart rate, and for stance time, vertical oscillation, vertical ratio, step length, leg spring stiffness, impact and form power. While a sample's stance time, vertical oscillation, leg spring stiffness or impact is `None`, the balance channel paired with it (stance time balance, vertical oscillation balance, leg spring stiffness balance, impact loading rate balance respectively) shall be `None` at that sample, and while form power is `None`, air power shall be `None`; otherwise the recorded balance or air power, including a recorded 0, shall be kept. These rules apply identically whichever application wrote the file.
 
 ### Requirement 4: Session, Lap, and Device Extraction
 **Objective:** As a docs renderer, I want session totals, laps mapped onto
@@ -419,6 +462,7 @@ value.
 1. If the required inputs for any derived metric are absent or insufficient, the fit-ingest library shall return `None` for that metric rather than raising an error or substituting a fabricated value.
 2. When a channel is entirely absent from an activity, the fit-ingest library shall report metrics depending on that channel as `None` while computing all independent metrics normally.
 3. When a device records a true zero value (for example, zero power while coasting), the fit-ingest library shall preserve the zero as recorded data; `None` shall be reserved exclusively for values the device did not record.
+4. _(added by Amendment 3)_ A zero recorded for a channel whose physical measurement cannot be zero (heart rate, and the running-dynamics channels named in 3.10) is a placeholder the device wrote in place of a reading, not a true zero in the sense of 12.3: the fit-ingest library shall report it as `None`, and every metric computed from that channel shall be computed over the recorded samples only. Criterion 12.3 continues to govern power, cadence, speed, distance, altitude and temperature, whose recorded zeros remain data.
 
 ### Requirement 13: Library Purity and Determinism
 **Objective:** As a fitdocs developer, I want ingestion to be a pure,
@@ -441,6 +485,13 @@ or an estimated RPE reach consumers without fit-ingest interpreting them.
 2. _(revised by Amendment 2, corrected by its post-review revision)_ The fit-ingest library shall decode each developer-field value by applying any scale and/or offset that field's own `field_description` declares — the FIT-protocol formula `value / scale - offset`, defaulting an UNDECLARED term to its identity (scale 1, offset 0) — preserving array values element-wise (for example, a 16-byte identifier stays 16 entries). A DECLARED `scale` of `0` is unrepresentable (division by zero, not an identity): the fit-ingest library shall OMIT that field entirely from the developer-field mapping rather than fabricate a value or emit the raw undecoded one — the maintainer's ruling (2026-07-27, see the amendment record), pinned by a test. A non-numeric raw value under a declared scale (for example a string-typed field) shall pass through UNSCALED — the malformed part is the declaration, not the value, which is real data worth keeping. The fit-ingest library shall not infer any scale, offset, or other convention the file does not itself declare, derive a value, or rename a field.
 3. If an activity contains no developer field descriptions, or the session message records none of the described fields, the fit-ingest library shall represent the developer-field mapping as empty and shall not treat this as an error.
 4. The fit-ingest library shall include only fields that are both described in a field description message and recorded on the session message, and shall never fabricate or default a developer-field entry.
+5. _(added by Amendment 3)_ When a file's record messages carry developer fields that the file describes, the fit-ingest library shall expose each on the activity model under its described name as one value per sample, index-aligned with the sample channels, pairing each recorded value with the description it was recorded against (never with a different description whose field definition number equals the position of the recorded description in the file). An activity with no such field shall expose an empty collection, and this shall not be an error.
+6. _(added by Amendment 3)_ The fit-ingest library shall expose with each record-level developer field its declared units, its developer data index, its field definition number, and the application identifier of its developer, each `None` where the file does not record it.
+7. _(added by Amendment 3)_ If a recorded developer value, at the record level or the session level, equals the invalid value of its declared base type or is a non-finite floating-point value, the fit-ingest library shall treat it as not recorded (`None` per sample at the record level; omitted at the session level); if every element of a recorded developer array is so treated, the array shall be treated as not recorded, and an array with at least one valid element shall pass through element for element. A described field that is recorded on no sample, or whose every value is treated as not recorded, shall be omitted.
+8. _(added by Amendment 3)_ When a developer field's base type is a 32-bit float, the fit-ingest library shall express each value, at the record level and the session level, as the shortest decimal number that denotes the same 32-bit value.
+9. _(added by Amendment 3)_ When a field description declares a scale and/or an offset, the fit-ingest library shall decode each record-level value with the formula and defaulting of 14.2, treating a declared scale of 0 by omitting the field; the fit-ingest library shall not infer a scale, unit or other convention that a description does not declare.
+10. _(added by Amendment 3)_ The fit-ingest library shall ignore any native message or native field number that a field description carries: a developer field shall never fill, replace or override a native channel.
+11. _(added by Amendment 3)_ If a file describes the same developer data index and field definition number twice, the fit-ingest library shall decode that field against the first description and shall not expose the later description's name; if two described fields that are both recorded share a name, the library shall expose the one described last in the file under that name and omit the other.
 
 ### Requirement 15: Primary-Source Provenance for Computed Constants
 _(added by Amendment 1)_

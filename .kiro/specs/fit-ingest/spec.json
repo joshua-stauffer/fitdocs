@@ -1,7 +1,7 @@
 {
   "feature_name": "fit-ingest",
   "created_at": "2026-07-14T21:58:27Z",
-  "updated_at": "2026-07-30T20:30:00Z",
+  "updated_at": "2026-09-30T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -47,6 +47,104 @@
       "reason": "Amendment 1 shipped complete (68be52c, task 13.4) with the NP rolling-window start condition as its single value-moving change -- introduced by task 13.1 (142da42) -- but Req 8.4 never stated a start condition -- the design_revision note above already flagged this at drafting time ('this refines an underspecified criterion... queued at 2026-07-28-np-window-start-has-no-criterion.md, which notes closing it reopens requirements approval'), and the queue item's own timestamp is stale: it still reads 'Amendment 1 has not been implemented yet' and 'not urgent', both false once 68be52c merged. Separately, the same unconditional-direction falsehood ('dropping the partial windows raises NP') was found in FIVE places once swept for rather than fixed on sight in the one place first reported: tasks.md:262, design.md's PowerSeriesMetrics bullet (~1365), design.md's Testing Strategy SS13 NP fixture note (~1712), design.md's 'What actually moves a value' narrative (~1820), and research.md Decision D7's Trade-off bullet (~459). Task 13.4's own real-data pass (Implementation Notes, 2026-07-30) had already falsified the unconditional form: 53 of 54 activities with power rose, 1 (a hard opener) fell, because the direction depends on whether the dropped leading windows sit below or above the retained series.",
       "also": "Maintainer approved fast-tracking these corrections directly (no separate requirements-review cycle) since they record already-shipped, already-reviewed behavior rather than propose new behavior: criterion 8.9 states the complete-window start condition Req 8.4 always implied once maintainer-ruled, and every direction-claiming sentence found in tasks.md/design.md/research.md now agrees with the evidence tasks.md itself already carried (13.4's Implementation Notes) -- one exception, deliberately left alone: amendments[0].design_revision above still reads 'NP rises... UNCONDITIONAL', kept verbatim per this array's own stated convention that a dated historical entry is never rewritten, corrected instead by this new dated entry. The existing approvals.requirements.approved=true flag is left as-is -- the maintainer's fast-track authorization for this narrow addition IS the requirements-review event Amendment 1's 'design_revision reopens approvals.requirements.approved' note anticipated (it named the reopening as a maintainer decision, not a design-gate side effect, and this is that decision being made); it is documentation of shipped behavior via a fast-tracked narrow addition, not a fresh full-requirements review, and no criterion is renumbered or withdrawn. Both queue items (.kiro/queue/2026-07-28-np-window-start-has-no-criterion.md, .kiro/queue/2026-07-30-np-direction-claim-is-conditional.md) closed to .kiro/queue/closed/ with resolutions recorded -- closing reserved to the maintainer per .claude/skills/kiro-queue/SKILL.md, left in place for the maintainer's verification at merge rather than reverted, per instruction.",
       "revision": "2026-07-30, second round after independent review REJECTED the first (9004329): both fixtures' figures re-verified with exact Fraction arithmetic and criterion 8.9 itself confirmed well-formed, but seven further defects found IN THE CORRECTING COMMIT ITSELF. (1) research.md D7's Requirements-note bullet, 13 lines from the Trade-off bullet this same commit edited, still said the behavior 'has no acceptance criterion of its own' and pointed at the now-moved open queue path -- fixed, now names criterion 8.9 and the closed path. (2) Criterion 8.9 never reached design.md's traceability: no row named it, and three '8.4-8.8' ranges (component table, Service-Interface annotations, PowerSeriesMetrics Detail table) were not widened -- fixed, plus the requirements.md/design.md criterion count (98 -> 99) reconciled explicitly in this phase_note rather than left silently stale. (3) design.md's golden-file traceability row claimed NP/IF/VI/TSS/EF move on every regenerated golden from the window-start fix; every committed golden reports normalized_power_w: null and 142da42 touched no golden file -- fixed to state the migration surface is the unit-test exact-value assertion, matching tasks.md's own 13.1 note. (4) 'Both directions are pinned' overclaimed: only the rise fixture (test_normalized_power_complete_window_raises_np_over_partial_window) asserts its direction; the fall fixture (test_normalized_power_exact_value_pins_fourth_power_exponent) pins its complete-window value exactly and documents the partial-window value it replaces in a comment, without asserting that comparison -- fixed in prose (design.md, research.md, this entry) rather than by adding a test assertion, since tests/metrics/ is a concurrent session's choke point. (5) this entry itself said 'FOUR places' while naming five -- fixed to FIVE. (6) requirements.md:139 attributed task 13.1's SHA as 68be52c (that is task 13.4; 13.1 is 142da42) -- fixed. (7) the direction-qualified sentences left an unqualified universal underneath ('for every activity with power' / 'for any activity with... power') that a constant-power stream falsifies (fourth-power mean of one value equals itself under either algorithm) -- softened at design.md's Impact summary, MigrationGate behavior-trigger bullet, and 'What actually moves a value'. Also reconciled: this entry now states explicitly that the maintainer's fast-track IS the approvals.requirements.approved reopening decision, rather than leaving that document and the closed queue item's Resolution disagreeing about whether it was resolved. THIRD ROUND (2026-07-30, same day), independent review REJECTED the second (a4525b2) narrowly -- six of seven round-2 fixes plus the reviewer's own self-found tasks.md fix verified good, but round 2's Finding-1 fix ('whose power varies across the dropped leading windows -- a constant-power stream is the one exception') was ITSELF false in both directions: [200]x30+[400]x60 has NO variation across the dropped windows (all exactly 200.0) yet NP moves +30.29 W, so the condition is not necessary; [298.513142630879]x29+[350]x60+[150]x60 is plainly non-constant yet moves 0.00 W, so a constant stream is not the ONLY exception. FIXED at all three sites (design.md Impact summary ~184, MigrationGate Behavior trigger ~1583, 'What actually moves a value' ~1844) by using the formulation already correct three paragraphs away in PowerSeriesMetrics: movement is 'in whichever direction the dropped leading windows' mean fourth power differs from the retained series'', a constant-power stream named only as ONE INSTANCE of no movement, not its characterization. Also fixed: requirements.md:144-148 carried the identical present-tense self-invalidation as the round-2 research.md finding ('nothing in this document would fail' -- false at HEAD, since criterion 8.9 IS in that document and would fail) plus the same universal overclaim ('moving every athlete's normalized power') -- both corrected to past tense and to the conditional formulation. Also fixed: the 8.9 traceability row paraphrased the criterion into 8.4's territory ('reporting None below NP_MIN_SPAN_S', a different, only-coincidentally-equal record) rather than 8.9's own wording ('insufficient to complete one such window')."
+    },
+    {
+      "date": "2026-09-30",
+      "requirement": "3.7-3.10, 12.4 and 14.5-14.11 added (appended; no criterion renumbered or reworded)",
+      "reason": "Record-level developer fields and running dynamics (running-dynamics Requirements 1-5), landed as fit-ingest's part of the Phase 8 Existing Spec Update. Requirement 14 read developer fields from the session message only, Requirement 3 had ten channels, and 12.3 made every recorded zero data, so a footpod's per-sample form data, and the zeros a device writes where it has no reading, never became honest channels.",
+      "also": "Amendment 3 is the next free number on this branch; the sibling activity-identity spec adds its own fit-ingest amendment concurrently, and whichever lands second renumbers its amendment and criteria to the next free ones. No existing criterion is renumbered. 12.4 clarifies 12.3 for channels whose physical measurement cannot be zero and does not change 12.3 for power, cadence, speed, distance, altitude or temperature.",
+      "implementation": "src/fitdocs/ingest/developer.py, dynamics.py, records.py, summary.py; src/fitdocs/model.py (Samples dynamics channels, DYNAMICS_CHANNELS, Activity record-level developer fields). Tests are named per criterion in `tests`.",
+      "tests": {
+        "3.7": [
+          "tests/ingest/test_dynamics.py::test_an_absent_native_value_is_none_only_at_that_sample",
+          "tests/ingest/test_dynamics.py::test_records_with_no_dynamics_and_no_developer_give_all_none",
+          "tests/ingest/test_dynamics.py::test_the_native_dynamics_fixture_fills_its_three_channels_and_nothing_else",
+          "tests/ingest/test_dynamics.py::test_a_file_without_dynamics_has_every_dynamics_channel_none"
+        ],
+        "3.8": [
+          "tests/ingest/test_dynamics.py::test_the_exact_name_table_and_native_map",
+          "tests/ingest/test_dynamics.py::test_each_developer_channel_is_read_from_its_named_field_only",
+          "tests/ingest/test_dynamics.py::test_unrecognized_developer_names_fill_no_channel_and_stay_generic",
+          "tests/ingest/test_dynamics.py::test_developer_speed_and_distance_never_fill_the_native_channels",
+          "tests/ingest/test_dynamics.py::test_the_twelve_channels_do_not_depend_on_which_application_wrote_the_file",
+          "tests/ingest/test_dynamics.py::test_a_recognized_channel_with_a_declared_scale_holds_the_scaled_value"
+        ],
+        "3.9": [
+          "tests/test_model.py::test_dynamics_channels_are_the_twelve_names_in_design_order",
+          "tests/test_model.py::test_dynamics_channels_are_samples_fields_after_temperature_with_default",
+          "tests/test_model.py::test_empty_dynamics_channels_fill_to_none_per_sample"
+        ],
+        "3.10": [
+          "tests/ingest/test_dynamics.py::test_the_exact_gate_pairs_and_placeholder_set",
+          "tests/ingest/test_dynamics.py::test_a_zero_placeholder_alone_beside_non_zero_values_is_none",
+          "tests/ingest/test_dynamics.py::test_a_recorded_zero_of_a_gated_channel_is_kept_beside_its_gate",
+          "tests/ingest/test_dynamics.py::test_an_absent_gate_channel_gates_its_partner_only",
+          "tests/ingest/test_dynamics.py::test_a_placeholder_zero_gate_gates_a_non_zero_partner",
+          "tests/ingest/test_records.py::test_heart_rate_zero_is_not_recorded_and_one_is_kept",
+          "tests/ingest/test_records.py::test_stryd_fixture_heart_rate_placeholders_are_none_whoever_wrote_it",
+          "tests/ingest/test_dynamics.py::test_the_stryd_fixture_pins_placeholders_pause_sentinel_and_kept_zeros"
+        ],
+        "12.4": [
+          "tests/ingest/test_records.py::test_heart_rate_zero_is_none_in_a_file_without_developer_data",
+          "tests/ingest/test_records.py::test_every_other_recorded_zero_is_kept",
+          "tests/ingest/test_records.py::test_stryd_fixture_heart_rate_average_and_maximum_exclude_placeholders",
+          "tests/ingest/test_dynamics.py::test_only_zero_is_a_placeholder_a_negative_value_is_kept"
+        ],
+        "14.5": [
+          "tests/ingest/test_record_developer_fields.py::test_mapping_keys_are_exactly_the_eleven_record_level_names",
+          "tests/ingest/test_record_developer_fields.py::test_every_channel_has_one_value_per_sample",
+          "tests/ingest/test_record_developer_fields.py::test_values_equal_the_fixture_series_at_every_sample",
+          "tests/ingest/test_record_developer_fields.py::test_a_file_with_no_descriptions_yields_an_empty_read_only_mapping",
+          "tests/ingest/test_record_developer_fields.py::test_values_stay_aligned_with_samples_when_a_record_has_no_timestamp",
+          "tests/test_model.py::test_activity_without_record_developer_fields_has_empty_read_only_mapping"
+        ],
+        "14.6": [
+          "tests/ingest/test_record_developer_fields.py::test_provenance_is_carried_verbatim_from_the_description",
+          "tests/ingest/test_record_developer_fields.py::test_application_id_is_none_when_the_file_records_none",
+          "tests/ingest/test_record_developer_fields.py::test_an_absent_index_definition_number_and_units_stay_none",
+          "tests/ingest/test_record_developer_fields.py::test_application_id_is_per_developer_data_index",
+          "tests/test_model.py::test_developer_channel_is_a_frozen_dataclass_of_seven_fields"
+        ],
+        "14.7": [
+          "tests/ingest/test_developer.py::test_invalid_value_table_equals_the_sdk_for_each_integer_base_type",
+          "tests/ingest/test_developer.py::test_scalar_sentinel_is_not_recorded",
+          "tests/ingest/test_developer.py::test_non_finite_float_scalar_is_not_recorded",
+          "tests/ingest/test_developer.py::test_integer_array_of_only_sentinels_is_not_recorded",
+          "tests/ingest/test_developer.py::test_integer_array_with_one_valid_element_is_unchanged",
+          "tests/ingest/test_developer.py::test_float_array_of_only_non_finite_elements_is_not_recorded",
+          "tests/ingest/test_record_developer_fields.py::test_unrecorded_and_all_sentinel_fields_are_omitted",
+          "tests/ingest/test_record_developer_fields.py::test_a_partly_recorded_field_has_none_where_it_was_not_recorded",
+          "tests/ingest/test_summary.py::test_session_uint16_recorded_as_its_invalid_value_is_omitted",
+          "tests/ingest/test_summary.py::test_session_identifier_containing_255_comes_back_as_the_same_tuple"
+        ],
+        "14.8": [
+          "tests/ingest/test_developer.py::test_float32_two_decimal_value_becomes_its_shortest_decimal",
+          "tests/ingest/test_developer.py::test_float32_value_needing_nine_digits_keeps_all_nine",
+          "tests/ingest/test_developer.py::test_float64_value_is_not_rounded_to_float32_digits",
+          "tests/ingest/test_developer.py::test_float32_array_elements_are_each_rounded_to_their_shortest_decimal",
+          "tests/ingest/test_summary.py::test_session_float32_value_comes_back_as_its_shortest_decimal"
+        ],
+        "14.9": [
+          "tests/ingest/test_record_developer_fields.py::test_declared_scale_and_offset_decode_as_value_over_scale_minus_offset",
+          "tests/ingest/test_record_developer_fields.py::test_a_scale_zero_description_is_omitted_and_nothing_raises",
+          "tests/ingest/test_record_developer_fields.py::test_an_offset_only_description_counts_as_declared",
+          "tests/ingest/test_developer.py::test_declared_scale_and_offset_apply_to_the_rounded_float32_value",
+          "tests/ingest/test_developer.py::test_absent_or_unknown_base_type_passes_a_value_through"
+        ],
+        "14.10": [
+          "tests/ingest/test_developer.py::test_a_description_has_no_native_slot",
+          "tests/ingest/test_record_developer_fields.py::test_developer_fields_with_native_slots_fill_no_native_channel",
+          "tests/ingest/test_record_developer_fields.py::test_no_developer_field_fills_a_native_temperature",
+          "tests/ingest/test_record_developer_fields.py::test_native_speed_and_distance_are_the_native_values",
+          "tests/ingest/test_dynamics.py::test_developer_fields_with_native_names_never_fill_native_channels"
+        ],
+        "14.11": [
+          "tests/ingest/test_record_developer_fields.py::test_a_repeated_index_and_definition_number_decodes_against_the_first",
+          "tests/ingest/test_record_developer_fields.py::test_two_recorded_descriptions_sharing_a_name_expose_the_later_one",
+          "tests/ingest/test_record_developer_fields.py::test_a_later_same_named_description_with_no_values_leaves_the_earlier"
+        ]
+      },
+      "cross_spec": "running-dynamics owns the implementation and the tests named in `tests`. workout-docs Amendment 1 (the Running Dynamics section and chart) consumes the channels 3.7-3.10 publish and must land with this one. activity-identity adds its own fit-ingest amendment concurrently; whichever lands second renumbers to the next free numbers."
     }
   ]
 }

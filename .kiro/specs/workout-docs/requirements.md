@@ -17,6 +17,24 @@ spec, and a user-editable free-form section in weight-training docs that
 regeneration must preserve. See `.kiro/specs/workout-docs/brief.md` and
 `docs/reference/fitdocs-ai-reference.md`.
 
+## Amendment 1 (2026-09-30): the Running Dynamics section, landed by running-dynamics
+
+Run pages show heart rate, power, pace, laps and a map, but nothing of a
+runner's form even for a file that records it. Once fit-ingest exposes the
+running-dynamics channels (fit-ingest Amendment 3), a run page can summarize
+them. This amendment appends criteria only: Requirement 6 gains 6.8-6.10 (the
+Running Dynamics section: its placement, its rows and units, its omission and
+its run-only scope) and Requirement 7 gains 7.7-7.8 (the running-dynamics
+chart). **No existing criterion is renumbered, reworded or withdrawn.** The
+section and its chart are computed from the activity's channels at render
+time; a page whose source records no running-dynamics data, no 0 bpm
+heart-rate sample and no session-level developer value that is an invalid
+value or a 32-bit float renders as before, apart from its document-format
+version. The document-format version advance that brings existing pages
+current is owned by the implementing spec `.kiro/specs/running-dynamics/`.
+The tests pinning each new criterion are listed in this spec's `spec.json`
+`amendments` array.
+
 ## Introduction
 
 workout-docs is the user-visible layer of fitdocs: the installable `fitdocs`
@@ -140,6 +158,9 @@ workout's story and details are one scroll away.
 5. If lap data or distance data required for a splits variant is absent, the fitdocs CLI shall omit that variant while rendering the others.
 6. The devices/data-quality section shall list the recording devices with manufacturer, product, and battery status where recorded, and shall surface per-channel data coverage and any decode errors reported for the source file.
 7. Where supplemental recorded session values are present (for example estimated perceived exertion or weather humidity), the summary section shall include the recognized ones and omit the rest silently.
+8. _(added by Amendment 1)_ When a run page's activity has recorded data in at least one running-dynamics channel, the fitdocs CLI shall include a `## Running Dynamics` section placed after the summary, map and telemetry sections (each when present) and before the splits section (when present); when no running-dynamics channel has recorded data, the section shall be omitted entirely, heading included, and the fitdocs CLI shall include the section only on pages whose activity modality is run.
+9. _(added by Amendment 1)_ The Running Dynamics section shall present one row per running-dynamics channel that has recorded data, in a fixed order, each showing the channel's average, its typical range (10th to 90th percentile of recorded samples) and its coverage (the percentage of samples that recorded it), computed over recorded samples only and never counting an absent sample as zero.
+10. _(added by Amendment 1)_ The Running Dynamics section shall display ground contact time in milliseconds, vertical oscillation in centimetres, step length in metres, leg spring stiffness in kilonewtons per metre, form and air power in watts, impact in body weights, and vertical ratio and every balance in percent, and shall present each balance channel as its recorded percentage without attributing it to a left or right side.
 
 ### Requirement 7: Hero Chart Generation
 **Objective:** As an athlete, I want the power-vs-heart-rate hero chart
@@ -153,6 +174,8 @@ profile is visible in any markdown renderer with zero plugins.
 4. The hero chart shall follow the chart specification documented in `docs/reference/fitdocs-ai-reference.md` §3 — per-series band normalization, faint elevation backdrop band, null-skipping boxcar smoothing, and the documented color palette — adapted only where static rendering demands.
 5. When samples are missing within a series, the hero chart shall render gaps rather than interpolating fabricated values.
 6. If an activity has no plottable telemetry series, the fitdocs CLI shall omit the hero chart and render the rest of the document without error.
+7. _(added by Amendment 1)_ When at least one of ground contact time, leg spring stiffness, vertical oscillation, form power, step length or vertical ratio has recorded data, the Running Dynamics section shall include one chart plotting the first two of those channels, in that order, that have recorded data, on the same horizontal axis as the page's telemetry chart (cumulative distance when the activity records distance, otherwise elapsed time), leaving a gap where a charted channel has no recorded sample and never interpolating across it; if none of those channels has recorded data, the section shall render without a chart.
+8. _(added by Amendment 1)_ The fitdocs CLI shall generate the running-dynamics chart as a static image asset alongside the document, linked by a standard relative image link, byte-identical for identical inputs and free of scripts.
 
 ### Requirement 8: Athlete Zone Inputs and HR-Zone Strip
 **Objective:** As an athlete, I want zone-based displays computed from my

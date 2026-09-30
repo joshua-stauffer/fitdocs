@@ -1,7 +1,7 @@
 {
   "feature_name": "workout-docs",
   "created_at": "2026-07-14T22:41:40Z",
-  "updated_at": "2026-07-14T23:52:08Z",
+  "updated_at": "2026-09-30T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -18,5 +18,58 @@
       "approved": true
     }
   },
-  "ready_for_implementation": true
+  "ready_for_implementation": true,
+  "amendments": [
+    {
+      "date": "2026-09-30",
+      "requirement": "6.8-6.10 and 7.7-7.8 added (appended; no criterion renumbered or reworded)",
+      "reason": "The Running Dynamics section and chart on run pages (running-dynamics Requirements 7 and 8), landed as workout-docs' part of the Phase 8 Existing Spec Update. fit-ingest Amendment 3 exposes the running-dynamics channels; run pages had no place to show them.",
+      "also": "Amendment 1 is the first workout-docs amendment. Sibling specs (intervals-connector, activity-identity, channel-merge) also name workout-docs updates; whichever lands after this one appends its entry to this array and renumbers to the next free criteria. No existing criterion is renumbered.",
+      "implementation": "src/fitdocs/render/dynamics.py and the run view (src/fitdocs/render/views.py); document-format version advance and release note owned by running-dynamics Requirement 9.",
+      "tests": {
+        "6.8": [
+          "tests/render/test_views.py::test_run_dynamics_sits_after_telemetry_and_before_splits",
+          "tests/render/test_views.py::test_run_dynamics_directly_after_summary_without_telemetry_or_map",
+          "tests/render/test_views.py::test_run_dynamics_follows_map_and_telemetry",
+          "tests/render/test_views.py::test_run_without_dynamics_has_no_section",
+          "tests/render/test_views.py::test_non_run_modalities_never_show_running_dynamics",
+          "tests/render/test_dynamics.py::test_section_is_none_when_no_channel_has_a_value"
+        ],
+        "6.9": [
+          "tests/render/test_dynamics.py::test_one_row_per_present_channel_in_display_order_none_for_all_none",
+          "tests/render/test_dynamics.py::test_no_rows_when_no_channel_has_a_value",
+          "tests/render/test_dynamics.py::test_average_p10_p90_on_thirty_pairwise_distinct_values",
+          "tests/render/test_dynamics.py::test_none_samples_are_excluded_from_every_figure_never_counted_as_zero",
+          "tests/render/test_dynamics.py::test_coverage_is_recorded_over_total_rounded_like_the_coverage_table",
+          "tests/render/test_golden_docs.py::test_stryd_page_dynamics_table_has_eleven_rows_and_no_vertical_ratio",
+          "tests/render/test_golden_docs.py::test_native_dynamics_page_has_three_rows_and_chart_gct_then_vo"
+        ],
+        "6.10": [
+          "tests/render/test_dynamics.py::test_display_table_covers_the_twelve_channels_in_registry_order",
+          "tests/render/test_dynamics.py::test_every_channel_renders_its_label_unit_decimals_and_factor",
+          "tests/render/test_dynamics.py::test_units_and_decimals_in_rendered_rows",
+          "tests/render/test_dynamics.py::test_a_value_that_rounds_to_zero_prints_unsigned_but_real_negatives_keep_sign",
+          "tests/render/test_dynamics.py::test_balance_labels_carry_no_side_word"
+        ],
+        "7.7": [
+          "tests/render/test_dynamics.py::test_chart_plots_first_two_precedence_channels_in_order",
+          "tests/render/test_dynamics.py::test_chart_skips_absent_precedence_channels_and_converts_to_display_units",
+          "tests/render/test_dynamics.py::test_chart_series_align_with_the_shared_axis_indices",
+          "tests/render/test_dynamics.py::test_no_chart_when_only_unchartable_channels_are_present",
+          "tests/render/test_dynamics.py::test_no_chart_when_no_sample_has_an_x_value",
+          "tests/render/test_dynamics.py::test_each_adjacent_precedence_pair_charts_in_precedence_order",
+          "tests/render/test_dynamics.py::test_a_run_of_none_in_a_charted_series_yields_separate_polylines",
+          "tests/render/test_golden_docs.py::test_stryd_page_chart_legend_is_gct_then_leg_spring_stiffness"
+        ],
+        "7.8": [
+          "tests/render/test_dynamics.py::test_link_asset_and_determinism",
+          "tests/render/test_golden_docs.py::test_document_markdown_matches_committed_golden",
+          "tests/render/test_golden_docs.py::test_chart_assets_match_committed_goldens",
+          "tests/render/test_golden_docs.py::test_render_twice_is_byte_identical",
+          "tests/render/charts/test_hero.py::test_static_rendering_has_no_scripts_or_cursor"
+        ]
+      },
+      "cross_spec": "fit-ingest Amendment 3 (3.7-3.10, 12.4, 14.5-14.11) publishes the running-dynamics channels this section reads and must land with this one. running-dynamics owns the implementation and the tests named in `tests`, and the document-format version advance (its Requirement 9)."
+    }
+  ]
 }
