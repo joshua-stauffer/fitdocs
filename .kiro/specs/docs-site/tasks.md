@@ -242,7 +242,7 @@
     recorded, and `load_content(fixture)` returns six pages sorted by path.
   - _Requirements: 2.1, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9_
 
-- [ ] 2.3 (P) Order pages, map URLs, build the nav and render both llms indexes
+- [x] 2.3 (P) Order pages, map URLs, build the nav and render both llms indexes
   - In `scripts/sitebuild/outline.py`, implement:
     - `ordered_pages`: canonical section order, empty sections omitted,
       ascending `order`;
@@ -851,3 +851,13 @@
   - `check_config` problems use path `website/mkdocs.template.yml` with a dotted `where` (`theme.palette[1].bogus`, `theme.features.<name>`, `plugins.search.<opt>`). Names must match exactly: no case-folding and no stripping.
   - Constraints on the 3.1 template: no `nav`, `docs_dir`, `site_dir` or `theme.custom_dir`; `plugins` must be a list; `theme` is a mapping or absent/null.
   - A 3.1-shaped template was probed and passes.
+- 2.3 (3 rounds, parallel stream impl/ds-2-3):
+  - `nav_structure` returns `[{section: [{title: "<path>.md"}]}]`, the shape 2.4's `render_config` takes.
+  - URLs are `site_url` (trailing `/` stripped, then one `/` added) + `page_path`; `index.md` maps to `site_url` itself.
+  - Reviewer-accepted gap-fills:
+    - An unknown section raises `ValueError`.
+    - Equal `order` values tie-break by path.
+    - In llms-full the body is CRLF/CR→LF then `.strip("\n")` only, so indentation and hard breaks are kept.
+    - llms-full renders `body`, never `staged_text`.
+  - Current behaviour pinned by exact literals: a title or summary containing CR/LF renders split (queued as a follow-up, low).
+  - design.md traceability row 4.6 corrected from `page_url` to `page_path`.

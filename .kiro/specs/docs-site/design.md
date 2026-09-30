@@ -442,7 +442,7 @@ flowchart LR
 | 4.3 | Copy button on every code block | SiteConfig | `content.code.copy` | Build |
 | 4.4 | Edit link to `website/content/` source | SiteConfig, Theme, Stager | `edit_uri`, 1:1 staging, `home.html` keeps action | Build |
 | 4.5 | One palette, typeface, logo, both modes | Theme | `brand.css`, `logo.svg` | Build |
-| 4.6 | Trailing-slash URLs under fitdocs.ai | SiteConfig, Outline | `site_url`, `use_directory_urls`, `page_url` | Build |
+| 4.6 | Trailing-slash URLs under fitdocs.ai | SiteConfig, Outline | `site_url`, `use_directory_urls`, `page_path` | Build |
 | 5.1 | `llms.txt` per llmstxt.org | Outline, Stager | `render_llms` | Build |
 | 5.2 | `llms-full.txt` bodies in nav order | Outline, Stager | `render_llms_full` | Build |
 | 5.3 | Drafts and `_` files absent from indexes | Outline | built from `SiteContent.pages` | Build |
