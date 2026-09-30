@@ -15,6 +15,8 @@ check that decodes the ride fixture. Coverage:
   units unchanged (Req 3.5);
 * raw values are preserved verbatim -- no smoothing/resampling (Req 3.6);
 * records lacking a ``timestamp`` are the only record-level exclusion;
+* a recorded heart rate of 0 is "not recorded" while every other recorded zero
+  is kept (Req 5.1, 5.5, 5.6, 6.1);
 * ``time_s`` offsets honour an explicit anchor, else anchor to the first record.
 """
 
@@ -22,9 +24,16 @@ from __future__ import annotations
 
 import pytest
 
+from fitdocs import parse_fit
 from fitdocs.ingest.records import extract_samples
+from fitdocs.metrics import compute_metrics
 from fitdocs.model import Samples, fit_datetime
-from tests.fixtures.builder import decode_messages, to_semicircles
+from tests.fixtures import builder
+from tests.fixtures.builder import (
+    decode_messages,
+    stryd_run_fit_bytes,
+    to_semicircles,
+)
 
 # A fixed FIT-epoch second used as t0 (never wall-clock time).
 TS0 = 1_000_000_000
@@ -312,3 +321,145 @@ def test_ride_fixture_records_extract_aligned(ride_fit_bytes: bytes) -> None:
     # Raw alternating power passes through unchanged (Req 3.6).
     assert samples.power_w[0] == 190
     assert samples.power_w[1] == 210
+
+
+# --- Placeholder heart rate (Req 5.1, 5.5, 5.6, 6.1) ----------------------------
+
+# The Stryd fixture's placeholder samples: record 0 and the three-record pause.
+_STRYD_PLACEHOLDER_POSITIONS = (0, 20, 21, 22)
+
+
+def test_heart_rate_zero_is_not_recorded_and_one_is_kept() -> None:
+    """0 bpm becomes ``None``; 1, an ordinary value and an absent reading stay as is.
+
+    The input holds the placeholder at two positions (Req 5.1).
+    """
+    records = [
+        {"timestamp": TS0 + 0, "heart_rate": 0},
+        {"timestamp": TS0 + 1, "heart_rate": 1},
+        {"timestamp": TS0 + 2, "heart_rate": 150},
+        {"timestamp": TS0 + 3, "heart_rate": 0},
+        {"timestamp": TS0 + 4},
+        {"timestamp": TS0 + 5, "heart_rate": 2},
+    ]
+
+    samples, _ = extract_samples(records, None)
+
+    assert samples.heart_rate_bpm == (None, 1, 150, None, None, 2)
+
+
+def test_every_other_recorded_zero_is_kept() -> None:
+    """One record recording 0 for each other channel keeps each as 0 (Req 5.5).
+
+    The first record also records heart rate 0. The second writes speed and
+    altitude through their basic (non-enhanced) fields. The third records a
+    non-zero heart rate beside zero power, cadence and speed, so a heart-rate
+    reading is not read as absent because another channel is 0 (Req 5.1).
+    """
+    records = [
+        {
+            "timestamp": TS0,
+            "heart_rate": 0,
+            "power": 0,
+            "cadence": 0,
+            "enhanced_speed": 0.0,
+            "distance": 0.0,
+            "enhanced_altitude": 0.0,
+            "temperature": 0,
+        },
+        {"timestamp": TS0 + 1, "speed": 0.0, "altitude": 0.0},
+        {
+            "timestamp": TS0 + 2,
+            "heart_rate": 150,
+            "power": 0,
+            "cadence": 0,
+            "enhanced_speed": 0.0,
+        },
+    ]
+
+    samples, _ = extract_samples(records, None)
+
+    assert samples.heart_rate_bpm == (None, None, 150)
+    assert samples.power_w == (0, None, 0)
+    assert samples.cadence_rpm == (0, None, 0)
+    assert samples.speed_mps == (0.0, 0.0, 0.0)
+    assert samples.distance_m == (0.0, None, None)
+    assert samples.altitude_m == (0.0, 0.0, None)
+    assert samples.temperature_c == (0, None, None)
+
+
+@pytest.mark.parametrize("sport", ["running", "cycling"])
+def test_heart_rate_zero_is_none_in_a_file_without_developer_data(sport: str) -> None:
+    """A garmin-written file with no developer data still reads 0 bpm as ``None``,
+    for a run and for a ride: the rule applies to any activity (Req 5.1, 5.6, 6.1).
+    """
+    data = builder.small_sport_fit_bytes(9001, sport, hr_base=0)
+    messages, _ = decode_messages(data)
+    assert not messages.get("developer_data_id_mesgs")
+    assert messages["file_id_mesgs"][0]["manufacturer"] == "garmin"
+    assert messages["session_mesgs"][0]["sport"] == sport
+    records = messages["record_mesgs"]
+    assert [r["heart_rate"] for r in records[:2]] == [0, 1]
+
+    samples = parse_fit(data).samples
+
+    assert samples.heart_rate_bpm[:2] == (None, 1)
+
+
+def _stryd_native(key: str) -> list[object]:
+    """The fixture's own recorded native series for ``key``, one per record."""
+    return [native[key] for native, _recorded in builder._stryd_records()]
+
+
+@pytest.mark.parametrize("manufacturer", ["stryd", "garmin"])
+def test_stryd_fixture_heart_rate_placeholders_are_none_whoever_wrote_it(
+    manufacturer: str,
+) -> None:
+    """Heart rate is ``None`` at the four placeholder positions and the recorded
+    value everywhere else, for a ``stryd`` and for a ``garmin`` writer (Req 5.1,
+    5.6). Power keeps its recorded 0 at the same four positions (Req 5.5).
+    """
+    data = stryd_run_fit_bytes(manufacturer=manufacturer)
+    messages, _ = decode_messages(data)
+    # The variant really writes the named manufacturer into both messages.
+    assert messages["file_id_mesgs"][0]["manufacturer"] == manufacturer
+    assert messages["device_info_mesgs"][0]["manufacturer"] == manufacturer
+
+    recorded_hr = _stryd_native("heart_rate")
+    recorded_power = _stryd_native("power")
+    # Precondition: the file records 0 at exactly those positions, and only there.
+    assert [i for i, v in enumerate(recorded_hr) if v == 0] == list(
+        _STRYD_PLACEHOLDER_POSITIONS
+    )
+    assert [i for i, v in enumerate(recorded_power) if v == 0] == list(
+        _STRYD_PLACEHOLDER_POSITIONS
+    )
+
+    samples = parse_fit(data).samples
+
+    assert len(samples.heart_rate_bpm) == len(recorded_hr) == 44
+    expected_hr = tuple(None if v == 0 else v for v in recorded_hr)
+    assert samples.heart_rate_bpm == expected_hr
+    for position in _STRYD_PLACEHOLDER_POSITIONS:
+        assert samples.heart_rate_bpm[position] is None
+        assert samples.power_w[position] == 0
+    assert samples.power_w == tuple(recorded_power)
+
+
+def test_stryd_fixture_heart_rate_average_and_maximum_exclude_placeholders() -> None:
+    """The page's average and maximum heart rate are those of the recorded
+    non-zero samples (Req 6.1). The session records neither, so the values come
+    from the samples.
+    """
+    activity = parse_fit(stryd_run_fit_bytes())
+    assert activity.summary.avg_heart_rate_bpm is None
+    assert activity.summary.max_heart_rate_bpm is None
+    recorded = [v for v in _stryd_native("heart_rate") if isinstance(v, int) and v != 0]
+    assert len(recorded) == 40
+    with_zeros = [*recorded, 0, 0, 0, 0]
+    assert sum(recorded) / len(recorded) != sum(with_zeros) / len(with_zeros)
+
+    metrics = compute_metrics(activity)
+
+    assert metrics.avg_heart_rate_bpm == sum(recorded) / len(recorded)
+    assert metrics.max_heart_rate_bpm == max(recorded)

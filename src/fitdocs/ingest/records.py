@@ -105,7 +105,7 @@ def extract_samples(
 
     samples = Samples(
         time_s=tuple((ts - anchor).total_seconds() for ts in timestamps),
-        heart_rate_bpm=tuple(_int_channel(r.get("heart_rate")) for r in retained),
+        heart_rate_bpm=tuple(_heart_rate(r.get("heart_rate")) for r in retained),
         power_w=tuple(_int_channel(r.get("power")) for r in retained),
         cadence_rpm=tuple(_float_channel(r.get("cadence")) for r in retained),
         speed_mps=tuple(
@@ -150,6 +150,20 @@ def _int_channel(value: object) -> int | None:
     if isinstance(value, int):
         return value
     raise TypeError(f"expected an integer channel value, got {type(value).__name__}")
+
+
+def _heart_rate(value: object) -> int | None:
+    """A heart-rate reading, with a recorded 0 bpm read as not recorded (Req 5.1).
+
+    A living heart does not beat 0 times a minute: devices write 0 as a
+    placeholder where they have no reading (the first sample, a pause). Every
+    other value is returned as :func:`_int_channel` returns it, and no other
+    channel gets this rule -- a recorded 0 of power, cadence, speed, distance,
+    altitude or temperature is a genuine value (Req 5.5). The rule looks at the
+    value alone, never at which application wrote the file (Req 5.6).
+    """
+    reading = _int_channel(value)
+    return None if reading == 0 else reading
 
 
 def _float_channel(value: object) -> float | None:
