@@ -37,6 +37,8 @@ which leg a skewed value favours.
   § Risks (~:264-265).
 - `.kiro/specs/running-dynamics/requirements.md:182` -- Req 7.5, no side.
 
+**Rendered consequence (2026-09-30, running-dynamics at 8b07b9f).** running-dynamics Req 5.3 keeps a recorded 0.0 balance, so the `stryd_run` golden (tests/render/golden_docs/stryd_run.md) shows Vertical oscillation balance average 48.4 % beneath its own 10th percentile, 49.0 %. A single mid-run 0.0 at fixture record 12 drives it. That is spec-conforming but physically implausible for a balance. Decide it together with the side convention, possibly as an activity-qa-flags plausibility rule.
+
 ## How to pick it up
 1. Read the two research passages and Req 5.3 / 7.5.
 2. Run the descriptor-and-shape read in a scratch directory outside the

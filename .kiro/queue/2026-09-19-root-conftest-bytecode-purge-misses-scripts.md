@@ -27,5 +27,7 @@ Reviewers and implementers must remember an out-of-band `rm -rf scripts/__pycach
 ## Evidence
 Implementation Notes 2.2 and 7.2 (WARN in the agent log 2026-09-19); root conftest.py purge scope.
 
+**Also tests/fixtures/ (2026-09-30, running-dynamics at 8b07b9f).** The same gap applies to fixture self-test mutations. The running-dynamics ground rules have those mutations target `tests/fixtures/builder.py`, but `conftest.py:38-56` purges only `_SRC.rglob("__pycache__")`, and `tests/fixtures/__pycache__/builder.cpython-311.pyc` exists. A same-size, same-second mutation of builder.py can run stale bytecode even under `uv run pytest`. This was reported by the task 1.2 reviewer subagent; the conftest lines were re-read here.
+
 ## How to pick it up
 Read conftest.py's purge, add scripts/ (and consider making the purge scope a list), then run the check named in the resume command. Done when a same-second, same-size mutation to scripts/artifact_policy.py reds a test without a manual purge.

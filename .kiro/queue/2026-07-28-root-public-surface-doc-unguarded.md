@@ -86,6 +86,8 @@ root guard for that reason. Re-read the shared agent log and check whether
 that branch has merged before starting, or expect a conflict in the one file
 this item must edit.
 
+**New name, same gap (2026-09-30, running-dynamics at 8b07b9f).** running-dynamics added `DeveloperChannel` to the `From \`fitdocs\`:` list (docs/plugins.md:~255). The task 1.1 reviewer subagent reported, without it being re-run here, that removing that name from the doc leaves the suite green: `test_every_name_in_the_plugins_doc_public_surface_list_actually_imports` checks only doc→code. activity-identity will add `FileIdentity` the same way. Related: 2026-09-30-root-init-type-checking-block-unguarded.
+
 ## How to pick it up
 
 1. Read `tests/test_docs_guarantees.py` around `:290-330` — the
