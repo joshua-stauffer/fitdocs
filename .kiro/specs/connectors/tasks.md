@@ -332,7 +332,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9_
   - _Boundary: CredentialStore_
 
-- [ ] 3.2 (P) Build the ledger: its entries and invariants, the watermark that never moves backward, and its versioned, sorted, write-if-different file
+- [x] 3.2 (P) Build the ledger: its entries and invariants, the watermark that never moves backward, and its versioned, sorted, write-if-different file
   - The three outcomes; an entry per remote id with revision, content hash,
     reason and pending location, with the invariants design.md states; the
     ledger value with lookup, the final-outcome test for an id at a
@@ -953,3 +953,4 @@
 - 1.4: the helper is `cli._run_drain_passes(data_root, *, tz, athlete, force, retry_quarantined, no_prompt, command)`. Two AST call-site pins (`tests/test_cli.py::test_apply_load_call_sites_pass_no_default_calculator_argument`, `tests/test_cli_plan.py::test_run_plan_pass_is_loaded_exactly_four_times`) count `_run_load_pass`/`_run_plan_pass`/`_run_drain_passes` calls per function -- 5.2/5.3 adding a `_run_drain_passes` call in `pull_command` must update both pins (controller ruling from 1.4).
 - Recurring review species (tasks 1.1-1.4): fixtures confounded by a coincidental order (prefix / alphabetical), self-referential compares against an imported constant, and docstrings naming a mutation's red set that was never observed. Every one cost a round.
 - 1.2: `connectors.errors` (AuthFailureKind, AuthFailure, ConnectorError, NotConnectedError, ConnectorSettingsError, NEXT_STEPS, next_step) and `connectors._atomic.write_atomic` (0o600 from creation via mkstemp, fsync, cleanup on BaseException). Reviewer mutation harnesses revert from their own snapshots -- a later round reusing an earlier round's harness clobbers fixes; always take fresh snapshots.
+- 3.2: `connectors.ledger` -- one shared `_invariant_violation` is run by `load_ledger` (LedgerError naming the file) and `save_ledger` (ValueError before writing). Rulings: load rejects an unsorted file; watermark must be tz-aware; sha256 is 64 lowercase hex on any outcome; `pending` is a relative path whose every `/` segment is non-empty and not `.`/`..` (4.1's sweep can trust it). tomli_w writes `2026-09-20 07:12:00+00:00` and inline `entries = [...]` for short ledgers -- both accepted as equivalent TOML.
