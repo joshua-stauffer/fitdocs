@@ -98,7 +98,13 @@ ATHLETE = AthleteInputs(
 # gap that no committed golden ever exercised a real NP value at all -- every
 # other power-bearing fixture above is only 10 records, span 9 s, far below
 # NP_MIN_SPAN_S), a strength session with HR-only records and no set messages,
-# and the minimal (session-less) file.
+# and the minimal (session-less) file. Two running-dynamics fixtures follow
+# (design.md § Supporting References): ``stryd_run``, a 44-record run shaped
+# after a Stryd developer-field file (record-level developer channels, 0
+# placeholders, a sentinel, a humidity spike), and ``run_native_dynamics``, a
+# 20-record run shaped after a HealthFit copy carrying native dynamics fields
+# and session-scoped developer fields (a 255-bearing ``SESSION UUID``,
+# hundredths-scaled humidity and METs).
 FIXTURES: dict[str, Callable[[], bytes]] = {
     "run_native_power_sparse_hr": builder.run_native_power_sparse_hr_fit_bytes,
     "run_no_gps": builder.run_no_gps_fit_bytes,
@@ -106,6 +112,8 @@ FIXTURES: dict[str, Callable[[], bytes]] = {
     "ride_power_dropout": builder.ride_power_dropout_fit_bytes,
     "strength_no_sets": builder.strength_no_sets_fit_bytes,
     "minimal": builder.minimal_fit_bytes,
+    "stryd_run": builder.stryd_run_fit_bytes,
+    "run_native_dynamics": builder.run_native_dynamics_fit_bytes,
 }
 
 # Map-bearing golden cases (route-maps task 4.2). Each is one of the FIXTURES'
@@ -550,6 +558,155 @@ def _map_asset(doc: RenderedDoc) -> Asset:
     map_assets = [a for a in doc.assets if a.rel_path.endswith("-map.svg")]
     assert len(map_assets) == 1
     return map_assets[0]
+
+
+# --- 8. running dynamics: the two new pages' observables (spec running-dynamics)
+
+
+def _split_frontmatter(md: str) -> tuple[dict[str, object], str]:
+    """The parsed frontmatter mapping and the body after its closing fence."""
+    assert md.startswith("---\n")
+    block, fence, body = md[len("---\n") :].partition("\n---\n")
+    assert fence == "\n---\n"
+    data = yaml.safe_load(block)
+    assert isinstance(data, dict)
+    return data, body
+
+
+def _section_lines(md: str, heading: str) -> list[str]:
+    """The lines of the ``## `` section ``heading``, heading excluded."""
+    lines = md.splitlines()
+    start = lines.index(heading) + 1
+    end = next(
+        (i for i in range(start, len(lines)) if lines[i].startswith("## ")),
+        len(lines),
+    )
+    return lines[start:end]
+
+
+def _table_data_rows(lines: list[str]) -> list[list[str]]:
+    """Data rows (header and separator dropped) of the table in ``lines``; callers
+    pass a slice holding exactly one table."""
+    table = [line for line in lines if line.startswith("|")]
+    assert len(table) >= 2, "no markdown table found"
+    return [[c.strip() for c in row.strip("|").split("|")] for row in table[2:]]
+
+
+def _dynamics_rows(md: str) -> list[list[str]]:
+    return _table_data_rows(_section_lines(md, "## Running Dynamics"))
+
+
+def _dynamics_legend(doc: RenderedDoc) -> list[str]:
+    """Legend labels, left to right, of the rendered ``-dynamics.svg`` asset."""
+    assets = [a for a in doc.assets if a.rel_path.endswith("-dynamics.svg")]
+    assert len(assets) == 1
+    labels = re.findall(
+        r'<text x="([0-9.]+)" y="17" font-size="11" fill="#333">([^<]+)</text>',
+        assets[0].content,
+    )
+    return [label for _, label in sorted(labels, key=lambda t: float(t[0]))]
+
+
+def _stryd_heart_rates() -> list[int]:
+    """The fixture's own non-zero heart-rate samples (records at 0 and 20-22 hold 0)."""
+    rates = [
+        int(native["heart_rate"])  # type: ignore[call-overload]
+        for native, _ in builder._stryd_records()
+    ]
+    return [hr for hr in rates if hr != 0]
+
+
+def test_stryd_page_dynamics_table_has_eleven_rows_and_no_vertical_ratio() -> None:
+    """The Stryd page carries eleven dynamics rows (no vertical ratio)."""
+    rows = _dynamics_rows(_render("stryd_run").markdown)
+    assert len(rows) == 11
+    assert "Vertical ratio" not in [r[0] for r in rows]
+
+
+def test_stryd_page_chart_legend_is_gct_then_leg_spring_stiffness() -> None:
+    assert _dynamics_legend(_render("stryd_run")) == [
+        "Ground contact time",
+        "Leg spring stiffness",
+    ]
+
+
+def test_native_dynamics_page_has_three_rows_and_chart_gct_then_vo() -> None:
+    doc = _render("run_native_dynamics")
+    assert len(_dynamics_rows(doc.markdown)) == 3
+    assert _dynamics_legend(doc) == ["Ground contact time", "Vertical oscillation"]
+
+
+def test_stryd_avg_hr_is_the_mean_of_the_non_zero_heart_rate_samples() -> None:
+    """Heart rate 0 is a placeholder: it is left out of the mean (Req 6.1)."""
+    rates = _stryd_heart_rates()
+    all_records = [n["heart_rate"] for n, _ in builder._stryd_records()]
+    assert len(rates) < len(all_records)  # the fixture does hold placeholder zeros
+    mean = sum(rates) / len(rates)
+    with_zeros = sum(all_records) / len(all_records)  # type: ignore[arg-type]
+    assert round(mean) != round(with_zeros)  # the wrong rule reads differently
+
+    doc = _render("stryd_run")
+    data, body = _split_frontmatter(doc.markdown)
+    assert data["avg_hr_bpm"] == round(mean)
+    assert f"| Avg HR | {round(mean)} bpm (max {max(rates)} bpm) |" in body
+
+
+def test_stryd_body_names_no_record_developer_field() -> None:
+    """The humidity spike (104) and the Stryd temperature / humidity channels are
+    absent from the body: no record-level environmental developer value (Stryd
+    Temperature, Stryd Humidity) is displayed, and the Summary holds only the rows
+    the fixture's native channels produce (Req 6.5)."""
+    activity = parse_fit(builder.stryd_run_fit_bytes())
+    humidity = activity.record_developer_fields["Stryd Humidity"]
+    assert 104 in humidity.values  # the decoy is present in the decoded file
+    assert "Stryd Temperature" in activity.record_developer_fields
+
+    md = _render("stryd_run").markdown
+    _, body = _split_frontmatter(md)
+    assert "104%" not in body
+    assert "Stryd Humidity" not in body
+    assert "Stryd Temperature" not in body
+    assert "Humidity" not in body
+    assert "Temperature" not in body
+    # The fixture records distance, speed, altitude and heart rate natively; its
+    # one session developer field (Run Profile) is not a recognised summary
+    # extra, and Power is a ride-only row, so these five rows are the whole Summary.
+    summary = _table_data_rows(_section_lines(body, "## Summary"))
+    assert [r[0] for r in summary] == [
+        "Distance",
+        "Moving time",
+        "Pace",
+        "Climb",
+        "Avg HR",
+    ]
+
+
+def test_stryd_coverage_table_has_no_temperature_row() -> None:
+    md = _render("stryd_run").markdown
+    coverage = _section_lines(md, "## Device & Data Quality")
+    rows = _table_data_rows(coverage[coverage.index("**Channel coverage**") :])
+    assert rows  # the coverage table is present and non-empty
+    assert "Temperature" not in [r[0] for r in rows]
+
+
+def test_native_dynamics_uuid_is_the_canonical_session_uuid() -> None:
+    """The frontmatter ``uuid`` is the canonical form of the 255-bearing UUID."""
+    expected = "ff28292a-2b2c-2d2e-2f30-313233343536"  # bytes 255, 40..54
+    assert (255, *range(40, 55)) == builder._NATIVE_DYNAMICS_UUID_BYTES
+    data, _ = _split_frontmatter(_render("run_native_dynamics").markdown)
+    assert data["uuid"] == expected
+
+
+def test_native_dynamics_summary_shows_hundredths_scaled_humidity_and_mets() -> None:
+    humidity = builder._SESSION_DEV_FIELD_VALUES["SESSION WEATHER HUMIDITY"]
+    mets = builder._SESSION_DEV_FIELD_VALUES["AVG METs"]
+    assert isinstance(humidity, int) and isinstance(mets, int)
+    _, body = _split_frontmatter(_render("run_native_dynamics").markdown)
+    summary = dict(
+        (r[0], r[1]) for r in _table_data_rows(_section_lines(body, "## Summary"))
+    )
+    assert summary["Humidity"] == f"{humidity / 100:.0f}%"
+    assert summary["Avg METs"] == f"{mets / 100:.1f}"
 
 
 if __name__ == "__main__":
