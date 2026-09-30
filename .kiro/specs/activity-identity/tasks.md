@@ -431,7 +431,7 @@ never co-varies two keys a rule distinguishes.
   - _Requirements: 3.7, 3.9, 3.10, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.8, 4.9, 5.7, 8.3_
   - _Boundary: RunPlanner_
 
-- [ ] 2.5 (P) Store held files in owned tool state
+- [x] 2.5 (P) Store held files in owned tool state
   - Add the held-record path helper to the layout leaf (inside `.fitdocs/`) and
     bind the layout's session-UUID field name from the contract's
     `SESSION_UUID_FIELD` (2.1), removing the private copy; the layout imports
