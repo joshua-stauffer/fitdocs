@@ -2267,7 +2267,7 @@ serve. The **constant trigger** below does NOT use this value -- see
 baseline cannot serve as that trigger's comparison point, and why that
 trigger's own baseline is instead tied to current reality where it can be."""
 
-CONSTANT_REGISTRY_ASOF_DOC_VERSION: Final[int] = 5
+CONSTANT_REGISTRY_ASOF_DOC_VERSION: Final[int] = 6
 """The document-format version as of which every ``CONSTANT_SOURCES``
 binding was last confirmed to carry no ``previous_value`` (this amendment:
 Req 15.3, 18.4) -- today, ``contract.DOC_VERSION`` itself.
@@ -2281,8 +2281,9 @@ regardless of the registry's own state: a future re-sourcing that moves a
 value without advancing ``contract.DOC_VERSION`` at all would still pass.
 Pinning the constant-trigger baseline to the *current* ``contract.DOC_VERSION``
 instead closes that gap -- ``doc_version > CONSTANT_REGISTRY_ASOF_DOC_VERSION``
-is false today (4 > 4), so it only holds once a future change both moves a
-value AND advances ``contract.DOC_VERSION`` beyond this constant.
+is false while the registry is unmoved (``DOC_VERSION > DOC_VERSION``), so it
+only holds once a future change both moves a value AND advances
+``contract.DOC_VERSION`` beyond this constant.
 
 Tied to reality, but only while it is safe to (task 13.2 remediation, round
 4 finding): asserting ``CONSTANT_REGISTRY_ASOF_DOC_VERSION ==

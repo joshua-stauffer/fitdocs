@@ -41,7 +41,7 @@ _EXACT_RICH_RUN_BLOCK = (
     "title: Run 2021-09-07 19:46\n"
     "type: workout\n"
     "generator: fitdocs\n"
-    "doc_version: 5\n"
+    "doc_version: 6\n"
     "date: '2021-09-07'\n"
     "start_time: '2021-09-07T19:46:40-06:00'\n"
     "sport: Run\n"
@@ -98,7 +98,7 @@ def test_wrapper_and_valid_yaml(run_fit_bytes: bytes) -> None:
     body = out[len("---\n") : -len("---\n")]
     data = yaml.safe_load(body)
     assert data["type"] == "workout"
-    assert data["doc_version"] == DOC_VERSION == 5
+    assert data["doc_version"] == DOC_VERSION == 6
 
 
 def test_fixed_key_order(run_fit_bytes: bytes) -> None:

@@ -171,7 +171,7 @@ __all__ = [
 
 # --- versions ----------------------------------------------------------------
 
-DOC_VERSION: Final[int] = 5
+DOC_VERSION: Final[int] = 6
 """The document-format version stamped on every generated workout document.
 
 Compared arithmetically against the version a document records (Req 5.1-5.3,
@@ -270,6 +270,20 @@ quiet, by construction, once any later change advances the version for an
 unrelated reason -- see ``_PRE_AMENDMENT_DOC_VERSION_HISTORICAL_VALUE``'s
 own docstring in that test module for why that is an accepted property of
 this trigger shape, not a defect to route around a second time.
+
+Raised from ``5`` to ``6`` by the running-dynamics spec, for three causes that
+each change what regeneration writes for an already-documented activity:
+
+1. A run page gains the Running Dynamics section (and its chart image) when
+   the activity records dynamics channels.
+2. A 0 bpm heart-rate sample is not recorded: it is a device-absent reading,
+   so it no longer enters the heart-rate series; where the session records no
+   average or maximum heart rate, those are computed from the remaining
+   samples.
+3. A session developer field holding its sentinel value or a float32 value is
+   decoded rather than misread, so the session values it feeds change.
+
+None of the registered cited constants moved.
 """
 
 CONTRACT_VERSION: Final[str] = "4"

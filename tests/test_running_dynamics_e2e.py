@@ -37,6 +37,13 @@ from tests.fixtures import builder
 
 runner = CliRunner()
 
+_PRE_RUNNING_DYNAMICS_DOC_VERSION: int = 5
+"""The document-format version `contract.DOC_VERSION` held on `main` before the
+running-dynamics spec's task 5.1 advanced it to 6 (see that constant's own
+docstring: "Raised from ``5`` to ``6`` by the running-dynamics spec"). Named
+here, with its provenance, rather than left as a bare literal in a test body;
+a run page aged to this version is one regeneration must bring current."""
+
 _DYNAMICS_LINK_RE = re.compile(r"!\[[^\]]*\]\(([^)\s]+-dynamics\.svg)\)")
 
 

@@ -193,9 +193,9 @@ def test_check_reports_every_finding_kind_and_exits_one(tmp_path: Path) -> None:
 
     # Out-of-date: force run.fit's doc_version below the current one.
     run_text = run_doc.read_text(encoding="utf-8")
-    assert "doc_version: 5" in run_text
+    assert "doc_version: 6" in run_text
     run_doc.write_text(
-        run_text.replace("doc_version: 5", "doc_version: 1"), encoding="utf-8"
+        run_text.replace("doc_version: 6", "doc_version: 1"), encoding="utf-8"
     )
 
     # Damaged region markers: drop the closing "notes" marker on ride.fit.

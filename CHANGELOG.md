@@ -15,6 +15,23 @@ recorded as one.
 
 ## [Unreleased]
 
+### Added
+
+- A run page gains a Running Dynamics section, with its own chart, when the
+  activity records running-dynamics channels (native `.fit`
+  running-dynamics fields, or record-level developer fields such as those a
+  Stryd pod writes).
+
+### Changed
+
+- The generated document format advances (`doc_version` 5 to 6): run pages
+  gain the Running Dynamics section, a 0 bpm heart-rate sample is no longer
+  recorded (where the session records no average or maximum heart rate, those
+  are computed from the remaining samples),
+  and a session developer field holding a sentinel or float32 value is
+  decoded. Run `fitdocs regen` to bring existing documents current; `fitdocs
+  check` reports them stale until then.
+
 ## [0.1.0] - 2026-09-19
 
 ### Added
