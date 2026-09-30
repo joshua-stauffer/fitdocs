@@ -428,7 +428,7 @@
   - _Requirements: 2.3, 6.1, 6.5, 7.1, 7.2, 8.1, 10.1_
   - _Depends: 1.2, 2.4, 3.3_
 
-- [ ] 4.2 Sync a Stryd file on its own, end to end
+- [x] 4.2 Sync a Stryd file on its own, end to end
   - `tests/test_running_dynamics_e2e.py`: in a temporary data root, sync only
     the Stryd fixture through the CLI, as the existing sync end-to-end tests
     do. It exits 0; one run page exists with the Running Dynamics section; the
@@ -580,3 +580,5 @@
 - 2.3: `records._heart_rate` maps exactly 0 to `None` (value-only rule, any writer/sport/developer data). Reviewer-closed mutation classes: parse_fit gates (file_id/device_info manufacturer, developer data, session avg HR, sport) and HR coupled to power/speed/cadence/distance zero. `<= 0` is an unreachable equivalent (uint8).
 - 2.4: `ingest/dynamics.py` = `NATIVE_DYNAMICS_FIELDS`, `DEVELOPER_DYNAMICS_NAMES`, `PLACEHOLDER_ZERO_CHANNELS`, `GATES`, `extract_dynamics`; `extract_samples(..., *, developer=None)`; `parse_fit` computes `record_developer_fields` before the samples. The Stryd fixture is confounded (every placeholder/gate goes None together), so per-channel and per-pair discrimination lives in `tests/ingest/test_dynamics.py` unit cases; expected tables there are literals (a derived `_PARTNER` let three gate-pair swaps survive in round 1). Recognition ignores developer index, application id and declared scale. Equivalent mutants: `not gate_value`, `not value`, `zip(strict=False)`, and a `developer_data_index is None` drop (unreachable from a file).
 - 4.1: 10.1 is held by each golden's byte comparison plus `test_render_twice_is_byte_identical` (the e74af37 golden-tree pin was retired). The 6.5 structural pin asserts no `Humidity`/`Temperature` anywhere in the Stryd body plus the exact Summary label list -- a narrower `104%`/label pin let a record-mean Humidity row pass (reviewer R6/R7). Round 3's wording fixes were applied by the controller and re-reviewed.
+- 4.2: 6.5 is bounded by `test_record_developer_fields_change_nothing_in_the_rendered_page` (render with and without the two Stryd environmental record channels -> byte-identical markdown and assets); word/label absence pins alone let chips and in-row notes through for two rounds. Timer and elapsed are both 43 s in the Stryd fixture, so the swap is pinned only by older unit tests (cited in the test docstring).
+- 5.1 (from activity-identity's log WARN): `tests/load/test_render.py::test_payload_version_paired_with_doc_version` pins `(LOAD_PAYLOAD_VERSION, DOC_VERSION)` -- a DOC_VERSION literal site missing from 5.1's list; move it too.
