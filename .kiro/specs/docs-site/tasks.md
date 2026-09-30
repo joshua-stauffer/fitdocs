@@ -514,7 +514,7 @@
   - **Done when** the tests are green with mutations recorded.
   - _Requirements: 1.3, 1.5, 1.6, 1.8, 3.3, 7.2_
 
-- [ ] 3.3 Orchestrate one build into one root, with the location and failure guarantees
+- [x] 3.3 Orchestrate one build into one root, with the location and failure guarantees
   - In `scripts/sitebuild/pipeline.py`, implement:
     - `guard_root`: a root inside the repo must be under `website/build/`,
       else `BuildRootRefused`; a root outside the repo is allowed;
@@ -914,3 +914,13 @@
   - **Source directories.** `_read_dir` skips dot-entries at any depth relative to the source dir.
   - **Consumer contract.** 3.3 and 3.4 must pass only `plan_tree` output to the writers.
   - **UNPINNED.** L20 and L21: symlinks and special files inside the repo-owned website/assets and website/overrides (queued).
+- 3.3 (2 rounds).
+  - **Interface.** `build(...) -> BuildOutcome(ok, problems, generator_output, tree, page_count)`. `page_count` is `len(content.pages)` when the content loaded, else 0.
+  - **guard_root.** Decides containment by file identity: some ancestor samefile the repo; the `website` ancestor at index ≥2; the next component named exactly `build`. `website/build` itself is refused. Case and firmlink spellings of the repo are refused into content (probed on macOS against the real worktree).
+  - **Order.** The managed-path clear runs first, but only when the root exists, so a failed first build creates nothing.
+  - **Error handling.**
+    - A template missing site_name, site_description or site_url is a Problem, co-reported with config problems.
+    - Template problems are re-pathed to `website/mkdocs.template.yml`.
+    - Any exception, including KeyboardInterrupt, removes html/ and re-raises.
+  - **Verified with real Zensical (reviewer).** The fixture builds with ok and 6 pages, with llms at the html root. A missing .svg yields one line and no html/. A broken Jinja override yields a generator problem and no html/.
+  - **For 3.4 and 3.5.** 3.5 MUST call `generator_executable()` BEFORE `build()`, because design says an exit-2 run touches nothing. 3.4 MUST decide the live sync on `outcome.ok`, not `outcome.tree`, because the tree is set on generator failure.

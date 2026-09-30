@@ -951,8 +951,11 @@ def start_serve(root: Path, addr: str) -> subprocess.Popen[bytes]: ...
 | Requirements | 2.9, 6.6, 6.7 |
 
 **Responsibilities & Constraints**
-- **Build-root guard** (6.7, 7.4). The root is resolved. If it lies inside
-  the repository it must lie under `<repo_root>/website/build/`; otherwise
+- **Build-root guard** (6.7, 7.4). The root is resolved, and containment is
+  decided by file identity (`os.path.samefile` over the root's ancestors), not
+  path text, because `Path.resolve` folds neither letter case on
+  case-insensitive APFS nor macOS firmlinks. If it lies inside
+  the repository it must lie strictly under `<repo_root>/website/build/`; otherwise
   `BuildRootRefused` is raised (exit 2). Roots outside the repository are
   allowed, which is how tests build into `tmp_path`.
 - **Order.**
