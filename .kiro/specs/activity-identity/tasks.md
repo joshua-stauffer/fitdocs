@@ -647,7 +647,7 @@ never co-varies two keys a rule distinguishes.
   - _Requirements: 2.5, 3.9, 3.10, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 4.11, 5.7, 6.8, 7.1, 7.5_
   - _Depends: 2.4, 2.5_
 
-- [ ] 4.4 Plan every inbox drain the same way
+- [x] 4.4 Plan every inbox drain the same way
   - After selection, settling, the probe read and the quarantine partition,
     prepare the admitted candidates from the probe bytes, plan, and apply
     tasks; per-candidate quarantine bookkeeping and the archive-presence
@@ -657,6 +657,9 @@ never co-varies two keys a rule distinguishes.
     refresh, so a damaged record raises before any write
   - `_process_isolated` keeps its name and is still called after the
     declaration refresh (`tests/test_drain.py:519-546`)
+    _(Amended 2026-09-30 by the controller: the planned drain no longer calls
+    `_process_isolated`; the test's spy moves to the planned run and still pins
+    the refresh before any per-file processing.)_
   - Carry the collision sweep: any test whose inbox corpus the rule now joins
     or holds is re-shaped (never a tolerance), outside this task's own files if
     need be, and listed in the report

@@ -516,7 +516,10 @@ def test_refresh_declarations_runs_before_any_per_file_processing(
     interleaved with or after it. A spy records call order around the real
     implementations (so the run's actual outcome is unaffected) and asserts
     the refresh is always the first call recorded, strictly before any
-    ``_process_isolated`` call."""
+    ``_run_planned`` call (the planner that prepares and applies the drain's
+    candidates; since
+    activity-identity 4.4 the drain no longer calls ``_process_isolated``,
+    which only ``regen`` uses)."""
     import fitdocs.sync as sync_module
 
     inbox = tmp_path / "inbox"
@@ -526,24 +529,24 @@ def test_refresh_declarations_runs_before_any_per_file_processing(
 
     calls: list[str] = []
     real_refresh = sync_module.refresh_declarations
-    real_process = sync_module._process_isolated
+    real_process = sync_module._run_planned
 
     def spy_refresh(*args: object, **kwargs: object) -> None:
         calls.append("refresh_declarations")
         real_refresh(*args, **kwargs)  # type: ignore[arg-type]
 
-    def spy_process(*args: object, **kwargs: object) -> None:
-        calls.append("_process_isolated")
-        real_process(*args, **kwargs)  # type: ignore[arg-type]
+    def spy_process(*args: object, **kwargs: object) -> dict[str, str]:
+        calls.append("_run_planned")
+        return real_process(*args, **kwargs)  # type: ignore[arg-type]
 
     monkeypatch.setattr(sync_module, "refresh_declarations", spy_refresh)
-    monkeypatch.setattr(sync_module, "_process_isolated", spy_process)
+    monkeypatch.setattr(sync_module, "_run_planned", spy_process)
 
     _drain(inbox, data_root)
 
-    assert "_process_isolated" in calls  # the fixture file really was processed
+    assert "_run_planned" in calls  # the fixture file really was processed
     assert calls[0] == "refresh_declarations"
-    assert calls.index("refresh_declarations") < calls.index("_process_isolated")
+    assert calls.index("refresh_declarations") < calls.index("_run_planned")
 
 
 # ===========================================================================
@@ -862,9 +865,11 @@ def test_a_second_candidate_sharing_bad_content_is_quarantined_within_one_drain(
     """Pins that the quarantine partition is checked against the record as it
     evolves *during* this drain, not only the record the caller passed in --
     two distinct candidates sharing identical undecodable content in one
-    drain: the first (by sorted inbox-relative order) is processed, fails,
-    and gets recorded; the second must see that just-recorded entry and be
-    quarantined quietly rather than independently reprocessed and failed."""
+    drain: the planner parses and fails each copy independently (an
+    undecodable file is never marked seen); after the run the first is recorded,
+    and the second, seeing that just-recorded entry, is demoted from the
+    failures to the quarantined channel rather than reported as a second
+    failure."""
     inbox = tmp_path / "inbox"
     data_root = tmp_path / "data"
     data_root.mkdir()
@@ -881,6 +886,92 @@ def test_a_second_candidate_sharing_bad_content_is_quarantined_within_one_drain(
     assert report.quarantined[0].detail == report.sync.failures[0].reason
     record = load_quarantine(data_root)
     assert len(record.entries) == 1
+
+
+def test_retrying_two_identical_bad_candidates_fails_both_and_updates_the_entry(
+    tmp_path: Path,
+) -> None:
+    """Inbox Req 5.5: under ``retry_quarantined`` two candidates sharing
+    quarantined undecodable content are both retried -- both are failures, none
+    is quarantined quietly, and the entry is updated with the new reason.
+
+    Mutation: demote a failed duplicate whenever the record holds its hash
+    (the second candidate lands in ``quarantined``, not ``failures``).
+    """
+    inbox = tmp_path / "inbox"
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    bad = builder.non_fit_bytes()
+    _put(inbox, "a-bad.fit", bad)
+    _put(inbox, "b-bad.fit", bad)
+    seeded = QuarantineRecord(
+        entries=(
+            QuarantineEntry(sha256=_sha256(bad), name="old.fit", reason="stale reason"),
+        )
+    )
+
+    report = _drain(inbox, data_root, quarantine=seeded, retry_quarantined=True)
+
+    assert [f.source for f in report.sync.failures] == ["a-bad.fit", "b-bad.fit"]
+    assert report.quarantined == ()
+    (entry,) = load_quarantine(data_root).entries
+    assert entry.reason != "stale reason"
+    assert entry.reason == report.sync.failures[-1].reason
+
+
+def test_quarantined_channel_is_in_candidate_order_with_a_demoted_duplicate(
+    tmp_path: Path,
+) -> None:
+    """The ``quarantined`` channel lists candidates in inbox order, a demoted
+    duplicate among them: ``b`` (demoted after the run) precedes ``c``
+    (quarantined at the partition).
+
+    Mutation: drop the final sort (``[c, b]``).
+    """
+    inbox = tmp_path / "inbox"
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    bad = builder.non_fit_bytes()
+    other = builder.non_fit_bytes() + b"-other"
+    _put(inbox, "a-bad.fit", bad)
+    _put(inbox, "b-bad.fit", bad)
+    _put(inbox, "c-known.fit", other)
+    seeded = QuarantineRecord(
+        entries=(
+            QuarantineEntry(sha256=_sha256(other), name="c", reason="A known reason"),
+        )
+    )
+
+    report = _drain(inbox, data_root, quarantine=seeded)
+
+    assert [f.source for f in report.sync.failures] == ["a-bad.fit"]
+    assert [n.subject for n in report.quarantined] == ["b-bad.fit", "c-known.fit"]
+
+
+def test_two_identical_new_bad_candidates_under_retry_both_fail_and_name_the_last(
+    tmp_path: Path,
+) -> None:
+    """Under ``retry_quarantined`` nothing is demoted: two identical new
+    undecodable candidates and an empty record are both failures, none is
+    quarantined, and the one entry carries the last failing name (as each
+    candidate being retried updates it).
+
+    Mutation: demote under retry too (``b-bad.fit`` lands in ``quarantined`` and
+    the entry names ``a-bad.fit``).
+    """
+    inbox = tmp_path / "inbox"
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    bad = builder.non_fit_bytes()
+    _put(inbox, "a-bad.fit", bad)
+    _put(inbox, "b-bad.fit", bad)
+
+    report = _drain(inbox, data_root, retry_quarantined=True)
+
+    assert [f.source for f in report.sync.failures] == ["a-bad.fit", "b-bad.fit"]
+    assert report.quarantined == ()
+    (entry,) = load_quarantine(data_root).entries
+    assert entry.name == "b-bad.fit"
 
 
 # --- quarantined files never enter written/skipped/failures ---------------

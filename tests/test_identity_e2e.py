@@ -41,9 +41,15 @@ from fitdocs.identity.roles import (
     PrecedenceEntry,
     resolve_precedence,
 )
-from fitdocs.inbox import DEFAULT_INBOX_SETTINGS
-from fitdocs.layout import WORKOUTS_DIR, archive_path, held_path, source_ref
-from fitdocs.quarantine import QuarantineRecord
+from fitdocs.inbox import DEFAULT_INBOX_SETTINGS, Disposition
+from fitdocs.layout import (
+    WORKOUTS_DIR,
+    archive_path,
+    held_path,
+    quarantine_path,
+    source_ref,
+)
+from fitdocs.quarantine import QuarantineRecord, load_quarantine
 from fitdocs.render import TileRef
 from fitdocs.sync import SyncReport, drain, regen, sync
 from tests.fixtures import identity as fx
@@ -1996,8 +2002,9 @@ def test_a_duplicate_of_a_file_whose_task_failed_is_a_failure_too(
     assert not archive_path(data_root, _sha(original.data)).exists()
 
 
+@pytest.mark.parametrize("entry_point", ["sync", "drain"])
 def test_settle_renames_of_the_run_carry_into_the_held_candidates(
-    tmp_path: Path,
+    tmp_path: Path, entry_point: str
 ) -> None:
     """Design (hold task): candidates are rewritten through the task renames and
     then the settle renames, so a candidate settled onto a freed name is recorded
@@ -2007,7 +2014,8 @@ def test_settle_renames_of_the_run_carry_into_the_held_candidates(
     unsuffixed name, the others sit under a suffix); the first is deleted, and a
     file 8 s from the second and third matches both. The run's settle pass moves
     one suffixed page onto the freed name. Mutation: rewrite through the task
-    renames only (the record names the vanished suffixed path).
+    renames only (the record names the vanished suffixed path), in ``sync`` and
+    in the drain alike.
     """
     data_root = tmp_path / "data"
     data_root.mkdir()
@@ -2023,7 +2031,11 @@ def test_settle_renames_of_the_run_carry_into_the_held_candidates(
     unsuffixed.unlink()
     ambiguous = _garmin_run(elapsed_s=3024.0, serial=14)
 
-    report = _sync_files(tmp_path, data_root, [("x", ambiguous)])
+    if entry_point == "sync":
+        report = _sync_files(tmp_path, data_root, [("x", ambiguous)])
+    else:
+        inbox = _put_inbox(tmp_path, [("x", ambiguous)])
+        report = _drain_inbox(tmp_path, data_root, inbox).sync
 
     assert report.failures == ()
     (entry,) = load_holds(data_root).entries
@@ -2094,3 +2106,292 @@ def test_held_candidates_follow_a_task_rename_and_then_a_settle_rename(
 
     assert holds.record.entries[0].candidates == ("c", "other")
     assert load_holds(tmp_path).entries[0].candidates == ("c", "other")
+
+
+# --- drain (4.4) ---
+
+_MOVE_INBOX = replace(
+    DEFAULT_INBOX_SETTINGS, settle_seconds=0.0, disposition=Disposition.MOVE
+)
+
+
+def _inbox_files(inbox: Path) -> list[str]:
+    return sorted(p.name for p in inbox.iterdir()) if inbox.exists() else []
+
+
+def _put_inbox(base: Path, files: Sequence[tuple[str, bytes]]) -> Path:
+    """A fresh inbox holding ``files`` (name, bytes), a directory per call."""
+    inbox = base / f"inbox-{len(list(base.glob('inbox-*')))}"
+    inbox.mkdir(parents=True)
+    for name, data in files:
+        (inbox / f"{name}.fit").write_bytes(data)
+    return inbox
+
+
+def _drain_inbox(
+    base: Path,
+    data_root: Path,
+    inbox: Path,
+    *,
+    precedence: Precedence = DEFAULT_PRECEDENCE,
+) -> sync_module.DrainReport:
+    """One draining run under the move disposition (processed files go to
+    ``<base>/processed``)."""
+    return drain(
+        inbox,
+        data_root,
+        settings=_MOVE_INBOX,
+        processed_dir=base / "processed",
+        quarantine=load_quarantine(data_root),
+        athlete=None,
+        tz=_TZ,
+        tiles=_TILES,
+        sleep=lambda _seconds: None,
+        precedence=precedence,
+    )
+
+
+def test_a_healthfit_page_then_a_garmin_original_in_the_inbox_join_and_move(
+    tmp_path: Path,
+) -> None:
+    """Req 4.1, 4.3, 4.11: the HealthFit page exists; the Garmin original dropped
+    in the inbox joins it (one page, the original its base) and is moved out; the
+    same two files dropped in one inbox give the tree ``sync`` gives them in one
+    run.
+
+    Mutation: skip planning in the drain and run the old per-file pipeline
+    (``_process_isolated``) on each candidate (this test reds). Planning each
+    candidate alone through ``_run_planned`` would not: one file per run joins
+    the same page in either order.
+    """
+    copy, original = fx.healthfit_copy(), fx.garmin_original()
+    data_root = tmp_path / "then" / "data"
+    data_root.mkdir(parents=True)
+    _sync_one(data_root, tmp_path / "then", copy)
+    inbox = _put_inbox(tmp_path / "then", [("original", original.data)])
+
+    report = _drain_inbox(tmp_path / "then", data_root, inbox)
+
+    assert report.sync.failures == ()
+    assert len(report.sync.written) == 1
+    assert report.moved != () and len(report.moved) == 1
+    assert _inbox_files(inbox) == []
+    page = _only_page(data_root)
+    assert _frontmatter(page)["sources"] == [_ref(copy), _ref(original)]
+    assert _frontmatter(page)["source_kind"] == "original"
+
+    together_root = tmp_path / "together" / "data"
+    together_root.mkdir(parents=True)
+    both = _put_inbox(
+        tmp_path / "together", [("a-copy", copy.data), ("b-original", original.data)]
+    )
+    drained = _drain_inbox(tmp_path / "together", together_root, both)
+    assert drained.sync.failures == ()
+    assert len(drained.moved) == 2
+    assert _inbox_files(both) == []
+    reference_root = tmp_path / "reference" / "data"
+    reference_root.mkdir(parents=True)
+    reference = _sync_files(
+        tmp_path / "reference",
+        reference_root,
+        [("a-copy", copy.data), ("b-original", original.data)],
+    )
+    assert reference.failures == ()
+    together = _tree(together_root)
+    assert together == _tree(reference_root)
+
+
+def test_the_drain_plans_from_the_probe_bytes_and_reads_a_candidate_twice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Design (run preparation): the drain reuses the probe read, so a written
+    candidate is read twice -- the probe, and the task's confirmation that the
+    planned bytes are still the file's.
+
+    Mutation: prepare from a fresh read instead of the probe bytes (three reads).
+    """
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    inbox = _put_inbox(tmp_path, [("run", fx.garmin_original().data)])
+    target = inbox / "run.fit"
+    reads: list[Path] = []
+    real_read = Path.read_bytes
+
+    def counting(self: Path) -> bytes:
+        if self == target:
+            reads.append(self)
+        return real_read(self)
+
+    monkeypatch.setattr(Path, "read_bytes", counting)
+
+    report = _drain_inbox(tmp_path, data_root, inbox)
+
+    assert len(report.sync.written) == 1  # the candidate really was applied
+    assert len(reads) == 2
+
+
+def test_an_ambiguous_candidate_is_held_moved_and_never_quarantined(
+    tmp_path: Path,
+) -> None:
+    """Req 4.5, 4.7, 4.11, 7.5: a candidate that matches two pages changes
+    neither, is archived and recorded, is reported skipped with the hold
+    warning, is moved out of the inbox under the move disposition (it is
+    archived), and is absent from the quarantine record; dropped again, it is
+    skipped quietly.
+
+    Mutations: quarantine a held candidate (the record names it); leave a held
+    candidate in the inbox (the inbox still lists it); hold without archiving
+    (the archive is missing and the file stays).
+    """
+    data_root, ambiguous = _stage_two_pages(tmp_path)
+    before = _tree(data_root)
+    sha = _sha(ambiguous)
+    inbox = _put_inbox(tmp_path, [("ambiguous", ambiguous)])
+
+    report = _drain_inbox(tmp_path, data_root, inbox)
+
+    assert report.sync.failures == ()
+    assert report.sync.written == ()
+    assert report.sync.skipped == ("ambiguous.fit",)
+    (warning,) = report.sync.warnings
+    assert warning.doc == source_ref(sha)
+    assert "held, not merged" in warning.detail
+    after = _tree(data_root)
+    assert {path: after[path] for path in before} == before  # both pages unchanged
+    (entry,) = load_holds(data_root).entries
+    assert entry.sha256 == sha
+    assert archive_path(data_root, sha).is_file()
+    assert len(report.moved) == 1
+    assert report.move_failures == ()
+    assert _inbox_files(inbox) == []
+    assert (tmp_path / "processed").is_dir()
+    assert report.quarantined == ()
+    assert load_quarantine(data_root).entries == ()
+    assert not quarantine_path(data_root).exists()
+
+    again = _put_inbox(tmp_path, [("ambiguous", ambiguous)])
+    second = _drain_inbox(tmp_path, data_root, again)
+
+    assert second.sync.failures == ()
+    assert second.sync.warnings == ()
+    assert second.sync.skipped == ("ambiguous.fit",)
+    assert _tree(data_root) == after
+
+
+def test_a_document_failure_in_a_group_task_quarantines_no_member(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Req 4.1, inbox 5.7: two candidates of one session join one damaged page in
+    one task; the document's fault fails both, neither is quarantined (a fault of
+    the page is not a property of their bytes), and both stay in the inbox.
+
+    Mutation: treat every failure as source-level (the record names both).
+    """
+    copy, original, partner = (
+        fx.healthfit_copy(),
+        fx.garmin_original(),
+        fx.partner_copy(),
+    )
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _sync_one(data_root, tmp_path, copy)
+    page = _only_page(data_root)
+    text = page.read_text(encoding="utf-8")
+    assert text.count(end_marker("notes")) == 1  # precondition
+    page.write_text(text.replace(end_marker("notes"), ""), encoding="utf-8")
+    damaged = _tree(data_root)
+    inbox = _put_inbox(
+        tmp_path, [("a-original", original.data), ("b-partner", partner.data)]
+    )
+    group_sizes: list[int] = []
+    real_group = sync_module._group_task
+
+    def spy(
+        members: list[sync_module._Prepared], *args: object, **kwargs: object
+    ) -> None:
+        group_sizes.append(len(members))
+        real_group(members, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(sync_module, "_group_task", spy)
+
+    report = _drain_inbox(tmp_path, data_root, inbox)
+
+    assert group_sizes == [2]  # precondition: one task, both members
+    assert [f.source for f in report.sync.failures] == [
+        "a-original.fit",
+        "b-partner.fit",
+    ]
+    assert report.quarantined == ()
+    assert load_quarantine(data_root).entries == ()
+    assert not quarantine_path(data_root).exists()
+    assert report.moved == ()
+    assert _inbox_files(inbox) == ["a-original.fit", "b-partner.fit"]
+    assert _tree(data_root) == damaged
+
+
+def _snapshot_tree(root: Path) -> dict[str, bytes | None]:
+    """Every path under ``root`` (directories as ``None``) with its bytes."""
+    return {
+        str(p.relative_to(root)): (p.read_bytes() if p.is_file() else None)
+        for p in sorted(root.rglob("*"))
+    }
+
+
+def test_a_damaged_hold_record_raises_before_the_drain_writes_anything(
+    tmp_path: Path,
+) -> None:
+    """Req 4.7, 4.10: the drain loads the hold record before the declaration
+    refresh, so a damaged one raises with the data root and the inbox exactly as
+    they were -- no declaration written, no candidate archived or moved.
+
+    Mutation: load the record after the declaration refresh (the refresh writes
+    ``AGENTS.md`` first, so the snapshot differs).
+    """
+    data_root = tmp_path / "data"
+    (data_root / ".fitdocs").mkdir(parents=True)
+    held_path(data_root).write_text("this is [not valid toml\n", encoding="utf-8")
+    inbox = _put_inbox(tmp_path, [("run", fx.garmin_original().data)])
+    before = _snapshot_tree(data_root)
+    inbox_before = _snapshot_tree(inbox)
+    assert set(before) == {".fitdocs", ".fitdocs/held.toml"}  # nothing to refresh yet
+
+    with pytest.raises(HoldRecordError):
+        _drain_inbox(tmp_path, data_root, inbox)
+
+    assert _snapshot_tree(data_root) == before
+    assert _snapshot_tree(inbox) == inbox_before
+    assert not (tmp_path / "processed").exists()
+
+
+def test_held_candidates_follow_a_rename_the_same_drain_makes(tmp_path: Path) -> None:
+    """Design (hold task, drain): a page a hold names is renamed in the same
+    drain, and the record names the page where it ended.
+
+    Fixture: as the ``sync`` version above, with the newer export and the
+    ambiguous file dropped in one inbox. Mutation: skip the drain's
+    ``_finish_holds`` (the record names the path a page had before the run).
+    """
+    older, newer = fx.healthfit_reexport_pair()
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _sync_files(tmp_path, data_root, [("a", older.data)])
+    _sync_files(tmp_path, data_root, [("b", _garmin_run(elapsed_s=3008.0, serial=12))])
+    old_paths = {p.relative_to(data_root).as_posix() for p in _pages(data_root)}
+    assert len(old_paths) == 2  # precondition: two pages
+    inbox = _put_inbox(
+        tmp_path,
+        [
+            ("1-newer", newer.data),
+            ("2-ambiguous", _garmin_run(elapsed_s=3004.0, serial=13)),
+        ],
+    )
+
+    report = _drain_inbox(tmp_path, data_root, inbox)
+
+    assert report.sync.failures == ()
+    assert len(_rename_warnings(report.sync)) == 1  # precondition: A was renamed
+    new_paths = {p.relative_to(data_root).as_posix() for p in _pages(data_root)}
+    assert new_paths != old_paths
+    (entry,) = load_holds(data_root).entries
+    assert set(entry.candidates) == new_paths
+    assert len(entry.candidates) == 2

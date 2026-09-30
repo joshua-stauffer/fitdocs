@@ -356,7 +356,9 @@ parallel. A cross-spec reviewer reconciles all five.
 ### Existing Architecture Analysis
 - **One writer**: `sync.py` owns every write under `workouts/` and
   `fit-archive/`; `sync()`, `drain()` and `regen()` share `_process_isolated`
-  and `_process_file` (`sync.py:1052-1321`). Write order is assets, document,
+  and `_process_file` (`sync.py:1052-1321`) -- the state before this spec;
+  after it, `sync()` and `drain()` share the planned run and only `regen()`
+  keeps `_process_isolated`. Write order is assets, document,
   archive last (`sync.py:1324-1351`); archive presence is the processed
   marker.
 - **Contract readers**: every frontmatter read goes through
@@ -1337,8 +1339,9 @@ if its sha no longer matches.
 
 *Planning.* `plan_run(run_files, scan_pages(data_root))` -- one scan per run.
 
-*Page task* (`_process_isolated` isolates one task; every member fails
-together on an exception, each with the same reason):
+*Page task* (isolated per task -- in `sync` and `drain` by the planned run,
+in `regen` by `_process_isolated`; every member fails together on an
+exception, each with the same reason):
 1. For an existing page: read its text once; version gate (newer → one
    `DocWarning`, every member skipped, nothing written or archived -- Req 6.8);
    the unmanaged-key and effort-tag warnings; carried user-owned lines.
@@ -1455,6 +1458,11 @@ complete).
 **Implementation Notes**
 - Integration: `tests/test_drain.py:519-546` spies `_process_isolated`; it keeps
   its name and is still called after `refresh_declarations`.
+  _(Implementation note 2026-09-30, accepted in the 4.4 review: the planned
+  drain applies its tasks through the planner shared with `sync` and no longer
+  calls `_process_isolated`, which only `regen` still uses; the drain-order test
+  spies the planned run instead and still pins `refresh_declarations` before
+  any per-file processing.)_
 - Validation: `tests/test_identity_e2e.py` (below); the fixture sweep of
   Testing Strategy. Each write step of a page task is one private helper, so a
   test injects a fault after any step (Req 6.7).

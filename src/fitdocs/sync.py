@@ -11,26 +11,20 @@ failures isolated so one bad file never aborts the batch (Req 1-4;
 activity-identity Req 4). :func:`regen` rebuilds documents from the data
 root alone -- re-rendering each from its base archived source and rendering any
 unreferenced archive fresh (Req 4.3, 4.4) -- through the per-file pipeline
-(:func:`_process_isolated`), which :func:`drain` also still uses; :func:`sync`
-runs the planned pipeline described above instead. :func:`drain` is the
-inbox spec's third entry point (design: DrainOrchestration): it composes the
-standing-inbox policy (:mod:`fitdocs.inbox` selection and stability) around
-this same per-file pipeline without modifying it -- candidates are selected,
-settled, read once
-each (a read failure defers rather than fails or quarantines the candidate,
-inbox Req 4.2), and every stable, readable candidate not already quarantined
-(or being retried, inbox Req 5.5) is handed to the same :func:`_process_isolated`
-call :func:`sync` uses, with the candidate's inbox-relative path as its
-``source_label`` (inbox Req 2.3). A candidate whose content hash is already in
-the quarantine record, and retry is not requested, is reported in its own
-``quarantined`` channel and never reaches :func:`_process_isolated` at all
-(inbox Req 5.2). The composed :class:`DrainReport` wraps the unchanged
-:class:`SyncReport` unmodified, alongside the inbox-only ``deferred`` and
-``quarantined`` channels; neither :func:`sync` nor :func:`regen` nor
-:func:`_process_file`/:func:`_write_outputs` is touched by this addition.
-Processed-file disposition is a later inbox-spec task layered on top of this
-same function -- this slice does not move or delete anything. The CLI wiring
-is built on top in a later slice.
+(:func:`_process_isolated`); :func:`sync` and :func:`drain` plan their runs as
+described above instead. :func:`drain` is the inbox spec's third entry point
+(design: DrainOrchestration): it composes the standing-inbox policy
+(:mod:`fitdocs.inbox` selection and stability) around the same planned run --
+candidates are selected, settled and read once each (a read failure defers
+rather than fails or quarantines the candidate, inbox Req 4.2); a candidate
+whose content hash is already in the quarantine record, and retry is not
+requested, is reported in its own ``quarantined`` channel and never reaches the
+planner (inbox Req 5.2); every other candidate is prepared from the bytes of
+that probe read and planned together, with the candidate's inbox-relative path
+as its report label (inbox Req 2.3). The composed :class:`DrainReport` wraps an
+ordinary :class:`SyncReport` alongside the inbox-only ``deferred`` and
+``quarantined`` channels. Processed-file disposition moves every candidate
+whose content is archived, a held one included.
 
 The *document lookup* (:func:`find_document`) is the read-only step that decides
 whether an incoming ``.fit`` file updates an existing document or seeds a fresh
@@ -246,6 +240,7 @@ from fitdocs.identity.roles import (
     source_member,
 )
 from fitdocs.inbox import (
+    Candidate,
     Disposition,
     InboxNote,
     InboxSettings,
@@ -658,7 +653,10 @@ class DrainReport:
     ``sync`` carries the exact same :class:`SyncReport` contract an
     explicit-source :func:`sync` call would produce over the same admitted
     files -- every admitted candidate lands in exactly one of its
-    ``written``/``skipped``/``failures`` tuples, and only its ``failures``
+    ``written``/``skipped``/``failures`` tuples, except that identical
+    undecodable content under a second name, whose first copy was just
+    quarantined in this drain, is reported in ``quarantined`` instead of as a
+    second failure -- and only its ``failures``
     (plus the load pass, outside this module) drives the failure exit code
     (inbox Req 4.6, 7.1). ``inbox`` names the drained inbox path (inbox Req
     2.3). ``deferred`` is the inbox-only channel for candidates that were not
@@ -679,7 +677,8 @@ class DrainReport:
     """The path drained, as given to :func:`drain` (inbox Req 2.3)."""
 
     sync: SyncReport
-    """The unchanged sync report over every admitted candidate."""
+    """The sync report over the admitted candidates (see the class docstring
+    for the one demotion to ``quarantined``)."""
 
     deferred: tuple[InboxNote, ...]
     """Candidates left untouched this run: unstable across the settle
@@ -688,11 +687,16 @@ class DrainReport:
 
     quarantined: tuple[InboxNote, ...]
     """Stable, readable candidates whose content hash is already present in
-    the quarantine record, and *not* being retried this drain (inbox Req 5.2).
-    Each entry's ``detail`` is the reason recorded when the file was first
-    quarantined. These candidates never reach :func:`_process_isolated` --
-    they are excluded from ``sync.written``/``skipped``/``failures`` entirely,
-    and never drive the failure exit code by themselves (inbox Req 5.3)."""
+    the quarantine record, and *not* being retried this drain (inbox Req 5.2);
+    these never reach the planner. Also a second candidate with the same
+    undecodable bytes as one that failed and was recorded earlier in this
+    drain (unless retrying): it does reach the planner and fails there, then
+    is demoted from ``sync.failures`` to here after the run, carrying the
+    recorded reason.
+    Otherwise each entry's ``detail`` is the reason recorded when the file was
+    first quarantined. Entries are in candidate order. They are excluded from
+    ``sync.written``/``skipped``/``failures`` and never drive the failure exit
+    code by themselves (inbox Req 5.3)."""
 
     moved: tuple[str, ...]
     """Destinations (as strings) of every admitted candidate relocated out of
@@ -722,63 +726,71 @@ def drain(
     sleep: Callable[[float], None] = time.sleep,
     precedence: Precedence = DEFAULT_PRECEDENCE,
 ) -> DrainReport:
-    r"""Drain the inbox: select, settle, quarantine-partition, and process
-    eligible ``.fit`` files through the unmodified per-file pipeline (design:
-    DrainOrchestration, inbox Req 2.1, 2.3, 2.4, 3.5, 4.2, 4.6, 5.1-5.5, 5.7,
-    7.1, 7.4, 7.6).
+    r"""Drain the inbox: select, settle, quarantine-partition, then plan and
+    apply the admitted ``.fit`` files as one run (design: DrainOrchestration,
+    inbox Req 2.1, 2.3, 2.4, 3.5, 4.2, 4.6, 5.1-5.5, 5.7, 7.1, 7.4, 7.6;
+    activity-identity Req 4).
 
-    Sequence, mirroring the design's per-drain ordering for the slice this
-    task builds: refresh the ownership declarations once, exactly where and
-    how :func:`sync` does (inbox Req 7.6). Alongside it,
-    :func:`_scan_symlinked_documents` also runs exactly once, before any
-    per-file processing -- the same once-per-run parity :func:`sync` and
-    :func:`regen` already share (task 7.2, F2; this is beyond the inbox
-    spec's own requirement list, kept for parity with the other two entry
-    points rather than mandated by it). Then select candidates
-    (:func:`fitdocs.inbox.select_candidates`) against *settings*, so ignored
-    files never reach any channel (inbox Req 3.5); settle them as one batch
-    (:func:`fitdocs.inbox.settle`), through the injected *sleep* so a test
-    spends no wall-clock time; read each stable candidate once -- the read
-    doubles as a readability probe, so a candidate that observes as stable
-    but cannot be read (for example an unmaterialized cloud placeholder) is
-    *deferred* with its reason, never failed and never quarantined (inbox
-    Req 4.2).
+    Sequence: the hold record is loaded first, before anything is written, so a
+    damaged one raises :class:`~fitdocs.identity.holds.HoldRecordError`
+    (uncaught here) with the data root untouched. Then the ownership
+    declarations are refreshed once, exactly where and how :func:`sync` does
+    (inbox Req 7.6), and :func:`_scan_symlinked_documents` runs once (the
+    once-per-run parity :func:`sync` and :func:`regen` share). Then candidates
+    are selected (:func:`fitdocs.inbox.select_candidates`) against *settings*,
+    so ignored files never reach any channel (inbox Req 3.5); settled as one
+    batch (:func:`fitdocs.inbox.settle`), through the injected *sleep* so a
+    test spends no wall-clock time; and read once each -- the read doubles as
+    a readability probe, so a candidate that observes as stable but cannot be
+    read (for example an unmaterialized cloud placeholder) is *deferred* with
+    its reason, never failed and never quarantined (inbox Req 4.2).
 
     **Quarantine partition (inbox Req 5.1-5.5, 5.7).** That same probe read's
-    bytes are hashed (sha256, matching the archive's content identity) with no
-    second read of the candidate. When that hash is already present in
-    *quarantine* and *retry_quarantined* is not set, the candidate is *not*
-    handed to the pipeline at all: it is reported once in ``quarantined`` with
-    its recorded reason (inbox Req 5.2) and never enters
-    ``sync.written``/``skipped``/``failures``. Every other stable, readable
-    candidate -- new content, or a quarantined one being retried -- is handed
-    to the same :func:`_process_isolated` call :func:`sync` uses, with the
-    candidate's inbox-relative path (``candidate.rel``) as its
-    ``source_label``, so report entries name inbox-relative paths and every
-    admitted candidate is classified exactly as an explicit-source
-    :func:`sync` over the same bytes would classify it (inbox Req 2.1, 2.3).
-    A fresh failure is recorded into the quarantine only when
-    :func:`_fresh_failure_is_source_level` -- which *re-derives* the fault by
-    re-parsing the probe-read bytes, rather than inspecting the exception the
-    pipeline actually raised (:func:`_process_isolated` isolates and discards
-    it) -- says the re-derived fault is source-level per :func:`is_source_level`
-    (Req 5.1); a fault that is a property of the existing document instead --
-    a damaged preserved region being the representative case, and anything
-    the re-derivation does not recognize -- is reported as a failure and
-    deliberately left unrecorded (Req 5.7), so repairing the document is
-    enough for the next drain to succeed. A retried candidate that fails
-    again always has its entry updated with the new reason and is reported as
-    a failure (Req 5.5), regardless of the re-derived level -- its content
-    was already known-bad; one that now succeeds has its entry removed.
-    *force* governs archive-skip policy only and never implies retry -- the
-    two are independent.
+    bytes are hashed (sha256, matching the archive's content identity). When
+    that hash is already present in *quarantine* and *retry_quarantined* is
+    not set, the candidate is *not* handed to the planner at all: it is
+    reported once in ``quarantined`` with its recorded reason (inbox Req 5.2)
+    and never enters ``sync.written``/``skipped``/``failures``. Every other
+    stable, readable candidate -- new content, or a quarantined one being
+    retried -- is *admitted*.
+
+    **Planned run (activity-identity Req 4).** The admitted candidates are
+    prepared from their probe bytes (the planner does not read them again),
+    assigned to pages together as a function of the *set* of candidates and
+    the existing pages, and applied one page task or hold task at a time
+    (:func:`_run_planned`, the same planner :func:`sync` uses), with the
+    candidate's inbox-relative path (``candidate.rel``) as its report label. A
+    task re-reads its candidates once to confirm their bytes are the planned
+    ones. A candidate whose page is ambiguous is *held*: recorded in
+    ``.fitdocs/held.toml``, archived, reported in ``sync.skipped`` with a
+    warning, and never a failure. A fresh failure is recorded into the
+    quarantine only when :func:`_fresh_failure_is_source_level` -- which
+    *re-derives* the fault by re-parsing the probe-read bytes, rather than
+    inspecting the exception the run isolated -- says the fault is
+    source-level per :func:`is_source_level` (Req 5.1); a fault that is a
+    property of the existing document instead -- a damaged preserved region
+    being the representative case, and anything the re-derivation does not
+    recognize -- is reported as a failure and deliberately left unrecorded
+    (Req 5.7), so repairing the document is enough for the next drain to
+    succeed. That holds for every member of a group task whose document fails:
+    none is quarantined. A held candidate is not a failure and is never
+    quarantined. A retried candidate that fails again always has its entry
+    updated with the new reason and is reported as a failure (Req 5.5),
+    regardless of the re-derived level -- its content was already known-bad;
+    one that now succeeds (or is held) has its entry removed. Identical
+    undecodable bytes under a second name are reported ``quarantined`` from the
+    entry the first copy just earned, not as a second failure (Req 5.2) --
+    unless *retry_quarantined* is set, when every such copy is a failure and the
+    entry carries the last name; the planner has already parsed and failed the
+    copy, and the demotion happens after the run. *force* governs
+    archive-skip policy only and never implies retry -- the two are
+    independent. Afterwards the settle pass runs and the hold record's
+    candidate paths follow the run's renames.
 
     The composed :class:`DrainReport` wraps the resulting :class:`SyncReport`
-    unmodified -- built from the same accumulating lists
-    :func:`_process_isolated` expects, exactly as :func:`sync` builds its own
-    -- alongside the ``deferred`` and ``quarantined`` channels. Only
+    alongside the ``deferred`` and ``quarantined`` channels. Only
     :class:`FileFailure`\ s inside that ``sync`` report drive the failure
-    outcome; a drain whose only exceptional entries are deferrals and/or
+    outcome; a drain whose only exceptional entries are deferrals, holds and/or
     already-quarantined files reports success (inbox Req 4.6, 5.3).
 
     The quarantine record is evolved in memory as the drain proceeds and
@@ -801,7 +813,7 @@ def drain(
     deferred, and quarantined candidates never reach this gate at all -- the
     "did not fail this drain" condition matters in its own right, separately
     from archive presence: under ``force=True`` an already-archived candidate
-    bypasses ``_process_file``'s ordinary dedupe skip and is reprocessed from
+    bypasses the planner's ordinary archived-file skip and is reprocessed from
     scratch, so a damaged preserved region can raise a failure for content
     that *is* already present in ``fit-archive/`` -- archive presence alone
     would wrongly pass that failed candidate. Disposition only runs under
@@ -812,7 +824,7 @@ def drain(
     A candidate that passes the gate has its already-computed hash *passed to*
     :func:`fitdocs.inbox.move_processed` (collision-safe, ``shutil.move``),
     which uses it only for collision-safe naming and never re-hashes it; the
-    drain never reads the candidate a second time (``shutil.move`` may copy
+    disposition never reads the candidate again (``shutil.move`` may copy
     the bytes itself when the destination is on another volume, but that is
     the move, not a re-read for the hash): success appends its destination to
     ``moved``; a
@@ -831,6 +843,9 @@ def drain(
     move_failures: list[InboxNote] = []
     ledger = _RunLedger()
 
+    # The hold record is read before anything is written, so a damaged one
+    # raises HoldRecordError with the data root untouched (Req 4.7, 4.10).
+    holds = _HoldState(load_holds(data_root))
     refresh_declarations(data_root, warnings)
     warnings.extend(_scan_symlinked_documents(data_root))
 
@@ -843,6 +858,7 @@ def drain(
     record = quarantine
     record_changed = False
 
+    admitted: list[tuple[Candidate, bytes, str, QuarantineEntry | None]] = []
     for candidate in settle_result.stable:
         try:
             data = candidate.path.read_bytes()
@@ -868,27 +884,44 @@ def drain(
                 InboxNote(subject=candidate.rel, detail=recorded_entry.reason)
             )
             continue
+        admitted.append((candidate, data, sha, recorded_entry))
 
-        failures_before = len(failures)
-        _process_isolated(
-            candidate.path,
-            data_root,
-            athlete=athlete,
-            tz=tz,
-            tiles=tiles,
-            force=force,
-            precedence=precedence,
-            source_label=candidate.rel,
-            written=written,
-            skipped=skipped,
-            failures=failures,
-            warnings=warnings,
-            ledger=ledger,
-        )
+    # The admitted candidates are planned together, from the probe bytes.
+    task_renames = _run_planned(
+        [_RunItem(c.rel, c.path, data) for c, data, _sha, _entry in admitted],
+        data_root,
+        athlete=athlete,
+        tz=tz,
+        tiles=tiles,
+        force=force,
+        precedence=precedence,
+        holds=holds,
+        ledger=ledger,
+        written=written,
+        skipped=skipped,
+        failures=failures,
+        warnings=warnings,
+    )
+    failed_reasons = {failure.source: failure.reason for failure in failures}
 
-        failed_this_candidate = len(failures) > failures_before
-        if failed_this_candidate:
-            reason = failures[-1].reason
+    demoted: set[str] = set()
+    for candidate, data, sha, recorded_entry in admitted:
+        reason = failed_reasons.get(candidate.rel)
+        earlier = record.get(sha)
+        if (
+            reason is not None
+            and recorded_entry is None
+            and earlier is not None
+            and not retry_quarantined
+        ):
+            # Identical undecodable bytes under another name: an earlier
+            # candidate of this drain was just recorded, and this one is
+            # reported from that entry, not as a second failure (Req 5.2).
+            quarantined.append(InboxNote(subject=candidate.rel, detail=earlier.reason))
+            demoted.add(candidate.rel)
+            continue
+        failed_this_candidate = reason is not None
+        if reason is not None:
             if recorded_entry is not None:
                 # A retried quarantined file failed again: the entry is
                 # always updated with the new reason, regardless of fault
@@ -907,7 +940,8 @@ def drain(
             # else: a document-level (or otherwise unrecognized) fault is
             # reported as a failure and deliberately left unrecorded, so
             # repairing the document is enough for the next drain to succeed
-            # (Req 5.7).
+            # (Req 5.7). A held candidate is not a failure and never
+            # reaches this branch.
         elif recorded_entry is not None:
             # A retried quarantined file succeeded: clear its entry (Req 5.5).
             record = record.without(sha)
@@ -918,7 +952,8 @@ def drain(
         # `fit-archive/` -- the positive, filesystem-checked gate, never the
         # `skipped` label. A version-gated skip (wiki-contract's newer-
         # doc_version gate) deliberately archives nothing, so it fails this
-        # check and stays in the inbox for the next drain to re-select.
+        # check and stays in the inbox for the next drain to re-select. A
+        # held candidate is archived, so it is moved like any other.
         # Reuses `sha` from the probe read above -- no re-hash, no re-read.
         # Runs only under the move disposition with a processed directory
         # supplied; the leave-in-place default (and a MOVE disposition
@@ -935,7 +970,10 @@ def drain(
             else:
                 moved.append(move_result)
 
-    _settle_pass(
+    failures[:] = [f for f in failures if f.source not in demoted]
+    order = {c.rel: i for i, c in enumerate(settle_result.stable)}
+    quarantined.sort(key=lambda note: order[note.subject])
+    settle_renames = _settle_pass(
         data_root,
         ledger,
         athlete=athlete,
@@ -946,6 +984,7 @@ def drain(
         failures=failures,
         warnings=warnings,
     )
+    _finish_holds(data_root, holds, task_renames, settle_renames)
 
     if record_changed:
         save_quarantine(data_root, record)
@@ -986,39 +1025,20 @@ def is_source_level(exc: BaseException) -> bool:
 
 
 def _fresh_failure_is_source_level(data: bytes) -> bool:
-    """Whether the failure the pipeline just isolated for *data* is
-    source-level (:func:`is_source_level`), re-deriving the underlying
-    exception from the same already-in-memory bytes the probe read produced
-    -- no second read of the candidate.
+    """Whether the failure :func:`drain` just saw for *data* is source-level
+    (:func:`is_source_level`), re-derived by parsing the drain's probe-read
+    bytes again.
 
-    :func:`_process_isolated` isolates its exception internally and reports
-    only a :class:`FileFailure`, so this attempts the pure, side-effect-free
-    first pipeline step (:func:`~fitdocs.parse_fit`) directly on *data* to
-    recover it: a fault in decoding these exact bytes reproduces
-    deterministically here, and any downstream fault (for example a region
-    conflict merging into an existing document) leaves this parse succeeding,
-    which is exactly the "not source-level" answer (Req 5.7).
-
-    This re-derivation is *not* a perfect reconstruction of what the pipeline
-    itself hit, and one known divergence is upstream of parsing rather than
-    downstream: :func:`_process_file` performs its own
-    ``source_file.read_bytes()`` rather than reusing the drain's probe-read
-    ``data``, so a candidate that vanishes or becomes unreadable in the
-    (typically sub-millisecond) window between the probe read and that
-    second read raises ``OSError`` inside the pipeline instead of ever
-    reaching :func:`~fitdocs.parse_fit`. Because *data* here is the probe
-    read's own bytes -- captured before that race could happen -- this
-    function still re-parses successfully-read, genuinely undecodable bytes
-    and classifies that ``OSError``-caused :class:`FileFailure` as
-    source-level too, recording it with the reason ``OSError: ...`` rather
-    than the true (transient, unrelated-to-content) cause. This is an
-    accepted, narrow imprecision of the re-derivation strategy: the recorded
-    reason still names ``OSError`` honestly, and the recorded *content* is
-    genuinely undecodable either way -- this branch is reached only when
-    re-parsing the probe bytes raises -- so the entry itself is correct even
-    though its reason names the transient cause. The entry then persists:
-    later drains report it from the record without re-processing it, until
-    ``--retry-quarantined`` re-attempts it.
+    Called only by :func:`drain`, for a candidate that failed and is not a
+    retried quarantine entry (regen does not use it). The planned run reports
+    only a :class:`FileFailure`, never the exception, so this attempts the pure,
+    side-effect-free first step (:func:`~fitdocs.parse_fit`) on *data*: a fault
+    in decoding these exact bytes reproduces deterministically, and any later
+    fault (a region conflict merging into an existing page, a changed-during-
+    the-run file, a failed hold save, a write error) leaves the parse
+    succeeding, which is exactly the "not source-level" answer (Req 5.7). The
+    bytes are the probe read's, so a candidate that vanishes after the probe
+    can never be classified source-level by an ``OSError`` here.
     """
     try:
         parse_fit(data)
@@ -1197,7 +1217,7 @@ def _process_isolated(
 ) -> None:
     """Run the per-file pipeline for one item, isolating any failure (Req 1.3).
 
-    Shared by :func:`regen` and :func:`drain` (:func:`sync` plans its run through
+    Used by :func:`regen` (:func:`sync` and :func:`drain` plan their runs through
     :func:`_run_planned` instead): the pipeline (``_process_file``) is identical
     -- only discovery and the ``source_label`` recorded in the report differ.
     Classifies the item into ``written`` (a document produced or updated),
@@ -1271,6 +1291,9 @@ class _RunItem:
 
     label: str
     path: Path
+    data: bytes | None = None
+    """Bytes the caller already read (the drain's probe read); preparation uses
+    them instead of reading ``path`` again. ``None`` means read ``path``."""
 
 
 @dataclass(frozen=True)
@@ -1316,7 +1339,8 @@ def _run_planned(
 ) -> dict[str, str]:
     """Plan and apply one run's files (activity-identity Req 4, 7.1, 7.5).
 
-    Preparation reads, hashes and parses each item in discovery order (a file
+    Preparation reads (or takes the caller's bytes), hashes and parses each item
+    in discovery order (a file
     already archived, or whose bytes appeared earlier in the run, is skipped
     without a parse; a read or decode failure is that file's failure); the page
     index is scanned once; :func:`~fitdocs.identity.planning.plan_run` assigns
@@ -1332,7 +1356,7 @@ def _run_planned(
     run_files: list[RunFile] = []
     for position, item in enumerate(items):
         try:
-            data = item.path.read_bytes()
+            data = item.data if item.data is not None else item.path.read_bytes()
             sha = hashlib.sha256(data).hexdigest()
             if archive_path(data_root, sha).exists() and not force:
                 outcomes[position] = _Outcome("skipped")

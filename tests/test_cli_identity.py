@@ -5,9 +5,8 @@ Driven through :class:`typer.testing.CliRunner` over temporary data roots. The
 ``connectors`` spec is not on this branch, so the ``pull`` scenarios are out of
 scope here (connectors does that wiring when it lands). The explicit-source
 ``sync`` loads the hold record itself, so its hold-record scenario runs the real
-engine over a damaged ``.fitdocs/held.toml``. The inbox drain does not load the
-record yet on this branch, so its scenario makes the engine function raise the
-real ``HoldRecordError`` (from ``load_holds``).
+engine over a damaged ``.fitdocs/held.toml``, and so does the inbox drain,
+which loads the record before any write.
 """
 
 from __future__ import annotations
@@ -25,7 +24,6 @@ from typer.testing import CliRunner
 from fitdocs import cli as cli_module
 from fitdocs.cli import app
 from fitdocs.declaration import DECLARATION_FILENAME
-from fitdocs.identity.holds import load_holds
 from fitdocs.identity.roles import DEFAULT_PRECEDENCE, Precedence
 from fitdocs.identity.settings import load_identity_settings
 from fitdocs.layout import WORKOUTS_DIR, archive_path, held_path, source_ref
@@ -136,17 +134,6 @@ def _damage_holds(data_root: Path) -> Path:
     return path
 
 
-def _raise_from_real_load(name: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Make the engine function raise the real error for the damaged record."""
-
-    def failing(*args: Any, **kwargs: Any) -> Any:
-        data_root = args[1]
-        load_holds(data_root)  # raises HoldRecordError naming held.toml
-        raise AssertionError("the hold record was expected to be damaged")
-
-    monkeypatch.setattr(cli_module, name, failing)
-
-
 # --- a malformed table exits 2 and writes nothing -------------------------------
 
 
@@ -252,24 +239,23 @@ def test_engine_receives_the_configured_precedence(
 
 @pytest.mark.parametrize("path", ["explicit", "drain"])
 def test_damaged_hold_record_exits_2_naming_the_file_and_regen(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, path: str
+    tmp_path: Path, path: str
 ) -> None:
     data_root = tmp_path / "data"
     _settings(data_root, None)
-    source = _stage(tmp_path / "src")
+    # The drain's inbox is staged in place, so the CLI has no empty directory
+    # to create and the whole data root is byte-compared on both paths.
+    source = _stage(tmp_path / "src" if path == "explicit" else data_root / "inbox")
     held = _damage_holds(data_root)
-    if path == "drain":
-        _raise_from_real_load("drain", monkeypatch)
     args = ["sync", str(source)] if path == "explicit" else ["sync"]
     before = _snapshot(data_root)
+    if path == "drain":  # the precondition: candidates waited in the inbox
+        assert any(name.endswith(".fit") for name in before)
 
     result = runner.invoke(app, [*args, "--out", str(data_root)])
 
     assert result.exit_code == 2, result.output
-    if path == "explicit":
-        # (the drain path's CLI creates the empty inbox directory before the
-        # engine is called, so only the explicit path is byte-compared here)
-        assert _snapshot(data_root) == before
+    assert _snapshot(data_root) == before
     assert str(held) in result.output.replace("\n", "")
     assert "fitdocs regen" in result.output
 
