@@ -176,6 +176,7 @@ FORBIDDEN_LOCAL_NAMES: Final[tuple[str, ...]] = (
 #: check, and only object identity rules it out.
 CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
     "fitdocs.sync": (
+        "document_uuid",
         "effort_tag",
         "is_workout_document",
         "parse_frontmatter",

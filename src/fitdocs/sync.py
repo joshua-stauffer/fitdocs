@@ -6,7 +6,7 @@ on. :func:`sync` walks a source directory and, for each discovered ``.fit`` file
 runs the per-file pipeline -- ``hash -> dedup -> parse -> identity -> render ->
 merge -> write -> archive`` -- with per-file failures isolated so one bad file
 never aborts the batch (Req 1-4). :func:`regen` rebuilds documents from the data
-root alone -- re-rendering each from its current archived source and rendering any
+root alone -- re-rendering each from its base archived source and rendering any
 unreferenced archive fresh (Req 4.3, 4.4) -- reusing that same per-file pipeline;
 only discovery and skip policy differ. :func:`drain` is the inbox spec's third
 entry point (design: DrainOrchestration): it composes the standing-inbox policy
@@ -58,13 +58,16 @@ history all have exactly one definition there, so a document this engine
 recognizes is understood identically by the training-load pass and the audit
 (Req 1.1-1.3). Two keys carry activity identity:
 
-* ``uuid`` -- the recorded session identifier (a canonical UUID string), present
-  only when the activity recorded a ``SESSION UUID``. It converges every
+* ``uuid`` -- the page's session identifier (a canonical UUID string), present
+  only when the page's base or one of its extras recorded a ``SESSION UUID``, or
+  the page already carried one (a page keeps its UUID when a later base records
+  none). It converges every
   re-export of one activity -- same session, different bytes -- onto one
   document.
-* ``sources`` -- the append-ordered list of data-root-relative archive refs the
-  document was rendered from (last entry = current). It resolves exact re-syncs
-  and documents that carry no session UUID.
+* ``sources`` -- the list of data-root-relative archive refs of the document's
+  files, in ascending rank (the last entry is the base, the file the page is
+  rendered from; refs that no longer resolve to an archived file come first).
+  It resolves exact re-syncs and documents that carry no session UUID.
 
 **Match precedence (Req 3.6).** ``uuid`` is matched first, then ``sources``.
 Because the match is *content-based* -- it reads frontmatter, never the filename
@@ -155,16 +158,24 @@ from __future__ import annotations
 
 import hashlib
 import time
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, replace
 from datetime import tzinfo
 from pathlib import Path
 from typing import Final
 
-from fitdocs import AthleteInputs, FitDecodeError, Modality, compute_metrics, parse_fit
+from fitdocs import (
+    Activity,
+    AthleteInputs,
+    FitDecodeError,
+    Modality,
+    compute_metrics,
+    parse_fit,
+)
 from fitdocs.contract import (
     DOC_VERSION,
     InvalidEffortTag,
+    document_uuid,
     document_version,
     effort_tag,
     is_workout_document,
@@ -183,7 +194,17 @@ from fitdocs.docio import REMEDY_REPLACE_SYMLINK as _REMEDY_REPLACE_SYMLINK
 from fitdocs.docio import SYMLINK_DETAIL as _SYMLINK_DETAIL
 from fitdocs.docio import read_frontmatter as _read_frontmatter
 from fitdocs.docmerge import RegionError, merge_regions
+from fitdocs.identity.kinds import source_identity
 from fitdocs.identity.pages import scan_pages
+from fitdocs.identity.roles import (
+    DEFAULT_PRECEDENCE,
+    PageRoles,
+    Precedence,
+    SourceMember,
+    page_session_uuid,
+    rank_members,
+    source_member,
+)
 from fitdocs.inbox import (
     Disposition,
     InboxNote,
@@ -225,8 +246,9 @@ class DocumentMatch:
     """A resolved existing document and its recorded source-ref history.
 
     ``path`` is the matched workout document; ``sources`` is its frontmatter
-    ``sources`` list as an append-ordered tuple (empty when the key is absent),
-    which the caller extends with the newly archived ref when updating in place.
+    ``sources`` list as a tuple in the order recorded (empty when the key is
+    absent), which the caller ranks together with the newly archived ref when
+    updating in place.
     """
 
     path: Path
@@ -467,6 +489,7 @@ def sync(
     tz: tzinfo,
     tiles: TileSource,
     force: bool = False,
+    precedence: Precedence = DEFAULT_PRECEDENCE,
 ) -> SyncReport:
     r"""Turn every ``.fit`` file under ``source_dir`` into a workout document.
 
@@ -531,6 +554,7 @@ def sync(
             tz=tz,
             tiles=tiles,
             force=force,
+            precedence=precedence,
             source_label=str(source_file),
             written=written,
             skipped=skipped,
@@ -616,6 +640,7 @@ def drain(
     force: bool = False,
     retry_quarantined: bool = False,
     sleep: Callable[[float], None] = time.sleep,
+    precedence: Precedence = DEFAULT_PRECEDENCE,
 ) -> DrainReport:
     r"""Drain the inbox: select, settle, quarantine-partition, and process
     eligible ``.fit`` files through the unmodified per-file pipeline (design:
@@ -771,6 +796,7 @@ def drain(
             tz=tz,
             tiles=tiles,
             force=force,
+            precedence=precedence,
             source_label=candidate.rel,
             written=written,
             skipped=skipped,
@@ -913,6 +939,7 @@ def regen(
     athlete: AthleteInputs | None,
     tz: tzinfo,
     tiles: TileSource,
+    precedence: Precedence = DEFAULT_PRECEDENCE,
 ) -> SyncReport:
     r"""Rebuild every workout document from the data root alone (Req 4.3, 4.4).
 
@@ -922,14 +949,16 @@ def regen(
     completely (Req 4.4). Discovery has two parts, both feeding the same per-file
     pipeline ``sync`` uses (only discovery and skip policy differ):
 
-    * **Every document re-renders from its current source.** For each
-      ``workouts/*.md`` workout document, the *last* entry of its frontmatter
-      ``sources`` history (the current render source) is resolved to its archived
-      file and re-rendered. Because those bytes are the archive the document was
+    * **Every document re-renders from its base.** For each ``workouts/*.md``
+      workout document, every file its frontmatter ``sources`` history lists is
+      resolved to its archived file, parsed and ranked with the given
+      ``precedence``, and the page is re-rendered from the highest-ranked one --
+      its base -- with ``sources`` rewritten in ascending rank (activity-identity
+      Req 5.1, 5.2, 7.2, 7.3). Because those bytes are the archive the document was
       rendered from, the pipeline's lookup matches this same document, so
       ``merge_regions`` carries its ``notes``/``workout``/``load`` regions over
       verbatim while the generated content is refreshed (Req 4.3, 10.2). A
-      document whose history is empty or whose current source is missing from the
+      document whose history is empty or none of whose listed files is in the
       archive cannot be regenerated -- it becomes a :class:`FileFailure` and is
       left untouched, the batch continuing.
     * **Archived sources referenced by no document render fresh.** Any
@@ -978,18 +1007,18 @@ def regen(
     refresh_declarations(data_root, warnings)
     warnings.extend(_scan_symlinked_documents(data_root))
 
-    # Re-render each document from its current (last) source, accumulating every
+    # Re-render each document from its base source, accumulating every
     # archive sha any document references so unreferenced archives can be found.
     referenced: set[str] = set()
     for document, sources in _discover_documents(data_root):
         referenced.update(sha for sha in map(sha_of_ref, sources) if sha is not None)
         doc_ref = document.relative_to(data_root).as_posix()
-        archive = _last_source_archive(data_root, sources)
+        archive = _resolvable_source_archive(data_root, sources)
         if archive is None:
-            # No archived source to rebuild from: an empty/unresolvable history or
-            # a current source missing from the archive. Fail this document (left
-            # untouched) and keep going (an orphaned archive it references, if any,
-            # renders fresh below).
+            # No archived source to rebuild from: an empty history, or every
+            # listed file unresolvable or missing from the archive. Fail this
+            # document (left untouched) and keep going (an orphaned archive it
+            # references, if any, renders fresh below).
             failures.append(
                 FileFailure(
                     source=doc_ref,
@@ -1008,6 +1037,7 @@ def regen(
             tz=tz,
             tiles=tiles,
             force=True,
+            precedence=precedence,
             source_label=doc_ref,
             written=written,
             skipped=skipped,
@@ -1024,6 +1054,7 @@ def regen(
             tz=tz,
             tiles=tiles,
             force=True,
+            precedence=precedence,
             source_label=archive.relative_to(data_root).as_posix(),
             written=written,
             skipped=skipped,
@@ -1047,6 +1078,7 @@ def _process_isolated(
     tz: tzinfo,
     tiles: TileSource,
     force: bool,
+    precedence: Precedence,
     source_label: str,
     written: list[str],
     skipped: list[str],
@@ -1080,7 +1112,13 @@ def _process_isolated(
     """
     try:
         outcome, file_warnings = _process_file(
-            source_file, data_root, athlete=athlete, tz=tz, tiles=tiles, force=force
+            source_file,
+            data_root,
+            athlete=athlete,
+            tz=tz,
+            tiles=tiles,
+            force=force,
+            precedence=precedence,
         )
     except (FitDecodeError, RegionError) as exc:
         failures.append(FileFailure(source=source_label, reason=_reason(exc)))
@@ -1121,6 +1159,7 @@ def _process_file(
     tz: tzinfo,
     tiles: TileSource,
     force: bool,
+    precedence: Precedence,
 ) -> tuple[str | None, tuple[DocWarning, ...]]:
     """Run the per-file pipeline; return ``(written-doc-ref | None, warnings)``.
 
@@ -1160,9 +1199,11 @@ def _process_file(
         return None, ()
 
     activity = parse_fit(data)
-    metrics = compute_metrics(activity, athlete)
 
-    uid = activity_uid(activity, sha)
+    # ``match_uid`` is the *incoming file's* identity, used only to find its
+    # page; the page's own uid (below) comes from its retained session UUID or
+    # its base's hash, which need not be this file's.
+    match_uid = activity_uid(activity, sha)
     new_ref = source_ref(sha)
     # ``pending_warnings`` accumulates whatever the version gate or
     # unmanaged-key check below add for the file that matched -- one list,
@@ -1173,7 +1214,7 @@ def _process_file(
     # (Req 7.5, 7.6) and is never reported here at all -- see
     # ``_scan_symlinked_documents``, run once per run by the caller.
     pending_warnings: list[DocWarning] = []
-    match = find_document(data_root, activity_uid=uid, source_ref=new_ref)
+    match = find_document(data_root, activity_uid=match_uid, source_ref=new_ref)
 
     # Document-format version gate (Req 5.4, 5.5, 5.7, 5.8, 5.9). Read the
     # matched document's frontmatter exactly ONCE here -- ``existing_text`` is
@@ -1187,6 +1228,7 @@ def _process_file(
     # honest "out of date" and fall through unchanged to the normal
     # merge-and-write path below, coming out at the current version.
     existing_text: str | None = None
+    existing_frontmatter: Mapping[str, object] | None = None
     carried: tuple[str, ...] = ()
     if match is not None:
         existing_text = match.path.read_text(encoding="utf-8")
@@ -1242,11 +1284,47 @@ def _process_file(
         # above for the version gate: no second read, no second parse.
         carried = user_owned_lines(existing_text.split("\n"))
 
-    # Source history: existing refs (minus any already equal to the new one) with
-    # the new ref appended last, so the current render source is always the unique
-    # final entry -- a re-export appends onto the existing history (Req 3.4, 3.6).
+    # Roles (activity-identity Req 5.1, 5.2, 7.1): the page's listed files plus
+    # the incoming one, each resolved through the archive and parsed once, then
+    # ranked. The incoming file is parsed already, so it is never read or parsed
+    # again (in regen and under force its bytes are archived, but the parse in
+    # hand is the one used); every other listed ref that does not resolve to an
+    # archived file is ``unresolved`` and keeps its place at the front of
+    # ``sources``.
     existing_refs = match.sources if match is not None else ()
-    history = tuple(ref for ref in existing_refs if ref != new_ref) + (new_ref,)
+    listed = tuple(dict.fromkeys((*existing_refs, new_ref)))
+    parsed: dict[str, Activity] = {new_ref: activity}
+    resolved: list[SourceMember] = []
+    unresolved: list[str] = []
+    for ref in listed:
+        if ref == new_ref:
+            resolved.append(source_member(ref, sha, activity))
+            continue
+        member_sha = sha_of_ref(ref)
+        member_archive = (
+            archive_path(data_root, member_sha) if member_sha is not None else None
+        )
+        if member_sha is None or member_archive is None or not member_archive.is_file():
+            unresolved.append(ref)
+            continue
+        member_activity = parse_fit(member_archive.read_bytes())
+        parsed[ref] = member_activity
+        resolved.append(source_member(ref, member_sha, member_activity))
+    roles = rank_members(resolved, unresolved, precedence)
+
+    # The page's session UUID is the first of base, extras that carries one,
+    # else the value the page already records (Req 5.5): a base that carries
+    # none never drops the identity its page converged on. The identity keys
+    # come from the base's own parse, never from a composed activity (Req 5.4).
+    page_uuid = page_session_uuid(
+        roles,
+        document_uuid(existing_frontmatter)
+        if existing_frontmatter is not None
+        else None,
+    )
+    uid = page_uuid if page_uuid is not None else roles.base.sha
+    base_activity = parsed[roles.base.ref]
+    identity = replace(source_identity(base_activity), session_uuid=page_uuid)
 
     def taken(candidate: str) -> bool:
         # A stem is taken only by a *different* activity's document; the activity's
@@ -1256,40 +1334,48 @@ def _process_file(
             return False
         return match is None or candidate_path != match.path
 
-    stem = doc_stem(activity, uid, tz, taken)
+    stem = doc_stem(base_activity, uid, tz, taken)
     # The write target -- and thus the data-root-relative doc ref used for both the
     # report entry and any map warning -- is known once the stem/match are resolved.
     target = match.path if match is not None else doc_path(data_root, stem)
     doc_ref = target.relative_to(data_root).as_posix()
+
+    # The activity the page renders (the channel-merge seam) and everything
+    # computed from it: metrics and the map plan.
+    render_activity = _render_activity(roles, parsed)
+    metrics = compute_metrics(render_activity, athlete)
 
     # Resolve prepared map inputs before the pure render, only for the outdoor
     # (non-strength) views that render a Map section (Req 3.5). Tile unavailability
     # degrades to a warning naming this document; the doc renders mapless (4.3, 4.4).
     map_data: MapData | None = None
     warnings: list[DocWarning] = pending_warnings
-    if activity.modality is not Modality.STRENGTH:
-        plan = plan_map(activity.samples.latitude_deg, activity.samples.longitude_deg)
+    if render_activity.modality is not Modality.STRENGTH:
+        plan = plan_map(
+            render_activity.samples.latitude_deg, render_activity.samples.longitude_deg
+        )
         if plan is not None:
             try:
-                resolved = tiles.resolve(plan.tiles)
+                resolved_tiles = tiles.resolve(plan.tiles)
             except TileUnavailableError as exc:
                 warnings.append(DocWarning(doc=doc_ref, detail=_reason(exc)))
             else:
                 map_data = MapData(
                     plan=plan,
-                    tiles=tuple((ref, resolved[ref]) for ref in plan.tiles),
+                    tiles=tuple((ref, resolved_tiles[ref]) for ref in plan.tiles),
                     attribution=tiles.attribution,
                 )
 
     ctx = DocContext(
-        activity=activity,
+        activity=render_activity,
         metrics=metrics,
         athlete=athlete,
         doc_stem=stem,
-        source_refs=history,
+        source_refs=roles.sources,
         tz=tz,
         map_data=map_data,
         user_frontmatter=carried,
+        identity=identity,
     )
     rendered = render_document(ctx)
 
@@ -1309,6 +1395,16 @@ def _process_file(
 
     _write_outputs(data_root, target, markdown, rendered.assets, archive, data)
     return doc_ref, tuple(warnings)
+
+
+def _render_activity(roles: PageRoles, parsed: Mapping[str, Activity]) -> Activity:
+    """The activity a page renders: the base's own (Req 5.8).
+
+    ``parsed`` maps each resolved member's archive ref to its parse. This is the
+    seam channel-merge widens to compose the extras' channels; the page's
+    identity keys never come from what it returns.
+    """
+    return parsed[roles.base.ref]
 
 
 def _write_outputs(
@@ -1431,15 +1527,19 @@ def _discover_documents(data_root: Path) -> list[tuple[Path, tuple[str, ...]]]:
     return documents
 
 
-def _last_source_archive(data_root: Path, sources: tuple[str, ...]) -> Path | None:
-    """The archived file for a document's current (last) source, or ``None``.
+def _resolvable_source_archive(
+    data_root: Path, sources: tuple[str, ...]
+) -> Path | None:
+    """An archived file for a document's ``sources`` history, or ``None``.
 
-    Resolves the last ``sources`` entry -- the current render source -- back to
-    ``fit-archive/<sha>.fit`` through :func:`fitdocs.contract.sha_of_ref`, the
-    exact inverse of :func:`fitdocs.layout.source_ref`. Returns ``None`` when the
-    history is empty, its last entry is not a resolvable archive ref, or the
-    referenced archive file is absent: in each case the document cannot be
-    regenerated from the archive and the caller records a failure.
+    Walks the history from its last entry -- the base -- backwards and returns
+    the first entry that resolves back to a present ``fit-archive/<sha>.fit``
+    through :func:`fitdocs.contract.sha_of_ref`, the exact inverse of
+    :func:`fitdocs.layout.source_ref`. The page task then resolves every other
+    listed file itself, so which one triggers the rebuild does not change the
+    result. Returns ``None`` when the history is empty or none of its entries
+    resolves to an archived file: the document cannot be regenerated and the
+    caller records a failure.
 
     The contract's resolver validates the embedded sha rather than trusting it, so
     a hand-edited or traversal-shaped entry (``fit-archive/../secrets.fit``) is
@@ -1447,13 +1547,14 @@ def _last_source_archive(data_root: Path, sources: tuple[str, ...]) -> Path | No
     root (Req 1.3). Such a document is reported as having no regenerable source --
     the same graceful degradation any other malformed history gets.
     """
-    if not sources:
-        return None
-    sha = sha_of_ref(sources[-1])
-    if sha is None:
-        return None
-    archive = archive_path(data_root, sha)
-    return archive if archive.is_file() else None
+    for ref in reversed(sources):
+        sha = sha_of_ref(ref)
+        if sha is None:
+            continue
+        archive = archive_path(data_root, sha)
+        if archive.is_file():
+            return archive
+    return None
 
 
 def _unreferenced_archives(data_root: Path, referenced: set[str]) -> list[Path]:

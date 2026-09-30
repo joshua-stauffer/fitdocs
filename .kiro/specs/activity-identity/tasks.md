@@ -540,7 +540,7 @@ never co-varies two keys a rule distinguishes.
 
 - [ ] 4. Engine: roles, renames and planned runs
 
-- [ ] 4.1 Render every page from its base, with its files in canonical order
+- [x] 4.1 Render every page from its base, with its files in canonical order
   - Give `sync`, `drain` and `regen` a keyword `precedence` defaulting to the
     default precedence
   - For a matched page, resolve every listed file, parse each resolved one
