@@ -21,8 +21,9 @@
 - **Generator-dependent tests run with the docs group.** Run
   `uv run --group docs pytest tests/sitebuild` for anything behind
   `requires_zensical`.
-  - A plain `uv sync` removes Zensical, and a plain `uv run pytest` *skips*
-    those tests, which proves nothing about them. Before calling a
+  - A plain `uv sync` removes Zensical, after which `uv run pytest` *skips*
+    those tests, which proves nothing about them (`uv run` alone does not
+    remove an already-synced Zensical). Before calling a
     generator-touching task done, run it with `FITDOCS_REQUIRE_SITE_TOOLING=1`
     so a skip is a failure.
   - Mutating `pyproject.toml` under `uv run` silently re-resolves `uv.lock`.
@@ -614,7 +615,7 @@
 
 - [ ] 4. Validation against the real generator
 
-- [ ] 4.1 Smoke-test a real build of the fixture site, and each failure class
+- [x] 4.1 Smoke-test a real build of the fixture site, and each failure class
   - Create `tests/sitebuild/test_build_smoke.py`, entirely behind
     `requires_zensical`. It builds the fixture into `tmp_path` through
     `pipeline.build` and asserts:
@@ -952,3 +953,13 @@
     - The import guard in test_repo_wiring.py covers exactly the 10 `scripts/sitebuild` files plus `build_site.py`.
     - The reviewer ran the real CLI: case and firmlink spellings of the repo and its parents are refused; SIGINT exits 0; a taken port exits 2.
   - **For 5.1.** `_build_parser()` parses the design's workflow commands.
+- 4.1 (2 rounds, parallel stream impl/ds-4-1). `test_build_smoke.py` builds the fixture once with real Zensical in about 2 s. Findings from the real output:
+  - search.json sits at the html root, with `items[].location` of `""` for home and `why/#anchor` for sections.
+  - Material's active page carries `label for=__toc` and a `#` link, which the nav parser skips.
+  - Zensical writes html/ BEFORE a strict abort, so removing html/ on generator failure is load-bearing.
+  - Zensical itself drops dotfiles on copy.
+
+  Other notes:
+  - llms equality is recomputed through outline, so outline's order and format are pinned in test_outline.py.
+  - `plugins: [search]` is pinned in test_config.py; Zensical writes search.json regardless.
+  - Linux runs so far were aarch64 only. The first ubuntu amd64 evidence is the docs.yml CI run.
