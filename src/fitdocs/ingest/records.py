@@ -2,8 +2,9 @@
 
 :func:`extract_samples` maps the decoded FIT record stream onto the model's
 parallel channel arrays. Every array is the same length and index-aligned: index
-``i`` describes the same sample across all ten channels, and a channel the device
-did not record at ``i`` holds ``None`` there (Req 3.1, 3.2).
+``i`` describes the same sample across all twenty-two channels (the ten core
+ones and the twelve running-dynamics ones), and a channel the device did not
+record at ``i`` holds ``None`` there (Req 3.1, 3.2).
 
 Channel policy:
 
@@ -19,6 +20,11 @@ Channel policy:
   (``apply_scale_and_offset=True``), so decoded speed (m/s), distance (m),
   altitude (m), and temperature (deg C) are read through in their model units
   unchanged. Only position needs conversion.
+- **Placeholder zeros** (running-dynamics 5.1): a heart rate of ``0`` is ``None``;
+  no other core channel gets that rule (5.5). The twelve running-dynamics channels
+  come from :func:`fitdocs.ingest.dynamics.extract_dynamics`, which owns their
+  zero-as-placeholder and gate rules and reads the record-level developer fields
+  passed as ``developer``.
 - **Raw values** (Req 3.6): sample values are stored verbatim -- no smoothing,
   resampling, or reordering. Smoothing is a downstream metric/renderer concern.
 
@@ -36,18 +42,19 @@ every consumer that must stay index-aligned with the samples. An empty record li
 (or one where no record has a timestamp) yields an empty :class:`Samples` with empty
 channel arrays and an empty timestamps tuple.
 
-This module depends on :mod:`fitdocs.model` and the shared enhanced-preference
-helper in :mod:`fitdocs.ingest._fields`; it never imports the SDK or the metrics
-layer.
+This module depends on :mod:`fitdocs.model`, :mod:`fitdocs.ingest.dynamics` and the
+shared enhanced-preference helper in :mod:`fitdocs.ingest._fields`; it never
+imports the SDK or the metrics layer.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 
 from fitdocs.ingest._fields import prefer_enhanced
-from fitdocs.model import Samples, fit_datetime
+from fitdocs.ingest.dynamics import extract_dynamics
+from fitdocs.model import DeveloperChannel, Samples, fit_datetime
 
 # semicircles -> decimal degrees: deg = semicircles * (180 / 2**31) (Req 3.4).
 _SEMICIRCLE_TO_DEGREE = 180 / 2**31
@@ -79,6 +86,8 @@ def retained_records(
 def extract_samples(
     record_mesgs: Sequence[dict[str, object]],
     start_time: datetime | None,
+    *,
+    developer: Mapping[str, DeveloperChannel] | None = None,
 ) -> tuple[Samples, tuple[datetime, ...]]:
     """Extract parallel channel arrays plus absolute record timestamps (Req 3.1-3.6).
 
@@ -93,6 +102,10 @@ def extract_samples(
     none remain, an empty :class:`Samples` and empty timestamps tuple are
     returned. Values are stored raw: no smoothing, resampling, or reordering
     (Req 3.6).
+
+    ``developer`` is the record-level developer mapping, index-aligned with the
+    retained records, from which the Stryd dynamics channels are read; ``None``
+    means no developer fields.
     """
     retained = retained_records(record_mesgs)
     if not retained:
@@ -103,6 +116,7 @@ def extract_samples(
     )
     anchor = start_time if start_time is not None else timestamps[0]
 
+    dynamics = extract_dynamics(retained, developer if developer is not None else {})
     samples = Samples(
         time_s=tuple((ts - anchor).total_seconds() for ts in timestamps),
         heart_rate_bpm=tuple(_heart_rate(r.get("heart_rate")) for r in retained),
@@ -124,6 +138,7 @@ def extract_samples(
             _semicircles_to_degrees(r.get("position_long")) for r in retained
         ),
         temperature_c=tuple(_float_channel(r.get("temperature")) for r in retained),
+        **dynamics,
     )
     return samples, timestamps
 

@@ -80,7 +80,12 @@ def parse_fit(source: str | Path | bytes) -> Activity:
     # session start is None, and returns the absolute record timestamps for laps.
     session_start = summary.start_time
     retained = retained_records(record_mesgs)
-    samples, record_ts = extract_samples(retained, session_start)
+    record_developer_fields = extract_record_developer_fields(
+        field_description_mesgs, developer_data_id_mesgs, retained
+    )
+    samples, record_ts = extract_samples(
+        retained, session_start, developer=record_developer_fields
+    )
     if session_start is not None:
         start_time = session_start
     elif record_ts:
@@ -95,10 +100,6 @@ def parse_fit(source: str | Path | bytes) -> Activity:
         extract_developer_fields_with_declared_scale(
             field_description_mesgs, session_mesgs
         )
-    )
-
-    record_developer_fields = extract_record_developer_fields(
-        field_description_mesgs, developer_data_id_mesgs, retained
     )
 
     # Sport source precedence: the session values, falling back to the standalone
