@@ -570,7 +570,7 @@ never co-varies two keys a rule distinguishes.
   - _Requirements: 5.1, 5.2, 5.3, 5.5, 5.6, 5.7, 5.8, 6.1, 6.3, 7.1, 7.2, 7.3, 7.6, 7.7_
   - _Depends: 2.3, 3.1, 3.2_
 
-- [ ] 4.2 Rename a page when its base changes, clean its old assets, and settle collisions
+- [x] 4.2 Rename a page when its base changes, clean its old assets, and settle collisions
   - On a base change whose computed filename differs, rename the page to it;
     otherwise keep the filename (user renames and timezone changes as today)
   - On a rename, remove every chart asset the previous generated content

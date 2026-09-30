@@ -31,10 +31,24 @@ The *document lookup* (:func:`find_document`) is the read-only step that decides
 whether an incoming ``.fit`` file updates an existing document or seeds a fresh
 one (Req 3.6).
 
-Write ordering is load-bearing (Req 3.1, 4.2). Per file the engine writes assets
-first, then the document, then the archived source copy **last**: the archive's
-presence is the processed-marker, so a crash before it leaves no archive and the
-file is reprocessed idempotently on the next run. The source directory is opened
+Write ordering is load-bearing (Req 3.1, 4.2, activity-identity 6.7). Per file the
+engine writes the new assets first, then -- only when the page is renamed --
+removes the previous render's stale assets and moves the document with a
+same-directory ``os.replace``, then writes the document, then the archived
+source copy **last**: the archive's presence is the processed-marker, so a crash
+before it leaves no archive and the file is reprocessed idempotently on the next
+run, and no instant leaves the page at two paths (each step is one
+``_write_outputs`` helper). After every file of a run, a settle pass moves each
+page written under a collision suffix to its unsuffixed name once that name is
+free (Req 6.6); it also takes every page an interrupted settle stranded, found
+by one ``workouts/*.md`` scan (a page still at ``<U>-<uid8>.md`` with
+``<U>.md`` free, or at ``<U>.md`` whose generated content, outside its regions,
+still links charts named for the suffix), because the next run skips every
+archived file (Req 6.7). Settling a stranded page is opportunistic: when it
+cannot complete it is left for a later run to finish and nothing is reported
+for it. Any
+ordinary rewrite of a page that sits under its own suffix with the unsuffixed
+name free finishes that rename itself. The source directory is opened
 strictly read-only -- nothing under it is ever written, moved, or deleted (Req
 1.6) -- and an already-archived source is never rewritten (Req 3.5).
 
@@ -157,9 +171,11 @@ rewritten and so is never read for its tag: it is warned only for its version.
 from __future__ import annotations
 
 import hashlib
+import os
+import re
 import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import tzinfo
 from pathlib import Path
 from typing import Final
@@ -193,7 +209,13 @@ from fitdocs.declaration import (
 from fitdocs.docio import REMEDY_REPLACE_SYMLINK as _REMEDY_REPLACE_SYMLINK
 from fitdocs.docio import SYMLINK_DETAIL as _SYMLINK_DETAIL
 from fitdocs.docio import read_frontmatter as _read_frontmatter
-from fitdocs.docmerge import RegionError, merge_regions
+from fitdocs.docmerge import (
+    RegionError,
+    begin_marker,
+    end_marker,
+    extract_regions,
+    merge_regions,
+)
 from fitdocs.identity.kinds import source_identity
 from fitdocs.identity.pages import scan_pages
 from fitdocs.identity.roles import (
@@ -215,6 +237,7 @@ from fitdocs.inbox import (
 )
 from fitdocs.layout import (
     ARCHIVE_DIR,
+    ASSETS_SUBDIR,
     WORKOUTS_DIR,
     activity_uid,
     archive_path,
@@ -358,7 +381,7 @@ class SyncReport:
     docstring's version-gate section.
 
     ``warnings`` is a **separate, additive channel** for non-fatal, subject-scoped
-    conditions. Six causes emit one today: a map that could not be rendered
+    conditions. Seven causes emit one today: a map that could not be rendered
     (Req 4.3, 4.4), a foreign ownership declaration that could not be placed
     (Req 3.6), a document left untouched because it records a newer
     document-format version (Req 5.5), a rewritten document that carried
@@ -366,9 +389,11 @@ class SyncReport:
     rewritten document whose effort tag fitdocs cannot read (preserved
     unchanged, not in effect until corrected, Req 1.4, 3.4, 3.6, 4.7), and a
     ``workouts/*.md`` symlink discovery never follows (Req 7.5, 7.6, task
-    7.2 F2). This is the canonical enumeration every other module points at
+    7.2 F2), and a page renamed because its base changed or because a
+    collision suffix was settled (activity-identity Req 6.5, 6.6). This is the
+    canonical enumeration every other module points at
     instead of repeating (:class:`DocWarning`, :func:`fitdocs.cli._report`) --
-    keep it, and only it, current when a seventh cause is added. A
+    keep it, and only it, current when an eighth cause is added. A
     :class:`DocWarning` rides *alongside* the partition: it never enters
     ``failures``, never moves a file into or out of
     ``written``/``skipped``/``failures``, and never changes the exit code. A
@@ -380,8 +405,8 @@ class SyncReport:
 
     One file can emit **several**. When it does they appear in the order the
     per-file pipeline detects them -- the unmanaged-key notice, then the
-    invalid-effort-tag notice, then the map omission -- which is fixed by
-    statement order in ``_process_file``, not by any set or mapping
+    invalid-effort-tag notice, then the map omission, then the rename notice --
+    which is fixed by statement order in ``_page_task``, not by any set or mapping
     iteration, so the sequence is reproducible run to run.
     """
 
@@ -543,6 +568,7 @@ def sync(
     skipped: list[str] = []
     failures: list[FileFailure] = []
     warnings: list[DocWarning] = []
+    ledger = _RunLedger()
     refresh_declarations(data_root, warnings)
     warnings.extend(_scan_symlinked_documents(data_root))
 
@@ -560,7 +586,20 @@ def sync(
             skipped=skipped,
             failures=failures,
             warnings=warnings,
+            ledger=ledger,
         )
+
+    _settle_pass(
+        data_root,
+        ledger,
+        athlete=athlete,
+        tz=tz,
+        tiles=tiles,
+        precedence=precedence,
+        written=written,
+        failures=failures,
+        warnings=warnings,
+    )
 
     return SyncReport(
         written=tuple(written),
@@ -749,6 +788,7 @@ def drain(
     quarantined: list[InboxNote] = []
     moved: list[str] = []
     move_failures: list[InboxNote] = []
+    ledger = _RunLedger()
 
     refresh_declarations(data_root, warnings)
     warnings.extend(_scan_symlinked_documents(data_root))
@@ -802,6 +842,7 @@ def drain(
             skipped=skipped,
             failures=failures,
             warnings=warnings,
+            ledger=ledger,
         )
 
         failed_this_candidate = len(failures) > failures_before
@@ -852,6 +893,18 @@ def drain(
                 move_failures.append(move_result)
             else:
                 moved.append(move_result)
+
+    _settle_pass(
+        data_root,
+        ledger,
+        athlete=athlete,
+        tz=tz,
+        tiles=tiles,
+        precedence=precedence,
+        written=written,
+        failures=failures,
+        warnings=warnings,
+    )
 
     if record_changed:
         save_quarantine(data_root, record)
@@ -1004,6 +1057,7 @@ def regen(
     skipped: list[str] = []
     failures: list[FileFailure] = []
     warnings: list[DocWarning] = []
+    ledger = _RunLedger()
     refresh_declarations(data_root, warnings)
     warnings.extend(_scan_symlinked_documents(data_root))
 
@@ -1043,6 +1097,7 @@ def regen(
             skipped=skipped,
             failures=failures,
             warnings=warnings,
+            ledger=ledger,
         )
 
     # Archived sources no document references render fresh (docs are derived).
@@ -1060,7 +1115,20 @@ def regen(
             skipped=skipped,
             failures=failures,
             warnings=warnings,
+            ledger=ledger,
         )
+
+    _settle_pass(
+        data_root,
+        ledger,
+        athlete=athlete,
+        tz=tz,
+        tiles=tiles,
+        precedence=precedence,
+        written=written,
+        failures=failures,
+        warnings=warnings,
+    )
 
     return SyncReport(
         written=tuple(written),
@@ -1084,6 +1152,7 @@ def _process_isolated(
     skipped: list[str],
     failures: list[FileFailure],
     warnings: list[DocWarning],
+    ledger: _RunLedger,
 ) -> None:
     """Run the per-file pipeline for one item, isolating any failure (Req 1.3).
 
@@ -1101,7 +1170,9 @@ def _process_isolated(
     *returns*, so they can ride with either non-failing branch: a version-gate
     skip carries exactly one (Req 5.5) alongside its ``None`` outcome; a
     written file may carry a map omission (Req 4.3), an
-    unmanaged-frontmatter-key notice (Req 6.3), both, or neither -- most
+    unmanaged-frontmatter-key notice (Req 6.3), an invalid-effort-tag notice
+    (Req 1.4), a rename notice (activity-identity Req 6.5), any combination,
+    or none -- most
     written files and every already-archived skip carry none. The invariant is
     one-directional: a *raising* file can never carry one, because when
     ``_process_file`` raises (a :class:`FileFailure`) it returns nothing at all
@@ -1111,7 +1182,7 @@ def _process_isolated(
     :func:`regen`) runs once per run instead.
     """
     try:
-        outcome, file_warnings = _process_file(
+        result = _process_file(
             source_file,
             data_root,
             athlete=athlete,
@@ -1125,10 +1196,19 @@ def _process_isolated(
     except Exception as exc:
         failures.append(FileFailure(source=source_label, reason=_reason(exc)))
     else:
-        if outcome is None:
+        if result.doc_ref is None:
             skipped.append(source_label)
         else:
-            written.append(outcome)
+            written.append(result.doc_ref)
+        # A moved page no longer sits at any path the ledger recorded for it; a
+        # page now under a collision suffix is a settle candidate (Req 6.6).
+        if result.renamed_from is not None:
+            ledger.settle[:] = [
+                entry for entry in ledger.settle if entry.path != result.renamed_from
+            ]
+        if result.settle_entry is not None:
+            ledger.settle.append(result.settle_entry)
+        file_warnings = result.warnings
         # Zero or more warnings can ride with either non-failing outcome -- a
         # written file may carry a map omission, an unmanaged-key notice, both,
         # or neither; a version-gated skip carries exactly one. Only the
@@ -1160,18 +1240,20 @@ def _process_file(
     tiles: TileSource,
     force: bool,
     precedence: Precedence,
-) -> tuple[str | None, tuple[DocWarning, ...]]:
-    """Run the per-file pipeline; return ``(written-doc-ref | None, warnings)``.
+) -> _TaskResult:
+    """Run the per-file pipeline; return its :class:`_TaskResult`.
 
-    The first element is the data-root-relative POSIX path of the document written
+    ``doc_ref`` is the data-root-relative POSIX path of the document written
     or updated on success, or ``None`` when the file is skipped -- either because
     its bytes are already archived and ``force`` is off (Req 3.2, 3.3), or because
     a matched document records a document-format version newer than this fitdocs
     can produce (Req 5.5, 5.8; see the module docstring's version-gate section).
-    The second element is a tuple of zero or more :class:`DocWarning`\\ s: a
+    ``warnings`` holds zero or more :class:`DocWarning`\\ s: a
     version-gate skip carries exactly one and nothing else (the early return
     below); a written document may carry a non-fatal map omission (Req 4.3,
-    4.4), an unmanaged-frontmatter-key notice (Req 6.3), both, or neither.
+    4.4), an unmanaged-frontmatter-key notice (Req 6.3), an invalid-effort-tag
+    notice (Req 1.4), a rename notice (activity-identity Req 6.5), any
+    combination, or none.
 
     **Map path (impure, Req 1.1, 3.5, 4.2, 4.3, 4.4).** When the activity is an
     outdoor (non-strength) modality -- the exact set of views that render a
@@ -1196,15 +1278,159 @@ def _process_file(
     if archive.exists() and not force:
         # Identical bytes are already archived: skip (dedups exact re-syncs and
         # two identically-named-differently files with the same content) (3.2, 3.3).
-        return None, ()
+        return _TaskResult(None, ())
 
     activity = parse_fit(data)
 
     # ``match_uid`` is the *incoming file's* identity, used only to find its
-    # page; the page's own uid (below) comes from its retained session UUID or
-    # its base's hash, which need not be this file's.
+    # page; the page's own uid (in the page task) comes from its retained
+    # session UUID or its base's hash, which need not be this file's.
     match_uid = activity_uid(activity, sha)
     new_ref = source_ref(sha)
+    match = find_document(data_root, activity_uid=match_uid, source_ref=new_ref)
+    return _page_task(
+        data_root,
+        match=match,
+        new=_NewMember(
+            ref=new_ref, sha=sha, activity=activity, data=data, archive=archive
+        ),
+        athlete=athlete,
+        tz=tz,
+        tiles=tiles,
+        precedence=precedence,
+        settling=False,
+        quiet=False,
+        expected_stem=None,
+    )
+
+
+@dataclass(frozen=True)
+class _NewMember:
+    """The incoming file of a page task: parsed once, archived last."""
+
+    ref: str
+    sha: str
+    activity: Activity
+    data: bytes
+    archive: Path
+
+
+@dataclass(frozen=True)
+class _SettleEntry:
+    """A page to settle onto its unsuffixed name (Req 6.6, 6.7).
+
+    ``path`` is where it sits; ``unsuffixed`` is the stem it would have had if
+    no other page had held the name. ``opportunistic`` marks a page found by the
+    scan of :func:`_stranded_pages` rather than written by this run: settling it
+    is best effort and reports nothing when it cannot complete.
+    """
+
+    path: Path
+    unsuffixed: str
+    opportunistic: bool = False
+
+
+@dataclass(frozen=True)
+class _TaskResult:
+    """What one page task reports: the outcome, warnings, and rename facts.
+
+    ``doc_ref`` is ``None`` for a version-gated skip. ``renamed_from`` is the
+    page's previous path when the task moved it; ``settle_entry`` is set when
+    the page now sits under a collision suffix.
+    """
+
+    doc_ref: str | None
+    warnings: tuple[DocWarning, ...]
+    renamed_from: Path | None = None
+    settle_entry: _SettleEntry | None = None
+
+
+@dataclass
+class _RunLedger:
+    """The settle candidates one run accumulates (sync, drain, regen)."""
+
+    settle: list[_SettleEntry] = field(default_factory=list)
+
+
+_ASSET_LINK_RE: Final[re.Pattern[str]] = re.compile(
+    r"!\[[^\]\n]*\]\((?P<ref>assets/(?P<name>[^/()\s]+\.svg))\)"
+)
+
+
+def _asset_names(text: str) -> set[str]:
+    """Single-component ``assets/<name>.svg`` image links in ``text`` (Req 6.4)."""
+    return {match.group("name") for match in _ASSET_LINK_RE.finditer(text)}
+
+
+def _split_regions(text: str) -> tuple[str, list[str]]:
+    """``text`` without its regions, and each region's content.
+
+    Raises :class:`RegionError` when the markers are damaged.
+    """
+    outside = text
+    inside: list[str] = []
+    for region_id, content in extract_regions(text).items():
+        inside.append(content)
+        outside = re.sub(
+            re.escape(begin_marker(region_id))
+            + ".*?"
+            + re.escape(end_marker(region_id)),
+            "",
+            outside,
+            flags=re.DOTALL,
+        )
+    return outside, inside
+
+
+def _stale_assets(existing_text: str, new_assets: tuple[Asset, ...]) -> tuple[str, ...]:
+    """The chart assets a rename leaves behind (Req 6.4), sorted by name.
+
+    Every single-component ``assets/<name>.svg`` image link in the existing
+    page *outside* its regions -- the generated content the new render
+    replaces -- that the new render does not write and no region links (a
+    region's content survives the rewrite verbatim, so its links must too).
+    """
+    outside, inside = _split_regions(existing_text)
+    written = {Path(asset.rel_path).name for asset in new_assets}
+    protected = _asset_names("\n".join(inside))
+    return tuple(sorted(_asset_names(outside) - written - protected))
+
+
+def _rename_detail(old: str, new: str, reason: str) -> str:
+    return (
+        f"page renamed from {old} to {new} because {reason}; wiki links to the "
+        "old name and plan overrides naming the old stem need updating"
+    )
+
+
+def _page_task(
+    data_root: Path,
+    *,
+    match: DocumentMatch | None,
+    new: _NewMember | None,
+    athlete: AthleteInputs | None,
+    tz: tzinfo,
+    tiles: TileSource,
+    precedence: Precedence,
+    settling: bool,
+    quiet: bool,
+    expected_stem: str | None,
+) -> _TaskResult:
+    """Write one page from its members: roles, render, rename, write, archive.
+
+    ``match`` is the page (``None`` for a fresh group) and ``new`` the incoming
+    file (``None`` for a settle task, which re-renders a page from its listed
+    files alone and moves it to its unsuffixed name, Req 6.6). The write order
+    is the crash-healing one of Req 6.7 -- see :func:`_write_outputs`.
+
+    A settle task (``settling``) is ``quiet`` when it re-renders a page this
+    very run just wrote: the unmanaged-key, effort-tag and map-omission notices
+    were already given for that write, so only the rename notice is kept. A
+    stranded page found by the scan was not written this run and is not quiet.
+    A settle task also names the ``expected_stem`` its caller took the page
+    for; when the stem the page computes unsuffixed is not that one, the page
+    is left exactly where it is and nothing is written.
+    """
     # ``pending_warnings`` accumulates whatever the version gate or
     # unmanaged-key check below add for the file that matched -- one list,
     # appended to only, so a later exception in this function (a decode error,
@@ -1214,7 +1440,6 @@ def _process_file(
     # (Req 7.5, 7.6) and is never reported here at all -- see
     # ``_scan_symlinked_documents``, run once per run by the caller.
     pending_warnings: list[DocWarning] = []
-    match = find_document(data_root, activity_uid=match_uid, source_ref=new_ref)
 
     # Document-format version gate (Req 5.4, 5.5, 5.7, 5.8, 5.9). Read the
     # matched document's frontmatter exactly ONCE here -- ``existing_text`` is
@@ -1242,7 +1467,7 @@ def _process_file(
             doc_ref = match.path.relative_to(data_root).as_posix()
             detail = _newer_version_detail(existing_version)
             pending_warnings.append(DocWarning(doc=doc_ref, detail=detail))
-            return None, tuple(pending_warnings)
+            return _TaskResult(None, tuple(pending_warnings))
 
         # Unmanaged-frontmatter-key warning (Req 6.3, design: "Unmanaged-key
         # detection on rewrite"). Reuses ``existing_frontmatter`` -- the same
@@ -1250,8 +1475,9 @@ def _process_file(
         # parse -- so this never fires for a version-gated document (it drops
         # nothing, since the early return above already left with a `None`
         # write). The rewrite below still proceeds and still drops these keys;
-        # this only names them before they go.
-        if existing_frontmatter is not None:
+        # this only names them before they go. A settle task re-renders a page
+        # this very run just wrote, so it repeats none of these notices.
+        if existing_frontmatter is not None and not quiet:
             dropped = unmanaged_keys(existing_frontmatter)
             if dropped:
                 match_ref = match.path.relative_to(data_root).as_posix()
@@ -1292,13 +1518,16 @@ def _process_file(
     # archived file is ``unresolved`` and keeps its place at the front of
     # ``sources``.
     existing_refs = match.sources if match is not None else ()
-    listed = tuple(dict.fromkeys((*existing_refs, new_ref)))
-    parsed: dict[str, Activity] = {new_ref: activity}
+    listed = tuple(
+        dict.fromkeys((*existing_refs, *((new.ref,) if new is not None else ())))
+    )
+    parsed: dict[str, Activity] = {}
     resolved: list[SourceMember] = []
     unresolved: list[str] = []
     for ref in listed:
-        if ref == new_ref:
-            resolved.append(source_member(ref, sha, activity))
+        if new is not None and ref == new.ref:
+            parsed[ref] = new.activity
+            resolved.append(source_member(ref, new.sha, new.activity))
             continue
         member_sha = sha_of_ref(ref)
         member_archive = (
@@ -1310,6 +1539,10 @@ def _process_file(
         member_activity = parse_fit(member_archive.read_bytes())
         parsed[ref] = member_activity
         resolved.append(source_member(ref, member_sha, member_activity))
+    if not resolved:
+        # Only a settle task can reach here (a page task with an incoming file
+        # always resolves it): the page's files left the archive mid-run.
+        raise FileNotFoundError("no archived source to regenerate from")
     roles = rank_members(resolved, unresolved, precedence)
 
     # The page's session UUID is the first of base, extras that carries one,
@@ -1334,10 +1567,35 @@ def _process_file(
             return False
         return match is None or candidate_path != match.path
 
-    stem = doc_stem(base_activity, uid, tz, taken)
+    unsuffixed = doc_stem(base_activity, uid, tz, lambda _: False)
+    if settling and match is not None and unsuffixed != expected_stem:
+        return _TaskResult(match.path.relative_to(data_root).as_posix(), ())
+    stem = unsuffixed if settling else doc_stem(base_activity, uid, tz, taken)
+
     # The write target -- and thus the data-root-relative doc ref used for both the
     # report entry and any map warning -- is known once the stem/match are resolved.
-    target = match.path if match is not None else doc_path(data_root, stem)
+    # An existing page keeps its path (a user's rename, a timezone change) unless
+    # its base changed and the base's computed name differs (Req 6.2, 6.3); a
+    # settle task moves it to its unsuffixed name (Req 6.6).
+    stranded = False
+    base_changed = False
+    if match is None:
+        target = doc_path(data_root, stem)
+    else:
+        previous_base = match.sources[-1] if match.sources else None
+        base_changed = previous_base is not None and previous_base != roles.base.ref
+        # A page still under the collision suffix of its own computed stem,
+        # whose unsuffixed name is free, is a settle rename an interrupted run
+        # left behind; any rewrite finishes it (its own uid names the suffix,
+        # so a user's filename never qualifies).
+        stranded = stem == unsuffixed and match.path.stem == f"{unsuffixed}-{uid[:8]}"
+        if (base_changed or settling or stranded) and doc_path(
+            data_root, stem
+        ) != match.path:
+            target = doc_path(data_root, stem)
+        else:
+            target = match.path
+    renaming = match is not None and target != match.path
     doc_ref = target.relative_to(data_root).as_posix()
 
     # The activity the page renders (the channel-merge seam) and everything
@@ -1358,7 +1616,8 @@ def _process_file(
             try:
                 resolved_tiles = tiles.resolve(plan.tiles)
             except TileUnavailableError as exc:
-                warnings.append(DocWarning(doc=doc_ref, detail=_reason(exc)))
+                if not quiet:
+                    warnings.append(DocWarning(doc=doc_ref, detail=_reason(exc)))
             else:
                 map_data = MapData(
                     plan=plan,
@@ -1383,6 +1642,7 @@ def _process_file(
     # that branch and nowhere else -- so narrowing on it is equivalent to
     # narrowing on ``match`` and needs no ``assert`` (which ``python -O`` would
     # strip, leaving ``merge_regions`` to be handed ``None``).
+    stale: tuple[str, ...] = ()
     if existing_text is not None:
         # An existing document (a rename, timezone change, or re-export) is updated
         # in place: preserved regions carry over verbatim (Req 3.6, 4.3, 10.2). A
@@ -1390,11 +1650,184 @@ def _process_file(
         # It was already read once above for the version gate; reusing it here
         # avoids a second disk read and a second parse.
         markdown = merge_regions(rendered.markdown, existing_text)
+        if renaming:
+            stale = _stale_assets(existing_text, rendered.assets)
     else:
         markdown = rendered.markdown
 
-    _write_outputs(data_root, target, markdown, rendered.assets, archive, data)
-    return doc_ref, tuple(warnings)
+    moved_from = match.path if renaming and match is not None else None
+    _write_outputs(
+        data_root,
+        target,
+        markdown,
+        rendered.assets,
+        new.archive if new is not None else None,
+        new.data if new is not None else None,
+        moved_from=moved_from,
+        stale_assets=stale,
+    )
+    if moved_from is not None:
+        old_ref = moved_from.relative_to(data_root).as_posix()
+        reason = (
+            f"the unsuffixed name {doc_ref} became free"
+            if settling or (stranded and not base_changed)
+            else "its base file changed"
+        )
+        warnings.append(
+            DocWarning(doc=doc_ref, detail=_rename_detail(old_ref, doc_ref, reason))
+        )
+    # A page sitting under a collision suffix (its path *is* its computed stem,
+    # so a user's own filename is never a candidate) is settled at the end of
+    # the run (Req 6.6).
+    settle_entry = (
+        _SettleEntry(path=target, unsuffixed=unsuffixed)
+        if stem != unsuffixed and target == doc_path(data_root, stem)
+        else None
+    )
+    return _TaskResult(
+        doc_ref,
+        tuple(warnings),
+        renamed_from=moved_from,
+        settle_entry=settle_entry,
+    )
+
+
+def _stranded_pages(data_root: Path) -> list[_SettleEntry]:
+    """Pages an interrupted settle left behind, from one ``workouts/*.md`` scan.
+
+    The next run skips every archived file, so a settle rename that died part
+    way cannot be healed from that run's own records (Req 6.7). Two shapes
+    qualify, each by the page's own uid (its recorded ``uuid``, else the sha of
+    its last listed source), so a user-chosen filename never does:
+
+    * the filename is ``<U>-<uid8>.md`` (``uid8`` the uid's first eight
+      characters) and ``workouts/<U>.md`` is free: the page still sits under
+      its collision suffix;
+    * the filename is ``<U>.md`` but the page's generated content (outside its
+      regions -- a note that links a suffixed chart does not count) still
+      links ``assets/<U>-<uid8>-...``: the move happened and the content
+      write did not, so the page is rewritten in place. This shape needs each
+      page's text, read once per run.
+
+    Every entry is ``opportunistic``, and the settle task moves or rewrites a
+    candidate only when the stem it computes unsuffixed is ``U``.
+    """
+    found: list[_SettleEntry] = []
+    for record in scan_pages(data_root).records:
+        uid = record.session_uuid
+        if uid is None and record.sources:
+            uid = sha_of_ref(record.sources[-1])
+        if uid is None:
+            continue
+        path = Path(record.path)
+        suffix = f"-{uid[:8]}"
+        if path.stem.endswith(suffix) and len(path.stem) > len(suffix):
+            unsuffixed = path.stem[: -len(suffix)]
+            if not doc_path(data_root, unsuffixed).exists():
+                found.append(
+                    _SettleEntry(path=path, unsuffixed=unsuffixed, opportunistic=True)
+                )
+            continue
+        try:
+            outside, _regions = _split_regions(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, RegionError):
+            continue
+        if f"assets/{path.stem}{suffix}-" in outside:
+            found.append(
+                _SettleEntry(path=path, unsuffixed=path.stem, opportunistic=True)
+            )
+    return found
+
+
+def _settle_pass(
+    data_root: Path,
+    ledger: _RunLedger,
+    *,
+    athlete: AthleteInputs | None,
+    tz: tzinfo,
+    tiles: TileSource,
+    precedence: Precedence,
+    written: list[str],
+    failures: list[FileFailure],
+    warnings: list[DocWarning],
+) -> None:
+    """Move each page under a collision suffix to its unsuffixed name.
+
+    Runs after every file of a run (Req 6.6). The candidates are the pages this
+    run recorded under a suffix plus :func:`_stranded_pages`, taken from one
+    scan at the start of the pass (not one per iteration). Each move is a page
+    task with no incoming file that renders the page again under the unsuffixed
+    stem. Report entries naming a moved page's suffixed path are rewritten to
+    the path it ended at.
+
+    A page this run wrote is settled under today's reporting: a failure is a
+    :class:`FileFailure`, and its notices are not repeated. A stranded page was
+    not written this run, so settling it is opportunistic: when its task
+    cannot complete (no archived source, a newer document version, any error)
+    the page is left for a later run to finish (a fault part way can leave
+    healable partial writes) and nothing at all is reported for it, so an idle
+    run stays silent. When it does complete, its notices and the rename
+    notice are reported like any other rewrite.
+
+    Req 6.6 requires repeating until a whole pass renames nothing, so the loop
+    does. A move only ever vacates a suffixed path, and no candidate waits on a
+    suffixed name, so in practice the second pass finds nothing and the loop
+    is the requirement's termination rule rather than a source of extra moves.
+    """
+    pending = list(ledger.settle)
+    known = {entry.path for entry in pending}
+    pending.extend(e for e in _stranded_pages(data_root) if e.path not in known)
+    moved: dict[str, str] = {}
+    while True:
+        progressed = False
+        for entry in list(pending):
+            if not entry.path.is_file():
+                pending.remove(entry)
+                continue
+            occupant = doc_path(data_root, entry.unsuffixed)
+            if occupant.exists() and occupant != entry.path:
+                continue
+            pending.remove(entry)
+            page_ref = entry.path.relative_to(data_root).as_posix()
+            try:
+                text = entry.path.read_text(encoding="utf-8")
+                front = parse_frontmatter(text)
+                match = DocumentMatch(
+                    path=entry.path,
+                    sources=source_refs(front) if front is not None else (),
+                )
+                result = _page_task(
+                    data_root,
+                    match=match,
+                    new=None,
+                    athlete=athlete,
+                    tz=tz,
+                    tiles=tiles,
+                    precedence=precedence,
+                    settling=True,
+                    quiet=not entry.opportunistic,
+                    expected_stem=entry.unsuffixed,
+                )
+            except Exception as exc:
+                if not entry.opportunistic:
+                    failures.append(FileFailure(source=page_ref, reason=_reason(exc)))
+                continue
+            if result.doc_ref is None and entry.opportunistic:
+                continue  # a version-gated page: left alone, and silently
+            warnings.extend(result.warnings)
+            if result.doc_ref is not None and result.renamed_from is not None:
+                moved[page_ref] = result.doc_ref
+                progressed = True
+        if not progressed:
+            break
+    if moved:
+        written[:] = [moved.get(ref, ref) for ref in written]
+        warnings[:] = [
+            DocWarning(doc=moved[warning.doc], detail=warning.detail)
+            if warning.doc in moved
+            else warning
+            for warning in warnings
+        ]
 
 
 def _render_activity(roles: PageRoles, parsed: Mapping[str, Activity]) -> Activity:
@@ -1412,26 +1845,67 @@ def _write_outputs(
     document: Path,
     markdown: str,
     assets: tuple[Asset, ...],
-    archive: Path,
-    source_bytes: bytes,
+    archive: Path | None,
+    source_bytes: bytes | None,
+    *,
+    moved_from: Path | None = None,
+    stale_assets: tuple[str, ...] = (),
 ) -> None:
-    """Write one file's outputs in commit order: assets, document, archive last.
+    """Write one page task's outputs in the crash-healing order (Req 3.1, 6.7, 7.1).
 
-    Output directories are created on demand (Req 2.8). The archive copy is
-    written **last** (Req 3.1, 4.2): its presence is the processed-marker, so a
-    crash before it leaves no archive and the file is reprocessed idempotently. An
-    existing archive is never rewritten (Req 3.5) -- only reachable under
-    ``force``, where the immutable source copy must be preserved.
+    New assets; stale assets removed; the document moved with a same-directory
+    replace (a rename only); the document written; the archive copy **last**.
+    At no instant does the page exist at two paths, and a crash after any step
+    leaves a state the next run over the same inputs completes: the new member
+    is not archived until the end, so it is re-planned onto the page that now
+    holds its fellow members. Each step is its own helper so a test can inject
+    a fault after any one of them.
+
+    The archive's presence is the processed-marker (Req 3.1, 4.2). An existing
+    archive is never rewritten (Req 3.5) -- only reachable under ``force``,
+    where the immutable source copy must be preserved. A settle task has no
+    incoming file, so it passes no archive.
     """
-    # (a) assets, each doc-relative under ``workouts/``.
+    _write_assets(data_root, assets)
+    _remove_stale_assets(data_root, stale_assets)
+    if moved_from is not None:
+        _move_document(moved_from, document)
+    _write_document(document, markdown)
+    if archive is not None and source_bytes is not None:
+        _write_archive(archive, source_bytes)
+
+
+def _write_assets(data_root: Path, assets: tuple[Asset, ...]) -> None:
+    """Step 1: the new render's assets, each doc-relative under ``workouts/``."""
     for asset in assets:
         asset_path = data_root / WORKOUTS_DIR / asset.rel_path
         asset_path.parent.mkdir(parents=True, exist_ok=True)
         asset_path.write_text(asset.content, encoding="utf-8")
-    # (b) the document.
+
+
+def _remove_stale_assets(data_root: Path, names: tuple[str, ...]) -> None:
+    """Step 2: the previous render's chart files (Req 6.4); nothing else."""
+    for name in names:
+        (data_root / WORKOUTS_DIR / ASSETS_SUBDIR / name).unlink(missing_ok=True)
+
+
+def _move_document(existing: Path, target: Path) -> None:
+    """Step 3: ``os.replace`` within ``workouts/`` -- never two paths (Req 6.7)."""
+    if target.exists():
+        # A rename never overwrites another file: the computed name (or its
+        # suffixed form) is held by something that is not this page.
+        raise FileExistsError(f"cannot rename the page onto existing {target.name}")
+    os.replace(existing, target)
+
+
+def _write_document(document: Path, markdown: str) -> None:
+    """Step 4: the document itself."""
     document.parent.mkdir(parents=True, exist_ok=True)
     document.write_text(markdown, encoding="utf-8")
-    # (c) the archived source, LAST and write-once (presence = committed).
+
+
+def _write_archive(archive: Path, source_bytes: bytes) -> None:
+    """Step 5, last and write-once: the archived source (presence = committed)."""
     if not archive.exists():
         archive.parent.mkdir(parents=True, exist_ok=True)
         archive.write_bytes(source_bytes)
