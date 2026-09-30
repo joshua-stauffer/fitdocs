@@ -694,7 +694,7 @@ never co-varies two keys a rule distinguishes.
 
 - [ ] 5. Surfaces: inspection and the CLI
 
-- [ ] 5.1 (P) Report held, orphaned and duplicated sources in `fitdocs check`
+- [x] 5.1 (P) Report held, orphaned and duplicated sources in `fitdocs check`
   - Add the three finding kinds with design.md's subjects, details and
     remedies: one per held entry (or one naming an unreadable record), one per
     archived source no readable workout page lists and no hold names, one per
