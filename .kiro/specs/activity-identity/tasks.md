@@ -757,7 +757,7 @@ never co-varies two keys a rule distinguishes.
 
 - [ ] 6. The published contract, the settings documentation and the spec records
 
-- [ ] 6.1 Document the precedence setting and the upgrade step
+- [x] 6.1 Document the precedence setting and the upgrade step
   - Lands before 6.2 (not parallel): `tests/test_docs_guarantees.py:951-997`
     requires every cross-file `*.md#anchor` link in `docs/` to resolve, and the
     two tasks link each other's pages. This task creates the `[identity]`
