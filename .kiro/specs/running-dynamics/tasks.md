@@ -402,7 +402,7 @@
 
 - [ ] 4. Integration: the new golden pages and a Stryd file synced alone
 
-- [ ] 4.1 Register the two new golden documents and pin their observables
+- [x] 4.1 Register the two new golden documents and pin their observables
   - Add `stryd_run` and `run_native_dynamics` to `FIXTURES` in
     `tests/render/test_golden_docs.py` (`:102-108`) and generate their
     goldens with `uv run python -m tests.render.test_golden_docs`; no
@@ -579,3 +579,4 @@
 - 2.2: `parse_fit` computes `retained = retained_records(record_mesgs)` once (the SDK never emits a `timestamp: None` key -- a missing timestamp is an absent key); `extract_samples` re-applies the idempotent filter. `extract_record_developer_fields` returns a `MappingProxyType[str, DeveloperChannel]`, keeps zeros, `None` for a sentinel/unrecorded sample -- the placeholder rule belongs in `extract_dynamics` (2.4), which should read this mapping. It also accepts raw description dicts, so tests may call it directly. Three omission causes (unrecorded, all-sentinel, scale 0) each leave an earlier same-named channel exposed; no developer field fills a native channel (synthetic test covers slots 5/6/13). Record-level tests live in `tests/ingest/test_record_developer_fields.py` (design placed them in test_developer.py).
 - 2.3: `records._heart_rate` maps exactly 0 to `None` (value-only rule, any writer/sport/developer data). Reviewer-closed mutation classes: parse_fit gates (file_id/device_info manufacturer, developer data, session avg HR, sport) and HR coupled to power/speed/cadence/distance zero. `<= 0` is an unreachable equivalent (uint8).
 - 2.4: `ingest/dynamics.py` = `NATIVE_DYNAMICS_FIELDS`, `DEVELOPER_DYNAMICS_NAMES`, `PLACEHOLDER_ZERO_CHANNELS`, `GATES`, `extract_dynamics`; `extract_samples(..., *, developer=None)`; `parse_fit` computes `record_developer_fields` before the samples. The Stryd fixture is confounded (every placeholder/gate goes None together), so per-channel and per-pair discrimination lives in `tests/ingest/test_dynamics.py` unit cases; expected tables there are literals (a derived `_PARTNER` let three gate-pair swaps survive in round 1). Recognition ignores developer index, application id and declared scale. Equivalent mutants: `not gate_value`, `not value`, `zip(strict=False)`, and a `developer_data_index is None` drop (unreachable from a file).
+- 4.1: 10.1 is held by each golden's byte comparison plus `test_render_twice_is_byte_identical` (the e74af37 golden-tree pin was retired). The 6.5 structural pin asserts no `Humidity`/`Temperature` anywhere in the Stryd body plus the exact Summary label list -- a narrower `104%`/label pin let a record-mean Humidity row pass (reviewer R6/R7). Round 3's wording fixes were applied by the controller and re-reviewed.
