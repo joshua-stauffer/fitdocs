@@ -18,10 +18,115 @@ A module inside this package may import only the standard library,
 module here reads the system clock directly; ``now`` and ``sleep`` are always
 passed in by the caller.
 
-The published surface (``__all__``) is filled in by a later task as the
-package's components land; today it is intentionally empty.
+The published surface (``__all__``) is the 46 names design.md's "PackageInit"
+section lists (pinned by ``tests/connectors/test_surface.py``): the protocol
+layer's types and vocabularies, the transport layer, the typed failures, the
+secret and its redactor, and the registration operations. The built-in
+folder connector (``FolderConnector``) is deliberately not published here --
+internal, like ``fitdocs.load``'s ``ThresholdCalculator`` -- and its
+registration line is added by a later task.
 """
 
 from __future__ import annotations
 
-__all__: list[str] = []
+from fitdocs.connectors.errors import (
+    AuthFailure,
+    AuthFailureKind,
+    ConnectorError,
+    ConnectorSettingsError,
+    NotConnectedError,
+)
+from fitdocs.connectors.http import (
+    CallMode,
+    HttpClient,
+    HttpRequest,
+    HttpResponse,
+    Transport,
+    TransportError,
+    auth_failure_from,
+)
+from fitdocs.connectors.protocol import (
+    CAPABILITIES,
+    DRIVEN_CAPABILITIES,
+    SUPPORTED_AUTH_STYLES,
+    ActivityPuller,
+    AuthStyle,
+    Capability,
+    CapabilityInfo,
+    Connector,
+    ConnectorSession,
+    CredentialAccess,
+    CredentialField,
+    Declined,
+    Deferred,
+    Fetched,
+    FetchResult,
+    Granted,
+    KeyVerifier,
+    Listing,
+    ListingDeferral,
+    RemoteActivity,
+    SettingsContext,
+    TokenIssuer,
+    TokenSet,
+)
+from fitdocs.connectors.registry import (
+    DuplicateConnectorIdError,
+    InvalidConnectorError,
+    UnknownConnectorError,
+    available,
+    get,
+    register,
+    unregister,
+    validate_connector,
+)
+from fitdocs.connectors.secrets import REDACTED, Redactor, Secret
+
+__all__ = [
+    "Capability",
+    "CapabilityInfo",
+    "CAPABILITIES",
+    "DRIVEN_CAPABILITIES",
+    "AuthStyle",
+    "SUPPORTED_AUTH_STYLES",
+    "CredentialField",
+    "RemoteActivity",
+    "Listing",
+    "ListingDeferral",
+    "Fetched",
+    "Declined",
+    "Deferred",
+    "FetchResult",
+    "Granted",
+    "TokenSet",
+    "SettingsContext",
+    "CredentialAccess",
+    "ConnectorSession",
+    "Connector",
+    "KeyVerifier",
+    "TokenIssuer",
+    "ActivityPuller",
+    "AuthFailure",
+    "AuthFailureKind",
+    "ConnectorError",
+    "NotConnectedError",
+    "ConnectorSettingsError",
+    "Secret",
+    "REDACTED",
+    "Redactor",
+    "HttpClient",
+    "CallMode",
+    "Transport",
+    "HttpRequest",
+    "HttpResponse",
+    "TransportError",
+    "auth_failure_from",
+    "register",
+    "unregister",
+    "get",
+    "available",
+    "validate_connector",
+    "DuplicateConnectorIdError",
+    "InvalidConnectorError",
+    "UnknownConnectorError",
+]
