@@ -180,7 +180,7 @@
     the draft-species assertion, and so on.
   - _Requirements: 9.1_
 
-- [ ] 2. Core: the planning modules, the gate and the hero chart
+- [x] 2. Core: the planning modules, the gate and the hero chart
 
 - [x] 2.1 Resolve, discover and strip the content directory without ever writing to it
   - In `scripts/sitebuild/content.py`, implement:
@@ -404,7 +404,7 @@
   - _Requirements: 3.5, 3.6_
   - _Boundary: HeroGenerator_
 
-- [ ] 2.8 Check the links the generator does not: assets, hero targets and `docs/` URLs
+- [x] 2.8 Check the links the generator does not: assets, hero targets and `docs/` URLs
   - In `scripts/sitebuild/links.py`, implement:
     - `extract_links`: fence- and code-span-aware. It covers inline links and
       images, reference definitions, and HTML `href` / `src`, with source
@@ -889,3 +889,21 @@
     Any future override or asset that mentions these outside brand.css reds that test.
   - **Test tooling.** jinja2 is loaded via importlib behind `requires_zensical`, since it is a transitive dependency of zensical.
   - **Queued.** The duplicate home-page h1 (hero plus `h1#__skip`), low.
+- 2.8 (4 rounds, parallel stream `impl/ds-2-8`).
+  - **Zensical 0.0.65, as measured by the reviewer's probe builds:**
+    - Quoted raw-HTML `href`, `src` and `xlink:href` are rewritten source-relatively, exactly like markdown links.
+    - Unquoted values, root-relative `/x`, `srcset` and `poster` are left untouched.
+    - `strict: true` reports a missing asset in NEITHER markdown nor HTML, so LinkChecker is the only guard for 6.1.
+  - **Resolution.** Link targets resolve against the page's source directory. A relative unquoted `href`/`src` is a Problem ("quote the value"); it is not resolved.
+  - **Link attributes.** `(?<![\w:.-])(?:xlink:href|href|src)`: `xlink:src`, `foo:href`, `:href`, `data-href` and `data.src` are not link attributes.
+  - **`github_slugs`.**
+    - Matches github-slugger v2, checked across the full code-point range with node on the real source.
+    - It keeps the Alphabetic So carve-out (circled, squared, negative-circled and negative-squared Latin letters, U+24B6–24E9 and U+1F130–1F189 sub-ranges) and the `-1-1` collision loop.
+    - Its limits: Unicode 13 (JS) vs stdlib 14+, and it slugs raw heading source, not rendered text.
+  - **Hero hrefs.** Every absolute hero href must be `https://`; a docs URL is then also checked.
+  - **Signature.** `check_links(content, *, repo_root)`.
+  - **Queued follow-ups (low):**
+    - srcset/poster;
+    - escaped destinations;
+    - reference definitions in containers;
+    - relative llms.txt links refused.
