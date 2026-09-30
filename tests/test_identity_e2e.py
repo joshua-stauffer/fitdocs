@@ -24,6 +24,7 @@ from fitdocs import compute_metrics as real_compute_metrics
 from fitdocs import parse_fit as real_parse_fit
 from fitdocs.contract import format_session_uuid
 from fitdocs.declaration import DECLARATION_FILENAME
+from fitdocs.docmerge import begin_marker, end_marker
 from fitdocs.identity.kinds import SourceKind
 from fitdocs.identity.roles import (
     DEFAULT_PRECEDENCE,
@@ -342,7 +343,11 @@ def test_sync_ranks_a_matched_page_with_the_given_precedence(tmp_path: Path) -> 
         precedence=precedence,
     )
     assert again.failures == ()
-    assert _frontmatter(page)["source_kind"] == "phone_copy"
+    # The phone copy that becomes the base starts two hours later than the
+    # original did, so the page follows it to its new name (Req 6.2).
+    renamed = _only_page(data_root)
+    assert renamed != page
+    assert _frontmatter(renamed)["source_kind"] == "phone_copy"
 
 
 def test_drain_ranks_a_matched_page_with_the_given_precedence(tmp_path: Path) -> None:
@@ -363,9 +368,12 @@ def test_drain_ranks_a_matched_page_with_the_given_precedence(tmp_path: Path) ->
         precedence=precedence,
     )
     assert report.sync.failures == ()
-    assert _only_page(data_root) == page
-    assert _frontmatter(page)["source_kind"] == "phone_copy"
-    assert len(_frontmatter(page)["sources"]) == 3  # type: ignore[arg-type]
+    # The base becomes the later-starting phone copy, so the page is renamed
+    # (Req 6.2): it is the only page, at a new name.
+    renamed = _only_page(data_root)
+    assert renamed != page
+    assert _frontmatter(renamed)["source_kind"] == "phone_copy"
+    assert len(_frontmatter(renamed)["sources"]) == 3  # type: ignore[arg-type]
 
 
 def _set_uuid(page: Path, value: str) -> None:
@@ -466,9 +474,14 @@ def test_page_uid_is_the_retained_uuid_else_the_base_hash(tmp_path: Path) -> Non
     _set_sources(page2, [_ref(original), _ref(partner)])
     moved2, stem2 = _force_collision(root2, page2)
     assert _regen(root2).failures == ()
-    text2 = moved2.read_text(encoding="utf-8")
+    # The base changed (partner -> original), so the page left its user-chosen
+    # name for the computed one, whose suffix is the uid: the base's own hash
+    # (Req 6.2). The unsuffixed name is held by the other file.
+    assert not moved2.exists()
+    renamed2 = moved2.with_name(f"{stem2}-{_sha(original.data)[:8]}.md")
+    text2 = renamed2.read_text(encoding="utf-8")
     assert f"assets/{stem2}-{_sha(original.data)[:8]}-hero.svg" in text2
-    assert _frontmatter(moved2)["sources"] == [_ref(partner), _ref(original)]
+    assert _frontmatter(renamed2)["sources"] == [_ref(partner), _ref(original)]
 
 
 def _stage_below_base_arrival(tmp_path: Path) -> tuple[Path, Path]:
@@ -546,3 +559,751 @@ def test_the_map_decision_follows_the_render_activitys_modality(
     report = sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
     assert report.failures == ()
     assert plans == []
+
+
+# --- renames (4.2) ---
+
+_NOTE = "walked the dog before this run; keep me"
+
+
+def _write_note(page: Path, note: str) -> None:
+    """Replace the page's ``notes`` region content (a user edit)."""
+    text = page.read_text(encoding="utf-8")
+    pattern = re.compile(
+        re.escape(begin_marker("notes")) + r"\n.*?\n" + re.escape(end_marker("notes")),
+        re.DOTALL,
+    )
+    edited, count = pattern.subn(
+        lambda _m: f"{begin_marker('notes')}\n{note}\n{end_marker('notes')}", text
+    )
+    assert count == 1
+    page.write_text(edited, encoding="utf-8")
+
+
+def _assets(data_root: Path) -> set[str]:
+    """Every file under ``workouts/assets/``, relative to it."""
+    root = data_root / WORKOUTS_DIR / "assets"
+    return {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()}
+
+
+def _linked_assets(page: Path) -> set[str]:
+    return set(
+        re.findall(r"!\[[^\]]*\]\(assets/([^)]+)\)", page.read_text(encoding="utf-8"))
+    )
+
+
+def _stage_reexport(tmp_path: Path) -> tuple[Path, Path, fx.Species, fx.Species]:
+    """The older export synced, a note written, the newer export in a source dir.
+
+    The newer export corrects the start (one hour earlier), so its page name
+    differs from the older export's.
+    """
+    older, newer = fx.healthfit_reexport_pair()
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _sync_one(data_root, tmp_path, older)
+    _write_note(_only_page(data_root), _NOTE)
+    source = tmp_path / "newer"
+    source.mkdir()
+    (source / "newer.fit").write_bytes(newer.data)
+    return data_root, source, older, newer
+
+
+def _sync_dir(data_root: Path, source: Path) -> SyncReport:
+    return sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
+
+
+def _rename_warnings(report: SyncReport) -> list[sync_module.DocWarning]:
+    return [w for w in report.warnings if "renamed" in w.detail]
+
+
+def test_reexport_that_corrects_the_start_renames_the_page(tmp_path: Path) -> None:
+    """Req 6.2, 6.4, 6.5: the newer export moves the page to the name its
+    start computes, its old chart is removed with nothing else, a note written
+    before survives, and the run warns once, naming both paths.
+
+    Fixture: the pair's starts differ by an hour (different stems), the assets
+    directory also holds a file the page never linked and a file the page
+    links through a two-component path, neither of which may go. Mutations:
+    skip the stale-asset removal (the old hero stays); drop the
+    single-component rule (``sub/deep.svg`` goes); rename on no base change
+    (the page keeps its old name).
+    """
+    data_root, source, older, newer = _stage_reexport(tmp_path)
+    old_page = _only_page(data_root)
+    old_hero = f"{old_page.stem}-hero.svg"
+    assert _assets(data_root) == {old_hero}  # precondition: one chart, the old one
+    (data_root / WORKOUTS_DIR / "assets" / "sub").mkdir()
+    (data_root / WORKOUTS_DIR / "assets" / "sub" / "deep.svg").write_text("<svg/>")
+    (data_root / WORKOUTS_DIR / "assets" / "keep-me.svg").write_text("<svg/>")
+    text = old_page.read_text(encoding="utf-8")
+    old_page.write_text(
+        text + "\n![deep](assets/sub/deep.svg)\n", encoding="utf-8"
+    )  # a generated-content link with two components
+
+    report = _sync_dir(data_root, source)
+
+    assert report.failures == ()
+    new_page = _only_page(data_root)
+    assert new_page.name != old_page.name
+    assert not old_page.exists()
+    assert report.written == (f"{WORKOUTS_DIR}/{new_page.name}",)
+    new_hero = f"{new_page.stem}-hero.svg"
+    assert _assets(data_root) == {new_hero, "sub/deep.svg", "keep-me.svg"}
+    assert _NOTE in new_page.read_text(encoding="utf-8")
+    assert _frontmatter(new_page)["sources"] == [_ref(older), _ref(newer)]
+    warnings = _rename_warnings(report)
+    assert report.warnings == tuple(warnings)  # exactly one warning, the rename
+    assert len(warnings) == 1
+    assert warnings[0].doc == f"{WORKOUTS_DIR}/{new_page.name}"
+    detail = warnings[0].detail
+    assert f"{WORKOUTS_DIR}/{old_page.name}" in detail
+    assert f"{WORKOUTS_DIR}/{new_page.name}" in detail
+    assert "wiki links" in detail and "plan overrides" in detail
+
+
+def test_user_renamed_page_keeps_its_name_when_the_base_does_not_change(
+    tmp_path: Path,
+) -> None:
+    """Req 6.3: a page the user renamed, rewritten by a file ranking below its
+    base, keeps that name and is not warned about.
+
+    The rewrite really happens (the older export is now listed). Mutation:
+    rename on every rewrite rather than on a base change (the page moves to
+    its computed name).
+    """
+    older, newer = fx.healthfit_reexport_pair()
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _sync_one(data_root, tmp_path, newer)
+    computed = _only_page(data_root)
+    mine = computed.with_name("my-favourite-run.md")
+    computed.rename(mine)
+    source = tmp_path / "older"
+    source.mkdir()
+    (source / "older.fit").write_bytes(older.data)
+
+    report = _sync_dir(data_root, source)
+
+    assert report.failures == ()
+    assert _only_page(data_root) == mine
+    assert _frontmatter(mine)["sources"] == [_ref(older), _ref(newer)]  # rewritten
+    assert _rename_warnings(report) == []
+
+
+def test_chart_linked_from_a_note_survives_the_rename(tmp_path: Path) -> None:
+    """Req 6.4: a chart a user-owned region links is kept, whatever its name.
+
+    The note links the old hero. Mutation: remove assets linked from a
+    preserved region (the old hero goes and the note's image breaks).
+    """
+    data_root, source, _older, _newer = _stage_reexport(tmp_path)
+    old_page = _only_page(data_root)
+    old_hero = f"{old_page.stem}-hero.svg"
+    _write_note(old_page, f"{_NOTE}\n![mine](assets/{old_hero})")
+
+    report = _sync_dir(data_root, source)
+
+    assert report.failures == ()
+    new_page = _only_page(data_root)
+    assert new_page.stem != old_page.stem
+    assert _assets(data_root) == {old_hero, f"{new_page.stem}-hero.svg"}
+    assert f"![mine](assets/{old_hero})" in new_page.read_text(encoding="utf-8")
+
+
+def _trade_export(
+    *,
+    start_hours: int,
+    created_hours: int,
+    session: int,
+    elapsed_s: float,
+    distance_m: float,
+) -> bytes:
+    """One HealthFit-style export of a session that starts ``start_hours``
+    after the fixtures' common start and was created ``created_hours`` after
+    the copy's creation (a later export outranks an earlier one); sessions
+    differ in every value."""
+    base = fx.healthfit_copy()
+    return fx.session_fit_bytes(
+        sport="running",
+        start=base.start + start_hours * 3600,
+        elapsed_s=elapsed_s,
+        timer_s=elapsed_s,
+        distance_m=distance_m,
+        manufacturer="development",
+        product=0,
+        serial=base.serial + session,
+        time_created=base.time_created + created_hours * 3600,
+        session_uuid=tuple(range(session * 16, session * 16 + 16)),
+        device_manufacturer="garmin",
+    )
+
+
+def _run_trade(
+    mode: str, tmp_path: Path, data_root: Path, a_new: bytes, b_new: bytes
+) -> SyncReport:
+    """Deliver both corrections to pages A (session 1) and B (session 2) in one
+    ``sync``, one ``drain``, or one ``regen`` (A's is discovered first except
+    under ``regen``, which walks the pages by name)."""
+    both = tmp_path / "both"
+    both.mkdir()
+    if mode == "regen":
+        for data in (a_new, b_new):
+            path = archive_path(data_root, _sha(data))
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        for page in _pages(data_root):
+            sources = _frontmatter(page)["sources"]
+            assert isinstance(sources, list)
+            newer = a_new if _frontmatter(page)["uuid"] == _uuid_of(1) else b_new
+            # Listed newer-first (the un-ranked shape): the last listed file,
+            # the page's recorded base, is the older export.
+            _set_sources(page, [source_ref(_sha(newer)), *sources])
+        return _regen(data_root)
+    (both / "1-a.fit").write_bytes(a_new)
+    (both / "2-b.fit").write_bytes(b_new)
+    if mode == "sync":
+        return _sync_dir(data_root, both)
+    return drain(
+        both,
+        data_root,
+        settings=DEFAULT_INBOX_SETTINGS,
+        processed_dir=None,
+        quarantine=QuarantineRecord(entries=()),
+        athlete=None,
+        tz=_TZ,
+        tiles=_TILES,
+        sleep=lambda _seconds: None,
+    ).sync
+
+
+def _uuid_of(session: int) -> str:
+    text = format_session_uuid(tuple(range(session * 16, session * 16 + 16)))
+    assert text is not None
+    return text
+
+
+@pytest.mark.parametrize("mode", ["sync", "drain", "regen"])
+def test_two_pages_trading_names_in_one_run_end_unsuffixed(
+    tmp_path: Path, mode: str
+) -> None:
+    """Req 6.6: one page's correction takes the name the other still holds (so
+    it is written under a collision suffix), the other's correction takes the
+    first's old name, and the settle pass moves the suffixed page to the name
+    that was freed -- after ``sync``, ``drain`` and ``regen`` alike.
+
+    Mutation: drop the settle pass from that entry point (the suffixed name
+    stays). The report's ``written`` names each page where it ended.
+    """
+    a_old = _trade_export(
+        start_hours=1, created_hours=0, session=1, elapsed_s=3000.0, distance_m=9000.0
+    )
+    a_new = _trade_export(
+        start_hours=0, created_hours=1, session=1, elapsed_s=3000.0, distance_m=9000.0
+    )
+    b_old = _trade_export(
+        start_hours=0, created_hours=0, session=2, elapsed_s=2000.0, distance_m=6000.0
+    )
+    b_new = _trade_export(
+        start_hours=1, created_hours=1, session=2, elapsed_s=2000.0, distance_m=6000.0
+    )
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    for index, data in enumerate((a_old, b_old)):
+        source = tmp_path / f"first-{index}"
+        source.mkdir()
+        (source / "f.fit").write_bytes(data)
+        assert _sync_dir(data_root, source).failures == ()
+    by_uuid_before = {_frontmatter(p)["uuid"]: p.name for p in _pages(data_root)}
+    name_a, name_b = by_uuid_before[_uuid_of(1)], by_uuid_before[_uuid_of(2)]
+    assert name_a > name_b  # A starts later: its correction takes B's name
+
+    report = _run_trade(mode, tmp_path, data_root, a_new, b_new)
+
+    assert report.failures == ()
+    names = sorted(p.name for p in _pages(data_root))
+    assert names == sorted([name_a, name_b])  # each name once, no suffix
+    by_uuid = {_frontmatter(p)["uuid"]: p.name for p in _pages(data_root)}
+    assert by_uuid == {_uuid_of(1): name_b, _uuid_of(2): name_a}  # traded
+    for ref in report.written:
+        assert (data_root / ref).is_file()
+    assert sorted(report.written) == sorted(f"{WORKOUTS_DIR}/{n}" for n in names)
+    assert _assets(data_root) == {f"{p.stem}-hero.svg" for p in _pages(data_root)}
+
+
+_STEPS = (
+    "_write_assets",
+    "_remove_stale_assets",
+    "_move_document",
+    "_write_document",
+    "_write_archive",
+)
+
+
+@pytest.mark.parametrize("step", _STEPS)
+def test_a_fault_after_each_write_step_leaves_one_page_and_the_next_run_heals(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, step: str
+) -> None:
+    """Req 6.7: whichever write step a run dies after, the page is at exactly
+    one path, and the next run over the same inputs completes the rename with
+    no chart left behind.
+
+    The state at the fault pins the order: through the stale-asset removal the
+    page is still at its old path (and old content); after the move it is at
+    the new path with its old content; after the document write its content is
+    new; only after the archive step is the file archived. Mutation: write the
+    document before the move (the page holds new content at its old path when
+    the move step ends, and at its new path only after).
+    """
+    data_root, source, older, newer = _stage_reexport(tmp_path)
+    old_page = _only_page(data_root)
+    real = getattr(sync_module, step)
+
+    def dying(*args: object, **kwargs: object) -> None:
+        real(*args, **kwargs)
+        raise RuntimeError(f"fault after {step}")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(sync_module, step, dying)
+        report = _sync_dir(data_root, source)
+    assert len(report.failures) == 1
+    assert f"fault after {step}" in report.failures[0].reason
+
+    pages = _pages(data_root)
+    assert len(pages) == 1  # never at two paths
+    page = pages[0]
+    front = _frontmatter(page)
+    at_old_path = page == old_page
+    assert at_old_path == (step in ("_write_assets", "_remove_stale_assets"))
+    new_content = front["sources"] == [_ref(older), _ref(newer)]
+    assert new_content == (step in ("_write_document", "_write_archive"))
+    assert archive_path(data_root, _sha(newer.data)).exists() == (
+        step == "_write_archive"
+    )
+    assert _NOTE in page.read_text(encoding="utf-8")
+
+    healed = _sync_dir(data_root, source)
+    assert healed.failures == ()
+    final = _only_page(data_root)
+    assert final.name != old_page.name
+    assert _frontmatter(final)["sources"] == [_ref(older), _ref(newer)]
+    assert _assets(data_root) == {f"{final.stem}-hero.svg"}
+    assert _NOTE in final.read_text(encoding="utf-8")
+    assert archive_path(data_root, _sha(newer.data)).is_file()
+
+
+def _put_files(root: Path, name: str, files: dict[str, bytes]) -> Path:
+    directory = root / name
+    directory.mkdir()
+    for file_name, data in files.items():
+        (directory / file_name).write_bytes(data)
+    return directory
+
+
+def test_rename_back_to_the_same_stem_keeps_the_chart_it_just_wrote(
+    tmp_path: Path,
+) -> None:
+    """Req 6.2, 6.4: a user-renamed page whose base changes while its computed
+    stem stays the same is renamed back to that stem, and its old and new
+    charts are one file (``<stem>-hero.svg``), which must survive.
+
+    Mutation: the stale set forgets to subtract the assets the new render
+    writes (the rename deletes the chart it just wrote).
+    """
+    old = _trade_export(
+        start_hours=0, created_hours=0, session=1, elapsed_s=3000.0, distance_m=9000.0
+    )
+    new = _trade_export(
+        start_hours=0, created_hours=1, session=1, elapsed_s=3000.0, distance_m=9000.0
+    )
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    assert (
+        _sync_dir(data_root, _put_files(tmp_path, "a", {"f.fit": old})).failures == ()
+    )
+    page = _only_page(data_root)
+    stem = page.stem
+    page.rename(page.with_name("mine.md"))
+
+    report = _sync_dir(data_root, _put_files(tmp_path, "b", {"f.fit": new}))
+
+    assert report.failures == ()
+    final = _only_page(data_root)
+    assert final.stem == stem  # back at the computed name
+    assert len(_rename_warnings(report)) == 1  # precondition: it did rename
+    assert _assets(data_root) == {f"{stem}-hero.svg"} == _linked_assets(final)
+
+
+def test_user_named_page_is_not_settled_onto_a_freed_name(tmp_path: Path) -> None:
+    """Req 6.3, 6.6: page P, at a user-chosen name, is rewritten by a lower
+    ranked file while its computed stem is held by page Q (so P's stem is
+    suffixed); Q then moves off that stem in the same run. P keeps its name:
+    only a page written *at* its suffixed name is settled.
+
+    Mutation: record every page whose stem is suffixed as a settle candidate
+    (P moves to Q's old name).
+    """
+    p_base = _trade_export(
+        start_hours=0, created_hours=1, session=1, elapsed_s=3000.0, distance_m=9000.0
+    )
+    p_extra = _trade_export(
+        start_hours=0, created_hours=0, session=1, elapsed_s=3000.0, distance_m=9000.0
+    )
+    q_old = _trade_export(
+        start_hours=0, created_hours=0, session=2, elapsed_s=2000.0, distance_m=6000.0
+    )
+    q_new = _trade_export(
+        start_hours=1, created_hours=1, session=2, elapsed_s=2000.0, distance_m=6000.0
+    )
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    assert (
+        _sync_dir(data_root, _put_files(tmp_path, "a", {"f.fit": p_base})).failures
+        == ()
+    )
+    p_page = _only_page(data_root)
+    p_page.rename(p_page.with_name("mine.md"))
+    assert (
+        _sync_dir(data_root, _put_files(tmp_path, "b", {"f.fit": q_old})).failures == ()
+    )
+    assert {p.name for p in _pages(data_root)} == {"mine.md", f"{p_page.stem}.md"}
+
+    report = _sync_dir(
+        data_root, _put_files(tmp_path, "c", {"1-p.fit": p_extra, "2-q.fit": q_new})
+    )
+
+    assert report.failures == ()
+    by_uuid = {_frontmatter(p)["uuid"]: p.name for p in _pages(data_root)}
+    assert by_uuid[_uuid_of(1)] == "mine.md"
+    assert len(_frontmatter(data_root / WORKOUTS_DIR / "mine.md")["sources"]) == 2  # type: ignore[arg-type]
+
+
+def _links_and_assets_consistent(data_root: Path) -> None:
+    """Every image link resolves, and no chart is unlinked."""
+    linked: set[str] = set()
+    for page in _pages(data_root):
+        links = _linked_assets(page)
+        assert links <= _assets(data_root), (page.name, links)
+        linked |= links
+    assert _assets(data_root) == linked
+
+
+@pytest.mark.parametrize("heal", ["sync", "regen"])
+@pytest.mark.parametrize("step", _STEPS[:4])
+def test_a_fault_in_a_settle_rename_heals_on_the_next_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, step: str, heal: str
+) -> None:
+    """Req 6.7: the settle rename of the trading scenario is interrupted after
+    each write step; the next ``sync`` over the same inputs (which skips every
+    archived file) and, separately, ``regen`` end with each page at one path
+    under its unsuffixed name, every image link resolving and no chart left.
+
+    The states at the fault differ by step (still suffixed with both charts;
+    still suffixed with broken links; moved with old content; complete), so
+    the two shapes of stranded page are both exercised. Mutations: drop the
+    stranded-page candidates from the settle pass (the ``sync`` heals of the
+    first three steps redden); drop the in-task finish of a suffixed page
+    (the ``regen`` heal after the asset step reddens, leaving the suffixed
+    chart behind).
+    """
+    a_old = _trade_export(
+        start_hours=1, created_hours=0, session=1, elapsed_s=3000.0, distance_m=9000.0
+    )
+    a_new = _trade_export(
+        start_hours=0, created_hours=1, session=1, elapsed_s=3000.0, distance_m=9000.0
+    )
+    b_old = _trade_export(
+        start_hours=0, created_hours=0, session=2, elapsed_s=2000.0, distance_m=6000.0
+    )
+    b_new = _trade_export(
+        start_hours=1, created_hours=1, session=2, elapsed_s=2000.0, distance_m=6000.0
+    )
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    assert (
+        _sync_dir(data_root, _put_files(tmp_path, "x", {"f.fit": a_old})).failures == ()
+    )
+    assert (
+        _sync_dir(data_root, _put_files(tmp_path, "y", {"f.fit": b_old})).failures == ()
+    )
+    before = {_frontmatter(p)["uuid"]: p.name for p in _pages(data_root)}
+    source = _put_files(tmp_path, "both", {"1-a.fit": a_new, "2-b.fit": b_new})
+
+    real = getattr(sync_module, step)
+    real_settle = sync_module._settle_pass
+    settling = {"now": False}
+
+    def settle_marker(*args: object, **kwargs: object) -> None:
+        settling["now"] = True
+        real_settle(*args, **kwargs)  # type: ignore[arg-type]
+
+    def dying(*args: object, **kwargs: object) -> None:
+        real(*args, **kwargs)
+        if settling["now"]:
+            raise RuntimeError("fault in settle")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(sync_module, "_settle_pass", settle_marker)
+        patch.setattr(sync_module, step, dying)
+        crashed = _sync_dir(data_root, source)
+    assert len(crashed.failures) == 1  # the settle really died
+    assert len(_pages(data_root)) == 2  # each page at one path
+
+    healed = _regen(data_root) if heal == "regen" else _sync_dir(data_root, source)
+    assert healed.failures == ()
+    after = {_frontmatter(p)["uuid"]: p.name for p in _pages(data_root)}
+    assert after == {_uuid_of(1): before[_uuid_of(2)], _uuid_of(2): before[_uuid_of(1)]}
+    _links_and_assets_consistent(data_root)
+
+
+@pytest.mark.parametrize("heal", ["sync", "regen"])
+def test_a_user_named_page_shaped_like_a_suffixed_one_is_never_moved(
+    tmp_path: Path, heal: str
+) -> None:
+    """Req 6.3, 6.6: a page the user named ``<stem>-<8 hex>.md`` whose hex is not
+    its uid is not a stranded page, though ``<stem>.md`` is free and it would
+    compute that stem.
+
+    Mutation: match the suffix by shape (any 8 hex characters) rather than by
+    the page's own uid (the page moves).
+    """
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    older, _newer = fx.healthfit_reexport_pair()
+    _sync_one(data_root, tmp_path, older)
+    page = _only_page(data_root)
+    assert not _uuid_text(older).startswith("deadbeef")
+    mine = page.with_name(f"{page.stem}-deadbeef.md")
+    page.rename(mine)
+    _assets_before = _assets(data_root)
+
+    if heal == "regen":
+        assert _regen(data_root).failures == ()
+    else:
+        assert _sync_dir(data_root, tmp_path / "src-empty-not-there").failures == ()
+    assert _only_page(data_root) == mine
+    assert _assets(data_root) == _assets_before
+
+
+@pytest.mark.parametrize("heal", ["sync", "regen"])
+def test_a_page_at_its_own_uid_suffix_stays_when_it_computes_another_stem(
+    tmp_path: Path, heal: str
+) -> None:
+    """Req 6.3, 6.6: a page whose filename is ``<U>-<its own uid8>.md`` with
+    ``<U>.md`` free is moved only when the stem it computes unsuffixed is
+    ``U``; here ``U`` is not that stem, so the page stays.
+
+    Mutation: move a stranded-shaped page without comparing ``U`` to the
+    computed stem (it moves to ``<U>.md``).
+    """
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    older, _newer = fx.healthfit_reexport_pair()
+    _sync_one(data_root, tmp_path, older)
+    page = _only_page(data_root)
+    mine = page.with_name(f"not-the-computed-stem-{_uuid_text(older)[:8]}.md")
+    page.rename(mine)
+    before = mine.read_text(encoding="utf-8")
+
+    if heal == "regen":
+        assert _regen(data_root).failures == ()
+    else:
+        assert _sync_dir(data_root, tmp_path / "src-empty-not-there").failures == ()
+    assert _only_page(data_root) == mine
+    if heal == "sync":  # nothing was rewritten
+        assert mine.read_text(encoding="utf-8") == before
+
+
+# --- stranded-page settling (4.2, opportunistic) ---
+
+
+def _stage_stranded(tmp_path: Path) -> tuple[Path, Path, Path, fx.Species]:
+    """A synced page moved to ``<stem>-<uid8>.md`` (its own uid), its stem free."""
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    older, _newer = fx.healthfit_reexport_pair()
+    _sync_one(data_root, tmp_path, older)
+    page = _only_page(data_root)
+    stranded = page.with_name(f"{page.stem}-{_uuid_text(older)[:8]}.md")
+    page.rename(stranded)
+    return data_root, page, stranded, older
+
+
+def _idle_sync(data_root: Path, tmp_path: Path) -> SyncReport:
+    empty = tmp_path / "idle-src"
+    empty.mkdir(exist_ok=True)
+    return _sync_dir(data_root, empty)
+
+
+def test_note_linking_a_suffixed_chart_does_not_make_a_page_stranded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Req 6.4, 6.7: only a page's generated content decides whether it is
+    stranded; a note that links a chart named for the suffix (kept by Req 6.4)
+    does not, so an idle sync writes nothing.
+
+    Mutation: search the whole text (the page is rewritten on every idle run).
+    """
+    data_root, _page, stranded, older = _stage_stranded(tmp_path)
+    settled = (
+        data_root
+        / WORKOUTS_DIR
+        / stranded.name.replace(f"-{_uuid_text(older)[:8]}", "")
+    )
+    stranded.rename(settled)
+    _write_note(
+        settled, f"![old](assets/{settled.stem}-{_uuid_text(older)[:8]}-hero.svg)"
+    )
+    calls: list[Path] = []
+    real = sync_module._write_document
+
+    def spy(document: Path, markdown: str) -> None:
+        calls.append(document)
+        real(document, markdown)
+
+    monkeypatch.setattr(sync_module, "_write_document", spy)
+    report = _idle_sync(data_root, tmp_path)
+    assert report.failures == () and report.written == ()
+    assert calls == []
+
+
+def test_a_stranded_page_settles_with_its_notices_and_the_free_reason(
+    tmp_path: Path,
+) -> None:
+    """Req 6.5, 6.7: a page not written this run keeps its unmanaged-key notice
+    when settled, and its rename notice says the unsuffixed name became free.
+
+    Mutation: silence the notices for stranded pages too; report a base change
+    as the reason.
+    """
+    data_root, page, stranded, _older = _stage_stranded(tmp_path)
+    text = stranded.read_text(encoding="utf-8")
+    stranded.write_text(text.replace("\n---\n", "\nmy_stray_key: 1\n---\n", 1))
+    report = _idle_sync(data_root, tmp_path)
+    assert report.failures == ()
+    assert _only_page(data_root) == page
+    details = [w.detail for w in report.warnings]
+    assert any("my_stray_key" in d for d in details)
+    renames = _rename_warnings(report)
+    assert len(renames) == 1
+    assert (
+        f"the unsuffixed name {WORKOUTS_DIR}/{page.name} became free"
+        in renames[0].detail
+    )
+    assert "base file changed" not in renames[0].detail
+
+
+def test_a_regen_finish_of_a_stranded_page_gives_the_free_reason(
+    tmp_path: Path,
+) -> None:
+    """Req 6.5: the in-task finish (no base change) is not blamed on the base."""
+    data_root, page, stranded, _older = _stage_stranded(tmp_path)
+    report = _regen(data_root)
+    assert report.failures == ()
+    assert _only_page(data_root) == page
+    (rename,) = _rename_warnings(report)
+    assert (
+        f"the unsuffixed name {WORKOUTS_DIR}/{page.name} became free" in rename.detail
+    )
+
+
+def test_a_stranded_page_that_cannot_be_settled_is_left_and_reported_silently(
+    tmp_path: Path,
+) -> None:
+    """Req 6.7: settling a stranded page is opportunistic. With its archived
+    source gone, or its document version newer than this fitdocs, an idle sync
+    exits clean with an empty report and the page untouched.
+
+    Mutation: report the failure or the version warning (as a ledger entry
+    would be).
+    """
+    for case in ("no-archive", "newer-version"):
+        root = tmp_path / case
+        root.mkdir()
+        data_root, _page, stranded, older = _stage_stranded(root)
+        if case == "no-archive":
+            archive_path(data_root, _sha(older.data)).unlink()
+        else:
+            text = stranded.read_text(encoding="utf-8")
+            edited, count = re.subn(
+                r"^doc_version: \d+$", "doc_version: 9999", text, flags=re.MULTILINE
+            )
+            assert count == 1
+            stranded.write_text(edited, encoding="utf-8")
+        before = stranded.read_bytes()
+        report = _idle_sync(data_root, root)
+        assert report == SyncReport(written=(), skipped=(), failures=(), warnings=()), (
+            case
+        )
+        assert stranded.read_bytes() == before, case
+        assert _pages(data_root) == [stranded], case
+
+
+@pytest.mark.parametrize("which", ["base", "first"])
+def test_uid_of_a_page_without_a_session_uuid_is_its_base_hash(
+    tmp_path: Path, which: str
+) -> None:
+    """Req 6.7: with no recorded UUID a page's uid is the sha of its LAST listed
+    source (the base). Stranded at ``<U>-<base sha8>.md`` it settles; at
+    ``<U>-<first source sha8>.md`` it is a user's name and stays.
+
+    Mutations: no fallback (the base case stays); the first listed source (the
+    decoy settles, the base case stays).
+    """
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    original, partner = fx.garmin_original(), fx.partner_copy()
+    _sync_one(data_root, tmp_path, partner)
+    _archive(data_root, original)
+    page = _only_page(data_root)
+    _set_sources(page, [_ref(original), _ref(partner)])
+    assert _regen(data_root).failures == ()
+    assert _frontmatter(page)["sources"] == [_ref(partner), _ref(original)]  # base last
+    assert "uuid" not in _frontmatter(page)
+    chosen = original if which == "base" else partner
+    moved = page.with_name(f"{page.stem}-{_sha(chosen.data)[:8]}.md")
+    page.rename(moved)
+
+    assert _idle_sync(data_root, tmp_path).failures == ()
+    assert _only_page(data_root) == (page if which == "base" else moved)
+
+
+def test_a_ledger_settle_does_not_repeat_the_pages_notices(tmp_path: Path) -> None:
+    """Req 6.5: the page the trading run writes carries an invalid effort tag.
+    That run reports the tag once (on its write); the settle that then moves
+    the same page is quiet about it.
+
+    Mutation: settle ledger entries without ``quiet`` (two notices).
+    """
+    a_old = _trade_export(
+        start_hours=1, created_hours=0, session=1, elapsed_s=3000.0, distance_m=9000.0
+    )
+    a_new = _trade_export(
+        start_hours=0, created_hours=1, session=1, elapsed_s=3000.0, distance_m=9000.0
+    )
+    b_old = _trade_export(
+        start_hours=0, created_hours=0, session=2, elapsed_s=2000.0, distance_m=6000.0
+    )
+    b_new = _trade_export(
+        start_hours=1, created_hours=1, session=2, elapsed_s=2000.0, distance_m=6000.0
+    )
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    assert (
+        _sync_dir(data_root, _put_files(tmp_path, "x", {"f.fit": a_old})).failures == ()
+    )
+    assert (
+        _sync_dir(data_root, _put_files(tmp_path, "y", {"f.fit": b_old})).failures == ()
+    )
+    for page in _pages(data_root):
+        if _frontmatter(page)["uuid"] == _uuid_of(1):
+            text = page.read_text(encoding="utf-8")
+            page.write_text(text.replace("\n---\n", "\neffort: banana\n---\n", 1))
+
+    report = _sync_dir(
+        data_root, _put_files(tmp_path, "both", {"1-a.fit": a_new, "2-b.fit": b_new})
+    )
+
+    assert report.failures == ()
+    assert len(_rename_warnings(report)) == 3  # precondition: A moved twice, B once
+    assert sum("effort" in w.detail for w in report.warnings) == 1

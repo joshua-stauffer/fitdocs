@@ -1803,9 +1803,10 @@ def test_one_document_carries_both_an_unmanaged_key_and_a_map_warning(
 ) -> None:
     """Two warnings for one file, both surviving in fixed order.
 
-    This is the whole reason ``_process_file`` returns a *tuple* of warnings
-    rather than an optional scalar: the unmanaged-key notice (Req 6.3) and the
-    map omission (Req 4.3) are computed at different points in the same rewrite,
+    This is the whole reason a task's result (``_TaskResult``) carries a *tuple*
+    of warnings rather than an optional scalar: the unmanaged-key notice (Req
+    6.3) and the map omission (Req 4.3) are computed at different points in the
+    same rewrite,
     and a scalar would force silently discarding one. Without this test the
     widening is unpinned -- truncating the return to ``warnings[:1]`` passes the
     entire suite.
@@ -1959,7 +1960,7 @@ def test_regen_version_gated_document_produces_no_unmanaged_key_warning(
 # 4.5, 4.6)
 # ===========================================================================
 #
-# In the matched-document branch of ``_process_file``, after the version gate
+# In the matched-document branch of ``_page_task``, after the version gate
 # (which still returns first and rewrites nothing), the user-owned lines of
 # the existing document are carried forward verbatim into the rewritten
 # frontmatter block -- regardless of whether they form a valid effort tag.

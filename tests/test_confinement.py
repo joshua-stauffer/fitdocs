@@ -83,6 +83,7 @@ from fitdocs.settings import load_settings_document
 from fitdocs.sync import drain, regen, sync
 from fitdocs.tiles import DEFAULT_TILE_SETTINGS, TileSource, TileStore
 from tests.fixtures import builder
+from tests.fixtures import identity as identity_fixtures
 from tests.load.conftest import ComputingCalculator
 
 # PINNED timezone: a FIXED -06:00 offset (never the system zone) so document
@@ -788,6 +789,53 @@ def _wrote_the_history_document(touched: Sequence[str]) -> bool:
     return f"data/{HISTORY_DIR}/{HISTORY_DOC_STEM}.md" in touched
 
 
+#: The two page stems of the ``sync-base-change`` entry point's fixture under
+#: the pinned ``_TZ``: the older export's page and the corrected start's page.
+_BASE_CHANGE_OLD_STEM: Final[str] = "2043-11-13-run-1713"
+_BASE_CHANGE_NEW_STEM: Final[str] = "2043-11-13-run-1613"
+
+
+def _stage_base_change(data_root: Path, source_dir: Path) -> None:
+    """Sync the older export of a re-exported session, then stage the newer one.
+
+    The newer export corrects the start by an hour, so syncing it renames the
+    page (activity-identity Req 6.2). It waits in its own directory beside the
+    sandbox's ``src`` (staged before the snapshot, so its creation is not a
+    measured write); the older export goes through a throwaway directory.
+    """
+    older, newer = identity_fixtures.healthfit_reexport_pair()
+    first = source_dir.parent / "older-export"
+    first.mkdir()
+    (first / "older.fit").write_bytes(older.data)
+    sync(
+        first,
+        data_root,
+        athlete=load_athlete_inputs(data_root),
+        tz=_TZ,
+        tiles=_tiles(data_root),
+    )
+    second = source_dir.parent / "newer-export"
+    second.mkdir()
+    (second / "newer.fit").write_bytes(newer.data)
+
+
+def _run_sync_base_change(data_root: Path, source_dir: Path) -> None:
+    """``sync`` over the newer export: the page is renamed (Req 6.2)."""
+    _run_sync(data_root, source_dir.parent / "newer-export")
+
+
+def _renamed_a_workout_document(touched: Sequence[str]) -> bool:
+    """The ``sync-base-change`` entry point's own non-vacuity check: the old
+    page's document was deleted and the new one created. The prepare step
+    creates the old document, and nothing else names either path, so a run
+    that touches both did both -- a run that only rewrote a page in place
+    (or wrote nothing) touches at most one of them.
+    """
+    old = f"data/{WORKOUTS_DIR}/{_BASE_CHANGE_OLD_STEM}.md"
+    new = f"data/{WORKOUTS_DIR}/{_BASE_CHANGE_NEW_STEM}.md"
+    return old in touched and new in touched
+
+
 @dataclass(frozen=True)
 class EntryPoint:
     """One registered writing entry point -- guard axis (a).
@@ -860,6 +908,16 @@ WRITING_ENTRY_POINTS: Final[tuple[EntryPoint, ...]] = (
         prepare=_stage_plan_and_logged_page,
         run=_run_reconcile,
         non_vacuous=_wrote_a_reconciled_block,
+    ),
+    # activity-identity task 4.2: a sync whose run renames a page (a session-UUID
+    # re-export whose corrected start changes the name), removing its old chart
+    # and moving its document: the deletes and the move are what this guard
+    # must see stay inside `workouts/`.
+    EntryPoint(
+        id="sync-base-change",
+        prepare=_stage_base_change,
+        run=_run_sync_base_change,
+        non_vacuous=_renamed_a_workout_document,
     ),
 )
 
@@ -1424,3 +1482,25 @@ def test_reconcile_touches_only_the_plan_directory_and_writes_no_other_document(
     # both pages, so the negative assertions above are not vacuously true
     # over a run that did nothing at all.
     assert _wrote_a_reconciled_block(touched)
+
+
+def test_sync_base_change_is_a_registered_writing_entry_point() -> None:
+    """``sync-base-change`` is registered with its own callables (activity-
+    identity Req 6.2, 6.4): dropping the registration would only shrink the
+    parametrized guard by one case, so this membership check pins it."""
+    registered = {entry_point.id: entry_point for entry_point in WRITING_ENTRY_POINTS}
+    assert "sync-base-change" in registered
+    entry = registered["sync-base-change"]
+    assert entry.prepare is _stage_base_change
+    assert entry.run is _run_sync_base_change
+    assert entry.non_vacuous is _renamed_a_workout_document
+
+
+def test_base_change_non_vacuous_predicate_needs_a_delete_and_a_create() -> None:
+    """A run that touched only the new document (a fresh page) or only the old
+    one (a rewrite in place) is vacuous for this entry; both is not."""
+    old = f"data/{WORKOUTS_DIR}/{_BASE_CHANGE_OLD_STEM}.md"
+    new = f"data/{WORKOUTS_DIR}/{_BASE_CHANGE_NEW_STEM}.md"
+    assert _renamed_a_workout_document((old,)) is False
+    assert _renamed_a_workout_document((new,)) is False
+    assert _renamed_a_workout_document((old, new)) is True

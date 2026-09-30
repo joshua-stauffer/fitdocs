@@ -1392,6 +1392,35 @@ the next run re-plans it and holds it again (pinned by fault injection).
 -- for each recorded `(path, unsuffixed)` whose `doc_path(unsuffixed)` does not
 exist, run a page task on that page with no new members and the rename target
 forced to the unsuffixed stem (Req 6.6).
+_(Controller ruling 2026-09-30, activity-identity 4.2 review: Req 6.7 covers
+settle renames too, and an interrupted settle cannot be healed from the run's
+own records because the next run over the same inputs skips every archived
+file. So the settle pass also takes, from one `workouts/*.md` scan, every page
+stranded at a collision-suffixed name -- filename `<U>-<uid8>.md` where `uid8`
+is the first eight characters of the page's own uid (its recorded `uuid`, else
+its base's hash) and `workouts/<U>.md` is free -- and runs the same settle page
+task, which moves the page only when the stem it computes unsuffixed is `U`.
+A user-chosen filename never has that shape with a matching uid, and a page
+whose computed stem differs is left where it is.)_
+_(Implementation detail of that ruling, accepted in the 4.2 review, 2026-09-30:
+(a) any ordinary page task (sync, drain, regen) also renames a page at
+`<U>-<own uid[:8]>.md` to `<U>.md` when `U` is the stem it computes and
+`<U>.md` is free, with the reason "the unsuffixed name `<U>.md` became free"
+unless its base also changed; (b) the settle pass's one `scan_pages` finds two
+shapes, each settled only when the computed unsuffixed stem is `U`:
+`<U>-<uid8>.md` with `<U>.md` free, and `<U>.md` whose generated content
+outside its regions still links `assets/<U>-<uid8>-...` (rewritten in place);
+a page whose regions cannot be parsed or whose text cannot be decoded is
+skipped; (c) the uid is the page's recorded `uuid`, else the hash of its last
+listed source (its base); (d) settling a scan-found page is opportunistic: if
+its task raises or meets the version gate, nothing is reported and any partial
+writes are healed by a later run, and when it completes its notices and the
+rename warning are reported; the run's own recorded entries keep per-document
+failure reporting and do not repeat the notices their page task already gave;
+(e) the first run after upgrading therefore also settles older collision
+leftovers at `<U>-<uid8>.md` (the first shape of (b)), each with a rename warning; (f) every sync, drain and
+regen pays one workout scan plus one text read per page -- about 1.4 s at 2500
+pages, dominated by the frontmatter scan.)_
 
 *Regeneration*: a page task per `scan_pages` record with no new members
 (roles rebuilt from the archive with the current precedence -- Req 7.2, 7.3);
