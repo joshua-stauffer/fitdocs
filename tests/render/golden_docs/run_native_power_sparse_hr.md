@@ -2,7 +2,7 @@
 title: Run 2021-09-07 19:46
 type: workout
 generator: fitdocs
-doc_version: 6
+doc_version: 7
 date: '2021-09-07'
 start_time: '2021-09-07T19:46:40-06:00'
 sport: Run
@@ -13,6 +13,10 @@ avg_hr_bpm: 131
 avg_power_w: 245
 elevation_gain_m: 9.0
 calories_kcal: 65
+source_kind: original
+source_elapsed_s: 9.0
+source_distance_m: 29.7
+source_device: 0d977e5a14df9a9a
 sources:
 - fit-archive/14a1609d981926d005f9ef2e910be6c453355360a3c37a833d6e7b90e807663d.fit
 ---

@@ -202,13 +202,17 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
         "FRONTMATTER_FENCE",
         "INDOOR_KEY",
         "MODALITY_KEY",
+        "SESSION_UUID_FIELD",
         "SOURCES_KEY",
+        "SOURCE_DEVICE_KEY",
+        "SOURCE_DISTANCE_KEY",
+        "SOURCE_ELAPSED_KEY",
+        "SOURCE_KIND_KEY",
         "SPORT_KEY",
         "START_TIME_KEY",
         "TYPE_KEY",
         "UUID_KEY",
         "WORKOUT_TYPE",
-        "format_session_uuid",
     ),
     "fitdocs.render.views": (
         "NOTES_PLACEHOLDER",
@@ -297,9 +301,11 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
 #: Document vocabulary no converted module may spell for itself: the frontmatter
 #: fence, the workout-type marker, and (plan-resolution task 1.1) the five
 #: matched-field keys -- the date, start time, sport, modality and indoor
-#: keys -- each have exactly one definition, in the contract. The scan walks
-#: every ``ast.Constant``, so a bare re-spelling reds wherever it sits, key
-#: or display word (``fitdocs.plans.page``'s ``INDOOR_WORD`` included).
+#: keys -- and (activity-identity task 3.1) the four base-identity keys --
+#: each have exactly one definition, in the contract. The scan walks
+#: every ``ast.Constant`` except the strings of a module-level ``__all__``
+#: (exported names, not vocabulary), so a bare re-spelling anywhere else reds,
+#: key or display word (``fitdocs.plans.page``'s ``INDOOR_WORD`` included).
 FORBIDDEN_LITERALS: Final[tuple[str, ...]] = (
     fitdocs.contract.FRONTMATTER_FENCE,
     fitdocs.contract.WORKOUT_TYPE,
@@ -308,6 +314,7 @@ FORBIDDEN_LITERALS: Final[tuple[str, ...]] = (
     fitdocs.contract.SPORT_KEY,
     fitdocs.contract.MODALITY_KEY,
     fitdocs.contract.INDOOR_KEY,
+    *fitdocs.contract.SOURCE_IDENTITY_KEYS,
 )
 
 _MODULE_IDS: Final[tuple[str, ...]] = tuple(
@@ -405,6 +412,81 @@ def test_converted_module_parses_no_yaml_of_its_own(module: ModuleType) -> None:
     )
 
 
+def _spelled_forbidden_literals(tree: ast.Module) -> list[str]:
+    """The :data:`FORBIDDEN_LITERALS` spelled as string constants in ``tree``.
+
+    The strings of a module-level ``__all__`` are exempt: they name exported
+    symbols, not document vocabulary, and ``fitdocs.identity.kinds`` exports a
+    function called ``source_kind``, which is also a managed key's spelling.
+    """
+    exempt: set[int] = set()
+    for node in tree.body:
+        if (
+            isinstance(node, (ast.Assign, ast.AnnAssign))
+            and any(
+                isinstance(t, ast.Name) and t.id == "__all__"
+                for t in (
+                    node.targets if isinstance(node, ast.Assign) else [node.target]
+                )
+            )
+            and node.value is not None
+        ):
+            exempt.update(id(n) for n in ast.walk(node.value))
+    return sorted(
+        {
+            node.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and node.value in FORBIDDEN_LITERALS
+            and id(node) not in exempt
+        }
+    )
+
+
+def test_literal_scan_exempts_only_the_exports_list() -> None:
+    """Positive control for the scan: a key spelled in code reds; only the same
+    spelling as an entry of a module-level ``__all__`` assignment is exempt."""
+    key = fitdocs.contract.SOURCE_KIND_KEY
+    assert _spelled_forbidden_literals(ast.parse(f'__all__ = ["{key}"]')) == []
+    assert _spelled_forbidden_literals(ast.parse(f'x = "{key}"')) == [key]
+    assert _spelled_forbidden_literals(ast.parse(f'__all__ = ["a"]\ny = "{key}"')) == [
+        key
+    ]
+    # a list or tuple that is not the module-level ``__all__`` is not exempt
+    assert _spelled_forbidden_literals(ast.parse(f'x = ["{key}"]')) == [key]
+    assert _spelled_forbidden_literals(ast.parse(f'x = ("{key}",)')) == [key]
+    # neither is an ``__all__`` that is not assigned at module level
+    assert _spelled_forbidden_literals(
+        ast.parse(f'def f():\n    __all__ = ["{key}"]')
+    ) == [key]
+    assert _spelled_forbidden_literals(
+        ast.parse(f'class C:\n    __all__ = ["{key}"]')
+    ) == [key]
+    # nor the augmented form
+    assert _spelled_forbidden_literals(
+        ast.parse(f'__all__ = []\n__all__ += ["{key}"]')
+    ) == [key]
+    # the exemption is by node, not by value: exporting a spelling does not
+    # license using it as a value elsewhere in the module
+    assert _spelled_forbidden_literals(
+        ast.parse(f'__all__ = ["{key}"]\ny = "{key}"')
+    ) == [key]
+    # a tuple target, an attribute target, or an ``__all__`` under a
+    # module-level ``if`` is not the module-level ``__all__`` assignment
+    assert _spelled_forbidden_literals(ast.parse(f'__all__, k = ["a"], "{key}"')) == [
+        key
+    ]
+    assert _spelled_forbidden_literals(ast.parse(f'm.__all__ = ["{key}"]')) == [key]
+    assert _spelled_forbidden_literals(
+        ast.parse(f'if X:\n    __all__ = ["{key}"]')
+    ) == [key]
+    # the annotated form is a module-level ``__all__`` assignment
+    assert (
+        _spelled_forbidden_literals(ast.parse(f'__all__: list[str] = ["{key}"]')) == []
+    )
+
+
 @pytest.mark.parametrize("module", CONVERTED_MODULES, ids=_MODULE_IDS)
 def test_converted_module_spells_no_document_vocabulary_of_its_own(
     module: ModuleType,
@@ -416,20 +498,12 @@ def test_converted_module_spells_no_document_vocabulary_of_its_own(
     :data:`fitdocs.contract.FRONTMATTER_FENCE`, :data:`fitdocs.contract.WORKOUT_TYPE`,
     and the matched-field keys (:data:`fitdocs.contract.DATE_KEY`,
     :data:`fitdocs.contract.START_TIME_KEY`, :data:`fitdocs.contract.SPORT_KEY`,
-    :data:`fitdocs.contract.MODALITY_KEY`, :data:`fitdocs.contract.INDOOR_KEY`);
+    :data:`fitdocs.contract.MODALITY_KEY`, :data:`fitdocs.contract.INDOOR_KEY`)
+    and the four base-identity keys (:data:`fitdocs.contract.SOURCE_IDENTITY_KEYS`);
     re-spelling any of them as a bare string is how one command's idea of "is
     this a fitdocs document?" drifts from another's (Req 1.1).
     """
-    tree = _module_ast(module)
-    spelled = sorted(
-        {
-            node.value
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Constant)
-            and isinstance(node.value, str)
-            and node.value in FORBIDDEN_LITERALS
-        }
-    )
+    spelled = _spelled_forbidden_literals(_module_ast(module))
     assert not spelled, (
         f"{module.__name__} spells document vocabulary itself ({spelled}); "
         "import the constant from fitdocs.contract instead"

@@ -171,8 +171,12 @@ def test_payload_version_paired_with_doc_version() -> None:
     session developer sentinel or float32 value is decoded. None of that
     changes the load result's own shape, so ``DOC_VERSION`` advances alone
     again and ``LOAD_PAYLOAD_VERSION`` stays untouched.
+
+    **The pair became ``(2, 7)`` (activity-identity task 3.1):** the four
+    base-identity frontmatter keys are a page-format change with no load
+    result behind it, so ``DOC_VERSION`` advances alone a fourth time.
     """
-    assert (LOAD_PAYLOAD_VERSION, contract.DOC_VERSION) == (2, 6), (
+    assert (LOAD_PAYLOAD_VERSION, contract.DOC_VERSION) == (2, 7), (
         f"LOAD_PAYLOAD_VERSION={LOAD_PAYLOAD_VERSION} and "
         f"contract.DOC_VERSION={contract.DOC_VERSION} drifted apart. "
         "Req 11.5 requires that a result-format change also change the "

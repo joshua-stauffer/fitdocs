@@ -2,7 +2,7 @@
 title: Run 2021-09-07 19:46
 type: workout
 generator: fitdocs
-doc_version: 6
+doc_version: 7
 uuid: ff28292a-2b2c-2d2e-2f30-313233343536
 date: '2021-09-07'
 start_time: '2021-09-07T19:46:40-06:00'
@@ -11,6 +11,9 @@ modality: run
 distance_km: 0.06
 moving_time: 0:19
 avg_hr_bpm: 134
+source_kind: original
+source_elapsed_s: 19.0
+source_device: 3467f5f154ae5275
 sources:
 - fit-archive/29327f7926996543bc743ae011a9bd703a73aa5430404800225d0f88421ad2f6.fit
 ---

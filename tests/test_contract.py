@@ -213,6 +213,10 @@ _PUBLISHED_KEYS = {
     "avg_power_w",
     "elevation_gain_m",
     "calories_kcal",
+    "source_kind",
+    "source_elapsed_s",
+    "source_distance_m",
+    "source_device",
     "sources",
     "load_value",
     "load_methodology",
@@ -1345,3 +1349,89 @@ def test_contract_performs_no_io_and_reads_no_clock() -> None:
     for banned in ("pathlib", "os", "io", "time", "random", "urllib"):
         assert banned not in imported
     assert clock_calls == set()
+
+
+# --- activity-identity task 3.1: the base-identity keys and their reader ------
+
+
+def test_source_identity_keys_are_the_four_keys_in_emission_order() -> None:
+    assert contract.SOURCE_IDENTITY_KEYS == (
+        "source_kind",
+        "source_elapsed_s",
+        "source_distance_m",
+        "source_device",
+    )
+    assert set(contract.SOURCE_IDENTITY_KEYS) <= contract.MANAGED_KEYS
+    assert set(contract.SOURCE_IDENTITY_KEYS).isdisjoint(contract.USER_KEYS)
+
+
+def _identity_doc(**overrides: object) -> dict[str, object]:
+    doc: dict[str, object] = {
+        "source_kind": "original",
+        "source_elapsed_s": 61.25,
+        "source_distance_m": 1000,
+        "source_device": "0123456789abcdef",
+    }
+    doc.update(overrides)
+    return doc
+
+
+def test_document_source_identity_reads_usable_values() -> None:
+    reading = contract.document_source_identity(_identity_doc())
+    assert reading == contract.SourceIdentityReading(
+        kind="original", elapsed_s=61.25, distance_m=1000.0, device="0123456789abcdef"
+    )
+    assert isinstance(reading.distance_m, float)
+
+
+def test_document_source_identity_of_nothing_is_all_absent() -> None:
+    empty = contract.SourceIdentityReading(None, None, None, None)
+    assert contract.document_source_identity(None) == empty
+    assert contract.document_source_identity({}) == empty
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        True,
+        False,
+        float("nan"),
+        float("inf"),
+        float("-inf"),
+        -1,
+        -0.5,
+        "12",
+        None,
+        [1],
+        10**400,
+    ],
+    ids=repr,
+)
+def test_document_source_identity_rejects_unusable_numbers(bad: object) -> None:
+    reading = contract.document_source_identity(
+        _identity_doc(source_elapsed_s=bad, source_distance_m=bad)
+    )
+    assert reading.elapsed_s is None
+    assert reading.distance_m is None
+    # the other two values are read independently of the bad numbers
+    assert reading.kind == "original"
+    assert reading.device == "0123456789abcdef"
+
+
+@pytest.mark.parametrize("bad", ["", 7, True, None, ["original"]], ids=repr)
+def test_document_source_identity_rejects_unusable_strings(bad: object) -> None:
+    reading = contract.document_source_identity(
+        _identity_doc(source_kind=bad, source_device=bad)
+    )
+    assert reading.kind is None
+    assert reading.device is None
+    assert reading.elapsed_s == 61.25
+    assert reading.distance_m == 1000.0
+
+
+def test_document_source_identity_accepts_zero() -> None:
+    reading = contract.document_source_identity(
+        _identity_doc(source_elapsed_s=0, source_distance_m=0.0)
+    )
+    assert reading.elapsed_s == 0.0
+    assert reading.distance_m == 0.0

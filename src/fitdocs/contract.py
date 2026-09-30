@@ -135,9 +135,16 @@ __all__ = [
     "NOTES_PLACEHOLDER",
     "NOTES_REGION",
     "PRESERVED_REGIONS",
+    "SESSION_UUID_FIELD",
     "SOURCES_KEY",
+    "SOURCE_DEVICE_KEY",
+    "SOURCE_DISTANCE_KEY",
+    "SOURCE_ELAPSED_KEY",
+    "SOURCE_IDENTITY_KEYS",
+    "SOURCE_KIND_KEY",
     "SPORT_KEY",
     "START_TIME_KEY",
+    "SourceIdentityReading",
     "TOOL_REGIONS",
     "TYPE_KEY",
     "USER_KEYS",
@@ -152,6 +159,7 @@ __all__ = [
     "document_load",
     "document_modality",
     "document_sport",
+    "document_source_identity",
     "document_start_time",
     "document_uuid",
     "document_version",
@@ -171,7 +179,7 @@ __all__ = [
 
 # --- versions ----------------------------------------------------------------
 
-DOC_VERSION: Final[int] = 6
+DOC_VERSION: Final[int] = 7
 """The document-format version stamped on every generated workout document.
 
 Compared arithmetically against the version a document records (Req 5.1-5.3,
@@ -284,6 +292,18 @@ each change what regeneration writes for an already-documented activity:
    decoded rather than misread, so the session values it feeds change.
 
 None of the registered cited constants moved.
+
+Raised from ``6`` to ``7`` by activity-identity (task 3.1, Req 5.4, 9.6). The
+format delta is three things. Every page gains four managed frontmatter keys
+recording its base file -- ``source_kind`` (always), ``source_elapsed_s``,
+``source_distance_m`` and ``source_device`` (each only when the base records
+it) -- between ``calories_kcal`` and ``sources``. The ``sources`` list is in
+canonical order, the base last (a document written before this version lists
+its files in append order instead). And ``uuid`` is retained: it is the
+session UUID of the page's highest-ranked file that carries one, so it is
+kept when a file without one becomes the base. A page stamped with a lower
+version lacks the identity keys, so it is recognized only by exact content or
+recorded session UUID until regeneration brings it current.
 """
 
 CONTRACT_VERSION: Final[str] = "4"
@@ -348,6 +368,29 @@ MODALITY_KEY: Final[str] = "modality"
 verbatim (Req 1.2, 1.5) -- the same "raw string, caller maps it" discipline
 as :data:`SPORT_KEY`."""
 
+SOURCE_KIND_KEY: Final[str] = "source_kind"
+"""Frontmatter key carrying the page's base file's source kind (Req 5.4)."""
+
+SOURCE_ELAPSED_KEY: Final[str] = "source_elapsed_s"
+"""Frontmatter key carrying the base file's recorded session elapsed time, in
+seconds, rounded to three decimals (Req 5.4)."""
+
+SOURCE_DISTANCE_KEY: Final[str] = "source_distance_m"
+"""Frontmatter key carrying the base file's recorded session distance, in
+metres, rounded to two decimals (Req 5.4)."""
+
+SOURCE_DEVICE_KEY: Final[str] = "source_device"
+"""Frontmatter key carrying the digest of the base file's device identity --
+never the serial number itself (Req 5.4)."""
+
+SOURCE_IDENTITY_KEYS: Final[tuple[str, ...]] = (
+    SOURCE_KIND_KEY,
+    SOURCE_ELAPSED_KEY,
+    SOURCE_DISTANCE_KEY,
+    SOURCE_DEVICE_KEY,
+)
+"""The four base-identity keys in emission order; all four are managed."""
+
 INDOOR_KEY: Final[str] = "indoor"
 """Frontmatter key carrying the activity's recorded indoor flag (Req 1.2,
 1.5). Written only when ``True``; a stated ``False`` and an unstated flag are
@@ -394,6 +437,7 @@ MANAGED_KEYS: Final[frozenset[str]] = frozenset(
         "avg_power_w",
         "elevation_gain_m",
         "calories_kcal",
+        *SOURCE_IDENTITY_KEYS,
         SOURCES_KEY,
         # Written by the training-load pass.
         *LOAD_KEYS,
@@ -1082,14 +1126,69 @@ def document_load(frontmatter: Mapping[str, object] | None) -> LoadReading | Non
     return LoadReading(value=load, methodology=methodology_value)
 
 
+@dataclass(frozen=True)
+class SourceIdentityReading:
+    """A page's recorded base-identity values; each ``None`` when unusable."""
+
+    kind: str | None
+    elapsed_s: float | None
+    distance_m: float | None
+    device: str | None
+
+
+def _non_negative_finite(value: object) -> float | None:
+    """``value`` as a float when a genuine finite non-negative number, else ``None``.
+
+    ``bool`` is an ``int`` subclass and is rejected explicitly; an ``int`` too
+    large to convert is unusable rather than an error.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        number = float(value)
+    except OverflowError:
+        return None
+    if not math.isfinite(number) or number < 0:
+        return None
+    return number
+
+
+def _non_empty_str(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
+def document_source_identity(
+    frontmatter: Mapping[str, object] | None,
+) -> SourceIdentityReading:
+    """The page's recorded base-identity values, each ``None`` when unusable (Req 5.4).
+
+    Reads the four :data:`SOURCE_IDENTITY_KEYS`: a non-empty ``str`` kind and
+    device, and a genuine finite non-negative ``int``/``float`` (never ``bool``)
+    elapsed time and distance. Anything else -- a missing key, a wrong type, a
+    non-finite or negative number -- reads as ``None`` for that value alone.
+    Never raises; ``None`` frontmatter reads as all four absent.
+    """
+    if frontmatter is None:
+        return SourceIdentityReading(None, None, None, None)
+    return SourceIdentityReading(
+        kind=_non_empty_str(frontmatter.get(SOURCE_KIND_KEY)),
+        elapsed_s=_non_negative_finite(frontmatter.get(SOURCE_ELAPSED_KEY)),
+        distance_m=_non_negative_finite(frontmatter.get(SOURCE_DISTANCE_KEY)),
+        device=_non_empty_str(frontmatter.get(SOURCE_DEVICE_KEY)),
+    )
+
+
 def source_refs(frontmatter: Mapping[str, object]) -> tuple[str, ...]:
-    """The document's ``sources`` history, in append order (Req 1.3).
+    """The document's ``sources`` history, in ascending rank (Req 1.3, 5.2).
 
     Each entry is a data-root-relative archive ref and the **last** entry is the
-    current render source -- the one regeneration and the training-load pass
-    resolve. A missing key, a non-list value, or an empty list yields ``()``;
-    non-string entries in an otherwise usable list are dropped individually, so
-    one hand-edited line degrades that entry rather than the whole history.
+    **base** -- the current render source, the one regeneration and the
+    training-load pass resolve; every earlier entry is an extra. A page written
+    before the roles existed lists its files in append order, which that
+    reading treats identically. A missing key, a non-list value, or an empty
+    list yields ``()``; non-string entries in an otherwise usable list are
+    dropped individually, so one hand-edited line degrades that entry rather
+    than the whole history.
     """
     raw = frontmatter.get(SOURCES_KEY)
     if isinstance(raw, list):
@@ -1148,8 +1247,8 @@ def unmanaged_keys(frontmatter: Mapping[str, object]) -> tuple[str, ...]:
 SESSION_UUID_FIELD: Final[str] = "SESSION UUID"
 """Developer-field key carrying the recorded 16-byte session identifier.
 
-Kept outside ``__all__`` until the frontmatter task publishes it with the rest
-of the identity keys."""
+The one spelling of the HealthFit session developer-field name; every module
+that reads it binds this constant rather than a local copy."""
 
 
 def format_session_uuid(value: object) -> str | None:

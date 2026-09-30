@@ -277,6 +277,10 @@ the training-load pass writes — is:
 - `load_value`
 - `modality`
 - `moving_time`
+- `source_device`
+- `source_distance_m`
+- `source_elapsed_s`
+- `source_kind`
 - `sources`
 - `sport`
 - `start_time`
