@@ -889,7 +889,7 @@ never co-varies two keys a rule distinguishes.
 
 - [ ] 7. Validation: guards and the measured-shape scenarios
 
-- [ ] 7.1 Pin the identity package's boundary and surfaces
+- [x] 7.1 Pin the identity package's boundary and surfaces
   - `tests/identity/test_boundary.py`: the package's import closure per module
     (allowed and forbidden targets from the hard rules, alias forms included),
     only `pages` and `holds` touching the filesystem, only `kinds` and `pages`
