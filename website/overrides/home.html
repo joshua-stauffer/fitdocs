@@ -1,0 +1,26 @@
+{% extends "main.html" %}
+
+{#- The home page: a hero above the page's own content. Only the content block
+    is overridden, and it calls super(), which renders the page's edit action;
+    replacing that block outright drops the action. -#}
+{% block content %}
+  <section class="fd-hero">
+    {% if page.meta.hero_title %}
+      <h1 class="fd-hero__title">{{ page.meta.hero_title }}</h1>
+    {% endif %}
+    {% if page.meta.hero_tagline %}
+      <p class="fd-hero__tagline">{{ page.meta.hero_tagline }}</p>
+    {% endif %}
+    {% if page.meta.hero_actions %}
+      <p class="fd-hero__actions">
+        {% for action in page.meta.hero_actions %}
+          <a class="md-button{% if action.primary %} md-button--primary{% endif %}" href="{{ action.href | url }}">{{ action.label }}</a>
+        {% endfor %}
+      </p>
+    {% endif %}
+    <div class="fd-hero__chart">
+      <img src="{{ '_brand/hero-chart.svg' | url }}" alt="Demo chart: power and heart rate over a workout (synthetic data, not a real athlete)" width="800" height="260">
+    </div>
+  </section>
+  {{ super() }}
+{% endblock %}

@@ -1,7 +1,9 @@
-"""Generator config rendering and the allowlist (6.4), part 1.
+"""Generator config rendering and the allowlist (6.4), in two parts.
 
-Every template here is built in memory or written under ``tmp_path``; the real
-template arrives with task 3.1.
+Part 2 also pins 4.1-4.4 and 4.6 on the checked-in template.
+
+Part 1 builds its templates in memory or under ``tmp_path``; part 2 (3.1, at the
+end of the module) loads the checked-in template.
 """
 
 from __future__ import annotations
@@ -767,3 +769,148 @@ def test_dump_ends_with_one_newline_and_uses_block_style() -> None:
     """
     text = config.dump_config({"a": {"b": [1, 2]}})
     assert text == "a:\n  b:\n  - 1\n  - 2\n"
+
+
+# --- the real template, part 2 (3.1) ---------------------------------------
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+REAL_TEMPLATE = REPO_ROOT / config.TEMPLATE_PATH
+
+TEN_FEATURES = [
+    "navigation.instant",
+    "navigation.tracking",
+    "navigation.sections",
+    "navigation.path",
+    "navigation.top",
+    "navigation.footer",
+    "toc.follow",
+    "search.highlight",
+    "content.code.copy",
+    "content.action.edit",
+]
+
+
+def _real() -> dict[str, Any]:
+    """The checked-in template, loaded through the production loader."""
+    loaded, problems = config.load_template(REAL_TEMPLATE)
+    assert problems == ()
+    assert loaded is not None
+    return loaded
+
+
+def _real_theme() -> dict[str, Any]:
+    theme = _real()["theme"]
+    assert isinstance(theme, dict)
+    return theme
+
+
+def test_the_real_template_passes_the_allowlist_once_rendered() -> None:
+    """The checked-in template renders to a config with no allowlist problem (6.4).
+
+    Dies on: adding `docs_dir: staged` (or any unknown key, feature or plugin)
+    to website/mkdocs.template.yml.
+    """
+    template = _real()
+    rendered = config.render_config(template, NAV)
+    theme = rendered["theme"]
+    assert isinstance(theme, dict)
+    # Reachability: the check has a theme, features, palette and plugins to look at.
+    assert theme["features"] and theme["palette"] and rendered["plugins"]
+    assert config.check_config(rendered, template) == ()
+
+
+def test_the_real_template_carries_the_url_contract() -> None:
+    """Trailing-slash URLs under the production domain (4.6).
+
+    Dies on: `site_url: https://fitdocs.ai/` -> `https://fitdocs.ai` (or
+    `use_directory_urls: false`) in the template.
+    """
+    template = _real()
+    assert template["site_url"] == "https://fitdocs.ai/"
+    assert template["use_directory_urls"] is True
+
+
+def test_the_real_template_points_the_edit_link_at_the_content_source() -> None:
+    """The edit link opens `website/content/` on `main` (4.4).
+
+    Dies on: `edit_uri: edit/main/website/content/` -> `edit/master/website/content/`,
+    or dropping `content.action.edit` from the features.
+    """
+    template = _real()
+    assert template["edit_uri"] == "edit/main/website/content/"
+    assert template["repo_url"] == "https://github.com/joshua-stauffer/fitdocs"
+    assert "content.action.edit" in _real_theme()["features"]
+
+
+def test_the_real_template_enables_search_and_the_copy_button() -> None:
+    """Full-text search (4.1) and the code copy button (4.3).
+
+    Dies on: `plugins: [search]` -> `plugins: []`, or dropping `content.code.copy`.
+    """
+    assert _real()["plugins"] == ["search"]
+    assert "content.code.copy" in _real_theme()["features"]
+
+
+def test_the_real_template_has_exactly_the_ten_features_in_order() -> None:
+    """The feature list is the ten the design chose, no more (4.1-4.4).
+
+    Dies on: appending `navigation.tabs` to `theme.features`.
+    """
+    assert _real_theme()["features"] == TEN_FEATURES
+
+
+def test_the_real_palette_is_auto_then_light_then_dark_each_with_a_toggle() -> None:
+    """System default first, then light, then dark, every entry switchable (4.2).
+
+    Dies on: `(prefers-color-scheme: light)` -> `(prefers-color-scheme: dark)` in
+    the template, or deleting the light entry's `toggle`.
+    """
+    palette = _real_theme()["palette"]
+    assert [(e["media"], e.get("scheme")) for e in palette] == [
+        ("(prefers-color-scheme)", None),
+        ("(prefers-color-scheme: light)", "default"),
+        ("(prefers-color-scheme: dark)", "slate"),
+    ]
+    for entry in palette:
+        assert entry["primary"] == "custom"
+        assert entry["accent"] == "custom"
+        assert set(entry["toggle"]) == {"icon", "name"}
+    # Pairwise-distinct, so a toggle copied from a neighbour is noticed.
+    assert len({e["toggle"]["icon"] for e in palette}) == 3
+    assert len({e["toggle"]["name"] for e in palette}) == 3
+
+
+def test_the_real_template_fixes_theme_and_build_settings() -> None:
+    """Material classic, no third-party font, strict, logo and favicon under `_brand/`.
+
+    Dies on: `font: false` -> `font: Inter`, `variant: classic` -> `modern`,
+    `strict: true` -> `false`, or `logo: _brand/logo.svg` -> `_brand/logo2.svg`.
+    """
+    template = _real()
+    theme = _real_theme()
+    assert theme["name"] == "material"
+    assert theme["variant"] == "classic"
+    assert theme["font"] is False
+    assert theme["logo"] == "_brand/logo.svg"
+    assert theme["favicon"] == "_brand/logo.svg"
+    assert template["strict"] is True
+    assert template["extra_css"] == ["_brand/brand.css"]
+
+
+def test_the_real_template_references_only_assets_the_site_ships() -> None:
+    """Each referenced asset is a file of `website/assets/` under `_brand/` (4.5).
+
+    Dies on: `logo: _brand/logo.svg` -> `_brand/logo2.svg`, or `extra_css` ->
+    `_brand/site.css` in the template.
+    """
+    rendered = config.render_config(_real(), NAV)
+    referenced = config.referenced_assets(rendered)
+    assert sorted(referenced) == [
+        "_brand/brand.css",
+        "_brand/logo.svg",
+        "_brand/logo.svg",
+    ]
+    for path in referenced:
+        name = path.removeprefix("_brand/")
+        assert name != path
+        assert (REPO_ROOT / "website" / "assets" / name).is_file()
