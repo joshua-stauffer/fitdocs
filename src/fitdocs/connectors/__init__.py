@@ -23,8 +23,9 @@ section lists (pinned by ``tests/connectors/test_surface.py``): the protocol
 layer's types and vocabularies, the transport layer, the typed failures, the
 secret and its redactor, and the registration operations. The built-in
 folder connector (``FolderConnector``) is deliberately not published here --
-internal, like ``fitdocs.load``'s ``ThresholdCalculator`` -- and its
-registration line is added by a later task.
+internal, like ``fitdocs.load``'s ``ThresholdCalculator`` -- but it is
+registered under its id at import time, below, so ``get("folder")`` answers
+it without any settings file naming it.
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ from fitdocs.connectors.errors import (
     ConnectorSettingsError,
     NotConnectedError,
 )
+from fitdocs.connectors.folder import FolderConnector
 from fitdocs.connectors.http import (
     CallMode,
     HttpClient,
@@ -130,3 +132,8 @@ __all__ = [
     "InvalidConnectorError",
     "UnknownConnectorError",
 ]
+
+# The one built-in connector: registered at import time so `get("folder")`
+# answers it whether or not any settings file names it. `FolderConnector` is
+# deliberately not in `__all__` above (internal, like `ThresholdCalculator`).
+register(FolderConnector())

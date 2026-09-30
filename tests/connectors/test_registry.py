@@ -99,8 +99,15 @@ def test_available_lists_connectors_in_registration_order() -> None:
     register(first)
     # Registration order (second, then first) is the opposite of every
     # plausible alphabetical or id-sorted order, so a wrong implementation
-    # that sorts ids would read (first-in, second-in) here.
-    ids = [c.connector_id for c in available()]
+    # that sorts ids would read (first-in, second-in) here. Filtered to the
+    # two ids this test registered: the built-in folder connector is also
+    # registered (package import time), and its presence or position must
+    # not affect this test's pin on relative order.
+    ids = [
+        c.connector_id
+        for c in available()
+        if c.connector_id in {"first-in", "second-in"}
+    ]
     assert ids == ["second-in", "first-in"]
 
 
