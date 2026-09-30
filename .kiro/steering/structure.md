@@ -63,7 +63,10 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
 
 - Dependencies point one way: `cli → render → load/metrics → ingest → model`.
   The activity model is the shared contract; renderers and calculators never
-  re-read `.fit` files directly.
+  re-read `.fit` files directly. `identity` (source roles, the match rule and
+  held files) imports only `model`, `contract`, `docio`, `layout` and
+  `settings`; `render`, `sync`, `audit` and
+  `cli` import it.
 - `LoadCalculator` implementations declare their required inputs so the CLI
   can prompt for missing data generically — no calculator-specific prompting
   code in the CLI.

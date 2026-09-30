@@ -1,7 +1,7 @@
 {
   "feature_name": "wiki-contract",
   "created_at": "2026-07-21T07:56:54Z",
-  "updated_at": "2026-09-16T00:00:00Z",
+  "updated_at": "2026-09-30T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -49,6 +49,12 @@
       "requirement": "2.12, 2.13, 3.10 (new) -- implemented by the training-blocks spec, not by this one",
       "reason": "training-blocks spec task 4.5, the roadmap's Phase 7 Existing Spec Update for wiki-contract. training-blocks adds a new owned data-root location (blocks/) holding two further document types -- the training-block page and the planned-workout page -- and a new user-owned source location, the plan-source directory, that fitdocs only reads. This spec's published-ownership-contract guarantee is extended to state that the plan-source directory is user-owned, read-only to fitdocs, located by a settings key and defaulting to a named directory, and never created, written or deleted by fitdocs (2.12); and to name the rendered blocks location as fitdocs-owned and state that it holds two further document types, declared and versioned by training-blocks rather than by this contract, naming which region of the block page is user-owned and that the planned page has none (2.13). Its in-tree-declaration guarantee is extended to state what the rendered location's own declaration says about those documents -- what the directory holds, the block page's carried-over notes region, the planned pages' lack of user-owned content, re-derivability from the plan sources alone, and that the plan sources are never written by fitdocs -- without restating either document's type or schema, which 2.13 locates (3.10). The rendered location's write path, its declaration text, and both pages' own schema remain training-blocks' own; so does the plan-source directory's resolution and confinement.",
       "also": "requirements.md gains Amendment 3 (2026-09-15), Requirement 2 criteria 2.12-2.13 and Requirement 3 criterion 3.10; design.md's DocumentContract component gains a matching amendment note (the two further types, their declaration in fitdocs.plans.page, and why they are not published from this leaf), and the owned-path-set bullet under 'This Spec Owns' gains a blocks/ clause plus a sentence that a configured read location grants no write right. CONTRACT_VERSION advances \"3\" to \"4\" in code by training-blocks task 1.2, not restated here. Nothing renumbered."
+    },
+    {
+      "date": "2026-09-30",
+      "requirement": "2.14, 6.9 (new) -- implemented by the activity-identity spec, not by this one",
+      "reason": "activity-identity spec task 6.3, its part of the roadmap's Phase 8 Existing Spec Update for wiki-contract (Amendment 4, shared with connectors and channel-merge; activity-identity created the section). activity-identity gives a workout page source roles (the base, the last entry of sources, and extras), four managed keys recording the base (source_kind, source_elapsed_s, source_distance_m, source_device), retention of a phone-side copy's session UUID, renames when the base changes, and held files recorded in .fitdocs/held.toml. This spec's published-ownership-contract guarantee is extended to state the roles, the base-recording keys, the UUID retention, renames and held files (2.14); its frontmatter-key guarantee to state that the managed key set includes the four keys (6.9). The roles, kinds, match rule, precedence setting, rename and hold remain activity-identity's own.",
+      "also": "requirements.md gains Amendment 4 (2026-09-30; connectors and channel-merge append their own paragraphs to it), Requirement 2 criterion 2.14 and Requirement 6 criterion 6.9; design.md's DocumentContract component gains a matching amendment note. CONTRACT_VERSION advances \"4\" to \"5\" in code by activity-identity task 6.2, not restated here. Nothing renumbered."
     }
   ]
 }

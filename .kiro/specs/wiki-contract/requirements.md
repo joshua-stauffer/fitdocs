@@ -167,6 +167,34 @@ document are training-blocks' to make, not restated by this amendment.
 Nothing existing is renumbered. This is the roadmap's Phase 7 Existing Spec
 Update for this spec.
 
+## Amendment 4 (2026-09-30): source roles, connector state and channel provenance, landed by activity-identity, connectors and channel-merge
+
+The three specs named in the title each land a part of this amendment; the
+first to land created this section, and each appends its own paragraph
+below, recording its own step of the published contract's version
+identifier. Nothing existing is renumbered.
+
+**Landed by `activity-identity`.** `activity-identity` gives a workout page a
+set of archived source files with roles -- the **base**, the file the page is
+rendered from and the last entry of `sources`, and the **extras**, every other
+file listed -- and records the base in four new managed keys (`source_kind`,
+`source_elapsed_s`, `source_distance_m`, `source_device`). It lets a page be
+renamed when its base changes, and lets a file that cannot be placed on one
+page be archived and held, recorded in `.fitdocs/held.toml`, a file inside
+the already-owned `.fitdocs/` directory. That spec
+owns the roles, the match rule, the source kinds and the precedence setting;
+this spec owns only the published-ownership-contract and frontmatter-key
+guarantees it extends -- naming the roles and the base-recording keys, the
+retention of a page's session UUID, renames and held files, recorded as
+Requirement 2 criterion 2.14, and stating that the managed key set includes
+the four base-recording keys, recorded as Requirement 6 criterion 6.9. The
+published contract's version identifier changes on account of it
+(`CONTRACT_VERSION` `"4"` to `"5"`), because a new managed key set, a new rule
+for when a page's filename changes and a new tool-owned file change
+guarantees that document states; that version bump and its own document are
+activity-identity's to make, not restated by this amendment. Nothing existing
+is renumbered.
+
 ## Requirements
 
 ### Requirement 1: Consistent Document Interpretation Across Operations
@@ -202,6 +230,7 @@ that I can rely on the boundary instead of inferring it from behavior.
 11. _(added by Amendment 2)_ The ownership contract shall name the history location as fitdocs-owned, and shall state that the document it holds is a second document type, distinct from the workout document this contract defines, whose type value and format are published by the history package rather than by this contract.
 12. _(added by Amendment 3)_ The ownership contract shall state that the plan-source directory is user-owned and read-only to fitdocs, located by a settings key and defaulting to a named directory, that it must not lie inside an owned path, and that fitdocs never creates, writes or deletes anything there.
 13. _(added by Amendment 3)_ The ownership contract shall name the rendered blocks location as fitdocs-owned, and shall state that the documents it holds are two further document types, distinct from the workout document and the history page, whose type values and formats are published by the training-blocks package rather than by this contract, and shall state which region of the block page is user-owned and that the planned page has none.
+14. _(added by Amendment 4)_ The ownership contract shall state that a generated workout document lists every archived source file of the document in ascending rank with the base last, that the base is the file the document is rendered from and every other listed file is an extra, and that the document records the base's kind, elapsed time, distance and device digest in managed keys; that the document keeps the session UUID of a phone-side copy when a file without one becomes its base; that a document may be renamed when its base changes, with the chart assets its previous render linked removed and links to the previous filename not updated; and that a file that cannot be placed on one document is archived and held, recorded in `.fitdocs/held.toml`, rather than added to a document until regeneration can place it on one.
 
 ### Requirement 3: In-Tree Ownership Declaration
 **Objective:** As an LLM agent maintaining a markdown wiki, I want the ownership
@@ -263,6 +292,7 @@ data silently.
 6. _(added by Amendment 1)_ The fitdocs CLI shall carry every user-owned key's frontmatter line, including any continuation lines its value spans, byte-for-byte through every operation that rewrites the document. When the fitdocs CLI rebuilds a document's frontmatter block in full, it shall place the carried lines after every managed key and before the closing fence, in the order they appeared in the document being regenerated, and this placement shall be stated as part of the published contract.
 7. _(added by Amendment 1)_ A user-owned key shall be excluded from the unmanaged-key warning (6.3) and from the unmanaged-key finding (8.4); a user-owned key carrying a malformed value shall instead be reported as a finding of its own kind, distinct from the unmanaged-key finding, naming the affected document and the offending key.
 8. _(added by Amendment 1)_ The ownership declaration placed in the generated-documents directory shall name the user-owned frontmatter keys and shall state that fitdocs never writes them and carries them through regeneration.
+9. _(added by Amendment 4)_ The published managed key set (6.2) shall include the four keys recording a document's base source file -- `source_kind`, `source_elapsed_s`, `source_distance_m` and `source_device` -- and the document's `sources` list, so that regeneration rewrites them and none is reported as an unmanaged key.
 
 ### Requirement 7: Regeneration and Overwrite Guarantees
 **Objective:** As a user whose documents fitdocs rewrites, I want the destructive

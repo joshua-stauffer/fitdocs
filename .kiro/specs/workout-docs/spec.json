@@ -70,6 +70,12 @@
         ]
       },
       "cross_spec": "fit-ingest Amendment 3 (3.7-3.10, 12.4, 14.5-14.11) publishes the running-dynamics channels this section reads and must land with this one. running-dynamics owns the implementation and the tests named in `tests`, and the document-format version advance (its Requirement 9)."
+    },
+    {
+      "date": "2026-09-30",
+      "requirement": "3.4, 3.6 (note only) -- recorded by the activity-identity spec",
+      "reason": "activity-identity spec task 6.3, its part of the roadmap's Phase 8 Existing Spec Update for workout-docs: a page's provenance (3.4) is its base, the last entry of sources, and 3.6's same-session update is generalized by activity-identity Requirements 3 and 4.",
+      "also": "requirements.md gains a note under Requirement 3. No criterion renumbered or reworded."
     }
   ]
 }
