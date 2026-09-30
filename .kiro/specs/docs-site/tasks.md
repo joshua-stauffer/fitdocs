@@ -549,7 +549,7 @@
   - **Done when** the tests are green with mutations recorded.
   - _Requirements: 2.9, 6.6, 6.7_
 
-- [ ] 3.4 Keep a preview serving the last content that built cleanly
+- [x] 3.4 Keep a preview serving the last content that built cleanly
   - In `scripts/sitebuild/preview.py`, implement:
     - `snapshot`: `(mtime_ns, size)` per file over the content dir,
       `website/overrides/`, `website/assets/` and the template;
@@ -924,3 +924,14 @@
     - Any exception, including KeyboardInterrupt, removes html/ and re-raises.
   - **Verified with real Zensical (reviewer).** The fixture builds with ok and 6 pages, with llms at the html root. A missing .svg yields one line and no html/. A broken Jinja override yields a generator problem and no html/.
   - **For 3.4 and 3.5.** 3.5 MUST call `generator_executable()` BEFORE `build()`, because design says an exit-2 run touches nothing. 3.4 MUST decide the live sync on `outcome.ok`, not `outcome.tree`, because the tree is set on generator failure.
+- 3.4 (2 rounds).
+  - **Loop.** The preview builds into `check/`. `sync_tree` into `live/` runs only on `outcome.ok`. The serve process starts once, after the first success.
+  - **Snapshot.** Records `(mtime_ns, size)` per file over content, overrides, assets and the template. Nested links are recorded but not followed.
+  - **Serve exit (controller addition).** If the serve process exits on its own (port taken), the loop prints `site generator: serve exited with status N` and returns 2. The design was amended to say so.
+  - **Verified against real Zensical (reviewer smoke run).** It handled serve, edit, add, delete (404), broken frontmatter with the old text still served, and the fix, then a clean stop (-15). A taken port returns 2 in about 1 s. The serve and snapshot signatures match the design.
+  - **Test harness.** `drive()` runs `serve` in a daemon thread with a bounded join, so a loop that ignores `stop` fails the test instead of hanging CI.
+  - **Not pinned here.** "The served site reflects the change" against the real generator is 4.2's job.
+  - **For 3.5:**
+    - map serve's return 2 to exit 2;
+    - call `generator_executable()` before `serve()` and `build()`;
+    - refuse a build root that lies inside the resolved content dir, since guard_root alone allows a root inside an out-of-repo content dir (checked by file identity).
