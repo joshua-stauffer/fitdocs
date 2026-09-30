@@ -1108,7 +1108,7 @@ class FindingKind(StrEnum):
 
 @dataclass(frozen=True)
 class Finding:
-    subject: str       # root-relative path, or "" for GATE_NOT_RUN
+    subject: str       # <root>/<relative path> as given (two roots share relative paths), "<root>/<redacted path #N>" when the path itself matched, or "" for GATE_NOT_RUN
     kind: FindingKind
     detail: str        # never contains matched text
     remedy: str
