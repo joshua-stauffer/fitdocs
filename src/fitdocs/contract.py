@@ -306,7 +306,7 @@ version lacks the identity keys, so it is recognized only by exact content or
 recorded session UUID until regeneration brings it current.
 """
 
-CONTRACT_VERSION: Final[str] = "4"
+CONTRACT_VERSION: Final[str] = "5"
 """The published ownership contract's version identifier (Req 2.8).
 
 A *string*, and deliberately not comparable with :data:`DOC_VERSION`: it
@@ -320,6 +320,18 @@ regeneration preserves in the frontmatter block changed: :data:`USER_KEYS`
 (the effort tag's four frontmatter keys) is a new class of key fitdocs never
 writes and carries unchanged through every rewrite, alongside the pre-existing
 managed keys and user-owned regions.
+
+Raised from ``4`` to ``5`` by activity-identity (Req 9.6) because the stated
+guarantees about a page's files changed. A page's ``sources`` list names every
+archived file of the page in ascending rank, the base last; the base is the
+file the page is rendered from and every other file is an extra, and the four
+:data:`SOURCE_IDENTITY_KEYS` are managed keys recording the base. A page may be
+renamed, and the chart assets its previous render linked removed, when its base
+changes; links to its previous filename are not updated by fitdocs. A page
+keeps the session UUID of a phone-side copy when a file without one becomes its
+base. An ambiguous file is archived and held, recorded in
+``.fitdocs/held.toml``, rather than added to a page. The published contract
+states the match rule with the measured source of each tolerance.
 """
 
 # --- document vocabulary -----------------------------------------------------

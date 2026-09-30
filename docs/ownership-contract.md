@@ -1,16 +1,18 @@
 # fitdocs Ownership Contract
 
-**Contract version:** `4`
+**Contract version:** `5`
 
-**What changed at this version:** a new owned path, `blocks/`, and a fourth
-declared directory alongside `workouts/`, `history/`, and `fit-archive/` —
-the data root now also carries two further published document types,
-`training-block` and `planned-workout` (see
-[Two Further Document Types: Training Blocks and Planned Workouts](#two-further-document-types-training-blocks-and-planned-workouts)
-below), rendered by `fitdocs plan` rather than by `sync` or `regen`. New in
-kind at this version: a **user-owned plan-source location** fitdocs only
-reads, never writes — see
-[Shared and User-Owned Files](#shared-and-user-owned-files) below.
+**What changed at this version:** a workout page now states which of its
+source files it is rendered from. A page's `sources` list names its archived
+files in ascending rank with the **base** last, four new managed keys record
+the base, and a page keeps the session UUID of a phone-side copy when a file
+without one becomes its base. A page may be **renamed** when its base changes,
+with the chart assets its previous render linked removed. A file that cannot
+be placed on one page is archived and **held** rather than added to a page,
+and the hold is recorded in `.fitdocs/held.toml`. See
+[Source Files and Their Roles](#source-files-and-their-roles) below, and
+[the precedence setting](configuration.md#identity-source-precedence) that
+chooses the base.
 
 This document is the authoritative, published statement of what fitdocs owns
 in your data root, what you own, and the exact limits of every operation that
@@ -62,8 +64,10 @@ named in the next section.
 - `.cache/` — re-fetchable, re-derivable cache state (today: basemap tiles).
   Deleting anything under here costs only work, never data.
 - `.fitdocs/` — tool-owned run state under the data root that is not a
-  document, an asset, an archived source, or a cache entry (for example, a
-  future ingestion feature's quarantine record). Dot-prefixed because nobody
+  document, an asset, an archived source, or a cache entry (for example,
+  the hold record `held.toml` of files held for a decision, described under
+  [Source Files and Their Roles](#source-files-and-their-roles) below, and the
+  inbox's quarantine record `quarantine.toml`). Dot-prefixed because nobody
   browses it; it carries no ownership declaration of its own.
 
 Two files at the top of the data root are explicitly **not** owned by
@@ -419,6 +423,124 @@ time, or an effort field present without `effort` — is:
 
 A well-formed tag produces no warning and no finding.
 
+## Source Files and Their Roles
+
+A workout is sometimes recorded by more than one file: a watch's own file, a
+phone app's copy of it, a power meter's file. fitdocs keeps one page for the
+workout and gives each of its files a role.
+
+- **`sources`** — the page's frontmatter list of the archived files of the
+  page, as `fit-archive/<sha>.fit` references. It is in ascending rank
+  with the **base** last. A reference fitdocs cannot resolve to an archived
+  file keeps its place ahead of the ranked files and is never the base.
+- **Base** — the file the page is rendered from: the best-ranked file of the
+  page. The `source_*` keys below describe it.
+- **Extra** — a file of the page that is not its base. An extra is archived
+  and listed in `sources`; nothing else on the page is rendered from it.
+
+### Kinds and precedence
+
+fitdocs classifies a file into one **source kind** from its own bytes, never
+from where or how it arrived:
+
+- `original` — the file records a manufacturer other than `development`;
+- `phone_copy` — the file records the manufacturer `development` and a
+  well-formed session UUID, which is what a phone app such as HealthFit writes;
+- `unknown` — anything else.
+
+The **precedence** setting ranks the kinds, and `original:<manufacturer>`
+entries rank one manufacturer's originals apart from the rest. Files at the
+same position are ordered by the number of messages the FIT profile does not
+define (more first), then by creation time (later first, absent last), then by
+content hash, so the order of a set of files does not depend on the order they
+arrived in. The vocabulary, the default and the validation of the setting are
+documented under
+[`[identity]`: source precedence](configuration.md#identity-source-precedence).
+A change to it takes effect on the next `fitdocs regen`.
+
+### What a page records about its base
+
+Four managed keys record the base: `source_kind` (always written), and
+`source_elapsed_s`, `source_distance_m` and `source_device`, each written only
+when the base records it. Elapsed time is in seconds rounded to three
+decimals, distance in metres rounded to two. `source_device` is a **digest**:
+the first 16 hex digits of a SHA-256 over the base's manufacturer, serial
+number and creation instant, written only when the file records all three. The
+serial number itself never appears on the page.
+
+A page's `uuid` is the session UUID of the first of its base and its extras,
+best first, that carries one, and the value the page already recorded when none
+does. It is therefore kept when a file without a session UUID becomes the base
+in place of a phone-side copy.
+
+### Deciding that two files are one workout
+
+A new file is compared with an existing page through the values the page
+records — its `sport` and `start_time`, its base's `source_*` keys, its `uuid`
+and its `sources` — without
+reading an archived file. The file belongs to a page when either:
+
+1. its content hash is among the page's `sources`, or its session UUID equals
+   the page's `uuid`; or
+2. both record the same sport and a session start, and one of three tiers of
+   evidence holds:
+   - **device** — the starts are no more than `START_TOLERANCE_S` apart and
+     the files record the same `source_device` digest;
+   - **strict** — the starts are no more than `START_TOLERANCE_S` apart, the
+     elapsed times no more than `ELAPSED_TOLERANCE_S` apart, and, where both
+     record a distance, the distances no more than `DISTANCE_TOLERANCE_M`
+     apart;
+   - **shifted** — at least one file is a `phone_copy`, both record an elapsed
+     time and a distance, the starts differ by a whole number of hours, from 1
+     up to `SHIFT_MAX_HOURS`, to within `START_TOLERANCE_S`, the elapsed times
+     are no more than `SHIFTED_ELAPSED_TOLERANCE_S` apart and the distances no
+     more than `SHIFTED_DISTANCE_TOLERANCE_M` apart. This catches a phone
+     export whose clock was shifted by whole hours.
+
+A file that records no session start is recognized only by exact content or by
+session UUID; a file that records no elapsed time is recognized as another
+file's session only by device evidence, besides those two. A file's timer time
+is never used as evidence. Comparisons are inclusive: a difference equal to a
+tolerance matches. A page written before this version of fitdocs lacks the four
+`source_*` keys, so it is recognized only by exact content or session UUID
+until it is regenerated.
+
+The tolerances, each with the measurement it was derived from:
+
+| Constant | Value | Compares | Measured source |
+|----------|-------|----------|-----------------|
+| `START_TOLERANCE_S` | `1.0` | session starts, in seconds (device and strict; the whole-hour slack of shifted) | Every Stryd↔HealthFit and Garmin↔HealthFit pair agreed on start to the second; a writer truncating a sub-second start and one rounding it differ by at most 1 s |
+| `ELAPSED_TOLERANCE_S` | `10.0` | elapsed times, in seconds (strict) | Stryd↔HealthFit elapsed 8–9 s apart (largest measured, 9 s) plus the same 1 s; Garmin↔HealthFit within about 1 s |
+| `DISTANCE_TOLERANCE_M` | `5.0` | distances, in metres (strict) | Garmin↔HealthFit within 5 m; Stryd↔HealthFit equal to 0.01 m |
+| `SHIFT_STEP_S` | `3600` | the step of a start shift, in seconds (shifted) | 244 older HealthFit re-exports shifted by whole hours |
+| `SHIFT_MAX_HOURS` | `36` | the largest whole-hour start shift, in hours (shifted) | the 2026-09-12 adoption rule's ±36 h window |
+| `SHIFTED_ELAPSED_TOLERANCE_S` | `5.0` | elapsed times, in seconds (shifted) | the 2026-09-12 adoption rule (true pairs agreed to ≤ 1 s) |
+| `SHIFTED_DISTANCE_TOLERANCE_M` | `10.0` | distances, in metres (shifted) | the 2026-09-12 adoption rule (true pairs agreed to ≤ 1 m) |
+
+`tests/identity/test_contract_docs.py` holds this table equal to the constants
+in `fitdocs.identity.matching` and their recorded sources.
+
+### Held files
+
+fitdocs never merges two pages and never removes a file from a page it was
+added to. When a new file, or a file arriving with it that is the same workout
+as it, is the same workout as two or more existing pages, or when two groups of
+files arriving together compete for one page, it is not added to a page. It is archived, no page is written for it, a warning names it
+and the pages it matched, and it is **held**: recorded by content hash in
+`.fitdocs/held.toml` together with the candidate pages and the evidence. A held
+file counts as skipped in the run's report, never as a failure, so the inbox
+disposes of it once its bytes are archived, and finding the same bytes again
+skips them.
+
+`fitdocs check` lists a held file as an `ambiguous_source` finding naming its
+archived path, the pages it matched and the evidence. If the candidate pages
+are one workout, keep one (move anything worth keeping out of the other's notes
+first), delete the other, and run `fitdocs regen`; fitdocs never merges pages
+or picks one. In any other case the file stays held, and is reported, until
+the pages change. Regeneration evaluates the held files, and the archived files no page lists, again against
+the regenerated pages and keeps `.fitdocs/held.toml` equal to the files that
+remain held; it also rebuilds that record when it cannot be read.
+
 ## Shared and User-Owned Files
 
 Three locations at the top of the data root (by default), and one file
@@ -441,7 +563,7 @@ contract:
   entry's table — no different from any other key here — so a hand edit
   can change either one.
 - **`fitdocs.toml`** — your settings file (`[tiles]`, `[inbox]`, `[plugins]`,
-  `[load]`, `[history]`, and `[plans]` today; more tables as more features
+  `[load]`, `[history]`, `[plans]`, and `[identity]` today; more tables as more features
   land). This file is **read-only to fitdocs**: nothing in fitdocs ever
   creates, writes, or modifies it. An absent file, or an absent table within
   it, degrades to defaults.
@@ -468,7 +590,19 @@ contract:
   pass over **every** workout document in the data root, not only the ones
   this run wrote (interactively prompting for missing inputs, unless run
   with `--no-prompt` or when stdin is not a terminal); see the `load` bullet
-  below for exactly what that pass is allowed to touch.
+  below for exactly what that pass is allowed to touch. A file that is the
+  same workout as an existing page joins that page's `sources` (see
+  [Source Files and Their Roles](#source-files-and-their-roles)). When it
+  outranks the page's base, the page is re-rendered from it with its
+  preserved regions and user-owned frontmatter keys carried over verbatim; if
+  the filename computed from the new base differs from the page's filename,
+  the page is **renamed** to it, the chart assets the page's previous render
+  linked that the new render does not write are removed (an asset a
+  user-owned region links is kept), and the run warns with the previous and
+  new paths. Links to the previous filename, in other pages or in your own
+  notes, are **not** updated by fitdocs. A page whose base does not change
+  keeps its filename, including one you chose. A file that cannot be placed on
+  one page is archived and held rather than added to a page.
 - **`sync --force`** — re-processes every discovered file even when its
   source is already archived, but forced re-processing does **not** bypass
   the preserved-region or user-owned-key guarantee: `notes`, `workout`, and
@@ -487,7 +621,13 @@ contract:
   keys from the region. For a document whose `load` region is still a
   placeholder, or holds a previously-written "unsupported" block, it runs the
   full computation and may rewrite the region. A hand-authored `load` region
-  is left untouched.
+  is left untouched. `regen` also rebuilds a page's roles from the archived
+  bytes of the files the page lists and the current `[identity]` precedence,
+  so a change to the precedence takes effect there; a page whose base changes
+  is re-rendered, renamed and cleaned up as under `sync` above. It evaluates
+  the held files, and the archived files that no page lists, again against the
+  regenerated pages and keeps `.fitdocs/held.toml` equal to the files that
+  remain held.
 - **`load`** — the training-load pass touches only two things in an
   existing document: the `load` region's inner content, and the three
   `load_value` / `load_methodology` / `load_basis` frontmatter keys. Every
@@ -597,6 +737,15 @@ for why this matters even more once a version gate is involved): if a run is
 interrupted before the archive write, nothing records the file as done and
 it is reprocessed idempotently on the next run.
 
+When a file's arrival changes a page's base and so its filename, the writes
+for that page run in this order: the new render's chart assets, then removal
+of the assets the previous render linked and the new one does not write, then
+the move of the existing document to its new path (a replace within one
+directory, so an interruption leaves the page at exactly one path), then the
+document's new content, and the archived copy of the file **last**. An
+interruption before the archive write leaves the file unarchived, so the next
+run over the same inputs completes the rename and the asset cleanup.
+
 Every workout document's **generated** content — everything outside its
 preserved regions — is re-derivable: fitdocs can rebuild it from the
 archived source in `fit-archive/`, the athlete profile (`athlete.toml`), the
@@ -660,6 +809,14 @@ training-load pass that follows `sync` and `regen` also consults
 its `load` region and its three load keys — and reports it skipped for the
 same reason, so the newer-version refusal holds for the whole document, not
 only the part `sync`/`regen` rewrite directly.
+
+A page written before the four `source_*` keys existed records an older
+`doc_version` and lacks them, so it is recognized only by exact content or
+recorded session UUID until it is regenerated (see
+[What a page records about its base](#what-a-page-records-about-its-base)).
+After upgrading, run `fitdocs regen` before pulling from a connector or adding
+files of a workout the data root already has a page for: until then such a
+file may not be recognized as belonging to its page.
 
 **A version-gated document counts as *skipped* only because `skipped` is
 the report's shared presentation bucket — it is not a completed file.** No
