@@ -78,6 +78,7 @@ from fitdocs.sync import (
 )
 from fitdocs.tiles import TileUnavailableError
 from tests.fixtures import builder
+from tests.fixtures import identity as fx
 
 # A canonical session UUID (the shape frontmatter records under ``uuid``).
 _UUID = "00010203-0405-0607-0809-0a0b0c0d0e0f"
@@ -558,9 +559,28 @@ def test_name_collision_between_activities_disambiguates(tmp_path: Path) -> None
     data_root = tmp_path / "data"
     data_root.mkdir()
     # Two DIFFERENT activities that resolve to the same base stem (same start
-    # time): a plain run (sha identity) and a re-export (session-UUID identity).
+    # minute): a plain run (sha identity) and a second run that records a
+    # session UUID (session-UUID identity). Its elapsed time (120 s against the
+    # plain run's 9 s), distance and device differ, so the cross-source rule
+    # reads them as two sessions -- the re-export fixture would read as the
+    # plain run's own copy (same start, elapsed and distance).
     _put(source, "1-run.fit", builder.run_fit_bytes())
-    _put(source, "2-reexport.fit", builder.reexport_a_fit_bytes())
+    _put(
+        source,
+        "2-other.fit",
+        fx.session_fit_bytes(
+            sport="running",
+            start=builder.FIT_TIMESTAMP_BASE,
+            elapsed_s=120.0,
+            timer_s=120.0,
+            distance_m=400.0,
+            manufacturer="garmin",
+            product=1,
+            serial=2_020_202,
+            time_created=builder.FIT_TIMESTAMP_BASE,
+            session_uuid=tuple(range(100, 116)),
+        ),
+    )
 
     report = sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
 
@@ -604,7 +624,8 @@ def test_reexport_converges_on_one_document_preserving_regions(tmp_path: Path) -
     # Still exactly one document, updated in place (not duplicated).
     assert len(report.written) == 1
     assert _md_names(data_root) == [f"{_RUN_STEM}.md"]
-    # Both archives kept; the new source ref is appended last (last = current).
+    # Both archives kept; ``sources`` is in ascending rank, base last: B outranks A
+    # (equal precedence and undocumented-message count, later creation time).
     assert archive_path(data_root, _sha(a)).is_file()
     assert archive_path(data_root, _sha(b)).is_file()
     assert _frontmatter(doc)["sources"] == [ref_a, ref_b]
@@ -895,7 +916,8 @@ def test_regen_re_renders_from_last_source_of_a_reexport(tmp_path: Path) -> None
     sync(tmp_path / "src_a", data_root, athlete=None, tz=_TZ, tiles=_TILES)
     _put(tmp_path / "src_b", "b.fit", b)
     sync(tmp_path / "src_b", data_root, athlete=None, tz=_TZ, tiles=_TILES)
-    # One document, its append-ordered history [older, current].
+    # One document, its history in ascending rank [A, B]: B is the base (later
+    # creation time), not merely the later arrival.
     assert _frontmatter(doc)["sources"] == [ref_a, ref_b]
 
     # Hand-write into the notes region.

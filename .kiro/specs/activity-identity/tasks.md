@@ -605,7 +605,7 @@ never co-varies two keys a rule distinguishes.
     present twice in any fault-injection snapshot
   - _Requirements: 6.2, 6.4, 6.5, 6.6, 6.7_
 
-- [ ] 4.3 Plan every `sync` run and hold what is ambiguous
+- [x] 4.3 Plan every `sync` run and hold what is ambiguous
   - Restructure `sync` into preparation (read, hash, skip archived or already
     seen, parse once, failures with today's reasons), one page scan, the
     planner, and tasks applied in first-member order; a task re-reads its files

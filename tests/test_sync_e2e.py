@@ -13,7 +13,7 @@ roots and asserts the user-visible end-to-end guarantees:
   filename produces no second document.
 * **Re-export convergence** (Req 3.6, 10.2): a re-export -- same session UUID,
   different bytes -- updates the same document in place, preserving an edited
-  region verbatim and appending the new source ref last.
+  region verbatim and listing both files in ascending rank, base last.
 * **Damaged-markers conflict** (Req 10.3): a document with damaged region
   markers is left untouched and reported as a conflict while its neighbours in
   the same run still succeed.
@@ -249,19 +249,20 @@ def test_renamed_byte_identical_file_produces_no_second_document(
     assert _archives(data_root) == [f"{_sha(data)}.fit"]
 
 
-# --- 3. re-export convergence: same doc, region kept, source appended --------
+# --- 3. re-export convergence: same doc, region kept, ranked sources ---------
 
 
-def test_reexport_updates_same_document_preserving_region_and_appending_source(
+def test_reexport_updates_same_document_preserving_region_and_ranking_sources(
     tmp_path: Path,
 ) -> None:
     """A re-export (same session UUID, different bytes) updates the SAME document
-    in place: an edited preserved region survives verbatim and the new source ref
-    is appended LAST, with exactly one document for the activity (Req 3.6, 10.2).
+    in place: an edited preserved region survives verbatim and ``sources`` lists
+    both files in ascending rank, the base (the later-created export) LAST, with
+    exactly one document for the activity (Req 3.6, 10.2).
 
     Mutation caught: if UUID convergence broke, a second document would appear; if
     ``merge_regions`` dropped the region, the note would be lost; if the source
-    history broke, ``sources`` would not list both refs with the new one last."""
+    history broke, ``sources`` would not list both refs in rank order."""
     data_root = tmp_path / "data"
     data_root.mkdir()
     a = builder.reexport_a_fit_bytes()
@@ -293,7 +294,7 @@ def test_reexport_updates_same_document_preserving_region_and_appending_source(
     # Exactly one document, updated in place (not duplicated).
     assert report.written == (f"{WORKOUTS_DIR}/{_RUN_STEM}.md",)
     assert _md_docs(data_root) == [f"{_RUN_STEM}.md"]
-    # Both sources archived; the new ref is appended LAST (last = current).
+    # Both sources archived; ``sources`` is in ascending rank, base (B) last.
     assert archive_path(data_root, _sha(a)).is_file()
     assert archive_path(data_root, _sha(b)).is_file()
     assert _frontmatter(doc)["sources"] == [ref_a, ref_b]

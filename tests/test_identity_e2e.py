@@ -9,6 +9,7 @@ only its own section.
 from __future__ import annotations
 
 import hashlib
+import itertools
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
@@ -22,9 +23,16 @@ import fitdocs.sync as sync_module
 from fitdocs import Activity, DerivedMetrics, Modality
 from fitdocs import compute_metrics as real_compute_metrics
 from fitdocs import parse_fit as real_parse_fit
-from fitdocs.contract import format_session_uuid
+from fitdocs.contract import DOC_VERSION, format_session_uuid
 from fitdocs.declaration import DECLARATION_FILENAME
 from fitdocs.docmerge import begin_marker, end_marker
+from fitdocs.identity import planning
+from fitdocs.identity.holds import (
+    HeldSource,
+    HoldRecord,
+    HoldRecordError,
+    load_holds,
+)
 from fitdocs.identity.kinds import SourceKind
 from fitdocs.identity.roles import (
     DEFAULT_PRECEDENCE,
@@ -34,7 +42,7 @@ from fitdocs.identity.roles import (
     resolve_precedence,
 )
 from fitdocs.inbox import DEFAULT_INBOX_SETTINGS
-from fitdocs.layout import WORKOUTS_DIR, archive_path, source_ref
+from fitdocs.layout import WORKOUTS_DIR, archive_path, held_path, source_ref
 from fitdocs.quarantine import QuarantineRecord
 from fitdocs.render import TileRef
 from fitdocs.sync import SyncReport, drain, regen, sync
@@ -413,10 +421,15 @@ class _CountingParse:
 def test_each_file_is_parsed_once_per_page_task(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Req 5.1: the incoming file and every resolved listed file are parsed once.
+    """Req 5.1: the incoming file and every resolved listed file are parsed once
+    per page task.
 
-    Regenerating the two-file adopted page parses twice; syncing a third file
-    onto it parses three times. Mutation: a second ``parse_fit`` per member.
+    Regenerating the two-file adopted page parses twice. Syncing a third file
+    onto it parses that file once in run preparation (the planner needs its
+    key) and the page task then parses it and the two listed files once each:
+    four in all (4.3 moved the count from three; the task re-reads its member
+    and does not retain the preparation's parse). Mutation: a second
+    ``parse_fit`` per member inside the task.
     """
     data_root, _page, _copy, _original = _stage_adopted(tmp_path, "copy-first")
     counter = _CountingParse()
@@ -430,7 +443,7 @@ def test_each_file_is_parsed_once_per_page_task(
     report = sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
     assert report.failures == ()
     assert len(report.written) == 1
-    assert counter.calls == 3
+    assert counter.calls == 4
 
 
 def _force_collision(data_root: Path, page: Path) -> tuple[Path, str]:
@@ -1307,3 +1320,777 @@ def test_a_ledger_settle_does_not_repeat_the_pages_notices(tmp_path: Path) -> No
     assert report.failures == ()
     assert len(_rename_warnings(report)) == 3  # precondition: A moved twice, B once
     assert sum("effort" in w.detail for w in report.warnings) == 1
+
+
+# --- planned sync runs (4.3) ---
+
+
+def _tree(root: Path) -> dict[str, bytes]:
+    """Every file under ``root`` (pages, assets, archive, tool state) by path."""
+    return {
+        str(path.relative_to(root)): path.read_bytes()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
+def _sync_files(
+    tmp_path: Path,
+    data_root: Path,
+    files: Sequence[tuple[str, bytes]],
+    *,
+    precedence: Precedence = DEFAULT_PRECEDENCE,
+) -> SyncReport:
+    """One ``sync`` over ``files``, discovered in the order given (each file's
+    name starts with its position, and discovery sorts by path)."""
+    source = tmp_path / f"run-{len(list(tmp_path.glob('run-*')))}"
+    source.mkdir()
+    for position, (name, data) in enumerate(files):
+        (source / f"{position}-{name}.fit").write_bytes(data)
+    return sync(
+        source, data_root, athlete=None, tz=_TZ, tiles=_TILES, precedence=precedence
+    )
+
+
+def _garmin_run(*, elapsed_s: float, serial: int) -> bytes:
+    """A Garmin run at the fixtures' common start: nine kilometres, its own device.
+
+    Two of these differ only in ``elapsed_s`` and ``serial``, so the rule reads
+    them as one session when their elapsed times are within 10 s and as two
+    otherwise.
+    """
+    start = fx.garmin_original().start
+    return fx.session_fit_bytes(
+        sport="running",
+        start=start,
+        elapsed_s=elapsed_s,
+        timer_s=elapsed_s,
+        distance_m=9_000.0,
+        manufacturer="garmin",
+        product=3843,
+        serial=serial,
+        time_created=start,
+    )
+
+
+def _ride_pair() -> tuple[bytes, bytes]:
+    """(Garmin original, HealthFit copy) of one ride."""
+    run = fx.garmin_original()
+    original = fx.session_fit_bytes(
+        sport="cycling",
+        start=run.start,
+        elapsed_s=3000.0,
+        timer_s=2900.0,
+        distance_m=30_000.0,
+        manufacturer="garmin",
+        product=3843,
+        serial=fx.garmin_original().serial,
+        time_created=run.start,
+        undocumented=fx.UNDOCUMENTED_COUNT,
+    )
+    copy = fx.session_fit_bytes(
+        sport="cycling",
+        start=run.start,
+        elapsed_s=3000.5,
+        timer_s=3000.5,
+        distance_m=30_002.0,
+        manufacturer="development",
+        product=0,
+        serial=fx.healthfit_copy().serial,
+        time_created=run.start + 4 * 3600,
+        session_uuid=tuple(range(60, 76)),
+        device_manufacturer="garmin",
+    )
+    return original, copy
+
+
+def _ref_of(data: bytes) -> str:
+    return source_ref(_sha(data))
+
+
+def test_a_healthfit_copy_and_its_garmin_original_give_one_page(
+    tmp_path: Path,
+) -> None:
+    """Req 4.3, 5.7: the copy and its original are one page whether they arrive
+    in one run or in two, and the original (the Garmin file) is the base.
+
+    Mutation: decide each file against the pages as they stood before the run
+    (the one-run case renders two pages).
+    """
+    copy, original = fx.healthfit_copy(), fx.garmin_original()
+    trees: dict[str, dict[str, bytes]] = {}
+    for label, batches in (
+        ("one-run", [[copy, original]]),
+        ("copy-then-original", [[copy], [original]]),
+        ("original-then-copy", [[original], [copy]]),
+    ):
+        data_root = tmp_path / label / "data"
+        data_root.mkdir(parents=True)
+        for number, batch in enumerate(batches):
+            report = _sync_files(
+                tmp_path / label,
+                data_root,
+                [(f"f{number}-{n}", s.data) for n, s in enumerate(batch)],
+            )
+            assert report.failures == ()
+        page = _only_page(data_root)
+        assert _frontmatter(page)["sources"] == [_ref(copy), _ref(original)], label
+        assert _frontmatter(page)["source_kind"] == "original"
+        trees[label] = _tree(data_root)
+    assert trees["one-run"] == trees["copy-then-original"]
+    assert trees["one-run"] == trees["original-then-copy"]
+
+
+def test_every_arrival_order_of_three_files_of_one_session_gives_one_tree(
+    tmp_path: Path,
+) -> None:
+    """Req 4.8, 5.7: an original, its partner-API copy and the HealthFit copy
+    give the same tree -- pages, assets and archive, byte for byte -- in every
+    one of the six orders, delivered in one run or in three.
+
+    Fixture: the three differ in undocumented messages, kind and creation time,
+    so a page ranked or matched by arrival differs in its ``sources`` list or its
+    base. Mutation: plan each file against the pages as they stood before the
+    run (the one-run orders render three pages).
+    """
+    files = {
+        "original": fx.garmin_original(),
+        "partner": fx.partner_copy(),
+        "copy": fx.healthfit_copy(),
+    }
+    trees: dict[tuple[str, tuple[str, ...]], dict[str, bytes]] = {}
+    for order in itertools.permutations(files):
+        for mode in ("one-run", "three-runs"):
+            data_root = tmp_path / mode / "-".join(order) / "data"
+            data_root.mkdir(parents=True)
+            batches = (
+                [[name] for name in order] if mode == "three-runs" else [list(order)]
+            )
+            for batch in batches:
+                report = _sync_files(
+                    tmp_path / mode / "-".join(order),
+                    data_root,
+                    [(name, files[name].data) for name in batch],
+                )
+                assert report.failures == (), (mode, order)
+                assert report.warnings == () or all(
+                    "renamed" in w.detail for w in report.warnings
+                ), (mode, order, report.warnings)
+            trees[(mode, order)] = _tree(data_root)
+    assert len(trees) == 12
+    reference = trees[("one-run", tuple(files))]
+    page_paths = [
+        name for name in reference if re.fullmatch(rf"{WORKOUTS_DIR}/20[^/]*\.md", name)
+    ]
+    assert len(page_paths) == 1  # one page, and the run wrote assets and archive
+    assert len(reference) > 1 + len(files)
+    sources = re.search(
+        r"^sources:\n((?:- .*\n)+)",
+        reference[page_paths[0]].decode(),
+        re.MULTILINE,
+    )
+    assert sources is not None
+    assert sources.group(1).split("\n")[:-1] == [
+        f"- {_ref(files['copy'])}",
+        f"- {_ref(files['partner'])}",
+        f"- {_ref(files['original'])}",
+    ]
+    for key, tree in trees.items():
+        assert tree == reference, key
+
+
+def _stage_two_pages(tmp_path: Path) -> tuple[Path, bytes]:
+    """Two pages (elapsed 3000 s and 3016 s: 16 s apart, so two sessions) and a
+    third file 8 s from each, which matches both."""
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    for number, elapsed in enumerate((3000.0, 3016.0)):
+        report = _sync_files(
+            tmp_path,
+            data_root,
+            [("page", _garmin_run(elapsed_s=elapsed, serial=11 + number))],
+        )
+        assert report.failures == ()
+    assert len(_pages(data_root)) == 2  # precondition: two separate pages
+    return data_root, _garmin_run(elapsed_s=3008.0, serial=13)
+
+
+def test_a_file_matching_two_pages_is_held_archived_recorded_and_skipped(
+    tmp_path: Path,
+) -> None:
+    """Req 4.5, 4.7, 4.11, 7.1, 7.5: a file that matches two pages changes
+    neither, is archived, recorded in ``held.toml``, warned about (naming its
+    archive ref, both pages and the evidence) and counted skipped -- never a
+    failure -- and a second sync skips it quietly.
+
+    Mutations: resolve the file to the first page (page changed, nothing held);
+    count a held file as a failure (``failures``); archive without recording
+    (no ``held.toml``); skip the warning (``warnings`` empty).
+    """
+    data_root, ambiguous = _stage_two_pages(tmp_path)
+    before = _tree(data_root)
+    pages = [str(p.relative_to(data_root).as_posix()) for p in _pages(data_root)]
+
+    report = _sync_files(tmp_path, data_root, [("ambiguous", ambiguous)])
+
+    sha = _sha(ambiguous)
+    assert report.failures == ()
+    assert report.written == ()
+    assert len(report.skipped) == 1
+    after = _tree(data_root)
+    assert {path: after[path] for path in before} == before  # both pages unchanged
+    assert set(after) - set(before) == {
+        str(archive_path(data_root, sha).relative_to(data_root)),
+        ".fitdocs/held.toml",
+    }
+    (entry,) = load_holds(data_root).entries
+    assert entry.sha256 == sha
+    assert entry.candidates == tuple(pages)
+    assert entry.evidence == ("strict", "strict")
+    (warning,) = report.warnings
+    assert warning.doc == source_ref(sha)
+    assert all(page in warning.detail for page in pages)
+    assert "strict" in warning.detail
+
+    again = _sync_files(tmp_path, data_root, [("ambiguous", ambiguous)])
+
+    assert again.failures == ()
+    assert len(again.skipped) == 1
+    assert again.warnings == ()
+    assert _tree(data_root) == after
+
+
+def test_two_unlinked_files_claiming_one_page_are_both_held(tmp_path: Path) -> None:
+    """Req 4.6, 4.7: two files 16 s apart in elapsed time, each 8 s from the
+    page, each claim the page as a separate group; neither joins it.
+
+    Mutation: resolve a double claim to the first group (the first file joins,
+    the page changes).
+    """
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _sync_files(tmp_path, data_root, [("p", _garmin_run(elapsed_s=3000.0, serial=11))])
+    before = _tree(data_root)
+    first = _garmin_run(elapsed_s=3008.0, serial=21)
+    second = _garmin_run(elapsed_s=2992.0, serial=22)
+
+    report = _sync_files(tmp_path, data_root, [("a", first), ("b", second)])
+
+    assert report.failures == ()
+    assert report.written == ()
+    assert len(report.skipped) == 2
+    after = _tree(data_root)
+    assert {path: after[path] for path in before} == before
+    record = load_holds(data_root)
+    assert sorted(e.sha256 for e in record.entries) == sorted(
+        [_sha(first), _sha(second)]
+    )
+    assert len(report.warnings) == 2
+    for data in (first, second):
+        assert archive_path(data_root, _sha(data)).read_bytes() == data
+
+
+def test_a_sync_that_holds_nothing_creates_no_tool_state(
+    tmp_path: Path,
+) -> None:
+    """Design (SyncEngine): the hold record is saved only when it changed, so a
+    sync that holds nothing never creates ``.fitdocs/``.
+
+    Mutation: save the (empty) record at the end of every run.
+    """
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    report = _sync_files(
+        tmp_path,
+        data_root,
+        [("a", fx.garmin_original().data), ("b", fx.healthfit_copy().data)],
+    )
+    assert report.failures == ()
+    assert len(report.written) == 2  # precondition: the run wrote a page
+    assert not (data_root / ".fitdocs").exists()
+
+
+def test_a_damaged_hold_record_stops_sync_before_any_write(tmp_path: Path) -> None:
+    """Req 4.7: the record is read before anything is written; the error
+    propagates and the data root is untouched.
+
+    Mutation: load the record after the declarations are refreshed (the
+    declaration files appear).
+    """
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    held = held_path(data_root)
+    held.parent.mkdir()
+    held.write_text("this is [not valid toml\n", encoding="utf-8")
+    before = _tree(data_root)
+
+    with pytest.raises(HoldRecordError, match="held.toml"):
+        _sync_files(tmp_path, data_root, [("a", fx.garmin_original().data)])
+
+    assert _tree(data_root) == before
+
+
+def test_the_default_precedence_end_to_end(tmp_path: Path) -> None:
+    """Maintainer decision 2026-09-29, Req 2.5, 5.1: a Stryd file and a HealthFit
+    copy of one run take the copy as base; a Garmin original and a HealthFit copy
+    of one ride take the original as base.
+
+    Mutation: swap the ``original:garmin`` and ``phone_copy`` default tiers (the
+    ride takes the copy).
+    """
+    copy, stryd = fx.healthfit_copy(), fx.stryd_file()
+    run_root = tmp_path / "run" / "data"
+    run_root.mkdir(parents=True)
+    report = _sync_files(
+        tmp_path / "run", run_root, [("stryd", stryd.data), ("copy", copy.data)]
+    )
+    assert report.failures == ()
+    run_page = _frontmatter(_only_page(run_root))
+    assert run_page["sources"] == [_ref(stryd), _ref(copy)]
+    assert run_page["source_kind"] == "phone_copy"
+
+    ride_original, ride_copy = _ride_pair()
+    ride_root = tmp_path / "ride" / "data"
+    ride_root.mkdir(parents=True)
+    report = _sync_files(
+        tmp_path / "ride",
+        ride_root,
+        [("copy", ride_copy), ("original", ride_original)],
+    )
+    assert report.failures == ()
+    ride_page = _frontmatter(_only_page(ride_root))
+    assert ride_page["sources"] == [_ref_of(ride_copy), _ref_of(ride_original)]
+    assert ride_page["source_kind"] == "original"
+
+
+def test_a_configured_precedence_makes_the_stryd_file_the_base(
+    tmp_path: Path,
+) -> None:
+    """Req 2.6: under ``["original", "phone_copy", "unknown"]`` the run of the
+    Stryd file and the HealthFit copy renders from the Stryd file.
+
+    Mutation: plan the run without the given precedence (the copy stays base).
+    """
+    copy, stryd = fx.healthfit_copy(), fx.stryd_file()
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    precedence = resolve_precedence(
+        [
+            PrecedenceEntry(SourceKind.ORIGINAL),
+            PrecedenceEntry(SourceKind.PHONE_COPY),
+            PrecedenceEntry(SourceKind.UNKNOWN),
+        ]
+    )
+
+    report = _sync_files(
+        tmp_path,
+        data_root,
+        [("copy", copy.data), ("stryd", stryd.data)],
+        precedence=precedence,
+    )
+
+    assert report.failures == ()
+    page = _frontmatter(_only_page(data_root))
+    assert page["sources"] == [_ref(copy), _ref(stryd)]
+    assert page["source_kind"] == "original"
+
+
+def test_a_group_claiming_a_page_of_a_newer_version_changes_nothing(
+    tmp_path: Path,
+) -> None:
+    """Req 6.8: a group of two files that would outrank the page's base (and
+    rename it) leaves the page, its filename and its assets byte-unchanged,
+    archives neither member, and warns once naming the page.
+
+    Fixture: the page was rendered from a copy shifted two hours, so the same
+    group on a page of the current version renames it (the control below).
+    Mutation: apply the version gate after the writes (the page moves and the
+    members are archived).
+    """
+    original, partner = fx.garmin_original(), fx.partner_copy()
+
+    def stage(name: str) -> tuple[Path, Path]:
+        data_root = tmp_path / name / "data"
+        data_root.mkdir(parents=True)
+        _sync_one(data_root, tmp_path / name, fx.healthfit_shifted())
+        return data_root, _only_page(data_root)
+
+    control_root, _ = stage("control")
+    control = _sync_files(
+        tmp_path / "control",
+        control_root,
+        [("o", original.data), ("p", partner.data)],
+    )
+    assert len(_rename_warnings(control)) == 1  # precondition: it would rename
+
+    data_root, page = stage("gated")
+    page.write_text(
+        page.read_text(encoding="utf-8").replace(
+            f"doc_version: {DOC_VERSION}", "doc_version: 9999", 1
+        ),
+        encoding="utf-8",
+    )
+    before = _tree(data_root)
+
+    report = _sync_files(
+        tmp_path / "gated", data_root, [("o", original.data), ("p", partner.data)]
+    )
+
+    assert report.failures == ()
+    assert report.written == ()
+    assert len(report.skipped) == 2
+    assert _tree(data_root) == before
+    assert not archive_path(data_root, _sha(original.data)).exists()
+    assert not archive_path(data_root, _sha(partner.data)).exists()
+    (warning,) = report.warnings
+    assert warning.doc == page.relative_to(data_root).as_posix()
+    assert "9999" in warning.detail
+
+
+def test_when_the_hold_record_cannot_be_saved_the_file_is_not_archived(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Req 4.7, 6.7: the record is saved before the archive is written, so a
+    failed save leaves the file unarchived; the next run plans it again and
+    holds it.
+
+    Mutation: archive the file before recording it (it is archived, so the next
+    run skips it with nothing naming it).
+    """
+    data_root, ambiguous = _stage_two_pages(tmp_path)
+    before = _tree(data_root)
+
+    def failing(*_args: object, **_kwargs: object) -> bool:
+        raise OSError("disk full")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(sync_module, "save_holds", failing)
+        report = _sync_files(tmp_path, data_root, [("ambiguous", ambiguous)])
+
+    assert len(report.failures) == 1
+    assert "disk full" in report.failures[0].reason
+    assert report.skipped == ()
+    assert _tree(data_root) == before
+    assert not archive_path(data_root, _sha(ambiguous)).exists()
+
+    retry = _sync_files(tmp_path, data_root, [("ambiguous", ambiguous)])
+
+    assert retry.failures == ()
+    assert len(retry.skipped) == 1
+    assert [e.sha256 for e in load_holds(data_root).entries] == [_sha(ambiguous)]
+    assert archive_path(data_root, _sha(ambiguous)).is_file()
+
+
+def test_held_candidates_follow_a_rename_the_same_run_makes(tmp_path: Path) -> None:
+    """Design (SyncEngine hold task): a page a hold names is renamed in the same
+    run, and the record names the page where it ended.
+
+    Fixture: page A is the older HealthFit export, page B a Garmin run; a file
+    that matches both is held while the newer export (pinned to A by its session
+    UUID) corrects A's start and renames it. Mutation: skip the rewrite (the
+    record names the path A had before the run).
+    """
+    older, newer = fx.healthfit_reexport_pair()
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _sync_files(tmp_path, data_root, [("a", older.data)])
+    _sync_files(tmp_path, data_root, [("b", _garmin_run(elapsed_s=3008.0, serial=12))])
+    old_paths = {p.relative_to(data_root).as_posix() for p in _pages(data_root)}
+    assert len(old_paths) == 2  # precondition: two pages
+    ambiguous = _garmin_run(elapsed_s=3004.0, serial=13)
+
+    report = _sync_files(
+        tmp_path, data_root, [("1-newer", newer.data), ("2-ambiguous", ambiguous)]
+    )
+
+    assert report.failures == ()
+    assert len(_rename_warnings(report)) == 1  # precondition: A was renamed
+    new_paths = {p.relative_to(data_root).as_posix() for p in _pages(data_root)}
+    assert new_paths != old_paths
+    (entry,) = load_holds(data_root).entries
+    assert set(entry.candidates) == new_paths
+    assert len(entry.candidates) == 2
+
+
+def test_a_file_that_changes_during_the_run_fails_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Design (page task): a task re-reads its files and fails a member whose
+    bytes changed since planning; its group's other member is still written and
+    nothing is archived for the changed one.
+
+    Fixture: after the plan, the original's file is replaced by another valid
+    ``.fit`` (the partner copy), so a task that trusts the planned hash would
+    archive the wrong bytes. Mutation: skip the hash comparison.
+    """
+    copy, original, partner = (
+        fx.healthfit_copy(),
+        fx.garmin_original(),
+        fx.partner_copy(),
+    )
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    source = tmp_path / "src"
+    source.mkdir()
+    (source / "1-copy.fit").write_bytes(copy.data)
+    (source / "2-original.fit").write_bytes(original.data)
+    real_plan = planning.plan_run
+
+    def plan_then_change(*args: object, **kwargs: object) -> object:
+        plan = real_plan(*args, **kwargs)  # type: ignore[arg-type]
+        (source / "2-original.fit").write_bytes(partner.data)
+        return plan
+
+    monkeypatch.setattr(sync_module, "plan_run", plan_then_change)
+    report = sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
+
+    assert [f.source for f in report.failures] == [str(source / "2-original.fit")]
+    assert "changed during the run" in report.failures[0].reason
+    assert len(report.written) == 1
+    assert _frontmatter(_only_page(data_root))["sources"] == [_ref(copy)]
+    assert not archive_path(data_root, _sha(original.data)).exists()
+    assert not archive_path(data_root, _sha(partner.data)).exists()
+    assert archive_path(data_root, _sha(copy.data)).is_file()
+
+
+def test_outcomes_are_reported_in_discovery_order_whatever_order_tasks_run(
+    tmp_path: Path,
+) -> None:
+    """Req 4.8 (design, Report): a group's members are reported where each was
+    discovered, not together, and a failure keeps its own slot.
+
+    Fixture: files 0 and 3 are one session (one group, one task, run first),
+    files 1 and 4 are two other sessions and file 2 is not a ``.fit`` file, so
+    task order (0/3, 1, 4) differs from discovery order (0, 1, 3, 4) and the
+    expected list is not a palindrome. Mutation: report in reverse.
+    """
+    copy, original = fx.healthfit_copy(), fx.garmin_original()
+    other, last = fx.ten_k_pair()
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+
+    report = _sync_files(
+        tmp_path,
+        data_root,
+        [
+            ("copy", copy.data),
+            ("other", other.data),
+            ("bad", b"not a fit file"),
+            ("original", original.data),
+            ("last", last.data),
+        ],
+    )
+
+    pages: dict[tuple[str, ...], str] = {}
+    for page in _pages(data_root):
+        listed = _frontmatter(page)["sources"]
+        assert isinstance(listed, list)
+        pages[tuple(str(ref) for ref in listed)] = page.relative_to(
+            data_root
+        ).as_posix()
+    shared = pages[(_ref(copy), _ref(original))]
+    solo = pages[(_ref(other),)]
+    final = pages[(_ref(last),)]
+    assert shared != solo  # precondition: two pages
+    assert report.written == (shared, solo, shared, final)
+    assert [Path(f.source).name for f in report.failures] == ["2-bad.fit"]
+
+
+def test_a_held_file_that_changes_during_the_run_is_failed_not_recorded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Design (hold task): the hold task re-reads its file and refuses one whose
+    bytes changed since planning -- nothing is recorded or archived for it.
+
+    Fixture: after the plan, the ambiguous file is replaced by another valid
+    ``.fit``, so a task that trusts the planned hash would record and archive
+    the wrong bytes under it. Mutation: the hold task reads the file without
+    comparing its hash.
+    """
+    data_root, ambiguous = _stage_two_pages(tmp_path)
+    replacement = fx.partner_copy().data
+    before = _tree(data_root)
+    source = tmp_path / "src"
+    source.mkdir()
+    (source / "a.fit").write_bytes(ambiguous)
+    real_plan = planning.plan_run
+
+    def plan_then_change(*args: object, **kwargs: object) -> object:
+        plan = real_plan(*args, **kwargs)  # type: ignore[arg-type]
+        (source / "a.fit").write_bytes(replacement)
+        return plan
+
+    monkeypatch.setattr(sync_module, "plan_run", plan_then_change)
+    report = sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
+
+    assert len(report.failures) == 1
+    assert "changed during the run" in report.failures[0].reason
+    assert report.skipped == ()
+    assert _tree(data_root) == before  # no archive at either hash, no held.toml
+    assert not archive_path(data_root, _sha(ambiguous)).exists()
+    assert not archive_path(data_root, _sha(replacement)).exists()
+    assert not held_path(data_root).exists()
+
+
+def _stage_damaged_page(tmp_path: Path) -> tuple[Path, Path]:
+    """A page rendered from the HealthFit copy whose ``notes`` end marker is gone,
+    so any rewrite of it raises a region error."""
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _sync_one(data_root, tmp_path, fx.healthfit_copy())
+    page = _only_page(data_root)
+    text = page.read_text(encoding="utf-8")
+    assert end_marker("notes") in text
+    page.write_text(text.replace(end_marker("notes"), "", 1), encoding="utf-8")
+    return data_root, page
+
+
+def test_a_task_exception_fails_every_member_of_its_group_with_one_reason(
+    tmp_path: Path,
+) -> None:
+    """Req 1.3 (design, page task): when a group's task raises, every member
+    fails with the same reason and none is archived.
+
+    Fixture: a two-file group (the original and its partner copy) claims a page
+    whose region markers are damaged. Mutation: only the first member fails
+    (the second is reported written or skipped, or archived).
+    """
+    data_root, page = _stage_damaged_page(tmp_path)
+    original, partner = fx.garmin_original(), fx.partner_copy()
+    before = _tree(data_root)
+
+    report = _sync_files(
+        tmp_path, data_root, [("o", original.data), ("p", partner.data)]
+    )
+
+    assert len(report.failures) == 2
+    assert {Path(f.source).name for f in report.failures} == {"0-o.fit", "1-p.fit"}
+    assert len({f.reason for f in report.failures}) == 1
+    assert "Region" in report.failures[0].reason
+    assert report.skipped == ()
+    assert report.written == ()
+    assert _tree(data_root) == before
+    assert not archive_path(data_root, _sha(original.data)).exists()
+    assert not archive_path(data_root, _sha(partner.data)).exists()
+
+
+def test_a_duplicate_of_a_file_whose_task_failed_is_a_failure_too(
+    tmp_path: Path,
+) -> None:
+    """Design (preparation): identical bytes discovered twice are one file; when
+    its task fails, the second copy inherits the failure, as two runs of the
+    old per-file pipeline would have reported it.
+
+    Mutation: report the duplicate as skipped whatever its first copy did.
+    """
+    data_root, _page = _stage_damaged_page(tmp_path)
+    original = fx.garmin_original()
+
+    report = _sync_files(
+        tmp_path, data_root, [("a", original.data), ("b", original.data)]
+    )
+
+    assert {Path(f.source).name for f in report.failures} == {"0-a.fit", "1-b.fit"}
+    assert len({f.reason for f in report.failures}) == 1
+    assert report.skipped == ()
+    assert not archive_path(data_root, _sha(original.data)).exists()
+
+
+def test_settle_renames_of_the_run_carry_into_the_held_candidates(
+    tmp_path: Path,
+) -> None:
+    """Design (hold task): candidates are rewritten through the task renames and
+    then the settle renames, so a candidate settled onto a freed name is recorded
+    at that name.
+
+    Fixture: three pages 16 s apart in elapsed time (the first owns the
+    unsuffixed name, the others sit under a suffix); the first is deleted, and a
+    file 8 s from the second and third matches both. The run's settle pass moves
+    one suffixed page onto the freed name. Mutation: rewrite through the task
+    renames only (the record names the vanished suffixed path).
+    """
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    for number, elapsed in enumerate((3000.0, 3016.0, 3032.0)):
+        _sync_files(
+            tmp_path,
+            data_root,
+            [("p", _garmin_run(elapsed_s=elapsed, serial=11 + number))],
+        )
+    pages = _pages(data_root)
+    assert len(pages) == 3  # precondition: three separate pages
+    unsuffixed = min(pages, key=lambda p: len(p.name))
+    unsuffixed.unlink()
+    ambiguous = _garmin_run(elapsed_s=3024.0, serial=14)
+
+    report = _sync_files(tmp_path, data_root, [("x", ambiguous)])
+
+    assert report.failures == ()
+    (entry,) = load_holds(data_root).entries
+    now = {p.relative_to(data_root).as_posix() for p in _pages(data_root)}
+    assert len(now) == 2
+    assert set(entry.candidates) == now
+    freed = unsuffixed.relative_to(data_root).as_posix()
+    assert freed in now  # precondition: the settle pass did move a page onto it
+
+
+def test_a_hold_is_applied_in_discovery_order_among_the_page_tasks(
+    tmp_path: Path,
+) -> None:
+    """Design (SyncEngine): hold tasks and page tasks run in first-member order,
+    and warnings are in task order -- not sorted by anything else.
+
+    Fixture: the ambiguous file is discovered once before and once after the
+    re-export that renames a page. The archive ref of the held warning sorts
+    before the renamed page's path, so the discovery order that puts the rename
+    first is the one a sort by ``doc`` cannot fake. Mutations: apply every hold
+    after the page tasks (the held-first order reds); sort the run's warnings by
+    ``doc`` (the renamed-first order reds).
+    """
+    older, newer = fx.healthfit_reexport_pair()
+    ambiguous = _garmin_run(elapsed_s=3004.0, serial=13)
+    held_doc = source_ref(_sha(ambiguous))
+    for label, order in (
+        ("held-first", ("ambiguous", "newer")),
+        ("renamed-first", ("newer", "ambiguous")),
+    ):
+        base = tmp_path / label
+        base.mkdir()
+        data_root = base / "data"
+        data_root.mkdir()
+        _sync_files(base, data_root, [("a", older.data)])
+        _sync_files(base, data_root, [("b", _garmin_run(elapsed_s=3008.0, serial=12))])
+        data = {"ambiguous": ambiguous, "newer": newer.data}
+
+        report = _sync_files(base, data_root, [(n, data[n]) for n in order])
+
+        assert report.failures == ()
+        kinds = [
+            "held" if w.doc == held_doc else "renamed"
+            for w in report.warnings
+            if w.doc == held_doc or "renamed" in w.detail
+        ]
+        expected = (
+            ["held", "renamed"] if order[0] == "ambiguous" else ["renamed", "held"]
+        )
+        assert kinds == expected, label
+
+
+def test_held_candidates_follow_a_task_rename_and_then_a_settle_rename(
+    tmp_path: Path,
+) -> None:
+    """Design (hold task): the run's renames are applied in the order they
+    happened -- the task renames, then the settle renames -- so a page moved
+    ``a`` to ``b`` and then ``b`` to ``c`` is recorded at ``c``.
+
+    Mutation: apply the maps in reverse order (the record names ``b``).
+    """
+    entry = HeldSource(
+        sha256="0" * 64, name="x.fit", candidates=("a", "other"), evidence=("strict",)
+    )
+    holds = sync_module._HoldState(HoldRecord(entries=(entry,)))
+
+    sync_module._finish_holds(tmp_path, holds, {"a": "b"}, {"b": "c"})
+
+    assert holds.record.entries[0].candidates == ("c", "other")
+    assert load_holds(tmp_path).entries[0].candidates == ("c", "other")

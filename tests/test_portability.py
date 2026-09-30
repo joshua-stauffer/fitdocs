@@ -189,35 +189,41 @@ _TILES: _ServingTiles = _ServingTiles()
 
 
 def _synced_documents(tmp_path: Path, *, with_athlete: bool) -> list[Path]:
-    """Sync every real-shaped fixture into a temp data root and return the docs.
+    """Sync every real-shaped fixture into its own temp data root; return the docs.
 
     Mirrors the CLI: a pinned timezone and the optional athlete inputs loaded via
-    :func:`~fitdocs.athlete.load_athlete_inputs`. Asserts the run itself is clean
-    (one document per fixture, no failures) before the invariant checks run.
+    :func:`~fitdocs.athlete.load_athlete_inputs`. Each fixture gets a data root
+    of its own because the two run fixtures record one start, elapsed time and
+    (to within 5 m) distance: synced together, the cross-source rule reads them
+    as one session and renders one page. Asserts each run itself is clean (one
+    document, no failures) before the invariant checks run.
     """
-    source = tmp_path / "src"
-    data_root = tmp_path / "data"
-    data_root.mkdir()
-    if with_athlete:
-        _write_athlete(data_root)
+    docs: list[Path] = []
     for name, data in _FIXTURES.items():
-        (source / name).parent.mkdir(parents=True, exist_ok=True)
+        source = tmp_path / "src" / Path(name).stem
+        data_root = tmp_path / "data" / Path(name).stem
+        source.mkdir(parents=True)
+        data_root.mkdir(parents=True)
+        if with_athlete:
+            _write_athlete(data_root)
         (source / name).write_bytes(data)
 
-    athlete = load_athlete_inputs(data_root)
-    assert (athlete is not None) is with_athlete  # loaded exactly as the CLI sees it
-    report = sync(source, data_root, athlete=athlete, tz=_TZ, tiles=_TILES)
-    assert report.failures == (), f"sync reported failures: {report.failures}"
-    assert len(report.written) == len(_FIXTURES)
+        athlete = load_athlete_inputs(data_root)
+        assert (athlete is not None) is with_athlete  # loaded as the CLI sees it
+        report = sync(source, data_root, athlete=athlete, tz=_TZ, tiles=_TILES)
+        assert report.failures == (), f"sync reported failures: {report.failures}"
+        assert len(report.written) == 1
 
-    # Excludes the in-tree ownership declaration (``AGENTS.md``, task 4.2, Req
-    # 3.7): sync places it too, and its name happens to end in ``.md``, but it
-    # is not a workout document and carries no portability invariant to check.
-    docs = sorted(
-        p
-        for p in (data_root / WORKOUTS_DIR).glob("*.md")
-        if p.name != DECLARATION_FILENAME
-    )
+        # Excludes the in-tree ownership declaration (``AGENTS.md``, task 4.2,
+        # Req 3.7): sync places it too, and its name happens to end in ``.md``,
+        # but it is not a workout document and carries no portability invariant.
+        written = sorted(
+            p
+            for p in (data_root / WORKOUTS_DIR).glob("*.md")
+            if p.name != DECLARATION_FILENAME
+        )
+        assert len(written) == 1
+        docs.extend(written)
     assert len(docs) == len(_FIXTURES)
     return docs
 

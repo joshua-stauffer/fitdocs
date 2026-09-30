@@ -2,16 +2,21 @@
 
 This module is the home of fitdocs's per-file pipeline (design: SyncEngine,
 ``src/fitdocs/sync.py``) and of the document-lookup surface that pipeline builds
-on. :func:`sync` walks a source directory and, for each discovered ``.fit`` file,
-runs the per-file pipeline -- ``hash -> dedup -> parse -> identity -> render ->
-merge -> write -> archive`` -- with per-file failures isolated so one bad file
-never aborts the batch (Req 1-4). :func:`regen` rebuilds documents from the data
+on. :func:`sync` walks a source directory and plans the run as a whole: every
+discovered ``.fit`` file is hashed, deduplicated and parsed (run preparation),
+the workout pages are scanned once, the planner assigns each file to an existing
+page, a new page, or a *hold* as a function of the *set* of files, and one page
+task per target then renders, merges, writes and archives -- with per-file
+failures isolated so one bad file never aborts the batch (Req 1-4;
+activity-identity Req 4). :func:`regen` rebuilds documents from the data
 root alone -- re-rendering each from its base archived source and rendering any
-unreferenced archive fresh (Req 4.3, 4.4) -- reusing that same per-file pipeline;
-only discovery and skip policy differ. :func:`drain` is the inbox spec's third
-entry point (design: DrainOrchestration): it composes the standing-inbox policy
-(:mod:`fitdocs.inbox` selection and stability) around this same per-file
-pipeline without modifying it -- candidates are selected, settled, read once
+unreferenced archive fresh (Req 4.3, 4.4) -- through the per-file pipeline
+(:func:`_process_isolated`), which :func:`drain` also still uses; :func:`sync`
+runs the planned pipeline described above instead. :func:`drain` is the
+inbox spec's third entry point (design: DrainOrchestration): it composes the
+standing-inbox policy (:mod:`fitdocs.inbox` selection and stability) around
+this same per-file pipeline without modifying it -- candidates are selected,
+settled, read once
 each (a read failure defers rather than fails or quarantines the candidate,
 inbox Req 4.2), and every stable, readable candidate not already quarantined
 (or being retried, inbox Req 5.5) is handed to the same :func:`_process_isolated`
@@ -83,7 +88,11 @@ recognizes is understood identically by the training-load pass and the audit
   rendered from; refs that no longer resolve to an archived file come first).
   It resolves exact re-syncs and documents that carry no session UUID.
 
-**Match precedence (Req 3.6).** ``uuid`` is matched first, then ``sources``.
+**Match precedence (Req 3.6).** ``uuid`` is matched first, then ``sources``;
+:func:`sync` then places a file no page lists by the cross-source rule of
+:mod:`fitdocs.identity` (a file that could belong to two pages, or that claims a
+page another group of the run also claims, is *held*: archived, recorded in
+``.fitdocs/held.toml``, warned and skipped, never merged by guesswork).
 Because the match is *content-based* -- it reads frontmatter, never the filename
 -- a user-renamed document and a timezone change (which would otherwise rename
 the document) both resolve to the same document. A plain sha256 identity (no
@@ -174,11 +183,11 @@ import hashlib
 import os
 import re
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import tzinfo
 from pathlib import Path
-from typing import Final
+from typing import Final, Literal
 
 from fitdocs import (
     Activity,
@@ -216,8 +225,17 @@ from fitdocs.docmerge import (
     extract_regions,
     merge_regions,
 )
+from fitdocs.identity.holds import HeldSource, HoldRecord, load_holds, save_holds
 from fitdocs.identity.kinds import source_identity
+from fitdocs.identity.matching import session_key
 from fitdocs.identity.pages import scan_pages
+from fitdocs.identity.planning import (
+    Hold,
+    PageRecord,
+    PageTaskPlan,
+    RunFile,
+    plan_run,
+)
 from fitdocs.identity.roles import (
     DEFAULT_PRECEDENCE,
     PageRoles,
@@ -367,12 +385,16 @@ class SyncReport:
     ``failures`` (a :class:`FileFailure`). The tuples are in deterministic
     (sorted-discovery) order.
 
-    ``skipped`` is a **shared presentation bucket with two unrelated causes**:
-    the source's bytes were already archived and ``force`` is off (Req 3.2), or
-    the matched document records a *newer* document-format version and was left
-    untouched (Req 5.5, 5.8). **It is not a completion signal** (Req 5.9). The
-    first cause is finished work; the second wrote nothing and archived nothing,
-    and depends on the source staying where it is to be retried next run.
+    ``skipped`` is a **shared presentation bucket with three unrelated causes**:
+    the source's bytes were already archived and ``force`` is off, or its bytes
+    appeared earlier in the run (Req 3.2, 3.3) -- finished work; the matched
+    document records a *newer* document-format version and was left untouched
+    (Req 5.5, 5.8), which wrote nothing and archived nothing and depends on the
+    source staying where it is to be retried next run; or the file was *held*
+    because its page is ambiguous (activity-identity Req 4.5-4.7, 7.5), which is
+    archived and recorded but written to no page. **It is not a completion
+    signal** (Req 5.9): a held file is archived (so a later run skips it) yet
+    belongs to no page, and is never a failure.
 
     The authoritative discriminator for a fully-processed source is its presence
     in ``fit-archive/`` -- never this label. A disposition, cleanup, or archival
@@ -381,7 +403,7 @@ class SyncReport:
     docstring's version-gate section.
 
     ``warnings`` is a **separate, additive channel** for non-fatal, subject-scoped
-    conditions. Seven causes emit one today: a map that could not be rendered
+    conditions. Eight causes emit one today: a map that could not be rendered
     (Req 4.3, 4.4), a foreign ownership declaration that could not be placed
     (Req 3.6), a document left untouched because it records a newer
     document-format version (Req 5.5), a rewritten document that carried
@@ -389,11 +411,13 @@ class SyncReport:
     rewritten document whose effort tag fitdocs cannot read (preserved
     unchanged, not in effect until corrected, Req 1.4, 3.4, 3.6, 4.7), and a
     ``workouts/*.md`` symlink discovery never follows (Req 7.5, 7.6, task
-    7.2 F2), and a page renamed because its base changed or because a
-    collision suffix was settled (activity-identity Req 6.5, 6.6). This is the
-    canonical enumeration every other module points at
+    7.2 F2), a page renamed because its base changed or because a
+    collision suffix was settled (activity-identity Req 6.5, 6.6), and a file
+    held because the page it belongs to is ambiguous, naming the archived file,
+    every page it could belong to and the evidence (activity-identity Req 4.7).
+    This is the canonical enumeration every other module points at
     instead of repeating (:class:`DocWarning`, :func:`fitdocs.cli._report`) --
-    keep it, and only it, current when an eighth cause is added. A
+    keep it, and only it, current when a ninth cause is added. A
     :class:`DocWarning` rides *alongside* the partition: it never enters
     ``failures``, never moves a file into or out of
     ``written``/``skipped``/``failures``, and never changes the exit code. A
@@ -519,11 +543,14 @@ def sync(
     r"""Turn every ``.fit`` file under ``source_dir`` into a workout document.
 
     Discovers ``.fit`` files recursively and case-insensitively in a deterministic
-    (sorted) order (Req 1.1) and runs the per-file pipeline for each. The source
-    directory is opened strictly read-only -- nothing under it is written, moved,
-    or deleted (Req 1.6). Each file is classified into the returned
+    (sorted) order (Req 1.1) and plans the run as a whole (:func:`_run_planned`).
+    The source directory is opened strictly read-only -- nothing under it is
+    written, moved, or deleted (Req 1.6). Each file is classified into the returned
     :class:`SyncReport`: *written* (a document produced or updated), *skipped* (its
-    bytes are already archived and ``force`` is off, Req 3.2, 3.3), or *failed*.
+    bytes are already archived and ``force`` is off, Req 3.2, 3.3, or its bytes
+    appeared earlier in this run (even under ``force``); it is held
+    because its page is ambiguous; or its page records a newer document-format
+    version), or *failed*.
 
     Decode errors (:class:`~fitdocs.FitDecodeError` and subclasses), region
     conflicts (:class:`~fitdocs.docmerge.RegionError`), and any unexpected per-file
@@ -563,33 +590,46 @@ def sync(
     (Req 5.9). A document recording no version, an unusable one, or an older
     one is upgraded in place at the current version instead, its user-owned
     regions carried over verbatim (Req 5.4, 5.6).
+
+    **Planned runs and holds (activity-identity Req 4).** The run's files are
+    assigned to pages together, as a function of the *set* of files and the
+    existing pages (:func:`_run_planned`), so the tree a run produces does not
+    depend on discovery order. A file whose page is ambiguous -- it could belong
+    to two pages, or claims a page another group of the run also claims -- is
+    *held*: recorded in ``.fitdocs/held.toml`` first, then archived, reported in
+    ``skipped`` with a :class:`DocWarning` naming the archive ref, every
+    candidate page and the evidence, and never counted as a failure. The hold
+    record is read before anything is written; a damaged one raises
+    :class:`~fitdocs.identity.holds.HoldRecordError`, uncaught here.
     """
     written: list[str] = []
     skipped: list[str] = []
     failures: list[FileFailure] = []
     warnings: list[DocWarning] = []
     ledger = _RunLedger()
+    # The hold record is read before anything is written, so a damaged one
+    # raises HoldRecordError with the data root untouched (Req 4.7, 4.10).
+    holds = _HoldState(load_holds(data_root))
     refresh_declarations(data_root, warnings)
     warnings.extend(_scan_symlinked_documents(data_root))
 
-    for source_file in _discover_fit_files(source_dir):
-        _process_isolated(
-            source_file,
-            data_root,
-            athlete=athlete,
-            tz=tz,
-            tiles=tiles,
-            force=force,
-            precedence=precedence,
-            source_label=str(source_file),
-            written=written,
-            skipped=skipped,
-            failures=failures,
-            warnings=warnings,
-            ledger=ledger,
-        )
+    task_renames = _run_planned(
+        [_RunItem(str(path), path) for path in _discover_fit_files(source_dir)],
+        data_root,
+        athlete=athlete,
+        tz=tz,
+        tiles=tiles,
+        force=force,
+        precedence=precedence,
+        holds=holds,
+        ledger=ledger,
+        written=written,
+        skipped=skipped,
+        failures=failures,
+        warnings=warnings,
+    )
 
-    _settle_pass(
+    settle_renames = _settle_pass(
         data_root,
         ledger,
         athlete=athlete,
@@ -600,6 +640,7 @@ def sync(
         failures=failures,
         warnings=warnings,
     )
+    _finish_holds(data_root, holds, task_renames, settle_renames)
 
     return SyncReport(
         written=tuple(written),
@@ -1156,9 +1197,10 @@ def _process_isolated(
 ) -> None:
     """Run the per-file pipeline for one item, isolating any failure (Req 1.3).
 
-    Shared by :func:`sync` and :func:`regen`: the pipeline (``_process_file``) is
-    identical -- only discovery and the ``source_label`` recorded in the report
-    differ. Classifies the item into ``written`` (a document produced or updated),
+    Shared by :func:`regen` and :func:`drain` (:func:`sync` plans its run through
+    :func:`_run_planned` instead): the pipeline (``_process_file``) is identical
+    -- only discovery and the ``source_label`` recorded in the report differ.
+    Classifies the item into ``written`` (a document produced or updated),
     ``skipped`` (already archived and not forcing, Req 3.2, **or** version-gated
     because the matched document is newer, Req 5.5), or ``failures``. Expected
     per-file errors -- an undecodable source (Req 1.2, 1.3) or a damaged region in
@@ -1200,20 +1242,345 @@ def _process_isolated(
             skipped.append(source_label)
         else:
             written.append(result.doc_ref)
-        # A moved page no longer sits at any path the ledger recorded for it; a
-        # page now under a collision suffix is a settle candidate (Req 6.6).
-        if result.renamed_from is not None:
-            ledger.settle[:] = [
-                entry for entry in ledger.settle if entry.path != result.renamed_from
-            ]
-        if result.settle_entry is not None:
-            ledger.settle.append(result.settle_entry)
+        _note_task_result(result, ledger)
         file_warnings = result.warnings
         # Zero or more warnings can ride with either non-failing outcome -- a
         # written file may carry a map omission, an unmanaged-key notice, both,
         # or neither; a version-gated skip carries exactly one. Only the
         # converse is guaranteed: a raising file never has any.
         warnings.extend(file_warnings)
+
+
+def _note_task_result(result: _TaskResult, ledger: _RunLedger) -> None:
+    """Fold one task's rename facts into the run's settle ledger (Req 6.6).
+
+    A moved page no longer sits at any path the ledger recorded for it; a page
+    now under a collision suffix is a settle candidate.
+    """
+    if result.renamed_from is not None:
+        ledger.settle[:] = [
+            entry for entry in ledger.settle if entry.path != result.renamed_from
+        ]
+    if result.settle_entry is not None:
+        ledger.settle.append(result.settle_entry)
+
+
+@dataclass(frozen=True)
+class _RunItem:
+    """One file of a planned run: the label its report entries use, and where it is."""
+
+    label: str
+    path: Path
+
+
+@dataclass(frozen=True)
+class _Prepared:
+    """A run file after preparation: hashed and parsed once, activity not kept."""
+
+    position: int
+    item: _RunItem
+    sha: str
+    run_file: RunFile
+
+
+@dataclass(frozen=True)
+class _Outcome:
+    """One file's place in the report: ``value`` is a page ref or a reason."""
+
+    kind: Literal["written", "skipped", "failed"]
+    value: str = ""
+
+
+@dataclass
+class _HoldState:
+    """The hold record as the run evolves it (saved only when it changes)."""
+
+    record: HoldRecord
+
+
+def _run_planned(
+    items: Sequence[_RunItem],
+    data_root: Path,
+    *,
+    athlete: AthleteInputs | None,
+    tz: tzinfo,
+    tiles: TileSource,
+    force: bool,
+    precedence: Precedence,
+    holds: _HoldState,
+    ledger: _RunLedger,
+    written: list[str],
+    skipped: list[str],
+    failures: list[FileFailure],
+    warnings: list[DocWarning],
+) -> dict[str, str]:
+    """Plan and apply one run's files (activity-identity Req 4, 7.1, 7.5).
+
+    Preparation reads, hashes and parses each item in discovery order (a file
+    already archived, or whose bytes appeared earlier in the run, is skipped
+    without a parse; a read or decode failure is that file's failure); the page
+    index is scanned once; :func:`~fitdocs.identity.planning.plan_run` assigns
+    every file to a page, a new page or a hold as a function of the *set* of
+    files; page tasks and hold tasks then run in first-member order. Report
+    entries are appended in discovery order, warnings in task order. Returns the
+    renames the tasks made (previous data-root-relative path to new path).
+    """
+    outcomes: list[_Outcome | None] = [None] * len(items)
+    duplicate_of: dict[int, int] = {}
+    seen: dict[str, int] = {}
+    prepared: dict[str, _Prepared] = {}
+    run_files: list[RunFile] = []
+    for position, item in enumerate(items):
+        try:
+            data = item.path.read_bytes()
+            sha = hashlib.sha256(data).hexdigest()
+            if archive_path(data_root, sha).exists() and not force:
+                outcomes[position] = _Outcome("skipped")
+                continue
+            if sha in seen:
+                duplicate_of[position] = seen[sha]
+                continue
+            activity = parse_fit(data)
+        except Exception as exc:
+            outcomes[position] = _Outcome("failed", _reason(exc))
+            continue
+        seen[sha] = position
+        run_file = RunFile(
+            id=item.label,
+            ref=source_ref(sha),
+            session_uuid=source_identity(activity).session_uuid,
+            key=session_key(activity),
+        )
+        prepared[item.label] = _Prepared(position, item, sha, run_file)
+        run_files.append(run_file)
+
+    renames: dict[str, str] = {}
+    if run_files:
+        index = scan_pages(data_root)
+        plan = plan_run(run_files, index)
+        records = {record.path: record for record in index.records}
+        work: list[tuple[int, PageTaskPlan | str]] = [
+            (prepared[task.members[0]].position, task) for task in plan.tasks
+        ]
+        work.extend((prepared[label].position, label) for label in plan.holds)
+        work.sort(key=lambda entry: entry[0])
+        for _position, unit in work:
+            if isinstance(unit, str):
+                decision = plan.decisions[unit]
+                assert isinstance(decision, Hold)
+                _hold_task(
+                    prepared[unit],
+                    decision,
+                    data_root,
+                    holds=holds,
+                    outcomes=outcomes,
+                    warnings=warnings,
+                )
+                continue
+            page = records[unit.page] if unit.page is not None else None
+            _group_task(
+                [prepared[label] for label in unit.members],
+                page,
+                data_root,
+                athlete=athlete,
+                tz=tz,
+                tiles=tiles,
+                precedence=precedence,
+                ledger=ledger,
+                outcomes=outcomes,
+                warnings=warnings,
+                renames=renames,
+            )
+
+    for position, primary in duplicate_of.items():
+        first = outcomes[primary]
+        outcomes[position] = (
+            first
+            if first is not None and first.kind == "failed"
+            else _Outcome("skipped")
+        )
+    for item, outcome in zip(items, outcomes, strict=True):
+        assert outcome is not None
+        if outcome.kind == "written":
+            written.append(outcome.value)
+        elif outcome.kind == "skipped":
+            skipped.append(item.label)
+        else:
+            failures.append(FileFailure(source=item.label, reason=outcome.value))
+    return renames
+
+
+def _reload(member: _Prepared) -> tuple[bytes, str]:
+    """Re-read a planned file; its bytes must still be the ones that were planned.
+
+    Raises when they changed during the run (or cannot be read); the caller
+    fails that member alone.
+    """
+    data = member.item.path.read_bytes()
+    if hashlib.sha256(data).hexdigest() != member.sha:
+        raise _ChangedDuringRun(
+            "the file changed during the run (its bytes no longer match the "
+            "ones that were planned); it was not processed"
+        )
+    return data, member.sha
+
+
+class _ChangedDuringRun(Exception):
+    """A planned file's bytes differ from what preparation hashed."""
+
+
+def _group_task(
+    members: list[_Prepared],
+    page: PageRecord | None,
+    data_root: Path,
+    *,
+    athlete: AthleteInputs | None,
+    tz: tzinfo,
+    tiles: TileSource,
+    precedence: Precedence,
+    ledger: _RunLedger,
+    outcomes: list[_Outcome | None],
+    warnings: list[DocWarning],
+    renames: dict[str, str],
+) -> None:
+    """One page task for the files the plan gave one page or one new page.
+
+    Each member is re-read and parsed here; a member whose bytes changed is
+    failed alone and the others proceed. An exception in the task fails every
+    remaining member with the same reason (Req 1.3).
+    """
+    news: list[_NewMember] = []
+    for member in members:
+        try:
+            data, sha = _reload(member)
+            activity = parse_fit(data)
+        except Exception as exc:
+            outcomes[member.position] = _Outcome("failed", _reason(exc))
+            continue
+        news.append(
+            _NewMember(
+                ref=member.run_file.ref,
+                sha=sha,
+                activity=activity,
+                data=data,
+                archive=archive_path(data_root, sha),
+            )
+        )
+    if not news:
+        return
+    live = [m for m in members if outcomes[m.position] is None]
+    match = (
+        DocumentMatch(path=Path(page.path), sources=page.sources)
+        if page is not None
+        else None
+    )
+    try:
+        result = _page_task(
+            data_root,
+            match=match,
+            news=tuple(news),
+            athlete=athlete,
+            tz=tz,
+            tiles=tiles,
+            precedence=precedence,
+            settling=False,
+            quiet=False,
+            expected_stem=None,
+        )
+    except Exception as exc:
+        for member in live:
+            outcomes[member.position] = _Outcome("failed", _reason(exc))
+        return
+    outcome = (
+        _Outcome("skipped")
+        if result.doc_ref is None
+        else _Outcome("written", result.doc_ref)
+    )
+    for member in live:
+        outcomes[member.position] = outcome
+    _note_task_result(result, ledger)
+    if result.renamed_from is not None and result.doc_ref is not None:
+        renames[result.renamed_from.relative_to(data_root).as_posix()] = result.doc_ref
+    warnings.extend(result.warnings)
+
+
+def _hold_task(
+    member: _Prepared,
+    hold: Hold,
+    data_root: Path,
+    *,
+    holds: _HoldState,
+    outcomes: list[_Outcome | None],
+    warnings: list[DocWarning],
+) -> None:
+    """Record, then archive, a file whose page is ambiguous (Req 4.7, 7.1, 7.5).
+
+    The record is saved **before** the archive write: the archive is the
+    processed-marker, so a file archived but never recorded would be skipped by
+    every later run with nothing naming it. When the save fails the file is not
+    archived, is reported as a failure, and the next run plans and holds it
+    again. A held file is ``skipped``, never a failure.
+    """
+    try:
+        data, sha = _reload(member)
+        candidates = tuple(
+            Path(path).relative_to(data_root).as_posix() for path in hold.candidates
+        )
+        entry = HeldSource(
+            sha256=sha,
+            name=member.item.label,
+            candidates=candidates,
+            evidence=tuple(str(evidence) for evidence in hold.evidence),
+        )
+        if holds.record.get(sha) != entry:
+            updated = holds.record.with_entry(entry)
+            save_holds(data_root, updated)
+            holds.record = updated
+        _write_archive(archive_path(data_root, sha), data)
+    except Exception as exc:
+        outcomes[member.position] = _Outcome("failed", _reason(exc))
+        return
+    outcomes[member.position] = _Outcome("skipped")
+    warnings.append(DocWarning(doc=source_ref(sha), detail=_held_detail(entry)))
+
+
+def _held_detail(entry: HeldSource) -> str:
+    """The warning for a held file: every candidate page and the evidence."""
+    return (
+        f"held, not merged: could be the same session as "
+        f"{', '.join(entry.candidates)} (evidence: {', '.join(entry.evidence)}); "
+        "the file was archived and recorded in .fitdocs/held.toml, and no page "
+        "was written or changed; `fitdocs regen` re-evaluates it"
+    )
+
+
+def _finish_holds(
+    data_root: Path,
+    holds: _HoldState,
+    *renames: Mapping[str, str],
+) -> None:
+    """Rewrite held candidates through the run's renames (write-if-different).
+
+    Each rename map is applied once, in order, so a page moved to a suffixed
+    name and then settled reads as its final path. Saves only when an entry
+    changed: a run with nothing held never creates ``.fitdocs/``.
+    """
+
+    def follow(path: str) -> str:
+        for mapping in renames:
+            path = mapping.get(path, path)
+        return path
+
+    record = holds.record
+    changed = False
+    for entry in record.entries:
+        moved = tuple(follow(path) for path in entry.candidates)
+        if moved != entry.candidates:
+            record = record.with_entry(replace(entry, candidates=moved))
+            changed = True
+    if changed:
+        save_holds(data_root, record)
+        holds.record = record
 
 
 def _discover_fit_files(source_dir: Path) -> list[Path]:
@@ -1291,8 +1658,10 @@ def _process_file(
     return _page_task(
         data_root,
         match=match,
-        new=_NewMember(
-            ref=new_ref, sha=sha, activity=activity, data=data, archive=archive
+        news=(
+            _NewMember(
+                ref=new_ref, sha=sha, activity=activity, data=data, archive=archive
+            ),
         ),
         athlete=athlete,
         tz=tz,
@@ -1407,7 +1776,7 @@ def _page_task(
     data_root: Path,
     *,
     match: DocumentMatch | None,
-    new: _NewMember | None,
+    news: tuple[_NewMember, ...],
     athlete: AthleteInputs | None,
     tz: tzinfo,
     tiles: TileSource,
@@ -1418,10 +1787,11 @@ def _page_task(
 ) -> _TaskResult:
     """Write one page from its members: roles, render, rename, write, archive.
 
-    ``match`` is the page (``None`` for a fresh group) and ``new`` the incoming
-    file (``None`` for a settle task, which re-renders a page from its listed
-    files alone and moves it to its unsuffixed name, Req 6.6). The write order
-    is the crash-healing one of Req 6.7 -- see :func:`_write_outputs`.
+    ``match`` is the page (``None`` for a fresh group) and ``news`` the incoming
+    files the plan assigned to it (empty for a settle task, which re-renders a
+    page from its listed files alone and moves it to its unsuffixed name, Req
+    6.6). The write order is the crash-healing one of Req 6.7 -- see
+    :func:`_write_outputs`.
 
     A settle task (``settling``) is ``quiet`` when it re-renders a page this
     very run just wrote: the unmanaged-key, effort-tag and map-omission notices
@@ -1518,14 +1888,14 @@ def _page_task(
     # archived file is ``unresolved`` and keeps its place at the front of
     # ``sources``.
     existing_refs = match.sources if match is not None else ()
-    listed = tuple(
-        dict.fromkeys((*existing_refs, *((new.ref,) if new is not None else ())))
-    )
+    listed = tuple(dict.fromkeys((*existing_refs, *(n.ref for n in news))))
+    incoming = {n.ref: n for n in news}
     parsed: dict[str, Activity] = {}
     resolved: list[SourceMember] = []
     unresolved: list[str] = []
     for ref in listed:
-        if new is not None and ref == new.ref:
+        new = incoming.get(ref)
+        if new is not None:
             parsed[ref] = new.activity
             resolved.append(source_member(ref, new.sha, new.activity))
             continue
@@ -1661,8 +2031,7 @@ def _page_task(
         target,
         markdown,
         rendered.assets,
-        new.archive if new is not None else None,
-        new.data if new is not None else None,
+        tuple((n.archive, n.data) for n in news),
         moved_from=moved_from,
         stale_assets=stale,
     )
@@ -1750,7 +2119,7 @@ def _settle_pass(
     written: list[str],
     failures: list[FileFailure],
     warnings: list[DocWarning],
-) -> None:
+) -> dict[str, str]:
     """Move each page under a collision suffix to its unsuffixed name.
 
     Runs after every file of a run (Req 6.6). The candidates are the pages this
@@ -1799,7 +2168,7 @@ def _settle_pass(
                 result = _page_task(
                     data_root,
                     match=match,
-                    new=None,
+                    news=(),
                     athlete=athlete,
                     tz=tz,
                     tiles=tiles,
@@ -1828,6 +2197,7 @@ def _settle_pass(
             else warning
             for warning in warnings
         ]
+    return moved
 
 
 def _render_activity(roles: PageRoles, parsed: Mapping[str, Activity]) -> Activity:
@@ -1845,8 +2215,7 @@ def _write_outputs(
     document: Path,
     markdown: str,
     assets: tuple[Asset, ...],
-    archive: Path | None,
-    source_bytes: bytes | None,
+    archives: tuple[tuple[Path, bytes], ...],
     *,
     moved_from: Path | None = None,
     stale_assets: tuple[str, ...] = (),
@@ -1863,15 +2232,16 @@ def _write_outputs(
 
     The archive's presence is the processed-marker (Req 3.1, 4.2). An existing
     archive is never rewritten (Req 3.5) -- only reachable under ``force``,
-    where the immutable source copy must be preserved. A settle task has no
-    incoming file, so it passes no archive.
+    where the immutable source copy must be preserved. Each new member of the
+    task is archived, in order, after every other write; a settle task has no
+    incoming file, so it passes none.
     """
     _write_assets(data_root, assets)
     _remove_stale_assets(data_root, stale_assets)
     if moved_from is not None:
         _move_document(moved_from, document)
     _write_document(document, markdown)
-    if archive is not None and source_bytes is not None:
+    for archive, source_bytes in archives:
         _write_archive(archive, source_bytes)
 
 

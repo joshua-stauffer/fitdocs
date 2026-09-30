@@ -3,10 +3,11 @@
 
 Driven through :class:`typer.testing.CliRunner` over temporary data roots. The
 ``connectors`` spec is not on this branch, so the ``pull`` scenarios are out of
-scope here (connectors does that wiring when it lands). ``sync`` and the inbox
-drain do not load the hold record yet on this branch, so the hold-record
-scenarios make the engine function raise the real ``HoldRecordError`` (from
-``load_holds`` over a damaged ``.fitdocs/held.toml``).
+scope here (connectors does that wiring when it lands). The explicit-source
+``sync`` loads the hold record itself, so its hold-record scenario runs the real
+engine over a damaged ``.fitdocs/held.toml``. The inbox drain does not load the
+record yet on this branch, so its scenario makes the engine function raise the
+real ``HoldRecordError`` (from ``load_holds``).
 """
 
 from __future__ import annotations
@@ -84,8 +85,7 @@ def _staged_page(tmp_path: Path) -> Path:
     """A data root whose one page lists a HealthFit copy and a Stryd file.
 
     The page is synced from the copy alone through the CLI; the Stryd file is
-    then archived and listed by hand (the staged shape ``regen`` rebuilds from:
-    ``sync`` does not yet match files of different origin on this branch).
+    then archived and listed by hand (the staged shape ``regen`` rebuilds from).
     """
     data_root = tmp_path / "data"
     _settings(data_root, None)
@@ -258,25 +258,29 @@ def test_damaged_hold_record_exits_2_naming_the_file_and_regen(
     _settings(data_root, None)
     source = _stage(tmp_path / "src")
     held = _damage_holds(data_root)
-    _raise_from_real_load("sync" if path == "explicit" else "drain", monkeypatch)
+    if path == "drain":
+        _raise_from_real_load("drain", monkeypatch)
     args = ["sync", str(source)] if path == "explicit" else ["sync"]
+    before = _snapshot(data_root)
 
     result = runner.invoke(app, [*args, "--out", str(data_root)])
 
     assert result.exit_code == 2, result.output
+    if path == "explicit":
+        # (the drain path's CLI creates the empty inbox directory before the
+        # engine is called, so only the explicit path is byte-compared here)
+        assert _snapshot(data_root) == before
     assert str(held) in result.output.replace("\n", "")
     assert "fitdocs regen" in result.output
 
 
 def test_regen_succeeds_after_the_damaged_hold_record_failed_sync(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
     data_root = _staged_page(tmp_path)
     source = tmp_path / "src"
     _damage_holds(data_root)
-    with monkeypatch.context() as patch:
-        _raise_from_real_load("sync", patch)
-        failed = runner.invoke(app, ["sync", str(source), "--out", str(data_root)])
+    failed = runner.invoke(app, ["sync", str(source), "--out", str(data_root)])
     assert failed.exit_code == 2
 
     result = runner.invoke(app, ["regen", "--out", str(data_root)])
