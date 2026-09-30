@@ -294,7 +294,7 @@
   - _Requirements: 6.4_
   - _Boundary: SiteConfig_
 
-- [ ] 2.5 (P) Wrap the generator: locate it, run it, and translate its output into problem lines
+- [x] 2.5 (P) Wrap the generator: locate it, run it, and translate its output into problem lines
   - In `scripts/sitebuild/generator.py`, implement:
     - `generator_executable`: next to `sys.executable`, else
       `GeneratorMissing`, whose message names `uv sync --group docs`;
@@ -833,3 +833,16 @@
   - **Reviewer-confirmed readings.** A draft's other violations still fail the load. Drafts are outside the duplicate check. A BOM before `---` is refused as "no frontmatter". Hero `href` shape is 2.8's job.
   - **Message shapes.** `path: L:C: invalid frontmatter YAML: <problem>` in file coordinates. A duplicate is one Problem per slot, on the first path, naming the others. The empty-tree problem has an empty path.
   - **Open.** A CRLF body with a CRLF annotation block still leaks; see queue `2026-09-30-docs-site-annotation-marker-misses-crlf-and-space-blank-lines`. A CRLF frontmatter fence is refused as "no frontmatter".
+- 2.5 capture record: the throwaway project is `mkdocs.yml` beside `staged/` and `overrides/`, with config `site_name`, `docs_dir: staged`, `site_dir: html`, `strict: true`, `theme: {variant: classic, custom_dir: overrides}` (no `theme.name`: `theme.name: modern` gives "Theme 'modern' is not installed"). Each copy was run as `uv run --group docs zensical build -f <dir>/mkdocs.yml`, once plain and once with `TERM=dumb NO_COLOR=1`; stdout and stderr were byte-identical, so there is one constant per case, and every case exits 1.
+  - Strict: two ANSI `Warning:` blocks with `╭─[ path:line:col ]` frames, then `2 issues found`, then a traceback ending `RuntimeError: Aborted because --strict flag is set`.
+  - Bad YAML: `Error: Encountered an error parsing the configuration file: ...` plus detail lines, with no ANSI and no traceback.
+  - Missing template: `No issues found`, then a traceback ending `RuntimeError: template not found: ...`.
+  - Traceback paths are normalised to `/path/to/repo`.
+  - 2.5 (2 rounds, parallel stream impl/ds-2-5). `run_build(root) -> GeneratorResult(ok, problems, output)`; `translate` runs inside it and `ok = returncode == 0`. Reviewer-accepted choices:
+    - An `Error:` problem keeps only its first line. The generated mkdocs.yml was already parsed by the script, and the full text is in `output` for `--verbose`.
+    - A frameless warning becomes a path-less problem, and a warning pairs with the first frame before the next report line, even across a blank line.
+    - Fallback candidates exclude traceback frames, and an empty non-zero exit reads "exited with status N".
+    - Output is stdout then stderr; the report is on stderr.
+    - A broken Jinja template reports as `site generator: syntax error: ... (in bad.html:2)`.
+
+    Test stubs are `#!/bin/sh`, which works because CI is ubuntu-only.
