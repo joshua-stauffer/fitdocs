@@ -714,7 +714,7 @@ never co-varies two keys a rule distinguishes.
   - _Boundary: AuditIdentityFindings_
   - _Depends: 2.4, 2.5, 3.2_
 
-- [ ] 5.2 (P) Load the precedence setting and map identity errors in the CLI
+- [x] 5.2 (P) Load the precedence setting and map identity errors in the CLI
   - Load `[identity]` once per `sync` (both paths) and `regen` through a helper
     mirroring the tile-store helper, before any engine call; pass the precedence
     to `sync`, `drain` and `regen`; a hold-record error from `sync` or the drain
