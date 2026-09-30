@@ -102,7 +102,8 @@ from that version line.
   cross-checked against the SDK's table in a test only.
 - `ingest/summary.py` may import `ingest/developer.py`; `developer.py` never
   imports `summary.py` or `records.py`.
-- `render/dynamics.py` imports `fitdocs.model`, `fitdocs.layout`,
+- `render/dynamics.py` imports `fitdocs.model` (as landed: `Samples` via the
+  package root's lazy re-export, as `render/sections.py` does), `fitdocs.layout`,
   `fitdocs.render` (contract types), `fitdocs.render.sections`
   (`chart_axis` only) and `fitdocs.render.charts.{hero,palette}`. It never
   imports ingest, metrics, load or `fitdocs.contract`, so
@@ -354,7 +355,8 @@ tests/
 ├── fixtures/builder.py       # + stryd_run_fit_bytes, run_native_dynamics_fit_bytes,
 │                             #   developer_field_run_fit_bytes, DevFieldSpec;
 │                             #   keyword params on _file_id and _device_info
-├── ingest/test_developer.py  # NEW
+├── ingest/test_developer.py  # NEW (decoder units; as landed, the record-level
+│                             #   reader's tests are in test_record_developer_fields.py)
 ├── ingest/test_dynamics.py   # NEW
 ├── render/test_dynamics.py   # NEW
 └── test_running_dynamics_e2e.py  # NEW: sync, check, regen over real data roots
@@ -733,6 +735,7 @@ def extract_dynamics(
 def retained_records(
     record_mesgs: Sequence[Mapping[str, object]],
 ) -> list[Mapping[str, object]]: ...          # records with a timestamp, in order
+                                              # (as landed: dict[str, object], the SDK's type)
 def extract_samples(
     record_mesgs: list[dict[str, object]],
     start_time: datetime | None,

@@ -39,7 +39,7 @@
   (task 1.2) are shared, append-only fixture seams (`activity-identity` uses
   `_file_id`'s; `channel-merge` extends the helper).
 
-- [ ] 1. Foundation: the model's channel set and the synthesized fixtures
+- [x] 1. Foundation: the model's channel set and the synthesized fixtures
 
 - [x] 1.1 Add the twelve running-dynamics channels, their registry and the developer-channel type to the activity model
   - In `src/fitdocs/model.py`: `DYNAMICS_CHANNELS` (the twelve names, in the
@@ -181,7 +181,7 @@
   - Parallel with 1.1: touches only `tests/fixtures/`, and no fixture needs
     the new model fields to be encoded
 
-- [ ] 2. Core ingest: one developer decoding rule, record-level developer fields, the placeholder rules, the dynamics channels
+- [x] 2. Core ingest: one developer decoding rule, record-level developer fields, the placeholder rules, the dynamics channels
 
 - [x] 2.1 Build the shared developer-value decoder and move the session reader onto it
   - Create `src/fitdocs/ingest/developer.py` per design.md
@@ -329,7 +329,7 @@
     model goldens and every golden document are unchanged
   - _Requirements: 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 4.4, 5.2, 5.3, 5.4, 5.6_
 
-- [ ] 3. Core render: the shared axis, the section and chart, the run view
+- [x] 3. Core render: the shared axis, the section and chart, the run view
 
 - [x] 3.1 (P) Extract the shared chart axis and add the two dynamics series colors
   - In `src/fitdocs/render/sections.py`, add `ChartAxis` and `chart_axis`
@@ -400,7 +400,7 @@
   - Done: every existing golden unchanged; the view tests pass
   - _Requirements: 7.1, 7.6, 7.7_
 
-- [ ] 4. Integration: the new golden pages and a Stryd file synced alone
+- [x] 4. Integration: the new golden pages and a Stryd file synced alone
 
 - [x] 4.1 Register the two new golden documents and pin their observables
   - Add `stryd_run` and `run_native_dynamics` to `FIXTURES` in
@@ -444,7 +444,7 @@
   - Done: the end-to-end test passes against a real data root
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 8.4_
 
-- [ ] 5. Contract advance, regeneration, and the spec records
+- [x] 5. Contract advance, regeneration, and the spec records
 
 - [x] 5.1 Advance the document-format version and move every pin of the old value
   - Read `DOC_VERSION` on the branch rebased onto `main`; advance it by one
@@ -516,7 +516,7 @@
   - _Requirements: 9.2, 9.3_
   - _Depends: 5.1_
 
-- [ ] 5.3 (P) Land the fit-ingest and workout-docs amendment records and their roadmap lines
+- [x] 5.3 (P) Land the fit-ingest and workout-docs amendment records and their roadmap lines
   - `.kiro/specs/fit-ingest/requirements.md`: a new
     `## Amendment N (<date>): record-level developer fields and running dynamics, landed by running-dynamics`
     section and appended criteria per design.md § AmendmentRecords, each
@@ -546,7 +546,7 @@
   - Parallel with 5.1 and 5.2: touches only the two spec directories, and
     the roadmap's two lines at the merge
 
-- [ ] 6. Validation: the evidence sweep
+- [x] 6. Validation: the evidence sweep
 
 - [x] 6.1 Classify every criterion, run the named mutations, and validate the whole change
   - For each of the 57 criteria, record PINNED (test and mutation),
@@ -584,7 +584,7 @@
 - 5.1 (from activity-identity's log WARN): `tests/load/test_render.py::test_payload_version_paired_with_doc_version` pins `(LOAD_PAYLOAD_VERSION, DOC_VERSION)` -- a DOC_VERSION literal site missing from 5.1's list; move it too.
 - 5.1: DOC_VERSION advanced 5 -> 6 (main's value 5 at 1c55e18); `_PRE_RUNNING_DYNAMICS_DOC_VERSION = 5`. Sites moved: contract.py, test_cli_check.py:196,198, test_frontmatter.py:44,101, test_sources.py:2270 (CONSTANT_REGISTRY_ASOF_DOC_VERSION), tests/load/test_render.py:169 (pair (2, 6)); 11 goldens, one doc_version line each. Final-rebase re-pin check: pending at merge (activity-identity's branch also moves 5 -> 6).
 - 5.2: aging deletes the first sync's `-dynamics.svg` too -- otherwise a regen that skips writing assets for an existing document (`sync._write_outputs`) survived the full suite (reviewer O7). Round 3's docstring fix was applied by the controller and re-reviewed.
-- 6.1 evidence sweep (2026-09-30, full suite 5892 passed):
+- 6.1 evidence sweep (2026-09-30, full suite 5890 passed after the dropped guard):
   - M1-M12 through the full suite, red counts: M1 44, M2 27, M3 heart-rate half 11, M3 stride half 20, M4 4, M5 13, M6 (stance-time-balance gate) 12, M7 Distance 4 / Speed 3, M8 2, M9 1, M10 5, M11 replacement `(k*n)//100 + 1` 3 (as written it is an equivalent mutant, green), M12 case-insensitive 1 / substring 1. M1, M2 and M3 each red (10.4).
   - Classification of the 57 criteria:
     - PINNED (52): 1.1-1.12, 2.1-2.3, 3.1-3.4, 4.1-4.4, 5.1-5.6, 6.1-6.3, 6.5, 6.6, 7.1-7.7, 8.1-8.5, 9.1-9.4, 10.1, 10.4.
@@ -597,3 +597,6 @@
     - 10.5: review grep, as design.md specifies. `grep -rniE "https?://[^ )]*stryd"` over every file the branch changes printed nothing. A repo-wide guard was drafted and dropped in review: its scope could be narrowed with nothing going red, it flagged harmless text, and its samples spelled real hosts. It is queued as a follow-up shared with channel-merge 9.3.
     - Tally: 52 PINNED, 6.4 (heart rate pinned, cadence vacuous), 10.2 PRESERVED-ONLY, 10.3 fixture shapes pinned with the privacy half conditional, 9.5 UNPINNED (review), 10.5 review grep = 57.
   - Greps: the prose-claim grep over added test lines found no false claim. The no-Stryd-address grep over every changed file printed nothing.
+- 5.3 roadmap: at merge (main 1c55e18, no sibling landed), the Phase 8 `fit-ingest` and `workout-docs` Existing Spec Update lines are annotated "(running-dynamics part landed)", not ticked: their activity-identity, intervals-connector and channel-merge parts are still open. fit-ingest Amendment 3 and workout-docs Amendment 1 stand as numbered, because this spec lands first. activity-identity's branch also writes a fit-ingest "Amendment 3" and a workout-docs `amendments` key, so it must renumber and merge on its rebase.
+- Validation (kiro-validate-impl, 2026-09-30): GO. The design.md drift was corrected at merge: record-level tests in test_record_developer_fields.py, `retained_records` typed `dict`, and `Samples` imported via the root re-export.
+

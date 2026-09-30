@@ -18,7 +18,9 @@ Contract highlights:
   and carries ``None`` when the device did not record it. ``None`` is reserved
   exclusively for "not recorded"; a recorded ``0`` (for example zero power while
   coasting, or a bodyweight set's ``0.0`` kg) is preserved as a real zero
-  (Req 2.5, 12.3).
+  (Req 2.5, 12.3). The exceptions are recorded placeholders: a 0 bpm heart
+  rate and a 0 in the seven running-dynamics placeholder channels mean "not
+  recorded" and arrive as ``None`` (fit-ingest Req 3.10, 12.4).
 - **Units** — seconds (``s``), metres (``m``), metres per second (``mps``),
   kilograms (``kg``), degrees Celsius (``c``), beats per minute (``bpm``),
   watts (``w``), revolutions per minute (``rpm``), degrees (``deg``),
@@ -26,7 +28,9 @@ Contract highlights:
   per metre (``kn_m``) and bodyweights (``bw``).
 
 Invariants documented here are *enforced* by the ingest extractors, not by the
-dataclasses themselves; the model states the contract those extractors uphold:
+dataclasses themselves -- except that :class:`Samples` checks and fills its
+twelve running-dynamics channels itself; the model states the contract those
+extractors uphold:
 
 - all :class:`Samples` channel arrays share one length;
 - :attr:`Samples.time_s` is non-decreasing;

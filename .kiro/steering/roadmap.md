@@ -1698,10 +1698,10 @@ Rejected:
   Amendment 3 was landed by `training-blocks`. Dependencies: none
 - [ ] fit-ingest — `file_id` identity fields (landed by
   `activity-identity`); record-level developer fields and running dynamics
-  (landed by `running-dynamics`); Garmin product names (landed by
+  (landed by `running-dynamics`) (running-dynamics part landed); Garmin product names (landed by
   `intervals-connector`). Dependencies: none
 - [ ] workout-docs — a running-dynamics section on run pages (landed by
-  `running-dynamics`); Garmin attribution (landed by
+  `running-dynamics`) (running-dynamics part landed); Garmin attribution (landed by
   `intervals-connector`); a note that a page's provenance is its base
   (landed by `activity-identity`); channel provenance on composed pages
   (landed by `channel-merge`). Dependencies: none
