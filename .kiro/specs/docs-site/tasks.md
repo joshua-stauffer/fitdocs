@@ -207,7 +207,7 @@
     and asset sets.
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 2.11_
 
-- [ ] 2.2 Validate frontmatter and the site-level rules, reporting every violation in one run
+- [x] 2.2 Validate frontmatter and the site-level rules, reporting every violation in one run
   - In `scripts/sitebuild/content.py`:
     - **Frontmatter splitting.** Leading `---` line, closing `---` line,
       UTF-8. A `SafeLoader` subclass that rejects duplicate keys. The result
@@ -827,3 +827,9 @@
   - `_tree_hash` in `test_content.py` records the root itself (mode and mtime), so a create-then-unlink or a chmod of the content dir is caught.
   - Mutations that make production write must run with `-k 'not test_fixture_discovery_yields'`. 2.1 once stripped the real fixture's directory modes.
   - Queued: `2026-09-30-docs-site-annotation-marker-misses-crlf-and-space-blank-lines` (medium).
+- 2.2 (3 rounds): `load_content(content_dir) -> (SiteContent, ())` or `(None, sorted problems)`; `count_included_pages` counts any unreadable page as included.
+  - **Controller rulings.** `_StrictLoader.construct_object` wraps ANY non-YAMLError exception from a PyYAML constructor into a positioned ConstructorError. SafeConstructor raises IndexError, KeyError and AttributeError, not just ValueError, so the exception list is not enumerated. A reader error maps its character offset to file L:C. An unknown key is named with `str(key)`, but with `repr` for an empty or whitespace-only text key.
+  - **Duplicate slots.** A `(section, order)` slot is recorded for every non-drafted page whose own section and order are valid, whatever its other violations (2.9).
+  - **Reviewer-confirmed readings.** A draft's other violations still fail the load. Drafts are outside the duplicate check. A BOM before `---` is refused as "no frontmatter". Hero `href` shape is 2.8's job.
+  - **Message shapes.** `path: L:C: invalid frontmatter YAML: <problem>` in file coordinates. A duplicate is one Problem per slot, on the first path, naming the others. The empty-tree problem has an empty path.
+  - **Open.** A CRLF body with a CRLF annotation block still leaks; see queue `2026-09-30-docs-site-annotation-marker-misses-crlf-and-space-blank-lines`. A CRLF frontmatter fence is refused as "no frontmatter".
