@@ -1344,3 +1344,97 @@ def test_plans_is_not_re_exported_from_the_package_root() -> None:
     """The plans package is a module-level surface, not a package-root
     name -- ``fitdocs.__all__`` stays the narrow parse/compute API."""
     assert not set(fitdocs.__all__) & _PLANS_SURFACE
+
+
+# --------------------------------------------------------------------------- #
+# activity-identity (task 7.1): the package marker re-exports nothing, nothing
+# reaches the root, and the seam channel-merge consumes is pinned by name.
+# --------------------------------------------------------------------------- #
+
+#: Names channel-merge imports, by defining submodule.
+_IDENTITY_SURFACE = {
+    "fitdocs.identity.roles": ("SourceMember", "PageRoles", "rank_members"),
+    "fitdocs.identity.kinds": ("SourceKind", "source_kind"),
+    "fitdocs.identity.matching": (
+        "START_TOLERANCE_S",
+        "SHIFT_STEP_S",
+        "SHIFT_MAX_HOURS",
+    ),
+}
+
+#: The seam constants whose type is part of the seam: whole seconds and hours.
+_IDENTITY_INT_CONSTANTS = ("SHIFT_STEP_S", "SHIFT_MAX_HOURS")
+
+_IDENTITY_SUBMODULES = (
+    "holds",
+    "kinds",
+    "matching",
+    "pages",
+    "planning",
+    "roles",
+    "settings",
+)
+
+
+def test_identity_package_marker_re_exports_nothing() -> None:
+    import importlib
+    import types
+
+    marker = importlib.import_module("fitdocs.identity")
+    assert marker.__all__ == []
+    for name in _IDENTITY_SUBMODULES:
+        importlib.import_module(f"fitdocs.identity.{name}")
+    # Public names are submodules (bound by importing them) and the
+    # `from __future__ import annotations` feature object; nothing else.
+    strays = [
+        name
+        for name in dir(marker)
+        if not name.startswith("_")
+        and name != "annotations"
+        and not (
+            isinstance(getattr(marker, name), types.ModuleType)
+            and name in _IDENTITY_SUBMODULES
+        )
+    ]
+    assert strays == []
+
+
+def test_identity_seam_is_pinned_by_name() -> None:
+    import importlib
+
+    for module_name, names in _IDENTITY_SURFACE.items():
+        module = importlib.import_module(module_name)
+        for name in names:
+            assert hasattr(module, name), f"{module_name} lost {name}"
+            assert name in module.__all__, f"{module_name}.__all__ lost {name}"
+
+
+def test_identity_seam_constants_are_whole_numbers_not_bool() -> None:
+    import importlib
+
+    matching = importlib.import_module("fitdocs.identity.matching")
+    for name in _IDENTITY_INT_CONSTANTS:
+        value = getattr(matching, name)
+        assert type(value) is int, f"{name} is {type(value).__name__}, not int"
+
+
+def test_identity_names_are_not_re_exported_from_the_package_root() -> None:
+    import importlib
+
+    assert "identity" not in fitdocs.__all__
+    lazy = fitdocs._LAZY_EXPORTS
+    assert lazy, "the root's lazy-export table moved or emptied"
+    for name, (owner, _attr) in lazy.items():
+        assert not owner.startswith("fitdocs.identity"), (
+            f"the root lazily exports {name} from {owner}"
+        )
+    checked = 0
+    for submodule in _IDENTITY_SUBMODULES:
+        module = importlib.import_module(f"fitdocs.identity.{submodule}")
+        for name in module.__all__:
+            checked += 1
+            assert name not in fitdocs.__all__, f"{name} is in fitdocs.__all__"
+            assert getattr(fitdocs, name, None) is not getattr(module, name), (
+                f"fitdocs.{name} is fitdocs.identity.{submodule}.{name}"
+            )
+    assert checked > 20, "the identity submodules' __all__ walk saw too few names"
