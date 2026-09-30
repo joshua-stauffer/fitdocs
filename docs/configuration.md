@@ -71,8 +71,13 @@ than silently misdirecting behavior.
 
 Outdoor activities (runs, rides, and other workouts whose samples carry GPS
 positions) get a **Map** section in their document: the route drawn over real
-basemap tiles. Rendering that map is the *only* time fitdocs touches the
-network — every other operation runs fully offline.
+basemap tiles. Rendering that map, and the connector commands — `fitdocs
+connect` (authenticating once against a configured source) and `fitdocs
+pull` (fetching activities from it) — are the only times fitdocs touches the
+network — every other operation runs fully offline. Map tiles are switched
+off with `[tiles] enabled = false` (below); a connector only ever runs when
+`fitdocs connect` or `fitdocs pull` is run against it, and removing its
+`[connectors.<name>]` table removes it from both commands entirely.
 
 **What leaves your machine, and when.** To draw the basemap, fitdocs fetches
 the map tiles that cover your route from the configured tile provider
@@ -89,9 +94,12 @@ No GPS coordinates, credentials, or personal data are ever sent — only the
 tile-URL requests the provider needs to serve the basemap.
 
 This happens **only on a cache miss**, and **only during `sync`/`regen`**
-while a map is being rendered. Each tile is fetched at most once and then
-cached (see below), so a warm cache — like every other fitdocs operation —
-is fully offline.
+while a map is being rendered. Each map tile is fetched at most once and
+then cached (see below), so a warm tile cache is fully offline — like every
+fitdocs operation except the connector commands, `fitdocs connect` and
+`fitdocs pull`, which run only when invoked and are switched off simply by
+not running them, or by removing the instance's `[connectors.<name>]`
+table.
 
 **Turning tile requests off (the persistent opt-out).** To stop fitdocs from
 ever making a tile request, set `enabled = false` under `[tiles]` in

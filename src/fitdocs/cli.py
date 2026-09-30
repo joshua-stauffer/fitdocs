@@ -95,11 +95,14 @@ exit ``2``, before anything is written). Plugin load errors, in contrast, are
 warnings, never failures: they are printed after the run's existing summaries
 and never change the exit code.
 
-Network access is confined to :mod:`fitdocs.tiles`: the only network the tool
-performs is fetching missing basemap tiles during ``sync``/``regen`` map
-rendering, and only while tile requests are enabled (Req 4.2). Every other
-operation -- and the entire ``load`` command -- stays fully offline; a warm tile
-cache makes even map rendering network-free.
+Network-capable code lives in exactly two modules (Req 14.2): :mod:`fitdocs.tiles`,
+which fetches missing basemap tiles during ``sync``/``regen`` map rendering
+and only while tile requests are enabled (Req 4.2), and :mod:`fitdocs.connectors.http`,
+the connector transport the connector commands -- ``fitdocs connect``
+(one authentication attempt against a configured source) and ``fitdocs pull``
+(fetching activities from a configured connector) -- send every request
+through. Every other operation -- and the entire ``load`` command -- stays
+fully offline; a warm tile cache makes even map rendering network-free.
 
 Requirements 1.3, 1.4, 1.5, 2.1, 3.5, 8.1, 8.2, 8.3, 8.4, 8.6, 14.1, 14.2, 14.4.
 """
