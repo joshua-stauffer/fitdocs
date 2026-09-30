@@ -675,7 +675,7 @@ never co-varies two keys a rule distinguishes.
   - Observable: the full `uv run pytest` green
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.11, 7.5_
 
-- [ ] 4.5 Regenerate roles and re-evaluate held and unreferenced archives
+- [x] 4.5 Regenerate roles and re-evaluate held and unreferenced archives
   - After rebuilding every page, rescan, parse every archived file no page
     lists, plan them against the rebuilt pages, apply tasks without archive
     writes, save the hold record equal to exactly this run's holds (never

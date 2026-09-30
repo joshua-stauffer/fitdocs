@@ -2395,3 +2395,374 @@ def test_held_candidates_follow_a_rename_the_same_drain_makes(tmp_path: Path) ->
     (entry,) = load_holds(data_root).entries
     assert set(entry.candidates) == new_paths
     assert len(entry.candidates) == 2
+
+
+# --- regeneration (4.5) ---
+
+
+def _held_text(data_root: Path) -> str:
+    return held_path(data_root).read_text(encoding="utf-8")
+
+
+def _sources(page: Path) -> list[str]:
+    sources = _frontmatter(page)["sources"]
+    assert isinstance(sources, list)
+    return [str(ref) for ref in sources]
+
+
+def _stage_held(tmp_path: Path) -> tuple[Path, bytes]:
+    """Two pages (16 s apart) and a third file matching both, which is held."""
+    data_root, ambiguous = _stage_two_pages(tmp_path)
+    report = _sync_files(tmp_path, data_root, [("ambiguous", ambiguous)])
+    assert report.failures == ()
+    assert len(load_holds(data_root).entries) == 1  # precondition: it is held
+    return data_root, ambiguous
+
+
+def _archive_names(data_root: Path) -> list[str]:
+    return sorted(p.name for p in (data_root / "fit-archive").glob("*.fit"))
+
+
+def test_deleting_one_of_two_duplicate_pages_joins_its_files_and_empties_the_hold(
+    tmp_path: Path,
+) -> None:
+    """Req 4.10: the held file and the deleted page's own file are archived files
+    no page lists; regeneration plans them against the page that is left, both
+    join it, the hold record ends with no entry, the page settles onto the freed
+    name, and the archive gains and loses nothing.
+
+    Mutations: skip held files in regeneration (the held file stays out of the
+    page); merge with the old record instead of replacing it (the entry
+    stays); render unreferenced archives fresh without planning (a second page
+    for each, none joined).
+    """
+    data_root, ambiguous = _stage_held(tmp_path)
+    pages = _pages(data_root)
+    victim = min(pages, key=lambda p: len(p.name))  # the unsuffixed name
+    (survivor,) = [p for p in pages if p != victim]
+    assert survivor.stem != victim.stem  # precondition: the survivor is suffixed
+    refs = {
+        _ref_of(_garmin_run(elapsed_s=3000.0, serial=11)),
+        _ref_of(_garmin_run(elapsed_s=3016.0, serial=12)),
+        _ref_of(ambiguous),
+    }
+    archives = _archive_names(data_root)
+    victim.unlink()
+
+    report = _regen(data_root)
+
+    assert report.failures == ()
+    page = _only_page(data_root)
+    assert page.name == victim.name  # onto the name the deletion freed
+    assert len(_sources(page)) == 3
+    assert set(_sources(page)) == refs
+    assert load_holds(data_root).entries == ()
+    assert "[[held]]" not in _held_text(data_root)
+    assert _archive_names(data_root) == archives
+    assert not any("held" in w.detail for w in report.warnings)
+
+
+def test_a_damaged_hold_record_is_rebuilt_by_regeneration(tmp_path: Path) -> None:
+    """Req 4.10: regeneration never reads the old record, so a damaged one is
+    replaced by the re-derived hold (the same sha, both pages, the same
+    evidence; ``name`` is the archive ref, the only label regeneration has),
+    and the next sync reads it.
+
+    Mutation: load the old record at the start of regeneration (raises).
+    """
+    data_root, ambiguous = _stage_held(tmp_path)
+    pages = [p.relative_to(data_root).as_posix() for p in _pages(data_root)]
+    held_path(data_root).write_text("this is [not valid toml\n", encoding="utf-8")
+    with pytest.raises(HoldRecordError):  # precondition: it is unreadable
+        load_holds(data_root)
+
+    report = _regen(data_root)
+
+    assert report.failures == ()
+    (entry,) = load_holds(data_root).entries
+    assert entry == HeldSource(
+        sha256=_sha(ambiguous),
+        name=_ref_of(ambiguous),
+        candidates=tuple(pages),
+        evidence=("strict", "strict"),
+    )
+    again = _sync_files(tmp_path, data_root, [("again", ambiguous)])
+    assert again.failures == ()
+
+
+def test_a_stale_hold_for_a_vanished_archive_is_not_re_held(tmp_path: Path) -> None:
+    """Req 4.10: an entry whose archived file no longer exists names nothing
+    regeneration can plan, so it does not survive; the entry for a file that is
+    still archived does.
+
+    Mutation: merge with the old record instead of replacing it.
+    """
+    data_root, ambiguous = _stage_held(tmp_path)
+    other = _garmin_run(elapsed_s=3008.5, serial=14)  # also matches both pages
+    _sync_files(tmp_path, data_root, [("other", other)])
+    assert len(load_holds(data_root).entries) == 2  # precondition
+    archive_path(data_root, _sha(ambiguous)).unlink()
+
+    report = _regen(data_root)
+
+    assert report.failures == ()
+    (entry,) = load_holds(data_root).entries
+    assert entry.sha256 == _sha(other)
+
+
+def test_regen_that_holds_nothing_creates_no_tool_state(tmp_path: Path) -> None:
+    """Design (Regeneration): a tree that never held anything is reproduced
+    without ``.fitdocs/``.
+
+    Mutation: save the (empty) record at the end of every regeneration.
+    """
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    copy, original = fx.healthfit_copy(), fx.garmin_original()
+    _sync_one(data_root, tmp_path, copy)
+    _archive(data_root, original)  # an unreferenced file, planned and joined
+    assert not (data_root / ".fitdocs").exists()  # precondition
+
+    report = _regen(data_root)
+
+    assert report.failures == ()
+    assert _sources(_only_page(data_root)) == [
+        _ref(copy),
+        _ref(original),
+    ]  # precondition: the unreferenced file was planned
+    assert not (data_root / ".fitdocs").exists()
+
+
+def test_a_precedence_change_re_bases_and_renames_at_regeneration(
+    tmp_path: Path,
+) -> None:
+    """Req 7.2: the page lists a shifted-start phone copy and a device original;
+    with phone copies first the page keeps the copy as its base and its name;
+    with the default precedence the original becomes the base, the page moves
+    to the name the original's start computes and its chart follows.
+
+    Mutations: ignore the ``precedence`` keyword (the first regeneration
+    already re-bases); skip the rename in the page task (the name stays).
+    """
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    shifted, original = fx.healthfit_shifted(), fx.garmin_original()
+    _sync_one(data_root, tmp_path, shifted)
+    _archive(data_root, original)
+    page = _only_page(data_root)
+    _set_sources(page, [_ref(shifted), _ref(original)])
+    phone_first = resolve_precedence([PrecedenceEntry(SourceKind.PHONE_COPY)])
+
+    kept = _regen(data_root, phone_first)
+
+    assert kept.failures == ()
+    assert _only_page(data_root) == page  # the copy is still the base
+    assert _frontmatter(page)["source_kind"] == "phone_copy"
+
+    moved = _regen(data_root)
+
+    assert moved.failures == ()
+    new_page = _only_page(data_root)
+    assert new_page.name != page.name
+    assert _frontmatter(new_page)["source_kind"] == "original"
+    assert _frontmatter(new_page)["source_elapsed_s"] == original.elapsed_s
+    assert _assets(data_root) == {f"{new_page.stem}-hero.svg"}
+    assert len(_rename_warnings(moved)) == 1
+
+
+def test_unreferenced_files_are_planned_against_the_rebuilt_pages(
+    tmp_path: Path,
+) -> None:
+    """Req 4.10, 7.2: a page hand-listed with an off-by-30-s phone copy and the
+    device original is rebuilt from the original; the archived partner copy of
+    that original (listed by no page) then joins it. Planned against the pages
+    as they stood before the rebuild (the copy's values, 30 s from the partner,
+    outside the 10 s tolerance) it would match nothing and become a page of its
+    own.
+
+    Mutation: plan the unreferenced files before rebuilding the pages.
+    """
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    original, partner = fx.garmin_original(), fx.partner_copy()
+    base_copy = fx.healthfit_copy()
+    off = replace(
+        base_copy,
+        data=fx.session_fit_bytes(
+            sport="running",
+            start=original.start,
+            elapsed_s=original.elapsed_s + 30.0,
+            timer_s=original.elapsed_s + 30.0,
+            distance_m=original.distance_m + 2.0,
+            manufacturer="development",
+            product=0,
+            serial=base_copy.serial,
+            time_created=original.start + 4 * 3600,
+            device_manufacturer="garmin",
+        ),
+    )
+    _sync_one(data_root, tmp_path, off)
+    _archive(data_root, original)
+    _archive(data_root, partner)
+    _set_sources(_only_page(data_root), [_ref(off), _ref(original)])
+
+    report = _regen(data_root)
+
+    assert report.failures == ()
+    page = _only_page(data_root)
+    assert set(_sources(page)) == {_ref(off), _ref(original), _ref(partner)}
+    assert not (data_root / ".fitdocs").exists()
+
+
+def test_held_candidates_follow_a_rename_the_regeneration_plan_makes(
+    tmp_path: Path,
+) -> None:
+    """Req 4.10, 4.7: page A (the older HealthFit export) and page B hold a file
+    that matches both; the newer export, archived and listed by no page, is
+    pinned to A by its session UUID and corrects A's start, so planning renames
+    A. The re-written record names A where it ended.
+
+    Mutation: save the record without following the plan's renames.
+    """
+    older, newer = fx.healthfit_reexport_pair()
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _sync_files(tmp_path, data_root, [("a", older.data)])
+    _sync_files(tmp_path, data_root, [("b", _garmin_run(elapsed_s=3008.0, serial=12))])
+    _sync_files(tmp_path, data_root, [("x", _garmin_run(elapsed_s=3004.0, serial=13))])
+    _archive(data_root, newer)
+    old_paths = {p.relative_to(data_root).as_posix() for p in _pages(data_root)}
+    assert len(old_paths) == 2  # precondition: two pages
+    assert len(load_holds(data_root).entries) == 1  # and the file is held
+
+    report = _regen(data_root)
+
+    assert report.failures == ()
+    assert len(_rename_warnings(report)) == 1  # precondition: A was renamed
+    new_paths = {p.relative_to(data_root).as_posix() for p in _pages(data_root)}
+    assert new_paths != old_paths
+    (entry,) = load_holds(data_root).entries
+    assert set(entry.candidates) == new_paths
+    assert len(entry.candidates) == 2
+
+
+def test_held_candidates_follow_a_rename_the_regeneration_settle_follows(
+    tmp_path: Path,
+) -> None:
+    """Req 4.10, 4.7: page A (the older HealthFit export) and page Y share one
+    stem, so Y sits under a suffix; a file matching both is held. The newer
+    export, archived and listed by no page, corrects A's start when planned, so
+    A leaves the stem and the settle pass moves Y onto it. The re-written
+    record names both pages where they ended.
+
+    Mutation: save the record without following the settle's renames.
+    """
+    older, newer = fx.healthfit_reexport_pair()
+
+    def near(seconds: float, serial: int) -> bytes:
+        return fx.session_fit_bytes(
+            sport="running",
+            start=older.start,
+            elapsed_s=older.elapsed_s + seconds,
+            timer_s=older.elapsed_s + seconds,
+            distance_m=older.distance_m,
+            manufacturer="garmin",
+            product=3843,
+            serial=serial,
+            time_created=older.start,
+        )
+
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _sync_files(tmp_path, data_root, [("a", older.data)])
+    _sync_files(tmp_path, data_root, [("y", near(16.0, 12))])
+    _sync_files(tmp_path, data_root, [("x", near(8.0, 13))])
+    _archive(data_root, newer)
+    old_paths = {p.relative_to(data_root).as_posix() for p in _pages(data_root)}
+    assert len(old_paths) == 2  # precondition: two pages
+    assert len({Path(path).stem[:15] for path in old_paths}) == 1  # one stem
+    assert len(load_holds(data_root).entries) == 1  # and the file is held
+
+    report = _regen(data_root)
+
+    assert report.failures == ()
+    reasons = [w.detail for w in _rename_warnings(report)]
+    assert any("its base file changed" in r for r in reasons)  # precondition: A
+    assert any("became free" in r for r in reasons)  # precondition: Y settled
+    new_paths = {p.relative_to(data_root).as_posix() for p in _pages(data_root)}
+    (entry,) = load_holds(data_root).entries
+    assert set(entry.candidates) == new_paths
+    assert len(new_paths) == 2
+
+
+def _stage_synced_corpus(tmp_path: Path) -> Path:
+    """A held file, a joined pair (a ride and its copy) and their charts."""
+    data_root, _ambiguous = _stage_held(tmp_path)
+    original, copy = _ride_pair()
+    report = _sync_files(tmp_path, data_root, [("ride", original), ("copy", copy)])
+    assert report.failures == ()
+    return data_root
+
+
+def test_regeneration_reproduces_the_synced_tree_byte_for_byte(tmp_path: Path) -> None:
+    """Req 7.3: syncing a corpus with a held file and a joined pair, then
+    regenerating, leaves every page, chart and archived file byte for byte as it
+    was, and the hold record as it was but for the entry's ``name`` (the path the
+    file arrived under, which an archived file no longer has; regeneration
+    labels it with its archive ref). A second regeneration changes nothing.
+
+    Mutations: render unreferenced archives fresh without planning (the held
+    file becomes a page); skip held files in regeneration (the entry goes).
+    """
+    data_root = _stage_synced_corpus(tmp_path)
+    before = _tree(data_root)
+    assert ".fitdocs/held.toml" in before  # precondition: something is held
+    assert any(name.endswith(".svg") for name in before)  # and charts exist
+    assert len(_pages(data_root)) == 3  # two run pages and the joined ride
+    sync_entry = load_holds(data_root).entries[0]
+
+    assert _regen(data_root).failures == ()
+
+    after = _tree(data_root)
+    assert {k: v for k, v in after.items() if k != ".fitdocs/held.toml"} == {
+        k: v for k, v in before.items() if k != ".fitdocs/held.toml"
+    }
+    (entry,) = load_holds(data_root).entries
+    assert entry == replace(sync_entry, name=source_ref(sync_entry.sha256))
+
+    assert _regen(data_root).failures == ()
+    assert _tree(data_root) == after
+
+
+def test_regeneration_writes_no_archive_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Design (Regeneration): tasks and holds are applied without archive
+    writes, since every file planned is already archived; the group path (the
+    ride pair) and the hold path are both taken and neither asks for its file
+    to be archived (the write-once helper is a no-op on a present file, so the
+    call itself is what is observed).
+
+    Mutation: let the planned tasks write their archive.
+    """
+    data_root = _stage_synced_corpus(tmp_path)
+    (ride,) = [p for p in _pages(data_root) if _frontmatter(p)["modality"] == "bike"]
+    ride.unlink()  # its two files are now unreferenced: a group task re-makes it
+    (entry,) = load_holds(data_root).entries
+    planned = {archive_path(data_root, _sha(data)) for data in _ride_pair()}
+    planned.add(archive_path(data_root, entry.sha256))
+    assert len(planned) == 3
+    calls: list[Path] = []
+    monkeypatch.setattr(
+        sync_module, "_write_archive", lambda archive, data: calls.append(archive)
+    )
+
+    report = _regen(data_root)
+
+    assert report.failures == ()
+    assert len(_pages(data_root)) == 3  # precondition: the group was re-made
+    assert len(load_holds(data_root).entries) == 1  # and the hold re-derived
+    # The pages that were not deleted rebuild from their archived base (a
+    # no-op write); the unreferenced files are the ones planned.
+    assert planned.isdisjoint(calls)
+    assert all(archive.exists() for archive in planned)

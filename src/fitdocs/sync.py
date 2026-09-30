@@ -9,10 +9,11 @@ page, a new page, or a *hold* as a function of the *set* of files, and one page
 task per target then renders, merges, writes and archives -- with per-file
 failures isolated so one bad file never aborts the batch (Req 1-4;
 activity-identity Req 4). :func:`regen` rebuilds documents from the data
-root alone -- re-rendering each from its base archived source and rendering any
-unreferenced archive fresh (Req 4.3, 4.4) -- through the per-file pipeline
-(:func:`_process_isolated`); :func:`sync` and :func:`drain` plan their runs as
-described above instead. :func:`drain` is the inbox spec's third entry point
+root alone -- re-rendering each page from its base archived source through the
+per-file pipeline (:func:`_process_isolated`), then planning every archived
+file no page lists against the rebuilt pages exactly as :func:`sync` plans its
+run (Req 4.3, 4.4; activity-identity Req 4.10, 7.2, 7.3). :func:`drain` is the
+inbox spec's third entry point
 (design: DrainOrchestration): it composes the standing-inbox policy
 (:mod:`fitdocs.inbox` selection and stability) around the same planned run --
 candidates are selected, settled and read once each (a read failure defers
@@ -256,6 +257,7 @@ from fitdocs.layout import (
     archive_path,
     doc_path,
     doc_stem,
+    held_path,
     source_ref,
 )
 from fitdocs.quarantine import QuarantineEntry, QuarantineRecord, save_quarantine
@@ -1060,8 +1062,10 @@ def regen(
     Regeneration takes no source directory: it reconstructs documents from the
     archived ``.fit`` sources under ``fit-archive/`` plus the optional athlete
     inputs, so a data root with the original exports long deleted still rebuilds
-    completely (Req 4.4). Discovery has two parts, both feeding the same per-file
-    pipeline ``sync`` uses (only discovery and skip policy differ):
+    completely (Req 4.4). It runs in two parts: the first rebuilds each page
+    through the per-file pipeline (:func:`_process_isolated`), the second plans
+    every archived file no page lists through the same planner :func:`sync`
+    uses:
 
     * **Every document re-renders from its base.** For each ``workouts/*.md``
       workout document, every file its frontmatter ``sources`` history lists is
@@ -1075,14 +1079,28 @@ def regen(
       document whose history is empty or none of whose listed files is in the
       archive cannot be regenerated -- it becomes a :class:`FileFailure` and is
       left untouched, the batch continuing.
-    * **Archived sources referenced by no document render fresh.** Any
-      ``fit-archive/<sha>.fit`` whose sha appears in no document's ``sources``
-      (its document was deleted -- documents are derived artifacts) is rendered
-      into a new document (Req 4.4).
+    * **Archived sources no page lists are planned.** After the pages are
+      rebuilt the page index is scanned again; every ``fit-archive/<sha>.fit``
+      whose sha no page's ``sources`` lists (its page was deleted -- documents
+      are derived artifacts -- or the file was held) is parsed and planned
+      against the rebuilt pages by :func:`_run_planned`, the planner
+      :func:`sync` uses, labelled with its archive ref. A file joins the page
+      it belongs to, seeds a new page, or is *held* when its page is ambiguous
+      (activity-identity Req 4.10, Req 4.4 of the original spec). The planned
+      tasks and holds write no archive file: the bytes are already archived.
+    * **The hold record is this run's holds.** The old record is never read, so
+      a damaged one is rebuilt rather than raised and an entry whose archived
+      file no longer exists is not re-held. An existing record is replaced by
+      the run's holds even when that is none (an empty record: no entry
+      outlives its cause); when the run holds nothing and no record exists,
+      none is created, so ``.fitdocs/`` never appears in a tree that never held
+      anything. Held candidates are rewritten through the run's renames, as in
+      :func:`sync`.
 
     ``force`` is implied for every item this discovery produces, so an
-    already-archived source is never skipped on that basis alone; the *only*
-    remaining skip is the document-format version gate below. The immutable
+    already-archived source is never skipped on that basis alone; the
+    remaining skips are the document-format version gate below, a file the
+    second part holds, and bytes repeated within the run. The immutable
     archive is still never rewritten (Req 3.5). Region conflicts
     (:class:`~fitdocs.docmerge.RegionError`), decode errors, and unexpected
     per-file exceptions become :class:`FileFailure`\ s without aborting the batch
@@ -1112,7 +1130,7 @@ def regen(
     Before any per-file processing, :func:`refresh_declarations` and
     :func:`_scan_symlinked_documents` each run once over ``data_root`` (Req
     3.5, 3.6, 3.8, 7.5, 7.6) -- the identical shared steps :func:`sync` calls,
-    not a second copy of either.
+    not a second copy of either. The settle pass runs last, as in :func:`sync`.
     """
     written: list[str] = []
     skipped: list[str] = []
@@ -1122,18 +1140,16 @@ def regen(
     refresh_declarations(data_root, warnings)
     warnings.extend(_scan_symlinked_documents(data_root))
 
-    # Re-render each document from its base source, accumulating every
-    # archive sha any document references so unreferenced archives can be found.
-    referenced: set[str] = set()
+    # Re-render each document from its base source (roles rebuilt with the
+    # current precedence), one isolated task per page.
     for document, sources in _discover_documents(data_root):
-        referenced.update(sha for sha in map(sha_of_ref, sources) if sha is not None)
         doc_ref = document.relative_to(data_root).as_posix()
         archive = _resolvable_source_archive(data_root, sources)
         if archive is None:
             # No archived source to rebuild from: an empty history, or every
             # listed file unresolvable or missing from the archive. Fail this
-            # document (left untouched) and keep going (an orphaned archive it
-            # references, if any, renders fresh below).
+            # document (left untouched) and keep going (an archive it lists, if
+            # any, is a page-listed file and is not planned below).
             failures.append(
                 FileFailure(
                     source=doc_ref,
@@ -1161,25 +1177,39 @@ def regen(
             ledger=ledger,
         )
 
-    # Archived sources no document references render fresh (docs are derived).
-    for archive in _unreferenced_archives(data_root, referenced):
-        _process_isolated(
-            archive,
-            data_root,
-            athlete=athlete,
-            tz=tz,
-            tiles=tiles,
-            force=True,
-            precedence=precedence,
-            source_label=archive.relative_to(data_root).as_posix(),
-            written=written,
-            skipped=skipped,
-            failures=failures,
-            warnings=warnings,
-            ledger=ledger,
-        )
+    # The pages are rebuilt: rescan, so "listed by no page" is judged against
+    # the pages as they now are (renames included), then plan every archived
+    # file no page lists exactly as a sync run would. The hold record is *this
+    # run's* holds and nothing else: the old record is never read, so a damaged
+    # one cannot block regeneration and a stale entry cannot survive it.
+    listed = {
+        sha
+        for record in scan_pages(data_root).records
+        for sha in map(sha_of_ref, record.sources)
+        if sha is not None
+    }
+    holds = _HoldState(HoldRecord(entries=()))
+    task_renames = _run_planned(
+        [
+            _RunItem(source_ref(archive.stem), archive)
+            for archive in _unreferenced_archives(data_root, listed)
+        ],
+        data_root,
+        athlete=athlete,
+        tz=tz,
+        tiles=tiles,
+        force=True,
+        precedence=precedence,
+        holds=holds,
+        ledger=ledger,
+        written=written,
+        skipped=skipped,
+        failures=failures,
+        warnings=warnings,
+        write_archive=False,
+    )
 
-    _settle_pass(
+    settle_renames = _settle_pass(
         data_root,
         ledger,
         athlete=athlete,
@@ -1190,6 +1220,12 @@ def regen(
         failures=failures,
         warnings=warnings,
     )
+    _finish_holds(data_root, holds, task_renames, settle_renames)
+    if holds.record.entries or held_path(data_root).exists():
+        # An existing record is replaced by this run's holds even when that is
+        # none (an empty record, so no entry outlives its cause); a tree that
+        # never held anything never gains ``.fitdocs/``.
+        save_holds(data_root, holds.record)
 
     return SyncReport(
         written=tuple(written),
@@ -1217,7 +1253,8 @@ def _process_isolated(
 ) -> None:
     """Run the per-file pipeline for one item, isolating any failure (Req 1.3).
 
-    Used by :func:`regen` (:func:`sync` and :func:`drain` plan their runs through
+    Used by :func:`regen` for the per-page rebuild (:func:`sync`, :func:`drain`
+    and regeneration's unreferenced files are planned through
     :func:`_run_planned` instead): the pipeline (``_process_file``) is identical
     -- only discovery and the ``source_label`` recorded in the report differ.
     Classifies the item into ``written`` (a document produced or updated),
@@ -1336,6 +1373,7 @@ def _run_planned(
     skipped: list[str],
     failures: list[FileFailure],
     warnings: list[DocWarning],
+    write_archive: bool = True,
 ) -> dict[str, str]:
     """Plan and apply one run's files (activity-identity Req 4, 7.1, 7.5).
 
@@ -1348,6 +1386,10 @@ def _run_planned(
     files; page tasks and hold tasks then run in first-member order. Report
     entries are appended in discovery order, warnings in task order. Returns the
     renames the tasks made (previous data-root-relative path to new path).
+
+    ``write_archive=False`` (regeneration, whose files are read *from* the
+    archive) applies the page tasks and holds without asking for any archive
+    write; a hold is still recorded before it is reported.
     """
     outcomes: list[_Outcome | None] = [None] * len(items)
     duplicate_of: dict[int, int] = {}
@@ -1399,6 +1441,7 @@ def _run_planned(
                     holds=holds,
                     outcomes=outcomes,
                     warnings=warnings,
+                    write_archive=write_archive,
                 )
                 continue
             page = records[unit.page] if unit.page is not None else None
@@ -1414,6 +1457,7 @@ def _run_planned(
                 outcomes=outcomes,
                 warnings=warnings,
                 renames=renames,
+                write_archive=write_archive,
             )
 
     for position, primary in duplicate_of.items():
@@ -1466,6 +1510,7 @@ def _group_task(
     outcomes: list[_Outcome | None],
     warnings: list[DocWarning],
     renames: dict[str, str],
+    write_archive: bool = True,
 ) -> None:
     """One page task for the files the plan gave one page or one new page.
 
@@ -1487,7 +1532,7 @@ def _group_task(
                 sha=sha,
                 activity=activity,
                 data=data,
-                archive=archive_path(data_root, sha),
+                archive=archive_path(data_root, sha) if write_archive else None,
             )
         )
     if not news:
@@ -1536,6 +1581,7 @@ def _hold_task(
     holds: _HoldState,
     outcomes: list[_Outcome | None],
     warnings: list[DocWarning],
+    write_archive: bool = True,
 ) -> None:
     """Record, then archive, a file whose page is ambiguous (Req 4.7, 7.1, 7.5).
 
@@ -1544,6 +1590,9 @@ def _hold_task(
     every later run with nothing naming it. When the save fails the file is not
     archived, is reported as a failure, and the next run plans and holds it
     again. A held file is ``skipped``, never a failure.
+
+    With ``write_archive=False`` (regeneration) the record is still saved but no
+    archive write follows: the file was read from the archive.
     """
     try:
         data, sha = _reload(member)
@@ -1560,7 +1609,8 @@ def _hold_task(
             updated = holds.record.with_entry(entry)
             save_holds(data_root, updated)
             holds.record = updated
-        _write_archive(archive_path(data_root, sha), data)
+        if write_archive:
+            _write_archive(archive_path(data_root, sha), data)
     except Exception as exc:
         outcomes[member.position] = _Outcome("failed", _reason(exc))
         return
@@ -1705,7 +1755,9 @@ class _NewMember:
     sha: str
     activity: Activity
     data: bytes
-    archive: Path
+    archive: Path | None
+    """Where the file is archived last; ``None`` when its bytes already are
+    (regeneration re-plans files read *from* the archive and writes none)."""
 
 
 @dataclass(frozen=True)
@@ -2055,7 +2107,7 @@ def _page_task(
         target,
         markdown,
         rendered.assets,
-        tuple((n.archive, n.data) for n in news),
+        tuple((n.archive, n.data) for n in news if n.archive is not None),
         moved_from=moved_from,
         stale_assets=stale,
     )
@@ -2376,10 +2428,10 @@ def _discover_documents(data_root: Path) -> list[tuple[Path, tuple[str, ...]]]:
     ``None`` for that path here and it is skipped exactly like any other
     unreadable file. Its sha history can therefore never be read, so its
     archived source (if any) is invisible to the "which archives are
-    referenced" accounting in :func:`regen` and is rendered fresh as a
-    *second*, separate document by :func:`_unreferenced_archives` unless
-    nothing else references it either. This is not left silent (task 7.2, F2)
-    -- but the warning for it is not this function's concern: see
+    referenced" accounting in :func:`regen` and is planned as an unreferenced
+    file by :func:`_run_planned` -- so it can seed a *second*, separate
+    document -- unless nothing else references it either. This is not left
+    silent (task 7.2, F2) -- but the warning for it is not this function's concern: see
     :func:`_scan_symlinked_documents`, which :func:`regen` runs once per run
     instead of relying on this per-document scan to happen to encounter it.
     """
