@@ -97,6 +97,23 @@ document-format version changed. See the ownership contract's
 for the full migration story, including what happens to a document written
 by a newer fitdocs than the one you have installed.
 
+### Before the first connector pull
+
+Pages written before source identity shipped lack the base-identity
+frontmatter keys (`source_kind`, `source_elapsed_s`, `source_distance_m` and
+`source_device`), so fitdocs recognizes such a page only by exact file content
+or its recorded session UUID until it is regenerated. **After
+upgrading, run `fitdocs regen` before the first connector pull.** Otherwise a
+file of a workout your wiki already has, arriving from another source, may not
+be recognized as belonging to that workout's page.
+
+The first `fitdocs check` after upgrading also reports as "orphaned" any
+archived source that no page lists — for example, the archive of a page you
+deleted by hand. Run `fitdocs regen` to render it: regeneration adds each such
+file to the page of its workout if one exists, holds it if that page cannot be
+told, and writes a new page only when it matches none. If you removed the page
+on purpose, delete the archived file instead.
+
 ## Uninstalling
 
 With uv:

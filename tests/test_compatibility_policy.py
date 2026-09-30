@@ -141,6 +141,7 @@ SETTINGS_TABLE_LITERALS: tuple[str, ...] = (
     "[load]",
     "[plans]",
     "[history]",
+    "[identity]",
 )
 
 
@@ -175,8 +176,8 @@ def test_governed_contracts_section_names_the_three_contracts_and_settings() -> 
     # "settings" is otherwise an ever-present token (item 2 used to say
     # "[inbox] settings table"), so this must be scoped to the ONE item that
     # names the settings schema as a governed contract, and that item alone
-    # must name `fitdocs.toml` and every one of its six tables -- deleting
-    # the whole item, or leaving only some of the six tables, must both red.
+    # must name `fitdocs.toml` and every table in SETTINGS_TABLE_LITERALS -- deleting
+    # the whole item, or leaving only some of the tables, must both red.
     settings_items = [item for item in items if "settings" in item.lower()]
     assert len(settings_items) == 1, (
         f"expected exactly one item naming the settings schema, "
@@ -267,7 +268,7 @@ def test_each_contract_subsection_defines_breaking_additive_and_internal(
         )
 
 
-def test_settings_schema_subsection_names_all_six_tables() -> None:
+def test_settings_schema_subsection_names_every_table() -> None:
     markdown = _read(_POLICY_PATH)
     section = _section(markdown, "## Breaking, additive and internal")
     subsections = _bold_led_subsections(section)
@@ -278,8 +279,8 @@ def test_settings_schema_subsection_names_all_six_tables() -> None:
     subsection = matching[0]
     for literal in SETTINGS_TABLE_LITERALS:
         assert literal in subsection, (
-            f"the tile/inbox/plugin/load/plans/history tables must all be "
-            f"named as governed, not left implicit -- missing {literal!r}"
+            f"every settings table must be named as governed, not left "
+            f"implicit -- missing {literal!r}"
         )
 
 

@@ -21,8 +21,8 @@ Version numbering governs exactly three contracts, plus one named schema:
    calculator implements, the entry-point discovery group, and the
    documented public import surface a calculator author may depend on.
 4. **The user-facing settings schema** — `<data-root>/fitdocs.toml`, with its
-   six tables today: `[tiles]`, `[inbox]`, `[plugins]`, `[load]` (and its
-   sub-tables), `[plans]`, and `[history]` (see
+   seven tables today: `[tiles]`, `[inbox]`, `[plugins]`, `[load]` (and its
+   sub-tables), `[plans]`, `[history]`, and `[identity]` (see
    [Breaking, additive and internal](#breaking-additive-and-internal) below).
 
 **Documented means public.** A name, key, or behavior described on this page,
@@ -61,10 +61,10 @@ surface](plugins.md#the-public-import-surface) — including the
 `fitdocs.plugins` module itself, which performs discovery but is not public
 surface.
 
-**The settings schema, including `[tiles]`.** One file, six tables today —
+**The settings schema, including `[tiles]`.** One file, seven tables today —
 `[tiles]`, `[inbox]`, `[plugins]`, `[load]` (and its sub-tables), `[plans]`,
-and `[history]` — all user-written and all documented; a table added by a
-later feature joins this list the same way. The tile table is governed
+`[history]`, and `[identity]` — all user-written and all documented; a table
+added by a later feature joins this list the same way. The tile table is governed
 exactly like the others, never left as an ungoverned user-facing schema.
 Breaking: removing a key, narrowing an accepted value, or changing a default
 in a way that changes behavior for an unchanged file. Additive: a new

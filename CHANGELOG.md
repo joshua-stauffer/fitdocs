@@ -15,6 +15,39 @@ recorded as one.
 
 ## [Unreleased]
 
+### Added
+
+- The `fitdocs.toml` settings schema gains an `[identity]` table whose
+  `precedence` key chooses which of a workout's files a page is rendered
+  from; the default is a Garmin original, then the phone copy, then any
+  other original, then unknown files, and applies when the table is
+  absent; see [the configuration reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/configuration.md).
+- `fitdocs check` reports three new findings: a held file that could not be
+  placed on one page (`ambiguous_source`), an archived source that no page
+  lists (`orphaned_source`), and one workout recorded on two or more pages
+  (`duplicate_session`), each with the action that resolves it.
+
+### Changed
+
+- Generated document contract: a workout's frontmatter carries four new
+  managed keys (`source_kind`, `source_elapsed_s`, `source_distance_m`,
+  `source_device`) that describe the file the page is rendered from — the
+  last three appear only when that file records the value — and `DOC_VERSION`
+  advances by one. `sources` lists every archived file of the page in one
+  canonical order, the base last. A page keeps a phone-side copy's session
+  `uuid` when a file without one becomes its base, and a page may be renamed
+  when a file that outranks its base arrives for the same workout (when the
+  new base's start time or sport gives a different filename; links to its
+  previous filename are not updated). A file that cannot be placed on one page
+  is archived and held, recorded in `.fitdocs/held.toml`, and never written as
+  a second page. Action: run `fitdocs regen` after
+  upgrading, and before the first connector pull, so pages written before
+  this release are recognized; see
+  [the ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md).
+- `fitdocs.toml` settings schema: the new `[identity]` table is additive and
+  optional; an invalid `[identity]` exits with status `2`. Action:
+  `fitdocs regen` applies a changed `precedence` to existing pages.
+
 ## [0.1.0] - 2026-09-19
 
 ### Added
