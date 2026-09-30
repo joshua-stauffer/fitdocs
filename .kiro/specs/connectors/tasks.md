@@ -211,7 +211,7 @@
   - _Requirements: 12.1, 12.3_
   - _Boundary: CliCommands_
 
-- [ ] 2. The published protocol: transport, vocabulary, registry
+- [x] 2. The published protocol: transport, vocabulary, registry
 
 - [x] 2.1 Build the transport and the HTTP client with the explicit User-Agent, the timeout, the bounded data-call retries and the single authentication attempt
   - The request and response values; the transport error whose message
@@ -273,7 +273,7 @@
     `uv run mypy` green, the stub checked against the protocols
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9_
 
-- [ ] 2.3 Add the registry with its validation gate, publish the package surface, and add the synthetic connectors every later test uses
+- [x] 2.3 Add the registry with its validation gate, publish the package surface, and add the synthetic connectors every later test uses
   - Register, unregister, look up and list connectors by id; validate a
     declaration in the order design.md states without calling any
     operation, never raising for a malformed object; reject a duplicate id
@@ -302,7 +302,7 @@
 
 - [ ] 3. State: credentials, ledger, settings
 
-- [ ] 3.1 (P) Build the credential store: its location order, its refusal inside the data root, owner-only atomic files, environment overrides, and token replacement
+- [x] 3.1 (P) Build the credential store: its location order, its refusal inside the data root, owner-only atomic files, environment overrides, and token replacement
   - Resolve the directory from the dedicated variable (absolute, else a
     location error), then an absolute configuration-home variable, then the
     home default; refuse a directory that is or lies inside the data root;
@@ -384,7 +384,7 @@
 
 - [ ] 4. Delivery, the folder connector, and the two engines
 
-- [ ] 4.1 Deliver bytes into the inbox atomically and sweep archived deliveries
+- [x] 4.1 Deliver bytes into the inbox atomically and sweep archived deliveries
   - The FIT-header check; the delivery-name rule (hint or remote id, last
     path component, sanitized, stem capped, `.fit` ensured); delivery into
     the instance's subdirectory of the inbox (created on demand) under the
@@ -956,3 +956,6 @@
 - 3.2: `connectors.ledger` -- one shared `_invariant_violation` is run by `load_ledger` (LedgerError naming the file) and `save_ledger` (ValueError before writing). Rulings: load rejects an unsorted file; watermark must be tz-aware; sha256 is 64 lowercase hex on any outcome; `pending` is a relative path whose every `/` segment is non-empty and not `.`/`..` (4.1's sweep can trust it). tomli_w writes `2026-09-20 07:12:00+00:00` and inline `entries = [...]` for short ledgers -- both accepted as equivalent TOML.
 - 2.1: `connectors.http` -- `HttpClient(transport, *, mode, redactor, sleep, timeout)`; `FakeTransport` in `tests/connectors/conftest.py` (scripted responses/errors; `.requests`, `.timeouts`). The client never redacts -- it registers secrets before the first call; every reporting engine (4.3/4.4/4.5) must `redactor.redact()` what it prints or stores. `TransportError` messages carry only `<scheme>://<host>[:port]<path>` or `<signed location>`.
 - 2.2: `connectors.protocol` is pinned exhaustively (field names/types/order/defaults/frozen, `inspect.signature` of every protocol member, member sets, StrEnum bases) against design literals -- any published-shape change now reds `tests/connectors/test_protocol.py`, which is the point (tasks.md: stop and report). Capability summaries are original wording (design gives none), pinned single-line and distinct.
+- 2.3 (conftest closes to new fixtures after this task): the three synthetic connectors' script lists hold `T | BaseException` (a queued exception is raised, not returned) and raise `tests.connectors.conftest.UnscriptedCall` (a `BaseException`, so it escapes `validate_connector`'s `except Exception` boundary and any later engine's per-connector isolation) when asked with nothing queued; every one of `ScriptedPersonalKeyConnector`, `ScriptedLoginConnector`, and `ScriptedPuller` takes a `capabilities=` (the first two only) and `data_url: str | None` constructor override -- when `data_url` is set, `list_activities` calls `session.http.get(data_url)` before consuming its scripted answer. `registry.validate_connector` reads and checks every member inside one `except Exception` boundary around the whole function body (a `current` variable, updated before each member's read and check, names which member was being processed when the boundary catches something) -- a raising property *or* a raising post-read check (e.g. `CredentialField(5, ...)` breaking a regex match, or a `capabilities` value whose `__iter__` raises) is a reason, never an escaping exception. `register` builds its `InvalidConnectorError` message from `type(connector).__name__`, never `repr(connector)`, so a candidate with a raising `__repr__` still reports cleanly.
+- 3.1: `connectors.credentials` -- rulings: the credentials directory is created 0o700 only when missing (an existing directory's mode is never touched); a naive `expires_at` is refused on load and save; a reserved OAUTH_BROWSER style resolves to NotConnectedError. Every shape error is a `CredentialStoreError` naming the path and never printing a value. `replace()` on a store-less or no-auth access is unspecified and unpinned.
+- 4.1: `connectors.delivery` -- `sweep` visits only `ledger.pending_entries()`; resolved entries keep every field but `pending`. Known, queued: an identical file already at `<stem>-<h8>.fit` outside the ledger gets a duplicate write; an OSError while hashing a pending file aborts the sweep (4.3 must decide whether to catch it).
