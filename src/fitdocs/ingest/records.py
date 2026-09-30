@@ -30,8 +30,10 @@ function is called in isolation. The absolute record timestamps are returned
 alongside the samples for later lap projection.
 
 Records without a ``timestamp`` are dropped -- they cannot be placed on the
-timeline -- and that is the only record-level exclusion. An empty record list (or
-one where no record has a timestamp) yields an empty :class:`Samples` with empty
+timeline -- and that is the only record-level exclusion. :func:`retained_records`
+is the one place the rule lives; ``parse_fit`` applies it and hands the result to
+every consumer that must stay index-aligned with the samples. An empty record list
+(or one where no record has a timestamp) yields an empty :class:`Samples` with empty
 channel arrays and an empty timestamps tuple.
 
 This module depends on :mod:`fitdocs.model` and the shared enhanced-preference
@@ -41,6 +43,7 @@ layer.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 
 from fitdocs.ingest._fields import prefer_enhanced
@@ -63,8 +66,18 @@ _EMPTY_SAMPLES = Samples(
 )
 
 
+def retained_records(
+    record_mesgs: Sequence[dict[str, object]],
+) -> list[dict[str, object]]:
+    """The records that can be placed on the timeline: those with a ``timestamp``.
+
+    File order is kept. Every per-sample channel is index-aligned with this list.
+    """
+    return [record for record in record_mesgs if record.get("timestamp") is not None]
+
+
 def extract_samples(
-    record_mesgs: list[dict[str, object]],
+    record_mesgs: Sequence[dict[str, object]],
     start_time: datetime | None,
 ) -> tuple[Samples, tuple[datetime, ...]]:
     """Extract parallel channel arrays plus absolute record timestamps (Req 3.1-3.6).
@@ -81,9 +94,7 @@ def extract_samples(
     returned. Values are stored raw: no smoothing, resampling, or reordering
     (Req 3.6).
     """
-    retained = [
-        record for record in record_mesgs if record.get("timestamp") is not None
-    ]
+    retained = retained_records(record_mesgs)
     if not retained:
         return _EMPTY_SAMPLES, ()
 

@@ -10,6 +10,12 @@ performs no writes, prompts, or network access (Req 13.1). Every FIT-epoch
 timestamp conversion is applied by the extractors via the model-owned
 :func:`fitdocs.model.fit_datetime` helper -- the orchestrator creates none of its
 own. It never imports the metrics layer.
+
+The records that can be placed on the timeline are computed once, by
+:func:`fitdocs.ingest.records.retained_records`, and handed both to
+``extract_samples`` and to the record-level developer-field reader, so
+:attr:`~fitdocs.model.Activity.record_developer_fields` is index-aligned with
+:attr:`~fitdocs.model.Activity.samples`.
 """
 
 from __future__ import annotations
@@ -17,8 +23,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from fitdocs.ingest.decode import decode_fit
+from fitdocs.ingest.developer import extract_record_developer_fields
 from fitdocs.ingest.laps import extract_laps
-from fitdocs.ingest.records import extract_samples
+from fitdocs.ingest.records import extract_samples, retained_records
 from fitdocs.ingest.sets import extract_sets
 from fitdocs.ingest.sport import detect_sport
 from fitdocs.ingest.summary import (
@@ -64,6 +71,7 @@ def parse_fit(source: str | Path | bytes) -> Activity:
     device_info_mesgs = messages.get("device_info_mesgs", [])
     sport_mesgs = messages.get("sport_mesgs", [])
     field_description_mesgs = messages.get("field_description_mesgs", [])
+    developer_data_id_mesgs = messages.get("developer_data_id_mesgs", [])
 
     summary = extract_summary(session_mesgs, activity_mesgs)
 
@@ -71,7 +79,8 @@ def parse_fit(source: str | Path | bytes) -> Activity:
     # else None. ``extract_samples`` anchors ``time_s`` to the first record when the
     # session start is None, and returns the absolute record timestamps for laps.
     session_start = summary.start_time
-    samples, record_ts = extract_samples(record_mesgs, session_start)
+    retained = retained_records(record_mesgs)
+    samples, record_ts = extract_samples(retained, session_start)
     if session_start is not None:
         start_time = session_start
     elif record_ts:
@@ -86,6 +95,10 @@ def parse_fit(source: str | Path | bytes) -> Activity:
         extract_developer_fields_with_declared_scale(
             field_description_mesgs, session_mesgs
         )
+    )
+
+    record_developer_fields = extract_record_developer_fields(
+        field_description_mesgs, developer_data_id_mesgs, retained
     )
 
     # Sport source precedence: the session values, falling back to the standalone
@@ -120,6 +133,7 @@ def parse_fit(source: str | Path | bytes) -> Activity:
         devices=devices,
         developer_fields=developer_fields,
         developer_fields_declared_scale=developer_fields_declared_scale,
+        record_developer_fields=record_developer_fields,
     )
 
 

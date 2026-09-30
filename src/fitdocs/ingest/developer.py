@@ -1,6 +1,6 @@
 """Developer-field decoding shared by the session and record readers.
 
-Requirements 1.2, 1.4-1.7, 1.10, 1.12 and 2.1.
+Requirements 1.1-1.4, 1.5-1.7, 1.8-1.12 and 2.1.
 
 A FIT file describes each developer field in a ``field_description`` message
 and records its values against that description. This module is the ONE place
@@ -20,8 +20,11 @@ that turns a recorded developer value into the value fitdocs exposes:
   :func:`apply_declared_scale`. Nothing undeclared is inferred (Req 1.12).
 * :func:`application_ids` maps a developer data index to the lowercase hex of
   its 16-byte application id.
+* :func:`extract_record_developer_fields` builds ``Activity.record_developer_fields``:
+  one :class:`~fitdocs.model.DeveloperChannel` per described, recorded field,
+  index-aligned with the retained records.
 
-This module depends only on the standard library.
+This module depends only on the standard library and :mod:`fitdocs.model`.
 """
 
 from __future__ import annotations
@@ -30,6 +33,9 @@ import math
 import struct
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from types import MappingProxyType
+
+from fitdocs.model import DeveloperChannel
 
 _BASE_TYPE_MASK = 0x1F
 _FLOAT32 = 0x08
@@ -234,10 +240,10 @@ def apply_declared_scale(value: object, scale: object, offset: object) -> object
       scale of 1. An array value is scaled ELEMENT-WISE, matching the SDK's
       own per-element treatment of a native array field, and still becomes a
       ``tuple``.
-    * A declared ``scale`` of ``0`` never reaches this function: the caller
-      (the session reader,
-      :func:`fitdocs.ingest.summary.extract_developer_fields_with_declared_scale`)
-      OMITS such a field before calling here, so
+    * A declared ``scale`` of ``0`` never reaches this function: each of its two
+      callers OMITS such a field before calling here -- the session reader,
+      :func:`fitdocs.ingest.summary.extract_developer_fields_with_declared_scale`,
+      and the record reader, :func:`extract_record_developer_fields` -- so
       ``scale`` is always either ``None`` or nonzero by this point (see the
       session reader's docstring for why omission rather than a raw-value
       fallback).
@@ -281,3 +287,55 @@ def _scale_one(value: object, scale: object, offset: object) -> object:
         return value  # nothing declared (or declared as identity): preserve type
     scaled = value if divisor == 1 else value / divisor
     return scaled - subtrahend
+
+
+def extract_record_developer_fields(
+    field_description_mesgs: Sequence[Mapping[str, object]],
+    developer_data_id_mesgs: Sequence[Mapping[str, object]],
+    retained_records: Sequence[Mapping[str, object]],
+) -> Mapping[str, DeveloperChannel]:
+    """Collect the developer fields recorded on each retained record (Req 1.1-1.3).
+
+    Returns a read-only mapping from a described field's ``field_name`` to a
+    :class:`~fitdocs.model.DeveloperChannel` whose ``values`` has one entry per
+    retained record, in record order: the value decoded by
+    :func:`decode_developer_value` from ``record["developer_fields"][key]``,
+    or ``None`` where the record does not carry the key or the value is a
+    sentinel. Values are paired by the description's ``key``, never by its
+    ``field_definition_number`` (Req 1.2). A repeated (index, definition number)
+    has its values recorded under the earlier description's key, so the later
+    description has none and is omitted (Req 1.8).
+
+    A description declaring ``scale`` 0 is omitted, as the session reader does;
+    a description with no non-``None`` value is omitted (Req 1.11); descriptions
+    sharing a name resolve in description order, so the last described one that
+    has values wins (Req 1.9). Nothing qualifying yields an empty mapping.
+    """
+    application = application_ids(developer_data_id_mesgs)
+    channels: dict[str, DeveloperChannel] = {}
+    for description in parse_field_descriptions(field_description_mesgs):
+        if description.scale == 0:
+            continue  # unrepresentable declared scale: omit, never fabricate
+        values: list[object] = []
+        for record in retained_records:
+            recorded = record.get("developer_fields")
+            if isinstance(recorded, Mapping) and description.key in recorded:
+                values.append(
+                    decode_developer_value(recorded[description.key], description)
+                )
+            else:
+                values.append(None)
+        if all(value is None for value in values):
+            continue
+        index = description.developer_data_index
+        channels[description.name] = DeveloperChannel(
+            name=description.name,
+            units=description.units,
+            developer_data_index=index,
+            field_definition_number=description.field_definition_number,
+            application_id=None if index is None else application.get(index),
+            declared_scale=description.scale is not None
+            or description.offset is not None,
+            values=tuple(values),
+        )
+    return MappingProxyType(channels)
