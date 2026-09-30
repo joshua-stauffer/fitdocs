@@ -1019,7 +1019,9 @@ def guard_root(root: Path, *, repo_root: Path) -> Path: ...     # raises BuildRo
   them, the loop continues, and `live/` is not touched until a build
   succeeds.
 - **Serving.** `zensical serve` starts on `live/` after the first success,
-  and runs until interrupted. The subprocess is terminated when the preview
+  and runs until interrupted, or until the serve process exits on its own
+  (e.g. the port is taken): then one `site generator: serve exited with
+  status N` line goes to `out` and serve returns 2. The subprocess is terminated when the preview
   exits.
 - **Writes** (7.4) go only under the guarded preview root.
 
@@ -1061,7 +1063,7 @@ def main(argv: Sequence[str]) -> int: ...
 # build:  0 built ("built N pages into <root>/html"); 1 problems (one rendered line each, stderr;
 #         with --verbose the generator output follows); 2 could not run
 #         (ContentDirMissing, GeneratorMissing, BuildRootRefused)
-# serve:  runs until interrupted; 0 on interrupt; 2 could not run
+# serve:  runs until interrupted; 0 on interrupt; 2 could not run (incl. the serve process exiting)
 # status: prints exactly "has_content=true" or "has_content=false" (count_included_pages > 0); 0; 2 if dir missing
 ```
 - The default `--addr` is `127.0.0.1:8000`. The default build dirs are
