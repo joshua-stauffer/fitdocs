@@ -1,15 +1,26 @@
-"""End-to-end running-dynamics pins through the installed CLI (task 4.2).
+"""End-to-end running-dynamics pins through the installed CLI (tasks 4.2, 5.2).
 
-Syncs only the synthesized Stryd fixture into a temporary data root through
-:class:`typer.testing.CliRunner`, as ``tests/test_effort_tags_e2e.py`` does
-(tile fetch seam patched offline; ``FITDOCS_DATA`` removed; explicit ``--out``
-and a temporary cwd). Expectations come from the fixture builder's constants
-and from the fixture decoded independently of the page (never from the
-rendered page's text). Literals in the assertions are the labels the page
-prints, the absent tokens (``104%``, ``Humidity``, ...), and the humidity
-value 104 the fixture records.
+The 4.2 tests that sync use only the synthesized Stryd fixture, synced into a
+temporary data root through :class:`typer.testing.CliRunner` with the tile
+fetch seam patched offline and an explicit ``--out``, as
+``tests/test_effort_tags_e2e.py`` does; this module also removes
+``FITDOCS_DATA`` and runs from a temporary cwd. The developer-field test
+renders the decoded Stryd fixture directly, without the CLI. Their
+expectations come from the fixture builder's constants and from the fixture
+decoded independently of the page; their literals are the labels the page
+prints, the absent tokens (``104%``, ``Humidity``, ...) and the humidity value
+104 the fixture records.
 
-Covers requirements 6.1, 6.2, 6.3, 6.4, 6.5, 6.6 and 8.4.
+The 5.2 test syncs the native-dynamics fixture the same way, then edits the
+synced page text to age it, runs ``check`` and ``regen``, and compares the
+regenerated page to the hand edits (``_NOTE``, ``_EFFORT_TAG``) and to
+``contract.DOC_VERSION``. Its literals are those two constants, the
+``modality: run`` and ``doc_version:`` frontmatter lines, the section heading,
+and the ``check`` output strings ``doc_version is N, below the current`` and
+``No findings``; the chart asset path it looks up is read from the page's own
+image link.
+
+Covers requirements 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 8.4, 9.2 and 9.3.
 """
 
 from __future__ import annotations
@@ -24,8 +35,10 @@ from types import MappingProxyType
 import pytest
 from typer.testing import CliRunner
 
+from fitdocs import contract
 from fitdocs.cli import app
 from fitdocs.declaration import DECLARATION_FILENAME
+from fitdocs.docmerge import begin_marker, end_marker, extract_regions
 from fitdocs.ingest import parse_fit
 from fitdocs.ingest.decode import decode_fit
 from fitdocs.layout import WORKOUTS_DIR
@@ -277,3 +290,111 @@ def test_record_developer_fields_change_nothing_in_the_rendered_page() -> None:
     assert with_fields[1], "the page has assets, so the asset comparison is non-trivial"
     assert with_fields[0] == without_fields[0]
     assert with_fields[1] == without_fields[1]
+
+
+_EFFORT_TAG = (
+    "effort: race\n"
+    "effort_distance_m: 42195\n"
+    "effort_time_s: 10692\n"
+    'effort_event: "[[Boston Marathon 2024]]"\n'
+)
+_NOTE = "Felt smooth through the last kilometre."
+
+
+def test_regeneration_brings_a_pre_feature_run_page_current(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """9.2, 9.3: a run page written before the Running Dynamics section existed
+    (older version, no section, no image link) is reported stale by ``check``;
+    ``regen`` restores the section and stamps the current version while the
+    notes region and the effort-tag lines survive byte for byte; a second
+    ``check`` reports it current."""
+    # A forward assertion: a later sibling advance leaves it true.
+    assert contract.DOC_VERSION > _PRE_RUNNING_DYNAMICS_DOC_VERSION
+
+    monkeypatch.delenv("FITDOCS_DATA", raising=False)
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    monkeypatch.chdir(cwd)
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    source = tmp_path / "src"
+    source.mkdir()
+    (source / "native.fit").write_bytes(builder.run_native_dynamics_fit_bytes())
+
+    result = runner.invoke(app, ["sync", str(source), "--out", str(data_root)])
+    assert result.exit_code == 0, result.output
+    pages = [
+        p
+        for p in (data_root / WORKOUTS_DIR).glob("*.md")
+        if p.name != DECLARATION_FILENAME
+    ]
+    assert len(pages) == 1, pages
+    page = pages[0]
+    synced_text = page.read_text(encoding="utf-8")
+    assert "modality: run\n" in synced_text
+    assert f"\ndoc_version: {contract.DOC_VERSION}\n" in synced_text
+    assert synced_text.count("\n## Running Dynamics\n") == 1
+    assert len(_DYNAMICS_LINK_RE.findall(synced_text)) == 1
+
+    # Age the page: drop the section (heading through the image link, up to the
+    # next heading), record the old version, and delete the chart asset the
+    # first sync wrote so that only regeneration can bring it back.
+    start = synced_text.index("## Running Dynamics\n")
+    end = synced_text.index("\n## ", start + 1) + 1
+    aged = synced_text[:start] + synced_text[end:]
+    aged = aged.replace(
+        f"\ndoc_version: {contract.DOC_VERSION}\n",
+        f"\ndoc_version: {_PRE_RUNNING_DYNAMICS_DOC_VERSION}\n",
+        1,
+    )
+    # Hand edits: text in the notes region, a valid effort tag in the frontmatter.
+    begin, finish = begin_marker("notes"), end_marker("notes")
+    n0 = aged.index(begin)
+    n1 = aged.index(finish) + len(finish)
+    aged = aged[:n0] + f"{begin}\n{_NOTE}\n{finish}" + aged[n1:]
+    fence = aged.index("---\n", len("---\n"))
+    aged = aged[:fence] + _EFFORT_TAG + aged[fence:]
+    page.write_text(aged, encoding="utf-8")
+    dynamics_assets = [
+        data_root / WORKOUTS_DIR / rel for rel in _DYNAMICS_LINK_RE.findall(synced_text)
+    ]
+    assert len(dynamics_assets) == 1
+    for asset_file in dynamics_assets:
+        asset_file.unlink()
+
+    # The aging really happened: preconditions are live.
+    assert "## Running Dynamics" not in aged
+    assert not _DYNAMICS_LINK_RE.findall(aged)
+    assert f"\ndoc_version: {_PRE_RUNNING_DYNAMICS_DOC_VERSION}\n" in aged
+    assert f"\ndoc_version: {contract.DOC_VERSION}\n" not in aged
+    assert extract_regions(aged)["notes"] == _NOTE
+    assert _EFFORT_TAG in aged
+    assert not dynamics_assets[0].exists()
+
+    stale = runner.invoke(app, ["check", "--out", str(data_root)])
+    assert stale.exit_code == 1, stale.output
+    assert page.name in stale.output
+    assert (
+        f"doc_version is {_PRE_RUNNING_DYNAMICS_DOC_VERSION}, below the current"
+        in stale.output
+    )
+    assert "No findings" not in stale.output
+
+    regen = runner.invoke(app, ["regen", "--out", str(data_root)])
+    assert regen.exit_code == 0, regen.output
+
+    text = page.read_text(encoding="utf-8")
+    assert text.count("\n## Running Dynamics\n") == 1
+    links = _DYNAMICS_LINK_RE.findall(text)
+    assert len(links) == 1, links
+    assert (data_root / WORKOUTS_DIR / links[0]).is_file()
+    assert (data_root / WORKOUTS_DIR / links[0]) == dynamics_assets[0]
+    assert f"\ndoc_version: {contract.DOC_VERSION}\n" in text
+    assert f"\ndoc_version: {_PRE_RUNNING_DYNAMICS_DOC_VERSION}\n" not in text
+    assert extract_regions(text)["notes"] == _NOTE
+    assert _EFFORT_TAG in text
+
+    current = runner.invoke(app, ["check", "--out", str(data_root)])
+    assert current.exit_code == 0, current.output
+    assert "No findings" in current.output
