@@ -41,6 +41,7 @@ from typer.testing import CliRunner
 from fitdocs import cli
 from fitdocs.athlete import load_athlete_inputs
 from fitdocs.cli import app
+from fitdocs.contract import DOC_VERSION
 from fitdocs.declaration import DECLARATION_FILENAME
 from fitdocs.layout import WORKOUTS_DIR
 from fitdocs.sync import sync
@@ -193,9 +194,10 @@ def test_check_reports_every_finding_kind_and_exits_one(tmp_path: Path) -> None:
 
     # Out-of-date: force run.fit's doc_version below the current one.
     run_text = run_doc.read_text(encoding="utf-8")
-    assert "doc_version: 5" in run_text
+    assert f"doc_version: {DOC_VERSION}" in run_text
     run_doc.write_text(
-        run_text.replace("doc_version: 5", "doc_version: 1"), encoding="utf-8"
+        run_text.replace(f"doc_version: {DOC_VERSION}", "doc_version: 1"),
+        encoding="utf-8",
     )
 
     # Damaged region markers: drop the closing "notes" marker on ride.fit.

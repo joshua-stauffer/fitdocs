@@ -115,7 +115,8 @@ sibling's):
 - `DOC_VERSION` literal sites both specs move (second lander re-pins):
   `tests/test_cli_check.py:196, 198` (this plan rewrites them as
   `f"doc_version: {DOC_VERSION}"`), `tests/render/test_frontmatter.py:44,
-  101`, `tests/metrics/test_sources.py:2270`; running-dynamics'
+  101`, `tests/metrics/test_sources.py:2270`, `tests/load/test_render.py`'s
+  `test_payload_version_paired_with_doc_version` (found in 3.1 review); running-dynamics'
   `_PRE_RUNNING_DYNAMICS_DOC_VERSION` constant keeps the value it recorded.
 - `tests/render/test_frontmatter.py:317-324` (the `DocContext` field-order
   pin): 3.1 rewrites it position-relative (`user_frontmatter` directly after
@@ -463,7 +464,7 @@ never co-varies two keys a rule distinguishes.
 
 - [ ] 3. Contract, render and the page scan
 
-- [ ] 3.1 Put the base identity on every page and advance the document format
+- [x] 3.1 Put the base identity on every page and advance the document format
   - Add the four key constants, their tuple, their membership in the managed
     set, the reader of Req 5.4's values (degrading, never raising, rejecting
     `bool` and non-finite numbers), and the base-last wording of the source-list

@@ -2,7 +2,7 @@
 title: Workout 2021-09-07 19:46
 type: workout
 generator: fitdocs
-doc_version: 5
+doc_version: 6
 date: '2021-09-07'
 start_time: '2021-09-07T19:46:40-06:00'
 sport: Workout
@@ -10,6 +10,8 @@ modality: other
 distance_km: 0.0
 moving_time: 0:03
 avg_hr_bpm: 102
+source_kind: original
+source_device: 9abde66abf329f2b
 sources:
 - fit-archive/41f7b7a3161b321b3ef05b7178f9f241392d94701660499c20d037a0c893cbb6.fit
 ---

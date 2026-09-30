@@ -42,8 +42,6 @@ serializing the managed block is not an interpretation of it.
 
 from __future__ import annotations
 
-from typing import Final
-
 import yaml
 
 from fitdocs.contract import (
@@ -55,21 +53,23 @@ from fitdocs.contract import (
     GENERATOR_KEY,
     INDOOR_KEY,
     MODALITY_KEY,
+    SESSION_UUID_FIELD,  # noqa: F401 -- bound so a local copy of the name is caught
+    SOURCE_DEVICE_KEY,
+    SOURCE_DISTANCE_KEY,
+    SOURCE_ELAPSED_KEY,
+    SOURCE_KIND_KEY,
     SOURCES_KEY,
     SPORT_KEY,
     START_TIME_KEY,
     TYPE_KEY,
     UUID_KEY,
     WORKOUT_TYPE,
-    format_session_uuid,
 )
+from fitdocs.identity.kinds import source_identity
 from fitdocs.render import DocContext
 from fitdocs.render.format import fmt_duration
 
 __all__ = ["build_frontmatter"]
-
-_SESSION_UUID_FIELD: Final[str] = "SESSION UUID"
-"""Developer-field key carrying the recorded 16-byte session identifier."""
 
 
 def _title(ctx: DocContext) -> str:
@@ -118,11 +118,9 @@ def build_frontmatter(ctx: DocContext) -> str:
     data[GENERATOR_KEY] = GENERATOR
     data[DOC_VERSION_KEY] = DOC_VERSION
 
-    session_uuid = format_session_uuid(
-        activity.developer_fields.get(_SESSION_UUID_FIELD)
-    )
-    if session_uuid is not None:
-        data[UUID_KEY] = session_uuid
+    identity = ctx.identity if ctx.identity is not None else source_identity(activity)
+    if identity.session_uuid is not None:
+        data[UUID_KEY] = identity.session_uuid
 
     if activity.start_time is not None:
         local = activity.start_time.astimezone(ctx.tz)
@@ -148,6 +146,14 @@ def build_frontmatter(ctx: DocContext) -> str:
         data["elevation_gain_m"] = round(float(metrics.elevation_gain_m), 1)
     if metrics.calories_kcal is not None:
         data["calories_kcal"] = metrics.calories_kcal
+
+    data[SOURCE_KIND_KEY] = identity.kind.value
+    if identity.elapsed_s is not None:
+        data[SOURCE_ELAPSED_KEY] = round(identity.elapsed_s, 3)
+    if identity.distance_m is not None:
+        data[SOURCE_DISTANCE_KEY] = round(identity.distance_m, 2)
+    if identity.device is not None:
+        data[SOURCE_DEVICE_KEY] = identity.device
 
     if ctx.source_refs:
         data[SOURCES_KEY] = list(ctx.source_refs)

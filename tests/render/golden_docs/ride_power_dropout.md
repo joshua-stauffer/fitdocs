@@ -2,7 +2,7 @@
 title: Ride 2021-09-07 19:46
 type: workout
 generator: fitdocs
-doc_version: 5
+doc_version: 6
 date: '2021-09-07'
 start_time: '2021-09-07T19:46:40-06:00'
 sport: Ride
@@ -12,6 +12,10 @@ moving_time: '1:29'
 avg_hr_bpm: 140
 avg_power_w: 240
 calories_kcal: 210
+source_kind: original
+source_elapsed_s: 89.0
+source_distance_m: 667.5
+source_device: 947a31a0ca699a95
 sources:
 - fit-archive/4320b4c8ce607e161ab03f4ac35465b5f15e9a76f7d4abe565912f0ab2166ebe.fit
 ---

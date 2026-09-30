@@ -21,6 +21,7 @@ import yaml
 
 from fitdocs import DerivedMetrics, compute_metrics, parse_fit
 from fitdocs.contract import DOC_VERSION, user_owned_lines
+from fitdocs.identity.kinds import SourceIdentity, SourceKind, source_identity
 from fitdocs.render import DocContext, render_document
 from fitdocs.render.frontmatter import build_frontmatter
 
@@ -41,7 +42,7 @@ _EXACT_RICH_RUN_BLOCK = (
     "title: Run 2021-09-07 19:46\n"
     "type: workout\n"
     "generator: fitdocs\n"
-    "doc_version: 5\n"
+    "doc_version: 6\n"
     "date: '2021-09-07'\n"
     "start_time: '2021-09-07T19:46:40-06:00'\n"
     "sport: Run\n"
@@ -51,6 +52,10 @@ _EXACT_RICH_RUN_BLOCK = (
     "avg_hr_bpm: 133\n"
     "elevation_gain_m: 9.0\n"
     "calories_kcal: 60\n"
+    "source_kind: original\n"
+    "source_elapsed_s: 9.0\n"
+    "source_distance_m: 29.7\n"
+    "source_device: 5c86ae30ada88665\n"
     "sources:\n"
     "- fit-archive/aaaa.fit\n"
     "- fit-archive/bbbb.fit\n"
@@ -98,7 +103,7 @@ def test_wrapper_and_valid_yaml(run_fit_bytes: bytes) -> None:
     body = out[len("---\n") : -len("---\n")]
     data = yaml.safe_load(body)
     assert data["type"] == "workout"
-    assert data["doc_version"] == DOC_VERSION == 5
+    assert data["doc_version"] == DOC_VERSION == 6
 
 
 def test_fixed_key_order(run_fit_bytes: bytes) -> None:
@@ -123,8 +128,148 @@ def test_fixed_key_order(run_fit_bytes: bytes) -> None:
         "avg_hr_bpm",
         "elevation_gain_m",
         "calories_kcal",
+        "source_kind",
+        "source_elapsed_s",
+        "source_distance_m",
+        "source_device",
         "sources",
     ]
+
+
+def _identity(**changes: object) -> SourceIdentity:
+    base = SourceIdentity(
+        kind=SourceKind.PHONE_COPY,
+        elapsed_s=1234.56789,
+        distance_m=5000.126,
+        device="0123456789abcdef",
+        session_uuid="11111111-2222-3333-4444-555555555555",
+    )
+    return dataclasses.replace(base, **changes)  # type: ignore[arg-type]
+
+
+def _frontmatter_data(ctx: DocContext) -> dict[str, object]:
+    out = build_frontmatter(ctx)
+    return yaml.safe_load(out[len("---\n") : -len("---\n")])
+
+
+def _with_identity(run_fit_bytes: bytes, identity: SourceIdentity | None) -> DocContext:
+    return dataclasses.replace(_ctx(run_fit_bytes), identity=identity)
+
+
+def test_context_identity_is_emitted_rounded_and_before_sources(
+    run_fit_bytes: bytes,
+) -> None:
+    """Req 5.4, 5.5: the carried identity -- not the activity's -- supplies
+    ``uuid`` and the four keys; elapsed rounds to 3 decimals, distance to 2."""
+    data = _frontmatter_data(_with_identity(run_fit_bytes, _identity()))
+    assert data["uuid"] == "11111111-2222-3333-4444-555555555555"
+    assert data["source_kind"] == "phone_copy"
+    assert data["source_elapsed_s"] == 1234.568
+    assert data["source_distance_m"] == 5000.13
+    assert data["source_device"] == "0123456789abcdef"
+    keys = list(data)
+    assert keys.index("calories_kcal") + 1 == keys.index("source_kind")
+    assert keys[-5:] == [
+        "source_kind",
+        "source_elapsed_s",
+        "source_distance_m",
+        "source_device",
+        "sources",
+    ]
+
+
+def test_absent_identity_values_are_omitted_and_kind_is_always_written(
+    run_fit_bytes: bytes,
+) -> None:
+    """Req 5.4: each value the base does not record is omitted, never nulled or
+    zeroed; ``source_kind`` is always present."""
+    identity = _identity(
+        kind=SourceKind.UNKNOWN,
+        elapsed_s=None,
+        distance_m=None,
+        device=None,
+        session_uuid=None,
+    )
+    out = build_frontmatter(_with_identity(run_fit_bytes, identity))
+    data = yaml.safe_load(out[len("---\n") : -len("---\n")])
+    assert data["source_kind"] == "unknown"
+    for key in ("source_elapsed_s", "source_distance_m", "source_device", "uuid"):
+        assert key not in data
+    assert "null" not in out
+
+
+def test_zero_elapsed_and_distance_are_recorded_values_not_absence(
+    run_fit_bytes: bytes,
+) -> None:
+    data = _frontmatter_data(
+        _with_identity(run_fit_bytes, _identity(elapsed_s=0.0, distance_m=0.0))
+    )
+    assert data["source_elapsed_s"] == 0.0
+    assert data["source_distance_m"] == 0.0
+
+
+def test_no_context_identity_derives_it_from_the_activity(
+    session_dev_fields_fit_bytes: bytes,
+) -> None:
+    """Req 5.5: with no carried identity the block is what the activity's own
+    identity yields, ``uuid`` included."""
+    ctx = _ctx(session_dev_fields_fit_bytes)
+    assert ctx.identity is None
+    expected = source_identity(ctx.activity)
+    assert expected.session_uuid == _EXPECTED_UUID
+    data = _frontmatter_data(ctx)
+    assert data["uuid"] == _EXPECTED_UUID
+    assert data["source_kind"] == expected.kind.value
+
+
+def test_carried_identity_wins_over_the_activity_including_uuid(
+    session_dev_fields_fit_bytes: bytes,
+) -> None:
+    """The activity records a session UUID; the carried identity records a
+    different one, and only it is written. A carried identity with no UUID
+    writes none, whatever the activity records."""
+    ctx = _ctx(session_dev_fields_fit_bytes)
+    carried = _identity()
+    assert carried.session_uuid != _EXPECTED_UUID
+    data = _frontmatter_data(dataclasses.replace(ctx, identity=carried))
+    assert data["uuid"] == carried.session_uuid
+    none = _frontmatter_data(
+        dataclasses.replace(ctx, identity=_identity(session_uuid=None))
+    )
+    assert "uuid" not in none
+
+
+def test_source_device_absent_when_the_serial_is_not_recorded(
+    run_fit_bytes: bytes,
+) -> None:
+    """Req 5.4 with no context identity: a base file lacking a serial has no
+    device digest, so no ``source_device`` key is written."""
+    ctx = _ctx(run_fit_bytes)
+    assert ctx.activity.file_identity.serial_number is not None
+    stripped = dataclasses.replace(
+        ctx.activity,
+        file_identity=dataclasses.replace(
+            ctx.activity.file_identity, serial_number=None
+        ),
+    )
+    data = _frontmatter_data(dataclasses.replace(ctx, activity=stripped))
+    assert "source_device" not in data
+    assert "source_kind" in data
+
+
+def test_serial_number_never_appears_in_the_block(run_fit_bytes: bytes) -> None:
+    ctx = _ctx(run_fit_bytes)
+    serial = ctx.activity.file_identity.serial_number
+    assert serial is not None
+    assert str(serial) not in build_frontmatter(ctx)
+
+
+def test_session_uuid_field_is_the_contracts() -> None:
+    from fitdocs.contract import SESSION_UUID_FIELD
+    from fitdocs.render import frontmatter as module
+
+    assert module.SESSION_UUID_FIELD is SESSION_UUID_FIELD
+    assert not hasattr(module, "_SESSION_UUID_FIELD")
 
 
 def test_absent_metric_key_is_omitted_not_nulled(run_fit_bytes: bytes) -> None:
@@ -322,4 +467,12 @@ def test_doc_context_field_order_has_user_frontmatter_after_map_data() -> None:
     design-normative, so it is pinned here rather than left silently
     swappable."""
     field_names = [f.name for f in dataclasses.fields(DocContext)]
-    assert field_names[-2:] == ["map_data", "user_frontmatter"]
+    assert field_names.index("user_frontmatter") == field_names.index("map_data") + 1
+
+
+def test_doc_context_identity_is_the_last_field() -> None:
+    """activity-identity appends ``identity`` after every earlier field
+    (channel-merge later appends ``channel_provenance`` after it and moves this
+    assertion)."""
+    field_names = [f.name for f in dataclasses.fields(DocContext)]
+    assert field_names[-1] == "identity"

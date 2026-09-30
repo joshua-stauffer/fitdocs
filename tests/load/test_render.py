@@ -165,8 +165,12 @@ def test_payload_version_paired_with_doc_version() -> None:
     device dropout), not a load-result format change, so ``DOC_VERSION``
     advances alone once more and ``LOAD_PAYLOAD_VERSION`` stays untouched
     for the same orphaning reason stated above.
+
+    **The pair became ``(2, 6)`` (activity-identity task 3.1):** the four
+    base-identity frontmatter keys are a page-format change with no load
+    result behind it, so ``DOC_VERSION`` advances alone a third time.
     """
-    assert (LOAD_PAYLOAD_VERSION, contract.DOC_VERSION) == (2, 5), (
+    assert (LOAD_PAYLOAD_VERSION, contract.DOC_VERSION) == (2, 6), (
         f"LOAD_PAYLOAD_VERSION={LOAD_PAYLOAD_VERSION} and "
         f"contract.DOC_VERSION={contract.DOC_VERSION} drifted apart. "
         "Req 11.5 requires that a result-format change also change the "

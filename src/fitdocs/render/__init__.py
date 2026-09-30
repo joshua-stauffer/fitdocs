@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from datetime import tzinfo
 
 from fitdocs import Activity, AthleteInputs, DerivedMetrics, Modality
+from fitdocs.identity.kinds import SourceIdentity
 
 # Re-export the pure map planning surface (Req 1.1) so downstream callers -- the
 # sync engine especially -- import map types from ``fitdocs.render`` rather than
@@ -115,7 +116,11 @@ class DocContext:
     valid. :attr:`user_frontmatter` carries an existing document's user-owned
     frontmatter lines verbatim (effort-tags Req 1.2, 1.3, 4.5, 4.6); it
     defaults to ``()`` so a first-time render, and every existing constructor
-    call, carries nothing forward.
+    call, carries nothing forward. :attr:`identity` carries the page base's
+    identity values (activity-identity Req 5.4, 5.5); it defaults to ``None``,
+    in which case they are derived from :attr:`activity`, which reproduces a
+    single-file page. :attr:`source_refs` is in ascending rank: the base is
+    the last entry and every earlier entry is an extra.
     """
 
     activity: Activity
@@ -127,6 +132,8 @@ class DocContext:
     map_data: MapData | None = None  # None: no positions, tiles unavailable,
     #   or strength modality
     user_frontmatter: tuple[str, ...] = ()  # verbatim user-owned lines, or ()
+    identity: SourceIdentity | None = None  # the page base's identity values; None
+    #   derives them from ``activity`` (every render-only caller)
 
 
 def render_document(ctx: DocContext) -> RenderedDoc:
