@@ -245,6 +245,7 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
         "effort_tag",
         "is_workout_document",
         "parse_frontmatter",
+        "sha_of_ref",
         "unmanaged_keys",
     ),
     # `cli.py` binds no contract name directly -- it delegates document
