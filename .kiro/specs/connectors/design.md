@@ -859,6 +859,14 @@ def auth_failure_from(response: HttpResponse, *, service_message: str | None = N
   `Date` the value is unparseable — DATA mode backs off, and
   `auth_failure_from` sets `retry_after_s = None`. Published signatures are
   unchanged.
+- *Transport failure messages* (controller ruling, 2026-09-30, connectors
+  task 2.1): `urllib_transport` builds the `Request` inside its `try` and
+  also converts `ValueError` (a malformed URL) and
+  `http.client.HTTPException` into `TransportError`; `connectors/http.py`
+  may therefore import `http.client` beside `urllib.*`. No `TransportError`
+  message interpolates an exception's text (urllib's messages carry the full
+  URL): the reason is fixed text naming only the exception type. A
+  non-finite `Retry-After` (`nan`, `inf`) is unparseable.
 - `urllib_transport` builds `urllib.request.Request(url, data=body,
   method=...)` with ordinary headers, adds each secret header with
   `add_unredirected_header(name, secret.reveal())`, calls
