@@ -88,6 +88,16 @@ existing `doc_version` is newer than this fitdocs produces — is never moved:
 file whose document could not be updated for any reason; leaving it in place
 is what makes the retry possible.
 
+**Held files.** A file that cannot be placed with certainty — its workout
+matches two or more existing pages, or files of two different workouts in the
+same run match the same page — is archived and held rather than added to a
+page: fitdocs writes no page for it and records the hold in
+`<data-root>/.fitdocs/held.toml`. A held file is archived and disposed of like
+any processed file — left in place under the default `"leave"`, or moved to
+`processed_dir` under `"move"` — and is never quarantined; a drain counts it among the skipped files, not among the
+failures. `fitdocs check` lists each held file with the action that resolves
+it.
+
 ## Ownership of the locations the inbox uses
 
 The inbox directory and its optional `processed_dir` destination are

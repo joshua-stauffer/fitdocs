@@ -48,7 +48,7 @@ fails loudly instead of writing generated documents into that checkout.
 ## The settings file: `<data-root>/fitdocs.toml`
 
 A single user-owned file lives at `<data-root>/fitdocs.toml`. fitdocs only
-ever *reads* it — it never creates, prompts for, or writes it. It carries six
+ever *reads* it — it never creates, prompts for, or writes it. It carries seven
 tables today, each documented in full where noted:
 
 | Table | Configures | Documented in |
@@ -59,6 +59,7 @@ tables today, each documented in full where noted:
 | `[load]` (and its sub-tables `[load.sufficiency]`, `[load.priority]`, `[load.flags]`) | The default calculator, benchmark staleness, and channel-sufficiency/priority/flagging behavior training-load computation reads | below |
 | `[plans]` | Where `fitdocs plan` looks for plan sources | the [README's Training blocks section](../README.md#training-blocks) |
 | `[history]` | The fitness/fatigue/form model constants and coverage threshold `fitdocs history` renders from | below |
+| `[identity]` | The source precedence that chooses each page's base file | below |
 
 Every table's keys default independently, so an absent file, an absent
 table, or a partially filled table is never an error on its own — only a
@@ -172,6 +173,65 @@ plugin load *error* (a warning, never a run failure), not a configuration
 error. See [`docs/plugins.md`](plugins.md) for the full guide — the worked
 packaged example, the public API surface, the compatibility policy, and
 diagnosis of every rejection reason.
+
+### `[identity]`: source precedence
+
+When more than one file records the same workout, fitdocs keeps one page for
+it and renders that page from one of its files, the page's **base**; the other
+files are its **extras**. The `[identity]` table chooses which file is the
+base. It has one key.
+
+| Key | Meaning | Default |
+|-----|---------|---------|
+| `precedence` | A list of strings, best first. Each file ranks at the position of the entry that matches it; the file with the best rank is the page's base. | `["original:garmin", "phone_copy", "original", "unknown"]` |
+
+**Vocabulary.** Each entry is one of:
+
+- `original` — a file that records a `file_id` manufacturer other than
+  `development`, for any manufacturer not named by an `original:<manufacturer>`
+  entry;
+- `phone_copy` — a file whose manufacturer is `development` (what a phone app
+  such as HealthFit writes) and that records a well-formed session UUID;
+- `unknown` — any other file: no recorded manufacturer, or `development`
+  without a well-formed session UUID;
+- `original:<manufacturer>` — an `original` file whose `file_id`
+  manufacturer is exactly `<manufacturer>` (for example `original:garmin`),
+  ranked at the position you give that entry rather than at the bare
+  `original` entry's. `original:development` is not accepted, because
+  `development` is the manufacturer that marks a phone copy; use `phone_copy`.
+
+**Default.** The default is the maintainer decision of 2026-09-29: a Garmin
+original, then the phone copy, then every other original (a Stryd file, for
+example), then unknown files. Files that share a position are ordered by the
+number of undocumented messages they carry (more first, a file with no count
+last), then by creation time (newer first, a file with none last), then by
+content hash.
+
+**A partial list is completed.** A kind you leave out of a configured list is
+appended after your entries, in the order `original`, `phone_copy`,
+`unknown`. The default's `original:garmin` is not appended: a list that names
+no `original:<manufacturer>` entry ranks every original alike.
+
+**Validation.** An absent file, an absent `[identity]` table, or an absent
+`precedence` key means the default. A present `[identity]` that is not valid
+fails loudly with exit code `2` before anything is written: an `[identity]`
+that is not a table, a `precedence` that is not a list of strings, an entry
+listed twice, an entry that is neither one of the three kinds nor
+`original:<manufacturer>`, `original:` with no manufacturer, and
+`original:development`. The message names the settings file and the offending key or entry.
+Keys other than `precedence` are ignored.
+
+**Example.** To let every original outrank the phone copy, whichever
+manufacturer wrote it:
+
+```toml
+[identity]
+precedence = ["original", "phone_copy", "unknown"]
+```
+
+A change to `precedence` takes effect on the next `fitdocs regen`, which
+re-ranks the files of every page and may rename a page whose base changes; see
+the [ownership contract](ownership-contract.md).
 
 ### `[load]`: calculator selection and training-load computation
 
