@@ -165,7 +165,6 @@ from fitdocs import AthleteInputs, FitDecodeError, Modality, compute_metrics, pa
 from fitdocs.contract import (
     DOC_VERSION,
     InvalidEffortTag,
-    document_uuid,
     document_version,
     effort_tag,
     is_workout_document,
@@ -184,6 +183,7 @@ from fitdocs.docio import REMEDY_REPLACE_SYMLINK as _REMEDY_REPLACE_SYMLINK
 from fitdocs.docio import SYMLINK_DETAIL as _SYMLINK_DETAIL
 from fitdocs.docio import read_frontmatter as _read_frontmatter
 from fitdocs.docmerge import RegionError, merge_regions
+from fitdocs.identity.pages import scan_pages
 from fitdocs.inbox import (
     Disposition,
     InboxNote,
@@ -272,23 +272,13 @@ def find_document(
     archive no longer holds. Resolving refs is the regeneration concern
     (:func:`_last_source_archive`), not the matching one.
     """
-    workouts_dir = data_root / WORKOUTS_DIR
-    if not workouts_dir.is_dir():
+    # One scan, then the index's exact match: the session UUID first, else the
+    # sources history. ``activity_uid`` (a session UUID or a file sha) goes to
+    # the UUID side unchanged, so a hand-edited ``uuid: <sha>`` keeps matching.
+    found = scan_pages(data_root).exact_match(activity_uid, source_ref)
+    if found is None:
         return None
-
-    sources_match: DocumentMatch | None = None
-    for path in sorted(workouts_dir.glob("*.md")):
-        frontmatter = _read_frontmatter(path)
-        if frontmatter is None or not is_workout_document(frontmatter):
-            continue
-        sources = source_refs(frontmatter)
-        if document_uuid(frontmatter) == activity_uid:
-            # uuid always wins: return the first uuid match in scan order.
-            return DocumentMatch(path=path, sources=sources)
-        if sources_match is None and source_ref in sources:
-            # Hold the first sources match as the fallback if no uuid matches.
-            sources_match = DocumentMatch(path=path, sources=sources)
-    return sources_match
+    return DocumentMatch(path=Path(found.path), sources=found.sources)
 
 
 @dataclass(frozen=True)

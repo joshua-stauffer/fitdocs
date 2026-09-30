@@ -54,6 +54,7 @@ import fitdocs.docio
 import fitdocs.history.documents
 import fitdocs.history.page
 import fitdocs.identity.kinds
+import fitdocs.identity.pages
 import fitdocs.layout
 import fitdocs.load.docedit
 import fitdocs.load.engine
@@ -134,6 +135,8 @@ CONVERTED_MODULES: Final[tuple[ModuleType, ...]] = (
     # activity-identity (task 2.1): the kind derivation, which binds the
     # session-UUID field name and formatter instead of defining its own.
     fitdocs.identity.kinds,
+    # activity-identity (task 3.2): the one workouts/*.md identity scan.
+    fitdocs.identity.pages,
 )
 
 #: The one converted module allowed to name ``yaml`` at all. The frontmatter
@@ -173,7 +176,6 @@ FORBIDDEN_LOCAL_NAMES: Final[tuple[str, ...]] = (
 #: check, and only object identity rules it out.
 CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
     "fitdocs.sync": (
-        "document_uuid",
         "effort_tag",
         "is_workout_document",
         "parse_frontmatter",
@@ -296,6 +298,14 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
         "is_workout_document",
     ),
     "fitdocs.identity.kinds": ("SESSION_UUID_FIELD", "format_session_uuid"),
+    "fitdocs.identity.pages": (
+        "document_source_identity",
+        "document_sport",
+        "document_start_time",
+        "document_uuid",
+        "is_workout_document",
+        "source_refs",
+    ),
 }
 
 #: Document vocabulary no converted module may spell for itself: the frontmatter

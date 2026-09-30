@@ -515,7 +515,7 @@ never co-varies two keys a rule distinguishes.
     `sources`; the full `uv run pytest` green
   - _Requirements: 5.2, 5.4, 5.5, 7.4, 9.2, 9.6_
 
-- [ ] 3.2 Build the page index from one frontmatter scan and route the exact match through it
+- [x] 3.2 Build the page index from one frontmatter scan and route the exact match through it
   - Add the page scan: a page record from parsed frontmatter through the
     contract readers only, its recorded `uuid` key read into `session_uuid` (a
     page lacking the identity keys yields a key no rule tier can match), and the sorted scan of `workouts/*.md` that refuses
