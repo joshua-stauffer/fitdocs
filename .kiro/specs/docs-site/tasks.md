@@ -443,7 +443,7 @@
 
 - [ ] 3. Integration: theme, staging, pipeline, preview, CLI
 
-- [ ] 3.1 Create the theme: config template, home override and the brand in one place
+- [x] 3.1 Create the theme: config template, home override and the brand in one place
   - **`website/mkdocs.template.yml`** carries:
     - `site_name`, `site_url: https://fitdocs.ai/` and `site_description`;
     - `repo_url`, `repo_name` and `edit_uri: edit/main/website/content/`;
@@ -877,3 +877,15 @@
   - A needle-named entry gets the subject `<root>/<redacted path #N>`, where N is its ordinal in the walk. Matched text never reaches output on any path.
   - GATE_NOT_RUN does not walk.
   - Subject is `<root>/<rel>`; design § SiteGate was amended to match, at merge.
+- 3.1 (3 rounds, parallel stream impl/ds-3-1).
+  - **home.html.** It overrides `block content` of `main.html`: hero first, then `{{ super() }}`, which keeps Material's `partials/actions.html` edit action. Hero keys are read as `page.meta.hero_*`, each inside its own `{% if %}`. A primary action gets `md-button md-button--primary`, and hrefs and the chart `src` go through the `url` filter.
+  - **Verified live.** A real Zensical 0.0.65 smoke build (reviewer) rendered the hero, the buttons, the chart with demo alt text, `rel="edit"` to `edit/main/website/content/…`, brand.css at every depth, and no third-party font request.
+  - **Brand-value scan.** The 4.5 one-place scan (test_theme `_brand_leaks`) walks every file under `website/` except top-level `build/` and `content/`; content is the maintainer's copy, per the controller ruling. It exempts only `website/assets/brand.css`, and flags:
+    - brand hex, case-insensitive;
+    - `--(md|fd)-*:` declarations;
+    - CSS colour functions;
+    - `font-family`.
+
+    Any future override or asset that mentions these outside brand.css reds that test.
+  - **Test tooling.** jinja2 is loaded via importlib behind `requires_zensical`, since it is a transitive dependency of zensical.
+  - **Queued.** The duplicate home-page h1 (hero plus `h1#__skip`), low.
