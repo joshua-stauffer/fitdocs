@@ -24,14 +24,8 @@ stored in either case (Req 5.6). :meth:`~fitdocs.connectors.credentials.
 CredentialStore.save` on acceptance already replaces any existing file for
 the instance atomically (Req 5.8).
 
-``ConnectorInstance`` is declared here as the minimal shape ``run_connect``
-needs (``name`` and ``connector``) rather than imported from
-``connectors/settings.py`` (task 3.3, a sibling task landing on a separate
-branch and not yet present in this tree). design.md's "ConnectorsSettings"
-component gives ``ConnectorInstance`` two further fields (``lookback_days``,
-``settings``) this engine never reads; whichever of the two definitions lands
-second at merge is the one callers use, per this plan's "Sibling specs in
-flight" note.
+``run_connect`` reads only an instance's ``name`` and ``connector`` from
+:class:`fitdocs.connectors.settings.ConnectorInstance`.
 """
 
 from __future__ import annotations
@@ -51,29 +45,19 @@ from fitdocs.connectors.errors import AuthFailure, AuthFailureKind, next_step
 from fitdocs.connectors.http import CallMode, HttpClient, Transport, TransportError
 from fitdocs.connectors.protocol import (
     AuthStyle,
-    Connector,
     ConnectorSession,
     KeyVerifier,
     TokenIssuer,
     TokenSet,
 )
 from fitdocs.connectors.secrets import Redactor, Secret
+from fitdocs.connectors.settings import ConnectorInstance
 
 # A placeholder for ``ConnectorSession.data_root``: ``run_connect`` never
 # reads or writes under a data root (Req 5.9), and neither ``KeyVerifier.
 # verify`` nor ``TokenIssuer.login`` receives one to use -- only
 # ``ActivityPuller`` operations (a later pull, not this connect) do.
 _NO_DATA_ROOT: Final[Path] = Path("connect-has-no-data-root")
-
-
-@dataclass(frozen=True)
-class ConnectorInstance:
-    """The minimal configured-instance shape this engine reads (Req 3.1-3.8,
-    design.md "ConnectorsSettings"). See module docstring for why this is a
-    local, narrower stand-in rather than an import."""
-
-    name: str
-    connector: Connector
 
 
 @dataclass(frozen=True)
