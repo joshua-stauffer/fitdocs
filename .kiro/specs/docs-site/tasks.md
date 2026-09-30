@@ -375,7 +375,7 @@
   - _Requirements: 10.3, 10.4, 10.5_
   - _Boundary: SiteGate_
 
-- [ ] 2.7 (P) Generate the demo-data hero chart and pin its reproducibility
+- [x] 2.7 (P) Generate the demo-data hero chart and pin its reproducibility
   - Create `scripts/make_hero_chart.py`:
     - `demo_spec()` builds a `HeroChartSpec` from closed-form series only:
       0–60 min in 0.5 min steps, power as warm-up, three intervals and
@@ -861,3 +861,11 @@
     - llms-full renders `body`, never `staged_text`.
   - Current behaviour pinned by exact literals: a title or summary containing CR/LF renders split (queued as a follow-up, low).
   - design.md traceability row 4.6 corrected from `page_url` to `page_path`.
+- 2.7 (3 rounds, parallel stream impl/ds-2-7):
+  - `scripts/make_hero_chart.py` renders through the real `fitdocs.render.charts.hero.render_hero_chart`.
+  - DECIMALS=1.
+  - The SVG is byte-identical on macOS arm64 and on Linux amd64 and arm64 (reviewer container runs, sha256 `c3a06796…668c`), and under Python 3.11–3.14.
+  - The file-read scan covers the whole module except `main`, which reads the SVG under `--check`.
+  - The checked-in SVG is pinned both byte-for-byte and as well-formed SVG (ElementTree) with `render() == render_hero_chart(demo_spec())`.
+  - Regenerate with `uv run python -m scripts.make_hero_chart`.
+  - The forbidden-strings scan of the SVG was not run locally (the variable is unset); the docs.yml gate covers it.
