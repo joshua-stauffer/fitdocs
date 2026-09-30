@@ -337,7 +337,7 @@
   - _Requirements: 6.1, 6.2, 6.5_
   - _Boundary: GeneratorAdapter_
 
-- [ ] 2.6 (P) Build the site gate over directory trees, failing closed
+- [x] 2.6 (P) Build the site gate over directory trees, failing closed
   - Create `scripts/check_site.py` in the `scripts/` entry-point shape:
     - `python -m scripts.check_site ROOT [ROOT ...]`;
     - it imports `load`, `matches` and `ForbiddenStringsSourceError` from
@@ -869,3 +869,11 @@
   - The checked-in SVG is pinned both byte-for-byte and as well-formed SVG (ElementTree) with `render() == render_hero_chart(demo_spec())`.
   - Regenerate with `uv run python -m scripts.make_hero_chart`.
   - The forbidden-strings scan of the SVG was not run locally (the variable is unset); the docs.yml gate covers it.
+- 2.6 (3 rounds, parallel stream impl/ds-2-6):
+  - `python -m scripts.check_site ROOT [ROOT ...]` matches check_artifacts: exit 0 clean, 1 findings, 2 hard error; the same `gate_not_run` wording; `kind\tsubject\tdetail\tremedy` on stderr.
+  - The walk covers dot-entries and reads whole files. Directories are path-checked.
+  - FIFOs and sockets are reported `unreadable` without being opened.
+  - Per-entry type lookups sit inside `try`. Every OSError detail carries only the exception type name.
+  - A needle-named entry gets the subject `<root>/<redacted path #N>`, where N is its ordinal in the walk. Matched text never reaches output on any path.
+  - GATE_NOT_RUN does not walk.
+  - Subject is `<root>/<rel>`; design § SiteGate was amended to match, at merge.
