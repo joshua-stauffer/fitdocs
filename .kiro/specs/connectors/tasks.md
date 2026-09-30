@@ -248,7 +248,7 @@
     the socket guard active; `uv run mypy` green
   - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 10.4_
 
-- [ ] 2.2 Declare the capability and authentication vocabularies and the protocol's value types and protocols
+- [x] 2.2 Declare the capability and authentication vocabularies and the protocol's value types and protocols
   - The nine capabilities with their summaries and flags (the three
     remote-changing members irreversible, every other member reversible,
     only pulling activities driven); the four authentication styles with
@@ -955,3 +955,4 @@
 - 1.2: `connectors.errors` (AuthFailureKind, AuthFailure, ConnectorError, NotConnectedError, ConnectorSettingsError, NEXT_STEPS, next_step) and `connectors._atomic.write_atomic` (0o600 from creation via mkstemp, fsync, cleanup on BaseException). Reviewer mutation harnesses revert from their own snapshots -- a later round reusing an earlier round's harness clobbers fixes; always take fresh snapshots.
 - 3.2: `connectors.ledger` -- one shared `_invariant_violation` is run by `load_ledger` (LedgerError naming the file) and `save_ledger` (ValueError before writing). Rulings: load rejects an unsorted file; watermark must be tz-aware; sha256 is 64 lowercase hex on any outcome; `pending` is a relative path whose every `/` segment is non-empty and not `.`/`..` (4.1's sweep can trust it). tomli_w writes `2026-09-20 07:12:00+00:00` and inline `entries = [...]` for short ledgers -- both accepted as equivalent TOML.
 - 2.1: `connectors.http` -- `HttpClient(transport, *, mode, redactor, sleep, timeout)`; `FakeTransport` in `tests/connectors/conftest.py` (scripted responses/errors; `.requests`, `.timeouts`). The client never redacts -- it registers secrets before the first call; every reporting engine (4.3/4.4/4.5) must `redactor.redact()` what it prints or stores. `TransportError` messages carry only `<scheme>://<host>[:port]<path>` or `<signed location>`.
+- 2.2: `connectors.protocol` is pinned exhaustively (field names/types/order/defaults/frozen, `inspect.signature` of every protocol member, member sets, StrEnum bases) against design literals -- any published-shape change now reds `tests/connectors/test_protocol.py`, which is the point (tasks.md: stop and report). Capability summaries are original wording (design gives none), pinned single-line and distinct.
