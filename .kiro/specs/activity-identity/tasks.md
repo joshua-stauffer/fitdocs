@@ -853,7 +853,7 @@ never co-varies two keys a rule distinguishes.
     `uv run mypy tests/identity/test_contract_docs.py` clean
   - _Requirements: 3.11, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.8_
 
-- [ ] 6.3 Record the wiki-contract and workout-docs amendments and annotate the roadmap
+- [x] 6.3 Record the wiki-contract and workout-docs amendments and annotate the roadmap
   - wiki-contract (controller ruling R6): if neither connectors nor
     channel-merge has created it on `main`, create `## Amendment 4 (<this
     landing date>): source roles, connector state and channel provenance,
