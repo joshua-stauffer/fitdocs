@@ -4,17 +4,27 @@ fitdocs is installed into wikis it does not control, and a maintainer -- human
 or automation -- needs a way to ask "does this tree still match the installed
 fitdocs?" without fitdocs writing anything to find out. :func:`audit` is that
 question answered: a single sorted, read-only scan of ``workouts/*.md`` plus the
-in-tree ownership declarations, producing a :class:`Finding` for every place the
-tree and the contract disagree (Req 8.1-8.6).
+in-tree ownership declarations, the hold record and a listing of ``fit-archive/``,
+producing a :class:`Finding` for every place the tree and the contract disagree
+(Req 8.1-8.6). Three identity findings (activity-identity Req 8.1-8.5) ride on
+the same pass: :attr:`FindingKind.AMBIGUOUS_SOURCE` (a held source, or an
+unreadable hold record), :attr:`FindingKind.ORPHANED_SOURCE` (an archived source
+no readable page lists and no hold names) and
+:attr:`FindingKind.DUPLICATE_SESSION` (pages that are one session).
 
 Read-only, and offline
 -----------------------
-This module opens files to read text and nothing else. It never writes a byte,
+This module opens files only to read them (workout documents, declarations and
+the hold record) and lists the archive directory. It never writes a byte,
 never creates a directory (including ``workouts/`` itself when absent), never
 opens a ``.fit`` source, and never touches the network (Req 8.1, 8.8). Every
 reader it composes -- :mod:`fitdocs.contract`'s pure frontmatter/version/key
-readers, :func:`fitdocs.docmerge.extract_regions`, and
-:func:`fitdocs.declaration.inspect_declarations` -- already holds that
+readers, :func:`fitdocs.docmerge.extract_regions`,
+:func:`fitdocs.declaration.inspect_declarations`,
+:func:`fitdocs.identity.holds.load_holds` (an absent record reads as empty and
+creates nothing), and the pure identity readers
+:func:`fitdocs.identity.pages.page_record` and
+:func:`fitdocs.identity.planning.duplicate_sets` -- already holds that
 guarantee; this module is what walks the tree and turns their answers into
 :class:`Finding` values.
 
@@ -69,6 +79,7 @@ from fitdocs.contract import (
     effort_tag,
     is_workout_document,
     parse_frontmatter,
+    sha_of_ref,
     unmanaged_keys,
 )
 from fitdocs.declaration import (
@@ -79,7 +90,10 @@ from fitdocs.declaration import (
 from fitdocs.docio import REMEDY_REPLACE_SYMLINK as _REMEDY_REPLACE_SYMLINK
 from fitdocs.docio import SYMLINK_DETAIL as _SYMLINK_DETAIL
 from fitdocs.docmerge import RegionError, extract_regions
-from fitdocs.layout import WORKOUTS_DIR
+from fitdocs.identity.holds import HeldSource, HoldRecordError, load_holds
+from fitdocs.identity.pages import page_record
+from fitdocs.identity.planning import PageIndex, PageRecord, duplicate_sets
+from fitdocs.layout import ARCHIVE_DIR, WORKOUTS_DIR, held_path, source_ref
 
 __all__ = [
     "AuditReport",
@@ -124,6 +138,19 @@ class FindingKind(StrEnum):
     """The document's effort tag (:func:`fitdocs.contract.effort_tag`) is
     malformed -- distinct from :attr:`UNMANAGED_KEYS`, since an effort key is
     user-owned, not unmanaged (Req 1.4, 3.5, 4.7)."""
+
+    AMBIGUOUS_SOURCE = "ambiguous_source"
+    """A hold record entry: an archived source no page lists, held because its
+    identity match was ambiguous -- or the hold record itself is unreadable
+    (activity-identity Req 8.1, 8.4)."""
+
+    ORPHANED_SOURCE = "orphaned_source"
+    """An archived ``fit-archive/<sha>.fit`` that no readable workout page lists
+    and no hold entry names (activity-identity Req 8.2)."""
+
+    DUPLICATE_SESSION = "duplicate_session"
+    """A workout page that is one session with at least one other page
+    (activity-identity Req 8.3)."""
 
 
 @dataclass(frozen=True)
@@ -194,6 +221,17 @@ _REMEDY_CLEAR_FOREIGN: str = (
 _REMEDY_FIX_EFFORT_TAG: str = (
     "correct the named effort key(s) by hand; the tag is preserved as "
     "written but is not in effect until it is valid"
+)
+_REMEDY_ONE_WORKOUT: str = (
+    "if the candidate pages are one workout, keep one (move anything worth "
+    "keeping out of the other's notes first), delete the other, and run "
+    "`fitdocs regen`; fitdocs never merges pages or picks one"
+)
+_REMEDY_REBUILD_HOLD_RECORD: str = (
+    "delete it and run `fitdocs regen`, which rebuilds it"
+)
+_REMEDY_RENDER_ORPHAN: str = (
+    "run `fitdocs regen` to render it, or delete it if its page was removed on purpose"
 )
 
 
@@ -419,6 +457,90 @@ def _declaration_findings(data_root: Path) -> tuple[Finding, ...]:
     return tuple(findings)
 
 
+def _held_findings(
+    data_root: Path,
+) -> tuple[tuple[Finding, ...], tuple[HeldSource, ...]]:
+    """One finding per hold-record entry, or one naming an unreadable record
+    (Req 8.1, 8.4); also the entries themselves (empty when unreadable).
+
+    An absent record is empty and reads as no findings."""
+    try:
+        record = load_holds(data_root)
+    except HoldRecordError as exc:
+        return (
+            Finding(
+                kind=FindingKind.AMBIGUOUS_SOURCE,
+                subject=held_path(data_root).relative_to(data_root).as_posix(),
+                detail=str(exc),
+                remedy=_REMEDY_REBUILD_HOLD_RECORD,
+            ),
+        ), ()
+    findings = tuple(
+        Finding(
+            kind=FindingKind.AMBIGUOUS_SOURCE,
+            subject=source_ref(entry.sha256),
+            detail=(
+                f"held {entry.name!r}: could be a page of "
+                f"{', '.join(entry.candidates) or 'no recorded candidate'}; "
+                f"evidence: {', '.join(entry.evidence) or 'none recorded'}"
+            ),
+            remedy=_REMEDY_ONE_WORKOUT,
+        )
+        for entry in record.entries
+    )
+    return findings, record.entries
+
+
+def _orphan_findings(
+    data_root: Path, records: list[PageRecord], held: tuple[HeldSource, ...]
+) -> tuple[Finding, ...]:
+    """One finding per archived source no readable page lists and no hold
+    names (Req 8.2). The archive is listed, never opened (Req 8.5)."""
+    archive_dir = data_root / ARCHIVE_DIR
+    if not archive_dir.is_dir():
+        return ()
+    listed = {ref for record in records for ref in record.sources}
+    held_shas = {entry.sha256 for entry in held}
+    findings: list[Finding] = []
+    for path in sorted(archive_dir.glob("*.fit")):
+        if not path.is_file():
+            continue
+        ref = f"{ARCHIVE_DIR}/{path.name}"
+        sha = sha_of_ref(ref)
+        if sha is None or ref in listed or sha in held_shas:
+            continue
+        findings.append(
+            Finding(
+                kind=FindingKind.ORPHANED_SOURCE,
+                subject=ref,
+                detail=(
+                    "no workout page lists this archived source and no hold names it"
+                ),
+                remedy=_REMEDY_RENDER_ORPHAN,
+            )
+        )
+    return tuple(findings)
+
+
+def _duplicate_findings(records: list[PageRecord]) -> tuple[Finding, ...]:
+    """One finding per page of each duplicate set (Req 8.3), built from the
+    records of the frontmatter this pass already parsed."""
+    findings: list[Finding] = []
+    for duplicate in duplicate_sets(PageIndex(records)):
+        evidence = ", ".join(str(item) for item in duplicate.evidence)
+        for page in duplicate.pages:
+            others = ", ".join(p for p in duplicate.pages if p != page)
+            findings.append(
+                Finding(
+                    kind=FindingKind.DUPLICATE_SESSION,
+                    subject=page,
+                    detail=f"the same session as {others}; evidence: {evidence}",
+                    remedy=_REMEDY_ONE_WORKOUT,
+                )
+            )
+    return tuple(findings)
+
+
 def audit(data_root: Path) -> AuditReport:
     """Scan ``data_root`` against the current contract without writing anything.
 
@@ -447,10 +569,16 @@ def audit(data_root: Path) -> AuditReport:
     Findings are sorted by :attr:`Finding.subject` then :attr:`Finding.kind`
     for a deterministic report; a clean tree yields ``findings == ()``. Opens
     no ``.fit`` file and performs no network access (Req 8.8): only the
-    documents' own text and the declaration files are ever read.
+    documents' own text, the declaration files and the hold record are read,
+    and ``fit-archive/`` is listed, never opened. After the document scan it
+    adds the identity findings: one per hold-record entry (or one naming an
+    unreadable record, after which the scan continues), one per archived source
+    no readable page lists and no hold names, and one per page of each
+    duplicate set built from the pages already parsed here.
     """
     documents = 0
     findings: list[Finding] = []
+    records: list[PageRecord] = []
 
     workouts_dir = data_root / WORKOUTS_DIR
     if workouts_dir.is_dir():
@@ -482,10 +610,15 @@ def audit(data_root: Path) -> AuditReport:
             if frontmatter is None or not is_workout_document(frontmatter):
                 continue  # not a fitdocs workout document -- not our concern
             documents += 1
+            records.append(page_record(Path(subject), frontmatter))
 
             findings.extend(_document_findings(subject, text, frontmatter))
 
     findings.extend(_declaration_findings(data_root))
+    held_findings, held = _held_findings(data_root)
+    findings.extend(held_findings)
+    findings.extend(_orphan_findings(data_root, records, held))
+    findings.extend(_duplicate_findings(records))
 
     findings.sort(key=lambda finding: (finding.subject, finding.kind))
     return AuditReport(findings=tuple(findings), documents=documents)

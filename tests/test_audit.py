@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import builtins
 import os
+import subprocess
+import sys
 import time
 from pathlib import Path
 from unittest import mock
@@ -22,7 +24,8 @@ from fitdocs.audit import AuditReport, Finding, FindingKind, audit
 from fitdocs.contract import DOC_VERSION
 from fitdocs.declaration import ensure_declarations
 from fitdocs.docmerge import begin_marker, end_marker
-from fitdocs.layout import ARCHIVE_DIR, WORKOUTS_DIR
+from fitdocs.identity.holds import HeldSource, HoldRecord, save_holds
+from fitdocs.layout import ARCHIVE_DIR, WORKOUTS_DIR, held_path, source_ref
 from tests.fixtures import builder
 from tests.test_determinism import _no_socket
 
@@ -659,7 +662,14 @@ def test_audit_completes_without_network_access_or_reading_any_fit_file(
     Mutation caught: making ``audit`` read the archived ``.fit`` source (e.g.
     to sniff its sport for a friendlier finding) trips this guard immediately.
     """
-    _write(tmp_path, f"{WORKOUTS_DIR}/one.md", _clean_doc_text())
+    _write(
+        tmp_path,
+        f"{WORKOUTS_DIR}/one.md",
+        _doc_text(
+            extra_frontmatter=f"sources:\n  - {ARCHIVE_DIR}/{'0' * 8}.fit\n",
+            regions=_region("notes"),
+        ),
+    )
     ensure_declarations(tmp_path)
     archive_dir = tmp_path / ARCHIVE_DIR
     archive_dir.mkdir(parents=True, exist_ok=True)
@@ -735,3 +745,306 @@ def test_every_finding_kind_is_a_str() -> None:
     for kind in FindingKind:
         assert isinstance(kind.value, str)
         assert str(kind) == kind.value
+
+
+# --- activity-identity 8.1-8.5: held, orphaned and duplicated sources --------
+
+_SHA_HELD = "b" * 64
+_SHA_ORPHAN = "c" * 64
+_SHA_LISTED = "a" * 64
+_SHA_UNREADABLE_PAGE = "d" * 64
+_SHA_EXTRA = "e" * 64
+_SHA_BASE = "f" * 64
+_UUID_TWO = "99999999-8888-7777-6666-555555555555"
+_UUID = "11111111-2222-3333-4444-555555555555"
+_REMEDY_ONE_WORKOUT = (
+    "if the candidate pages are one workout, keep one (move anything worth "
+    "keeping out of the other's notes first), delete the other, and run "
+    "`fitdocs regen`; fitdocs never merges pages or picks one"
+)
+_REMEDY_ORPHAN = (
+    "run `fitdocs regen` to render it, or delete it if its page was removed on purpose"
+)
+_REMEDY_HOLD_RECORD = "delete it and run `fitdocs regen`, which rebuilds it"
+
+
+def _page(root: Path, name: str, *, sources: list[str], extra: str = "") -> str:
+    """Write a workout page listing ``sources``; returns its subject."""
+    listing = "".join(f"  - {ref}\n" for ref in sources)
+    _write(
+        root,
+        f"{WORKOUTS_DIR}/{name}.md",
+        _doc_text(
+            extra_frontmatter=f"sources:\n{listing}{extra}",
+            regions=_region("notes"),
+        ),
+    )
+    return f"{WORKOUTS_DIR}/{name}.md"
+
+
+def _archive(root: Path, *shas: str) -> None:
+    for sha in shas:
+        target = root / ARCHIVE_DIR / f"{sha}.fit"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(builder.run_fit_bytes())
+
+
+def _kind(report: AuditReport, kind: FindingKind) -> list[Finding]:
+    return [f for f in report.findings if f.kind == kind]
+
+
+def _stage_identity_tree(root: Path) -> None:
+    """One held entry, one orphan, a shared-source pair, a UUID-only triple, a
+    rule-tier pair, a clean page, a page listing two archived sources, and a
+    triple linked by two tiers."""
+    ensure_declarations(root)
+    _archive(root, _SHA_HELD, _SHA_ORPHAN, _SHA_LISTED)
+    # shared source (evidence: source)
+    _page(root, "s1", sources=[source_ref(_SHA_LISTED)])
+    _page(root, "s2", sources=[source_ref(_SHA_LISTED)])
+    # UUID-only triple: pairwise-disjoint sources, no start, so no rule tier
+    for name, sha in (("u1", "1"), ("u2", "2"), ("u3", "3")):
+        _page(
+            root,
+            name,
+            sources=[source_ref(sha * 64)],
+            extra=f"uuid: {_UUID}\n",
+        )
+    # rule-tier pair (evidence: strict): different sources, no uuid
+    for name, sha in (("r1", "4"), ("r2", "5")):
+        _page(
+            root,
+            name,
+            sources=[source_ref(sha * 64)],
+            extra=(
+                "sport: running\nstart_time: '2026-07-12T07:30:00-06:00'\n"
+                "source_elapsed_s: 1800\nsource_distance_m: 5000\n"
+            ),
+        )
+    _page(root, "clean", sources=[source_ref("6" * 64)])
+    # extra + base, neither held, pairwise-distinct from every other sha
+    _archive(root, _SHA_EXTRA, _SHA_BASE)
+    _page(root, "multi", sources=[source_ref(_SHA_EXTRA), source_ref(_SHA_BASE)])
+    # two tiers in one set: m1-m2 share a source, m2-m3 share a uuid
+    _page(root, "m1", sources=[source_ref("7" * 64)])
+    _page(
+        root,
+        "m2",
+        sources=[source_ref("7" * 64), source_ref("8" * 64)],
+        extra=f"uuid: {_UUID_TWO}\n",
+    )
+    _page(root, "m3", sources=[source_ref("9" * 64)], extra=f"uuid: {_UUID_TWO}\n")
+    save_holds(
+        root,
+        HoldRecord(
+            (
+                HeldSource(
+                    sha256=_SHA_HELD,
+                    name="held.fit",
+                    candidates=(f"{WORKOUTS_DIR}/s1.md", f"{WORKOUTS_DIR}/r1.md"),
+                    evidence=("strict", "device"),
+                ),
+            )
+        ),
+    )
+
+
+def test_held_entry_is_one_finding_with_subject_candidates_evidence_and_remedy(
+    tmp_path: Path,
+) -> None:
+    _stage_identity_tree(tmp_path)
+
+    found = _kind(audit(tmp_path), FindingKind.AMBIGUOUS_SOURCE)
+
+    assert len(found) == 1
+    finding = found[0]
+    assert finding.subject == source_ref(_SHA_HELD)
+    assert f"{WORKOUTS_DIR}/s1.md" in finding.detail
+    assert f"{WORKOUTS_DIR}/r1.md" in finding.detail
+    assert "strict, device" in finding.detail
+    assert finding.remedy == _REMEDY_ONE_WORKOUT
+
+
+def test_a_held_archive_is_not_also_orphaned_but_an_unheld_unlisted_one_is(
+    tmp_path: Path,
+) -> None:
+    _stage_identity_tree(tmp_path)
+
+    orphans = _kind(audit(tmp_path), FindingKind.ORPHANED_SOURCE)
+
+    # _SHA_HELD is archived, unlisted by every page, and named by the hold.
+    # (the multi-source page's two archives are listed, so not orphans)
+    assert [f.subject for f in orphans] == [source_ref(_SHA_ORPHAN)]
+    assert orphans[0].remedy == _REMEDY_ORPHAN
+    assert orphans[0].detail  # non-empty, names why
+
+
+def test_orphan_check_ignores_pages_the_audit_could_not_read(tmp_path: Path) -> None:
+    _stage_identity_tree(tmp_path)
+    _archive(tmp_path, _SHA_UNREADABLE_PAGE)
+    # A page listing the archive but not valid UTF-8, and a non-workout note
+    # that mentions it: neither is a readable workout page.
+    bad = tmp_path / WORKOUTS_DIR / "bad.md"
+    bad.write_bytes(
+        b"---\ntype: workout\nsources:\n  - "
+        + source_ref(_SHA_UNREADABLE_PAGE).encode()
+        + b"\n---\n\xff\xfe\n"
+    )
+    _write(
+        tmp_path,
+        f"{WORKOUTS_DIR}/stray.md",
+        f"---\ntitle: n\nsources:\n  - {source_ref(_SHA_UNREADABLE_PAGE)}\n---\n",
+    )
+
+    orphans = _kind(audit(tmp_path), FindingKind.ORPHANED_SOURCE)
+
+    assert source_ref(_SHA_UNREADABLE_PAGE) in [f.subject for f in orphans]
+
+
+def test_archive_entries_that_are_not_hex_named_fit_files_are_not_orphans(
+    tmp_path: Path,
+) -> None:
+    ensure_declarations(tmp_path)
+    (tmp_path / ARCHIVE_DIR).mkdir(exist_ok=True)
+    (tmp_path / ARCHIVE_DIR / "notes.fit").write_bytes(b"x")
+    (tmp_path / ARCHIVE_DIR / "AGENTS.md").write_text("x", encoding="utf-8")
+    (tmp_path / ARCHIVE_DIR / f"{_SHA_ORPHAN}.fit").mkdir()
+
+    assert _kind(audit(tmp_path), FindingKind.ORPHANED_SOURCE) == []
+
+
+def test_duplicate_sets_yield_one_finding_per_page_naming_the_others(
+    tmp_path: Path,
+) -> None:
+    _stage_identity_tree(tmp_path)
+
+    report = audit(tmp_path)
+    dups = {f.subject: f for f in _kind(report, FindingKind.DUPLICATE_SESSION)}
+
+    w = f"{WORKOUTS_DIR}/"
+    assert sorted(dups) == [
+        f"{w}{n}.md"
+        for n in ("m1", "m2", "m3", "r1", "r2", "s1", "s2", "u1", "u2", "u3")
+    ]
+    # two tiers link this set: both named, strongest first (duplicate_sets order)
+    assert (
+        dups[f"{w}m2.md"].detail
+        == f"the same session as {w}m1.md, {w}m3.md; evidence: source, uuid"
+    )
+    assert dups[f"{w}s1.md"].detail == f"the same session as {w}s2.md; evidence: source"
+    assert dups[f"{w}r2.md"].detail == f"the same session as {w}r1.md; evidence: strict"
+    # UUID-only set of three: each names both others, and the link is the uuid.
+    assert (
+        dups[f"{w}u2.md"].detail
+        == f"the same session as {w}u1.md, {w}u3.md; evidence: uuid"
+    )
+    assert {f.remedy for f in dups.values()} == {_REMEDY_ONE_WORKOUT}
+    assert f"{w}clean.md" not in dups
+
+
+def test_unreadable_hold_record_is_one_finding_naming_the_file(
+    tmp_path: Path,
+) -> None:
+    _stage_identity_tree(tmp_path)
+    _write(tmp_path, ".fitdocs/held.toml", "held = [ not toml")
+
+    report = audit(tmp_path)
+    found = _kind(report, FindingKind.AMBIGUOUS_SOURCE)
+
+    # The scan continues past the bad record (Req 8.4): the formerly held
+    # archive is now unnamed, so it is orphaned too.
+    orphans = {f.subject for f in _kind(report, FindingKind.ORPHANED_SOURCE)}
+    assert orphans == {source_ref(_SHA_ORPHAN), source_ref(_SHA_HELD)}
+    assert len(_kind(report, FindingKind.DUPLICATE_SESSION)) == 10
+    assert len(found) == 1
+    assert found[0].subject == ".fitdocs/held.toml"
+    assert "held.toml" in found[0].detail
+    assert found[0].remedy == _REMEDY_HOLD_RECORD
+
+
+def test_absent_hold_record_means_no_held_findings_and_creates_nothing(
+    tmp_path: Path,
+) -> None:
+    ensure_declarations(tmp_path)
+    _page(tmp_path, "one", sources=[source_ref(_SHA_LISTED)])
+    _archive(tmp_path, _SHA_LISTED)
+
+    assert audit(tmp_path).findings == ()
+    assert not held_path(tmp_path).parent.exists()
+
+
+def test_identity_findings_open_no_fit_file_and_write_nothing(
+    tmp_path: Path,
+) -> None:
+    _stage_identity_tree(tmp_path)
+    for path in sorted(tmp_path.rglob("*")):
+        if path.is_file():
+            _age(path)
+    before = _snapshot(tmp_path)
+
+    opened: list[str] = []
+    real_open = builtins.open
+    real_read_bytes = Path.read_bytes
+    real_read_text = Path.read_text
+    real_path_open = Path.open
+
+    def _note(target: object) -> None:
+        if str(target).endswith(".fit"):
+            opened.append(str(target))
+            raise AssertionError(f".fit opened: {target}")
+
+    def _open(file: object, *args: object, **kwargs: object) -> object:
+        _note(file)
+        return real_open(file, *args, **kwargs)  # type: ignore[call-overload]
+
+    def _rb(self: Path) -> bytes:
+        _note(self)
+        return real_read_bytes(self)
+
+    def _rt(self: Path, *args: object, **kwargs: object) -> str:
+        _note(self)
+        return real_read_text(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    def _po(self: Path, *args: object, **kwargs: object) -> object:
+        _note(self)
+        return real_path_open(self, *args, **kwargs)  # type: ignore[call-overload]
+
+    with (
+        mock.patch("builtins.open", _open),
+        mock.patch.object(Path, "read_bytes", _rb),
+        mock.patch.object(Path, "read_text", _rt),
+        mock.patch.object(Path, "open", _po),
+    ):
+        report = audit(tmp_path)
+
+    assert opened == []
+    # A non-vacuous run: every identity kind was reached.
+    assert {f.kind for f in report.findings} >= {
+        FindingKind.AMBIGUOUS_SOURCE,
+        FindingKind.ORPHANED_SOURCE,
+        FindingKind.DUPLICATE_SESSION,
+    }
+    assert _snapshot(tmp_path) == before
+
+
+def test_check_cli_prints_the_three_kinds_and_exits_one(tmp_path: Path) -> None:
+    _stage_identity_tree(tmp_path)
+
+    fitdocs = Path(sys.executable).parent / "fitdocs"
+    result = subprocess.run(
+        [str(fitdocs), "check", "--out", str(tmp_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    # The listing prints subject, detail and remedy, not the kind name.
+    for fragment in (
+        source_ref(_SHA_HELD),  # held
+        source_ref(_SHA_ORPHAN),  # orphaned
+        _REMEDY_ORPHAN,
+        "the same session as",  # duplicate
+        _REMEDY_ONE_WORKOUT,
+    ):
+        assert fragment in result.stdout, fragment
