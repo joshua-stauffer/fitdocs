@@ -91,7 +91,7 @@ def _reason_for_credential_fields(fields: object, auth_style: object) -> str | N
 
     names = [field.name for field in fields]
     for field in fields:
-        if not _FIELD_NAME_PATTERN.match(field.name):
+        if not _FIELD_NAME_PATTERN.fullmatch(field.name):
             return "credential_fields must have valid names"
         if not isinstance(field.label, str) or not field.label:
             return "credential_fields must have non-empty labels"
@@ -140,7 +140,7 @@ def validate_connector(obj: object) -> str | None:
     current = "connector_id"
     try:
         connector_id = getattr(obj, current, None)
-        if not isinstance(connector_id, str) or not _CONNECTOR_ID_PATTERN.match(
+        if not isinstance(connector_id, str) or not _CONNECTOR_ID_PATTERN.fullmatch(
             connector_id
         ):
             return "connector_id must match ^[a-z0-9][a-z0-9-]{0,63}$"
