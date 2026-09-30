@@ -1,0 +1,50 @@
+site_name: fitdocs
+site_url: https://fitdocs.ai/
+site_description: Turn .fit files into markdown workout pages you own.
+repo_url: https://github.com/joshua-stauffer/fitdocs
+repo_name: joshua-stauffer/fitdocs
+edit_uri: edit/main/website/content/
+use_directory_urls: true
+strict: true
+theme:
+  name: material
+  variant: classic
+  font: false
+  logo: _brand/logo.svg
+  favicon: _brand/logo.svg
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.path
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+  palette:
+    - media: "(prefers-color-scheme)"
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/link-variant
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/toggle-switch-off
+        name: Switch to system preference
+extra_css:
+  - _brand/brand.css
+plugins:
+  - search

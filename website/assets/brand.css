@@ -1,0 +1,70 @@
+/* The one place the site's brand values live: palette, typeface, hero. */
+
+:root,
+[data-md-color-scheme="default"],
+[data-md-color-scheme="slate"] {
+  --md-text-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --md-code-font: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --md-primary-fg-color: #1f2933;
+  --md-primary-fg-color--light: #3e4c59;
+  --md-primary-fg-color--dark: #121820;
+  --md-primary-bg-color: #ffffff;
+  --md-primary-bg-color--light: #ffffffb3;
+}
+
+[data-md-color-scheme="default"] {
+  --md-accent-fg-color: #b8324b;
+  --md-typeset-a-color: #b8324b;
+  --fd-hero-card-bg: #ffffff;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-accent-fg-color: #f07d8e;
+  --md-typeset-a-color: #f07d8e;
+  --fd-hero-card-bg: #f5f7fa;
+}
+
+.md-button--primary {
+  background-color: var(--md-accent-fg-color);
+  border-color: var(--md-accent-fg-color);
+}
+
+.fd-hero {
+  text-align: center;
+  padding: 2rem 0 1rem;
+}
+
+.fd-hero__title {
+  margin: 0 0 0.5rem;
+  font-size: 2.4em;
+  line-height: 1.15;
+}
+
+.fd-hero__tagline {
+  margin: 0 auto 1.5rem;
+  max-width: 36rem;
+  font-size: 1.15em;
+}
+
+.fd-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0 0 2rem;
+}
+
+.fd-hero__chart {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 1rem;
+  background-color: var(--fd-hero-card-bg);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.1rem 0.5rem rgba(0, 0, 0, 0.25);
+}
+
+.fd-hero__chart img {
+  display: block;
+  width: 100%;
+  height: auto;
+}

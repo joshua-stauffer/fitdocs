@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="#9aa5b1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <title>Placeholder mark: a page outline with a pulse line</title>
+  <path d="M12 6h17l9 9v27H12z"/>
+  <path d="M29 6v9h9"/>
+  <path d="M16 30h5l3-7 4 12 3-5h3"/>
+</svg>
