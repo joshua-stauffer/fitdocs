@@ -817,7 +817,7 @@ never co-varies two keys a rule distinguishes.
     (`docs/configuration.md:51`, `docs/compatibility.md:24, 64`)
   - _Requirements: 9.7, 9.8_
 
-- [ ] 6.2 Publish the roles, renames and held files in the ownership contract and advance its version
+- [x] 6.2 Publish the roles, renames and held files in the ownership contract and advance its version
   - Advance `CONTRACT_VERSION` by one from `main`'s value with its own
     docstring paragraph (controller ruling R1: every lander advances, no
     sharing); update the contract document's version line and **replace** its
