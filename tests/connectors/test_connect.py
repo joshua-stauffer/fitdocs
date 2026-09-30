@@ -26,7 +26,6 @@ import pytest
 from fitdocs.connectors.connect import (
     Connected,
     ConnectFailed,
-    ConnectorInstance,
     run_connect,
 )
 from fitdocs.connectors.credentials import CredentialStore, env_var_name
@@ -35,12 +34,14 @@ from fitdocs.connectors.http import HttpResponse, TransportError, auth_failure_f
 from fitdocs.connectors.protocol import (
     AuthStyle,
     Capability,
+    Connector,
     ConnectorSession,
     CredentialField,
     Granted,
     TokenSet,
 )
 from fitdocs.connectors.secrets import REDACTED, Redactor, Secret
+from fitdocs.connectors.settings import ConnectorInstance
 from tests.connectors.conftest import (
     FakeTransport,
     ScriptedLoginConnector,
@@ -145,6 +146,12 @@ class _OAuthBrowserConnector:
         return None
 
 
+def _instance(*, name: str, connector: Connector) -> ConnectorInstance:
+    return ConnectorInstance(
+        name=name, connector=connector, lookback_days=30, settings=None
+    )
+
+
 def _run(
     instance: ConnectorInstance,
     answers: Mapping[str, str],
@@ -177,7 +184,7 @@ def test_personal_key_verify_success_stores_answers_and_scopes(tmp_path: Path) -
     )
     store = CredentialStore(tmp_path / "creds")
     connector = _HttpPersonalKeyConnector()
-    instance = ConnectorInstance(name="svc1", connector=connector)
+    instance = _instance(name="svc1", connector=connector)
 
     result = _run(
         instance, {"api_key": "leaked-key-1"}, store=store, transport=transport
@@ -213,7 +220,7 @@ def test_personal_key_success_with_no_scopes_is_recorded_as_absent(
     transport = FakeTransport([HttpResponse(status=200, headers={}, body=b"{}")])
     store = CredentialStore(tmp_path / "creds")
     connector = _HttpPersonalKeyConnector()
-    instance = ConnectorInstance(name="svc-noscopes", connector=connector)
+    instance = _instance(name="svc-noscopes", connector=connector)
 
     result = _run(
         instance, {"api_key": "leaked-key-8"}, store=store, transport=transport
@@ -230,7 +237,7 @@ def test_login_success_stores_tokens_and_not_the_password(tmp_path: Path) -> Non
     transport = FakeTransport([HttpResponse(status=200, headers={}, body=b"{}")])
     store = CredentialStore(tmp_path / "creds")
     connector = _HttpLoginConnector()
-    instance = ConnectorInstance(name="login1", connector=connector)
+    instance = _instance(name="login1", connector=connector)
 
     result = _run(
         instance,
@@ -259,7 +266,7 @@ def test_login_success_stores_tokens_and_not_the_password(tmp_path: Path) -> Non
 def test_login_success_with_no_scopes_is_recorded_as_absent(tmp_path: Path) -> None:
     transport = FakeTransport([HttpResponse(status=200, headers={}, body=b"{}")])
     store = CredentialStore(tmp_path / "creds")
-    instance = ConnectorInstance(
+    instance = _instance(
         name="login-noscopes", connector=_HttpLoginConnector(scopes=None)
     )
 
@@ -284,7 +291,7 @@ def test_personal_key_stores_every_answer_not_only_the_secret_ones(
         CredentialField("org_id", "Org ID", secret=False),
     )
     connector = _HttpPersonalKeyConnector(credential_fields=fields)
-    instance = ConnectorInstance(name="svc-two", connector=connector)
+    instance = _instance(name="svc-two", connector=connector)
     transport = FakeTransport([HttpResponse(status=200, headers={}, body=b"{}")])
     store = CredentialStore(tmp_path / "creds")
 
@@ -321,7 +328,7 @@ def test_each_scripted_failure_makes_one_request_and_stores_nothing(
     credentials_dir = tmp_path / "creds"
     store = CredentialStore(credentials_dir)
     connector = _HttpPersonalKeyConnector()
-    instance = ConnectorInstance(name="svc-fail", connector=connector)
+    instance = _instance(name="svc-fail", connector=connector)
 
     result = _run(
         instance, {"api_key": "leaked-key-2"}, store=store, transport=transport
@@ -350,7 +357,7 @@ def test_non_header_answer_is_also_redacted_from_a_personal_key_failure(
         CredentialField("org_id", "Org ID", secret=False),
     )
     connector = _HttpPersonalKeyConnector(credential_fields=fields)
-    instance = ConnectorInstance(name="svc-org", connector=connector)
+    instance = _instance(name="svc-org", connector=connector)
     transport = FakeTransport([HttpResponse(status=401, headers={}, body=b"{}")])
     store = CredentialStore(tmp_path / "creds")
 
@@ -375,7 +382,7 @@ def test_login_failure_redacts_the_username_and_not_only_the_password(
     transport = FakeTransport([HttpResponse(status=401, headers={}, body=b"{}")])
     store = CredentialStore(tmp_path / "creds")
     connector = _HttpLoginConnector()
-    instance = ConnectorInstance(name="login-fail", connector=connector)
+    instance = _instance(name="login-fail", connector=connector)
 
     result = _run(
         instance,
@@ -397,7 +404,7 @@ def test_429_with_retry_after_names_the_wait(tmp_path: Path) -> None:
     )
     store = CredentialStore(tmp_path / "creds")
     connector = _HttpPersonalKeyConnector()
-    instance = ConnectorInstance(name="svc-429", connector=connector)
+    instance = _instance(name="svc-429", connector=connector)
 
     result = _run(
         instance, {"api_key": "leaked-key-6"}, store=store, transport=transport
@@ -422,7 +429,7 @@ def test_network_error_redacts_the_key_but_keeps_the_target(tmp_path: Path) -> N
     credentials_dir = tmp_path / "creds"
     store = CredentialStore(credentials_dir)
     connector = _HttpPersonalKeyConnector()
-    instance = ConnectorInstance(name="svc-net", connector=connector)
+    instance = _instance(name="svc-net", connector=connector)
 
     result = _run(
         instance, {"api_key": "leaked-key-3"}, store=store, transport=transport
@@ -458,7 +465,7 @@ def test_503_makes_exactly_one_request_never_retried(tmp_path: Path) -> None:
     )
     store = CredentialStore(tmp_path / "creds")
     connector = _HttpPersonalKeyConnector()
-    instance = ConnectorInstance(name="svc-503", connector=connector)
+    instance = _instance(name="svc-503", connector=connector)
 
     result = _run(
         instance, {"api_key": "leaked-key-4"}, store=store, transport=transport
@@ -476,7 +483,7 @@ def test_503_makes_exactly_one_request_never_retried(tmp_path: Path) -> None:
 def test_second_connect_replaces_the_first_file(tmp_path: Path) -> None:
     store = CredentialStore(tmp_path / "creds")
     connector = _HttpPersonalKeyConnector()
-    instance = ConnectorInstance(name="svc-replace", connector=connector)
+    instance = _instance(name="svc-replace", connector=connector)
 
     first_transport = FakeTransport(
         [HttpResponse(status=200, headers={"x-scopes": "read"}, body=b"{}")]
@@ -516,7 +523,7 @@ def test_overriding_env_variables_are_reported_in_declared_order(
         CredentialField("org_id", "Org ID", secret=False),
     )
     connector = _HttpPersonalKeyConnector(credential_fields=fields)
-    instance = ConnectorInstance(name="svc-env", connector=connector)
+    instance = _instance(name="svc-env", connector=connector)
     api_key_var = env_var_name("svc-env", "api_key")
     org_id_var = env_var_name("svc-env", "org_id")
     transport = FakeTransport([HttpResponse(status=200, headers={}, body=b"{}")])
@@ -540,7 +547,7 @@ def test_empty_env_variable_is_not_reported_as_an_override(tmp_path: Path) -> No
         CredentialField("org_id", "Org ID", secret=False),
     )
     connector = _HttpPersonalKeyConnector(credential_fields=fields)
-    instance = ConnectorInstance(name="svc-env2", connector=connector)
+    instance = _instance(name="svc-env2", connector=connector)
     api_key_var = env_var_name("svc-env2", "api_key")
     org_id_var = env_var_name("svc-env2", "org_id")
     transport = FakeTransport([HttpResponse(status=200, headers={}, body=b"{}")])
@@ -560,7 +567,7 @@ def test_empty_env_variable_is_not_reported_as_an_override(tmp_path: Path) -> No
 
 def test_login_style_never_reports_an_env_override(tmp_path: Path) -> None:
     connector = _HttpLoginConnector()
-    instance = ConnectorInstance(name="login-env", connector=connector)
+    instance = _instance(name="login-env", connector=connector)
     transport = FakeTransport([HttpResponse(status=200, headers={}, body=b"{}")])
     store = CredentialStore(tmp_path / "creds")
     var_name = env_var_name("login-env", "password")
@@ -588,7 +595,7 @@ def test_none_auth_style_raises_before_any_request(tmp_path: Path) -> None:
     credentials_dir = tmp_path / "creds"
     store = CredentialStore(credentials_dir)
     connector = ScriptedPuller()
-    instance = ConnectorInstance(name="svc-none", connector=connector)
+    instance = _instance(name="svc-none", connector=connector)
 
     with pytest.raises(AssertionError):
         _run(instance, {}, store=store, transport=transport)
@@ -602,7 +609,7 @@ def test_oauth_browser_auth_style_raises_before_any_request(tmp_path: Path) -> N
     credentials_dir = tmp_path / "creds"
     store = CredentialStore(credentials_dir)
     connector = _OAuthBrowserConnector()
-    instance = ConnectorInstance(name="svc-oauth", connector=connector)
+    instance = _instance(name="svc-oauth", connector=connector)
 
     with pytest.raises(AssertionError):
         _run(instance, {}, store=store, transport=transport)
