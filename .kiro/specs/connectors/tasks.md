@@ -646,7 +646,7 @@
     when activity-identity is on `main`)
   - _Requirements: 11.4, 12.1, 12.2, 12.3, 12.4, 12.5_
 
-- [ ] 6. Guards and true network statements
+- [x] 6. Guards and true network statements
 
 - [x] 6.1 (P) Guard the package boundary and confine network code to two modules
   - The four layers design.md states: each module's *direct* (not
@@ -706,7 +706,7 @@
   - _Requirements: 14.4_
   - _Boundary: NetworkStatements_
 
-- [ ] 6.3 (P) Register `pull` with the write-confinement guard and prove `connect` writes only its credentials file
+- [x] 6.3 (P) Register `pull` with the write-confinement guard and prove `connect` writes only its credentials file
   - A staging function writing a settings file with the inbox and one
     folder instance whose path is the sandbox's source directory; a run
     function driving the settings, inbox, connectors reader, inbox creation
@@ -776,7 +776,7 @@
 
 - [ ] 8. Contracts, documentation, and the packaged skill (four independent documents)
 
-- [ ] 8.1 (P) Publish the credential, ledger and command statements in the ownership contract and apply the contract-version rule
+- [x] 8.1 (P) Publish the credential, ledger and command statements in the ownership contract and apply the contract-version rule
   - The `.fitdocs/` bullet names the connector ledgers, keeping `.fitdocs/`
     its first backticked token; a shared-and-user-owned bullet for the
     credentials store outside the data root; `[connectors]` in the
@@ -811,7 +811,7 @@
   - _Requirements: 15.1, 15.2, 15.6_
   - _Boundary: ContractVersion, OwnershipContractDocs_
 
-- [ ] 8.2 (P) State the delivery-removal carve-out and the connectors settings table in the inbox, configuration and compatibility pages
+- [x] 8.2 (P) State the delivery-removal carve-out and the connectors settings table in the inbox, configuration and compatibility pages
   - `docs/inbox.md`: the opening bold sentence keeps "fitdocs performs no
     watching and no scheduling of any kind" and says delivering files is
     the athlete's concern unless a connector is configured; the disposition
@@ -845,7 +845,7 @@
   - _Requirements: 8.9, 15.4, 15.6_
   - _Boundary: InboxDocs, CompatibilityDocs, ConfigurationDocs_
 
-- [ ] 8.3 (P) Update the README, the wiki-integration page and the changelog
+- [x] 8.3 (P) Update the README, the wiki-integration page and the changelog
   - `README.md`: `:31`'s ingest line names connectors; `:113`'s skill
     summary names the pull; a short `## Connectors` section linking the
     connectors page by project URL; a "Learn more" bullet
