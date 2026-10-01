@@ -1312,17 +1312,22 @@ Summary-only. It is one page with these H2 sections:
   - The statement that rebuild-on-save belongs to the repository's site
     tooling. fitdocs itself performs no watching and no scheduling, so the
     corpus pin still holds.
-- **Maintainer runbook** (11.5):
-  - **DNS**: apex A records `185.199.108.153`–`185.199.111.153`, AAAA
-    `2606:50c0:8000::153`–`2606:50c0:8003::153`, and `www` CNAME
-    `joshua-stauffer.github.io`.
+- **Maintainer runbook** (11.5), in GitHub's order: verify the domain, then
+  configure Pages and the custom domain, then create DNS records, then
+  enforce HTTPS. DNS records created before the domain is verified and set
+  as the custom domain leave a gap in which another account can claim it.
   - **Domain verification**: TXT record
-    `_github-pages-challenge-joshua-stauffer.fitdocs.ai`, kept in place.
+    `_github-pages-challenge-joshua-stauffer.fitdocs.ai`, created in the
+    account's own Settings (not the repository's) and kept in place.
   - **Pages settings**:
     - Source "GitHub Actions";
     - custom domain `fitdocs.ai`;
-    - Enforce HTTPS, which may take up to 24 h to become available;
     - the `github-pages` environment limited to `main`.
+  - **DNS**: apex A records `185.199.108.153`–`185.199.111.153`, AAAA
+    `2606:50c0:8000::153`–`2606:50c0:8003::153`, and `www` CNAME
+    `joshua-stauffer.github.io`.
+  - **Enforce HTTPS**, which GitHub offers only after DNS resolves and may
+    take up to 24 h to become available.
   - **Content import**: copy the draft into `website/content/`, build
     locally, and land it per the change protocol. A push to `main` deploys it.
   - **Zensical pin bump**:

@@ -721,7 +721,7 @@
 
 - [ ] 6. Documentation and project metadata
 
-- [ ] 6.1 Document the site in `docs/website.md` and link it from the entry point
+- [x] 6.1 Document the site in `docs/website.md` and link it from the entry point
   - Write `docs/website.md` with these sections:
     - an intro stating that it documents the repository's website and is
       not one of the contracts governed by the compatibility policy, linking
