@@ -478,7 +478,7 @@
     `uv run mypy` green
   - _Requirements: 1.9, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.12, 6.13, 7.2, 7.4, 7.7, 8.5, 11.5, 13.4_
 
-- [ ] 4.4 Give the pull its credentials, its token renewal, its failure isolation, and its redaction
+- [x] 4.4 Give the pull its credentials, its token renewal, its failure isolation, and its redaction
   - Resolve each instance's credentials through the store and the
     environment; a not-connected instance is the instance's error carrying
     the next step; a login-style token expiring within the margin is renewed
@@ -964,3 +964,4 @@
 - 4.5: `connectors.connect.run_connect` never redacts the next step or path (they hold no user or service text); unexpected exceptions from verify/login propagate unredacted -- 5.1's CLI must map them (queued).
 - 6.2: every network statement names the map tiles AND both connector commands (`fitdocs connect` authenticates once; `fitdocs pull` fetches) -- round 1 wrongly wrote pull as the only other path. `tests/connectors/test_network_statements.py` scopes each positive check to a unique (start, end) anchor span; tasks 7, 8.2 and 8.3 rewording README.md or docs/configuration.md near those sentences must keep each anchor unique and present, or update the anchors.
 - 4.3: `connectors.pull.run_pull(data_root, inbox, instances, options, ...)` -> `PullReport`; `listed` counts every listed entry (invalid, repeated, unavailable, start-less, already-final, fetch-deferred all included; listing deferrals excluded). Six review rounds, all test-side: tie order, held-before-unavailable, and `listed` each needed fixtures that differ from every plausible wrong rule. 4.4 owns redaction of `unavailable_reason`/`Declined` in the ledger (reviewer mutation S4 survives until then). Callers must pass instances name-sorted (5.x `NAMES...`).
+- 4.4: per-instance failure scope in `run_pull` -- credential resolution catches `ConnectorError`+`CredentialStoreError`; renewal and listing catch `Exception` (BaseException always escapes); a fetch `AuthFailure`/`ConnectorError` ends the instance, any other fetch exception (incl. `TransportError`) is an unrecorded failed note. `_instance_error` appends the kind's next step for `AuthFailure` and the UNAVAILABLE step for `TransportError` (controller ruling, Req 6.10). Renewed `TokenSet` values are registered with the redactor before persisting (round-2 finding: a renewed token otherwise leaked unredacted). Error-detail pins are exact strings, not `in`.
