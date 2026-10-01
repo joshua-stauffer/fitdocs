@@ -5,10 +5,11 @@ HealthFit → iCloud, watch sync, a manual drop, your own script — and
 `fitdocs sync`, run with no arguments, drains it. `fitdocs sync SOURCE` keeps
 working exactly as before and never reads the inbox or its settings.
 
-**Delivering files is entirely your concern. fitdocs performs no watching and
-no scheduling of any kind** — there is no daemon, no filesystem watcher, and
-no background process. A drain happens only when `fitdocs sync` is invoked,
-one shot, by you, your cron job, or your wiki agent.
+**Delivering files is your concern, unless you configure a connector. fitdocs
+performs no watching and no scheduling of any kind** — there is no daemon, no
+filesystem watcher, and no background process. A drain happens only when
+`fitdocs sync` is invoked, one shot, by you, your cron job, or your wiki
+agent.
 
 ## Default location and configuration
 
@@ -87,6 +88,15 @@ existing `doc_version` is newer than this fitdocs produces — is never moved:
 **it stays in the inbox and is retried on the next drain.** That includes a
 file whose document could not be updated for any reason; leaving it in place
 is what makes the retry possible.
+
+**Connector deliveries are the one carve-out.** The drain itself never
+deletes anything — this is unchanged. A file `fitdocs pull` delivered under
+`<inbox>/<name>/` is fitdocs's own copy of bytes already recorded in that
+connector's ledger, not something you or your tools put there, and the
+*next* pull removes it once the archive holds an identical-content copy.
+Nothing you or your own tools put in the inbox is ever removed — only a
+connector's own prior deliveries, already archived, are ever candidates for
+removal.
 
 **Held files.** A file that cannot be placed with certainty — its workout
 matches two or more existing pages, or files of two different workouts in the

@@ -7,9 +7,9 @@ under it, and the network behavior that file controls.
 ## The data-root contract
 
 Every command that describes or changes a tree (`sync`, `regen`, `load`,
-`check`, `plan`, `history`, `derive-benchmarks`, and any future one) needs a
-data root — the directory fitdocs writes documents, assets, the source
-archive, and its own state into. Only a command that describes the
+`check`, `plan`, `history`, `derive-benchmarks`, `connect`, `pull`, and any
+future one) needs a data root — the directory fitdocs writes documents,
+assets, the source archive, and its own state into. Only a command that describes the
 *installed tool itself*, rather than any tree (today: `fitdocs plugins`,
 `fitdocs skill [NAME]`), needs no data root at all.
 
@@ -48,7 +48,7 @@ fails loudly instead of writing generated documents into that checkout.
 ## The settings file: `<data-root>/fitdocs.toml`
 
 A single user-owned file lives at `<data-root>/fitdocs.toml`. fitdocs only
-ever *reads* it — it never creates, prompts for, or writes it. It carries seven
+ever *reads* it — it never creates, prompts for, or writes it. It carries eight
 tables today, each documented in full where noted:
 
 | Table | Configures | Documented in |
@@ -60,6 +60,7 @@ tables today, each documented in full where noted:
 | `[plans]` | Where `fitdocs plan` looks for plan sources | the [README's Training blocks section](../README.md#training-blocks) |
 | `[history]` | The fitness/fatigue/form model constants and coverage threshold `fitdocs history` renders from | below |
 | `[identity]` | The source precedence that chooses each page's base file | below |
+| `[connectors]` | Per-instance connector configuration for `fitdocs connect` and `fitdocs pull` | below |
 
 Every table's keys default independently, so an absent file, an absent
 table, or a partially filled table is never an error on its own — only a
@@ -297,6 +298,17 @@ page's own origin line names, field by field, which is which:
 | `coverage_threshold` | The minimum share of a period's pages that must record a load before its curve is drawn rather than suppressed. | `0.80` |
 | `methodology` | Which calculator's load values to read; falls back to `[load].default_calculator` when unset. | `null` (unset) |
 
+### `[connectors]`: pulling from a configured source
+
+Each `[connectors.<name>]` table configures one connector instance for
+`fitdocs connect` and `fitdocs pull`: which connector it uses (by default
+the one named like the instance), how far back a pull lists (30 days by
+default), and any keys the connector itself takes.
+Credentials never belong in this file. See
+[`docs/connectors.md`](connectors.md) for the full guide — configuring an
+instance, the built-in folder connector, connecting, where credentials
+live, pulling, delivery and removal, and what leaves your machine.
+
 ## The athlete profile: `<data-root>/athlete.toml`
 
 Alongside the settings file, an optional `<data-root>/athlete.toml` carries
@@ -313,6 +325,8 @@ inputs — and a malformed one is a configuration error (exit code 2).
 ## Related pages
 
 - [`docs/inbox.md`](inbox.md) — the full inbox interface.
+- [`docs/connectors.md`](connectors.md) — configuring and running a
+  connector.
 - [`docs/plugins.md`](plugins.md) — the plugin platform.
 - [`docs/ownership-contract.md`](ownership-contract.md) — what fitdocs owns
   in your data root and what you own.
