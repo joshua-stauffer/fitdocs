@@ -530,11 +530,75 @@ def test_sweep_reports_a_failed_removal_and_keeps_the_entry_pending(
     assert len(result.failures) == 1
     failed_path, reason = result.failures[0]
     assert failed_path == "healthfit/run.fit"
-    assert "permission denied" in reason
+    assert reason == "OSError: permission denied"
     # A failed removal changes nothing about the entry: it stays exactly as it was.
     assert result.ledger.get("r1") == entry
     # The mocked removal never actually happened.
     assert pending_file.is_file()
+
+
+def test_sweep_reports_a_failed_hash_read_and_keeps_the_entry_pending(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An ``OSError`` while *reading* a present, archived file to hash it
+    (not while removing it) leaves the entry pending and reports the failure
+    -- the sweep continues rather than aborting (R1 controller ruling)."""
+    data_root = tmp_path / "data"
+    inbox = tmp_path / "inbox"
+    data = b"cant-read-this-to-hash-it"
+    sha = _write_archive(data_root, data)
+
+    pending_dir = inbox / "healthfit"
+    pending_dir.mkdir(parents=True)
+    pending_file = pending_dir / "run.fit"
+    pending_file.write_bytes(data)
+    assert pending_file.is_file()
+
+    real_read_bytes = Path.read_bytes
+
+    def _boom(self: Path) -> bytes:
+        # Scoped to paths under this test's own tmp_path: a blanket patch of
+        # every `Path.read_bytes` call risks breaking pytest's own teardown
+        # machinery, which also touches paths.
+        if self == tmp_path or tmp_path in self.parents:
+            raise OSError("permission denied reading for hash")
+        return real_read_bytes(self)
+
+    monkeypatch.setattr(Path, "read_bytes", _boom, raising=True)
+
+    entry = _pending_entry(
+        "r1", sha256=sha, pending="healthfit/run.fit", revision="rev-hashfail"
+    )
+    # A second, unrelated pending entry proves the sweep continues past the
+    # failing one rather than aborting the whole sweep (R1). Its archive
+    # copy exists but its inbox file does not -- the *settled* branch (Req
+    # 8.6: moved by the drain's disposition, or deleted after archiving),
+    # which only clears `pending` and never reads or hashes anything, so it
+    # is genuinely unaffected by the `read_bytes` failure above.
+    other_data = b"a-second-entry-that-sweeps-fine"
+    other_sha = _write_archive(data_root, other_data)
+    other_ledger_entry = _pending_entry(
+        "r2", sha256=other_sha, pending="other/gone.fit", revision="rev-other"
+    )
+    ledger = Ledger(
+        connector_id="folder", watermark=None, entries=(entry, other_ledger_entry)
+    )
+
+    result = sweep(inbox, data_root, ledger)
+
+    assert result.removed == ()
+    assert len(result.failures) == 1
+    failed_path, reason = result.failures[0]
+    assert failed_path == "healthfit/run.fit"
+    assert reason == "OSError: permission denied reading for hash"
+    # A failed hash read changes nothing about the entry: it stays exactly
+    # as it was, still pending.
+    assert result.ledger.get("r1") == entry
+    # The other, unrelated entry (archived, file absent) still resolves
+    # normally -- the sweep visited it and did not abort on the first
+    # entry's read failure.
+    assert result.ledger.get("r2") is not None
+    assert result.ledger.get("r2").pending is None  # type: ignore[union-attr]
 
 
 def test_sweep_never_removes_a_hand_dropped_inbox_file(tmp_path: Path) -> None:

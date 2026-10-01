@@ -186,7 +186,9 @@ class SweepResult:
     """Inbox-relative paths of files actually unlinked (Req 8.5)."""
 
     failures: tuple[tuple[str, str], ...]
-    """``(path, reason)`` for a removal that raised; the entry stays pending."""
+    """``(path, reason)`` for a hash read or removal that raised; the entry
+    stays pending. ``reason`` is ``f"{type(exc).__name__}: {exc}"``, matching
+    the format ``pull.py``'s own exception reports use."""
 
 
 def _remove(path: Path) -> None:
@@ -220,9 +222,12 @@ def sweep(inbox: Path, data_root: Path, ledger: Ledger) -> SweepResult:
     * not archived, file absent -> drop the entry entirely (*forgotten*, so
       the next pull fetches it again, Req 8.7).
 
-    A removal that raises :class:`OSError` leaves the entry pending and is
-    reported in ``failures`` instead of ``removed`` -- the next sweep will
-    retry it.
+    An :class:`OSError` while reading a present, archived file to hash it, or
+    while removing it once the hash matches, leaves the entry pending and is
+    reported in ``failures`` instead of ``removed`` -- the sweep continues
+    with the next pending entry rather than aborting, and the next sweep will
+    retry the failed one. ``pull.py`` (4.3) maps every ``failures`` pair to a
+    deferred note keyed by the pending path.
     """
     result = ledger
     removed: list[str] = []
@@ -240,12 +245,16 @@ def sweep(inbox: Path, data_root: Path, ledger: Ledger) -> SweepResult:
 
         if archive_exists:
             if file_exists:
-                current_hash = hashlib.sha256(pending_path.read_bytes()).hexdigest()
+                try:
+                    current_hash = hashlib.sha256(pending_path.read_bytes()).hexdigest()
+                except OSError as exc:
+                    failures.append((pending_rel, f"{type(exc).__name__}: {exc}"))
+                    continue
                 if current_hash == sha:
                     try:
                         _remove(pending_path)
                     except OSError as exc:
-                        failures.append((pending_rel, str(exc)))
+                        failures.append((pending_rel, f"{type(exc).__name__}: {exc}"))
                         continue
                     result = result.with_entry(replace(entry, pending=None))
                     removed.append(pending_rel)
