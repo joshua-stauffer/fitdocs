@@ -31,3 +31,6 @@ Implementation Notes 2.2 and 7.2 (WARN in the agent log 2026-09-19); root confte
 
 ## How to pick it up
 Read conftest.py's purge, add scripts/ (and consider making the purge scope a list), then run the check named in the resume command. Done when a same-second, same-size mutation to scripts/artifact_policy.py reds a test without a manual purge.
+
+## Update 2026-10-01 (docs-site validation)
+docs-site adds a large mutation-tested package under `scripts/sitebuild/` (10 modules) plus `scripts/build_site.py`, `check_site.py`, `make_hero_chart.py`; every docs-site reviewer mutated these files. The design-validation reviewer re-flagged this item: a `scripts/**/__pycache__` left by a direct `python -m scripts.*` run can make mutation evidence false. None existed at validation time (impl/docs-site ba76d03). The fix should cover `scripts/sitebuild/` too.
