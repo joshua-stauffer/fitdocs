@@ -613,7 +613,7 @@
     `has_content=false`.
   - _Requirements: 1.1, 1.2, 6.5, 7.1, 8.4, 10.6_
 
-- [ ] 4. Validation against the real generator
+- [x] 4. Validation against the real generator
 
 - [x] 4.1 Smoke-test a real build of the fixture site, and each failure class
   - Create `tests/sitebuild/test_build_smoke.py`, entirely behind
@@ -651,7 +651,7 @@
     exits 0.
   - _Requirements: 1.8, 2.4, 3.3, 3.4, 4.1, 4.3, 4.4, 4.6, 5.1, 5.2, 5.3, 6.1, 6.2, 6.6, 9.1, 9.2_
 
-- [ ] 4.2 Prove the live preview end to end against the real generator
+- [x] 4.2 Prove the live preview end to end against the real generator
   - Add the integration part of `tests/sitebuild/test_preview.py`, behind
     `requires_zensical`:
     - run `serve` on a free port, in a thread with a stop event, over a
