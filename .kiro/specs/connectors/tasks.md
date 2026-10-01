@@ -774,7 +774,7 @@
   - _Requirements: 14.6, 15.5_
   - _Boundary: ConnectorsDoc, NeutralScan_
 
-- [ ] 8. Contracts, documentation, and the packaged skill (four independent documents)
+- [x] 8. Contracts, documentation, and the packaged skill (four independent documents)
 
 - [x] 8.1 (P) Publish the credential, ledger and command statements in the ownership contract and apply the contract-version rule
   - The `.fitdocs/` bullet names the connector ledgers, keeping `.fitdocs/`
@@ -871,7 +871,7 @@
   - _Requirements: 15.8_
   - _Boundary: ReadmeAndIndex, ChangelogEntry_
 
-- [ ] 8.4 (P) Teach the packaged skill the pull and move its pins
+- [x] 8.4 (P) Teach the packaged skill the pull and move its pins
   - The skill's description, commands section (the routine fence exactly
     `fitdocs pull --sync --no-prompt` then `fitdocs check`; the no-connector
     equivalence; the retry-quarantined instruction unchanged; never run
@@ -894,7 +894,7 @@
 
 - [ ] 9. Records and validation
 
-- [ ] 9.1 Record the steering rules and the other specs' amendments
+- [x] 9.1 Record the steering rules and the other specs' amendments
   - `.kiro/steering/tech.md`: the network-and-credentials subsection;
     `.kiro/steering/structure.md`: the connectors dependency line; a grep of
     steering and `CLAUDE.md` for contradicted network statements, each moved
