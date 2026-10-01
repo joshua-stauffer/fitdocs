@@ -892,7 +892,7 @@
   - _Requirements: 15.7_
   - _Boundary: PackagedSkill, SkillPins_
 
-- [ ] 9. Records and validation
+- [x] 9. Records and validation
 
 - [x] 9.1 Record the steering rules and the other specs' amendments
   - `.kiro/steering/tech.md`: the network-and-credentials subsection;
@@ -918,7 +918,7 @@
     "fully offline" finds no contradicted statement
   - _Requirements: 14.7_
 
-- [ ] 9.2 End-to-end pull and drain, offline commands under the socket guard, and the whole-suite gate
+- [x] 9.2 End-to-end pull and drain, offline commands under the socket guard, and the whole-suite gate
   - An end-to-end test over a synthetic folder source and a synthetic
     personal-key connector behind the patched transport seam: `fitdocs pull
     --sync --no-prompt` delivers, drains into workout documents and exits
@@ -968,3 +968,4 @@
 - 5.1: `connect_command` maps an unexpected connector exception to `<Type>: <redacted message>`, exit 1 (design silent; same rule as pull, queued as a design note). Every connect print uses `soft_wrap=True`, and test fixtures for wrapped lines assert `len(line) > 80` -- a line of exactly 80 columns passes CI by coincidence. Seam bodies (`_ask_secret`/getpass, `_ask_value`/typer.prompt, `_stdin_is_interactive`, `_connector_transport`) and the `run_connect` wiring (transport, tz-aware now, real sleep) are pinned directly, since every other test patches them. 5.2/5.3: copy this shape.
 - 5.2: `pull_command` + `_report_pull` (rows bound to `InstancePullReport` fields via `_PULL_REPORT_ROWS`, pinned against `dataclasses.fields`). `--since` is that date's local midnight (`datetime.combine(d, time.min).astimezone().astimezone(UTC)`): `_local_tz()` is today's fixed offset and is an hour off across DST. The `--dry-run` help states a token renewal is still saved (design's "write nothing" contradicts Req 6.9). The `--sync`-only preflight (athlete, plugins, tiles, quarantine, identity, holds) is already wired in 5.2 in design order; 5.3 owns pinning its three middle adjacent pairs, rewriting the "does not yet chain" docstring sentences, and passing `identity.precedence` into the drain helper.
 - 5.3 (declared deviation): design.md "Identity wiring" prescribes `_run_drain_passes(..., precedence=)` with the `[identity]` load in `sync_command`; the helper shipped by activity-identity loads `[identity]` and the hold record itself, so `pull --sync` reads both twice (preflight, then helper). Kept: moving the load would reorder `sync`'s configuration errors, which 1.4 forbids. Queued as a design amendment. `pull --sync` forwards `force=False`, `retry_quarantined=False` (pull declares neither flag), pinned by behaviour. "No request made" pins need a puller scripted to deliver -- an unscripted one crashes with `UnscriptedCall` and pins nothing.
+- 9.2: the e2e hand-drop fixture must be a `.fit` the drain ARCHIVES but the ledger does not own (one at the inbox root, one inside `<inbox>/<instance>/`): an unarchived `.txt` cannot catch a ledger-blind "remove archived files" sweep. The offline-commands test compares exit code, output, socket-attempt counts and scripted-connector call lists, because `regen` already swallows two tile socket attempts. Requirement sweep at landing: 15.1, 15.6 (ownership-contract `[connectors]`) and 15.8 UNPINNED (queued); 15.2 PINNED by the declaration goldens.
