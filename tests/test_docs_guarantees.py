@@ -1104,13 +1104,15 @@ def test_agent_skills_readme_section_documents_install_verify_and_update() -> No
 
 _ENTRY_POINT = _REPO_ROOT / "docs" / "index.md"
 
-# The ten pages 7.9/design.md's docs/index.md bullet names, exactly as
-# docs/index.md's own links must spell them (relative to docs/index.md
-# itself, so the CONTRIBUTING.md target climbs one directory).
+# The pages 7.9/design.md's docs/index.md bullet names (the connectors
+# spec's task 7 added its own row), exactly as docs/index.md's own links
+# must spell them (relative to docs/index.md itself, so the CONTRIBUTING.md
+# target climbs one directory).
 _REQUIRED_ENTRY_POINT_LINKS = [
     "install.md",
     "configuration.md",
     "inbox.md",
+    "connectors.md",
     "upgrading.md",
     "wiki-integration.md",
     "ownership-contract.md",
@@ -1141,11 +1143,11 @@ def _plain_link_targets(markdown: str) -> list[str]:
 
 def test_documentation_entry_point_links_every_required_page() -> None:
     """7.9/design.md's ``docs/index.md`` bullet: a single entry point linking
-    install, configuration, the inbox interface, upgrading, wiki integration,
-    the ownership contract, the plugin platform, compatibility, releasing,
-    and contributing.
+    install, configuration, the inbox interface, connectors, upgrading, wiki
+    integration, the ownership contract, the plugin platform, compatibility,
+    releasing, and contributing.
 
-    Each of the ten targets is checked both for presence in the parsed link
+    Each of the required targets is checked both for presence in the parsed link
     list (a renamed or dropped link is caught even if the file it would have
     pointed at still exists) and for actually resolving to a file on disk (a
     stale link to a renamed page is caught even though the link text is
@@ -1166,11 +1168,12 @@ def test_documentation_entry_point_links_every_required_page() -> None:
     text = _ENTRY_POINT.read_text(encoding="utf-8")
     targets = _plain_link_targets(text)
 
-    # Positive control: parsing must find at least the ten required links,
-    # or the loop below would pass having checked a target list emptied by a
+    # Positive control: parsing must find at least the required links, or
+    # the loop below would pass having checked a target list emptied by a
     # broken regex.
-    assert len(targets) >= 10, (
-        f"expected at least 10 links parsed from docs/index.md, found {targets}"
+    assert len(targets) >= len(_REQUIRED_ENTRY_POINT_LINKS), (
+        f"expected at least {len(_REQUIRED_ENTRY_POINT_LINKS)} links parsed "
+        f"from docs/index.md, found {targets}"
     )
 
     for required in _REQUIRED_ENTRY_POINT_LINKS:
