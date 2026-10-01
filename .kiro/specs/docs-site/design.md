@@ -882,7 +882,9 @@ def dump_config(config: Mapping[str, object]) -> str: ...    # yaml.safe_dump(so
 MANAGED: Final[tuple[str, ...]] = ("mkdocs.yml", "staged", "overrides", "html")
 STAGED: Final = "staged"
 HTML: Final = "html"
+INJECTED_LINE: Final = 2  # staged line of the home page's injected `template:`
 
+def source_where(path: str, where: str) -> str: ...  # home-page line:col after INJECTED_LINE moves up one
 def plan_tree(content: SiteContent, *, config_text: str, llms: str, llms_full: str,
               assets_dir: Path, overrides_dir: Path) -> dict[str, bytes]: ...
 def write_tree(tree: Mapping[str, bytes], root: Path) -> None: ...
@@ -912,7 +914,10 @@ def sync_tree(tree: Mapping[str, bytes], root: Path) -> None: ...
     `╭─[ <path>:<line>:<col> ]` frame, becomes
     `Problem(path, f"{line}:{col}", msg)`.
     - The path is relative to `staged/`. Staging mirrors content paths 1:1, so
-      it is already the content-relative path.
+      it is already the content-relative path. The home page's staged copy
+      carries one injected `template:` line (`stage.INJECTED_LINE`), so the
+      pipeline maps its reported lines back to source lines
+      (`stage.source_where`: lines after the injected line move up by one).
     - Paths under `_brand/`, and the two llms files, are build-owned and
       reported as-is.
   - A line `Error: <msg>` becomes `Problem("site generator", "", msg)`.
@@ -969,8 +974,10 @@ def start_serve(root: Path, addr: str) -> subprocess.Popen[bytes]: ...
   3. The config's referenced assets are checked against that planned tree.
   4. All script-level problems are collected (2.9). If any exist, the build
      fails without writing anything or running the generator.
-  5. Otherwise `write_tree`, then `run_build`. On generator failure `html/`
-     is deleted, since the generator repopulates it even when it fails.
+  5. Otherwise `write_tree`, then `run_build`; the generator's problems are
+     mapped through `stage.source_where` before they are returned. On
+     generator failure `html/` is deleted, since the generator repopulates it
+     even when it fails.
 - **Atomic outcome** (6.6). `html/` exists after `build` returns if and only
   if the outcome is success.
 

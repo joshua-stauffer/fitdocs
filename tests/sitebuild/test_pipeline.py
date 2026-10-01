@@ -410,6 +410,34 @@ def test_a_generator_failure_removes_html_even_when_the_generator_made_it(
     assert not (root / "html").exists()
 
 
+def test_generator_lines_on_the_home_page_are_mapped_to_source_lines(
+    tmp_path: Path, stub: Recorder
+) -> None:
+    """Generator problems on ``index.md`` report the content file's line (6.5).
+
+    The staged home page has one injected line, so the generator's line is one
+    too high; other pages and path-less problems pass through unchanged.
+
+    Dies on: the mapping dropped from ``build``; the mapping applied to every
+    page; a path-less problem altered; ``where`` replaced by a fixed value.
+    """
+    stub.result = GeneratorResult(
+        ok=False,
+        problems=(
+            Problem("index.md", "16:58", "home"),
+            Problem("why.md", "16:58", "other"),
+            Problem("site generator", "", "none"),
+        ),
+        output="",
+    )
+    outcome = build(FIXTURE, tmp_path / "out", repo_root=REPO_ROOT)
+    assert rendered(outcome) == [
+        "index.md: 15:58: home",
+        "why.md: 16:58: other",
+        "site generator: none",
+    ]
+
+
 def test_the_managed_paths_are_cleared_before_the_content_is_loaded(
     tmp_path: Path, stub: Recorder, monkeypatch: pytest.MonkeyPatch
 ) -> None:

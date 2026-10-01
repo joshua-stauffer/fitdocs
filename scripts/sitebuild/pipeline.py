@@ -34,7 +34,7 @@ from scripts.sitebuild.generator import run_build
 from scripts.sitebuild.links import check_links
 from scripts.sitebuild.model import Problem
 from scripts.sitebuild.outline import nav_structure, render_llms, render_llms_full
-from scripts.sitebuild.stage import HTML, STAGED, plan_tree, write_tree
+from scripts.sitebuild.stage import HTML, STAGED, plan_tree, source_where, write_tree
 
 DEFAULT_BUILD_ROOT: Final = Path("website/build/site")
 DEFAULT_PREVIEW_ROOT: Final = Path("website/build/preview")
@@ -152,7 +152,11 @@ def build(content_dir: Path, root: Path, *, repo_root: Path) -> BuildOutcome:
         raise
     if not result.ok:
         _remove_html(root)
-    return BuildOutcome(result.ok, result.problems, result.output, tree, page_count)
+    problems = tuple(
+        Problem(p.path, source_where(p.path, p.where), p.message)
+        for p in result.problems
+    )
+    return BuildOutcome(result.ok, problems, result.output, tree, page_count)
 
 
 def _llms_fields(

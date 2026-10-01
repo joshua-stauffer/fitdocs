@@ -17,9 +17,11 @@ from scripts.sitebuild.content import load_content, strip_annotation
 from scripts.sitebuild.model import HOME_PAGE, Asset, Page, SiteContent
 from scripts.sitebuild.stage import (
     HTML,
+    INJECTED_LINE,
     MANAGED,
     STAGED,
     plan_tree,
+    source_where,
     sync_tree,
     write_tree,
 )
@@ -159,6 +161,43 @@ def test_home_page_differs_by_exactly_the_injected_line() -> None:
     assert after[:1] + after[2:] == before
     delta = [d for d in difflib.ndiff(before, after) if d[0] in "+-"]
     assert delta == [f"+ {INJECTED}\n"]
+
+
+def test_injected_line_constant_is_the_staged_line_of_the_template_line() -> None:
+    """``INJECTED_LINE`` is the 1-based staged line holding the injected text.
+
+    Dies on: ``INJECTED_LINE`` drifting from where ``_inject_template`` puts the
+    line.
+    """
+    staged = _plan(_content())[f"{STAGED}/{HOME_PAGE}"].decode("utf-8")
+    assert staged.splitlines()[INJECTED_LINE - 1] == INJECTED
+
+
+@pytest.mark.parametrize(
+    ("path", "where", "expected"),
+    [
+        (HOME_PAGE, "16:58", "15:58"),
+        (HOME_PAGE, "3:1", "2:1"),
+        (HOME_PAGE, "2:5", "2:5"),
+        (HOME_PAGE, "1:1", "1:1"),
+        (HOME_PAGE, "", ""),
+        (HOME_PAGE, "title", "title"),
+        (HOME_PAGE, "x:58", "x:58"),
+        (HOME_PAGE, "16:x", "16:x"),
+        ("why.md", "16:58", "16:58"),
+        ("guides/index.md", "16:58", "16:58"),
+    ],
+)
+def test_source_where_corrects_only_home_lines_after_the_injection(
+    path: str, where: str, expected: str
+) -> None:
+    """A home-page location after the injected line moves up one; nothing else moves.
+
+    Dies on: no correction; correcting every page; subtracting 0 or 2; correcting
+    the opening-fence line or the injected line itself; touching a non-``line:col``
+    ``where``.
+    """
+    assert source_where(path, where) == expected
 
 
 def test_only_the_root_home_page_gets_the_template_line() -> None:

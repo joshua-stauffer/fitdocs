@@ -519,3 +519,37 @@ def test_a_broken_link_fails_the_build_naming_the_file_and_leaves_no_html(
     assert failure.message in rendered[0], rendered
     assert not (root / "html").exists()
     assert (root / "staged").is_dir()
+
+
+@pytest.mark.parametrize(
+    "link", ["[here](#no-such-anchor)", "[nothing](missing-page.md)"]
+)
+def test_a_broken_link_on_the_home_page_reports_its_content_line(
+    link: str, requires_zensical: None, tmp_path: Path
+) -> None:
+    """The home page's staged copy has an injected line; the report must not show it.
+
+    A broken link is added on a known line of a copy of the fixture ``index.md``,
+    and the real generator's problem names exactly that content line.
+
+    Dies on: the pipeline passing the generator's lines through unchanged (it
+    reports the line one too high); the correction applied to every page or in
+    the wrong direction.
+    """
+    content = copy_fixture_tree(FIXTURE, tmp_path, "content")
+    page = content / "index.md"
+    original = page.read_text(encoding="utf-8")
+    marker = "before anything else.\n"
+    assert original.count(marker) == 1
+    page.write_text(
+        original.replace(marker, marker + "\nSee " + link + ".\n"), encoding="utf-8"
+    )
+    expected = original[: original.index(marker)].count("\n") + 3
+    outcome = build(content, tmp_path / "root", repo_root=REPO_ROOT)
+    assert not outcome.ok
+    rendered = [p.render() for p in outcome.problems]
+    assert len(rendered) == 1, rendered
+    assert rendered[0].startswith(f"index.md: {expected}:"), rendered
+    assert (
+        page.read_text(encoding="utf-8").splitlines()[expected - 1].startswith("See ")
+    )

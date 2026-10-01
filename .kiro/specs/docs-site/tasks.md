@@ -786,9 +786,9 @@
     assertions.
   - _Requirements: 11.1, 11.8_
 
-- [ ] 7. Feature validation
+- [x] 7. Feature validation
 
-- [ ] 7.1 Validate the whole feature after rebasing onto `main`
+- [x] 7.1 Validate the whole feature after rebasing onto `main`
   - Rebase onto current `main` and resolve the shared files by keeping both
     sides.
   - **Full gates.** Run the complete class-validation row:
@@ -964,3 +964,4 @@
   - `plugins: [search]` is pinned in test_config.py; Zensical writes search.json regardless.
   - Linux runs so far were aarch64 only. The first ubuntu amd64 evidence is the docs.yml CI run.
   - 6.2: `[project.urls]` held eleven keys before this spec (`Wiki Integration` came in 7faa55e, distribution 5.4), not ten; tasks.md and design.md corrected, the wiring test pins all eleven as a subset (a later `Connectors` key stays green).
+  - 7.1 / validation: generator problems on the home page were one line too high (the injected `template:` line); fixed by `stage.INJECTED_LINE` + `stage.source_where`, applied in `pipeline.build` (preview inherits it). `--verbose` output stays raw, so its home-page positions are the staged copy's. Forbidden-strings guard run by hand with the real match file before merge: clean (CI never runs it on tracked files; queued).

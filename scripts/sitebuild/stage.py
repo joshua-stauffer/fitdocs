@@ -27,6 +27,9 @@ _OVERRIDES: Final = "overrides"
 # describes it; ``.cache/`` is not managed at all.
 _PLANNED: Final[tuple[str, ...]] = (_CONFIG, STAGED, _OVERRIDES)
 _FENCE: Final = "---\n"
+# The 1-based line the home page's injected ``template:`` line occupies in the
+# staged file: straight after the opening fence.
+INJECTED_LINE: Final = 2
 
 
 def plan_tree(
@@ -102,6 +105,24 @@ def sync_tree(tree: Mapping[str, bytes], root: Path) -> None:
             _remove(path)
     for key in sorted(tree):
         _write_file(root, key, tree[key], skip_equal=True)
+
+
+def source_where(path: str, where: str) -> str:
+    """Map a generator-reported ``line:col`` back to the content file's line.
+
+    Only the home page carries an injected line, so only its locations after
+    that line move up by one; every other path, and a ``where`` that is not
+    ``line:col``, comes back unchanged.
+    """
+    if path != HOME_PAGE:
+        return where
+    line, sep, col = where.partition(":")
+    if not (sep and line.isdecimal() and col.isdecimal()):
+        return where
+    number = int(line)
+    if number <= INJECTED_LINE:
+        return where
+    return f"{number - 1}:{col}"
 
 
 def _inject_template(text: str) -> str:
