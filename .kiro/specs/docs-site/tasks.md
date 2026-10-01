@@ -668,9 +668,9 @@
     rename-swap is invisible to `serve`.
   - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-- [ ] 5. Automation: the docs workflow and its test
+- [x] 5. Automation: the docs workflow and its test
 
-- [ ] 5.1 Build, gate and deploy the site from `.github/workflows/docs.yml`, with its workflow test
+- [x] 5.1 Build, gate and deploy the site from `.github/workflows/docs.yml`, with its workflow test
   - Write `docs.yml` exactly per design.md § DocsWorkflow:
     - the `push` and `pull_request` `paths` lists;
     - workflow `permissions: {contents: read}`, and env `TERM: dumb`,

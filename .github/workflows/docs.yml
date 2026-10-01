@@ -1,0 +1,123 @@
+# Documentation site (docs-site task 5.1; design.md "DocsWorkflow";
+# Requirements 9.5, 10.1-10.9).
+#
+# Builds and gates the site on every relevant push and pull request, and
+# publishes to GitHub Pages from a push to `main` only, and only when
+# website/content holds an included page. With no content the job builds
+# the fixture site instead, so the pipeline is exercised, and deploy is
+# skipped with a notice. The encumbered-content gate runs over the staged
+# and the built trees; an absent secret fails the job closed
+# (`gate_not_run`), and so does a fork PR, by design (Requirement 10.4).
+# Publish permissions live on the `deploy` job alone.
+
+on:
+  push:
+    paths: &paths
+      - "website/**"
+      - "scripts/build_site.py"
+      - "scripts/check_site.py"
+      - "scripts/make_hero_chart.py"
+      - "scripts/sitebuild/**"
+      - "tests/sitebuild/**"
+      - "tests/test_docs_workflow.py"
+      - "tests/_forbidden_strings.py"
+      - "tests/_content_oracle.py"
+      - "tests/_content_fingerprints.py"
+      - "docs/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    paths: *paths
+
+permissions:
+  contents: read
+
+env:
+  # typer forces rich's terminal rendering whenever GITHUB_ACTIONS is set,
+  # which inserts ANSI styling into `--help` output; a dumb terminal renders
+  # the plain text a developer's non-tty run sees. NO_COLOR is the public
+  # convention for the same intent.
+  TERM: dumb
+  NO_COLOR: "1"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      has_content: ${{ steps.content.outputs.has_content }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+
+      - name: Install Python 3.11
+        run: uv python install 3.11
+
+      - name: Sync dependencies, keeping dev for the gate cores
+        run: uv sync --group docs
+
+      - name: Run the site tests
+        env:
+          FITDOCS_REQUIRE_SITE_TOOLING: "1"
+        run: uv run --group docs pytest tests/sitebuild tests/test_docs_workflow.py
+
+      - name: Report whether the site has content
+        id: content
+        run: uv run python -m scripts.build_site status >> "$GITHUB_OUTPUT"
+
+      - name: Build the site
+        if: steps.content.outputs.has_content == 'true'
+        run: uv run --group docs python -m scripts.build_site build
+
+      - name: Build the fixture site
+        if: steps.content.outputs.has_content != 'true'
+        run: |
+          uv run --group docs python -m scripts.build_site build --content tests/sitebuild/fixtures/site
+          echo "::notice::website/content holds no included page; built the fixture site; deploy skipped"
+
+      # A pull request from a fork never sees this repository's secrets --
+      # GitHub redacts them to an empty string for fork-triggered runs. That
+      # means a fork PR fails here, by design: the encumbered-content gate
+      # cannot run without its match data, and an unrun gate is exactly the
+      # `gate_not_run` failure this step reports (distribution Requirement
+      # 6.9; docs-site Requirement 10.4). There is no fork-specific skip; the
+      # gate is fail-closed for every trigger.
+      - name: Write the match data outside the checkout
+        env:
+          FITDOCS_FORBIDDEN_STRINGS_CONTENT: ${{ secrets.FITDOCS_FORBIDDEN_STRINGS_CONTENT }}
+        run: |
+          if [ -z "$FITDOCS_FORBIDDEN_STRINGS_CONTENT" ]; then
+            echo "::error::gate_not_run: FITDOCS_FORBIDDEN_STRINGS_CONTENT secret is not set; the encumbered-content gate cannot run"
+            exit 1
+          fi
+          printf '%s' "$FITDOCS_FORBIDDEN_STRINGS_CONTENT" > "$RUNNER_TEMP/forbidden-strings.txt"
+
+      - name: Gate the staged and built trees
+        run: FITDOCS_FORBIDDEN_STRINGS="$RUNNER_TEMP/forbidden-strings.txt" uv run python -m scripts.check_site website/build/site/staged website/build/site/html
+
+      - name: Upload the Pages artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.content.outputs.has_content == 'true'
+        uses: actions/upload-pages-artifact@v5.0.0
+        with:
+          path: website/build/site/html
+
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build.outputs.has_content == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5.0.1

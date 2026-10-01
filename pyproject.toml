@@ -177,6 +177,7 @@ files = [
     "tests/identity/test_settings_docs.py",
     "tests/test_identity_e2e.py",
     "tests/test_cli_identity.py",
+    "tests/test_docs_workflow.py",
     "tests/sitebuild",
     "scripts",
 ]
