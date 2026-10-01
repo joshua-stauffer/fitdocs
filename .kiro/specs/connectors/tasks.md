@@ -533,7 +533,7 @@
   - _Requirements: 4.6, 4.8, 5.5, 5.6, 5.7, 5.8, 10.2_
   - _Boundary: ConnectEngine_
 
-- [ ] 5. The commands
+- [x] 5. The commands
 
 - [x] 5.1 Add `fitdocs connect`
   - The command and its module-level seams (transport, terminal check,
@@ -599,7 +599,7 @@
     options
   - _Requirements: 3.9, 4.2, 6.1, 6.2, 6.3, 6.9, 8.4, 11.1, 11.2, 11.3, 11.4, 11.5_
 
-- [ ] 5.3 Chain the drain after the pull with `--sync`
+- [x] 5.3 Chain the drain after the pull with `--sync`
   - Under `--sync`, the preflight also checks the athlete profile, the
     plugins table, the tiles table and the quarantine record (the checks the
     drain path makes before its first write); after the pull report, the
@@ -967,3 +967,4 @@
 - 4.4: per-instance failure scope in `run_pull` -- credential resolution catches `ConnectorError`+`CredentialStoreError`; renewal and listing catch `Exception` (BaseException always escapes); a fetch `AuthFailure`/`ConnectorError` ends the instance, any other fetch exception (incl. `TransportError`) is an unrecorded failed note. `_instance_error` appends the kind's next step for `AuthFailure` and the UNAVAILABLE step for `TransportError` (controller ruling, Req 6.10). Renewed `TokenSet` values are registered with the redactor before persisting (round-2 finding: a renewed token otherwise leaked unredacted). Error-detail pins are exact strings, not `in`.
 - 5.1: `connect_command` maps an unexpected connector exception to `<Type>: <redacted message>`, exit 1 (design silent; same rule as pull, queued as a design note). Every connect print uses `soft_wrap=True`, and test fixtures for wrapped lines assert `len(line) > 80` -- a line of exactly 80 columns passes CI by coincidence. Seam bodies (`_ask_secret`/getpass, `_ask_value`/typer.prompt, `_stdin_is_interactive`, `_connector_transport`) and the `run_connect` wiring (transport, tz-aware now, real sleep) are pinned directly, since every other test patches them. 5.2/5.3: copy this shape.
 - 5.2: `pull_command` + `_report_pull` (rows bound to `InstancePullReport` fields via `_PULL_REPORT_ROWS`, pinned against `dataclasses.fields`). `--since` is that date's local midnight (`datetime.combine(d, time.min).astimezone().astimezone(UTC)`): `_local_tz()` is today's fixed offset and is an hour off across DST. The `--dry-run` help states a token renewal is still saved (design's "write nothing" contradicts Req 6.9). The `--sync`-only preflight (athlete, plugins, tiles, quarantine, identity, holds) is already wired in 5.2 in design order; 5.3 owns pinning its three middle adjacent pairs, rewriting the "does not yet chain" docstring sentences, and passing `identity.precedence` into the drain helper.
+- 5.3 (declared deviation): design.md "Identity wiring" prescribes `_run_drain_passes(..., precedence=)` with the `[identity]` load in `sync_command`; the helper shipped by activity-identity loads `[identity]` and the hold record itself, so `pull --sync` reads both twice (preflight, then helper). Kept: moving the load would reorder `sync`'s configuration errors, which 1.4 forbids. Queued as a design amendment. `pull --sync` forwards `force=False`, `retry_quarantined=False` (pull declares neither flag), pinned by behaviour. "No request made" pins need a puller scripted to deliver -- an unscripted one crashes with `UnscriptedCall` and pins nothing.

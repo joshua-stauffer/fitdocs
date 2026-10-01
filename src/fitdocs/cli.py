@@ -66,8 +66,14 @@ would fetch, fetching, delivering, removing, and recording nothing under the
 data root or in the inbox -- except a token renewal the listing needed,
 which is still persisted to the credentials store (Req 6.9). ``--sync`` is
 declared, validated, and refused together with ``--dry-run`` here (Req
-12.4); the drain chain it will trigger after the pull is not yet wired. The
-printed report and the exit codes below follow connectors Req 11.1-11.5.
+12.4); after the pull report it chains the same drain ``fitdocs sync``'s
+own no-SOURCE branch runs -- the inbox drain, then the load pass, then the
+plan reconciling pass, labeled ``pull`` -- via the shared
+``_run_drain_passes`` helper (connectors Req 12.1-12.3), regardless of
+whether the pull itself reported a failure or no connector was configured
+(Req 12.2); the run exits with the failure code when the pull or the
+chained drain failed (Req 12.5). The printed report and the exit codes
+below follow connectors Req 11.1-11.5.
 
 Every tree-processing command (each command in the list above), *before any
 processing* (Req 2.1), resolves the data root by the explicit precedence
@@ -96,8 +102,10 @@ Exit codes (Req 1.5, 2.2, 8.5, 8.7):
   ``check`` reports one or more findings, ``plan`` finds an invalid, blocked,
   or failed block, the plan reconciling pass -- chained after ``sync``'s
   and ``regen``'s load pass, and run standalone by ``plan`` -- finds an
-  override problem (plan-resolution Req 8.7), or ``pull`` reports any
-  instance or activity failure (connectors Req 11.4);
+  override problem (plan-resolution Req 8.7), ``pull`` reports any
+  instance or activity failure (connectors Req 11.4), or (``--sync``) the
+  chained drain -- the inbox drain, its load pass, or its reconciling pass --
+  failed (connectors Req 12.5);
 * ``2`` -- a configuration error: an unresolvable data root (its message lists
   the three configuration options), a malformed ``athlete.toml`` / profile, a
   malformed ``fitdocs.toml`` ``[tiles]``, ``[load]``, ``[history]`` or
@@ -1004,16 +1012,23 @@ def pull_command(
     discovery, projects the tiles table, and loads the quarantine
     record -- the same checks ``fitdocs sync``'s own drain path makes before
     its first write -- plus the identity settings and the hold record
-    (identity Req 2.7); this version validates all of that but does not yet
-    chain the drain (task 5.3).
+    (identity Req 2.7), each before any request or write; after the pull
+    report, ``--sync`` chains :func:`_run_drain_passes` (task 1.4), labeled
+    ``pull``, even when an instance failed and even when no connector is
+    configured. The drain re-reads the identity table and the hold record
+    itself (a harmless repeat of this preflight's own read, the same pattern
+    :func:`_plugin_report` already runs twice on this path) and passes the
+    configured precedence into the drain call (connectors Req 12.1-12.3,
+    12.5; the join with activity-identity, design.md CliCommands "Identity
+    wiring").
 
     Unless ``--dry-run``, the inbox (and, under the move disposition, the
     processed-files destination) is created once every check above has
     passed. With no instance configured, this prints that nothing is
     configured and continues rather than returning early (Req 6.3) -- the
-    pull still runs, over no instances, so the report and (once chained) the
-    drain behave exactly as they would with a connectors table that
-    happens to be empty.
+    pull still runs, over no instances, so the report and (under
+    ``--sync``) the drain behave exactly as they would with a connectors
+    table that happens to be empty.
 
     The pull itself is :func:`~fitdocs.connectors.pull.run_pull`, which
     isolates every instance's and every activity's own failure into the
@@ -1076,8 +1091,9 @@ def pull_command(
             _config_error(str(exc))
         store = CredentialStore(credentials_dir)
 
+    athlete: AthleteInputs | None = None
     if sync_after:
-        _loaded_athlete(data_root)
+        athlete = _loaded_athlete(data_root)
         _plugin_report(data_root)
         try:
             tile_settings_from_document(document, settings_path(data_root))
@@ -1131,7 +1147,26 @@ def pull_command(
         raise typer.Exit(code=_EXIT_FILE_FAILURES) from None
 
     _report_pull(report)
-    _finish(failed=report.failed)
+    # Under --sync, the drain chains after the pull table regardless of
+    # whether the pull itself failed, and regardless of whether any instance
+    # was configured (no early return): the chained drain is the join with
+    # activity-identity -- `_run_drain_passes` loads its own [identity]
+    # table and hold record again (a redundant, harmless re-read, the same
+    # pattern `_plugin_report` already runs twice on this path) and passes
+    # the configured precedence into the drain itself (Req 12.1-12.3, 12.5).
+    drain_failed = False
+    if sync_after:
+        drain_failed = _run_drain_passes(
+            data_root,
+            tz=_local_tz(),
+            athlete=athlete,
+            force=False,
+            retry_quarantined=False,
+            no_prompt=no_prompt,
+            command="pull",
+        )
+    # The pull or the chained drain failing makes the run exit 1 (Req 12.5).
+    _finish(failed=report.failed or drain_failed)
 
 
 _PULL_REPORT_ROWS: Final[tuple[tuple[str, str], ...]] = (

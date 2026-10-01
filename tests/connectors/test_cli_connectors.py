@@ -47,6 +47,7 @@ import typer
 from typer.testing import CliRunner
 
 import fitdocs.cli as cli_module
+from fitdocs import AthleteInputs
 from fitdocs.cli import app
 from fitdocs.connectors import registry as connector_registry
 from fitdocs.connectors.credentials import CredentialStore, env_var_name
@@ -58,6 +59,7 @@ from fitdocs.connectors.protocol import (
     CredentialField,
     Declined,
     Deferred,
+    Fetched,
     Granted,
     Listing,
     RemoteActivity,
@@ -73,11 +75,18 @@ from fitdocs.connectors.pull import (
 )
 from fitdocs.connectors.secrets import Redactor
 from fitdocs.connectors.settings import ConnectorInstance
+from fitdocs.identity.roles import DEFAULT_PRECEDENCE
+from fitdocs.identity.settings import load_identity_settings
+from fitdocs.layout import settings_path
+from fitdocs.load.engine import DocLoadEntry, LoadReport
+from fitdocs.settings import load_settings_document
+from fitdocs.sync import DrainReport, FileFailure, SyncReport
 from tests.connectors.conftest import (
     ScriptedLoginConnector,
     ScriptedPersonalKeyConnector,
     ScriptedPuller,
 )
+from tests.fixtures import builder
 
 runner = CliRunner()
 
@@ -902,10 +911,10 @@ def test_none_style_long_instance_name_never_hard_wraps(
 # survives -- a fixture with only one violation present cannot tell "checked
 # first" from "checked only". The internal order of the --sync-only block
 # (athlete -> plugins -> tiles -> quarantine -> identity -> holds) is pinned
-# only at its two ends here (athlete-before-plugins, identity-before-holds);
-# the three middle adjacent pairs reuse already-tested call sequences
-# (``_inbox_preflight``, ``_run_drain_passes``) rather than re-pinning them,
-# and are declared UNPINNED in the task report.
+# at every adjacent pair (connectors task 5.3): athlete-before-plugins and
+# identity-before-holds below, plugins-before-tiles, tiles-before-quarantine,
+# and quarantine-before-identity further down (just above the sync/pull
+# chaining section), each its own two-violation fixture.
 # ---------------------------------------------------------------------------
 
 
@@ -1310,6 +1319,73 @@ def test_preflight_order_sync_athlete_before_plugins(
 
     assert result.exit_code == 2
     assert result.output.startswith(f"{tmp_path / 'athlete.toml'} is not valid TOML: ")
+
+
+def test_preflight_order_sync_plugins_before_tiles(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connector_registry.register(ScriptedPuller())
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path,
+        connectors=(
+            '[connectors.src]\nconnector = "scripted-puller"\n\n'
+            '[plugins]\nenabled = "not-a-bool"\n\n'
+            '[tiles]\nurl = "https://tiles.example/static.png"\n'
+        ),
+    )
+
+    result = runner.invoke(app, ["pull", "--sync", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert "[plugins] enabled must be a boolean" in result.output
+    assert "[tiles]" not in result.output
+
+
+def test_preflight_order_sync_tiles_before_quarantine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connector_registry.register(ScriptedPuller())
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path,
+        connectors=(
+            '[connectors.src]\nconnector = "scripted-puller"\n\n'
+            '[tiles]\nurl = "https://tiles.example/static.png"\n'
+        ),
+    )
+    state_dir = tmp_path / ".fitdocs"
+    state_dir.mkdir()
+    (state_dir / "quarantine.toml").write_text("not [ valid toml", encoding="utf-8")
+
+    result = runner.invoke(app, ["pull", "--sync", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert "[tiles] url must contain" in result.output
+    assert "quarantine.toml" not in result.output
+
+
+def test_preflight_order_sync_quarantine_before_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connector_registry.register(ScriptedPuller())
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path,
+        connectors=(
+            '[connectors.src]\nconnector = "scripted-puller"\n\n'
+            "[identity]\nprecedence = 5\n"
+        ),
+    )
+    state_dir = tmp_path / ".fitdocs"
+    state_dir.mkdir()
+    (state_dir / "quarantine.toml").write_text("not [ valid toml", encoding="utf-8")
+
+    result = runner.invoke(app, ["pull", "--sync", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert "quarantine.toml" in result.output
+    assert "precedence" not in result.output
 
 
 def test_preflight_order_sync_identity_before_hold_record(
@@ -1909,3 +1985,561 @@ def test_pull_help_renders_no_swallowed_markup() -> None:
         "remove, and record nothing -- except a token renewal the listing "
         "needs, which is still saved to the credentials store."
     ) in _collapsed(result.output)
+
+
+# ---------------------------------------------------------------------------
+# fitdocs pull --sync: chaining the drain (task 5.3, Req 11.4, 12.1-12.5)
+# ---------------------------------------------------------------------------
+
+
+def _configured_precedence(data_root: Path) -> object:
+    document = load_settings_document(data_root)
+    return load_identity_settings(document, settings_path(data_root)).precedence
+
+
+def _delivering_puller() -> ScriptedPuller:
+    """A puller scripted to list one activity and fetch its bytes if the pull
+    ever makes a request -- so ``list_calls``/``fetch_calls`` staying empty on
+    a preflight-exit test is observed, not merely assumed from an unscripted
+    puller that would instead raise on the first call it received."""
+    puller = ScriptedPuller()
+    puller.listing_script.append(
+        Listing(
+            activities=(RemoteActivity(remote_id="run-1", original_available=True),)
+        )
+    )
+    puller.fetch_script.append(Fetched(data=builder.run_fit_bytes()))
+    return puller
+
+
+def test_pull_sync_malformed_plugins_table_exits_2_with_no_request_made(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Named mutation: validating ``[plugins]`` only inside ``_run_drain_passes``
+    (not the pull preflight) reds this -- the pull would otherwise make a
+    request through the forbidden transport before the malformed table is
+    ever discovered."""
+    puller = _delivering_puller()
+    connector_registry.register(puller)
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path,
+        connectors=(
+            '[connectors.src]\nconnector = "scripted-puller"\n\n'
+            '[plugins]\nenabled = "not-a-bool"\n'
+        ),
+    )
+    before = _snapshot(tmp_path)
+
+    result = runner.invoke(app, ["pull", "--sync", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2, result.output
+    assert "[plugins] enabled must be a boolean" in result.output
+    assert _snapshot(tmp_path) == before
+    assert not (tmp_path / "inbox").exists()
+    assert puller.list_calls == []
+    assert puller.fetch_calls == []
+
+
+def test_pull_sync_malformed_identity_table_exits_2_naming_settings_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Named mutation: loading ``[identity]`` only inside the drain helper
+    instead of the ``--sync`` preflight reds this -- the pull would deliver
+    before the exit instead of making no request at all."""
+    puller = _delivering_puller()
+    connector_registry.register(puller)
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path,
+        connectors=(
+            '[connectors.src]\nconnector = "scripted-puller"\n\n'
+            '[identity]\nprecedence = "original"\n'
+        ),
+    )
+    before = _snapshot(tmp_path)
+
+    result = runner.invoke(app, ["pull", "--sync", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2, result.output
+    assert str(tmp_path / "fitdocs.toml") in result.output
+    assert "precedence" in result.output
+    assert _snapshot(tmp_path) == before
+    assert not (tmp_path / "inbox").exists()
+    assert puller.list_calls == []
+    assert puller.fetch_calls == []
+
+
+def test_pull_sync_damaged_hold_record_exits_2_naming_file_and_regen(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Named mutation: dropping ``load_holds`` from the ``--sync`` preflight
+    reds this the same way the malformed-``[identity]`` case does above --
+    the damaged record would only surface once the drain helper reaches it,
+    after the pull itself already ran."""
+    puller = _delivering_puller()
+    connector_registry.register(puller)
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path, connectors='[connectors.src]\nconnector = "scripted-puller"\n'
+    )
+    fitdocs_dir = tmp_path / ".fitdocs"
+    fitdocs_dir.mkdir()
+    held = fitdocs_dir / "held.toml"
+    held.write_text("not valid toml [[[")
+    before = _snapshot(tmp_path)
+
+    result = runner.invoke(app, ["pull", "--sync", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2, result.output
+    assert str(held) in result.output.replace("\n", "")
+    assert "fitdocs regen" in result.output
+    assert _snapshot(tmp_path) == before
+    assert not (tmp_path / "inbox").exists()
+    assert puller.list_calls == []
+    assert puller.fetch_calls == []
+
+
+def test_pull_sync_produces_documents_and_prints_the_drain_table_after_the_pull_table(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Named mutation: running the drain before the pull report reds the
+    ordering assertion below."""
+    _patch_pull_transport(monkeypatch)
+    source = tmp_path / "phone-exports"
+    source.mkdir()
+    (source / "run.fit").write_bytes(builder.run_fit_bytes())
+    _write_settings(
+        tmp_path,
+        connectors=(
+            '[connectors.folder-src]\nconnector = "folder"\n'
+            f'path = "{source.as_posix()}"\nsettle_seconds = 0\n'
+        ),
+    )
+
+    result = runner.invoke(
+        app, ["pull", "--sync", "--out", str(tmp_path), "--no-prompt"]
+    )
+
+    assert result.exit_code == 0, result.output
+    pull_table_index = result.output.index("fitdocs pull: folder-src")
+    # "Written:" is a drain-report-only label (the pull table's own rows never
+    # use it) -- its presence, after the instance table, is the chained
+    # drain's own report.
+    written_index = result.output.index("Written:")
+    assert pull_table_index < written_index
+    docs = list((tmp_path / "workouts").glob("*.md"))
+    assert docs, "the chained drain must have archived the delivered file"
+
+
+def test_pull_sync_drain_runs_even_when_an_instance_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Named mutation: skipping the drain when an instance failed reds this
+    -- a healthy instance's delivered file would never be archived."""
+    connector = ScriptedPersonalKeyConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    connector_registry.register(connector)
+    _patch_pull_transport(monkeypatch)
+    source = tmp_path / "phone-exports"
+    source.mkdir()
+    (source / "run.fit").write_bytes(builder.run_fit_bytes())
+    _write_settings(
+        tmp_path,
+        connectors=(
+            '[connectors.broken]\nconnector = "personal-key"\n\n'
+            '[connectors.healthy]\nconnector = "folder"\n'
+            f'path = "{source.as_posix()}"\nsettle_seconds = 0\n'
+        ),
+    )
+
+    result = runner.invoke(
+        app, ["pull", "--sync", "--out", str(tmp_path), "--no-prompt"]
+    )
+
+    assert result.exit_code == 1, result.output
+    assert "Error 1" in _collapsed(result.output)
+    docs = list((tmp_path / "workouts").glob("*.md"))
+    assert docs, "the drain must still have run despite the broken instance"
+
+
+def test_pull_sync_chained_drain_failure_exits_1_even_when_the_pull_succeeded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The pull itself delivers successfully (a healthy folder instance);
+    the chained drain's own per-file failure -- synthesized the same way
+    ``tests/test_cli_sync_inbox.py::test_drain_with_a_genuine_failure_exits_one``
+    does, rather than relying on a real file the folder connector's own
+    listing might instead skip before ever delivering it -- still drives the
+    exit code to ``1``."""
+    _patch_pull_transport(monkeypatch)
+    source = tmp_path / "phone-exports"
+    source.mkdir()
+    (source / "run.fit").write_bytes(builder.run_fit_bytes())
+    _write_settings(
+        tmp_path,
+        connectors=(
+            '[connectors.folder-src]\nconnector = "folder"\n'
+            f'path = "{source.as_posix()}"\nsettle_seconds = 0\n'
+        ),
+    )
+    failing_sync = SyncReport(
+        written=(),
+        skipped=(),
+        failures=(FileFailure(source="broken.fit", reason="CRC mismatch"),),
+        warnings=(),
+    )
+    failing_report = DrainReport(
+        inbox=str(tmp_path / "inbox"),
+        sync=failing_sync,
+        deferred=(),
+        quarantined=(),
+        moved=(),
+        move_failures=(),
+    )
+    monkeypatch.setattr(cli_module, "drain", lambda *a, **k: failing_report)
+
+    result = runner.invoke(
+        app, ["pull", "--sync", "--out", str(tmp_path), "--no-prompt"]
+    )
+
+    assert result.exit_code == 1, result.output
+    collapsed = _collapsed(result.output)
+    assert "Delivered 1" in collapsed  # the pull itself succeeded
+    assert "broken.fit" in result.output  # the chained drain's own failure
+
+
+def test_pull_sync_no_prompt_reaches_the_load_pass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Spied rather than asserted on output, mirroring
+    ``tests/test_cli_sync_inbox.py``'s identical pin for ``fitdocs sync``'s
+    own no-SOURCE branch -- ``CliRunner``'s stdin is never a TTY, so only the
+    forwarded value distinguishes the two."""
+    _patch_pull_transport(monkeypatch)
+    calls: list[bool] = []
+    original = cli_module._build_session
+
+    def _spy(*, no_prompt: bool) -> object:
+        calls.append(no_prompt)
+        return original(no_prompt=no_prompt)
+
+    monkeypatch.setattr(cli_module, "_build_session", _spy)
+
+    result = runner.invoke(
+        app, ["pull", "--sync", "--out", str(tmp_path), "--no-prompt"]
+    )
+    assert result.exit_code == 0, result.output
+    assert calls == [True]
+
+    calls.clear()
+    result = runner.invoke(app, ["pull", "--sync", "--out", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert calls == [False]
+
+
+def test_pull_sync_forwards_the_loaded_athlete_into_the_chained_drain(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The preflight's ``_loaded_athlete`` call is not just a validation read
+    -- its return value must reach the chained drain, the same athlete
+    inputs ``fitdocs sync``'s own drain branch threads through
+    ``_run_drain_passes``."""
+    puller = ScriptedPuller()
+    puller.listing_script.append(Listing(activities=()))
+    connector_registry.register(puller)
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path, connectors='[connectors.src]\nconnector = "scripted-puller"\n'
+    )
+    (tmp_path / "athlete.toml").write_text("ftp_watts = 250\n", encoding="utf-8")
+    calls: list[dict[str, object]] = []
+    real_run_drain_passes = cli_module._run_drain_passes
+
+    def _spy(data_root: object, **kwargs: object) -> object:
+        calls.append(kwargs)
+        return real_run_drain_passes(cast(Path, data_root), **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(cli_module, "_run_drain_passes", _spy)
+
+    result = runner.invoke(
+        app, ["pull", "--sync", "--out", str(tmp_path), "--no-prompt"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert len(calls) == 1
+    athlete = cast(AthleteInputs, calls[0]["athlete"])
+    assert athlete is not None
+    assert athlete.ftp_watts == 250
+
+
+def test_pull_sync_second_run_reports_the_first_runs_delivery_removed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    puller = ScriptedPuller()
+    puller.listing_script.append(
+        Listing(
+            activities=(RemoteActivity(remote_id="run-1", original_available=True),)
+        )
+    )
+    puller.fetch_script.append(Fetched(data=builder.run_fit_bytes()))
+    # Queued for the second invocation below: nothing further to list.
+    puller.listing_script.append(Listing(activities=()))
+    connector_registry.register(puller)
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path, connectors='[connectors.src]\nconnector = "scripted-puller"\n'
+    )
+
+    first = runner.invoke(
+        app, ["pull", "--sync", "--out", str(tmp_path), "--no-prompt"]
+    )
+    assert first.exit_code == 0, first.output
+    assert list((tmp_path / "workouts").glob("*.md")), (
+        "the first run's chained drain must have archived the delivery"
+    )
+
+    second = runner.invoke(
+        app, ["pull", "--sync", "--out", str(tmp_path), "--no-prompt"]
+    )
+
+    assert second.exit_code == 0, second.output
+    assert "Removed 1" in _collapsed(second.output)
+
+
+def test_pull_sync_with_no_connectors_matches_bare_sync_over_the_same_inbox(
+    tmp_path: Path,
+) -> None:
+    """``pull --sync --no-prompt`` with no ``[connectors]`` table prints the
+    no-connectors line and then chains the drain regardless (no early
+    return); every file the run leaves behind in its sandbox -- documents,
+    ``.fitdocs/`` state, the drained inbox and processed directory -- is
+    byte-for-byte what ``sync --no-prompt`` leaves behind from the identical
+    starting inbox, compared in two sandboxes."""
+    sandbox_pull = tmp_path / "via-pull"
+    sandbox_sync = tmp_path / "via-sync"
+    for sandbox in (sandbox_pull, sandbox_sync):
+        sandbox.mkdir()
+        (sandbox / "fitdocs.toml").write_text(
+            "[inbox]\nsettle_seconds = 0\n", encoding="utf-8"
+        )
+        inbox = sandbox / "inbox"
+        inbox.mkdir()
+        (inbox / "run.fit").write_bytes(builder.run_fit_bytes())
+
+    pull_result = runner.invoke(
+        app, ["pull", "--sync", "--no-prompt", "--out", str(sandbox_pull)]
+    )
+    sync_result = runner.invoke(
+        app, ["sync", "--no-prompt", "--out", str(sandbox_sync)]
+    )
+
+    assert pull_result.exit_code == 0, pull_result.output
+    assert sync_result.exit_code == 0, sync_result.output
+    assert "No connectors are configured; nothing to pull." in pull_result.output
+
+    def _tree(root: Path) -> dict[str, bytes]:
+        return {
+            p.relative_to(root).as_posix(): p.read_bytes()
+            for p in root.rglob("*")
+            if p.is_file()
+        }
+
+    pull_tree = _tree(sandbox_pull)
+    sync_tree = _tree(sandbox_sync)
+    assert any(name.startswith("workouts/") for name in pull_tree), (
+        "the chained drain must have archived the delivery"
+    )
+    assert pull_tree == sync_tree
+
+
+def test_pull_sync_with_no_connectors_exits_by_the_drains_outcome(
+    tmp_path: Path,
+) -> None:
+    """Named mutation: returning early when no instance is configured reds
+    this -- the per-file failure sitting in the inbox would never be
+    drained, so the run would wrongly exit 0."""
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    (data_root / "fitdocs.toml").write_text(
+        "[inbox]\nsettle_seconds = 0\n", encoding="utf-8"
+    )
+    inbox = data_root / "inbox"
+    inbox.mkdir()
+    (inbox / "bad.fit").write_bytes(builder.non_fit_bytes())
+
+    result = runner.invoke(
+        app, ["pull", "--sync", "--no-prompt", "--out", str(data_root)]
+    )
+
+    assert result.exit_code == 1, result.output
+    assert "No connectors are configured; nothing to pull." in result.output
+
+
+def test_pull_sync_drain_sees_the_configured_precedence_same_as_sync(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A spy on the drain call sees the configured ``[identity]`` precedence
+    under both ``pull --sync`` and ``sync`` (the join with activity-identity,
+    design.md CliCommands "Identity wiring").
+
+    Named mutation: dropping ``precedence=`` from the helper's drain call
+    reds the keyword-presence assertion below."""
+    pull_root = tmp_path / "via-pull"
+    sync_root = tmp_path / "via-sync"
+    identity_table = '[identity]\nprecedence = ["original", "phone_copy", "unknown"]\n'
+    for root in (pull_root, sync_root):
+        root.mkdir()
+        (root / "fitdocs.toml").write_text(
+            f"[inbox]\nsettle_seconds = 0\n\n{identity_table}", encoding="utf-8"
+        )
+    puller = ScriptedPuller()
+    puller.listing_script.append(Listing(activities=()))
+    connector_registry.register(puller)
+    _patch_pull_transport(monkeypatch)
+    pull_settings = (pull_root / "fitdocs.toml").read_text(encoding="utf-8")
+    (pull_root / "fitdocs.toml").write_text(
+        pull_settings + '[connectors.src]\nconnector = "scripted-puller"\n',
+        encoding="utf-8",
+    )
+
+    def _spy(real: object) -> tuple[Callable[..., object], list[dict[str, object]]]:
+        calls: list[dict[str, object]] = []
+
+        def wrapper(*args: object, **kwargs: object) -> object:
+            calls.append(kwargs)
+            return cast(Callable[..., object], real)(*args, **kwargs)
+
+        return wrapper, calls
+
+    real_drain = getattr(cli_module, "drain")  # noqa: B009 - mirrors test_cli_identity.py's _spy
+    wrapper, calls = _spy(real_drain)
+    monkeypatch.setattr(cli_module, "drain", wrapper)
+
+    pull_result = runner.invoke(
+        app, ["pull", "--sync", "--no-prompt", "--out", str(pull_root)]
+    )
+    assert pull_result.exit_code == 0, pull_result.output
+    assert len(calls) == 1
+    assert "precedence" in calls[0]
+    pull_precedence = calls[0]["precedence"]
+
+    calls.clear()
+    sync_result = runner.invoke(app, ["sync", "--no-prompt", "--out", str(sync_root)])
+    assert sync_result.exit_code == 0, sync_result.output
+    assert len(calls) == 1
+    assert "precedence" in calls[0]
+    sync_precedence = calls[0]["precedence"]
+
+    expected = _configured_precedence(pull_root)
+    assert pull_precedence == expected
+    assert sync_precedence == expected
+    assert pull_precedence != DEFAULT_PRECEDENCE
+
+
+def _inbox_only_sandbox(data_root: Path, name: str, payload: bytes) -> None:
+    """A minimal sandbox for the chained-drain tests below: a settled inbox
+    with no ``[connectors]`` table, so ``pull --sync`` runs its drain over
+    exactly the delivered file at ``name``."""
+    (data_root / "fitdocs.toml").write_text(
+        "[inbox]\nsettle_seconds = 0\n", encoding="utf-8"
+    )
+    inbox = data_root / "inbox"
+    inbox.mkdir()
+    (inbox / name).write_bytes(payload)
+
+
+def test_pull_sync_drain_table_is_titled_pull(tmp_path: Path) -> None:
+    """The chained drain's report table is titled ``fitdocs pull`` (Req
+    12.1), never ``fitdocs sync`` -- the title the same drain helper uses on
+    the explicit-source path.
+
+    Named mutation: passing ``command="sync"`` into ``_run_drain_passes``
+    from ``pull_command`` reds the ``fitdocs sync`` absence assertion below."""
+    _inbox_only_sandbox(tmp_path, "run.fit", builder.run_fit_bytes())
+
+    result = runner.invoke(
+        app, ["pull", "--sync", "--no-prompt", "--out", str(tmp_path)]
+    )
+
+    assert result.exit_code == 0, result.output
+    stripped = [line.strip() for line in result.output.splitlines()]
+    assert stripped.count("fitdocs pull") == 1
+    assert "fitdocs sync" not in stripped
+
+
+def test_pull_sync_drain_is_unforced_like_bare_sync(tmp_path: Path) -> None:
+    """The chained drain passes ``force=False``, the same as a bare ``sync``
+    -- an already-delivered file is skipped on a second run, not rewritten.
+
+    Named mutation: passing ``force=True`` into ``_run_drain_passes`` from
+    ``pull_command`` reds the second run's ``Written 0`` / ``Skipped 1``
+    assertions below."""
+    _inbox_only_sandbox(tmp_path, "run.fit", builder.run_fit_bytes())
+    argv = ["pull", "--sync", "--no-prompt", "--out", str(tmp_path)]
+
+    first = runner.invoke(app, argv)
+    assert first.exit_code == 0, first.output
+    assert "Written 1" in _collapsed(first.output)
+
+    second = runner.invoke(app, argv)
+    assert second.exit_code == 0, second.output
+    collapsed = _collapsed(second.output)
+    assert "Written 0" in collapsed
+    assert "Skipped 1" in collapsed
+
+
+def test_pull_sync_drain_does_not_retry_quarantined_files(tmp_path: Path) -> None:
+    """The chained drain passes ``retry_quarantined=False``, the same as a
+    bare ``sync`` -- a file quarantined on the first run stays quarantined
+    (not re-attempted and re-failed) on the second.
+
+    Named mutation: passing ``retry_quarantined=True`` into
+    ``_run_drain_passes`` from ``pull_command`` reds the second run's
+    ``Quarantined 1`` / ``Failed 0`` assertions below (a retried file would
+    instead fail again and be counted under ``Failed``)."""
+    _inbox_only_sandbox(tmp_path, "bad.fit", builder.non_fit_bytes())
+    argv = ["pull", "--sync", "--no-prompt", "--out", str(tmp_path)]
+
+    first = runner.invoke(app, argv)
+    assert first.exit_code == 1, first.output
+
+    second = runner.invoke(app, argv)
+    assert second.exit_code == 0, second.output
+    collapsed = _collapsed(second.output)
+    assert "Quarantined 1" in collapsed
+    assert "Failed 0" in collapsed
+
+
+def test_pull_sync_chained_load_failure_exits_1(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A load-pass failure inside the chained drain still makes ``pull
+    --sync`` exit 1, and names the failing document -- the load pass's
+    outcome is one of the three ``_run_drain_passes`` folds into its
+    returned ``drain_failed`` (alongside a per-file drain failure and a
+    reconciling-pass failure).
+
+    Named mutation: dropping ``or bool(load_report.failures)`` from
+    ``_run_drain_passes``'s returned expression reds the exit-code assertion
+    below (the drain and plan passes both stay clean in this fixture, so
+    only the load failure can drive the exit code)."""
+    (tmp_path / "fitdocs.toml").write_text(
+        "[inbox]\nsettle_seconds = 0\n", encoding="utf-8"
+    )
+    failing = LoadReport(
+        computed=(),
+        restored=(),
+        unsupported=(),
+        skipped=(),
+        failures=(DocLoadEntry(doc="workouts/damaged.md", detail="damaged markers"),),
+    )
+    monkeypatch.setattr(cli_module, "apply_load", lambda *a, **k: failing)
+
+    result = runner.invoke(
+        app, ["pull", "--sync", "--no-prompt", "--out", str(tmp_path)]
+    )
+
+    assert result.exit_code == 1, result.output
+    assert "workouts/damaged.md" in result.output
