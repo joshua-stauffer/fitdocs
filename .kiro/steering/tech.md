@@ -10,7 +10,9 @@ Installable Python CLI with a one-way pipeline:
 ```
 
 No server, no database, no background jobs. State = the user's files
-(source `.fit`s, generated markdown/SVG, a small athlete profile file).
+(source `.fit`s, generated markdown/SVG, a small athlete profile file, the
+per-user connector credentials files outside the data root, and the
+connector ledgers under `.fitdocs/`).
 Everything is re-derivable from the `.fit` + profile.
 
 ## Core Technologies
@@ -30,6 +32,30 @@ Everything is re-derivable from the `.fit` + profile.
   standard image links so they render in Obsidian, GitHub, and any viewer.
   No matplotlib dependency unless a spec proves we need it.
 - YAML frontmatter: `pyyaml`
+
+## Network and Credentials
+
+Network-capable code lives in exactly two places: the map-tile fetch
+(`fitdocs.tiles`) and the connector transport
+(`fitdocs.connectors.http`). Connector requests happen only during
+`fitdocs connect` (one authentication call per attempt) and `fitdocs pull`
+(a single-attempt token renewal when a login-style token is due, then
+bounded, retried data calls); every other command — `sync`, `regen`,
+`load`, `check`, `history`, `plan`, `derive-benchmarks`, and rendering —
+makes no connector request, whether or not connectors are configured, and
+keeps its existing map-tile behavior (rendering a map may fetch missing
+basemap tiles unless tile requests are disabled). Both network paths go
+through the standard library's `urllib` only, sending the one composed
+fitdocs User-Agent; connectors add no runtime dependency (beyond the
+standard library they use only the already-required `tomli_w`; the frozen
+runtime dependency list is unchanged). Connector credentials and tokens are
+stored per user outside the data root — one TOML file per instance in a
+per-user directory, never inside the data root (a credentials directory
+that resolves there is refused) — and the connectors package makes no
+clock call of its own (`now` and `sleep`
+are always injected by the caller, never read from the system clock
+inside the package). An automated boundary guard enforces the network
+allow-list, the module-dependency direction, and the no-clock rule.
 
 ## Development Standards
 
@@ -70,8 +96,10 @@ ran, not that it could fail. Gate and named anti-patterns:
 
 1. **Compute rich metrics locally.** fitdocs.ai imports NP/IF/decoupling/
    zone-times from Intervals.icu; we implement them in-package (formulas
-   documented in `docs/reference/fitdocs-ai-reference.md`) so the tool works
-   fully offline.
+   documented in `docs/reference/fitdocs-ai-reference.md`) so metric
+   computation needs no external API call. (The map tiles and the explicit
+   connector commands are the tool's only network paths — see "Network and
+   Credentials" above.)
 2. **Static SVG charts.** The power-vs-HR hero graph is reproduced as a
    generated SVG (band-normalized overlay, elevation backdrop) written next
    to the markdown doc. Renderer-portable; no plugins required.

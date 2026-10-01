@@ -24,6 +24,10 @@ the section cleanly, a missing tile never fails a document, and a persistent
 opt-out lets users prevent any location-revealing tile traffic from leaving
 their machine.
 
+*(Amendment 1, 2026-10-01: tile fetch is no longer the tool's only network
+access; the explicit connector commands `fitdocs connect` and `fitdocs
+pull` are the other — see Requirement 4.2.)*
+
 ## Boundary Context
 
 - **In scope**: a Map section in the run/ride and generic document layouts for
@@ -88,7 +92,7 @@ their machine.
 
 #### Acceptance Criteria
 1. While the local tile cache already holds every tile a document's map requires, when rendering the same activity with the same inputs repeatedly, the fitdocs CLI shall produce byte-identical document and asset output on every invocation. (This refines the workout-docs byte-identical guarantee to "byte-identical given a warm tile cache".)
-2. The fitdocs CLI shall perform network access only to fetch missing basemap tiles; every other operation shall continue to work fully offline. (This amends the workout-docs fully-offline guarantee.)
+2. The fitdocs CLI shall perform network access, outside the explicit connector commands (`fitdocs connect`, `fitdocs pull`), only to fetch missing basemap tiles; every other operation shall continue to work fully offline. (This amends the workout-docs fully-offline guarantee; this spec's Amendment 1, landed by `connectors`, further amends it to name the connector commands as the tool's other, equally explicit, network path.) *(amended by Amendment 1: formerly "The fitdocs CLI shall perform network access only to fetch missing basemap tiles; every other operation shall continue to work fully offline.")*
 3. If a required tile is neither cached nor fetchable (offline, provider error, or tile requests disabled), the fitdocs CLI shall omit the Map section, emit a warning naming the affected document, and render the remainder of the document normally.
 4. The fitdocs CLI shall never report a document or a run as failed solely because a map could not be rendered; map omission is reported as a warning, not an error.
 
@@ -108,3 +112,16 @@ their machine.
 #### Acceptance Criteria
 1. The fitdocs CLI shall produce each map as a single self-contained image file that references no external resources when displayed.
 2. The generated document shall embed the map via a standard image link, consistent with existing chart embedding, so that it displays in common markdown renderers (including Obsidian and GitHub) without plugins, scripts, or network access at view time.
+
+## Amendment 1 (2026-10-01): the connector commands named as the tool's other explicit network path, landed by connectors
+
+`connectors` adds two commands, `fitdocs connect` and `fitdocs pull`, that
+reach the network under their own explicit invocation. Criterion 4.2 read,
+on its own, as "basemap tiles are the only network access any fitdocs
+operation ever performs" — true when this spec shipped (2026-07-19,
+before any other network path existed) and false once a second, equally
+explicit command pair exists. That spec owns the connector commands' own
+network behavior; this spec owns only the correction that its own
+offline-except-tiles statement no longer describes the whole tool —
+recorded here as Requirement 4 criterion 4.2 amended in place. No
+criterion is renumbered.

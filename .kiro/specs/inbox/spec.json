@@ -1,7 +1,7 @@
 {
   "feature_name": "inbox",
   "created_at": "2026-07-21T07:49:02Z",
-  "updated_at": "2026-07-21T12:30:00Z",
+  "updated_at": "2026-10-01T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -18,5 +18,13 @@
       "approved": true
     }
   },
-  "ready_for_implementation": true
+  "ready_for_implementation": true,
+  "amendments": [
+    {
+      "date": "2026-10-01",
+      "requirement": "6 (6.8 added)",
+      "reason": "connectors spec task 9.1: `connectors` adds `fitdocs pull`, a second writer into the configured inbox, which removes its own archived, content-identical prior deliveries once re-delivered. Requirement 6's never-delete guarantee (6.6) and leave-in-place default (6.1) were written before any other writer existed and, read alone, appear to bind every removal under the inbox directory.",
+      "also": "requirements.md gains Amendment 1 (2026-10-01) and Requirement 6 criterion 6.8, clarifying that 6.1 and 6.6 are the drain's own guarantees and do not constrain a connector's own narrower removal, which `connectors` Requirement 8 owns and governs. Nothing renumbered."
+    }
+  ]
 }

@@ -1,7 +1,7 @@
 {
   "feature_name": "route-maps",
   "created_at": "2026-07-17T04:33:34Z",
-  "updated_at": "2026-07-19T01:37:53Z",
+  "updated_at": "2026-10-01T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -18,5 +18,13 @@
       "approved": true
     }
   },
-  "ready_for_implementation": true
+  "ready_for_implementation": true,
+  "amendments": [
+    {
+      "date": "2026-10-01",
+      "requirement": "4.2 amended",
+      "reason": "connectors spec task 9.1: `connectors` adds `fitdocs connect` and `fitdocs pull`, a second explicit network path after the map tiles. Criterion 4.2's 'network access only to fetch missing basemap tiles' read, on its own, as a claim that no other fitdocs operation ever reaches the network — true when this spec shipped, false once the connector commands exist.",
+      "also": "requirements.md gains Amendment 1 (2026-10-01); Requirement 4 criterion 4.2 is amended in place, tagged `(amended by Amendment 1)`, naming the connector commands as the tool's other explicit network path. Nothing renumbered."
+    }
+  ]
 }

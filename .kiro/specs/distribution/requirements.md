@@ -270,8 +270,8 @@ new workouts and respect the ownership boundary without me writing the
 instructions myself.
 
 #### Acceptance Criteria
-1. The fitdocs project shall publish an agent skill that gives an LLM-managed markdown wiki a turnkey workflow for processing the fitdocs inbox.
-2. The agent skill shall state when it applies, the commands to run, how to interpret every reported outcome channel — written, skipped, failed, deferred, quarantined, moved, files whose move failed, and warnings — and what to do about files the tool deferred, quarantined, failed on, or could not move.
+1. The fitdocs project shall publish an agent skill that gives an LLM-managed markdown wiki a turnkey workflow for processing the fitdocs inbox and for pulling new files from the athlete's configured connectors. *(amended by Amendment 3: "and for pulling new files from the athlete's configured connectors" added)*
+2. The agent skill shall state when it applies, the commands to run, how to interpret every reported outcome channel — the drain's written, skipped, failed, deferred, quarantined, moved, files whose move failed, and warnings, and the pull's delivered, would_fetch, held, skipped, deferred, failed, removed, and error — and what to do about files or connector instances the tool deferred, quarantined, held, failed on, could not move, or errored on. *(amended by Amendment 3: the pull's eight channels, and "held" and "errored on" in the what-to-do list, added)*
 3. The agent skill shall state the ownership boundary — that the fitdocs-owned tree is tool-owned, which document regions the wiki's author owns, and that generated content is never hand-edited — and shall point at the ownership declaration fitdocs emits inside the owned tree as the authority for it.
 4. The agent skill shall not restate the ownership contract's enumerated content; where detail is needed it shall refer to the emitted declaration and the published contract.
 5. The agent skill shall be readable and usable as plain markdown instructions by a human, and by an agent environment that does not support the packaged skill format.
@@ -301,7 +301,7 @@ private, or less predictable.
 1. The fitdocs tool shall add no new runtime dependency in order to become publishable, installable, or self-reporting.
 2. The installed tool shall behave identically to the revision that passed the release gates; no build step shall alter behavior between the tested revision and the published artifact.
 3. No published artifact shall contain personal fitness data, generated workout documents, or the contents of any data root.
-4. Running the installed tool shall require no network access beyond the map-tile requests the project already documents, and the release process shall not introduce any new runtime network access.
+4. Running the installed tool shall require no network access beyond the map-tile requests and the explicit connector commands (`fitdocs connect`, `fitdocs pull`) the project already documents, and the release process shall not introduce any new runtime network access beyond those two paths. *(amended by Amendment 3: formerly "beyond the map-tile requests the project already documents" and "any new runtime network access")*
 5. Building the same tagged revision twice shall produce artifacts with identical contents.
 6. Reorganizing the project's documentation shall preserve every behavior statement the project publishes at the time of the reorganization — its own and its sibling features' — including data-root resolution order, the persistent tile opt-out, tile-provider attribution, the inbox never-delete guarantee, the statement that fitdocs performs no watching and no scheduling, and a pointer to the published ownership contract.
 7. Rewriting the readme shall preserve rather than replace the sections other features publish there — the ownership section, the inbox section, and the plugins section — either keeping each in place or relocating each into the documentation set with the readme linking to it.
@@ -386,3 +386,28 @@ where the churn lands. The sequencing rule "no publication before the gate
 can refuse an artifact" stays pinned to task 3.2, which now proves — against
 the real built artifacts — that the gate refuses the removed material and
 refuses to pass an artifact it never scanned.
+
+## Amendment 3 (2026-10-01): the packaged skill also pulls, and network beyond tiles names the connector commands, landed by connectors
+
+`connectors` adds two commands, `fitdocs connect` and `fitdocs pull`, that
+reach the network under their own explicit invocation — the second new
+network path this project has ever shipped, after the map tiles. The
+packaged `fitdocs-workouts` skill's routine learns the pull step
+(`fitdocs pull --sync --no-prompt` ahead of `fitdocs check`, prose noting
+the unconfigured-connectors fallback is exactly `fitdocs sync --no-prompt`)
+and its reported-outcome section gains the pull's own channel table
+(`delivered`, `would_fetch`, `held`, `skipped`, `deferred`, `failed`,
+`removed`, `error`) alongside the drain's unchanged eight-row table. That
+spec owns the pull's report shape, the connector commands' own behavior,
+and the packaged skill's routine text; this spec owns only the two
+guarantees that lean on "the skill processes the inbox" and "network is
+tiles only" now being incomplete statements — recorded here as Requirement
+8 criteria 8.1 and 8.2 amended in place, and Requirement 10 criterion 10.4
+amended in place. No criterion is renumbered; `tests/test_agent_skill.py`
+pins move to the pull's fence and table as `connectors` task 8.4 lands them.
+
+This also resolves the roadmap's Phase 8 Existing Spec Update line for
+`distribution`: "the packaged `fitdocs-workouts` skill's routine learns the
+pull, and its pins move... Req 8.1/8.2 (the skill also pulls) and Req 10.4
+(network beyond tiles is the explicit connector commands) are amended" —
+landed by `connectors`.
