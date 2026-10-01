@@ -10,7 +10,7 @@ area: .claude/skills/kiro-spec-status
 created: 2026-07-27
 surfaced_by: /kiro-review chore/spec-status-args remediation
 pinned_at: c3d2201
-resume_command: "do: give kiro-spec-status/SKILL.md Step 1 an explicit branch for empty \$ARGUMENTS that routes to the List All Specs fallback (:70-74) instead of computing an empty {feature}"
+resume_command: 'do: give kiro-spec-status/SKILL.md Step 1 an explicit branch for empty $ARGUMENTS that routes to the List All Specs fallback (:70-74) instead of computing an empty {feature}'
 context:
   - .claude/skills/kiro-spec-status/SKILL.md
 blocked_by: []

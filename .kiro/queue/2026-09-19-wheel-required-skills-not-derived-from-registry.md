@@ -1,6 +1,6 @@
 ---
 id: 2026-09-19-wheel-required-skills-not-derived-from-registry
-title: [wheel].required's SKILL.md entries and their test fixture are literal lists, not bound to agentskill.PACKAGED_SKILLS
+title: '[wheel].required''s SKILL.md entries and their test fixture are literal lists, not bound to agentskill.PACKAGED_SKILLS'
 status: open
 importance: low
 importance_why: A third registered skill with no policy entry would ship unrequired; today both lists agree.

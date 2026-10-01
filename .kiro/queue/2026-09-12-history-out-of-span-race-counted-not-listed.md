@@ -3,7 +3,7 @@ id: 2026-09-12-history-out-of-span-race-counted-not-listed
 title: A race dated outside the series span is counted in criterion points but neither marked on the chart nor listed under Races
 status: open
 importance: medium
-importance_why: The page contradicts itself on that edge -- "criterion points: 2, earliest 2024-01-02" above a Races list with one entry -- and the athlete cannot tell why.
+importance_why: 'The page contradicts itself on that edge -- "criterion points: 2, earliest 2024-01-02" above a Races list with one entry -- and the athlete cannot tell why.'
 effort: S
 kind: inconsistency
 area: load-history, src/fitdocs/history/engine.py, src/fitdocs/history/page.py

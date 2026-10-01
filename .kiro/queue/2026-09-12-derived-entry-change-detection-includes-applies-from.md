@@ -3,7 +3,7 @@ id: 2026-09-12-derived-entry-change-detection-includes-applies-from
 title: The derivation pass rewrites and reports written=True on every run once an athlete adds applies_from to a derived entry
 status: open
 importance: low
-importance_why: Bytes stay identical (Req 6.5 holds) but the report's "Profile written: yes" and the file's mtime churn on every run for any athlete who used the sanctioned hand-annotation.
+importance_why: 'Bytes stay identical (Req 6.5 holds) but the report''s "Profile written: yes" and the file''s mtime churn on every run for any athlete who used the sanctioned hand-annotation.'
 effort: S
 kind: bug
 area: performance-benchmarks, src/fitdocs/performance/engine.py

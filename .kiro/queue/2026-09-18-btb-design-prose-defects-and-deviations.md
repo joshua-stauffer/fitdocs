@@ -1,6 +1,6 @@
 ---
 id: 2026-09-18-btb-design-prose-defects-and-deviations
-title: build-training-block design.md: three false prose lines and five recorded deviations to write up as Amendment 1
+title: 'build-training-block design.md: three false prose lines and five recorded deviations to write up as Amendment 1'
 status: open
 importance: low
 importance_why: The design is now the reference for distribution 4.2; two of its pointers are wrong and five things shipped differently than it says.

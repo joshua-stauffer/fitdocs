@@ -1,6 +1,6 @@
 ---
 id: 2026-07-26-load-all-pinned-only-by-ruff
-title: `fitdocs.load.__all__` membership is enforced only by ruff F401, not by the plugin-surface test
+title: '`fitdocs.load.__all__` membership is enforced only by ruff F401, not by the plugin-surface test'
 status: open
 importance: low
 importance_why: Nothing is broken today and ruff is a canonical gate, but the surface test reads as the `__all__` pin and is not one, so a session trusting it could drop a name from the published surface.

@@ -1,6 +1,6 @@
 ---
 id: 2026-09-19-docs-guard-small-hygiene-batch
-title: Small docs-guard hygiene: unpinned README compatibility link, overclaiming docstrings, over-broad prose, and a bare-path detector edge
+title: 'Small docs-guard hygiene: unpinned README compatibility link, overclaiming docstrings, over-broad prose, and a bare-path detector edge'
 status: open
 importance: low
 importance_why: None changes behaviour; each is a guard whose claim is slightly wider or narrower than what it pins.

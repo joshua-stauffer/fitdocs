@@ -1,6 +1,6 @@
 ---
 id: 2026-09-18-btb-test-strength-leftovers
-title: build-training-block suites: three assertions weaker than the rule they name (stage-C fixture confounded with stem order; bare `plan` span unbound; compatibility note pinned by substring; wheel scans prefix-match)
+title: 'build-training-block suites: three assertions weaker than the rule they name (stage-C fixture confounded with stem order; bare `plan` span unbound; compatibility note pinned by substring; wheel scans prefix-match)'
 status: open
 importance: low
 importance_why: Each is a clause the suite claims but cannot fail on under one plausible mutation; none changes behaviour.

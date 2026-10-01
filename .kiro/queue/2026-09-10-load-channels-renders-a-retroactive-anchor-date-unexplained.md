@@ -3,7 +3,7 @@ id: 2026-09-10-load-channels-renders-a-retroactive-anchor-date-unexplained
 title: The power and heart-rate channels render the anchor's measured_on into the document, so a retroactive anchor now shows a measurement date after the activity with nothing explaining it, while pace renders no anchor date at all
 status: open
 importance: medium
-importance_why: A 2019 run scored against a prompt answer given in 2026 prints "ftp_measured_on: 2026-09-10" in its inputs table with no applies_from beside it; the athlete cannot tell a bug from their own declaration, and the prompt they answered said the activity would be marked as measured later — which the pace channel, running's default, does not do.
+importance_why: 'A 2019 run scored against a prompt answer given in 2026 prints "ftp_measured_on: 2026-09-10" in its inputs table with no applies_from beside it; the athlete cannot tell a bug from their own declaration, and the prompt they answered said the activity would be marked as measured later — which the pace channel, running''s default, does not do.'
 effort: S
 kind: gap
 area: load-channels, threshold-load, src/fitdocs/load/channels/power.py, src/fitdocs/load/channels/heart_rate.py, src/fitdocs/load/channels/pace.py, src/fitdocs/load/threshold/calculator.py

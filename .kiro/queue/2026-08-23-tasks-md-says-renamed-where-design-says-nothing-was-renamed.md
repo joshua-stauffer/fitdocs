@@ -3,7 +3,7 @@ id: 2026-08-23-tasks-md-says-renamed-where-design-says-nothing-was-renamed
 title: tasks.md says the remote was "renamed" with no inexactness caution, while design.md says nothing was renamed — and an executor wrote the false account into the durable record
 status: open
 importance: medium
-importance_why: This is a proven-harmful contradiction, not a latent one: it already produced a false statement in the shipped provenance record, which took three review rounds to find and correct. The wording is still there, and 9.2 is not the last task that will read it.
+importance_why: 'This is a proven-harmful contradiction, not a latent one: it already produced a false statement in the shipped provenance record, which took three review rounds to find and correct. The wording is still there, and 9.2 is not the last task that will read it.'
 effort: S
 kind: inconsistency
 area: encumbered-content-purge

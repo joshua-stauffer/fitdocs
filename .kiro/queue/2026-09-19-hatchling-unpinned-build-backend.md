@@ -1,6 +1,6 @@
 ---
 id: 2026-09-19-hatchling-unpinned-build-backend
-title: `build-system.requires = ["hatchling"]` is unpinned and absent from uv.lock, so cross-machine reproducibility (Req 10.5) depends on hatchling version equality
+title: '`build-system.requires = ["hatchling"]` is unpinned and absent from uv.lock, so cross-machine reproducibility (Req 10.5) depends on hatchling version equality'
 status: open
 importance: medium
 importance_why: Two builds of one tagged revision on different days can differ by hatchling's Generator metadata alone; the in-run reproducibility tests cannot see it.

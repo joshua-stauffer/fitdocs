@@ -8,7 +8,7 @@ effort: S
 kind: gap
 area: .claude/skills/kiro-spec-design, .claude/skills/kiro-spec-requirements, .claude/skills/kiro-spec-tasks, .kiro/specs/*/spec.json
 created: 2026-09-16
-surfaced_by: /kiro-spec-design activity-qa-flags [queue: 2026-09-10-activity-qa-flags-staleness-guard-neutralises-retroactive-anchors]
+surfaced_by: '/kiro-spec-design activity-qa-flags [queue: 2026-09-10-activity-qa-flags-staleness-guard-neutralises-retroactive-anchors]'
 pinned_at: 41f980b
 resume_command: "do: write the spec.json rule for a queue-scoped amendment run into .claude/skills/kiro-spec-design/SKILL.md Step 6 (and the matching step in kiro-spec-requirements and kiro-spec-tasks): either retain the top-level approvals and record the run in amendments[] with an explicit approval field, or reset phase/approvals as the full-regeneration path does; then say which existing records (athlete-benchmarks, training-load, activity-qa-flags) follow it and reconcile any that do not"
 context:

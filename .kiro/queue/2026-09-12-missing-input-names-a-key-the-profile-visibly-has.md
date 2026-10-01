@@ -1,9 +1,9 @@
 ---
 id: 2026-09-12-missing-input-names-a-key-the-profile-visibly-has
-title: The load pass reports "missing: a maximum heart rate (max_hr_bpm)" and "Cycling FTP" against an athlete.toml that visibly carries max_hr_bpm = 194 and ftp_watts = 340
+title: 'The load pass reports "missing: a maximum heart rate (max_hr_bpm)" and "Cycling FTP" against an athlete.toml that visibly carries max_hr_bpm = 194 and ftp_watts = 340'
 status: open
 importance: medium
-importance_why: Raised from low on 2026-09-12 (validate-impl): the heart-rate channel is not merely mis-worded, it is structurally unreachable for a pace- or power-anchored athlete -- the prompt for the two athlete-wide HR benchmarks fires only when NO channel selects, so it never fires on a run or a powered ride, and the 111 walks / 8 hikes that would ask were run under --no-prompt; the result is zero HR load anywhere in a 2767-doc archive whose profile visibly carries both numbers.
+importance_why: 'Raised from low on 2026-09-12 (validate-impl): the heart-rate channel is not merely mis-worded, it is structurally unreachable for a pace- or power-anchored athlete -- the prompt for the two athlete-wide HR benchmarks fires only when NO channel selects, so it never fires on a run or a powered ride, and the 111 walks / 8 hikes that would ask were run under --no-prompt; the result is zero HR load anywhere in a 2767-doc archive whose profile visibly carries both numbers.'
 effort: S (docs) / M (seed or prompt path)
 kind: gap
 area: athlete-benchmarks, threshold-load, src/fitdocs/load/threshold/calculator.py, src/fitdocs/load/channels/heart_rate.py, README.md

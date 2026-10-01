@@ -1,6 +1,6 @@
 ---
 id: 2026-09-17-hand-written-workout-page-fails-chained-load-pass
-title: Any hand-written `type: workout` page makes `fitdocs sync`/`load` exit 1, while the plan-resolution corpus reads such pages by design
+title: 'Any hand-written `type: workout` page makes `fitdocs sync`/`load` exit 1, while the plan-resolution corpus reads such pages by design'
 status: open
 importance: medium
 importance_why: Product scope includes hand-written strength pages (the maintainer keeps manual strength markdown); on a real root with one such page every sync and regen now ends in a per-document failure, and plan-resolution's e2e had to split its sync and synthetic-corpus scenarios to work around it.

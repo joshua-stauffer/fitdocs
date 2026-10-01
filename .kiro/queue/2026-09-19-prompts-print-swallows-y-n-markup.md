@@ -3,7 +3,7 @@ id: 2026-09-19-prompts-print-swallows-y-n-markup
 title: load/prompts.py prints prompt text without markup=False, so rich swallows a `[y/N]` options tag
 status: open
 importance: low
-importance_why: Latent: both current callers pass default=True, whose `[Y/n]` survives; any default=False confirm would hide its options.
+importance_why: 'Latent: both current callers pass default=True, whose `[Y/n]` survives; any default=False confirm would hide its options.'
 effort: S
 kind: bug
 area: athlete-benchmarks, src/fitdocs/load/prompts.py

@@ -1,6 +1,6 @@
 ---
 id: 2026-09-17-document-load-empty-methodology-parity-vs-design
-title: `document_load` accepts an empty-string methodology (parity with `_read_load`) while the design says non-empty
+title: '`document_load` accepts an empty-string methodology (parity with `_read_load`) while the design says non-empty'
 status: open
 importance: medium
 importance_why: Two readers of the same frontmatter must agree; the design's `LoadReading.methodology  # non-empty` comment is false today, and `_observed_counts` would count `""` as a methodology and could infer it.

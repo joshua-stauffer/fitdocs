@@ -1,6 +1,6 @@
 ---
 id: 2026-09-18-config-error-output-surface-wrap-and-stderr
-title: `_config_error` hard-wraps at 80 columns in non-tty output, and no test in tests/test_cli.py asserts its messages reach stderr
+title: '`_config_error` hard-wraps at 80 columns in non-tty output, and no test in tests/test_cli.py asserts its messages reach stderr'
 status: open
 importance: low
 importance_why: Cosmetic wrap plus a convention gap; tests/test_cli_skill.py already asserts stderr, so the gap is the older suite only.
