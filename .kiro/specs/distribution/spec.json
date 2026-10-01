@@ -1,7 +1,7 @@
 {
   "feature_name": "distribution",
   "created_at": "2026-07-21T08:14:49Z",
-  "updated_at": "2026-09-18T00:00:00Z",
+  "updated_at": "2026-10-01T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -31,6 +31,12 @@
       "requirement": "6 (retitled, 6.1-6.3 and 6.6 amended, 6.4/6.5/6.8 withdrawn, 6.9-6.10 added); 1.5 amended; 1.10 added",
       "reason": "Requirement 6 was premised on an encumbered bundled calculator (withdrawn 2026-07-25, purged with every identifying token by encumbered-content-purge on 2026-08-23; the built-in is now the unencumbered threshold engine). Maintainer decisions 2026-09-18: keep the artifact scan as a standing property reading the purge guard's single out-of-repository match-data source and failing closed when it is absent; drop the bundled/unencumbered profile split (one artifact set per release, from the working tree); exclude the root agent-log symlink from the sdist and treat any link member as a violation. Resolves queue items 2026-07-30-distribution-req6-assumes-a-bundled-calculator, 2026-07-30-no-release-gate-on-the-publish-path (as spec text; the gate itself is still task work), 2026-08-04-distribution-forbidden-markers-scan-for-the-placeholder, 2026-07-31-agent-log-symlink-ships-in-sdist.",
       "also": "requirements.md gains an Amendment 2 note under Introduction and Boundary Context and the Amendment 2 record; design.md and tasks.md regenerated against it in the same change (majors 2 and 3). Nothing renumbered."
+    },
+    {
+      "date": "2026-10-01",
+      "requirement": "8.1 and 8.2 amended; 10.4 amended",
+      "reason": "connectors spec task 9.1: `connectors` adds `fitdocs connect` and `fitdocs pull`, a second network path after the map tiles. The packaged `fitdocs-workouts` skill's routine learns the pull step and its reported-outcome section gains the pull's own channel table; the skill-publication guarantee (8.1) and the reported-outcome-channel guarantee (8.2) read as if the skill only ever processed the inbox. Requirement 10's network guarantee (10.4) read as if the map tiles were the only network path the installed tool could ever reach.",
+      "also": "requirements.md gains Amendment 3 (2026-10-01); Requirement 8 criteria 8.1 and 8.2 and Requirement 10 criterion 10.4 are amended in place, each tagged `(amended by Amendment 3: ...)` at the end of the criterion. Nothing renumbered. `connectors` task 8.4 lands the skill routine and `tests/test_agent_skill.py` pin moves this amendment anticipates."
     }
   ]
 }

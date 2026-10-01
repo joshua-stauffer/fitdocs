@@ -66,7 +66,11 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   re-read `.fit` files directly. `identity` (source roles, the match rule and
   held files) imports only `model`, `contract`, `docio`, `layout` and
   `settings`; `render`, `sync`, `audit` and
-  `cli` import it.
+  `cli` import it. `connectors` (the `fitdocs connect` and `fitdocs pull`
+  commands) imports only `layout`, `settings`, `inbox` and `version` from
+  the rest of the package, and only `cli` imports it; it does not depend
+  on rendering, training load, metrics, `.fit` ingestion, or the sync
+  engine.
 - `LoadCalculator` implementations declare their required inputs so the CLI
   can prompt for missing data generically — no calculator-specific prompting
   code in the CLI.

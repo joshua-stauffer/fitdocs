@@ -21,6 +21,13 @@ processed files are left in place unless the user explicitly configures a
 move-to-processed disposition. Files are never deleted. Explicit-source sync,
 regen, and load behavior is unchanged; the feature is purely additive.
 
+*(Amendment 1, 2026-10-01: the drain described above still never deletes a
+file. `connectors` adds a second writer into the inbox, `fitdocs pull`,
+whose removal of its own prior, now-archived deliveries is the one
+carve-out from "never deleted" — a connector removing bytes it delivered
+itself, not the drain and not any other file — see Requirement 6 criterion
+6.8.)*
+
 ## Boundary Context
 
 Sequencing: this feature lands **after** the pre-wave `settings-foundation`
@@ -129,6 +136,7 @@ it).
 5. If an individual move fails after successful processing, the fitdocs CLI shall report the failed move distinctly, shall leave the completed processing intact, and shall not emit the failure exit code for the move alone; a later drain shall retry the move when it encounters the file again.
 6. The fitdocs CLI shall offer no disposition that deletes inbox files; deletion is never performed under any configuration.
 7. Where the move disposition is active and the processed-files destination lies inside the data root, the fitdocs CLI shall create the destination directory on demand; if the destination lies outside the data root and does not exist at drain time, the fitdocs CLI shall report a configuration error and exit with the configuration-error code before processing anything.
+8. *(added by Amendment 1)* Criteria 6.1 and 6.6 are guarantees of the drain's own disposition of inbox files; they do not constrain a connector's own removal, under `fitdocs pull`, of its own prior deliveries once their unchanged bytes are archived — a removal the `connectors` spec owns and governs, not a drain disposition and not a deletion performed by the drain.
 
 ### Requirement 7: Reporting, Exit Codes, and Idempotency Compatibility
 **Objective:** As a user with automation built on the existing report and exit codes, I want the inbox feature to be purely additive, so that existing invocations and re-run guarantees are unaffected byte for byte.
@@ -150,3 +158,25 @@ it).
 3. The `fitdocs sync` command help text shall describe the no-argument drain behavior and how the inbox location is determined.
 4. The never-delete guarantee (6.6) and the no-watching-or-scheduling guarantee (8.2) shall each be asserted by an automated preserved-guarantee test, so that a later documentation rewrite cannot drop them silently.
 5. The locations this feature creates shall be reconciled with the published ownership contract: the inbox directory and its optional processed-files destination as user-configured locations fitdocs may create, and the tool-state directory holding the quarantine record as tool-owned state; nothing in this feature shall write outside the paths that contract names.
+
+## Amendment 1 (2026-10-01): the drain's guarantees distinguished from a connector's own removal, landed by connectors
+
+`connectors` adds `fitdocs pull`, a second writer into the configured
+inbox alongside the drain this spec already governs. A pull that delivers
+a file today and, on a later run, finds that same connector's own prior
+delivery already archived and byte-identical, removes that prior delivery
+from the inbox — not the file it just wrote, and not, in general, a file
+some other source delivered — the one exception, which `connectors` owns,
+is a file already sitting under that instance's delivery name with
+byte-identical content, which the pull adopts as its delivery and later
+removes once those bytes are archived. This spec's never-delete guarantee
+(6.6) and leave-in-place default (6.1) describe the drain's own
+disposition of files inside the inbox; they were written before any other
+writer existed and read, on their own, as if they bound every removal of
+anything under the inbox directory. That spec owns the pull's removal rule
+— which files qualify (its own instance's deliveries only, archived,
+content-identical), when it runs, and how it is reported; this spec owns
+only the clarification that 6.1 and 6.6 are drain guarantees, not a
+prohibition on a different feature's own distinct, narrower removal —
+recorded here as Requirement 6 criterion 6.8. Nothing existing is
+renumbered.
