@@ -1,10 +1,12 @@
-"""Pins for the pull engine (design.md "PullEngine", Req 1.9, 6.4-6.9, 6.12,
-6.13, 7.2, 7.4, 7.7, 8.5, 11.5, 13.4).
+"""Pins for the pull engine (design.md "PullEngine", Req 1.9, 4.7, 6.4-6.13,
+7.2, 7.4, 7.7, 8.5, 10.1, 10.2, 10.5, 11.5, 13.4).
 
-Every connector used here needs no credentials (``AuthStyle.NONE``): task
-4.4 adds credential resolution's failure handling, token renewal, and
-per-item/per-instance isolation, none of which this task implements or
-pins.
+Most connectors used here need no credentials (``AuthStyle.NONE``). Task
+4.4's own pins, at the bottom of this module, use
+``ScriptedPersonalKeyConnector``/``ScriptedLoginConnector`` (``conftest.py``)
+with ``capabilities`` overridden to add ``Capability.PULL_ACTIVITIES`` --
+credential resolution's failure handling, a login-style token's renewal, and
+per-item/per-instance failure isolation and redaction.
 
 Fixtures deliberately defeat the specific wrong implementations the task
 text calls out: the "second pull" pin counts the connector's fetches on the
@@ -26,7 +28,7 @@ from __future__ import annotations
 import hashlib
 import stat
 import tomllib
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -35,15 +37,32 @@ import pytest
 
 from fitdocs import layout
 from fitdocs.connectors import delivery as delivery_mod
+from fitdocs.connectors.credentials import (
+    CredentialStore,
+    CredentialStoreError,
+    StoredCredentials,
+    env_var_name,
+)
+from fitdocs.connectors.errors import (
+    AuthFailure,
+    AuthFailureKind,
+    ConnectorError,
+    next_step,
+)
 from fitdocs.connectors.folder import FolderConnector, FolderSettings
+from fitdocs.connectors.http import HttpRequest, HttpResponse, Transport, TransportError
 from fitdocs.connectors.protocol import (
+    AuthStyle,
+    Capability,
     Connector,
+    ConnectorSession,
     Declined,
     Deferred,
     Fetched,
     Listing,
     ListingDeferral,
     RemoteActivity,
+    TokenSet,
 )
 from fitdocs.connectors.pull import (
     Delivered,
@@ -52,9 +71,14 @@ from fitdocs.connectors.pull import (
     PullReport,
     run_pull,
 )
-from fitdocs.connectors.secrets import REDACTED, Redactor
+from fitdocs.connectors.secrets import REDACTED, Redactor, Secret
 from fitdocs.connectors.settings import ConnectorInstance
-from tests.connectors.conftest import FakeTransport, ScriptedPuller
+from tests.connectors.conftest import (
+    FakeTransport,
+    ScriptedLoginConnector,
+    ScriptedPersonalKeyConnector,
+    ScriptedPuller,
+)
 
 _NOW = datetime(2026, 6, 1, tzinfo=UTC)
 
@@ -97,15 +121,18 @@ def _run(
     since: datetime | None = None,
     redactor: Redactor | None = None,
     now: Callable[[], datetime] | None = None,
+    store: CredentialStore | None = None,
+    environ: Mapping[str, str] | None = None,
+    transport: Transport | None = None,
 ) -> PullReport:
     return run_pull(
         data_root,
         instances,
         inbox=inbox,
-        store=None,
-        transport=FakeTransport([]),
+        store=store,
+        transport=transport if transport is not None else FakeTransport([]),
         options=PullOptions(since=since, dry_run=dry_run),
-        environ={},
+        environ=environ if environ is not None else {},
         now=now or (lambda: _NOW),
         sleep=lambda seconds: None,
         redactor=redactor or Redactor(),
@@ -2481,3 +2508,975 @@ def test_same_revision_duplicate_counts_in_listed(tmp_path: Path) -> None:
     report = _run(data_root, inbox, [_instance(connector)])
     assert [n.subject for n in report.instances[0].failed] == ["dup"]
     assert report.instances[0].listed == 2
+
+
+# ---------------------------------------------------------------------------
+# Task 4.4: credentials, token renewal, per-item/per-instance isolation, and
+# redaction (design.md "PullEngine" step 3, Req 4.7, 6.10, 6.11, 10.1, 10.2,
+# 10.5).
+#
+# ``ScriptedPersonalKeyConnector``/``ScriptedLoginConnector`` (conftest.py,
+# closed to new fixtures) are used with ``capabilities`` overridden to add
+# ``Capability.PULL_ACTIVITIES``, exactly as their own docstrings describe.
+# ---------------------------------------------------------------------------
+
+
+def _store_login_credentials(
+    store: CredentialStore,
+    name: str,
+    connector_id: str,
+    *,
+    token_value: str,
+    expires_at: datetime,
+) -> None:
+    store.save(
+        name,
+        StoredCredentials(
+            connector_id=connector_id,
+            auth_style=AuthStyle.LOGIN,
+            values={"access_token": Secret(token_value)},
+            expires_at=expires_at,
+            scopes=None,
+        ),
+    )
+
+
+def _bytes_under(root: Path) -> list[tuple[Path, bytes]]:
+    """Every regular file's bytes under ``root`` -- the ledger, the inbox,
+    and (if present) the archive alike -- for a byte-level secret scan after
+    a pull."""
+    if not root.exists():
+        return []
+    return [
+        (path, path.read_bytes()) for path in sorted(root.rglob("*")) if path.is_file()
+    ]
+
+
+class _CredentialObservingTransport:
+    """A :data:`~fitdocs.connectors.http.Transport` that reads the
+    credentials file straight off disk the instant it is called -- the
+    first data request a connector makes -- rather than after returning, so
+    a renewal only persisted *after* listing (instead of before it) would
+    still be caught (Req 4.7)."""
+
+    def __init__(self, store: CredentialStore, instance_name: str) -> None:
+        self._store = store
+        self._instance_name = instance_name
+        self.observed_token_at_first_call: str | None = "unobserved"
+
+    def __call__(self, request: HttpRequest, timeout: float) -> HttpResponse:
+        if self.observed_token_at_first_call == "unobserved":
+            stored = self._store.load(self._instance_name)
+            self.observed_token_at_first_call = (
+                stored.values["access_token"].reveal() if stored is not None else None
+            )
+        return HttpResponse(status=200, headers={}, body=b"{}")
+
+
+def test_not_connected_names_the_connect_command_and_the_variable(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+    store = CredentialStore(tmp_path / "creds")
+
+    connector = ScriptedPersonalKeyConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    instance = _instance(connector, name="keyed")
+
+    report = _run(data_root, inbox, [instance], store=store)
+    inst = report.instances[0]
+
+    assert inst.error is not None
+    assert inst.error.detail == (
+        "NotConnectedError: keyed is not connected: run `fitdocs connect keyed`"
+        " or set FITDOCS_CONNECTOR_KEYED_API_KEY"
+    )
+    # Reachability: the connector was never asked to list -- this is the
+    # instance's terminal error, not a failed note about a listed entry.
+    assert connector.list_calls == []
+    assert inst.failed == ()
+
+
+def test_credentials_are_resolved_before_the_capability_refusal(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+    store = CredentialStore(tmp_path / "creds")
+
+    # No PULL_ACTIVITIES *and* no usable credentials: design.md's order
+    # (credentials at step 3, before the capability refusal at step 4)
+    # means the not-connected error is reported, never "does not pull
+    # activities" -- a reviewer-visible way to defeat the plausible wrong
+    # order (capability check first, as task 4.3 had it).
+    connector = ScriptedPersonalKeyConnector(capabilities=frozenset())
+    instance = _instance(connector, name="keyed")
+
+    report = _run(data_root, inbox, [instance], store=store)
+    inst = report.instances[0]
+
+    assert inst.error is not None
+    assert "does not pull activities" not in inst.error.detail
+    assert f"fitdocs connect {instance.name}" in inst.error.detail
+
+
+def test_expired_login_token_is_renewed_and_on_disk_before_the_first_data_request(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+    store = CredentialStore(tmp_path / "creds")
+    name = "logged"
+
+    connector = ScriptedLoginConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES}),
+        data_url="https://svc.example/activities",
+    )
+    _store_login_credentials(
+        store,
+        name,
+        connector.connector_id,
+        token_value="old-token",
+        # Exactly at the 60s margin (design.md step 3): the inclusive
+        # boundary, paired below against one second past it.
+        expires_at=_NOW + timedelta(seconds=60),
+    )
+    connector.refresh_script.append(
+        TokenSet(
+            values={"access_token": Secret("new-token")},
+            expires_at=_NOW + timedelta(hours=1),
+            scopes=None,
+        )
+    )
+    connector.listing_script.append(Listing(activities=()))
+
+    observing_transport = _CredentialObservingTransport(store, name)
+
+    report = _run(
+        data_root,
+        inbox,
+        [_instance(connector, name=name)],
+        store=store,
+        now=lambda: _NOW,
+        transport=observing_transport,
+    )
+
+    inst = report.instances[0]
+    assert inst.error is None
+    # Falsity in the starting state: the credentials file held "old-token"
+    # before this pull; the renewed value must already be on disk at the
+    # moment of the first data request, not merely by the time the pull
+    # finishes.
+    assert observing_transport.observed_token_at_first_call == "new-token"
+    stored_after = store.load(name)
+    assert stored_after is not None
+    assert stored_after.values["access_token"].reveal() == "new-token"
+    assert connector.refresh_calls == 1
+
+
+def test_a_token_not_yet_within_the_renewal_margin_is_not_renewed(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+    store = CredentialStore(tmp_path / "creds")
+    name = "logged"
+
+    connector = ScriptedLoginConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    _store_login_credentials(
+        store,
+        name,
+        connector.connector_id,
+        token_value="still-good",
+        # One second past the 60s margin boundary pinned above.
+        expires_at=_NOW + timedelta(seconds=61),
+    )
+    connector.listing_script.append(Listing(activities=()))
+    # refresh_script deliberately left empty: UnscriptedCall (a
+    # BaseException) would propagate out of this test if refresh were ever
+    # called, since nothing here catches it.
+
+    report = _run(
+        data_root,
+        inbox,
+        [_instance(connector, name=name)],
+        store=store,
+        now=lambda: _NOW,
+    )
+
+    inst = report.instances[0]
+    assert inst.error is None
+    assert connector.refresh_calls == 0
+    stored_after = store.load(name)
+    assert stored_after is not None
+    assert stored_after.values["access_token"].reveal() == "still-good"
+
+
+def test_renewal_persists_under_dry_run_and_nothing_else_is_written(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+    store = CredentialStore(tmp_path / "creds")
+    name = "logged"
+
+    connector = ScriptedLoginConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    _store_login_credentials(
+        store,
+        name,
+        connector.connector_id,
+        token_value="old-token",
+        expires_at=_NOW + timedelta(seconds=1),
+    )
+    connector.refresh_script.append(
+        TokenSet(
+            values={"access_token": Secret("fresh-token")},
+            expires_at=_NOW + timedelta(hours=1),
+            scopes=None,
+        )
+    )
+    connector.listing_script.append(Listing(activities=()))
+
+    before_root = _snapshot(data_root)
+    before_inbox = _snapshot(inbox)
+
+    report = _run(
+        data_root,
+        inbox,
+        [_instance(connector, name=name)],
+        store=store,
+        dry_run=True,
+        now=lambda: _NOW,
+    )
+
+    after_root = _snapshot(data_root)
+    after_inbox = _snapshot(inbox)
+
+    inst = report.instances[0]
+    assert inst.error is None
+    assert connector.refresh_calls == 1
+    stored_after = store.load(name)
+    assert stored_after is not None
+    assert stored_after.values["access_token"].reveal() == "fresh-token"
+    # Nothing else was written: a dry run's renewal is the one exception to
+    # "writes nothing under the data root or in the inbox".
+    assert before_root == after_root
+    assert before_inbox == after_inbox
+
+
+def test_one_instances_not_connected_error_does_not_stop_the_next(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+    store = CredentialStore(tmp_path / "creds")
+
+    failing = ScriptedPersonalKeyConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    # No stored or environment credentials at all for "failing".
+
+    ok = ScriptedPersonalKeyConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    activity = RemoteActivity(
+        remote_id="r1", original_available=True, start=_NOW, revision="1"
+    )
+    ok.listing_script.append(Listing(activities=(activity,)))
+    ok.fetch_script.append(Fetched(data=_fit_bytes(b"ok")))
+
+    environ = {env_var_name("ok-instance", "api_key"): "k-value"}
+
+    report = _run(
+        data_root,
+        inbox,
+        [_instance(failing, name="aaa"), _instance(ok, name="ok-instance")],
+        store=store,
+        environ=environ,
+    )
+
+    assert [i.name for i in report.instances] == ["aaa", "ok-instance"]
+    assert report.instances[0].error is not None
+    assert report.instances[1].error is None
+    assert [d.remote_id for d in report.instances[1].delivered] == ["r1"]
+
+
+def test_one_items_exception_does_not_stop_its_instance(tmp_path: Path) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+
+    first = RemoteActivity(
+        remote_id="a", original_available=True, start=_NOW, revision="1"
+    )
+    second = RemoteActivity(
+        remote_id="b",
+        original_available=True,
+        start=_NOW + timedelta(seconds=1),
+        revision="1",
+    )
+    connector = ScriptedPuller()
+    connector.listing_script.append(Listing(activities=(first, second)))
+    connector.fetch_script.append(ValueError("transient glitch"))
+    connector.fetch_script.append(Fetched(data=_fit_bytes(b"second")))
+
+    report = _run(data_root, inbox, [_instance(connector)])
+    inst = report.instances[0]
+
+    assert inst.error is None
+    assert [note.subject for note in inst.failed] == ["a"]
+    assert "ValueError" in inst.failed[0].detail
+    assert [d.remote_id for d in inst.delivered] == ["b"]
+
+
+def test_connector_error_quoting_the_key_is_reported_redacted(tmp_path: Path) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+    name = "keyed"
+    api_key = "sekrit-abc-999"
+
+    connector = ScriptedPersonalKeyConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    activity = RemoteActivity(
+        remote_id="r1", original_available=True, start=_NOW, revision="1"
+    )
+    connector.listing_script.append(Listing(activities=(activity,)))
+    connector.fetch_script.append(ConnectorError(f"upstream rejected key {api_key}"))
+
+    environ = {env_var_name(name, "api_key"): api_key}
+    report = _run(data_root, inbox, [_instance(connector, name=name)], environ=environ)
+    inst = report.instances[0]
+
+    assert inst.error is not None
+    assert REDACTED in inst.error.detail
+    assert api_key not in inst.error.detail
+    assert inst.failed == ()
+
+
+def test_declined_and_unavailable_reason_are_redacted_and_leave_no_secret_on_disk(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+    name = "keyed"
+    api_key = "key-for-redaction-check"
+
+    connector = ScriptedPersonalKeyConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    declined_activity = RemoteActivity(
+        remote_id="declined-1", original_available=True, start=_NOW, revision="1"
+    )
+    unavailable_activity = RemoteActivity(
+        remote_id="unavailable-1",
+        original_available=False,
+        start=_NOW + timedelta(seconds=1),
+        revision="1",
+        unavailable_reason=f"blocked for key {api_key}",
+    )
+    connector.listing_script.append(
+        Listing(activities=(declined_activity, unavailable_activity))
+    )
+    connector.fetch_script.append(
+        Declined(reason=f"declined, key {api_key} over quota")
+    )
+
+    environ = {env_var_name(name, "api_key"): api_key}
+    report = _run(data_root, inbox, [_instance(connector, name=name)], environ=environ)
+    inst = report.instances[0]
+
+    assert len(inst.skipped) == 2
+    for note in inst.skipped:
+        assert api_key not in note.detail
+        assert REDACTED in note.detail
+
+    doc = _ledger_document(data_root, name)
+    assert len(doc["entries"]) == 2
+    for entry in doc["entries"]:
+        detail = entry.get("detail", "")
+        assert api_key not in detail
+        assert REDACTED in detail
+
+    scanned = _bytes_under(data_root) + _bytes_under(inbox)
+    assert scanned, "the byte scan is looking at the wrong directory"
+    for _path, content in scanned:
+        assert api_key.encode() not in content
+
+
+def test_auth_failure_from_listing_ends_the_instance_with_its_next_step(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+
+    connector = ScriptedPuller()
+    connector.listing_script.append(
+        AuthFailure(AuthFailureKind.RATE_LIMITED, "slow down", retry_after_s=30.0)
+    )
+
+    report = _run(data_root, inbox, [_instance(connector, name="src")])
+    inst = report.instances[0]
+
+    assert inst.error is not None
+    assert "slow down" in inst.error.detail
+    expected_step = next_step(
+        AuthFailureKind.RATE_LIMITED, name="src", retry_after_s=30.0
+    )
+    assert expected_step in inst.error.detail
+    assert inst.failed == ()
+
+
+def test_a_generic_listing_exception_ends_the_instance(tmp_path: Path) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+
+    connector = ScriptedPuller()
+    connector.listing_script.append(RuntimeError("source unreachable"))
+
+    report = _run(data_root, inbox, [_instance(connector, name="src")])
+    inst = report.instances[0]
+
+    assert inst.error is not None
+    # Exact: an ordinary (non-AuthFailure, non-TransportError) listing
+    # exception gets no addendum -- just its type and message, not a
+    # traceback (kills O18, `traceback.format_exception` in
+    # `_instance_error`).
+    assert inst.error.detail == "RuntimeError: source unreachable"
+    assert inst.listed == 0
+
+
+# ---------------------------------------------------------------------------
+# Task 4.4 remediation round 2: a fetch TransportError is a failed note (not
+# instance-ending); a fetch AuthFailure still ends the instance and the next
+# instance still runs; a renewal AuthFailure/TransportError/
+# CredentialStoreError each end only their own instance, redacted; an item
+# exception's message is redacted; the renewal session is built in
+# CallMode.AUTH, not CallMode.DATA.
+# ---------------------------------------------------------------------------
+
+
+def test_item_transport_error_is_a_failed_note_and_the_instance_continues(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+
+    a = RemoteActivity(remote_id="a", original_available=True, start=_NOW, revision="1")
+    b = RemoteActivity(
+        remote_id="b",
+        original_available=True,
+        start=_NOW + timedelta(seconds=1),
+        revision="1",
+    )
+    connector = ScriptedPuller()
+    connector.listing_script.append(Listing(activities=(a, b)))
+    connector.fetch_script.extend(
+        [
+            TransportError("timed out: https://svc.example/x"),
+            Fetched(data=_fit_bytes(b"b")),
+        ]
+    )
+
+    report = _run(data_root, inbox, [_instance(connector)])
+    inst = report.instances[0]
+
+    assert inst.error is None
+    assert [n.subject for n in inst.failed] == ["a"]
+    # Exact "<Type>: <message>" (kills O19, `f"{exc!r}"` in the item note);
+    # a fetch TransportError must stay a failed note, not instance-ending
+    # (kills N2, adding TransportError to the instance-ending fetch tuple).
+    assert inst.failed[0].detail == "TransportError: timed out: https://svc.example/x"
+    assert [d.remote_id for d in inst.delivered] == ["b"]
+
+
+def test_fetch_auth_failure_ends_the_instance_and_the_next_instance_runs(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+
+    a = RemoteActivity(remote_id="a", original_available=True, start=_NOW, revision="1")
+    b = RemoteActivity(
+        remote_id="b",
+        original_available=True,
+        start=_NOW + timedelta(seconds=1),
+        revision="1",
+    )
+    aaa = ScriptedPuller()
+    aaa.listing_script.append(Listing(activities=(a, b)))
+    aaa.fetch_script.extend(
+        [AuthFailure(AuthFailureKind.REJECTED, "nope"), Fetched(data=_fit_bytes(b"b"))]
+    )
+
+    zzz = ScriptedPuller()
+    zzz_activity = RemoteActivity(
+        remote_id="z1", original_available=True, start=_NOW, revision="1"
+    )
+    zzz.listing_script.append(Listing(activities=(zzz_activity,)))
+    zzz.fetch_script.append(Fetched(data=_fit_bytes(b"z")))
+
+    report = _run(
+        data_root,
+        inbox,
+        [_instance(aaa, name="aaa"), _instance(zzz, name="zzz")],
+    )
+    inst_aaa, inst_zzz = report.instances
+
+    assert inst_aaa.error is not None
+    # The design's NEXT_STEPS[REJECTED] literal, named "aaa" -- a literal
+    # copy, not the imported `next_step` constant, so a change to the
+    # table's own text is pinned rather than compared against itself.
+    assert (
+        "Check the credentials and run `fitdocs connect aaa` again."
+        in inst_aaa.error.detail
+    )
+    assert inst_aaa.failed == ()
+    assert inst_aaa.delivered == ()
+    # "b" was never fetched: the instance-ending break happened on "a"
+    # before "b" was reached (kills O11, break -> continue after an
+    # instance-ending fetch error).
+    assert [activity.remote_id for activity in aaa.fetch_calls] == ["a"]
+    assert len(aaa.fetch_script) == 1
+
+    assert inst_zzz.error is None
+    assert [d.remote_id for d in inst_zzz.delivered] == ["z1"]
+
+
+def test_renewal_auth_failure_ends_the_instance_redacted_and_the_next_runs(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+    store = CredentialStore(tmp_path / "creds")
+    name = "logged"
+
+    connector = ScriptedLoginConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    _store_login_credentials(
+        store,
+        name,
+        connector.connector_id,
+        token_value="tok-secret-1",
+        expires_at=_NOW,
+    )
+    connector.refresh_script.append(
+        AuthFailure(AuthFailureKind.REJECTED, "token tok-secret-1 revoked")
+    )
+
+    healthy = ScriptedPuller()
+    activity = RemoteActivity(
+        remote_id="z1", original_available=True, start=_NOW, revision="1"
+    )
+    healthy.listing_script.append(Listing(activities=(activity,)))
+    healthy.fetch_script.append(Fetched(data=_fit_bytes(b"z")))
+
+    report = _run(
+        data_root,
+        inbox,
+        [_instance(connector, name=name), _instance(healthy, name="zzz")],
+        store=store,
+        now=lambda: _NOW,
+    )
+    inst, inst2 = report.instances
+
+    assert inst.error is not None
+    assert REDACTED in inst.error.detail
+    assert "tok-secret-1" not in inst.error.detail
+    expected_step = next_step(AuthFailureKind.REJECTED, name=name, retry_after_s=None)
+    assert expected_step in inst.error.detail
+
+    # The store started with "tok-secret-1"; a failed renewal must leave
+    # it exactly as it was.
+    stored_after = store.load(name)
+    assert stored_after is not None
+    assert stored_after.values["access_token"].reveal() == "tok-secret-1"
+
+    assert inst2.error is None
+    assert [d.remote_id for d in inst2.delivered] == ["z1"]
+
+
+def test_renewal_transport_error_ends_the_instance_and_the_next_runs(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+    store = CredentialStore(tmp_path / "creds")
+    name = "logged"
+
+    connector = ScriptedLoginConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    _store_login_credentials(
+        store, name, connector.connector_id, token_value="old-token", expires_at=_NOW
+    )
+    connector.refresh_script.append(
+        TransportError("timed out: https://svc.example/token")
+    )
+
+    healthy = ScriptedPuller()
+    activity = RemoteActivity(
+        remote_id="z1", original_available=True, start=_NOW, revision="1"
+    )
+    healthy.listing_script.append(Listing(activities=(activity,)))
+    healthy.fetch_script.append(Fetched(data=_fit_bytes(b"z")))
+
+    report = _run(
+        data_root,
+        inbox,
+        [_instance(connector, name=name), _instance(healthy, name="zzz")],
+        store=store,
+        now=lambda: _NOW,
+    )
+    inst, inst2 = report.instances
+
+    assert inst.error is not None
+    assert inst.error.detail.startswith("TransportError: ")
+    expected_step = next_step(
+        AuthFailureKind.UNAVAILABLE, name=name, retry_after_s=None
+    )
+    assert expected_step in inst.error.detail
+    stored_after = store.load(name)
+    assert stored_after is not None
+    assert stored_after.values["access_token"].reveal() == "old-token"
+
+    assert inst2.error is None
+    assert [d.remote_id for d in inst2.delivered] == ["z1"]
+
+
+def test_permissive_credentials_file_is_the_instance_error_and_the_next_runs(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+    store = CredentialStore(tmp_path / "creds")
+    name = "keyed"
+
+    connector = ScriptedPersonalKeyConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    store.save(
+        name,
+        StoredCredentials(
+            connector_id=connector.connector_id,
+            auth_style=AuthStyle.API_KEY,
+            values={"api_key": Secret("k-value")},
+            expires_at=None,
+            scopes=None,
+        ),
+    )
+    path = store.path_for(name)
+    path.chmod(0o644)  # group/other-readable -- CredentialStore.load refuses this
+
+    healthy = ScriptedPuller()
+    activity = RemoteActivity(
+        remote_id="z1", original_available=True, start=_NOW, revision="1"
+    )
+    healthy.listing_script.append(Listing(activities=(activity,)))
+    healthy.fetch_script.append(Fetched(data=_fit_bytes(b"z")))
+
+    report = _run(
+        data_root,
+        inbox,
+        [_instance(connector, name=name), _instance(healthy, name="zzz")],
+        store=store,
+    )
+    inst, inst2 = report.instances
+
+    assert inst.error is not None
+    assert inst.error.detail == (
+        f"CredentialStoreError: {path} is accessible by other users;"
+        f" run: chmod 600 {path}"
+    )
+
+    assert inst2.error is None
+    assert [d.remote_id for d in inst2.delivered] == ["z1"]
+
+
+def test_item_exception_message_is_redacted(tmp_path: Path) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+    name = "keyed"
+    api_key = "key-for-item-redaction"
+
+    connector = ScriptedPersonalKeyConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    activity = RemoteActivity(
+        remote_id="r1", original_available=True, start=_NOW, revision="1"
+    )
+    connector.listing_script.append(Listing(activities=(activity,)))
+    connector.fetch_script.append(ValueError(f"bad {api_key}"))
+
+    environ = {env_var_name(name, "api_key"): api_key}
+    report = _run(data_root, inbox, [_instance(connector, name=name)], environ=environ)
+    inst = report.instances[0]
+
+    # Exact: catches both a missing redaction (kills O5) and a `repr`-shaped
+    # note (kills O19).
+    assert inst.failed[0].detail == f"ValueError: bad {REDACTED}"
+
+
+class _AuthModeCheckingConnector(ScriptedLoginConnector):
+    """Calls ``session.http.get`` itself before delegating to the scripted
+    ``refresh`` -- lets a test observe the ``HttpClient`` mode the renewal
+    session was actually built with. ``CallMode.AUTH`` makes exactly one
+    request whatever the response; ``CallMode.DATA`` would retry a 503 up to
+    ``MAX_DATA_ATTEMPTS`` times (``connectors/http.py``, Req 9.3-9.5)."""
+
+    def refresh(self, session: ConnectorSession) -> TokenSet:
+        session.http.get("https://svc.example/token")
+        return super().refresh(session)
+
+
+def test_renewal_session_uses_auth_mode_not_data_mode(tmp_path: Path) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+    store = CredentialStore(tmp_path / "creds")
+    name = "logged"
+
+    connector = _AuthModeCheckingConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    _store_login_credentials(
+        store, name, connector.connector_id, token_value="old", expires_at=_NOW
+    )
+    connector.refresh_script.append(
+        TokenSet(
+            values={"access_token": Secret("new")},
+            expires_at=_NOW + timedelta(hours=1),
+            scopes=None,
+        )
+    )
+    connector.listing_script.append(Listing(activities=()))
+
+    # A 503: a DATA-mode session would retry this up to MAX_DATA_ATTEMPTS
+    # times; an AUTH-mode session makes exactly one request regardless.
+    transport = FakeTransport([HttpResponse(status=503, headers={}, body=b"")])
+
+    report = _run(
+        data_root,
+        inbox,
+        [_instance(connector, name=name)],
+        store=store,
+        now=lambda: _NOW,
+        transport=transport,
+    )
+
+    assert report.instances[0].error is None
+    # Kills O9 (the renewal session built with CallMode.DATA).
+    assert len(transport.requests) == 1
+
+
+# --- reviewer round-2 proposed pins -------------------------------------
+
+
+@pytest.mark.parametrize(
+    "store_exc",
+    [
+        OSError(28, "No space left on device"),
+        CredentialStoreError("creds/logged.toml could not be written"),
+    ],
+    ids=["oserror", "credential-store-error"],
+)
+def test_renewal_store_failure_ends_the_instance_and_the_next_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, store_exc: Exception
+) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+    store = CredentialStore(tmp_path / "creds")
+    connector = ScriptedLoginConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    _store_login_credentials(
+        store, "logged", connector.connector_id, token_value="old", expires_at=_NOW
+    )
+    connector.refresh_script.append(
+        TokenSet(
+            values={"access_token": Secret("new")},
+            expires_at=_NOW + timedelta(hours=1),
+            scopes=None,
+        )
+    )
+
+    def failing_save(self: CredentialStore, name: str, stored: object) -> None:
+        raise store_exc
+
+    monkeypatch.setattr(CredentialStore, "save", failing_save)
+
+    healthy = ScriptedPuller()
+    healthy.listing_script.append(
+        Listing(
+            activities=(
+                RemoteActivity(
+                    remote_id="z1", original_available=True, start=_NOW, revision="1"
+                ),
+            )
+        )
+    )
+    healthy.fetch_script.append(Fetched(data=_fit_bytes(b"z")))
+
+    report = _run(
+        data_root,
+        inbox,
+        [_instance(connector, name="logged"), _instance(healthy, name="zzz")],
+        store=store,
+        now=lambda: _NOW,
+    )
+    inst, inst2 = report.instances
+    assert inst.error is not None
+    assert inst.error.detail == f"{type(store_exc).__name__}: {store_exc}"
+    assert connector.list_calls == []
+    assert [d.remote_id for d in inst2.delivered] == ["z1"]
+
+
+def test_a_renewed_token_quoted_by_a_later_error_is_redacted(tmp_path: Path) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    store = CredentialStore(tmp_path / "creds")
+    connector = ScriptedLoginConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    _store_login_credentials(
+        store, "logged", connector.connector_id, token_value="old", expires_at=_NOW
+    )
+    # Built with Secret(...) directly, not session.secret(...): only the pull
+    # engine's own registration of the issued TokenSet can redact it.
+    connector.refresh_script.append(
+        TokenSet(
+            values={"access_token": Secret("brand-new-tok-77")},
+            expires_at=_NOW + timedelta(hours=1),
+            scopes=None,
+        )
+    )
+    connector.listing_script.append(
+        ConnectorError("listing refused for brand-new-tok-77")
+    )
+    report = _run(
+        data_root,
+        tmp_path / "inbox",
+        [_instance(connector, name="logged")],
+        store=store,
+        now=lambda: _NOW,
+    )
+    error = report.instances[0].error
+    assert error is not None
+    assert error.detail == "ConnectorError: listing refused for <redacted>"
+
+
+def test_failed_fetches_are_left_unrecorded(tmp_path: Path) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+    first = RemoteActivity(
+        remote_id="a", original_available=True, start=_NOW, revision="1"
+    )
+    second = RemoteActivity(
+        remote_id="b",
+        original_available=True,
+        start=_NOW + timedelta(seconds=1),
+        revision="1",
+    )
+    connector = ScriptedPuller()
+    connector.listing_script.append(Listing(activities=(first, second)))
+    connector.fetch_script.extend(
+        [ValueError("glitch"), Fetched(data=_fit_bytes(b"b"))]
+    )
+    _run(data_root, inbox, [_instance(connector)])
+    doc = _ledger_document(data_root, "src")
+    assert [entry["remote_id"] for entry in doc["entries"]] == ["b"]
+
+
+def test_fetch_auth_failure_leaves_the_item_unrecorded(tmp_path: Path) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    a = RemoteActivity(remote_id="a", original_available=True, start=_NOW, revision="1")
+    connector = ScriptedPuller()
+    connector.listing_script.append(Listing(activities=(a,)))
+    connector.fetch_script.append(AuthFailure(AuthFailureKind.REJECTED, "nope"))
+    _run(data_root, tmp_path / "inbox", [_instance(connector)])
+    assert not layout.connector_ledger_path(data_root, "src").exists()
+
+
+def test_deferral_reasons_are_redacted(tmp_path: Path) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    name = "keyed"
+    api_key = "key-in-a-deferral"
+    connector = ScriptedPersonalKeyConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    activity = RemoteActivity(
+        remote_id="r1", original_available=True, start=_NOW, revision="1"
+    )
+    connector.listing_script.append(
+        Listing(
+            activities=(activity,),
+            deferred=(
+                ListingDeferral(subject="page-2", reason=f"page {api_key} later"),
+            ),
+        )
+    )
+    connector.fetch_script.append(Deferred(reason=f"not ready for {api_key}"))
+    environ = {env_var_name(name, "api_key"): api_key}
+    report = _run(
+        data_root,
+        tmp_path / "inbox",
+        [_instance(connector, name=name)],
+        environ=environ,
+    )
+    assert [(n.subject, n.detail) for n in report.instances[0].deferred] == [
+        ("page-2", "page <redacted> later"),
+        ("r1", "not ready for <redacted>"),
+    ]
+
+
+def test_an_interrupt_during_listing_or_renewal_propagates(tmp_path: Path) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    lister = ScriptedPuller()
+    lister.listing_script.append(KeyboardInterrupt("stop"))
+    with pytest.raises(KeyboardInterrupt):
+        _run(data_root, tmp_path / "inbox", [_instance(lister)])
+
+    store = CredentialStore(tmp_path / "creds")
+    renewer = ScriptedLoginConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    _store_login_credentials(
+        store, "logged", renewer.connector_id, token_value="old", expires_at=_NOW
+    )
+    renewer.refresh_script.append(KeyboardInterrupt("stop"))
+    with pytest.raises(KeyboardInterrupt):
+        _run(
+            data_root,
+            tmp_path / "inbox",
+            [_instance(renewer, name="logged")],
+            store=store,
+            now=lambda: _NOW,
+        )
