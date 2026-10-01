@@ -648,7 +648,7 @@
 
 - [ ] 6. Guards and true network statements
 
-- [ ] 6.1 (P) Guard the package boundary and confine network code to two modules
+- [x] 6.1 (P) Guard the package boundary and confine network code to two modules
   - The four layers design.md states: each module's *direct* (not
     transitive) non-stdlib imports — `fitdocs.*` targets and third-party
     top-level names, stdlib decided by `sys.stdlib_module_names` — pinned by
