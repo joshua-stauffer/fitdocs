@@ -182,8 +182,9 @@ def test_gate_names_both_trees_and_runs_before_the_upload() -> None:
     the match-data step, and before the upload (10.3).
 
     Dies on: moving the gate step below the upload step, deleting either
-    directory argument from the gate command, or moving the secret step
-    below the gate.
+    directory argument from the gate command, moving the secret step
+    below the gate, or prefixing the gate's `run` with `echo `, `true || `
+    or a first line `exit 0`.
     """
     steps = _steps(_job(_workflow(), "build"))
     gate = steps[_gate_index(steps)]
@@ -194,7 +195,11 @@ def test_gate_names_both_trees_and_runs_before_the_upload() -> None:
         "website/build/site/staged",
         "website/build/site/html",
     ]
-    assert 'FITDOCS_FORBIDDEN_STRINGS="$RUNNER_TEMP/forbidden-strings.txt"' in run
+    root = DEFAULT_BUILD_ROOT.as_posix()
+    assert run == (
+        'FITDOCS_FORBIDDEN_STRINGS="$RUNNER_TEMP/forbidden-strings.txt" '
+        f"uv run python -m scripts.check_site {root}/staged {root}/html"
+    )
     gate_at = _gate_index(steps)
     assert _index_by_uses(steps, "actions/upload-pages-artifact") > gate_at
     assert _index_by_run(steps, "printf ") < gate_at
@@ -211,11 +216,12 @@ def test_upload_path_is_the_directory_the_builder_writes_html_to() -> None:
     """The artifact uploaded is the builder's `html/` tree, the same one the
     gate scans (10.3).
 
-    Dies on: pointing the upload `path:` anywhere but `website/build/site/html`.
+    Dies on: pointing the upload `path:` anywhere but `website/build/site/html`,
+    or adding a second `with:` key such as `name: not-github-pages`.
     """
     steps = _steps(_job(_workflow(), "build"))
     upload = steps[_index_by_uses(steps, "actions/upload-pages-artifact")]
-    assert upload["with"]["path"] == f"{DEFAULT_BUILD_ROOT.as_posix()}/html"
+    assert upload["with"] == {"path": f"{DEFAULT_BUILD_ROOT.as_posix()}/html"}
     gate_args = shlex.split(steps[_gate_index(steps)]["run"])
     assert upload["with"]["path"] in gate_args
 
@@ -243,12 +249,66 @@ def test_no_job_or_step_continues_on_error_and_the_gate_is_unconditional() -> No
     assert set(steps[_gate_index(steps)]) == {"name", "run"}
 
 
+_BUILD_JOB_KEYS = {"runs-on", "outputs", "steps"}
+_DEPLOY_JOB_KEYS = {
+    "needs",
+    "if",
+    "runs-on",
+    "permissions",
+    "environment",
+    "concurrency",
+    "steps",
+}
+# One key set per build step, in file order: checkout, setup-uv, python
+# install, sync, site tests, status, real build, fixture build, secret, gate,
+# upload.
+_BUILD_STEP_KEYS = [
+    {"name", "uses"},
+    {"name", "uses"},
+    {"name", "run"},
+    {"name", "run"},
+    {"name", "env", "run"},
+    {"name", "id", "run"},
+    {"name", "if", "run"},
+    {"name", "if", "run"},
+    {"name", "env", "run"},
+    {"name", "run"},
+    {"name", "if", "uses", "with"},
+]
+_DEPLOY_STEP_KEYS = [{"name", "id", "uses"}]
+
+
+def test_jobs_and_steps_carry_exactly_the_designed_keys() -> None:
+    """Every job and every step has exactly the keys the design gives it, so no
+    key outside that set (`defaults`, `continue-on-error`, `timeout-minutes`,
+    `shell`, `env`, an extra `if`, `strategy`, `container`, `services`) is
+    present on a job or a step (10.3, 10.4, 10.5).
+
+    Dies on: adding any key to the build or deploy job, or to any step, or
+    removing one from them (for example `defaults: {run: {shell: "true {0}"}}`
+    on `build`, `continue-on-error` or `if` on the gate step, `timeout-minutes`
+    or `env` on the deploy job or its step).
+    """
+    doc = _workflow()
+    build = _job(doc, "build")
+    deploy = _job(doc, "deploy")
+    assert set(build) == _BUILD_JOB_KEYS, set(build) ^ _BUILD_JOB_KEYS
+    assert set(deploy) == _DEPLOY_JOB_KEYS, set(deploy) ^ _DEPLOY_JOB_KEYS
+    assert build["runs-on"] == "ubuntu-latest"
+    assert deploy["runs-on"] == "ubuntu-latest"
+    assert [set(s) for s in _steps(build)] == _BUILD_STEP_KEYS
+    assert [set(s) for s in _steps(deploy)] == _DEPLOY_STEP_KEYS
+
+
 def test_fixture_build_step_is_the_negation_of_the_real_build_and_notices() -> None:
     """With no included page the fixture site is built, a notice is emitted and
     the real build is skipped (10.6).
 
     Dies on: making the fixture step's `if` equal to the real step's, dropping
-    `--content tests/sitebuild/fixtures/site`, or deleting the `::notice::` line.
+    `--content tests/sitebuild/fixtures/site`, deleting the `::notice::` line,
+    appending `> /dev/null` to the notice, pointing `--content` at
+    `tests/sitebuild/fixtures/site/../../../website/content`, appending
+    `|| true` to the fixture build, or appending `|| true` to the real build.
     """
     steps = _steps(_job(_workflow(), "build"))
     fixture = steps[_index_by_run(steps, "build_site build --content")]
@@ -262,13 +322,15 @@ def test_fixture_build_step_is_the_negation_of_the_real_build_and_notices() -> N
     assert real["if"] == _HAS_CONTENT
     assert fixture["if"] == _NO_CONTENT
     assert real["if"].replace("==", "!=") == fixture["if"]
-    assert "--content tests/sitebuild/fixtures/site" in fixture["run"]
-    notices = [
-        line for line in fixture["run"].splitlines() if line.strip().startswith("echo")
+    assert fixture["run"].strip().splitlines() == [
+        "uv run --group docs python -m scripts.build_site build "
+        "--content tests/sitebuild/fixtures/site",
+        'echo "::notice::website/content holds no included page; '
+        'built the fixture site; deploy skipped"',
     ]
-    assert len(notices) == 1
-    assert "::notice::" in notices[0]
-    assert "deploy skipped" in notices[0]
+    assert real["run"].strip() == (
+        "uv run --group docs python -m scripts.build_site build"
+    )
     assert _index_by_run(steps, "build_site status") < steps.index(real)
 
 

@@ -82,8 +82,9 @@ jobs:
       # GitHub redacts them to an empty string for fork-triggered runs. That
       # means a fork PR fails here, by design: the encumbered-content gate
       # cannot run without its match data, and an unrun gate is exactly the
-      # `gate_not_run` failure this step reports (Requirement 6.9). There is
-      # no fork-specific skip; the gate is fail-closed for every trigger.
+      # `gate_not_run` failure this step reports (distribution Requirement
+      # 6.9; docs-site Requirement 10.4). There is no fork-specific skip; the
+      # gate is fail-closed for every trigger.
       - name: Write the match data outside the checkout
         env:
           FITDOCS_FORBIDDEN_STRINGS_CONTENT: ${{ secrets.FITDOCS_FORBIDDEN_STRINGS_CONTENT }}
