@@ -1032,26 +1032,26 @@ def test_live_preview_serves_edits_adds_deletes_failures_and_fixes(
     served, the deleted page answers 404, a page with a broken `section:` prints
     its problem lines (identical to a direct ``build`` of the same content) while
     the edited text is still served, and the fix is served. Each wait is a
-    bounded poll. Before the steps that add a page and print problems the test
-    asserts the page answers 404 and ``out`` is empty. The content copy, outside
-    the repository, hashes the same (bytes, modes, mtimes) before and after the
-    startup waits and each wait that follows one of the test's own edits. After
+    bounded poll. Before the page is added the test asserts it answers 404, and
+    before the page is broken it asserts ``out`` is empty. The content copy,
+    outside the repository, is hashed (bytes, modes, mtimes) when each wait
+    begins, after the test's own edit, and must hash the same at every poll of
+    that wait, for the startup waits and for the waits that follow an edit. After
     stop the recorded ``zensical serve`` process has a return code, read before
     the test's own cleanup can kill it, and its pid is not alive.
 
-    Dies on: `sync_tree(tree, live)` replaced by a swap of `live/staged` for a
-    freshly written directory (the edit is never served: "not within 20.0 s");
-    the `sync_tree` call removed (no home page: "the preview loop ended");
-    the `print(problem.render(), ...)` removed (no problem lines);
-    `live/staged` removed before the failure lines are printed (`/why/` then
-    answers 404); `_terminate(process)` removed ("the serve process outlived
-    the stop").
+    Dies on: `sync_tree(tree, live)` replaced by a staged swap that keeps the
+    old `live/staged` serving and puts a freshly written directory beside it
+    (the edit never appears: "not within 20.0 s"); the `sync_tree` call removed
+    (no home page: "the preview loop ended"); the `print(problem.render(), ...)`
+    removed (no problem lines); `live/staged` removed before the failure lines
+    are printed (`/why/` then answers 404); `_terminate(process)` removed ("the
+    serve process outlived the stop").
 
-    Replacing it with `write_tree(tree, live)`, or deleting `live/` and
-    renaming a freshly written directory into its place, stays green here, because
-    `zensical serve` picks those up (`test_a_later_success_syncs_live_in_place`
-    reds both). Renaming `live/` aside and renaming a fresh directory in is a
-    rename-swap and goes red like the `live/staged` swap.
+    Whether `zensical serve` notices a directory rename depends on the
+    platform (see research.md), so this test does not claim that any other
+    spelling of the sync is red or green; the in-place write is pinned by
+    `test_a_later_success_syncs_live_in_place`.
     """
     content = copy_fixture_tree(FIXTURE, tmp_path, "content")
     broken = copy_fixture_tree(FIXTURE, tmp_path, "broken-reference")

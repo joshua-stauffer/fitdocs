@@ -15,8 +15,11 @@
     by the build script, not delegated to the generator.
   - Zensical's `site_dir` is wiped and repopulated on every build, **including
     failed ones**. Both `docs_dir` and `site_dir` must sit inside the config
-    file's directory. `serve` writes into `site_dir` and does not notice a
-    directory swap by rename, though in-place writes are seen in about 0.25 s.
+    file's directory. `serve` writes into `site_dir`. Whether it notices a
+    directory swap by rename depends on the platform (on Linux a rename-aside
+    followed by a delete is picked up; on macOS a rename-aside is invisible),
+    while in-place writes are seen in about 0.25 s on both, so an in-place
+    `sync_tree` is the only spelling that works on both.
     This fixes the build-root layout (one dedicated root per mode), the failure
     cleanup (6.6) and the preview sync strategy (7.2).
   - The existing guard cores are reusable unchanged, with no second marker
@@ -84,7 +87,8 @@
     set.
   - **serve** picks up these changes: an in-place file edit, a config edit, an
     override-template edit, a new page, a delete, and a re-create. A
-    rename-swap of the staged directory is not detected within 20 s.
+    rename-swap of the staged directory is not detected within 20 s on macOS,
+    and is platform-dependent on Linux (see above).
     `copytree(dirs_exist_ok=True)` over the tree is detected.
 - **Implications**:
   - The allowlist, `_` exclusion, dotfile exclusion, asset-link checks and
@@ -350,7 +354,7 @@
   - 7.3 wants failures reported in the build's own form, with the last good
     site kept serving.
   - `serve --strict` is unsupported.
-  - A rename-swap is invisible to `serve`.
+  - A rename-swap is not reliably seen by `serve` (platform-dependent).
 - **Selected Approach**:
   - The preview polls the content dir, `website/overrides/`,
     `website/assets/` and the config template, with stdlib `os.scandir` and
