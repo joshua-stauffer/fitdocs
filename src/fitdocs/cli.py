@@ -2,8 +2,8 @@
 
 A thin typer shell (design: CliApp, ``src/fitdocs/cli.py``): it parses flags,
 resolves configuration, calls the engine, and reports -- it contains no
-rendering or file-pipeline logic of its own. Ten commands are registered on
-top of the baseline ``--version`` / ``--help`` shell. The tree-processing
+rendering or file-pipeline logic of its own. Eleven commands are registered
+on top of the baseline ``--version`` / ``--help`` shell. The tree-processing
 commands documented here are:
 
 * ``fitdocs sync SOURCE [--out PATH] [--force] [--no-prompt]`` -- turn every
@@ -48,6 +48,27 @@ marked secret through a no-echo prompt; when standard input is not an
 interactive terminal it prompts for nothing and fails loudly instead
 (connectors Req 5.4).
 
+``fitdocs pull [NAMES...] [--out PATH] [--since DATE] [--dry-run] [--sync]
+[--no-prompt]`` fetches new activities from the connectors configured under
+``[connectors]`` -- every configured instance, in name order, or only the
+named ones when NAMES is given -- and delivers each into the configured
+inbox, inside a subdirectory named for its instance (connectors Req 6.1-6.13,
+8.1-8.4). Every check the preflight can make -- the data root, a ``--sync``/
+``--dry-run`` conflict, the ``--since`` date, the settings document, the
+inbox, the connectors table, an unknown instance name, and (for a selected
+instance whose connector authenticates) the credentials directory -- runs
+before any request or write (Req 3.9, 4.2); with no instance configured it
+reports that and completes with the success code rather than treating it as
+an error (Req 6.3). ``--since DATE`` lists each instance from the start of
+that day in the local time zone instead of its ledger's watermark less its
+look-back (Req 6.4); ``--dry-run`` lists and reports what each instance
+would fetch, fetching, delivering, removing, and recording nothing under the
+data root or in the inbox -- except a token renewal the listing needed,
+which is still persisted to the credentials store (Req 6.9). ``--sync`` is
+declared, validated, and refused together with ``--dry-run`` here (Req
+12.4); the drain chain it will trigger after the pull is not yet wired. The
+printed report and the exit codes below follow connectors Req 11.1-11.5.
+
 Every tree-processing command (each command in the list above), *before any
 processing* (Req 2.1), resolves the data root by the explicit precedence
 (``--out`` > ``FITDOCS_DATA`` > ``.fitdocs/data-root`` pointer). ``sync`` and
@@ -67,13 +88,16 @@ load pass restore-only and deterministic.
 Exit codes (Req 1.5, 2.2, 8.5, 8.7):
 
 * ``0`` -- success, including an all-skipped no-op run (everything written
-  and/or skipped, nothing failed), a ``check`` run that reports nothing, or a
-  ``plan`` run with no plan sources present;
+  and/or skipped, nothing failed), a ``check`` run that reports nothing, a
+  ``plan`` run with no plan sources present, or a ``pull`` run with no
+  connector configured or whose only exceptional entries are deferrals and
+  skips (connectors Req 6.3, 11.4);
 * ``1`` -- one or more per-file *or* per-document (load) failures occurred,
   ``check`` reports one or more findings, ``plan`` finds an invalid, blocked,
-  or failed block, or the plan reconciling pass -- chained after ``sync``'s
+  or failed block, the plan reconciling pass -- chained after ``sync``'s
   and ``regen``'s load pass, and run standalone by ``plan`` -- finds an
-  override problem (plan-resolution Req 8.7);
+  override problem (plan-resolution Req 8.7), or ``pull`` reports any
+  instance or activity failure (connectors Req 11.4);
 * ``2`` -- a configuration error: an unresolvable data root (its message lists
   the three configuration options), a malformed ``athlete.toml`` / profile, a
   malformed ``fitdocs.toml`` ``[tiles]``, ``[load]``, ``[history]`` or
@@ -81,7 +105,11 @@ Exit codes (Req 1.5, 2.2, 8.5, 8.7):
   before it ever calls the plan engine, plan-resolution Req 8.7), an unknown
   ``--calculator``/configured-default id, or a missing source directory --
   including a configured plan-source directory that does not exist or is not
-  a directory -- or (``skill``) an unknown or absent packaged skill name. The
+  a directory -- or (``skill``) an unknown or absent packaged skill name.
+  ``pull`` adds its own preflight configuration errors: an unknown connector
+  instance name, an invalid ``--since`` date, ``--sync`` combined with
+  ``--dry-run``, and a credentials directory that is the data root or lies
+  inside it (connectors Req 3.9, 4.2, 6.2, 12.4). The
   ``[load]`` table is read inside the load pass itself (task 4.1); this
   module reads none of it directly. A configuration error writes nothing,
   and for ``check`` means nothing was
@@ -122,11 +150,12 @@ from __future__ import annotations
 
 import getpass
 import os
+import re
 import sys
 import time
 from datetime import UTC, date, datetime, tzinfo
 from pathlib import Path
-from typing import NoReturn
+from typing import Final, NoReturn
 
 import typer
 from rich.console import Console
@@ -151,6 +180,14 @@ from fitdocs.connectors.protocol import (
     SUPPORTED_AUTH_STYLES,
     AuthStyle,
     SettingsContext,
+)
+from fitdocs.connectors.pull import (
+    Delivered,
+    InstancePullReport,
+    PullNote,
+    PullOptions,
+    PullReport,
+    run_pull,
 )
 from fitdocs.connectors.secrets import Redactor
 from fitdocs.connectors.settings import load_connectors_settings
@@ -298,6 +335,35 @@ _CONNECT_NAME_ARGUMENT = typer.Argument(
         "connectors table in fitdocs.toml)."
     ),
 )
+_PULL_NAMES_ARGUMENT = typer.Argument(
+    None,
+    help=(
+        "Configured connector instance names to pull (default: every "
+        "configured instance, in name order)."
+    ),
+)
+_SINCE_OPTION = typer.Option(
+    None,
+    "--since",
+    help=(
+        "YYYY-MM-DD; list activities from the start of that day in the local time zone."
+    ),
+)
+_PULL_DRY_RUN_OPTION = typer.Option(
+    False,
+    "--dry-run",
+    help=(
+        "List and report what each instance would fetch; fetch, deliver, "
+        "remove, and record nothing -- except a token renewal the listing "
+        "needs, which is still saved to the credentials store."
+    ),
+)
+_SYNC_OPTION = typer.Option(
+    False,
+    "--sync",
+    help="Then drain the inbox exactly as `fitdocs sync` does.",
+)
+_SINCE_DATE_RE: Final[re.Pattern[str]] = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 @app.command("sync")
@@ -886,6 +952,288 @@ def connect_command(
     )
     console.print(outcome.next_step, markup=False, highlight=False, soft_wrap=True)
     raise typer.Exit(code=_EXIT_FILE_FAILURES)
+
+
+def _parse_since(value: str) -> datetime:
+    """Parse ``--since``'s ``YYYY-MM-DD`` value as local midnight, in UTC
+    (design: CliCommands pull preflight, Req 6.4).
+
+    ``date.fromisoformat`` alone accepts more than this shape (ISO week
+    dates, the compact ``YYYYMMDD`` form); the leading ``fullmatch`` keeps
+    the documented ``YYYY-MM-DD`` shape the only one accepted.
+    """
+    if not _SINCE_DATE_RE.fullmatch(value):
+        _config_error(f"--since {value!r} is not a valid date; use YYYY-MM-DD.")
+    try:
+        since_date = date.fromisoformat(value)
+    except ValueError:
+        _config_error(f"--since {value!r} is not a valid date; use YYYY-MM-DD.")
+    # A naive local midnight's ``astimezone()`` applies the local zone's
+    # offset *on that date*; ``_local_tz()`` is today's fixed offset, which
+    # is an hour off for a date on the other side of a DST change.
+    return (
+        datetime.combine(since_date, datetime.min.time()).astimezone().astimezone(UTC)
+    )
+
+
+@app.command("pull")
+def pull_command(
+    names: list[str] | None = _PULL_NAMES_ARGUMENT,
+    out: Path | None = _OUT_OPTION,
+    since: str | None = _SINCE_OPTION,
+    dry_run: bool = _PULL_DRY_RUN_OPTION,
+    sync_after: bool = _SYNC_OPTION,
+    no_prompt: bool = _NO_PROMPT_OPTION,
+) -> None:
+    """Fetch new activities from every configured connector instance, or the
+    named ones, and deliver them into the inbox.
+
+    (connectors design: CliCommands "``fitdocs pull``"; Req 3.9, 4.2, 6.1-6.3,
+    6.9, 8.4, 11.1-11.5.)
+
+    Every preflight check runs, in design.md's order, before any request or
+    write: the data root (Req 3.9); ``--sync`` combined with ``--dry-run``
+    (Req 12.4); ``--since`` parsed as ``YYYY-MM-DD`` at local midnight; the
+    settings document; the configured inbox, validated but not created (Req
+    8.4); the connectors table; NAMES, when given, matched against the
+    configured instances -- an unknown name exits with the configuration-error
+    code naming every configured instance (Req 6.2); and, when any selected
+    instance's connector authenticates, the per-user credentials directory,
+    resolved and checked to lie outside the data root (Req 4.2). With
+    ``--sync`` the preflight also loads the athlete inputs, runs plugin
+    discovery, projects the tiles table, and loads the quarantine
+    record -- the same checks ``fitdocs sync``'s own drain path makes before
+    its first write -- plus the identity settings and the hold record
+    (identity Req 2.7); this version validates all of that but does not yet
+    chain the drain (task 5.3).
+
+    Unless ``--dry-run``, the inbox (and, under the move disposition, the
+    processed-files destination) is created once every check above has
+    passed. With no instance configured, this prints that nothing is
+    configured and continues rather than returning early (Req 6.3) -- the
+    pull still runs, over no instances, so the report and (once chained) the
+    drain behave exactly as they would with a connectors table that
+    happens to be empty.
+
+    The pull itself is :func:`~fitdocs.connectors.pull.run_pull`, which
+    isolates every instance's and every activity's own failure into the
+    returned report (Req 6.10, 6.11); an exception it does not itself catch
+    -- a genuine bug, never an ordinary per-instance failure -- is still
+    never shown unredacted or as a traceback here: mapped to
+    ``<ExceptionType>: <redacted message>`` and the failure code, the same
+    convention :func:`connect_command` already applies to its own call (Req
+    10.1-10.2). Otherwise :func:`_report_pull` prints the report and this
+    command exits with the failure code when :attr:`PullReport.failed` is
+    true, else the success code (Req 11.4).
+    """
+    data_root = _resolved_data_root(out)
+
+    if sync_after and dry_run:
+        _config_error(
+            "--sync cannot be combined with --dry-run: a dry run writes nothing."
+        )
+
+    since_dt = _parse_since(since) if since is not None else None
+
+    try:
+        document = load_settings_document(data_root)
+        inbox_settings = load_inbox_settings(document, data_root=data_root)
+        validated_inbox = validate_inbox_paths(data_root, inbox_settings)
+        all_instances = load_connectors_settings(
+            document,
+            settings_file=settings_path(data_root),
+            context=SettingsContext(
+                data_root=data_root, inbox=validated_inbox.inbox_resolved
+            ),
+        )
+    except SettingsError as exc:
+        _config_error(str(exc))
+
+    by_name = {instance.name: instance for instance in all_instances}
+    if names:
+        unknown = sorted(set(names) - by_name.keys())
+        if unknown:
+            configured = ", ".join(sorted(by_name)) or "none"
+            _config_error(
+                f"unknown connector instance(s): {', '.join(unknown)}; "
+                f"configured instances: {configured}"
+            )
+        wanted = set(names)
+        selected = tuple(
+            instance for instance in all_instances if instance.name in wanted
+        )
+    else:
+        selected = all_instances
+
+    store: CredentialStore | None = None
+    if any(
+        instance.connector.auth_style is not AuthStyle.NONE for instance in selected
+    ):
+        try:
+            credentials_dir = resolve_credentials_dir(os.environ, Path.home())
+            check_outside_data_root(credentials_dir, data_root)
+        except CredentialsLocationError as exc:
+            _config_error(str(exc))
+        store = CredentialStore(credentials_dir)
+
+    if sync_after:
+        _loaded_athlete(data_root)
+        _plugin_report(data_root)
+        try:
+            tile_settings_from_document(document, settings_path(data_root))
+        except SettingsError as exc:
+            _config_error(str(exc))
+        try:
+            load_quarantine(data_root)
+        except QuarantineError as exc:
+            _config_error(str(exc))
+        _identity_settings(data_root)
+        try:
+            load_holds(data_root)
+        except HoldRecordError as exc:
+            _hold_record_error(exc)
+
+    if dry_run:
+        inbox_path = validated_inbox.inbox_resolved
+    else:
+        inbox_path = create_inbox_paths(validated_inbox).inbox
+
+    if not selected:
+        Console().print(
+            "No connectors are configured; nothing to pull.",
+            markup=False,
+            highlight=False,
+            soft_wrap=True,
+        )
+
+    redactor = Redactor()
+    try:
+        report = run_pull(
+            data_root,
+            selected,
+            inbox=inbox_path,
+            store=store,
+            transport=_connector_transport(),
+            options=PullOptions(since=since_dt, dry_run=dry_run),
+            environ=os.environ,
+            now=lambda: datetime.now(UTC),
+            sleep=time.sleep,
+            redactor=redactor,
+        )
+    except Exception as exc:  # noqa: BLE001 - mapped to a redacted, typed line
+        message = redactor.redact(str(exc))
+        Console().print(
+            f"{type(exc).__name__}: {message}",
+            markup=False,
+            highlight=False,
+            soft_wrap=True,
+        )
+        raise typer.Exit(code=_EXIT_FILE_FAILURES) from None
+
+    _report_pull(report)
+    _finish(failed=report.failed)
+
+
+_PULL_REPORT_ROWS: Final[tuple[tuple[str, str], ...]] = (
+    ("Listed", "listed"),
+    ("Delivered", "delivered"),
+    ("Would fetch", "would_fetch"),
+    ("Already held", "held"),
+    ("Skipped", "skipped"),
+    ("Deferred", "deferred"),
+    ("Failed", "failed"),
+    ("Removed", "removed"),
+    ("Error", "error"),
+)
+"""The pull report table's rows, each naming the :class:`InstancePullReport`
+field it counts (design: CliCommands "``_report_pull``", Req 11.1) -- the
+one ordered source of truth both the table and (via
+:data:`_PULL_REPORT_ROWS`) any later consumer read, so a channel can never
+be renamed or dropped in one place and not the other."""
+
+
+def _report_pull(report: PullReport) -> None:
+    """Print the pull report exactly as design.md's ``_report_pull`` states
+    (Req 11.1, 11.2, 11.3, 11.5): the inbox line or the dry-run line, then
+    per instance an always-complete counts table and its detail blocks.
+    """
+    console = Console()
+    if report.dry_run:
+        console.print(
+            "Dry run — nothing fetched or written.",
+            markup=False,
+            highlight=False,
+            soft_wrap=True,
+        )
+    else:
+        console.print(
+            f"Inbox: {report.inbox}", markup=False, highlight=False, soft_wrap=True
+        )
+
+    instance: InstancePullReport
+    for instance in report.instances:
+        table = Table(title=f"fitdocs pull: {instance.name} ({instance.connector_id})")
+        table.add_column("Result")
+        table.add_column("Count", justify="right")
+        for label, field_name in _PULL_REPORT_ROWS:
+            if field_name == "listed":
+                count = instance.listed
+            elif field_name == "error":
+                count = 1 if instance.error is not None else 0
+            else:
+                count = len(getattr(instance, field_name))
+            table.add_row(label, str(count))
+        console.print(table)
+
+        if instance.delivered:
+            console.print("Delivered:")
+            delivered_item: Delivered
+            for delivered_item in instance.delivered:
+                console.print(
+                    f"  {delivered_item.path}",
+                    markup=False,
+                    highlight=False,
+                    soft_wrap=True,
+                )
+
+        if instance.would_fetch:
+            console.print("Would fetch:")
+            for remote_id in instance.would_fetch:
+                console.print(
+                    f"  {remote_id}", markup=False, highlight=False, soft_wrap=True
+                )
+
+        def _print_notes(label: str, notes: tuple[PullNote, ...]) -> None:
+            if not notes:
+                return
+            console.print(f"{label}:")
+            for note in notes:
+                console.print(
+                    f"  {note.subject}", markup=False, highlight=False, soft_wrap=True
+                )
+                console.print(
+                    f"    {note.detail}", markup=False, highlight=False, soft_wrap=True
+                )
+
+        _print_notes("Skipped", instance.skipped)
+        _print_notes("Deferred", instance.deferred)
+        _print_notes("Failed", instance.failed)
+
+        if instance.removed:
+            console.print("Removed:")
+            for path in instance.removed:
+                console.print(
+                    f"  {path}", markup=False, highlight=False, soft_wrap=True
+                )
+
+        if instance.error is not None:
+            console.print("Error:")
+            console.print(
+                f"  {instance.error.detail}",
+                markup=False,
+                highlight=False,
+                soft_wrap=True,
+            )
 
 
 @app.command("plugins")

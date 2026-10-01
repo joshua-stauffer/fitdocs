@@ -1,4 +1,5 @@
-"""CLI end-to-end tests: ``fitdocs connect`` (task 5.1).
+"""CLI end-to-end tests: ``fitdocs connect`` (task 5.1) and ``fitdocs pull``
+(task 5.2, in the ``# --- pull ---`` section near the bottom of this module).
 
 Drives the installed entry point through :class:`typer.testing.CliRunner`,
 with every connector-facing seam patched (the transport, the TTY check, the
@@ -23,20 +24,23 @@ is a literal copied by hand, not the imported ``NEXT_STEPS``/``REDACTED``
 constant -- a self-referential compare against the same constant the
 production code reads cannot catch a change to that constant.
 
-Requirements 1.7, 3.9, 4.2, 5.1, 5.2, 5.3, 5.4, 5.9, 10.6.
+Requirements 1.7, 3.9, 4.2, 5.1, 5.2, 5.3, 5.4, 5.9, 10.6 (``connect``); 3.9,
+4.2, 6.1, 6.2, 6.3, 6.9, 8.4, 11.1-11.5 (``pull``, task 5.2).
 """
 
 from __future__ import annotations
 
+import dataclasses
 import getpass
 import os
 import sys
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
-from datetime import UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 import typer
@@ -52,11 +56,23 @@ from fitdocs.connectors.protocol import (
     AuthStyle,
     Capability,
     CredentialField,
+    Declined,
+    Deferred,
     Granted,
+    Listing,
+    RemoteActivity,
     SettingsContext,
     TokenSet,
 )
+from fitdocs.connectors.pull import (
+    Delivered,
+    InstancePullReport,
+    PullNote,
+    PullOptions,
+    PullReport,
+)
 from fitdocs.connectors.secrets import Redactor
+from fitdocs.connectors.settings import ConnectorInstance
 from tests.connectors.conftest import (
     ScriptedLoginConnector,
     ScriptedPersonalKeyConnector,
@@ -876,3 +892,1020 @@ def test_none_style_long_instance_name_never_hard_wraps(
     assert _lines(result.output) == [
         f"{name}: this connector requires no authentication; nothing to connect."
     ]
+
+
+# ---------------------------------------------------------------------------
+# fitdocs pull (task 5.2)
+#
+# Preflight-order tests below each build a *two*-violation fixture for one
+# adjacent pair of design.md's stated check order and assert which message
+# survives -- a fixture with only one violation present cannot tell "checked
+# first" from "checked only". The internal order of the --sync-only block
+# (athlete -> plugins -> tiles -> quarantine -> identity -> holds) is pinned
+# only at its two ends here (athlete-before-plugins, identity-before-holds);
+# the three middle adjacent pairs reuse already-tested call sequences
+# (``_inbox_preflight``, ``_run_drain_passes``) rather than re-pinning them,
+# and are declared UNPINNED in the task report.
+# ---------------------------------------------------------------------------
+
+
+def _fit_bytes(tag: bytes = b"") -> bytes:
+    """Minimal, valid FIT header bytes; ``tag`` makes the content -- and so
+    its hash -- distinct between calls (mirrors ``tests/connectors/test_pull.py``)."""
+    return bytes([12, 0x10, 0, 0, 0, 0, 0, 0]) + b".FIT" + tag
+
+
+def _forbidden_pull_transport(request: object, timeout: float) -> object:
+    raise AssertionError(
+        "no connector used by this section makes a real request through "
+        "this transport seam; it must never actually be called"
+    )
+
+
+def _patch_pull_transport(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli_module, "_connector_transport", lambda: _forbidden_pull_transport
+    )
+
+
+def test_docstring_names_the_pull_command() -> None:
+    doc = cli_module.__doc__ or ""
+    assert "fitdocs pull [NAMES...]" in doc
+
+
+def test_pull_help_lists_the_five_options() -> None:
+    result = runner.invoke(app, ["pull", "--help"])
+    assert result.exit_code == 0
+    collapsed = _collapsed(result.output)
+    for option in ("--out", "--since", "--dry-run", "--sync", "--no-prompt"):
+        assert option in collapsed
+
+
+def test_pull_never_links_the_connectors_page() -> None:
+    doc = cli_module.__doc__ or ""
+    result = runner.invoke(app, ["pull", "--help"])
+    assert "connectors.md" not in doc
+    assert "connectors.md" not in result.output
+    assert "connectors page" not in doc.lower()
+
+
+# --- single-violation preflight configuration errors (exit 2) ------------
+
+
+def test_pull_data_root_error_is_the_resolver_message(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_pull_transport(monkeypatch)
+    missing = tmp_path / "does-not-exist"
+
+    result = runner.invoke(app, ["pull", "--out", str(missing)])
+
+    assert result.exit_code == 2
+    assert result.output.startswith(f"The --out path does not exist: {missing}\n")
+
+
+def test_pull_sync_and_dry_run_conflict_exits_2(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_pull_transport(monkeypatch)
+    before = _snapshot(tmp_path)
+
+    result = runner.invoke(app, ["pull", "--sync", "--dry-run", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert _lines(result.output) == [
+        "--sync cannot be combined with --dry-run: a dry run writes nothing."
+    ]
+    assert _snapshot(tmp_path) == before
+
+
+def test_pull_invalid_since_date_exits_2(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_pull_transport(monkeypatch)
+    before = _snapshot(tmp_path)
+
+    result = runner.invoke(
+        app, ["pull", "--since", "not-a-date", "--out", str(tmp_path)]
+    )
+
+    assert result.exit_code == 2
+    assert _lines(result.output) == [
+        "--since 'not-a-date' is not a valid date; use YYYY-MM-DD."
+    ]
+    assert _snapshot(tmp_path) == before
+
+
+def test_pull_since_date_rejects_compact_iso_form(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``date.fromisoformat`` alone accepts ``YYYYMMDD``; the leading
+    ``fullmatch`` must reject it too, not just outright garbage text."""
+    _patch_pull_transport(monkeypatch)
+
+    result = runner.invoke(app, ["pull", "--since", "20260601", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert _lines(result.output) == [
+        "--since '20260601' is not a valid date; use YYYY-MM-DD."
+    ]
+
+
+def test_pull_invalid_settings_document_message(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_pull_transport(monkeypatch)
+    _write_settings(tmp_path, connectors="[connectors\n")
+    before = _snapshot(tmp_path)
+
+    result = runner.invoke(app, ["pull", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert result.output.startswith(f"{tmp_path / 'fitdocs.toml'} is not valid TOML: ")
+    assert _snapshot(tmp_path) == before
+
+
+def test_pull_invalid_inbox_message(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_pull_transport(monkeypatch)
+    (tmp_path / "not-a-dir").write_text("")
+    _write_settings(tmp_path, connectors='[inbox]\npath = "not-a-dir"\n')
+    before = _snapshot(tmp_path)
+
+    result = runner.invoke(app, ["pull", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert _lines(result.output) == [
+        f"{tmp_path / 'fitdocs.toml'}: [inbox] path exists but is not a "
+        f"directory: {tmp_path / 'not-a-dir'}"
+    ]
+    assert _snapshot(tmp_path) == before
+
+
+def test_pull_malformed_connectors_table_message(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path, connectors='[connectors.bogus]\nconnector = "does-not-exist"\n'
+    )
+    before = _snapshot(tmp_path)
+
+    result = runner.invoke(app, ["pull", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert _snapshot(tmp_path) == before
+    assert result.output.startswith(
+        f"{tmp_path / 'fitdocs.toml'}: [connectors.bogus] connector: "
+    )
+
+
+def test_pull_unknown_names_are_listed_sorted_not_argv_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Named mutation: sorting ``unknown`` with ``reverse=True`` reds this --
+    two unknown names given in reverse-sorted order on argv still print in
+    ascending order."""
+    connector_registry.register(ScriptedPuller())
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path, connectors='[connectors.src]\nconnector = "scripted-puller"\n'
+    )
+
+    result = runner.invoke(app, ["pull", "zulu", "alpha", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert _lines(result.output) == [
+        "unknown connector instance(s): alpha, zulu; configured instances: src"
+    ]
+
+
+def test_pull_unknown_name_lists_every_configured_instance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connector_registry.register(ScriptedPuller())
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path,
+        connectors=(
+            '[connectors.alpha]\nconnector = "scripted-puller"\n\n'
+            '[connectors.beta]\nconnector = "scripted-puller"\n'
+        ),
+    )
+    before = _snapshot(tmp_path)
+
+    result = runner.invoke(app, ["pull", "zzz", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert _lines(result.output) == [
+        "unknown connector instance(s): zzz; configured instances: alpha, beta"
+    ]
+    assert _snapshot(tmp_path) == before
+
+
+def test_pull_credentials_dir_inside_data_root_exits_2(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connector = ScriptedPersonalKeyConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    connector_registry.register(connector)
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path, connectors='[connectors.src]\nconnector = "personal-key"\n'
+    )
+    bad_dir = tmp_path / "creds"
+    monkeypatch.setenv("FITDOCS_CREDENTIALS_DIR", str(bad_dir))
+    before = _snapshot(tmp_path)
+
+    result = runner.invoke(app, ["pull", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert _lines(result.output) == [
+        f"credentials directory {bad_dir.resolve()} is the data root "
+        f"{tmp_path.resolve()} or lies inside it; credentials may never be "
+        "stored under the data root"
+    ]
+    assert _snapshot(tmp_path) == before
+
+
+def test_pull_skips_credentials_dir_check_when_no_selected_instance_authenticates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Positive control for the ``any(... is not AuthStyle.NONE ...)`` gate:
+    a misconfigured credentials directory (inside the data root) is never
+    even consulted when every selected instance is ``AuthStyle.NONE``."""
+    puller = ScriptedPuller()
+    puller.listing_script.append(Listing(activities=()))
+    connector_registry.register(puller)
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path, connectors='[connectors.src]\nconnector = "scripted-puller"\n'
+    )
+    monkeypatch.setenv("FITDOCS_CREDENTIALS_DIR", str(tmp_path / "creds"))
+
+    result = runner.invoke(app, ["pull", "--out", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+
+
+# --- adjacent-pair preflight ordering (two violations; assert the winner) -
+
+
+def test_preflight_order_data_root_before_sync_dry_run_conflict(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_pull_transport(monkeypatch)
+    missing = tmp_path / "does-not-exist"
+
+    result = runner.invoke(app, ["pull", "--sync", "--dry-run", "--out", str(missing)])
+
+    assert result.exit_code == 2
+    assert result.output.startswith(f"The --out path does not exist: {missing}\n")
+
+
+def test_preflight_order_sync_dry_run_conflict_before_since(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_pull_transport(monkeypatch)
+
+    result = runner.invoke(
+        app,
+        [
+            "pull",
+            "--sync",
+            "--dry-run",
+            "--since",
+            "not-a-date",
+            "--out",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert _lines(result.output) == [
+        "--sync cannot be combined with --dry-run: a dry run writes nothing."
+    ]
+
+
+def test_preflight_order_since_before_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_pull_transport(monkeypatch)
+    _write_settings(tmp_path, connectors="[connectors\n")
+
+    result = runner.invoke(app, ["pull", "--since", "bad-date", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert _lines(result.output) == [
+        "--since 'bad-date' is not a valid date; use YYYY-MM-DD."
+    ]
+
+
+def test_preflight_order_inbox_before_connectors_table(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_pull_transport(monkeypatch)
+    (tmp_path / "not-a-dir").write_text("")
+    _write_settings(
+        tmp_path,
+        connectors=(
+            '[inbox]\npath = "not-a-dir"\n\n'
+            '[connectors.bogus]\nconnector = "does-not-exist"\n'
+        ),
+    )
+
+    result = runner.invoke(app, ["pull", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert _lines(result.output) == [
+        f"{tmp_path / 'fitdocs.toml'}: [inbox] path exists but is not a "
+        f"directory: {tmp_path / 'not-a-dir'}"
+    ]
+
+
+def test_preflight_order_connectors_table_before_unknown_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path, connectors='[connectors.bogus]\nconnector = "does-not-exist"\n'
+    )
+
+    result = runner.invoke(app, ["pull", "zzz", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert "unknown connector instance" not in result.output
+    assert "bogus" in result.output
+
+
+def test_preflight_order_unknown_name_before_credentials_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connector = ScriptedPersonalKeyConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    connector_registry.register(connector)
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path, connectors='[connectors.src]\nconnector = "personal-key"\n'
+    )
+    monkeypatch.setenv("FITDOCS_CREDENTIALS_DIR", str(tmp_path / "creds"))
+
+    result = runner.invoke(app, ["pull", "zzz", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert _lines(result.output) == [
+        "unknown connector instance(s): zzz; configured instances: src"
+    ]
+
+
+# The three pairs below only establish the *order* of the --sync preflight's
+# checks against their immediate neighbor; they are not exact-line pinned
+# the way the checks above them are, because 5.3 (not this task) owns the
+# drain helper's own validation of these same inputs and will tighten these
+# assertions once that chain exists. They do not reuse any tested helper
+# sequence from elsewhere in this module -- each builds its own fixture.
+def test_preflight_order_credentials_dir_before_sync_block(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connector = ScriptedPersonalKeyConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    connector_registry.register(connector)
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path, connectors='[connectors.src]\nconnector = "personal-key"\n'
+    )
+    bad_dir = tmp_path / "creds"
+    monkeypatch.setenv("FITDOCS_CREDENTIALS_DIR", str(bad_dir))
+    (tmp_path / "athlete.toml").write_text("not valid toml [[[")
+
+    result = runner.invoke(app, ["pull", "--sync", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert _lines(result.output) == [
+        f"credentials directory {bad_dir.resolve()} is the data root "
+        f"{tmp_path.resolve()} or lies inside it; credentials may never be "
+        "stored under the data root"
+    ]
+
+
+def test_preflight_order_sync_athlete_before_plugins(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connector_registry.register(ScriptedPuller())
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path,
+        connectors=(
+            '[connectors.src]\nconnector = "scripted-puller"\n\n'
+            '[plugins]\nenabled = "not-a-bool"\n'
+        ),
+    )
+    (tmp_path / "athlete.toml").write_text("not valid toml [[[")
+
+    result = runner.invoke(app, ["pull", "--sync", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert result.output.startswith(f"{tmp_path / 'athlete.toml'} is not valid TOML: ")
+
+
+def test_preflight_order_sync_identity_before_hold_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connector_registry.register(ScriptedPuller())
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path,
+        connectors=(
+            '[connectors.src]\nconnector = "scripted-puller"\n\n'
+            "[identity]\nprecedence = 5\n"
+        ),
+    )
+    fitdocs_dir = tmp_path / ".fitdocs"
+    fitdocs_dir.mkdir()
+    (fitdocs_dir / "held.toml").write_text("not valid toml [[[")
+
+    result = runner.invoke(app, ["pull", "--sync", "--out", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert "precedence" in result.output
+    assert "held.toml" not in result.output
+
+
+# --- the no-connectors-configured path (Req 6.3) --------------------------
+
+
+def test_pull_no_connectors_configured_reports_and_exits_0(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_pull_transport(monkeypatch)
+
+    result = runner.invoke(app, ["pull", "--out", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert _lines(result.output) == [
+        "No connectors are configured; nothing to pull.",
+        f"Inbox: {tmp_path / 'inbox'}",
+    ]
+    assert (tmp_path / "inbox").is_dir()
+
+
+def test_pull_dry_run_no_connectors_does_not_create_the_inbox(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Named mutation: creating the inbox unconditionally (dropping the
+    ``if dry_run`` branch) reds this -- the inbox directory would then
+    exist."""
+    _patch_pull_transport(monkeypatch)
+
+    result = runner.invoke(app, ["pull", "--dry-run", "--out", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert _lines(result.output) == [
+        "No connectors are configured; nothing to pull.",
+        "Dry run — nothing fetched or written.",
+    ]
+    assert not (tmp_path / "inbox").exists()
+
+
+# --- the report table and its detail blocks (Req 11.1, 11.2, 11.3, 11.5) -
+
+
+def test_pull_report_table_has_every_channel_row_even_when_zero(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Named mutation: dropping a row from ``_PULL_REPORT_ROWS`` reds this."""
+    puller = ScriptedPuller()
+    puller.listing_script.append(Listing(activities=()))
+    connector_registry.register(puller)
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path, connectors='[connectors.src]\nconnector = "scripted-puller"\n'
+    )
+
+    result = runner.invoke(app, ["pull", "--out", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    collapsed = _collapsed(result.output)
+    for label in (
+        "Listed",
+        "Delivered",
+        "Would fetch",
+        "Already held",
+        "Skipped",
+        "Deferred",
+        "Failed",
+        "Removed",
+        "Error",
+    ):
+        assert f"{label} 0" in collapsed, (label, collapsed)
+
+
+def test_pull_report_table_counts_each_channel_distinctly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    puller = ScriptedPuller()
+    puller.listing_script.append(
+        Listing(
+            activities=(
+                RemoteActivity(remote_id="", original_available=True),
+                RemoteActivity(remote_id="d1", original_available=True),
+                RemoteActivity(remote_id="f1", original_available=True),
+                RemoteActivity(
+                    remote_id="u1",
+                    original_available=False,
+                    unavailable_reason="gone",
+                ),
+            )
+        )
+    )
+    puller.fetch_script.extend([Declined("nope"), Deferred("wait")])
+    connector_registry.register(puller)
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path, connectors='[connectors.src]\nconnector = "scripted-puller"\n'
+    )
+
+    result = runner.invoke(app, ["pull", "--out", str(tmp_path)])
+
+    assert result.exit_code == 1, result.output
+    collapsed = _collapsed(result.output)
+    assert "Listed 4" in collapsed
+    assert "Skipped 2" in collapsed
+    assert "Deferred 1" in collapsed
+    assert "Failed 1" in collapsed
+    assert "Delivered 0" in collapsed
+
+
+def test_pull_delivers_through_the_folder_connector(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_pull_transport(monkeypatch)
+    source = tmp_path / "phone-exports"
+    source.mkdir()
+    (source / "ride.fit").write_bytes(_fit_bytes(b"ride"))
+    _write_settings(
+        tmp_path,
+        connectors=(
+            '[connectors.folder-src]\nconnector = "folder"\n'
+            f'path = "{source.as_posix()}"\nsettle_seconds = 0\n'
+        ),
+    )
+
+    result = runner.invoke(app, ["pull", "--out", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    collapsed = _collapsed(result.output)
+    assert "Delivered 1" in collapsed
+    delivered_dir = tmp_path / "inbox" / "folder-src"
+    delivered_files = list(delivered_dir.glob("*.fit"))
+    assert len(delivered_files) == 1
+    assert delivered_files[0].read_bytes() == _fit_bytes(b"ride")
+    assert (tmp_path / ".fitdocs" / "connectors" / "folder-src.toml").is_file()
+    assert "Delivered:" in result.output
+    assert "folder-src/ride.fit" in result.output.replace("\\", "/")
+
+
+def test_pull_dry_run_lists_would_fetch_and_writes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_pull_transport(monkeypatch)
+    source = tmp_path / "phone-exports"
+    source.mkdir()
+    (source / "ride.fit").write_bytes(_fit_bytes(b"ride"))
+    _write_settings(
+        tmp_path,
+        connectors=(
+            '[connectors.folder-src]\nconnector = "folder"\n'
+            f'path = "{source.as_posix()}"\nsettle_seconds = 0\n'
+        ),
+    )
+    before = _snapshot(tmp_path)
+
+    result = runner.invoke(app, ["pull", "--dry-run", "--out", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    collapsed = _collapsed(result.output)
+    assert "Would fetch 1" in collapsed
+    assert "Delivered 0" in collapsed
+    assert "Would fetch:" in result.output
+    assert "ride.fit" in result.output
+    assert _snapshot(tmp_path) == before
+
+
+def test_pull_isolates_a_failing_instance_from_a_healthy_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Named mutation: ``_finish(failed=False)`` reds the exit-code assertion."""
+    connector = ScriptedPersonalKeyConnector(
+        capabilities=frozenset({Capability.PULL_ACTIVITIES})
+    )
+    connector_registry.register(connector)
+    _patch_pull_transport(monkeypatch)
+    source = tmp_path / "phone-exports"
+    source.mkdir()
+    (source / "ride.fit").write_bytes(_fit_bytes(b"ride"))
+    _write_settings(
+        tmp_path,
+        connectors=(
+            '[connectors.broken]\nconnector = "personal-key"\n\n'
+            '[connectors.healthy]\nconnector = "folder"\n'
+            f'path = "{source.as_posix()}"\nsettle_seconds = 0\n'
+        ),
+    )
+
+    result = runner.invoke(app, ["pull", "--out", str(tmp_path)])
+
+    assert result.exit_code == 1, result.output
+    collapsed = _collapsed(result.output)
+    assert "fitdocs pull: broken (personal-key)" in collapsed
+    assert "fitdocs pull: healthy (folder)" in collapsed
+    assert "Error 1" in collapsed
+    delivered_dir = tmp_path / "inbox" / "healthy"
+    assert len(list(delivered_dir.glob("*.fit"))) == 1
+
+
+def test_pull_deferral_only_exits_0(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    puller = ScriptedPuller()
+    puller.listing_script.append(
+        Listing(activities=(RemoteActivity(remote_id="f1", original_available=True),))
+    )
+    puller.fetch_script.append(Deferred("not ready yet"))
+    connector_registry.register(puller)
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path, connectors='[connectors.src]\nconnector = "scripted-puller"\n'
+    )
+
+    result = runner.invoke(app, ["pull", "--out", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    collapsed = _collapsed(result.output)
+    assert "Deferred 1" in collapsed
+    assert "Failed 0" in collapsed
+
+
+# --- wiring: the run_pull seam, sorted instances, redacted exceptions ----
+
+
+def test_run_pull_receives_the_seam_transport_real_clock_and_sorted_instances(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Req 11.5: instances must reach ``run_pull`` name-sorted even when
+    NAMES is given out of order on the command line -- a caller that simply
+    forwards argv order would fail this."""
+    connector_registry.register(ScriptedPuller())
+    _write_settings(
+        tmp_path,
+        connectors=(
+            '[connectors.zulu]\nconnector = "scripted-puller"\n\n'
+            '[connectors.alpha]\nconnector = "scripted-puller"\n\n'
+            '[connectors.mike]\nconnector = "scripted-puller"\n'
+        ),
+    )
+    sentinel = object()
+    monkeypatch.setattr(cli_module, "_connector_transport", lambda: sentinel)
+    seen: dict[str, object] = {}
+
+    class _Stop(Exception):
+        pass
+
+    def fake_run_pull(data_root: object, instances: object, **kwargs: object) -> object:
+        seen["instances"] = instances
+        seen.update(kwargs)
+        raise _Stop("stop")
+
+    monkeypatch.setattr(cli_module, "run_pull", fake_run_pull)
+
+    result = runner.invoke(
+        app, ["pull", "zulu", "alpha", "mike", "--out", str(tmp_path)]
+    )
+
+    assert result.exit_code == 1
+    instances = cast(tuple[ConnectorInstance, ...], seen["instances"])
+    assert [instance.name for instance in instances] == ["alpha", "mike", "zulu"]
+    assert seen["transport"] is sentinel
+    assert seen["sleep"] is time.sleep
+    assert seen["environ"] is os.environ
+    assert isinstance(seen["redactor"], Redactor)
+    now = cast("Callable[[], object]", seen["now"])
+    assert callable(now)
+    assert now().tzinfo is UTC  # type: ignore[attr-defined]
+    assert seen["store"] is None
+    assert seen["inbox"] == tmp_path / "inbox"
+    options = cast(PullOptions, seen["options"])
+    assert isinstance(options, PullOptions)
+    assert options.since is None
+    assert options.dry_run is False
+
+
+def test_unexpected_run_pull_exception_is_redacted_type_and_message(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A genuine engine bug must never reach the terminal unredacted, the
+    same convention ``connect_command`` already applies to its own call.
+    Because this path builds a fresh ``Redactor()`` right before calling
+    ``run_pull``, the ``Redactor`` seam is patched to pre-register the
+    secret -- standing in for the registration ``run_pull`` would ordinarily
+    have done for any secret it actually used."""
+    connector_registry.register(ScriptedPuller())
+    _write_settings(
+        tmp_path, connectors='[connectors.src]\nconnector = "scripted-puller"\n'
+    )
+    secret_like = "unexpected-raise-pull-abc999"
+
+    def _seeded_redactor() -> Redactor:
+        redactor = Redactor()
+        redactor.add(secret_like)
+        return redactor
+
+    monkeypatch.setattr(cli_module, "Redactor", _seeded_redactor)
+
+    def fake_run_pull(*args: object, **kwargs: object) -> object:
+        raise ValueError(f"could not parse {secret_like} while pulling")
+
+    monkeypatch.setattr(cli_module, "run_pull", fake_run_pull)
+
+    result = runner.invoke(app, ["pull", "--out", str(tmp_path)])
+
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)
+    assert _lines(result.output) == [
+        "ValueError: could not parse <redacted> while pulling"
+    ]
+
+
+# --- pull: report rows, the full report, instance selection, --since, the
+# --- credentials store, the non-sync gate, and --help (task 5.2 remediation)
+
+
+def test_pull_report_rows_are_the_design_literal_and_bind_every_channel() -> None:
+    assert cli_module._PULL_REPORT_ROWS == (
+        ("Listed", "listed"),
+        ("Delivered", "delivered"),
+        ("Would fetch", "would_fetch"),
+        ("Already held", "held"),
+        ("Skipped", "skipped"),
+        ("Deferred", "deferred"),
+        ("Failed", "failed"),
+        ("Removed", "removed"),
+        ("Error", "error"),
+    )
+    channels = [
+        f.name
+        for f in dataclasses.fields(InstancePullReport)
+        if f.name not in {"name", "connector_id"}
+    ]
+    assert [field_name for _, field_name in cli_module._PULL_REPORT_ROWS] == channels
+
+
+def _long(prefix: str) -> str:
+    return prefix + "-" + "x" * 90
+
+
+def _full_instance(name: str) -> InstancePullReport:
+    return InstancePullReport(
+        name=name,
+        connector_id="folder",
+        listed=11,
+        delivered=(Delivered("r1", _long(f"{name}/delivered")),),
+        would_fetch=(_long("wf0"), "wf1"),
+        held=("h0", "h1", "h2"),
+        skipped=tuple(PullNote(f"s{i}", _long(f"skip{i}")) for i in range(4)),
+        deferred=tuple(PullNote(f"d{i}", f"defer {i}") for i in range(5)),
+        failed=tuple(PullNote(f"f{i}", f"fail {i}") for i in range(6)),
+        removed=tuple(f"{name}/removed{i}.fit" for i in range(6)) + (_long("rm"),),
+        error=PullNote(name, _long("error detail")),
+    )
+
+
+def _empty_instance(name: str) -> InstancePullReport:
+    return InstancePullReport(
+        name=name,
+        connector_id="folder",
+        listed=0,
+        delivered=(),
+        would_fetch=(),
+        held=(),
+        skipped=(),
+        deferred=(),
+        failed=(),
+        removed=(),
+        error=None,
+    )
+
+
+def test_report_pull_prints_every_line_design_states(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connector_registry.register(ScriptedPuller())
+    _write_settings(
+        tmp_path, connectors='[connectors.src]\nconnector = "scripted-puller"\n'
+    )
+    inbox = "/" + "inbox-dir/" * 10 + "inbox"
+    report = PullReport(
+        inbox=inbox,
+        dry_run=False,
+        instances=(_full_instance("alpha"), _empty_instance("zulu")),
+    )
+    monkeypatch.setattr(cli_module, "run_pull", lambda *a, **k: report)
+
+    result = runner.invoke(app, ["pull", "--out", str(tmp_path)])
+
+    assert result.exit_code == 1, result.output
+    lines = _lines(result.output)
+    assert len(inbox) > 80
+    assert lines[0] == f"Inbox: {inbox}"
+    collapsed = _collapsed(result.output)
+    assert collapsed.index("fitdocs pull: alpha (folder)") < collapsed.index(
+        "fitdocs pull: zulu (folder)"
+    )
+    assert (
+        "Listed 11 Delivered 1 Would fetch 2 Already held 3 Skipped 4 "
+        "Deferred 5 Failed 6 Removed 7 Error 1"
+    ) in collapsed
+    assert (
+        "Listed 0 Delivered 0 Would fetch 0 Already held 0 Skipped 0 "
+        "Deferred 0 Failed 0 Removed 0 Error 0"
+    ) in collapsed
+    start = lines.index("Delivered:")
+    end = next(i for i, line in enumerate(lines) if "fitdocs pull: zulu" in line)
+    expected = (
+        ["Delivered:", f"  {_long('alpha/delivered')}"]
+        + ["Would fetch:", f"  {_long('wf0')}", "  wf1"]
+        + ["Skipped:"]
+        + [x for i in range(4) for x in (f"  s{i}", f"    {_long(f'skip{i}')}")]
+        + ["Deferred:"]
+        + [x for i in range(5) for x in (f"  d{i}", f"    defer {i}")]
+        + ["Failed:"]
+        + [x for i in range(6) for x in (f"  f{i}", f"    fail {i}")]
+        + ["Removed:"]
+        + [f"  alpha/removed{i}.fit" for i in range(6)]
+        + [f"  {_long('rm')}"]
+        + ["Error:", f"  {_long('error detail')}"]
+    )
+    assert lines[start:end] == expected
+    assert lines[-1].strip() != "Delivered:"  # the empty instance prints no block
+
+
+def test_pull_names_select_exactly_the_named_instances(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connector_registry.register(ScriptedPuller())
+    _write_settings(
+        tmp_path,
+        connectors=(
+            '[connectors.zulu]\nconnector = "scripted-puller"\n\n'
+            '[connectors.alpha]\nconnector = "scripted-puller"\n\n'
+            '[connectors.mike]\nconnector = "scripted-puller"\n'
+        ),
+    )
+    seen: dict[str, object] = {}
+
+    def fake_run_pull(data_root: object, instances: object, **kwargs: object) -> object:
+        seen["instances"] = instances
+        return PullReport(inbox="i", dry_run=False, instances=())
+
+    monkeypatch.setattr(cli_module, "run_pull", fake_run_pull)
+
+    result = runner.invoke(app, ["pull", "zulu", "alpha", "--out", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    instances = cast(tuple[ConnectorInstance, ...], seen["instances"])
+    assert [instance.name for instance in instances] == ["alpha", "zulu"]
+
+
+@pytest.fixture
+def _new_york_tz(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    monkeypatch.setenv("TZ", "America/New_York")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
+
+
+@pytest.mark.parametrize(
+    ("since", "expected_utc_hour"), [("2026-01-15", 5), ("2026-07-15", 4)]
+)
+def test_pull_since_is_that_days_local_midnight_in_utc(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    _new_york_tz: None,
+    since: str,
+    expected_utc_hour: int,
+) -> None:
+    connector_registry.register(ScriptedPuller())
+    _write_settings(
+        tmp_path, connectors='[connectors.src]\nconnector = "scripted-puller"\n'
+    )
+    seen: dict[str, object] = {}
+
+    def fake_run_pull(data_root: object, instances: object, **kwargs: object) -> object:
+        seen.update(kwargs)
+        return PullReport(inbox="i", dry_run=False, instances=())
+
+    monkeypatch.setattr(cli_module, "run_pull", fake_run_pull)
+
+    result = runner.invoke(app, ["pull", "--since", since, "--out", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    options = cast(PullOptions, seen["options"])
+    year, month, day = (int(part) for part in since.split("-"))
+    assert options.since == datetime(year, month, day, expected_utc_hour, tzinfo=UTC)
+    assert options.since is not None and options.since.tzinfo is UTC
+
+
+def test_pull_passes_a_store_on_the_resolved_credentials_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connector_registry.register(
+        ScriptedPersonalKeyConnector(
+            capabilities=frozenset({Capability.PULL_ACTIVITIES})
+        )
+    )
+    _write_settings(
+        tmp_path, connectors='[connectors.src]\nconnector = "personal-key"\n'
+    )
+    seen: dict[str, object] = {}
+
+    def fake_run_pull(data_root: object, instances: object, **kwargs: object) -> object:
+        seen.update(kwargs)
+        return PullReport(inbox="i", dry_run=False, instances=())
+
+    monkeypatch.setattr(cli_module, "run_pull", fake_run_pull)
+
+    result = runner.invoke(app, ["pull", "--out", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    store = seen["store"]
+    assert isinstance(store, CredentialStore)
+    assert store.directory == _credentials_dir()
+
+
+def test_pull_without_sync_reads_none_of_the_sync_only_inputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    puller = ScriptedPuller()
+    puller.listing_script.append(Listing(activities=()))
+    connector_registry.register(puller)
+    _patch_pull_transport(monkeypatch)
+    _write_settings(
+        tmp_path,
+        connectors=(
+            '[connectors.src]\nconnector = "scripted-puller"\n\n'
+            '[plugins]\nenabled = "not-a-bool"\n'
+        ),
+    )
+    (tmp_path / "athlete.toml").write_text("not valid toml [[[")
+
+    result = runner.invoke(app, ["pull", "--out", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+
+
+def test_pull_dry_run_resolves_the_configured_inbox_not_the_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Named mutation: hard-coding ``data_root / 'inbox'`` under ``--dry-run``
+    instead of using ``validated_inbox.inbox_resolved`` reds this -- the
+    configured inbox here is a different directory from the default."""
+    connector_registry.register(ScriptedPuller())
+    custom_inbox = tmp_path / "custom-inbox-dir"
+    _write_settings(
+        tmp_path,
+        connectors=(
+            f'[inbox]\npath = "{custom_inbox.name}"\n\n'
+            '[connectors.src]\nconnector = "scripted-puller"\n'
+        ),
+    )
+    seen: dict[str, object] = {}
+
+    def fake_run_pull(data_root: object, instances: object, **kwargs: object) -> object:
+        seen.update(kwargs)
+        return PullReport(inbox="i", dry_run=True, instances=())
+
+    monkeypatch.setattr(cli_module, "run_pull", fake_run_pull)
+
+    result = runner.invoke(app, ["pull", "--dry-run", "--out", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert seen["inbox"] == custom_inbox
+    assert seen["inbox"] != tmp_path / "inbox"
+    assert not custom_inbox.exists()
+
+
+def test_pull_help_renders_no_swallowed_markup() -> None:
+    result = runner.invoke(app, ["pull", "--help"])
+    assert result.exit_code == 0
+    assert "``" + "``" not in result.output
+    assert " the  table" not in _collapsed(result.output)
+    assert (
+        "List and report what each instance would fetch; fetch, deliver, "
+        "remove, and record nothing -- except a token renewal the listing "
+        "needs, which is still saved to the credentials store."
+    ) in _collapsed(result.output)
