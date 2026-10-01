@@ -166,7 +166,7 @@ into the fitdocs.ai website:
   - It never checks asset links.
   - It wipes `site_dir` even when a build fails.
   - It requires `docs_dir` and `site_dir` inside the config directory.
-  - `serve` misses a rename-swapped docs dir.
+  - `serve` does not reliably see a rename-swapped docs dir (platform-dependent).
 
   Each of these forces a decision below.
 

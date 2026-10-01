@@ -664,8 +664,8 @@
     - the content copy's byte hash is unchanged throughout;
     - the server process is gone after stop.
   - **Done when** it is green under `FITDOCS_REQUIRE_SITE_TOOLING=1` locally,
-    with mutations recorded. It must use in-place sync only, because a
-    rename-swap is invisible to `serve`.
+    with mutations recorded. It must use in-place sync only, because
+    whether `serve` sees a rename-swap depends on the platform.
   - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
 - [x] 5. Automation: the docs workflow and its test

@@ -2,12 +2,12 @@
 
 ``serve`` builds into ``<root>/check`` and, only when that build succeeded, syncs
 its planned tree *in place* into ``<root>/live`` (``sync_tree``: ``zensical
-serve`` watches ``live/`` and never sees a renamed or swapped directory). The
-serve process starts on ``live/`` after the first success and is terminated when
-the loop exits, however it exits. A failed build prints its problem lines and
-leaves ``live/`` alone. Changes are found by polling ``(mtime_ns, size)``
-snapshots of the content directory, ``website/overrides/``, ``website/assets/``
-and the template. Standard library plus ``scripts.sitebuild``.
+serve`` watches ``live/``, and whether it notices a renamed or swapped directory
+depends on the platform). The serve process starts on ``live/`` after the first
+success and is terminated when the loop exits, however it exits. A failed build
+prints its problem lines and leaves ``live/`` alone. Changes are found by polling
+``(mtime_ns, size)`` snapshots of the content directory, ``website/overrides/``,
+``website/assets/`` and the template. Standard library plus ``scripts.sitebuild``.
 """
 
 from __future__ import annotations
