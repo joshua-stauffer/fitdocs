@@ -2,8 +2,8 @@
 id: 2026-10-01-identity-precedence-manufacturer-entry-matches-case-sensitively-and-silently
 title: A configured `original:Garmin` is accepted but matches no file, silently ranking Garmin files with every other original, below phone copies
 status: open
-importance: low
-importance_why: A one-letter capitalization slip in settings inverts which file becomes a page's base (the phone copy wins over the Garmin original) with no error or warning; the documented word is "exactly".
+importance: medium
+importance_why: 'A one-letter case typo in [identity] precedence is accepted silently and renders pages from the wrong base file -- wrong output reaching documents with no error or warning.'
 effort: S
 kind: gap
 area: activity-identity, src/fitdocs/identity/settings.py, src/fitdocs/identity/roles.py, docs/configuration.md

@@ -53,9 +53,21 @@ Reproduced at `fc5c06d` using the helpers of
 - Pins: the record is pinned at `tests/test_identity_e2e.py:2010`
   (settle rename) and `:2370-2402` (task rename); the order only at `:2095-2113`
   (`_finish_holds(tmp_path, holds, {"a": "b"}, {"b": "c"})`). None asserts on the
-  warning text, and none run has a task rename and a settle rename together.
-  The order claim is by reading; the mutation (swap the two arguments at a call
-  site) was not run.
+  warning text.
+- **Correction and measurement (added at `882ee04`, mutation run).** The
+  statement above that no run has both renames is wrong for regeneration:
+  `tests/test_identity_e2e.py:2737-2783`
+  (`test_held_candidates_follow_a_rename_the_regeneration_settle_follows`) has A
+  renamed by its base change and Y settled onto the freed stem in one `regen`.
+  The mutation "reverse the rename maps `_finish_holds` receives" was applied
+  from outside the repo (a pytest plugin in the scratchpad rebinding
+  `fitdocs.sync._finish_holds` to reverse its `*renames` when the calling frame
+  is one named function; no tracked file touched), full suite each time:
+  - caller `regen` (`sync.py:1222`): 1 failed (the `:2737` test), 6488 passed;
+  - caller `sync` (`sync.py:638`): **6489 passed, 7 skipped, nothing red**;
+  - caller `drain` (`sync.py:987`): **6489 passed, 7 skipped, nothing red**.
+  So the order is end-to-end pinned at the regen call site only; the `sync` and
+  `drain` call sites can have their arguments swapped with the suite green.
 
 ## How to pick it up
 1. Extend the `:2370` test to assert the held warning's candidate paths equal
@@ -63,7 +75,8 @@ Reproduced at `fc5c06d` using the helpers of
    the renames are known (hold tasks return the entry; format at the end of the
    run) or by rewriting candidate paths in the pending warnings with the same
    `follow` map `_finish_holds` uses.
-2. Add one e2e run with both a base-change rename and a settle rename of a page
-   a hold names, asserting the record and the warning name the final path; run
-   the mutation swapping `task_renames` and `settle_renames` at one call site and
-   see it red.
+2. Add an e2e run for each of `sync` and `drain` (regen already has one) with
+   both a base-change rename and a settle rename of a page a hold names,
+   asserting the record and the warning name the final path; run the mutation
+   swapping `task_renames` and `settle_renames` at that call site and see it red
+   (the plugin recipe is in the Evidence correction above).
