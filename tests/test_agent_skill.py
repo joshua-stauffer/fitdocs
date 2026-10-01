@@ -48,8 +48,10 @@ from fitdocs.cli import (
     _EXIT_CONFIG_ERROR,
     _EXIT_FILE_FAILURES,
     _EXIT_SUCCESS,
+    _PULL_REPORT_ROWS,
 )
 from fitdocs.cli import app as cli_app
+from fitdocs.connectors.pull import InstancePullReport
 from fitdocs.contract import MANAGED_KEYS, PRESERVED_REGIONS
 from fitdocs.declaration import CONTRACT_DOCUMENTATION_URL
 from fitdocs.layout import OWNED_PATHS
@@ -118,6 +120,57 @@ _INBOX_CHANNELS_LITERAL: frozenset[str] = frozenset(
 )
 
 
+#: The three :class:`InstancePullReport` fields that are not pull channels
+#: at all: ``name``/``connector_id`` identify the instance (they head the
+#: table rather than appearing in it) and ``listed`` is a cross-cutting
+#: count, not its own outcome bucket.
+_PULL_EXCLUSIONS = frozenset({"name", "connector_id", "listed"})
+
+#: Hardcoded literal (design.md SkillPins) -- the field names the inbox
+#: skill's own ``Pull channel`` table is expected to document, spelled out
+#: independently of the dataclass introspection below so the two can
+#: disagree when :class:`InstancePullReport` changes.
+_PULL_CHANNELS_LITERAL: frozenset[str] = frozenset(
+    {
+        "delivered",
+        "would_fetch",
+        "held",
+        "skipped",
+        "deferred",
+        "failed",
+        "removed",
+        "error",
+    }
+)
+
+
+def test_pull_exclusion_set_is_non_vacuous() -> None:
+    """``name``, ``connector_id`` and ``listed`` are real
+    :class:`InstancePullReport` field names -- the exclusion set actually
+    removes something, rather than naming fields that were never going to
+    be counted as channels anyway."""
+    all_pull_fields = {field.name for field in dataclasses.fields(InstancePullReport)}
+    assert all_pull_fields >= _PULL_EXCLUSIONS
+    assert "name" in all_pull_fields
+    assert "connector_id" in all_pull_fields
+    assert "listed" in all_pull_fields
+
+
+def test_literal_pull_channel_set_matches_the_derived_dataclass_fields() -> None:
+    """The hardcoded literal the inbox profile's pull table is built from
+    agrees with the independently-derived set of
+    :class:`InstancePullReport` fields minus the three exclusions. A
+    rename/add/drop on the dataclass moves the derived set without moving
+    ``_PULL_CHANNELS_LITERAL``, so the two go out of sync and this test is
+    what catches it."""
+    derived = (
+        frozenset(field.name for field in dataclasses.fields(InstancePullReport))
+        - _PULL_EXCLUSIONS
+    )
+    assert derived == _PULL_CHANNELS_LITERAL
+    assert len(derived) == 8
+
+
 @dataclass(frozen=True)
 class _SkillProfile:
     """What differs between packaged skills for the shared contract.
@@ -125,17 +178,22 @@ class _SkillProfile:
     ``channels`` is ``None`` for a skill whose body does not report drain
     channels at all (``build-training-block``); a skill that does carries
     the frozen set of channel names its own ``## Reading the report``
-    section is expected to document.
+    section is expected to document. ``pull_channels`` is the same idea for
+    a skill whose body also reports a per-instance pull outcome (the inbox
+    skill alone, today).
     """
 
     headings: tuple[str, ...]
     channels: frozenset[str] | None = None
+    pull_channels: frozenset[str] | None = None
 
 
 _SKILL_PROFILES: dict[str, _SkillProfile] = {
     BLOCK_SKILL_NAME: _SkillProfile(headings=_BLOCK_HEADINGS),
     INBOX_SKILL_NAME: _SkillProfile(
-        headings=_INBOX_HEADINGS, channels=_INBOX_CHANNELS_LITERAL
+        headings=_INBOX_HEADINGS,
+        channels=_INBOX_CHANNELS_LITERAL,
+        pull_channels=_PULL_CHANNELS_LITERAL,
     ),
 }
 
@@ -491,6 +549,172 @@ def _channel_rows_by_field(name: str) -> dict[str, list[str]]:
     return {_cell_token(row[1]): row for row in rows}
 
 
+# --- pull-channel binding (design.md SkillPins, Req 15.7) ------------------
+
+_PULL_CHANNEL_SKILLS = tuple(
+    name
+    for name, profile in _SKILL_PROFILES.items()
+    if profile.pull_channels is not None
+)
+
+
+def test_pull_channel_skills_is_non_vacuous() -> None:
+    """At least one registered skill declares a pull-channel binding -- the
+    parametrized test below is not silently walking zero cases."""
+    assert _PULL_CHANNEL_SKILLS
+    assert INBOX_SKILL_NAME in _PULL_CHANNEL_SKILLS
+    assert BLOCK_SKILL_NAME not in _PULL_CHANNEL_SKILLS
+
+
+@pytest.mark.parametrize("name", _PULL_CHANNEL_SKILLS)
+def test_pull_channel_binding_matches_instance_pull_report_fields(name: str) -> None:
+    """Every channel name the body's own ``## Reading the report`` section
+    table -- the one whose header's first cell is ``Pull channel``, found by
+    that header rather than by position, so it is distinguished from the
+    drain table's own ``Channel``-headed table in the same section --
+    documents (its backticked field-name column) is compared against the
+    profile's declared pull-channel set, which in turn is pinned against
+    :class:`InstancePullReport` (`test_literal_pull_channel_set_matches_
+    the_derived_dataclass_fields`). Dropping a row (e.g. ``would_fetch``)
+    breaks this chain at the point it actually diverges."""
+    text = _skill_text(name)
+    _frontmatter, body = _split_frontmatter(text)
+    sections = _sections(body)
+    rows = _table_rows(sections["Reading the report"], "Pull channel")
+    assert rows, "vacuous walk: no pull-channel row found"
+
+    field_names = {_cell_token(row[1]) for row in rows}
+    assert len(field_names) == len(rows), (
+        "duplicate field name in the pull-channel table"
+    )
+
+    expected = _SKILL_PROFILES[name].pull_channels
+    assert expected is not None
+    assert field_names == expected
+
+    for row in rows:
+        assert row[0].strip(), f"empty Pull channel label cell: {row!r}"
+        assert row[2].strip(), f"empty Meaning cell: {row!r}"
+        assert row[3].strip(), f"empty Do cell: {row!r}"
+
+
+def _pull_channel_rows_by_field(name: str) -> dict[str, list[str]]:
+    """The inbox skill's own ``Pull channel``-headed table, keyed by the
+    backticked field name in each row's second cell."""
+    text = _skill_text(name)
+    _frontmatter, body = _split_frontmatter(text)
+    sections = _sections(body)
+    rows = _table_rows(sections["Reading the report"], "Pull channel")
+    return {_cell_token(row[1]): row for row in rows}
+
+
+def test_pull_channel_labels_match_the_cli_report_row_labels() -> None:
+    """Each row's label cell (the first column) must read exactly as
+    ``cli._report_pull`` labels that same field in :data:`_PULL_REPORT_ROWS`
+    -- the one ordered source of truth the real command's own table is
+    built from (``Listed`` is excluded: it is not a channel row at all, per
+    :data:`_PULL_EXCLUSIONS`). Pinned by field name, not position, so a row
+    reordering in the skill body still matches the right CLI label."""
+    rows = _pull_channel_rows_by_field(INBOX_SKILL_NAME)
+    cli_labels_by_field = {
+        field_name: label
+        for label, field_name in _PULL_REPORT_ROWS
+        if field_name != "listed"
+    }
+    assert cli_labels_by_field, "vacuous walk: no non-listed CLI row found"
+    assert set(cli_labels_by_field) == set(rows)
+    for field_name, row in rows.items():
+        assert row[0].strip() == cli_labels_by_field[field_name], (
+            f"{field_name!r} row label {row[0].strip()!r} does not match "
+            f"the CLI's own label {cli_labels_by_field[field_name]!r}"
+        )
+
+
+def test_pull_error_row_states_never_connect_and_never_retry() -> None:
+    """Req 15.7 / design.md SkillPins row-level pin: the ``error`` row's Do
+    cell names both the forbidden actions an unattended agent must never
+    take on its own -- running ``fitdocs connect`` (it needs an interactive
+    terminal) and retrying the instance -- pinned against that specific
+    row's own Do cell, not the body as a whole, and checked absent from the
+    other packaged skill's body as a positive control that the phrases are
+    not simply always-true boilerplate."""
+    error_row = _pull_channel_rows_by_field(INBOX_SKILL_NAME)["error"]
+    error_do = error_row[3]
+
+    never_connect_claim = "never run `fitdocs connect`"
+    never_retry_claim = "never retry"
+
+    assert never_connect_claim in error_do
+    assert never_retry_claim in error_do
+
+    block_text = _skill_text(BLOCK_SKILL_NAME)
+    for phrase in (never_connect_claim, never_retry_claim):
+        assert phrase not in block_text, (
+            f"positive control failed -- {phrase!r} found in the other skill too"
+        )
+
+
+#: design.md "ConnectorsDoc"/task-8.4 literal -- the published Connectors
+#: page's project URL, as the Further reading bullet is required to spell
+#: it. Hardcoded independently of any source constant (there is none: the
+#: packaged skill's own prose is the only place this target lives) so a
+#: typo'd link target is caught rather than compared against itself.
+_CONNECTORS_DOC_URL = (
+    "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md"
+)
+
+
+def test_inbox_commands_section_states_the_three_routine_sentences() -> None:
+    """Sentence-level pins for the ``Commands to run`` prose (task 8.4
+    remediation (b)): the retry-quarantined command plus its never-on-your-
+    own-initiative qualifier, the never-run-connect prohibition, and the
+    no-connectors-configured equivalence -- each asserted against the
+    whitespace-normalized section text so a line-wrap inside a sentence
+    cannot break the pin, and each checked absent from the other packaged
+    skill's body as a positive control that the phrases are not simply
+    boilerplate every skill carries."""
+    text = _skill_text(INBOX_SKILL_NAME)
+    _frontmatter, body = _split_frontmatter(text)
+    sections = _sections(body)
+    commands_text = " ".join(sections["Commands to run"].split())
+
+    retry_quarantined_claim = "`fitdocs sync --no-prompt --retry-quarantined`"
+    never_own_initiative_claim = "never on your own initiative"
+    never_connect_claim = "Never run `fitdocs connect`"
+    no_connectors_claim = (
+        "With no connectors configured, this is exactly `fitdocs sync --no-prompt`"
+    )
+
+    assert retry_quarantined_claim in commands_text
+    assert never_own_initiative_claim in commands_text
+    assert never_connect_claim in commands_text
+    assert no_connectors_claim in commands_text
+
+    block_text = " ".join(_skill_text(BLOCK_SKILL_NAME).split())
+    for phrase in (
+        retry_quarantined_claim,
+        never_own_initiative_claim,
+        never_connect_claim,
+        no_connectors_claim,
+    ):
+        assert phrase not in block_text, (
+            f"positive control failed -- {phrase!r} found in the other skill too"
+        )
+
+
+def test_inbox_further_reading_links_the_connectors_doc() -> None:
+    """The Further reading section's Connectors bullet points at the
+    published Connectors page by the exact project URL design.md states --
+    pinned against a hardcoded literal (there is no source constant for
+    this target), not against any value read back out of the skill or
+    pyproject itself."""
+    text = _skill_text(INBOX_SKILL_NAME)
+    _frontmatter, body = _split_frontmatter(text)
+    sections = _sections(body)
+    further_reading = sections["Further reading"]
+    assert _CONNECTORS_DOC_URL in further_reading
+
+
 def test_move_failures_row_states_processed_and_retried_never_reprocess() -> None:
     """Sentence-level pins for the task's three called-out claims, each
     asserted against the specific row's own cells (not the body as a
@@ -637,7 +861,7 @@ def test_every_named_command_and_option_is_bound_to_the_tool(name: str) -> None:
 def test_block_skill_fenced_commands_are_exactly_plan() -> None:
     """``build-training-block``'s own body only ever fences ``fitdocs
     plan`` -- this is that skill's own command surface, not a property
-    every packaged skill shares (the inbox skill fences ``sync``, ``check``,
+    every packaged skill shares (the inbox skill fences ``pull``, ``check``,
     and ``regen`` instead)."""
     text = _skill_text(BLOCK_SKILL_NAME)
     _frontmatter, body = _split_frontmatter(text)
@@ -678,13 +902,49 @@ def _inbox_bash_fence_command_sets() -> list[frozenset[str]]:
     return fence_sets
 
 
-def test_inbox_skill_routine_fence_is_exactly_sync_and_check() -> None:
-    """The routine drain pair lives in one fence together, and that fence
-    names exactly ``sync`` and ``check`` -- never ``regen``, which an agent
-    that blindly executes every fenced block in a skill would otherwise run
-    on every drain (the defect this rewrite fixes)."""
+def test_inbox_skill_routine_fence_is_exactly_pull_and_check() -> None:
+    """The routine pull-and-drain pair lives in one fence together, and that
+    fence names exactly ``pull`` and ``check`` -- never ``regen``, which an
+    agent that blindly executes every fenced block in a skill would
+    otherwise run on every drain (the defect this rewrite fixes)."""
     fence_sets = _inbox_bash_fence_command_sets()
-    assert frozenset({"sync", "check"}) in fence_sets
+    assert frozenset({"pull", "check"}) in fence_sets
+
+
+def test_inbox_skill_routine_fence_is_exactly_the_design_literal() -> None:
+    """The routine fence -- the one whose commands are exactly ``pull`` and
+    ``check`` (found the same way :func:`_inbox_bash_fence_command_sets`
+    does, so this test shares the discovery logic rather than re-deriving
+    it) -- is pinned line-for-line against design.md's ``PackagedSkill``
+    literal: ``fitdocs pull --sync --no-prompt`` then ``fitdocs check``, in
+    that order and with no other non-blank line. This catches what the
+    frozenset-based test above cannot: dropping ``--sync``, adding
+    ``--dry-run``, swapping the two lines, or dropping ``--no-prompt``."""
+    text = _skill_text(INBOX_SKILL_NAME)
+    _frontmatter, body = _split_frontmatter(text)
+    _stripped, fences = _strip_fences(body)
+
+    routine_fence_content: str | None = None
+    for lang, content in fences:
+        if lang not in ("bash", "sh"):
+            continue
+        commands = set()
+        for line in content.splitlines():
+            command_name = _validate_fitdocs_mention(line)
+            if command_name is not None:
+                commands.add(command_name)
+        if commands == {"pull", "check"}:
+            routine_fence_content = content
+            break
+
+    assert routine_fence_content is not None, "vacuous walk: routine fence not found"
+
+    lines = [line.strip() for line in routine_fence_content.splitlines()]
+    non_blank_lines = [line for line in lines if line]
+    assert non_blank_lines == [
+        "fitdocs pull --sync --no-prompt",
+        "fitdocs check",
+    ]
 
 
 def test_inbox_skill_regen_is_never_in_the_routine_fence() -> None:

@@ -156,8 +156,9 @@ was.
 
 From here, the wiki's agent follows the `fitdocs-workouts` skill's own
 routine whenever new `.fit` files arrive or the wiki's workouts look
-stale: drain the inbox, read the drain report, and act on anything
-deferred, quarantined, or failed. See [Inbox](inbox.md) for the full
+stale: pull from configured connectors and drain the inbox, read the pull
+and drain reports, and act on anything deferred, quarantined, failed or
+errored. See [Inbox](inbox.md) for the full
 interface the skill's commands drive — the inbox's default location and
 resolution, every settings key, drain semantics, the safeguards, and the
 disposition policy's never-delete guarantee.
