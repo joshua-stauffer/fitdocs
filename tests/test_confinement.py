@@ -49,21 +49,36 @@ capable code path never opens a socket.
 from __future__ import annotations
 
 import hashlib
+import socket
+import tempfile
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import date, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Final
+from typing import Final, NoReturn
 
 import pytest
 
 from fitdocs.athlete import ATHLETE_FILE, load_athlete_inputs
+from fitdocs.connectors.connect import Connected, run_connect
+from fitdocs.connectors.credentials import CredentialStore
+from fitdocs.connectors.http import HttpResponse
+from fitdocs.connectors.protocol import Granted, SettingsContext
+from fitdocs.connectors.pull import PullOptions, run_pull
+from fitdocs.connectors.secrets import Redactor
+from fitdocs.connectors.settings import ConnectorInstance, load_connectors_settings
 from fitdocs.declaration import DECLARATION_FILENAME
 from fitdocs.history import run_history
-from fitdocs.inbox import load_inbox_settings, prepare_inbox
+from fitdocs.inbox import (
+    create_inbox_paths,
+    load_inbox_settings,
+    prepare_inbox,
+    validate_inbox_paths,
+)
 from fitdocs.layout import (
     ARCHIVE_DIR,
     BLOCKS_DIR,
+    CONNECTOR_STATE_DIR,
     DEFAULT_PLANS_DIR,
     HISTORY_DIR,
     HISTORY_DOC_STEM,
@@ -82,6 +97,11 @@ from fitdocs.quarantine import load_quarantine
 from fitdocs.settings import load_settings_document
 from fitdocs.sync import drain, regen, sync
 from fitdocs.tiles import DEFAULT_TILE_SETTINGS, TileSource, TileStore
+from tests.connectors.conftest import (
+    FakeTransport,
+    ScriptedPersonalKeyConnector,
+    isolate_connector_environment,
+)
 from tests.fixtures import builder
 from tests.fixtures import identity as identity_fixtures
 from tests.load.conftest import ComputingCalculator
@@ -836,6 +856,149 @@ def _renamed_a_workout_document(touched: Sequence[str]) -> bool:
     return old in touched and new in touched
 
 
+# --- the pull entry point (connectors task 6.3; Req 5.9, 13.5, 15.3) --------
+
+#: A fixed point in time for every ``run_pull``/``run_connect`` call this
+#: module makes -- never the real clock (this module imports no clock call,
+#: matching design.md's "no clock call inside the package" rule for the
+#: package itself, kept here as the same discipline for its own tests).
+_PULL_NOW: Final[datetime] = datetime(2026, 6, 1, tzinfo=UTC)
+
+#: The instance name :func:`_stage_pull_folder` configures -- also the
+#: ledger's and delivery subdirectory's own name
+#: (:data:`fitdocs.layout.connector_ledger_path`,
+#: ``connectors/delivery.py``'s ``inbox / instance`` convention).
+_PULL_INSTANCE_NAME: Final[str] = "src"
+
+
+def _socket_raises(*args: object, **kwargs: object) -> NoReturn:
+    raise RuntimeError(
+        "test_confinement's connector cases must not open a real network socket"
+    )
+
+
+def _raise_if_transport_called(request: object, timeout: float) -> NoReturn:
+    """A :data:`~fitdocs.connectors.http.Transport` that raises the moment it
+    is called -- the folder connector is network-free (Req 13.9), so the
+    measured ``pull`` run below must never reach it. The raise itself is
+    absorbed by the pull engine's per-instance error isolation (it becomes a
+    failed/errored instance report, not a propagated exception); what
+    actually fails the test is the call recorded by the wrapper in
+    :func:`_run_pull`, asserted empty after the run.
+    """
+    raise AssertionError(
+        "pull entry point's confinement run reached the transport -- the "
+        "folder connector must never make a network request"
+    )
+
+
+def _stage_pull_folder(data_root: Path, source_dir: Path) -> None:
+    """Prepare a fresh data root for the ``pull`` entry point (design.md
+    "ConfinementRegistration"): an ``[inbox]`` table and one ``folder``
+    connector instance (:data:`_PULL_INSTANCE_NAME`) whose configured source
+    *is* the sandbox's own staged source directory -- the same ``.fit``
+    fixtures :func:`_stage_sources` already staged for every other entry
+    point, reused here rather than staged a second time. ``settle_seconds =
+    0`` on both tables is the design's stated configuration for this guard,
+    not a value chosen to make the run deterministic by timing: the measured
+    run is deterministic because the ``sleep`` seam :func:`_run_pull` passes
+    to :func:`~fitdocs.connectors.pull.run_pull` is an injected no-op, so the
+    ``[inbox]`` table's ``settle_seconds`` value has no effect on a pull
+    (only on inbox's own settle wait, a different code path).
+    """
+    settings_path(data_root).write_text(
+        "\n".join(
+            [
+                "[inbox]",
+                'path = "inbox"',
+                "settle_seconds = 0",
+                "",
+                f"[connectors.{_PULL_INSTANCE_NAME}]",
+                'connector = "folder"',
+                f'path = "{source_dir.as_posix()}"',
+                "settle_seconds = 0",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
+def _run_pull(data_root: Path, source_dir: Path) -> None:
+    """The ``pull`` entry point, driven exactly as design.md's
+    ConfinementRegistration states and as ``cli.py``'s own connector commands
+    order it: settings -> inbox validation -> connector instances -> inbox
+    creation -> the pull engine, with a transport that raises if called (the
+    folder connector reads only the local filesystem, Req 13.9).
+
+    This module sits outside ``tests/connectors/conftest.py``'s autouse
+    fixtures (that conftest's own docstring), so the environment isolation
+    and the socket guard every connector test gets for free are applied
+    here directly -- in a throwaway directory created and torn down inside
+    this call, outside the sandbox this guard snapshots, so the isolation
+    itself is never mistaken for a measured write.
+    """
+    monkeypatch = pytest.MonkeyPatch()
+    try:
+        with tempfile.TemporaryDirectory() as base_dir:
+            isolate_connector_environment(monkeypatch, Path(base_dir))
+            monkeypatch.setattr(socket, "socket", _socket_raises)
+
+            calls: list[object] = []
+
+            def transport(request: object, timeout: float) -> NoReturn:
+                calls.append(request)
+                _raise_if_transport_called(request, timeout)
+
+            document = load_settings_document(data_root)
+            inbox_settings = load_inbox_settings(document, data_root=data_root)
+            validated = validate_inbox_paths(data_root, inbox_settings)
+            context = SettingsContext(
+                data_root=data_root, inbox=validated.inbox_resolved
+            )
+            instances = load_connectors_settings(
+                document, settings_file=settings_path(data_root), context=context
+            )
+            inbox_paths = create_inbox_paths(validated)
+            report = run_pull(
+                data_root,
+                instances,
+                inbox=inbox_paths.inbox,
+                store=None,
+                transport=transport,
+                options=PullOptions(since=None, dry_run=False),
+                environ={},
+                now=lambda: _PULL_NOW,
+                sleep=lambda seconds: None,
+                redactor=Redactor(),
+            )
+    finally:
+        monkeypatch.undo()
+
+    assert calls == [], f"pull reached the transport: {calls}"
+    (instance_report,) = report.instances
+    assert instance_report.error is None, instance_report.error
+    assert instance_report.failed == (), instance_report.failed
+    assert instance_report.deferred == (), instance_report.deferred
+
+
+def _wrote_a_ledger_and_a_delivery(touched: Sequence[str]) -> bool:
+    """The ``pull`` entry point's own non-vacuity check (Req 5.9, 13.5,
+    15.3): the measured run wrote the instance's own ledger
+    (:data:`~fitdocs.layout.CONNECTOR_STATE_DIR`) *and* delivered at least
+    one ``.fit`` file into its own inbox subdirectory
+    (``connectors/delivery.py``'s ``inbox / instance`` convention) --
+    requiring both keeps a run that only ever saved an empty ledger (no
+    activity actually delivered) from passing vacuously.
+    """
+    ledger_touched = f"data/{CONNECTOR_STATE_DIR}/{_PULL_INSTANCE_NAME}.toml" in touched
+    delivery_touched = any(
+        key.startswith(f"data/inbox/{_PULL_INSTANCE_NAME}/") and key.endswith(".fit")
+        for key in touched
+    )
+    return ledger_touched and delivery_touched
+
+
 @dataclass(frozen=True)
 class EntryPoint:
     """One registered writing entry point -- guard axis (a).
@@ -918,6 +1081,18 @@ WRITING_ENTRY_POINTS: Final[tuple[EntryPoint, ...]] = (
         prepare=_stage_base_change,
         run=_run_sync_base_change,
         non_vacuous=_renamed_a_workout_document,
+    ),
+    # connectors task 6.3: the pull engine, driven directly (the CLI's own
+    # `pull` command is task 5.2, not a dependency of this one -- mirrors
+    # `plan` and `reconcile` registering their engine functions directly).
+    # A `folder` instance is the only connector that needs no credentials,
+    # so this entry point's own run isolates the environment and forbids a
+    # real socket locally (see `_run_pull`'s own docstring).
+    EntryPoint(
+        id="pull",
+        prepare=_stage_pull_folder,
+        run=_run_pull,
+        non_vacuous=_wrote_a_ledger_and_a_delivery,
     ),
 )
 
@@ -1504,3 +1679,123 @@ def test_base_change_non_vacuous_predicate_needs_a_delete_and_a_create() -> None
     assert _renamed_a_workout_document((old,)) is False
     assert _renamed_a_workout_document((new,)) is False
     assert _renamed_a_workout_document((old, new)) is True
+
+
+def test_pull_is_a_registered_writing_entry_point() -> None:
+    """``pull`` must be registered in :data:`WRITING_ENTRY_POINTS` (connectors
+    task 6.3; Req 5.9, 13.5, 15.3), the same discipline
+    :func:`test_plan_is_a_registered_writing_entry_point` states for its own
+    entry point -- including the identity check against the registered
+    callables themselves, not only the id, for the same reason that test's
+    own docstring gives: an id-only check cannot catch a swapped-in vacuous
+    stand-in for ``prepare``, ``run``, or ``non_vacuous``.
+
+    Named mutation: dropping this registration reds this test directly; the
+    parametrized guard above merely runs one fewer case (it iterates
+    whatever :data:`WRITING_ENTRY_POINTS` holds), so this is the only thing
+    in the suite that fails outright, matching every sibling membership
+    test's own docstring on this point.
+    """
+    registered = {entry_point.id: entry_point for entry_point in WRITING_ENTRY_POINTS}
+    assert "pull" in registered
+    entry = registered["pull"]
+    assert entry.prepare is _stage_pull_folder
+    assert entry.run is _run_pull
+    assert entry.non_vacuous is _wrote_a_ledger_and_a_delivery
+
+
+def test_pull_non_vacuous_predicate_needs_a_ledger_and_a_delivery() -> None:
+    """:func:`_wrote_a_ledger_and_a_delivery` requires both the ledger write
+    and a delivered ``.fit`` file -- neither alone is enough, so a run that
+    only ever saved an (empty) ledger cannot pass this guard vacuously."""
+    ledger = f"data/{CONNECTOR_STATE_DIR}/{_PULL_INSTANCE_NAME}.toml"
+    delivery = f"data/inbox/{_PULL_INSTANCE_NAME}/run.fit"
+    assert _wrote_a_ledger_and_a_delivery((ledger,)) is False
+    assert _wrote_a_ledger_and_a_delivery((delivery,)) is False
+    assert _wrote_a_ledger_and_a_delivery((ledger, delivery)) is True
+    assert (
+        _wrote_a_ledger_and_a_delivery((ledger, f"data/inbox/{_PULL_INSTANCE_NAME}"))
+        is False
+    )
+    assert (
+        _wrote_a_ledger_and_a_delivery(
+            (ledger, f"data/inbox/{_PULL_INSTANCE_NAME}/.run.fit-x.tmp")
+        )
+        is False
+    )
+    assert (
+        _wrote_a_ledger_and_a_delivery((f"data/{CONNECTOR_STATE_DIR}", delivery))
+        is False
+    )
+    assert (
+        _wrote_a_ledger_and_a_delivery(
+            (f"data/{CONNECTOR_STATE_DIR}/other.toml", delivery)
+        )
+        is False
+    )
+
+
+def test_connect_writes_only_the_credentials_file(tmp_path: Path) -> None:
+    """``connect`` touches only its own credentials directory and file (Req
+    5.9, 15.3) -- a sibling claim to the generic ``pull`` confinement guard
+    above, proved directly over :func:`~fitdocs.connectors.connect.run_connect`
+    rather than through the :class:`EntryPoint` registry: ``connect`` makes no
+    data-root write at all (design.md ConfinementRegistration states this
+    test standalone, not as a registered writing entry point).
+
+    Isolated locally, the same way :func:`_run_pull` is (this module sits
+    outside ``tests/connectors/conftest.py``'s autouse fixtures): the
+    environment isolation and the socket guard are applied here directly,
+    and the credentials directory (``<sandbox>/user-config``) is deliberately
+    inside the sandbox this test snapshots but outside the data root, so a
+    stray write under ``data/`` or ``src/`` would be visible in the diff.
+    """
+    sandbox = tmp_path
+    data_root = sandbox / "data"
+    data_root.mkdir()
+    source_dir = sandbox / "src"
+    source_dir.mkdir()
+    credentials_dir = sandbox / "user-config"
+
+    monkeypatch = pytest.MonkeyPatch()
+    try:
+        with tempfile.TemporaryDirectory() as base_dir:
+            isolate_connector_environment(monkeypatch, Path(base_dir))
+            monkeypatch.setattr(socket, "socket", _socket_raises)
+
+            store = CredentialStore(credentials_dir)
+            connector = ScriptedPersonalKeyConnector()
+            connector.verify_script.append(Granted(scopes=("read",)))
+            instance = ConnectorInstance(
+                name="svc", connector=connector, lookback_days=30, settings=None
+            )
+            transport = FakeTransport(
+                [HttpResponse(status=200, headers={}, body=b"{}")]
+            )
+
+            before = _snapshot(sandbox)
+            result = run_connect(
+                instance,
+                {"api_key": "s3cr3t-connect-fixture"},
+                store=store,
+                transport=transport,
+                environ={},
+                now=lambda: _PULL_NOW,
+                sleep=lambda seconds: None,
+                redactor=Redactor(),
+            )
+            after = _snapshot(sandbox)
+    finally:
+        monkeypatch.undo()
+
+    assert isinstance(result, Connected), result
+
+    touched = _touched(before, after)
+    assert touched == ("user-config", "user-config/svc.toml"), (
+        f"connect wrote outside its own credentials directory: {touched}"
+    )
+    for key in touched:
+        assert not key.startswith("data/"), f"connect wrote under the data root: {key}"
+        assert not key.startswith("src/"), (
+            f"connect wrote under the source directory: {key}"
+        )
