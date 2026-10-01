@@ -50,8 +50,8 @@ recorded as one.
   managed keys (`source_kind`, `source_elapsed_s`, `source_distance_m`,
   `source_device`) that describe the file the page is rendered from — the
   last three appear only when that file records the value — and the document
-  format advances again (`doc_version` 6 to 7). `sources` lists every archived file of the page in one
-  canonical order, the base last. A page keeps a phone-side copy's session
+  format advances again (`doc_version` 6 to 7). `sources` lists every
+  archived file of the page in one canonical order, the base last. A page keeps a phone-side copy's session
   `uuid` when a file without one becomes its base, and a page may be renamed
   when its base changes (a file that outranks it arrives, or the precedence
   changes at `fitdocs regen`) and the new base gives a different filename, or

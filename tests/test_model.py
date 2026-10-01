@@ -351,5 +351,10 @@ def test_activity_without_record_developer_fields_has_empty_read_only_mapping() 
     with pytest.raises(TypeError):
         activity.record_developer_fields["x"] = None  # type: ignore[index]
     names = [f.name for f in dataclasses.fields(Activity)]
-    assert names[-1] == "record_developer_fields"
-    assert names[-2] == "developer_fields_declared_scale"
+    # Appended after ``developer_fields_declared_scale``; activity-identity's
+    # ``file_identity`` (fit-ingest Amendment 4) was appended after it in turn.
+    assert names[-3:] == [
+        "developer_fields_declared_scale",
+        "record_developer_fields",
+        "file_identity",
+    ]
