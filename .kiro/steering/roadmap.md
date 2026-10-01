@@ -1783,7 +1783,7 @@ credential store are designed for them now and built later.
 
 #### Specs (dependency order)
 
-- [ ] activity-identity — **spec written 2026-09-29** (Phase 8 batch, `tasks-generated`, all approvals set; 9 requirements / 73 criteria, 7 majors / 21 executable tasks; cross-spec reviewed, three rounds, READY; default base precedence `original:garmin > phone_copy > original > unknown`, maintainer decision 2026-09-29). the file-identity fields from `file_id`; the
+- [x] activity-identity — **implemented 2026-10-01** (21/21 tasks, validate-impl GO after remediation; rebased onto running-dynamics: DOC_VERSION 7, CONTRACT_VERSION "5", fit-ingest Amendment 4); **spec written 2026-09-29** (Phase 8 batch, `tasks-generated`, all approvals set; 9 requirements / 73 criteria, 7 majors / 21 executable tasks; cross-spec reviewed, three rounds, READY; default base precedence `original:garmin > phone_copy > original > unknown`, maintainer decision 2026-09-29). the file-identity fields from `file_id`; the
   cross-source match rule (one-to-one, calibrated on measured pairs,
   ambiguity reported and never merged); source roles on the page; base
   selection by configurable precedence (a device original outranks a
