@@ -263,9 +263,9 @@ def test_registered_command_count_matches_docstring_opening() -> None:
 
     group = cast(typer.core.TyperGroup, typer.main.get_command(app))
     commands = group.commands
-    assert len(commands) == 9, sorted(commands)
+    assert len(commands) == 10, sorted(commands)
     doc = cli_module.__doc__ or ""
-    assert "Nine" in doc[:400]
+    assert "Ten" in doc[:400]
     assert "Four feature commands" not in doc
 
 

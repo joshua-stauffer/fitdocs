@@ -2,7 +2,7 @@
 
 A thin typer shell (design: CliApp, ``src/fitdocs/cli.py``): it parses flags,
 resolves configuration, calls the engine, and reports -- it contains no
-rendering or file-pipeline logic of its own. Nine commands are registered on
+rendering or file-pipeline logic of its own. Ten commands are registered on
 top of the baseline ``--version`` / ``--help`` shell. The tree-processing
 commands documented here are:
 
@@ -36,6 +36,17 @@ outside the list above: ``fitdocs plugins`` and ``fitdocs skill [NAME]`` --
 list every packaged agent skill and its installed directory, or (given
 ``NAME``) print one skill's directory and a copy recipe (Req 1.3, 1.4, 1.5,
 1.6, 1.7, 7.2, 7.5).
+
+``fitdocs connect NAME [--out PATH]`` sits between these two shapes: it
+resolves the data root to read the configured ``[connectors]`` instances
+(connectors Req 3.9) but writes nothing under it -- it makes exactly one
+authentication attempt against the named instance's connector and, on
+acceptance, stores the credentials under the resolved per-user credentials
+directory, never under the data root (connectors Req 5.1-5.9). It prompts
+interactively for each field the connector declares, reading any field
+marked secret through a no-echo prompt; when standard input is not an
+interactive terminal it prompts for nothing and fails loudly instead
+(connectors Req 5.4).
 
 Every tree-processing command (each command in the list above), *before any
 processing* (Req 2.1), resolves the data root by the explicit precedence
@@ -109,9 +120,11 @@ Requirements 1.3, 1.4, 1.5, 2.1, 3.5, 8.1, 8.2, 8.3, 8.4, 8.6, 14.1, 14.2, 14.4.
 
 from __future__ import annotations
 
+import getpass
 import os
 import sys
-from datetime import date, datetime, tzinfo
+import time
+from datetime import UTC, date, datetime, tzinfo
 from pathlib import Path
 from typing import NoReturn
 
@@ -125,6 +138,22 @@ from fitdocs.athlete import AthleteFileError, load_athlete_inputs
 from fitdocs.audit import AuditReport, audit
 from fitdocs.benchmarks import BenchmarkKind
 from fitdocs.config import DataRootError, resolve_data_root
+from fitdocs.connectors.connect import Connected, ConnectFailed, run_connect
+from fitdocs.connectors.credentials import (
+    CredentialsLocationError,
+    CredentialStore,
+    check_outside_data_root,
+    env_var_name,
+    resolve_credentials_dir,
+)
+from fitdocs.connectors.http import Transport, urllib_transport
+from fitdocs.connectors.protocol import (
+    SUPPORTED_AUTH_STYLES,
+    AuthStyle,
+    SettingsContext,
+)
+from fitdocs.connectors.secrets import Redactor
+from fitdocs.connectors.settings import load_connectors_settings
 from fitdocs.history.engine import HistoryReport, run_history
 from fitdocs.identity.holds import HoldRecordError, load_holds
 from fitdocs.identity.settings import IdentitySettings, load_identity_settings
@@ -179,6 +208,7 @@ app = typer.Typer(
     help="Turn .fit files into rich markdown workout documents.",
     add_completion=False,
     no_args_is_help=True,
+    pretty_exceptions_show_locals=False,
 )
 
 
@@ -260,6 +290,13 @@ _METHODOLOGY_OPTION = typer.Option(
     None,
     "--methodology",
     help="Sum the history page's curve under only this methodology id.",
+)
+_CONNECT_NAME_ARGUMENT = typer.Argument(
+    ...,
+    help=(
+        "The name of a configured connector instance (a table under the "
+        "connectors table in fitdocs.toml)."
+    ),
 )
 
 
@@ -643,6 +680,212 @@ def plan_command(
     # override problem, exits 1; a run with no plan sources -- or none
     # configured at all -- is success (Req 8.9, plan-resolution Req 8.7).
     _finish(failed=report.failed)
+
+
+def _connector_transport() -> Transport:
+    """The real connector transport (design: CliCommands); tests patch this."""
+    return urllib_transport
+
+
+def _stdin_is_interactive() -> bool:
+    """Whether standard input is a real terminal (design: CliCommands)."""
+    return sys.stdin.isatty()
+
+
+def _ask_secret(prompt: str) -> str:
+    """Read one line with no echo (design: CliCommands, Req 5.1)."""
+    return getpass.getpass(prompt)
+
+
+def _ask_value(prompt: str) -> str:
+    """Read one ordinary, echoed line (design: CliCommands)."""
+    return str(typer.prompt(prompt))
+
+
+@app.command("connect")
+def connect_command(
+    name: str = _CONNECT_NAME_ARGUMENT,
+    out: Path | None = _OUT_OPTION,
+) -> None:
+    """Authenticate one configured connector instance once and store its
+    credentials only on success.
+
+    (connectors design: CliCommands "``connect`` flow"; Req 1.7, 3.9, 4.2,
+    5.1-5.9, 10.6.)
+
+    Resolves the data root (Req 3.9), reads the settings document, validates
+    -- without creating -- the configured inbox (needed only so a connector's
+    own settings can refuse a configuration that would loop into it), and
+    projects the connectors table. NAME must be a configured instance;
+    otherwise this exits with the configuration-error code naming every
+    configured instance (Req 5.3). A connector that needs no authentication
+    reports that there is nothing to connect and exits with the success code,
+    prompting for and writing nothing (Req 5.2); a connector whose
+    authentication style is reserved exits with the configuration-error code
+    naming it unsupported by this version (Req 1.7, 5.3).
+
+    The per-user credentials directory is then resolved and checked to be
+    outside the data root (Req 4.1, 4.2); when standard input is not an
+    interactive terminal this command prompts for nothing and exits with the
+    configuration-error code, naming -- for a personal-key connector only --
+    the environment variables an unattended pull can use instead (Req 5.4).
+    Otherwise every credential field the connector declares is prompted for,
+    a field marked secret through the no-echo seam (Req 5.1); an empty
+    answer exits with the configuration-error code before any request is
+    made (Req 5.7).
+
+    The one authentication attempt itself is :func:`~fitdocs.connectors.
+    connect.run_connect`. On success this prints the instance, the
+    credentials file's location, and the granted scopes (or that the service
+    reported none) and any environment variable that will override a stored
+    value during a pull, then exits with the success code (Req 5.5). On
+    refusal it prints which of the typed failure kinds occurred, the
+    service's own message with every secret redacted, and the next step,
+    then exits with the failure code; nothing is stored either way (Req
+    5.6). An exception ``run_connect`` does not itself map -- a connector's
+    ``verify``/``login`` raising something other than the typed failures --
+    is still never shown unredacted or as a traceback: this command maps it
+    to ``<ExceptionType>: <redacted message>`` and the failure code, the same
+    shape a mapped failure uses (interpretation: design.md states this rule
+    for the pull command's own exceptions, Req 10.2, and is silent for
+    connect's; applied here identically since nothing here may ever show an
+    unredacted secret). Nothing is written under the data root either way
+    (Req 5.9); this command never touches the inbox, a ledger, or a
+    delivery.
+    """
+    data_root = _resolved_data_root(out)
+    try:
+        document = load_settings_document(data_root)
+        inbox_settings = load_inbox_settings(document, data_root=data_root)
+        validated_inbox = validate_inbox_paths(data_root, inbox_settings)
+        instances = load_connectors_settings(
+            document,
+            settings_file=settings_path(data_root),
+            context=SettingsContext(
+                data_root=data_root, inbox=validated_inbox.inbox_resolved
+            ),
+        )
+    except SettingsError as exc:
+        _config_error(str(exc))
+
+    by_name = {instance.name: instance for instance in instances}
+    instance = by_name.get(name)
+    if instance is None:
+        configured = ", ".join(sorted(by_name)) or "none"
+        _config_error(
+            f"{name!r} is not a configured connector instance; "
+            f"configured instances: {configured}"
+        )
+
+    connector = instance.connector
+    if connector.auth_style is AuthStyle.NONE:
+        Console().print(
+            f"{name}: this connector requires no authentication; nothing to connect.",
+            markup=False,
+            highlight=False,
+            soft_wrap=True,
+        )
+        raise typer.Exit(code=_EXIT_SUCCESS)
+
+    if connector.auth_style not in SUPPORTED_AUTH_STYLES:
+        _config_error(
+            f"{name}: {connector.auth_style.value} authentication is "
+            "reserved; this version of fitdocs does not support it."
+        )
+
+    try:
+        credentials_dir = resolve_credentials_dir(os.environ, Path.home())
+        check_outside_data_root(credentials_dir, data_root)
+    except CredentialsLocationError as exc:
+        _config_error(str(exc))
+
+    if not _stdin_is_interactive():
+        if connector.auth_style is AuthStyle.API_KEY:
+            variables = ", ".join(
+                env_var_name(name, field.name) for field in connector.credential_fields
+            )
+            _config_error(
+                f"{name}: standard input is not an interactive terminal; "
+                f"an unattended pull can use {variables} instead."
+            )
+        _config_error(
+            f"{name}: standard input is not an interactive terminal; "
+            "`fitdocs connect` needs one to prompt for credentials."
+        )
+
+    answers: dict[str, str] = {}
+    for credential_field in connector.credential_fields:
+        prompt = f"{credential_field.label}: "
+        value = _ask_secret(prompt) if credential_field.secret else _ask_value(prompt)
+        if not value:
+            _config_error(f"{name}: {credential_field.label} must not be empty.")
+        answers[credential_field.name] = value
+
+    store = CredentialStore(credentials_dir)
+    redactor = Redactor()
+    try:
+        outcome = run_connect(
+            instance,
+            answers,
+            store=store,
+            transport=_connector_transport(),
+            environ=os.environ,
+            now=lambda: datetime.now(UTC),
+            sleep=time.sleep,
+            redactor=redactor,
+        )
+    except Exception as exc:  # noqa: BLE001 - mapped to a redacted, typed line
+        message = redactor.redact(str(exc))
+        Console().print(
+            f"{type(exc).__name__}: {message}",
+            markup=False,
+            highlight=False,
+            soft_wrap=True,
+        )
+        raise typer.Exit(code=_EXIT_FILE_FAILURES) from None
+
+    if isinstance(outcome, Connected):
+        console = Console()
+        console.print(
+            f"{name}: connected.", markup=False, highlight=False, soft_wrap=True
+        )
+        console.print(
+            f"Credentials: {outcome.path}",
+            markup=False,
+            highlight=False,
+            soft_wrap=True,
+        )
+        scopes_line = (
+            ", ".join(outcome.scopes)
+            if outcome.scopes
+            else "the service reported no scopes"
+        )
+        console.print(
+            f"Scopes: {scopes_line}",
+            markup=False,
+            highlight=False,
+            soft_wrap=True,
+        )
+        if outcome.env_override:
+            console.print(
+                "Overriding environment variables (used instead of the "
+                f"stored values during a pull): {', '.join(outcome.env_override)}",
+                markup=False,
+                highlight=False,
+                soft_wrap=True,
+            )
+        raise typer.Exit(code=_EXIT_SUCCESS)
+
+    assert isinstance(outcome, ConnectFailed)
+    console = Console()
+    console.print(
+        f"{name}: {outcome.kind.value}: {outcome.message}",
+        markup=False,
+        highlight=False,
+        soft_wrap=True,
+    )
+    console.print(outcome.next_step, markup=False, highlight=False, soft_wrap=True)
+    raise typer.Exit(code=_EXIT_FILE_FAILURES)
 
 
 @app.command("plugins")

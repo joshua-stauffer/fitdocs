@@ -535,7 +535,7 @@
 
 - [ ] 5. The commands
 
-- [ ] 5.1 Add `fitdocs connect`
+- [x] 5.1 Add `fitdocs connect`
   - The command and its module-level seams (transport, terminal check,
     secret prompt, visible prompt); the data root, settings, inbox
     validation without creation, and connectors table read, each failure a
@@ -965,3 +965,4 @@
 - 6.2: every network statement names the map tiles AND both connector commands (`fitdocs connect` authenticates once; `fitdocs pull` fetches) -- round 1 wrongly wrote pull as the only other path. `tests/connectors/test_network_statements.py` scopes each positive check to a unique (start, end) anchor span; tasks 7, 8.2 and 8.3 rewording README.md or docs/configuration.md near those sentences must keep each anchor unique and present, or update the anchors.
 - 4.3: `connectors.pull.run_pull(data_root, inbox, instances, options, ...)` -> `PullReport`; `listed` counts every listed entry (invalid, repeated, unavailable, start-less, already-final, fetch-deferred all included; listing deferrals excluded). Six review rounds, all test-side: tie order, held-before-unavailable, and `listed` each needed fixtures that differ from every plausible wrong rule. 4.4 owns redaction of `unavailable_reason`/`Declined` in the ledger (reviewer mutation S4 survives until then). Callers must pass instances name-sorted (5.x `NAMES...`).
 - 4.4: per-instance failure scope in `run_pull` -- credential resolution catches `ConnectorError`+`CredentialStoreError`; renewal and listing catch `Exception` (BaseException always escapes); a fetch `AuthFailure`/`ConnectorError` ends the instance, any other fetch exception (incl. `TransportError`) is an unrecorded failed note. `_instance_error` appends the kind's next step for `AuthFailure` and the UNAVAILABLE step for `TransportError` (controller ruling, Req 6.10). Renewed `TokenSet` values are registered with the redactor before persisting (round-2 finding: a renewed token otherwise leaked unredacted). Error-detail pins are exact strings, not `in`.
+- 5.1: `connect_command` maps an unexpected connector exception to `<Type>: <redacted message>`, exit 1 (design silent; same rule as pull, queued as a design note). Every connect print uses `soft_wrap=True`, and test fixtures for wrapped lines assert `len(line) > 80` -- a line of exactly 80 columns passes CI by coincidence. Seam bodies (`_ask_secret`/getpass, `_ask_value`/typer.prompt, `_stdin_is_interactive`, `_connector_transport`) and the `run_connect` wiring (transport, tz-aware now, real sleep) are pinned directly, since every other test patches them. 5.2/5.3: copy this shape.
