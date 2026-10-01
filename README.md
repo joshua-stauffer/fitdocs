@@ -28,7 +28,7 @@ inside an existing markdown wiki.
 
 ## What it does
 
-1. **Ingest** `.fit` files from a target directory or the standing inbox (user drops files in; fitdocs never watches for them).
+1. **Ingest** `.fit` files from a target directory or the standing inbox — dropped there by hand, or fetched by a configured connector's `fitdocs pull` (fitdocs itself never watches for them).
 2. **Render** one markdown doc per activity — summary metrics, laps/splits or
    sets/reps, and embedded charts (e.g. the power-vs-heart-rate hero graph) —
    modeled on [fitdocs.ai](https://github.com/joshua-stauffer/fitdocs.ai)'s
@@ -112,8 +112,9 @@ it came from.
 Two packaged skills ship today: `build-training-block` walks an agent
 through building a training block from the athlete's answers as a plan
 source, rendering it with `fitdocs plan`, amending it, and settling
-ambiguous matches; `fitdocs-workouts` drains the inbox into workout
-documents and reads the drain report. See
+ambiguous matches; `fitdocs-workouts` pulls new `.fit` files from the
+athlete's configured connectors, drains the inbox into workout documents,
+and reads the pull and drain reports. See
 [Wiki Integration](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/wiki-integration.md)
 for where each skill lands, how to confirm it is active, how to update it,
 and an end-to-end recipe for adopting fitdocs into an existing wiki.
@@ -126,6 +127,19 @@ watching and no scheduling of any kind. See
 [Inbox](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/inbox.md)
 for the full interface: every settings key and its default, drain semantics,
 the safeguards, and the disposition policy's never-delete guarantee.
+
+## Connectors
+
+`fitdocs connect` authenticates once against a configured connector instance,
+and `fitdocs pull` fetches what's new from it straight into the inbox, where
+the existing drain picks it up like any other file. fitdocs ships one
+connector that needs no service at all, `folder`, plus the framework —
+credential storage, per-instance ledgers, and the pull report — any future
+connector builds on. See
+[Connectors](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md)
+for the full interface: configuring an instance, the credentials directory,
+what leaves your machine and how to switch it off, and the terms-first
+policy.
 
 ## Training blocks
 
@@ -209,6 +223,7 @@ them.
 - [Install](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/install.md) — the full first-run path, standalone or wiki-hosted.
 - [Configuration](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/configuration.md) — the data-root contract, the settings file, and the network/offline behavior.
 - [Inbox](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/inbox.md) — the full inbox interface.
+- [Connectors](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md) — configuring instances, credentials, and `fitdocs connect`/`pull`.
 - [Compatibility policy](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/compatibility.md) — what a version number promises.
 - [Plugin platform](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/plugins.md) — the calculator plugin API.
 - [Ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md) — what fitdocs owns in your data root and what you own.

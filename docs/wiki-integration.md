@@ -21,9 +21,10 @@ fitdocs-workouts  /path/to/site-packages/fitdocs/skills/fitdocs-workouts
 - **`build-training-block`** walks an agent through building a training
   block from the athlete's answers as a plan source, rendering it with
   `fitdocs plan`, amending it, and settling ambiguous matches.
-- **`fitdocs-workouts`** drains the fitdocs inbox into workout documents
-  and reads the resulting drain report — the turnkey workflow for a wiki's
-  agent to run whenever new `.fit` files have arrived.
+- **`fitdocs-workouts`** pulls new `.fit` files from the athlete's
+  configured connectors, drains the fitdocs inbox into workout documents,
+  and reads the resulting pull and drain reports — the turnkey workflow for
+  a wiki's agent to run whenever new `.fit` files have arrived.
 
 ## Installing a skill
 

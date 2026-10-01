@@ -39,6 +39,14 @@ recorded as one.
 - The package metadata gains a `Homepage` project URL, `https://fitdocs.ai`,
   listed first among the project URLs; the other project URLs are unchanged
   and no action is needed.
+- `fitdocs connect` and `fitdocs pull`: configure a named connector instance
+  in a new `[connectors]` table, authenticate it once with `connect` if it needs credentials, and
+  fetch new activities with `pull`, delivered into the existing inbox where
+  the existing drain picks them up. fitdocs ships one connector, `folder`,
+  that reads a local directory and needs no authentication.
+  `fitdocs.toml` settings schema (additive; no action needed): gains the
+  `[connectors]` table. See
+  [the connectors reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md).
 
 ### Changed
 
@@ -69,6 +77,14 @@ recorded as one.
 - `fitdocs.toml` settings schema: the new `[identity]` table is additive and
   optional; an invalid `[identity]` exits with status `2`. Action:
   `fitdocs regen` applies a changed `precedence` to existing pages.
+- Inbox interface: a file a connector pull delivered is fitdocs's own copy,
+  and the next pull removes it once identical bytes are archived — no
+  action; every other never-delete guarantee is unchanged.
+- Ownership contract: states that credentials never live under the data
+  root, that each connector's ledger is fitdocs-owned tool state in the
+  tool-state directory `.fitdocs/`, what `fitdocs pull` writes and removes,
+  and that `fitdocs connect` writes nothing under the data root — no
+  action.
 
 ## [0.1.0] - 2026-09-19
 
