@@ -440,7 +440,7 @@
   - _Requirements: 2.1, 13.1, 13.2, 13.3, 13.5, 13.6, 13.7, 13.8, 13.9_
   - _Boundary: FolderConnector, PackageInit_
 
-- [ ] 4.3 Orchestrate one pull: listing, classification, fetch answers, delivery, the ledger's watermark, and saving on every exit
+- [x] 4.3 Orchestrate one pull: listing, classification, fetch answers, delivery, the ledger's watermark, and saving on every exit
   - The pull options, notes, delivered records, per-instance report and pull
     report exactly as design.md states, the run failing on any instance
     error or failed note; channels sorted
@@ -963,3 +963,4 @@
 - 4.2: the folder connector registers at import, so `available()` always includes `folder`; registry tests filter to their own ids. Selection and settling are delegated to `fitdocs.inbox`. Tests needing a Path.stat failure wrap `inbox.settle` rather than counting stdlib calls (Python 3.14's `is_file` no longer calls `stat`).
 - 4.5: `connectors.connect.run_connect` never redacts the next step or path (they hold no user or service text); unexpected exceptions from verify/login propagate unredacted -- 5.1's CLI must map them (queued).
 - 6.2: every network statement names the map tiles AND both connector commands (`fitdocs connect` authenticates once; `fitdocs pull` fetches) -- round 1 wrongly wrote pull as the only other path. `tests/connectors/test_network_statements.py` scopes each positive check to a unique (start, end) anchor span; tasks 7, 8.2 and 8.3 rewording README.md or docs/configuration.md near those sentences must keep each anchor unique and present, or update the anchors.
+- 4.3: `connectors.pull.run_pull(data_root, inbox, instances, options, ...)` -> `PullReport`; `listed` counts every listed entry (invalid, repeated, unavailable, start-less, already-final, fetch-deferred all included; listing deferrals excluded). Six review rounds, all test-side: tie order, held-before-unavailable, and `listed` each needed fixtures that differ from every plausible wrong rule. 4.4 owns redaction of `unavailable_reason`/`Declined` in the ledger (reviewer mutation S4 survives until then). Callers must pass instances name-sorted (5.x `NAMES...`).
