@@ -15,14 +15,15 @@ Version numbering governs exactly three contracts, plus one named schema:
    still matches what the installed tool would write.
 2. **The inbox interface** — the `[inbox]` table's meaning, the
    never-delete disposition guarantee (a file is left in place by default,
-   and moved out of the inbox only when the user opts in — never deleted),
-   and the channels a drain reports.
+   and moved out of the inbox only when the user opts in — never deleted) —
+   with one carve-out: a connector's own prior delivery, once archived, is
+   removed by the next pull — and the channels a drain reports.
 3. **The load-calculator plugin API** — the calculator contract a third-party
    calculator implements, the entry-point discovery group, and the
    documented public import surface a calculator author may depend on.
 4. **The user-facing settings schema** — `<data-root>/fitdocs.toml`, with its
-   seven tables today: `[tiles]`, `[inbox]`, `[plugins]`, `[load]` (and its
-   sub-tables), `[plans]`, `[history]`, and `[identity]` (see
+   eight tables today: `[tiles]`, `[inbox]`, `[plugins]`, `[load]` (and its
+   sub-tables), `[plans]`, `[history]`, `[identity]`, and `[connectors]` (see
    [Breaking, additive and internal](#breaking-additive-and-internal) below).
 
 **Documented means public.** A name, key, or behavior described on this page,
@@ -46,10 +47,14 @@ any helper module that reads or writes a document without being named here.
 narrower disposition guarantee (for example, treating a file the drain
 previously moved as one it may now delete), or the removal or rename of a
 reported channel. Additive: a new optional `[inbox]` key with a
-behavior-preserving default, or a new reported channel that a caller who
-ignores unknown channels can safely skip. Internal: the drain's internal
-scheduling, its filesystem staging strategy, and any module that implements
-the drain without being part of the documented `[inbox]` interface.
+behavior-preserving default, a new reported channel that a caller who
+ignores unknown channels can safely skip, or the delivery-removal carve-out —
+a connector's own prior delivery, once its bytes are archived, is removed by
+that connector's next pull; nothing the athlete or the athlete's own tools
+place in the inbox is ever a candidate for removal. Internal: the drain's
+internal scheduling, its filesystem staging strategy, and any module that
+implements the drain without being part of the documented `[inbox]`
+interface.
 
 **The plugin API.** Breaking: a change to the calculator contract's required
 members, a change to the entry-point discovery group's name, or the removal
@@ -61,10 +66,10 @@ surface](plugins.md#the-public-import-surface) — including the
 `fitdocs.plugins` module itself, which performs discovery but is not public
 surface.
 
-**The settings schema, including `[tiles]`.** One file, seven tables today —
+**The settings schema, including `[tiles]`.** One file, eight tables today —
 `[tiles]`, `[inbox]`, `[plugins]`, `[load]` (and its sub-tables), `[plans]`,
-`[history]`, and `[identity]` — all user-written and all documented; a table
-added by a later feature joins this list the same way. The tile table is governed
+`[history]`, `[identity]`, and `[connectors]` — all user-written and all
+documented; a table added by a later feature joins this list the same way. The tile table is governed
 exactly like the others, never left as an ungoverned user-facing schema.
 Breaking: removing a key, narrowing an accepted value, or changing a default
 in a way that changes behavior for an unchanged file. Additive: a new

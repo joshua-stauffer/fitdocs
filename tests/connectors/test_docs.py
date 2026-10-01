@@ -506,6 +506,98 @@ def test_cron_example_uses_the_real_data_root_env_var() -> None:
 
 
 # --------------------------------------------------------------------------
+# Inbox carve-out (task 8.2, design.md "InboxDocs"; Req 8.9, 15.4)
+# --------------------------------------------------------------------------
+
+_INBOX_DOC = _REPO_ROOT / "docs" / "inbox.md"
+
+
+def _inbox_doc_text() -> str:
+    return _INBOX_DOC.read_text(encoding="utf-8")
+
+
+def test_inbox_page_names_the_delivery_carve_out_as_the_concern_exception() -> None:
+    """The opening bold sentence keeps naming no watching/scheduling, and
+    now qualifies "your concern" with the connector exception instead of
+    the old unqualified "entirely" (design.md InboxDocs).
+
+    Mutation caught: reverting the qualifying clause back to "entirely your
+    concern" reds this; dropping the no-watching clause entirely also reds
+    this (checked independently of the never-delete pins below, which neither
+    regex here can satisfy).
+    """
+    text = _inbox_doc_text()
+    assert re.search(
+        r"your concern, unless you configure a connector\.\s+fitdocs\s+"
+        r"performs no watching and no scheduling of any kind",
+        text,
+    )
+
+
+def test_inbox_page_states_the_three_carve_out_statements() -> None:
+    """The Disposition policy paragraph design.md states: the drain itself
+    is unchanged (still never deletes); a connector's own prior delivery is
+    removed by the *next* pull once its bytes are archived; and nothing the
+    athlete or the athlete's own tools placed in the inbox is ever a
+    removal candidate.
+
+    Three independent regexes, each scoped to its own clause, so a mutation
+    dropping only one of the three statements (not the whole paragraph)
+    still reds exactly one assertion rather than being masked by the other
+    two surviving.
+    """
+    text = _inbox_doc_text()
+    assert re.search(r"drain itself\s+never\s+deletes anything", text)
+    assert re.search(
+        r"\*next\*\s+pull\s+removes it once the archive holds an? "
+        r"identical-content copy",
+        text,
+    )
+    assert re.search(
+        r"[Nn]othing you or your own tools put in the inbox is ever removed",
+        text,
+    )
+
+
+def test_inbox_page_keeps_both_never_delete_pins_verbatim() -> None:
+    """The two bold guarantee sentences in the Disposition policy paragraph
+    survive the carve-out addition verbatim -- the carve-out is additive,
+    not a narrowing of the default-disposition guarantee.
+
+    Mutation caught: deleting either sentence (simulating an edit that
+    folded the never-delete guarantee into the new carve-out paragraph
+    instead of keeping it standing on its own) reds the corresponding
+    assertion.
+    """
+    text = _inbox_doc_text()
+    assert re.search(
+        r"No configuration\s+ever deletes an inbox file: deletion is not an "
+        r"option fitdocs offers, under\s+any disposition",
+        text,
+    )
+    assert re.search(
+        r"it stays in the inbox and is retried on the next drain",
+        text,
+    )
+
+
+def test_inbox_page_carve_out_paragraph_is_additive_not_in_place_of_the_pin() -> None:
+    """The carve-out is its own paragraph, after the never-delete and
+    never-moved sentences -- not a rewrite that replaces "never" with a
+    conditional.
+    """
+    text = _inbox_doc_text()
+    never_delete = text.index("deletion is not an")
+    never_moved = text.index("it stays in the inbox and is retried")
+    carve_out = text.index("drain itself")
+    assert never_delete < never_moved < carve_out
+    assert (
+        "\n\n**Connector deliveries are the one carve-out.** The drain itself never"
+        in text
+    )
+
+
+# --------------------------------------------------------------------------
 # NeutralScan (design.md "NeutralScan", Req 14.6)
 # --------------------------------------------------------------------------
 
@@ -942,3 +1034,56 @@ def test_conditional_control_flags_an_exemption_entry_none_of_its_files_names() 
 
     good_sources = {"pkg/mod.py": _url(_FAKE_HOST, "/x")}
     assert _unexercised_exemptions(good_sources, bad_exemptions) == []
+
+
+_COMPATIBILITY_DOC = _REPO_ROOT / "docs" / "compatibility.md"
+_CONFIGURATION_DOC = _REPO_ROOT / "docs" / "configuration.md"
+
+
+def _collapsed_doc(path: Path) -> str:
+    return " ".join(path.read_text(encoding="utf-8").split())
+
+
+def test_compatibility_inbox_item_names_the_carve_out() -> None:
+    text = _collapsed_doc(_COMPATIBILITY_DOC)
+    start = text.index("2. **The inbox interface**")
+    item = text[start : text.index("3. **The load-calculator plugin API**", start)]
+    assert (
+        "with one carve-out: a connector's own prior delivery, once archived, "
+        "is removed by the next pull"
+    ) in item
+
+
+def test_compatibility_inbox_subsection_names_the_carve_out_as_additive() -> None:
+    text = _collapsed_doc(_COMPATIBILITY_DOC)
+    start = text.index("**The inbox interface.**")
+    subsection = text[start : text.index("**The plugin API.**", start)]
+    additive = subsection[subsection.index("Additive:") : subsection.index("Internal:")]
+    assert (
+        "the delivery-removal carve-out — a connector's own prior delivery, once "
+        "its bytes are archived, is removed by that connector's next pull"
+    ) in additive
+    assert (
+        "nothing the athlete or the athlete's own tools place in the inbox is "
+        "ever a candidate for removal"
+    ) in additive
+
+
+def test_configuration_data_root_command_list_names_connect_and_pull() -> None:
+    text = _collapsed_doc(_CONFIGURATION_DOC)
+    assert (
+        "`derive-benchmarks`, `connect`, `pull`, and any future one) needs a data root"
+    ) in text
+
+
+def test_configuration_names_the_connectors_table_and_points_at_its_page() -> None:
+    markdown = _CONFIGURATION_DOC.read_text(encoding="utf-8")
+    rows = [
+        line for line in markdown.splitlines() if line.startswith("| `[connectors]` |")
+    ]
+    assert len(rows) == 1
+    assert rows[0].rstrip().endswith("| below |")
+    heading = "### `[connectors]`: pulling from a configured source\n"
+    assert markdown.count(heading) == 1
+    body = re.split(r"\n#{1,3} ", markdown.split(heading, 1)[1], maxsplit=1)[0]
+    assert "[`docs/connectors.md`](connectors.md)" in body

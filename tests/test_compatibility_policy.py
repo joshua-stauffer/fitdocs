@@ -142,6 +142,7 @@ SETTINGS_TABLE_LITERALS: tuple[str, ...] = (
     "[plans]",
     "[history]",
     "[identity]",
+    "[connectors]",
 )
 
 
