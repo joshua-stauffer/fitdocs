@@ -57,6 +57,27 @@ Task 5.1's review independently established the guard is the sole detector: with
 five registered entries removed and five same-named shadow copies installed, the
 whole suite stays green.
 
+### Addendum 2026-10-01 (activity-identity merge, read at `fc5c06d`)
+Re-derived with the predicate "name in `contract.__all__`, `getattr(mod, name) is
+getattr(contract, name)`, name not in the module's `CONTRACT_BINDINGS` tuple"
+over `CONVERTED_MODULES`: 15 unregistered bindings, not twelve. The table above
+is out of date in two ways:
+- `fitdocs.sync` now also binds `begin_marker` and `end_marker` unregistered.
+  They arrived with activity-identity task 4.2 (`git log -S"begin_marker" --
+  src/fitdocs/sync.py` -> `8f92a04`), which is the recurrence this item
+  predicted: a spec added contract imports without touching the registry.
+- `fitdocs.plans.page` binds `region_block` unregistered (training-blocks, `9ffe4c0`).
+Current list: sync `DOC_VERSION`, `InvalidEffortTag`, `begin_marker`,
+`document_version`, `end_marker`; load.engine `DOC_VERSION`, `document_date`,
+`document_version`; load.docedit `begin_marker`, `end_marker`; render.frontmatter
+`GENERATOR`, `GENERATOR_KEY`; render.views `DOC_BANNER`; audit `InvalidEffortTag`;
+plans.page `region_block`. This supports deriving the expected tuple from each
+module's `from fitdocs.contract import (...)` AST: effort-tags, training-blocks
+and activity-identity each added bindings without a registry edit and no test
+prompted any of them.
+The same blind spot, from the other side, is
+`2026-09-17-forbidden-literals-omit-load-keys` (its addendum of the same date).
+
 ## How to pick it up
 
 1. Re-derive the list with the predicate written down, and record it in the task

@@ -61,6 +61,17 @@ unless this lands first or with it.
 3. Apply the same removal on the keep-filename path; done when the repro
    leaves one chart set and every link on the page resolves.
 
+## Update 2026-10-01 (activity-identity has landed; read at `fc5c06d`)
+- The shipped cleanup is exactly as this item predicted: `src/fitdocs/sync.py:2024-2025`
+  runs `stale = _stale_assets(existing_text, rendered.assets)` only `if renaming`,
+  so the keep-filename path (timezone change) still leaves orphans.
+- Same root cause, different symptom, now its own item:
+  `2026-10-01-chart-assets-named-by-computed-stem-collide-across-pages` (a
+  user-renamed page's assets can be overwritten by another activity with the
+  same computed stem). Choose the asset-naming rule for both together.
+- The `blocked_by: [activity-identity]` above is satisfied (the spec merged at
+  `fc5c06d`); left unedited here for the queue owner to flip.
+
 ## Open questions
 - Alternative the maintainer may prefer: keep the asset stem stable (derive
   it from the assets the page already links) instead of cleaning up after a

@@ -1,6 +1,6 @@
 ---
 id: 2026-10-01-parse-frontmatter-raises-on-unconstructible-yaml-values
-title: contract.parse_frontmatter catches only yaml.YAMLError, so a hand-edited `date: 2026-02-30` raises ValueError out of every full-scan command
+title: "contract.parse_frontmatter catches only yaml.YAMLError, so a hand-edited `date: 2026-02-30` raises ValueError out of every full-scan command"
 status: open
 importance: high
 importance_why: One hand-edited page with an impossible date or timezone offset turns sync, regen, load and check into tracebacks until the user finds the file, and breaks the documented "never raises" contract that wiki-contract Req 1.2 makes every command rely on.

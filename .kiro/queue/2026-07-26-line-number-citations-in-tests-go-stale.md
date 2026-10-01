@@ -62,6 +62,23 @@ post-change `engine.py`: `test_engine.py:730` (364→372), `:969` (511-517→522
 (261-268→269-276). Task 4.2's round 2 fixes these; the *convention* is what this
 item is about.
 
+## Addendum 2026-10-01: the same species in `src/`, found by activity-identity
+Verified at `fc5c06d`. The convention applies to production comments too, and
+the identity merge left a live instance: the CLAIM ANCHOR comments in
+`src/fitdocs/declaration.py` cite lines that moved when `sync.py` grew.
+- `src/fitdocs/declaration.py:212` cites `sync.regen(...)` as `sync.py:281-287`
+  and `:257` as `sync.py:281-352`; `def regen` is now `sync.py:1050` (the file is
+  2418 lines).
+- `declaration.py:229` cites `load/engine.py:339` "via `docedit.replace_load_region`";
+  the calls are now `load/engine.py:516` and `:584`.
+- The `:214` sentence in the same block says region content is copied "ONLY when
+  `find_document` matches"; the page task now matches by scan record
+  (`sync.py:1953-1966`), so that anchor needs rereading, not just renumbering.
+When the convention above is decided, include these citations (and the
+`declaration.py` block as a whole; its `docmerge.py:130-149` cite still lands on
+`merge_regions`'s conflict check, `docmerge.py` being unchanged since the root commit) in the conversion; symbol anchors (`regen`,
+`replace_load_region`, `merge_regions`) would have survived the merge.
+
 ## Open questions
 Which fix, and it is a convention decision:
 1. **Stable anchors** — cite the function and symbol (`_compute_document`'s `supports_activity` guard) instead of a line range. Never rots, slightly less precise, requires no tooling. Probably the right default.
