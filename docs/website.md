@@ -58,7 +58,8 @@ Reserved names are matched exactly, with letter case significant.
 Every page begins with a line `---`, a YAML mapping with no duplicate keys, and
 a closing line `---`. The file is UTF-8 with LF line endings: a file with CRLF
 line endings, or with a byte-order mark before the first `---`, is refused as
-having no frontmatter. A key not in this table is refused, and so is a value of
+having no frontmatter. A CRLF body after LF frontmatter is not refused, but see
+[The annotation block](#the-annotation-block). A key not in this table is refused, and so is a value of
 the wrong type. That includes the generator's own `template` key.
 
 | Key | Type | Rule |
@@ -117,10 +118,12 @@ draft page fails, the same as a link to a page that does not exist.
 
 Links between pages use markdown link syntax with a relative path to the
 target's `.md` source file, optionally followed by an `#anchor`. The anchor must
-match a heading in the target, slugged the way GitHub slugs it. A page link
-written as raw HTML is not accepted: a raw-HTML link to a `.md` source file is
-refused, and the message names the file and line. A raw-HTML link to a page URL
-such as `get-started/install/` is accepted.
+match the heading's id as the site generator makes it, which differs from
+GitHub's slug for punctuation runs and non-ASCII letters: `## Foo & Bar!` is
+`#foo-bar` and `# Café -- Über_x` is `#cafe-uber_x`, where GitHub would give
+`#foo--bar` and `#café----über_x`. A raw-HTML link to a `.md` source file is
+refused, and the message names the file and line. A raw-HTML link to a page
+URL such as `get-started/install/` is accepted.
 
 Assets are linked by relative path. Every relative target, page or asset,
 resolves relative to the directory of the page that links them. Inside raw HTML
@@ -143,9 +146,9 @@ leaves the rest of the page byte-for-byte unchanged, so it appears in no page,
 search index or site index. A `---` rule that does not begin such a block is
 kept.
 
-The build recognises the block by those exact characters. A block in a file
-with CRLF line endings, or one whose blank line before `---` holds spaces, is
-not stripped and stays in the page.
+The build recognises the block by those exact characters. A block in a CRLF body
+after LF frontmatter, or one whose blank line before `---` holds spaces, is not
+stripped and stays in the page.
 
 ## Building the site
 
@@ -232,8 +235,8 @@ guarantees the rest of the documentation publishes about the installed tool.
 The steps a maintainer does by hand. The pages themselves are the maintainer's
 own copy; the tooling never writes them. Do steps 1 to 4 in this order: GitHub
 documents verifying the domain first, then setting the custom domain, then
-creating the DNS records. In any other order someone else can publish a Pages
-site on the domain in the gap.
+creating the DNS records. If the DNS records are created before the domain is verified and set as the
+custom domain, someone else can publish a Pages site on the domain in the gap.
 
 ### 1. Verify the domain
 
@@ -284,7 +287,7 @@ up to 24 hours to become available.
 
 Copy the maintainer's pages into `website/content/` and build locally with the
 command above. The annotation blocks may stay when the files use LF line
-endings, because the build strips them. Land the change as any other change to
+endings and the line before `---` is empty, because the build strips them. Land the change as any other change to
 this repository, by commit. The site deploys only from `main`, and only when the
 content directory holds an included page: a push to `main` then builds, checks
 and deploys it.

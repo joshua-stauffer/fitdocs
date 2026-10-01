@@ -104,7 +104,8 @@ def test_frontmatter_table_lists_every_key_with_its_type() -> None:
     """Every required, optional and hero key is a table row, carrying its type.
 
     Dies on: deleting the `draft` row, changing the `order` row's type word
-    from integer to string, or adding a key to `OPTIONAL_KEYS` in the model.
+    from integer to string, dropping "required, not a boolean" from it, or
+    adding a key to `OPTIONAL_KEYS` in the model.
     """
     rows = _table_rows(_section("### Frontmatter keys"))
     documented = REQUIRED_KEYS + OPTIONAL_KEYS + HERO_KEYS
@@ -114,6 +115,7 @@ def test_frontmatter_table_lists_every_key_with_its_type() -> None:
         assert type_word in rows[key], (
             f"{key} row does not say {type_word}: {rows[key]}"
         )
+    assert "required, not a boolean" in rows["order"], rows["order"]
 
 
 def test_frontmatter_rows_state_who_may_carry_each_key() -> None:
@@ -250,12 +252,14 @@ def test_exit_code_bullets_each_state_their_meaning() -> None:
     every way the command could not run, including a missing generator.
 
     Dies on: rewording any one code's bullet, for example the `2` bullet's
-    "a missing generator" to "a missing template".
+    "a missing generator" to "a missing template", or its lead "the command
+    could not run" to "the command failed".
     """
     bullets = _bullets(_section("### Failures and exit codes"))
     assert set(bullets) == {"0", "1", "2"}
-    assert "success" in bullets["0"]
-    assert "problems" in bullets["1"]
+    assert bullets["0"] == "success."
+    assert bullets["1"] == "the input has problems, listed as above."
+    assert bullets["2"].startswith("the command could not run: ")
     for cannot_run in (
         "a missing content directory",
         "a missing generator",
@@ -265,6 +269,7 @@ def test_exit_code_bullets_each_state_their_meaning() -> None:
     ):
         assert cannot_run in bullets["2"], cannot_run
     assert "success" not in bullets["1"] + bullets["2"]
+    assert "problems" not in bullets["2"]
 
 
 def test_exit_two_scope_is_limited_to_runs_refused_before_building() -> None:
@@ -351,6 +356,11 @@ def test_runbook_steps_are_numbered_in_order_with_verification_before_dns() -> N
         "verifying the domain first, then setting the custom domain, then creating "
         "the DNS records"
     ) in intro
+    assert (
+        "If the DNS records are created before the domain is verified and set as "
+        "the custom domain, someone else can publish a Pages site on the domain in "
+        "the gap."
+    ) in intro
 
 
 def test_dns_section_has_four_a_and_four_aaaa_records() -> None:
@@ -358,14 +368,18 @@ def test_dns_section_has_four_a_and_four_aaaa_records() -> None:
     and IPv6 address in the section is one of those eight.
 
     Dies on: changing one octet of one address, deleting one record line, or
-    adding a ninth address.
+    adding a ninth address in IPv4, compressed or uncompressed IPv6 form.
     """
     body = _section("### 3. Add the DNS records")
     a_rows = re.findall(r"^\| A \| `([0-9.]+)` \|", body, flags=re.MULTILINE)
     aaaa_rows = re.findall(r"^\| AAAA \| `([0-9a-f:]+)` \|", body, flags=re.MULTILINE)
     assert tuple(a_rows) == A_RECORDS
     assert tuple(aaaa_rows) == AAAA_RECORDS
-    tokens = re.findall(r"(?:\d{1,3}\.){3}\d{1,3}|[0-9A-Fa-f:]*::[0-9A-Fa-f:]*", body)
+    # IPv4, and any IPv6 form: a run of hex digits and colons holding two or
+    # more colons.
+    tokens = re.findall(
+        r"(?:\d{1,3}\.){3}\d{1,3}|[0-9A-Fa-f]*(?::[0-9A-Fa-f]*){2,}", body
+    )
     assert sorted(tokens) == sorted((*A_RECORDS, *AAAA_RECORDS)), tokens
     assert "docs.github.com" in body, "the page must say where the addresses came from"
     assert "`www` CNAME record pointing at `joshua-stauffer.github.io`" in _squash(body)
@@ -426,12 +440,18 @@ def test_stated_zensical_pin_equals_the_docs_group_pin() -> None:
     pin is stated.
 
     Dies on: editing the pin in the page (for example `0.0.65` to `0.0.64`),
-    or pyproject's docs pin without the page.
+    or pyproject's docs pin without the page, or adding a second pin in any
+    spelling (`zensical == 0.0.64`, `zensical>=0.0.64`).
     """
     pin = _docs_pin()
     assert pin.startswith("zensical=="), pin
     text = PAGE.read_text(encoding="utf-8")
-    stated = set(re.findall(r"zensical==[0-9][0-9A-Za-z.]*", text))
+    stated = {
+        re.sub(r"\s+", "", m)
+        for m in re.findall(
+            r"zensical\s*(?:===?|[<>!~]=|[<>])\s*[0-9][0-9A-Za-z.]*", _squash(text)
+        )
+    }
     assert stated == {pin}, (stated, pin)
 
 
@@ -508,16 +528,26 @@ def test_link_rules_are_stated() -> None:
     href or src is refused while absolute and fragment-only ones are not;
     assets resolve relative to the linking page; docs/ pages by GitHub URL.
 
-    Dies on: deleting or rewording any one of those sentences.
+    Dies on: deleting or rewording any one of those sentences, for example
+    reversing the `.md` rule to "A raw-HTML link to a page URL ... is refused".
     """
     body = _squash(_section("### Links"))
-    assert "markdown link syntax" in body
-    assert "a raw-HTML link to a `.md` source file is refused" in body
+    assert (
+        "Links between pages use markdown link syntax with a relative path to the "
+        "target's `.md` source file, optionally followed by an `#anchor`."
+    ) in body
+    assert (
+        "A raw-HTML link to a `.md` source file is refused, and the message names "
+        "the file and line."
+    ) in body
     assert (
         "A raw-HTML link to a page URL such as `get-started/install/` is accepted."
         in body
     )
-    assert "an unquoted relative raw-HTML `href` or `src` value is refused" in body
+    assert (
+        "Inside raw HTML a relative `href` or `src` value must be quoted: an "
+        "unquoted relative raw-HTML `href` or `src` value is refused."
+    ) in body
     assert "An unquoted absolute or `#fragment`-only value is not refused." in body
     assert "relative to the directory of the page that links them" in body
     assert "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/" in body
@@ -535,8 +565,8 @@ def test_drafts_rule_is_stated() -> None:
 
 def test_annotation_block_rule_and_its_limits_are_stated() -> None:
     """The block is defined by an empty line, `---` and an `Annotations:` line
-    to the end of the file, files use LF, and CRLF files or a blank line holding
-    spaces are stated as not stripped.
+    to the end of the file, files use LF, and a CRLF body after LF frontmatter or
+    a blank line holding spaces are stated as not stripped.
 
     Dies on: deleting the LF sentence or the limitation paragraph, or changing
     "removes such a block".
@@ -550,8 +580,8 @@ def test_annotation_block_rule_and_its_limits_are_stated() -> None:
     assert "Files use LF line endings." in body
     assert "The build removes such a block" in body
     assert (
-        "A block in a file with CRLF line endings, or one whose blank line before "
-        "`---` holds spaces, is not stripped and stays in the page."
+        "A block in a CRLF body after LF frontmatter, or one whose blank line "
+        "before `---` holds spaces, is not stripped and stays in the page."
     ) in body
 
 
@@ -574,6 +604,11 @@ CONTRACT_SENTENCES = (
     "Reserved names are matched exactly, with letter case significant.",
     "a file with CRLF line endings, or with a byte-order mark before the first "
     "`---`, is refused as having no frontmatter",
+    "A CRLF body after LF frontmatter is not refused",
+    "That includes the generator's own `template` key.",
+    "the text from the last occurrence of an empty line (no spaces), then `---`",
+    "In the GitHub account's own Settings (not the repository's), open Pages",
+    "and the line before `---` is empty, because the build strips them",
     "Two included pages in one section with the same `order` fail, and the "
     "message names both files.",
     "A section with no included page is left out.",
@@ -581,7 +616,17 @@ CONTRACT_SENTENCES = (
     "leaves out any element whose key is missing; it never substitutes default text",
     "Its other frontmatter is still checked.",
     "A link to a draft page fails, the same as a link to a page that does not exist.",
-    "slugged the way GitHub slugs it",
+    "the heading's id as the site generator makes it, which differs from "
+    "GitHub's slug for punctuation runs and non-ASCII letters",
+    "`## Foo & Bar!` is `#foo-bar` and `# Café -- Über_x` is `#cafe-uber_x`",
+    "A key not in this table is refused, and so is a value of the wrong type.",
+    "reports every violation it finds in one run",
+    "names the directory and which of the three sources chose it",
+    "so it appears in no page, search index or site index",
+    "It accepts `--content` and `FITDOCS_SITE_CONTENT` exactly as `build` does, "
+    "so an out-of-repo directory can be previewed",
+    "the preview rebuilds",
+    "A build writes the site to `website/build/site/html/`",
     "A link to a page or asset that is not in the built site fails.",
     "The build checks that the file exists in the repository and that any "
     "`#anchor` matches a heading there.",
