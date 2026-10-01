@@ -411,3 +411,113 @@ def test_the_import_guard_refuses_each_kind_of_foreign_import() -> None:
         "scripts",
         "scripts",
     ]
+
+
+# Literal `[project.urls]` entries (eleven) before the docs-site spec (11.1).
+PRE_SPEC_PROJECT_URLS = {
+    "Source": "https://github.com/joshua-stauffer/fitdocs",
+    "Documentation": (
+        "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/index.md"
+    ),
+    "Changelog": "https://github.com/joshua-stauffer/fitdocs/blob/main/CHANGELOG.md",
+    "Issues": "https://github.com/joshua-stauffer/fitdocs/issues",
+    "Ownership Contract": (
+        "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/"
+        "ownership-contract.md"
+    ),
+    "Plugin Platform": (
+        "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/plugins.md"
+    ),
+    "Inbox": "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/inbox.md",
+    "Configuration": (
+        "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/configuration.md"
+    ),
+    "Install": "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/install.md",
+    "Compatibility": (
+        "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/compatibility.md"
+    ),
+    "Wiki Integration": (
+        "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/wiki-integration.md"
+    ),
+}
+
+
+def _project_urls() -> dict[str, str]:
+    urls: dict[str, str] = _pyproject()["project"]["urls"]
+    return urls
+
+
+def test_homepage_is_the_first_project_url() -> None:
+    """`Homepage` is the site address and the first `[project.urls]` key (11.1).
+
+    Dies on: moving the `Homepage` line below another key, or changing its
+    value, in `pyproject.toml`.
+    """
+    urls = _project_urls()
+    assert list(urls)[0] == "Homepage"
+    assert urls["Homepage"] == "https://fitdocs.ai"
+
+
+def test_every_pre_spec_project_url_keeps_its_literal_value() -> None:
+    """Each of the eleven pre-spec URL keys is present, unchanged (11.1).
+
+    A subset check: keys added later (such as `Connectors`) are allowed.
+
+    Dies on: deleting or editing the value of any pre-existing key in
+    `[project.urls]` in `pyproject.toml`.
+    """
+    urls = _project_urls()
+    assert len(PRE_SPEC_PROJECT_URLS) == 11
+    for key, value in PRE_SPEC_PROJECT_URLS.items():
+        assert urls.get(key) == value, key
+
+
+def _contributing_website_section() -> str:
+    text = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    headings = re.findall(r"^## (.+)$", text, re.MULTILINE)
+    assert headings[-1] == "Building the website", headings
+    return text.split("## Building the website", 1)[1]
+
+
+def test_contributing_ends_with_a_building_the_website_section() -> None:
+    """The last H2 of CONTRIBUTING.md is one fence-free paragraph (11.8).
+
+    Dies on: renaming or moving the `## Building the website` heading, adding
+    a fenced block to it, or splitting it into two paragraphs, in
+    `CONTRIBUTING.md`.
+    """
+    body = _contributing_website_section().strip()
+    assert body, "the section is empty"
+    assert "```" not in body
+    assert "\n\n" not in body, "more than one paragraph"
+    for command in (
+        "uv sync --group docs",
+        "uv run --group docs python -m scripts.build_site build",
+        "uv run --group docs python -m scripts.build_site serve",
+    ):
+        assert f"`{command}`" in body, command
+
+
+def test_contributing_website_section_links_the_website_doc() -> None:
+    """The section links `docs/website.md`, which exists (11.8).
+
+    Dies on: changing the link target to another path in `CONTRIBUTING.md`.
+    """
+    body = _contributing_website_section()
+    targets = re.findall(r"\]\(([^)]+)\)", body)
+    assert targets == ["docs/website.md"]
+    assert (ROOT / "docs" / "website.md").is_file()
+
+
+def test_changelog_unreleased_added_declares_the_homepage_url() -> None:
+    """`## [Unreleased]` / `### Added` carries a bullet naming the Homepage URL (11.8).
+
+    Dies on: deleting the Homepage bullet from the Unreleased `### Added`
+    section of `CHANGELOG.md`, or moving it under a released heading.
+    """
+    text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    unreleased = text.split("## [Unreleased]", 1)[1].split("\n## [", 1)[0]
+    added = unreleased.split("### Added", 1)[1].split("\n### ", 1)[0]
+    bullets = [b for b in re.split(r"\n(?=- )", added) if "Homepage" in b]
+    assert len(bullets) == 1, bullets
+    assert "https://fitdocs.ai" in bullets[0]

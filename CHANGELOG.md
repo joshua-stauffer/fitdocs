@@ -36,6 +36,9 @@ recorded as one.
   `Provenance.undocumented_messages` counts the messages a file carries that
   the installed FIT profile does not define (`None` when not counted). See
   [the plugin guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/plugins.md).
+- The package metadata gains a `Homepage` project URL, `https://fitdocs.ai`,
+  listed first among the project URLs; the other project URLs are unchanged
+  and no action is needed.
 
 ### Changed
 

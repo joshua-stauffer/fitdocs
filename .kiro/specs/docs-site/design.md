@@ -1590,7 +1590,7 @@ tracked, because the tracked-file guard refuses any non-regular file.
 - **`test_repo_wiring.py`**:
   - the runtime and optional dependencies equal their pre-spec values (8.1);
   - `docs == ["zensical==0.0.65"]` with an exact `==` (8.2);
-  - `Homepage` present and the other ten URLs unchanged (11.1);
+  - `Homepage` present and the other eleven URLs unchanged (11.1);
   - `git check-ignore website/build/x` succeeds and no tracked path lies under
     `website/build/` (6.7);
   - the build-logic import guard (8.4);

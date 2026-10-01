@@ -31,6 +31,7 @@ dependencies = [
 ]
 
 [project.urls]
+Homepage = "https://fitdocs.ai"
 Source = "https://github.com/joshua-stauffer/fitdocs"
 Documentation = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/index.md"
 Changelog = "https://github.com/joshua-stauffer/fitdocs/blob/main/CHANGELOG.md"

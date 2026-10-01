@@ -719,7 +719,7 @@
   - _Requirements: 9.5, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9_
   - _Depends: 2.6, 3.5_
 
-- [ ] 6. Documentation and project metadata
+- [x] 6. Documentation and project metadata
 
 - [x] 6.1 Document the site in `docs/website.md` and link it from the entry point
   - Write `docs/website.md` with these sections:
@@ -762,9 +762,9 @@
   - _Requirements: 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.9_
   - _Depends: 1.2, 3.5_
 
-- [ ] 6.2 Declare the homepage, add the CONTRIBUTING section and owe the changelog entry
+- [x] 6.2 Declare the homepage, add the CONTRIBUTING section and owe the changelog entry
   - Insert `Homepage = "https://fitdocs.ai"` as the **first**
-    `[project.urls]` key. The other ten keys and values stay byte-identical.
+    `[project.urls]` key. The other eleven keys and values stay byte-identical.
     Write `TOUCHING` first: `impl-connectors` appends `Connectors`.
   - Add a final `## Building the website` H2 to `CONTRIBUTING.md`: one
     paragraph, no fenced blocks, inline `uv sync --group docs` / `build` /
@@ -774,7 +774,7 @@
     `tests/test_changelog.py`'s format rules.
   - **Tests** (`tests/sitebuild/test_repo_wiring.py`):
     - `Homepage` is present and first;
-    - each of the ten pre-spec keys is present with its literal pre-spec
+    - each of the eleven pre-spec keys is present with its literal pre-spec
       value. This is a subset check, and later keys are allowed:
       `impl-connectors` appends `Connectors`, so an exact key-set equality
       would red on rebase;
@@ -963,3 +963,4 @@
   - llms equality is recomputed through outline, so outline's order and format are pinned in test_outline.py.
   - `plugins: [search]` is pinned in test_config.py; Zensical writes search.json regardless.
   - Linux runs so far were aarch64 only. The first ubuntu amd64 evidence is the docs.yml CI run.
+  - 6.2: `[project.urls]` held eleven keys before this spec (`Wiki Integration` came in 7faa55e, distribution 5.4), not ten; tasks.md and design.md corrected, the wiring test pins all eleven as a subset (a later `Connectors` key stays green).

@@ -134,3 +134,7 @@ described in full in
 [`.kiro/steering/change-protocol.md`](.kiro/steering/change-protocol.md).
 A human contributor follows the same gates an automated change does; there
 is no separate, lighter path for a change opened by hand.
+
+## Building the website
+
+The public site at <https://fitdocs.ai> is built from this repository with a separate tooling group that is never part of the installed package: run `uv sync --group docs` once, then `uv run --group docs python -m scripts.build_site build` to write the site under `website/build/` or `uv run --group docs python -m scripts.build_site serve` to preview it at `127.0.0.1:8000` while you edit; content directories, the build root and exit codes are described in [the website guide](docs/website.md).
