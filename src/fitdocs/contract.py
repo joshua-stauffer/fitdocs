@@ -306,7 +306,7 @@ version lacks the identity keys, so it is recognized only by exact content or
 recorded session UUID until regeneration brings it current.
 """
 
-CONTRACT_VERSION: Final[str] = "5"
+CONTRACT_VERSION: Final[str] = "6"
 """The published ownership contract's version identifier (Req 2.8).
 
 A *string*, and deliberately not comparable with :data:`DOC_VERSION`: it
@@ -332,6 +332,19 @@ keeps the session UUID of a phone-side copy when a file without one becomes its
 base. An ambiguous file is archived and held, recorded in
 ``.fitdocs/held.toml``, rather than added to a page. The published contract
 states the match rule with the measured source of each tolerance.
+
+Raised from ``5`` to ``6`` by connectors (Req 15.1, 15.2) because the stated
+guarantees about what else fitdocs reads and writes changed. ``fitdocs
+connect`` and ``fitdocs pull`` are two new commands: each connector's
+credentials -- never a FIT file, never workout data -- are stored one TOML
+file per instance in a per-user directory outside the data root, never read
+from or written to the data root; each connector's own ledger is fitdocs-
+owned tool state under ``.fitdocs/connectors/``; ``fitdocs pull`` writes its
+deliveries under the configured inbox and removes only its own archived,
+hash-identical deliveries, and with ``--sync`` then drains the inbox
+exactly as ``fitdocs sync`` does; ``fitdocs connect`` writes
+nothing under the data root at all. The settings file gains a
+``[connectors]`` table.
 """
 
 # --- document vocabulary -----------------------------------------------------

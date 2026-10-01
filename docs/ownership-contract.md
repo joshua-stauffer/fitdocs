@@ -1,18 +1,20 @@
 # fitdocs Ownership Contract
 
-**Contract version:** `5`
+**Contract version:** `6`
 
-**What changed at this version:** a workout page now states which of its
-source files it is rendered from. A page's `sources` list names its archived
-files in ascending rank with the **base** last, four new managed keys record
-the base, and a page keeps the session UUID of a phone-side copy when a file
-without one becomes its base. A page may be **renamed** when its base changes,
-with the chart assets its previous render linked removed. A file that cannot
-be placed on one page is archived and **held** rather than added to a page,
-and the hold is recorded in `.fitdocs/held.toml`. See
-[Source Files and Their Roles](#source-files-and-their-roles) below, and
-[the precedence setting](configuration.md#identity-source-precedence) that
-chooses the base.
+**What changed at this version:** two new commands, `fitdocs connect` and
+`fitdocs pull`, read and write beyond what regeneration already covered. A
+connector's credentials live one TOML file per instance in a per-user
+directory outside the data root, never read from or written to the data root;
+`connect` writes nothing under the data root. Each connector's own ledger is
+fitdocs-owned tool state under `.fitdocs/connectors/`; `pull` writes its
+deliveries under the configured inbox and removes only its own archived,
+hash-identical deliveries; with `--sync` it then drains the inbox exactly as
+`fitdocs sync` does. The settings file gains a
+`[connectors]` table. See
+[Shared and User-Owned Files](#shared-and-user-owned-files) and
+[Overwrite Semantics of Every Writing Operation](#overwrite-semantics-of-every-writing-operation)
+below.
 
 This document is the authoritative, published statement of what fitdocs owns
 in your data root, what you own, and the exact limits of every operation that
@@ -66,9 +68,12 @@ named in the next section.
 - `.fitdocs/` — tool-owned run state under the data root that is not a
   document, an asset, an archived source, or a cache entry (for example,
   the hold record `held.toml` of files held for a decision, described under
-  [Source Files and Their Roles](#source-files-and-their-roles) below, and the
-  inbox's quarantine record `quarantine.toml`). Dot-prefixed because nobody
-  browses it; it carries no ownership declaration of its own.
+  [Source Files and Their Roles](#source-files-and-their-roles) below, the
+  inbox's quarantine record `quarantine.toml`, and each configured
+  connector's own ledger, one TOML file per instance under
+  `.fitdocs/connectors/`, recording what `fitdocs pull` has already
+  delivered). Dot-prefixed because nobody browses it; it carries no
+  ownership declaration of its own.
 
 Two files at the top of the data root are explicitly **not** owned by
 fitdocs even though fitdocs reads and, in one case, writes into them —
@@ -180,7 +185,10 @@ location **widens nothing else**: it does not grant fitdocs any right
 outside that specific configured path, and it does not add to, or change
 the meaning of, the fixed owned-path set above. The full set of places a
 given run of fitdocs may write is therefore always *the owned paths above,
-union whatever your settings currently configure* — never more.
+union whatever your settings currently configure* — never more, apart from
+the files under [Shared and User-Owned Files](#shared-and-user-owned-files)
+that state their own write rule (`athlete.toml`, and outside the data root
+the connector credentials store).
 
 ## User-Owned and Tool-Filled Regions
 
@@ -544,8 +552,9 @@ remain held; it also rebuilds that record when it cannot be read.
 
 ## Shared and User-Owned Files
 
-Three locations at the top of the data root (by default), and one file
-outside it, are not part of the owned-path set above, and each has a distinct
+Three locations at the top of the data root (by default), and two outside
+it (the connector credentials store and the `.fitdocs/data-root` pointer
+file), are not part of the owned-path set above, and each has a distinct
 contract:
 
 - **`athlete.toml`** — your athlete profile (tested max heart rate, a
@@ -564,10 +573,25 @@ contract:
   entry's table — no different from any other key here — so a hand edit
   can change either one.
 - **`fitdocs.toml`** — your settings file (`[tiles]`, `[inbox]`, `[plugins]`,
-  `[load]`, `[history]`, `[plans]`, and `[identity]` today; more tables as more features
+  `[load]`, `[history]`, `[plans]`, `[identity]`, and `[connectors]` today;
+  more tables as more features
   land). This file is **read-only to fitdocs**: nothing in fitdocs ever
   creates, writes, or modifies it. An absent file, or an absent table within
   it, degrades to defaults.
+- **The connector credentials store** — one TOML file per configured
+  connector instance, holding that instance's stored credentials or tokens.
+  It lives outside the data root, in a per-user directory (`$FITDOCS_CREDENTIALS_DIR` when set, else
+  `$XDG_CONFIG_HOME/fitdocs/credentials` when that is set to an absolute
+  path, else `~/.config/fitdocs/credentials`); fitdocs refuses to read or write
+  credentials in a resolved directory that is, or lies inside, the data
+  root, stopping with a configuration error. It is **not owned by fitdocs**
+  in this contract's sense — fitdocs never deletes it or anything in it —
+  but fitdocs creates it, owner-only, when missing, and `fitdocs connect`
+  and a credential-renewing `fitdocs pull` are the only operations that
+  write to it, each one instance's file at a time, never touching another
+  instance's file or anything under the data root. See
+  [Connectors](connectors.md) for where each field comes from and how to
+  override it per connector.
 - **The plan-source directory** — your plan sources: the athlete's own
   content and its own revision history. This directory is **user-owned and
   read-only to fitdocs**: fitdocs never creates, writes, renames, or deletes
@@ -699,6 +723,32 @@ contract:
   by a standalone `fitdocs plan` run and one written at the end of `sync` or
   `regen` carry the same resolution, filled from whatever the logged workout
   pages record at the moment that chained run reaches it.
+- **`pull`** — fetches new activity files from each configured connector
+  instance and writes each one it accepts under `<inbox>/<name>/`, naming
+  the configured instance; it also writes and updates that instance's own
+  ledger under `.fitdocs/connectors/<name>.toml`, recording what it has
+  already delivered. On a later run, once a delivered file's identical
+  bytes have been archived (by a `sync`, or by an earlier `pull --sync`'s
+  drain), `pull` removes that one file from the inbox — never a file its
+  ledger does not record as that instance's delivery, and never before the
+  archive holds the matching bytes. (A file already sitting at a
+  delivery's exact name under `<inbox>/<name>/` with identical bytes is
+  adopted as that delivery rather than written twice.) The pull itself
+  never writes, alters, or deletes a `workouts/*.md` document, a
+  `fit-archive/*` archived source, the athlete profile, or the settings
+  file, and never writes to or deletes from a folder a connector reads. Run
+  as `fitdocs pull --sync`, it then drains the inbox and runs the
+  training-load and plan passes exactly as `fitdocs sync` with no source
+  argument does; those writes are `sync`'s, stated in the `sync` bullet
+  above.
+  A connector that renews an expired token updates only that instance's
+  credentials file (see
+  [Shared and User-Owned Files](#shared-and-user-owned-files) below).
+- **`connect`** — authenticates one connector instance interactively and
+  writes nothing at all under the data root; the only file it creates or
+  updates is that instance's own credentials file (and the credentials
+  directory, created when missing), outside the data root
+  (see [Shared and User-Owned Files](#shared-and-user-owned-files) below).
 
 **No fitdocs operation discards user-owned region content**, with one
 precise exception worth stating plainly rather than glossing over: if a

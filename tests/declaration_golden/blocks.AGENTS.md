@@ -12,5 +12,5 @@ The pages are re-derivable from the plan sources alone: deleting them costs only
 ## Ownership
 
 Owner: `fitdocs`.
-Ownership contract version: `5`.
+Ownership contract version: `6`.
 Published ownership contract: https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md

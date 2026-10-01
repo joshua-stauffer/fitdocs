@@ -195,6 +195,26 @@ guarantees that document states; that version bump and its own document are
 activity-identity's to make, not restated by this amendment. Nothing existing
 is renumbered.
 
+**Landed by `connectors`.** `connectors` adds two commands, `fitdocs connect`
+and `fitdocs pull`, that read and write outside what regeneration already
+covers: each connector's credentials are stored one TOML file per instance in
+a per-user directory outside the data root, never read from or written to it;
+each connector's own ledger is fitdocs-owned tool state under
+`.fitdocs/connectors/`, inside the already-owned `.fitdocs/` directory; `pull`
+writes its deliveries under the configured inbox and removes only its own
+archived, hash-identical deliveries; `connect` writes nothing under the data
+root at all. That spec owns the protocol, the transport, the credential
+store's resolution and the ledger's own format; this spec owns only the
+published-ownership-contract guarantee it extends -- naming where credentials
+live, that each ledger is fitdocs-owned tool state, and what `pull` and
+`connect` write and remove, recorded as Requirement 2 criterion 2.15. The
+published contract's version identifier changes on account of it
+(`CONTRACT_VERSION` `"5"` to `"6"`), because a new per-user credentials
+location, a new tool-owned ledger file and two new writing operations change
+guarantees that document states; that version bump and its own document are
+connectors' to make, not restated by this amendment. Nothing existing is
+renumbered.
+
 ## Requirements
 
 ### Requirement 1: Consistent Document Interpretation Across Operations
@@ -231,6 +251,7 @@ that I can rely on the boundary instead of inferring it from behavior.
 12. _(added by Amendment 3)_ The ownership contract shall state that the plan-source directory is user-owned and read-only to fitdocs, located by a settings key and defaulting to a named directory, that it must not lie inside an owned path, and that fitdocs never creates, writes or deletes anything there.
 13. _(added by Amendment 3)_ The ownership contract shall name the rendered blocks location as fitdocs-owned, and shall state that the documents it holds are two further document types, distinct from the workout document and the history page, whose type values and formats are published by the training-blocks package rather than by this contract, and shall state which region of the block page is user-owned and that the planned page has none.
 14. _(added by Amendment 4)_ The ownership contract shall state that a generated workout document lists every archived source file of the document in ascending rank with the base last, that the base is the file the document is rendered from and every other listed file is an extra, and that the document records the base's kind, elapsed time, distance and device digest in managed keys; that the document keeps the session UUID of a phone-side copy when a file without one becomes its base; that a document may be renamed when its base changes, with the chart assets its previous render linked removed and links to the previous filename not updated; and that a file that cannot be placed on one document is archived and held, recorded in `.fitdocs/held.toml`, rather than added to a document until regeneration can place it on one.
+15. _(added by Amendment 4)_ The ownership contract shall state that a connector's credentials are stored outside the data root, one file per configured instance, never read from or written to the data root; that each connector's own ledger is fitdocs-owned tool state inside the already-owned `.fitdocs/` directory; and what `fitdocs pull` writes and removes, and that `fitdocs connect` writes nothing under the data root.
 
 ### Requirement 3: In-Tree Ownership Declaration
 **Objective:** As an LLM agent maintaining a markdown wiki, I want the ownership

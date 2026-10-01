@@ -1,7 +1,7 @@
 {
   "feature_name": "wiki-contract",
   "created_at": "2026-07-21T07:56:54Z",
-  "updated_at": "2026-09-30T00:00:00Z",
+  "updated_at": "2026-10-01T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -55,6 +55,12 @@
       "requirement": "2.14, 6.9 (new) -- implemented by the activity-identity spec, not by this one",
       "reason": "activity-identity spec task 6.3, its part of the roadmap's Phase 8 Existing Spec Update for wiki-contract (Amendment 4, shared with connectors and channel-merge; activity-identity created the section). activity-identity gives a workout page source roles (the base, the last entry of sources, and extras), four managed keys recording the base (source_kind, source_elapsed_s, source_distance_m, source_device), retention of a phone-side copy's session UUID, renames when the base changes, and held files recorded in .fitdocs/held.toml. This spec's published-ownership-contract guarantee is extended to state the roles, the base-recording keys, the UUID retention, renames and held files (2.14); its frontmatter-key guarantee to state that the managed key set includes the four keys (6.9). The roles, kinds, match rule, precedence setting, rename and hold remain activity-identity's own.",
       "also": "requirements.md gains Amendment 4 (2026-09-30; connectors and channel-merge append their own paragraphs to it), Requirement 2 criterion 2.14 and Requirement 6 criterion 6.9; design.md's DocumentContract component gains a matching amendment note. CONTRACT_VERSION advances \"4\" to \"5\" in code by activity-identity task 6.2, not restated here. Nothing renumbered."
+    },
+    {
+      "date": "2026-10-01",
+      "requirement": "2.15 (new) -- implemented by the connectors spec, not by this one",
+      "reason": "connectors spec task 8.1, its part of the roadmap's Phase 8 Existing Spec Update for wiki-contract (Amendment 4, shared with activity-identity and channel-merge; activity-identity created the section). connectors adds two commands, fitdocs connect and fitdocs pull, that read and write beyond what regeneration already covers: a connector's credentials live one TOML file per instance in a per-user directory outside the data root, never read from or written to it; each connector's own ledger is fitdocs-owned tool state under .fitdocs/connectors/, inside the already-owned .fitdocs/ directory; pull writes its deliveries under the configured inbox and removes only its own archived, hash-identical deliveries; connect writes nothing under the data root. This spec's published-ownership-contract guarantee is extended to state where credentials live, that each ledger is fitdocs-owned tool state, and what pull and connect write and remove (2.15). The connector protocol, the transport and the credential store's resolution rules remain connectors' own.",
+      "also": "requirements.md gains a connectors paragraph appended to Amendment 4 (2026-09-30) and Requirement 2 criterion 2.15; design.md's DocumentContract component gains a matching amendment note. CONTRACT_VERSION advances \"5\" to \"6\" in code by connectors task 8.1, not restated here. Nothing renumbered."
     }
   ]
 }
