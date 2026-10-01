@@ -42,6 +42,7 @@ Configuration = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/confi
 Install = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/install.md"
 Compatibility = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/compatibility.md"
 "Wiki Integration" = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/wiki-integration.md"
+Connectors = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md"
 
 [project.scripts]
 fitdocs = "fitdocs.cli:app"
