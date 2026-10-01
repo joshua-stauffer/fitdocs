@@ -382,7 +382,7 @@
     `uv run mypy` green
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8_
 
-- [ ] 4. Delivery, the folder connector, and the two engines
+- [x] 4. Delivery, the folder connector, and the two engines
 
 - [x] 4.1 Deliver bytes into the inbox atomically and sweep archived deliveries
   - The FIT-header check; the delivery-name rule (hint or remote id, last
@@ -732,7 +732,7 @@
   - _Requirements: 5.9, 13.5, 15.3_
   - _Boundary: ConfinementRegistration_
 
-- [ ] 7. Write the connectors page, link it from the documentation index and the project URLs, and pin it service-neutral
+- [x] 7. Write the connectors page, link it from the documentation index and the project URLs, and pin it service-neutral
   - `docs/connectors.md` with every subject design.md lists (the instance
     table and its keys, the folder connector, connecting, the credentials
     directory order, modes, variables and the login-style limitation, the
