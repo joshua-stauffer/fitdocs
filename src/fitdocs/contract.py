@@ -306,7 +306,7 @@ version lacks the identity keys, so it is recognized only by exact content or
 recorded session UUID until regeneration brings it current.
 """
 
-CONTRACT_VERSION: Final[str] = "6"
+CONTRACT_VERSION: Final[str] = "7"
 """The published ownership contract's version identifier (Req 2.8).
 
 A *string*, and deliberately not comparable with :data:`DOC_VERSION`: it
@@ -345,6 +345,19 @@ hash-identical deliveries, and with ``--sync`` then drains the inbox
 exactly as ``fitdocs sync`` does; ``fitdocs connect`` writes
 nothing under the data root at all. The settings file gains a
 ``[connectors]`` table.
+
+Raised from ``6`` to ``7`` by channel-merge (Req 8.4) because the stated
+guarantees about what a page takes from its files changed. An extra now
+contributes channels to the page: a channel the base records at even one
+sample stays the base's in full, and a channel it records at none is taken in
+full, as placed on the base's timeline, from the highest-ranked extra that
+records it; position is one unit; identity, laps and session values stay the
+base's. A page with at least one extra gains a Channel Sources section naming
+the file each channel came from and how each extra was aligned; no frontmatter
+key records it. The training-load pass and the benchmark-derivation pass read
+the same composed activity, so ``fitdocs regen`` applies the composition to
+existing pages and ``fitdocs load --recompute`` rescores a page whose
+composition changed after its load was computed.
 """
 
 # --- document vocabulary -----------------------------------------------------

@@ -85,6 +85,16 @@ recorded as one.
   tool-state directory `.fitdocs/`, what `fitdocs pull` writes and removes,
   and that `fitdocs connect` writes nothing under the data root — no
   action.
+- Generated document contract: a page that lists several files of one
+  workout takes the channels its base file lacks from the others (a channel
+  the base records at all stays the base's) and, in a new Channel Sources
+  section, names the file each channel came from; training load and derived
+  benchmarks are computed from the same combined activity, and the ownership
+  contract's version advances. Actions: run `fitdocs regen` to apply this to
+  existing pages, and `fitdocs load --recompute` to rescore a page whose
+  files changed after its load was computed (a computed load is otherwise
+  kept); see
+  [the ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md).
 
 ## [0.1.0] - 2026-09-19
 
