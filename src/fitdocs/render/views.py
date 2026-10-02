@@ -20,6 +20,8 @@ Three rules govern every view:
 - **Honest omission.** A ``## Splits`` / ``## Recorded Sets`` / ``## Telemetry``
   / ``## Running Dynamics`` section whose body would be empty is omitted
   entirely -- heading and all (Req 9.6, 13.2; running-dynamics 7.6).
+  ``## Channel Sources`` is the last section and exists only on a composed page
+  (channel-merge 4.6, 4.7).
   ``## Summary``, ``## Training Load``, ``## Device & Data Quality``, and the
   ``notes`` region are always present.
 - **Portable, plugin-free markdown.** The only PKM affordances are the YAML
@@ -53,6 +55,7 @@ from fitdocs.model import Modality
 from fitdocs.render import Asset, DocContext, RenderedDoc
 from fitdocs.render.dynamics import dynamics_section
 from fitdocs.render.frontmatter import build_frontmatter
+from fitdocs.render.provenance import channel_sources_section
 from fitdocs.render.sections import (
     devices_section,
     hero_chart,
@@ -98,6 +101,17 @@ def _region_section(heading: str, region: str) -> str:
     end marker keeps its own line.
     """
     return f"## {heading}\n\n{region.rstrip(chr(10))}"
+
+
+def _append_channel_sources(blocks: list[str], ctx: DocContext) -> None:
+    """Append ``## Channel Sources`` as the last section of a composed page.
+
+    A context without provenance, or whose composition has no extra, appends
+    nothing (channel-merge Req 4.6, 4.7).
+    """
+    body = channel_sources_section(ctx)
+    if body is not None:
+        blocks.append(_section("Channel Sources", body))
 
 
 def _telemetry_body(ctx: DocContext) -> tuple[str, tuple[Asset, ...]] | None:
@@ -151,7 +165,8 @@ def render_run_ride(ctx: DocContext) -> RenderedDoc:
 
     Order: H1 → ``notes`` region → ``## Summary`` → ``## Map`` → ``## Telemetry``
     → ``## Running Dynamics`` → ``## Splits`` → ``## Training Load`` →
-    ``## Device & Data Quality``. The Map section sits immediately after Summary
+    ``## Device & Data Quality`` → ``## Channel Sources`` (composed pages only).
+    The Map section sits immediately after Summary
     and before Telemetry, present only when the context carries prepared map
     inputs; its asset leads the assets tuple. ``## Running Dynamics`` is emitted
     for run modality only (never for a ride) and its asset follows the telemetry
@@ -190,6 +205,7 @@ def render_run_ride(ctx: DocContext) -> RenderedDoc:
 
     blocks.append(_region_section("Training Load", load_section()))
     blocks.append(_section("Device & Data Quality", devices_section(ctx)))
+    _append_channel_sources(blocks, ctx)
     return _assemble(ctx, blocks, assets)
 
 
@@ -198,7 +214,8 @@ def render_strength(ctx: DocContext) -> RenderedDoc:
 
     Order: H1 → ``notes`` region → ``## Summary`` → ``## Telemetry`` (HR chart
     when plottable) → ``## Workout`` (workout region) → ``## Recorded Sets``
-    (only when sets exist) → ``## Training Load`` → ``## Device & Data Quality``.
+    (only when sets exist) → ``## Training Load`` → ``## Device & Data Quality``
+    → ``## Channel Sources`` (composed pages only).
     """
     blocks: list[str] = [
         f"# {_title(ctx)}",
@@ -221,6 +238,7 @@ def render_strength(ctx: DocContext) -> RenderedDoc:
 
     blocks.append(_region_section("Training Load", load_section()))
     blocks.append(_section("Device & Data Quality", devices_section(ctx)))
+    _append_channel_sources(blocks, ctx)
     return _assemble(ctx, blocks, assets)
 
 
@@ -228,7 +246,8 @@ def render_generic(ctx: DocContext) -> RenderedDoc:
     """Assemble the generic fallback document (Req 12.1, route-maps 1.1, 1.2).
 
     Order: H1 → ``notes`` region → ``## Summary`` → ``## Map`` → ``## Telemetry``
-    (when plottable) → ``## Training Load`` → ``## Device & Data Quality``. The
+    (when plottable) → ``## Training Load`` → ``## Device & Data Quality`` →
+    ``## Channel Sources`` (composed pages only). The
     Map section sits immediately after Summary and before Telemetry, present only
     when the context carries prepared map inputs (its asset leads the assets
     tuple); it uses the neutral tint for these non-run/ride activities. No splits,
@@ -255,4 +274,5 @@ def render_generic(ctx: DocContext) -> RenderedDoc:
 
     blocks.append(_region_section("Training Load", load_section()))
     blocks.append(_section("Device & Data Quality", devices_section(ctx)))
+    _append_channel_sources(blocks, ctx)
     return _assemble(ctx, blocks, assets)

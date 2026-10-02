@@ -5,7 +5,7 @@ design.md § ChannelSourcesSection with hand-built compositions: the exact body
 text, the label table held equal to the two tables the page already uses, and
 the reverse-direction import guard (design.md § Guards).
 
-Placing the section in a view is task 3.3 and is not tested here.
+The views section at the end places the section in every view (task 3.3).
 """
 
 from __future__ import annotations
@@ -29,10 +29,12 @@ from fitdocs.compose.types import (
     StretchLag,
 )
 from fitdocs.identity.kinds import SourceKind
-from fitdocs.render import DocContext
+from fitdocs.model import Modality
+from fitdocs.render import DocContext, render_document
 from fitdocs.render.dynamics import DYNAMICS_DISPLAY
 from fitdocs.render.provenance import CHANNEL_LABELS, channel_sources_section
 from fitdocs.render.sections import _COVERAGE_CHANNELS
+from tests.fixtures import builder
 
 _SENTENCE: Final[str] = (
     "Each channel below comes from one file: the base when it records the "
@@ -512,3 +514,93 @@ def test_provenance_never_imports_the_named_modules(forbidden: str) -> None:
         t == forbidden or t.startswith(forbidden + ".")
         for t in _provenance_targets(every_name=True)
     )
+
+
+# --- the section in every view (task 3.3; Req 4.6, 4.7, 8.2) -----------------
+
+_VIEW_FIXTURES: Final[dict[str, tuple[str, Modality]]] = {
+    "run": ("run_fit_bytes", Modality.RUN),
+    "ride": ("ride_fit_bytes", Modality.BIKE),
+    "strength": ("strength_fit_bytes", Modality.STRENGTH),
+    "generic": ("minimal_fit_bytes", Modality.OTHER),
+}
+_VIEW_HEADING: Final[str] = "## Channel Sources"
+_DEVICES_HEADING: Final[str] = "## Device & Data Quality"
+
+
+def _view_fit_bytes(view: str, request: pytest.FixtureRequest) -> bytes:
+    name, _ = _VIEW_FIXTURES[view]
+    if name == "minimal_fit_bytes":
+        return builder.minimal_fit_bytes()
+    value = request.getfixturevalue(name)
+    assert isinstance(value, bytes)
+    return value
+
+
+def _composed_provenance() -> ChannelProvenance:
+    return ChannelProvenance(
+        base=_contrib("aaaa", SourceKind.PHONE_COPY, ("heart_rate_bpm",)),
+        extras=(
+            _contrib(
+                "bbbb",
+                SourceKind.ORIGINAL,
+                ("power_w",),
+                manufacturer="stryd",
+                alignment=ExtraAlignment(0, _stretches("distance_m")),
+            ),
+        ),
+    )
+
+
+def _h2(markdown: str) -> list[str]:
+    return [line for line in markdown.splitlines() if line.startswith("## ")]
+
+
+@pytest.mark.parametrize("view", list(_VIEW_FIXTURES))
+def test_a_composed_context_ends_every_view_with_the_section(
+    view: str, request: pytest.FixtureRequest
+) -> None:
+    """Last ``##`` section, directly after Device & Data Quality, in all views."""
+    fit = _view_fit_bytes(view, request)
+    ctx = _ctx(fit, _composed_provenance())
+    assert ctx.activity.modality is _VIEW_FIXTURES[view][1]  # the view under test
+    headings = _h2(render_document(ctx).markdown)
+    assert headings.count(_VIEW_HEADING) == 1
+    assert headings[-1] == _VIEW_HEADING
+    assert headings[-2] == _DEVICES_HEADING
+
+
+@pytest.mark.parametrize("view", list(_VIEW_FIXTURES))
+def test_the_section_is_the_provenance_body_under_its_heading(
+    view: str, request: pytest.FixtureRequest
+) -> None:
+    """The page equals the same page without provenance plus the heading and the
+    body ``channel_sources_section`` returns, appended at the end."""
+    fit = _view_fit_bytes(view, request)
+    ctx = _ctx(fit, _composed_provenance())
+    body = channel_sources_section(ctx)
+    assert body is not None
+    without = render_document(_ctx(fit, None)).markdown
+    assert without.endswith("\n")
+    assert render_document(ctx).markdown == (f"{without}\n{_VIEW_HEADING}\n\n{body}\n")
+
+
+@pytest.mark.parametrize("view", list(_VIEW_FIXTURES))
+def test_without_provenance_or_extras_no_view_renders_the_section(
+    view: str, request: pytest.FixtureRequest
+) -> None:
+    """A differential render: a context holding provenance with no extra is
+    byte-identical to one holding none, in markdown and in assets."""
+    fit = _view_fit_bytes(view, request)
+    bare = render_document(_ctx(fit, None))
+    composed = render_document(_ctx(fit, _composed_provenance()))
+    # the differential is non-trivial: provenance with an extra does change the page
+    assert composed.markdown != bare.markdown
+    base_only = ChannelProvenance(
+        base=_contrib("aaaa", SourceKind.PHONE_COPY, ("heart_rate_bpm",)), extras=()
+    )
+    no_extras = render_document(_ctx(fit, base_only))
+    assert no_extras.markdown == bare.markdown
+    assert no_extras.assets == bare.assets
+    assert _VIEW_HEADING not in _h2(bare.markdown)
+    assert "Channel Sources" not in bare.markdown
