@@ -516,7 +516,7 @@
   - _Requirements: 3.4, 4.6, 4.7, 5.6, 5.8, 6.1, 6.2, 6.3, 8.1, 8.5, 8.6_
   - _Depends: 2.3, 3.4_
 
-- [ ] 4.2 (P) Document the connector for the athlete and record it in the changelog
+- [x] 4.2 (P) Document the connector for the athlete and record it in the changelog
   - The `## intervals.icu` section of `docs/connectors.md` with the four
     subsections and every subject design.md "ConnectorsDocSection" lists;
     the heading pin in `tests/connectors/test_docs.py` gains the five headings
