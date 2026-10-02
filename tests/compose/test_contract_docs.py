@@ -130,7 +130,7 @@ def test_the_subsection_states_each_composition_guarantee() -> None:
         "never takes one channel from two files",
         "is taken from the highest-ranked extra that records it",
         "otherwise the highest-ranked extra that records both latitude and longitude",
-        "The page's identity, its laps, its devices, its decode record and every "
+        "The page's identity, its laps, its devices table, its decode record and every "
         "session value (start, elapsed and timer time, distance, and the other "
         "session summaries) come from the base alone",
         "An extra's laps and session values never reach the page",

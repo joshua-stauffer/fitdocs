@@ -573,8 +573,8 @@ it.
   base's when it records either, otherwise the highest-ranked extra that
   records both latitude and longitude once placed on the base's timeline. An
   extra that records only one of the two supplies neither.
-- **What stays the base's.** The page's identity, its laps, its devices, its
-  decode record and every session value (start, elapsed and timer time,
+- **What stays the base's.** The page's identity, its laps, its devices table,
+  its decode record and every session value (start, elapsed and timer time,
   distance, and the other session summaries) come from the base alone. An
   extra's laps and session values never reach the page. Averages, maxima and
   the other values the page computes from a channel follow the channels the

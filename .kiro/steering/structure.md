@@ -73,7 +73,8 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   engine. `compose` (one activity from a base and its extras) imports
   `model` and `identity`, and in `compose.archive` alone `contract`,
   `layout` and `ingest`; `sync`, the load and benchmark passes and
-  `render.provenance` (its types and alignment constants only) import it.
+  `render` (its types only: `DocContext`'s provenance field, and
+  `render.provenance` with the alignment constants) import it.
 - `LoadCalculator` implementations declare their required inputs so the CLI
   can prompt for missing data generically — no calculator-specific prompting
   code in the CLI.
