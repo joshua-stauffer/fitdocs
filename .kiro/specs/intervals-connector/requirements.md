@@ -80,18 +80,19 @@ real account before the connector is used on a real data root.
     commands; this spec amends none of their behaviour.
   - `activity-identity` decides which page a delivered file belongs to and
     which file is a page's base, from the file's own content. An intervals.icu
-    download is Garmin's partner-API copy of a ride; this spec relies on
-    identity ranking the device's own original above it (its within-kind rank
-    puts the file with more undocumented messages first) and adds no marker to
-    the file. Until identity has merged, pulling into a data root that already
+    download is Garmin's partner-API copy of a ride. This spec adds no marker
+    to the file; the live check of 2026-10-02 (research.md, TBC-8) found the
+    copy not byte-identical to the device's own original but carrying the same
+    messages, so identity's within-kind rank ties the two and a page reads the
+    same whichever is its base. Until identity has merged, pulling into a data root that already
     holds other copies of the same rides creates duplicate pages.
   - `channel-merge` decides which extras donate channels to a page and
     publishes each contributing file's own devices; the combined-source
     attribution wording is exercised on a composed page once whichever of the
     two specs lands second passes the donating files' devices to it.
-  - `activity-qa-flags` reads sample channels and load outcomes only, so the
-    messages Garmin strips from a partner-API copy (undocumented messages,
-    workout steps) never reach a quality flag.
+  - `activity-qa-flags` reads sample channels and load outcomes only, so any
+    message a partner-API copy might lack never reaches a quality flag (the
+    2026-10-02 live check found none missing: TBC-8).
   - `route-maps` is unaffected: position is a documented record field and
     survives in the partner-API copy.
 

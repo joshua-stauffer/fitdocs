@@ -82,7 +82,31 @@
       "requirement": "5.7-5.12 and 6.11 added (appended; no criterion renumbered or reworded) -- Amendment 2, recorded by the intervals-connector spec",
       "reason": "intervals-connector Requirement 8: pages built from Garmin device data must attribute Garmin and the device model beside the data (intervals.icu API terms section 1.1; Garmin API Brand Guidelines), without implying Garmin vouches for data from other devices, and the devices table shows the product name fit-ingest resolves.",
       "also": "The attribution line is generated content outside every preserved region, recorded in no frontmatter key, decided from the files' own content alone; the document-format version advance is owned by the implementing spec and is not a criterion.",
-      "cross_spec": "fit-ingest Amendment 5 (4.8-4.12) publishes the resolved Garmin product names this reads and lands with it. intervals-connector owns the implementation, the tests (listed here when that implementation lands) and the document-format version advance."
+      "cross_spec": "fit-ingest Amendment 5 (4.8-4.12) publishes the resolved Garmin product names this reads and lands with it. intervals-connector owns the implementation, the tests (named per criterion in `tests`) and the document-format version advance.",
+      "tests": {
+        "5.7": [
+          "tests/render/test_views.py::test_garmin_line_is_the_first_line_after_the_title_in_every_view"
+        ],
+        "5.8": [
+          "tests/render/test_attribution.py::test_absent_model_gives_garmin_alone"
+        ],
+        "5.9": [
+          "tests/render/test_views.py::test_stryd_recorded_activity_renders_no_data_source_line",
+          "tests/render/test_views.py::test_device_less_goldens_carry_no_data_source_line"
+        ],
+        "5.10": [
+          "tests/render/test_attribution.py::test_garmin_base_with_stryd_donor_adds_other_devices"
+        ],
+        "5.11": [
+          "tests/render/test_attribution.py::test_same_inputs_give_the_same_line"
+        ],
+        "5.12": [
+          "tests/render/test_views.py::test_garmin_line_is_the_first_line_after_the_title_in_every_view"
+        ],
+        "6.11": [
+          "tests/render/test_views.py::test_resolved_product_names_reach_the_attribution_and_devices_table"
+        ]
+      }
     }
   ]
 }

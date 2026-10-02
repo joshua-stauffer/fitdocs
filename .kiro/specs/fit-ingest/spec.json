@@ -158,7 +158,24 @@
       "requirement": "4 (criteria 4.8-4.12 added) -- Amendment 5, recorded by the intervals-connector spec",
       "reason": "intervals-connector Requirement 7: a Garmin device_info message usually records a product code and no product name text, so the devices table and the Garmin attribution line (workout-docs Amendment 2) cannot name the device model. The library now resolves a name from the FIT SDK's own profile when the file records no text.",
       "also": "Additive: only a device's product name changes, and only where the file recorded no product text and the code is one the profile names as a Garmin product (it was None). A code the profile does not name stays None; recorded text still wins; the name is resolved from the file's own content alone; fitdocs keeps no product-name table. No existing criterion is renumbered or reworded.",
-      "cross_spec": "Implemented by the intervals-connector spec (its Requirement 7); its tests are listed here when that implementation lands. workout-docs Amendment 2 (the attribution line and the resolved names in the devices table) consumes the names this publishes and lands with it."
+      "cross_spec": "Implemented by the intervals-connector spec (its Requirement 7); its tests are named per criterion in `tests`. workout-docs Amendment 2 (the attribution line and the resolved names in the devices table) consumes the names this publishes and lands with it.",
+      "tests": {
+        "4.8": [
+          "tests/ingest/test_parse.py::test_garmin_devices_ride_names_each_device_from_the_profile"
+        ],
+        "4.9": [
+          "tests/ingest/test_summary.py::test_devices_numeric_garmin_product_is_not_a_name"
+        ],
+        "4.10": [
+          "tests/ingest/test_summary.py::test_devices_recorded_name_wins_over_a_textual_garmin_product"
+        ],
+        "4.11": [
+          "tests/connectors/test_intervals_pull.py::test_cli_pull_sync_writes_an_attributed_page_equal_to_a_hand_drop"
+        ],
+        "4.12": [
+          "tests/ingest/test_parse.py::test_garmin_devices_names_equal_the_profile_entries"
+        ]
+      }
     }
   ]
 }

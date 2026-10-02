@@ -1697,17 +1697,17 @@ Rejected:
   Landed by `activity-identity`, `connectors` and `channel-merge`, the way
   Amendment 3 was landed by `training-blocks`. Dependencies: none
   (activity-identity part landed) (connectors part landed)
-- [ ] fit-ingest — `file_id` identity fields (landed by
+- [x] fit-ingest — `file_id` identity fields (landed by
   `activity-identity`); record-level developer fields and running dynamics
   (landed by `running-dynamics`) (running-dynamics part landed); Garmin product names (landed by
   `intervals-connector`). Dependencies: none
-  (activity-identity part landed)
+  (activity-identity part landed) (intervals-connector part landed)
 - [ ] workout-docs — a running-dynamics section on run pages (landed by
   `running-dynamics`) (running-dynamics part landed); Garmin attribution (landed by
   `intervals-connector`); a note that a page's provenance is its base
   (landed by `activity-identity`); channel provenance on composed pages
   (landed by `channel-merge`). Dependencies: none
-  (activity-identity part landed)
+  (activity-identity part landed) (intervals-connector part landed)
 - [x] distribution — the packaged `fitdocs-workouts` skill's routine learns
   the pull, and its pins move (`tests/test_agent_skill.py:614, 681`); Req
   8.1/8.2 (the skill also pulls) and Req 10.4 (network beyond tiles is the

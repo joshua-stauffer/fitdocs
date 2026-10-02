@@ -54,7 +54,7 @@ every Garmin-recorded file, however it arrived. The document-format version
 advance that brings existing pages current is owned by the implementing spec
 `.kiro/specs/intervals-connector/`, and is not a criterion here. The tests
 pinning each new criterion are listed in this spec's `spec.json` `amendments`
-array once that spec's implementation lands.
+array.
 
 ## Introduction
 

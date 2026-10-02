@@ -288,8 +288,7 @@ devices are named from its own content alone (4.11), so the same device is
 named alike however its file arrived.
 
 The implementing spec is `.kiro/specs/intervals-connector/`; the tests pinning
-each new criterion are listed in this spec's `spec.json` `amendments` array
-once that spec's implementation lands.
+each new criterion are listed in this spec's `spec.json` `amendments` array.
 
 ## Introduction
 
