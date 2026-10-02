@@ -80,6 +80,20 @@ connector is offline beyond the one scenario the confinement guard stages.
   that assertion -- re-run it before relying on this point. Items 1-3 were reported by
   the task 6.1 and task 7 reviewer subagents; the guard code was re-read here.
 
+- Added 2026-10-02 by /kiro-impl intervals-connector (9d08482), confirming item 3
+  with a doc-section case. Writing the bare host `developer.garmin.com` (no
+  scheme) into a `docs/connectors.md` section left
+  `tests/connectors/test_docs.py::test_real_tree_has_no_unadmitted_hosts`
+  green. The 4.2 reviewer's mutation was re-run in round 2 with the same
+  result (reviewer subagent; not re-run by the controller). The scan reads URLs
+  only. intervals-connector closed this gap for its own section with
+  `address_violations` in `tests/connectors/test_intervals_docs.py`, a usable
+  model for the page-wide scan. That rule still admits four adversarial
+  spellings, each of which passed the full suite (reviewer-reported):
+  `/../` traversal under an own URL prefix, a host glued after `...`, an IDN
+  host, and a host glued to a word with `_`. The page-wide scan also admits
+  the `/../` form.
+
 ## How to pick it up
 1. Read `test_boundary.py` (layers and their positive/negative controls) and
    `test_docs.py`'s NeutralScan section (`:601-700`).

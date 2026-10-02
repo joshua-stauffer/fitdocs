@@ -1817,7 +1817,7 @@ credential store are designed for them now and built later.
   base wins every shared channel. The page states which file each channel
   came from, and summaries are recomputed only where a donated channel
   feeds them. Dependencies: activity-identity, running-dynamics
-- [ ] intervals-connector — **spec written 2026-09-29** (Phase 8 batch, `tasks-generated`, all approvals set; 10 requirements / 57 criteria, 5 majors / 13 executable tasks; cross-spec reviewed, three rounds, READY; tasks 1.1 (live check) and 5.2 (completion gate) are maintainer-only, `_Blocked:_`). the intervals.icu activity pull. Auth is a
+- [x] intervals-connector — **implemented 2026-10-02, merged at 9d08482** (13/13 tasks; live check 1.1 run 2026-10-02 at the maintainer's request with the maintainer's key, Req 9.5 amended: TBC-5/6/8 contradicted, 422 now declined as no-file, the rest design amendments; validate-impl NO-GO -> remediated (docs model route, redaction before the byte bound) -> GO verified; DOC_VERSION 8, fit-ingest Amendment 5, workout-docs Amendment 2; donor wiring of the attribution left to channel-merge, ruling R2); **spec written 2026-09-29** (Phase 8 batch, all approvals set; 10 requirements / 57 criteria, 5 majors / 13 executable tasks; cross-spec reviewed, three rounds, READY). the intervals.icu activity pull. Auth is a
   personal API key. Listing is by date range; Strava-sourced stubs are
   skipped, and a source filter is configurable. The original file is
   downloaded (gzip) and checked for a FIT header. Garmin product names are
