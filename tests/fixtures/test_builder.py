@@ -830,6 +830,9 @@ _UNMOVED_DIGESTS: dict[str, str] = {
     "bad_message_fit_bytes": (
         "185484c1db1c7a8e6c075494e324794df1f879c34ca0fc028486853bf7a1eb11"
     ),
+    "garmin_devices_ride_fit_bytes": (
+        "23d3e6e8dc8c294efc31f00567e5ba49c59261c853069caa8b0ec462cb79a89a"
+    ),
     "hike_fit_bytes": (
         "2f1f30099a9d3676075f44149829a0c3377ad13b727a28712a886743c0daed25"
     ),

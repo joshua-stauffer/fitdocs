@@ -312,11 +312,16 @@ def _build_device(device: dict[str, object]) -> DeviceInfo:
 
 
 def _product_name(device: dict[str, object]) -> str | None:
-    """Resolve a device product name, or ``None`` when only a numeric code exists.
+    """Resolve a device product name, or ``None`` when no name text exists.
 
-    ``product_name`` wins when recorded as a string; otherwise a string
-    ``product`` field is used. A numeric ``product`` code is not a name and is
-    never turned into one -- the field stays ``None`` (no fabrication, Req 4.5).
+    Order: a recorded ``product_name`` string; then a string ``product``; then
+    a string ``garmin_product`` -- the name the FIT SDK's profile gives a
+    Garmin product code when it decodes the message (Req 7.1, 7.5). The first
+    string found wins, so recorded text beats a resolved name (Req 7.3). A
+    numeric value -- ``product``, or a ``garmin_product`` the profile does not
+    name -- is a code, not a name, and is never turned into one (Req 7.2, 4.5).
+    fitdocs keeps no product table of its own; the decision uses only the
+    decoded message, so every route to the file resolves alike (Req 7.4).
     """
     name = device.get("product_name")
     if isinstance(name, str):
@@ -324,6 +329,9 @@ def _product_name(device: dict[str, object]) -> str | None:
     product = device.get("product")
     if isinstance(product, str):
         return product
+    garmin_product = device.get("garmin_product")
+    if isinstance(garmin_product, str):
+        return garmin_product
     return None
 
 

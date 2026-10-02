@@ -1451,6 +1451,39 @@ def ride_fit_bytes() -> bytes:
     return encode(ride_mesgs())
 
 
+def _device_info_by_code(
+    serial: int, device_index: int, manufacturer: str, product: int
+) -> Mesg:
+    """A device message that records a product code and no product name text."""
+    return {
+        "mesg_num": _MESG_DEVICE_INFO,
+        "timestamp": FIT_TIMESTAMP_BASE,
+        "device_index": device_index,
+        "manufacturer": manufacturer,
+        "serial_number": serial,
+        "product": product,
+    }
+
+
+def garmin_devices_ride_fit_bytes() -> bytes:
+    """Encoded ``.fit`` bytes for a ride recorded with four distinct devices.
+
+    The ride fixture's one device message is replaced by four with
+    pairwise-distinct serials, none recording a product name: index 0 (the
+    recording device) Garmin code 3843, index 1 Dynastream code 3300, index 2
+    Garmin code 65000, index 3 Wahoo code 3843.
+    """
+    mesgs = ride_mesgs()
+    at = next(i for i, m in enumerate(mesgs) if m["mesg_num"] == _MESG_DEVICE_INFO)
+    mesgs[at : at + 1] = [
+        _device_info_by_code(1101, 0, "garmin", 3843),
+        _device_info_by_code(1102, 1, "dynastream", 3300),
+        _device_info_by_code(1103, 2, "garmin", 65000),
+        _device_info_by_code(1104, 3, "wahoo_fitness", 3843),
+    ]
+    return encode(mesgs)
+
+
 def strength_fit_bytes() -> bytes:
     """Encoded ``.fit`` bytes for the strength-session fixture."""
     return encode(strength_mesgs())

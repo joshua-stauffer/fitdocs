@@ -47,6 +47,7 @@ from fitdocs.model import (
     Sport,
     fit_datetime,
 )
+from tests.fixtures import builder
 from tests.fixtures.builder import (
     DevFieldSpec,
     decode_messages,
@@ -1044,3 +1045,26 @@ def test_session_later_same_named_sentinel_leaves_the_earlier_value() -> None:
     assert sessions[0]["developer_fields"] == {0: 111, 1: 65535}  # precondition
 
     assert extract_developer_fields(descriptions, sessions)["DUP"] == 111
+
+
+def test_devices_recorded_name_wins_over_a_textual_garmin_product() -> None:
+    """7.3: recorded text beats a name resolved from a code."""
+    mesgs, errors = builder.decode_messages(builder.garmin_devices_ride_fit_bytes())
+    assert errors == []
+    decoded = dict(mesgs["device_info_mesgs"][1])
+    assert decoded["garmin_product"] == "hrm_pro"
+    decoded["garmin_product"] = "hrm1"
+
+    unnamed = extract_devices([dict(decoded)])
+    assert unnamed[0].product_name == "hrm1"
+
+    recorded = extract_devices([{**decoded, "product_name": "SyntheticRideComputer"}])
+    assert recorded[0].product_name == "SyntheticRideComputer"
+
+
+def test_devices_numeric_garmin_product_is_not_a_name() -> None:
+    """7.2: an unresolved (numeric) Garmin-product value leaves the name absent."""
+    devices = extract_devices(
+        [{"device_index": 2, "manufacturer": "garmin", "garmin_product": 65000}]
+    )
+    assert devices[0].product_name is None

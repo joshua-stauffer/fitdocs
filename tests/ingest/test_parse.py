@@ -28,6 +28,7 @@ import hashlib
 from pathlib import Path
 
 import pytest
+from garmin_fit_sdk import Profile
 
 from fitdocs.ingest import parse_fit
 from fitdocs.ingest.decode import DecodeResult, decode_fit
@@ -277,3 +278,51 @@ def test_parse_fit_wires_declared_scale_names_end_to_end(
     assert "AVG METs" in activity.developer_fields_declared_scale
     assert activity.developer_fields["SESSION WEATHER HUMIDITY"] == 5500
     assert "SESSION WEATHER HUMIDITY" not in activity.developer_fields_declared_scale
+
+
+# --- Garmin product names resolved from the SDK profile (Req 7) --------------
+
+
+def _garmin_devices_decoded() -> list[dict[str, object]]:
+    messages, errors = builder.decode_messages(builder.garmin_devices_ride_fit_bytes())
+    assert errors == []
+    return list(messages["device_info_mesgs"])
+
+
+def test_garmin_devices_fixture_decodes_as_the_pins_assume() -> None:
+    """Preconditions: what the SDK decodes, before fitdocs reads any of it."""
+    decoded = _garmin_devices_decoded()
+
+    assert [d["serial_number"] for d in decoded] == [1101, 1102, 1103, 1104]
+    assert [d.get("garmin_product") for d in decoded] == [
+        "edge_1040",
+        "hrm_pro",
+        65000,
+        None,
+    ]
+    assert all("product_name" not in d for d in decoded)
+    assert 65000 not in Profile["types"]["garmin_product"]
+
+
+def test_garmin_devices_ride_names_each_device_from_the_profile() -> None:
+    """7.1, 7.2, 7.4: per-device names; an unresolved code or other maker is absent."""
+    activity = parse_fit(builder.garmin_devices_ride_fit_bytes())
+
+    assert [d.device_index for d in activity.devices] == [0, 1, 2, 3]
+    assert [d.product_name for d in activity.devices] == [
+        "edge_1040",
+        "hrm_pro",
+        None,
+        None,
+    ]
+
+
+def test_garmin_devices_names_equal_the_profile_entries() -> None:
+    """7.5: each resolved name is the SDK profile's own entry for its code."""
+    activity = parse_fit(builder.garmin_devices_ride_fit_bytes())
+    table = Profile["types"]["garmin_product"]
+
+    resolved = {d.device_index: d.product_name for d in activity.devices}
+    assert resolved[0] == table[3843]
+    assert resolved[1] == table[3300]
+    assert resolved[0] != "Edge 1040"
