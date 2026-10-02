@@ -266,6 +266,31 @@ golden snapshots gain the two new keys and change no other value. Absence
 follows Requirement 2.5's rule: a value the file did not record is `None`,
 never `0` or an empty string.
 
+## Amendment 5 (2026-10-02): Garmin product names, landed by intervals-connector
+
+A Garmin device's `device_info` message usually records a product code
+(which the SDK decodes as its `garmin_product` sub-field) and no product name
+text, so a Garmin ride's devices table
+and the attribution line the intervals-connector spec adds to workout pages
+(workout-docs Amendment 2) cannot name the device model. Requirement 4's
+device extraction (4.5) exposes the recorded product text and leaves the
+rest `None`; this amendment has the library resolve a name from the FIT
+SDK's own profile when, and only when, the file records no text.
+
+Requirement 4 gains criteria 4.8-4.12. **No existing criterion is renumbered,
+reworded or withdrawn, and every value the activity exposed before is
+unchanged for the same input bytes** except a device's product name where the
+file recorded no product text and its code is one the profile names as a
+Garmin product: that name was `None` and is now the profile's name. A product
+the profile does not name stays `None` (4.9), recorded text still wins
+(4.10), and the table is the SDK's, never one fitdocs keeps (4.12). A file's
+devices are named from its own content alone (4.11), so the same device is
+named alike however its file arrived.
+
+The implementing spec is `.kiro/specs/intervals-connector/`; the tests pinning
+each new criterion are listed in this spec's `spec.json` `amendments` array
+once that spec's implementation lands.
+
 ## Introduction
 
 fit-ingest is the foundation layer of fitdocs: a pure library that decodes a
@@ -382,6 +407,11 @@ tables come straight from the model.
 5. When device information messages are present, the fit-ingest library shall expose the reporting devices — including manufacturer, product, and battery status where recorded — with absent fields as `None`.
 6. _(added by Amendment 4)_ When a file's first file-identity message (`file_id`) records them, the fit-ingest library shall expose its manufacturer (the FIT profile's name, or the recorded number as text when the profile names none), its product as the recorded integer code (never resolved to a model name), its serial number, and its creation time as a timezone-aware UTC instant, each as `None` when the file did not record it or carries no such message.
 7. _(added by Amendment 4)_ The fit-ingest library shall expose, for every decoded file, the number of messages it carries whose message type the installed FIT profile does not define, as an integer (`0` when there are none).
+8. _(added by Amendment 5)_ When a device entry in a `.fit` file records no product name text but carries a product code that the FIT SDK's profile names as a Garmin product, the fit-ingest library shall expose that profile name as the device's product name.
+9. _(added by Amendment 5)_ If a device's product code is not named by the FIT SDK's profile, the fit-ingest library shall leave the device's product name absent, never a placeholder and never the code rendered as text.
+10. _(added by Amendment 5)_ Where a device entry records a product name as text, the fit-ingest library shall keep exposing that recorded text in preference to any name resolved from a code.
+11. _(added by Amendment 5)_ The fit-ingest library shall resolve product names from a file's own content alone, so that the same device is named alike whether its file arrived as a device original, a Garmin Connect export, an intervals.icu download or a hand drop.
+12. _(added by Amendment 5)_ The fit-ingest library shall take every resolved name from the FIT SDK's profile, and shall keep no product-name table of its own.
 
 ### Requirement 5: Sport and Modality Detection
 **Objective:** As a downstream consumer, I want a normalized sport label and

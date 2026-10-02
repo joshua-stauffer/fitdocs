@@ -1,7 +1,7 @@
 {
   "feature_name": "fit-ingest",
   "created_at": "2026-07-14T21:58:27Z",
-  "updated_at": "2026-09-30T12:00:00Z",
+  "updated_at": "2026-10-02T12:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -152,6 +152,13 @@
       "reason": "The identity engine (activity-identity, Phase 8) needs what a file's own file_id message declares -- manufacturer, product code, serial number, creation time -- and the count of messages the installed FIT profile does not define, to classify files by what produced them and recognize several files of one session. fit-ingest read neither.",
       "also": "Additive only: Activity.file_identity (a FileIdentity, all-None default) and Provenance.undocumented_messages (None default, always an int from parse_fit); SCHEMA_VERSION does not move; no existing criterion is renumbered; the golden snapshots gain the two keys and no existing value changes. The garmin_product sub-field the SDK adds is never read.",
       "cross_spec": "Landed by activity-identity task 1.2 (src/fitdocs/model.py, src/fitdocs/ingest/file_id.py, src/fitdocs/ingest/__init__.py); FileIdentity joins the package root's public exports and docs/plugins.md's public import surface."
+    },
+    {
+      "date": "2026-10-02",
+      "requirement": "4 (criteria 4.8-4.12 added) -- Amendment 5, recorded by the intervals-connector spec",
+      "reason": "intervals-connector Requirement 7: a Garmin device_info message usually records a product code and no product name text, so the devices table and the Garmin attribution line (workout-docs Amendment 2) cannot name the device model. The library now resolves a name from the FIT SDK's own profile when the file records no text.",
+      "also": "Additive: only a device's product name changes, and only where the file recorded no product text and the code is one the profile names as a Garmin product (it was None). A code the profile does not name stays None; recorded text still wins; the name is resolved from the file's own content alone; fitdocs keeps no product-name table. No existing criterion is renumbered or reworded.",
+      "cross_spec": "Implemented by the intervals-connector spec (its Requirement 7); its tests are listed here when that implementation lands. workout-docs Amendment 2 (the attribution line and the resolved names in the devices table) consumes the names this publishes and lands with it."
     }
   ]
 }

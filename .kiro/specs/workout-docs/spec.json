@@ -1,7 +1,7 @@
 {
   "feature_name": "workout-docs",
   "created_at": "2026-07-14T22:41:40Z",
-  "updated_at": "2026-09-30T00:00:00Z",
+  "updated_at": "2026-10-02T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -76,6 +76,13 @@
       "requirement": "3.4, 3.6 (note only) -- recorded by the activity-identity spec",
       "reason": "activity-identity spec task 6.3, its part of the roadmap's Phase 8 Existing Spec Update for workout-docs: a page's provenance (3.4) is its base, the last entry of sources, and 3.6's same-session update is generalized by activity-identity Requirements 3 and 4.",
       "also": "requirements.md gains a note under Requirement 3. No criterion renumbered or reworded."
+    },
+    {
+      "date": "2026-10-02",
+      "requirement": "5.7-5.12 and 6.11 added (appended; no criterion renumbered or reworded) -- Amendment 2, recorded by the intervals-connector spec",
+      "reason": "intervals-connector Requirement 8: pages built from Garmin device data must attribute Garmin and the device model beside the data (intervals.icu API terms section 1.1; Garmin API Brand Guidelines), without implying Garmin vouches for data from other devices, and the devices table shows the product name fit-ingest resolves.",
+      "also": "The attribution line is generated content outside every preserved region, recorded in no frontmatter key, decided from the files' own content alone; the document-format version advance is owned by the implementing spec and is not a criterion.",
+      "cross_spec": "fit-ingest Amendment 5 (4.8-4.12) publishes the resolved Garmin product names this reads and lands with it. intervals-connector owns the implementation, the tests (listed here when that implementation lands) and the document-format version advance."
     }
   ]
 }

@@ -35,6 +35,27 @@ current is owned by the implementing spec `.kiro/specs/running-dynamics/`.
 The tests pinning each new criterion are listed in this spec's `spec.json`
 `amendments` array.
 
+## Amendment 2 (2026-10-02): Garmin attribution on workout pages, landed by intervals-connector
+
+Pages built from Garmin device data name Garmin only as a manufacturer in the
+devices table, never as the data's source, and the table cannot name a Garmin
+device's model when the file records only a product code. The
+intervals-connector spec fetches Garmin rides through intervals.icu, whose API
+terms (section 1.1) and Garmin's API Brand Guidelines require the data's
+source to be attributed beside it. Once fit-ingest resolves Garmin product
+names (fit-ingest Amendment 5), a page can name the device that recorded it.
+This amendment appends criteria only: Requirement 5 gains 5.7-5.12 (the
+attribution line, its absent-model and non-Garmin cases, the combined-device
+case, the from-content-alone rule, and its generated, frontmatter-free
+rendering) and Requirement 6 gains
+6.11 (the devices table shows the resolved product name). **No existing
+criterion is renumbered, reworded or withdrawn.** The attribution applies to
+every Garmin-recorded file, however it arrived. The document-format version
+advance that brings existing pages current is owned by the implementing spec
+`.kiro/specs/intervals-connector/`, and is not a criterion here. The tests
+pinning each new criterion are listed in this spec's `spec.json` `amendments`
+array once that spec's implementation lands.
+
 ## Introduction
 
 workout-docs is the user-visible layer of fitdocs: the installable `fitdocs`
@@ -154,6 +175,12 @@ anywhere, so that my training log is never locked to one tool.
 4. Where PKM-specific affordances are used in a document, the fitdocs CLI shall use only forms that degrade gracefully in vanilla markdown renderers.
 5. The fitdocs CLI shall embed charts as standard image links so they display in any renderer that supports images.
 6. When the activity records a stable session identifier, the frontmatter shall include it as the document's activity identity.
+7. _(added by Amendment 2)_ When the fitdocs CLI renders a workout document from a file whose recording device — the device the file itself names as its creator — is made by Garmin, it shall show a line reading "Garmin" followed by that device's product name directly beneath the document's title and above every section.
+8. _(added by Amendment 2)_ If that Garmin recording device's product name is absent, the fitdocs CLI shall show "Garmin" alone in the line, never a placeholder model.
+9. _(added by Amendment 2)_ Where a document's recording device is not made by Garmin, or the file names no recording device, the fitdocs CLI shall show no Garmin attribution.
+10. _(added by Amendment 2)_ Where a document combines channels from files recorded by different devices and at least one of them is a Garmin device, the fitdocs CLI shall name each contributing Garmin device and state that other devices also contributed, and shall never present Garmin as the source of the whole document.
+11. _(added by Amendment 2)_ The fitdocs CLI shall decide the attribution from the files' own content alone, so that the same files yield the same attribution however they arrived.
+12. _(added by Amendment 2)_ The fitdocs CLI shall render the attribution as generated content outside every preserved region, refreshed on every regeneration and byte-identical for identical inputs, and shall record it in no frontmatter key.
 
 ### Requirement 6: Run and Ride Document View
 **Objective:** As a runner or cyclist, I want one strong document per
@@ -171,6 +198,7 @@ workout's story and details are one scroll away.
 8. _(added by Amendment 1)_ When a run page's activity has recorded data in at least one running-dynamics channel, the fitdocs CLI shall include a `## Running Dynamics` section placed after the summary, map and telemetry sections (each when present) and before the splits section (when present); when no running-dynamics channel has recorded data, the section shall be omitted entirely, heading included, and the fitdocs CLI shall include the section only on pages whose activity modality is run.
 9. _(added by Amendment 1)_ The Running Dynamics section shall present one row per running-dynamics channel that has recorded data, in a fixed order, each showing the channel's average, its typical range (10th to 90th percentile of recorded samples) and its coverage (the percentage of samples that recorded it), computed over recorded samples only and never counting an absent sample as zero.
 10. _(added by Amendment 1)_ The Running Dynamics section shall display ground contact time in milliseconds, vertical oscillation in centimetres, step length in metres, leg spring stiffness in kilonewtons per metre, form and air power in watts, impact in body weights, and vertical ratio and every balance in percent, and shall present each balance channel as its recorded percentage without attributing it to a left or right side.
+11. _(added by Amendment 2)_ The devices table shall show each device's product name as the fit-ingest library resolves it.
 
 ### Requirement 7: Hero Chart Generation
 **Objective:** As an athlete, I want the power-vs-heart-rate hero chart
