@@ -102,9 +102,9 @@
   rebase 5.1 (the `DOC_VERSION` re-pin, and the donor wiring if
   `channel-merge` landed while this branch was open).
 
-- [ ] 1. The live viability check (maintainer only)
+- [x] 1. The live viability check (maintainer only)
 
-- [ ] 1.1 Run the live viability check against the athlete's own intervals.icu account and record what it finds
+- [x] 1.1 Run the live viability check against the athlete's own intervals.icu account and record what it finds
   - Performed by the maintainer with their own key, following design.md
     "LiveCheckProcedure" steps 1-8, in a temporary directory outside the
     repository and the data root, deleted afterwards; the key is read without
@@ -126,7 +126,7 @@
     date of an activity, name, location, file or key. This record is the only
     place a TBC item is marked; 5.2 reads it and does not re-mark it
   - _Requirements: 9.1, 9.2, 9.3, 9.5_
-  - _Blocked: maintainer-only — needs the athlete's intervals.icu key; no agent performs, records or ticks it. The maintainer ticks it by hand once `research.md` "Live check findings" holds the record above_
+  - _Done 2026-10-02: at the maintainer's explicit request (Req 9.5 as amended), the `/kiro-impl` controller session ran it with the maintainer's key from the gitignored `.env`, never passed to a subagent or written; findings in `research.md` "Live check findings" (TBC-5, TBC-6, TBC-8 contradicted; TBC-6 repaired in 3.4; TBC-5/TBC-8 need no code change)_
 
 - [ ] 2. Garmin product names and the attribution line
 
@@ -455,7 +455,9 @@
     for a missing file; the remaining statuses through 3.3's mapping
   - Pins: gzip of `builder.ride_fit_bytes()` fetched equal to the input bytes;
     the same bytes uncompressed fetched unchanged; gzip of a GPX and of a TCX
-    document declined naming the format; 404 declined with the no-file reason;
+    document declined naming the format; 404 and 422 (the live service's
+    answer for an activity without a file, TBC-6, research.md "Live check
+    findings") each declined with the no-file reason, which names no status;
     a truncated gzip and one expanding past a patched size bound raise the
     download error; the request path ends `/file`, never `/fit-file`, and an
     id containing `/` is quoted into one path segment; 401 and 403 raise the
@@ -465,7 +467,7 @@
   - Named mutations: return the compressed body (the equality pin reds); drop
     the size bound (the oversize pin reds); request `/fit-file` (the path pin
     reds); skip the quoting (the path-segment pin reds); drop GPX recognition
-    (the GPX pin reds); drop TCX recognition (the TCX pin reds); fail a 404 instead of declining (its pin reds); raise a
+    (the GPX pin reds); drop TCX recognition (the TCX pin reds); fail a 404 instead of declining (its pin reds); fail a 422 instead of declining (its pin reds); raise a
     connector error for a download 418 (the download-error pin reds)
   - Observable: `uv run pytest tests/connectors/test_intervals.py` green; no
     operation raises "not implemented" any more
@@ -634,4 +636,4 @@
     clean with every task ticked
   - _Requirements: 9.4, 9.5_
   - _Depends: 1.1, 5.1_
-  - _Blocked: waits for task 1.1 (maintainer live check); the maintainer removes this line once `research.md` holds the findings_
+  - Reconciliation already applied on the impl branch 2026-10-02, before 3.4 ran: design.md download mapping (422), Cross-spec seams and ConnectorsDocSection (TBC-8 premise), 3.4's pins. No 6.x repair task was needed. 5.2 therefore runs on the impl branch after 5.1's gate rather than after the merge, and checks that every contradicted item has an amended marker and pinned behaviour

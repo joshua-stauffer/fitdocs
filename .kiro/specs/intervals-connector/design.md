@@ -329,7 +329,7 @@ flowchart TD
     Gz -- no --> Sniff{GPX or TCX document}
     Sniff -- yes --> Decl[declined, format reason]
     Sniff -- no --> Fetched[fetched bytes unmodified]
-    S -- 404 --> NoFile[declined, no original]
+    S -- 404 or 422 --> NoFile[declined, no original]
     S -- 401 or 403 --> Auth[auth failure ends the instance]
     S -- 429 or 5xx --> Stop[connector error ends the instance]
     S -- other --> ItemFail
@@ -346,7 +346,7 @@ flowchart TD
 | 3.1, 3.2, 3.3 | Windows, first pull, dedupe | IntervalsConnector | `list_activities`, `_windows`, `FIRST_PULL_DAYS`, `WINDOW_DAYS` | pull |
 | 3.4, 3.5, 3.6, 3.7 | Filter, Strava stub, non-FIT type, absent values, no revision | IntervalsConnector | `_remote_activity` | listing-entry mapping |
 | 3.8 | Malformed listing ends the instance | IntervalsConnector | `_listing_entries` | listing-entry mapping |
-| 4.1, 4.2, 4.3, 4.4, 4.5, 4.7 | Original only, gunzip, bounds, GPX/TCX, 404, unmodified | IntervalsConnector | `fetch_activity`, `_decompress`, `_document_format` | download mapping |
+| 4.1, 4.2, 4.3, 4.4, 4.5, 4.7 | Original only, gunzip, bounds, GPX/TCX, 404/422, unmodified | IntervalsConnector | `fetch_activity`, `_decompress`, `_document_format` | download mapping |
 | 4.6 | Other non-FIT bytes skipped | (framework `is_fit`), IntervalsPullTests | — | download mapping |
 | 5.1, 5.2, 5.3, 5.4, 5.5 | Status handling on data calls | IntervalsConnector | `_raise_for_status` | download mapping |
 | 5.6 | fitdocs User-Agent on every request | IntervalsConnector (uses `session.http` only), BoundaryGuardEntry | — | pull |
@@ -501,7 +501,10 @@ class IntervalsConnector:                           # Connector + KeyVerifier + 
   leading whitespace, lower-cased, begin with `<` and contain `<gpx` → `"GPX"`,
   or `<trainingcenterdatabase` → `"TCX"`; a format → `Declined(NOT_FIT_REASON…)`
   (4.4); else `Fetched(data)` — the decompressed bytes, unmodified (4.7). `404`
-  → `Declined(NO_FILE_REASON)` (4.5) (TBC-6). Anything else →
+  or `422` → `Declined(NO_FILE_REASON)` (4.5) (TBC-6, contradicted 2026-10-02:
+  the live service answers an activity without a file with 422 `"Activity has
+  no original file to download"`; 404 is kept for the published
+  description's case). Anything else →
   `_raise_for_status(response, listing=False)`.
 - **`_raise_for_status(response, *, listing)`** (5.1-5.5): 401 or 403 → raise
   `auth_failure_from(...)`'s failure (with the service message); 429 →
@@ -522,7 +525,7 @@ class IntervalsConnector:                           # Connector + KeyVerifier + 
 |----------|------|
 | `STRAVA_REASON` | `Strava-sourced: intervals.icu returns only a stub for Strava activities and shares no file for them` |
 | `NOT_FIT_REASON` | `the original is a {format} file, not FIT; fitdocs ingests FIT files only` |
-| `NO_FILE_REASON` | `intervals.icu holds no original file for this activity (HTTP 404)` |
+| `NO_FILE_REASON` | `intervals.icu holds no original file for this activity` |
 | `RATE_LIMITED_MESSAGE` | `intervals.icu is limiting requests (HTTP 429) and still was after fitdocs's retries; this pull stopped, and the next pull resumes where it stopped` |
 | `UNAVAILABLE_MESSAGE` | `intervals.icu is unavailable (HTTP {status}) after fitdocs's retries; this pull stopped, and the next pull resumes where it stopped` |
 | `LISTING_STATUS_MESSAGE` | `intervals.icu answered the activity listing with HTTP {status}: {message}` |
@@ -751,7 +754,9 @@ def attribution_line(
 | Intent | Confirm TBC-1..9 and the brief's three questions on a real account |
 | Requirements | 9.1, 9.2, 9.3, 9.4, 9.5 |
 
-Run by the maintainer only, with their own key, in a temporary directory
+Run with the maintainer's own key — by the maintainer, or by a session the
+maintainer explicitly asks to (Req 9.5 as amended 2026-10-02; the 2026-10-02
+check was run that way) — in a temporary directory
 outside the repository and the data root, deleted afterwards:
 1. Read the key without echo (`read -rs IV_KEY`); it is never written to a
    file, a spec, a commit or a log. Every request uses the fitdocs agent
@@ -816,8 +821,9 @@ One `## intervals.icu` section, after the folder connector's section, with
   the regenerate-before-first-pull statement instead (regenerate the data
   root's existing documents with `fitdocs regen` before the first pull, so
   pages written before identity are recognized). Either way, that the
-  download is Garmin's partner-API copy, which identity ranks below the
-  device's own original.
+  download is Garmin's partner-API copy of the ride. It is not byte-identical
+  to the device's own original, but carries the same messages (TBC-8,
+  2026-10-02), so a page holding both reads the same whichever is its base.
 Every web address in the section is the project's own or on `intervals.icu`.
 
 #### ChangelogEntry (`CHANGELOG.md` `[Unreleased]`)
@@ -890,6 +896,7 @@ The framework's: `remote_id` = intervals.icu's `id`, no `revision`, outcome,
 | 401 | rejected (one attempt) | instance ends: rejected key, reconnect | instance ends: rejected key |
 | 403 | blocked, service message quoted | instance ends: client refused | instance ends: client refused |
 | 404 | unavailable, "HTTP 404" | instance ends: status named | declined: no original file |
+| 422 | unavailable, "HTTP 422" | instance ends: status named | declined: no original file (TBC-6, live) |
 | 429 after retries | rate-limited, wait stated | instance ends: rate-limit message | instance ends: rate-limit message |
 | 5xx after retries | unavailable | instance ends: unavailable message | instance ends: unavailable message |
 | other status | unavailable, status named | instance ends: status named | activity failed, retried next pull |
@@ -952,7 +959,7 @@ any real account.
   (mutation: skip bad entries instead).
 - Download: gzip of `builder.ride_fit_bytes()` → `Fetched` equal to the input
   bytes; the same bytes uncompressed → `Fetched`; gzip of GPX and TCX text →
-  `Declined` naming the format; 404 → `Declined(NO_FILE_REASON)`; a truncated
+  `Declined` naming the format; 404 and 422 → `Declined(NO_FILE_REASON)`; a truncated
   gzip and a gzip expanding past a patched `MAX_FILE_BYTES` →
   `IntervalsDownloadError`; the request path is `/file`, never `/fit-file`,
   with the id percent-quoted (mutations: return the compressed body; drop the
@@ -1102,9 +1109,13 @@ any real account.
   marker; the download carries the recording device's `file_id`, so identity
   classifies it `original` and, under the default precedence
   (`original:garmin > phone_copy > original > unknown`, maintainer decision
-  2026-09-29), it outranks a HealthFit copy of the same ride and ranks below
-  the device's own original by the within-kind undocumented-message key
-  (TBC-8), or deduplicates with it by hash when byte-identical. This spec
+  2026-09-29), it outranks a HealthFit copy of the same ride. Against the
+  device's own original it ties on the within-kind undocumented-message key:
+  TBC-8 was contradicted on 2026-10-02, when the two copies were found not
+  byte-identical, with every message count equal. The base then falls to
+  identity's later keys (`time_created`, then `sha`), and the page content is
+  the same either way. A byte-identical pair would instead deduplicate by
+  hash. This spec
   reads neither `FileIdentity` nor `garmin_product` from `file_id`, and
   identity reads no product name. Documentation (ruling R7): if identity is
   on `main` when 4.2 writes the section, the section states

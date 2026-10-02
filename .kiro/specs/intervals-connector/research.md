@@ -358,8 +358,88 @@ Assumptions the design takes from the public description and marks
   product (shape only; the files are never committed).
 
 ## Live check findings
-_Not yet run (2026-09-29): the maintainer's `.env` holds no intervals.icu
-key. Task 1 records its findings here as shapes and vocabulary only._
+**Check run 2026-10-02** by the controller session of `/kiro-impl
+intervals-connector`, with the maintainer's key and at the maintainer's
+explicit request (Req 9.5 as amended that day). The key was read in-process
+from the maintainer's gitignored `.env` and never printed, passed to a
+subagent or written to a file. The scripts ran from a temporary directory
+outside the repository and the data root, which was deleted afterwards. All
+requests were read-only and sent the fitdocs User-Agent. Vocabulary is as
+observed on 2026-10-02. Recorded below: shapes, vocabulary, statuses,
+booleans and counts only.
+
+- **TBC-1 confirmed.** In a four-month window the listing held 108 entries
+  with `source` values `GARMIN_CONNECT` (17) and `OAUTH_CLIENT` (91). Over the
+  account since 2022 there were 531 entries: `OAUTH_CLIENT` 477,
+  `GARMIN_CONNECT` 53 and `MANUAL` 1. Every `GARMIN_CONNECT` entry sampled
+  (`Ride`, `VirtualRide`) is a file whose `device_info` index 0 and
+  `file_id` are both `garmin` / `edge_1040`. Every `OAUTH_CLIENT` entry
+  sampled (`Run`, `Ride`, `Hike`, `Walk`, `WeightTraining`) is a file whose
+  index-0 device is `development` with no product: these are HealthFit
+  uploads. The account has no `STRAVA` entries. The Edge rides therefore
+  arrive from Garmin directly. The default filter `{"GARMIN_CONNECT"}`
+  selects exactly them and leaves out the HealthFit copies.
+- **TBC-2 confirmed for `start_date`.** All 108 values have the shape
+  `9999-99-99T99:99:99Z` (UTC with a `Z` designator). `start_date_local` was
+  not requested, so its form is unobserved.
+- **TBC-3 confirmed.** `file_type` is present and lower case (`fit`) on every
+  file-backed entry. No `gpx` or `tcx` value occurs in this account, and the
+  one `MANUAL` entry has no `file_type`.
+- **TBC-4 confirmed for `fields=`; the Strava half is unobservable.** All 108
+  entries carry exactly the six requested keys. `id` is a `str` of the shape
+  `i` followed by digits, and `elapsed_time` is an `int`. With no Strava
+  entries, the shape of a Strava stub could not be checked.
+- **TBC-5 contradicted in form; the design needs no code change.**
+  - `/file` answers 200 directly, with no redirect.
+  - Without an `Accept-Encoding` header, the body is the FIT file itself
+    (`application/octet-stream`, `.FIT` at bytes 8-12, no gzip magic).
+  - With `Accept-Encoding: gzip`, the server applies HTTP `Content-Encoding:
+    gzip`. That is transport compression of the same body, not a gzip file.
+  - `connectors`' `HttpClient` sends no `Accept-Encoding`, so the connector
+    takes the "any other body is used as received" branch. The gzip branch
+    stays as a defensive path.
+  - The file is a complete FIT: 5044 records, with `power` and
+    `left_right_balance` on record messages. Torque effectiveness and pedal
+    smoothness are absent from both this copy and the device original (the
+    pedals do not record them), so the "pedal dynamics" this ride carries is
+    balance only.
+- **TBC-6 contradicted.** For the one activity without a file (`MANUAL`),
+  `/file` answers **422** with a JSON body `{"status":422,"error":"Activity
+  has no original file to download"}`, not 404. Repair: the download maps
+  422 to the no-file declination as well as 404 (design.md download mapping
+  amended; task 3.4 pins it).
+- **TBC-7 confirmed.** The one-entry listing answers 200 with the real key
+  and 401 with a wrong one. The explicit fitdocs User-Agent is not blocked.
+- **TBC-8 contradicted.** Three `GARMIN_CONNECT` rides were matched by start
+  time to their originals in the maintainer's Garmin data export.
+  - None of the three is byte-identical: the intervals.icu copy is 14-33 KB
+    smaller in each case.
+  - Every message type has the same count in both copies, and so do the
+    undocumented messages (12 types and 570 messages in the first pair) and
+    the records.
+  - The FIT header is 14 bytes in both, and both have creator `garmin` /
+    `edge_1040`.
+  - So the intervals.icu copy does not carry fewer undocumented messages. Under
+    `activity-identity`'s rank the two tie on kind and on undocumented count,
+    and the base falls to the later keys (`time_created`, then `sha`). The two
+    copies carry the same messages, so the page has the same content whichever
+    one is the base. Design premise amended ("Cross-spec seams"); no code
+    repair.
+- **TBC-9 confirmed.** Three recent HealthFit cycling copies, three HealthFit
+  "(Connect)" run copies and three HealthFit outdoor-run copies were read
+  locally and left in place. Each has `device_info` index 0 and `file_id`
+  manufacturer `development` with no product.
+  - The ride-pair pin and `channel-merge`'s `development` HealthFit copies
+    match the real files.
+  - `activity-identity`'s HealthFit species and `running-dynamics`'
+    `run_native_dynamics`, which record `garmin` there, are synthetic
+    variants that do not match.
+- **Brief's three questions**:
+  - The rides arrive from Garmin directly, not through Strava.
+  - The original is a FIT carrying power, left/right balance and the full
+    record set. It is served raw, and gzip only as transport encoding.
+  - Its bytes do not equal the Garmin export's original, but its message
+    counts do.
 
 ## Risks & Mitigations
 - The published description drifts from the service — every relied-on shape
