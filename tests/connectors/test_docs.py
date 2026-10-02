@@ -103,6 +103,11 @@ _EXPECTED_HEADINGS = [
     "# Connectors",
     "## Configuring an instance",
     "## The folder connector",
+    "## intervals.icu",
+    "### Connecting",
+    "### Configuring",
+    "### What a pull fetches",
+    "### Garmin attribution",
     "## Connecting",
     "## Credentials",
     "## Pulling",
@@ -172,6 +177,9 @@ def test_documented_lookback_upper_bound_equals_the_code_constant() -> None:
 _DOCUMENTED_ENV_VAR_EXAMPLES: list[tuple[str, str]] = [
     ("myservice", "api_key"),
     ("another-service", "client_secret"),
+    # The `## intervals.icu` section's override variable (its own pin lives in
+    # tests/connectors/test_intervals_docs.py).
+    ("intervals", "api_key"),
 ]
 
 

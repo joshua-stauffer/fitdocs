@@ -132,10 +132,11 @@ the safeguards, and the disposition policy's never-delete guarantee.
 
 `fitdocs connect` authenticates once against a configured connector instance,
 and `fitdocs pull` fetches what's new from it straight into the inbox, where
-the existing drain picks it up like any other file. fitdocs ships one
-connector that needs no service at all, `folder`, plus the framework —
-credential storage, per-instance ledgers, and the pull report — any future
-connector builds on. See
+the existing drain picks it up like any other file. fitdocs ships two
+connectors: `folder`, which needs no service at all, and `intervals`, which
+pulls the original `.fit` files of an intervals.icu account with a personal
+API key; both run on the framework — credential storage, per-instance
+ledgers, and the pull report — any future connector builds on. See
 [Connectors](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md)
 for the full interface: configuring an instance, the credentials directory,
 what leaves your machine and how to switch it off, and the terms-first

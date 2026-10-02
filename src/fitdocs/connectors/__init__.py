@@ -22,10 +22,11 @@ The published surface (``__all__``) is the 46 names design.md's "PackageInit"
 section lists (pinned by ``tests/connectors/test_surface.py``): the protocol
 layer's types and vocabularies, the transport layer, the typed failures, the
 secret and its redactor, and the registration operations. The built-in
-folder connector (``FolderConnector``) is deliberately not published here --
-internal, like ``fitdocs.load``'s ``ThresholdCalculator`` -- but it is
-registered under its id at import time, below, so ``get("folder")`` answers
-it without any settings file naming it.
+connectors (``FolderConnector``, and ``IntervalsConnector`` for an
+intervals.icu account) are deliberately not published here -- internal, like
+``fitdocs.load``'s ``ThresholdCalculator`` -- but each is registered under its
+id at import time, below, so ``get("folder")`` and ``get("intervals")`` answer
+without any settings file naming them.
 """
 
 from __future__ import annotations

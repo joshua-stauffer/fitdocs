@@ -42,10 +42,19 @@ recorded as one.
 - `fitdocs connect` and `fitdocs pull`: configure a named connector instance
   in a new `[connectors]` table, authenticate it once with `connect` if it needs credentials, and
   fetch new activities with `pull`, delivered into the existing inbox where
-  the existing drain picks them up. fitdocs ships one connector, `folder`,
-  that reads a local directory and needs no authentication.
+  the existing drain picks them up. This release's first connector,
+  `folder`, reads a local directory and needs no authentication.
   `fitdocs.toml` settings schema (additive; no action needed): gains the
   `[connectors]` table. See
+  [the connectors reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md).
+- The `intervals` connector pulls the original `.fit` files of an
+  intervals.icu account with a personal API key (pull only): configure it as
+  `[connectors.intervals]`, or as any `[connectors.<name>]` table with
+  `connector = "intervals"`, then run `fitdocs connect <name>` once. Its
+  optional `sources` key chooses which recording sources a pull keeps; the
+  default is `["GARMIN_CONNECT"]`. `fitdocs.toml` settings schema (additive;
+  no action needed): `[connectors.<name>]` gains the `sources` key for this
+  connector. See
   [the connectors reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md).
 
 ### Changed
@@ -85,6 +94,15 @@ recorded as one.
   tool-state directory `.fitdocs/`, what `fitdocs pull` writes and removes,
   and that `fitdocs connect` writes nothing under the data root — no
   action.
+- Garmin devices are named by model in a workout's devices table, and a page
+  rendered from a Garmin-recorded file carries the line `Data source: Garmin
+  <model>` directly beneath its title, as intervals.icu's API terms and
+  Garmin's API Brand Guidelines require. The generated document format
+  advances, so a page written by an earlier release lacks the line and the
+  model names until regenerated. Action: run `fitdocs regen` to bring existing
+  documents current, and before the first `fitdocs pull` of an `intervals`
+  instance; `fitdocs check` reports them stale until then. See
+  [the connectors reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md).
 
 ## [0.1.0] - 2026-09-19
 

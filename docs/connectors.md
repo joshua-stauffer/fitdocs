@@ -9,9 +9,11 @@ sync`, or `pull --sync`) picks it up exactly as it would a file you dropped
 there yourself.
 
 This page documents the connector *framework*: the commands, the settings
-keys, the credential rules, and the one connector fitdocs ships that needs no
-service at all (`folder`). It names no online service and no network
-protocol — this release includes no connector to any online service.
+keys, the credential rules, and the two connectors fitdocs ships: `folder`,
+which needs no service at all, and `intervals`, for an intervals.icu account
+([its section](#intervalsicu) below). Outside that section, the framework
+sections of this page describe no online service and no network protocol;
+the one service they mention, intervals.icu, is named only to point to it.
 
 ## Configuring an instance
 
@@ -27,7 +29,7 @@ lookback_days = 30       # optional; whole days, 0-3650; defaults to 30
 | Key | Meaning | Default |
 | --- | --- | --- |
 | `connector` | Which connector implementation this instance uses. | the instance's own name |
-| `lookback_days` | For a connector that supports it, how many days before the *watermark* — the newest activity already recorded — its listing starts. An instance's first pull, with no ledger yet, lists everything regardless of this key. The `folder` connector ignores it; it always considers everything under its source. | `30` |
+| `lookback_days` | For a connector that supports it, how many days before the *watermark* — the newest activity already recorded — its listing starts. An instance's first pull, with no ledger yet, has no watermark, so this key does not apply: each connector chooses where such a pull starts (`folder` considers everything under its source; `intervals` starts as its [section](#intervalsicu) says). The `folder` connector ignores it; it always considers everything under its source. | `30` |
 
 Any other key in the table is passed to the connector itself; each connector
 documents its own keys (`folder`'s are below). A key that collides with one
@@ -36,9 +38,8 @@ belong in this file (see [Credentials](#credentials)).
 
 ## The folder connector
 
-`folder` is the one connector this framework ships: a local directory as a
-source, requiring no authentication and making no network request of any
-kind.
+`folder` is the connector for a local directory: it needs no authentication
+and makes no network request of any kind.
 
 ```toml
 [connectors.<name>]
@@ -56,6 +57,140 @@ settle_seconds = 2                              # optional
 
 `folder` only ever reads from its source directory — it never writes, moves,
 renames, or deletes anything there.
+
+## intervals.icu
+
+`intervals` is the connector for an [intervals.icu](https://intervals.icu)
+account. It pulls only: it lists the activities of the account the key
+belongs to and fetches each one's original `.fit` file. It never writes to the
+account.
+
+### Connecting
+
+1. In `<data-root>/fitdocs.toml`, add the instance. An empty table is
+   enough, because every key of it is optional (see
+   [Configuring](#configuring)):
+
+   ```toml
+   [connectors.intervals]
+   ```
+
+   `fitdocs connect intervals` exits `2` with "not a configured connector
+   instance" until the table exists.
+2. In intervals.icu, open Settings, then Developer Settings, and create a
+   personal API key.
+3. Run `fitdocs connect intervals`. fitdocs asks for the key without echoing
+   it, makes one read request to intervals.icu to check it, and saves it to
+   the credentials store described under [Credentials](#credentials).
+
+At a terminal that is not interactive, `fitdocs connect` exits `2` instead of
+prompting and names the variable below.
+
+An instance named `intervals` needs no `connector` key, because the
+connector defaults to the instance's own name. An instance with any other
+name sets `connector = "intervals"`, and its override variable is built by
+the rule under [Credentials](#credentials).
+
+To supply the key without storing it, set the override variable for an
+instance named `intervals`:
+
+```
+FITDOCS_CONNECTOR_INTERVALS_API_KEY
+```
+
+A key intervals.icu refuses ends `fitdocs connect` with a message saying so,
+and nothing is saved; create a new key and run `fitdocs connect intervals`
+again.
+
+### Configuring
+
+```toml
+[connectors.intervals]
+sources = ["GARMIN_CONNECT"]   # optional; this is the default
+```
+
+`sources` is a non-empty list of upper-case source names. intervals.icu
+records, for every activity, which source it came from; a pull keeps only the
+activities whose source is in the list. The default is `["GARMIN_CONNECT"]`,
+so that your other copies of the same activities, such as uploads from a
+phone app, are not fetched a second time. intervals.icu publishes these
+names: `STRAVA`, `UPLOAD`, `MANUAL`, `GARMIN_CONNECT`, `OAUTH_CLIENT`,
+`DROPBOX`, `POLAR`, `SUUNTO`, `COROS`, `WAHOO`, `ZWIFT`, `ZEPP`, `CONCEPT2`
+and `HUAWEI`. fitdocs also accepts a well-formed name that is not in that
+list, so a source the service adds later needs no fitdocs release. A
+malformed `sources` value (not a list, an empty list, or a name that is not
+upper case) is a configuration error, reported before any request is made.
+The framework's `lookback_days` key applies as described under
+[Configuring an instance](#configuring-an-instance); no other key is read.
+
+### What a pull fetches
+
+The first pull lists the last 30 days. To go further back, run `fitdocs pull
+intervals --since YYYY-MM-DD`, which lists from the start of that local day.
+A long backfill can run into intervals.icu's rate limits, so step `--since`
+back in stages, for example one season at a time: the ledger remembers what
+each run delivered, so a later run fetches only what earlier ones did not.
+The pull lists activities in date windows and fetches each new, available
+activity's original file.
+
+What a pull skips, and why. Each skip is recorded in the ledger, so the
+activity is not asked about again, and it shows in the report's `skipped`
+row with its reason:
+
+- **Strava stubs.** intervals.icu returns only a stub for an activity that
+  came from Strava and shares no file for it.
+- **Originals that are not FIT.** An activity whose original is a GPX or TCX
+  file is skipped, whether the listing says so or the file itself shows it.
+  fitdocs ingests FIT files only.
+- **Activities without a file.** An activity with no original file, such as
+  one entered by hand, is skipped as having no original file.
+
+What fails, and when it is retried. A single activity whose download fails
+(an unreadable or oversized file, or an unexpected status from the service)
+is reported as failed, and the next pull tries it again. These end the whole
+instance's run instead, and the other configured instances still run:
+
+- **A refused key.** The report names the rejection; run `fitdocs connect
+  intervals` again with a working key.
+- **A blocked client.** If intervals.icu refuses fitdocs itself rather than
+  your key, the message quotes the service's reason; report it to the
+  fitdocs project.
+- **A rate limit.** If intervals.icu is still limiting requests after
+  fitdocs's own retries, the pull stops and says so; the next pull resumes
+  where it stopped. This page states no request limits: intervals.icu
+  decides them.
+- **An unavailable service.** Handled the same way: the pull stops, and the
+  next one resumes.
+
+What leaves your machine. Requests go to intervals.icu only. Each carries the
+one fitdocs User-Agent and, in the `Authorization` header, your key. The key
+is sent to intervals.icu itself and never to the target of a redirect, and it
+never appears in an address. The addresses carry date bounds and activity
+ids.
+
+What you get. The file a pull delivers is the copy intervals.icu holds. For an
+activity whose source is `GARMIN_CONNECT` (the default), that is Garmin's own
+partner-API copy of a ride recorded on a Garmin device. It is not
+byte-identical to the file the device itself wrote, but it carries the
+same messages, so a page that holds both reads the same whichever of the two
+is its base. Before the first pull into a data root that already holds
+pages, run `fitdocs regen`, so that the pages written before cross-source
+identity are recognized when the same ride arrives; see
+[Regenerating before a first pull](#regenerating-before-a-first-pull).
+
+### Garmin attribution
+
+A page rendered from a file recorded by a Garmin device carries the line
+`Data source: Garmin <model>` directly beneath its title, where `<model>` is
+the product name the device recorded (just `Garmin` when it recorded none).
+The line is rebuilt on every render, so `fitdocs regen` adds it to existing
+pages.
+
+The reason is the terms the data comes under: intervals.icu's API terms,
+§1.1 (effective 2025-10-23), and Garmin's API Brand Guidelines, version
+V 6.30.2025. The line applies to every Garmin-recorded file, however it
+reached your data root, whether pulled by this connector or dropped in the
+inbox by hand.
 
 ## Connecting
 
@@ -245,9 +380,9 @@ either command to use.
 ## The terms-first policy
 
 fitdocs ships a connector for a given service only when that service's own
-terms of use permit this kind of automated, personal access. This page
-documents the framework only; it names no online service and no endpoint of
-one, because this release includes no connector to any online service.
+terms of use permit this kind of automated, personal access. The one service
+connector fitdocs ships is the [intervals.icu](#intervalsicu) one, and the
+only web address of an online service this page gives is intervals.icu's.
 
 ## Regenerating before a first pull
 

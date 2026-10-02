@@ -306,7 +306,7 @@ the one named like the instance), how far back a pull lists (30 days by
 default), and any keys the connector itself takes.
 Credentials never belong in this file. See
 [`docs/connectors.md`](connectors.md) for the full guide — configuring an
-instance, the built-in folder connector, connecting, where credentials
+instance, the built-in folder and intervals.icu connectors, connecting, where credentials
 live, pulling, delivery and removal, and what leaves your machine.
 
 ## The athlete profile: `<data-root>/athlete.toml`
