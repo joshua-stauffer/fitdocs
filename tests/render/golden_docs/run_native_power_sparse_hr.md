@@ -2,7 +2,7 @@
 title: Run 2021-09-07 19:46
 type: workout
 generator: fitdocs
-doc_version: 7
+doc_version: 8
 date: '2021-09-07'
 start_time: '2021-09-07T19:46:40-06:00'
 sport: Run
