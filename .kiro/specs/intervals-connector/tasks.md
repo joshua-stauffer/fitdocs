@@ -298,7 +298,7 @@
   - _Requirements: 8.1, 8.3, 8.4, 8.5, 8.7, 8.8_
   - _Depends: 2.1, 2.2_
 
-- [ ] 3. The intervals.icu connector
+- [x] 3. The intervals.icu connector
 
 - [x] 3.1 (P) Declare and register the connector, parse its settings, and admit its address only in its own files
   - The connector module with every constant, the settings value, the
@@ -448,7 +448,7 @@
     availability and reasons
   - _Requirements: 1.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 5.1, 5.2, 5.3, 5.4, 5.5, 5.7, 6.1_
 
-- [ ] 3.4 Download originals: decompress within the bound, decline GPX, TCX and missing files, and map every status
+- [x] 3.4 Download originals: decompress within the bound, decline GPX, TCX and missing files, and map every status
   - The download of the original (never the regenerated file), the remote id
     percent-quoted into its path; bounded decompression of a gzip body and
     pass-through of any other; GPX/TCX recognition by content; the declination
