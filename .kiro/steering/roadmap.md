@@ -1810,7 +1810,7 @@ credential store are designed for them now and built later.
   delivery; the connect and pull commands, the pull optionally chaining the
   drain; the folder connector; the revised network statements and guards;
   the packaged skill's routine. Dependencies: none
-- [ ] channel-merge — **spec written 2026-09-29** (Phase 8 batch, `tasks-generated`, all approvals set; 9 requirements / 54 criteria, 6 majors / 17 executable tasks; cross-spec reviewed, three rounds, READY; also composes the listed files in the load and benchmark passes). composing one activity from a base and its extras.
+- [x] channel-merge — **implemented 2026-10-02** (17/17 tasks; landed second after intervals-connector: DOC_VERSION 9, CONTRACT_VERSION "7", workout-docs Amendment 3, wiki-contract Amendment 4 channel part, training-load Amendment 5, performance-benchmarks Amendment 2; donor devices wired into the Garmin attribution line; validate-impl GO); **spec written 2026-09-29** (Phase 8 batch, `tasks-generated`, all approvals set; 9 requirements / 54 criteria, 6 majors / 17 executable tasks; cross-spec reviewed, three rounds, READY; also composes the listed files in the load and benchmark passes). composing one activity from a base and its extras.
   Alignment is by timestamp, with a per-stretch lag between pauses (Stryd
   and HealthFit copies drift between 0 and +1 s from one stretch to the
   next, measured). Extras donate only the channels the base lacks, and the
