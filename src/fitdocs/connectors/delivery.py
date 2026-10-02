@@ -16,19 +16,30 @@ it only ever acts on ``ledger.pending_entries()`` -- every other entry
 already resolved) passes through unchanged -- and never removes a file whose
 current bytes differ from the recorded hash (Req 8.6), so a hand-dropped
 inbox file, or a delivery a later run modified, is left untouched either
-way. :func:`deliver` makes no such claim about files outside its own target:
-it reads the primary candidate's bytes to decide whether to reuse it, and
-may leave a colliding file (even a directory) exactly as it found it while
-writing elsewhere, but it is not scoped to "only files the ledger knows
-about" the way :func:`sweep` is.
+way. :func:`deliver` is scoped the same way on its reuse decision (R2
+controller ruling, Req 15.4, Req 8.6): an existing file at a candidate name
+is only ever reused when ``owned`` -- a mapping from inbox-relative path to
+the sha256 this instance itself recorded delivering there -- maps that exact
+path to the candidate's own sha256, and the file's current bytes still hash
+to it; never merely because its bytes happen to match some other recorded
+delivery, and never because the path alone was once this instance's. A
+byte-identical file the athlete's own tool placed at that exact name, or one
+the athlete overwrote after this instance delivered there, is therefore
+never adopted, so it can never later be removed by :func:`sweep` once a
+*different* file ends up archived under the same hash. Any other existing
+file at a candidate name (identical or not, owned under a different hash, or
+even a directory) is left exactly as :func:`deliver` found it, and the
+delivery escalates to the next candidate.
 """
 
 from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
+from types import MappingProxyType
 
 from fitdocs import layout
 from fitdocs.connectors._atomic import write_atomic
@@ -102,76 +113,96 @@ class DeliveryResult:
     """Inbox-relative POSIX path, e.g. ``"healthfit/2026-09-20-run.fit"``."""
 
     written: bool
-    """``False`` when an identical file already sat at the chosen path."""
+    """``False`` when this instance's own recorded delivery already sat there."""
 
 
 def deliver(
-    inbox: Path, instance: str, name: str, data: bytes, sha256: str
+    inbox: Path,
+    instance: str,
+    name: str,
+    data: bytes,
+    sha256: str,
+    *,
+    owned: Mapping[str, str] = MappingProxyType({}),
 ) -> DeliveryResult:
-    """Write ``data`` into ``<inbox>/<instance>/`` under ``name`` (Req 8.1-8.4).
+    """Write ``data`` into ``<inbox>/<instance>/`` under ``name`` (Req 8.1-8.4,
+    15.4; R2 controller ruling).
 
-    The instance's subdirectory is created on demand. If ``<dir>/<name>``
-    already holds a file whose content hash equals ``sha256``, that file is
-    reused and nothing is written (``written=False``). Otherwise a
-    content-derived name is chosen -- ``<stem>-<sha256[:8]>.fit``, then
-    ``<stem>-<sha256[:8]>-2.fit``, ... -- escalating until a name that does
-    not yet exist is found, the same scheme
-    :func:`fitdocs.inbox._first_free_destination` uses (reimplemented here
+    The instance's subdirectory is created on demand. Candidates are tried
+    in order -- ``<dir>/<name>``, then ``<stem>-<sha256[:8]>.fit``, then
+    ``<stem>-<sha256[:8]>-2.fit``, ... (the same scheme
+    :func:`fitdocs.inbox._first_free_destination` uses, reimplemented here
     because that function is private and this package may not import
-    :mod:`fitdocs.inbox`'s move-side internals). The write itself goes
-    through :func:`fitdocs.connectors._atomic.write_atomic`, so the
-    temporary name is dot-prefixed and the target is never partially
-    written (Req 8.1); the bytes given are written unmodified (Req 8.2); an
-    existing, different file at any candidate name is never overwritten
-    (Req 8.3).
+    :mod:`fitdocs.inbox`'s move-side internals). At each candidate: if
+    nothing exists there, ``data`` is written there and that candidate is
+    the result. If a *file* exists there, it is reused (``written=False``)
+    only when ``owned`` maps its inbox-relative POSIX path to this exact
+    ``sha256`` -- i.e. this instance itself previously recorded delivering
+    these bytes at this path (Req 8.6's definition of a delivery) -- and the
+    file's current on-disk bytes still hash to ``sha256``. Any other
+    existing entry at a candidate -- an unowned file (identical content or
+    not), a file owned under a different hash, or a directory -- is left
+    exactly as found, and the search moves to the next candidate. This is
+    what keeps a byte-identical file the athlete's own tool placed at the
+    exact candidate name from ever being adopted (Req 15.4): callers pass a
+    mapping from the inbox-relative paths of this instance's own pending and
+    already-delivered-this-run entries to the sha256 recorded for each.
+
+    The write itself goes through
+    :func:`fitdocs.connectors._atomic.write_atomic`, so the temporary name
+    is dot-prefixed and the target is never partially written (Req 8.1);
+    the bytes given are written unmodified (Req 8.2); an existing, unowned
+    file at any candidate name is never overwritten (Req 8.3).
     """
     directory = inbox / instance
     directory.mkdir(parents=True, exist_ok=True)
     primary = directory / name
 
-    if primary.is_file():
-        if hashlib.sha256(primary.read_bytes()).hexdigest() == sha256:
-            return DeliveryResult(
-                rel=primary.relative_to(inbox).as_posix(), written=False
-            )
-        target = _escalate(primary, sha256)
-    elif primary.exists():
-        target = _escalate(primary, sha256)
-    else:
-        target = primary
+    for candidate in _candidates(primary, sha256):
+        rel = candidate.relative_to(inbox).as_posix()
+        if candidate.is_file():
+            if (
+                owned.get(rel) == sha256
+                and hashlib.sha256(candidate.read_bytes()).hexdigest() == sha256
+            ):
+                return DeliveryResult(rel=rel, written=False)
+            continue
+        if candidate.exists():
+            # A directory (or other non-file) sits at this name -- never a
+            # target to reuse or overwrite; move on to the next candidate.
+            continue
+        write_atomic(candidate, data, prefix=name)
+        return DeliveryResult(rel=rel, written=True)
+    raise AssertionError("unreachable: _candidates never stops yielding free names")
 
-    write_atomic(target, data, prefix=name)
-    return DeliveryResult(rel=target.relative_to(inbox).as_posix(), written=True)
 
+def _candidates(primary: Path, sha256: str) -> Iterator[Path]:
+    """The ordered, unbounded sequence of names :func:`deliver` tries.
 
-def _escalate(primary: Path, sha256: str) -> Path:
-    """The next free name for ``primary``, given it (or its predecessor
-    candidate) is already taken by different content.
-
-    Mirrors :func:`fitdocs.inbox._first_free_destination`'s escalation
-    scheme -- ``<stem>-<sha256[:8]>.fit``, then ``-2``, ``-3``, ... until a
-    name that does not currently exist is found -- with one deliberate
-    difference: :func:`fitdocs.inbox._first_free_destination` keeps
-    ``primary.suffix`` verbatim (any extension a processed file may carry),
-    while every delivery this package makes is a FIT file, so this function
-    always appends the literal ``.fit`` to each escalated candidate
-    regardless of ``primary``'s own suffix or its case. A pure function of
-    ``primary``'s current filesystem state and ``sha256``.
+    ``primary`` first, then ``<stem>-<sha256[:8]>.fit``, then
+    ``<stem>-<sha256[:8]>-2.fit``, ``-3``, ... without end -- the caller
+    (:func:`deliver`) stops at the first candidate it can use. Mirrors
+    :func:`fitdocs.inbox._first_free_destination`'s escalation scheme, with
+    one deliberate difference: :func:`fitdocs.inbox._first_free_destination`
+    keeps ``primary.suffix`` verbatim (any extension a processed file may
+    carry), while every delivery this package makes is a FIT file, so this
+    generator always appends the literal ``.fit`` to each escalated
+    candidate regardless of ``primary``'s own suffix or its case. A pure
+    function of ``primary`` and ``sha256`` -- it reads no filesystem state
+    itself.
     """
+    yield primary
+
     name = primary.name
     stem = name[: -len(_FIT_SUFFIX)] if name.lower().endswith(_FIT_SUFFIX) else name
     parent = primary.parent
     short_hash = sha256[:8]
 
-    hashed = parent / f"{stem}-{short_hash}{_FIT_SUFFIX}"
-    if not hashed.exists():
-        return hashed
+    yield parent / f"{stem}-{short_hash}{_FIT_SUFFIX}"
 
     attempt = 2
     while True:
-        candidate = parent / f"{stem}-{short_hash}-{attempt}{_FIT_SUFFIX}"
-        if not candidate.exists():
-            return candidate
+        yield parent / f"{stem}-{short_hash}-{attempt}{_FIT_SUFFIX}"
         attempt += 1
 
 

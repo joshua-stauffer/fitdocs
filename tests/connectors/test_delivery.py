@@ -183,7 +183,10 @@ def test_deliver_writes_bytes_unchanged_under_the_instance_subdirectory(
     assert target.read_bytes() == data
 
 
-def test_deliver_reuses_an_identical_file_and_writes_nothing(tmp_path: Path) -> None:
+def test_deliver_reuses_an_identical_file_only_when_owned(tmp_path: Path) -> None:
+    # R2 controller ruling (owned-only reuse, Req 15.4): identical bytes alone
+    # no longer justify reuse -- the candidate's inbox-relative path must also
+    # be in ``owned`` (this instance's own recorded delivery).
     inbox = tmp_path / "inbox"
     data = b"identical-bytes"
     sha = _sha(data)
@@ -193,12 +196,99 @@ def test_deliver_reuses_an_identical_file_and_writes_nothing(tmp_path: Path) -> 
     existing.write_bytes(data)
     before_mtime = existing.stat().st_mtime_ns
 
-    result = deliver(inbox, "healthfit", "run.fit", data, sha)
+    result = deliver(
+        inbox, "healthfit", "run.fit", data, sha, owned={"healthfit/run.fit": sha}
+    )
 
     assert result == DeliveryResult(rel="healthfit/run.fit", written=False)
     # Nothing else was created in the directory, and the file was not rewritten.
     assert [p.name for p in directory.iterdir()] == ["run.fit"]
     assert existing.stat().st_mtime_ns == before_mtime
+
+
+def test_deliver_never_reuses_an_unowned_identical_file(tmp_path: Path) -> None:
+    # The blocker this pin closes: a byte-identical file the athlete's own
+    # tool dropped at the exact candidate name is NOT this instance's own
+    # delivery (not in ``owned``), so it must be left alone and the delivery
+    # escalates to a hashed name instead of adopting it (Req 15.4).
+    inbox = tmp_path / "inbox"
+    data = b"identical-bytes-not-owned"
+    sha = _sha(data)
+    directory = inbox / "healthfit"
+    directory.mkdir(parents=True)
+    existing = directory / "run.fit"
+    existing.write_bytes(data)
+    before_mtime = existing.stat().st_mtime_ns
+
+    result = deliver(inbox, "healthfit", "run.fit", data, sha)  # owned defaults empty
+
+    expected_name = f"run-{sha[:8]}.fit"
+    assert result == DeliveryResult(rel=f"healthfit/{expected_name}", written=True)
+    # The athlete's own file at the primary name is untouched -- never
+    # adopted, never rewritten, never deleted later by a sweep.
+    assert existing.read_bytes() == data
+    assert existing.stat().st_mtime_ns == before_mtime
+    assert (directory / expected_name).read_bytes() == data
+
+
+def test_deliver_escalation_never_reuses_an_unowned_identical_hashed_name(
+    tmp_path: Path,
+) -> None:
+    # The owned-only rule applies at every candidate, not just the primary:
+    # an identical, unowned file already sitting at the *hashed* candidate
+    # name must also be left alone, forcing escalation to "-2".
+    inbox = tmp_path / "inbox"
+    data = b"identical-bytes-hashed-unowned"
+    sha = _sha(data)
+    directory = inbox / "healthfit"
+    directory.mkdir(parents=True)
+    (directory / "run.fit").write_bytes(b"different-primary-content")
+    hashed_name = f"run-{sha[:8]}.fit"
+    hashed_path = directory / hashed_name
+    hashed_path.write_bytes(data)  # identical to the new data, but not owned
+    before_mtime = hashed_path.stat().st_mtime_ns
+
+    result = deliver(inbox, "healthfit", "run.fit", data, sha)  # owned defaults empty
+
+    expected_name = f"run-{sha[:8]}-2.fit"
+    assert result == DeliveryResult(rel=f"healthfit/{expected_name}", written=True)
+    assert hashed_path.read_bytes() == data
+    assert hashed_path.stat().st_mtime_ns == before_mtime
+    assert (directory / expected_name).read_bytes() == data
+
+
+def test_deliver_reuses_an_owned_hashed_candidate_without_escalating_further(
+    tmp_path: Path,
+) -> None:
+    # The mirror of the previous pin: when the hashed candidate IS this
+    # instance's own prior delivery (owned) and its bytes still match, it is
+    # reused in place rather than escalating to "-2".
+    inbox = tmp_path / "inbox"
+    data = b"identical-bytes-hashed-owned"
+    sha = _sha(data)
+    directory = inbox / "healthfit"
+    directory.mkdir(parents=True)
+    (directory / "run.fit").write_bytes(b"different-primary-content-2")
+    hashed_name = f"run-{sha[:8]}.fit"
+    hashed_path = directory / hashed_name
+    hashed_path.write_bytes(data)
+    before_mtime = hashed_path.stat().st_mtime_ns
+
+    result = deliver(
+        inbox,
+        "healthfit",
+        "run.fit",
+        data,
+        sha,
+        owned={f"healthfit/{hashed_name}": sha},
+    )
+
+    assert result == DeliveryResult(rel=f"healthfit/{hashed_name}", written=False)
+    assert hashed_path.stat().st_mtime_ns == before_mtime
+    # No "-2" escalation was created.
+    assert sorted(p.name for p in directory.iterdir()) == sorted(
+        ["run.fit", hashed_name]
+    )
 
 
 def test_deliver_escalates_on_collision_with_different_content(tmp_path: Path) -> None:
@@ -228,12 +318,18 @@ def test_deliver_escalates_past_a_taken_hashed_name_too(tmp_path: Path) -> None:
     sha = _sha(new_data)
     (directory / "run.fit").write_bytes(b"primary-taken")
     (directory / f"run-{sha[:8]}.fit").write_bytes(b"hashed-name-also-taken")
+    # Byte-identical to `new_data`, but not in `owned` (the default, empty):
+    # the owned check must still be exercised and refuse it at the "-2"
+    # candidate, so delivery escalates one step further, to "-3".
+    (directory / f"run-{sha[:8]}-2.fit").write_bytes(new_data)
 
     result = deliver(inbox, "healthfit", "run.fit", new_data, sha)
 
-    expected_name = f"run-{sha[:8]}-2.fit"
+    expected_name = f"run-{sha[:8]}-3.fit"
     assert result.rel == f"healthfit/{expected_name}"
     assert (directory / expected_name).read_bytes() == new_data
+    # The identical-content file at "-2" was never adopted or touched.
+    assert (directory / f"run-{sha[:8]}-2.fit").read_bytes() == new_data
 
 
 def test_deliver_escalation_name_preserves_the_stems_case(tmp_path: Path) -> None:
@@ -663,3 +759,61 @@ def test_sweep_computes_the_hash_only_when_the_archive_copy_exists(
     sweep(inbox, data_root, ledger)
 
     assert calls == []  # never hashed the pending file: the archive was absent
+
+
+def test_deliver_never_reuses_an_owned_path_recorded_with_other_bytes(
+    tmp_path: Path,
+) -> None:
+    # An owned path whose file now holds bytes other than the ones this
+    # instance recorded there (the athlete's tool overwrote it) is no longer
+    # this instance's delivery (Req 8.6): even when those bytes equal the new
+    # data, it is left alone and the delivery escalates.
+    inbox = tmp_path / "inbox"
+    data = b"bytes-the-athlete-wrote"
+    sha = _sha(data)
+    directory = inbox / "healthfit"
+    directory.mkdir(parents=True)
+    existing = directory / "run.fit"
+    existing.write_bytes(data)
+    before_mtime = existing.stat().st_mtime_ns
+
+    result = deliver(
+        inbox,
+        "healthfit",
+        "run.fit",
+        data,
+        sha,
+        owned={"healthfit/run.fit": _sha(b"bytes-this-instance-delivered")},
+    )
+
+    expected_name = f"run-{sha[:8]}.fit"
+    assert result == DeliveryResult(rel=f"healthfit/{expected_name}", written=True)
+    assert existing.stat().st_mtime_ns == before_mtime
+    assert (directory / expected_name).read_bytes() == data
+
+
+def test_deliver_never_reuses_an_owned_path_whose_bytes_changed_underneath(
+    tmp_path: Path,
+) -> None:
+    # ``owned`` maps this exact path to this exact sha256 -- the instance did
+    # record delivering these bytes here -- but the file now holds other
+    # bytes (overwritten since): the current-bytes check must refuse reuse,
+    # so the delivery escalates and the file there is left as found.
+    inbox = tmp_path / "inbox"
+    data = b"bytes-this-instance-delivered-here"
+    sha = _sha(data)
+    directory = inbox / "healthfit"
+    directory.mkdir(parents=True)
+    existing = directory / "run.fit"
+    existing.write_bytes(b"bytes-written-over-the-delivery")
+    before_mtime = existing.stat().st_mtime_ns
+
+    result = deliver(
+        inbox, "healthfit", "run.fit", data, sha, owned={"healthfit/run.fit": sha}
+    )
+
+    expected_name = f"run-{sha[:8]}.fit"
+    assert result == DeliveryResult(rel=f"healthfit/{expected_name}", written=True)
+    assert existing.read_bytes() == b"bytes-written-over-the-delivery"
+    assert existing.stat().st_mtime_ns == before_mtime
+    assert (directory / expected_name).read_bytes() == data

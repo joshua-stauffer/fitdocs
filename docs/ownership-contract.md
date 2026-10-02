@@ -732,8 +732,10 @@ contract:
   drain), `pull` removes that one file from the inbox — never a file its
   ledger does not record as that instance's delivery, and never before the
   archive holds the matching bytes. (A file already sitting at a
-  delivery's exact name under `<inbox>/<name>/` with identical bytes is
-  adopted as that delivery rather than written twice.) The pull itself
+  delivery's name under `<inbox>/<name>/` that the pull did not itself
+  deliver there — identical bytes or not — is never adopted: the delivery
+  leaves it exactly as it is and is written under a name derived from its
+  content instead.) The pull itself
   never writes, alters, or deletes a `workouts/*.md` document, a
   `fit-archive/*` archived source, the athlete profile, or the settings
   file, and never writes to or deletes from a folder a connector reads. Run

@@ -51,7 +51,9 @@ behavior-preserving default, a new reported channel that a caller who
 ignores unknown channels can safely skip, or the delivery-removal carve-out —
 a connector's own prior delivery, once its bytes are archived, is removed by
 that connector's next pull; nothing the athlete or the athlete's own tools
-place in the inbox is ever a candidate for removal. Internal: the drain's
+place in the inbox is ever a candidate for removal, other than an exact copy
+of a still-pending delivery written at that delivery's own path, which
+fitdocs cannot tell from the delivery. Internal: the drain's
 internal scheduling, its filesystem staging strategy, and any module that
 implements the drain without being part of the documented `[inbox]`
 interface.

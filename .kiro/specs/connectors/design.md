@@ -1165,9 +1165,12 @@ def delivery_name(activity: RemoteActivity) -> str: ...
 @dataclass(frozen=True)
 class DeliveryResult:
     rel: str            # inbox-relative POSIX path, e.g. "healthfit/2026-09-20-run.fit"
-    written: bool       # False when an identical file already sat at the chosen path
+    written: bool       # False when this instance's own recorded delivery already sat there
 
-def deliver(inbox: Path, instance: str, name: str, data: bytes, sha256: str) -> DeliveryResult: ...
+def deliver(
+    inbox: Path, instance: str, name: str, data: bytes, sha256: str,
+    *, owned: Mapping[str, str] = MappingProxyType({}),
+) -> DeliveryResult: ...
 
 @dataclass(frozen=True)
 class SweepResult:
@@ -1178,12 +1181,28 @@ class SweepResult:
 def sweep(inbox: Path, data_root: Path, ledger: Ledger) -> SweepResult: ...
 ```
 - `deliver`: directory `<inbox>/<instance>/` created on demand. Target
-  `primary = <dir>/<name>`; if it exists: identical hash → reuse, `written=False`;
-  otherwise escalate `<stem>-<sha256[:8]>.fit`, `<stem>-<sha256[:8]>-2.fit`, …
-  (the scheme `inbox._first_free_destination` uses, reimplemented because that
-  function is private). Write with `write_atomic(target, data, prefix=name)` —
-  the temporary name starts with `.`, so `select_candidates` never admits it
-  (8.1); bytes are written exactly as received (8.2).
+  `primary = <dir>/<name>`; tries candidates in order — `primary`, then
+  `<stem>-<sha256[:8]>.fit`, `<stem>-<sha256[:8]>-2.fit`, … (the scheme
+  `inbox._first_free_destination` uses, reimplemented because that function
+  is private). At each candidate: nothing there → write and stop; a file
+  there → reuse (`written=False`) **only when `owned` maps that exact
+  inbox-relative path to this candidate's `sha256` and the file's current
+  bytes still hash to it** — the caller-supplied keyword-only
+  `owned: Mapping[str, str] = MappingProxyType({})` from inbox-relative path
+  to the sha256 this instance itself recorded delivering there (its
+  ledger's pending paths plus any delivered earlier in this run, each
+  mapped to its own recorded hash); otherwise (unowned, owned under a
+  different hash, identical bytes or not, or a non-file) leave it untouched
+  and escalate to the next candidate (R2 controller ruling, replacing the
+  earlier "identical hash → reuse" rule — a hand-dropped file byte-identical
+  to a fetched activity is not this instance's own delivery, and a file
+  this instance once delivered but whose bytes have since changed
+  underneath it is no longer that delivery either, so adopting either on
+  hash or path alone would let a later sweep delete it once a different
+  file ends up archived under the same hash, violating Req 15.4 and 8.6).
+  Write with `write_atomic(target, data, prefix=name)` — the temporary name
+  starts with `.`, so `select_candidates` never admits it (8.1); bytes are
+  written exactly as received (8.2).
 - `sweep` over `ledger.pending_entries()`:
   archive present (`layout.archive_path(data_root, sha).is_file()`):
   file present and its hash equal → `unlink`, clear `pending`, add to
@@ -1274,7 +1293,12 @@ Per instance, in order:
    `Deferred` → note; `Declined` → record `SKIPPED`; `Fetched`:
    `is_fit` false → record `SKIPPED("not a FIT file", sha)`; hash archived or
    equal to a pending delivery's hash (including one made earlier this run) →
-   record `ALREADY_HELD`; else `deliver` → record `DELIVERED(pending=rel)`.
+   record `ALREADY_HELD`; else `deliver(..., owned=owned_paths)` — a mapping
+   from this instance's own pending inbox-relative paths (built fresh after
+   the sweep in step 2) to each one's recorded `sha256`, updated with this
+   candidate's own path and hash on every successful delivery (defensive:
+   `held_hashes` already dedups before every `deliver`, so reuse is
+   unreachable from pull today) — → record `DELIVERED(pending=rel)`.
    `AuthFailure` or `ConnectorError` from `fetch_activity` → `error`, stop
    the instance; any other exception or `TransportError` → `failed` note,
    continue (6.11). A `deliver` `OSError` → `failed` note.
@@ -1659,7 +1683,9 @@ each name identical to its defining module's object.
   paragraph: the drain never deletes; a file `fitdocs pull` delivered under
   `<inbox>/<name>/` is fitdocs's own copy and the next pull removes it once
   identical bytes are archived; nothing the athlete or the athlete's tools
-  put in the inbox is ever removed (15.4).
+  put in the inbox is ever removed, a delivery being recognized by its path
+  and bytes, so an exact copy of a still-pending delivery placed at its own
+  path counts as that delivery (15.4, amended 2026-10-02).
 - **Settings-table count (15.6; cross-spec ruling 2026-09-29)**: both
   `activity-identity` (`[identity]`) and this spec add a table. The count
   in prose at `docs/configuration.md:51` and `docs/compatibility.md:24, 64`
@@ -1899,9 +1925,11 @@ Discrimination); the items below name the behavior and the mutation it dies on.
   each malformed shape and newer version and foreign connector raise; absent
   file creates nothing; watermark never moves backward.
 - Delivery: `is_fit` on valid/12-byte/non-FIT/short inputs; name
-  sanitization table; collision escalation; identical-file reuse; the temp
-  file is dot-prefixed (spy on `mkstemp` prefix); sweep's six branches, each
-  with a fixture where the asserted state is false beforehand.
+  sanitization table; collision escalation; owned-path-and-hash reuse (never
+  on path alone, never on hash alone, never on an owned path whose bytes
+  changed underneath it); the temp file is dot-prefixed (spy on `mkstemp`
+  prefix); sweep's six branches, each with a fixture where the asserted
+  state is false beforehand.
 
 ### Integration (engine level, `FakeTransport` or folder connector, socket guard on)
 - Second pull over an unchanged folder fetches nothing and leaves the ledger

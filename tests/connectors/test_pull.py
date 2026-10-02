@@ -1867,6 +1867,70 @@ def test_pull_with_archived_deliveries_gives_removed_sorted(tmp_path: Path) -> N
         assert "pending" not in entry
 
 
+def test_a_hand_dropped_identical_file_is_never_adopted_or_later_removed(
+    tmp_path: Path,
+) -> None:
+    # The blocker this pin closes (Req 15.4, R2 controller ruling): the
+    # athlete's own tool placed a byte-identical file at the exact inbox
+    # path `deliver` would otherwise choose as its primary name, *before*
+    # this instance ever delivered anything there. `deliver` must not adopt
+    # it -- it is not this instance's own delivery (not in the ledger's
+    # pending set) -- so the activity is delivered under an escalated,
+    # content-hashed name instead, and the athlete's file is never touched,
+    # recorded, or later swept away.
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+    data = _fit_bytes(b"hand-dropped-identical")
+    sha = hashlib.sha256(data).hexdigest()
+
+    athlete_file = inbox / "src" / "run.fit"
+    athlete_file.parent.mkdir(parents=True)
+    athlete_file.write_bytes(data)  # falsity in the starting state: pre-existing
+    athlete_mtime = athlete_file.stat().st_mtime_ns
+
+    activity = RemoteActivity(
+        remote_id="remote-1",
+        original_available=True,
+        start=_NOW,
+        revision="r1",
+        suggested_name="run.fit",
+    )
+    connector = ScriptedPuller()
+    connector.listing_script.append(Listing(activities=(activity,)))
+    connector.fetch_script.append(Fetched(data=data))
+
+    first = _run(data_root, inbox, [_instance(connector, name="src")])
+
+    expected_hashed_path = f"src/run-{sha[:8]}.fit"
+    assert first.instances[0].delivered == (
+        Delivered(remote_id="remote-1", path=expected_hashed_path),
+    )
+    # The athlete's file at the primary name is untouched.
+    assert athlete_file.read_bytes() == data
+    assert athlete_file.stat().st_mtime_ns == athlete_mtime
+    assert (inbox / expected_hashed_path).read_bytes() == data
+
+    # Simulate the drain archiving this instance's own delivery (the hashed
+    # path), exactly as test_pull_with_archived_deliveries_gives_removed_sorted
+    # does -- never the athlete's file, which was never recorded anywhere.
+    archive_path = layout.archive_path(data_root, sha)
+    archive_path.parent.mkdir(parents=True, exist_ok=True)
+    archive_path.write_bytes(data)
+
+    second_connector = ScriptedPuller()
+    second_connector.listing_script.append(Listing(activities=()))
+    second = _run(data_root, inbox, [_instance(second_connector, name="src")])
+
+    # Only this instance's own (hashed) delivery is swept; the athlete's
+    # file survives, byte-identical and untouched.
+    assert second.instances[0].removed == (expected_hashed_path,)
+    assert not (inbox / expected_hashed_path).exists()
+    assert athlete_file.is_file()
+    assert athlete_file.read_bytes() == data
+    assert athlete_file.stat().st_mtime_ns == athlete_mtime
+
+
 # ---------------------------------------------------------------------------
 # M20/M21: a Declined entry, in the ledger and the report.
 # ---------------------------------------------------------------------------
@@ -3480,3 +3544,69 @@ def test_an_interrupt_during_listing_or_renewal_propagates(tmp_path: Path) -> No
             store=store,
             now=lambda: _NOW,
         )
+
+
+def test_an_athlete_overwrite_of_a_pending_delivery_is_never_adopted(
+    tmp_path: Path,
+) -> None:
+    # The path is this instance's (still pending, not archived), but the
+    # bytes there are now the athlete's: a later activity fetched with those
+    # same bytes under the same name must not adopt the file, so the sweep
+    # never removes it once those bytes are archived (Req 8.6, 15.4).
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+    first_bytes = _fit_bytes(b"first-delivery")
+    athlete_bytes = _fit_bytes(b"athlete-overwrote")
+    athlete_sha = hashlib.sha256(athlete_bytes).hexdigest()
+
+    first = ScriptedPuller()
+    first.listing_script.append(
+        Listing(
+            activities=(
+                RemoteActivity(
+                    remote_id="remote-1",
+                    original_available=True,
+                    start=_NOW,
+                    revision="r1",
+                    suggested_name="run.fit",
+                ),
+            )
+        )
+    )
+    first.fetch_script.append(Fetched(data=first_bytes))
+    _run(data_root, inbox, [_instance(first, name="src")])
+
+    athlete_file = inbox / "src" / "run.fit"
+    athlete_file.write_bytes(athlete_bytes)
+
+    second = ScriptedPuller()
+    second.listing_script.append(
+        Listing(
+            activities=(
+                RemoteActivity(
+                    remote_id="remote-2",
+                    original_available=True,
+                    start=_NOW + timedelta(hours=1),
+                    revision="r1",
+                    suggested_name="run.fit",
+                ),
+            )
+        )
+    )
+    second.fetch_script.append(Fetched(data=athlete_bytes))
+    report = _run(data_root, inbox, [_instance(second, name="src")])
+    hashed = f"src/run-{athlete_sha[:8]}.fit"
+    assert report.instances[0].delivered == (
+        Delivered(remote_id="remote-2", path=hashed),
+    )
+
+    archive_path = layout.archive_path(data_root, athlete_sha)
+    archive_path.parent.mkdir(parents=True, exist_ok=True)
+    archive_path.write_bytes(athlete_bytes)
+    third = ScriptedPuller()
+    third.listing_script.append(Listing(activities=()))
+    swept = _run(data_root, inbox, [_instance(third, name="src")])
+
+    assert swept.instances[0].removed == (hashed,)
+    assert athlete_file.read_bytes() == athlete_bytes

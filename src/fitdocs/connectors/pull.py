@@ -496,6 +496,22 @@ def _pull_one(
                             for entry in ledger.pending_entries()
                             if entry.sha256 is not None
                         }
+                        # `deliver`'s owned-only reuse rule (Req 15.4, R2
+                        # controller ruling): only an inbox-relative path
+                        # this instance itself already recorded -- a still-
+                        # pending delivery, or one made earlier in this same
+                        # run -- mapped to the exact sha256 it was recorded
+                        # with, may ever be reused. Never a file that merely
+                        # happens to have identical bytes, such as one the
+                        # athlete's own tool dropped in by hand. Built after
+                        # the sweep above, so an entry whose delivery was
+                        # just swept away from the inbox is not offered as
+                        # owned.
+                        owned_paths: dict[str, str] = {
+                            entry.pending: entry.sha256
+                            for entry in ledger.pending_entries()
+                            if entry.pending is not None and entry.sha256 is not None
+                        }
 
                         for activity in ordered:
                             existing_entry = ledger.get(activity.remote_id)
@@ -635,7 +651,14 @@ def _pull_one(
                             # file it discovers (R2 controller ruling).
                             file_name = delivery_name(activity)
                             try:
-                                result = deliver(inbox, name, file_name, data, sha)
+                                result = deliver(
+                                    inbox,
+                                    name,
+                                    file_name,
+                                    data,
+                                    sha,
+                                    owned=owned_paths,
+                                )
                             except OSError as exc:
                                 failed.append(
                                     PullNote(
@@ -659,6 +682,7 @@ def _pull_one(
                                 Delivered(remote_id=activity.remote_id, path=result.rel)
                             )
                             held_hashes.add(sha)
+                            owned_paths[result.rel] = sha
 
                         if not options.dry_run:
                             watermark = _compute_watermark(listing.activities, ledger)

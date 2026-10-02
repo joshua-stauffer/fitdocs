@@ -55,7 +55,11 @@ re-hashed forever. A file a connector delivered is fitdocs's own transient
 copy of bytes that exist at the source and, once drained, in the archive; the
 next pull removes it once — and only once — the archive holds identical bytes.
 The drain itself still never deletes anything, and nothing the athlete or the
-athlete's own tools put in the inbox is ever removed.
+athlete's own tools put in the inbox is ever removed -- a pull recognizes its
+own delivery by the path and bytes it wrote, so an exact copy of a
+still-pending delivery's bytes written back at that delivery's own path counts
+as that delivery (amended at feature validation, 2026-10-02, maintainer
+decision; the bytes are always archived first).
 
 ## Boundary Context
 
@@ -297,7 +301,7 @@ athlete's own tools put in the inbox is ever removed.
 1. The ownership contract shall state that credentials never live under the data root, that each connector ledger is fitdocs-owned tool state in the tool-state directory, what `fitdocs pull` writes and removes (its deliveries in the configured inbox and its ledgers), and that `fitdocs connect` writes nothing under the data root.
 2. The ownership contract's version shall advance by one from the value current when this feature lands.
 3. `fitdocs pull` shall be registered with the write-confinement guard as a writing entry point with its own proof that the measured run wrote, and an automated test shall prove that `fitdocs connect` writes only its credentials file and nothing inside the data root or the source tree.
-4. The inbox documentation and the compatibility policy shall state that the drain never deletes an inbox file, that nothing the athlete or the athlete's tools put in the inbox is ever deleted, and that a connector's own delivery is removed by the next pull once identical bytes are archived, keeping every existing never-delete statement true.
+4. The inbox documentation and the compatibility policy shall state that the drain never deletes an inbox file, that nothing the athlete or the athlete's tools put in the inbox is ever deleted, and that a connector's own delivery is removed by the next pull once identical bytes are archived, keeping every existing never-delete statement true; and shall state that a delivery is recognized by its path and bytes, so an exact copy of a still-pending delivery's bytes placed at that delivery's own path counts as that delivery. *(amended at feature validation, 2026-10-02, maintainer decision: formerly ended at "keeping every existing never-delete statement true.")*
 5. The shipped documentation shall describe connectors: configuring instances, the folder connector, connecting, where credentials live and their environment overrides, the pull and its options and report, delivery and removal, the ledger, what leaves the machine and how to switch that access off, the terms-first policy, and — while cross-source identity has not shipped — that pulling into a data root that already holds other copies of the same activities creates duplicate pages, or, once it has shipped, that a data root whose pages predate it is regenerated before its first pull.
 6. The settings documentation, the ownership contract, and the compatibility policy shall name the connectors table among the settings file's tables.
 7. The packaged `fitdocs-workouts` skill's routine shall pull and drain in one command and then check the tree; the skill shall document the pull report's channels in a table an automated test binds to the pull report's fields, and shall tell the agent never to run `fitdocs connect` itself and never to retry a failed authentication.

@@ -96,7 +96,9 @@ connector's ledger, not something you or your tools put there, and the
 *next* pull removes it once the archive holds an identical-content copy.
 Nothing you or your own tools put in the inbox is ever removed — only a
 connector's own prior deliveries, already archived, are ever candidates for
-removal.
+removal. (fitdocs recognizes a delivery by its path and its bytes, so a file
+you place at a still-pending delivery's own path holding exactly the bytes
+delivered there counts as that delivery.)
 
 **Held files.** A file that cannot be placed with certainty — its workout
 matches two or more existing pages, or files of two different workouts in the

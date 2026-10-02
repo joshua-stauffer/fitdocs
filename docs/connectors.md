@@ -164,7 +164,7 @@ field's name; the right is the label the printed table shows for that row.
 | `listed` | Listed | How many remote activities the connector reported. |
 | `delivered` | Delivered | Fetched and written into the inbox this run. |
 | `would_fetch` | Would fetch | Under `--dry-run`, what would be fetched. |
-| `held` | Already held | The remote id already has a final outcome in the ledger, or its bytes are already held — archived, or still pending in the inbox as an earlier delivery of this same instance. Nothing is delivered for it: an id already final in the ledger is not fetched at all, while one recognized by its bytes was fetched to compare them. A byte-identical file you dropped in by hand, sitting unarchived in the inbox, is not recognized this way: this check never scans the inbox for other files. |
+| `held` | Already held | The remote id already has a final outcome in the ledger, or its bytes are already held — archived, or still pending in the inbox as an earlier delivery of this same instance. Nothing is delivered for it: an id already final in the ledger is not fetched at all, while one recognized by its bytes was fetched to compare them. A byte-identical file you dropped in by hand, sitting unarchived in the inbox, is not recognized this way: this check never scans the inbox for other files. It is left exactly where it is — never adopted into the ledger — and the fetched activity is delivered alongside it, under a content-derived name if your file occupies the name the delivery would otherwise take. |
 | `skipped` | Skipped | The connector or fitdocs declined this one on purpose (not a FIT file, no original available, and similar). |
 | `deferred` | Deferred | Not resolved yet — try again next time; not an error. |
 | `failed` | Failed | This one activity could not be fetched or delivered. |
@@ -175,9 +175,15 @@ field's name; the right is the label the printed table shows for that row.
 
 A fetched file is written atomically into `<inbox>/<name>/` under the
 configured inbox, named from whatever hint the connector gave (or the remote
-id), sanitized to a safe file name ending in `.fit`. If a different file
-already holds that name, the delivery gets a name derived from its own
-content instead, so two distinct files never collide.
+id), sanitized to a safe file name ending in `.fit`. If a file already holds
+that name, it is reused in place — nothing new is written — only when this
+instance itself recorded delivering these exact bytes at that name (still
+pending in the ledger, or delivered earlier in the same run) **and** the
+file at that name still holds them; any other file already at that name,
+identical bytes or not, is left exactly as it is, and the delivery instead
+gets a name derived from its own content, so a file you or your own tools
+placed there — or an earlier delivery's file you overwrote — is never
+adopted and two distinct files never collide.
 
 If a later pull fetches the same remote activity again while its earlier
 delivery is still sitting in the inbox (not yet archived): identical bytes
@@ -195,7 +201,12 @@ reported — it, too, becomes an ordinary file the drain can pick up. Only a
 removal that actually fails, or a pending file that could not be read while
 checking it, is reported, as a deferral. **Nothing you or your own tools put
 in the inbox is ever touched by a connector** — only a connector's own prior
-deliveries are ever candidates for removal.
+deliveries are ever candidates for removal. fitdocs recognizes its own
+delivery by the path it wrote and the bytes it wrote there, not by which
+program last wrote the file: a file holding exactly a still-pending
+delivery's bytes, placed at that delivery's own path (after deleting or
+overwriting it), cannot be told apart from it and is removed the same way
+once the archive holds those bytes.
 
 ## The ledger
 
@@ -206,7 +217,11 @@ remembers, per remote activity, whether it was delivered, already held, or
 skipped, and the content hash of what was delivered. A second pull against
 the same source fetches nothing new: **the ledger decides what's new, not
 the connector's listing.** Removing the ledger file makes fitdocs re-list
-and re-fetch everything the connector currently reports.
+and re-fetch everything the connector currently reports; any deliveries
+still sitting in the inbox are left exactly where they are (fitdocs can no
+longer tell them from your own files, so no later pull removes them), and
+a re-fetched activity whose bytes are not yet archived is delivered again
+alongside them.
 
 ## What leaves your machine
 

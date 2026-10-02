@@ -25,8 +25,8 @@ regen, and load behavior is unchanged; the feature is purely additive.
 file. `connectors` adds a second writer into the inbox, `fitdocs pull`,
 whose removal of its own prior, now-archived deliveries is the one
 carve-out from "never deleted" — a connector removing bytes it delivered
-itself, not the drain and not any other file — see Requirement 6 criterion
-6.8.)*
+itself (recognized by path and bytes), never the drain — see Requirement 6
+criterion 6.8.)*
 
 ## Boundary Context
 
@@ -165,11 +165,13 @@ it).
 inbox alongside the drain this spec already governs. A pull that delivers
 a file today and, on a later run, finds that same connector's own prior
 delivery already archived and byte-identical, removes that prior delivery
-from the inbox — not the file it just wrote, and not, in general, a file
-some other source delivered — the one exception, which `connectors` owns,
-is a file already sitting under that instance's delivery name with
-byte-identical content, which the pull adopts as its delivery and later
-removes once those bytes are archived. This spec's never-delete guarantee
+from the inbox — not the file it just wrote, and never a file its ledger
+does not record as that delivery: one already sitting under that
+instance's delivery name before the pull wrote there, even with
+byte-identical content, is left untouched and never recorded as its own
+delivery. (A delivery is recognized by path and content: an exact copy
+of a still-pending delivery's bytes written at that delivery's own path
+cannot be told apart from it.) This spec's never-delete guarantee
 (6.6) and leave-in-place default (6.1) describe the drain's own
 disposition of files inside the inbox; they were written before any other
 writer existed and read, on their own, as if they bound every removal of
