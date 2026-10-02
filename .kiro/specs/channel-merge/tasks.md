@@ -437,7 +437,7 @@ rewrite or reorder a sibling's):
   - _Requirements: 2.1, 2.2, 3.3, 3.5, 3.6, 3.8, 5.1, 5.3, 9.1, 9.2_
   - _Depends: 1.1_
 
-- [ ] 3. The archive adapter and the Channel Sources section
+- [x] 3. The archive adapter and the Channel Sources section
 
 - [x] 3.1 (P) Compose a page's listed archived files for the passes that hold only `sources`
   - Given the data root, a page's listed refs and the activity the caller
@@ -508,7 +508,7 @@ rewrite or reorder a sibling's):
   - _Boundary: ChannelSourcesSection, ViewWiring_
   - _Depends: 2.4_
 
-- [ ] 3.3 Place the section in every view and add the composed golden
+- [x] 3.3 Place the section in every view and add the composed golden
   - The run/ride, strength and generic views each append the Channel Sources
     section immediately after Device & Data Quality when it has a body
   - Add a `composed_run` golden case: the run pair composed and rendered with
@@ -766,3 +766,4 @@ rewrite or reorder a sibling's):
 - 3.1 named mutations, each observed red then reverted green: keep list order (the reverse-order test alone); stop skipping missing files (the missing-file test); drop the base-duplicate skip; drop the earlier-extra-duplicate skip; catch and skip decode errors (an import-free `except Exception: continue` reds the decode and read tests); a local `_sha_of_ref` (two consumer-guard tests); boundary `==` weakened to `<=` (the seven-module equality test). Review round 1 added `is_file()` -> `exists()` (the directory-at-archive-path test alone). Dropping only the `sha is None` check is caught by mypy (`archive_path(root, None)` arg-type), not by a test. `compose_listed(data_root, refs, base) -> Composition`: extras are `reversed(refs[:-1])`; read/decode errors propagate. The clock regex lookbehind is now `(?<!\w)` (docstring `datetime.datetime.now` detected).
 - 3.2: all 10 named mutations observed red then reverted green (no-extras render; GPS twice; shift sign; zero counts; always "stretches"; delete a label; label case; archive import in provenance.py; field before user_frontmatter; field before identity). Reverse guard took 4 review rounds (converging, not oscillating; controller ruling: no debug dispatch, the round-3 reviewer swept every guard part and named the last gap): relative imports resolved per file package (O9a/O9b/O17/O21), `_package_of` pinned by literals (R2/R3), `_archive_offenders` per-file package (R4), recursive walk reaching charts/ (R5), `_provenance_targets` package (Ni/Nj). Lesson for 3.3+: a guard's helpers are code too -- pin each helper with a fixed-input test, not only the real-tree scan. `DocContext.channel_provenance` is the last field, after `identity`, default None.
 - 5.3: wiki-contract Amendment 4 gains the channel-merge paragraph + criterion 2.16 (CONTRACT_VERSION recorded "6" to "7" -- re-check against 5.2 and main after the final rebase); workout-docs Amendment 2 (3.7, 6.11, 13.4; criteria_map in spec.json), training-load Amendment 5 (9.4), performance-benchmarks Amendment 2 (1.11). Roadmap written for the state at merge: wiki-contract, training-load, performance-benchmarks ticked; workout-docs annotated, unticked (intervals-connector's attribution part pending) -- re-check if intervals-connector lands first. Review round 1 narrowed workout-docs 6.11 to the splits/devices sections (it had contradicted intervals-connector 8.4's donor attribution) and redefined 13.4's gap by placement (CM 2.6).
+- 3.3: attribution step took the "intervals-connector NOT on main" branch (origin/main 16a42a1 has no `_head`/`attribution_line`): `_head` untouched, no M25/M26 pins -- intervals-connector wires donor devices when it lands second; if it lands first, the final rebase runs 3.3's attribution step here. Named mutations red: section before Device & Data Quality (10 red), run/ride only (strength and generic tests), drop the call (both golden tests). The composed_run golden's `source_refs` come from `identity.roles.rank_members(...).sources` (ascending rank, base LAST, as sync writes them); the Channel Sources table is `reversed(source_refs)`. The "no Data source line" claim is unpinned on this branch (no attribution line exists yet).
