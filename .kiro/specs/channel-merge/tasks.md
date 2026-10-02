@@ -246,7 +246,7 @@ rewrite or reorder a sibling's):
     every pre-existing fixture test unchanged
   - _Requirements: 9.1, 9.3_
 
-- [ ] 1.2 Create the composition package, its result types and its boundary guard
+- [x] 1.2 Create the composition package, its result types and its boundary guard
   - Create the package as a marker that re-exports nothing, and its types
     module with the stretch lag, extra alignment, placement, source
     contribution, channel provenance and composition values exactly as
@@ -750,3 +750,7 @@ rewrite or reorder a sibling's):
     `uv run pytest && uv run ruff check . && uv run ruff format --check . &&
     uv run mypy` green
   - _Requirements: 7.3, 9.2, 9.3_
+
+## Implementation Notes
+
+- 1.2: the guard's "seven modules" are the package marker plus the six design modules (types, stretches, alignment, donation, composer, archive); the marker may import nothing non-stdlib. The allowlist is a subset check until 3.1 tightens it to equality. Outside `archive.py` the guard also bars `os`, `shutil`, `tempfile`, `glob`, `io`. Clock spellings match word-bounded (`(?<![\w.])<s>\b`), so `start_time.timestamp()` and `datetime.timezone` are allowed (2.1 may use them). 3.1: the `.` in that lookbehind is unpinned and costs docstring detection of `datetime.datetime.now` -- consider `(?<!\w)` when tightening. `tests/compose/builders.make_activity`: passing `summary=` drops the default `summary.start_time`; there is no `record_developer_fields` option (use `dataclasses.replace` locally).
