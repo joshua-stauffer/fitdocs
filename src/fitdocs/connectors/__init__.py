@@ -47,6 +47,7 @@ from fitdocs.connectors.http import (
     TransportError,
     auth_failure_from,
 )
+from fitdocs.connectors.intervals import IntervalsConnector
 from fitdocs.connectors.protocol import (
     CAPABILITIES,
     DRIVEN_CAPABILITIES,
@@ -133,7 +134,9 @@ __all__ = [
     "UnknownConnectorError",
 ]
 
-# The one built-in connector: registered at import time so `get("folder")`
-# answers it whether or not any settings file names it. `FolderConnector` is
-# deliberately not in `__all__` above (internal, like `ThresholdCalculator`).
+# The built-in connectors: registered at import time so `get("folder")` and
+# `get("intervals")` answer whether or not any settings file names them.
+# Neither `FolderConnector` nor `IntervalsConnector` is in `__all__` above
+# (internal, like `ThresholdCalculator`).
 register(FolderConnector())
+register(IntervalsConnector())

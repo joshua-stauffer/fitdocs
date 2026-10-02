@@ -31,9 +31,9 @@ Two independent things are pinned here:
 * **NeutralScan** (design.md "NeutralScan") -- the service-neutral scan
   design.md describes for the connectors package, its tests, and this page's
   own ``##`` sections (plus its preamble, treated as its own section).
-  :data:`NEUTRAL_SCAN_EXEMPTIONS` ships **empty** in this spec (no
-  online-service connector); ``intervals-connector`` appends its own entry
-  later, by design a pure append -- nothing here asserts the table is empty.
+  :data:`NEUTRAL_SCAN_EXEMPTIONS` shipped **empty** in this spec (no
+  online-service connector); ``intervals-connector`` has since appended its
+  own entry, by design a pure append -- nothing here asserts the table's size.
   :func:`scan_for_unadmitted_hosts` is pinned on synthetic inputs,
   independent of the real tree, and then run once for real. "The project's
   own" is decided by URL prefix against a declared ``[project.urls]`` value
@@ -601,10 +601,20 @@ def test_inbox_page_carve_out_paragraph_is_additive_not_in_place_of_the_pin() ->
 # NeutralScan (design.md "NeutralScan", Req 14.6)
 # --------------------------------------------------------------------------
 
-# Ships empty: this spec adds no online-service connector. `intervals-connector`
-# appends its own entry later (cross-spec ruling 2026-09-29) -- a pure append,
-# so nothing here asserts this table is empty.
-NEUTRAL_SCAN_EXEMPTIONS: dict[str, frozenset[str]] = {}
+# The `connectors` spec shipped this table empty; `intervals-connector` appended
+# the one `intervals.icu` entry (cross-spec ruling 2026-09-29) -- a pure append,
+# so nothing here asserts the table's size.
+NEUTRAL_SCAN_EXEMPTIONS: dict[str, frozenset[str]] = {
+    "intervals.icu": frozenset(
+        {
+            "src/fitdocs/connectors/intervals.py",
+            "tests/connectors/test_intervals.py",
+            "tests/connectors/test_intervals_pull.py",
+            "tests/connectors/test_intervals_docs.py",
+            "docs/connectors.md#intervals.icu",
+        }
+    ),
+}
 
 _URL_PATTERN = re.compile(r"https?://[^\s\"')>\]]+", re.IGNORECASE)
 _RESERVED_EXACT_HOSTS = frozenset(
@@ -870,13 +880,21 @@ def test_real_tree_has_no_unadmitted_hosts() -> None:
 
 
 # --- Conditional control: only when the table is non-empty ----------------
-# (zero iterations today -- the table ships empty; `intervals-connector`
-# exercises this loop for real when it appends an entry).
+# (the `intervals.icu` entry makes this loop run for real).
 
 
 def test_every_exemption_entry_is_exercised_in_the_real_tree() -> None:
     sources = _real_sources()
     assert _unexercised_exemptions(sources, NEUTRAL_SCAN_EXEMPTIONS) == []
+
+
+def test_the_scan_finds_the_intervals_host_in_the_connectors_own_module() -> None:
+    """The generic control above is satisfied by any admitted file; this one
+    pins that ``intervals.py`` itself still names the host."""
+    sources = _real_sources()
+    assert "intervals.icu" in _extract_hosts(
+        sources["src/fitdocs/connectors/intervals.py"]
+    )
 
 
 # --- Synthetic unit tests of the scan function, independent of the real ---
