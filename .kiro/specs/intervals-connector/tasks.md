@@ -27,15 +27,16 @@
   `tests/fixtures/builder.py`, `src/fitdocs/contract.py`'s `DOC_VERSION` and
   its pins, `tests/render/golden_docs/`, `CHANGELOG.md` `[Unreleased]`.
   Rebase and keep both sides; the version rule is below.
-- **Task 1.1 belongs to the maintainer** and carries a `_Blocked:_` line,
-  which is what `/kiro-impl` skips (`.claude/skills/kiro-impl/SKILL.md:86`):
-  it needs an intervals.icu key that no agent holds and that this repository
-  never holds. No task depends on it except 5.2, which is `_Blocked:_` too;
-  list order does not make 2.1 onward wait for it.
-- **Where the merge happens.** 5.1 is the last task before the branch merges
-  to `main` (change-protocol lifecycle step 4) and does the roadmap
-  bookkeeping at that merge. 5.2 runs later, on its own branch under
-  change-protocol, once 1.1's findings are in `research.md`.
+- **Task 1.1 belongs to the maintainer.** It needs an intervals.icu key that
+  this repository never holds. No task depends on it except 5.2; list order
+  does not make 2.1 onward wait for it. (Amended 2026-10-02: the maintainer
+  asked the `/kiro-impl` controller session to run it with the maintainer's
+  key, Req 9.5 as amended, so neither 1.1 nor 5.2 carries a `_Blocked:_` line
+  any more.)
+- **Where the merge happens.** 5.1 is the gate before the branch merges to
+  `main` (change-protocol lifecycle step 4) and does the roadmap bookkeeping
+  at that merge. 5.2 was planned to run later on its own branch; because 1.1
+  ran before the merge, 5.2 closes on the implementation branch after 5.1.
 
 ## Hard rules for every task
 
@@ -109,7 +110,8 @@
     "LiveCheckProcedure" steps 1-8, in a temporary directory outside the
     repository and the data root, deleted afterwards; the key is read without
     echo and never written anywhere. No agent performs, records or ticks this
-    task
+    task unless the maintainer explicitly asks it to (Req 9.5 as amended
+    2026-10-02)
   - Answers the brief's three questions (intervals.icu receives the Edge rides
     from Garmin directly, not through Strava; the original is a gzip FIT
     carrying power, pedal dynamics and the full record set; whether its bytes
@@ -604,15 +606,15 @@
     state is known): the Phase 8 Existing Spec Updates `fit-ingest` and
     `workout-docs` lines are ticked if every other part they name is already on
     `main`, otherwise annotated "(intervals-connector part landed)"; the
-    `intervals-connector` Specs line is not ticked (5.2 does, later). Then the
-    branch merges to `main` under change-protocol, with 1.1 and 5.2 still
-    blocked
-  - Observable: the gate green; the sweep table in the report; every task but
-    1.1 and 5.2 ticked; the two roadmap lines updated in the merged commit
+    `intervals-connector` Specs line is not ticked (5.2 does). Then the
+    branch merges to `main` under change-protocol (as run 2026-10-02: 1.1
+    already done, 5.2 closed on the branch after this task)
+  - Observable: the gate green; the sweep table in the report; every task
+    ticked; the two roadmap lines updated in the merged commit
   - _Requirements: 5.8, 8.4, 8.8, 10.1, 10.3_
 
 - [ ] 5.2 Completion gate: reconcile the live check with the design
-  - Runs after the merge, on its own branch under change-protocol, once 1.1's
+  - Planned to run after the merge, on its own branch under change-protocol, once 1.1's
     findings are in `research.md`. It reads that record and does not re-mark
     it (1.1 owns the record)
   - For each TBC item 1.1 records as contradicted: design.md is amended at

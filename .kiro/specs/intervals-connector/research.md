@@ -370,7 +370,7 @@ booleans and counts only.
 
 - **TBC-1 confirmed.** In a four-month window the listing held 108 entries
   with `source` values `GARMIN_CONNECT` (17) and `OAUTH_CLIENT` (91). Over the
-  account since 2022 there were 531 entries: `OAUTH_CLIENT` 477,
+  multi-year window there were 531 entries: `OAUTH_CLIENT` 477,
   `GARMIN_CONNECT` 53 and `MANUAL` 1. Every `GARMIN_CONNECT` entry sampled
   (`Ride`, `VirtualRide`) is a file whose `device_info` index 0 and
   `file_id` are both `garmin` / `edge_1040`. Every `OAUTH_CLIENT` entry

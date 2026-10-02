@@ -93,7 +93,7 @@ dependency, no new command, no settings table, no managed key, no
 
 ### Allowed Dependencies
 - `connectors/intervals.py` imports only the standard library (`base64`,
-  `gzip`, `io`, `json`, `re`, `datetime`, `urllib.parse`, `dataclasses`,
+  `gzip`, `io`, `json`, `re`, `zlib`, `datetime`, `urllib.parse`, `dataclasses`,
   `typing`, `collections.abc`) and, by absolute import,
   `fitdocs.connectors.errors`, `fitdocs.connectors.http`,
   `fitdocs.connectors.protocol` and `fitdocs.connectors.secrets`. It never
@@ -121,7 +121,9 @@ dependency, no new command, no settings table, no managed key, no
 - The live check contradicting a **TBC** item → the listing mapping, the
   download mapping and their tests are amended before completion.
 - A change to how `activity-identity` ranks files within a kind → the premise
-  that a device original outranks this connector's download (TBC-8) re-checks.
+  that this connector's download and the device's own original tie on the
+  within-kind undocumented-message key (TBC-8, as measured 2026-10-02: same
+  message counts, not byte-identical) re-checks.
 - `channel-merge` composing pages → whichever of the two specs lands second
   wires `_head` (the one call site of `attribution_line`, in
   `render/views.py`) to pass the donating files' device tuples from
@@ -252,7 +254,7 @@ tests/render/
 - `src/fitdocs/render/views.py` — a `_head(ctx)` helper returning the H1 and, when present, the attribution line; the three views start their blocks from it; module docstring notes the line. If `channel-merge` is on `main` first, `_head` also passes the donating files' devices (ViewHead). Shared with `running-dynamics` and `channel-merge` (append-only).
 - `src/fitdocs/render/__init__.py` — read, not edited, by this spec (`_head` reads `DocContext.channel_provenance`, which `channel-merge` appends); shared with `channel-merge` and `activity-identity` (append-only), so any rebase keeps every appended field.
 - `src/fitdocs/contract.py` — `DOC_VERSION` advanced by one from `main`'s value at landing, with a docstring paragraph.
-- `tests/fixtures/builder.py` — appended `garmin_devices_ride_mesgs()` / `garmin_devices_ride_fit_bytes()` (no existing default changes).
+- `tests/fixtures/builder.py` — appended `garmin_devices_ride_fit_bytes()` and a private `_device_info_by_code` helper (no existing default changes; the planned `garmin_devices_ride_mesgs()` was not needed).
 - `tests/ingest/test_summary.py`, `tests/ingest/test_parse.py` — product-name pins.
 - `tests/render/test_views.py` — placement pins; `tests/render/golden_docs/*.md` — regenerated.
 - `tests/test_cli_check.py:196,198`, `tests/render/test_frontmatter.py:44,101`, `tests/metrics/test_sources.py:2270` — `DOC_VERSION` re-pins (whichever literal form is on `main` at landing).
@@ -285,8 +287,8 @@ sequenceDiagram
         Eng->>Conn: fetch activity
         Conn->>Http: GET activity file
         Http->>Icu: request
-        Icu-->>Http: gzip body
-        Conn->>Conn: bounded gunzip, sniff GPX or TCX
+        Icu-->>Http: original file (raw FIT live, TBC-5)
+        Conn->>Conn: gunzip if gzip (defensive), sniff GPX or TCX
         Conn-->>Eng: fetched bytes or declined
         Eng->>Eng: FIT check, hash, deliver, record
     end
@@ -496,7 +498,10 @@ class IntervalsConnector:                           # Connector + KeyVerifier + 
   `GZIP_MAGIC` is read through `gzip.GzipFile(fileobj=io.BytesIO(body)).read(MAX_FILE_BYTES + 1)`
   — more than `MAX_FILE_BYTES` bytes, or `OSError`/`EOFError`/`zlib.error`
   (bad or truncated data), raises `IntervalsDownloadError` (4.3); any other
-  body is used as received (4.2) (TBC-5). Then
+  body is used as received (4.2) (TBC-5, contradicted in form 2026-10-02:
+  the live `/file` serves the raw FIT, and gzip appears only as HTTP
+  transport encoding when `Accept-Encoding: gzip` is sent, which the
+  connectors client never sends — so the gzip branch is defensive). Then
   `_document_format(data)`: the first 1024 bytes, less a UTF-8 BOM and
   leading whitespace, lower-cased, begin with `<` and contain `<gpx` → `"GPX"`,
   or `<trainingcenterdatabase` → `"TCX"`; a format → `Declined(NOT_FIT_REASON…)`
@@ -860,8 +865,9 @@ Every web address in the section is the project's own or on `intervals.icu`.
   Existing Spec Updates lines tick if every other part they name is already
   on `main`, otherwise gain "(intervals-connector part landed)". The
   `intervals-connector` Specs line ticks, with the implementation's merge SHA,
-  only when the completion gate that follows the maintainer's live check
-  closes, on its own later branch.
+  when the completion gate closes. (The live check ran on 2026-10-02, before
+  the merge, at the maintainer's request, so the gate closed on the
+  implementation branch.)
 
 ## Data Models
 
@@ -1156,8 +1162,11 @@ any real account.
   edit `docs/index.md`; it edits only its section of `docs/connectors.md`.
 
 ### Shared-file touches (for peers and rebases)
-Append-only: `src/fitdocs/connectors/__init__.py`, `tests/connectors/test_boundary.py`,
-`tests/connectors/test_docs.py` (the exemption-table entry, the heading pin),
+Append-only: `src/fitdocs/connectors/__init__.py`, `tests/connectors/test_boundary.py`
+(as landed: three entries — `CONNECTORS_MODULE_NAMES`, `_ALLOWED_IMPORT_TARGETS` and
+the package initializer's set),
+`tests/connectors/test_docs.py` (the exemption-table entry, the heading pin, and, as
+landed, `("intervals", "api_key")` in `_DOCUMENTED_ENV_VAR_EXAMPLES`),
 `tests/fixtures/builder.py`, `docs/connectors.md`, `CHANGELOG.md` (`[Unreleased]`,
 under the existing category headings), the two amendment blocks. Shared render
 modules, append-only toward peers (a rebase keeps every peer's section, field and
