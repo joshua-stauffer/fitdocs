@@ -872,9 +872,11 @@ def test_the_last_sources_ref_is_resolved_not_the_first(tmp_path: Path) -> None:
 
     The two archives hold genuinely different bytes (`run_fit_bytes()` vs.
     `ride_fit_bytes()`), so their `sources` refs are pairwise-distinct and
-    which one was actually opened is directly observable through the
-    recorder, not inferred from a report field that both choices could
-    satisfy identically.
+    which one was the base is directly observable through the recorder, not
+    inferred from a report field that both choices could satisfy identically.
+    Both archives are opened (the pass composes the listed files), but the
+    recorder sees only the base: the composition adapter has its own
+    `parse_fit` binding.
 
     Mutation caught: resolving `sources[0]` instead of `sources[-1]` records
     the first (run) archive instead of the second (ride) one.
