@@ -470,9 +470,10 @@ def test_doc_context_field_order_has_user_frontmatter_after_map_data() -> None:
     assert field_names.index("user_frontmatter") == field_names.index("map_data") + 1
 
 
-def test_doc_context_identity_is_the_last_field() -> None:
-    """activity-identity appends ``identity`` after every earlier field
-    (channel-merge later appends ``channel_provenance`` after it and moves this
-    assertion)."""
+def test_doc_context_channel_provenance_is_the_last_field_after_identity() -> None:
+    """activity-identity appends ``identity`` after every earlier field and
+    channel-merge appends ``channel_provenance`` after it: the new field is
+    last and ``identity`` directly before it."""
     field_names = [f.name for f in dataclasses.fields(DocContext)]
-    assert field_names[-1] == "identity"
+    assert field_names[-1] == "channel_provenance"
+    assert field_names.index("identity") == field_names.index("channel_provenance") - 1
