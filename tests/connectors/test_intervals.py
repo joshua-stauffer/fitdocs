@@ -1,5 +1,5 @@
-"""The intervals.icu connector's declaration, registration, settings and key
-check (intervals-connector tasks 3.1 and 3.2).
+"""The intervals.icu connector's declaration, registration, settings, key
+check, listing and file download (intervals-connector tasks 3.1 to 3.4).
 
 Task 3.1 (Req 1.1, 1.5, 2.1-2.4, 5.6, 10.2, 10.4) covers what needs no
 request: the declaration, the registry entry, the ``sources`` settings
@@ -8,15 +8,19 @@ Task 3.2 (Req 1.2, 1.3, 1.4, 5.7) covers ``verify``: the one listing request,
 the Basic credential and its registration for redaction, the status mapping,
 and the service-message helper. Task 3.3 (Req 1.5, 3.1-3.8, 5.1-5.5, 5.7,
 6.1) covers ``list_activities``: the date windows, the six-field request, the
-entry mapping and the status mapping for a listing. ``fetch_activity`` and the
-download branch of the status mapping are not exercised here yet.
+entry mapping and the status mapping for a listing. Task 3.4 (Req 4.1-4.5,
+4.7, 5.1-5.5, 5.7) covers ``fetch_activity``: the request, bounded
+decompression, GPX and TCX recognition, the no-file declination and the
+download branch of the status mapping.
 """
 
 from __future__ import annotations
 
+import gzip
 import json
 import subprocess
 import sys
+import zlib
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -31,6 +35,7 @@ from fitdocs.connectors import (
     get,
     validate_connector,
 )
+from fitdocs.connectors import intervals as intervals_module
 from fitdocs.connectors.connect import ConnectFailed, run_connect
 from fitdocs.connectors.credentials import CredentialStore
 from fitdocs.connectors.errors import (
@@ -50,12 +55,16 @@ from fitdocs.connectors.intervals import (
     DEFAULT_SOURCES,
     INTERVALS_CONNECTOR_ID,
     IntervalsConnector,
+    IntervalsDownloadError,
     IntervalsSettings,
     _service_message,
 )
 from fitdocs.connectors.protocol import (
     ConnectorSession,
     CredentialAccess,
+    Declined,
+    Fetched,
+    FetchResult,
     Listing,
     RemoteActivity,
     TokenSet,
@@ -67,6 +76,7 @@ from fitdocs.connectors.settings import (
     load_connectors_settings,
 )
 from tests.connectors.conftest import FakeTransport
+from tests.fixtures import builder
 
 
 def _context(tmp_path: Path) -> SettingsContext:
@@ -957,5 +967,379 @@ def test_a_listing_418_echoing_the_bare_token_is_redacted(tmp_path: Path) -> Non
     assert str(error) == (
         f"intervals.icu answered the activity listing with HTTP 418: "
         f"seen {REDACTED} here"
+    )
+    assert _TOKEN not in str(error)
+
+
+# --------------------------------------------------------------------------
+# Task 3.4: the file download
+# --------------------------------------------------------------------------
+
+_FILE_URL = "https://intervals.icu/api/v1/activity/i9000001/file"
+_NO_FILE = "intervals.icu holds no original file for this activity"
+_GPX = (
+    b'<?xml version="1.0" encoding="UTF-8"?>\n'
+    b'<gpx version="1.1" creator="synthetic"><trk><name>x</name></trk></gpx>'
+)
+_TCX = (
+    b'<?xml version="1.0" encoding="UTF-8"?>\n'
+    b"<TrainingCenterDatabase><Activities/></TrainingCenterDatabase>"
+)
+
+
+def _remote(remote_id: str = "i9000001") -> RemoteActivity:
+    return RemoteActivity(
+        remote_id=remote_id,
+        original_available=True,
+        unavailable_reason=None,
+        start=None,
+        sport=None,
+        duration_s=None,
+        revision=None,
+        suggested_name=None,
+    )
+
+
+def _body(body: bytes, status: int = 200) -> HttpResponse:
+    return HttpResponse(status=status, headers={}, body=body)
+
+
+def _fetch(
+    tmp_path: Path,
+    responses: list[HttpResponse],
+    remote_id: str = "i9000001",
+) -> tuple[FetchResult, FakeTransport]:
+    transport = FakeTransport(list(responses))
+    session = _session(
+        tmp_path, transport, mode=CallMode.DATA, credentials=_KeyCredentials()
+    )
+    session.secret(_KEY)
+    return IntervalsConnector().fetch_activity(session, _remote(remote_id)), transport
+
+
+def _fetch_failure(
+    tmp_path: Path, responses: list[HttpResponse]
+) -> tuple[BaseException, FakeTransport]:
+    transport = FakeTransport(list(responses))
+    session = _session(
+        tmp_path, transport, mode=CallMode.DATA, credentials=_KeyCredentials()
+    )
+    with pytest.raises((AuthFailure, ConnectorError, IntervalsDownloadError)) as exc:
+        IntervalsConnector().fetch_activity(session, _remote())
+    return exc.value, transport
+
+
+def test_a_gzip_body_is_fetched_as_the_decompressed_original(tmp_path: Path) -> None:
+    original = builder.ride_fit_bytes()
+    compressed = gzip.compress(original)
+    assert compressed != original
+    assert compressed.startswith(b"\x1f\x8b")
+    result, transport = _fetch(tmp_path, [_body(compressed)])
+    assert result == Fetched(original)
+    assert len(transport.requests) == 1
+
+
+def test_an_uncompressed_body_is_fetched_unchanged(tmp_path: Path) -> None:
+    original = builder.ride_fit_bytes()
+    assert original[8:12] == b".FIT"
+    result, _ = _fetch(tmp_path, [_body(original)])
+    assert result == Fetched(original)
+
+
+def test_gzip_magic_after_the_first_two_bytes_does_not_make_a_body_gzip(
+    tmp_path: Path,
+) -> None:
+    body = b"\x0e\x10" + b"\x1f\x8b" + b"not compressed at all"
+    result, _ = _fetch(tmp_path, [_body(body)])
+    assert result == Fetched(body)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [b"\x1f\x00" + b"not compressed", b"\x00\x8b" + b"not compressed"],
+    ids=["first-byte-only", "second-byte-only"],
+)
+def test_a_body_with_only_one_of_the_two_gzip_magic_bytes_is_not_gzip(
+    tmp_path: Path, body: bytes
+) -> None:
+    result, _ = _fetch(tmp_path, [_body(body)])
+    assert result == Fetched(body)
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "message"),
+    [
+        (204, b"", "HTTP 204"),
+        (206, b"partial", "partial"),
+    ],
+)
+def test_a_2xx_other_than_200_fails_the_download_naming_the_status(
+    tmp_path: Path, status: int, body: bytes, message: str
+) -> None:
+    error, transport = _fetch_failure(tmp_path, [_body(body, status), _body(b"x")])
+    assert type(error) is IntervalsDownloadError
+    assert str(error) == (
+        f"intervals.icu answered HTTP {status} for the original file: {message}"
+    )
+    assert len(transport.requests) == 1
+
+
+def test_the_request_is_a_get_of_the_original_file_with_the_credential(
+    tmp_path: Path,
+) -> None:
+    _, transport = _fetch(tmp_path, [_body(builder.ride_fit_bytes())])
+    (request,) = transport.requests
+    assert request.method == "GET"
+    assert request.url == _FILE_URL
+    assert request.body is None
+    assert {
+        name: secret.reveal() for name, secret in request.secret_headers.items()
+    } == {"Authorization": _BASIC}
+    assert _KEY not in request.url
+    assert _TOKEN not in request.url
+
+
+def test_an_id_with_a_slash_is_quoted_into_one_path_segment(tmp_path: Path) -> None:
+    _, transport = _fetch(
+        tmp_path, [_body(builder.ride_fit_bytes())], remote_id="i9/00 1?x"
+    )
+    (request,) = transport.requests
+    assert request.url == ("https://intervals.icu/api/v1/activity/i9%2F00%201%3Fx/file")
+
+
+@pytest.mark.parametrize(
+    ("document", "name"), [(_GPX, "GPX"), (_TCX, "TCX")], ids=["gpx", "tcx"]
+)
+@pytest.mark.parametrize("compressed", [True, False], ids=["gzip", "plain"])
+def test_a_gpx_or_tcx_original_is_declined_naming_the_format(
+    tmp_path: Path, document: bytes, name: str, compressed: bool
+) -> None:
+    body = gzip.compress(document) if compressed else document
+    result, _ = _fetch(tmp_path, [_body(body)])
+    assert result == Declined(
+        f"the original is a {name} file, not FIT; fitdocs ingests FIT files only"
+    )
+
+
+@pytest.mark.parametrize(
+    ("document", "name"),
+    [
+        (b"\xef\xbb\xbf" + _GPX, "GPX"),
+        (b" \r\n\t " + _GPX, "GPX"),
+        (b"\xef\xbb\xbf \n" + _TCX, "TCX"),
+        (_GPX.upper(), "GPX"),
+        (_TCX.replace(b"TrainingCenterDatabase", b"TRAININGCENTERDATABASE"), "TCX"),
+        (b"<gpx>" + b" " * 1100, "GPX"),
+        (b"<?xml?>" + b" " * 1000 + b"<gpx>", "GPX"),
+        (b"<?xml?>" + b" " * 1030 + b"<gpx>", None),
+        (b"<?xml?>" + b" " * 1016 + b"<gpx>", None),
+        (b"\x0e\x10\x00\x00<gpx version", None),
+        (b"\x0e\x10\x00\x00<TrainingCenterDatabase", None),
+        (b"<kml><doc/></kml> but <gpx", "GPX"),
+        (b"<html>a page</html>", None),
+        (b"", None),
+    ],
+    ids=[
+        "bom",
+        "leading-whitespace",
+        "bom-then-whitespace-tcx",
+        "upper-case-gpx",
+        "upper-case-tcx",
+        "root-first-long-file",
+        "root-inside-window",
+        "root-past-window",
+        "root-straddling-window",
+        "fit-header-then-gpx-text",
+        "fit-header-then-tcx-text",
+        "root-not-first-element",
+        "html-is-not-recognised",
+        "empty",
+    ],
+)
+def test_document_recognition_looks_at_the_first_1024_bytes_of_a_document(
+    tmp_path: Path, document: bytes, name: str | None
+) -> None:
+    result, _ = _fetch(tmp_path, [_body(document)])
+    if name is None:
+        assert result == Fetched(document)
+    else:
+        assert isinstance(result, Declined)
+        assert result.reason.startswith(f"the original is a {name} file")
+
+
+def test_the_window_is_counted_before_the_bom_and_whitespace_are_removed(
+    tmp_path: Path,
+) -> None:
+    inside = b"\xef\xbb\xbf" + b" " * 3 + b"<gpx" + b" " * 2000
+    pad = 1024 - 3 - 4
+    assert len(b"\xef\xbb\xbf" + b" " * pad + b"<gpx") == 1024
+    exactly_in = b"\xef\xbb\xbf" + b" " * pad + b"<gpx" + b" " * 50
+    one_past = b"\xef\xbb\xbf" + b" " * (pad + 1) + b"<gpx" + b" " * 50
+    in_result, _ = _fetch(tmp_path, [_body(inside)])
+    edge_result, _ = _fetch(tmp_path, [_body(exactly_in)])
+    past_result, _ = _fetch(tmp_path, [_body(one_past)])
+    assert isinstance(in_result, Declined)
+    assert isinstance(edge_result, Declined)
+    assert past_result == Fetched(one_past)
+
+
+@pytest.mark.parametrize("status", [404, 422])
+def test_a_missing_original_is_declined_without_naming_a_status(
+    tmp_path: Path, status: int
+) -> None:
+    body = b'{"status":422,"error":"Activity has no original file to download"}'
+    result, transport = _fetch(tmp_path, [_body(body, status), _body(b"x")])
+    assert result == Declined(_NO_FILE)
+    assert len(transport.requests) == 1
+
+
+def test_a_410_is_a_failed_download_not_a_declination(tmp_path: Path) -> None:
+    error, transport = _fetch_failure(tmp_path, [_body(b"gone", 410)])
+    assert type(error) is IntervalsDownloadError
+    assert str(error) == "intervals.icu answered HTTP 410 for the original file: gone"
+    assert len(transport.requests) == 1
+
+
+@pytest.mark.parametrize(
+    "tail",
+    [
+        pytest.param(-10, id="trailer-cut"),
+        pytest.param(-100, id="mid-stream-cut"),
+    ],
+)
+def test_a_truncated_gzip_fails_the_download(tmp_path: Path, tail: int) -> None:
+    compressed = gzip.compress(builder.ride_fit_bytes())
+    assert len(compressed) > 200
+    error, transport = _fetch_failure(tmp_path, [_body(compressed[:tail])])
+    assert type(error) is IntervalsDownloadError
+    assert str(error) == (
+        "the downloaded file is gzip data that could not be decompressed"
+    )
+    assert len(transport.requests) == 1
+
+
+def test_a_corrupt_deflate_stream_fails_the_download(tmp_path: Path) -> None:
+    compressed = gzip.compress(builder.ride_fit_bytes())
+    corrupt = compressed[:10] + b"\xff" * 40 + compressed[50:]
+    assert len(corrupt) == len(compressed)
+    with pytest.raises(zlib.error):
+        gzip.decompress(corrupt)
+    error, _ = _fetch_failure(tmp_path, [_body(corrupt)])
+    assert type(error) is IntervalsDownloadError
+    assert str(error) == (
+        "the downloaded file is gzip data that could not be decompressed"
+    )
+
+
+def test_decompression_reads_at_most_one_byte_past_the_bound(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(intervals_module, "MAX_FILE_BYTES", 64)
+    sizes: list[int] = []
+    real_read = gzip.GzipFile.read
+
+    def spy(self: gzip.GzipFile, size: int = -1) -> bytes:
+        sizes.append(size)
+        return real_read(self, size)
+
+    monkeypatch.setattr(gzip.GzipFile, "read", spy)
+    error, _ = _fetch_failure(tmp_path, [_body(gzip.compress(b"\x00" * 100_000))])
+    assert type(error) is IntervalsDownloadError
+    assert sizes == [65]
+
+
+def test_gzip_magic_followed_by_garbage_fails_the_download(tmp_path: Path) -> None:
+    error, _ = _fetch_failure(tmp_path, [_body(b"\x1f\x8bthis is not a stream")])
+    assert type(error) is IntervalsDownloadError
+
+
+def test_a_gzip_expanding_past_the_bound_fails_and_one_at_it_does_not(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(intervals_module, "MAX_FILE_BYTES", 64)
+    at_bound = b"\x00" * 64
+    past_bound = b"\x00" * 65
+    ok, _ = _fetch(tmp_path, [_body(gzip.compress(at_bound))])
+    assert ok == Fetched(at_bound)
+    assert len(gzip.compress(past_bound)) < 64
+    error, transport = _fetch_failure(tmp_path, [_body(gzip.compress(past_bound))])
+    assert type(error) is IntervalsDownloadError
+    assert str(error) == (
+        "the downloaded file expands past the 64-byte size limit when decompressed"
+    )
+    assert len(transport.requests) == 1
+
+
+def test_the_bound_applies_to_the_decompressed_size_not_the_body(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(intervals_module, "MAX_FILE_BYTES", 200)
+    original = bytes(range(190))
+    compressed = gzip.compress(original)
+    assert len(compressed) > 200 >= len(original)
+    result, _ = _fetch(tmp_path, [_body(compressed)])
+    assert result == Fetched(original)
+
+
+@pytest.mark.parametrize(
+    ("status", "kind"),
+    [(401, AuthFailureKind.REJECTED), (403, AuthFailureKind.BLOCKED)],
+)
+def test_a_download_401_or_403_is_an_authentication_failure(
+    tmp_path: Path, status: int, kind: AuthFailureKind
+) -> None:
+    error, transport = _fetch_failure(
+        tmp_path, [_body(b"  go   away ", status), _body(b"")]
+    )
+    assert type(error) is AuthFailure
+    assert isinstance(error, AuthFailure)
+    assert error.kind is kind
+    assert error.service_message == "go away"
+    assert len(transport.requests) == 1
+
+
+def test_a_persistent_download_429_is_a_rate_limit_error_after_three_requests(
+    tmp_path: Path,
+) -> None:
+    error, transport = _fetch_failure(tmp_path, [_body(b"slow", 429)] * 4)
+    assert type(error) is ConnectorError
+    assert str(error) == (
+        "intervals.icu is limiting requests (HTTP 429) and still was after "
+        "fitdocs's retries; this pull stopped, and the next pull resumes where "
+        "it stopped"
+    )
+    assert len(transport.requests) == 3
+
+
+def test_a_persistent_download_503_is_an_unavailable_error_after_three_requests(
+    tmp_path: Path,
+) -> None:
+    error, transport = _fetch_failure(tmp_path, [_body(b"down", 503)] * 4)
+    assert type(error) is ConnectorError
+    assert str(error) == (
+        "intervals.icu is unavailable (HTTP 503) after fitdocs's retries; "
+        "this pull stopped, and the next pull resumes where it stopped"
+    )
+    assert len(transport.requests) == 3
+
+
+def test_a_download_418_fails_the_one_activity_naming_the_status(
+    tmp_path: Path,
+) -> None:
+    error, transport = _fetch_failure(
+        tmp_path, [_body(b"short and stout", 418), _body(b"next")]
+    )
+    assert type(error) is IntervalsDownloadError
+    assert str(error) == (
+        "intervals.icu answered HTTP 418 for the original file: short and stout"
+    )
+    assert len(transport.requests) == 1
+
+
+def test_a_download_418_echoing_the_bare_token_is_redacted(tmp_path: Path) -> None:
+    error, _ = _fetch_failure(tmp_path, [_body(f"seen {_TOKEN} here".encode(), 418)])
+    assert type(error) is IntervalsDownloadError
+    assert str(error) == (
+        f"intervals.icu answered HTTP 418 for the original file: seen {REDACTED} here"
     )
     assert _TOKEN not in str(error)

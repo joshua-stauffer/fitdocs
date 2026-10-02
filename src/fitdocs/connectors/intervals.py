@@ -11,20 +11,22 @@ only time source.
 Task 3.1 declares the connector, its constants and its settings parser; task
 3.2 implements the key check, the credential and the service-message helper;
 task 3.3 implements the listing, its date windows and entry mapping, and the
-status mapping for data calls. The file fetch raises
-:class:`NotImplementedError` until task 3.4 implements it.
+status mapping for data calls; task 3.4 implements the file download.
 """
 
 from __future__ import annotations
 
 import base64
+import gzip
+import io
 import json
 import re
+import zlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from typing import Final
-from urllib.parse import urlencode
+from typing import Final, NoReturn
+from urllib.parse import quote, urlencode
 
 from fitdocs.connectors.errors import (
     AuthFailure,
@@ -42,6 +44,8 @@ from fitdocs.connectors.protocol import (
     Capability,
     ConnectorSession,
     CredentialField,
+    Declined,
+    Fetched,
     FetchResult,
     Granted,
     Listing,
@@ -77,9 +81,15 @@ STRAVA_REASON: Final[str] = (
 NOT_FIT_REASON: Final[str] = (
     "the original is a {format} file, not FIT; fitdocs ingests FIT files only"
 )
-NO_FILE_REASON: Final[str] = (
-    "intervals.icu holds no original file for this activity (HTTP 404)"
+NO_FILE_REASON: Final[str] = "intervals.icu holds no original file for this activity"
+GZIP_UNREADABLE_MESSAGE: Final[str] = (
+    "the downloaded file is gzip data that could not be decompressed"
 )
+GZIP_OVERSIZE_MESSAGE: Final[str] = (
+    "the downloaded file expands past the {limit}-byte size limit when decompressed"
+)
+DOCUMENT_SNIFF_BYTES: Final[int] = 1024
+UTF8_BOM: Final[bytes] = b"\xef\xbb\xbf"
 RATE_LIMITED_MESSAGE: Final[str] = (
     "intervals.icu is limiting requests (HTTP 429) and still was after "
     "fitdocs's retries; this pull stopped, and the next pull resumes where "
@@ -104,7 +114,6 @@ SERVICE_MESSAGE_BODY_BYTES: Final[int] = 4096
 SERVICE_MESSAGE_CHARS: Final[int] = 300
 
 _SOURCE_NAME_RE = re.compile(SOURCE_NAME_PATTERN)
-_NOT_YET = "implemented by a later intervals-connector task (3.4)"
 
 
 @dataclass(frozen=True)
@@ -216,7 +225,25 @@ class IntervalsConnector:
     def fetch_activity(
         self, session: ConnectorSession, activity: RemoteActivity
     ) -> FetchResult:
-        raise NotImplementedError(_NOT_YET)
+        """The activity's original file (Req 4.1-4.5, 4.7, 5.1-5.5): ``200``
+        is decompressed within the size bound and handed over unmodified,
+        unless it is a GPX or TCX document (declined, naming the format);
+        ``404`` and ``422`` are an activity with no file (declined); every
+        other status goes through :func:`_raise_for_status`."""
+        url = f"{API_BASE}/activity/{quote(activity.remote_id, safe='')}/file"
+        response = session.http.get(
+            url,
+            secret_headers=_auth_headers(session, session.credentials.value("api_key")),
+        )
+        if response.status == 200:
+            data = _decompress(response.body)
+            document = _document_format(data)
+            if document is not None:
+                return Declined(NOT_FIT_REASON.format(format=document))
+            return Fetched(data)
+        if response.status in (404, 422):
+            return Declined(NO_FILE_REASON)
+        _raise_for_status(session, response, listing=False)
 
 
 def _windows(earliest: datetime, today: date) -> list[tuple[date, date | None]]:
@@ -322,9 +349,39 @@ def _start(value: object) -> datetime | None:
     return parsed.astimezone(UTC)
 
 
+def _decompress(body: bytes) -> bytes:
+    """``body`` gunzipped when it starts with :data:`GZIP_MAGIC`, else as
+    received (Req 4.2); gzip data that is damaged, truncated or expands past
+    :data:`MAX_FILE_BYTES` fails the download (Req 4.3)."""
+    if not body.startswith(GZIP_MAGIC):
+        return body
+    try:
+        data = gzip.GzipFile(fileobj=io.BytesIO(body)).read(MAX_FILE_BYTES + 1)
+    except (OSError, EOFError, zlib.error):
+        raise IntervalsDownloadError(GZIP_UNREADABLE_MESSAGE) from None
+    if len(data) > MAX_FILE_BYTES:
+        raise IntervalsDownloadError(GZIP_OVERSIZE_MESSAGE.format(limit=MAX_FILE_BYTES))
+    return data
+
+
+def _document_format(data: bytes) -> str | None:
+    """``"GPX"`` or ``"TCX"`` when the first :data:`DOCUMENT_SNIFF_BYTES`
+    bytes, less a UTF-8 byte-order mark and leading whitespace, begin with
+    ``<`` and hold that format's root element (case-insensitively); else
+    ``None`` (Req 4.4)."""
+    head = data[:DOCUMENT_SNIFF_BYTES].removeprefix(UTF8_BOM).lstrip().lower()
+    if not head.startswith(b"<"):
+        return None
+    if b"<gpx" in head:
+        return "GPX"
+    if b"<trainingcenterdatabase" in head:
+        return "TCX"
+    return None
+
+
 def _raise_for_status(
     session: ConnectorSession, response: HttpResponse, *, listing: bool
-) -> None:
+) -> NoReturn:
     """The status mapping for a data call (Req 5.1-5.5). 401 and 403 end the
     instance as authentication failures; a 429 or 5xx that survived the
     client's retries ends it as a connector error; any other status ends the
