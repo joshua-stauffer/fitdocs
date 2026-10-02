@@ -24,6 +24,15 @@ never touches an entry it did not write. Source:
 `.kiro/specs/performance-benchmarks/brief.md`; Phase 6 of
 `.kiro/steering/roadmap.md`.
 
+## Amendment 2 (2026-10-02): deriving from a composed activity, landed by channel-merge
+
+Amendment 1 lives in `design.md` and corrects the entry shape this spec
+extends. This amendment appends one criterion to Requirement 1: a tagged
+document that lists several archived files is derived from their composition,
+the same activity the page is rendered from and the load pass scores. **No
+existing criterion is renumbered, reworded or withdrawn.** The composition is
+owned by `.kiro/specs/channel-merge/`.
+
 ## Introduction
 
 performance-benchmarks is the pass that turns the athlete's own history into
@@ -131,6 +140,7 @@ entry's provenance, so a later reader knows which one it was.
 8. Where the derivation command is invoked in a preview mode, the fitdocs CLI shall produce the same report it would otherwise produce and shall create, modify, or delete no file.
 9. The fitdocs CLI shall complete the run with a non-zero exit status when at least one document was recorded as a failure, and with a success status when the run produced only derivations and declines.
 10. The fitdocs CLI shall derive benchmarks only within this command; no other command shall derive, write, or reconcile a derived benchmark.
+11. _(added by Amendment 2)_ When a tagged document lists several archived source files, the fitdocs CLI shall derive from the composition of those files that the document is rendered from, so that the derivation pass reads the same activity as the load pass, and a channel recorded by no listed file shall remain absent for the derivation; an extra that cannot be resolved shall not be recorded as a failure under criterion 5, the pass composing from the files that do resolve.
 
 ### Requirement 2: Threshold Pace From a Tagged Race
 **Objective:** As a runner, I want each of my races converted into the pace I could have held for an hour on that date, so that my old running pages score against the threshold I actually had.

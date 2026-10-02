@@ -215,6 +215,23 @@ guarantees that document states; that version bump and its own document are
 connectors' to make, not restated by this amendment. Nothing existing is
 renumbered.
 
+**Landed by `channel-merge`.** `channel-merge` makes a workout page's
+channels the composition of its archived source files: each per-sample channel
+comes from exactly one file -- the base when the base records it, otherwise the
+highest-ranked extra that records it -- while the page's identity, laps and
+session values stay the base's, a Channel Sources section names the file each
+channel came from, and the training-load and benchmark-derivation passes read
+the same composed activity. That spec owns the composition rule, the alignment
+and the section's content; this spec owns only the published-ownership-contract
+guarantee it extends -- stating the composition, recorded as Requirement 2
+criterion 2.16. The published contract's version identifier changes on account
+of it (`CONTRACT_VERSION` `"6"` to `"7"`), because a page's channels now come
+from more than one archived file and the passes that read an activity read the
+composition, which changes guarantees that document states; that version bump
+and its own document are channel-merge's to make, not restated by this
+amendment. It adds no managed key and no owned path. Nothing existing is
+renumbered.
+
 ## Requirements
 
 ### Requirement 1: Consistent Document Interpretation Across Operations
@@ -252,6 +269,7 @@ that I can rely on the boundary instead of inferring it from behavior.
 13. _(added by Amendment 3)_ The ownership contract shall name the rendered blocks location as fitdocs-owned, and shall state that the documents it holds are two further document types, distinct from the workout document and the history page, whose type values and formats are published by the training-blocks package rather than by this contract, and shall state which region of the block page is user-owned and that the planned page has none.
 14. _(added by Amendment 4)_ The ownership contract shall state that a generated workout document lists every archived source file of the document in ascending rank with the base last, that the base is the file the document is rendered from and every other listed file is an extra, and that the document records the base's kind, elapsed time, distance and device digest in managed keys; that the document keeps the session UUID of a phone-side copy when a file without one becomes its base; that a document may be renamed when its base changes, with the chart assets its previous render linked removed and links to the previous filename not updated; and that a file that cannot be placed on one document is archived and held, recorded in `.fitdocs/held.toml`, rather than added to a document until regeneration can place it on one.
 15. _(added by Amendment 4)_ The ownership contract shall state that a connector's credentials are stored outside the data root, one file per configured instance, never read from or written to the data root; that each connector's own ledger is fitdocs-owned tool state inside the already-owned `.fitdocs/` directory; and what `fitdocs pull` writes and removes, and that `fitdocs connect` writes nothing under the data root.
+16. _(added by Amendment 4)_ The ownership contract shall state that a workout document takes each of its channels from exactly one of its archived source files -- the base when the base records the channel, otherwise the highest-ranked extra that records it -- that the document's identity, laps and session values are the base's, that its Channel Sources section names the file each channel came from, and that the training-load and benchmark-derivation passes read the same composed activity.
 
 ### Requirement 3: In-Tree Ownership Declaration
 **Objective:** As an LLM agent maintaining a markdown wiki, I want the ownership

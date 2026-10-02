@@ -107,6 +107,17 @@
           "tests/render/test_views.py::test_resolved_product_names_reach_the_attribution_and_devices_table"
         ]
       }
+    },
+    {
+      "date": "2026-10-02",
+      "requirement": "3.7, 6.12, 13.4 added (appended; no criterion renumbered or reworded) -- implemented by the channel-merge spec, not by this one",
+      "reason": "channel-merge spec task 5.3, its part of the roadmap's Phase 8 Existing Spec Update for workout-docs. A page rendered from a composition of several archived source files names the file each channel came from (3.7), has its device laps, recording devices and decode errors be the base's alone (6.12), and holds a donated channel absent at every sample where no value of it was placed from that file (13.4).",
+      "also": "requirements.md gains Amendment 3 (2026-10-02) and the three criteria. The document-format version advance that brings existing pages current is owned by channel-merge task 5.1.",
+      "criteria_map": {
+        "3.7": "channel-merge 4.1-4.3",
+        "6.12": "channel-merge 1.5, 5.4",
+        "13.4": "channel-merge 2.6"
+      }
     }
   ]
 }

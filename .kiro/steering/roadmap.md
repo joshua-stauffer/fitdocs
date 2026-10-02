@@ -1687,7 +1687,7 @@ Rejected:
 
   The machinery in `plugins.py` is parameterized by kind, not copied. This
   is the slot a user-installed connector lives in. Dependencies: connectors
-- [ ] wiki-contract — Amendment 4:
+- [x] wiki-contract — Amendment 4:
   - source roles (base and extras) on the page;
   - which file each channel came from, if `channel-merge` records it;
   - the version advances;
@@ -1696,18 +1696,18 @@ Rejected:
 
   Landed by `activity-identity`, `connectors` and `channel-merge`, the way
   Amendment 3 was landed by `training-blocks`. Dependencies: none
-  (activity-identity part landed) (connectors part landed)
+  (activity-identity part landed) (connectors part landed) (channel-merge part landed)
 - [x] fit-ingest — `file_id` identity fields (landed by
   `activity-identity`); record-level developer fields and running dynamics
   (landed by `running-dynamics`) (running-dynamics part landed); Garmin product names (landed by
   `intervals-connector`). Dependencies: none
   (activity-identity part landed) (intervals-connector part landed)
-- [ ] workout-docs — a running-dynamics section on run pages (landed by
+- [x] workout-docs — a running-dynamics section on run pages (landed by
   `running-dynamics`) (running-dynamics part landed); Garmin attribution (landed by
   `intervals-connector`); a note that a page's provenance is its base
   (landed by `activity-identity`); channel provenance on composed pages
   (landed by `channel-merge`). Dependencies: none
-  (activity-identity part landed) (intervals-connector part landed)
+  (activity-identity part landed) (intervals-connector part landed) (channel-merge part landed)
 - [x] distribution — the packaged `fitdocs-workouts` skill's routine learns
   the pull, and its pins move (`tests/test_agent_skill.py:614, 681`); Req
   8.1/8.2 (the skill also pulls) and Req 10.4 (network beyond tiles is the
@@ -1720,10 +1720,10 @@ Rejected:
 - [x] route-maps — an amendment note on Req 4.2 ("only to fetch missing
   basemap tiles") naming the connector commands. Landed by `connectors`.
   Dependencies: connectors *(added at the Phase 8 spec batch, 2026-09-29)*
-- [ ] training-load — a document listing several archived files is scored
+- [x] training-load — a document listing several archived files is scored
   from their composition (Req 9). Landed by `channel-merge`. Dependencies:
   channel-merge *(added at the Phase 8 spec batch, 2026-09-29)*
-- [ ] performance-benchmarks — the same, for benchmark derivation (Req 1).
+- [x] performance-benchmarks — the same, for benchmark derivation (Req 1).
   Landed by `channel-merge`. Dependencies: channel-merge *(added at the
   Phase 8 spec batch, 2026-09-29)*
 

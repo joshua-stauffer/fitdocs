@@ -70,7 +70,10 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   commands) imports only `layout`, `settings`, `inbox` and `version` from
   the rest of the package, and only `cli` imports it; it does not depend
   on rendering, training load, metrics, `.fit` ingestion, or the sync
-  engine.
+  engine. `compose` (one activity from a base and its extras) imports
+  `model` and `identity`, and in `compose.archive` alone `contract`,
+  `layout` and `ingest`; `sync`, the load and benchmark passes and
+  `render.provenance` (its types and alignment constants only) import it.
 - `LoadCalculator` implementations declare their required inputs so the CLI
   can prompt for missing data generically — no calculator-specific prompting
   code in the CLI.
