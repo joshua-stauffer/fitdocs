@@ -300,7 +300,7 @@
 
 - [ ] 3. The intervals.icu connector
 
-- [ ] 3.1 (P) Declare and register the connector, parse its settings, and admit its address only in its own files
+- [x] 3.1 (P) Declare and register the connector, parse its settings, and admit its address only in its own files
   - The connector module with every constant, the settings value, the
     download error and the declaration design.md "IntervalsConnector" states
     (id `intervals`, display name `intervals.icu`, the personal-key style, one
