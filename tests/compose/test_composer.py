@@ -9,14 +9,20 @@ from __future__ import annotations
 
 import dataclasses
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 
+from fitdocs import parse_fit
 from fitdocs.compose.alignment import align_extra
 from fitdocs.compose.composer import compose_activity
 from fitdocs.compose.donation import placed_values
 from fitdocs.identity.kinds import SourceKind
+from fitdocs.identity.roles import DEFAULT_PRECEDENCE, rank_members, source_member
+from fitdocs.metrics import compute_metrics
+from fitdocs.metrics.types import AthleteInputs, DerivedMetrics, ZoneSpec
 from fitdocs.model import (
+    DYNAMICS_CHANNELS,
     Activity,
     DeveloperChannel,
     DeviceInfo,
@@ -24,6 +30,7 @@ from fitdocs.model import (
     Sport,
     StrengthSet,
 )
+from tests.fixtures import builder, merge
 
 from .builders import make_activity, make_lap, make_summary
 
@@ -698,3 +705,431 @@ class TestDeterminism:
         second = compose_activity(base, [extra])
         assert first.activity.samples.power_w == tuple(range(301, 311))
         assert first == second
+
+
+# ---------------------------------------------------------------------------
+# Measured-pair section (task 2.5)
+#
+# The run pair, run trio and ride pair of ``tests/fixtures/merge.py``, parsed
+# from bytes and composed (channel-merge Req 2.1, 2.2, 3.3, 3.5, 3.6, 3.8, 5.1,
+# 5.3, 9.1, 9.2; design.md § Testing Strategy M1-M6). Expected values are
+# literals, or are read from the raw decoded Stryd messages (never from the
+# composer, the alignment or the donation modules).
+# ---------------------------------------------------------------------------
+
+_RUN_STRYD_LAGS = (1, 1, 0, 1, 0)  # the HealthFit copy's lag per stretch
+_RUN_STRETCH_STRIDE_S = 16  # stretch k's samples sit at offsets 16k..16k+11
+_RUN_STRETCH_LEN = 12
+_RUN_BASE_SAMPLES = 63  # five stretches of twelve, then three trailing instants
+_RUN_PLACED_FIRST_LAST = (
+    # (first placed base index, last placed base index) per stretch; stretch 0
+    # at lag +1 loses its last sample (base offset 12 does not exist).
+    (1, 11),
+    (13, 23),
+    (24, 35),
+    (37, 47),
+    (48, 59),
+)
+_RUN_TRAILING = (60, 61, 62)
+
+# donated channel -> (raw record key, developer-field position or None); the
+# position is the description order of the Stryd file's developer table
+# (Air Power 0, Form Power 1, Leg Spring Stiffness 2, Impact 3, Leg Spring
+# Stiffness Balance 4, Impact Loading Rate Balance 5, Vertical Oscillation
+# Balance 6).
+_RUN_DONATED: dict[str, tuple[str, int | None]] = {
+    "stance_time_balance_pct": ("stance_time_balance", None),
+    "vertical_oscillation_balance_pct": ("", 6),
+    "leg_spring_stiffness_kn_m": ("", 2),
+    "leg_spring_stiffness_balance_pct": ("", 4),
+    "form_power_w": ("", 1),
+    "air_power_w": ("", 0),
+    "impact_bw": ("", 3),
+    "impact_loading_rate_balance_pct": ("", 5),
+}
+
+_HR_FED_FIELDS = (
+    "avg_heart_rate_bpm",  # aggregates.py:203 reads samples.heart_rate_bpm
+    "max_heart_rate_bpm",  # aggregates.py:212
+    "efficiency_factor",  # power.py:285 divides by the average heart rate
+    "decoupling_pct",  # power.py:358 pairs output with heart rate per half
+    "hr_time_in_zone_s",  # metrics/__init__.py: zones of samples.heart_rate_bpm
+    "trimp",  # stress.py:158 reads samples.heart_rate_bpm
+    "trimp_weighting",  # set together with trimp (metrics/__init__.py)
+)
+
+_ATHLETE = AthleteInputs(
+    ftp_watts=250.0,
+    resting_hr_bpm=50,
+    max_hr_bpm=190,
+    hr_zones=ZoneSpec((110.0, 140.0, 170.0)),
+    power_zones=ZoneSpec((150.0, 200.0, 250.0)),
+    pace_zones=ZoneSpec((330.0, 400.0)),
+)
+
+
+def _raw_stryd(data: bytes, channel: str) -> dict[int, object]:
+    """The Stryd file's raw decoded value of ``channel`` by second offset."""
+    key, position = _RUN_DONATED[channel]
+    messages, errors = builder.decode_messages(data)
+    assert errors == []
+    out: dict[int, object] = {}
+    records: list[dict[str, Any]] = messages["record_mesgs"]
+    for record in records:
+        offset = record["timestamp"] - merge.RUN_START
+        out[offset] = (
+            record[key] if position is None else record["developer_fields"][position]
+        )
+    return out
+
+
+def _expected_run_series(
+    raw: dict[int, object], base_offsets: tuple[float, ...]
+) -> tuple[object | None, ...]:
+    """Per base sample: the Stryd value at the instant minus the stretch's lag.
+
+    Stretch ``k`` places Stryd offsets ``16k..16k+11`` on base offsets plus its
+    lag; a base offset no placed Stryd sample reaches is ``None``.
+    """
+    series: list[object | None] = []
+    for t in base_offsets:
+        value: object | None = None
+        for k, lag in enumerate(_RUN_STRYD_LAGS):
+            start = k * _RUN_STRETCH_STRIDE_S
+            source = int(t) - lag
+            if start <= source < start + _RUN_STRETCH_LEN:
+                value = raw[source]
+        series.append(value)
+    return tuple(series)
+
+
+def _fields_differing(
+    a: DerivedMetrics, b: DerivedMetrics, names: tuple[str, ...] = ()
+) -> set[str]:
+    fields = {f.name for f in dataclasses.fields(DerivedMetrics)} - set(names)
+    return {n for n in sorted(fields) if getattr(a, n) != getattr(b, n)}
+
+
+class TestRunPair:
+    @pytest.fixture
+    def pair(self) -> tuple[Activity, Activity, bytes]:
+        healthfit, stryd = merge.run_pair_fit_bytes()
+        return parse_fit(healthfit), parse_fit(stryd), stryd
+
+    def test_the_ranking_premise_healthfit_base_and_stryd_extra(
+        self, pair: tuple[Activity, Activity, bytes]
+    ) -> None:
+        base, extra, _ = pair
+        members = [
+            source_member("hf", base.provenance.sha256, base),
+            source_member("st", extra.provenance.sha256, extra),
+        ]
+        for ordered in (members, members[::-1]):
+            roles = rank_members(ordered, (), DEFAULT_PRECEDENCE)
+            assert roles.base.ref == "hf"
+            assert [m.ref for m in roles.extras] == ["st"]
+
+    def test_the_fixture_shape_the_assertions_stand_on(
+        self, pair: tuple[Activity, Activity, bytes]
+    ) -> None:
+        base, extra, _ = pair
+        assert len(base.samples.time_s) == _RUN_BASE_SAMPLES
+        assert len(extra.samples.time_s) == 60
+        assert [lap.total_distance_m for lap in base.laps] == [
+            50.0,
+            57.25,
+            64.5,
+            71.75,
+            79.0,
+        ]
+        assert len(extra.laps) == 4
+        # The base records none of the donated channels; the extra records all.
+        for channel in _RUN_DONATED:
+            assert not any(v is not None for v in getattr(base.samples, channel))
+            assert all(v is not None for v in getattr(extra.samples, channel))
+
+    def test_form_power_at_each_stretchs_first_and_last_placed_sample(
+        self, pair: tuple[Activity, Activity, bytes]
+    ) -> None:
+        base, extra, stryd = pair
+        form_power = compose_activity(base, [extra]).activity.samples.form_power_w
+        raw = _raw_stryd(stryd, "form_power_w")
+        # Hand-written per stretch: (first, last placed base index) and the
+        # Stryd instants (offsets) they carry: instant minus the stretch's lag.
+        cases = [
+            ((1, 11), (0, 10)),  # lag +1
+            ((13, 23), (16, 26)),  # lag +1 (base index 13 is offset 17)
+            ((24, 35), (32, 43)),  # lag 0
+            ((37, 47), (48, 58)),  # lag +1 (base index 37 is offset 49)
+            ((48, 59), (64, 75)),  # lag 0
+        ]
+        assert tuple(c[0] for c in cases) == _RUN_PLACED_FIRST_LAST
+        for (first, last), (first_source, last_source) in cases:
+            assert form_power[first] == raw[first_source]
+            assert form_power[last] == raw[last_source]
+        # Literal anchors, independent of the raw table: Stryd form power is
+        # 50 + 2 * ((5 g) % 13) at Stryd sample g (offsets 0, 10, 32, 43 are
+        # g = 0, 10, 24, 35).
+        assert (form_power[1], form_power[11]) == (50, 72)
+        assert (form_power[24], form_power[35]) == (56, 62)
+
+    def test_the_whole_composed_series_is_the_stryd_series_at_each_lag(
+        self, pair: tuple[Activity, Activity, bytes]
+    ) -> None:
+        base, extra, stryd = pair
+        composed = compose_activity(base, [extra]).activity.samples
+        for channel in _RUN_DONATED:
+            expected = _expected_run_series(
+                _raw_stryd(stryd, channel), base.samples.time_s
+            )
+            assert getattr(composed, channel) == expected, channel
+        assert sum(v is not None for v in composed.form_power_w) == 57
+
+    def test_every_stretch_is_aligned_by_distance_at_its_own_lag(
+        self, pair: tuple[Activity, Activity, bytes]
+    ) -> None:
+        base, extra, _ = pair
+        alignment = compose_activity(base, [extra]).provenance.extras[0].alignment
+        assert alignment is not None
+        assert alignment.hour_shift_s == 0
+        assert [(s.start, s.stop) for s in alignment.stretches] == [
+            (0, 12),
+            (12, 24),
+            (24, 36),
+            (36, 48),
+            (48, 60),
+        ]
+        assert [s.key for s in alignment.stretches] == ["distance_m"] * 5
+        assert [s.lag_s for s in alignment.stretches] == [1, 1, 0, 1, 0]
+
+    def test_the_three_trailing_base_samples_hold_none_in_every_donated_channel(
+        self, pair: tuple[Activity, Activity, bytes]
+    ) -> None:
+        base, extra, _ = pair
+        composed = compose_activity(base, [extra]).activity.samples
+        # Precondition: the base does record something at those instants.
+        assert all(base.samples.heart_rate_bpm[i] is not None for i in _RUN_TRAILING)
+        for channel in _RUN_DONATED:
+            for i in _RUN_TRAILING:
+                assert getattr(composed, channel)[i] is None, (channel, i)
+
+    def test_step_length_and_cadence_are_the_healthfit_values(
+        self, pair: tuple[Activity, Activity, bytes]
+    ) -> None:
+        base, extra, _ = pair
+        composed = compose_activity(base, [extra]).activity.samples
+        # Precondition: the Stryd file's values differ at every sample.
+        assert all(
+            a != b
+            for a, b in zip(
+                extra.samples.step_length_mm, base.samples.step_length_mm, strict=False
+            )
+        )
+        assert composed.step_length_mm == base.samples.step_length_mm
+        assert composed.cadence_rpm == base.samples.cadence_rpm
+        assert composed.step_length_mm[:3] == (892.9, 926.1, 959.3)
+        assert composed.cadence_rpm[:3] == (141, 167, 145)
+
+    def test_the_laps_are_the_healthfit_laps(
+        self, pair: tuple[Activity, Activity, bytes]
+    ) -> None:
+        base, extra, _ = pair
+        laps = compose_activity(base, [extra]).activity.laps
+        assert len(laps) == 5
+        assert laps == base.laps
+        assert laps != extra.laps
+
+    def test_every_donated_channel_is_a_running_dynamics_channel(
+        self, pair: tuple[Activity, Activity, bytes]
+    ) -> None:
+        base, extra, _ = pair
+        composition = compose_activity(base, [extra])
+        changed = {
+            f.name
+            for f in dataclasses.fields(base.samples)
+            if getattr(composition.activity.samples, f.name)
+            != getattr(base.samples, f.name)
+        }
+        assert changed == set(_RUN_DONATED)
+        assert changed <= set(DYNAMICS_CHANNELS)
+        assert set(composition.provenance.extras[0].channels) == changed
+        assert composition.activity.samples.time_s == base.samples.time_s
+
+    def test_the_metrics_of_the_composition_equal_those_of_the_base_alone(
+        self, pair: tuple[Activity, Activity, bytes]
+    ) -> None:
+        base, extra, _ = pair
+        composition = compose_activity(base, [extra])
+        for athlete in (None, _ATHLETE):
+            alone = compute_metrics(base, athlete)
+            composed = compute_metrics(composition.activity, athlete)
+            assert composed == alone
+        # The comparison is non-trivial: the athlete's fields are all computed.
+        full = compute_metrics(composition.activity, _ATHLETE)
+        assert full.avg_heart_rate_bpm is not None
+        assert full.trimp is not None
+        assert full.hr_time_in_zone_s is not None
+        assert full.power_time_in_zone_s is not None
+        assert full.decoupling_pct is not None
+
+
+class TestRunTrio:
+    def test_the_highest_ranked_extra_donates_and_the_other_supplies_nothing(
+        self,
+    ) -> None:
+        healthfit, stryd_a, stryd_b = merge.run_trio_fit_bytes()
+        base, a, b = parse_fit(healthfit), parse_fit(stryd_a), parse_fit(stryd_b)
+        members = [
+            source_member(name, act.provenance.sha256, act)
+            for name, act in (("a", a), ("b", b), ("hf", base))
+        ]
+        roles = rank_members(members, (), DEFAULT_PRECEDENCE)
+        assert roles.base.ref == "hf"
+        assert [m.ref for m in roles.extras] == ["b", "a"]
+
+        composition = compose_activity(base, [b, a])
+        form_power = composition.activity.samples.form_power_w
+        assert form_power == _expected_run_series(
+            _raw_stryd(stryd_b, "form_power_w"), base.samples.time_s
+        )
+        assert (form_power[1], form_power[24]) == (51, 57)
+        # stryd_a's form power is one watt lower at every sample.
+        assert _raw_stryd(stryd_a, "form_power_w")[0] == 50
+        extra_b, extra_a = composition.provenance.extras
+        assert extra_b.sha256 == b.provenance.sha256
+        assert set(DYNAMICS_CHANNELS) >= set(extra_b.channels) >= {"form_power_w"}
+        assert extra_a.sha256 == a.provenance.sha256
+        assert extra_a.channels == ()
+        assert extra_a.alignment is None
+
+
+def _ride(
+    *, copy_power: bool = True, copy_shift_h: int = 0
+) -> tuple[Activity, Activity]:
+    garmin, healthfit = merge.ride_pair_fit_bytes(
+        copy_power=copy_power, copy_shift_h=copy_shift_h
+    )
+    return parse_fit(garmin), parse_fit(healthfit)
+
+
+# The copy's heart rate: 90 + 3 * (g % 34) in each of three stretches of 34.
+_RIDE_HEART_RATE = tuple(90 + 3 * i for i in range(34)) * 3
+
+
+class TestRidePair:
+    def test_the_ranking_premise_garmin_base_and_healthfit_extra(self) -> None:
+        base, extra = _ride()
+        members = [
+            source_member("g", base.provenance.sha256, base),
+            source_member("h", extra.provenance.sha256, extra),
+        ]
+        for ordered in (members, members[::-1]):
+            roles = rank_members(ordered, (), DEFAULT_PRECEDENCE)
+            assert roles.base.ref == "g"
+            assert [m.ref for m in roles.extras] == ["h"]
+
+    def test_heart_rate_is_donated_with_every_stretch_aligned_by_power_at_lag_0(
+        self,
+    ) -> None:
+        base, extra = _ride()
+        assert not any(v is not None for v in base.samples.heart_rate_bpm)
+        composition = compose_activity(base, [extra])
+        assert composition.activity.samples.heart_rate_bpm == _RIDE_HEART_RATE
+        contribution = composition.provenance.extras[0]
+        assert contribution.channels == ("heart_rate_bpm",)
+        alignment = contribution.alignment
+        assert alignment is not None
+        assert alignment.hour_shift_s == 0
+        assert [(s.start, s.stop, s.lag_s, s.key) for s in alignment.stretches] == [
+            (0, 34, 0, "power_w"),
+            (34, 68, 0, "power_w"),
+            (68, 102, 0, "power_w"),
+        ]
+
+    def test_the_average_heart_rate_is_the_mean_of_the_donated_values(self) -> None:
+        base, extra = _ride()
+        composition = compose_activity(base, [extra])
+        assert compute_metrics(base).avg_heart_rate_bpm is None
+        # Three stretches of 90, 93, .., 189 each average 139.5.
+        assert compute_metrics(composition.activity).avg_heart_rate_bpm == 139.5
+
+    def test_every_metric_not_fed_by_heart_rate_equals_the_base_alone(self) -> None:
+        base, extra = _ride()
+        composed = compose_activity(base, [extra]).activity
+        alone_m = compute_metrics(base, _ATHLETE)
+        composed_m = compute_metrics(composed, _ATHLETE)
+        # The heart-rate-fed fields are exactly the ones that move (each is
+        # computed in the composition and absent from the base alone).
+        assert _fields_differing(alone_m, composed_m) == set(_HR_FED_FIELDS)
+        for name in _HR_FED_FIELDS:
+            assert getattr(alone_m, name) is None, name
+            assert getattr(composed_m, name) is not None, name
+        assert _fields_differing(alone_m, composed_m, _HR_FED_FIELDS) == set()
+        # Non-trivial: power, distance and elevation fields are computed.
+        for name in ("avg_power_w", "normalized_power_w", "distance_m", "power_tss"):
+            assert getattr(alone_m, name) is not None, name
+
+    def test_with_no_copy_power_every_stretch_falls_back(self) -> None:
+        base, extra = _ride(copy_power=False)
+        assert not any(v is not None for v in extra.samples.power_w)
+        composition = compose_activity(base, [extra])
+        alignment = composition.provenance.extras[0].alignment
+        assert alignment is not None
+        assert [(s.start, s.stop, s.lag_s, s.key) for s in alignment.stretches] == [
+            (0, 34, 0, None),
+            (34, 68, 0, None),
+            (68, 102, 0, None),
+        ]
+        assert composition.activity.samples.heart_rate_bpm == _RIDE_HEART_RATE
+
+    def test_shifted_one_hour_the_shift_is_recorded_and_heart_rate_lands_alike(
+        self,
+    ) -> None:
+        base, extra = _ride(copy_shift_h=1)
+        # Precondition: the copy starts an hour after the base.
+        assert base.start_time is not None and extra.start_time is not None
+        assert (extra.start_time - base.start_time).total_seconds() == 3600
+        composition = compose_activity(base, [extra])
+        alignment = composition.provenance.extras[0].alignment
+        assert alignment is not None
+        assert alignment.hour_shift_s == 3600
+        assert [(s.lag_s, s.key) for s in alignment.stretches] == [(0, "power_w")] * 3
+        plain_base, plain_extra = _ride()
+        unshifted = compose_activity(plain_base, [plain_extra])
+        assert (
+            composition.activity.samples.heart_rate_bpm
+            == unshifted.activity.samples.heart_rate_bpm
+            == _RIDE_HEART_RATE
+        )
+
+
+class TestPartialCoverageOnTheRunPair:
+    def test_a_trimmed_heart_rate_composes_to_exactly_the_trimmed_heart_rate(
+        self,
+    ) -> None:
+        healthfit, stryd = merge.run_pair_fit_bytes()
+        full, extra = parse_fit(healthfit), parse_fit(stryd)
+        kept = [(5 * i) % 63 < 32 for i in range(63)]
+        assert sum(kept) == 32  # 51% of 63 samples, scattered over the run
+        trimmed_hr = tuple(
+            v if keep else None
+            for v, keep in zip(full.samples.heart_rate_bpm, kept, strict=True)
+        )
+        base = dataclasses.replace(
+            full, samples=dataclasses.replace(full.samples, heart_rate_bpm=trimmed_hr)
+        )
+        # Preconditions: the base has gaps and the extra records every sample.
+        assert any(v is None for v in trimmed_hr)
+        assert all(v is not None for v in extra.samples.heart_rate_bpm)
+        composition = compose_activity(base, [extra])
+        assert composition.activity.samples.heart_rate_bpm == trimmed_hr
+        assert composition.provenance.extras[0].channels.count("heart_rate_bpm") == 0
+        # Gaps stay None where the extra places a value: the placed positions
+        # are those at which the untrimmed composition donates form power.
+        donated = compose_activity(full, [extra]).activity.samples.form_power_w
+        placed_gaps = [
+            i for i, keep in enumerate(kept) if not keep and donated[i] is not None
+        ]
+        assert len(placed_gaps) >= 10
+        heart_rate = composition.activity.samples.heart_rate_bpm
+        assert all(heart_rate[i] is None for i in placed_gaps)
