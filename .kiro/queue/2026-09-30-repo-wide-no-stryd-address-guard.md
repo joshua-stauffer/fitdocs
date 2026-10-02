@@ -35,6 +35,8 @@ A contributor or agent can paste a Stryd endpoint into docs, specs, steering or 
   - `https?://[^ )]*stryd` spans newlines, so a `<https://example.com/x>` line followed by a line starting "Stryd pods ..." false-positived.
   - The samples joined into Stryd's real public host.
 
+- 2026-10-02 (channel-merge 6.1, partial): `tests/compose/test_boundary.py::TestNoServiceAddress` now scans every `git ls-files` text file (floor 1300) with `https?://[^\s)]*stryd` case-insensitively; planting an address in src/, docs/ or .kiro/ reds it. Still missing against this item: the generic `[a-z0-9-]+\.stryd\.[a-z]{2,}` host pattern, per-scope non-vacuity (one file under each of src/ tests/ docs/ .kiro/steering/ .kiro/specs/ scripts/ .github/), `>`/`]`/quote delimiters in the URL class, and the newline negative sample. Extend that test rather than adding a second guard; see also 2026-10-02-no-service-address-guard-git-blind-spots.
+
 ## How to pick it up
 1. Read `tests/test_forbidden_strings.py` for the repo's pattern of walking `git ls-files` (it deliberately ignores untracked files).
 2. Write one guard:
