@@ -1167,6 +1167,11 @@ def developer_field_run_fit_bytes(
     product: int = 1,
     time_created: int = FIT_TIMESTAMP_BASE,
     device_manufacturer: str | None = None,
+    laps: Sequence[Mapping[str, object]] = (),
+    session_start: int | None = None,
+    session_elapsed_s: float | None = None,
+    session_distance_m: float | None = None,
+    sport: str = "running",
 ) -> bytes:
     """Encode a valid run carrying arbitrary developer fields.
 
@@ -1181,6 +1186,14 @@ def developer_field_run_fit_bytes(
     ``manufacturer`` goes to ``file_id``; the recording device (``device_info``
     index 0) uses ``device_manufacturer``, which follows ``manufacturer`` when
     ``None``.
+
+    The last five keywords default to what the helper wrote before they
+    existed. ``laps`` (field maps, each written as one ``lap`` message after
+    the records) is empty. ``session_start`` and ``session_elapsed_s`` (the
+    latter written as both the elapsed and the timer time) default to the first
+    record's timestamp and the first-to-last record span.
+    ``session_distance_m`` writes no ``total_distance`` when ``None``.
+    ``sport`` names the session and the ``sport`` message.
     """
     if not records:
         raise ValueError("developer_field_run_fit_bytes needs at least one record")
@@ -1198,21 +1211,26 @@ def developer_field_run_fit_bytes(
     first = record_mesgs[0]["timestamp"]
     last = record_mesgs[-1]["timestamp"]
     assert isinstance(first, int) and isinstance(last, int)
+    elapsed = float(last - first) if session_elapsed_s is None else session_elapsed_s
     session: Mesg = {
         "mesg_num": _MESG_SESSION,
-        "start_time": first,
+        "start_time": first if session_start is None else session_start,
         "timestamp": last,
-        "sport": "running",
+        "sport": sport,
         "sub_sport": "generic",
-        "total_elapsed_time": float(last - first),
-        "total_timer_time": float(last - first),
+        "total_elapsed_time": elapsed,
+        "total_timer_time": elapsed,
     }
+    if session_distance_m is not None:
+        session["total_distance"] = session_distance_m
     if session_fields:
         session["developer_fields"] = dict(session_fields)
+    lap_mesgs: list[Mesg] = [{"mesg_num": _MESG_LAP, **lap} for lap in laps]
     body: list[Mesg] = [
         _device_info(serial, "SyntheticDevFieldWatch", manufacturer=device),
-        {"mesg_num": _MESG_SPORT, "sport": "running", "sub_sport": "generic"},
+        {"mesg_num": _MESG_SPORT, "sport": sport, "sub_sport": "generic"},
         *record_mesgs,
+        *lap_mesgs,
         session,
         _activity(last - FIT_TIMESTAMP_BASE, float(last - first)),
     ]
