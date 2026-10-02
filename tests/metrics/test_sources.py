@@ -2267,7 +2267,7 @@ serve. The **constant trigger** below does NOT use this value -- see
 baseline cannot serve as that trigger's comparison point, and why that
 trigger's own baseline is instead tied to current reality where it can be."""
 
-CONSTANT_REGISTRY_ASOF_DOC_VERSION: Final[int] = 8
+CONSTANT_REGISTRY_ASOF_DOC_VERSION: Final[int] = 9
 """The document-format version as of which every ``CONSTANT_SOURCES``
 binding was last confirmed to carry no ``previous_value`` (this amendment:
 Req 15.3, 18.4) -- today, ``contract.DOC_VERSION`` itself.

@@ -179,7 +179,7 @@ __all__ = [
 
 # --- versions ----------------------------------------------------------------
 
-DOC_VERSION: Final[int] = 8
+DOC_VERSION: Final[int] = 9
 """The document-format version stamped on every generated workout document.
 
 Compared arithmetically against the version a document records (Req 5.1-5.3,
@@ -315,6 +315,13 @@ product code, the devices table names the device by that product name (e.g.
 ``edge_1040``) where it used to show only the manufacturer (``garmin``). A page
 stamped with a lower version lacks the line and names such a device only by
 its manufacturer until regeneration brings it current.
+
+Raised from ``8`` to ``9`` by channel-merge (task 5.1, Req 8.1, 8.2). A page
+with at least one extra gains a Channel Sources section naming each of its
+files and the channels each supplies (an extra that supplies none shows the
+absence marker), and takes each channel its base does not record from the
+highest-ranked extra that records it. A page without extras renders as before
+and changes only this line (Req 8.2).
 """
 
 CONTRACT_VERSION: Final[str] = "7"

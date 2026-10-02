@@ -108,7 +108,9 @@ recorded as one.
   the base records at all stays the base's) and, in a new Channel Sources
   section, names the file each channel came from; training load and derived
   benchmarks are computed from the same combined activity, and the ownership
-  contract's version advances. Actions: run `fitdocs regen` to apply this to
+  contract's version advances. The generated document format advances again
+  (`doc_version` 8 to 9); `fitdocs check` reports older pages as out of date
+  until they are regenerated. Actions: run `fitdocs regen` to apply this to
   existing pages, and `fitdocs load --recompute` to rescore a page whose
   files changed after its load was computed (a computed load is otherwise
   kept); see

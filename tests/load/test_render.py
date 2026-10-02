@@ -179,8 +179,13 @@ def test_payload_version_paired_with_doc_version() -> None:
     **The pair became ``(2, 8)`` (intervals-connector task 2.3):** the Garmin
     attribution line and resolved device names are a page-format change with
     no load result behind it, so ``DOC_VERSION`` advances alone a fifth time.
+
+    **The pair became ``(2, 9)`` (channel-merge task 5.1):** a page with extras
+    takes the channels its base lacks and gains a Channel Sources section, a
+    page-format change; the load result's own shape is untouched, so
+    ``DOC_VERSION`` advances alone a sixth time.
     """
-    assert (LOAD_PAYLOAD_VERSION, contract.DOC_VERSION) == (2, 8), (
+    assert (LOAD_PAYLOAD_VERSION, contract.DOC_VERSION) == (2, 9), (
         f"LOAD_PAYLOAD_VERSION={LOAD_PAYLOAD_VERSION} and "
         f"contract.DOC_VERSION={contract.DOC_VERSION} drifted apart. "
         "Req 11.5 requires that a result-format change also change the "

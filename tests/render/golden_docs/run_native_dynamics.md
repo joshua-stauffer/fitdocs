@@ -2,7 +2,7 @@
 title: Run 2021-09-07 19:46
 type: workout
 generator: fitdocs
-doc_version: 8
+doc_version: 9
 uuid: ff28292a-2b2c-2d2e-2f30-313233343536
 date: '2021-09-07'
 start_time: '2021-09-07T19:46:40-06:00'

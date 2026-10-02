@@ -1,8 +1,9 @@
-"""Channel-merge end-to-end suite over temp data roots (engine level).
+"""Channel-merge end-to-end suite over temp data roots.
 
 One headed section per task (tasks.md, Test File Ownership): this file grows a
 section each for the render seam (4.1), arrival order and regeneration (4.2) and
-the load and performance engines (5.1). A task edits only its own section.
+an aged page and the document-format version (5.1). A task edits only its own
+section. The load and benchmark passes are tests/test_compose_passes_e2e.py.
 """
 
 from __future__ import annotations
@@ -16,8 +17,11 @@ from datetime import timedelta, timezone
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
 import fitdocs.sync as sync_module
+from fitdocs import contract
+from fitdocs.cli import app
 from fitdocs.declaration import DECLARATION_FILENAME
 from fitdocs.docmerge import begin_marker, end_marker
 from fitdocs.inbox import DEFAULT_INBOX_SETTINGS
@@ -441,3 +445,95 @@ def test_the_ride_pair_page_shows_the_donated_heart_rate_and_states_power_alignm
     assert section is not None
     assert copy_row in section.group(0).splitlines()
     assert _table_refs(text) == [_ref(garmin), _ref(copy)]
+
+
+# --- an aged page and the document-format version (5.1) ----------------------
+
+_PRE_CHANNEL_MERGE_DOC_VERSION: int = 8
+"""The document-format version `contract.DOC_VERSION` held on `main` before the
+channel-merge spec's task 5.1 advanced it to 9 (see that constant's own
+docstring: "Raised from ``8`` to ``9`` by channel-merge"). Named here, with its
+provenance, rather than left as a bare literal in a test body; a run-pair page
+aged to this version is one regeneration must bring current."""
+
+_runner = CliRunner()
+_CHART_LINK = re.compile(r"!\[[^\]]*\]\(([^)\s]+\.svg)\)")
+
+
+def test_a_pre_channel_merge_run_pair_page_is_out_of_date_and_regen_restores_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Req 8.1, 8.2, 8.5: a run-pair page stamped with the previous version and
+    lacking its Channel Sources section is reported out of date by ``check``;
+    ``regen`` writes the section back, stamps the current version and rewrites
+    the chart assets deleted beforehand; a second ``check`` reports it current.
+    Mutations: leave ``DOC_VERSION`` at 8 (the precondition); make the audit's
+    ``version < DOC_VERSION`` branch ``False`` (``check`` reports nothing); drop
+    the section in ``_append_channel_sources``; make ``_write_assets`` write
+    nothing."""
+    # A forward assertion: a later sibling advance leaves it true.
+    assert contract.DOC_VERSION > _PRE_CHANNEL_MERGE_DOC_VERSION
+
+    monkeypatch.delenv("FITDOCS_DATA", raising=False)
+    monkeypatch.setattr(
+        "fitdocs.tiles._default_fetch", lambda _url: b"\x89PNG\r\n\x1a\n"
+    )
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    monkeypatch.chdir(cwd)
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    healthfit, stryd = merge.run_pair_fit_bytes()
+    source = _stage(tmp_path / "src", healthfit=healthfit, stryd=stryd)
+    synced = _runner.invoke(app, ["sync", str(source), "--out", str(data_root)])
+    assert synced.exit_code == 0, synced.output
+
+    page = _only_page(data_root)
+    synced_text = page.read_text(encoding="utf-8")
+    assert f"\ndoc_version: {contract.DOC_VERSION}\n" in synced_text
+    assert _table_refs(synced_text) == [_ref(healthfit), _ref(stryd)]
+
+    # Age the page: drop the section (heading up to the next heading or the end)
+    # and record the old version; delete the chart assets the first sync wrote
+    # so that only regeneration can bring them back.
+    section = _CHANNEL_SOURCES.search(synced_text)
+    assert section is not None
+    aged = synced_text[: section.start()] + synced_text[section.end() :]
+    aged = aged.replace(
+        f"\ndoc_version: {contract.DOC_VERSION}\n",
+        f"\ndoc_version: {_PRE_CHANNEL_MERGE_DOC_VERSION}\n",
+        1,
+    )
+    page.write_text(aged, encoding="utf-8")
+    charts = [page.parent / rel for rel in _CHART_LINK.findall(synced_text)]
+    assert charts and all(chart.is_file() for chart in charts)
+    for chart in charts:
+        chart.unlink()
+
+    # The aging really happened: preconditions are live.
+    assert "## Channel Sources" not in aged
+    assert f"\ndoc_version: {_PRE_CHANNEL_MERGE_DOC_VERSION}\n" in aged
+    assert f"\ndoc_version: {contract.DOC_VERSION}\n" not in aged
+    assert not any(chart.exists() for chart in charts)
+
+    stale = _runner.invoke(app, ["check", "--out", str(data_root)])
+    assert stale.exit_code == 1, stale.output
+    assert page.name in stale.output
+    assert (
+        f"doc_version is {_PRE_CHANNEL_MERGE_DOC_VERSION}, below the current"
+        in stale.output
+    )
+    assert "No findings" not in stale.output
+
+    restored = _runner.invoke(app, ["regen", "--out", str(data_root)])
+    assert restored.exit_code == 0, restored.output
+
+    text = _only_page(data_root).read_text(encoding="utf-8")
+    assert text == synced_text
+    assert _table_refs(text) == [_ref(healthfit), _ref(stryd)]
+    assert f"\ndoc_version: {contract.DOC_VERSION}\n" in text
+    assert all(chart.is_file() for chart in charts)
+
+    current = _runner.invoke(app, ["check", "--out", str(data_root)])
+    assert current.exit_code == 0, current.output
+    assert "No findings" in current.output

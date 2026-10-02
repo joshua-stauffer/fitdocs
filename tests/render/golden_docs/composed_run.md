@@ -2,7 +2,7 @@
 title: Run 2042-04-13 23:20
 type: workout
 generator: fitdocs
-doc_version: 7
+doc_version: 9
 uuid: 28292a2b-2c2d-2e2f-3031-323334353637
 date: '2042-04-13'
 start_time: '2042-04-13T23:20:00-06:00'
