@@ -14,8 +14,13 @@ opened, Req 1.3), a well-formed tag, or a malformed tag (recorded as a
 :meth:`~fitdocs.contract.InvalidEffortTag.describe`, Req 1.6).
 
 Task 4.2 adds archive resolution, re-parsing and derivation for
-the valid-tag arm, plus the remaining failure classes. It resolves a tagged
-document's archived source by the *same rule* :func:`fitdocs.load.engine`'s
+the valid-tag arm, plus the remaining failure classes. The re-parse is of the
+page's composition, not of its last `sources` entry alone: the last entry is
+resolved and parsed as the base, then composed with the page's other listed
+files by the page's own rule through :func:`fitdocs.compose.archive.compose_listed`
+(channel-merge Req 6.2), inside the same read and decode failure handling.
+It resolves a tagged document's archived source by the *same rule*
+:func:`fitdocs.load.engine`'s
 private `_resolve_archive` uses -- the document's last `sources` ref,
 validated through :func:`fitdocs.contract.sha_of_ref` (which refuses a
 traversal-shaped ref) and joined through :func:`fitdocs.layout.archive_path`
@@ -109,6 +114,7 @@ from fitdocs.benchmarks import (
     BenchmarkSource,
     BenchmarkSourceKind,
 )
+from fitdocs.compose.archive import compose_listed
 from fitdocs.contract import (
     EffortTag,
     InvalidEffortTag,
@@ -298,7 +304,8 @@ def derive_benchmarks(data_root: Path, *, dry_run: bool = False) -> DeriveReport
 
     Task 4.1 implemented discovery, the frontmatter read and the three-way
     tag branch. Task 4.2 adds, for the valid-tag arm only, archive
-    resolution, re-parsing, and the call into
+    resolution, re-parsing (the last listed file composed with the page's
+    other listed files by the page's rule, channel-merge Req 6.2), and the call into
     :func:`fitdocs.performance.derive.derive` -- never for an untagged
     document (Req 1.3), and only after the tag branch has already committed
     to "valid tag" (a malformed or absent tag never reaches
@@ -363,7 +370,9 @@ def derive_benchmarks(data_root: Path, *, dry_run: bool = False) -> DeriveReport
             continue
 
         try:
-            activity = parse_fit(archive)
+            activity = compose_listed(
+                data_root, source_refs(frontmatter), parse_fit(archive)
+            ).activity
         except OSError as exc:
             failures.append(
                 DeriveFailure(

@@ -4,8 +4,9 @@ This module is the one place that owns document I/O for the load layer. A single
 entry point, :func:`apply_load`, walks the workout documents in a data root and,
 per document in isolation, either **restores** the load frontmatter from a
 preserved payload (no recomputation, no prompting), **computes** a fresh result
-(resolve the archived source, parse it, compute metrics, select a supporting
-calculator, collect declared fields, apply the outcome), writes the honest
+(resolve the archived source, parse it and compose it with the page's other
+listed files, compute metrics, select a supporting calculator, collect
+declared fields, apply the outcome), writes the honest
 **unsupported** state when no calculator supports the sport, records a
 **skip** with a reason (missing inputs / declined / non-interactive), or records
 a **failure** (missing/unparseable archive, damaged markers) -- and it never
@@ -74,7 +75,7 @@ from __future__ import annotations
 
 import os
 import tempfile
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -82,6 +83,7 @@ from typing import Final, assert_never
 
 from fitdocs import AthleteInputs, compute_metrics, parse_fit
 from fitdocs.athlete import AthleteFileError, load_athlete_inputs
+from fitdocs.compose.archive import compose_listed
 from fitdocs.contract import (
     DOC_VERSION,
     document_date,
@@ -240,9 +242,11 @@ def apply_load(
     * **Compute** -- ``recompute`` (any state; the frontmatter keys are stripped
       first so a fresh compute re-confirms from scratch, 8.3), or a placeholder /
       previously-unsupported region (a supporting calculator may exist now,
-      7.7): resolve the last ``sources`` archive (9.3), ``parse_fit`` +
-      ``compute_metrics``, :func:`~fitdocs.load.arbitrate.arbitrate` exactly one
-      calculator for the activity (Req 1.6, 10.1-10.4) -- no candidate loop --
+      7.7): resolve the last ``sources`` archive (9.3), ``parse_fit`` it,
+      compose it with the document's other listed files by the page's rule
+      (channel-merge Req 6.1), ``compute_metrics``,
+      :func:`~fitdocs.load.arbitrate.arbitrate` exactly one calculator for the
+      activity (Req 1.6, 10.1-10.4) -- no candidate loop --
       then, for a ``Selected`` calculator, ask
       :func:`~fitdocs.load.types.supports_activity` **before** collecting any
       athlete input (Req 1.14, 3.1); a ``False`` answer writes the honest
@@ -465,7 +469,11 @@ def _compute_document(
         return profile
 
     data = archive.read_bytes()
-    activity = parse_fit(data)  # FitDecodeError -> per-doc failure
+    base = parse_fit(data)  # FitDecodeError -> per-doc failure
+    # The document's other listed files donate the channels the base lacks
+    # (channel-merge Req 6.1, 6.3); a read or decode error in one of them is
+    # the same per-doc failure as the base's (Req 6.4).
+    activity = compose_listed(data_root, _listed_refs(markdown), base).activity
     metrics = compute_metrics(activity, athlete_inputs)
 
     outcome = arbitrate(
@@ -613,6 +621,12 @@ def _discover_workout_docs(data_root: Path) -> list[Path]:
         for path in sorted(workouts.glob("*.md"))
         if is_workout_document(_read_frontmatter(path))
     ]
+
+
+def _listed_refs(markdown: str) -> Sequence[str]:
+    """The document's whole ``sources`` history, ascending rank, base last."""
+    frontmatter = parse_frontmatter(markdown)
+    return () if frontmatter is None else source_refs(frontmatter)
 
 
 def _resolve_archive(data_root: Path, markdown: str) -> Path | None:
