@@ -182,7 +182,9 @@ identity are recognized when the same ride arrives; see
 
 A page rendered from a file recorded by a Garmin device carries the line
 `Data source: Garmin <model>` directly beneath its title, where `<model>` is
-the product name the device recorded (just `Garmin` when it recorded none).
+the device's product name, as recorded in the file or, for a Garmin
+product code, as the FIT SDK's profile names it (just `Garmin` when neither
+gives one).
 The line is rebuilt on every render, so `fitdocs regen` adds it to existing
 pages.
 

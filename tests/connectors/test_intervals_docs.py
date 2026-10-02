@@ -209,3 +209,10 @@ def test_it_tells_the_athlete_to_regenerate_before_the_first_pull() -> None:
     section = " ".join(_section().split()).lower()
     assert "run `fitdocs regen`" in section
     assert "before the first pull" in section
+
+
+def test_the_attribution_names_the_sdk_profile_route_for_the_model() -> None:
+    part = _section().split("### Garmin attribution", 1)[1]
+    flat = " ".join(part.split())
+    assert "FIT SDK's profile names it" in flat
+    assert "just `Garmin` when neither gives one" in flat

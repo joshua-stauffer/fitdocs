@@ -180,8 +180,10 @@ class IntervalsConnector:
         failure = auth_failure_from(response, service_message=message)
         if failure is not None:
             raise failure
+        said = _service_text(session, response)
         raise AuthFailure(
-            AuthFailureKind.UNAVAILABLE, f"HTTP {response.status}: {message}"
+            AuthFailureKind.UNAVAILABLE,
+            f"HTTP {response.status}: {said}" if said else message,
         )
 
     def list_activities(
@@ -423,11 +425,24 @@ def _auth_headers(session: ConnectorSession, key: Secret) -> dict[str, Secret]:
     return {"Authorization": session.secret(f"Basic {token}")}
 
 
+def _service_text(session: ConnectorSession, response: HttpResponse) -> str:
+    """The service's own words, redacted before they are bounded (Req 5.7):
+    the whole body (the transport has already bounded it) decoded with
+    replacement and passed through the session's redactor, so a secret lying
+    across the byte bound is matched whole; then cut to
+    :data:`SERVICE_MESSAGE_BODY_BYTES` bytes of that redacted text (a
+    multibyte character split by the cut is dropped, not replaced, so the cut
+    leaves no stray marker), whitespace collapsed and cut to
+    :data:`SERVICE_MESSAGE_CHARS` characters. Empty when the body said
+    nothing."""
+    text = session.redactor.redact(response.body.decode("utf-8", "replace"))
+    # Every character is at least one byte, so a character pre-slice keeps the
+    # re-encode at most 4 * SERVICE_MESSAGE_BODY_BYTES bytes.
+    head = text[:SERVICE_MESSAGE_BODY_BYTES].encode("utf-8")
+    text = head[:SERVICE_MESSAGE_BODY_BYTES].decode("utf-8", "ignore")
+    return " ".join(text.split())[:SERVICE_MESSAGE_CHARS]
+
+
 def _service_message(session: ConnectorSession, response: HttpResponse) -> str:
-    """The service's own words, bounded and redacted (Req 5.7): the first
-    :data:`SERVICE_MESSAGE_BODY_BYTES` body bytes, whitespace collapsed,
-    passed through the session's redactor, then cut to
-    :data:`SERVICE_MESSAGE_CHARS` characters; ``HTTP <status>`` when empty."""
-    text = response.body[:SERVICE_MESSAGE_BODY_BYTES].decode("utf-8", "replace")
-    text = session.redactor.redact(" ".join(text.split()))
-    return text[:SERVICE_MESSAGE_CHARS] or f"HTTP {response.status}"
+    """:func:`_service_text`, or ``HTTP <status>`` when it is empty."""
+    return _service_text(session, response) or f"HTTP {response.status}"

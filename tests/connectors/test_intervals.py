@@ -367,6 +367,12 @@ def test_each_status_maps_to_one_failure_after_one_request(
     assert failure.service_message == message
 
 
+def test_a_404_with_an_empty_body_says_the_status_once(tmp_path: Path) -> None:
+    failure, _ = _failure(tmp_path, HttpResponse(status=404, headers={}, body=b""))
+    assert failure.kind is AuthFailureKind.UNAVAILABLE
+    assert failure.service_message == "HTTP 404"
+
+
 def test_a_403_body_echoing_the_bare_token_is_redacted_in_the_failure(
     tmp_path: Path,
 ) -> None:
@@ -430,6 +436,37 @@ def test_the_redaction_runs_before_the_cut_so_no_key_prefix_survives(
     message = _service_message(session, straddling)
     assert message == "x" * 295 + REDACTED[:5]
     assert _KEY[:5] not in message
+
+
+def test_a_character_split_by_the_byte_bound_is_dropped(tmp_path: Path) -> None:
+    # "é" is two bytes, at 4095-4096: the bound keeps only its first byte.
+    body = b" " * 4093 + b"z " + "é".encode()
+    assert len(body) == 4097
+    session = _session(tmp_path, FakeTransport([]))
+    assert (
+        _service_message(session, HttpResponse(status=400, headers={}, body=body))
+        == "z"
+    )
+    failure, _ = _failure(tmp_path, HttpResponse(status=404, headers={}, body=body))
+    assert failure.service_message == "HTTP 404: z"
+
+
+def test_a_secret_echoed_across_the_4096_byte_bound_leaves_no_prefix(
+    tmp_path: Path,
+) -> None:
+    session = _session(tmp_path, FakeTransport([]))
+    session.secret(_KEY)
+    session.secret(_TOKEN)
+    for secret in (_KEY, _TOKEN):
+        # 4080 spaces, then a filler word, then the secret: the secret starts
+        # a few bytes before byte 4096 and ends after it.
+        body = b" " * 4080 + b"ab " + secret.encode()
+        message = _service_message(
+            session, HttpResponse(status=400, headers={}, body=body)
+        )
+        assert message == "ab " + REDACTED
+        for k in range(4, len(secret)):
+            assert secret[:k] not in message
 
 
 def test_an_empty_service_message_falls_back_to_the_status(tmp_path: Path) -> None:

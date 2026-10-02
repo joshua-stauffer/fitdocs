@@ -456,7 +456,8 @@ class IntervalsConnector:                           # Connector + KeyVerifier + 
   is raised when it returns a failure (401 rejected, 403 blocked, 429
   rate-limited with `Retry-After`, 5xx unavailable); any other status raises
   `AuthFailure(UNAVAILABLE)` whose message is `"HTTP <status>: <service
-  message>"`. The body of a 200 is not read. (TBC-7)
+  message>"` (just `"HTTP <status>"` when the body said nothing). The body
+  of a 200 is not read. (TBC-7)
 - **`list_activities`** (3.1-3.8, 1.5):
   - `earliest = since` when given, else `session.now() − FIRST_PULL_DAYS days`.
   - `_windows(earliest, now)`: `first` is the UTC calendar date of `earliest`
@@ -518,11 +519,17 @@ class IntervalsConnector:                           # Connector + KeyVerifier + 
   `ConnectorError(LISTING_STATUS_MESSAGE)` when `listing`, else
   `IntervalsDownloadError(DOWNLOAD_STATUS_MESSAGE)`. Status codes are plain
   `int`s (the stdlib `http` package is never imported).
-- **`_service_message(session, response)`**: the first 4096 body bytes
-  decoded as UTF-8 with replacement, whitespace collapsed, passed through
-  `session.redactor.redact` (so a service that echoes the credential or its
-  encoded form never puts it into an exception this module raises), then cut
-  to 300 characters; `"HTTP <status>"` when empty (5.7).
+- **`_service_message(session, response)`**: the whole body (the transport
+  has already bounded it) decoded as UTF-8 with replacement and passed
+  through `session.redactor.redact` FIRST (so a service that echoes the
+  credential or its encoded form never puts it into an exception this module
+  raises, even when the echo lies across the byte bound), then the redacted
+  text cut to 4096 bytes (a multibyte character split by the cut is dropped,
+  decode `"ignore"`, not turned into a replacement marker), whitespace
+  collapsed, and cut to 300 characters; `"HTTP <status>"` when empty (5.7).
+  `verify` prefixes `"HTTP <status>: "` only when the body yielded text
+  (`_service_text`), so an empty body reads `"HTTP 404"`, not
+  `"HTTP 404: HTTP 404"`.
 
 **User-facing texts** (constants; the tests bind to them, the docs quote their substance):
 
@@ -984,7 +991,7 @@ any real account.
   (mutation: add the key as a query parameter); a 403 at `verify` and a 418 on
   a download whose bodies echo the bare encoded token raise failures whose
   messages carry `<redacted>` and not the token (mutations: skip
-  `session.secret(token)`; drop the `redact` call in `_service_message`).
+  `session.secret(token)`; drop the `redact` call in `_service_text`).
 
 ### Integration (`tests/connectors/test_intervals_pull.py`)
 - Engine level (`run_pull` with the registered connector, `FakeTransport`,
