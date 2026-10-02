@@ -304,7 +304,7 @@ rewrite or reorder a sibling's):
   - _Requirements: 3.1, 3.2_
   - _Boundary: Stretches_
 
-- [ ] 2.2 (P) Define the donation units and the base-wins rule
+- [x] 2.2 (P) Define the donation units and the base-wins rule
   - Donation units derived from the model's per-sample channel set at import:
     every channel but the time offset, in field order, each its own unit except
     latitude and longitude, which form one position unit at latitude's place
@@ -759,3 +759,4 @@ rewrite or reorder a sibling's):
 - 1.1 (review round 2): moving the helper's laps after the session or before the records reds the lap-placement test (raw stream order via `_message_numbers`); the ride copy's distance matches the original's at no lag in -2..+2 (`matched == 0`, stricter than the alignment rule needs). `fitdocs.compose.alignment.MIN_MATCHED_SAMPLES` is not referenced by the fixture tests.
 - TBC-9 resolved 2026-10-02 by intervals-connector's live check (agent-log WARN 09:17:48Z): real HealthFit copies (rides and runs) record `development` at `device_info` index 0 and in `file_id`, so 1.1's `development` HealthFit fixtures match reality and the pins resting on them (M25 / intervals-connector 2.3, the composed_run no-Data-source-line claim) need no revisit.
 - 2.1 named mutations, each observed red then reverted green: extra's pauses only (3 red, incl. test_base_pause_splits_a_continuous_extra); `>=` in the gap test (17 red, incl. test_one_second_step_is_not_a_pause); count cut points with `<` (7 red, incl. test_sample_exactly_at_a_resume_instant_opens_the_stretch); instants without the start (6 red, incl. test_start_is_part_of_the_instant); round a non-whole instant (3 red, incl. test_round_halves_and_near_wholes_are_not_whole). `split_stretches(extra, base)` returns `tuple[range, ...]` over the extra in file order and emits no empty range; equivalent mutants (shown by 200k-case comparison): dropping `sorted`, iterating `first` unsorted, keeping only base cuts the extra has a sample at.
+- 2.2 named mutations, each observed red then reverted green: require every base sample to keep a unit (the 51% and single-sample tests red); split position into two units (literal-list and position tests); drop a channel (literal-list and coverage tests; a dynamics channel also reds the dynamics positive control); index placed values by base position (4 placed-values tests); fill unplaced with `0` (4, incl. the none-not-zero test). Review round 1 added O9b: `float()` on placed values reds `test_values_pass_through_exactly_as_decoded`, which now pins value, type and identity. `placed_values` reads a negative placement index from the end silently -- 2.3/2.4 must never produce one.
