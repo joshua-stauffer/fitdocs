@@ -8,6 +8,7 @@ the load and performance engines (5.1). A task edits only its own section.
 from __future__ import annotations
 
 import hashlib
+import itertools
 import re
 from collections.abc import Sequence
 from dataclasses import replace
@@ -217,3 +218,226 @@ def test_a_single_file_page_is_byte_identical_to_its_render_without_provenance(
     page = _only_page(data_root).read_text(encoding="utf-8")
     assert page == expected.markdown
     assert begin_marker("notes") in page and end_marker("notes") in page
+
+
+# --- arrival order, regeneration, drain and summaries (4.2) ------------------
+
+_RUN_FILES = ("healthfit", "stryd_a", "stryd_b")
+_ORDERS = list(itertools.permutations(_RUN_FILES))
+_RUNNING_DYNAMICS = re.compile(r"\n## Running Dynamics\n.*?(?=\n## |\Z)", re.DOTALL)
+_UUID_LINE = re.compile(r"^uuid: .*$", re.MULTILINE)
+
+# The Running Dynamics Form power row of the run pair (stryd_a's form power)
+# and of the trio (stryd_b's, one watt higher at every sample).
+_FORM_POWER_ROW_A = "| Form power | 62 w | 52–72 w | 90% |"
+_FORM_POWER_ROW_B = "| Form power | 63 w | 53–73 w | 90% |"
+
+
+def _dynamics_form_power_row(text: str) -> str:
+    section = _RUNNING_DYNAMICS.search(text)
+    assert section is not None, "the page has no Running Dynamics section"
+    rows = _FORM_POWER_ROW.findall(section.group(0))
+    assert len(rows) == 1, rows
+    return str(rows[0])
+
+
+def _tree(data_root: Path) -> dict[str, bytes]:
+    """Every file under the data root (pages, charts, archive), by relative path."""
+    return {
+        path.relative_to(data_root).as_posix(): path.read_bytes()
+        for path in sorted(data_root.rglob("*"))
+        if path.is_file()
+    }
+
+
+def _sync_run_files(
+    tmp_path: Path, label: str, order: Sequence[str], *, one_run: bool
+) -> Path:
+    """Sync the run trio's files in ``order`` into a fresh data root.
+
+    ``one_run`` stages all three in one source directory, names prefixed with
+    their position so a sorted directory listing yields ``order``; otherwise
+    each file is its own sync run, in ``order``.
+    """
+    files = dict(zip(_RUN_FILES, merge.run_trio_fit_bytes(), strict=True))
+    data_root = tmp_path / label / "data"
+    data_root.mkdir(parents=True)
+    work = tmp_path / label / "work"
+    if one_run:
+        _sync(
+            _stage(
+                work, **{f"{i}_{name}": files[name] for i, name in enumerate(order)}
+            ),
+            data_root,
+        )
+    else:
+        for i, name in enumerate(order):
+            _sync(_stage(work / str(i), **{name: files[name]}), data_root)
+    return data_root
+
+
+@pytest.fixture(scope="module")
+def trio_baseline(tmp_path_factory: pytest.TempPathFactory) -> dict[str, bytes]:
+    """The trio synced in the canonical order, one run per file."""
+    root = tmp_path_factory.mktemp("trio-baseline")
+    return _tree(_sync_run_files(root, "base", _RUN_FILES, one_run=False))
+
+
+def test_the_trio_baseline_takes_form_power_from_the_higher_ranked_stryd_file(
+    trio_baseline: dict[str, bytes], tmp_path: Path
+) -> None:
+    """Precondition of the arrival-order tests: the baseline is non-trivial and
+    its form power is ``stryd_b``'s, which differs from the pair's (``stryd_a``).
+    """
+    pages = [n for n in trio_baseline if re.fullmatch(r"workouts/[^/]+\.md", n)]
+    pages = [n for n in pages if n != f"{WORKOUTS_DIR}/{DECLARATION_FILENAME}"]
+    assert len(pages) == 1, pages
+    assets = [n for n in trio_baseline if n.startswith("workouts/assets/")]
+    assert len(assets) >= 3, assets
+    text = trio_baseline[pages[0]].decode("utf-8")
+    assert _dynamics_form_power_row(text) == _FORM_POWER_ROW_B
+    _page, pair_text = _run_pair_page(tmp_path, "one-run")
+    assert _dynamics_form_power_row(pair_text) == _FORM_POWER_ROW_A
+
+
+@pytest.mark.parametrize("one_run", [True, False], ids=["one-run", "three-runs"])
+@pytest.mark.parametrize("order", _ORDERS, ids=["-".join(o) for o in _ORDERS])
+def test_the_run_trio_gives_the_same_pages_and_assets_in_every_arrival_order(
+    tmp_path: Path,
+    trio_baseline: dict[str, bytes],
+    order: tuple[str, ...],
+    one_run: bool,
+) -> None:
+    """Req 1.3, 5.1: whichever order the three files arrive in, and whether in
+    one run or across three, every file under the data root (page, charts,
+    archive) is byte-identical to the baseline, and the Running Dynamics Form
+    power row is ``stryd_b``'s. Mutation: take the extras in the listed
+    (arrival) order instead of rank order in ``_render_activity``.
+    """
+    data_root = _sync_run_files(tmp_path, "case", order, one_run=one_run)
+    tree = _tree(data_root)
+    page = _only_page(data_root)
+    text = page.read_text(encoding="utf-8")
+    assert _dynamics_form_power_row(text) == _FORM_POWER_ROW_B
+    assert tree == trio_baseline
+
+
+def test_regen_reproduces_the_synced_run_trio_byte_for_byte(tmp_path: Path) -> None:
+    """Req 5.1: ``regen`` over a synced trio rewrites the page and leaves every
+    file under the data root as the sync left it. Mutation: take the extras in
+    the listed (arrival) order instead of rank order in ``_render_activity``.
+    """
+    data_root = _sync_run_files(tmp_path, "regen", _RUN_FILES, one_run=False)
+    before = _tree(data_root)
+    assert len(before) > 3
+    synced = _only_page(data_root).read_text(encoding="utf-8")
+    assert _dynamics_form_power_row(synced) == _FORM_POWER_ROW_B
+    report = regen(data_root, athlete=None, tz=_TZ, tiles=_TILES)
+    assert report.failures == ()
+    assert len(report.written) == 1
+    assert _tree(data_root) == before
+
+
+def test_drain_of_the_run_pair_writes_the_page_and_assets_sync_writes(
+    tmp_path: Path,
+) -> None:
+    """Req 5.1: the inbox drain and a plain sync of the same two files leave
+    byte-identical data roots, the page carrying the Stryd file's form power.
+    Mutation: ``drain`` plans with the reversed precedence.
+    """
+    synced, synced_text = _run_pair_page(tmp_path, "one-run")
+    drained, drained_text = _run_pair_page(tmp_path, "drain")
+    assert _dynamics_form_power_row(synced_text) == _FORM_POWER_ROW_A
+    assert drained_text == synced_text
+    assert drained.name == synced.name
+    tree = _tree(synced.parent.parent)
+    assert any(n.startswith("workouts/assets/") for n in tree)
+    assert _tree(drained.parent.parent) == tree
+
+
+def test_the_page_filename_and_uuid_are_those_the_healthfit_copy_alone_produces(
+    tmp_path: Path,
+) -> None:
+    """Req 1.6: the composed trio keeps the HealthFit copy's identity.
+
+    The filename and the ``uuid`` line are satisfied by the fixture whichever
+    file is the base (all three files compute one stem, and only the HealthFit
+    copy carries a session uuid), so they are a regression check only. What
+    discriminates is the recorded base identity: ``source_kind``,
+    ``source_elapsed_s``, ``source_distance_m`` and ``source_device`` equal the
+    HealthFit-alone page's and differ from the Stryd-alone page's. Mutations:
+    read the identity from the first extra's parse in ``_page_task``; rank the
+    members with the reversed precedence.
+    """
+    healthfit, stryd_a, _stryd_b = merge.run_trio_fit_bytes()
+    alone = tmp_path / "alone" / "data"
+    alone.mkdir(parents=True)
+    _sync(_stage(tmp_path / "alone" / "work", healthfit=healthfit), alone)
+    stryd = tmp_path / "stryd" / "data"
+    stryd.mkdir(parents=True)
+    _sync(_stage(tmp_path / "stryd" / "work", stryd_a=stryd_a), stryd)
+    composed = _sync_run_files(tmp_path, "trio", _RUN_FILES, one_run=True)
+
+    alone_text = _only_page(alone).read_text(encoding="utf-8")
+    stryd_text = _only_page(stryd).read_text(encoding="utf-8")
+    composed_text = _only_page(composed).read_text(encoding="utf-8")
+    keys = ("source_kind", "source_elapsed_s", "source_distance_m", "source_device")
+
+    def recorded(text: str) -> list[str]:
+        front = text.split("---\n", 2)[1]
+        lines = [
+            line
+            for key in keys
+            for line in front.splitlines()
+            if line.startswith(f"{key}: ")
+        ]
+        assert len(lines) == len(keys), lines
+        return lines
+
+    assert recorded(composed_text) == recorded(alone_text)
+    assert recorded(stryd_text) != recorded(alone_text)
+    assert _only_page(composed).name == _only_page(alone).name
+    assert _UUID_LINE.findall(composed_text) == _UUID_LINE.findall(alone_text)
+
+
+def _ride_page(tmp_path: Path, label: str, *, copy_first: bool) -> str:
+    garmin, copy = merge.ride_pair_fit_bytes()
+    data_root = tmp_path / label / "data"
+    data_root.mkdir(parents=True)
+    work = tmp_path / label / "work"
+    if copy_first:
+        _sync(_stage(work / "a", copy=copy), data_root)
+        _sync(_stage(work / "b", garmin=garmin), data_root)
+    else:
+        _sync(_stage(work / "both", garmin=garmin, copy=copy), data_root)
+    return _only_page(data_root).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("copy_first", [False, True], ids=["one-run", "copy-first"])
+def test_the_ride_pair_page_shows_the_donated_heart_rate_and_states_power_alignment(
+    tmp_path: Path, copy_first: bool
+) -> None:
+    """Req 5.1, 7.1: the Garmin original records no heart rate; the page's
+    summary table and frontmatter show the average of the copy's donated values,
+    and the copy's row of Channel Sources names the power alignment. Mutation:
+    compute metrics from the base instead of the composition in ``_page_task``.
+    """
+    garmin, copy = merge.ride_pair_fit_bytes()
+    alone = tmp_path / "alone" / "data"
+    alone.mkdir(parents=True)
+    _sync(_stage(tmp_path / "alone" / "work", garmin=garmin), alone)
+    alone_text = _only_page(alone).read_text(encoding="utf-8")
+    assert "\n| Avg HR | " not in alone_text
+    assert "avg_hr_bpm" not in alone_text
+
+    text = _ride_page(tmp_path, "pair", copy_first=copy_first)
+    assert "| Avg HR | 140 bpm (max 189 bpm) |" in text
+    assert "\navg_hr_bpm: 140\n" in text
+    copy_row = (
+        f"| `{_ref(copy)}` | extra | phone copy | Heart rate "
+        "| 3 stretches: 3 by power |"
+    )
+    section = _CHANNEL_SOURCES.search(text)
+    assert section is not None
+    assert copy_row in section.group(0).splitlines()
+    assert _table_refs(text) == [_ref(garmin), _ref(copy)]
