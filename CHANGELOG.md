@@ -110,8 +110,10 @@ recorded as one.
   benchmarks are computed from the same combined activity, and the ownership
   contract's version advances. The generated document format advances again
   (`doc_version` 8 to 9); `fitdocs check` reports older pages as out of date
-  until they are regenerated. Actions: run `fitdocs regen` to apply this to
-  existing pages, and `fitdocs load --recompute` to rescore a page whose
+  until they are regenerated. The Garmin data-source line beneath the title
+  also counts the files that donate channels: a Garmin-recorded one is named,
+  any other adds "other devices". Actions: run `fitdocs regen` to apply this
+  to existing pages, and `fitdocs load --recompute` to rescore a page whose
   files changed after its load was computed (a computed load is otherwise
   kept); see
   [the ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md).

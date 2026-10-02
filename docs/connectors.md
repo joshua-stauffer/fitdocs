@@ -188,6 +188,16 @@ gives one).
 The line is rebuilt on every render, so `fitdocs regen` adds it to existing
 pages.
 
+A page that takes channels from other files of the same workout counts every
+file that donates a channel alongside its base (a file that donates nothing is
+not counted). The line names each distinct Garmin recording device among those
+files, the base's first, and ends with `and other devices` when any of them was
+not recorded by a Garmin device: for example
+`Data sources: Garmin <model> and other devices`, or
+`Data sources: Garmin <model> and Garmin <other model>` when two Garmin models
+contribute. A model recorded by two of the files is named once. A page none of
+whose counted files was recorded by a Garmin device carries no line.
+
 The reason is the terms the data comes under: intervals.icu's API terms,
 §1.1 (effective 2025-10-23), and Garmin's API Brand Guidelines, version
 V 6.30.2025. The line applies to every Garmin-recorded file, however it

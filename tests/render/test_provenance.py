@@ -22,6 +22,7 @@ import pytest
 
 import fitdocs.render
 from fitdocs import Samples, compute_metrics, parse_fit
+from fitdocs.compose.composer import compose_activity
 from fitdocs.compose.types import (
     ChannelProvenance,
     ExtraAlignment,
@@ -29,12 +30,13 @@ from fitdocs.compose.types import (
     StretchLag,
 )
 from fitdocs.identity.kinds import SourceKind
-from fitdocs.model import Modality
+from fitdocs.model import DeviceInfo, Modality
 from fitdocs.render import DocContext, render_document
+from fitdocs.render.attribution import recording_device
 from fitdocs.render.dynamics import DYNAMICS_DISPLAY
 from fitdocs.render.provenance import CHANNEL_LABELS, channel_sources_section
 from fitdocs.render.sections import _COVERAGE_CHANNELS
-from tests.fixtures import builder
+from tests.fixtures import builder, merge
 
 _SENTENCE: Final[str] = (
     "Each channel below comes from one file: the base when it records the "
@@ -582,7 +584,17 @@ def test_the_section_is_the_provenance_body_under_its_heading(
     assert body is not None
     without = render_document(_ctx(fit, None)).markdown
     assert without.endswith("\n")
-    assert render_document(ctx).markdown == (f"{without}\n{_VIEW_HEADING}\n\n{body}\n")
+    # The donor is a non-Garmin contributor, so a Garmin-recorded fixture's
+    # attribution line widens to name other devices (task 3.3's attribution
+    # step); every other byte of the page is unchanged.
+    # The generic fixture records no device, so its page has no such line.
+    sole = _attribution_lines(without)
+    assert len(sole) == (0 if view == "generic" else 1)
+    expected = without
+    for line in sole:
+        widened = line.replace("Data source: ", "Data sources: ") + " and other devices"
+        expected = expected.replace(line, widened, 1)
+    assert render_document(ctx).markdown == (f"{expected}\n{_VIEW_HEADING}\n\n{body}\n")
 
 
 @pytest.mark.parametrize("view", list(_VIEW_FIXTURES))
@@ -604,3 +616,125 @@ def test_without_provenance_or_extras_no_view_renders_the_section(
     assert no_extras.assets == bare.assets
     assert _VIEW_HEADING not in _h2(bare.markdown)
     assert "Channel Sources" not in bare.markdown
+
+
+# --- the Garmin attribution over a composed page (intervals-connector Req 8.4) --
+
+
+def _device(index: int, manufacturer: str, product_name: str) -> DeviceInfo:
+    return DeviceInfo(
+        device_index=index,
+        manufacturer=manufacturer,
+        product_name=product_name,
+        serial_number=None,
+        software_version=None,
+        battery_status=None,
+    )
+
+
+def _attribution_lines(markdown: str) -> list[str]:
+    return [line for line in markdown.splitlines() if line.startswith("Data source")]
+
+
+def _contrib_with_devices(
+    channels: tuple[str, ...], devices: tuple[DeviceInfo, ...]
+) -> SourceContribution:
+    return dataclasses.replace(
+        _contrib("bbbb", SourceKind.ORIGINAL, channels), devices=devices
+    )
+
+
+def test_ride_pair_reads_garmin_and_other_devices() -> None:
+    """The Garmin-original base plus the HealthFit copy donating heart rate."""
+    garmin_bytes, copy_bytes = merge.ride_pair_fit_bytes()
+    base = parse_fit(garmin_bytes)
+    composition = compose_activity(base, [parse_fit(copy_bytes)])
+    extra = composition.provenance.extras[0]
+    # preconditions: the copy donates and its recording device is not a Garmin
+    assert "heart_rate_bpm" in extra.channels
+    assert "heart_rate_bpm" not in composition.provenance.base.channels
+    donor_recorder = recording_device(extra.devices)
+    assert donor_recorder is not None
+    assert donor_recorder.manufacturer != "garmin"
+    ctx = dataclasses.replace(
+        _ctx(garmin_bytes, composition.provenance),
+        activity=composition.activity,
+    )
+    # falsity in the starting state: the base alone is a sole Garmin source
+    alone = render_document(_ctx(garmin_bytes, None)).markdown
+    assert _attribution_lines(alone) == ["Data source: Garmin SyntheticGarminEdge"]
+    composed = render_document(ctx).markdown
+    assert _attribution_lines(composed) == [
+        "Data sources: Garmin SyntheticGarminEdge and other devices"
+    ]
+
+
+def _garmin_base_ctx(
+    run_fit_bytes: bytes, extras: tuple[SourceContribution, ...]
+) -> DocContext:
+    ctx = _ctx(
+        run_fit_bytes,
+        ChannelProvenance(
+            base=_contrib("aaaa", SourceKind.ORIGINAL, ("heart_rate_bpm",)),
+            extras=extras,
+        ),
+    )
+    activity = dataclasses.replace(
+        ctx.activity, devices=(_device(0, "garmin", "edge_1040"),)
+    )
+    return dataclasses.replace(ctx, activity=activity)
+
+
+def test_a_non_donating_extra_adds_no_other_devices(run_fit_bytes: bytes) -> None:
+    ctx = _garmin_base_ctx(
+        run_fit_bytes, (_contrib_with_devices((), (_device(0, "stryd", "pod"),)),)
+    )
+    assert ctx.channel_provenance is not None
+    assert ctx.channel_provenance.extras[0].channels == ()  # donates nothing
+    assert _attribution_lines(render_document(ctx).markdown) == [
+        "Data source: Garmin edge_1040"
+    ]
+
+
+def test_a_non_donating_garmin_extra_is_not_named(run_fit_bytes: bytes) -> None:
+    ctx = _garmin_base_ctx(
+        run_fit_bytes,
+        (_contrib_with_devices((), (_device(0, "garmin", "fenix_7"),)),),
+    )
+    assert _attribution_lines(render_document(ctx).markdown) == [
+        "Data source: Garmin edge_1040"
+    ]
+
+
+def test_a_donating_garmin_extra_is_named_after_the_base(
+    run_fit_bytes: bytes,
+) -> None:
+    ctx = _garmin_base_ctx(
+        run_fit_bytes,
+        (
+            _contrib_with_devices((), (_device(0, "stryd", "pod"),)),
+            _contrib_with_devices(("power_w",), (_device(0, "garmin", "fenix_7"),)),
+        ),
+    )
+    assert _attribution_lines(render_document(ctx).markdown) == [
+        "Data sources: Garmin edge_1040 and Garmin fenix_7"
+    ]
+
+
+def test_every_donating_extra_is_read_in_rank_order_by_its_recording_device(
+    run_fit_bytes: bytes,
+) -> None:
+    ctx = _garmin_base_ctx(
+        run_fit_bytes,
+        (
+            _contrib_with_devices(
+                ("power_w",),
+                (_device(1, "stryd", "pod"), _device(0, "garmin", "fenix_7")),
+            ),
+            _contrib_with_devices(("cadence_rpm",), (_device(0, "garmin", "fr965"),)),
+            _contrib_with_devices((), (_device(0, "stryd", "pod"),)),
+        ),
+    )
+    assert _attribution_lines(render_document(ctx).markdown) == [
+        "Data sources: Garmin edge_1040, Garmin fenix_7 and Garmin fr965"
+    ]

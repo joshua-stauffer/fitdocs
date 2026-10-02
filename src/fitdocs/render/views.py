@@ -8,12 +8,14 @@ exact reference order for run/ride, strength, and the generic fallback (design
 and chart :class:`~fitdocs.render.Asset`s out, no file I/O (the sync engine owns
 all writes, Req 4.1).
 
-Beneath the H1 every view carries, when the base file's recording device is a
-Garmin, one ``Data source: Garmin <model>`` line (intervals-connector Req
-8.1-8.3; worded by :mod:`fitdocs.render.attribution`). Donor files' devices
-join the wording once the donor wiring lands (whichever of channel-merge
-and intervals-connector lands second wires it, Req 8.4). It is generated
-content outside every region, refreshed by every regeneration.
+Beneath the H1 every view carries, when the base or an extra that donates a
+channel was recorded by a Garmin, one data-source line worded by
+:func:`fitdocs.render.attribution.attribution_line` (intervals-connector Req
+8.1-8.4). It is worded over the base's devices plus those of each extra that
+donates a channel: each distinct Garmin model among them is named once, the
+base's first, and any of them not recorded by a Garmin adds "other devices".
+It is generated content outside every region, refreshed by every
+regeneration.
 
 Three rules govern every view:
 
@@ -103,11 +105,17 @@ def _head(ctx: DocContext) -> list[str]:
     directly beneath the H1 -- before the ``notes`` region and every section,
     outside every region -- in all three views. The wording is
     :func:`fitdocs.render.attribution.attribution_line`, over the base
-    activity's devices alone: no donor devices are passed yet (whichever of
-    channel-merge and intervals-connector lands second wires them).
+    activity's devices and, on a composed page, the devices of every extra that
+    donates at least one channel (an extra that donates nothing is not a
+    contributing file).
     """
     head = [f"# {_title(ctx)}"]
-    line = attribution_line(ctx.activity)
+    donor_devices = (
+        tuple(c.devices for c in ctx.channel_provenance.extras if c.channels)
+        if ctx.channel_provenance is not None
+        else ()
+    )
+    line = attribution_line(ctx.activity, donor_devices)
     if line is not None:
         head.append(line)
     return head
