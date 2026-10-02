@@ -577,9 +577,9 @@
   - _Requirements: 10.4_
   - _Boundary: SpecRecords_
 
-- [ ] 5. Validation and completion
+- [x] 5. Validation and completion
 
-- [ ] 5.1 Whole-suite gate and the exhaustive sweep
+- [x] 5.1 Whole-suite gate and the exhaustive sweep
   - After rebasing onto `main`: `uv run pytest && uv run ruff check . && uv
     run ruff format --check . && uv run mypy` green; `DOC_VERSION` equals
     `main`'s value plus one (cross-spec ruling R1), and if a sibling landed a
@@ -613,7 +613,7 @@
     ticked; the two roadmap lines updated in the merged commit
   - _Requirements: 5.8, 8.4, 8.8, 10.1, 10.3_
 
-- [ ] 5.2 Completion gate: reconcile the live check with the design
+- [x] 5.2 Completion gate: reconcile the live check with the design
   - Planned to run after the merge, on its own branch under change-protocol, once 1.1's
     findings are in `research.md`. It reads that record and does not re-mark
     it (1.1 owns the record)
@@ -639,3 +639,8 @@
   - _Requirements: 9.4, 9.5_
   - _Depends: 1.1, 5.1_
   - Reconciliation already applied on the impl branch 2026-10-02, before 3.4 ran: design.md download mapping (422), Cross-spec seams and ConnectorsDocSection (TBC-8 premise), 3.4's pins. No 6.x repair task was needed. 5.2 therefore runs on the impl branch after 5.1's gate rather than after the merge, and checks that every contradicted item has an amended marker and pinned behaviour
+
+## Implementation Notes
+
+- 2026-10-02 (5.2 reconciliation, on the implementation branch): TBC-5 contradicted in form (raw FIT served; gzip only as unrequested transport encoding) -- design.md marker amended, gzip branch kept defensive, no repair task. TBC-6 contradicted (422 for no file) -- design amended and repaired inside 3.4 before it ran (404 and 422 declined; NO_FILE_REASON names no status), no 6.x task needed. TBC-8 contradicted (not byte-identical, equal message counts) -- design premise amended (Revalidation Triggers, Cross-spec seams, ConnectorsDocSection), no code change. TBC-1/2/3/4/7 confirmed (TBC-4's Strava half unobservable: no Strava entries). TBC-9 confirmed (HealthFit copies record `development` at index 0): the ride-pair pin and channel-merge's `development` HealthFit copies match; activity-identity's HealthFit species and running-dynamics' `run_native_dynamics` (index-0 `garmin`) are kept as stated synthetic variants -- they test identity ranking and dynamics decoding, not attribution, so no alignment is required by this spec.
+- 5.1 sweep (57 criteria): every requirement PINNED or PRESERVED-ONLY except the declared UNPINNED clauses -- 3.3 dedupe-before-filter order (equivalent unless the service answers inconsistently), 3.4's `isinstance(source, str)` guard, 5.7 the connector's own registration of the full header value (HttpClient registers it too), 8.4 donor wiring (deferred to channel-merge, ruling R2), parts of 10.1 doc prose, 10.3 changelog content, 10.4 amendment records. Feature validation then added pins for the docs model route, redaction across the 4096-byte bound, the decode mode at the cut, and the empty-body status.
