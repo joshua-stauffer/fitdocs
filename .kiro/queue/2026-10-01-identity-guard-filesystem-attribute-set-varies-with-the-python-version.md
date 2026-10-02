@@ -60,3 +60,11 @@ set(dir(pathlib.PurePath))`, public names only), 3.11 as the baseline.
    `planning` (`group` is a `Path` method name on POSIX).
 3. Done when the guard's verdict on `src/fitdocs/identity/` is the same on 3.11
    and the newest supported interpreter.
+
+## Update 2026-10-02 (/kiro-impl connectors, ad985b3)
+The underlying CI gap (one interpreter for the whole supported range) is now
+its own item, `2026-10-02-ci-tests-only-python-3-11-of-the-supported-range`,
+because it is not specific to this guard (connectors hit a Path.stat
+call-count assumption of the same kind, `tests/connectors/test_folder.py:799-805`).
+If that item lands a 3.11-3.13 matrix, this item's option 2 is done and only
+the freeze-or-not decision for `_FS_ATTRIBUTES` remains.

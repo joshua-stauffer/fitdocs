@@ -1696,7 +1696,7 @@ Rejected:
 
   Landed by `activity-identity`, `connectors` and `channel-merge`, the way
   Amendment 3 was landed by `training-blocks`. Dependencies: none
-  (activity-identity part landed)
+  (activity-identity part landed) (connectors part landed)
 - [ ] fit-ingest — `file_id` identity fields (landed by
   `activity-identity`); record-level developer fields and running dynamics
   (landed by `running-dynamics`) (running-dynamics part landed); Garmin product names (landed by
@@ -1708,16 +1708,16 @@ Rejected:
   (landed by `activity-identity`); channel provenance on composed pages
   (landed by `channel-merge`). Dependencies: none
   (activity-identity part landed)
-- [ ] distribution — the packaged `fitdocs-workouts` skill's routine learns
+- [x] distribution — the packaged `fitdocs-workouts` skill's routine learns
   the pull, and its pins move (`tests/test_agent_skill.py:614, 681`); Req
   8.1/8.2 (the skill also pulls) and Req 10.4 (network beyond tiles is the
   explicit connector commands) are amended. Landed by `connectors`.
   Dependencies: connectors
-- [ ] inbox — Req 6.1/6.6 read as the drain's guarantees; a connector's own
+- [x] inbox — Req 6.1/6.6 read as the drain's guarantees; a connector's own
   delivery is removed by the next pull once identical bytes are archived.
   Landed by `connectors`. Dependencies: connectors *(added at the Phase 8
   spec batch, 2026-09-29)*
-- [ ] route-maps — an amendment note on Req 4.2 ("only to fetch missing
+- [x] route-maps — an amendment note on Req 4.2 ("only to fetch missing
   basemap tiles") naming the connector commands. Landed by `connectors`.
   Dependencies: connectors *(added at the Phase 8 spec batch, 2026-09-29)*
 - [ ] training-load — a document listing several archived files is scored
@@ -1801,7 +1801,7 @@ credential store are designed for them now and built later.
   recognized by name. Stryd-file quirks are handled: zeros at pauses, no
   session HR summary, a wrong lap count, a session timestamp that is not the
   end. A running-dynamics section and chart on run pages. Dependencies: none
-- [ ] connectors — **spec written 2026-09-29** (Phase 8 batch, `tasks-generated`, all approvals set; 15 requirements / 122 criteria, 9 majors / 28 executable tasks; cross-spec reviewed, three rounds, READY). the connector protocol and its capability vocabulary
+- [x] connectors — **implemented 2026-10-02** (28/28 tasks, validate-impl GO after one remediation: a pull never adopts an inbox file it did not deliver with those bytes; Req 15.4 qualified to path+bytes recognition, maintainer decision 2026-10-02; CONTRACT_VERSION "6"; `fitdocs connect`/`fitdocs pull`, folder connector); **spec written 2026-09-29** (Phase 8 batch, `tasks-generated`, all approvals set; 15 requirements / 122 criteria, 9 majors / 28 executable tasks; cross-spec reviewed, three rounds, READY). the connector protocol and its capability vocabulary
   (pull activities now; the follow-ons' kinds named and reserved, with an
   irreversible flag); the built-in registry and the published surface the
   plugin kind validates against; per-user credential and token storage

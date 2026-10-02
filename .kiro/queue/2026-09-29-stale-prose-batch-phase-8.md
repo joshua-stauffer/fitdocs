@@ -16,6 +16,9 @@ context:
   - src/fitdocs/layout.py
   - tests/test_changelog.py
   - .kiro/specs/workout-docs/requirements.md
+  - .kiro/specs/workout-docs/design.md
+  - src/fitdocs/sync.py
+  - tests/test_cli_identity.py
   - .kiro/steering/structure.md
   - .kiro/queue/2026-09-16-contract-version-docstring-ledger-incomplete.md
   - .kiro/queue/2026-09-12-ownership-contract-prose-stale-and-unpinned.md
@@ -71,3 +74,32 @@ writers (2026-09-29); each re-verified against the tree before filing.
 2. Fix the code docstrings and the test docstring in one commit; the spec
    and steering edits follow change-protocol's class rules.
 3. Done when every box is ticked; no test pins any of these sentences.
+
+## Update 2026-10-02 (/kiro-impl connectors, ad985b3)
+
+Connectors shipped `fitdocs connect` and `fitdocs pull`, so every "offline /
+sole network access" sentence below is now wrong, not merely inexact. The
+connectors spec rewrote the user-facing ones (pinned by
+`tests/connectors/test_network_statements.py`); these were outside its
+boundary. Re-verified at `ad985b3`; first reported by the connectors task
+6.2, 9.1 and 5.3 reviewers.
+
+- [ ] **Workout-docs criterion and design, not just the objective.** Beyond
+  the Requirement 14 objective above: criterion 14.4
+  (`.kiro/specs/workout-docs/requirements.md:266`, "The fitdocs CLI shall
+  operate fully offline, requiring no network access for any operation"),
+  `.kiro/specs/workout-docs/design.md:88` ("no network access ever") and
+  `:352` ("No network access anywhere in the process (14.4)"). Only
+  indirectly amended via route-maps Req 4.2. Needs a dated amendment note in
+  workout-docs naming the map tiles, `connect` and `pull`.
+- [ ] **`sync.py` docstrings.** `src/fitdocs/sync.py:563` (`sync()`) and
+  `:1126` (`regen()`) call tile resolution "the sole network access". True
+  within the engine only; say "this engine's only network access".
+  (activity-identity owns `sync.py`; connectors could not edit it.)
+- [ ] **Stale test docstring.** `tests/test_cli_identity.py:4-6`: "The
+  ``connectors`` spec is not on this branch, so the ``pull`` scenarios are
+  out of scope here (connectors does that wiring when it lands)." Connectors
+  has landed; point to `tests/connectors/test_cli_connectors.py` instead.
+- Checked and left alone: `.kiro/specs/inbox/design.md:70` ("No network
+  access anywhere in this feature") is still true of the inbox feature
+  itself.

@@ -161,3 +161,19 @@ only and the reverse must stay forbidden), and `os`, `io`, `tomllib` to
 `_FORBIDDEN_IO_OR_RANDOM_MODULES`; the existing injected-spelling self-test
 (`test_boundary_scanner_catches_every_reported_spelling`) should be extended
 with one of the new names so the addition is proven live.
+
+## Additional gap (2026-10-02, /kiro-impl connectors, pinned at ad985b3)
+
+Same class in the connectors network allow-list, layer 3 of
+`tests/connectors/test_boundary.py` (`:505-668`): `_source_imports_network`
+(`:539-554`) collects names only from `ast.Import` and absolute
+`ast.ImportFrom` nodes, so `importlib.import_module("socket")` or
+`__import__("http.client")` in any `src/fitdocs/` module outside
+`fitdocs/tiles.py` and `fitdocs/connectors/http.py` passes Req 14.2's guard.
+Read in this session; first reported by the connectors task 6.1 reviewer
+subagent (no mutation re-run here). No live defect found: `grep -rn "import_module\|__import__" src/fitdocs`
+at ad985b3 hits only `src/fitdocs/__init__.py:124` (the lazy public-API
+re-export), which imports no network module. The other connectors guard gaps
+(missing importer guard, short module list, URL-only neutral scan, folder
+no-request test) are a separate item:
+`2026-10-02-connectors-boundary-and-neutrality-guard-gaps`.
