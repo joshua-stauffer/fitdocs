@@ -159,7 +159,7 @@ rewrite or reorder a sibling's):
 
 ---
 
-- [ ] 1. Foundation: measured-shape fixtures and the package skeleton
+- [x] 1. Foundation: measured-shape fixtures and the package skeleton
 
 - [x] 1.1 Synthesize the run, trio and ride fixtures with the measured alignment shapes
   - First, check the merged developer-field helper
@@ -279,7 +279,7 @@ rewrite or reorder a sibling's):
     full suite still green with no existing test edited
   - _Requirements: 7.2_
 
-- [ ] 2. Core: the pure composition rules
+- [x] 2. Core: the pure composition rules
 
 - [x] 2.1 (P) Put samples on a whole-second clock and cut stretches at the pauses of either file
   - Instants: each sample's recorded start plus its offset as a whole POSIX
@@ -403,7 +403,7 @@ rewrite or reorder a sibling's):
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.10, 5.2, 5.4, 7.1_
   - _Depends: 2.2, 2.3_
 
-- [ ] 2.5 Prove the composition on the measured-shape fixtures
+- [x] 2.5 Prove the composition on the measured-shape fixtures
   - In its own headed section of the composer tests, parse the run pair, the
     run trio and the ride pair from `tests/fixtures/merge.py` and compose them
   - Run pair: at every stretch's first and last placed base sample, the composed
@@ -762,3 +762,4 @@ rewrite or reorder a sibling's):
 - 2.2 named mutations, each observed red then reverted green: require every base sample to keep a unit (the 51% and single-sample tests red); split position into two units (literal-list and position tests); drop a channel (literal-list and coverage tests; a dynamics channel also reds the dynamics positive control); index placed values by base position (4 placed-values tests); fill unplaced with `0` (4, incl. the none-not-zero test). Review round 1 added O9b: `float()` on placed values reds `test_values_pass_through_exactly_as_decoded`, which now pins value, type and identity. `placed_values` reads a negative placement index from the end silently -- 2.3/2.4 must never produce one.
 - 2.3 named mutations, each observed red then reverted green: first stretch's lag for all (2 red); heart rate leading the keys (2-3); power before distance; drop uniqueness (3); drop majority (2); minimum 0 (2); place at instant minus lag (8); last index of a duplicated instant (1); later sample overwrites (1); drop the hour shift (5); k up to 37 (4). Review round 1 added: lag/key carried into a following fallback stretch (O1/O2), majority measured at a lag other than the winning one (O3 lag 0, O4 max, O5 min), reversed placement within a stretch (O9) -- each now reds its own test. Equivalent mutant: `winners[-1]` (uniqueness runs first). Verified by the reviewer on the real fixtures: run pair lags +1,+1,0,+1,0 by distance (57 of 63 base samples placed, last three None); ride lag 0 by power, hour_shift_s 3600 when shifted, all fall back with no copy power. "Compared" at a lag = extra value, its instant, t+L on the base timeline and the base value there all present; match is `abs(v-b) < resolution/2`. No placement index is ever negative.
 - 2.4: all 13 named mutations observed red then reverted green (skip base-keeps 9 red; every-sample 5; fill base gaps 4; worst first 6; any-not-every 1 (position); raw-vs-placed 2; extra's laps / summary / record developer fields 1 each; null balance 1; rebuilt activity when no extra 1; alignment on a non-donor 2; M23 base devices 1). Review round 1 added O1 (align against the composed-so-far activity -> TestAgainstTheBaseAlone) and O2 (lower-ranked extra fills a donor's gaps -> TestNoMixingOfOneChannel). `compose_activity(base, extras) -> Composition`; each contribution's sha256 is `activity.provenance.sha256` (the decoded bytes' hash = the archive name and `sources` ref, confirmed sync.py:1405), kind is `identity.kinds.source_kind`, manufacturer is `file_identity.manufacturer`, devices the file's own. An extra whose raw samples record no open channel is never aligned (unobservable beyond `alignment is None`). Reviewer e2e on merge.py: run pair donates exactly the 8 Stryd-only channels (all DYNAMICS_CHANNELS), form power at per-stretch lags with 0 mismatches; ride donates heart_rate_bpm only.
+- 2.5 named mutations, each observed red then reverted green: one lag for every stretch M1 (8 red, incl. TestRunPair form-power first/last, whole-series, stretch-keys, trailing-None, and the trio); skip base-keeps M2 (16 red, incl. TestRunPair step-length/cadence, donated-channels, metrics equality, the ride's non-HR-fields test, the trimmed-HR test); heart rate leading the keys M3 (7 red, incl. TestRunPair form-power, whole-series, stretch-keys); the extra's laps M4 (TestRunPair test_the_laps_are_the_healthfit_laps); fill base gaps from the extra's placed values M5 (the trimmed-HR test, the only 2.5 test); every-sample-keeps (incl. the trimmed test); return the base without donating (37 red, incl. the ride avg-HR 139.5 test); drop the hour shift (the shifted-ride test). Req 9.2's five (per-file lag, base-recorded channel taken from an extra, heart-rate lag, extra's laps, partial fill) = M1, M2, M3, M4, M5. HR-fed metric fields excluded from the ride equality: avg/max_heart_rate_bpm, efficiency_factor, decoupling_pct, trimp, trimp_weighting, hr_time_in_zone_s. Unpinned: the ride ranking premise against precedence mutations that leave original:garmin first.
