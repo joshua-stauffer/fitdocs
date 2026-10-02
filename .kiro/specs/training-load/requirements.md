@@ -237,6 +237,16 @@ results" is amended below to point at the Phase 6 specs that now own them
 (`load-history`, `performance-benchmarks`), as the roadmap's wave-0 entry
 asks.
 
+## Amendment 5 (2026-10-02): scoring a composed activity, landed by channel-merge
+
+A document may list several archived files of one workout (activity-identity).
+`channel-merge` composes them into one activity whose channels each come from
+one file. This amendment appends one criterion to Requirement 9: a load pass
+scores the composition, not the base alone, so a channel the base lacks but
+another listed file records is available to the calculator, and an absent one
+stays absent. **No existing criterion is renumbered, reworded or withdrawn.**
+The composition itself is owned by `.kiro/specs/channel-merge/`.
+
 ## Introduction
 
 training-load is the differentiating layer of fitdocs: it turns each workout
@@ -446,6 +456,7 @@ an invented training load.
 1. The training-load layer shall never present, persist, or render a load value derived from fabricated, defaulted, or assumed inputs; whenever required data is absent, the outcome shall be an explicit "not computed" state with a stated reason.
 2. _(revised by Amendment 2)_ Where a calculator derives a value from a recorded sample stream, the training-load contract shall require that derivation to be based on aggregates over the samples actually recorded, and shall never treat missing samples as zeros. Enforcing this for a given methodology's math is that methodology's own requirement.
 3. If a document's archived source cannot be found or parsed during a load pass, the fitdocs CLI shall report that document as failed and shall not alter it.
+4. _(added by Amendment 5)_ When a document lists several archived source files, the fitdocs CLI shall score the composition of those files that the document is rendered from, so that the load pass and the rendered document read the same channels, and a channel recorded by no listed file shall remain absent and never be treated as zero; an extra that cannot be resolved shall not fail the document under criterion 3, the pass composing from the files that do resolve.
 
 ### Requirement 10: Calculator Arbitration and Default Selection
 **Objective:** As an athlete with more than one applicable methodology

@@ -35,6 +35,21 @@ current is owned by the implementing spec `.kiro/specs/running-dynamics/`.
 The tests pinning each new criterion are listed in this spec's `spec.json`
 `amendments` array.
 
+## Amendment 2 (2026-10-02): channel provenance, landed by channel-merge
+
+A page may list several archived files of one workout (activity-identity), and
+until now only the base was read. `channel-merge` renders a page from the
+composition of those files: each channel from exactly one file, the base's
+identity, laps and session values kept. This amendment appends criteria only:
+Requirement 3 gains 3.7 (a composed document names each channel's file),
+Requirement 6 gains 6.11 (its laps, devices and decode errors are the base's)
+and Requirement 13 gains 13.4 (a donated channel's gaps stay absent).
+**No existing criterion is renumbered, reworded or withdrawn.** A page with no
+extra renders as before, apart from its document-format version, whose advance
+is owned by the implementing spec `.kiro/specs/channel-merge/`. Each new criterion is
+pinned by channel-merge criteria: 3.7 by 4.1-4.3, 6.11 by 1.5 and 5.4, 13.4 by
+2.6 (tests are listed in that spec's tasks).
+
 ## Introduction
 
 workout-docs is the user-visible layer of fitdocs: the installable `fitdocs`
@@ -131,6 +146,8 @@ re-syncing the same exports never duplicates a workout.
 > a file that cannot be placed on one page. No criterion here is renumbered or
 > reworded.
 
+7. _(added by Amendment 2)_ When a document is rendered from a composition of several archived source files, the fitdocs CLI shall name in the document the archived source file each composed channel came from, so that the provenance recorded under criterion 4 is also recorded per channel.
+
 ### Requirement 4: Idempotent and Deterministic Rendering
 **Objective:** As a user re-running sync freely, I want identical inputs to
 produce identical outputs, so that re-runs are safe, diffs are meaningful, and
@@ -171,6 +188,7 @@ workout's story and details are one scroll away.
 8. _(added by Amendment 1)_ When a run page's activity has recorded data in at least one running-dynamics channel, the fitdocs CLI shall include a `## Running Dynamics` section placed after the summary, map and telemetry sections (each when present) and before the splits section (when present); when no running-dynamics channel has recorded data, the section shall be omitted entirely, heading included, and the fitdocs CLI shall include the section only on pages whose activity modality is run.
 9. _(added by Amendment 1)_ The Running Dynamics section shall present one row per running-dynamics channel that has recorded data, in a fixed order, each showing the channel's average, its typical range (10th to 90th percentile of recorded samples) and its coverage (the percentage of samples that recorded it), computed over recorded samples only and never counting an absent sample as zero.
 10. _(added by Amendment 1)_ The Running Dynamics section shall display ground contact time in milliseconds, vertical oscillation in centimetres, step length in metres, leg spring stiffness in kilonewtons per metre, form and air power in watts, impact in body weights, and vertical ratio and every balance in percent, and shall present each balance channel as its recorded percentage without attributing it to a left or right side.
+11. _(added by Amendment 2)_ When a document is rendered from a composition of several archived source files, the splits section's device laps (criterion 3) and the devices/data-quality section's recording devices and decode errors (criterion 6) shall be the base file's alone.
 
 ### Requirement 7: Hero Chart Generation
 **Objective:** As an athlete, I want the power-vs-heart-rate hero chart
@@ -253,6 +271,7 @@ or the pipeline did not compute.
 1. If a metric's value is absent, the fitdocs CLI shall omit it or render an explicit absence marker, and shall never render a zero or fabricated value in its place.
 2. When a telemetry channel is entirely absent, the fitdocs CLI shall omit the sections and chart elements that depend on it while rendering all independent content normally.
 3. When a device records a true zero (for example zero power while coasting), the fitdocs CLI shall present it as a genuine recorded value.
+4. _(added by Amendment 2)_ When a channel is taken from another of a document's source files than the base, the fitdocs CLI shall leave every sample of the document at which no value of that channel was placed from that file absent, render it as absent under criteria 1 and 2, and never fill it from any other file or invent a value there.
 
 ### Requirement 14: Packaging and Installation
 **Objective:** As a user, I want fitdocs installable as a standalone

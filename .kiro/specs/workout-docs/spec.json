@@ -1,7 +1,7 @@
 {
   "feature_name": "workout-docs",
   "created_at": "2026-07-14T22:41:40Z",
-  "updated_at": "2026-09-30T00:00:00Z",
+  "updated_at": "2026-10-02T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -76,6 +76,17 @@
       "requirement": "3.4, 3.6 (note only) -- recorded by the activity-identity spec",
       "reason": "activity-identity spec task 6.3, its part of the roadmap's Phase 8 Existing Spec Update for workout-docs: a page's provenance (3.4) is its base, the last entry of sources, and 3.6's same-session update is generalized by activity-identity Requirements 3 and 4.",
       "also": "requirements.md gains a note under Requirement 3. No criterion renumbered or reworded."
+    },
+    {
+      "date": "2026-10-02",
+      "requirement": "3.7, 6.11, 13.4 added (appended; no criterion renumbered or reworded) -- implemented by the channel-merge spec, not by this one",
+      "reason": "channel-merge spec task 5.3, its part of the roadmap's Phase 8 Existing Spec Update for workout-docs. A page rendered from a composition of several archived source files names the file each channel came from (3.7), has its device laps, recording devices and decode errors be the base's alone (6.11), and holds a donated channel absent at every sample where no value of it was placed from that file (13.4).",
+      "also": "requirements.md gains Amendment 2 (2026-10-02) and the three criteria. The document-format version advance that brings existing pages current is owned by channel-merge task 5.1.",
+      "criteria_map": {
+        "3.7": "channel-merge 4.1-4.3",
+        "6.11": "channel-merge 1.5, 5.4",
+        "13.4": "channel-merge 2.6"
+      }
     }
   ]
 }
