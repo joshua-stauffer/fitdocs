@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from datetime import tzinfo
 
 from fitdocs import Activity, AthleteInputs, DerivedMetrics, Modality
+from fitdocs.compose.types import ChannelProvenance
 from fitdocs.identity.kinds import SourceIdentity
 
 # Re-export the pure map planning surface (Req 1.1) so downstream callers -- the
@@ -119,7 +120,10 @@ class DocContext:
     call, carries nothing forward. :attr:`identity` carries the page base's
     identity values (activity-identity Req 5.4, 5.5); it defaults to ``None``,
     in which case they are derived from :attr:`activity`, which reproduces a
-    single-file page. :attr:`source_refs` is in ascending rank: the base is
+    single-file page. :attr:`channel_provenance` carries a composed page's
+    per-file channel provenance (channel-merge Req 4.1-4.6); it defaults to
+    ``None``, which renders no Channel Sources section. :attr:`source_refs` is
+    in ascending rank: the base is
     the last entry and every earlier entry is an extra.
     """
 
@@ -134,6 +138,8 @@ class DocContext:
     user_frontmatter: tuple[str, ...] = ()  # verbatim user-owned lines, or ()
     identity: SourceIdentity | None = None  # the page base's identity values; None
     #   derives them from ``activity`` (every render-only caller)
+    channel_provenance: ChannelProvenance | None = None  # which file supplied
+    #   which channel; None renders no Channel Sources section
 
 
 def render_document(ctx: DocContext) -> RenderedDoc:
