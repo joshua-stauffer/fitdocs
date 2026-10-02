@@ -28,11 +28,12 @@ _PRECEDENCE_LINK = "configuration.md#identity-source-precedence"
 
 
 def _section() -> str:
-    """The section's text, up to the next second-level heading."""
+    """The section's text, up to the next second-level heading or the channels
+    subsection (channel-merge), which carries its own table."""
     text = _DOC.read_text(encoding="utf-8")
     start = text.index(_HEADING)
     rest = text[start + len(_HEADING) :]
-    end = re.search(r"^## ", rest, re.MULTILINE)
+    end = re.search(r"^## |^### Channels a Page Takes", rest, re.MULTILINE)
     return rest[: end.start()] if end else rest
 
 

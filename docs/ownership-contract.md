@@ -1,18 +1,20 @@
 # fitdocs Ownership Contract
 
-**Contract version:** `6`
+**Contract version:** `7`
 
-**What changed at this version:** two new commands, `fitdocs connect` and
-`fitdocs pull`, read and write beyond what regeneration already covered. A
-connector's credentials live one TOML file per instance in a per-user
-directory outside the data root, never read from or written to the data root;
-`connect` writes nothing under the data root. Each connector's own ledger is
-fitdocs-owned tool state under `.fitdocs/connectors/`; `pull` writes its
-deliveries under the configured inbox and removes only its own archived,
-hash-identical deliveries; with `--sync` it then drains the inbox exactly as
-`fitdocs sync` does. The settings file gains a
-`[connectors]` table. See
-[Shared and User-Owned Files](#shared-and-user-owned-files) and
+**What changed at this version:** a page that lists more than one file of a
+workout now takes channels from the files other than its base. A channel the
+base records at even one sample stays the base's, gaps included; a channel it
+records at none is taken, as a whole, from the highest-ranked other file that
+records it. The page's identity, laps and session values stay the base's. A
+page with such a file gains a `## Channel Sources` section naming the file
+each channel came from; no frontmatter key records it. The training-load pass
+and the benchmark-derivation pass read the same composed activity. `fitdocs
+regen` applies the composition to existing pages, and `fitdocs load
+--recompute` rescores a page whose composition changed after its load was
+computed. See
+[Channels a Page Takes from Its Extras](#channels-a-page-takes-from-its-extras)
+and
 [Overwrite Semantics of Every Writing Operation](#overwrite-semantics-of-every-writing-operation)
 below.
 
@@ -550,6 +552,91 @@ the pages change. Regeneration evaluates the held files, and the archived files 
 the regenerated pages and keeps `.fitdocs/held.toml` equal to the files that
 remain held; it also rebuilds that record when it cannot be read.
 
+### Channels a Page Takes from Its Extras
+
+A page is rendered from its base, and takes from its extras only the channels
+the base lacks. A **channel** is one per-sample series of the activity (heart
+rate, power, cadence, speed, distance, altitude, temperature, and each
+running-dynamics series); position, latitude with longitude, is one channel. A
+file **records** a channel when at least one of its samples holds a value for
+it.
+
+- **Donation.** A channel the base records is the base's. A channel the base
+  records at none of its samples is taken from the highest-ranked extra that
+  records it at one or more of the base's samples once the extra is placed on
+  the base's timeline, and from no other. A page never averages or blends
+  values from two files, and never takes one channel from two files.
+- **Partial coverage.** A channel the base records at only some of its samples
+  is still the base's in full: its gaps stay gaps and are never filled from an
+  extra.
+- **Position.** Latitude and longitude are taken together from one file: the
+  base's when it records either, otherwise the highest-ranked extra that
+  records both latitude and longitude once placed on the base's timeline. An
+  extra that records only one of the two supplies neither.
+- **What stays the base's.** The page's identity, its laps, its devices, its
+  decode record and every session value (start, elapsed and timer time,
+  distance, and the other session summaries) come from the base alone. An
+  extra's laps and session values never reach the page. Averages, maxima and
+  the other values the page computes from a channel follow the channels the
+  page holds.
+- **Placing an extra's samples.** An extra's samples are put on the base's
+  timeline by their recorded time to the whole second. Two files of one
+  workout can disagree by a lag of a second or two that changes at each pause,
+  so each extra is cut into stretches at the pauses of either file, and each
+  stretch's lag is established from the first of the alignment keys below that
+  both files record and reproduce exactly. A stretch in which no key
+  establishes a lag is placed at exact timestamps, and the page says so. Heart
+  rate, cadence and step length never establish a lag. A value that lands on
+  no base sample is discarded, and a base sample no value lands on holds none:
+  absence is recorded as absent, never as a default.
+
+| Constant | Value | Source |
+|----------|-------|--------|
+| `PAUSE_GAP_S` | `1` | Recording is 1 Hz; the measured lag changed only at pauses (brief, viability check 2026-09-24) |
+| `MAX_LAG_S` | `2` | Measured lags of exactly reproduced channels were 0 and +1 s on three Stryd↔HealthFit pairs; one second of margin each side |
+| `MIN_MATCHED_SAMPLES` | `5` | Design choice, not measured: fewer exact matches cannot rule out coincidence on a repeating power value; a shorter stretch falls back and says so |
+| `ALIGNMENT_KEYS` | distance (0.01 m), then power (1 W) | The channels HealthFit reproduced exactly; distance first because a moving cumulative distance matches at one lag only; heart rate (-1/0 s), step length (+0.8%) and cadence (±1) are not reproduced exactly |
+
+`PAUSE_GAP_S` is the longest gap, in seconds, between two samples of one
+file that is not a pause. `MAX_LAG_S` bounds the lag tried in each
+direction. `MIN_MATCHED_SAMPLES` is the fewest exactly matching samples a
+stretch needs, and a lag must also match more than half of the samples
+compared at it and be the only lag with the most matches.
+`tests/compose/test_contract_docs.py` holds this table equal to the
+constants in `fitdocs.compose.alignment` and `fitdocs.compose.stretches`
+and to the recorded sources.
+
+- **The whole-hour shift.** When the extra's start differs from the base's by
+  a whole number of hours, from 1 up to `SHIFT_MAX_HOURS`, to within
+  `START_TOLERANCE_S` (the step is `SHIFT_STEP_S`; all three are in the
+  tolerance table under
+  [Deciding that two files are one workout](#deciding-that-two-files-are-one-workout)), every instant of the extra is moved by that whole number of hours
+  before it is placed, and the page states the shift. This is the clock shift
+  that lets such a file be recognized as the same workout.
+- **The Channel Sources section.** A page with at least one extra carries a
+  `## Channel Sources` section, after the Device & Data Quality section. It
+  lists every file the page is composed from with its archive reference, role
+  and source kind, the channels each file supplies to the page, and for each
+  extra that supplies a channel the number of its stretches, how many were
+  aligned by distance, how many by power and how many fell back to exact
+  timestamps, and the whole-hour shift when one was applied. An extra that
+  supplies nothing shows the absence marker. A page with no extra has no such
+  section and renders exactly as before, apart from the recorded
+  document-format version.
+- **No frontmatter key.** Which file a channel came from is recorded in the
+  page body only. The set of managed frontmatter keys is unchanged.
+- **The two passes.** The training-load pass (`load`) and the
+  benchmark-derivation pass (`derive-benchmarks`) each re-read the files the
+  page lists and compose them by the same rule: the last listed file is the
+  base, every other listed file an extra, and an extra listed nearer the end
+  ranks higher. A donated channel therefore counts
+  toward the data-sufficiency rules of load, and a benchmark is derived from
+  the channels the page holds.
+- **Recomputing load.** A load region that holds a computed result is kept
+  until you ask for recomputation. A page whose composition changed after its
+  load was computed (a file joined the page, or `fitdocs regen` composed it)
+  keeps the earlier load until `fitdocs load --recompute` rescores it.
+
 ## Shared and User-Owned Files
 
 Three locations at the top of the data root (by default), and two outside
@@ -560,8 +647,10 @@ contract:
 - **`athlete.toml`** — your athlete profile (tested max heart rate, a
   threshold pace, or whatever else the calculators you have installed
   declare they need). fitdocs writes to this
-  file only when you answer a training-load prompt, and it writes **one
-  field at a time**: the value you supplied is validated and stored, then
+  file in two cases: when you answer a training-load prompt, which writes
+  **one field at a time**, and when `fitdocs derive-benchmarks` derives
+  benchmarks (see that operation below). For a prompt answer, the value you
+  supplied is validated and stored, then
   the whole document is rewritten with every other key and table it does
   not manage preserved. That preservation covers keys, tables, and values;
   it does **not** cover comments or formatting, because the file is parsed
@@ -652,7 +741,12 @@ contract:
   is left untouched. `regen` also rebuilds a page's roles from the archived
   bytes of the files the page lists and the current `[identity]` precedence,
   so a change to the precedence takes effect there; a page whose base changes
-  is re-rendered, renamed and cleaned up as under `sync` above. It evaluates
+  is re-rendered, renamed and cleaned up as under `sync` above. Every page is
+  rendered from the composition of the files it lists (see
+  [Channels a Page Takes from Its Extras](#channels-a-page-takes-from-its-extras)),
+  so a page written before channels were taken from extras gains them, and its
+  Channel Sources section, on the next `regen`; a page whose `load` region
+  already holds a computed result keeps that result. It evaluates
   the held files, and the archived files that no page lists, again against the
   regenerated pages and keeps `.fitdocs/held.toml` equal to the files that
   remain held.
@@ -669,7 +763,22 @@ contract:
   overwrites **hand-authored** `load`-region content: it discards whatever
   the region holds and recomputes it from scratch. Nothing is written if
   the recompute is declined or fails, so the existing content survives a
-  run that produces no result.
+  run that produces no result. The pass computes from the activity composed
+  of the files the page lists (see
+  [Channels a Page Takes from Its Extras](#channels-a-page-takes-from-its-extras)),
+  not from the base alone; a computed result is kept until `load --recompute`
+  rescores the page, so a page whose composition changed after its load was
+  computed needs `fitdocs load --recompute` to be scored from the new
+  composition.
+
+- **`derive-benchmarks`** — reads every workout document and, for each one
+  carrying an effort tag, derives from the activity composed of the files the
+  page lists, by the same rule as the `load` pass. It never writes a workout
+  document. Its only write is the athlete profile, written at most once per run,
+  only when the set of benchmarks it derived changes, and never under
+  `--dry-run`. It replaces the benchmarks it derived earlier with those
+  derived now, so a derived benchmark whose effort tag is gone is removed. It
+  never overwrites a benchmark you recorded yourself.
 
 - **`history`** — its outputs are `history/training-load-history.md` and
   its chart `history/assets/training-load-history-fitness.svg`, each
