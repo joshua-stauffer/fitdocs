@@ -49,7 +49,9 @@ import pytest
 import yaml
 
 from fitdocs import compute_metrics, parse_fit
+from fitdocs.compose.composer import compose_activity
 from fitdocs.docmerge import extract_regions
+from fitdocs.identity.roles import DEFAULT_PRECEDENCE, rank_members, source_member
 from fitdocs.layout import activity_uid, doc_stem, source_ref
 from fitdocs.metrics.types import AthleteInputs, ZoneSpec
 from fitdocs.render import (
@@ -66,7 +68,7 @@ from fitdocs.render.charts.palette import (
     ROUTE_RUN_TINT,
 )
 from fitdocs.render.sections import hero_chart_spec
-from tests.fixtures import builder
+from tests.fixtures import builder, merge
 
 _GOLDEN_DIR = Path(__file__).parent / "golden_docs"
 
@@ -134,6 +136,10 @@ MAP_FIXTURES: dict[str, Callable[[], bytes]] = {
 _MAP_LATS: tuple[float | None, ...] = (45.0, 45.0008, 45.0016, 45.0022, 45.0030)
 _MAP_LONS: tuple[float | None, ...] = (10.0, 10.0010, 10.0016, 10.0026, 10.0032)
 _MAP_ATTRIBUTION = "© OpenStreetMap contributors"
+
+# The composed golden case (channel-merge task 3.3): the synthetic run pair
+# composed through ``compose_activity`` and rendered with its provenance.
+COMPOSED_KEY = "composed_run"
 
 
 def _png_chunk(tag: bytes, data: bytes) -> bytes:
@@ -212,6 +218,42 @@ def _build_ctx(
     )
 
 
+def _build_composed_ctx() -> DocContext:
+    """The composed run's context: the run pair composed (HealthFit base, Stryd
+    extra), carrying its provenance. ``source_refs`` are what sync writes: the
+    identity ranking's ``sources``, ascending rank with the base last."""
+    base_bytes, extra_bytes = merge.run_pair_fit_bytes()
+    base = parse_fit(base_bytes)
+    extra = parse_fit(extra_bytes)
+    composition = compose_activity(base, [extra])
+    base_sha = hashlib.sha256(base_bytes).hexdigest()
+    extra_sha = hashlib.sha256(extra_bytes).hexdigest()
+    roles = rank_members(
+        [
+            source_member(source_ref(base_sha), base_sha, base),
+            source_member(source_ref(extra_sha), extra_sha, extra),
+        ],
+        (),
+        DEFAULT_PRECEDENCE,
+    )
+    assert roles.base.ref == source_ref(base_sha)  # identity picks the same base
+    activity = composition.activity
+    uid = activity_uid(activity, base_sha)
+    return DocContext(
+        activity=activity,
+        metrics=compute_metrics(activity, ATHLETE),
+        athlete=ATHLETE,
+        doc_stem=doc_stem(activity, uid, TZ, lambda _candidate: False),
+        source_refs=roles.sources,
+        tz=TZ,
+        channel_provenance=composition.provenance,
+    )
+
+
+def _render_composed() -> RenderedDoc:
+    return render_document(_build_composed_ctx())
+
+
 def _render(key: str, athlete: AthleteInputs | None = ATHLETE) -> RenderedDoc:
     """Render the fixture ``key`` with the given (default pinned) athlete inputs."""
     return render_document(_build_ctx(FIXTURES[key](), athlete))
@@ -279,6 +321,12 @@ def _write_goldens() -> None:
             if asset.rel_path.endswith("-map.svg"):
                 name = _asset_golden_name(key, asset.rel_path)
                 (_GOLDEN_DIR / name).write_text(asset.content, encoding="utf-8")
+    # The composed run: the document plus every chart asset it emits.
+    composed = _render_composed()
+    (_GOLDEN_DIR / f"{COMPOSED_KEY}.md").write_text(composed.markdown, encoding="utf-8")
+    for asset in composed.assets:
+        name = _asset_golden_name(COMPOSED_KEY, asset.rel_path)
+        (_GOLDEN_DIR / name).write_text(asset.content, encoding="utf-8")
 
 
 # --- 1. byte-golden parity: full document + every chart asset (Req 4.1) ------
@@ -707,6 +755,34 @@ def test_native_dynamics_summary_shows_hundredths_scaled_humidity_and_mets() -> 
     )
     assert summary["Humidity"] == f"{humidity / 100:.0f}%"
     assert summary["Avg METs"] == f"{mets / 100:.1f}"
+
+
+# --- 9. composed run: the Channel Sources section (spec channel-merge) --------
+
+
+def test_composed_run_markdown_matches_committed_golden() -> None:
+    assert _render_composed().markdown == _read_golden(f"{COMPOSED_KEY}.md")
+
+
+def test_composed_run_assets_match_committed_goldens() -> None:
+    doc = _render_composed()
+    assert doc.assets, "the composed run should render at least the hero chart"
+    for asset in doc.assets:
+        name = _asset_golden_name(COMPOSED_KEY, asset.rel_path)
+        assert asset.content == _read_golden(name)
+
+
+def test_composed_run_ends_with_channel_sources_after_the_device_section() -> None:
+    ctx = _build_composed_ctx()
+    assert len(ctx.source_refs) == 2  # the composed page lists both files
+    md = render_document(ctx).markdown
+    h2 = _h2_lines(md)
+    assert h2[-2:] == ["## Device & Data Quality", "## Channel Sources"]
+    assert h2.count("## Channel Sources") == 1
+    rows = _table_data_rows(_section_lines(md, "## Channel Sources"))
+    assert [r[1] for r in rows] == ["base", "extra"]
+    # the table is `sources` reversed: base row = last ref, extra row = first
+    assert [r[0] for r in rows] == [f"`{ref}`" for ref in reversed(ctx.source_refs)]
 
 
 if __name__ == "__main__":
