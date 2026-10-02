@@ -8,21 +8,31 @@ standard library and ``fitdocs.connectors.{errors,http,protocol,secrets}``,
 builds no HTTP client of its own, and reads no clock: ``session.now`` is the
 only time source.
 
-Task 3.1 declares the connector, its constants and its settings parser; the
-three operations raise :class:`NotImplementedError` until later tasks
-implement the key check, the listing and the file fetch.
+Task 3.1 declares the connector, its constants and its settings parser; task
+3.2 implements the key check, the credential and the service-message helper.
+The listing and the file fetch raise :class:`NotImplementedError` until later
+tasks implement them.
 """
 
 from __future__ import annotations
 
+import base64
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Final
 
-from fitdocs.connectors.errors import ConnectorSettingsError
-from fitdocs.connectors.http import MAX_RESPONSE_BYTES
+from fitdocs.connectors.errors import (
+    AuthFailure,
+    AuthFailureKind,
+    ConnectorSettingsError,
+)
+from fitdocs.connectors.http import (
+    MAX_RESPONSE_BYTES,
+    HttpResponse,
+    auth_failure_from,
+)
 from fitdocs.connectors.protocol import (
     AuthStyle,
     Capability,
@@ -82,8 +92,11 @@ DOWNLOAD_STATUS_MESSAGE: Final[str] = (
     "intervals.icu answered HTTP {status} for the original file: {message}"
 )
 
+SERVICE_MESSAGE_BODY_BYTES: Final[int] = 4096
+SERVICE_MESSAGE_CHARS: Final[int] = 300
+
 _SOURCE_NAME_RE = re.compile(SOURCE_NAME_PATTERN)
-_NOT_YET = "implemented by a later intervals-connector task (3.2-3.4)"
+_NOT_YET = "implemented by a later intervals-connector task (3.3-3.4)"
 
 
 @dataclass(frozen=True)
@@ -132,7 +145,27 @@ class IntervalsConnector:
     def verify(
         self, session: ConnectorSession, values: Mapping[str, Secret]
     ) -> Granted:
-        raise NotImplementedError(_NOT_YET)
+        """One listing request for the key's own athlete (Req 1.2): ``200``
+        grants no reported scopes (Req 1.3); every other answer is a failure
+        (Req 1.4). One attempt, never retried: the session's client is in
+        AUTH mode."""
+        newest_day = session.now().astimezone(UTC).date() - timedelta(days=1)
+        url = (
+            f"{API_BASE}/athlete/{SELF_ATHLETE}/activities"
+            f"?oldest={newest_day.isoformat()}&limit=1&fields=id"
+        )
+        response = session.http.get(
+            url, secret_headers=_auth_headers(session, values["api_key"])
+        )
+        if response.status == 200:
+            return Granted(scopes=None)
+        message = _service_message(session, response)
+        failure = auth_failure_from(response, service_message=message)
+        if failure is not None:
+            raise failure
+        raise AuthFailure(
+            AuthFailureKind.UNAVAILABLE, f"HTTP {response.status}: {message}"
+        )
 
     def list_activities(
         self, session: ConnectorSession, since: datetime | None
@@ -151,3 +184,25 @@ def _sources_error(offending: object) -> ConnectorSettingsError:
         "sources must be a non-empty list of upper-case source names "
         f'such as "GARMIN_CONNECT", got {offending!r}',
     )
+
+
+def _auth_headers(session: ConnectorSession, key: Secret) -> dict[str, Secret]:
+    """The Basic credential for username ``API_KEY`` (Req 5.7). Both the bare
+    encoded token and the full header value are registered with the session's
+    redactor before the request, so a service that echoes either one is
+    scrubbed."""
+    token = base64.b64encode(f"{API_KEY_USERNAME}:{key.reveal()}".encode()).decode(
+        "ascii"
+    )
+    session.secret(token)
+    return {"Authorization": session.secret(f"Basic {token}")}
+
+
+def _service_message(session: ConnectorSession, response: HttpResponse) -> str:
+    """The service's own words, bounded and redacted (Req 5.7): the first
+    :data:`SERVICE_MESSAGE_BODY_BYTES` body bytes, whitespace collapsed,
+    passed through the session's redactor, then cut to
+    :data:`SERVICE_MESSAGE_CHARS` characters; ``HTTP <status>`` when empty."""
+    text = response.body[:SERVICE_MESSAGE_BODY_BYTES].decode("utf-8", "replace")
+    text = session.redactor.redact(" ".join(text.split()))
+    return text[:SERVICE_MESSAGE_CHARS] or f"HTTP {response.status}"
