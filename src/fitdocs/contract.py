@@ -179,7 +179,7 @@ __all__ = [
 
 # --- versions ----------------------------------------------------------------
 
-DOC_VERSION: Final[int] = 7
+DOC_VERSION: Final[int] = 8
 """The document-format version stamped on every generated workout document.
 
 Compared arithmetically against the version a document records (Req 5.1-5.3,
@@ -304,6 +304,17 @@ session UUID of the page's highest-ranked file that carries one, so it is
 kept when a file without one becomes the base. A page stamped with a lower
 version lacks the identity keys, so it is recognized only by exact content or
 recorded session UUID until regeneration brings it current.
+
+Raised from ``7`` to ``8`` by intervals-connector (task 2.3, Req 8.7, 8.8). A
+page whose recording device (the ``device_index == 0`` device of a
+contributing file) is made by Garmin gains one generated line directly beneath
+its title, outside every region: ``Data source: Garmin <model>`` (or ``Data
+sources: ...`` when several files contribute). And when a file records no
+product name text for a Garmin device and the FIT SDK's profile names its
+product code, the devices table names the device by that product name (e.g.
+``edge_1040``) where it used to show only the manufacturer (``garmin``). A page
+stamped with a lower version lacks the line and names such a device only by
+its manufacturer until regeneration brings it current.
 """
 
 CONTRACT_VERSION: Final[str] = "6"

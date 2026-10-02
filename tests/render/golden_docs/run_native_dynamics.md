@@ -2,7 +2,7 @@
 title: Run 2021-09-07 19:46
 type: workout
 generator: fitdocs
-doc_version: 7
+doc_version: 8
 uuid: ff28292a-2b2c-2d2e-2f30-313233343536
 date: '2021-09-07'
 start_time: '2021-09-07T19:46:40-06:00'
@@ -21,6 +21,8 @@ sources:
 <!-- fitdocs:generated: everything outside the notes/workout/load regions is replaced on regeneration -- see this directory's AGENTS.md -->
 
 # Run 2021-09-07 19:46
+
+Data source: Garmin SyntheticDevFieldWatch
 
 <!-- fitdocs:begin:notes -->
 _Your notes go here. This section is preserved when the document is regenerated._

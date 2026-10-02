@@ -8,6 +8,13 @@ exact reference order for run/ride, strength, and the generic fallback (design
 and chart :class:`~fitdocs.render.Asset`s out, no file I/O (the sync engine owns
 all writes, Req 4.1).
 
+Beneath the H1 every view carries, when the base file's recording device is a
+Garmin, one ``Data source: Garmin <model>`` line (intervals-connector Req
+8.1-8.3; worded by :mod:`fitdocs.render.attribution`). Donor files' devices
+join the wording once the donor wiring lands (whichever of channel-merge
+and intervals-connector lands second wires it, Req 8.4). It is generated
+content outside every region, refreshed by every regeneration.
+
 Three rules govern every view:
 
 - **One H1, headings outside regions.** The ``# <title>`` line is the document's
@@ -51,6 +58,7 @@ from fitdocs.contract import (
 )
 from fitdocs.model import Modality
 from fitdocs.render import Asset, DocContext, RenderedDoc
+from fitdocs.render.attribution import attribution_line
 from fitdocs.render.dynamics import dynamics_section
 from fitdocs.render.frontmatter import build_frontmatter
 from fitdocs.render.sections import (
@@ -83,6 +91,23 @@ def _title(ctx: DocContext) -> str:
         return f"{sport} {ctx.doc_stem}"
     local = start.astimezone(ctx.tz)
     return f"{sport} {local:%Y-%m-%d} {local:%H:%M}"
+
+
+def _head(ctx: DocContext) -> list[str]:
+    """The H1 and, when the wording yields one, the Garmin attribution line.
+
+    Every view starts its blocks from this helper, so the attribution line sits
+    directly beneath the H1 -- before the ``notes`` region and every section,
+    outside every region -- in all three views. The wording is
+    :func:`fitdocs.render.attribution.attribution_line`, over the base
+    activity's devices alone: no donor devices are passed yet (whichever of
+    channel-merge and intervals-connector lands second wires them).
+    """
+    head = [f"# {_title(ctx)}"]
+    line = attribution_line(ctx.activity)
+    if line is not None:
+        head.append(line)
+    return head
 
 
 def _section(heading: str, body: str) -> str:
@@ -159,7 +184,7 @@ def render_run_ride(ctx: DocContext) -> RenderedDoc:
     when they would be empty.
     """
     blocks: list[str] = [
-        f"# {_title(ctx)}",
+        *_head(ctx),
         notes_region(NOTES_PLACEHOLDER).rstrip("\n"),
         _section("Summary", hero_stats(ctx)),
     ]
@@ -201,7 +226,7 @@ def render_strength(ctx: DocContext) -> RenderedDoc:
     (only when sets exist) → ``## Training Load`` → ``## Device & Data Quality``.
     """
     blocks: list[str] = [
-        f"# {_title(ctx)}",
+        *_head(ctx),
         notes_region(NOTES_PLACEHOLDER).rstrip("\n"),
         _section("Summary", hero_stats(ctx)),
     ]
@@ -235,7 +260,7 @@ def render_generic(ctx: DocContext) -> RenderedDoc:
     workout, or sets sections -- those are modality-specific.
     """
     blocks: list[str] = [
-        f"# {_title(ctx)}",
+        *_head(ctx),
         notes_region(NOTES_PLACEHOLDER).rstrip("\n"),
         _section("Summary", hero_stats(ctx)),
     ]

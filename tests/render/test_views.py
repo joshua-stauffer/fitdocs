@@ -21,6 +21,7 @@ from __future__ import annotations
 import dataclasses
 import re
 from datetime import timedelta, timezone, tzinfo
+from pathlib import Path
 
 import pytest
 
@@ -28,8 +29,9 @@ from fitdocs import DerivedMetrics, Modality, compute_metrics, parse_fit
 from fitdocs.contract import DOC_BANNER, GENERATED_PREFIX, LOAD_NOT_COMPUTED
 from fitdocs.docmerge import extract_regions, merge_regions
 from fitdocs.metrics.types import AthleteInputs, ZoneSpec
-from fitdocs.model import Samples
+from fitdocs.model import DeviceInfo, Samples
 from fitdocs.render import DocContext, MapData, plan_map, render_document
+from tests.fixtures import builder
 
 # The run/ride/strength fixtures start 2021-09-08 01:46:40 UTC; at -06:00 that is
 # local 2021-09-07 19:46:40 -- pinned so titles and dates are deterministic.
@@ -577,3 +579,107 @@ def test_banner_contains_no_run_or_release_varying_value(run_fit_bytes: bytes) -
     second = render_document(_ctx(run_fit_bytes)).markdown
     assert first.count(DOC_BANNER) == second.count(DOC_BANNER) == 1
     assert first == second
+
+
+# --- Garmin attribution beneath the title (intervals-connector 2.3) -------
+
+_GARMIN_LINE = "Data source: Garmin edge_1040"
+_GOLDEN_DIR = Path(__file__).parent / "golden_docs"
+
+
+def _device(
+    index: int | None, manufacturer: str, product_name: str | None
+) -> DeviceInfo:
+    return DeviceInfo(
+        device_index=index,
+        manufacturer=manufacturer,
+        product_name=product_name,
+        serial_number=None,
+        software_version=None,
+        battery_status=None,
+    )
+
+
+_EDGE = (_device(0, "garmin", "edge_1040"),)
+_STRYD = (_device(0, "stryd", "pod"),)
+
+
+def _data_source_lines(md: str) -> list[str]:
+    return [line for line in md.splitlines() if line.startswith("Data source")]
+
+
+def _views(
+    run_fit_bytes: bytes, strength_fit_bytes: bytes, minimal_fit_bytes: bytes
+) -> dict[str, bytes]:
+    return {
+        "run_ride": run_fit_bytes,
+        "strength": strength_fit_bytes,
+        "generic": minimal_fit_bytes,
+    }
+
+
+@pytest.mark.parametrize("view", ["run_ride", "strength", "generic"])
+def test_garmin_line_is_the_first_line_after_the_title_in_every_view(
+    view: str,
+    run_fit_bytes: bytes,
+    strength_fit_bytes: bytes,
+    minimal_fit_bytes: bytes,
+) -> None:
+    fit = _views(run_fit_bytes, strength_fit_bytes, minimal_fit_bytes)[view]
+    ctx = _ctx(fit, activity_replace={"devices": _EDGE})
+    # The fixture really lands in the view this case names.
+    modality = ctx.activity.modality
+    if view == "run_ride":
+        assert modality in (Modality.RUN, Modality.BIKE)
+    elif view == "strength":
+        assert modality is Modality.STRENGTH
+    else:
+        assert modality not in (Modality.RUN, Modality.BIKE, Modality.STRENGTH)
+    md = render_document(ctx).markdown
+    lines = md.splitlines()
+    h1 = next(i for i, line in enumerate(lines) if line.startswith("# "))
+    following = [line for line in lines[h1 + 1 :] if line.strip()]
+    assert _data_source_lines(md) == [_GARMIN_LINE]
+    assert following[0] == _GARMIN_LINE
+    assert lines[h1 + 1] == ""
+    assert md.index(_GARMIN_LINE) < md.index("fitdocs:begin:notes")
+    # Not in any region's content: a line the region parser does not see.
+    regions = extract_regions(md)
+    assert regions
+    assert all(_GARMIN_LINE not in content for content in regions.values())
+
+
+@pytest.mark.parametrize("view", ["run_ride", "strength", "generic"])
+def test_stryd_recorded_activity_renders_no_data_source_line(
+    view: str,
+    run_fit_bytes: bytes,
+    strength_fit_bytes: bytes,
+    minimal_fit_bytes: bytes,
+) -> None:
+    fit = _views(run_fit_bytes, strength_fit_bytes, minimal_fit_bytes)[view]
+    md = render_document(_ctx(fit, activity_replace={"devices": _STRYD})).markdown
+    assert _data_source_lines(md) == []
+
+
+def test_device_less_activity_renders_no_data_source_line(
+    minimal_fit_bytes: bytes,
+) -> None:
+    ctx = _ctx(minimal_fit_bytes)
+    assert ctx.activity.devices == ()
+    assert _data_source_lines(render_document(ctx).markdown) == []
+
+
+@pytest.mark.parametrize("golden", ["minimal.md", "map_generic.md"])
+def test_device_less_goldens_carry_no_data_source_line(golden: str) -> None:
+    text = (_GOLDEN_DIR / golden).read_text(encoding="utf-8")
+    assert "## Device & Data Quality" in text
+    assert _data_source_lines(text) == []
+
+
+def test_resolved_product_names_reach_the_attribution_and_devices_table() -> None:
+    md = render_document(_ctx(builder.garmin_devices_ride_fit_bytes())).markdown
+    assert _data_source_lines(md) == [_GARMIN_LINE]
+    table = md.split("## Device & Data Quality", 1)[1]
+    rows = [line for line in table.splitlines() if line.startswith("| ")]
+    assert any(row.startswith("| edge_1040 ") for row in rows)
+    assert any(row.startswith("| hrm_pro ") for row in rows)

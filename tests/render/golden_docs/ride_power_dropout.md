@@ -2,7 +2,7 @@
 title: Ride 2021-09-07 19:46
 type: workout
 generator: fitdocs
-doc_version: 7
+doc_version: 8
 date: '2021-09-07'
 start_time: '2021-09-07T19:46:40-06:00'
 sport: Ride
@@ -23,6 +23,8 @@ sources:
 <!-- fitdocs:generated: everything outside the notes/workout/load regions is replaced on regeneration -- see this directory's AGENTS.md -->
 
 # Ride 2021-09-07 19:46
+
+Data source: Garmin SyntheticPowerDropoutBike
 
 <!-- fitdocs:begin:notes -->
 _Your notes go here. This section is preserved when the document is regenerated._
