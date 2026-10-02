@@ -195,6 +195,8 @@ from fitdocs import (
     compute_metrics,
     parse_fit,
 )
+from fitdocs.compose.composer import compose_activity
+from fitdocs.compose.types import Composition
 from fitdocs.contract import (
     DOC_VERSION,
     InvalidEffortTag,
@@ -1974,7 +1976,8 @@ def _page_task(
 
     # The activity the page renders (the channel-merge seam) and everything
     # computed from it: metrics and the map plan.
-    render_activity = _render_activity(roles, parsed)
+    composition = _render_activity(roles, parsed)
+    render_activity = composition.activity
     metrics = compute_metrics(render_activity, athlete)
 
     # Resolve prepared map inputs before the pure render, only for the outdoor
@@ -2009,6 +2012,7 @@ def _page_task(
         map_data=map_data,
         user_frontmatter=carried,
         identity=identity,
+        channel_provenance=composition.provenance,
     )
     rendered = render_document(ctx)
 
@@ -2204,14 +2208,16 @@ def _settle_pass(
     return moved
 
 
-def _render_activity(roles: PageRoles, parsed: Mapping[str, Activity]) -> Activity:
-    """The activity a page renders: the base's own (Req 5.8).
+def _render_activity(roles: PageRoles, parsed: Mapping[str, Activity]) -> Composition:
+    """The composition a page renders: the base with every extra's donated channels.
 
-    ``parsed`` maps each resolved member's archive ref to its parse. This is the
-    seam channel-merge widens to compose the extras' channels; the page's
-    identity keys never come from what it returns.
+    ``parsed`` maps each resolved member's archive ref to its parse; the extras
+    are composed in the roles' rank order (best first). The page's identity keys
+    never come from what it returns (channel-merge Req 1.6; activity-identity Req 5.4).
     """
-    return parsed[roles.base.ref]
+    return compose_activity(
+        parsed[roles.base.ref], [parsed[member.ref] for member in roles.extras]
+    )
 
 
 def _write_outputs(

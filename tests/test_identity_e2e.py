@@ -26,6 +26,7 @@ from fitdocs import cli as cli_module
 from fitdocs import compute_metrics as real_compute_metrics
 from fitdocs import parse_fit as real_parse_fit
 from fitdocs.cli import app
+from fitdocs.compose.types import Composition
 from fitdocs.contract import DOC_VERSION, format_session_uuid
 from fitdocs.declaration import DECLARATION_FILENAME
 from fitdocs.docmerge import begin_marker, end_marker
@@ -124,6 +125,35 @@ def _frontmatter(page: Path) -> dict[str, object]:
 
 
 _SOURCES_BLOCK = re.compile(r"^sources:\n(?:- .*\n)+", re.MULTILINE)
+_CHANNEL_SOURCES = re.compile(r"\n## Channel Sources\n.*?(?=\n## |\Z)", re.DOTALL)
+_TABLE_REF = re.compile(r"^\| `(fit-archive/[0-9a-f]{64}\.fit)` \|", re.MULTILINE)
+
+
+def _without_channel_sources(text: str) -> str:
+    """The page text minus its channel-merge ``## Channel Sources`` section."""
+    return _CHANNEL_SOURCES.sub("", text)
+
+
+def _channel_sources_lines(text: str) -> list[str]:
+    """The lines of the page's Channel Sources section (empty without one)."""
+    section = _CHANNEL_SOURCES.search(text)
+    return section.group(0).strip("\n").splitlines() if section else []
+
+
+def _extra_channels_cells(text: str) -> list[str]:
+    """The Channels cell of every ``extra`` row of the Channel Sources table."""
+    cells = [
+        [c.strip() for c in line.strip("|").split("|")]
+        for line in _channel_sources_lines(text)
+        if line.startswith("| `fit-archive")
+    ]
+    return [row[3] for row in cells if row[1] == "extra"]
+
+
+def _channel_source_refs(text: str) -> list[str]:
+    """The files the page's Channel Sources table names, base first."""
+    section = _CHANNEL_SOURCES.search(text)
+    return _TABLE_REF.findall(section.group(0)) if section else []
 
 
 def _set_sources(page: Path, refs: Sequence[str]) -> None:
@@ -196,21 +226,30 @@ def test_reexport_pair_in_either_order_renders_byte_identical_pages(
         page = _only_page(data_root)
         assert _frontmatter(page)["sources"] == [_ref(older), _ref(newer)]
         texts[label] = page.read_text(encoding="utf-8")
+        # Channel composition: the page now names both files, base first.
+        assert _channel_source_refs(texts[label]) == [_ref(newer), _ref(older)]
     assert texts["ab"] == texts["ba"]
     # ...and it is the newer export's page (the base): it matches what the
-    # newer export alone renders, apart from the ``sources`` list.
+    # newer export alone renders, apart from the ``sources`` list and the
+    # Channel Sources section (whose one extra row, the older export, donates
+    # nothing).
     alone_root = tmp_path / "alone" / "data"
     alone_root.mkdir(parents=True)
     _sync_one(alone_root, tmp_path / "alone", newer)
     alone = _only_page(alone_root).read_text(encoding="utf-8")
-    assert _SOURCES_BLOCK.sub("", texts["ab"]) == _SOURCES_BLOCK.sub("", alone)
+    assert _channel_source_refs(alone) == []
+    assert _extra_channels_cells(texts["ab"]) == ["–"]
+    assert _SOURCES_BLOCK.sub("", _without_channel_sources(texts["ab"])) == (
+        _SOURCES_BLOCK.sub("", alone)
+    )
 
 
 def test_file_below_the_base_leaves_base_and_filename_unchanged(
     tmp_path: Path,
 ) -> None:
     """Req 5.3, 5.7: a file that ranks below the base changes neither the base
-    nor the page's filename, only the ``sources`` list.
+    nor the page's filename, only the ``sources`` list and the page's Channel
+    Sources section, whose one extra row (the older export) donates nothing.
 
     Mutation: render from the last listed file (the older export, which arrives
     last, would become the rendered activity and move ``start_time``).
@@ -226,7 +265,10 @@ def test_file_below_the_base_leaves_base_and_filename_unchanged(
     assert _only_page(data_root).name == name
     after = page.read_text(encoding="utf-8")
     assert _frontmatter(page)["sources"] == [_ref(older), _ref(newer)]
-    normalized = _SOURCES_BLOCK.sub("", after)
+    assert _channel_source_refs(before) == []
+    assert _extra_channels_cells(after) == ["–"]
+    assert _channel_source_refs(after) == [_ref(newer), _ref(older)]
+    normalized = _SOURCES_BLOCK.sub("", _without_channel_sources(after))
     assert normalized == _SOURCES_BLOCK.sub("", before)
 
 
@@ -529,14 +571,15 @@ def test_metrics_and_map_come_from_the_render_activity(
     lat = (1.0, 2.0)
     lon = (3.0, 4.0)
 
-    def seam(roles: PageRoles, parsed: Mapping[str, Activity]) -> Activity:
-        base = real(roles, parsed)
+    def seam(roles: PageRoles, parsed: Mapping[str, Activity]) -> Composition:
+        composed = real(roles, parsed)
+        base = composed.activity
         assert roles.base.kind is SourceKind.ORIGINAL  # incoming ranks below
         out = replace(
             base, samples=replace(base.samples, latitude_deg=lat, longitude_deg=lon)
         )
         returned.append(out)
-        return out
+        return replace(composed, activity=out)
 
     metric_args: list[Activity] = []
     plan_args: list[tuple[object, object]] = []
@@ -569,8 +612,11 @@ def test_the_map_decision_follows_the_render_activitys_modality(
     data_root, source = _stage_below_base_arrival(tmp_path)
     real = sync_module._render_activity
 
-    def seam(roles: PageRoles, parsed: Mapping[str, Activity]) -> Activity:
-        return replace(real(roles, parsed), modality=Modality.STRENGTH)
+    def seam(roles: PageRoles, parsed: Mapping[str, Activity]) -> Composition:
+        composed = real(roles, parsed)
+        return replace(
+            composed, activity=replace(composed.activity, modality=Modality.STRENGTH)
+        )
 
     plans: list[object] = []
 
@@ -3097,8 +3143,10 @@ def test_cli_partner_copy_arriving_later_changes_nothing_but_sources(
 ) -> None:
     """Req 2.8, 4.3, 5.6, 8.5: the Garmin original's partner copy (same ``file_id``, no
     undocumented messages) synced afterwards joins the run page and changes
-    nothing but its ``sources`` list -- every other byte of the page, the page
-    name and the charts are as they were, and ``check`` stays clean.
+    nothing but its ``sources`` list and one more row in the page's Channel
+    Sources section (between the base's row and the copy's) -- every other
+    byte of the page, the page name and the charts are as they were, and
+    ``check`` stays clean.
 
     Mutations: rank the phone copy above a Garmin original in the default
     precedence (this test and the drain scenario red); prefer the file with
@@ -3126,7 +3174,21 @@ def test_cli_partner_copy_arriving_later_changes_nothing_but_sources(
     old_text = before[f"{WORKOUTS_DIR}/{_run_stem()}.md"].decode("utf-8")
     new_text = after[f"{WORKOUTS_DIR}/{_run_stem()}.md"].decode("utf-8")
     assert _SOURCES_BLOCK.subn("", old_text)[1] == 1
-    assert _SOURCES_BLOCK.sub("", new_text) == _SOURCES_BLOCK.sub("", old_text)
+    # The partner is one more extra: the section gains exactly its row, between
+    # the base's row and the copy's, and every other line of it is unchanged.
+    assert _channel_source_refs(new_text) == list(reversed(_sources(run_path)))
+    assert len(_channel_source_refs(old_text)) == 2
+    old_lines = _channel_sources_lines(old_text)
+    new_lines = _channel_sources_lines(new_text)
+    partner_rows = [line for line in new_lines if _ref(partner) in line]
+    assert len(partner_rows) == 1
+    assert new_lines.index(partner_rows[0]) == 1 + next(
+        i for i, line in enumerate(new_lines) if line.startswith("| `fit-archive")
+    )
+    assert [line for line in new_lines if line != partner_rows[0]] == old_lines
+    assert _SOURCES_BLOCK.sub(
+        "", _without_channel_sources(new_text)
+    ) == _SOURCES_BLOCK.sub("", _without_channel_sources(old_text))
     shifted, original = fx.healthfit_shifted(), fx.garmin_original()
     old_front = yaml.safe_load(old_text.split("---\n", 2)[1])
     assert old_front["sources"] == [_ref(shifted), _ref(original)]
