@@ -122,11 +122,17 @@ def _flat(text: str) -> str:
 
 def test_the_subsection_states_each_composition_guarantee() -> None:
     """Req 8.3: one file per channel, the base's identity, laps and session
-    values, the Channel Sources placement, the lag majority and the two passes."""
+    values, the ranking, the Channel Sources placement, the lag majority and
+    the two passes."""
     text = _flat(_subsection())
     for phrase in (
         "never averages or blends values from two files",
         "never takes one channel from two files",
+        "is taken from the highest-ranked extra that records it",
+        "otherwise the highest-ranked extra that records both latitude and longitude",
+        "The page's identity, its laps, its devices, its decode record and every "
+        "session value (start, elapsed and timer time, distance, and the other "
+        "session summaries) come from the base alone",
         "An extra's laps and session values never reach the page",
         "`## Channel Sources` section, after the Device & Data Quality section",
         "more than half of the samples compared at it",
@@ -155,5 +161,6 @@ def test_the_unreleased_entry_names_the_actions() -> None:
     assert len(entries) == 1, len(entries)
     entry = _flat(entries[0])
     assert "takes the channels its base file lacks from the others" in entry
+    assert "names the file each channel came from" in entry
     assert "run `fitdocs regen` to apply this to existing pages" in entry
     assert "`fitdocs load --recompute` to rescore a page" in entry

@@ -26,6 +26,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Final
@@ -409,51 +410,59 @@ class TestPositiveControls:
 
 _REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 _ADDRESS: Final[re.Pattern[str]] = re.compile(
-    r"https?://[^ )]*" + "stryd", re.IGNORECASE
+    r"https?://[^\s)]*" + "stryd", re.IGNORECASE
 )
-_FEATURE_FILES: Final[tuple[str, ...]] = (
-    "src/fitdocs/compose/*.py",
-    "src/fitdocs/render/provenance.py",
-    "tests/compose/*.py",
-    "tests/fixtures/merge.py",
-    "tests/fixtures/test_merge_fixtures.py",
-    "tests/render/test_provenance.py",
-    "tests/test_compose_e2e.py",
-    "tests/test_compose_passes_e2e.py",
-    "docs/ownership-contract.md",
-    "CHANGELOG.md",
-    ".kiro/specs/channel-merge/*.md",
-)
+_MIN_TRACKED_FILES: Final[int] = 1300
 
 
-def _address_offenders(root: Path) -> tuple[list[str], int]:
-    """Every feature file under ``root`` that names a Stryd web address, and
-    how many files were scanned."""
+def _tracked_files(root: Path) -> list[Path]:
+    out = subprocess.run(
+        ["git", "ls-files", "-z"], cwd=root, capture_output=True, check=True
+    ).stdout
+    return [root / name.decode() for name in out.split(b"\0") if name]
+
+
+def _address_offenders(files: list[Path], root: Path) -> list[str]:
+    """Every text file in ``files`` that names a Stryd web address. A file that
+    is not UTF-8 text is binary and skipped."""
     offenders: list[str] = []
-    scanned = 0
-    for pattern in _FEATURE_FILES:
-        for path in sorted(root.glob(pattern)):
-            scanned += 1
-            if _ADDRESS.search(path.read_text(encoding="utf-8")):
-                offenders.append(path.relative_to(root).as_posix())
-    return offenders, scanned
+    for path in files:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        if _ADDRESS.search(text):
+            offenders.append(path.relative_to(root).as_posix())
+    return offenders
 
 
 class TestNoServiceAddress:
-    """Req 9.3: no Stryd web or service address in this feature's code, tests,
-    specification or documentation."""
+    """Req 9.3: no Stryd web or service address in any tracked file of the
+    repository, which includes this feature's code, tests, specification and
+    documentation."""
 
-    def test_no_feature_file_names_one(self) -> None:
-        offenders, scanned = _address_offenders(_REPO_ROOT)
-        assert scanned >= 30, "the walk is looking at the wrong directory"
-        assert offenders == []
+    def test_no_tracked_file_names_one(self) -> None:
+        files = _tracked_files(_REPO_ROOT)
+        assert len(files) >= _MIN_TRACKED_FILES, "the walk is looking at the wrong tree"
+        assert _address_offenders(files, _REPO_ROOT) == []
 
-    def test_an_address_in_any_scanned_file_is_detected(self, tmp_path: Path) -> None:
-        target = tmp_path / "src" / "fitdocs" / "compose"
-        target.mkdir(parents=True)
-        (target / "types.py").write_text(
-            "see https://www." + "stryd" + ".com/x\n", encoding="utf-8"
-        )
-        (target / "clean.py").write_text("x = 1\n", encoding="utf-8")
-        offenders, scanned = _address_offenders(tmp_path)
-        assert (offenders, scanned) == (["src/fitdocs/compose/types.py"], 2)
+    def test_an_address_is_detected_in_code_docs_and_specs(
+        self, tmp_path: Path
+    ) -> None:
+        paths = [
+            tmp_path / "src" / "fitdocs" / "sync.py",
+            tmp_path / "docs" / "guide.md",
+            tmp_path / ".kiro" / "specs" / "x" / "design.md",
+        ]
+        for path in paths:
+            path.parent.mkdir(parents=True)
+            path.write_text("see https://www." + "stryd" + ".com/x\n", encoding="utf-8")
+        clean = tmp_path / "clean.py"
+        clean.write_text("x = 1\n", encoding="utf-8")
+        found = _address_offenders([*paths, clean], tmp_path)
+        assert found == [p.relative_to(tmp_path).as_posix() for p in paths]
+
+    def test_an_address_cannot_span_a_newline(self, tmp_path: Path) -> None:
+        split = tmp_path / "a.md"
+        split.write_text("https://example.org/\n" + "stryd" + "\n", encoding="utf-8")
+        assert _address_offenders([split], tmp_path) == []
