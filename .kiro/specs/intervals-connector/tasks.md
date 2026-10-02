@@ -473,9 +473,9 @@
     operation raises "not implemented" any more
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.7, 5.1, 5.2, 5.3, 5.4, 5.5, 5.7_
 
-- [ ] 4. Integration, documentation and records
+- [x] 4. Integration, documentation and records
 
-- [ ] 4.1 Pull through the framework into an attributed workout page
+- [x] 4.1 Pull through the framework into an attributed workout page
   - `tests/connectors/test_intervals_pull.py`, engine level: the registered
     connector through the pull engine with a scripted transport and a synthetic
     data root. First pull over a listing of four entries: a Garmin Connect FIT
