@@ -48,6 +48,7 @@ import pytest
 import fitdocs
 import fitdocs.audit
 import fitdocs.cli
+import fitdocs.compose.archive
 import fitdocs.contract
 import fitdocs.declaration
 import fitdocs.docio
@@ -137,6 +138,9 @@ CONVERTED_MODULES: Final[tuple[ModuleType, ...]] = (
     fitdocs.identity.kinds,
     # activity-identity (task 3.2): the one workouts/*.md identity scan.
     fitdocs.identity.pages,
+    # channel-merge (task 3.1): the one compose module that reads archive
+    # refs, binding the archive-ref reader by identity.
+    fitdocs.compose.archive,
 )
 
 #: The one converted module allowed to name ``yaml`` at all. The frontmatter
@@ -307,6 +311,7 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
         "is_workout_document",
         "source_refs",
     ),
+    "fitdocs.compose.archive": ("sha_of_ref",),
 }
 
 #: Document vocabulary no converted module may spell for itself: the frontmatter
