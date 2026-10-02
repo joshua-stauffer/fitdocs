@@ -166,7 +166,7 @@
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
   - _Boundary: ProductNameResolution_
 
-- [ ] 2.2 (P) Word the Garmin attribution for a page's contributing files
+- [x] 2.2 (P) Word the Garmin attribution for a page's contributing files
   - A pure module with design.md "GarminAttribution"'s three functions and
     signatures: the recording device of a device tuple (the first device with
     index 0); a Garmin label from a device tuple (its recording device's exact
