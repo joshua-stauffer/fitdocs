@@ -128,7 +128,7 @@
   - _Requirements: 9.1, 9.2, 9.3, 9.5_
   - _Done 2026-10-02: at the maintainer's explicit request (Req 9.5 as amended), the `/kiro-impl` controller session ran it with the maintainer's key from the gitignored `.env`, never passed to a subagent or written; findings in `research.md` "Live check findings" (TBC-5, TBC-6, TBC-8 contradicted; TBC-6 repaired in 3.4; TBC-5/TBC-8 need no code change)_
 
-- [ ] 2. Garmin product names and the attribution line
+- [x] 2. Garmin product names and the attribution line
 
 - [x] 2.1 (P) Resolve Garmin product names at ingest from the FIT SDK's profile, with a shared multi-device ride fixture
   - Append to the builder a ride whose one device message is replaced by four
@@ -221,7 +221,7 @@
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.6_
   - _Boundary: GarminAttribution_
 
-- [ ] 2.3 Put the attribution beneath the title of every view and advance the document format
+- [x] 2.3 Put the attribution beneath the title of every view and advance the document format
   - One head helper in the views module gives the H1 and, when the wording
     yields one, the attribution line; the run/ride, strength and generic views
     all start from it, so the line sits directly beneath the H1, before the
