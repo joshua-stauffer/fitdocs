@@ -161,7 +161,7 @@ rewrite or reorder a sibling's):
 
 - [ ] 1. Foundation: measured-shape fixtures and the package skeleton
 
-- [ ] 1.1 Synthesize the run, trio and ride fixtures with the measured alignment shapes
+- [x] 1.1 Synthesize the run, trio and ride fixtures with the measured alignment shapes
   - First, check the merged developer-field helper
     `developer_field_run_fit_bytes` in `tests/fixtures/builder.py` against
     what these fixtures need through it: per-file laps (count and values,
@@ -754,3 +754,6 @@ rewrite or reorder a sibling's):
 ## Implementation Notes
 
 - 1.2: the guard's "seven modules" are the package marker plus the six design modules (types, stretches, alignment, donation, composer, archive); the marker may import nothing non-stdlib. The allowlist is a subset check until 3.1 tightens it to equality. Outside `archive.py` the guard also bars `os`, `shutil`, `tempfile`, `glob`, `io`. Clock spellings match word-bounded (`(?<![\w.])<s>\b`), so `start_time.timestamp()` and `datetime.timezone` are allowed (2.1 may use them). 3.1: the `.` in that lookbehind is unpinned and costs docstring detection of `datetime.datetime.now` -- consider `(?<!\w)` when tightening. `tests/compose/builders.make_activity`: passing `summary=` drops the default `summary.start_time`; there is no `record_developer_fields` option (use `dataclasses.replace` locally).
+- 1.1 fixture edit per self-test (each observed red, reverted green): L_3 to +1 reds the per-stretch lag test; dropping enhanced_speed from the HealthFit copy reds the Stryd-only-channels subset test; ride copy device_manufacturer="garmin" reds the ride recording-device test; Stryd device_manufacturer="garmin" reds the run recording-device test (and the trio test); _RUN_STRIDE 16->12 reds the layout test; _RUN_TRAILING 3->2 reds the trailing test; stance-time modulus 13->11 reds the distinct test; HR at lag 0 reds the HR test; step divisor 1.008->1.0 reds the step-ratio test; HealthFit laps 5->4 reds the laps test; Stryd start +5 reds the STRICT identity test; shift 3600->1800 reds the SHIFTED test; dropping the HealthFit SESSION UUID reds the run precedence test; copy distance equal to the original's reds the ride-lag test; builder `sport` default "cycling" reds the default-bytes pin (named mutation).
+- 1.1 pins resting on the synthetic `development` HealthFit recording device (revisit if intervals-connector's live check TBC-9 finds a Garmin device at device_info index 0 of a real HealthFit copy): the ride-pair attribution pin (M25 / intervals-connector 2.3), the composed_run golden's no-Data-source-line claim (3.3), and 1.1's two recording-device self-tests.
+- 1.1 (review round 2): moving the helper's laps after the session or before the records reds the lap-placement test (raw stream order via `_message_numbers`); the ride copy's distance matches the original's at no lag in -2..+2 (`matched == 0`, stricter than the alignment rule needs). `fitdocs.compose.alignment.MIN_MATCHED_SAMPLES` is not referenced by the fixture tests.
