@@ -368,7 +368,7 @@
   - _Requirements: 1.1, 1.5, 2.1, 2.2, 2.3, 2.4, 5.6, 10.2, 10.4_
   - _Boundary: IntervalsConnector, ConnectorRegistration, BoundaryGuardEntry, NeutralScanExemption_
 
-- [ ] 3.2 Check a key with one request, and keep the key and its encoded form out of everything but the header
+- [x] 3.2 Check a key with one request, and keep the key and its encoded form out of everything but the header
   - The credential: the Basic value for username `API_KEY`, with the bare
     encoded token and the header value both registered as secrets and sent
     only as a secret header; the service-message helper (truncated, whitespace
