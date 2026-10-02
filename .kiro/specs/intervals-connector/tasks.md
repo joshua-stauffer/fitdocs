@@ -557,7 +557,7 @@
   - _Boundary: ConnectorsDocSection, ChangelogEntry_
   - _Depends: 3.1_
 
-- [ ] 4.3 (P) Record the amendments on fit-ingest and workout-docs
+- [x] 4.3 (P) Record the amendments on fit-ingest and workout-docs
   - `fit-ingest`: an Amendment block taking the next free number at landing,
     appending to Requirement 4 criteria equivalent to Req 7.1-7.5, each
     tagged with the amendment, and a `spec.json` `amendments` entry
