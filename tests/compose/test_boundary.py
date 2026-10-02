@@ -8,9 +8,8 @@ is parsed. Three rules run over it:
    imports are resolved to dotted targets and every non-stdlib target must be
    in that module's hand-written allowlist, which names all seven planned
    modules: the marker plus `types`, `stretches`, `alignment`, `donation`,
-   `composer` and `archive`. A target is a subset check, not an equality pin,
-   because the modules arrive one task at a time; `TestPositiveControls` asserts every
-   scanned module has an entry and that `types.py` was found.
+   `composer` and `archive`. `TestPositiveControls` asserts the scanned set
+   equals those seven exactly, so an eighth module, or a missing one, fails.
 2. **Forbidden names** (`TestForbiddenNames`): independent of the allowlist,
    no module imports the hard-rule packages (`fitdocs.sync`, `render`, ...),
    `yaml`, `urllib`, `socket` or `time`; outside `archive.py` none imports a
@@ -236,7 +235,7 @@ def _forbidden_violations(tree: ast.Module, module_name: str) -> list[str]:
 
 def _clock_offenders(source: str) -> list[str]:
     found = [
-        s for s in _CLOCK_SPELLINGS if re.search(rf"(?<![\w.]){re.escape(s)}\b", source)
+        s for s in _CLOCK_SPELLINGS if re.search(rf"(?<!\w){re.escape(s)}\b", source)
     ]
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Attribute) and node.attr in _CLOCK_NAMES:
@@ -359,6 +358,7 @@ class TestClockNames:
         for source in (
             *(f"x = {spelling}()\n" for spelling in _CLOCK_SPELLINGS),
             '"""e.g. datetime.now(UTC)"""\n',
+            '"""e.g. datetime.datetime.now(UTC)"""\n',
             "from time import time_ns\n",
             "from datetime import datetime\nx = datetime.now()\n",
             "x = clock.monotonic()\n",
@@ -387,9 +387,10 @@ class TestClockNames:
 
 
 class TestPositiveControls:
-    def test_every_scanned_module_has_an_allowlist_entry(self) -> None:
+    def test_the_scanned_modules_are_exactly_the_seven_allowlisted(self) -> None:
         files = _module_files(_package_dir())
-        assert set(files) <= set(_ALLOWED), sorted(set(files) - set(_ALLOWED))
+        assert set(files) == set(_ALLOWED), sorted(set(files) ^ set(_ALLOWED))
+        assert set(files) == set(_ALL_SEVEN)
 
     def test_the_walk_found_the_types_module(self) -> None:
         assert "fitdocs.compose.types" in _module_files(_package_dir())
@@ -400,7 +401,7 @@ class TestPositiveControls:
         (tmp_path / "surprise.py").write_text("x = 1\n", encoding="utf-8")
         files = _module_files(tmp_path)
         assert files == {"fitdocs.compose.surprise": tmp_path / "surprise.py"}
-        assert not set(files) <= set(_ALLOWED)
+        assert set(files) - set(_ALLOWED) == {"fitdocs.compose.surprise"}
 
     def test_an_empty_directory_finds_no_types_module(self, tmp_path: Path) -> None:
         assert "fitdocs.compose.types" not in _module_files(tmp_path)
