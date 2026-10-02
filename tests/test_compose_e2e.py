@@ -19,12 +19,12 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-import fitdocs.sync as sync_module
 from fitdocs import contract
 from fitdocs.cli import app
 from fitdocs.declaration import DECLARATION_FILENAME
 from fitdocs.docmerge import begin_marker, end_marker
 from fitdocs.inbox import DEFAULT_INBOX_SETTINGS
+from fitdocs.ingest import parse_fit
 from fitdocs.layout import WORKOUTS_DIR, source_ref
 from fitdocs.quarantine import QuarantineRecord
 from fitdocs.render import DocContext, RenderedDoc, TileRef, render_document
@@ -176,6 +176,27 @@ def test_the_run_pair_page_is_the_same_whichever_path_made_it(
     assert _FORM_POWER_ROW.search(dynamics) is not None
 
 
+def test_the_run_pair_pages_lap_table_is_the_base_laps_alone(
+    tmp_path: Path,
+) -> None:
+    """Req 1.5, 5.4: the Splits section holds the HealthFit copy's five laps,
+    with their recorded heart rates; the Stryd file's four laps (no heart rate)
+    reach no row. Mutation: take the extra's laps in ``compose_activity``."""
+    healthfit, stryd = merge.run_pair_fit_bytes()
+    base_laps = parse_fit(healthfit).laps
+    extra_laps = parse_fit(stryd).laps
+    assert (len(base_laps), len(extra_laps)) == (5, 4)
+    _page, text = _run_pair_page(tmp_path, "one-run")
+    splits = text.split("## Splits", 1)[1].split("\n## ", 1)[0]
+    rows = [line for line in splits.splitlines() if line.startswith("| Lap ")]
+    assert [row.split("|")[1].strip() for row in rows] == [
+        f"Lap {n}" for n in range(1, 6)
+    ]
+    assert [row.split("|")[4].strip() for row in rows] == [
+        f"{lap.avg_heart_rate_bpm} bpm" for lap in base_laps
+    ]
+
+
 def test_the_page_identity_comes_from_the_base_not_the_composition(
     tmp_path: Path,
 ) -> None:
@@ -204,13 +225,13 @@ def test_a_single_file_page_is_byte_identical_to_its_render_without_provenance(
     """
     healthfit, _ = merge.run_pair_fit_bytes()
     contexts: list[DocContext] = []
-    real = sync_module.render_document
+    real = render_document
 
     def spy(ctx: DocContext) -> RenderedDoc:
         contexts.append(ctx)
         return real(ctx)
 
-    monkeypatch.setattr(sync_module, "render_document", spy)
+    monkeypatch.setattr("fitdocs.sync.render_document", spy)
     data_root = tmp_path / "data"
     data_root.mkdir()
     _sync(_stage(tmp_path / "work", healthfit=healthfit), data_root)

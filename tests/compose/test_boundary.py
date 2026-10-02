@@ -405,3 +405,55 @@ class TestPositiveControls:
 
     def test_an_empty_directory_finds_no_types_module(self, tmp_path: Path) -> None:
         assert "fitdocs.compose.types" not in _module_files(tmp_path)
+
+
+_REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
+_ADDRESS: Final[re.Pattern[str]] = re.compile(
+    r"https?://[^ )]*" + "stryd", re.IGNORECASE
+)
+_FEATURE_FILES: Final[tuple[str, ...]] = (
+    "src/fitdocs/compose/*.py",
+    "src/fitdocs/render/provenance.py",
+    "tests/compose/*.py",
+    "tests/fixtures/merge.py",
+    "tests/fixtures/test_merge_fixtures.py",
+    "tests/render/test_provenance.py",
+    "tests/test_compose_e2e.py",
+    "tests/test_compose_passes_e2e.py",
+    "docs/ownership-contract.md",
+    "CHANGELOG.md",
+    ".kiro/specs/channel-merge/*.md",
+)
+
+
+def _address_offenders(root: Path) -> tuple[list[str], int]:
+    """Every feature file under ``root`` that names a Stryd web address, and
+    how many files were scanned."""
+    offenders: list[str] = []
+    scanned = 0
+    for pattern in _FEATURE_FILES:
+        for path in sorted(root.glob(pattern)):
+            scanned += 1
+            if _ADDRESS.search(path.read_text(encoding="utf-8")):
+                offenders.append(path.relative_to(root).as_posix())
+    return offenders, scanned
+
+
+class TestNoServiceAddress:
+    """Req 9.3: no Stryd web or service address in this feature's code, tests,
+    specification or documentation."""
+
+    def test_no_feature_file_names_one(self) -> None:
+        offenders, scanned = _address_offenders(_REPO_ROOT)
+        assert scanned >= 30, "the walk is looking at the wrong directory"
+        assert offenders == []
+
+    def test_an_address_in_any_scanned_file_is_detected(self, tmp_path: Path) -> None:
+        target = tmp_path / "src" / "fitdocs" / "compose"
+        target.mkdir(parents=True)
+        (target / "types.py").write_text(
+            "see https://www." + "stryd" + ".com/x\n", encoding="utf-8"
+        )
+        (target / "clean.py").write_text("x = 1\n", encoding="utf-8")
+        offenders, scanned = _address_offenders(tmp_path)
+        assert (offenders, scanned) == (["src/fitdocs/compose/types.py"], 2)

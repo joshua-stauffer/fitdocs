@@ -114,3 +114,46 @@ def test_the_subsection_names_the_statements_it_owes() -> None:
     for constant in ("SHIFT_STEP_S", "SHIFT_MAX_HOURS", "START_TOLERANCE_S"):
         assert hasattr(matching, constant), constant
         assert f"`{constant}`" in text, constant
+
+
+def _flat(text: str) -> str:
+    return " ".join(text.split())
+
+
+def test_the_subsection_states_each_composition_guarantee() -> None:
+    """Req 8.3: one file per channel, the base's identity, laps and session
+    values, the Channel Sources placement, the lag majority and the two passes."""
+    text = _flat(_subsection())
+    for phrase in (
+        "never averages or blends values from two files",
+        "never takes one channel from two files",
+        "An extra's laps and session values never reach the page",
+        "`## Channel Sources` section, after the Device & Data Quality section",
+        "more than half of the samples compared at it",
+        "each re-read the files the page lists and compose them by the same rule",
+    ):
+        assert phrase in text, phrase
+
+
+def test_the_changed_at_this_version_paragraph_names_the_feature() -> None:
+    """Req 8.4: the paragraph under the contract version says what this
+    feature changed."""
+    text = _flat(_DOC.read_text(encoding="utf-8").split("\n## ", 1)[0])
+    assert "**What changed at this version:**" in text
+    assert (
+        "The training-load pass and the benchmark-derivation pass read the same "
+        "composed activity."
+    ) in text
+
+
+def test_the_unreleased_entry_names_the_actions() -> None:
+    """Req 8.6: the unreleased changelog entry for composed pages names both
+    actions."""
+    changelog = (_DOC.parents[1] / "CHANGELOG.md").read_text(encoding="utf-8")
+    unreleased = changelog.split("## [Unreleased]", 1)[1].split("\n## [", 1)[0]
+    entries = [e for e in unreleased.split("\n- ") if "Channel Sources" in e]
+    assert len(entries) == 1, len(entries)
+    entry = _flat(entries[0])
+    assert "takes the channels its base file lacks from the others" in entry
+    assert "run `fitdocs regen` to apply this to existing pages" in entry
+    assert "`fitdocs load --recompute` to rescore a page" in entry

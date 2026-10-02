@@ -182,6 +182,13 @@ files = [
     "tests/test_docs_workflow.py",
     "tests/sitebuild",
     "tests/connectors",
+    # channel-merge task 6.1: every typed test and fixture module the spec added.
+    "tests/fixtures/merge.py",
+    "tests/fixtures/test_merge_fixtures.py",
+    "tests/compose",
+    "tests/render/test_provenance.py",
+    "tests/test_compose_e2e.py",
+    "tests/test_compose_passes_e2e.py",
     "scripts",
 ]
 

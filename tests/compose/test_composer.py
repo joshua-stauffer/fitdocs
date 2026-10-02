@@ -524,6 +524,27 @@ class TestAlignmentIsApplied:
         assert composition.provenance.extras[0].channels == ("cadence_rpm",)
 
 
+class TestSessionValueWins:
+    def test_the_bases_recorded_session_average_beats_the_donated_samples_mean(
+        self,
+    ) -> None:
+        """Req 5.2. The base records a session average heart rate of 150 and no
+        heart-rate sample; the extra donates ten samples averaging 205.5. The
+        page's average is the base's 150. Mutations: compute the average from
+        the samples before the session value in ``avg_heart_rate_bpm``; blank
+        the base's session average in ``compose_activity``."""
+        base = make_activity(
+            _START,
+            _TEN,
+            summary=make_summary(start_time=_START, avg_heart_rate_bpm=150),
+        )
+        extra = make_activity(_START, _TEN, heart_rate_bpm=tuple(range(201, 211)))
+        composed = compose_activity(base, [extra]).activity
+        assert composed.samples.heart_rate_bpm == tuple(range(201, 211))
+        assert compute_metrics(base).avg_heart_rate_bpm == 150
+        assert compute_metrics(composed).avg_heart_rate_bpm == 150
+
+
 class TestBaseOwnedFields:
     def _pair(self) -> tuple[Activity, Activity]:
         base = make_activity(
