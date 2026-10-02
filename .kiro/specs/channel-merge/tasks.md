@@ -548,7 +548,7 @@ rewrite or reorder a sibling's):
     attribution step ran
   - _Requirements: 4.6, 4.7, 8.2_
 
-- [ ] 4. Integration: the engine and the two passes
+- [x] 4. Integration: the engine and the two passes
 
 - [x] 4.1 Render every page from its composition, and move the upstream tests that pin a base-only body
   - The render seam composes the base with the extras in the roles' rank order
