@@ -130,7 +130,7 @@
 
 - [ ] 2. Garmin product names and the attribution line
 
-- [ ] 2.1 (P) Resolve Garmin product names at ingest from the FIT SDK's profile, with a shared multi-device ride fixture
+- [x] 2.1 (P) Resolve Garmin product names at ingest from the FIT SDK's profile, with a shared multi-device ride fixture
   - Append to the builder a ride whose one device message is replaced by four
     with pairwise-distinct serials: the recording device (index 0) made by
     Garmin with code 3843 and no recorded name; index 1 made by Dynastream with
