@@ -530,6 +530,9 @@ class IntervalsConnector:                           # Connector + KeyVerifier + 
 | `UNAVAILABLE_MESSAGE` | `intervals.icu is unavailable (HTTP {status}) after fitdocs's retries; this pull stopped, and the next pull resumes where it stopped` |
 | `LISTING_STATUS_MESSAGE` | `intervals.icu answered the activity listing with HTTP {status}: {message}` |
 | `DOWNLOAD_STATUS_MESSAGE` | `intervals.icu answered HTTP {status} for the original file: {message}` |
+| `LISTING_FORM_MESSAGE` | `intervals.icu's activity listing is not in its documented form: {problem}` (added in implementation, task 3.3) |
+| `GZIP_UNREADABLE_MESSAGE` | `the downloaded file is gzip data that could not be decompressed` (added in implementation, task 3.4) |
+| `GZIP_OVERSIZE_MESSAGE` | `the downloaded file expands past the {limit}-byte size limit when decompressed` (added in implementation, task 3.4) |
 
 **Implementation Notes**
 - Integration: `SettingsContext` is unused (no path settings). The session's
