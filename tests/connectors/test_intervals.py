@@ -6,12 +6,15 @@ request: the declaration, the registry entry, the ``sources`` settings
 parser, and the connector's own address admitted by the service-neutral scan.
 Task 3.2 (Req 1.2, 1.3, 1.4, 5.7) covers ``verify``: the one listing request,
 the Basic credential and its registration for redaction, the status mapping,
-and the service-message helper. ``list_activities`` and ``fetch_activity``
-are not exercised here yet.
+and the service-message helper. Task 3.3 (Req 1.5, 3.1-3.8, 5.1-5.5, 5.7,
+6.1) covers ``list_activities``: the date windows, the six-field request, the
+entry mapping and the status mapping for a listing. ``fetch_activity`` and the
+download branch of the status mapping are not exercised here yet.
 """
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from datetime import UTC, datetime, timedelta, timezone
@@ -33,6 +36,7 @@ from fitdocs.connectors.credentials import CredentialStore
 from fitdocs.connectors.errors import (
     AuthFailure,
     AuthFailureKind,
+    ConnectorError,
     ConnectorSettingsError,
 )
 from fitdocs.connectors.http import (
@@ -49,7 +53,13 @@ from fitdocs.connectors.intervals import (
     IntervalsSettings,
     _service_message,
 )
-from fitdocs.connectors.protocol import ConnectorSession, TokenSet
+from fitdocs.connectors.protocol import (
+    ConnectorSession,
+    CredentialAccess,
+    Listing,
+    RemoteActivity,
+    TokenSet,
+)
 from fitdocs.connectors.secrets import REDACTED, Redactor, Secret
 from fitdocs.connectors.settings import (
     ConnectorInstance,
@@ -215,18 +225,23 @@ def _session(
     *,
     now: datetime = _CLOCK,
     redactor: Redactor | None = None,
+    mode: CallMode = CallMode.AUTH,
+    settings: IntervalsSettings | None = None,
+    credentials: CredentialAccess | None = None,
 ) -> ConnectorSession:
     redactor = redactor if redactor is not None else Redactor()
     return ConnectorSession(
         instance="intervals",
-        settings=IntervalsSettings(sources=DEFAULT_SOURCES),
+        settings=settings
+        if settings is not None
+        else IntervalsSettings(sources=DEFAULT_SOURCES),
         http=HttpClient(
             transport,
-            mode=CallMode.AUTH,
+            mode=mode,
             redactor=redactor,
             sleep=lambda seconds: None,
         ),
-        credentials=_StubCredentials(),
+        credentials=credentials if credentials is not None else _StubCredentials(),
         data_root=tmp_path,
         now=lambda: now,
         sleep=lambda seconds: None,
@@ -480,3 +495,467 @@ def test_a_scripted_429_through_the_connect_engine_is_one_request_and_stores_not
     assert "7 seconds" in result.next_step
     assert len(transport.requests) == 1
     assert not credentials_dir.exists()
+
+
+# --------------------------------------------------------------------------
+# Listing (task 3.3; Req 1.5, 3.1-3.8, 5.1-5.5, 5.7, 6.1)
+# --------------------------------------------------------------------------
+
+_LISTING_FIELDS = "id,source,start_date,type,elapsed_time,file_type"
+_ACTIVITIES_URL = "https://intervals.icu/api/v1/athlete/0/activities"
+
+
+class _KeyCredentials(_StubCredentials):
+    """A credential access that hands out the synthetic key."""
+
+    def value(self, field: str) -> Secret:
+        assert field == "api_key"
+        return Secret(_KEY)
+
+
+def _json_ok(payload: object) -> HttpResponse:
+    return HttpResponse(status=200, headers={}, body=json.dumps(payload).encode())
+
+
+def _list(
+    tmp_path: Path,
+    responses: list[HttpResponse],
+    *,
+    since: datetime | None,
+    sources: frozenset[str] = DEFAULT_SOURCES,
+    settings: IntervalsSettings | None = None,
+) -> tuple[Listing, FakeTransport]:
+    transport = FakeTransport(list(responses))
+    session = _session(
+        tmp_path,
+        transport,
+        mode=CallMode.DATA,
+        settings=settings if settings is not None else IntervalsSettings(sources),
+        credentials=_KeyCredentials(),
+    )
+    session.secret(_KEY)
+    return IntervalsConnector().list_activities(session, since), transport
+
+
+def _queries(transport: FakeTransport) -> list[dict[str, list[str]]]:
+    return [
+        parse_qs(urlsplit(request.url).query, keep_blank_values=True)
+        for request in transport.requests
+    ]
+
+
+def test_a_since_200_days_back_is_three_overlapping_windows(tmp_path: Path) -> None:
+    since = _CLOCK - timedelta(days=200)
+    assert since == datetime(2025, 8, 13, 0, 30, tzinfo=UTC)
+    # A fourth scripted answer, so a surplus request would be answered and
+    # only the count could notice it.
+    listing, transport = _list(
+        tmp_path, [_json_ok([]), _json_ok([]), _json_ok([]), _json_ok([])], since=since
+    )
+    assert listing.activities == ()
+    assert [query.get("oldest") for query in _queries(transport)] == [
+        ["2025-08-12T00:00:00"],
+        ["2025-11-10T00:00:00"],
+        ["2026-02-08T00:00:00"],
+    ]
+    assert [query.get("newest") for query in _queries(transport)] == [
+        ["2025-11-11T00:00:00"],
+        ["2026-02-09T00:00:00"],
+        None,
+    ]
+
+
+def test_a_since_179_days_back_is_exactly_two_windows(tmp_path: Path) -> None:
+    since = _CLOCK - timedelta(days=179)
+    assert since == datetime(2025, 9, 3, 0, 30, tzinfo=UTC)
+    _, transport = _list(
+        tmp_path, [_json_ok([]), _json_ok([]), _json_ok([])], since=since
+    )
+    assert [query.get("oldest") for query in _queries(transport)] == [
+        ["2025-09-02T00:00:00"],
+        ["2025-12-01T00:00:00"],
+    ]
+    assert [query.get("newest") for query in _queries(transport)] == [
+        ["2025-12-02T00:00:00"],
+        None,
+    ]
+
+
+def test_no_since_is_one_window_from_31_days_before_the_clock(tmp_path: Path) -> None:
+    _, transport = _list(tmp_path, [_json_ok([]), _json_ok([])], since=None)
+    assert _queries(transport) == [
+        {"oldest": ["2026-01-29T00:00:00"], "fields": [_LISTING_FIELDS]}
+    ]
+
+
+def test_with_no_since_the_earliest_is_the_clock_less_30_days(tmp_path: Path) -> None:
+    assert _CLOCK - timedelta(days=30) == datetime(2026, 1, 30, 0, 30, tzinfo=UTC)
+    window = [
+        _entry("i9000001", start_date="2026-01-30T00:29:59Z"),
+        _entry("i9000002", start_date="2026-01-30T00:30:00Z"),
+    ]
+    listing, transport = _list(tmp_path, [_json_ok(window)], since=None)
+    assert len(transport.requests) == 1
+    assert [a.remote_id for a in listing.activities] == ["i9000002"]
+
+
+def test_the_first_bound_is_the_utc_day_of_since_less_one(tmp_path: Path) -> None:
+    # 05:00 on 2025-08-13 at UTC+10 is 19:00 on 2025-08-12 UTC: the local date
+    # is the 13th, the UTC date the 12th, so the first bound is the 11th.
+    since = datetime(2025, 8, 13, 5, 0, tzinfo=timezone(timedelta(hours=10)))
+    assert since.astimezone(UTC) == datetime(2025, 8, 12, 19, 0, tzinfo=UTC)
+    _, transport = _list(
+        tmp_path, [_json_ok([]), _json_ok([]), _json_ok([])], since=since
+    )
+    assert _queries(transport)[0]["oldest"] == ["2025-08-11T00:00:00"]
+
+
+def test_every_request_asks_for_the_six_fields_and_carries_no_credential(
+    tmp_path: Path,
+) -> None:
+    since = _CLOCK - timedelta(days=200)
+    _, transport = _list(
+        tmp_path, [_json_ok([]), _json_ok([]), _json_ok([])], since=since
+    )
+    assert len(transport.requests) == 3
+    for request in transport.requests:
+        parts = urlsplit(request.url)
+        assert request.method == "GET"
+        assert f"{parts.scheme}://{parts.netloc}{parts.path}" == _ACTIVITIES_URL
+        assert parse_qs(parts.query)["fields"] == [_LISTING_FIELDS]
+        assert set(parse_qs(parts.query)) <= {"oldest", "newest", "fields"}
+        assert _KEY not in request.url
+        assert _TOKEN not in request.url
+        assert list(request.secret_headers) == ["Authorization"]
+        assert request.secret_headers["Authorization"].reveal() == _BASIC
+
+
+def test_athlete_and_api_base_keys_change_no_request(tmp_path: Path) -> None:
+    table: dict[str, object] = {
+        "athlete": "i5",
+        "api_base": "https://example.org",
+        "sources": ["GARMIN_CONNECT"],
+    }
+    settings = _parse(tmp_path, table)
+    since = _CLOCK - timedelta(days=200)
+    _, transport = _list(
+        tmp_path,
+        [_json_ok([]), _json_ok([]), _json_ok([])],
+        since=since,
+        settings=settings,
+    )
+    assert len(transport.requests) == 3
+    for request in transport.requests:
+        assert request.url.startswith(f"{_ACTIVITIES_URL}?")
+        assert "i5" not in request.url
+        assert "example.org" not in request.url
+
+
+_BASE_START = "2025-10-01T08:00:00Z"
+
+
+def _entry(identifier: str, **changes: object) -> dict[str, object]:
+    """One listing entry: the base entry with ``changes`` applied; a value of
+    ``None`` removes the key."""
+    entry: dict[str, object] = {
+        "id": identifier,
+        "source": "GARMIN_CONNECT",
+        "start_date": _BASE_START,
+        "type": "Ride",
+        "elapsed_time": 3600,
+        "file_type": "fit",
+    }
+    for key, value in changes.items():
+        if value is None:
+            del entry[key]
+        else:
+            entry[key] = value
+    return entry
+
+
+def _expected(identifier: str, **changes: object) -> RemoteActivity:
+    fields: dict[str, object] = {
+        "remote_id": identifier,
+        "original_available": True,
+        "unavailable_reason": None,
+        "start": datetime(2025, 10, 1, 8, 0, tzinfo=UTC),
+        "sport": "Ride",
+        "duration_s": 3600.0,
+        "revision": None,
+        "suggested_name": None,
+    }
+    fields.update(changes)
+    return RemoteActivity(**fields)  # type: ignore[arg-type]
+
+
+_STRAVA_TEXT = (
+    "Strava-sourced: intervals.icu returns only a stub for Strava activities "
+    "and shares no file for them"
+)
+
+_EARLIEST = "2025-08-13T00:30:00Z"
+
+_WINDOW_ONE = [
+    _entry("i9000001"),
+    _entry("i9000002", source="OAUTH_CLIENT"),
+    _entry("i9000003", source=None),
+    _entry("i9000004", start_date="2025-08-13T00:29:59Z"),
+    _entry("i9000005", start_date=None),
+    _entry("i9000006", start_date=_EARLIEST),
+    _entry("i9000014", start_date="2025-08-13T10:00:00+10:00"),
+]
+_WINDOW_TWO = [
+    _entry("i9000001", type="Run"),
+    _entry("i9000007", source="STRAVA"),
+    _entry("i9000008", file_type="gpx"),
+    _entry("i9000009", file_type=" TCX "),
+    _entry("i9000015", start_date="2025-10-02T18:00:00+10:00"),
+    # Two-property entries: an early start together with a rule that would
+    # list the entry unavailable; the omission comes first.
+    _entry("i9000022", source="STRAVA", start_date="2025-08-13T00:29:59Z"),
+    _entry("i9000023", file_type="gpx", start_date="2025-08-13T00:29:59Z"),
+]
+_WINDOW_THREE = [
+    _entry("i9000010", file_type="FIT"),
+    _entry("i9000011", file_type=None),
+    _entry("i9000012", start_date="2025-11-02T08:00:00"),
+    _entry("i9000013", elapsed_time=True),
+    _entry("i9000016", elapsed_time=-1),
+    _entry("i9000017", elapsed_time="3600"),
+    _entry("i9000018", elapsed_time=0),
+    _entry("i9000019", elapsed_time=None),
+    _entry("i9000020", type=None),
+    _entry("i9000021", type=""),
+    _entry("i9000024", file_type=""),
+    _entry("i9000025", file_type="  "),
+]
+
+
+def _fixture_listing(
+    tmp_path: Path, sources: frozenset[str]
+) -> tuple[Listing, FakeTransport]:
+    raw = [_WINDOW_ONE, _WINDOW_TWO, _WINDOW_THREE]
+    # Preconditions: every category the expected lists omit or keep is in the
+    # raw listing, and the id the second window repeats is in the first.
+    assert sum(len(window) for window in raw) == 26
+    assert {e["id"] for e in _WINDOW_ONE} & {e["id"] for e in _WINDOW_TWO} == {
+        "i9000001"
+    }
+    since = _CLOCK - timedelta(days=200)
+    return _list(
+        tmp_path, [_json_ok(window) for window in raw], since=since, sources=sources
+    )
+
+
+_GPX_TEXT = "the original is a GPX file, not FIT; fitdocs ingests FIT files only"
+_TCX_TEXT = "the original is a TCX file, not FIT; fitdocs ingests FIT files only"
+
+_KEPT_BEFORE_STRAVA = [
+    _expected("i9000001"),
+    _expected("i9000005", start=None),
+    _expected("i9000006", start=datetime(2025, 8, 13, 0, 30, tzinfo=UTC)),
+]
+_KEPT_AFTER_STRAVA = [
+    _expected("i9000008", original_available=False, unavailable_reason=_GPX_TEXT),
+    _expected("i9000009", original_available=False, unavailable_reason=_TCX_TEXT),
+    _expected("i9000015", start=datetime(2025, 10, 2, 8, 0, tzinfo=UTC)),
+    _expected("i9000010"),
+    _expected("i9000011"),
+    _expected("i9000012", start=None),
+    _expected("i9000013", duration_s=None),
+    _expected("i9000016", duration_s=None),
+    _expected("i9000017", duration_s=None),
+    _expected("i9000018", duration_s=0.0),
+    _expected("i9000019", duration_s=None),
+    _expected("i9000020", sport=None),
+    _expected("i9000021", sport=None),
+    _expected("i9000024"),
+    _expected("i9000025"),
+]
+
+
+def test_the_fixture_listing_under_the_default_filter(tmp_path: Path) -> None:
+    listing, transport = _fixture_listing(tmp_path, DEFAULT_SOURCES)
+    assert len(transport.requests) == 3
+    assert listing.deferred == ()
+    assert list(listing.activities) == _KEPT_BEFORE_STRAVA + _KEPT_AFTER_STRAVA
+
+
+def test_a_filter_naming_strava_lists_the_stub_unavailable_with_the_reason(
+    tmp_path: Path,
+) -> None:
+    listing, _ = _fixture_listing(tmp_path, frozenset({"GARMIN_CONNECT", "STRAVA"}))
+    strava = _expected(
+        "i9000007", original_available=False, unavailable_reason=_STRAVA_TEXT
+    )
+    assert list(listing.activities) == (
+        _KEPT_BEFORE_STRAVA + [strava] + _KEPT_AFTER_STRAVA
+    )
+
+
+def test_a_start_with_an_offset_is_stored_in_utc(tmp_path: Path) -> None:
+    listing, _ = _fixture_listing(tmp_path, DEFAULT_SOURCES)
+    shifted = next(a for a in listing.activities if a.remote_id == "i9000015")
+    assert shifted.start is not None
+    assert shifted.start.utcoffset() == timedelta(0)
+    assert shifted.start.hour == 8
+
+
+def test_every_listed_activity_has_the_service_id_and_no_revision(
+    tmp_path: Path,
+) -> None:
+    listing, _ = _fixture_listing(tmp_path, frozenset({"GARMIN_CONNECT", "STRAVA"}))
+    assert len(listing.activities) == 19
+    expected_ids = [
+        "i9000001",
+        "i9000005",
+        "i9000006",
+        "i9000007",
+        "i9000008",
+        "i9000009",
+        "i9000015",
+        "i9000010",
+        "i9000011",
+        "i9000012",
+        "i9000013",
+        "i9000016",
+        "i9000017",
+        "i9000018",
+        "i9000019",
+        "i9000020",
+        "i9000021",
+        "i9000024",
+        "i9000025",
+    ]
+    assert [a.remote_id for a in listing.activities] == expected_ids
+    assert all(a.revision is None for a in listing.activities)
+    assert all(a.suggested_name is None for a in listing.activities)
+
+
+@pytest.mark.parametrize(
+    ("body", "problem"),
+    [
+        (b"not json at all", "not valid JSON"),
+        (b'{"id": "i9000001"}', "not a JSON array"),
+        (
+            json.dumps([_entry("i9000001"), _entry("i9000002", id=None)]).encode(),
+            "entry 1 has no text id",
+        ),
+        (
+            json.dumps([_entry("i9000001"), _entry("i9000002", id=9000002)]).encode(),
+            "entry 1 has no text id",
+        ),
+        (json.dumps(["i9000001"]).encode(), "entry 0 is not an object"),
+        (
+            json.dumps([_entry("i9000001"), _entry("i9000002", id="")]).encode(),
+            "entry 1 has no text id",
+        ),
+        (
+            json.dumps(
+                [_entry("i9000001"), _entry("x", id=None, source="OAUTH_CLIENT")]
+            ).encode(),
+            "entry 1 has no text id",
+        ),
+    ],
+    ids=[
+        "not-json",
+        "object",
+        "no-id",
+        "numeric-id",
+        "not-an-entry-object",
+        "empty-id",
+        "no-id-outside-the-filter",
+    ],
+)
+def test_a_malformed_listing_ends_the_instance_naming_the_problem(
+    tmp_path: Path, body: bytes, problem: str
+) -> None:
+    since = _CLOCK - timedelta(days=200)
+    transport = FakeTransport([HttpResponse(200, {}, body), _json_ok([])])
+    session = _session(
+        tmp_path, transport, mode=CallMode.DATA, credentials=_KeyCredentials()
+    )
+    with pytest.raises(ConnectorError) as excinfo:
+        IntervalsConnector().list_activities(session, since)
+    assert str(excinfo.value).startswith(
+        "intervals.icu's activity listing is not in its documented form: "
+    )
+    assert problem in str(excinfo.value)
+    assert len(transport.requests) == 1
+
+
+def _failing_listing(
+    tmp_path: Path, responses: list[HttpResponse]
+) -> tuple[BaseException, FakeTransport]:
+    transport = FakeTransport(list(responses))
+    session = _session(
+        tmp_path, transport, mode=CallMode.DATA, credentials=_KeyCredentials()
+    )
+    with pytest.raises((AuthFailure, ConnectorError)) as excinfo:
+        IntervalsConnector().list_activities(session, None)
+    return excinfo.value, transport
+
+
+@pytest.mark.parametrize(
+    ("status", "kind"),
+    [(401, AuthFailureKind.REJECTED), (403, AuthFailureKind.BLOCKED)],
+)
+def test_a_listing_401_or_403_is_an_authentication_failure(
+    tmp_path: Path, status: int, kind: AuthFailureKind
+) -> None:
+    error, transport = _failing_listing(
+        tmp_path,
+        [HttpResponse(status, {}, b"  go   away "), HttpResponse(status, {}, b"")],
+    )
+    assert type(error) is AuthFailure
+    assert isinstance(error, AuthFailure)
+    assert error.kind is kind
+    assert error.service_message == "go away"
+    assert len(transport.requests) == 1
+
+
+def test_a_persistent_429_is_a_rate_limit_connector_error_after_three_requests(
+    tmp_path: Path,
+) -> None:
+    error, transport = _failing_listing(tmp_path, [HttpResponse(429, {}, b"slow")] * 4)
+    assert type(error) is ConnectorError
+    assert str(error) == (
+        "intervals.icu is limiting requests (HTTP 429) and still was after "
+        "fitdocs's retries; this pull stopped, and the next pull resumes where "
+        "it stopped"
+    )
+    assert len(transport.requests) == 3
+
+
+def test_a_persistent_503_is_an_unavailable_connector_error_after_three_requests(
+    tmp_path: Path,
+) -> None:
+    error, transport = _failing_listing(tmp_path, [HttpResponse(503, {}, b"down")] * 4)
+    assert type(error) is ConnectorError
+    assert str(error) == (
+        "intervals.icu is unavailable (HTTP 503) after fitdocs's retries; "
+        "this pull stopped, and the next pull resumes where it stopped"
+    )
+    assert len(transport.requests) == 3
+
+
+def test_a_listing_418_names_the_status_and_the_service_words(tmp_path: Path) -> None:
+    error, transport = _failing_listing(
+        tmp_path, [HttpResponse(418, {}, b"short and stout"), _json_ok([])]
+    )
+    assert type(error) is ConnectorError
+    assert str(error) == (
+        "intervals.icu answered the activity listing with HTTP 418: short and stout"
+    )
+    assert len(transport.requests) == 1
+
+
+def test_a_listing_418_echoing_the_bare_token_is_redacted(tmp_path: Path) -> None:
+    error, _ = _failing_listing(
+        tmp_path, [HttpResponse(418, {}, f"seen {_TOKEN} here".encode())]
+    )
+    assert str(error) == (
+        f"intervals.icu answered the activity listing with HTTP 418: "
+        f"seen {REDACTED} here"
+    )
+    assert _TOKEN not in str(error)
