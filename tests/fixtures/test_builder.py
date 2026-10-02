@@ -675,13 +675,25 @@ _HELPER_RECORDS = (
 )
 
 
-def _helper(**kwargs: object) -> _Messages:
+def _helper_bytes(**kwargs: object) -> bytes:
     args: dict[str, object] = {
         "descriptions": _HELPER_DESCRIPTIONS,
         "records": _HELPER_RECORDS,
     }
     args.update(kwargs)
-    return _decode(builder.developer_field_run_fit_bytes(**args))  # type: ignore[arg-type]
+    return builder.developer_field_run_fit_bytes(**args)  # type: ignore[arg-type]
+
+
+def _helper(**kwargs: object) -> _Messages:
+    return _decode(_helper_bytes(**kwargs))
+
+
+def _message_numbers(data: bytes) -> list[int]:
+    """Global message numbers in the order the file's stream carries them."""
+    seen: list[int] = []
+    stream = Stream.from_byte_array(data)
+    Decoder(stream).read(mesg_listener=lambda num, _mesg: seen.append(num))
+    return seen
 
 
 def test_helper_writes_each_description_at_its_key_and_definition_number() -> None:
@@ -813,6 +825,73 @@ def test_helper_bytes_are_reproducible() -> None:
         )
 
     assert build() == build()
+
+
+# The helper's bytes with every appended keyword (laps, session_start,
+# session_elapsed_s, session_distance_m, sport) left at its default.
+_HELPER_DEFAULT_DIGEST = (
+    "b89d09045d36fde83068dc3770b7c3d31b8e5162274436ddab82f282cba9e30e"
+)
+
+
+def test_helper_default_output_bytes_are_unchanged_by_the_appended_keywords() -> None:
+    data = builder.developer_field_run_fit_bytes(
+        descriptions=_HELPER_DESCRIPTIONS,
+        records=_HELPER_RECORDS,
+        session_fields={3: 4},
+    )
+    assert hashlib.sha256(data).hexdigest() == _HELPER_DEFAULT_DIGEST
+
+
+def test_helper_defaults_write_no_lap_no_session_distance_and_a_running_sport() -> None:
+    messages = _helper()
+    assert messages.get("lap_mesgs", []) == []
+    session = messages["session_mesgs"][0]
+    assert "total_distance" not in session
+    assert session["sport"] == "running"
+    assert [m["sport"] for m in messages["sport_mesgs"]] == ["running"]
+
+
+def test_helper_laps_are_written_in_order_between_the_records_and_the_session() -> None:
+    laps = (
+        {"start_time": builder.FIT_TIMESTAMP_BASE, "avg_heart_rate": 131},
+        {"start_time": builder.FIT_TIMESTAMP_BASE + 20, "avg_heart_rate": 152},
+    )
+    messages = _helper(laps=laps)
+    written = messages["lap_mesgs"]
+    assert [m["start_time"] for m in written] == [
+        builder.FIT_TIMESTAMP_BASE,
+        builder.FIT_TIMESTAMP_BASE + 20,
+    ]
+    assert [m["avg_heart_rate"] for m in written] == [131, 152]
+    order = _message_numbers(_helper_bytes(laps=laps))
+    laps_at = [i for i, n in enumerate(order) if n == builder._MESG_LAP]
+    records_at = [i for i, n in enumerate(order) if n == builder._MESG_RECORD]
+    session_at = order.index(builder._MESG_SESSION)
+    assert len(laps_at) == 2 and len(records_at) == 3
+    assert max(records_at) < min(laps_at)
+    assert max(laps_at) < session_at
+
+
+def test_helper_session_start_elapsed_and_distance_override_the_derived_values() -> (
+    None
+):
+    messages = _helper(
+        session_start=builder.FIT_TIMESTAMP_BASE + 5,
+        session_elapsed_s=123.5,
+        session_distance_m=456.25,
+    )
+    session = messages["session_mesgs"][0]
+    assert session["start_time"] == builder.FIT_TIMESTAMP_BASE + 5
+    assert session["total_elapsed_time"] == 123.5
+    assert session["total_timer_time"] == 123.5
+    assert session["total_distance"] == 456.25
+
+
+def test_helper_sport_reaches_the_session_and_the_sport_message() -> None:
+    messages = _helper(sport="cycling")
+    assert messages["session_mesgs"][0]["sport"] == "cycling"
+    assert [m["sport"] for m in messages["sport_mesgs"]] == ["cycling"]
 
 
 # --- byte pins ----------------------------------------------------------------
