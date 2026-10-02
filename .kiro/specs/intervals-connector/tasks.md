@@ -397,7 +397,7 @@
   - Observable: `uv run pytest tests/connectors/test_intervals.py` green
   - _Requirements: 1.2, 1.3, 1.4, 5.7_
 
-- [ ] 3.3 List activities by overlapping date windows and map each entry onto a listed activity
+- [x] 3.3 List activities by overlapping date windows and map each entry onto a listed activity
   - The windows (design.md: first day one before the earliest start's UTC
     date, 90-day windows while the next start is before today, each upper
     bound one day past the next lower bound, the last without an upper bound,
