@@ -161,6 +161,8 @@ class _Collector(HTMLParser):
             self._text = []
         if tag == "div" and "fd-hero__chart" in classes:
             self._in_chart = True
+        if tag == "source" and self._in_chart:
+            self.out.chart_srcs.append(a.get("srcset") or "")
         if tag == "img" and self._in_chart:
             self.out.chart_srcs.append(a.get("src") or "")
 
@@ -375,7 +377,7 @@ def test_the_home_page_shows_the_hero_with_two_actions_and_the_chart(
 
     Dies on: ``website/overrides/home.html`` losing the ``{% if
     page.meta.hero_tagline %}`` guard (an empty tagline element renders), the
-    primary-class condition, or the chart ``img``.
+    primary-class condition, or the chart's webp ``source`` or ``img``.
     """
     assert "hero_tagline" not in read(FIXTURE / "index.md")
     parsed = parse_html(page_html(built, ""))
@@ -388,8 +390,12 @@ def test_the_home_page_shows_the_hero_with_two_actions_and_the_chart(
         True,
         False,
     ]
-    assert parsed.chart_srcs == ["./_brand/hero-chart.svg"]
-    assert (built.html / "_brand" / "hero-chart.svg").is_file()
+    assert parsed.chart_srcs == [
+        "./_brand/fitdocs-hero.webp",
+        "./_brand/fitdocs-hero.png",
+    ]
+    for name in ("fitdocs-hero.webp", "fitdocs-hero.png", "fitdocs-hero@2x.png"):
+        assert (built.html / "_brand" / name).is_file(), name
     assert not {c for c in parsed.class_names if "tagline" in c}
     for _md, location, _title in PAGES[1:]:
         other = parse_html(page_html(built, location))

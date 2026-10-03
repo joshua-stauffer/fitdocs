@@ -19,7 +19,10 @@
       </p>
     {% endif %}
     <div class="fd-hero__chart">
-      <img src="{{ '_brand/hero-chart.svg' | url }}" alt="Demo chart: power and heart rate over a workout (synthetic data, not a real athlete)" width="800" height="260">
+      <picture>
+        <source type="image/webp" srcset="{{ '_brand/fitdocs-hero.webp' | url }}">
+        <img src="{{ '_brand/fitdocs-hero.png' | url }}" srcset="{{ '_brand/fitdocs-hero.png' | url }} 1x, {{ '_brand/fitdocs-hero@2x.png' | url }} 2x" alt="Example fitdocs workout page: summary stats, route map, heart-rate and power chart, and notes" width="1200" height="675">
+      </picture>
     </div>
   </section>
   {{ super() }}

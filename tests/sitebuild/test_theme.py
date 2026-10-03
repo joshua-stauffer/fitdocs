@@ -315,20 +315,27 @@ def test_no_hero_keys_leaves_only_the_chart(requires_zensical: None) -> None:
     assert _visible(hero) == ""
 
 
-def test_the_hero_shows_the_demo_chart_with_demo_alt_text(
+def test_the_hero_shows_the_hero_image_with_webp_and_png_fallbacks(
     requires_zensical: None,
 ) -> None:
-    """The chart is `_brand/hero-chart.svg` via `url`; the alt text says demo (3.5).
+    """The hero image is a webp `source` over a 1x/2x png `img`, all via `url` (3.5).
 
-    Dies on: `_brand/hero-chart.svg` -> `_brand/hero.svg`, or `Demo chart:` ->
-    `Chart:` in the alt text in home.html.
+    Dies on: dropping the `<source type="image/webp">` from home.html, losing the
+    `2x` candidate from the `img` srcset, or emptying its alt text.
     """
     hero = _hero_html(_render({}))
-    match = re.search(r'<img src="([^"]*)" alt="([^"]*)"', hero)
-    assert match is not None
-    assert match.group(1) == "URL[_brand/hero-chart.svg]"
-    assert "demo" in match.group(2).lower()
-    assert (WEBSITE / "assets" / "hero-chart.svg").is_file()
+    source = re.search(r'<source type="image/webp" srcset="([^"]*)">', hero)
+    assert source is not None
+    assert source.group(1) == "URL[_brand/fitdocs-hero.webp]"
+    img = re.search(r'<img src="([^"]*)" srcset="([^"]*)" alt="([^"]*)"', hero)
+    assert img is not None
+    assert img.group(1) == "URL[_brand/fitdocs-hero.png]"
+    assert img.group(2) == (
+        "URL[_brand/fitdocs-hero.png] 1x, URL[_brand/fitdocs-hero@2x.png] 2x"
+    )
+    assert img.group(3).startswith("Example fitdocs workout page:")
+    for name in ("fitdocs-hero.webp", "fitdocs-hero.png", "fitdocs-hero@2x.png"):
+        assert (WEBSITE / "assets" / name).is_file(), name
 
 
 def test_home_keeps_the_edit_action_and_the_page_body(requires_zensical: None) -> None:

@@ -1,4 +1,6 @@
-/* The one place the site's brand values live: palette, typeface, hero. */
+/* The one place the site's brand values live: palette, typeface, hero.
+   Readability and dark-mode rules follow the 2026-10-03 design handoff
+   (.kiro/specs/docs-site/design-handoff-2026-10-03.md). */
 
 :root,
 [data-md-color-scheme="default"],
@@ -10,28 +12,321 @@
   --md-primary-fg-color--dark: #121820;
   --md-primary-bg-color: #ffffff;
   --md-primary-bg-color--light: #ffffffb3;
+  --fd-text: 17px;
+  --fd-leading: 1.7;
+  --fd-measure: 70ch;
 }
 
 [data-md-color-scheme="default"] {
   --md-accent-fg-color: #b8324b;
   --md-typeset-a-color: #b8324b;
-  --fd-hero-card-bg: #ffffff;
+  --md-code-bg-color: #f6f7f8;
+  --fd-hero-card-bg: #eceef1;
+  --fd-fg: rgba(0, 0, 0, 0.8);
+  --fd-fg-strong: rgba(0, 0, 0, 0.9);
+  --fd-fg-light: rgba(0, 0, 0, 0.58);
+  --fd-fg-lighter: rgba(0, 0, 0, 0.45);
+  --fd-border: rgba(0, 0, 0, 0.08);
+  --fd-border-strong: rgba(0, 0, 0, 0.12);
+  --fd-hover-bg: rgba(0, 0, 0, 0.045);
 }
 
 [data-md-color-scheme="slate"] {
   --md-accent-fg-color: #f07d8e;
   --md-typeset-a-color: #f07d8e;
-  --fd-hero-card-bg: #f5f7fa;
+  --fd-hero-card-bg: #eceef1;
+  --fd-fg: hsla(225, 15%, 90%, 0.8);
+  --fd-fg-strong: hsla(225, 15%, 96%, 0.95);
+  --fd-fg-light: hsla(225, 15%, 90%, 0.6);
+  --fd-fg-lighter: hsla(225, 15%, 90%, 0.42);
+  --fd-border: hsla(225, 15%, 95%, 0.1);
+  --fd-border-strong: hsla(225, 15%, 95%, 0.16);
+  --fd-hover-bg: hsla(225, 15%, 95%, 0.06);
+  --fd-nav-label: hsla(225, 15%, 97%, 0.96);
+  --fd-nav-link: hsla(225, 15%, 90%, 0.66);
+  --fd-btn-fg: hsla(225, 15%, 92%, 0.9);
+  --fd-on-accent: hsla(225, 20%, 10%, 1);
 }
 
-.md-button--primary {
+/* Layout: a wider grid, 256px sidebars, roomy content, TOC from 1280px up. */
+
+.md-grid {
+  max-width: 1360px;
+}
+
+.md-sidebar {
+  width: 256px;
+}
+
+.md-content {
+  padding: 56px 64px 120px;
+}
+
+@media (max-width: 959px) {
+  .md-content {
+    padding: 32px 20px 72px;
+  }
+}
+
+@media (max-width: 1279px) {
+  .md-sidebar--secondary {
+    display: none;
+  }
+}
+
+/* The article: one readable measure, larger text, space below blocks only. */
+
+.md-content__inner.md-typeset {
+  max-width: var(--fd-measure);
+  margin: 0 auto;
+  padding-top: 0;
+  font-size: var(--fd-text);
+  line-height: var(--fd-leading);
+  color: var(--fd-fg);
+}
+
+.md-typeset p,
+.md-typeset ul,
+.md-typeset ol {
+  margin: 0 0 1.25em;
+}
+
+.md-typeset ul,
+.md-typeset ol {
+  margin-left: 0;
+  padding-left: 1.4em;
+}
+
+.md-typeset ul li,
+.md-typeset ol li {
+  margin-left: 0;
+  margin-bottom: 0.6em;
+}
+
+.md-typeset strong {
+  color: var(--fd-fg-strong);
+}
+
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3 {
+  font-weight: 650;
+  color: var(--fd-fg-strong);
+}
+
+.md-typeset h1 {
+  font-size: 2.25em;
+  line-height: 1.15;
+  letter-spacing: -0.022em;
+  margin: 0 0 0.5em;
+}
+
+.md-typeset h1 + p {
+  font-size: 1.15em;
+}
+
+.md-typeset h2 {
+  font-size: 1.5em;
+  margin: 2.25em 0 0.6em;
+  padding-top: 1.25em;
+  border-top: 1px solid var(--fd-border);
+}
+
+.md-typeset hr + h2 {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.md-typeset h3 {
+  font-size: 1.15em;
+  margin: 2em 0 0.5em;
+}
+
+.md-typeset h2 + h3 {
+  margin-top: 1em;
+}
+
+.md-typeset hr {
+  margin: 2.5em 0;
+}
+
+.md-typeset a:not(.md-button):not(.headerlink):not(.md-content__button) {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+  text-decoration-color: color-mix(in srgb, var(--md-typeset-a-color) 40%, transparent);
+}
+
+.md-typeset a:not(.md-button):not(.headerlink):not(.md-content__button):hover {
+  text-decoration-color: var(--md-accent-fg-color);
+}
+
+.md-typeset pre a {
+  text-decoration: none;
+}
+
+/* Code. */
+
+.md-typeset code {
+  font-size: 0.86em;
+  padding: 0.12em 0.38em;
+  border-radius: 4px;
+}
+
+.md-typeset pre {
+  margin: 1.5em 0 1.75em;
+}
+
+.md-typeset pre > code {
+  padding: 1.1em 1.4em;
+  border: 1px solid var(--fd-border);
+  border-radius: 8px;
+  line-height: 1.65;
+}
+
+/* Tables: a bordered, rounded wrapper that scrolls sideways when it must.
+   The theme's script wraps each table in __scrollwrap > __table; without the
+   script the table carries the border itself. */
+
+.md-typeset table:not([class]) {
+  display: table;
+  width: 100%;
+  font-size: 0.9em;
+  line-height: 1.55;
+  border: 1px solid var(--fd-border-strong);
+  border-radius: 8px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.md-typeset__scrollwrap {
+  margin: 1.5em 0;
+  overflow-x: auto;
+  border: 1px solid var(--fd-border-strong);
+  border-radius: 8px;
+}
+
+.md-typeset__table {
+  display: block;
+  margin: 0;
+  padding: 0;
+}
+
+.md-typeset__table table:not([class]) {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.md-typeset table:not([class]) th {
+  font-size: 0.78em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fd-fg-light);
+  background-color: var(--md-code-bg-color);
+  padding: 0.9em 1.2em;
+}
+
+.md-typeset table:not([class]) td {
+  padding: 0.9em 1.2em;
+  border-top: 1px solid var(--fd-border);
+}
+
+.md-typeset table:not([class]) td code {
+  white-space: nowrap;
+}
+
+/* Left nav: small-caps group headings, padded links, a tinted current page. */
+
+.md-nav--primary {
+  line-height: 1.45;
+}
+
+.md-nav--primary .md-nav__item--section {
+  margin: 28px 0;
+}
+
+.md-nav--primary .md-nav__item--section > .md-nav__link {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fd-nav-label, var(--fd-fg-light));
+}
+
+.md-nav--primary .md-nav__link {
+  margin-top: 0;
+  padding: 5px 10px;
+  border-radius: 6px;
+}
+
+.md-nav--primary .md-nav__item:not(.md-nav__item--section) > .md-nav__link {
+  color: var(--fd-nav-link, var(--fd-fg));
+}
+
+.md-nav--primary .md-nav__item:not(.md-nav__item--section) > .md-nav__link:hover {
+  background-color: var(--fd-hover-bg);
+}
+
+.md-nav--primary .md-nav__item:not(.md-nav__item--section) > .md-nav__link--active {
+  font-weight: 600;
+  color: var(--md-accent-fg-color);
+  background-color: var(--fd-hover-bg);
+}
+
+/* TOC: titled like a nav heading, links on a 1px rail, the active one marked. */
+
+.md-sidebar--secondary .md-nav__title {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fd-nav-label, var(--fd-fg-light));
+  background: none;
+  box-shadow: none;
+}
+
+.md-sidebar--secondary .md-nav--secondary > .md-nav__list {
+  border-left: 1px solid var(--fd-border-strong);
+}
+
+.md-sidebar--secondary .md-nav__link {
+  margin: 0 0 0 -1px;
+  padding: 4px 0 4px 14px;
+  border-left: 2px solid transparent;
+  color: var(--fd-fg-light);
+}
+
+.md-sidebar--secondary .md-nav__link--active {
+  color: var(--md-accent-fg-color);
+  border-left-color: var(--md-accent-fg-color);
+}
+
+/* Buttons: readable in both schemes. */
+
+.md-typeset .md-button {
+  color: var(--fd-btn-fg, var(--md-primary-fg-color));
+  border-color: var(--fd-btn-fg, var(--md-primary-fg-color));
+}
+
+.md-typeset .md-button--primary {
+  color: var(--fd-on-accent, #ffffff);
   background-color: var(--md-accent-fg-color);
   border-color: var(--md-accent-fg-color);
 }
 
+.md-typeset .md-button:focus,
+.md-typeset .md-button:hover {
+  color: var(--fd-on-accent, #ffffff);
+  background-color: var(--md-accent-fg-color);
+  border-color: var(--md-accent-fg-color);
+}
+
+/* The home page hero. The image carries its own card and backdrop. */
+
 .fd-hero {
   text-align: center;
-  padding: 2rem 0 1rem;
+  padding: 0 0 1rem;
 }
 
 .fd-hero__title {
@@ -55,12 +350,10 @@
 }
 
 .fd-hero__chart {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 1rem;
+  margin: 0 auto 2rem;
   background-color: var(--fd-hero-card-bg);
-  border-radius: 0.5rem;
-  box-shadow: 0 0.1rem 0.5rem rgba(0, 0, 0, 0.25);
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 .fd-hero__chart img {

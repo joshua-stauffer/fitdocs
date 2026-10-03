@@ -1,7 +1,7 @@
 ---
 id: 2026-10-02-docs-site-dark-scheme-hero-buttons-unreadable
 title: "Dark (slate) scheme: non-primary hero buttons render graphite on graphite, primary is white on #f07d8e"
-status: open
+status: done
 importance: medium
 importance_why: "The first hero_actions the home page gets will be near-invisible to every dark-mode visitor."
 effort: S
@@ -32,3 +32,6 @@ No page uses `hero_actions` yet, so nothing is broken today. The first home page
 1. In `brand.css`, add a `[data-md-color-scheme="slate"] .md-typeset .md-button` rule with a light text/border colour, and choose a primary-button text colour that clears 4.5:1 on the slate accent (or darken the fill).
 2. Build a content dir whose `index.md` sets `hero_actions` with one primary and one plain action; check both schemes.
 3. Fold in whatever the 2026-10 Claude Design pass on the site decides for buttons, if it has landed.
+
+## Resolution
+Done 2026-10-03 on chore/design-handoff: slate outline buttons take `--fd-btn-fg`, primary/hover text takes `--fd-on-accent`; the primary fill now sits on `.md-typeset .md-button--primary` (the old `.md-button--primary` rule lost to Material's more specific one, so the accent fill never applied). Checked in headless Chrome in both schemes.
