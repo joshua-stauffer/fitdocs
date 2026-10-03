@@ -8,6 +8,9 @@ the pkm project this plugs into:
 1. **Code/data split.** The repo holds only code, templates, schema, and
    docs. Personal data — `.fit` files and generated workout markdown — lives
    under a user-configured directory, never inside the repo.
+   One exception: website artwork under `website/assets/` may show a real
+   workout when the maintainer chooses to publish it. That covers rendered
+   images only; `.fit` files and workout markdown still never enter the repo.
 2. **Raw is immutable; rendered is regenerable.** Source `.fit` files are
    never modified; workout documents are derived artifacts that can always be
    re-rendered from the `.fit` + athlete profile (user-supplied answers are

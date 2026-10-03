@@ -1447,7 +1447,7 @@ def test_the_notice_phrase_and_mark_are_absent_from_every_tracked_file() -> None
     unexpected_unreadable = {
         name: why
         for name, why in unreadable.items()
-        if not name.endswith((".fit", ".png", ".gz"))
+        if not name.endswith((".fit", ".png", ".webp", ".gz"))
     }
     assert not unexpected_unreadable, (
         "tracked file(s) neither read nor accounted for by the notice/mark "

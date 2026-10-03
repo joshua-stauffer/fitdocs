@@ -71,6 +71,7 @@ third delivers the differentiating feature (training load).
 - Personal data (`.fit` files, generated docs) never lives in a code repo —
   data-root contract mirrors joshua-stauffer/pkm (`FITDOCS_DATA` env /
   `.fitdocs/data-root` file / explicit flag; loud failure, no repo fallback).
+  Website artwork is the one narrow exception (`structure.md` rule 1).
 - **Third-party methodology licensing — resolved by withdrawal (2026-07-25).**
   The withdrawn methodology's lookup tables and trademarked name required the
   methodology's author's permission before public redistribution. That

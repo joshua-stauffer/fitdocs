@@ -289,13 +289,20 @@ def test_brand_llms_config_and_overrides_bytes(tmp_path: Path) -> None:
 
 
 def test_real_brand_files_are_planned_byte_for_byte() -> None:
-    """The three shipped brand files appear under ``staged/_brand/`` (3.5).
+    """The shipped brand files appear under ``staged/_brand/`` (3.5).
 
     Dies on: skipping a file of ``website/assets/`` or staging it elsewhere.
     """
     tree = _plan()
     names = sorted(p.name for p in ASSETS_DIR.iterdir())
-    assert names == ["brand.css", "hero-chart.svg", "logo.svg"]
+    assert names == [
+        "brand.css",
+        "fitdocs-hero.png",
+        "fitdocs-hero.webp",
+        "fitdocs-hero@2x.png",
+        "hero-chart.svg",
+        "logo.svg",
+    ]
     for name in names:
         assert tree[f"staged/_brand/{name}"] == (ASSETS_DIR / name).read_bytes()
     assert tree["overrides/home.html"] == (OVERRIDES_DIR / "home.html").read_bytes()

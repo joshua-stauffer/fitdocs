@@ -14,8 +14,9 @@ Key references:
   (parsing pipeline, metric formulas, doc/chart structure)
 
 Hard rules: personal data (`.fit` files, generated docs) never lives in this
-repo — data-root contract in `tech.md`; absent data is `None`, never a
-fabricated `0` or default.
+repo — data-root contract in `tech.md` (one narrow exception, for website
+artwork the maintainer publishes: `structure.md` rule 1); absent data is
+`None`, never a fabricated `0` or default.
 
 # Agentic SDLC and Spec-Driven Development
 
