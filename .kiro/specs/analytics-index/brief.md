@@ -11,7 +11,7 @@ have only two options, both bad:
 - **Read documents.** Frontmatter carries only distance, moving time,
   average HR and power, elevation gain, calories and the selected load
   (`src/fitdocs/render/frontmatter.py:90`). Everything else is in rendered
-  tables and the load region's JSON (`load/render.py:63`). Answering "time
+  tables and the load region's JSON (`load/render.py:162`). Answering "time
   above 170 bpm in September" means reading every September page and
   parsing tables, and the per-second data isn't in any document at all.
 - **Re-parse `.fit` files themselves**, re-implementing fitdocs's parsing,
@@ -48,7 +48,7 @@ written as activities are ingested and read with standard SQL.
   `src/`.
 - The runtime dependency set is frozen by plugin-api's Req 7.2 guard
   (`tests/test_determinism.py:672-713`, which also forbids any
-  `optional-dependencies`) and by `tests/test_packaging.py:501-516`.
+  `optional-dependencies`) and by `tests/test_packaging.py:503-519`.
 - Writes are confined to `OWNED_PATHS` ∪ `athlete.toml` ∪ configured
   locations (`tests/test_confinement.py:1026`, `WRITING_ENTRY_POINTS`). The
   one existing per-user location outside the data root is the connector
@@ -230,7 +230,7 @@ write hooks and refresh-on-query):
     no dependency and never imports `duckdb`, but the baseline set gains
     `duckdb` for this spec.
   - `distribution`: the exact dependency list in
-    `tests/test_packaging.py:501-516`.
+    `tests/test_packaging.py:503-519`.
   - `workout-docs`: the in-memory handoff out of `_page_task` (append-only;
     nothing it renders changes).
 - **Adjacent**:
