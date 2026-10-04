@@ -162,7 +162,7 @@ compliance is a query instead of a read of rendered block pages.
 4. fitdocs shall hold one row per workout page a planned workout claims, by match or by override, carrying the page's data-root-relative path and the page's index key when the index holds that page, and one row per page an override names that does not exist, marked as not found.
 5. fitdocs shall hold, for each mesocycle, one row per unplanned workout page in its window, carrying the page's data-root-relative path and the page's index key when the index holds that page.
 6. fitdocs shall decide every resolution state, confidence, claimed page, unplanned page and mesocycle load exactly as the plan pass decides them for the same plan sources, workout pages, settings and current date.
-7. fitdocs shall hold a planned workout that has no logged candidate and no override as not logged when its date is before the current date and as upcoming otherwise, taking the current date from the command that runs the refresh.
+7. fitdocs shall hold a planned workout that has no logged candidate and no override as not logged when its date is before the current date and as upcoming otherwise, taking the current date from the command that runs the refresh, and shall record that date on every block row.
 8. fitdocs shall hold no mesocycle, planned-workout or page row for an invalid plan source, and no block-table row of any kind when the plan pass discovers no plan source.
 9. fitdocs shall not hold a planned workout's prescription, an override's reason, a block's amendment trail or the rows of its plan before amendment.
 
