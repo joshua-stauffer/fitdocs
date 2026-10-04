@@ -2108,9 +2108,12 @@ Rejected:
   re-confirmed after viability reported the footprint below), over an
   optional `fitdocs[analytics]` extra that would make two product modes.
   This deliberately unfreezes plugin-api's Req 7.2 baseline
-  (`tests/test_determinism.py:672-713`, which also forbids any
-  `optional-dependencies`) and `tests/test_packaging.py:501-516`. Plugin
-  discovery itself must still add no dependency and never import `duckdb`.
+  (`tests/test_determinism.py:666-715`, which also forbids any
+  `optional-dependencies`), `tests/test_packaging.py:503-519`,
+  `tests/test_preserved_guarantees.py:93-108` and docs-site's Req 8.1 pin
+  (`tests/sitebuild/test_repo_wiring.py:18-24, 64-72`). The last two were
+  found during the spec batch. Plugin discovery itself must still add no
+  dependency and never import `duckdb`.
 - **A reconciling post-pass** (maintainer, 2026-10-04), over inline write
   hooks and refresh-on-query (see Rejected).
 - **Derived tables in this phase** (maintainer, 2026-10-04): mean-max
@@ -2168,9 +2171,14 @@ Rejected:
     wheels since 1.4.0, so Alpine must compile from source, and no
     free-threaded 3.14t wheels.
 - Taken without asking, consistent with the above:
-  - **`duckdb>=1.1,<2`.** An agent's own 1.x client must be able to read
+  - **`duckdb>=1.2,<2`.** An agent's own 1.x client must be able to read
     the file, so a move to 2.x is a deliberate change. A version-mismatch
-    error means rebuild.
+    error means rebuild. The floor was 1.1 at discovery. The spec batch
+    raised it to 1.2 (2026-10-05): on 1.1.0–1.1.3, `INSTALL` under the
+    locked configuration still creates `~/.duckdb/extensions/…` in HOME
+    before refusing, while 1.2.0–1.5.6 refuse everything and create nothing
+    (`analytics-query` research). Readability by older 1.x clients rests on
+    the writer's storage version, not on this floor.
   - **No automatic pass ever starts a full rebuild.** When the index is
     absent, unreadable or on another schema version, a writing command
     reports that `fitdocs index` is needed and leaves it alone. A routine
@@ -2272,22 +2280,38 @@ Rejected:
 
 #### Existing Spec Updates
 
-- [ ] plugin-api — Req 7.2's guard (`tests/test_determinism.py:672-713`)
+- [ ] plugin-api — Req 7.2's guard (`tests/test_determinism.py:666-715`)
   reworded. Plugin discovery adds no dependency and never imports
   `duckdb`, but the runtime baseline gains `duckdb` for the index. Carried
   out inside `analytics-index`. Dependencies: analytics-index
 - [ ] distribution — the exact dependency list
-  (`tests/test_packaging.py:501-516`), and the install footprint and
-  platform gap in the install docs. Carried out inside `analytics-index`.
-  Dependencies: analytics-index
+  (`tests/test_packaging.py:503-519`, `tests/test_preserved_guarantees.py:93-108`),
+  and the install footprint and platform gap in the install docs. Carried
+  out inside `analytics-index`. Dependencies: analytics-index
+- [ ] docs-site — Req 8.1's "runtime dependency list stays as it was" pin
+  (`tests/sitebuild/test_repo_wiring.py:18-24, 64-72`) amended for
+  `duckdb` (docs-site Amendment 1). Carried out inside `analytics-index`.
+  Found during the spec batch. Dependencies: analytics-index
 - [ ] workout-docs — an append-only in-memory handoff out of
   `sync.py:_page_task` (the composed activity, metrics, identity and roles)
   for the post-pass. Nothing it renders changes. Carried out inside
   `analytics-index`. Dependencies: analytics-index
 - [ ] connectors — `index` and `query` join the no-network command list
   (`tech.md`, `tests/connectors/test_e2e.py:205`). Carried out inside
-  whichever spec adds each command. Dependencies: analytics-index,
-  analytics-query
+  whichever spec adds each command: `analytics-index` takes connectors
+  Amendment 1 (`index`), and `analytics-query` takes the next free number
+  at landing (`query`). Dependencies: analytics-index, analytics-query
+- [ ] fit-ingest — a new requirement for the mean-max computation in
+  `fitdocs.metrics` (next free requirement and amendment numbers at
+  landing). Carried out inside `analytics-derived`. Found during the spec
+  batch. Dependencies: analytics-derived
+
+`analytics-derived` also extracts behaviour-preserving seams from the
+history and plans engines, and appends them to the `fitdocs.history` and
+`fitdocs.plans` public surfaces. This needs no load-history or
+plan-resolution amendment, which is the same treatment plan-resolution's
+earlier `_HISTORY_SURFACE` append received. The engines' rendered output
+and existing tests stay unchanged.
 
 #### Direct Implementation Candidates
 
@@ -2301,6 +2325,11 @@ None. Every piece of the work has a spec home.
   `fitdocs.metrics` function.
 - Existing passes (history, plan, derive-benchmarks) reading the index once
   it has proven itself, if their scans become a cost.
+- A free first build. When every page of a brand-new data root's first
+  sync is in the in-memory hand-over, the index could be built without a
+  separate `fitdocs index`. This was rejected for `analytics-index`, which
+  keeps "no automatic pass ever starts a full build" (its research,
+  Decision 6).
 - Free-text columns (notes, the strength section) with DuckDB's full-text
   search, which is a downloadable extension and so needs a network-policy
   decision.
