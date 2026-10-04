@@ -269,7 +269,7 @@ never written by two processes at once.
 path, so that fitdocs's network promises still hold.
 
 #### Acceptance Criteria
-1. fitdocs shall configure every database connection it opens so that the database library cannot install or load an extension, read or write any file other than the index and its own working files, or keep a secret, and so that no statement on the connection can re-enable any of these.
+1. fitdocs shall configure every database connection it opens so that the database library never installs or loads an extension on its own, never reads or writes a file other than the index and its own working files on a statement's behalf, and never keeps a secret, and so that no statement on the connection can change any of these settings; and the statements fitdocs itself issues shall never install or load an extension.
 2. fitdocs shall make no network request while opening, refreshing, building or rebuilding the index, including when a value or statement it handles contains a web address.
 3. fitdocs shall declare DuckDB as a required runtime dependency in the version range from 1.1 up to but excluding 2, and shall declare no optional dependency group.
 4. fitdocs shall not load the DuckDB library during plugin discovery, or during any command or import that does not open the index.
