@@ -15,6 +15,14 @@ per-user connector credentials files outside the data root, and the
 connector ledgers under `.fitdocs/`).
 Everything is re-derivable from the `.fit` + profile.
 
+*Planned (Phase 10 of the roadmap, discovery 2026-10-04):* a derived
+DuckDB analytics index, one file per data root in a per-user cache
+directory outside the data root. It is a cache, not state: it is rebuilt
+from the documents and the archived `.fit` files, never read back into a
+document, and deleting it costs only rebuild time. This note is not a
+contradiction of the rule above. `analytics-index` amends this section,
+Key Libraries and Network and Credentials when it lands.
+
 ## Core Technologies
 
 - **Language**: Python 3.11+

@@ -2026,3 +2026,309 @@ Rejected:
   preview against an out-of-repo content directory, fixture and smoke tests,
   and a GitHub Pages workflow gated on forbidden strings. Builds and tests
   without the maintainer's copy. Dependencies: none
+
+### Phase 10 — the analytics index (discovery 2026-10-04)
+
+**Goal**: let agents ask fitdocs statistical questions instead of computing
+the answers themselves. Today an agent in the athlete's PKM that wants
+"weekly running volume since March", "time above 170 bpm in September" or
+"best 20-minute power this year" has two options:
+
+- **Read hundreds of documents** and do the arithmetic in context.
+  Frontmatter carries only distance, moving time, average HR and power,
+  elevation, calories and the selected load. Everything else sits in
+  rendered tables, and per-second data isn't in any document.
+- **Re-implement fitdocs's parsing, composition and metric rules** over the
+  archived `.fit` files.
+
+The maintainer wants fitdocs to ship an analytics engine: a DuckDB database
+written on intake and read with standard SQL.
+
+**Approach decision — a derived DuckDB projection, reconciled after every
+writing command.** One DuckDB file per data root, in a per-user cache
+directory outside the data root. It holds activities, laps, strength sets,
+per-second records, zone times and per-channel loads, plus derived tables:
+mean-max curves, the daily load series, the benchmark timeline and training
+blocks.
+
+- **Written by one post-pass.** At the end of `sync`, drain, `pull --sync`,
+  `regen` and `load`, the pass fingerprints each workout page against the
+  index and updates only what moved. It reuses the composed activity and
+  metrics when the run already holds them.
+- **Rebuild is the same pass.** `fitdocs index --rebuild` runs it against an
+  empty database.
+- **Read with `fitdocs query`**, a sandboxed, read-only command with schema
+  introspection, and taught to agents by a packaged skill.
+- **Documents and archived `.fit` files stay the truth.** The index is a
+  cache with a schema version, and deleting it costs only rebuild time. This
+  reconciles the steering rule "no database … everything is re-derivable"
+  (`tech.md`) with the request, and answers the earlier rejection of a load
+  database for "duplicating truth"
+  (`.kiro/specs/training-load/research.md:79`). Nothing reads the index
+  back into a document.
+
+Rejected:
+- *Inline write hooks*, inserting rows at each write site from objects in
+  memory. There are five sites (`sync.py:_page_task` → `_write_outputs`,
+  and `load/engine.py:379`, `:526`, `:594`) owned by four specs. A hand
+  edit to a page, such as an effort tag, would never reach the index until
+  fitdocs itself rewrote that page. A missed site means silent drift, and a
+  second, separate backfill path would still be needed.
+- *Refresh on query.* Intake stays untouched, but the first query after a
+  big sync pays the whole cost, and an outside DuckDB client reading the
+  file sees stale data. It also isn't "written on intake".
+- *Per-activity Parquet files behind DuckDB views.* Their advantage, being
+  immutable and sync-friendly, disappears once the file lives outside the
+  data root. They leave thousands of small files, a schema-evolution
+  problem across them, and writing Parquet would still need DuckDB or
+  pyarrow.
+- *SQLite.* It's in the standard library, so the dependency list wouldn't
+  move. But it's row-oriented, has no columnar compression and has weaker
+  analytic SQL. The request names DuckDB, and per-second scans across about
+  9M rows are exactly what DuckDB is built for.
+
+#### Decisions taken at discovery (2026-10-04)
+
+- **Path E: three new specs, plus existing-spec updates carried out inside
+  them** (maintainer, 2026-10-04): `analytics-index`, `analytics-query`,
+  `analytics-derived`.
+- **Everything is queryable, including per-second streams** (maintainer,
+  2026-10-04), over summary-only and summary-plus-precomputed. Agents can
+  then answer questions nobody planned for.
+- **The index lives in a per-user cache, outside the data root**
+  (maintainer, 2026-10-04): a dedicated absolute env override, then
+  `$XDG_CACHE_HOME/fitdocs/…`, then `~/.cache/fitdocs/…`, keyed by the
+  resolved data root and refused inside it, like the credentials directory.
+  The real data root is in iCloud Drive (its git repository ignores
+  `.cache/` and `.fitdocs/`). A ~200 MB binary rewritten on every sync there
+  would risk conflict copies and eviction. It would also fall within
+  `tests/test_inbox_e2e.py:100`'s "a second sync changes nothing" scan.
+  Each machine builds its own index.
+- **DuckDB is a core runtime dependency** (maintainer, 2026-10-04,
+  re-confirmed after viability reported the footprint below), over an
+  optional `fitdocs[analytics]` extra that would make two product modes.
+  This deliberately unfreezes plugin-api's Req 7.2 baseline
+  (`tests/test_determinism.py:672-713`, which also forbids any
+  `optional-dependencies`) and `tests/test_packaging.py:501-516`. Plugin
+  discovery itself must still add no dependency and never import `duckdb`.
+- **A reconciling post-pass** (maintainer, 2026-10-04), over inline write
+  hooks and refresh-on-query (see Rejected).
+- **Derived tables in this phase** (maintainer, 2026-10-04): mean-max
+  curves, the daily load series, the benchmark timeline and training blocks.
+  All four, in `analytics-derived`.
+- **Out of this phase** (maintainer, 2026-10-04):
+  - an MCP or HTTP server;
+  - existing passes (history, derive-benchmarks, plan, check) reading the
+    index;
+  - free-text columns (notes, the hand-written strength section);
+  - cross-machine index sync.
+- **Viability (2026-10-04)**: duckdb 1.5.6, macOS arm64, Python 3.11, in a
+  scratch environment.
+  - **Maintenance and fit.** MIT licensed, with permissive bundled code,
+    released roughly monthly (1.5.6 on 2026-09-28). No hard dependencies;
+    numpy, pandas and pyarrow are only in its `[all]` extra. It ships
+    `py.typed` plus stubs, and a sample module passed `mypy --strict`.
+    Importing and querying writes nothing to the current directory or HOME.
+    DuckDB never connected to the network on its own, tested under a
+    sandbox that kills the process on any outbound connection.
+  - **Size and speed.** 9.0M records rows over 2,502 activities make a
+    224 MB file. A group-by over them runs in 11–14 ms, and a rolling 60 s
+    max over every row in 150–180 ms. Peak memory is about 480 MB.
+  - **Insert route.** Pure Python, one JSON-columnar parameter through
+    `from_json` + `unnest`, runs at about 186k rows/s. `executemany` and
+    list parameters manage about 1.4k rows/s; `con.append` needs pandas;
+    `read_csv` from a file-like object needs fsspec.
+  - **Comments.** Table and column comments are readable from
+    `duckdb_columns()` and `information_schema`, even on a locked read-only
+    connection.
+
+  Caveats the specs must own:
+  - **`read_only=True` alone is no sandbox.** It still allowed reading
+    `/etc/passwd`, `COPY TO`, `INSTALL httpfs`, `ATTACH 'md:'` (which
+    opened a browser login) and `CALL start_ui()`. A locked configuration
+    measured to refuse all of these is recorded in the `analytics-query`
+    brief.
+  - **Extensions can fetch themselves.** Under default settings, one SQL
+    string mentioning `https://` auto-installs httpfs over plain HTTP. Every
+    fitdocs connection, the writer's included, turns auto-install and
+    auto-load off.
+  - **Locks never wait.** One read-write process or many read-only ones.
+    Every conflict fails at once, and an outside client left open blocks
+    refreshes.
+  - **Errors look alike.** Lock, version and missing-file errors are all
+    `duckdb.IOException`, told apart only by message text.
+  - **Open corruption bugs** are tied to primary-key/ART indexes and
+    checkpoints (duckdb/duckdb #22823, #25928, #23046).
+  - **2.0 changes the format.** DuckDB 2.0 pre-releases write a file format
+    1.x refuses, while files from 1.0–1.5 are mutually readable.
+  - **No statement timeout.** `connection.interrupt()` works (stops within
+    1 s).
+  - **`CREATE OR REPLACE` drops comments.**
+  - **Footprint:** about 44 MB installed (13–21 MB wheels). No musllinux
+    wheels since 1.4.0, so Alpine must compile from source, and no
+    free-threaded 3.14t wheels.
+- Taken without asking, consistent with the above:
+  - **`duckdb>=1.1,<2`.** An agent's own 1.x client must be able to read
+    the file, so a move to 2.x is a deliberate change. A version-mismatch
+    error means rebuild.
+  - **No automatic pass ever starts a full rebuild.** When the index is
+    absent, unreadable or on another schema version, a writing command
+    reports that `fitdocs index` is needed and leaves it alone. A routine
+    `sync` never turns into a 25-minute backfill (the full real drain took
+    27:58 for 2,478 files).
+  - **Index failures never cost the pipeline.** A held lock, a full disk or
+    a corrupt file is reported, and never fails, rolls back or skips a
+    document write. The pass reconciles against disk state, so a skipped
+    refresh heals at the next successful one.
+  - **No `PRIMARY KEY`, `UNIQUE` or index in the schema.** Page uniqueness
+    is delete-then-insert per page in one transaction, pinned by a test.
+  - **A rebuild writes a temp file and `os.replace`s it into place.**
+    Measured on macOS with a reader open. Windows is verified in the design.
+  - **Schema comments are the single source of column meaning.**
+    `fitdocs query --schema` and the docs page's schema reference both
+    project them, and a test holds the doc to the live schema.
+  - **One computation, two projections.** Every derived table calls the
+    owning engine's code (history's series builder, the profile reader,
+    plan resolution), so the index can never disagree with the history or
+    block page for the same inputs. Mean-max is the only new computation,
+    and it lives in `fitdocs.metrics`.
+  - **`query` and `index` join the no-network command list** (`tech.md`,
+    `tests/connectors/test_e2e.py:205`). The allow-list gains a sentence:
+    it binds fitdocs's connections, not an outside DuckDB client opening the
+    file.
+
+#### Scope
+
+- **In**:
+  - the per-user index location and its refusal inside the data root;
+  - DuckDB as a core dependency, and the reworded dependency guards;
+  - the connection policy;
+  - the core schema with comments and a schema version;
+  - the producer seam (per-page and corpus-level producers);
+  - fingerprints and the reconciling post-pass after every writing command,
+    with the in-memory handoff from sync;
+  - `fitdocs index [--rebuild]` with progress;
+  - failure isolation;
+  - `fitdocs query` with formats, row cap, the sandbox, a statement
+    timeout, schema introspection, freshness reporting and lock retry;
+  - a packaged agent skill for querying;
+  - `docs/analytics.md`;
+  - the four derived tables;
+  - steering updates (`tech.md`'s database rule, Key Libraries, Network);
+  - CHANGELOG entries.
+- **Out**:
+  - an MCP or HTTP server, and a natural-language "ask" wrapper;
+  - existing passes reading the index;
+  - documents showing anything new (a mean-max section is a follow-on);
+  - free-text columns;
+  - write access, user tables, saved queries;
+  - cross-machine sync;
+  - charting query results;
+  - new load or fitness methodologies.
+
+#### Constraints
+
+- Absent data is NULL, never 0 or a default (CLAUDE.md hard rule). This
+  covers NaN from the JSON insert route and curve points an activity can't
+  support.
+- No network from any fitdocs connection. Only the index store module
+  imports `duckdb`, pinned by a boundary test.
+- `query` writes nothing anywhere. The index writer writes only inside the
+  resolved index directory. A confinement entry covers the new location.
+- Determinism means the same rows for the same inputs. File bytes aren't
+  compared.
+- The schema version advances by one per lander across the three specs,
+  the second lander re-pinning, as `DOC_VERSION` does. `analytics-query`
+  doesn't change the schema.
+- Python 3.11 floor, `mypy --strict`.
+
+#### Boundary Strategy
+
+- **Why this split**:
+  - **`analytics-index`** owns everything that writes: location, store,
+    schema, the producer seam, the pass and its CLI wiring.
+  - **`analytics-query`** owns everything that reads: the sandbox,
+    formatting, freshness, skill and docs. It changes no schema and no
+    write path.
+  - **`analytics-derived`** owns four producers registered through the
+    seam, and touches neither the pass nor the read side.
+
+  Once the index lands, query and derived proceed in parallel.
+- **Shared seams to watch**:
+  - The **producer seam**: its shape (per-page versus corpus-level, input
+    fingerprints, transaction boundaries) is the contract `analytics-derived`
+    builds on. Settle it in `analytics-index`'s design, not after.
+  - The **schema version** and table names. Each lander advances the
+    version from `main`'s value, and the second lander re-pins.
+  - **Schema comments**. `analytics-query`'s schema view and docs reference
+    project them, so a derived table without comments is a defect the query
+    side would surface.
+  - The **stale-document rule** (`analytics-index` brief, Constraints).
+    `athlete.toml` changes alter IF, TSS, TRIMP and zone times, but
+    documents change only on `regen`. One stated rule governs both the core
+    tables and mean-max.
+  - **`cli.py` command count, the no-network command list, the confinement
+    entry list and `PACKAGED_SKILLS`**: append-only, keep both on rebase.
+
+#### Existing Spec Updates
+
+- [ ] plugin-api — Req 7.2's guard (`tests/test_determinism.py:672-713`)
+  reworded. Plugin discovery adds no dependency and never imports
+  `duckdb`, but the runtime baseline gains `duckdb` for the index. Carried
+  out inside `analytics-index`. Dependencies: analytics-index
+- [ ] distribution — the exact dependency list
+  (`tests/test_packaging.py:501-516`), and the install footprint and
+  platform gap in the install docs. Carried out inside `analytics-index`.
+  Dependencies: analytics-index
+- [ ] workout-docs — an append-only in-memory handoff out of
+  `sync.py:_page_task` (the composed activity, metrics, identity and roles)
+  for the post-pass. Nothing it renders changes. Carried out inside
+  `analytics-index`. Dependencies: analytics-index
+- [ ] connectors — `index` and `query` join the no-network command list
+  (`tech.md`, `tests/connectors/test_e2e.py:205`). Carried out inside
+  whichever spec adds each command. Dependencies: analytics-index,
+  analytics-query
+
+#### Direct Implementation Candidates
+
+None. Every piece of the work has a spec home.
+
+#### Follow-on candidates (not scheduled)
+
+- A stdio MCP server wrapping `analytics-query`'s sandboxed connection
+  factory, with query and schema tools.
+- A mean-max section in the workout documents, reusing the
+  `fitdocs.metrics` function.
+- Existing passes (history, plan, derive-benchmarks) reading the index once
+  it has proven itself, if their scans become a cost.
+- Free-text columns (notes, the strength section) with DuckDB's full-text
+  search, which is a downloadable extension and so needs a network-policy
+  decision.
+- Moving to DuckDB 2.x, once 2.0 is stable and clients have caught up.
+
+#### Specs (dependency order)
+
+- [ ] analytics-index — the derived DuckDB index:
+  - per-user location outside the data root;
+  - core dependency with the reworded guards and the connection policy;
+  - core schema with comments and a schema version;
+  - the producer seam;
+  - the fingerprint-reconciling post-pass after every writing command, with
+    the in-memory handoff;
+  - `fitdocs index [--rebuild]`;
+  - failure isolation;
+  - steering updates.
+  Dependencies: none
+- [ ] analytics-query — `fitdocs query`:
+  - sandboxed read-only connection, statement timeout, formats, row cap;
+  - schema introspection and freshness reporting, lock retry;
+  - the packaged agent skill;
+  - `docs/analytics.md` with a live-schema pin.
+  Dependencies: analytics-index
+- [ ] analytics-derived — four producers through the seam:
+  - mean-max curves (new `fitdocs.metrics` function);
+  - daily load series (history's builder);
+  - benchmark timeline (`athlete.toml`);
+  - training blocks with planned-versus-logged resolution (plan
+    resolution).
+  Dependencies: analytics-index
