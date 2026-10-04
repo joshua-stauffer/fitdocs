@@ -1,7 +1,7 @@
 ---
 id: 2026-10-04-stryd-elapsed-tolerance-miscalibrated
 title: ELAPSED_TOLERANCE_S (10 s) rejects 34 of 90 real Stryd↔HealthFit pairs; each becomes a duplicate page that check cannot see
-status: open
+status: done
 importance: high
 importance_why: Wrong output reaches the wiki (a duplicate page per rejected Stryd file, no channel donation), and fitdocs check is blind to it because it uses the same rule.
 effort: M
@@ -138,3 +138,6 @@ Output (aggregate only; no personal files enter the repo):
 - Should `fitdocs check` report same-sport pages whose starts agree to within
   1 s but that fail every tier, as a "near-duplicate" finding? That would make
   the next miscalibration visible.
+
+## Resolution
+Done 2026-10-04 by activity-identity Amendment 1 (task 8.1): strict evidence is the same sport, starts within 1 s and distances within max(5 m, 20 % of the longer); elapsed is compared only when a distance is missing. CONTRACT_VERSION 7 -> 8. All 90 real pairs match. The open question about a "near-duplicate" check finding was not pursued: same-start pairs that fail every tier did not occur in the real data root.

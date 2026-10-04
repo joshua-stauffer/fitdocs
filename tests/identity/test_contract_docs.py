@@ -186,6 +186,7 @@ def test_the_unreleased_entry_states_the_rule_and_the_actions() -> None:
         "Elapsed time is compared only when a distance is missing.",
         "The ownership contract's version advances.",
         "run `fitdocs check`",
-        "deleting one of its pages and running `fitdocs regen`",
+        "deleting one of its pages (move anything worth keeping out of its "
+        "notes first) and running `fitdocs regen`",
     ):
         assert phrase in entry, phrase

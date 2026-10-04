@@ -125,8 +125,9 @@ recorded as one.
   two pages, because HealthFit's session runs on until the workout is ended
   on the watch. The ownership contract's version advances. Actions: run
   `fitdocs check` to see pages that are now recognized as one workout
-  (`duplicate_session`), and resolve each by deleting one of its pages and
-  running `fitdocs regen` before adding more files of that workout, which
+  (`duplicate_session`), and resolve each by deleting one of its pages (move
+  anything worth keeping out of its notes first) and running `fitdocs regen`
+  before adding more files of that workout, which
   would otherwise be held because they match both pages; see
   [the ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md#deciding-that-two-files-are-one-workout).
 

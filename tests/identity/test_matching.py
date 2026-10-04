@@ -527,3 +527,15 @@ def test_bounds_exact_in_decimal_are_inclusive_in_binary() -> None:
         _key(elapsed_s=16.1, distance_m=None),
         Evidence.STRICT,
     )
+
+
+def test_the_float_slack_admits_rounding_only() -> None:
+    # 2 500.001 m on 12 500.001 m is 0.8 mm beyond 20 % of the longer: a slack
+    # wider than rounding (1e-4 would admit 0.25 m) turns this into a match.
+    _check(_key(), _key(distance_m=12_500.001), None)
+    # and 1 ms beyond the elapsed fallback's 10 s
+    _check(
+        _key(distance_m=None),
+        _key(elapsed_s=3010.001, distance_m=None),
+        None,
+    )

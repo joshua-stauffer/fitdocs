@@ -934,9 +934,9 @@ never co-varies two keys a rule distinguishes.
     task and their outcomes
   - _Requirements: 3.5, 4.8, 5.7, 6.2, 6.4, 7.3, 8.1, 8.5_
 
-- [ ] 8. Amendment 1 (2026-10-04): strict evidence keyed on distance, not elapsed time
+- [x] 8. Amendment 1 (2026-10-04): strict evidence keyed on distance, not elapsed time
 
-- [ ] 8.1 Re-key the strict tier on start plus a tolerant distance, publish it and advance the contract version
+- [x] 8.1 Re-key the strict tier on start plus a tolerant distance, publish it and advance the contract version
   - `src/fitdocs/identity/matching.py`: add `DISTANCE_TOLERANCE_FRACTION:
     Final[float] = 0.2` with its source. `pair_evidence`'s strict tier
     becomes: start within `START_TOLERANCE_S`, and either both distances
@@ -975,3 +975,12 @@ never co-varies two keys a rule distinguishes.
 ## Implementation Notes
 
 - 2026-10-01 rebase onto main d600bf5 (running-dynamics landed first, DOC_VERSION 5 -> 6): this spec's advance became 6 -> 7 (contract.py value + "Raised from 6 to 7" paragraph, `tests/load/test_render.py` pair `(2, 7)`, `tests/render/test_frontmatter.py:45,106`, `CONSTANT_REGISTRY_ASOF_DOC_VERSION = 7`, 11 page goldens regenerated under `TZ=UTC`); the fit-ingest file-identity amendment became **Amendment 4** (heading, 4.6/4.7 markers, spec.json entry appended after running-dynamics'); the workout-docs note appended to the existing `amendments` array; `Activity.file_identity` sits after main's `record_developer_fields` (tail order pinned in `tests/test_model.py`); main's `stryd_run_fit_bytes` / `run_native_dynamics_fit_bytes` joined the 1.1 unmoved-digest table (bytes verified identical to main's) and the arg-taking `developer_field_run_fit_bytes` is excluded from the zero-argument pin. CONTRACT_VERSION "4" -> "5" applied cleanly (running-dynamics did not move it).
+- 2026-10-04 Amendment 1 (task 8.1): implemented and independently reviewed
+  (Opus reviewer, 3 rounds; round 1 found the fixture record-field reorder that
+  moved every species digest, now pinned, and unpinned amendment prose; round 2
+  the unpinned float-slack size). Bounds are inclusive to floating-point
+  precision (`_within`, relative slack 1e-9). Real-data evidence, outside the
+  repo: all 90 of the maintainer's Stryd↔HealthFit pairs yield strict evidence
+  (was 56), and the real data root's duplicate report is unchanged at 7 sets.
+  The 34 duplicate pages the old rule made were rolled back by the maintainer
+  before this landed, so no data repair was needed.
