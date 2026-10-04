@@ -147,12 +147,12 @@ calibrated rule, so that it joins that page instead of duplicating it.
 #### Acceptance Criteria
 1. The fitdocs CLI shall treat two files as possibly the same session only when both record the same sport.
 2. When two files record the same sport, the same manufacturer, serial number and creation time, and session starts no more than 1 second apart, the fitdocs CLI shall treat them as the same session (device evidence).
-3. When two files record the same sport, session starts no more than 1 second apart and elapsed times no more than 10 seconds apart, and, where both record a distance, distances no more than 5 metres apart, the fitdocs CLI shall treat them as the same session (strict evidence).
+3. ~~When two files record the same sport, session starts no more than 1 second apart and elapsed times no more than 10 seconds apart, and, where both record a distance, distances no more than 5 metres apart, the fitdocs CLI shall treat them as the same session (strict evidence).~~ _Superseded by Amendment 1 (2026-10-04), criterion A1.1._
 4. When at least one of two files is a `phone_copy`, both record the same sport, an elapsed time and a distance, their session starts are a whole number of hours apart between 1 and 36 hours inclusive to within 1 second, their elapsed times are no more than 5 seconds apart and their distances no more than 10 metres apart, the fitdocs CLI shall treat them as the same session (shifted evidence).
 5. If two files' session starts are more than 1 second apart and are not a whole number of hours apart between 1 and 36 hours to within 1 second, the fitdocs CLI shall not treat them as the same session, however close their elapsed times and distances.
 6. The fitdocs CLI shall never use a file's timer time as evidence of identity.
 7. If a file records no session start, the fitdocs CLI shall recognize it as an existing page's only by exact content or by recorded session UUID.
-8. If a file records no elapsed time, the fitdocs CLI shall recognize it as the same session as another file only by device evidence, besides exact content and recorded session UUID.
+8. ~~If a file records no elapsed time, the fitdocs CLI shall recognize it as the same session as another file only by device evidence, besides exact content and recorded session UUID.~~ _Superseded by Amendment 1 (2026-10-04), criterion A1.2._
 9. When an incoming file's content hash is among an existing page's sources, or its recorded session UUID equals the page's, the fitdocs CLI shall treat the file as that page's before any evidence of criteria 2–4 is considered, exactly as it does today.
 10. The fitdocs CLI shall compare an incoming file against an existing page through the values the page records for its base file, its session UUID and its source list, without reading any archived file.
 11. The fitdocs documentation shall state each tolerance of criteria 2–5 together with the measured pairs it was derived from.
@@ -245,3 +245,58 @@ are, so that I can rely on them instead of inferring them.
 6. The published contract version and the document-format version shall each advance by one from the values current when this feature lands.
 7. The configuration documentation shall document the source-precedence setting, its vocabulary, its default and its validation, and shall list its settings table among the settings file's tables with a table count that matches that list; the compatibility statement shall list the table among the settings file's tables likewise.
 8. The documentation shall state that a data root holding pages written before this feature must be regenerated before files of already-held sessions are added from another source, so that those pages can be recognized.
+
+## Amendment 1 (2026-10-04): strict evidence keyed on distance, not elapsed time
+
+**Why.** The strict tier's 10 s elapsed tolerance (criterion 3.3) was set
+from a sample of Stryd↔HealthFit pairs whose largest gap was 9 s. A
+validation against the maintainer's full set of 90 Stryd originals showed the
+sample did not represent the population. All 90 pairs agree on sport and on
+start to within 1 s, but 34 of them had elapsed times 10.03 s to 1,685 s
+apart, so each of the 34 became a duplicate page. `fitdocs check` could not
+report them, because it links pages with the same rule.
+
+The cause is in how the two writers end a session, not in either recording:
+- **A Stryd file** ends its session at the final timer stop.
+- **A HealthFit copy** ends its session when the workout is ended on the
+  watch. The elapsed gap is therefore how long the athlete stayed paused
+  before pressing End, plus about 1 s. Subtracting that pause explains the
+  gap to within 2 s for 83 of 89 pairs.
+- **One Stryd file lost the last 28 s of its run** (the sensor stopped
+  recording mid-stride), so its distance is 91.3 m, or 0.99 %, short of the
+  copy's.
+- **The other 89 pairs** agree on distance to within 1.23 m.
+
+Elapsed time therefore measures what the athlete did after the session, and it
+is not evidence of identity when a distance is recorded. Start time is the
+discriminating key. Across the 2,561 pages of the same data root that record a
+start, exactly one same-sport pair started within 60 s of another, and it was
+a true duplicate.
+
+Maintainer decision 2026-10-04: strict evidence is the same sport, a start
+within 1 s, and a very tolerant distance comparison. Where a distance is
+missing, the elapsed-time comparison is kept unchanged (A1.1 (b)), so a pair
+with no distance to compare matches exactly as it did before. The shifted tier
+(3.4) is unchanged: it was calibrated on the 2026-09-12 Garmin adoption and has
+no counter-evidence.
+
+#### Acceptance Criteria
+- A1.1 (replaces 3.3) When two files record the same sport and session starts
+  no more than 1 second apart, the fitdocs CLI shall treat them as the same
+  session (strict evidence) when either:
+  - (a) both record a distance, and the distances are no more than 5 metres
+    or 20 % of the longer distance apart, whichever is larger; or
+  - (b) at least one records no distance, both record an elapsed time, and
+    the elapsed times are no more than 10 seconds apart.
+
+  When both record a distance, the fitdocs CLI shall not compare their
+  elapsed times.
+- A1.2 (replaces 3.8) If two files do not both record a distance and do not
+  both record an elapsed time, the fitdocs CLI shall recognize them as the
+  same session only by device evidence, besides exact content and recorded
+  session UUID.
+- A1.3 The fitdocs documentation shall state the amended strict tier, its
+  relative distance tolerance, and the measured population it was derived
+  from, in place of the superseded 8–9 s sample (3.11). The published
+  contract version shall advance by one, because a guarantee the ownership
+  contract states has changed.

@@ -36,7 +36,9 @@ sources in a canonical order, and renames a page whose base changes.
   phone-side copy's session UUID survives it (Req 5.5, 6).
 - `check` reports held, orphaned and duplicated sources without reading a
   `.fit` file (Req 8).
-- Every tolerance is a stated constant with its measured source, and every rule
+- Every tolerance is a stated constant with its measured source (the strict
+  tier was re-measured and amended on 2026-10-04: requirements.md Amendment 1),
+  and every rule
   owes a named mutation (brief Constraints; `change-protocol.md` § Fixture
   Discrimination).
 
@@ -899,8 +901,9 @@ def source_identity(activity: Activity) -> SourceIdentity: ...
 | Constant | Value | Measured source |
 |----------|-------|-----------------|
 | `START_TOLERANCE_S` | 1.0 | Every Stryd↔HealthFit and Garmin↔HealthFit pair agreed on start to the second; a writer truncating a sub-second start and one rounding it differ by at most 1 s |
-| `ELAPSED_TOLERANCE_S` | 10.0 | Stryd↔HealthFit elapsed 8–9 s apart (largest measured, 9 s) plus the same 1 s; Garmin↔HealthFit within about 1 s |
-| `DISTANCE_TOLERANCE_M` | 5.0 | Garmin↔HealthFit within 5 m; Stryd↔HealthFit equal to 0.01 m |
+| `ELAPSED_TOLERANCE_S` | 10.0 | Strict tier only when a distance is missing (Amendment 1): Garmin↔HealthFit within about 1 s; never compared when both files record a distance, because a Stryd file and its HealthFit copy end their sessions at different moments (90 pairs, 1 s to 1,685 s apart) |
+| `DISTANCE_TOLERANCE_M` | 5.0 | Floor of the strict distance comparison: Garmin↔HealthFit within 5 m; 89 of 90 Stryd↔HealthFit pairs within 1.23 m |
+| `DISTANCE_TOLERANCE_FRACTION` | 0.2 | Relative strict distance tolerance, of the longer distance (Amendment 1): a Stryd file that stopped recording 28 s early was 0.99 % short; deliberately very tolerant, because a start agreeing to the second already separates sessions (one same-sport pair within 60 s across 2,561 pages, a true duplicate) |
 | `SHIFT_STEP_S` | 3600 | 244 older HealthFit re-exports shifted by whole hours |
 | `SHIFT_MAX_HOURS` | 36 | the 2026-09-12 adoption rule's ±36 h window |
 | `SHIFTED_ELAPSED_TOLERANCE_S` | 5.0 | the 2026-09-12 adoption rule (true pairs agreed to ≤ 1 s) |
@@ -923,8 +926,10 @@ def source_identity(activity: Activity) -> SourceIdentity: ...
   - no tier when the sports differ or either start is `None` (Req 3.1, 3.7);
   - `DEVICE`: both devices recorded and equal, `|Δstart| ≤ START_TOLERANCE_S`
     (Req 3.2);
-  - `STRICT`: both elapsed recorded, `|Δstart| ≤ 1 s`, `|Δelapsed| ≤ 10 s`,
-    and `|Δdistance| ≤ 5 m` when both distances are recorded (Req 3.3, 3.8);
+  - `STRICT` (Amendment 1, A1.1/A1.2): `|Δstart| ≤ 1 s`, and either both
+    distances recorded with `|Δdistance| ≤ max(5 m, 0.2 × the longer
+    distance)` -- elapsed not compared -- or, when a distance is missing on
+    either side, both elapsed recorded with `|Δelapsed| ≤ 10 s`;
   - `SHIFTED`: at least one kind is `PHONE_COPY`; both elapsed and both
     distances recorded; `Δstart` is within 1 s of `k × 3600 s` for an integer
     `1 ≤ |k| ≤ 36`; `|Δelapsed| ≤ 5 s`; `|Δdistance| ≤ 10 m` (Req 3.4).
@@ -957,6 +962,13 @@ def pair_evidence(a: SessionKey, b: SessionKey) -> Evidence | None: ...
   with equal elapsed whose timer values differ by 400 s matches. Named
   mutations: widening each constant by one unit; deleting the sport check;
   deleting the `phone_copy` gate; using `<` for `≤`; comparing `abs(k) ≤ 37`.
+  Amendment 1 adds: a pair 1,685 s apart in elapsed with equal distances
+  matches strict; a 0.99 %-short tail matches; 20 % of the longer distance is
+  inclusive and one unit beyond rejects; the 5 m floor governs short
+  distances; the elapsed fallback still applies, unchanged, when a distance is
+  missing. Named mutations: compare elapsed when both distances are recorded;
+  take the fraction of the shorter distance; drop the 5 m floor; drop the
+  elapsed fallback.
 
 #### PrecedenceAndRoles (`src/fitdocs/identity/roles.py`)
 

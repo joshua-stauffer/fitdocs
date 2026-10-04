@@ -934,6 +934,42 @@ never co-varies two keys a rule distinguishes.
     task and their outcomes
   - _Requirements: 3.5, 4.8, 5.7, 6.2, 6.4, 7.3, 8.1, 8.5_
 
+- [ ] 8. Amendment 1 (2026-10-04): strict evidence keyed on distance, not elapsed time
+
+- [ ] 8.1 Re-key the strict tier on start plus a tolerant distance, publish it and advance the contract version
+  - `src/fitdocs/identity/matching.py`: add `DISTANCE_TOLERANCE_FRACTION:
+    Final[float] = 0.2` with its source. `pair_evidence`'s strict tier
+    becomes: start within `START_TOLERANCE_S`, and either both distances
+    recorded with `|Δd| ≤ max(DISTANCE_TOLERANCE_M,
+    DISTANCE_TOLERANCE_FRACTION × max(d_a, d_b))` and elapsed not compared,
+    or (a distance missing on either side) both elapsed recorded within
+    `ELAPSED_TOLERANCE_S`. Correct the sources of `ELAPSED_TOLERANCE_S` and
+    `DISTANCE_TOLERANCE_M`. Device and shifted tiers are unchanged.
+  - `docs/ownership-contract.md`: the strict-tier bullet, the absent-value
+    sentence, and the tolerance table (pinned by
+    `tests/identity/test_contract_docs.py`). `CONTRACT_VERSION` "7" -> "8",
+    with a "What changed at this version" paragraph, the four declaration
+    goldens, and a `CHANGELOG.md` `[Unreleased]` entry.
+  - `tests/identity/test_matching.py`: the measured shapes as boundary pairs.
+    - Elapsed 1,685 s apart with equal distances is strict.
+    - A tail 0.99 % short is strict.
+    - 20 % of the longer distance matches and one unit beyond does not.
+    - The 5 m floor governs short distances.
+    - The elapsed fallback has its 10 s boundary when a distance is missing.
+    - Absent distance and absent elapsed together leave device evidence only.
+    - The zero-shift and two-10 k cases are still rejected.
+  - `tests/test_identity_e2e.py`: the `_garmin_run` pair that relied on
+    elapsed now differs in distance as well. A sync-level case shows a
+    Stryd-shaped original whose elapsed is 1,685 s shorter than its copy's
+    joining the copy's page.
+  - Named mutations: compare elapsed when both distances are recorded; take
+    the fraction of the shorter distance; drop the 5 m floor; drop the elapsed
+    fallback; change `≤` to `<` on the relative bound.
+  - Observable: the full validation is green. The maintainer's 90 real
+    Stryd↔HealthFit pairs (outside the repo) all yield evidence, and the real
+    data root's duplicate report gains no false pair.
+  - _Requirements: A1.1, A1.2, A1.3_
+
 ## Implementation Notes
 
 - 2026-10-01 rebase onto main d600bf5 (running-dynamics landed first, DOC_VERSION 5 -> 6): this spec's advance became 6 -> 7 (contract.py value + "Raised from 6 to 7" paragraph, `tests/load/test_render.py` pair `(2, 7)`, `tests/render/test_frontmatter.py:45,106`, `CONSTANT_REGISTRY_ASOF_DOC_VERSION = 7`, 11 page goldens regenerated under `TZ=UTC`); the fit-ingest file-identity amendment became **Amendment 4** (heading, 4.6/4.7 markers, spec.json entry appended after running-dynamics'); the workout-docs note appended to the existing `amendments` array; `Activity.file_identity` sits after main's `record_developer_fields` (tail order pinned in `tests/test_model.py`); main's `stryd_run_fit_bytes` / `run_native_dynamics_fit_bytes` joined the 1.1 unmoved-digest table (bytes verified identical to main's) and the arg-taking `developer_field_run_fit_bytes` is excluded from the zero-argument pin. CONTRACT_VERSION "4" -> "5" applied cleanly (running-dynamics did not move it).
