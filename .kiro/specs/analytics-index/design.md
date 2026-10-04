@@ -1641,16 +1641,33 @@ def run_index_command(data_root: Path, *, environ: Mapping[str, str], home: Path
     (append-only).
   - **Store SQL.** Non-docstring string constants in `store.py` contain,
     case-sensitively, none of `INSTALL `, `LOAD `, `ATTACH`, `COPY `,
-    `EXPORT `, `http://`, `https://`, `PRAGMA`, `SET `. The setting names
-    (`autoinstall_known_extensions`) and the classifier stems do not match
-    these tokens. Positive control: a synthetic module whose constant is
-    `"INSTALL httpfs"` is flagged.
-  - **The subprocess check.** A subprocess imports `fitdocs.cli`, runs
-    `plugins.discover(...)`, and runs these through `CliRunner`: `check`,
-    `history`, `plan`, `derive-benchmarks`, `plugins`, `skill`, `--version`,
-    `connect` and `pull` without `--sync`, both against a folder-connector
-    instance, which makes no network request. It then asserts `"duckdb" not
-    in sys.modules` and that the index directory does not exist.
+    `EXPORT `, `http://`, `https://`, `PRAGMA`, and none matches the
+    statement-leading pattern `^\s*SET\b`.
+    - The anchor matters: the guard catches configuration statements, while
+      the bookkeeping writes' ordinary `UPDATE … SET` (`write_meta`,
+      `write_page_state`, `write_producer_state`) is allowed.
+    - The setting names (`autoinstall_known_extensions`) and the classifier
+      stems do not match these tokens.
+    - Positive controls: synthetic constants `"INSTALL httpfs"` and `"SET
+      autoinstall_known_extensions = true"` are flagged.
+    - Negative control: `"UPDATE index_meta SET athlete_fingerprint = $1"` is
+      not flagged.
+  - **The untouched-commands check** runs in a subprocess.
+    - **Setup.** The parent builds an index for a fixture data root, then
+      hand-edits one page's `effort` tag, so the index is behind the corpus.
+      It snapshots every file in the index directory: size, `mtime_ns` and
+      sha256.
+    - **The run.** The subprocess imports `fitdocs.cli`, runs
+      `plugins.discover(...)`, and runs these through `CliRunner`: `check`,
+      `history`, `plan`, `derive-benchmarks`, `plugins`, `skill`,
+      `--version`, and `connect` and `pull` without `--sync`, both against a
+      folder-connector instance, which makes no network request.
+    - **The assertions.**
+      - The subprocess asserts that `"duckdb"` is not in `sys.modules` and
+        that no output line starts with `Index:`.
+      - The parent asserts that the index directory's snapshot is unchanged.
+      - A wrongly run refresh would write the edit and print a line, so all
+        three can fail.
 - **Reworded dependency pins.**
   - `test_determinism.py` keeps the five, adds `"duckdb>=1.1,<2"`, and keeps
     `optional-dependencies == {}`. Its docstring says which spec added it and

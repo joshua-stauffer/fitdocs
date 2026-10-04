@@ -1,9 +1,9 @@
 {
   "feature_name": "analytics-index",
   "created_at": "2026-10-04T21:27:07Z",
-  "updated_at": "2026-10-05T00:10:00Z",
+  "updated_at": "2026-10-05T01:30:00Z",
   "language": "en",
-  "phase": "design-generated",
+  "phase": "tasks-generated",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -11,12 +11,13 @@
     },
     "design": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "tasks": {
-      "generated": false,
-      "approved": false
+      "generated": true,
+      "approved": true
     }
   },
-  "ready_for_implementation": false
+  "ready_for_implementation": true,
+  "phase_note": "Generated 2026-10-04/05 by the Phase 10 spec batch (wave 1) in auto-approve mode. 14 requirements / 94 acceptance criteria; 20 design components; 8 major / 30 leaf tasks ((P): 2.3, 2.4, 3.1, 3.2, 5.1, 5.2, 5.3; 8.5 maintainer-only). Research: five read-only Explore subagents surveyed the codebase in parallel, and seven DuckDB probes ran in scratchpad venvs (1.5.6 and 1.1.3); no research downgrade. Step 3.5 task-graph review ran as an independent reviewer dispatched by the controller, twice. Round 1: NEEDS_FIXES (3 blocking, 8 should-fix, 12 nit), all applied. Among them: a fourth dependency pin owned by docs-site (tests/sitebuild/test_repo_wiring.py), which became docs-site Amendment 1, recorded in requirements 14.8 and design SpecRecords; and producer.LoadReading renamed LoadRegionReading to avoid clashing with contract.LoadReading. Round 2: NEEDS_FIXES (1 blocking: the store-SQL guard's reachability at 4.1; 1 should-fix: the SET token, anchored to a statement-leading SET per controller ruling; 3 nits), applied without a third review because the skill bounds the loop at one re-review. Accepted trade-off: design.md exceeds the template's 1000-line advisory. It settles the producer seam, the connection policy and the stale-document rule that two wave-2 specs consume, and carries the full schema with column descriptions. Settled seams: SCHEMA_VERSION = 1 in fitdocs.index.schema, +1 per lander that changes the schema (analytics-query never changes it); three producer protocols with registration by append to fitdocs.index.registry; fitdocs.index.store is the only duckdb importer."
 }
