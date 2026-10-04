@@ -1,0 +1,1227 @@
+# Implementation Plan
+
+## Upstream Prerequisites
+
+- **`analytics-index` has merged to `main`**, and this plan starts from it. Every
+  seam in `analytics-index` design.md § "Cross-spec seams" is on the branch:
+  - `fitdocs.index.location`, `store` (the facade), `schema`, `bookkeeping`,
+    `corpus`, `fingerprint`, `producer`, `registry` and `build`;
+  - the `fitdocs index` command;
+  - the autouse `FITDOCS_INDEX_DIR` isolation fixture in `tests/conftest.py`;
+  - `tests/index/_helpers.py` (`hold_index`, `forge_storage_version`);
+  - `_INDEX_IMPORTERS` in `tests/index/test_boundary.py`;
+  - the CLI docstring at "Twelve".
+
+  A task that finds one of those shapes different from design.md stops and
+  reports rather than adapting silently.
+- **Three upstream issues** were raised to the controller against
+  `analytics-index` (design.md § Upstream Prerequisites). Task 1.1 checks each
+  and **stops and reports** if one does not hold on the branch:
+  - **U1**: `pyproject.toml` pins `duckdb>=1.2,<2`. Every 1.1.x release writes
+    into HOME before refusing `INSTALL` (research.md, Decision 1).
+  - **U2**: `IndexResult.fetchmany`/`fetchall` raise `IndexStatementError` or
+    `IndexInterrupted`, chained, as `execute` does.
+  - **U3**: the ownership contract's analytics-index section names
+    `query-spill-<pid>/` among the index directory's transient files. This plan
+    edits neither `docs/ownership-contract.md` nor `CONTRACT_VERSION`.
+- **The sibling `analytics-derived`** may land before or after this plan. Its
+  producers appear through `registered_tables()`, and this plan treats them
+  generically. See "Cross-spec shared files" for what the second lander does.
+
+**Hard rules for every task**
+
+- **No test, probe or fixture executes `INSTALL`, `LOAD` or `ATTACH 'md:'`,
+  or calls `start_ui`.**
+  - `INSTALL`/`LOAD` refusal is pinned only at the statement gate, where the
+    executing function is replaced by a non-forwarding recorder.
+  - A statement naming an `http(s)` URL runs only on a sandboxed connection,
+    with HOME pointed at a fresh temporary directory that is asserted to still
+    be empty afterwards.
+  - A mutation run that removes a sandbox setting deselects every URL case
+    (`-k 'not url'`; every such case carries `url` in its id).
+  - Ad-hoc DuckDB exploration happens only in a throwaway venv under the
+    session scratchpad, network-blocked, never in the worktree's `.venv`.
+- **Only `src/fitdocs/index/store.py` imports `duckdb`.** Tests reach DuckDB only
+  through the store facade, `fitdocs.query`, or the CLI.
+- **Every test or fixture that executes DuckDB points HOME at a fresh
+  temporary directory**, and never reads or writes the real user's HOME,
+  cache or configuration.
+  - Function-scoped tests in `tests/query/` use the `home_dir` fixture
+    (task 1.1).
+  - Module-scoped builders set HOME and `FITDOCS_INDEX_DIR` themselves, with
+    `pytest.MonkeyPatch.context()` over `tmp_path_factory` directories. The
+    function-scoped autouse fixture and `home_dir` cannot reach them.
+  - Tests outside `tests/query/` (task 5.4) set HOME themselves.
+    `tests/connectors/conftest.py` already does this for the e2e module.
+- **Fixture data roots disable tile requests** (`[tiles] enabled = false` in
+  their `fitdocs.toml`), so a fixture sync opens no socket.
+- **Absent is `None`, then `NULL`.** No task prints `0`, an empty string or a
+  default for a NULL.
+- **No fixture holds personal data.** Every `.fit` input comes from
+  `tests/fixtures/builder.py`, `identity.py` or `merge.py`. No task reads the
+  real data root; task 8.3 is the maintainer's alone.
+- **No schema, document or contract change.**
+  - `SCHEMA_VERSION`, every table, column and comment, `DOC_VERSION`,
+    `MANAGED_KEYS`, `CONTRACT_VERSION`, `docs/ownership-contract.md` and the
+    rendering goldens stay untouched.
+  - A task that needs any of these stops and reports.
+  - Temporary edits to `analytics-index` files made only as named mutations are
+    the exception. They are restored from a `cp` backup.
+- **Mutations** follow `change-protocol.md` § Fixture Discrimination, including
+  its bytecode-cache step.
+  - Each named mutation is applied, observed red with `uv run pytest`,
+    reverted by restoring a `cp` of the file taken before it, and observed
+    green.
+  - The result is recorded in the task's Implementation Notes.
+  - Never revert with `git checkout -- <path>`, `git stash` or
+    `git reset --hard`.
+  - A listed mutation that cannot be made red is reported as UNPINNED. The
+    assertion's wording is never weakened instead.
+  - A guard's helper functions are code, and get fixed-input tests in the task
+    that adds them.
+- **Shell safety.** Never `rm -rf`, `git init`, `git reset --hard` or
+  `git checkout -- <path>`. Never chain a destructive command after `cd`.
+- **Types and lint.**
+  - Every task type-checks the modules it creates or changes with
+    `uv run mypy <paths>`.
+  - Every task runs `uv run ruff check` and `uv run ruff format --check` on
+    the files it changed.
+  - Task 8.2 registers the new test modules in `pyproject.toml`'s mypy `files`.
+- **Stop and report** when a task finds it needs any of:
+  - a runtime dependency;
+  - a change to an `analytics-index` seam beyond the one facade method of
+    task 1.2;
+  - a write location other than the spill directory;
+  - a network path;
+  - a change to what any other command does.
+
+## Shared source files
+
+Each file below has more than one writer in this plan, and its writers are
+sequential: never two of them `(P)` at once.
+
+- **`src/fitdocs/index/store.py`**: 1.2 only, an append.
+- **`src/fitdocs/query/sandbox.py`**: 2.2, then 2.3.
+- **`src/fitdocs/query/statement.py`**: 3.1, then 3.2.
+- **`src/fitdocs/query/schemaview.py`**: 4.2, then 5.1.
+- **`src/fitdocs/cli.py`**: 5.3 only.
+- **`pyproject.toml`**: 6.1 (`[project.urls]`), then 8.2 (the mypy `files`).
+- **`src/fitdocs/skills/fitdocs-analytics/SKILL.md`**: 7.1 (the text), then
+  7.3 (making the examples execute).
+- **`tests/query/conftest.py`**:
+  - 1.1: `home_dir`;
+  - 1.3: the indexed fixtures;
+  - 7.3: the derived inputs section, only if `analytics-derived` has landed.
+- **`tests/query/_helpers.py`**: 1.3 only. Later tasks import it and never edit
+  it; a missing helper is a stop-and-report.
+- **`tests/query/test_fixtures.py`**: 1.1 (the `home_dir` section), then 1.3
+  (the builders section).
+- **`tests/query/test_store_facade.py`**: 1.1 (the U2 section), then 1.2 (the
+  statement-types section).
+- **`tests/query/test_boundary.py`**: 1.3 (importers), 2.1 (format purity) and
+  5.4 (direction). Each adds its own headed section, and 2.1's `(P)` sibling
+  2.2 does not touch it.
+- **`tests/query/test_statement.py`**: 3.1 (execution section), then 3.2 (gate
+  section).
+- **`tests/test_agent_skill.py`**: 7.1 (the profile), then 7.2 (the
+  teaching-order pin).
+
+## Cross-spec shared files
+
+Each file below is shared with `analytics-index` (landed) or `analytics-derived`
+(the wave-2 sibling). Writers append an entry, a row, a field or a block, and
+never rewrite or reorder another spec's. **On rebase, keep both.**
+
+- **`src/fitdocs/cli.py`**, the docstring command count, and
+  `tests/test_cli_skill.py:262-270`.
+  - This plan moves the count from `main`'s value to that value plus one: from
+    "Twelve" to "Thirteen", and from 12 to 13.
+  - `analytics-derived` adds no command.
+  - If another command lands first, re-pin from `main` plus one.
+- **The no-network command list**:
+  - `tests/connectors/test_e2e.py` (`analytics-index` appended `index`; this
+    plan appends `query`, with an argument column);
+  - `.kiro/steering/tech.md`, Network and Credentials;
+  - the `connectors` amendment for Req 14.1. This plan appends `query` to
+    `analytics-index`'s Amendment 1 only if that amendment is not yet landed
+    on the branch. Otherwise it records the next free amendment number at
+    landing.
+- **`tests/test_confinement.py`**: this plan appends one standalone test for
+  `query`.
+- **`tests/index/test_boundary.py`, `_INDEX_IMPORTERS`**: this plan appends
+  `fitdocs.query.sandbox`, `.statement`, `.freshness`, `.schemaview` and
+  `.command`. The duckdb-importer set stays exactly `{store}`.
+- **`src/fitdocs/index/store.py`**: this plan appends one facade method,
+  `statement_types`. It never changes `MANDATORY_SETTINGS` or an existing
+  method.
+- **`PACKAGED_SKILLS`** (`src/fitdocs/agentskill.py`), with
+  `tests/test_skill_locator.py:57-58` and the `tests/test_agent_skill.py`
+  profiles: this plan appends `fitdocs-analytics` last.
+- **The second lander's bounded read-side exception** (design.md § Out of
+  Boundary). "`analytics-derived` touches neither the pass nor the read side"
+  holds except here: whichever of `analytics-query` and `analytics-derived`
+  lands second touches exactly these three read-side files.
+  - **The generated schema-reference block in `docs/analytics.md`.** The block
+    projects whatever schema is live on `main` when a spec lands. The second
+    lander regenerates it with `uv run python -m
+    tests.query.test_docs_analytics`, and re-pins it.
+  - **The worked examples in `src/fitdocs/skills/fitdocs-analytics/SKILL.md`.**
+    `tests/query/test_skill_examples.py` requires one `sql` example per
+    non-core **producer**, keyed on `ResolvedTable.producer` and
+    `TableScope`. That example must name one of the producer's tables and
+    select rows from it. For `analytics-derived` that is four examples:
+    `derived.mean_max`, `derived.load_series`, `derived.benchmarks` and
+    `derived.blocks`. The second lander adds or keeps them; the test turns
+    red until it does.
+  - **The derived-inputs section of `tests/query/conftest.py`'s indexed
+    fixture**: the plan sources, the benchmark entries, and whatever else
+    each derived producer needs to yield rows on the fixture.
+    - If `analytics-derived` landed first, task 7.3 extends it.
+    - Otherwise, the second lander extends it.
+    - The section is an append point: a function `derived_inputs()` that
+      returns two outputs:
+      - **extra files**, as data-root-relative path to text (for example plan
+        sources);
+      - **TOML text appended** to the fixture's `athlete.toml`, for example
+        a `[benchmarks]` table.
+    - The builder writes both **before `fitdocs sync`**, so every document and
+      load is computed under the final inputs.
+    - The base `athlete.toml` declares `profile_version = 2`
+      (`src/fitdocs/athlete.py:40-44`), so an appended `[benchmarks]` table
+      is valid. The append never replaces the base keys.
+  - **Data-relative examples.** Every worked example, core or derived, takes
+    its date window relative to the data: `max(date)`, or the table's own
+    dates. None uses `current_date`, `now()` or "this year".
+    - The fixture's activities sit at `FIT_TIMESTAMP_BASE`
+      (`tests/fixtures/builder.py:100`), about September 2021.
+    - The fixture's "today" is pinned (task 1.3).
+    - The second lander proves its examples with
+      `tests/query/test_skill_examples.py` on `indexed_root`, extending the
+      `derived_inputs()` hook as needed.
+
+  Every table, derived ones included, stays covered by the docs schema block
+  and `--schema`, which need no per-table work.
+- **`CHANGELOG.md` `[Unreleased]`**: append under an existing category heading,
+  and create it only if absent.
+- **`pyproject.toml`**: `[project.urls]` and the mypy `files` list, append-only.
+- **`.kiro/steering/structure.md`**: the dependency-direction line for `query`,
+  appended.
+- **`.kiro/steering/roadmap.md`**: the Phase 10 ticks for this spec and the
+  connectors line.
+
+## Test File Ownership
+
+- **1.1**:
+  - `tests/query/__init__.py`;
+  - `tests/query/conftest.py` (`home_dir`);
+  - `tests/query/test_fixtures.py` (`home_dir` section);
+  - `tests/query/test_store_facade.py` (U2 section).
+- **1.2**: `tests/query/test_store_facade.py` (statement-types section).
+- **1.3**:
+  - `tests/query/conftest.py` (the indexed fixtures);
+  - `tests/query/_helpers.py`;
+  - `tests/query/test_fixtures.py` (builders section);
+  - `tests/query/test_boundary.py` (importers section);
+  - `_INDEX_IMPORTERS` in `tests/index/test_boundary.py`.
+- **2.1**: `tests/query/test_format.py`, and `tests/query/test_boundary.py`
+  (format-purity section).
+- **2.2**: `tests/query/test_sandbox.py`.
+- **2.3**: `tests/query/test_spill.py`.
+- **3.1**: `tests/query/test_statement.py` (execution section). **3.2**: the same
+  file (gate section).
+- **4.1**: `tests/query/test_freshness.py`.
+- **4.2**: `tests/query/test_schemaview.py` (catalog section). **5.1**: the same
+  file (state section).
+- **5.2**: `tests/query/test_command.py`.
+- **5.3**: `tests/query/test_cli_query.py` and `tests/test_cli_skill.py:262-270`.
+- **5.4**:
+  - `tests/test_confinement.py` (an appended test);
+  - `tests/connectors/test_e2e.py:203-246`;
+  - `tests/query/test_crash_vectors.py`;
+  - `tests/query/test_boundary.py` (direction section).
+- **6.1**: `tests/query/test_docs_analytics.py` and
+  `tests/test_docs_guarantees.py:1111-1123`.
+- **7.1**:
+  - `tests/test_agent_skill.py` (import, `_ANALYTICS_HEADINGS`, profile);
+  - `tests/test_skill_locator.py:29-58`;
+  - `tests/test_release_artifacts.py:978-983`;
+  - `tests/test_releasing_docs.py:569-573`.
+- **7.2**: `tests/test_agent_skill.py` (teaching-order pin).
+- **7.3**: `tests/query/test_skill_examples.py`.
+- **8.1**: `tests/query/test_changelog_entry.py`.
+
+---
+
+- [ ] 1. Foundation: prerequisites, the test package, the facade method and the fixtures
+
+- [ ] 1.1 Check the upstream prerequisites and create the isolated query test package
+  - **Prerequisite checks**, recorded in Implementation Notes with file:line
+    evidence:
+    - **U1**: the dependency literal in `pyproject.toml` is `duckdb>=1.2,<2`.
+    - **U3**: `docs/ownership-contract.md`'s analytics-index section names
+      `query-spill-<pid>/`.
+    - `tests/index/_helpers.py` exports `hold_index` and
+      `forge_storage_version`.
+    - The `tests/index/test_boundary.py` importer guard is a one-way
+      allow-list: it fails on an importer missing from `_INDEX_IMPORTERS`,
+      and does not fail on a listed name whose module does not exist. If it
+      is two-way, stop and report, because task 1.3 appends names ahead of
+      their modules.
+
+    If any check fails, stop and report. Do not work around it.
+  - **The test package.** Create `tests/query/__init__.py` and
+    `tests/query/conftest.py` with one fixture, `home_dir`.
+    - It is function-scoped.
+    - It monkeypatches HOME to a fresh `tmp_path` directory.
+    - It offers `assert_untouched()`, which fails if anything exists inside
+      that directory.
+    - The conftest records `_REAL_HOME = Path.home()` at import, before any
+      monkeypatch, for the fixture self-tests in 1.3.
+  - **The `home_dir` self-tests** (`tests/query/test_fixtures.py`, its section):
+    - inside a test, `Path.home()` is the temporary directory and not
+      `_REAL_HOME`;
+    - `assert_untouched()` passes on an empty directory, and fails once a file
+      is written into it.
+  - **The U2 pins** (`tests/query/test_store_facade.py`, U2 section). Each
+    runs on a store connection opened read-only on a database created with
+    `store.create_index`, with HOME at `home_dir`. These exercise
+    `analytics-index`'s facade on query's own call path:
+    - `execute("SELECT now()")`, then `fetchmany(1)`, raises
+      `IndexStatementError` whose `__cause__` is set. The same holds for
+      `fetchall()`.
+    - `execute("SELECT count(*) FROM range(1000000000000)")`, then
+      `fetchmany(1)`, raises `IndexInterrupted` when a test timer calls
+      `interrupt()` after 0.5 s. This case runs in a subprocess with a 60 s
+      timeout, so a broken interrupt reds instead of hanging.
+
+    If either fails on the unmodified branch, U2 does not hold: stop and
+    report.
+  - **Mutations:**
+    - make `home_dir` return the real home (the `Path.home()` pin reds);
+    - make `assert_untouched` ignore files (its fixed-input test reds);
+    - for U2, in `store.py`, let `fetchmany` re-raise the raw DuckDB
+      exception, in place with a `cp` backup (both U2 pins red).
+  - **Observable:** `uv run pytest tests/query/test_fixtures.py
+    tests/query/test_store_facade.py` is green, and each U check is recorded
+    in Implementation Notes.
+  - _Requirements: 4.2, 6.1_
+
+- [ ] 1.2 Append the statement-type facade method
+  - **The method.** Append `IndexConnection.statement_types(sql)` to
+    `store.py`, per design.md § StoreFacadeAddition:
+    - it returns DuckDB's statement-type names, without the `StatementType.`
+      prefix;
+    - it returns `()` for empty or comment-only text;
+    - a parse error raises `IndexStatementError`, chained.
+
+    Nothing else in `store.py` changes.
+  - **Tests** (`tests/query/test_store_facade.py`, statement-types section,
+    with HOME at `home_dir`):
+    - `SELECT`, `WITH`, `FROM`, `VALUES`, `DESCRIBE`, `SHOW`, `SUMMARIZE` and
+      table-valued `PRAGMA` give `("SELECT",)`; `EXPLAIN ANALYZE` gives
+      `("EXPLAIN",)`;
+    - `INSTALL httpfs` and `LOAD httpfs` give `("LOAD",)`, parsed only, never
+      executed;
+    - `SET`, `RESET`, `USE` and `SET VARIABLE` give `("SET",)`;
+    - `CALL` and `CHECKPOINT` give `("CALL",)`;
+    - `CREATE TEMP TABLE` and `CREATE SECRET` give `("CREATE",)`;
+    - `COPY`, `ATTACH`, `DETACH` and `EXPORT` each give their own type;
+    - `"SELECT 1; SELECT 2"` gives two;
+    - `""`, whitespace and `-- c` give `()`;
+    - `SELEC 1` raises `IndexStatementError` whose `__cause__` is set;
+    - a positive control: an `execute` spy shows that no call executed a
+      statement.
+  - **Mutations:**
+    - return `str(statement.type)`, keeping the prefix (the type pins red);
+    - return `()` on a parse error (the parse-error pin reds).
+  - **Observable:** the statement-types section is green.
+    `git diff --stat src/fitdocs/index/store.py` shows one appended method, and
+    the `analytics-index` store and boundary suites stay green.
+  - _Requirements: 1.5, 5.2_
+
+- [ ] 1.3 Create the query package, the indexed fixtures and the importer guards
+  - **The package.** `src/fitdocs/query/__init__.py` is a docstring only: the
+    read side, never imports `duckdb`, imported only by `fitdocs.cli`.
+  - **`_INDEX_IMPORTERS`**: append the five query modules design.md names
+    (`sandbox`, `statement`, `freshness`, `schemaview`, `command`), with a
+    comment naming the task that creates each. 1.1 confirmed the guard is a
+    one-way allow-list. Doing it here keeps the `(P)` tasks 4.1 and 4.2 from
+    editing the same line.
+  - **`tests/query/_helpers.py`**, the one owner of the shared non-fixture
+    helpers. Callers set HOME.
+    - **`plain_database(path, *statements) -> Path`**: creates a DuckDB file
+      through `store.create_index` and facade `execute`, with no
+      bookkeeping.
+    - **`schema_only_index(path) -> Path`**: `store.create_index`, then
+      `store.create_schema(registry.registered_tables())`, then close.
+      Nothing else: no refresh and no `apply_descriptions`.
+    - **`FIXTURE_TODAY`**: a fixed `date(2021, 10, 1)`, after every fixture
+      activity.
+    - **`DerivedInputs`** (`files: Mapping[str, str]`, `athlete_toml: str`)
+      and **`write_fixture_inputs(root, base_athlete_toml, inputs)`**:
+      - writes `athlete.toml` as the base text followed by
+        `inputs.athlete_toml`;
+      - writes every extra file;
+      - refuses a path outside `root`.
+    - **`copy_indexed_root(src_root, src_index_dir, dst) -> (root, index_dir)`**:
+      - copies the data root to `dst/root`;
+      - resolves `resolve_index_location(dst/root,
+        environ={"FITDOCS_INDEX_DIR": str(dst/"index-cache")}, home=dst/"home")`;
+      - creates that location's directory;
+      - copies the source `index.duckdb`, and `index.duckdb.wal` if present,
+        to it.
+
+      The per-data-root key hashes the resolved path, so a data-root copy
+      alone would be NOT_BUILT.
+  - **`tests/query/conftest.py`** gains the indexed fixtures:
+    - **`derived_inputs()`**: the cross-spec append point. At this task it
+      returns `DerivedInputs(files={}, athlete_toml="")`.
+    - **`indexed_root`** is module-scoped. Inside `pytest.MonkeyPatch.context()`,
+      for its whole body:
+      - HOME and `FITDOCS_INDEX_DIR` are set to `tmp_path_factory`
+        directories;
+      - `XDG_CACHE_HOME` is deleted;
+      - `fitdocs.cli._today` is pinned to `FIXTURE_TODAY`.
+
+      It builds a data root through the real CLI (`CliRunner`), in this
+      order:
+      1. `fitdocs.toml` with `[tiles] enabled = false`;
+      2. `write_fixture_inputs`, with a base `athlete.toml` declaring
+         `profile_version = 2`, `ftp_watts`, `resting_hr_bpm`, `max_hr_bpm`,
+         `hr_zones`, `power_zones` and `pace_zones`, plus `derived_inputs()`;
+      3. `fitdocs sync` over the builder's run and ride files
+         (`--no-prompt`);
+      4. one page hand-tagged with the `contract.EFFORT_KEYS` keys, with
+         pairwise-distinct values;
+      5. `fitdocs index`.
+
+      It returns the data root and its index directory. At teardown it
+      asserts its HOME directory is still empty.
+    - **`use_indexed_root(monkeypatch)`** is function-scoped. It points
+      `FITDOCS_INDEX_DIR` at the fixture's index directory and pins
+      `fitdocs.cli._today` to `FIXTURE_TODAY`.
+    - **`copy_indexed_root(tmp_path)`** is function-scoped and wraps the
+      helper. Tests never write into `indexed_root`; a test that needs another
+      state works on a copy.
+  - **Fixture self-tests** (`tests/query/test_fixtures.py`, builders section),
+    read through `store.open_index(read_only=True)` with HOME at `home_dir`:
+    - the index holds two or more pages;
+    - `zone_times` has rows for `heart_rate`;
+    - `loads` has a selected row;
+    - exactly one `pages` row has a non-NULL `effort`, with the tagged values;
+    - the index directory is not under `_REAL_HOME`;
+    - every `pages.date` is before `FIXTURE_TODAY`;
+    - `write_fixture_inputs` with a non-empty append (a `[benchmarks]` table)
+      leaves every base key readable through `load_athlete_inputs`, and the
+      appended table present: a fixed-input test on a `tmp_path` root;
+    - `write_fixture_inputs` refuses an extra file path outside the root;
+    - `schema_only_index` gives a file whose catalog holds the registered
+      tables and zero rows;
+    - a `copy_indexed_root` copy opens with no NOT_BUILT, and its page drift is
+      zero (asserted with `scan_workout_pages` against `read_bookkeeping`
+      directly; `page_drift` arrives in 4.1).
+  - **The importer guard** (`tests/query/test_boundary.py`, importers section).
+    An AST walk of `src/fitdocs` covers `import X`, `from X import`, aliases,
+    and string arguments to `importlib.import_module`/`__import__`. No module
+    outside `fitdocs.query` imports `fitdocs.query`, except `fitdocs.cli`.
+    Positive controls: `scanned > 100`, and a synthetic violating module is
+    caught.
+  - **Mutations:**
+    - add `import fitdocs.query` to `src/fitdocs/history/engine.py`, in place,
+      with a `cp` backup restored (the importer guard reds);
+    - drop `hr_zones` from the fixture's `athlete.toml` (the zone self-test
+      reds);
+    - skip the effort edit (the effort self-test reds);
+    - make `copy_indexed_root` copy only the data root (the copy self-test
+      reds with NOT_BUILT);
+    - make `indexed_root` leave `FITDOCS_INDEX_DIR` unset. The index then
+      resolves under the fixture's temporary HOME, and the teardown "HOME
+      still empty" assertion reds. `XDG_CACHE_HOME` is deleted inside the
+      context, so a user-level XDG cache cannot catch the write;
+    - make `write_fixture_inputs` write only `inputs.athlete_toml` (the
+      base-keys-survive pin reds);
+    - drop the `_today` pin (record whether any fixture value moves; with no
+      derived producer registered it may be UNPINNED, and is noted as
+      such).
+  - **Observable:** `uv run pytest tests/query tests/index/test_boundary.py`
+    is green, `uv run python -c "import fitdocs.query"` imports nothing from
+    DuckDB, and the real `~/.cache/fitdocs` gains nothing (listed before and
+    after).
+  - _Requirements: 7.3, 11.4_
+
+- [ ] 2. Core: output rendering and the sandboxed connection
+
+- [ ] 2.1 (P) Render results as a table, CSV or JSON
+  - **`format.py`**, per design.md § Format:
+    - `OutputFormat`, `ResultSet` and `default_format`;
+    - `render_result`;
+    - `text_value`, `table_cell`, `csv_field` and `json_value`;
+    - a hand-written JSON writer that emits a `Decimal` as an exact number
+      token.
+
+    Every rule in the value-rules table, the table layout and footer, the CSV
+    quoting with LF endings, and the JSON key order.
+  - **Tests** (`tests/query/test_format.py`), on in-memory `ResultSet`s only:
+    - one parametrized case per value-rules row;
+    - NULL, `0`, `0.0`, `""`, `False` and `"NULL"` render pairwise-distinct in
+      `csv` and `json`, and NULL renders `NULL` in `table`;
+    - repeated column names survive in `json`;
+    - `Decimal("1E+2")` renders `100`;
+    - NaN, `inf` and `-inf` render as `NaN`/`Infinity`/`-Infinity` in all
+      three formats;
+    - `timedelta(days=1, seconds=3661.5)` renders `P1DT1H1M1.5S`, and zero
+      renders `PT0S`;
+    - `\n`, `\t` and `\x01` inside a value are escaped in `table`, and quoted
+      in `csv`;
+    - the truncated footer and the `truncated` flag;
+    - zero rows in each format;
+    - `default_format(True)` gives `table` and `default_format(False)` gives
+      `csv`.
+  - **The format-purity guard** (`tests/query/test_boundary.py`, a new
+    section): `fitdocs/query/format.py` imports standard-library modules only.
+    Positive control: a synthetic module importing `fitdocs.index` is
+    flagged.
+  - **Mutations:**
+    - render NULL as `""` in `csv` (the NULL-versus-empty pin reds);
+    - drop the empty-string quoting;
+    - render NaN as `null`;
+    - use `str(Decimal)` (the `1E+2` pin reds);
+    - swap the two defaults;
+    - add `import fitdocs.index.schema` to `format.py` (the purity guard
+      reds).
+  - **Observable:** `uv run pytest tests/query/test_format.py
+    tests/query/test_boundary.py` is green, and mypy is clean on `format.py`.
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 2.10, 3.3_
+  - _Boundary: Format_
+
+- [ ] 2.2 (P) Open the index read-only inside a verified, bounded sandbox
+  - **`sandbox.py`**, per design.md § Sandbox, without spill handling (that is
+    2.3):
+    - `RESOURCE_SETTINGS`;
+    - `REQUIRED_SANDBOX`, as a literal never derived from the store's map;
+    - `SandboxUnverified`, `IndexBusy`, `verify_sandbox`;
+    - `open_sandboxed`, with the lock-retry schedule, `LOCK_RETRY_WINDOW_S`,
+      the injected `monotonic`/`sleep`/`on_wait`, and closing on a failed
+      verification.
+  - **Tests** (`tests/query/test_sandbox.py`, with HOME at `home_dir`, on
+    `plain_database` files):
+    - every key of `store.MANDATORY_SETTINGS` is in `REQUIRED_SANDBOX`;
+    - on a real `open_sandboxed` connection, each `REQUIRED_SANDBOX` value
+      reads back. `memory_limit` and `max_temp_directory_size` equal the
+      strings the locked release reports, recorded in Implementation Notes
+      (`953.6 MiB` was probed for `1GB`);
+    - with `store.MANDATORY_SETTINGS` monkeypatched without
+      `enable_external_access`, `open_sandboxed` raises `SandboxUnverified`
+      naming it, and the connection is closed (a spy);
+    - **retry**:
+      - with a fake clock and a `hold_index(read_only=False)` holder, the
+        sleeps equal the schedule capped at the 10.0 s window;
+      - `on_wait` fires exactly once, with the holder's PID;
+      - `IndexBusy.holder_pid` equals the holder's PID;
+    - with a `hold_index(read_only=True)` holder, the open succeeds with no
+      sleep (8.5);
+    - a `CORRUPT` fault (a junk file) propagates as `IndexOpenError` without a
+      retry.
+  - **Mutations:**
+    - compute the expected map from `store.MANDATORY_SETTINGS` inside
+      `verify_sandbox` (the monkeypatched read-back pin reds);
+    - drop `enable_external_access` from `store.MANDATORY_SETTINGS`, in place,
+      with a `cp` backup (the real read-back pin reds);
+    - drop the `LOCKED` retry (the schedule pin reds);
+    - use `<` instead of `<=` for the window (the schedule pin reds);
+    - open with `read_only=False` (the read-only-holder pin reds).
+  - **Observable:** `uv run pytest tests/query/test_sandbox.py` is green, HOME
+    stays empty, and no holder process survives.
+  - _Requirements: 5.1, 5.4, 5.6, 5.8, 6.2, 8.3, 8.4, 8.5_
+  - _Boundary: Sandbox_
+  - _Depends: 1.3_
+
+- [ ] 2.3 Give every query process its own spill directory and remove stale ones
+  - **`sandbox.py`** gains `SPILL_PREFIX`, `spill_directory`,
+    `process_is_running`, the module-level hook `_SKIPS_SPILL_CLEANUP` and
+    `remove_stale_spill`, per design.md. `open_sandboxed` sets
+    `temp_directory` to `spill_directory(location, pid)`.
+  - **Tests** (`tests/query/test_spill.py`):
+    - **Setup.** A module-scoped `plain_database` holds a 3M-row table, built
+      inside `pytest.MonkeyPatch.context()` with HOME at a `tmp_path_factory`
+      directory that is asserted empty at teardown.
+      `sandbox.RESOURCE_SETTINGS` is monkeypatched to `memory_limit='48MB'`.
+    - A sorted group-by creates `query-spill-<pid>/`, observed by a watcher
+      thread.
+    - The directory is absent after close, and `index.duckdb.tmp` never
+      exists.
+    - **Concurrency.** Four subprocesses, each opening with `open_sandboxed`,
+      run a spilling window query at the same time. Every one returns the
+      reference result computed with a large memory limit.
+    - **`remove_stale_spill`**, with directories planted in a `tmp_path` index
+      directory:
+      - it removes the directory of a dead PID (a reaped subprocess's PID);
+      - it keeps a live sleeping subprocess's directory;
+      - it keeps its own PID's directory, with `is_running` injected as
+        always-false;
+      - it does not follow a symlink with a dead-PID name pointing at a
+        populated directory outside the index directory: the target and its
+        contents survive, and the link is not in the returned tuple;
+      - it keeps `index.duckdb`;
+      - with `_SKIPS_SPILL_CLEANUP` patched true and a removable dead-PID
+        directory present, it returns `()` and the directory survives. The
+        hook is patched, never `os.name`, because a `Path` built while
+        `os.name == "nt"` raises on 3.11.
+    - `process_is_running` gives `True` for the current PID and `False` for a
+      reaped PID.
+  - **Mutations:**
+    - drop the `temp_directory` setting (the concurrency pin reds; record the
+      red rate over 5 runs);
+    - drop the liveness check (the live-PID pin reds);
+    - drop the own-PID check (the own-PID pin reds);
+    - follow symlinks, `shutil.rmtree(path.resolve())` (the symlink-target pin
+      reds);
+    - ignore the hook (the hook pin reds).
+  - **Observable:** `uv run pytest tests/query/test_spill.py` is green, no
+    spill directory or subprocess survives, and HOME stays empty.
+  - _Requirements: 6.3, 6.4, 7.3_
+
+- [ ] 3. Core: one screened, timed statement
+
+- [ ] 3.1 Execute a statement under the time limit and row cap, and classify its failures
+  - **`statement.py`**, per design.md § Statement:
+    - `Restriction`, `RESTRICTION_TEXT`;
+    - `StatementRefused`, `StatementFailed`, `StatementTimedOut`;
+    - `classify_statement_error`, `failure_hint`;
+    - `execute_statement`, with the timer that records it fired before
+      calling `interrupt`, the `fetchmany(max_rows + 1)` cap, and the timer
+      cancelled in `finally`.
+  - **Tests** (`tests/query/test_statement.py`, execution section, on a
+    sandboxed `plain_database`, with HOME at `home_dir`):
+    - **The configuration refusals** through `execute_statement`, each
+      classified OUTSIDE_INDEX:
+      - `read_csv('<tmp>/x.csv')`, `read_text('/etc/hosts')` and
+        `glob('/etc/*')`;
+      - `read_csv('https://example.invalid/x.csv')`, whose id carries `url`;
+      - `COPY (SELECT 1) TO '<tmp>/out.csv'` and
+        `EXPLAIN ANALYZE COPY (SELECT 1) TO '<tmp>/out2.csv'`, with both files
+        absent afterwards;
+      - `EXPORT DATABASE '<tmp>/exp'`, with no directory afterwards;
+      - `ATTACH '<tmp>/other.duckdb' AS o`.
+    - `SET threads = 8` and `SET autoinstall_known_extensions = true` are
+      classified LOCKED_SETTING.
+    - **The classifier**, fixed-input tests over exceptions captured from the
+      facade:
+      - a binder error gives `None`;
+      - `ATTACH ':memory:'` gives READ_ONLY;
+      - `CREATE SECRET s (TYPE S3, KEY_ID 'x', SECRET 'y')` gives EXTENSION,
+        with a stable message and no URL;
+      - a `SELECT now()` fetch gives `None`, with the TIMESTAMP hint;
+      - a synthetic cause named `OutOfMemoryException` gives the memory hint.
+    - **The time limit**: `SELECT count(*) FROM range(1000000000000)` with
+      `timeout_s=0.5` raises `StatementTimedOut` within 3 s. The test arms its
+      own 10 s safety interrupt, so a missing timer reds rather than hangs.
+    - **The row cap**: `range(1001)` with `max_rows=1000` gives 1000 rows and
+      `truncated=True`; `range(1000)` gives `truncated=False`.
+    - The timer is cancelled after both success and failure (a timer spy).
+  - **Mutations** (the first two run with `-k 'not url'`):
+    - drop `enable_external_access` from both `store.MANDATORY_SETTINGS` and
+      `REQUIRED_SANDBOX`, in place, with `cp` backups (DuckDB runs the `COPY`,
+      the tmp file appears, and the OUTSIDE_INDEX pins red);
+    - drop `lock_configuration` from both (the `SET` pins red);
+    - classify by message stems only (the class-name pin reds);
+    - never start the timer (the time-limit pin reds through the safety
+      interrupt);
+    - use `fetchmany(max_rows)` (the `truncated` pin reds).
+  - **Observable:** the execution section is green, HOME stays empty, and no
+    file appears under the test's tmp targets.
+  - _Requirements: 3.1, 3.4, 4.2, 5.3, 5.5, 5.8, 6.1_
+  - _Depends: 2.1, 2.3_
+
+- [ ] 3.2 Refuse every statement that is not exactly one query or EXPLAIN
+  - **`statement.py`** gains `ALLOWED_STATEMENT_TYPES`, `screen_statement` and
+    `run_statement` (screen, then execute), per design.md. The
+    STATEMENT_KIND text names LOAD as "INSTALL or LOAD" and SET as "SET, RESET
+    or USE", and its CALL hint points at `SELECT * FROM <function>(…)`.
+  - **Tests** (`tests/query/test_statement.py`, gate section). Each runs
+    through `run_statement` on a real sandboxed connection, with
+    `statement.execute_statement` monkeypatched to a non-forwarding recorder:
+    - `INSTALL httpfs`, `LOAD httpfs`, `ATTACH ':memory:' AS m`,
+      `COPY (SELECT 1) TO 'x.csv'`, `EXPORT DATABASE 'x'`, `SET threads = 1`,
+      `RESET threads`, `USE system`, `SET VARIABLE v = 1`,
+      `CREATE TEMP TABLE t AS SELECT 1`, `CALL pragma_version()` and
+      `CHECKPOINT` each raise STATEMENT_KIND, and the recorder is never
+      called;
+    - `SELECT 1; SELECT 2` and `-- only a comment` raise ONE_STATEMENT, with
+      no recorder call;
+    - `SELECT 1`, `FROM t` (on a `plain_database` table), `DESCRIBE t`,
+      `PRAGMA table_info('t')` and `EXPLAIN SELECT 1` each reach the recorder
+      exactly once;
+    - a parse error propagates as `IndexStatementError`, with no recorder
+      call.
+  - **Mutations:**
+    - add `LOAD`, then `SET`, then `CALL`, then `CREATE`, then `COPY` to
+      `ALLOWED_STATEMENT_TYPES`, each in turn (its pins red, and the recorder
+      shows a call; nothing executes);
+    - drop the statement-count check (the ONE_STATEMENT pins red);
+    - call `execute_statement` before screening (every gate pin reds).
+  - **Observable:** the gate section is green, and the recorder confirms that
+    no refused statement reached execution.
+  - _Requirements: 1.5, 5.2, 5.5, 5.8_
+
+- [ ] 4. Core: freshness and the schema catalog
+
+- [ ] 4.1 (P) Measure how far the index is from the data root
+  - **`freshness.py`**, per design.md § Freshness:
+    - `PageDrift`/`page_drift`;
+    - `CorpusDrift`/`corpus_fingerprints`/`corpus_drift`, which build the
+      `CorpusSnapshot` from the scan and use `corpus_fingerprint` with
+      `version.tool_version()` and `SCHEMA_VERSION`;
+    - `AthleteDrift`/`current_athlete_fingerprint`/`athlete_drift`, including
+      the unreadable-profile rule (corpus drift unassessed).
+  - **Tests** (`tests/query/test_freshness.py`, on `copy_indexed_root` copies,
+    with HOME at `home_dir`):
+    - **Pages**, each change alone. Assert first that the counts are all 0,
+      then each change gives its own count:
+      - a new page gives `added == 1`;
+      - a hand-edited `effort` gives `changed == 1`;
+      - a deleted page gives `removed == 1`;
+      - a rename gives `changed == 1` and `added == 0`;
+      - a duplicate-base page gives `added == 0` and appears in
+        `scan.left_out`.
+    - After rebuilding the copy in-process with `build.run_index_command`, the
+      counts return to 0.
+    - **Corpus.** A fake corpus producer, with one declared table, is
+      monkeypatched into `registry.CORPUS_PRODUCERS`. The copy's index is then
+      rebuilt in-process with `build.run_index_command(rebuild=True,
+      today=FIXTURE_TODAY)` under the monkeypatch, and every
+      `corpus_fingerprints` call passes `today=FIXTURE_TODAY`: the fixture's own index was built without the fake, so
+      it has no state for it.
+      - after that build, `corpus_drift.behind == ()`;
+      - changing the input the fake fingerprints lists its table;
+      - a raising fingerprint becomes unassessed.
+    - **Athlete**:
+      - on the unmodified copy, the count is 0;
+      - changing `ftp_watts` in `athlete.toml` counts every activity;
+      - a malformed `athlete.toml` gives `skipped_reason` and runs no query
+        (a facade spy).
+    - The data root and the index directory are byte-identical before and
+      after every assessment (9.5).
+  - **Mutations:**
+    - count `left_out` as added (the duplicate pin reds);
+    - key by path instead of `page_key` (the rename pin reds);
+    - compare against `index_meta.athlete_fingerprint` instead of
+      `athlete.toml` (the athlete pin reds);
+    - pass `fitdocs_version=None` (the post-build corpus pin reds when the
+      installed version is known; otherwise record UNPINNED with the reason).
+  - **Observable:** `uv run pytest tests/query/test_freshness.py` is green, and
+    mypy is clean.
+  - _Requirements: 9.1, 9.3, 9.5, 10.3, 10.4_
+  - _Boundary: Freshness_
+  - _Depends: 1.3_
+
+- [ ] 4.2 (P) Read the live catalog and render the schema reference
+  - **`schemaview.py`**, catalog part, per design.md § SchemaView:
+    - `CatalogColumn`/`CatalogTable`;
+    - `read_catalog`, with the `current_database()`/`main`/not-temporary
+      filters and the table order;
+    - `row_counts`, with quoted identifiers;
+    - `unit_of`, over `schema.UNIT_SUFFIXES`, longest first;
+    - `undescribed`;
+    - `render_reference`.
+  - **Tests** (`tests/query/test_schemaview.py`, catalog section, with HOME at
+    `home_dir`):
+    - `read_catalog` on a sandboxed `schema_only_index` excludes system views
+      and a temporary table created in the test (the positive control: the
+      temp table exists before the read);
+    - for every registered column, `unit_of` returns the suffix's unit word,
+      and that word appears in the stored description;
+    - a `plain_database` table created without comments is listed with `None`
+      descriptions and named by `undescribed`, which also has a fixed-input
+      test;
+    - `render_reference` escapes `|`, and is identical across two calls;
+    - **10.9**: a `schema_only_index` (`create_index` +
+      `create_schema(registered_tables())`, no refresh) has
+      `undescribed(read_catalog(…)) == ()`, with `len(tables) >= 13` asserted
+      first.
+  - **Mutations:**
+    - drop the `database_name = current_database()` filter (system views
+      appear and the exclusion pin reds);
+    - match unit suffixes shortest-first (the `_s_per_km` and `_kn_m` pins
+      red);
+    - make `store.create_schema` skip `COMMENT ON COLUMN`, in place, with a
+      `cp` backup (the 10.9 pin reds, since no `apply_descriptions` runs on
+      this path);
+    - let `undescribed` skip columns (its fixed-input test reds).
+  - **Observable:** the catalog section is green, and mypy is clean.
+  - _Requirements: 10.1, 10.5, 10.9, 12.5_
+  - _Boundary: SchemaView_
+  - _Depends: 2.2_
+
+- [ ] 5. Integration: the state view, the command, the CLI and the guards
+
+- [ ] 5.1 Render the index state and the full schema view
+  - **`schemaview.py`** gains `IndexState`, `render_state_text`,
+    `render_schema_text` and `render_schema_json`, per design.md:
+    - the state lines;
+    - `(N rows)` on each table heading;
+    - the undescribed closing line;
+    - the schema JSON keys, written through `format.json_value`.
+  - **Tests** (`tests/query/test_schemaview.py`, state section, on
+    hand-built `IndexState`s):
+    - every state field appears in the text: the path, both schema versions,
+      the fitdocs version, held against workout pages, each left-out page
+      with its reason, the three drift counts, the without-computed counts by
+      state, the athlete count or skip reason, the corpus tables behind, and
+      the rebuild reason;
+    - the JSON parses, and its keys equal design.md § Data Models;
+    - an undescribed column produces the defect line.
+  - **Mutations:**
+    - drop the left-out lines (their pin reds);
+    - omit `reads_schema_version` from the JSON (the key-set pin reds).
+  - **Observable:** the state section is green.
+  - _Requirements: 10.2, 10.5, 10.6_
+  - _Depends: 4.1, 4.2_
+
+- [ ] 5.2 Orchestrate one invocation, from location to outcome
+  - **`command.py`**, per design.md § Command:
+    - `DEFAULT_MAX_ROWS`, `DEFAULT_TIMEOUT_S`;
+    - `QueryRequest`, `QueryEnvironment`, `OutcomeKind`, `SchemaReport`,
+      `QueryOutcome`;
+    - `run_query`, in design.md's order: stale spill, the existence check, the
+      scan (plus the athlete and corpus fingerprints for `--schema`), the
+      sandboxed open, bookkeeping and version checks, the statement or schema
+      path, `finally: close()`, then drift.
+  - **Tests** (`tests/query/test_command.py`, on copies, with HOME at
+    `home_dir`). Each `OutcomeKind` comes from a real state:
+    - **NOT_BUILT**:
+      - there is no file, and nothing is created in the index directory;
+      - **by race**: a `scan_workout_pages` spy deletes `index.duckdb` after
+        the existence check. The read-only open's MISSING fault still gives
+        NOT_BUILT.
+    - **NEEDS_REBUILD**:
+      - a junk file;
+      - `forge_storage_version(…, 69)`;
+      - a database without `index_meta` (`plain_database`);
+      - `schema_version` 99, written on a copy through a read-write
+        `store.open_index`;
+    - **BUSY**: `hold_index` with a fake clock.
+    - **UNVERIFIED**: a monkeypatched mandatory map.
+    - **REFUSED, FAILED and TIMED_OUT**: FAILED is covered by both a binder
+      error and a parse error.
+    - **RESULT**: the rows equal a direct facade read.
+    - **SCHEMA**: drift is reported on a behind copy.
+    - **State assembly.** On a copy, delete one page's base archive file and
+      add a duplicate-base page (a copied page file under a new name), then
+      rebuild the copy with `fitdocs index`. The SCHEMA outcome's state has
+      `without_computed == {"source_missing": 1}` and one left-out entry
+      naming `duplicate_base` and the page it collides with.
+    - **Stale spill.** Plant `query-spill-<reaped pid>/` and
+      `query-spill-<live sleeping pid>/` in the copy's index directory. After
+      `run_query`, the first is gone and the second is kept.
+    - **Ordering**: a spy shows `scan_workout_pages` ran before `open_index`.
+    - **Close**: a connection spy shows `close()` on every outcome, and on a
+      `KeyboardInterrupt` raised from a monkeypatched `execute_statement`,
+      which propagates.
+  - **Mutations:**
+    - scan after opening (the ordering pin reds);
+    - drop the `finally` (the `KeyboardInterrupt` close pin reds);
+    - treat a schema-version mismatch as RESULT;
+    - map `MISSING` to NEEDS_REBUILD (the race pin reds);
+    - drop the `remove_stale_spill` call (the stale-spill pin reds);
+    - leave `without_computed` empty (the state-assembly pin reds).
+  - **Observable:** `uv run pytest tests/query/test_command.py` is green, and
+    HOME stays empty.
+  - _Requirements: 1.6, 4.3, 6.4, 6.6, 8.1, 8.2, 10.2, 10.7, 10.8_
+
+- [ ] 5.3 Add the `fitdocs query` command
+  - **`cli.py`**, per design.md § CliWiring:
+    - the option singletons (`--file`, `--schema`, `--format` as a
+      case-insensitive `OutputFormat` choice, `--max-rows` with `min=1`,
+      `--timeout`, `--out`);
+    - `query_command`, `_read_statement` (strict UTF-8; `-` reads
+      `sys.stdin.buffer`) and `_stdout_is_terminal`;
+    - the validation order;
+    - results to stdout via `typer.echo(text, nl=False)`;
+    - every line in design.md's table to a stderr `Console` with
+      `markup=False, highlight=False, soft_wrap=True`;
+    - the exit mapping;
+    - `render_state_text` on stderr for `--schema` failures that read a state;
+    - the docstring's first paragraph, a plain sentence;
+    - the module docstring count, "Twelve" becomes "Thirteen", with the
+      `query` entry and its exit codes.
+
+    `tests/test_cli_skill.py:262-270` goes from 12 to 13, and "Thirteen".
+  - **Tests** (`tests/query/test_cli_query.py`, `use_indexed_root` and
+    `home_dir`):
+    - **Forms**:
+      - the SQL argument;
+      - `--file`, and `--file` holding undecodable bytes (exit 2);
+      - `-` with CliRunner input;
+      - none, two sources, and `--schema` with SQL (each exit 2, with
+        `open_index` never called: a spy);
+      - whitespace only (exit 2);
+      - comment only (exit 1, the ONE_STATEMENT line).
+    - **Options**:
+      - piped output defaults to `csv`;
+      - `_stdout_is_terminal` monkeypatched to `True` gives `table`;
+      - `--max-rows 0`, `--timeout 0`, `--timeout nan` and
+        `--schema --format csv` each exit 2.
+    - **Streams**: stdout parses as exactly the CSV or JSON result. The
+      truncated, behind and waiting lines appear only on stderr.
+    - **Exit codes**: one case per row of design.md § Error Categories, each
+      asserting the exact line.
+    - **`--schema`**:
+      - exit 0 on the fixture, behind or not;
+      - exit 1 with the not-built line when absent;
+      - on a `schema_version` 99 copy: exit 1, with stderr showing `99` and
+        the rebuild line;
+      - `--format json` parses.
+  - **Mutations:**
+    - swap the defaults (the TTY pin reds);
+    - print the behind notice to stdout (the streams pin reds);
+    - exit 0 on REFUSED;
+    - accept `--timeout 0`;
+    - drop the state print on `--schema` failures (the `99` pin reds);
+    - leave the count at "Twelve" (`tests/test_cli_skill.py` reds).
+  - **Observable:** the CLI tests and `tests/test_cli_skill.py` are green.
+    `uv run fitdocs query --help` lists every option, and its first line is
+    the plain sentence.
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.2, 2.3, 3.2, 3.5, 4.1, 4.4, 4.5, 6.5, 9.2, 9.4, 10.6, 10.7, 10.8_
+
+- [ ] 5.4 Extend the confinement, network, boundary and crash-vector guards to `query`
+  - **`tests/test_confinement.py`**: append a standalone
+    `test_query_writes_nothing_outside_its_spill_directory`, modelled on
+    `test_connect_writes_only_the_credentials_file`.
+    - **The sandbox** holds the data root, `FITDOCS_INDEX_DIR` and HOME, all
+      set by the test itself.
+    - **The index** is built inside the sandbox with `fitdocs index`, and the
+      snapshot is taken after that.
+    - **The runs**: through `CliRunner`, a SELECT, `--schema`, a refused
+      `COPY` targeting the sandbox, a `read_csv` of a sandbox file, an
+      `ATTACH` of a sandbox file, a parse error, and a 0.5 s timeout.
+    - **The checks**: every file's size, `mtime_ns` and sha256 are unchanged,
+      and no path is added.
+    - **Non-vacuity**: the SELECT printed rows, and each refusal printed its
+      line.
+  - **`tests/connectors/test_e2e.py:203-246`**: the parametrization gains an
+    argument column, keeping every existing entry, `analytics-index`'s `index`
+    included.
+    - `query` runs with `SELECT count(*) AS n FROM pages`.
+    - `fitdocs index` builds each root's index before the socket guard is
+      installed.
+    - Output is compared with the roots substituted.
+    - For the `query` row it also asserts `bare_attempts == 0`.
+  - **`tests/query/test_crash_vectors.py`** (subprocess, HOME and
+    `FITDOCS_INDEX_DIR` temporary). Each subprocess is invoked as
+    `[sys.executable, "-c", "from fitdocs.cli import app; app()", "query",
+    …]`, so the interpreter's own DuckDB is the one exercised, the floor venv's
+    in 8.2.
+    - **Positive control**: a subprocess print of
+      `fitdocs.index.store.duckdb_version()` equals the in-process value.
+    - `"SELECT * FROM enable_logging(storage='file',
+      storage_path='<tmp>/logs'); SELECT 42"` exits 1 with the ONE_STATEMENT
+      line, and `<tmp>/logs` does not exist.
+    - The single `SELECT * FROM enable_logging(…)` exits 0 or 1, never by a
+      signal, and creates no `<tmp>/logs`.
+  - **`tests/query/test_boundary.py`, direction section**:
+    - each `fitdocs.query` module imports only modules to its left in
+      `format → sandbox → statement → freshness → schemaview → command`;
+    - no `fitdocs.query` module imports `fitdocs.cli`, `fitdocs.sync`,
+      `fitdocs.render`, `fitdocs.connectors`, `fitdocs.tiles`,
+      `fitdocs.plugins`, or `fitdocs.index.refresh`, `.build`, `.lock`,
+      `.handoff` or `.derive` (7.4);
+    - positive controls on synthetic violations.
+  - **Mutations:**
+    - write a marker file into the data root from `run_query` (the
+      confinement pin reds);
+    - add a swallowed socket attempt to `run_query`, `try:
+      socket.socket(); except Exception: pass`. The existing equal-attempts
+      check tolerates it, and `bare_attempts == 0` reds;
+    - drop the statement-count check (the multi-statement pin reds on the exit
+      code, by a signal abort or by exit 0; the −6 abort was probed for
+      `CALL enable_logging(…); SELECT 42`, and this exact text is unprobed);
+    - import `fitdocs.index.refresh` from `command.py`, then separately
+      `fitdocs.sync` (the direction pin reds each time).
+  - **Observable:** the confinement, connectors-e2e, crash-vector and
+    boundary suites are green.
+  - _Requirements: 1.5, 5.8, 7.1, 7.2, 7.3, 7.4, 7.5, 9.5_
+
+- [ ] 6. The analytics documentation
+
+- [ ] 6.1 Publish `docs/analytics.md` with its schema reference held to the live schema
+  - **`docs/analytics.md`**: the seven sections of design.md § Docs and
+    Records.
+    - The schema reference sits between `<!-- schema-reference:start -->` and
+      `<!-- schema-reference:end -->`.
+    - The outside-client section gives a DuckDB CLI line (`-readonly` with
+      auto-install and auto-load off, and its own `temp_directory`) and a
+      Python `duckdb.connect(…, read_only=True, config={…})` snippet.
+    - The location section names `FITDOCS_INDEX_DIR`,
+      `$XDG_CACHE_HOME/fitdocs/index` and `~/.cache/fitdocs/index`.
+  - **Wiring**:
+    - a row in `docs/index.md`, before the Contributing row;
+    - `"analytics.md"` appended to `_REQUIRED_ENTRY_POINT_LINKS`;
+    - `Analytics = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/analytics.md"`
+      appended to `[project.urls]`.
+  - **Tests** (`tests/query/test_docs_analytics.py`):
+    - the block equals `render_reference(read_catalog(…))` of a
+      `schema_only_index` in `tmp_path`, with HOME at `home_dir`;
+    - the module's `if __name__ == "__main__":` regeneration:
+      - builds its `schema_only_index` inside a `TemporaryDirectory`, with HOME
+        at another `TemporaryDirectory`;
+      - never resolves an index location. This is pinned in-process: the
+        regeneration function is called directly with
+        `fitdocs.index.location.resolve_index_location` patched to raise, and
+        the function completes;
+      - rewrites only the marked block (asserted by running it as a
+        subprocess against a temporary copy of the page, with the page path
+        passed as an argument);
+    - every `fitdocs` line in a `bash` fence names a registered command and
+      only its options;
+    - the stated defaults equal `DEFAULT_MAX_ROWS` and `DEFAULT_TIMEOUT_S`;
+    - the page names `FITDOCS_INDEX_DIR`, `XDG_CACHE_HOME`, `read_only`,
+      `-readonly`, `autoinstall_known_extensions`,
+      `autoload_known_extensions` and `temp_directory`, case-sensitively,
+      outside the generated block;
+    - it states that outside clients bypass the sandbox and block refreshes
+      (phrase pins).
+  - **Mutations:**
+    - edit one description string in `src/fitdocs/index/core/documents.py`, in
+      place, with a `cp` backup (the block-equality pin reds);
+    - state `500` as the default row limit (the defaults pin reds);
+    - write `--rows` in a `bash` fence (the command-binding pin reds);
+    - make the regeneration resolve the default index location (the
+      in-process never-resolves pin, with `resolve_index_location` patched to
+      raise, reds).
+  - **Observable:**
+    - `uv run pytest tests/query/test_docs_analytics.py
+      tests/test_docs_guarantees.py tests/test_packaging.py` is green;
+    - every anchor in the page resolves;
+    - `uv run python -m tests.query.test_docs_analytics` leaves `git diff`
+      empty, and the real `~/.cache/fitdocs` gains nothing.
+  - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6_
+  - _Depends: 4.2, 5.3_
+
+- [ ] 7. The packaged agent skill
+
+- [ ] 7.1 Write and register the `fitdocs-analytics` skill
+  - **`src/fitdocs/skills/fitdocs-analytics/SKILL.md`**, per design.md § Skill:
+    - the five frontmatter keys;
+    - `metadata.version` equal to `[project].version`;
+    - the eight H2 headings in order;
+    - one `bash` fence and inline `fitdocs query`/`fitdocs index` spans;
+    - links only to `https://github.com/joshua-stauffer/fitdocs/…`, including
+      the ownership-contract URL and the analytics page.
+
+    The worked-examples section has its four H3s and one `sql` fence each,
+    drafted here. Task 7.3 makes them execute.
+  - **Spelling rules**:
+    - no `OWNED_PATHS` substring anywhere, fences included: no `.cache/`, no
+      `'workouts/…'` literal;
+    - no `--word` on a `bash` line except registered options;
+    - no backticked managed key or region inside `## Ownership`.
+  - **Registration.** These land together, because the locator's directory
+    check (`tests/test_skill_locator.py:186-194`) and the per-name docs pins
+    (`tests/test_wiki_integration_docs.py:113-121, 218-224`) fail on a skill
+    directory without its entry, and on an entry without its docs lines.
+    - `ANALYTICS_SKILL_NAME = "fitdocs-analytics"`, appended to
+      `PACKAGED_SKILLS`, with the agentskill docstring's "Two" becoming
+      "Three";
+    - `tests/test_skill_locator.py`: `_PUBLIC_NAMES` gains the constant, and
+      the registry-order pin appends it;
+    - `tests/test_agent_skill.py`: the import, `_ANALYTICS_HEADINGS`, and the
+      `_SKILL_PROFILES` entry;
+    - `docs/wiki-integration.md`: a listing line and a bullet;
+    - `README.md` Agent skills: "Three packaged skills ship today", naming
+      it;
+    - `release/artifact-policy.toml` `[wheel] required` and the clean-wheel
+      fixture `tests/test_release_artifacts.py:978-983`;
+    - `docs/releasing.md`: "four tracked places", naming the third skill,
+      with `tests/test_releasing_docs.py:569-573` gaining its path.
+  - **Tests**: the parametrized skill, locator, wheel, packaging,
+    version-identity, wiki-integration, release-artifact and releasing-docs
+    suites cover the new skill.
+  - **Mutations:**
+    - spell `.cache/` in the skill body (the owned-path pin reds);
+    - add `--rows` to the `bash` fence (the command-binding pin reds);
+    - drop the registry entry (the locator's two-way pins red);
+    - drop the README line (the README-section pin reds).
+  - **Observable:**
+    - `uv run fitdocs skill` lists three skills;
+    - `uv run fitdocs skill fitdocs-analytics` prints its directory and the
+      `cp -R` recipe;
+    - `uv run pytest tests/test_agent_skill.py tests/test_skill_locator.py
+      tests/test_skill_wheel.py tests/test_cli_skill.py
+      tests/test_wiki_integration_docs.py tests/test_release_artifacts.py
+      tests/test_releasing_docs.py tests/test_version_identity.py
+      tests/test_packaging.py` is green.
+  - _Requirements: 11.1, 11.6, 11.7_
+  - _Depends: 6.1_
+
+- [ ] 7.2 Pin the teaching order and point `fitdocs-workouts` at the new skill
+  - **The teaching-order pin**, in `tests/test_agent_skill.py` beside the
+    profile. The positions of four pinned phrases in the analytics skill
+    ascend:
+    1. `fitdocs query --schema`;
+    2. the prefer-the-index sentence;
+    3. the show-the-SQL sentence;
+    4. the NULL-is-absent sentence.
+
+    Each phrase is matched case-sensitively, outside fences, and its presence
+    is asserted before the order.
+  - **`fitdocs-workouts`**: one "Further reading" bullet linking the analytics
+    page and naming `fitdocs-analytics`. Its headings are unchanged, and the
+    existing inbox-skill pins stay green.
+  - **The workouts link pin**, `test_inbox_further_reading_links_the_analytics_doc`
+    in `tests/test_agent_skill.py`, modelled on
+    `test_inbox_further_reading_links_the_connectors_doc` (`:706`). Within the
+    inbox skill's "Further reading" section, a bullet links the exact
+    hard-coded literal
+    `https://github.com/joshua-stauffer/fitdocs/blob/main/docs/analytics.md`
+    and names `fitdocs-analytics`.
+  - **Mutations:**
+    - move the NULL paragraph before the schema step (the order pin reds);
+    - drop the workouts bullet (the workouts link pin reds).
+  - **Observable:** `uv run pytest tests/test_agent_skill.py` is green.
+  - _Requirements: 11.2, 11.8_
+
+- [ ] 7.3 Make every worked example run against the live schema, one per producer
+  - **The core examples**: weekly running volume, time in heart-rate zones,
+    selected training load per week, and races, tests and hard efforts.
+    - They use the values the index actually stores, checked here: the
+      `Sport` values in `activities.sport`, the `zone_times.channel`
+      vocabulary, and `loads.selected`.
+    - Their date windows are relative to `max(date)`, so they hold on the
+      fixture.
+  - **Derived producers.** If `analytics-derived` has landed (its producers
+    appear in `registered_tables()`):
+    - add one H3 and one `sql` fence per derived producer
+      (`derived.mean_max`, `derived.load_series`, `derived.benchmarks`,
+      `derived.blocks`), each selecting rows from one of that producer's
+      tables;
+    - take each example's window relative to the data (`max(date)` or the
+      table's own dates), never `current_date`, `now()` or "this year". The
+      fixture's activities are in September 2021;
+    - extend `derived_inputs()` in `tests/query/conftest.py`: plan sources as
+      extra files, with dates around `FIXTURE_TODAY`, and the `[benchmarks]`
+      table as appended `athlete.toml` text.
+
+    Otherwise, record in Implementation Notes that the second lander does
+    both (Cross-spec shared files).
+  - **Tests** (`tests/query/test_skill_examples.py`, `use_indexed_root`, HOME
+    at `home_dir`):
+    - every `sql` fence of the skill runs through `fitdocs query --format
+      json`, exits 0, and has `row_count >= 1`;
+    - there are at least four fences, and the four core H3 topics exist;
+    - **the generic 11.5 pin, keyed on the producer**:
+      - group `registered_tables()` by `ResolvedTable.producer`;
+      - exclude scope `TableScope.BOOKKEEPING`, and the core producers named
+        by the imported `CORE_DOCUMENTS.name` and `CORE_COMPUTED.name`, never
+        spelled out;
+      - each remaining producer needs at least one `sql` fence that names one
+        of its tables (whole word, case-sensitive) and selects rows from it:
+        it returns at least one row on a `copy_indexed_root` copy, and zero
+        rows on a second copy where every table of that producer was emptied
+        through a read-write `store.open_index`.
+    - **The helper's fixed-input tests**:
+      - a monkeypatched extra producer, with a one-row table and no example,
+        is reported missing;
+      - an example `SELECT count(*) AS n FROM <that table>` is reported as
+        not selecting rows (it returns one row on the emptied copy);
+      - `SELECT * FROM <that table>` satisfies it.
+  - **Mutations:**
+    - misspell a column in one example (the execution pin reds);
+    - filter the effort example to an impossible kind (`row_count >= 1`
+      reds);
+    - drop the emptied-copy condition (the bare-aggregate fixed-input test
+      reds);
+    - make the per-producer check accept any producer (the missing-producer
+      control reds).
+  - **Observable:** `uv run pytest tests/query/test_skill_examples.py` is
+    green, with the number of examples and producers checked recorded.
+  - _Requirements: 11.3, 11.4, 11.5_
+
+- [ ] 8. Records, the floor and validation
+
+- [ ] 8.1 Publish the release notes, steering and amendment records
+  - **`CHANGELOG.md` `[Unreleased]` `### Added`**: `fitdocs query` (forms,
+    formats, sandbox, `--schema`), the `fitdocs-analytics` skill, and the
+    analytics page, linked by its https URL.
+  - **The entry pin** (`tests/query/test_changelog_entry.py`): the
+    `[Unreleased]` section names `fitdocs query`, `fitdocs-analytics` and
+    `https://github.com/joshua-stauffer/fitdocs/blob/main/docs/analytics.md`,
+    and the `[0.1.0]` section names none of them.
+  - **`tech.md` Network and Credentials**:
+    - `query` joins the commands that make no connector request;
+    - one clause on the read-only, locked DuckDB configuration with external
+      access and extension loading off.
+  - **`structure.md`**: the `query` dependency-direction sentence of
+    design.md.
+  - **The connectors amendment**: append `query` to `analytics-index`'s
+    Amendment 1 if that is not yet landed on the branch. Otherwise append the
+    next free amendment number ("Amendment N (date): Req 14.1 gains `query`,
+    landed by analytics-query"), naming `tests/connectors/test_e2e.py`.
+  - **Roadmap**:
+    - Phase 10 Existing Spec Updates: the connectors line is ticked, since
+      both parts have landed;
+    - Specs: the analytics-query line is ticked at merge.
+  - **Steering-class validation**: grep `.kiro/steering/` and `CLAUDE.md` for
+    the no-network command list and "query", and reconcile every hit.
+    `tests/connectors/test_network_statements.py` and
+    `tests/connectors/test_docs.py` stay green.
+  - **Mutations:**
+    - move the entry under `[0.1.0]` (the entry pin reds; `test_changelog`
+      checks structure only);
+    - drop the analytics URL from the entry (the entry pin reds).
+  - **Observable:**
+    - the entry pin, the changelog, network-statement and connectors-docs
+      tests are green;
+    - the grep output, before and after, is recorded in Implementation Notes;
+    - `/kiro-spec-status connectors` is clean.
+  - _Requirements: 7.5, 12.6, 12.7_
+
+- [ ] 8.2 Register the test modules, verify the duckdb floor and validate the feature
+  - **mypy registration**: append every new `tests/query/` module to
+    `pyproject.toml`'s mypy `files`.
+  - **The floor check**:
+    - **The venv**: a throwaway venv under the session scratchpad, with the
+      project's runtime and test dependencies and `duckdb==1.2.0`, running the
+      worktree's `src` on `PYTHONPATH`. Never the worktree `.venv`.
+    - **The run**: `tests/query/test_store_facade.py`, `test_sandbox.py`,
+      `test_spill.py`, `test_statement.py`, `test_crash_vectors.py` and
+      `test_command.py`, under `sandbox-exec -p '(version 1)(allow
+      default)(deny network*)'` with HOME at a fresh empty directory.
+    - **Before the run**, verify that the sandbox blocks network with a
+      `urlopen` probe.
+    - **Confirm the floor is exercised**: the crash-vector positive control
+      reports `1.2.0`.
+    - **After the run**, assert HOME is still empty.
+    - **Recording**: pass or fail per test, plus the `memory_limit` and
+      `max_temp_directory_size` strings 1.2.0 reports. The `enable_logging`
+      cases are expected to see the function absent.
+    - If any sandbox test fails on 1.2.0, stop and report: the floor in U1 is
+      wrong.
+  - **Full validation**, after the final rebase:
+    - `uv run pytest && uv run ruff check . && uv run ruff format --check . &&
+      uv run mypy`, plain, with `TZ=UTC`, and with `CI=true`;
+    - the forbidden-strings gate, in the mode the other specs' validations
+      recorded.
+  - **Version checks**:
+    - `SCHEMA_VERSION`, `CONTRACT_VERSION` and `DOC_VERSION` equal `main`'s;
+    - the CLI count equals `main`'s plus one;
+    - the docs reference block equals the live schema (regenerated if
+      `analytics-derived` landed first);
+    - the skill-examples test covers every non-core producer on `main`.
+  - **Observable:** all green, with the floor table and the validation output
+    recorded in Implementation Notes.
+  - _Requirements: 5.7, 5.8_
+
+- [ ] 8.3 (Maintainer-only) Measure `fitdocs query` on the real data root
+  - **Who runs it**: the maintainer, on their machine. No agent reads the real
+    data root.
+  - **What to run**:
+    - `time fitdocs query "SELECT count(*) FROM pages"` (the freshness scan
+      dominates);
+    - `time fitdocs query --schema`;
+    - one aggregate over `records`.
+  - **Where results go**: `research.md`, as numbers only, with no personal
+    values.
+  - **Observable:** the three timings are recorded. If the plain query exceeds
+    3 s, a follow-up is queued.
+  - _Requirements: 9.1_
