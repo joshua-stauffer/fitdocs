@@ -958,10 +958,12 @@ never co-varies two keys a rule distinguishes.
     - The elapsed fallback has its 10 s boundary when a distance is missing.
     - Absent distance and absent elapsed together leave device evidence only.
     - The zero-shift and two-10 k cases are still rejected.
-  - `tests/test_identity_e2e.py`: the `_garmin_run` pair that relied on
-    elapsed now differs in distance as well. A sync-level case shows a
-    Stryd-shaped original whose elapsed is 1,685 s shorter than its copy's
-    joining the copy's page.
+  - `tests/test_identity_e2e.py`: the `_garmin_run` and `near()` sessions,
+    which were told apart by elapsed time alone, now record no distance, so the
+    unchanged elapsed fallback (A1.1 (b)) still separates them; a test needing
+    the shifted tier passes a distance. A sync-level case shows a
+    Stryd-shaped original whose elapsed is 1,685 s shorter than its copy's,
+    and one whose tail is 0.99 % short, joining the copy's page.
   - Named mutations: compare elapsed when both distances are recorded; take
     the fraction of the shorter distance; drop the 5 m floor; drop the elapsed
     fallback; change `≤` to `<` on the relative bound.

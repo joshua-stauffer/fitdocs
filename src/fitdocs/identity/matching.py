@@ -4,8 +4,8 @@ Pure over :class:`SessionKey` values -- no file is read. The rule compares sport
 session start, distance, elapsed time and the device digest; it never compares a
 file's timer time (the key has no such field), and the strict tier compares
 elapsed time only when a distance is missing (Amendment 1). Every comparison is
-inclusive (``<=``), and every absent value is ``None`` and never compared as a
-number.
+inclusive (``<=``, to floating-point precision), and every absent value is
+``None`` and never compared as a number.
 """
 
 from __future__ import annotations
@@ -116,12 +116,24 @@ def session_key(activity: Activity) -> SessionKey:
     )
 
 
+_RELATIVE_SLACK: Final[float] = 1e-9
+"""Floating-point slack, relative to the tolerance (``math.isclose``'s default);
+far below any tolerance's measured meaning."""
+
+
+def _within(delta: float, tolerance: float) -> bool:
+    """``delta <= tolerance``, inclusive to floating-point precision: a gap that
+    is a tolerance exactly in decimal (25.05 m - 20.04 m against 20 % of
+    25.05 m) can exceed it by one unit in the last place in binary."""
+    return delta <= tolerance * (1.0 + _RELATIVE_SLACK)
+
+
 def _is_shift(delta_s: float) -> bool:
     """Whether ``delta_s`` is a whole 1..SHIFT_MAX_HOURS hours, to within 1 s."""
     hours = round(abs(delta_s) / SHIFT_STEP_S)
     if not 1 <= hours <= SHIFT_MAX_HOURS:
         return False
-    return abs(abs(delta_s) - hours * SHIFT_STEP_S) <= START_TOLERANCE_S
+    return _within(abs(abs(delta_s) - hours * SHIFT_STEP_S), START_TOLERANCE_S)
 
 
 def pair_evidence(a: SessionKey, b: SessionKey) -> Evidence | None:
@@ -129,7 +141,7 @@ def pair_evidence(a: SessionKey, b: SessionKey) -> Evidence | None:
     if a.sport != b.sport or a.start is None or b.start is None:
         return None
     start_delta_s = (a.start - b.start).total_seconds()
-    close_start = abs(start_delta_s) <= START_TOLERANCE_S
+    close_start = _within(abs(start_delta_s), START_TOLERANCE_S)
 
     if (
         close_start
@@ -150,7 +162,7 @@ def pair_evidence(a: SessionKey, b: SessionKey) -> Evidence | None:
             DISTANCE_TOLERANCE_M,
             DISTANCE_TOLERANCE_FRACTION * max(a.distance_m, b.distance_m),
         )
-        if abs(a.distance_m - b.distance_m) <= limit_m:
+        if _within(abs(a.distance_m - b.distance_m), limit_m):
             return Evidence.STRICT
 
     if a.elapsed_s is None or b.elapsed_s is None:
@@ -160,7 +172,7 @@ def pair_evidence(a: SessionKey, b: SessionKey) -> Evidence | None:
     if (
         close_start
         and distance_delta_m is None
-        and elapsed_delta_s <= ELAPSED_TOLERANCE_S
+        and _within(elapsed_delta_s, ELAPSED_TOLERANCE_S)
     ):
         return Evidence.STRICT
 
@@ -168,8 +180,8 @@ def pair_evidence(a: SessionKey, b: SessionKey) -> Evidence | None:
         SourceKind.PHONE_COPY in (a.kind, b.kind)
         and distance_delta_m is not None
         and _is_shift(start_delta_s)
-        and elapsed_delta_s <= SHIFTED_ELAPSED_TOLERANCE_S
-        and distance_delta_m <= SHIFTED_DISTANCE_TOLERANCE_M
+        and _within(elapsed_delta_s, SHIFTED_ELAPSED_TOLERANCE_S)
+        and _within(distance_delta_m, SHIFTED_DISTANCE_TOLERANCE_M)
     ):
         return Evidence.SHIFTED
     return None

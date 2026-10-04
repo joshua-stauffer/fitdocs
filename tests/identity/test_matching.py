@@ -510,3 +510,20 @@ def test_a_real_species_shift_is_matched_from_parsed_files() -> None:
     shifted = session_key(parse_fit(identity.healthfit_shifted().data))
     # elapsed 0.5 s and distance 2 m apart, start two hours apart
     _check(original, shifted, Evidence.SHIFTED)
+
+
+# --- inclusive to floating-point precision ----------------------------------
+
+
+def test_bounds_exact_in_decimal_are_inclusive_in_binary() -> None:
+    # 25.05 - 20.04 is 5.010000000000002 and 0.2 * 25.05 is 5.010000000000001:
+    # the gap is 20 % of the longer exactly in decimal and must match.
+    _check(_key(distance_m=25.05), _key(distance_m=20.04), Evidence.STRICT)
+    # 8.05 - 3.05 is 5.000000000000001: the 5 m floor, exactly.
+    _check(_key(distance_m=3.05), _key(distance_m=8.05), Evidence.STRICT)
+    # 16.1 - 6.1 is 10.000000000000002: the elapsed fallback's 10 s, exactly.
+    _check(
+        _key(elapsed_s=6.1, distance_m=None),
+        _key(elapsed_s=16.1, distance_m=None),
+        Evidence.STRICT,
+    )

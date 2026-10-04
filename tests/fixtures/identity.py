@@ -144,10 +144,9 @@ def session_fit_bytes(
         record: Mesg = {
             "mesg_num": builder._MESG_RECORD,
             "timestamp": start + round(elapsed_s * fraction),
+            **({} if distance_m is None else {"distance": distance_m * fraction}),
             "heart_rate": 140 + i,
         }
-        if distance_m is not None:
-            record["distance"] = distance_m * fraction
         if with_position:
             record["position_lat"] = builder.to_semicircles(40.0 + 0.0001 * i)
             record["position_long"] = builder.to_semicircles(-105.0 + 0.0001 * i)

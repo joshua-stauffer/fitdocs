@@ -8,6 +8,7 @@ The expected values below are literals, not read back from the species.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import cast
@@ -320,3 +321,73 @@ def test_splice_appends_exactly_the_requested_count() -> None:
         assert errors == []
         assert len(messages[_UNDOCUMENTED_KEY]) == count
         assert Decoder(Stream.from_byte_array(spliced)).check_integrity() is True
+
+
+# The bytes of every species, pinned. ``session_fit_bytes`` gained an optional
+# ``distance_m=None`` (activity-identity Amendment 1); with a distance the
+# record field order -- and so every byte -- must stay what it was, which the
+# self-tests above (decoded values only) cannot see.
+_SPECIES_SHA256 = {
+    "garmin_original": (
+        "4eaffdb6bbba5d6a8aeee18a601c3a24bed667dacd2c04da39194f8e189391d7"
+    ),
+    "partner_copy": (
+        "0cd4eb69d70afedc986865419c4e3dd6c161c9f893486b14c04bdd30a52f543e"
+    ),
+    "healthfit_copy": (
+        "272bafdf6d17d9170efebf92a609335fd3083bd97d399b59e82ffedab90d9081"
+    ),
+    "healthfit_shifted": (
+        "034ad027f37c92bb096c30df899b4cd8b57c06e2cb3272d30b65588a679ffac6"
+    ),
+    "stryd_file": ("d0118bac7fd2e0a8f42acf2166b94951c9a571740fae1c5af75f5ad4dbe5cd10"),
+    "healthfit_reexport_pair[0]": (
+        "8eab364b6afabd8fec54dda13332bfc1fa3398f624a2379fc0fce94be20db1be"
+    ),
+    "healthfit_reexport_pair[1]": (
+        "00e484c9a5849879851884b01e250b40466c53d2689822b002d9dfabd9f5464a"
+    ),
+    "ten_k_pair[0]": (
+        "aeabceb297a4a0fad6545b291844bbf3018546f18a53179257feb3ad47e76d61"
+    ),
+    "ten_k_pair[1]": (
+        "c1000efdeaa75e9454657308f4ad40d3281dbb802e3fe5b0a1ed5b7bcc587282"
+    ),
+}
+
+
+def test_species_bytes_are_pinned() -> None:
+    reexport = identity.healthfit_reexport_pair()
+    ten_k = identity.ten_k_pair()
+    actual = {
+        "garmin_original": identity.garmin_original().data,
+        "partner_copy": identity.partner_copy().data,
+        "healthfit_copy": identity.healthfit_copy().data,
+        "healthfit_shifted": identity.healthfit_shifted().data,
+        "stryd_file": identity.stryd_file().data,
+        "healthfit_reexport_pair[0]": reexport[0].data,
+        "healthfit_reexport_pair[1]": reexport[1].data,
+        "ten_k_pair[0]": ten_k[0].data,
+        "ten_k_pair[1]": ten_k[1].data,
+    }
+    digests = {name: hashlib.sha256(data).hexdigest() for name, data in actual.items()}
+    assert digests == _SPECIES_SHA256
+
+
+def test_no_distance_records_none_on_the_session_or_any_record() -> None:
+    data = identity.session_fit_bytes(
+        sport="running",
+        start=builder.FIT_TIMESTAMP_BASE + 700_000_000,
+        elapsed_s=3000.0,
+        timer_s=3000.0,
+        distance_m=None,
+        manufacturer="garmin",
+        product=3843,
+        serial=1,
+        time_created=builder.FIT_TIMESTAMP_BASE + 700_000_000,
+    )
+    activity = parse_fit(data)
+    assert activity.summary.total_distance_m is None
+    assert activity.summary.total_elapsed_time_s == 3000.0
+    messages, _ = Decoder(Stream.from_byte_array(bytearray(data))).read()
+    assert all("distance" not in r for r in messages["record_mesgs"])

@@ -163,7 +163,7 @@ sources in a canonical order, and renames a page whose base changes.
   previous document's own links.
 - A change to `SessionSummary.total_elapsed_time_s`, `total_distance_m` or the
   start-time anchor for any file shape (including Stryd quirk handling): the
-  calibration of Req 3.3/3.4 is re-measured.
+  calibration of Req 3.4 and Amendment 1 (A1.1) is re-measured.
 
 ### Cross-spec seams
 
@@ -666,15 +666,18 @@ regeneration (Req 4.10, 8.4).
 | 2.8 | total rank order | PrecedenceAndRoles | `rank_key` | Page task |
 | 3.1 | sport check | MatchRule | `pair_evidence` | -- |
 | 3.2 | device evidence | MatchRule | `pair_evidence` | -- |
-| 3.3 | strict evidence | MatchRule | `pair_evidence` | -- |
+| 3.3 | strict evidence (superseded by A1.1) | MatchRule | `pair_evidence` | -- |
 | 3.4 | shifted evidence | MatchRule | `pair_evidence` | -- |
 | 3.5 | counter-example rejected | MatchRule | `pair_evidence` | -- |
 | 3.6 | no timer time | MatchRule | `SessionKey` (no timer field) | -- |
 | 3.7 | no start: exact only | MatchRule, RunPlanner | `pair_evidence` | -- |
-| 3.8 | no elapsed: device only | MatchRule | `pair_evidence` | -- |
+| 3.8 | no elapsed: device only (superseded by A1.2) | MatchRule | `pair_evidence` | -- |
 | 3.9 | exact paths first, unchanged | RunPlanner, PageScan | `PageIndex.exact_match`, `find_document` | Writing run |
 | 3.10 | compare through page records only | RunPlanner, PageScan | `page_record`, `plan_run` | Writing run |
 | 3.11 | tolerances documented with sources | MatchRule, OwnershipDocs | `TOLERANCE_SOURCES` | -- |
+| A1.1 | strict evidence: start + distance within max(5 m, 20 % of the longer); elapsed only when a distance is missing | MatchRule | `pair_evidence`, `DISTANCE_TOLERANCE_FRACTION` | -- |
+| A1.2 | no distance pair and no elapsed pair: device only | MatchRule | `pair_evidence` | -- |
+| A1.3 | amended tier documented; contract version advances | MatchRule, OwnershipDocs | `TOLERANCE_SOURCES`, `CONTRACT_VERSION` | -- |
 | 4.1 | exact-path files always join | RunPlanner | `plan_run` | Writing run |
 | 4.2 | groups | RunPlanner | `plan_run` | Writing run |
 | 4.3 | one claim joins | RunPlanner, SyncEngine | `Join`, page task | Writing run |
@@ -730,7 +733,7 @@ regeneration (Req 4.10, 8.4).
 | FileIdentityModel | Model | Typed file identity and undocumented count | 1.1, 1.6, 1.7 | -- | State |
 | FileIdExtractor | Ingest | Decode `file_id`, count undocumented messages | 1.1-1.6 | SDK decode (P0) | Service |
 | SourceKinds | Identity (pure) | Kind vocabulary, page identity values, device digest | 2.1-2.4, 5.4 | model, contract (P0) | Service |
-| MatchRule | Identity (pure) | Tolerances and pair evidence | 3.1-3.8, 3.11 | SourceKinds (P0) | Service |
+| MatchRule | Identity (pure) | Tolerances and pair evidence | 3.1-3.8, 3.11, A1.1-A1.3 | SourceKinds (P0) | Service |
 | PrecedenceAndRoles | Identity (pure) | Rank order, base and extras, UUID retention | 2.5, 2.6, 2.8, 5.1-5.3, 5.5, 7.7 | SourceKinds (P0) | Service |
 | RunPlanner | Identity (pure) | Exact matches, groups, claims, holds; duplicate sets | 3.7, 3.9, 3.10, 4.1-4.9, 5.7, 8.3 | MatchRule (P0) | Service |
 | PageScan | Identity (I/O) | One-scan page index from frontmatter | 3.9, 3.10, 7.4 | contract, docio (P0) | Service |
@@ -890,7 +893,7 @@ def source_identity(activity: Activity) -> SourceIdentity: ...
 | Field | Detail |
 |-------|--------|
 | Intent | Decide whether two files are the same session, and by which evidence |
-| Requirements | 3.1-3.8, 3.11 |
+| Requirements | 3.1-3.8, 3.11; Amendment 1: A1.1-A1.3 |
 
 **Responsibilities & Constraints**
 - Tolerance constants, each with its measured source in

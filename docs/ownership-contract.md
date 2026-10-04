@@ -7,7 +7,7 @@ one workout no longer compares elapsed times when both files record a
 distance. Strict evidence is now the same sport, starts no more than
 `START_TOLERANCE_S` apart, and distances no more than `DISTANCE_TOLERANCE_M` or
 `DISTANCE_TOLERANCE_FRACTION` of the longer distance apart, whichever is
-larger. Elapsed times are compared, as before, only when a distance is missing.
+larger. When a distance is missing, elapsed times are compared as before.
 Two writers can end one workout's session at different moments. A HealthFit
 copy ends when the workout is ended on the watch, and a Stryd file ends at its
 last timer stop, so their elapsed times differ by as long as the athlete stayed
