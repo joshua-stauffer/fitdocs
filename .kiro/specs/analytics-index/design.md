@@ -1947,11 +1947,17 @@ red it.
   - `current_setting(k)` equals the mandatory value for every key, on writer,
     read-only and created connections. A mandatory override raises
     `ValueError`.
-  - `SET enable_external_access=true`, `read_csv('/etc/hosts')`, a `read_csv`
-    of an `https://` address and `INSTALL httpfs` are all refused on a store
-    connection, with HOME pointed at an empty temporary directory, and nothing
-    is created under it. The `INSTALL` case is guarded to the locked version
-    and must never run without the locked config.
+  - `SET enable_external_access=true`, `SET
+    autoinstall_known_extensions=true`, `read_csv('/etc/hosts')` and a
+    `read_csv` of an `https://` address are all refused on a store
+    connection, with HOME pointed at a nonexistent temporary path.
+    - No test executes `INSTALL` or `LOAD`. A test that did so could reach
+      the network under the very mutation meant to prove a setting matters.
+    - "fitdocs never issues `INSTALL`/`LOAD`" is pinned statically, by the
+      store-SQL guard.
+    - Under a mutation that drops a setting, the `https://` case fails on the
+      nonexistent HOME before any download, so the assertion on the
+      configuration-refusal message goes red with no network attempt.
   - The classifier against real messages produced in-test:
     - LOCKED: a subprocess holder, with the PID parsed;
     - MISSING: read-only on an absent file, and a missing directory;
