@@ -114,8 +114,10 @@
     (`documents.py:147-159`) and makes `run_model` raise `ValueError`
     (`model.py:67-80`), which `cli.py:717` does not catch.
 - **Implications**: extract `read_history_inputs` and `compute_history` from
-  `run_history` without changing it, move the suppressed-day rule to a public
-  `day_rows` that the chart also reads, and append those names to the surface.
+  `run_history` without changing it, add a public `day_rows` in `page.py`
+  built on the chart's own `_suppressed_day_indices` (which stays, because
+  `tests/history/test_page.py:981-1046` and `tests/test_history_e2e.py:18, 337`
+  name it as the mutation site), and append those names to the surface.
   The producer reaches `load_load_settings` only through history's own reader,
   so the caller pin does not move.
 
@@ -333,12 +335,18 @@
   reproduces the rule for every day without restating it. The test checks
   every day of a window against `applicable` directly.
 
-### Decision: History's suppressed-day rule moves to one public function
+### Decision: History's suppressed-day rule gets a second reader, not a new home
 - **Context**: the chart withholds daily values in suppressed weeks through a
-  private helper (`page.py:359-374`).
-- **Selected**: `fitdocs.history.day_rows(series, model, weeks)` returns each
-  day's values with the suppression applied; the chart and the producer both
-  read it. The history golden proves the page unchanged.
+  private helper (`page.py:359-374`). Existing tests and docstrings name that
+  helper as their mutation site (`tests/history/test_page.py:981-1046`,
+  `tests/test_history_e2e.py:18, 337`), and one calls `_build_chart`
+  directly.
+- **Selected**: `fitdocs.history.day_rows(series, model, weeks)`, defined in
+  `page.py`, returns each day's values with suppression decided by the same
+  `_suppressed_day_indices` the chart calls. Neither the helper nor
+  `_build_chart` changes, so no existing test or docstring is edited.
+- **Rationale**: one rule with two readers; moving it would have made those
+  docstrings' mutation instructions stale (Step 3.5 round 1, S2).
 
 ### Decision: No ownership-contract change
 - **Context**: the contract states what fitdocs writes and where; the index
@@ -416,6 +424,17 @@
    and `mean_max` rows until a rebuild or regen. This spec mitigates for
    mean-max by advancing `SCHEMA_VERSION` on any rule change; the core tables
    have the same exposure.
+5. **An `athlete.toml` the refresh cannot load stops every producer.**
+   analytics-index's refresh loads the athlete inputs before reconciling
+   (`.kiro/specs/analytics-index/design.md:1366-1367`, step 6:
+   `load_athlete_inputs` raising `AthleteFileError` gives FAILED). That
+   loader rejects invalid TOML, an unsupported profile version and malformed
+   flat keys (`src/fitdocs/athlete.py:62-91, 115-118, 130-183`) but never reads
+   `[benchmarks]`. So this spec's Req 8.5 holds for a malformed benchmark entry
+   in a valid profile (the benchmark producer alone fails), while a profile
+   the upstream loader rejects fails the whole refresh and every table keeps its
+   rows. Requirement 8.5 was worded to say so. For the controller to queue: no
+   change proposed here.
 
 ## References
 - `.kiro/specs/analytics-index/{requirements,design,tasks,research}.md`: the

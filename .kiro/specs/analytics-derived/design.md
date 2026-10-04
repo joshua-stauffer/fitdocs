@@ -127,11 +127,11 @@ ride" or "planned sessions missed this block" with one query.
   the data root, the held pages, `today` and the athlete fingerprint, declares
   a fingerprint, and has its tables replaced whole when it moves.
 - **History** reads settings and every workout page, computes one methodology's
-  series, then renders and writes (`history/engine.py:288-435`). The middle is
+  series, then renders and writes (`history/engine.py:288-462`). The middle is
   pure.
 - **The plan pass** discovers and parses plan sources, scans the frontmatter
   corpus once, resolves each valid block with `reconcile_block`, then renders
-  and writes (`plans/engine.py:456-577`, `plans/reconcile.py:113-230`). The date
+  and writes (`plans/engine.py:456-577`, `plans/reconcile.py:113-228`). The date
   is used only to split not-logged from upcoming.
 - **The profile** is read by `load_profile`; its in-force rule is
   `BenchmarkSet.applicable` (`benchmarks.py:189-243`).
@@ -229,10 +229,9 @@ tests/index/derived/
 - `src/fitdocs/history/engine.py`: `HistoryInputs`, `HistoryComputation`,
   `read_history_inputs`, `observed_methodologies`, `compute_history`;
   `run_history` composes them, unchanged in behaviour.
-- `src/fitdocs/history/series.py`: `DayRow` and `day_rows` (the suppressed-day
-  rule moved from `page.py`).
-- `src/fitdocs/history/page.py`: the chart reads its values and suppressed
-  days from `day_rows`; `_suppressed_day_indices` is removed.
+- `src/fitdocs/history/page.py`: `DayRow` and `day_rows`, built on the
+  existing `_suppressed_day_indices`, which stays where it is with its name,
+  signature and body; `_build_chart` is unchanged.
 - `src/fitdocs/history/__init__.py`: seven names appended to `__all__`.
 - `src/fitdocs/plans/engine.py`: `ParsedSource`, `PlanSources`,
   `read_plan_sources`; `run_plan` composes it, unchanged in behaviour.
@@ -496,7 +495,7 @@ MEAN_MAX_SOURCES: Final[tuple[CitedConstant[int] | CitedConstant[float], ...]]  
 
 ### Engine seams
 
-#### HistorySeam (`src/fitdocs/history/engine.py`, `series.py`, `page.py`, `__init__.py`)
+#### HistorySeam (`src/fitdocs/history/engine.py`, `page.py`, `__init__.py`)
 
 | Field | Detail |
 |---|---|
@@ -529,7 +528,7 @@ def observed_methodologies(inputs: HistoryInputs) -> tuple[str, ...]: ...      #
 def compute_history(inputs: HistoryInputs, *, methodology: str | None) -> HistoryComputation | None: ...
     # None for the empty archive (every page's load None); MethodologyConfigurationError on a MethodologyProblem
 
-# fitdocs.history.series
+# fitdocs.history.page
 @dataclass(frozen=True)
 class DayRow:
     day: date
@@ -547,10 +546,14 @@ def day_rows(series: DailySeries, model: ModelSeries, weeks: Sequence[WeekRow]) 
   return when `compute_history` returns `None`, then markers, render and write
   exactly as before. The steps of `engine.py:312-359` move into the two new
   functions in the same order; nothing else in the module changes.
-- **`day_rows`** holds the rule moved from `page.py:_suppressed_day_indices`:
-  a day is suppressed when its ISO `(year, week)` is a suppressed `WeekRow`'s.
-  `page.py`'s chart takes its three value series and its suppressed bands from
-  `day_rows`, so the page and the index read one rule.
+- **`day_rows`** lives in `page.py` beside the chart and decides suppression
+  by calling the existing `_suppressed_day_indices` (a day is suppressed when
+  its ISO `(year, week)` is a suppressed `WeekRow`'s). The chart's
+  `_build_chart` keeps calling that same helper, unchanged. One rule, two
+  readers: a mutation of `_suppressed_day_indices` reds the chart's existing
+  tests (`tests/history/test_page.py`, `tests/test_history_e2e.py`, whose
+  docstrings name it) and the seam test together. No existing history test or
+  docstring is edited.
 - **Surface**: `HistoryInputs`, `HistoryComputation`, `read_history_inputs`,
   `observed_methodologies`, `compute_history`, `DayRow`, `day_rows` are
   appended to `fitdocs.history.__all__` and `_HISTORY_SURFACE`. The module
@@ -835,8 +838,10 @@ BLOCK_PRODUCER: Final[BlockProducer]
   derived producers (`index.derived`) also import `history`, `plans`,
   `benchmarks` and `load.profile`, and `metrics.mean_max` computes best
   efforts; only `index.registry` imports `index.derived`."
-- **fit-ingest amendment** (next free number at landing, "landed by
-  analytics-derived"): Requirement 18, "Best efforts", states the library's
+- **fit-ingest amendment** (the next free amendment number at landing, 6
+  today, "landed by analytics-derived"): a new requirement numbered the next
+  free requirement number at landing (19 today; 18 is "Correcting
+  Already-Written Documents by Regeneration"), "Best efforts", states the library's
   best-effort function at library level (the rule of this spec's Requirement 2)
   and classifies its duration set and maximum step under Req 15.8 in their own
   record module, outside Req 15.6's enumeration and `CONSTANT_SOURCES`. Its
@@ -870,7 +875,10 @@ BLOCK_PRODUCER: Final[BlockProducer]
 
 Every column is nullable. Each description below is the column's DuckDB
 comment, extended only to name a unit's word. Every corpus table's description
-ends with the agreement sentence given for it.
+carries its agreement sentence (Req 9.3): it contains "as of the last refresh"
+and exactly one of these command phrases, by producer: `fitdocs history
+--methodology` (`derived.load_series`), "the athlete profile's own"
+(`derived.benchmarks`), `fitdocs plan` (`derived.blocks`).
 
 **`mean_max`** (`derived.mean_max`, per page; `page_key` prepended). Table:
 "One row per duration of the best-effort set that at least one of power, speed
@@ -934,7 +942,9 @@ for the inputs as of the last refresh."
   NULL when suppressed. `suppressed` BOOLEAN.
 
 **`benchmarks`** (`derived.benchmarks`). Table: "One row per benchmark entry in
-athlete.toml, as the athlete profile reads it, as of the last refresh."
+athlete.toml. Equals the athlete profile's own reading of athlete.toml (the
+reading `fitdocs derive-benchmarks` and the training-load pass use), for the
+inputs as of the last refresh."
 - `kind` VARCHAR: `ftp_watts`, `lthr_bpm`, `threshold_pace_s_per_km`,
   `max_hr_bpm` or `resting_hr_bpm`.
 - `discipline` VARCHAR: the sport (`Ride`, `Run`, …); NULL for an athlete-wide
@@ -949,9 +959,10 @@ athlete.toml, as the athlete profile reads it, as of the last refresh."
   recorded.
 
 **`benchmark_periods`**. Table: "One row per period during which one benchmark
-entry is in force for its kind and discipline, by the athlete profile's own
-in-force rule, as of the last refresh. Per discipline as recorded: no
-cross-discipline borrowing."
+entry is in force for its kind and discipline. Equals the athlete profile's own
+in-force rule (the rule the training-load pass applies before its
+cross-discipline borrowing), for the inputs as of the last refresh. Per
+discipline as recorded: no cross-discipline borrowing."
 - `kind` VARCHAR, `discipline` VARCHAR.
 - `starts_on` DATE: first day in force; `ends_before` DATE: first day no longer
   in force; NULL while still in force.
@@ -960,8 +971,8 @@ cross-discipline borrowing."
   date (in force through its applies-from date).
 
 **`blocks`** (`derived.blocks`). Table: "One row per plan source the plan pass
-discovers, resolved as the plan pass resolves it on `resolved_on`, for the
-inputs as of the last refresh."
+discovers. Equals the plan pass's resolution (`fitdocs plan`) on `resolved_on`,
+for the inputs as of the last refresh."
 - `block_id` VARCHAR: the source file's stem; `source_path` VARCHAR: as the
   plan pass reports it.
 - `valid` BOOLEAN; `problems` INTEGER: problems the plan pass reports for the
@@ -970,8 +981,9 @@ inputs as of the last refresh."
   `mesocycle_days` INTEGER: NULL for an invalid source.
 - `resolved_on` DATE: the current date the resolution used.
 
-**`mesocycles`**. Table: "One row per mesocycle of a valid block, with the
-actual-load picture the plan pass computes."
+**`mesocycles`**. Table: "One row per mesocycle of a valid block, with its
+actual-load picture. Equals the plan pass's resolution (`fitdocs plan`) for the
+inputs as of the last refresh."
 - `block_id` VARCHAR, `mesocycle` INTEGER (from 1), `starts_on` DATE, `ends_on`
   DATE, `nominal_days` INTEGER, `days` INTEGER.
 - `target_load` DOUBLE (dimensionless), `focus` VARCHAR: NULL when not stated.
@@ -983,7 +995,8 @@ actual-load picture the plan pass computes."
   `unplanned_pages` INTEGER.
 
 **`planned_workouts`**. Table: "One row per planned workout in a valid block's
-current plan, with its resolution."
+current plan, with its resolution. Equals the plan pass's resolution
+(`fitdocs plan`) for the inputs as of the last refresh."
 - `block_id` VARCHAR, `workout_id` VARCHAR, `mesocycle` INTEGER, `day` DATE,
   `sport` VARCHAR, `modality` VARCHAR (NULL unless stated), `indoor` BOOLEAN
   (NULL unless stated), `title` VARCHAR, `summary` VARCHAR.
@@ -995,13 +1008,15 @@ current plan, with its resolution."
 - `claimed_pages` INTEGER, `missing_pages` INTEGER.
 
 **`planned_workout_pages`**. Table: "One row per workout page a planned workout
-claims, and per page an override names that does not exist."
+claims, and per page an override names that does not exist. Equals the plan
+pass's resolution (`fitdocs plan`) for the inputs as of the last refresh."
 - `block_id`, `workout_id`, `stem` VARCHAR; `path` VARCHAR: data-root-relative,
   NULL when not found; `page_key` VARCHAR: NULL when the index holds no row for
   the page; `found` BOOLEAN.
 
 **`unplanned_pages`**. Table: "One row per workout page in a mesocycle's window
-that no planned workout of the block claims."
+that no planned workout of the block claims. Equals the plan pass's resolution
+(`fitdocs plan`) for the inputs as of the last refresh."
 - `block_id` VARCHAR, `mesocycle` INTEGER, `stem` VARCHAR, `path` VARCHAR,
   `page_key` VARCHAR (NULL when not held).
 
@@ -1015,14 +1030,18 @@ the original plan rows, problem messages.
 |---|---|---|
 | Malformed `fitdocs.toml` or `[history]`/`[load]` table | `rows` of load series and blocks raise; their previous rows stay; benchmarks and mean-max refresh | `Index: could not refresh derived.load_series: …` (and blocks) |
 | Configured plan directory absent or not a directory | Blocks `rows` raise `PlanSettingsError`; previous rows stay | `could not refresh derived.blocks` |
-| Malformed `[benchmarks]` in `athlete.toml` | Benchmarks `rows` raise `ProfileError`; previous rows stay | `could not refresh derived.benchmarks` |
+| Malformed `[benchmarks]` entry in a valid-TOML `athlete.toml` | Benchmarks `rows` raise `ProfileError`; previous rows stay | `could not refresh derived.benchmarks` |
+| `athlete.toml` that is not valid TOML, or fails its profile-version or flat-key checks | The whole refresh fails upstream before any producer runs (analytics-index Refresh step 6: `load_athlete_inputs` raises `AthleteFileError`, outcome FAILED); every table keeps its rows | `Index: not refreshed; …` (analytics-index's line) |
 | Invalid plan source | Not an error: a `blocks` row with `valid` FALSE | In the table |
 | `history` would refuse to choose a methodology | Not an error: every methodology held, none marked default | In the table |
 | Negative `load_value` on a page (an existing history defect) | Load-series `rows` raise `ValueError`; previous rows stay | `could not refresh derived.load_series` |
 | A page's best-effort computation raises | That page's rows roll back (analytics-index Req 9.4) | `could not index <path>` |
 
 Fingerprints never raise for these inputs; the engine's own error, raised from
-`rows`, is what the refresh reports.
+`rows`, is what the refresh reports. Req 8.5's "malformed benchmark entry"
+therefore covers benchmark errors in an otherwise valid profile; a profile the
+upstream refresh itself cannot load stops the whole refresh (research.md,
+Upstream issues, 5).
 
 ## Testing Strategy
 
@@ -1079,8 +1098,9 @@ directly in the test, never the index's earlier output.
   methodology; `day_rows` returns `None` exactly on the days of suppressed
   weeks, with at least one suppressed and one unsuppressed day asserted
   first; the history golden and every existing history test pass unchanged
-  (mutation: drop the suppression mask in `day_rows`, which reds both the
-  seam test and the golden).
+  (mutations: `day_rows` ignores `_suppressed_day_indices`, which reds the
+  seam test; `_suppressed_day_indices` keys by ISO week alone, which reds the
+  seam test and the existing page tests together).
 - **Plans** (`tests/plans/test_resolve_seam.py`): for the reconcile fixtures,
   `resolve_plans(root, today=d).blocks` equals `run_reconcile(root,
   today=d).blocks`; `read_plan_sources` gives the same valid/invalid split as
@@ -1136,9 +1156,16 @@ counting each producer's `rows` calls:
     load-series fingerprint; drop the "only with a source" condition);
   - a `notes` edit recomputes the load series (over-inclusive by design) and
     not that page's `mean_max` rows (the computed-tier rule, inherited).
-- **Failure** (8.5): a malformed `[history]` table keeps the load-series and
-  block rows, refreshes benchmarks, reports both failures, and the next good
-  refresh repairs them.
+- **Failure** (8.5), one case per input class, each refresh also carrying a
+  change that moves an unaffected producer, so "the others refresh" is
+  observable:
+  - a malformed `[history]` table plus a benchmark edit: the load-series and
+    block rows stay, the benchmark rows change, both failures are reported;
+  - a malformed `[benchmarks]` entry in a valid-TOML profile plus a new page:
+    the benchmark rows stay and the load series changes;
+  - a configured plan directory that does not exist plus a benchmark edit: the
+    block rows stay and the benchmark rows change;
+  - in each case the next good refresh repairs the failed tables.
 - **No-op** (8.6): a second refresh leaves every file in the index directory
   byte-identical.
 - **Agreement over time** (7.4): an `athlete.toml` edit reaches
@@ -1147,10 +1174,14 @@ counting each producer's `rows` calls:
   order, after reverse creation, from hand-over, by re-derivation and by
   `--rebuild` gives equal `SELECT * … ORDER BY ALL` for all eleven tables, each
   asserted non-empty first.
-- **Version advance** (10.2): an index built with the previous schema version
-  (the registry without the derived producers, `SCHEMA_VERSION` patched to the
-  old value) makes a writing command's refresh report NEEDS_REBUILD, and
-  `fitdocs index` rebuilds it with every derived table filled.
+- **Version advance** (10.2), by analytics-index's recorded-version recipe:
+  an index built with the derived producers monkeypatched out of the registry
+  tuples, whose `index_meta.schema_version` is then set to `SCHEMA_VERSION - 1`
+  through the store facade, makes a refresh report NEEDS_REBUILD naming both
+  versions; `run_index_command` then rebuilds it with every derived table
+  non-empty. This leg is a regression check of analytics-index's rebuild
+  contract over this spec's tables; its production mutation is removing one
+  derived producer from the registry append.
 
 ### Guards
 - The boundary walk, confinement entry and version pins of DerivedGuards; the
@@ -1192,3 +1223,7 @@ design, which assumes no change to `analytics-index`:
    helper modules; this spec's boundary guard states the rule it follows.
 4. The computed tier does not follow fitdocs upgrades; mitigated here by
    advancing `SCHEMA_VERSION` on any best-effort rule change.
+5. An `athlete.toml` that analytics-index's refresh cannot load (invalid TOML,
+   unsupported profile version, malformed flat keys) fails the whole refresh
+   before any producer runs, so Req 8.5's per-table isolation covers benchmark
+   errors in an otherwise valid profile only; recorded for the controller.
