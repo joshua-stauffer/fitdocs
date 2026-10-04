@@ -94,8 +94,9 @@ Terms used below:
     bookkeeping this feature compares against, and the definition of a workout
     page.
   - `analytics-derived` adds tables through `analytics-index`'s producer seam.
-    This feature shows them the same way as every other table and adds
-    nothing for them except skill examples (Requirement 11.5).
+    This feature shows them the same way as every other table, and adds
+    nothing for them except one skill example per producer (Requirement
+    11.5) and the fixture inputs that example needs.
   - An outside DuckDB client that opens the index file is outside every
     guarantee here. The documentation says so (Requirement 12.4).
 
@@ -235,7 +236,7 @@ Terms used below:
    - read NULL as absent, never as zero.
 3. The skill shall include worked SQL examples for training volume over time, time in heart-rate, power or pace zones, training loads, and effort tags.
 4. If an SQL example in the skill fails to run, or returns no row, against an index built from the fitdocs test fixtures, then the fitdocs test suite shall fail.
-5. Where `analytics-derived`'s tables (mean-max curves, the daily load series, the benchmark timeline, training blocks) are in the index when this feature lands, the skill shall include a worked example for each.
+5. Where `analytics-derived`'s producers (mean-max curves, the daily load series, the benchmark timeline, training blocks) are registered when the later of the two features lands, the skill shall include, for each producer, a worked example that selects rows from one of its tables and returns at least one row against an index built from the fitdocs test fixtures.
 6. The skill shall teach the output formats, the row limit and `--max-rows`, the time limit and `--timeout`, and what the sandbox refuses.
 7. The skill shall meet every pin the existing packaged skills meet:
    - its frontmatter keys;

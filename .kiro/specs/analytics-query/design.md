@@ -100,9 +100,19 @@ the index.
   (`analytics-index`'s section). Naming `query-spill-<pid>/` there is upstream
   issue U3. This spec does not edit `docs/ownership-contract.md` or
   `CONTRACT_VERSION`.
-- **Derived tables and their meaning** (`analytics-derived`). This spec projects
-  them like any table and requires a skill example per table (Requirement
-  11.5, by a generic test).
+- **Derived tables and their meaning** (`analytics-derived`).
+  - This spec projects them like any table: the docs schema block and
+    `--schema` cover every table.
+  - It requires one skill example per non-core producer (Requirement 11.5),
+    through a generic test keyed on the producer.
+  - **Bounded exception for the second lander.** Whichever of this spec and
+    `analytics-derived` lands second may touch exactly three read-side files:
+    - the worked examples in `src/fitdocs/skills/fitdocs-analytics/SKILL.md`;
+    - the generated schema block in `docs/analytics.md`;
+    - the input section of the indexed fixture in `tests/query/conftest.py`
+      (plan sources, benchmark entries).
+
+    Nothing else on the read side.
 - **Making any other command read the index**, `fitdocs check` included.
 
 ### Allowed Dependencies
@@ -164,8 +174,9 @@ These are raised to the controller as upstream issues against
   - **`SCHEMA_VERSION` or any table, column or comment.** The docs reference
     regenerates, and the skill examples re-run. This is the cross-spec rule in
     tasks.md.
-- **`analytics-derived`**: a new registered table needs a skill example. The
-  generic test turns red until one exists.
+- **`analytics-derived`**: a new registered non-core producer needs a skill
+  example that selects rows from one of its tables, and the indexed fixture
+  may need inputs for it. The generic test turns red until both exist.
 - **The duckdb floor.** The floor verification re-runs, and the probe matrix in
   research.md is extended.
 - **This spec's output shapes**: the JSON keys, the CSV NULL rule, the exit
@@ -263,7 +274,10 @@ docs/analytics.md    # The analytics page, with the generated schema-reference b
 
 tests/query/
 ├── __init__.py
-├── conftest.py               # indexed data root (real sync + `fitdocs index`), plain sandbox databases, HOME isolation
+├── conftest.py               # home_dir; module-scoped indexed data root (real sync + `fitdocs index`, own HOME and FITDOCS_INDEX_DIR); copies
+├── _helpers.py               # plain_database, schema_only_index (create_index + create_schema, no refresh), copy_indexed_root
+├── test_fixtures.py          # self-tests of the fixtures and helpers
+├── test_changelog_entry.py   # the [Unreleased] entry names the command, the skill and the page
 ├── test_store_facade.py      # statement_types facade addition
 ├── test_format.py            # every value rule, all three formats, defaults
 ├── test_sandbox.py           # settings, read-back, lock retry, spill naming and stale clean-up
@@ -454,7 +468,7 @@ stateDiagram-v2
 | 11.2 | Teaching order | Skill | Heading profile; ordered sections |
 | 11.3 | Four example topics | Skill | H3 per topic under "Worked examples" |
 | 11.4 | Examples run, return rows | Guards | `test_skill_examples.py` |
-| 11.5 | Example per derived table | Skill, Guards | Generic non-core-table test |
+| 11.5 | Example per derived producer | Skill, Guards | Generic non-core-producer test |
 | 11.6 | Formats, limits, refusals taught | Skill | Sections |
 | 11.7 | Existing skill pins | Skill | Profile entry; parametrized pins |
 | 11.8 | Inbox skill pointer | Skill | One "Further reading" bullet |
@@ -637,7 +651,9 @@ def verify_sandbox(conn: IndexConnection) -> None: ...
     - its number is not `own_pid`;
     - `is_running` returns `False` for that number.
   - Nothing else is touched. It returns the removed paths.
-  - When `os.name == "nt"` it returns `()` without listing.
+  - When the module-level hook `_SKIPS_SPILL_CLEANUP` (initialised to
+    `os.name == "nt"`) is true, it returns `()` without listing. Tests patch
+    the hook, never `os.name`.
   - An `OSError` while removing is swallowed, and the directory is left for a
     later run.
 - **Postconditions**:
@@ -1043,9 +1059,15 @@ def query_command(
   - no `--word` token on a `bash` line other than registered options, so no
     SQL `--` comments in `bash` fences;
   - SQL lives in `sql` fences.
-- **Derived examples.** When `analytics-derived`'s tables are registered at
-  landing, each gets an H3 and a `sql` fence. The generic pin (Testing
-  Strategy) enforces this whichever spec lands second.
+- **Derived examples.**
+  - When `analytics-derived`'s producers are registered at landing, each
+    producer gets an H3 and a `sql` fence that selects rows from one of its
+    tables. That is four examples: mean-max, the load series, benchmarks and
+    blocks.
+  - The generic pin (Testing Strategy) enforces this whichever spec lands
+    second.
+  - The second lander also extends the indexed fixture's inputs, so that
+    each producer yields rows.
 - **`fitdocs-workouts`** gains one "Further reading" bullet linking the
   analytics page and naming `fitdocs-analytics`. Its heading profile is
   unchanged.
@@ -1225,9 +1247,14 @@ Hard rules that apply to every test:
     - A `hold_index(read_only=True)` holder does not delay the open (8.5).
   - **`remove_stale_spill`.**
     - It removes the directory of a dead PID: a reaped subprocess's PID.
-    - It keeps a live PID's directory, its own, a symlink named like one, a
-      file named like one, and `index.duckdb`.
-    - It returns `()` when `os.name` is monkeypatched to `"nt"`.
+    - It keeps a live PID's directory.
+    - It keeps its own PID's directory, with `is_running` injected as
+      always-false so that the own-PID check is what keeps it.
+    - A symlink with a dead-PID name, pointing at a populated directory, is
+      not followed: the target and its contents survive, and the link is not
+      in the returned tuple.
+    - With `_SKIPS_SPILL_CLEANUP` patched true and a removable dead-PID
+      directory present, it returns `()` and the directory survives.
   - **Mutations:**
     - derive `REQUIRED_SANDBOX` from the store's map (the read-back pin reds);
     - drop the `LOCKED` retry;
@@ -1265,7 +1292,12 @@ Hard rules that apply to every test:
     - drop `lock_configuration` from both (the `SET` pins red).
   - **Classifier**: fixed-input tests over real exceptions captured from the
     facade, for each restriction and for `None` (a binder error), plus the
-    `pytz` and out-of-memory hints. Mutation: classify by message only (a
+    `pytz` and out-of-memory hints.
+    - EXTENSION uses `CREATE SECRET s (TYPE S3, KEY_ID 'x', SECRET 'y')`,
+      whose message is stable across 1.x and names no URL.
+    - The configuration-mutation runs that drop `enable_external_access`
+      deselect the cases naming an `https://` address (`-k 'not url'`),
+      because those cases are not sandboxed under that mutation. Mutation: classify by message only (a
     stem-less PermissionException reds).
   - **Time limit**: `SELECT count(*) FROM range(1000000000000)` with
     `timeout_s=0.5` raises `StatementTimedOut` within 3 s. A 10 s safety
@@ -1295,9 +1327,11 @@ Hard rules that apply to every test:
     and its word appears in the stored description.
   - A table created without comments is listed with `(no description)` and
     named by `undescribed`.
-  - **10.9 (live comments)**: a freshly built index from `registered_tables()`
-    has `undescribed(read_catalog(...)) == ()`, with `len(tables) >= 13` as a
-    positive control. Mutation: make `store.create_schema` skip `COMMENT ON
+  - **10.9 (live comments)**: an index created directly with `create_index`
+    and `create_schema(registered_tables())` has
+    `undescribed(read_catalog(...)) == ()`, with `len(tables) >= 13` as a
+    positive control. It is not built through the refresh, whose
+    `apply_descriptions` could restore a dropped comment. Mutation: make `store.create_schema` skip `COMMENT ON
     COLUMN`.
   - `render_reference` escapes `|`.
 - **StoreFacadeAddition.**
@@ -1315,11 +1349,18 @@ Hard rules that apply to every test:
     - a forged storage version (analytics-index's `forge_storage_version`);
     - a file without `index_meta`;
     - `schema_version` 99.
+  - NOT_BUILT by race: the index file disappears after the existence check,
+    and the read-only open's MISSING fault still maps to NOT_BUILT.
   - BUSY: `hold_index` with a fake clock.
   - UNVERIFIED, REFUSED, FAILED and TIMED_OUT.
   - RESULT and SCHEMA.
   - The ordering pin: a `scan_workout_pages` spy records that it ran before
     `open_index`.
+  - The stale-spill pin: a planted `query-spill-<dead pid>/` is removed by
+    `run_query`, and a live-PID sibling is kept.
+  - State assembly: `--schema` on a copy rebuilt with one missing-source page
+    and one duplicate-base page reports `without_computed ==
+    {"source_missing": 1}` and the left-out entry.
   - The close pin: a connection spy shows `close` called on every outcome,
     and on a `KeyboardInterrupt` raised from `execute`.
   - Mutations:
@@ -1334,12 +1375,16 @@ Hard rules that apply to every test:
   - Four concurrent subprocess spills all return the reference result.
   - Mutation: drop the `temp_directory` setting (the concurrency pin reds, as in
     research.md; the observed red rate is recorded).
-- **Crash vectors** (subprocess):
+- **Crash vectors** (subprocess, invoked as `[sys.executable, "-c", "from
+  fitdocs.cli import app; app()", "query", ...]`, so the floor venv's DuckDB
+  is the one exercised; positive control: a subprocess print of
+  `fitdocs.index.store.duckdb_version()` equals the in-process value):
   - `fitdocs query "SELECT * FROM enable_logging(storage='file',
     storage_path='<tmp>/logs'); SELECT 42"` exits 1 with ONE_STATEMENT and
     leaves no `<tmp>/logs`.
-  - Mutation: drop the count check (the subprocess aborts with −6 on 1.4 and
-    later, and the returncode pin reds).
+  - Mutation: drop the count check. The pin reds on the exit code either
+    way, by a signal abort or by exit 0. The −6 abort was probed for
+    `CALL enable_logging(…); SELECT 42`; this exact text is unprobed.
 
 ### End-to-End CLI Tests
 - **Forms**:
@@ -1369,7 +1414,9 @@ Hard rules that apply to every test:
   the reader's lock and the pin reds).
 - **Offline e2e** (`tests/connectors/test_e2e.py`): `query` with `SELECT count(*)
   AS n FROM pages`, after `fitdocs index` in both roots, completes identically
-  with and without connectors, with no socket attempt.
+  with and without connectors, and the bare run makes zero socket attempts.
+  Mutation: a swallowed socket attempt in `run_query`. The existing
+  equal-attempts check tolerates that mutation; the zero check reds.
 - **Skill examples**:
   - every `sql` fence runs through `fitdocs query --format json` against the
     fixture index, exits 0, and has `row_count >= 1`;
@@ -1378,13 +1425,32 @@ Hard rules that apply to every test:
     phrases ascend (`fitdocs query --schema`, the prefer-the-index sentence,
     the show-the-SQL sentence, the NULL sentence). Mutation: move the NULL
     paragraph before the schema step;
-  - **generic 11.5 pin**: every table in `registered_tables()` whose producer
-    is not `core.documents`, `core.computed` or bookkeeping appears in at
-    least one `sql` fence. Positive control: a monkeypatched extra producer
-    table is reported missing.
+  - **generic 11.5 pin, keyed on the producer.**
+    - Group `registered_tables()` by `ResolvedTable.producer`, excluding
+      `TableScope.BOOKKEEPING` and the core producers. The core producers are
+      named by the imported `CORE_DOCUMENTS.name` and `CORE_COMPUTED.name`,
+      never spelled out.
+    - Each remaining producer has at least one `sql` fence that names one of
+      its tables (whole word, case-sensitive) and *selects rows from it*:
+      - it returns at least one row on a copy of the fixture index;
+      - it returns zero rows on a second copy where every table of that
+        producer has been emptied.
+
+      A bare aggregate such as `SELECT count(*) FROM t` fails the second
+      condition.
+    - The helper has fixed-input tests. Positive controls: a monkeypatched
+      extra producer is reported missing, and a bare-aggregate example is
+      reported as not selecting rows.
 - **Docs**:
-  - the reference block equals `render_reference` of a freshly built index;
-  - `python -m tests.query.test_docs_analytics` rewrites only the block;
+  - the reference block equals `render_reference` of an index created
+    directly with `create_index` + `create_schema(registered_tables())` in a
+    temporary directory;
+  - `python -m tests.query.test_docs_analytics` rewrites only the block. It
+    builds that index inside a `TemporaryDirectory`, with HOME at another
+    temporary directory, and never resolves an index location;
+  - `tests/query/test_changelog_entry.py`: `[Unreleased]` names `fitdocs
+    query`, `fitdocs-analytics` and the analytics URL, and `[0.1.0]` does
+    not. Mutation: move the entry under `[0.1.0]`;
   - `fitdocs` lines in `bash` fences are registered commands and options;
   - the defaults stated equal `DEFAULT_MAX_ROWS` and `DEFAULT_TIMEOUT_S`;
   - `FITDOCS_INDEX_DIR`, `XDG_CACHE_HOME`, `read_only`, `-readonly`,
@@ -1443,5 +1509,7 @@ Hard rules that apply to every test:
   and asks for a rebuild otherwise.
 - **The cross-spec landing rules** (tasks.md, Cross-spec shared files):
   - the second lander of `analytics-query`/`analytics-derived` regenerates the
-    docs reference and adds or keeps the derived skill examples;
+    docs reference, adds or keeps one skill example per derived producer, and
+    extends the indexed fixture's inputs. These are the three bounded
+    read-side files of Out of Boundary;
   - the command count and the shared lists are re-pinned from `main`.
