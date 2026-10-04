@@ -550,10 +550,12 @@ def day_rows(series: DailySeries, model: ModelSeries, weeks: Sequence[WeekRow]) 
   by calling the existing `_suppressed_day_indices` (a day is suppressed when
   its ISO `(year, week)` is a suppressed `WeekRow`'s). The chart's
   `_build_chart` keeps calling that same helper, unchanged. One rule, two
-  readers: a mutation of `_suppressed_day_indices` reds the chart's existing
-  tests (`tests/history/test_page.py`, `tests/test_history_e2e.py`, whose
-  docstrings name it) and the seam test together. No existing history test or
-  docstring is edited.
+  readers: a mutation of `_suppressed_day_indices` reds the seam test
+  together with whichever existing chart test covers that mutation
+  (`tests/history/test_page.py` and `tests/test_history_e2e.py` name the
+  helper; the ISO-week-only keying is caught by
+  `test_suppressed_band_keys_by_iso_year_not_week_number_alone`). No existing
+  history test or docstring is edited.
 - **Surface**: `HistoryInputs`, `HistoryComputation`, `read_history_inputs`,
   `observed_methodologies`, `compute_history`, `DayRow`, `day_rows` are
   appended to `fitdocs.history.__all__` and `_HISTORY_SURFACE`. The module
@@ -1100,7 +1102,10 @@ directly in the test, never the index's earlier output.
   first; the history golden and every existing history test pass unchanged
   (mutations: `day_rows` ignores `_suppressed_day_indices`, which reds the
   seam test; `_suppressed_day_indices` keys by ISO week alone, which reds the
-  seam test and the existing page tests together).
+  seam test's cross-year case, whose series spans an ISO-year boundary with
+  only one of the two week 1s suppressed, and
+  `tests/test_history_e2e.py::test_suppressed_band_keys_by_iso_year_not_week_number_alone`
+  together).
 - **Plans** (`tests/plans/test_resolve_seam.py`): for the reconcile fixtures,
   `resolve_plans(root, today=d).blocks` equals `run_reconcile(root,
   today=d).blocks`; `read_plan_sources` gives the same valid/invalid split as

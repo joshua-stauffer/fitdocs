@@ -433,8 +433,7 @@
    `[benchmarks]`. So this spec's Req 8.5 holds for a malformed benchmark entry
    in a valid profile (the benchmark producer alone fails), while a profile
    the upstream loader rejects fails the whole refresh and every table keeps its
-   rows. Requirement 8.5 was worded to say so. For the controller to queue: no
-   change proposed here.
+   rows. Requirement 8.5 was worded to say so. For the controller to queue.
 
 ## References
 - `.kiro/specs/analytics-index/{requirements,design,tasks,research}.md`: the
