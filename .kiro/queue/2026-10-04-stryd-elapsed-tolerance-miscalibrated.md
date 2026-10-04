@@ -70,10 +70,35 @@ Output (aggregate only; no personal files enter the repo):
   does not separate two populations.
 - Δdistance overall: 89 of 90 pairs are ≤ 1.23 m. One pair is 91.32 m, with
   Δelapsed 28.6 s.
-- Stryd writes elapsed as whole seconds. In the large-delta cases the Stryd
-  timer is well below elapsed: 1240 elapsed / 1197 timer against a HealthFit
-  elapsed of about 2925. This suggests HealthFit's elapsed includes time before
-  or after the Stryd recording window. Not yet confirmed.
+- Stryd writes elapsed as whole seconds.
+- **Root cause, confirmed 2026-10-04.** The two writers end the session at
+  different moments. The method was a garmin_fit_sdk dump of the session,
+  event, lap and record messages of both files in each pair, over all 90
+  pairs.
+  - Stryd ends its session at the final timer `stop_all`. In 89 of 90 files,
+    Stryd elapsed equals start → last timer stop to within 1 s.
+  - HealthFit ends its session at the later `session stop_all` event, which
+    is when the workout was ended on the watch. It writes one trailing record
+    and a zero-length `timer start` at that instant.
+  - So Δelapsed is how long the athlete stayed paused before pressing End,
+    plus about 1 s. Δelapsed minus HealthFit's (session stop − last timer
+    stop) falls within 0.1–2.0 s for 83 of 89 pairs; one HealthFit file has no
+    session event.
+  - The 1,685 s pair was paused 28 min before End. Stryd's last record and
+    HealthFit's last timer stop share one second, and their distances agree to
+    0.01 m.
+  - The 210 s pair (a 3.7 h run with 13 pauses) agrees on every one of its 13
+    pause starts to within 1 s. It then sat 3.5 min paused before End.
+  - Elapsed time therefore measures athlete behaviour after the run, not
+    session identity.
+- **The 91 m pair is a different mechanism: Stryd cut the tail short.** The
+  run ended without a pause. The Stryd file's last record is mid-stride at
+  3.46 m/s and has no closing timer stop. HealthFit continues for 28 s more,
+  and 28 s × ~3.4 m/s ≈ 91 m. The starts and both pause boundaries agree to
+  within 1–2 s.
+- **Start discriminates sessions.** Across all 2,561 pages of the real wiki
+  that record a start, exactly one same-sport pair starts within 60 s of
+  another, and it is a true duplicate (Δstart 0 s, device evidence).
 - The suite stays green: `TZ=UTC uv run pytest -q` gave 8674 passed and
   8 skipped. No synthetic fixture can find a miscalibrated constant.
 
@@ -84,11 +109,11 @@ Output (aggregate only; no personal files enter the repo):
    record the full Δelapsed and Δdistance distributions in `research.md`.
    Also re-measure Garmin↔HealthFit on the 2026-09-12 adoption set, so the
    new rule is not calibrated on Stryd alone.
-2. Find out where the Stryd elapsed falls short. Compare record-stream
-   first/last timestamps against the session `start_time` and
-   `total_elapsed_time` for a few of the largest-delta pairs. Decide whether
-   the right key is elapsed time, end time, or neither. Recall that Req 3.6
-   already bans timer time.
+2. (Done 2026-10-04; see Evidence.) Elapsed time is not an identity key.
+   Each writer chooses differently when to end the session, and a file can
+   lose its tail. The maintainer is provisionally OK with "same sport +
+   start ≤ 1 s + distance agreement" and no elapsed term. The open point is the
+   distance tolerance, which has to admit a truncated tail.
 3. Amend Req 3.3 and 3.11 and design.md's tolerance table, then
    `TOLERANCE_SOURCES` and the ownership-contract table (pinned by
    `tests/identity/test_contract_docs.py`). Re-run the match-rule mutation
