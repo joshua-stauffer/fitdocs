@@ -1,9 +1,11 @@
 """The cross-source match rule: are two files the same session, and by what evidence.
 
 Pure over :class:`SessionKey` values -- no file is read. The rule compares sport,
-session start, elapsed time, distance and the device digest; it never compares a
-file's timer time (the key has no such field). Every comparison is inclusive
-(``<=``), and every absent value is ``None`` and never compared as a number.
+session start, distance, elapsed time and the device digest; it never compares a
+file's timer time (the key has no such field), and the strict tier compares
+elapsed time only when a distance is missing (Amendment 1). Every comparison is
+inclusive (``<=``), and every absent value is ``None`` and never compared as a
+number.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from fitdocs.identity.kinds import SourceKind, source_identity
 from fitdocs.model import Activity
 
 __all__ = [
+    "DISTANCE_TOLERANCE_FRACTION",
     "DISTANCE_TOLERANCE_M",
     "ELAPSED_TOLERANCE_S",
     "SHIFTED_DISTANCE_TOLERANCE_M",
@@ -36,6 +39,7 @@ __all__ = [
 START_TOLERANCE_S: Final[float] = 1.0
 ELAPSED_TOLERANCE_S: Final[float] = 10.0
 DISTANCE_TOLERANCE_M: Final[float] = 5.0
+DISTANCE_TOLERANCE_FRACTION: Final[float] = 0.2
 SHIFT_STEP_S: Final[int] = 3600
 SHIFT_MAX_HOURS: Final[int] = 36
 SHIFTED_ELAPSED_TOLERANCE_S: Final[float] = 5.0
@@ -49,11 +53,21 @@ TOLERANCE_SOURCES: Final[Mapping[str, str]] = MappingProxyType(
             "it differ by at most 1 s"
         ),
         "ELAPSED_TOLERANCE_S": (
-            "Stryd↔HealthFit elapsed 8–9 s apart (largest measured, 9 s) plus "
-            "the same 1 s; Garmin↔HealthFit within about 1 s"
+            "Strict tier only when a distance is missing: Garmin↔HealthFit "
+            "within about 1 s; never compared when both record a distance, "
+            "because a Stryd file and its HealthFit copy end their sessions at "
+            "different moments (90 pairs, 1 s to 1,685 s apart)"
         ),
         "DISTANCE_TOLERANCE_M": (
-            "Garmin↔HealthFit within 5 m; Stryd↔HealthFit equal to 0.01 m"
+            "Floor of the strict distance comparison: Garmin↔HealthFit within "
+            "5 m; 89 of 90 Stryd↔HealthFit pairs within 1.23 m"
+        ),
+        "DISTANCE_TOLERANCE_FRACTION": (
+            "Of the longer distance, strict tier: a Stryd file that stopped "
+            "recording 28 s early was 0.99 % short; deliberately tolerant, "
+            "because a start agreeing to the second already separates sessions "
+            "(one same-sport pair within 60 s across 2,561 pages, a true "
+            "duplicate)"
         ),
         "SHIFT_STEP_S": "244 older HealthFit re-exports shifted by whole hours",
         "SHIFT_MAX_HOURS": "the 2026-09-12 adoption rule's ±36 h window",
@@ -125,19 +139,28 @@ def pair_evidence(a: SessionKey, b: SessionKey) -> Evidence | None:
     ):
         return Evidence.DEVICE
 
-    if a.elapsed_s is None or b.elapsed_s is None:
-        return None
-    elapsed_delta_s = abs(a.elapsed_s - b.elapsed_s)
     distance_delta_m = (
         abs(a.distance_m - b.distance_m)
         if a.distance_m is not None and b.distance_m is not None
         else None
     )
+    if close_start and a.distance_m is not None and b.distance_m is not None:
+        # Both distances recorded: elapsed is not compared (Amendment 1).
+        limit_m = max(
+            DISTANCE_TOLERANCE_M,
+            DISTANCE_TOLERANCE_FRACTION * max(a.distance_m, b.distance_m),
+        )
+        if abs(a.distance_m - b.distance_m) <= limit_m:
+            return Evidence.STRICT
+
+    if a.elapsed_s is None or b.elapsed_s is None:
+        return None
+    elapsed_delta_s = abs(a.elapsed_s - b.elapsed_s)
 
     if (
         close_start
+        and distance_delta_m is None
         and elapsed_delta_s <= ELAPSED_TOLERANCE_S
-        and (distance_delta_m is None or distance_delta_m <= DISTANCE_TOLERANCE_M)
     ):
         return Evidence.STRICT
 

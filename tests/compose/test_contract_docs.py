@@ -141,15 +141,21 @@ def test_the_subsection_states_each_composition_guarantee() -> None:
         assert phrase in text, phrase
 
 
-def test_the_changed_at_this_version_paragraph_names_the_feature() -> None:
-    """Req 8.4: the paragraph under the contract version says what this
-    feature changed."""
-    text = _flat(_DOC.read_text(encoding="utf-8").split("\n## ", 1)[0])
-    assert "**What changed at this version:**" in text
+def test_the_version_history_records_what_the_feature_changed() -> None:
+    """Req 8.4: the published paragraph under the contract version said what
+    this feature changed while version 7 was current; a later version replaces
+    that paragraph (activity-identity Amendment 1 raised it to 8), so the
+    statement is pinned where it persists, in ``CONTRACT_VERSION``'s version
+    history."""
+    head = _flat(_DOC.read_text(encoding="utf-8").split("\n## ", 1)[0])
+    assert "**What changed at this version:**" in head
+    source = _DOC.parents[1] / "src" / "fitdocs" / "contract.py"
+    history = _flat(source.read_text(encoding="utf-8"))
+    assert "Raised from ``6`` to ``7`` by channel-merge (Req 8.4)" in history
     assert (
         "The training-load pass and the benchmark-derivation pass read the same "
-        "composed activity."
-    ) in text
+        "composed activity"
+    ) in history
 
 
 def test_the_unreleased_entry_names_the_actions() -> None:

@@ -1,4 +1,4 @@
-"""Tests for the cross-source match rule (Req 3.1-3.8, 3.11).
+"""Tests for the cross-source match rule (Req 3.1-3.8, 3.11; Amendment 1).
 
 The rule is exercised over :class:`SessionKey` values, one difference per pair:
 
@@ -23,6 +23,7 @@ import pytest
 from fitdocs.identity import matching
 from fitdocs.identity.kinds import SourceKind
 from fitdocs.identity.matching import (
+    DISTANCE_TOLERANCE_FRACTION,
     DISTANCE_TOLERANCE_M,
     ELAPSED_TOLERANCE_S,
     SHIFT_MAX_HOURS,
@@ -76,6 +77,7 @@ def test_constants_have_the_designed_values_and_types() -> None:
     assert START_TOLERANCE_S == 1.0
     assert ELAPSED_TOLERANCE_S == 10.0
     assert DISTANCE_TOLERANCE_M == 5.0
+    assert DISTANCE_TOLERANCE_FRACTION == 0.2
     assert SHIFT_STEP_S == 3600
     assert SHIFT_MAX_HOURS == 36
     assert SHIFTED_ELAPSED_TOLERANCE_S == 5.0
@@ -86,6 +88,7 @@ def test_constants_have_the_designed_values_and_types() -> None:
         "START_TOLERANCE_S",
         "ELAPSED_TOLERANCE_S",
         "DISTANCE_TOLERANCE_M",
+        "DISTANCE_TOLERANCE_FRACTION",
         "SHIFTED_ELAPSED_TOLERANCE_S",
         "SHIFTED_DISTANCE_TOLERANCE_M",
     ):
@@ -96,7 +99,7 @@ def test_every_constant_has_a_one_line_source() -> None:
     constants = {
         name
         for name in vars(matching)
-        if name.endswith(("_S", "_M", "_HOURS")) and name.isupper()
+        if name.endswith(("_S", "_M", "_HOURS", "_FRACTION")) and name.isupper()
     }
     assert constants and set(TOLERANCE_SOURCES) == constants
     for source in TOLERANCE_SOURCES.values():
@@ -154,23 +157,91 @@ def test_device_is_reported_over_strict() -> None:
     _check(_key(device=_DEVICE), _key(device=_DEVICE), Evidence.DEVICE)
 
 
-# --- strict elapsed and distance (3.3) ----------------------------------------
+# --- strict tier (Amendment 1: A1.1, A1.2) -------------------------------------
+#
+# The base pair records 10 000 m, so the relative bound (20 % of the longer
+# distance) is the governing one; the short-distance pairs exercise the 5 m
+# floor. With both distances recorded, elapsed time is never compared.
 
 
 @pytest.mark.parametrize(
-    ("delta_s", "expected"),
-    [(10.0, Evidence.STRICT), (11.0, None)],
+    ("delta_m", "expected"),
+    [(2_500.0, Evidence.STRICT), (2_501.0, None)],
 )
-def test_strict_elapsed_boundary(delta_s: float, expected: Evidence | None) -> None:
-    _check(_key(), _key(elapsed_s=3000.0 + delta_s), expected)
+def test_strict_relative_distance_boundary(
+    delta_m: float, expected: Evidence | None
+) -> None:
+    # 2 500 m of 12 500 m (the longer) is exactly 20 %; 2 501 m of 12 501 m is
+    # beyond it.
+    _check(_key(), _key(distance_m=10_000.0 + delta_m), expected)
+
+
+def test_strict_relative_distance_is_of_the_longer_distance() -> None:
+    # 2 400 m is 24 % of the shorter (10 000 m) but 19.4 % of the longer
+    # (12 400 m): measured against the longer it matches.
+    _check(_key(), _key(distance_m=12_400.0), Evidence.STRICT)
 
 
 @pytest.mark.parametrize(
     ("delta_m", "expected"),
     [(5.0, Evidence.STRICT), (6.0, None)],
 )
-def test_strict_distance_boundary(delta_m: float, expected: Evidence | None) -> None:
-    _check(_key(), _key(distance_m=10_000.0 + delta_m), expected)
+def test_strict_distance_floor_governs_short_distances(
+    delta_m: float, expected: Evidence | None
+) -> None:
+    # 20 % of 10-16 m is 2-3.2 m, under the 5 m floor, so the floor answers.
+    _check(_key(distance_m=10.0), _key(distance_m=10.0 + delta_m), expected)
+
+
+def test_strict_distance_floor_matches_two_zero_distances() -> None:
+    _check(_key(distance_m=0.0), _key(distance_m=0.0), Evidence.STRICT)
+    _check(_key(distance_m=0.0), _key(distance_m=5.0), Evidence.STRICT)
+    _check(_key(distance_m=0.0), _key(distance_m=6.0), None)
+
+
+@pytest.mark.parametrize("elapsed_delta_s", [11.0, 210.5, 1_685.2])
+def test_elapsed_is_not_compared_when_both_distances_are_recorded(
+    elapsed_delta_s: float,
+) -> None:
+    # The measured Stryd↔HealthFit shape: the copy ends its session when the
+    # workout is ended on the watch, the Stryd file at its last timer stop, so
+    # elapsed differs by however long the athlete stayed paused.
+    stryd = _key(elapsed_s=1_240.0, distance_m=1_888.9)
+    copy = _key(
+        kind=SourceKind.PHONE_COPY,
+        elapsed_s=1_240.0 + elapsed_delta_s,
+        distance_m=1_888.89,
+    )
+    _check(stryd, copy, Evidence.STRICT)
+
+
+def test_a_truncated_tail_matches() -> None:
+    # The measured Stryd file that stopped recording 28 s early: 91.32 m short
+    # of 9 237.32 m (0.99 %), elapsed 28.6 s short.
+    stryd = _key(elapsed_s=2_879.0, distance_m=9_146.0)
+    copy = _key(kind=SourceKind.PHONE_COPY, elapsed_s=2_907.626, distance_m=9_237.32)
+    _check(stryd, copy, Evidence.STRICT)
+
+
+def test_absent_elapsed_with_both_distances_is_strict() -> None:
+    _check(_key(elapsed_s=None), _key(), Evidence.STRICT)
+    _check(_key(elapsed_s=None), _key(elapsed_s=None), Evidence.STRICT)
+
+
+@pytest.mark.parametrize(
+    ("delta_s", "expected"),
+    [(10.0, Evidence.STRICT), (11.0, None)],
+)
+@pytest.mark.parametrize("missing", ["one", "both"])
+def test_strict_elapsed_fallback_boundary_when_a_distance_is_missing(
+    delta_s: float, expected: Evidence | None, missing: str
+) -> None:
+    a = _key(distance_m=None)
+    b = _key(
+        elapsed_s=3000.0 + delta_s,
+        distance_m=None if missing == "both" else 10_000.0,
+    )
+    _check(a, b, expected)
 
 
 # --- shifted tier (3.4) -------------------------------------------------------
@@ -248,11 +319,17 @@ def test_shift_window_and_step(shift_s: int, expected: Evidence | None) -> None:
 
 
 def test_zero_shift_is_not_a_shift() -> None:
-    # A start within 1 s is zero hours apart. The 8 m distance gap fails the
-    # strict 5 m limit but is inside the shifted 10 m limit, so only the
-    # shifted tier could accept it, and it must not: k = 0 is outside 1..36.
+    # A start within 1 s is zero hours apart. On 20 m and 28 m the strict limit
+    # is max(5 m, 20 % of 28 m) = 5.6 m, so the 8 m gap fails it but is inside
+    # the shifted 10 m limit: only the shifted tier could accept the pair, and
+    # it must not, since k = 0 is outside 1..36.
     for shift_s in (0, 1):
-        _check(*_shifted_pair(shift_s=shift_s, distance_delta_m=8.0), None)
+        original, copy = _shifted_pair(shift_s=shift_s)
+        _check(
+            dataclasses.replace(original, distance_m=20.0),
+            dataclasses.replace(copy, distance_m=28.0),
+            None,
+        )
     # with the strict limits met, a phone copy at zero shift is strict evidence
     _check(*_shifted_pair(shift_s=0), Evidence.STRICT)
 
@@ -324,15 +401,23 @@ def test_absent_start_matches_nothing() -> None:
     _check(original, dataclasses.replace(copy, start=None), None)
 
 
-def test_absent_elapsed_matches_by_device_only() -> None:
-    a = _key(device=_DEVICE, elapsed_s=None)
-    b = _key(device=_DEVICE)
-    _check(a, b, Evidence.DEVICE)
-    # no device on either side: nothing to go on
-    _check(_key(elapsed_s=None), _key(), None)
-    _check(_key(elapsed_s=None), _key(elapsed_s=None), None)
+def test_absent_elapsed_and_absent_distance_match_by_device_only() -> None:
+    # A1.2: no pair of distances and no pair of elapsed times to compare.
+    def bare(device: str | None = None) -> SessionKey:
+        return _key(elapsed_s=None, distance_m=None, device=device)
+
+    _check(bare(device=_DEVICE), _key(device=_DEVICE), Evidence.DEVICE)
+    # no device on either side: nothing to go on, whichever side lacks what
+    _check(bare(), _key(), None)
+    _check(bare(), bare(), None)
+    _check(_key(elapsed_s=None), _key(distance_m=None), None)
+    _check(
+        _key(elapsed_s=None, distance_m=10_000.0),
+        _key(elapsed_s=3000.0, distance_m=None),
+        None,
+    )
     # different devices: nothing
-    _check(_key(device=_DEVICE, elapsed_s=None), _key(device=_OTHER_DEVICE), None)
+    _check(bare(device=_DEVICE), _key(device=_OTHER_DEVICE), None)
 
 
 def test_absent_distance_is_not_compared() -> None:
@@ -340,8 +425,8 @@ def test_absent_distance_is_not_compared() -> None:
     _check(_key(), _key(distance_m=None), Evidence.STRICT)
     # two-sided
     _check(_key(distance_m=None), _key(distance_m=None), Evidence.STRICT)
-    # and a recorded distance far apart still rejects when both are recorded
-    _check(_key(), _key(distance_m=10_000.0 + 200.0), None)
+    # and recorded distances far apart still reject when both are recorded
+    _check(_key(), _key(distance_m=10_000.0 * 2), None)
 
 
 # --- the two-10k counter-example (3.5) ------------------------------------------

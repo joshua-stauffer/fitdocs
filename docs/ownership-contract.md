@@ -1,21 +1,19 @@
 # fitdocs Ownership Contract
 
-**Contract version:** `7`
+**Contract version:** `8`
 
-**What changed at this version:** a page that lists more than one file of a
-workout now takes channels from the files other than its base. A channel the
-base records at even one sample stays the base's, gaps included; a channel it
-records at none is taken, as a whole, from the highest-ranked other file that
-records it. The page's identity, laps and session values stay the base's. A
-page with such a file gains a `## Channel Sources` section naming the file
-each channel came from; no frontmatter key records it. The training-load pass
-and the benchmark-derivation pass read the same composed activity. `fitdocs
-regen` applies the composition to existing pages, and `fitdocs load
---recompute` rescores a page whose composition changed after its load was
-computed. See
-[Channels a Page Takes from Its Extras](#channels-a-page-takes-from-its-extras)
-and
-[Overwrite Semantics of Every Writing Operation](#overwrite-semantics-of-every-writing-operation)
+**What changed at this version:** the rule that decides whether two files are
+one workout no longer compares elapsed times when both files record a
+distance. Strict evidence is now the same sport, starts no more than
+`START_TOLERANCE_S` apart, and distances no more than `DISTANCE_TOLERANCE_M` or
+`DISTANCE_TOLERANCE_FRACTION` of the longer distance apart, whichever is
+larger. Elapsed times are compared, as before, only when a distance is missing.
+Two writers can end one workout's session at different moments. A HealthFit
+copy ends when the workout is ended on the watch, and a Stryd file ends at its
+last timer stop, so their elapsed times differ by as long as the athlete stayed
+paused. Such files now join one page instead of each making its own. Run
+`fitdocs check` to see pages that the rule now recognizes as one workout. See
+[Deciding that two files are one workout](#deciding-that-two-files-are-one-workout)
 below.
 
 This document is the authoritative, published statement of what fitdocs owns
@@ -497,10 +495,12 @@ reading an archived file. The file belongs to a page when either:
    evidence holds:
    - **device** — the starts are no more than `START_TOLERANCE_S` apart and
      the files record the same `source_device` digest;
-   - **strict** — the starts are no more than `START_TOLERANCE_S` apart, the
-     elapsed times no more than `ELAPSED_TOLERANCE_S` apart, and, where both
-     record a distance, the distances no more than `DISTANCE_TOLERANCE_M`
-     apart;
+   - **strict** — the starts are no more than `START_TOLERANCE_S` apart, and
+     either both files record a distance and the distances are no more than
+     `DISTANCE_TOLERANCE_M` or `DISTANCE_TOLERANCE_FRACTION` of the longer
+     distance apart, whichever is larger (elapsed times are then not
+     compared), or a distance is missing and the elapsed times are no more
+     than `ELAPSED_TOLERANCE_S` apart;
    - **shifted** — at least one file is a `phone_copy`, both record an elapsed
      time and a distance, the starts differ by a whole number of hours, from 1
      up to `SHIFT_MAX_HOURS`, to within `START_TOLERANCE_S`, the elapsed times
@@ -509,8 +509,9 @@ reading an archived file. The file belongs to a page when either:
      export whose clock was shifted by whole hours.
 
 A file that records no session start is recognized only by exact content or by
-session UUID; a file that records no elapsed time is recognized as another
-file's session only by device evidence, besides those two. A file's timer time
+session UUID. Two files of which one records no distance and one records no
+elapsed time are recognized as one session only by device evidence, besides
+those two. A file's timer time
 is never used as evidence. Comparisons are inclusive: a difference equal to a
 tolerance matches. A page written before this version of fitdocs lacks the four
 `source_*` keys, so it is recognized only by exact content or session UUID
@@ -521,8 +522,9 @@ The tolerances, each with the measurement it was derived from:
 | Constant | Value | Compares | Measured source |
 |----------|-------|----------|-----------------|
 | `START_TOLERANCE_S` | `1.0` | session starts, in seconds (device and strict; the whole-hour slack of shifted) | Every Stryd↔HealthFit and Garmin↔HealthFit pair agreed on start to the second; a writer truncating a sub-second start and one rounding it differ by at most 1 s |
-| `ELAPSED_TOLERANCE_S` | `10.0` | elapsed times, in seconds (strict) | Stryd↔HealthFit elapsed 8–9 s apart (largest measured, 9 s) plus the same 1 s; Garmin↔HealthFit within about 1 s |
-| `DISTANCE_TOLERANCE_M` | `5.0` | distances, in metres (strict) | Garmin↔HealthFit within 5 m; Stryd↔HealthFit equal to 0.01 m |
+| `ELAPSED_TOLERANCE_S` | `10.0` | elapsed times, in seconds (strict, only when a distance is missing) | Strict tier only when a distance is missing: Garmin↔HealthFit within about 1 s; never compared when both record a distance, because a Stryd file and its HealthFit copy end their sessions at different moments (90 pairs, 1 s to 1,685 s apart) |
+| `DISTANCE_TOLERANCE_M` | `5.0` | distances, in metres (strict; the floor of the relative bound) | Floor of the strict distance comparison: Garmin↔HealthFit within 5 m; 89 of 90 Stryd↔HealthFit pairs within 1.23 m |
+| `DISTANCE_TOLERANCE_FRACTION` | `0.2` | distances, as a fraction of the longer (strict) | Of the longer distance, strict tier: a Stryd file that stopped recording 28 s early was 0.99 % short; deliberately tolerant, because a start agreeing to the second already separates sessions (one same-sport pair within 60 s across 2,561 pages, a true duplicate) |
 | `SHIFT_STEP_S` | `3600` | the step of a start shift, in seconds (shifted) | 244 older HealthFit re-exports shifted by whole hours |
 | `SHIFT_MAX_HOURS` | `36` | the largest whole-hour start shift, in hours (shifted) | the 2026-09-12 adoption rule's ±36 h window |
 | `SHIFTED_ELAPSED_TOLERANCE_S` | `5.0` | elapsed times, in seconds (shifted) | the 2026-09-12 adoption rule (true pairs agreed to ≤ 1 s) |

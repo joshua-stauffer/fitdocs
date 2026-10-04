@@ -46,7 +46,9 @@ def _key(
     *,
     start: datetime | None = _T0,
     elapsed_s: float | None = 3000.0,
-    distance_m: float | None = 10_000.0,
+    # No distance by default: these keys are told apart by elapsed time, which
+    # the strict tier compares only when a distance is missing (Amendment 1).
+    distance_m: float | None = None,
     device: str | None = None,
     kind: SourceKind | None = SourceKind.ORIGINAL,
     sport: str = "Run",
@@ -357,7 +359,7 @@ def test_duplicate_sets_finds_a_shifted_pair_past_unrelated_pages() -> None:
     )
     records = [
         _page("w/2-shifted.md", phone),
-        _page("w/1-base.md", _key()),
+        _page("w/1-base.md", _key(distance_m=10_000.0)),
         _page("w/3-between.md", _key(start=_T0 + timedelta(hours=2), elapsed_s=900.0)),
         _page(
             "w/4-too-far.md", _key(start=_T0 + timedelta(hours=100), elapsed_s=3002.0)
@@ -379,7 +381,7 @@ def test_no_duplicate_sets_when_no_pages_link() -> None:
 
 
 def test_duplicate_sets_window_covers_a_shift_of_exactly_the_maximum() -> None:
-    base = _page("w/base.md", _key())
+    base = _page("w/base.md", _key(distance_m=10_000.0))
     edge = _page(
         "w/edge.md",
         _key(

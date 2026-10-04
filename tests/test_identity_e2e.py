@@ -1408,12 +1408,17 @@ def _sync_files(
     )
 
 
-def _garmin_run(*, elapsed_s: float, serial: int) -> bytes:
-    """A Garmin run at the fixtures' common start: nine kilometres, its own device.
+def _garmin_run(
+    *, elapsed_s: float, serial: int, distance_m: float | None = None
+) -> bytes:
+    """A Garmin run at the fixtures' common start with no recorded distance and
+    its own device.
 
-    Two of these differ only in ``elapsed_s`` and ``serial``, so the rule reads
-    them as one session when their elapsed times are within 10 s and as two
-    otherwise.
+    Two of these differ only in ``elapsed_s`` and ``serial``. With no distance
+    to compare, the strict tier falls back to elapsed time (Amendment 1,
+    A1.1 (b)), so the rule reads them as one session when their elapsed times
+    are within 10 s and as two otherwise. A test that needs the shifted tier,
+    which compares distances, passes ``distance_m``.
     """
     start = fx.garmin_original().start
     return fx.session_fit_bytes(
@@ -1421,7 +1426,7 @@ def _garmin_run(*, elapsed_s: float, serial: int) -> bytes:
         start=start,
         elapsed_s=elapsed_s,
         timer_s=elapsed_s,
-        distance_m=9_000.0,
+        distance_m=distance_m,
         manufacturer="garmin",
         product=3843,
         serial=serial,
@@ -1719,6 +1724,52 @@ def test_the_default_precedence_end_to_end(tmp_path: Path) -> None:
     assert ride_page["source_kind"] == "original"
 
 
+@pytest.mark.parametrize(
+    ("elapsed_short_s", "distance_short_m"),
+    [
+        # paused 28 min before the workout was ended on the watch
+        (1_685.2, 0.0),
+        # the Stryd recording stopped 28 s early, mid-stride: 0.99 % short
+        (28.6, 89.1),
+    ],
+    ids=["paused-before-end", "truncated-tail"],
+)
+def test_a_stryd_file_with_a_much_shorter_session_joins_the_copys_page(
+    tmp_path: Path, elapsed_short_s: float, distance_short_m: float
+) -> None:
+    """Amendment 1 (A1.1): the measured Stryd↔HealthFit shapes the 10 s elapsed
+    tolerance rejected. A HealthFit copy ends its session when the workout is
+    ended on the watch, a Stryd file at its last timer stop; a Stryd file can
+    also lose its last seconds. Same start, distance within 20 %: one page.
+
+    Mutation: compare elapsed when both distances are recorded (each Stryd file
+    makes a second page).
+    """
+    copy, stryd = fx.healthfit_copy(), fx.stryd_file()
+    short = fx.session_fit_bytes(
+        sport="running",
+        start=copy.start,
+        elapsed_s=copy.elapsed_s - elapsed_short_s,
+        timer_s=copy.elapsed_s - elapsed_short_s,
+        distance_m=copy.distance_m - distance_short_m,
+        manufacturer="stryd",
+        product=1,
+        serial=stryd.serial,
+        time_created=copy.start,
+        device_manufacturer="stryd",
+    )
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _sync_files(tmp_path, data_root, [("copy", copy.data)])
+
+    report = _sync_files(tmp_path, data_root, [("stryd", short)])
+
+    assert report.failures == ()
+    page = _frontmatter(_only_page(data_root))
+    assert page["sources"] == [_ref_of(short), _ref(copy)]
+    assert page["source_kind"] == "phone_copy"
+
+
 def test_a_configured_precedence_makes_the_stryd_file_the_base(
     tmp_path: Path,
 ) -> None:
@@ -1921,7 +1972,21 @@ def test_outcomes_are_reported_in_discovery_order_whatever_order_tasks_run(
     expected list is not a palindrome. Mutation: report in reverse.
     """
     copy, original = fx.healthfit_copy(), fx.garmin_original()
-    other, last = fx.ten_k_pair()
+    # ten_k_pair()'s first run starts in the same second as the copy and the
+    # original, and its distance is within the strict tier's 20 %, so it would
+    # join their page; "other" is the same run three days later instead.
+    first, last = fx.ten_k_pair()
+    other = fx.session_fit_bytes(
+        sport="running",
+        start=first.start + 3 * 86_400,
+        elapsed_s=first.elapsed_s,
+        timer_s=first.elapsed_s,
+        distance_m=first.distance_m,
+        manufacturer="garmin",
+        product=3843,
+        serial=first.serial,
+        time_created=first.start + 3 * 86_400,
+    )
     data_root = tmp_path / "data"
     data_root.mkdir()
 
@@ -1930,7 +1995,7 @@ def test_outcomes_are_reported_in_discovery_order_whatever_order_tasks_run(
         data_root,
         [
             ("copy", copy.data),
-            ("other", other.data),
+            ("other", other),
             ("bad", b"not a fit file"),
             ("original", original.data),
             ("last", last.data),
@@ -1945,7 +2010,7 @@ def test_outcomes_are_reported_in_discovery_order_whatever_order_tasks_run(
             data_root
         ).as_posix()
     shared = pages[(_ref(copy), _ref(original))]
-    solo = pages[(_ref(other),)]
+    solo = pages[(_ref_of(other),)]
     final = pages[(_ref(last),)]
     assert shared != solo  # precondition: two pages
     assert report.written == (shared, solo, shared, final)
@@ -2762,8 +2827,12 @@ def test_held_candidates_follow_a_rename_the_regeneration_plan_makes(
     data_root = tmp_path / "data"
     data_root.mkdir()
     _sync_files(tmp_path, data_root, [("a", older.data)])
-    _sync_files(tmp_path, data_root, [("b", _garmin_run(elapsed_s=3008.0, serial=12))])
-    _sync_files(tmp_path, data_root, [("x", _garmin_run(elapsed_s=3004.0, serial=13))])
+    # Distances recorded: x reaches A, an hour shifted, only by the shifted
+    # tier (elapsed 4 s apart); b is 8 s from A, beyond the shifted 5 s.
+    b = _garmin_run(elapsed_s=3008.0, serial=12, distance_m=older.distance_m)
+    x = _garmin_run(elapsed_s=3004.0, serial=13, distance_m=older.distance_m)
+    _sync_files(tmp_path, data_root, [("b", b)])
+    _sync_files(tmp_path, data_root, [("x", x)])
     _archive(data_root, newer)
     old_paths = {p.relative_to(data_root).as_posix() for p in _pages(data_root)}
     assert len(old_paths) == 2  # precondition: two pages
@@ -2799,7 +2868,8 @@ def test_held_candidates_follow_a_rename_the_regeneration_settle_follows(
             start=older.start,
             elapsed_s=older.elapsed_s + seconds,
             timer_s=older.elapsed_s + seconds,
-            distance_m=older.distance_m,
+            # No distance: the elapsed fallback decides (Amendment 1, A1.1 (b)).
+            distance_m=None,
             manufacturer="garmin",
             product=3843,
             serial=serial,

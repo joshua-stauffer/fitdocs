@@ -117,6 +117,15 @@ recorded as one.
   files changed after its load was computed (a computed load is otherwise
   kept); see
   [the ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md).
+- Ownership contract: two files that start in the same second and record
+  distances no more than 5 m or 20 % of the longer distance apart are now
+  one workout, however far apart their elapsed times are. Elapsed time is
+  compared only when a distance is missing. Before, a Stryd file and its
+  HealthFit copy were often two pages, because HealthFit's session runs on
+  until the workout is ended on the watch. The ownership contract's version
+  advances. Actions: run `fitdocs check` to see pages that are now recognized
+  as one workout (`duplicate_session`); see
+  [the ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md#deciding-that-two-files-are-one-workout).
 
 ## [0.1.0] - 2026-09-19
 

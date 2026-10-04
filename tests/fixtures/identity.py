@@ -93,7 +93,7 @@ def session_fit_bytes(
     start: int,
     elapsed_s: float,
     timer_s: float,
-    distance_m: float,
+    distance_m: float | None,
     manufacturer: str,
     product: int,
     serial: int,
@@ -111,7 +111,8 @@ def session_fit_bytes(
     ``session_uuid`` (16 byte values), when given, is recorded as the HealthFit
     ``SESSION UUID`` developer field on the session, registered with the
     builder's own field description. ``undocumented`` messages are spliced in
-    with :func:`splice_undocumented`.
+    with :func:`splice_undocumented`. ``distance_m=None`` records no distance,
+    neither on the session nor on any record.
     """
     end = start + round(elapsed_s)
     dev_data_id: Mesg = {
@@ -143,9 +144,10 @@ def session_fit_bytes(
         record: Mesg = {
             "mesg_num": builder._MESG_RECORD,
             "timestamp": start + round(elapsed_s * fraction),
-            "distance": distance_m * fraction,
             "heart_rate": 140 + i,
         }
+        if distance_m is not None:
+            record["distance"] = distance_m * fraction
         if with_position:
             record["position_lat"] = builder.to_semicircles(40.0 + 0.0001 * i)
             record["position_long"] = builder.to_semicircles(-105.0 + 0.0001 * i)
@@ -174,7 +176,7 @@ def session_fit_bytes(
             "sub_sport": "generic",
             "total_elapsed_time": elapsed_s,
             "total_timer_time": timer_s,
-            "total_distance": distance_m,
+            **({} if distance_m is None else {"total_distance": distance_m}),
             **session_extra,
         },
         {

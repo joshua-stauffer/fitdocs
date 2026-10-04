@@ -324,7 +324,7 @@ highest-ranked extra that records it. A page without extras renders as before
 and changes only this line (Req 8.2).
 """
 
-CONTRACT_VERSION: Final[str] = "7"
+CONTRACT_VERSION: Final[str] = "8"
 """The published ownership contract's version identifier (Req 2.8).
 
 A *string*, and deliberately not comparable with :data:`DOC_VERSION`: it
@@ -376,6 +376,14 @@ key records it. The training-load pass and the benchmark-derivation pass read
 the same composed activity, so ``fitdocs regen`` applies the composition to
 existing pages and ``fitdocs load --recompute`` rescores a page whose
 composition changed after its load was computed.
+
+Raised from ``7`` to ``8`` by activity-identity Amendment 1 because the stated
+match rule changed. The strict tier compares the sport, the session starts
+(within 1 s) and, when both files record one, their distances, which may differ
+by up to 5 m or 20 % of the longer distance, whichever is larger. Elapsed time
+is compared only when a distance is missing. A file and its copy that end their
+sessions at different moments (a HealthFit copy ends when the workout is ended
+on the watch, a Stryd file at its last timer stop) are now one workout.
 """
 
 # --- document vocabulary -----------------------------------------------------
