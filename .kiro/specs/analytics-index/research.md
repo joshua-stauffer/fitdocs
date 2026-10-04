@@ -170,6 +170,11 @@
   - `tests/test_preserved_guarantees.py:93-108` together with
     `tests/fixtures/pre_distribution_e74af37.py:19-39`. **This third pin is
     missing from the roadmap and the brief**;
+  - `tests/sitebuild/test_repo_wiring.py:18-24, 64-72`
+    (`PRE_SPEC_DEPENDENCIES`, docs-site Req 8.1: "keep its runtime dependency
+    list ... exactly as they are"). **A fourth pin, found by the Step 3.5
+    review**, owned by a spec the roadmap's Existing Spec Updates does not
+    list. It becomes docs-site Amendment 1;
   - `pyproject.toml:25-31` and `:103-193` (the curated mypy `files`);
   - `uv.lock`.
 - **Findings**: The vendored snapshot says "re-vendor explicitly, do not

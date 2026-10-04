@@ -93,7 +93,7 @@ Terms used below:
   Libraries, Network and Credentials; `structure.md`'s dependency direction);
   the ownership-contract statement and version advance; the install
   documentation's footprint note; the release notes; the amendment records in
-  `plugin-api`, `distribution`, `workout-docs` and `connectors`.
+  `plugin-api`, `distribution`, `docs-site`, `workout-docs` and `connectors`.
 - **Out of scope**: `fitdocs query`, its sandbox, statement timeout, formats,
   freshness reporting, read-side lock retry, the agent skill and
   `docs/analytics.md` (`analytics-query`); mean-max curves, the daily load
@@ -305,4 +305,4 @@ true.
 5. The steering documents shall state the index as a derived cache that is not state, DuckDB among the key libraries, the network statement of criterion 12.5, and the index package's place in the dependency direction.
 6. The fitdocs test suite shall never read or write the real user's cache, configuration or home directory while exercising the index.
 7. If any writing command or `fitdocs index` writes outside the data root's permitted locations and the resolved index directory, or if any module other than the one connection module imports the DuckDB library, then the fitdocs test suite shall fail.
-8. The amendment records of `plugin-api` (its dependency baseline), `distribution` (its exact dependency list, its pre-feature dependency snapshot and the install footprint), `workout-docs` (the hand-over out of the sync engine) and `connectors` (the no-network command list) shall name this feature's change.
+8. The amendment records of `plugin-api` (its dependency baseline), `distribution` (its exact dependency list, its pre-feature dependency snapshot and the install footprint), `docs-site` (its requirement that the runtime dependency list stay as it was), `workout-docs` (the hand-over out of the sync engine) and `connectors` (the no-network command list) shall name this feature's change.

@@ -90,7 +90,8 @@ No document byte changes. `DOC_VERSION` is untouched.
   - the ownership-contract section and the `CONTRACT_VERSION` advance;
   - the CHANGELOG entry and the install-footprint note;
   - the `tech.md` and `structure.md` edits;
-  - the amendment records in `plugin-api`, `distribution`, `workout-docs` and
+  - the amendment records in `plugin-api`, `distribution`, `docs-site`,
+  `workout-docs` and
     `connectors`.
 - **Guards**:
   - the duckdb-importer and index-importer boundaries;
@@ -381,7 +382,7 @@ src/fitdocs/index/
 ├── location.py        # FITDOCS_INDEX_DIR > XDG_CACHE_HOME > ~/.cache resolution, per-data-root key, refusal, 0o700 mkdir
 ├── schema.py          # SCHEMA_VERSION, ColumnType, ColumnSpec, TableSpec, PAGE_KEY column, UNIT_SUFFIXES, resolve_tables, manifest/digest
 ├── bookkeeping.py     # index_meta / index_pages / index_producers TableSpecs; IndexMeta, PageState, ComputedState, Bookkeeping types
-├── producer.py        # The seam: SqlValue, Row, Rows, LoadReading, PageDocument, PageComputed, CorpusPage, CorpusSnapshot, the three Protocols
+├── producer.py        # The seam: SqlValue, Row, Rows, LoadRegionReading, PageDocument, PageComputed, CorpusPage, CorpusSnapshot, the three Protocols
 ├── registry.py        # DOCUMENT_PRODUCERS, COMPUTED_PRODUCERS, CORPUS_PRODUCERS (append-only); registered_tables()
 ├── fingerprint.py     # document_fingerprint, render_fingerprint, athlete_fingerprint, corpus_fingerprint (pure)
 ├── core/
@@ -467,7 +468,9 @@ tests/index/
 - Test suites amended:
   - `tests/conftest.py`: an autouse `FITDOCS_INDEX_DIR` isolation fixture;
   - `tests/test_determinism.py:666-715`, `tests/test_packaging.py:503-519`
-    and `:1036-1090`, and `tests/test_preserved_guarantees.py:93-108`;
+    and `:1036-1090`, `tests/test_preserved_guarantees.py:93-108`, and
+    `tests/sitebuild/test_repo_wiring.py:18-24, 64-72` (docs-site's
+    `PRE_SPEC_DEPENDENCIES` pin);
   - `tests/test_confinement.py`: the `index` entry, and the index directory as
     a permitted location;
   - `tests/connectors/test_e2e.py:203-244`: `index` joins the offline list,
@@ -479,10 +482,11 @@ tests/index/
     phrase pins in `tests/identity/test_contract_docs.py:155-165` moved into
     the history docstring, and `tests/declaration_golden/*.AGENTS.md`;
   - any test pinning full `sync`/`regen`/`load` stdout. The isolated run
-    prints the "not built" line, and those tests are named in task 6.2.
+    prints the "not built" line, and those tests are named in task 7.2.
 - Spec records:
   - `.kiro/specs/plugin-api/requirements.md` (Amendment 1);
   - `.kiro/specs/distribution/requirements.md` (Amendment 4);
+  - `.kiro/specs/docs-site/requirements.md` (Amendment 1);
   - `.kiro/specs/workout-docs/requirements.md` (Amendment 4);
   - `.kiro/specs/connectors/requirements.md` (Amendment 1);
   - `.kiro/steering/roadmap.md`: the Existing Spec Updates ticks, and the
@@ -669,7 +673,7 @@ stateDiagram-v2
 | 14.5 | Steering | Steering | `tech.md`, `structure.md` |
 | 14.6 | Tests never touch real home | TestIsolation | Autouse fixture |
 | 14.7 | Confinement and importer guards | Guards | `test_confinement.py`, `tests/index/test_boundary.py` |
-| 14.8 | Amendment records | SpecRecords | Four amendments |
+| 14.8 | Amendment records | SpecRecords | Five amendments |
 
 ## Components and Interfaces
 
@@ -693,7 +697,7 @@ stateDiagram-v2
 | Build | orchestration | `fitdocs index`: build, swap, recover | 10.2–10.7, 10.9 | Refresh, Store, Lock (P0) | Batch |
 | CliWiring | cli | Command, call sites, reporters, progress | 7.1, 7.6, 7.8, 9.1, 9.2, 10.1, 10.8–10.10 | Refresh, Build (P0) | Service |
 | FormatVersion and ContractDocs | docs | Contract version and published statements | 5.7, 12.5, 12.6, 14.1–14.4 | — | — |
-| Steering and SpecRecords | records | `tech.md`, `structure.md`, the four amendments | 14.5, 14.8 | — | — |
+| Steering and SpecRecords | records | `tech.md`, `structure.md`, the five amendments | 14.5, 14.8 | — | — |
 | Guards and TestIsolation | tests | Boundaries, pins, isolation | 3.8, 4.6, 7.8, 9.7, 12.3, 12.4, 13.7, 14.6, 14.7 | — | — |
 
 ### Configuration and contract layer
@@ -850,7 +854,7 @@ Rows = Mapping[str, Sequence[Row]]
 LoadStatus = Literal["computed", "unsupported", "not_computed", "unreadable"]
 
 @dataclass(frozen=True)
-class LoadReading:
+class LoadRegionReading:
     status: LoadStatus          # COMPUTED->computed, UNSUPPORTED->unsupported, PLACEHOLDER->not_computed, SUPERSEDED/FOREIGN->unreadable
     payload: LoadPayload | None # parsed only for computed and unsupported
 
@@ -861,7 +865,7 @@ class PageDocument:
     text: str                     # the page file decoded as UTF-8
     frontmatter: Mapping[str, object]
     sources: tuple[str, ...]      # contract.source_refs(frontmatter)
-    load: LoadReading
+    load: LoadRegionReading
 
 @dataclass(frozen=True)
 class PageComputed:
@@ -1399,9 +1403,11 @@ def refresh_after_command(data_root: Path, *, environ: Mapping[str, str], home: 
   6. **Meta**: if the athlete fingerprint, fitdocs version or DuckDB version
      differs from `index_meta`, write it. If the fitdocs version differs,
      `apply_descriptions` first.
-- **Athlete inputs.** For a handed-over page, `PageComputed.athlete` comes
-  from the hand-over. For any other page, it is the refresh's
-  `inputs.athlete`.
+- **Athlete inputs.** For a handed-over page, `PageComputed.athlete` and
+  `athlete_fingerprint` come from the hand-over. For any other page, they come
+  from the refresh's `inputs.athlete`. A test pins a hand-over whose
+  inputs differ from the refresh's: the recorded fingerprint is the
+  hand-over's.
 
 #### Build (`src/fitdocs/index/build.py`)
 
@@ -1595,6 +1601,10 @@ def run_index_command(data_root: Path, *, environ: Mapping[str, str], home: Path
   - **distribution Amendment 4.** The exact dependency list gains
     `duckdb>=1.1,<2`. The pre-feature snapshot guard asserts the named delta.
     The install documentation states the footprint and the platform gap.
+  - **docs-site Amendment 1.** Req 8.1 is amended: the runtime dependency
+    list is the pre-docs-site list plus `duckdb>=1.1,<2`, added by
+    analytics-index; the site tooling still adds none. The optional
+    dependencies stay empty.
   - **workout-docs Amendment 4.** A criterion is appended: after each document
     write the sync engine hands the rendered page's composition, metrics,
     sources and athlete inputs to an optional consumer; nothing rendered
@@ -1629,9 +1639,12 @@ def run_index_command(data_root: Path, *, environ: Mapping[str, str], home: Path
   - **The index importers.** Modules outside `fitdocs.index` that import
     `fitdocs.index` must be in `_INDEX_IMPORTERS = {"fitdocs.cli"}`
     (append-only).
-  - **Store SQL.** String literals in `store.py` contain none of `INSTALL`,
-    `LOAD `, `ATTACH`, `COPY`, `EXPORT`, `http://`, `https://`, `PRAGMA`,
-    `SET `.
+  - **Store SQL.** Non-docstring string constants in `store.py` contain,
+    case-sensitively, none of `INSTALL `, `LOAD `, `ATTACH`, `COPY `,
+    `EXPORT `, `http://`, `https://`, `PRAGMA`, `SET `. The setting names
+    (`autoinstall_known_extensions`) and the classifier stems do not match
+    these tokens. Positive control: a synthetic module whose constant is
+    `"INSTALL httpfs"` is flagged.
   - **The subprocess check.** A subprocess imports `fitdocs.cli`, runs
     `plugins.discover(...)`, and runs these through `CliRunner`: `check`,
     `history`, `plan`, `derive-benchmarks`, `plugins`, `skill`, `--version`,
@@ -1645,13 +1658,20 @@ def run_index_command(data_root: Path, *, environ: Mapping[str, str], home: Path
   - `test_packaging.py:503-519` holds the ordered list plus `duckdb`.
   - `test_preserved_guarantees.py` asserts `head == list(DEPENDENCIES) +
     ["duckdb>=1.1,<2"]`, with the vendored snapshot untouched.
+  - `tests/sitebuild/test_repo_wiring.py`'s
+    `test_runtime_dependencies_are_the_pre_spec_literals` asserts
+    `PRE_SPEC_DEPENDENCIES + ["duckdb>=1.1,<2"]`, and its docstring names
+    analytics-index as the deliberate delta.
 - **Confinement.** `test_confinement.py` gains:
   - `EntryPoint(id="index", ...)`, running `fitdocs index` with
     `FITDOCS_INDEX_DIR=<sandbox>/index-cache`;
   - `permitted_locations` extended with the resolved index directory;
   - a non-vacuity check that requires `index.duckdb` to have been written.
-  - Every other writing entry runs with that sandboxed variable, and for
-    `sync` an index is prebuilt, so its post-pass writes.
+  - The existing writing entries call the engine functions directly
+    (`tests/test_confinement.py:310-328, 447`), not the CLI, so they never
+    reach the post-pass. A new entry, `sync-with-index`, runs `fitdocs sync
+    SOURCE --out` through `CliRunner` against a prebuilt sandboxed index. Its
+    non-vacuity check requires a file in the index directory to have changed.
 - **Others.**
   - `test_inbox_e2e.py`: the second drain leaves every file in the index
     directory byte-identical.
