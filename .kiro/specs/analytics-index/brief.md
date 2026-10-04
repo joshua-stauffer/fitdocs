@@ -253,7 +253,10 @@ write hooks and refresh-on-query):
   Only the store module imports `duckdb`, and a boundary test pins both
   facts. Tech.md's network allow-list gains a sentence: it binds fitdocs's
   connections, not an outside DuckDB client that opens the file.
-- **Dependency pin: `duckdb>=1.1,<2`** (viability, 2026-10-04). Moving to 2.x
+- **Dependency pin: `duckdb>=1.1,<2`** (viability, 2026-10-04). *Superseded:
+  the floor is now `duckdb>=1.2,<2`, by the Phase 10 cross-spec review,
+  round 1, ruling C1 (every 1.1.x release writes into HOME on `INSTALL`; see
+  research.md, Risks).* Moving to 2.x
   is a deliberate change, because a 2.x-written file can't be read by an
   agent's 1.x client. A version-mismatch error means rebuild, never data
   loss.

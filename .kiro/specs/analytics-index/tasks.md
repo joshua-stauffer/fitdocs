@@ -94,7 +94,7 @@ sequential: never two of them `(P)` at once.
   storage-version forger, with their self-tests). Later tasks import it and
   never edit it; a missing helper is a stop-and-report.
 - `tests/index/conftest.py`: 5.1 (created, with page-building fixtures), then
-  6.1 (appends the built-index fixture).
+  6.1 (appends the `core_registry` fixture and the built-index fixture).
 - `src/fitdocs/index/refresh.py`: 6.1, then 6.2, then 6.3.
 - `src/fitdocs/cli.py`: 7.1 (the `index` command and docstring), then 7.2
   (the post-pass wiring).
@@ -124,11 +124,12 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
   `index`. **Append-only. Sibling: analytics-query, which appends `query`.**
 - **The confinement entry list and permitted locations**
   (`tests/test_confinement.py`: `WRITING_ENTRY_POINTS`, `permitted_locations`).
-  This plan appends the `index` entry and the resolved index directory.
-  **Append-only. Siblings:**
-  - `analytics-query` may append a check that `query` writes nothing;
-  - `analytics-derived` adds no writer, but its producers run inside the
-    entries this plan registers.
+  This plan appends the `index` and `sync-with-index` entries and the
+  resolved index directory. **Append-only. Siblings:**
+  - `analytics-query` appends one standalone test that `query` writes nothing
+    outside its spill directory;
+  - `analytics-derived` appends `EntryPoint(id="index-derived", …)`, running
+    `fitdocs index` over its derived fixture root.
 - **`PACKAGED_SKILLS`**: `src/fitdocs/agentskill.py:44-47`,
   `tests/test_skill_locator.py:57-58` and `tests/test_agent_skill.py:191-199`.
   This plan adds nothing. **Append-only. Sibling: analytics-query, which
@@ -138,30 +139,43 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 - **`src/fitdocs/index/schema.py`, `SCHEMA_VERSION`, with
   `tests/index/test_schema_version.py` `_DIGESTS_BY_VERSION`.**
   **Append-only map; the version advances by exactly one per lander that
-  changes the schema. Sibling: analytics-derived, which advances to `main`'s
-  value plus one and appends its digest. analytics-query never edits either.**
+  changes the schema or a producer's row rule (design.md, Seam 2). Sibling:
+  analytics-derived, which advances to `main`'s value plus one and appends its
+  digest. analytics-query never edits either.**
+- **`tests/index/test_schema.py`, the exact registered-table-set pin** (the 13
+  names of design.md, Seam 3, after this plan). **Append-only. Sibling:
+  analytics-derived, which appends its eleven table names.**
 - **`tests/index/test_boundary.py`, `_INDEX_IMPORTERS`.** The set is
   `{"fitdocs.cli"}` after this plan. **Append-only. Sibling: analytics-query,
-  which appends its command module.** The duckdb-importer set stays exactly
-  `{store}`. No sibling adds to it: query goes through the facade.
+  which appends its five modules: `fitdocs.query.sandbox`,
+  `fitdocs.query.statement`, `fitdocs.query.freshness`,
+  `fitdocs.query.schemaview` and `fitdocs.query.command`.** analytics-derived
+  appends nothing: its producers live inside `fitdocs.index`. The
+  duckdb-importer set stays exactly `{store}`. No sibling adds to it: query
+  goes through the facade.
 - **`src/fitdocs/index/store.py`, the connection facade.** **Append-only for
-  `analytics-query`**, which adds a facade method it needs. Never change
-  `MANDATORY_SETTINGS` or remove a method.
-- **`tests/conftest.py`, the index-isolation fixture.** **Extend, never replace.
-  Siblings: both.**
-- **`CHANGELOG.md` `[Unreleased]`** (append under an existing category heading;
-  create it only if absent) **and `docs/ownership-contract.md`** (the
-  analytics-index section; a sibling appends its own sentences). **Siblings:
-  both.**
+  `analytics-query`**, which adds the facade method it needs
+  (`statement_types`). Never change `MANDATORY_SETTINGS`, the writer
+  settings or the exception mapping, and never remove a method.
+- **`tests/conftest.py`, the index-isolation fixture.** Owned by this plan.
+  **Neither sibling edits it**: analytics-query isolates HOME in
+  `tests/query/conftest.py`, and analytics-derived uses the fixture as is.
+- **`CHANGELOG.md` `[Unreleased]`.** Append under an existing category
+  heading; create it only if absent. **Siblings: both.**
+- **`docs/ownership-contract.md`, the analytics-index section.** Owned by this
+  plan. **Neither sibling edits it**: this plan's section already names
+  `query-spill-<pid>/` (task 8.1), and analytics-derived adds no write
+  location.
 - **`pyproject.toml`'s mypy `files` list.** **Append-only. Siblings: both.**
-- **`.kiro/steering/structure.md`**, the dependency-direction line for `index`.
-  **analytics-query appends its package's line.**
+- **`.kiro/steering/structure.md`**, the dependency-direction sentence for
+  `index`. **analytics-query appends its package's line; analytics-derived
+  appends its derived-producers clause to the `index` sentence.**
 - **`.kiro/steering/roadmap.md`**, the Phase 10 Existing Spec Updates and Specs
   ticks. The connectors line is ticked only when both its parts land: this
   plan annotates it "(analytics-index part landed)".
 - **`.kiro/specs/connectors/requirements.md`**, the amendment adding `index` to
-  Requirement 14.1. analytics-query appends `query` to the same amendment, or
-  numbers its own from the branch at landing.
+  Requirement 14.1. analytics-query starts after this plan merges, so it
+  records its own amendment, numbered the next free at its landing.
 
 ## Test File Ownership
 
@@ -184,7 +198,8 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
   Each adds its own headed section.
 - `tests/index/_helpers.py` and `tests/index/test_helpers.py`: **4.2**.
 - `tests/index/test_boundary.py`: **4.1**, then **7.3**.
-- `tests/index/conftest.py` and `tests/index/test_corpus.py`: **5.1**.
+- `tests/index/conftest.py` and `tests/index/test_corpus.py`: **5.1**
+  (6.1 appends `core_registry` and the built-index fixture to the conftest).
 - `tests/index/test_derive.py`: **5.2**.
 - `tests/test_sync_handoff.py`: **5.3**.
 - `tests/index/test_handoff.py`: **5.4**.
@@ -210,26 +225,28 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 - [ ] 1. Foundation: the dependency, test isolation and the index location
 
 - [ ] 1.1 Add DuckDB as a core runtime dependency and reword the four dependency pins
-  - **Dependency and lock.** Append `duckdb>=1.1,<2` to `[project].dependencies`
+  - **Dependency and lock.** Append `duckdb>=1.2,<2` to `[project].dependencies`
     and regenerate `uv.lock` with `uv lock`. No `[project.optional-dependencies]`
-    appears.
+    appears. The floor is 1.2, not the brief's 1.1: every 1.1.x release writes
+    into HOME on `INSTALL` under the locked configuration (design.md, Security
+    Considerations).
   - **Reword `tests/test_determinism.py:666-715`; do not delete it.**
-    - The baseline set becomes the five plus `"duckdb>=1.1,<2"`.
+    - The baseline set becomes the five plus `"duckdb>=1.2,<2"`.
     - The docstring states that analytics-index added `duckdb` for the index,
       that plugin discovery adds no dependency, and that discovery never loads
       `duckdb`. The last is pinned by 4.1's subprocess check.
     - The `optional-dependencies == {}` assertion stays.
   - **Reword `tests/test_packaging.py:503-519`.** The exact ordered list gains
-    `"duckdb>=1.1,<2"` last. The scratch-venv docstring at `:1036-1090` says
+    `"duckdb>=1.2,<2"` last. The scratch-venv docstring at `:1036-1090` says
     "six".
   - **Reword `tests/test_preserved_guarantees.py:93-108`.** It asserts `head ==
-    list(pre_distribution.DEPENDENCIES) + ["duckdb>=1.1,<2"]` and names
+    list(pre_distribution.DEPENDENCIES) + ["duckdb>=1.2,<2"]` and names
     analytics-index as the deliberate delta. The vendored snapshot
     `tests/fixtures/pre_distribution_e74af37.py` is not edited (its own
     rule, lines 19-23).
   - **Reword `tests/sitebuild/test_repo_wiring.py:18-24, 64-72`** (docs-site
     Req 8.1). `test_runtime_dependencies_are_the_pre_spec_literals` asserts
-    `PRE_SPEC_DEPENDENCIES + ["duckdb>=1.1,<2"]`, and keeps `PRE_SPEC_DEPENDENCIES`
+    `PRE_SPEC_DEPENDENCIES + ["duckdb>=1.2,<2"]`, and keeps `PRE_SPEC_DEPENDENCIES`
     itself as the five literals. Its docstring names analytics-index as the
     deliberate delta, and keeps a `Dies on:` line (the module's own
     `_DIES_ON` rule requires one) that names adding any other entry.
@@ -241,6 +258,8 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
   - **Mutations.**
     - Remove `duckdb` from `pyproject.toml`: the determinism, packaging,
       preserved-guarantees and docs-site repo-wiring pins each red.
+    - Write the superseded floor, `duckdb>=1.1,<2`, in `pyproject.toml`: the
+      same four pins each red on the literal.
     - Add an `[project.optional-dependencies]` table: the optional-dependency
       assertions red.
   - **Observable:** `uv sync` installs `duckdb` 1.5.x. The four pin modules
@@ -356,7 +375,9 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     - `SqlValue`, `Row`, `Rows`, `LoadStatus`, `LoadRegionReading`. The
       name differs from `fitdocs.contract.LoadReading` (the frontmatter load
       reading, `contract.py:1150`) so the two never clash in one module;
-    - `PageDocument`, `PageComputed`, `CorpusPage`, `CorpusSnapshot`;
+    - `PageDocument`, `PageComputed`, `CorpusPage`, `CorpusLeftOut` and
+      `CorpusSnapshot` (`data_root`, `pages`, `left_out`, `today`,
+      `athlete_fingerprint`, in that order);
     - the `DocumentProducer`, `ComputedProducer` and `CorpusProducer` protocols.
 
     The module docstring states every producer obligation:
@@ -365,18 +386,26 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     - naive datetimes;
     - every declared table keyed, possibly empty;
     - per-page rows exclude `page_key`;
-    - corpus fingerprints cover every input read, `today` included when used;
-    - an exception rolls back that unit and is retried.
+    - corpus fingerprints cover every input read, `today` included when used,
+      and a producer reading the workout pages fingerprints the snapshot's
+      `pages` and `left_out` rather than globbing `workouts/`;
+    - a snapshot is built only by `corpus.corpus_snapshot` (task 5.1);
+    - an exception, from `rows` or `fingerprint`, rolls back or skips that
+      unit and is retried.
   - **Typing tests.** A test module defines one minimal frozen-dataclass
     producer per protocol, passes each where the protocol is expected, and
     `uv run mypy` accepts them. A deliberately wrong one, with `rows` taking
     the wrong input type, is rejected: the test runs mypy on a snippet through
     the API that existing typing tests use, or records the reject in
     Implementation Notes if no such pattern exists.
-  - **Dataclass test.** `dataclasses.fields` of each input type equals the
-    design's field list, in order. This is a seam pin for the siblings.
+  - **Dataclass test.** `dataclasses.fields` of each input type (`PageDocument`,
+    `PageComputed`, `CorpusPage`, `CorpusLeftOut`, `CorpusSnapshot`) equals the
+    design's field list, in order, including `CorpusSnapshot.left_out` and
+    `CorpusLeftOut`'s `path` and `document_fingerprint`. This is a seam pin
+    for the siblings.
   - **Mutations:**
     - drop `today` from `CorpusSnapshot`;
+    - drop `left_out` from `CorpusSnapshot`;
     - reorder `PageComputed` fields.
 
     The field-list pins red.
@@ -390,6 +419,13 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     fingerprint excises the `notes`, `workout` and `load` region contents
     using `fitdocs.docmerge`'s grammar, keeping the markers. It keeps managed
     frontmatter minus `LOAD_KEYS`.
+  - **`combined_corpus_fingerprint(producer, snapshot)`**, the one composition
+    of a corpus producer's stored fingerprint:
+    `corpus_fingerprint(producer.fingerprint(snapshot),
+    fitdocs_version=version.tool_version(), schema_version=SCHEMA_VERSION)`.
+    It calls `fitdocs.version.tool_version` through the module attribute at
+    call time, and lets an exception from `producer.fingerprint` propagate
+    unchanged.
   - **Tests**, starting from a real page made by the existing fixture builders.
     Each fixture edit is verified to change the page bytes before the
     fingerprint is asserted.
@@ -413,18 +449,32 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     - Two athlete inputs differing only in the twelfth significant digit of
       `ftp_watts` give different fingerprints.
     - The corpus fingerprint moves on each of its three arguments.
+    - `combined_corpus_fingerprint`, with a minimal test corpus producer and a
+      snapshot built by hand in the test (the builder arrives in 5.1):
+      - it equals `corpus_fingerprint(<the producer's fingerprint>,
+        fitdocs_version=tool_version(), schema_version=SCHEMA_VERSION)`;
+      - it moves when `fitdocs.version.tool_version` is monkeypatched to
+        another version, and when the producer's fingerprint changes;
+      - a producer whose `fingerprint` raises makes it raise the same
+        exception object.
   - **Mutations:**
     - include `LOAD_KEYS` in managed;
     - stop excising the `notes` region (and, separately, the `load` region);
     - drop `path` from the document fingerprint;
     - render floats rounded to six significant digits (the twelfth-digit test
       reds);
-    - drop `schema_version` from the corpus fingerprint.
+    - drop `schema_version` from the corpus fingerprint;
+    - bind `tool_version` with `from fitdocs.version import tool_version` (the
+      monkeypatched-version test reds);
+    - catch the producer's exception and return a constant (the propagation
+      test reds).
   - **Observable:** `uv run pytest tests/index/test_fingerprint.py` is green
     and mypy is clean. The module imports only `fitdocs.contract`,
-    `fitdocs.docmerge`, `fitdocs.metrics.types` and stdlib.
+    `fitdocs.docmerge`, `fitdocs.metrics.types`, `fitdocs.version`,
+    `fitdocs.index.producer`, `fitdocs.index.schema` and stdlib.
   - _Requirements: 5.1, 5.2, 5.5, 7.3, 13.3_
   - _Boundary: Fingerprint_
+  - _Depends: 2.1, 2.2_
 
 - [ ] 2.4 (P) Guarantee one fitdocs writer with an OS advisory lock
   - **The lock module**, per design.md § Lock: `writer_lock(path)` uses a
@@ -545,7 +595,10 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     pasted. It asserts `schema_digest(registered_tables()) ==
     _DIGESTS_BY_VERSION[SCHEMA_VERSION]` and `SCHEMA_VERSION ==
     max(_DIGESTS_BY_VERSION)`. Its docstring states the binding rule of
-    design.md, Seam 2.
+    design.md, Seam 2, including that the version advances for every change
+    to how any producer derives rows from unchanged inputs, because the
+    per-page tiers do not recompute on an upgrade, and that such a version's
+    digest may equal the previous one (Requirement 13.6).
   - **Mutations:**
     - add a channel to `Samples` in a test-local subclass passed to the pin
       helper, or the generated column list hard-coded minus one field (3.8
@@ -567,9 +620,16 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
       override;
     - `IndexConnection` (`execute`, `interrupt`, `close`, the context manager);
     - `IndexResult` (`columns`, `fetchmany`, `fetchall`);
-    - `IndexStatementError` and `IndexInterrupted`, raised by `execute` with
-      the original DuckDB exception chained (`raise … from exc`), so 4.2 can
-      classify a statement failure through `__cause__`;
+    - `IndexStatementError` and `IndexInterrupted`, raised by `execute`,
+      `IndexResult.fetchmany` and `IndexResult.fetchall` alike, with the
+      original DuckDB exception chained (`raise … from exc`), so 4.2 can
+      classify a statement failure through `__cause__`:
+      `duckdb.InterruptException` becomes `IndexInterrupted`, and every other
+      `duckdb.Error` becomes `IndexStatementError`. DuckDB streams execution,
+      so errors and interrupts surface at fetch;
+    - the writer's `temp_directory`: every writer connection (`create_index`,
+      `open_index(read_only=False)`) sets it to `path.parent /
+      WRITER_SPILL_DIRNAME` (`"writer-spill"`), per design.md § Store;
     - `duckdb_version()`.
 
     `import duckdb` appears only inside the private connect function and under
@@ -580,6 +640,10 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
       and a read-only connection;
     - `current_setting('storage_compatibility_version')` is `v1.0.0` on
       writers;
+    - `current_setting('temp_directory')` on a created and on a read-write
+      connection names `<the database's directory>/writer-spill` (compared
+      after resolving both paths), and is not that path on a read-only
+      connection;
     - a mandatory override raises before any file is created;
     - `SET enable_external_access=true`, `SET
       autoinstall_known_extensions=true`, `read_csv('/etc/hosts')` and
@@ -590,7 +654,18 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     - the file header storage version (bytes 12-20) is 64. This is a
       regression check of Requirement 11.4's outcome. It does not
       discriminate on 1.5.6, which writes 64 either way (research.md P6);
-    - `interrupt()` on an idle connection is harmless.
+    - `interrupt()` on an idle connection is harmless;
+    - **fetch errors are wrapped** (analytics-query relies on this):
+      - `execute("SELECT now()")`, then `fetchmany(1)`, raises
+        `IndexStatementError` whose `__cause__` is set; the test first
+        asserts that `pytz` is not importable, so the fetch-time failure is
+        real;
+      - separately, the same with `fetchall()`, with the same `pytz`
+        precondition;
+      - `execute("SELECT count(*) FROM range(1000000000000)")`, then
+        `fetchmany(1)`, raises `IndexInterrupted` when a timer calls
+        `interrupt()` after 0.5 s. It runs in a subprocess with a 60 s
+        timeout, so a broken interrupt reds instead of hanging.
 
     No test executes `INSTALL` or `LOAD`.
   - **The boundary guard**, `tests/index/test_boundary.py`. An AST walk of
@@ -633,6 +708,11 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     - drop `lock_configuration` (the `SET` refusal pins red);
     - drop `WRITER_SETTINGS` (the `current_setting('storage_compatibility_version')`
       pin reds);
+    - drop the writer `temp_directory` (the `writer-spill` pin reds);
+    - let `fetchmany` re-raise the raw DuckDB exception (the `fetchmany`
+      wrapping pin and the interrupt pin red);
+    - let `fetchall` re-raise the raw DuckDB exception (the `fetchall`
+      wrapping pin reds);
     - move `import duckdb` to `store.py`'s top level (the subprocess check
       reds, because it imports the store);
     - add `import duckdb` to `src/fitdocs/index/location.py` in place, with a
@@ -644,7 +724,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
   - **Observable:** the policy and boundary tests are green, and `uv run
     python -c "import fitdocs.cli, sys; print('duckdb' in sys.modules)"`
     prints `False`.
-  - _Requirements: 11.4, 12.1, 12.2, 12.4, 14.7_
+  - _Requirements: 1.5, 11.4, 12.1, 12.2, 12.4, 14.7_
 
 - [ ] 4.2 Classify DuckDB failures from their real messages
   - **`classify_error`**, with the stems and PID extraction of design.md
@@ -758,7 +838,16 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     delegates to it. The existing docio and scanner tests stay green
     unchanged.
   - **The corpus module**, per design.md § Corpus:
-    - `ScannedPage`, `LeftOutPage`, `CorpusScan` and `scan_workout_pages`;
+    - `ScannedPage`, `LeftOutPage` (`path`, `reason`, `collides_with`,
+      `document_fingerprint`, in that order), `CorpusScan` and
+      `scan_workout_pages`; every left-out page carries the
+      `document_fingerprint` of the bytes the scan read;
+    - `corpus_snapshot(data_root, scan, *, today, athlete_fingerprint, held)`,
+      the one builder of a `CorpusSnapshot`: `pages` holds every scanned page
+      whose key is in `held` (every scanned page when `held` is `None`);
+      `left_out` holds a `CorpusLeftOut` for each of `scan.left_out` and for
+      each scanned page not held; both sorted by path. It is pure: it reads no
+      file;
     - the `LoadRegionReading` mapping from `classify_load_region` states:
       - COMPUTED becomes `computed`;
       - UNSUPPORTED becomes `unsupported`;
@@ -776,16 +865,37 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     - two pages with the same base keep the first by path and leave the second
       out as `duplicate_base` naming the first;
     - pages are sorted by path;
-    - each load state maps as above.
+    - each load state maps as above;
+    - **`LeftOutPage`'s fields** are `path`, `reason`, `collides_with`,
+      `document_fingerprint`, in order (a seam pin for analytics-query), and a
+      left-out page's `document_fingerprint` equals
+      `fingerprint.document_fingerprint(path, <its bytes>)`;
+    - **`corpus_snapshot`**, on a scan with one `no_base_reference` page and
+      one `duplicate_base` page:
+      - with `held=None`, `pages` is every scanned page and `left_out` is the
+        two left-out pages, with their fingerprints;
+      - with a `held` set missing one scanned key, that page appears in
+        `left_out` with its document fingerprint, not in `pages`;
+      - with a `held` set holding a key no scanned page has, nothing extra
+        appears;
+      - in every case, the paths of `pages` and `left_out` together are every
+        scanned workout page exactly once, each tuple is sorted by path, and
+        `data_root`, `today` and `athlete_fingerprint` are passed through
+        unchanged (asserted with values that differ from any default).
   - **Mutations:**
     - key by `sources[0]` (red with a multi-file page);
     - keep the last colliding page;
     - drop the symlink refusal in `read_document` (the docio symlink tests and
       the corpus test red);
-    - map SUPERSEDED to `computed`.
+    - map SUPERSEDED to `computed`;
+    - leave `scan.left_out` out of the snapshot's `left_out` (the `held=None`
+      pin reds);
+    - drop not-held pages instead of moving them to `left_out` (the
+      missing-key pin reds);
+    - ignore `held` (the missing-key pin reds).
   - **Observable:** the corpus and docio tests are green, and
     `read_frontmatter`'s callers are unchanged.
-  - _Requirements: 2.6, 6.1, 6.2, 7.2_
+  - _Requirements: 2.6, 6.1, 6.2, 7.2, 13.3_
   - _Boundary: Corpus, docio_
   - _Depends: 2.2, 2.3_
 
@@ -882,10 +992,24 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     - one transaction per removal.
 
     Also define `RefreshInputs`, `RefreshResult` and `PROGRESS_EVERY`.
-    `tests/index/conftest.py` gains a built-index fixture: schema created,
-    reconcile from empty.
+    `reconcile` reads the producer tuples as `registry.<NAME>` at call time
+    (design.md § Registry).
+  - **`tests/index/conftest.py` gains two fixtures:**
+    - **`core_registry`**: monkeypatches the registry to its core-only values,
+      `registry.DOCUMENT_PRODUCERS = (CORE_DOCUMENTS,)`,
+      `registry.COMPUTED_PRODUCERS = (CORE_COMPUTED,)` and
+      `registry.CORPUS_PRODUCERS = ()`;
+    - **the built-index fixture**: schema created, reconcile from empty. It
+      requests `core_registry`, so the index is built under the same registry
+      its refresh then uses. A test that registers a fake producer patches
+      the tuple on top of `core_registry` and builds its own index after the
+      patch.
   - **Tests** (`tests/index/test_refresh.py`, pages section). Each starts by
-    asserting its postcondition is false.
+    asserting its postcondition is false. Every test that asserts an exact
+    write set or a no-op runs under `core_registry`: the effort edit, the load
+    rewrite, the rename, the render change, the removal, the base change, the
+    missing base's no-write retry and the no-op. So a later spec's registered
+    producers never change what they assert.
     - **New pages**: added with both tiers.
     - **Effort edit**: a hand-edited `effort` gives a document-only update,
       and a spy confirms `derive_page` is not called.
@@ -926,25 +1050,60 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 
 - [ ] 6.2 Refresh corpus producers, metadata and progress
   - **`reconcile` steps 5-6**, per design.md § Refresh:
-    - the `CorpusSnapshot` of held pages, with `today` and the athlete
-      fingerprint;
-    - corpus fingerprint gating with whole-table replacement in one
-      transaction per producer;
+    - the snapshot from `corpus.corpus_snapshot(data_root, scan, today=…,
+      athlete_fingerprint=…, held=…)`, where `held` is the keys
+      `index_pages` holds after steps 3 and 4 (a page whose transaction
+      rolled back keeps its previous membership);
+    - corpus fingerprint gating on
+      `fingerprint.combined_corpus_fingerprint(producer, snapshot)`, with
+      whole-table replacement in one transaction per producer. Neither the
+      snapshot nor the three-part fingerprint is assembled in `refresh.py`;
     - producer error rollback;
-    - the meta update;
+    - **a raising `fingerprint()` is that producer's error**: no transaction
+      runs, its previous rows and stored fingerprint are kept, the error is
+      appended to `producer_errors`, the other producers and the meta step
+      proceed, and the producer is retried at the next refresh;
+    - the meta update, reading the version through
+      `fitdocs.version.tool_version()` as a module attribute at call time,
+      like `combined_corpus_fingerprint` (2.3), so one monkeypatch moves both;
     - `apply_descriptions` when the fitdocs version differs.
 
     Plus the progress callback: it fires when the total exceeds
     `PROGRESS_EVERY`, every `PROGRESS_EVERY` pages and at the end.
   - **Tests**, in the corpus, meta and progress section. Fake corpus producers
     are registered by monkeypatching `registry.CORPUS_PRODUCERS` in the test,
-    never editing the registry.
+    on top of `core_registry` (6.1), never editing the registry. Every test
+    here that asserts an exact write set or a no-op runs under
+    `core_registry`, the 5.5 test included.
     - Rows are replaced only when the producer's fingerprint moves.
-    - A fitdocs-version change, monkeypatched, recomputes them and reapplies
-      every description.
-    - An exception keeps the previous rows and records the error.
-    - The snapshot holds every held page, sorted, with `today` exactly as
-      passed.
+    - A fitdocs-version change, monkeypatched on `fitdocs.version.tool_version`,
+      recomputes them and reapplies every description.
+    - An exception from `rows` keeps the previous rows and stored
+      fingerprint, and records the error.
+    - **A raising `fingerprint()`**: two fake producers, one whose
+      `fingerprint` raises and one whose fingerprint moved since the last
+      refresh, with the athlete inputs also changed. After the refresh, the
+      raising producer's rows and stored `index_producers.fingerprint` are
+      unchanged and its error is in `producer_errors`; the other producer's
+      rows are replaced; `index_meta` carries the new athlete fingerprint.
+      Assert first that the moved producer's stored fingerprint differs from
+      its new one.
+    - **The snapshot.** A fake producer records the snapshot it is handed, on
+      a refresh that adds one new page and removes one held page. It
+      holds every held page, sorted, with `today` exactly as passed, and it
+      equals `corpus_snapshot(data_root, scan_workout_pages(data_root),
+      today=…, athlete_fingerprint=…, held=frozenset(<read_bookkeeping(conn)
+      .pages after the refresh>))`: the snapshot a reader rebuilds.
+    - **The snapshot after a page error.** A test-only document producer
+      with no tables (`tables=()`, so the built index needs none, as in 6.5)
+      is appended to `registry.DOCUMENT_PRODUCERS` on top of `core_registry`.
+      It raises on one new page and on one page held before (whose file was
+      edited so it is document-due). The recorded snapshot has the new page
+      in `left_out`, not `pages`, and the previously held page still in
+      `pages`, with its new document fingerprint. On the next refresh, with
+      the raising producer removed, the new page moves to `pages` and the fake
+      producer's fingerprint moves (the fake fingerprints the paths of `pages`
+      and of `left_out` as two separate lists).
     - **5.5**: an athlete-inputs change alone writes only `index_meta`
       (`activities` rows unchanged), and the old athlete fingerprint is still
       on the rows.
@@ -955,9 +1114,22 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     - always recompute corpus producers;
     - skip `apply_descriptions` (a changed description is not visible);
     - update `activities.athlete_fingerprint` on a meta change;
-    - change `>` to `>=` in the progress threshold.
+    - change `>` to `>=` in the progress threshold;
+    - let an exception from `fingerprint()` propagate out of `reconcile` (the
+      raising-fingerprint test reds);
+    - build the snapshot with `held=None` (the page-error snapshot pin reds:
+      the failed new page lands in `pages`);
+    - build `held` from the bookkeeping read before the pages step, ignoring
+      commits (the new page never moves to `pages`, and the snapshot-equality
+      pin reds);
+    - make the built-index fixture skip `core_registry` while a test-only
+      corpus producer whose fingerprint covers `snapshot.athlete_fingerprint`
+      is appended to `registry.CORPUS_PRODUCERS` in `registry.py`, both in
+      place with `cp` backups restored afterwards (the 5.5
+      writes-only-`index_meta` pin reds: the isolation is what keeps it green
+      once a later spec registers producers).
   - **Observable:** the section is green, and mypy is clean.
-  - _Requirements: 5.5, 7.7, 13.2, 13.3, 13.8_
+  - _Requirements: 1.7, 5.5, 7.7, 13.2, 13.3, 13.8_
 
 - [ ] 6.3 Run the refresh after a command, never raising
   - **`refresh_after_command`** and `IndexReport`/`Outcome`, per design.md
@@ -1051,9 +1223,14 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     4. by re-derivation, with the hand-over disabled;
     5. by `run_index_command(rebuild=True)`.
 
-    For every table, `SELECT * … ORDER BY ALL` (through the facade) is equal
-    across all five, and non-empty. The rows are asserted non-trivial before
-    comparing.
+    For every table of the core producers (`CORE_DOCUMENTS.tables` and
+    `CORE_COMPUTED.tables`, read from the producers, not a hard-coded list),
+    `SELECT * … ORDER BY ALL` (through the facade) is equal across all five,
+    and non-empty. The rows are asserted non-trivial before comparing. Both
+    assertions are scoped to the core producers' tables, so they stay green
+    when a later spec registers producers whose tables may be empty on this
+    fixture; those producers prove their own determinism. All five runs pass
+    the same `today`.
   - **Mutations:**
     - write and commit `PageState` before computing and inserting the page's
       rows. The kill then falls after a page's new fingerprint is recorded
@@ -1078,8 +1255,10 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     - `tests/test_cli_skill.py:262-270`: 11 becomes 12.
   - **Tests** (`tests/index/test_cli_index.py`):
     - **The first run**: on fixture pages it prints the table counts, `Index
-      file: <abs path inside FITDOCS_INDEX_DIR>` and `Schema version: 1`, and
-      exits 0.
+      file: <abs path inside FITDOCS_INDEX_DIR>` and
+      `f"Schema version: {SCHEMA_VERSION}"`, and exits 0. The schema line is
+      pinned from the constant, never the literal `1`, so a later spec's
+      version advance keeps it green.
     - **A second run** gives UNCHANGED, exit 0, with identical counts.
     - **Detail lines**: a missing-source page is listed with its reason, exit
       0. A duplicate-base page is listed as left out, naming the other page.
@@ -1094,7 +1273,10 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     - exit 0 on STAGED;
     - print progress to stdout;
     - omit the left-out lines;
-    - map `IndexLocationError` to exit 1.
+    - map `IndexLocationError` to exit 1;
+    - print `Schema version: 1` as a literal and set `SCHEMA_VERSION` to 2 in
+      `schema.py`, both in place with `cp` backups (the schema-line pin
+      reds).
   - **Observable:** the command tests and `tests/test_cli_skill.py` are green,
     and `uv run fitdocs index --help` lists `--rebuild`.
   - _Requirements: 6.2, 7.7, 10.1, 10.8, 10.9_
@@ -1165,7 +1347,15 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     leaves every file in the index directory byte-identical (7.4).
   - **`tests/index/test_boundary.py`:**
     - `_INDEX_IMPORTERS = {"fitdocs.cli"}`: no module outside `fitdocs.index`
-      except those imports `fitdocs.index`, with a positive control;
+      except those imports `fitdocs.index`, with a positive control. The set
+      is append-only: analytics-query appends `fitdocs.query.sandbox`,
+      `fitdocs.query.statement`, `fitdocs.query.freshness`,
+      `fitdocs.query.schemaview` and `fitdocs.query.command`. The check is
+      one-way: it fails on an importer missing from the set, and never on a
+      listed name whose module does not exist, so query can append its names
+      ahead of its modules. A fixed-input test pins both directions: a
+      synthetic importer not in the set is flagged, and a listed name with no
+      module is not;
     - **the untouched-commands check** (7.8, 12.4). The parent first builds
       an index for a fixture data root with `fitdocs index`, then hand-edits
       one page's `effort` tag so the index is behind the corpus, then
@@ -1192,6 +1382,8 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
       confinement guard reds);
     - import `fitdocs.index.refresh` from `src/fitdocs/history/engine.py`, in
       place with a `cp` backup restored afterwards (the importer guard reds);
+    - make the importer guard also require every listed name to resolve to a
+      module (the listed-name-with-no-module fixed-input test reds);
     - run `_run_index_pass` at the end of `check` (the untouched-commands
       check reds three ways: `duckdb` is imported, an `Index: 0 added, 1
       updated` line prints, and the snapshot changes);
@@ -1212,7 +1404,12 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     - `0o700`;
     - the disposable cache, never read back into a document;
     - the agreement rule of 5.7, in those words;
-    - the file names.
+    - the file names: `index.duckdb`, `.wal`, `index.lock`, `.building`,
+      `.rebuilt`, `writer-spill/` (transient; DuckDB's spill space for
+      fitdocs's own index writes, set by the store) and
+      "`query-spill-<pid>/` (transient; created by `fitdocs query`, removed on
+      close or by the next query)". DuckDB's default `.tmp/` is not listed:
+      no fitdocs connection uses it.
 
     It also gains:
     - the overwrite-semantics bullets for the refresh and for `fitdocs
@@ -1237,6 +1434,10 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     - the contract section names `FITDOCS_INDEX_DIR`, both fallbacks and the
       refusal;
     - the agreement-rule sentences;
+    - **the spill directories**: the section contains the phrase
+      "`query-spill-<pid>/` (transient; created by `fitdocs query`, removed on
+      close or by the next query)" and names `writer-spill/`, and the name
+      equals `store.WRITER_SPILL_DIRNAME` (read from the constant);
     - the `CHANGELOG` entry is inside `[Unreleased]`;
     - `docs/install.md` names the size and both platform gaps;
     - `DOC_VERSION == 9`, the value on `main` when this plan was written. If
@@ -1244,6 +1445,9 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
       value: this plan never changes it.
   - **Mutations:**
     - drop the refusal sentence;
+    - drop the `query-spill-<pid>/` phrase (the spill-directory pin reds);
+    - change `WRITER_SPILL_DIRNAME`'s value in `store.py` without touching
+      the contract (the spill-directory pin reds);
     - move the CHANGELOG entry under `[0.1.0]`;
     - leave `CONTRACT_VERSION` unchanged (the version pins and the golden
       red).
@@ -1281,7 +1485,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     - **distribution Amendment 4**: the dependency list, the pre-feature
       snapshot delta and the install footprint, naming the tests.
     - **docs-site Amendment 1**: Req 8.1 amended. The runtime dependency list
-      is the pre-docs-site list plus `duckdb>=1.1,<2`, added by
+      is the pre-docs-site list plus `duckdb>=1.2,<2`, added by
       analytics-index. The site tooling still adds none, and the optional
       dependencies stay empty. It names
       `tests/sitebuild/test_repo_wiring.py::test_runtime_dependencies_are_the_pre_spec_literals`.
@@ -1305,14 +1509,22 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
   - **mypy registration.** Append every new test module to `pyproject.toml`'s
     mypy `files` list.
   - **The floor check.** Run `tests/index/test_store.py`'s policy and
-    classification sections against `duckdb==1.1.3`, in a throwaway venv under
-    the session scratchpad, with `HOME` set to a nonexistent path and no
-    network calls. Never the worktree `.venv`, and never with `INSTALL`.
-    - Installing the 1.1.3 wheel may fetch it from PyPI. Only the test run is
+    classification sections against `duckdb==1.2.0`, the floor of
+    `duckdb>=1.2,<2`, in a throwaway venv under the session scratchpad, with
+    no network calls. Never the worktree `.venv`, and never with `INSTALL`.
+    - **HOME.** At the venv/run level, point `HOME` at an **existing** empty
+      directory under the scratchpad, and assert after the run that it is
+      still empty. The policy tests themselves still monkeypatch HOME to a
+      nonexistent path (task 4.1) and are not changed for this run; the
+      run-level directory catches anything else the run writes into HOME,
+      which a nonexistent HOME would hide (research.md, the P6 disclosure).
+    - Installing the 1.2.0 wheel may fetch it from PyPI. Only the test run is
       network-free.
-    - Record pass or fail per test.
-    - **If any fails, stop and report.** Raising the floor is a roadmap
-      decision (research.md, Risks).
+    - Record pass or fail per test, and the HOME listing after the run.
+    - **If any fails, or HOME is not empty, stop and report.** The floor is
+      1.2.0 by cross-spec ruling C1 (every 1.1.x release writes into HOME on
+      `INSTALL`); changing it again is a roadmap decision (research.md,
+      Risks).
   - **Full validation**, after the final rebase: `uv run pytest && uv run ruff
     check . && uv run ruff format --check . && uv run mypy`, plain, with
     `TZ=UTC`, and with `CI=true`. Also run the forbidden-strings gate
@@ -1321,8 +1533,8 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     validations used, which is recorded in their Implementation Notes.
   - **Version checks.**
     - `CONTRACT_VERSION` equals `main`'s value plus one.
-    - `SCHEMA_VERSION == 1`, unless a sibling landed first, in which case
-      re-pin per design.md, Seam 2.
+    - `SCHEMA_VERSION == 1`. This plan lands first by construction: both
+      siblings start after it merges.
   - **Observable:** all green, with the floor-check table and the validation
     commands' output recorded in Implementation Notes.
   - _Requirements: 11.4, 12.1, 12.3_

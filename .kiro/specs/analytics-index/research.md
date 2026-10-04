@@ -22,7 +22,8 @@
     dependency (P1: `InvalidInputException: Required module 'pytz' failed to
     import`). Every instant is therefore a naive `TIMESTAMP`, with UTC or local
     stated in its comment (Decision 9).
-  - **The `>=1.1` floor runs the whole writer recipe** (P6, duckdb 1.1.3):
+  - **The writer recipe ran on 1.1.3 and 1.5.6** (P6), measured when the
+    floor under study was `>=1.1`:
     - the locked config with `lock_configuration`;
     - `storage_compatibility_version='v1.0.0'`;
     - `COMMENT ON`;
@@ -30,6 +31,15 @@
 
     Both versions write storage version 64, which every 1.x client reads. The
     open-error message stems are identical across 1.1.3 and 1.5.6 (P2, P7).
+  - **The floor is now `duckdb>=1.2,<2`** (Phase 10 cross-spec review, round
+    1, ruling C1). analytics-query's probes, with an existing empty HOME,
+    found that every 1.1.x release (1.1.0 to 1.1.3) creates
+    `~/.duckdb/extensions/v1.1.x/<platform>` in HOME on `INSTALL` even under
+    the locked configuration, while 1.2.0 to 1.5.6 refuse everything and
+    create nothing (analytics-query research.md, the escape matrix). P6 below
+    missed this, because its HOME did not exist. 1.2.0 itself was not probed
+    by this spec; task 8.4 runs the store's policy and classification tests on
+    it.
   - **The per-page fingerprint has to come in two tiers** (Decision 3). A single
     page-bytes fingerprint would make `fitdocs load --recompute` recompute every
     page's per-second rows: about 20+ minutes on the real corpus. It would also
@@ -180,7 +190,8 @@
 - **Findings**: The vendored snapshot says "re-vendor explicitly, do not
   silently edit".
 - **Implications**: The snapshot stays as the pre-feature truth. The pin
-  asserts `snapshot + ["duckdb>=1.1,<2"]` and names the deliberate delta.
+  asserts `snapshot + ["duckdb>=1.2,<2"]` and names the deliberate delta (the
+  floor raised from the brief's `>=1.1` by cross-spec ruling C1).
 
 ### Confinement, isolation and the network guards
 - **Sources**:
@@ -238,6 +249,12 @@
     cheap without a second scan.
   - Producers may read data-root files themselves, read-only, and must
     fingerprint everything they read.
+  - Added at cross-spec ruling C5: the history engine counts workout pages the
+    index leaves out, so the snapshot also carries every scanned workout page
+    it does not hold (`left_out`, path and document fingerprint), and one
+    builder, `corpus.corpus_snapshot`, makes every snapshot. A producer then
+    fingerprints the pages it reads without globbing `workouts/` again, and
+    query's freshness reproduces the refresh's snapshot exactly.
 
 ### Model and metrics shapes
 - **Sources**:
@@ -265,13 +282,18 @@ statement attached `md:`, called `start_ui`, or named a URL except one refused
 `read_csv('https://example.invalid/…')`. **Disclosure:** P6 issued `INSTALL
 httpfs` under the locked config:
 - On 1.5.6 the configuration refused it (`PermissionException`).
-- On 1.1.3 it was **not** refused by the configuration. It failed only because
-  HOME pointed at a nonexistent directory (`Can't find the home directory`), so
-  no download happened.
+- On 1.1.3 it appeared **not** to be refused by the configuration. It failed
+  only because HOME pointed at a nonexistent directory (`Can't find the home
+  directory`), so no download happened.
+- **Correction, from analytics-query's probes.** With an existing empty HOME,
+  every 1.1.x release does refuse `INSTALL` by configuration, but only after
+  creating `~/.duckdb/extensions/v1.1.x/<platform>` in HOME. P6's nonexistent
+  HOME hid that write: DuckDB failed on the missing home before reaching
+  either the directory creation or the configuration check. That write
+  outside the index is why the floor is `>=1.2` (cross-spec ruling C1).
 
-The writer never issues `INSTALL`. `analytics-query`, which runs arbitrary SQL,
-must not rely on the configuration refusing `INSTALL` on the floor version (see
-Risks).
+The writer never issues `INSTALL`. `analytics-query`, which runs arbitrary SQL
+through this store's connections, is the path the floor protects (see Risks).
 
 | # | Probe | Result |
 |---|---|---|
@@ -280,7 +302,7 @@ Risks).
 | P3 | A forged storage version (header bytes 12–20, the checksum recomputed over bytes 8–4096 with DuckDB's `5381 ^= x*0xbf58476d1ce4e5b9` per uint64) | 69 gives `Trying to read a database file with version number 69, but we can only read versions between 64 and 68. The database file was created with a newer version of DuckDB.` Patching without the checksum gives "Corrupt database file". The forged recipe lets tests produce a genuine version mismatch without a 2.x install. |
 | P4 | A WAL from `kill -9`, then a rebuild file `os.replace`d over the index | **Foreign WAL replayed**: the new file showed the old WAL's row and its WAL-only table. |
 | P5 | Opening RW, reading and closing, then RO the same, then an empty `DELETE` in a transaction | The file stays byte-identical: size, mtime_ns and sha256. So "a refresh that changes nothing writes nothing" holds with an RW open. |
-| P6 | The writer recipe on 1.1.3 and on 1.5.6, under a fake HOME | Both accept `storage_compatibility_version='v1.0.0'` and `lock_configuration`. JSON insert with ISO `TIMESTAMP`, `DATE`, `BOOLEAN` and `VARCHAR[]` works. Header version is 64. `read_csv` of a local file or a URL is refused. Nothing is created under HOME. |
+| P6 | The writer recipe on 1.1.3 and on 1.5.6, under a fake HOME | Both accept `storage_compatibility_version='v1.0.0'` and `lock_configuration`. JSON insert with ISO `TIMESTAMP`, `DATE`, `BOOLEAN` and `VARCHAR[]` works. Header version is 64. `read_csv` of a local file or a URL is refused. Nothing is created under HOME, but that HOME did not exist, which hid the 1.1.x `INSTALL` write (see the disclosure above). |
 | P7 | P2 and P3 on 1.1.3 | The same stems. Version text: `…but we can only read version 64. The database file was created with an newer version…`. The exception module path differs (`duckdb.duckdb` against `_duckdb`), so the classifier matches class `duckdb.IOException` and message stems, never module paths. |
 
 Source check (DuckDB `src/common/local_file_system.cpp`, main branch): on
@@ -431,6 +453,11 @@ claims no Windows support. Hence the staged-rebuild fallback (Requirement
 - **Writer-only**: `storage_compatibility_version='v1.0.0'` (Requirement 11.4).
   P6 confirms the default today is 64, and the explicit setting keeps it 64 if a
   later 1.x changes its default.
+- **Writer-only, added at cross-spec ruling C3**: `temp_directory` set to
+  `writer-spill/` beside the database file. P1 found DuckDB's default to be
+  `<db>.tmp`; naming it explicitly lets the ownership contract list a
+  fitdocs name for every entry of the index directory, beside
+  analytics-query's `query-spill-<pid>/`.
 - **Not set**: `disabled_filesystems` (it breaks spilling), and memory and
   thread limits for the writer (the default memory limit is 80% of RAM).
 
@@ -450,6 +477,10 @@ claims no Windows support. Hence the staged-rebuild fallback (Requirement
   advancing without a digest.
 - A comment change is not a schema change: the pass reapplies comments when the
   recorded fitdocs version differs.
+- A change to how a producer derives rows from unchanged inputs also advances
+  the version (cross-spec ruling C8), because the per-page tiers do not
+  recompute on an upgrade. Such a version's digest may equal the previous
+  one.
 
 ## Synthesis outcomes
 - **Generalization**:
@@ -476,18 +507,24 @@ claims no Windows support. Hence the staged-rebuild fallback (Requirement
   - A missing-source page is a recorded state, not an error.
 
 ## Risks & Mitigations
-- **The `duckdb>=1.1` floor and `INSTALL`.** The writer never issues
-  `INSTALL`/`LOAD`, so the index is unaffected. For `analytics-query`, which
-  runs arbitrary SQL, the floor (1.1.3) did not refuse `INSTALL httpfs` by
-  configuration (P6 disclosure).
-  - Mitigation inside this spec: the store's policy test pins `INSTALL`
-    refusal on the locked version, and a floor-verification task runs the
-    store's policy and classifier tests on 1.1.x in a scratch venv with no
-    network and a nonexistent HOME.
-  - Raised to the controller for `analytics-query`, which either verifies the
-    floor or proposes raising it. The roadmap's stated reason for `>=1.1`,
-    1.x-client readability, rests on the written storage version (64), not on
-    the installed library's floor.
+- **The duckdb floor and `INSTALL`: resolved by raising it to `>=1.2`.** The
+  writer never issues `INSTALL`/`LOAD`, so the index is unaffected. For
+  `analytics-query`, which runs arbitrary SQL, every 1.1.x release writes
+  `~/.duckdb/extensions/v1.1.x/<platform>` into HOME on `INSTALL` before the
+  locked configuration refuses it; 1.2.0 and later create nothing
+  (analytics-query research.md). This spec's P6 missed the write because its
+  HOME did not exist (the P6 disclosure).
+  - Decision: the Phase 10 cross-spec review, round 1, ruling C1, sets the
+    dependency to `duckdb>=1.2,<2` at every site in this spec.
+  - Mitigation inside this spec: the store-SQL guard pins that fitdocs never
+    issues `INSTALL`/`LOAD`, and the floor-verification task (8.4) runs the
+    store's policy and classifier tests on `duckdb==1.2.0` in a scratch venv
+    with no network. The run's HOME is an existing empty directory, asserted
+    still empty afterwards; the policy tests themselves still point HOME at a
+    nonexistent path, unchanged.
+  - The roadmap's stated reason for a 1.x pin, 1.x-client readability, rests
+    on the written storage version (64), not on the installed library's floor,
+    so raising the floor costs readers nothing.
 - **CI's offline install.** The scratch-venv test installs dependencies
   `--offline`, so the uv cache must hold the duckdb wheel. The distribution spec
   met three CI-runner-only failure classes. Mitigation: the dependency task runs

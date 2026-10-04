@@ -127,7 +127,7 @@ synced, versioned files and deleting it loses nothing.
 4. If the per-data-root index directory resolves to the data root itself or to a path inside it, then fitdocs shall refuse it with a message naming both resolved paths, and shall write nothing there.
 5. fitdocs shall write index files only inside the resolved per-data-root index directory.
 6. When fitdocs creates the index base directory or a per-data-root directory, fitdocs shall create it readable, writable and searchable by the current user only.
-7. fitdocs shall hold nothing in the index that a build cannot reproduce from the data root's workout pages, archived files, athlete profile, settings file and plan sources, so that deleting the index directory costs only the time of `fitdocs index`.
+7. fitdocs shall hold nothing in the index that a build cannot reproduce from the data root's workout pages, archived files, athlete profile, settings file and plan sources, and the current date the command takes, so that deleting the index directory costs only the time of `fitdocs index`.
 
 ### Requirement 2: Document Values in the Index
 **Objective:** As an agent answering an athlete's questions, I want every
@@ -169,7 +169,7 @@ itself, so that I can trust a value without reading fitdocs's source.
 2. fitdocs shall name every column that carries a unit with that unit's suffix in the style the frontmatter uses (for example `_m`, `_s`, `_bpm`, `_w`, `_mps`, `_rpm`, `_c`, `_pct`).
 3. fitdocs shall give every table and every column of the index a non-empty description in the database's own table and column comments, stating the value's meaning and, for a column with a unit, the unit in words; and shall reapply every description whenever it creates the schema.
 4. fitdocs shall store every instant in a type any DuckDB client reads without a time-zone extension or library, and shall state in each such column's description whether it holds UTC or local wall-clock time.
-5. fitdocs shall hold the same rows, compared as sets, for the same data root, athlete profile, settings and fitdocs version, whichever order pages were indexed in, whether a page's computed values were handed over by the command that wrote it or computed by the refresh, and whether the index was refreshed incrementally or built from empty.
+5. fitdocs shall hold the same rows, compared as sets, for the same data root, athlete profile, settings and fitdocs version, and the current date the command takes, whichever order pages were indexed in, whether a page's computed values were handed over by the command that wrote it or computed by the refresh, and whether the index was refreshed incrementally or built from empty.
 6. If a table or column of the index lacks a description, or a column named with a unit suffix has a description that does not name that unit, then the fitdocs test suite shall fail.
 
 ### Requirement 5: Agreement with the Documents
@@ -271,7 +271,7 @@ path, so that fitdocs's network promises still hold.
 #### Acceptance Criteria
 1. fitdocs shall configure every database connection it opens so that the database library never installs or loads an extension on its own, never reads or writes a file other than the index and its own working files on a statement's behalf, and never keeps a secret, and so that no statement on the connection can change any of these settings; and the statements fitdocs itself issues shall never install or load an extension.
 2. fitdocs shall make no network request while opening, refreshing, building or rebuilding the index, including when a value or statement it handles contains a web address.
-3. fitdocs shall declare DuckDB as a required runtime dependency in the version range from 1.1 up to but excluding 2, and shall declare no optional dependency group.
+3. fitdocs shall declare DuckDB as a required runtime dependency in the version range from 1.2 up to but excluding 2, and shall declare no optional dependency group.
 4. fitdocs shall not load the DuckDB library during plugin discovery, or during any command or import that does not open the index.
 5. The published list of commands that make no network request shall include `fitdocs index`, and the network statement shall say that it binds the connections fitdocs opens, not another program that opens the index file.
 6. The installation documentation shall state DuckDB's installed size and the platforms for which no prebuilt package exists (musl-based Linux, free-threaded Python builds).
@@ -287,7 +287,7 @@ pass and described by the same comments, without changing the pass.
 3. fitdocs shall hand a corpus-level producer the data root as the refresh leaves it, have it declare a fingerprint of its inputs, and replace its tables whole when, and only when, that fingerprint, the fitdocs version or the schema version differs from the one recorded for it.
 4. fitdocs shall let a later feature register a producer without changing the refresh, the build, the `index` command or the database connection code.
 5. fitdocs shall record in the index its schema version, the fitdocs version that last wrote it, the DuckDB version, the data root, the athlete-input fingerprint, each page's fingerprints and computed-values state, and each producer's fingerprint.
-6. fitdocs's schema version shall be 1 when this feature lands, and every later feature that adds, removes or renames a table or column, or changes a column's type or order, shall advance it by exactly one from the value current when that feature lands.
+6. fitdocs's schema version shall be 1 when this feature lands. Every later feature that adds, removes or renames a table or column, or changes a column's type or order, shall advance it by exactly one from the value current when that feature lands, and so shall every change to how any producer derives rows from unchanged inputs, because the per-page tiers do not recompute on an upgrade; such a version's digest may equal the previous one.
 7. If the tables, columns, types or column order fitdocs creates differ from those recorded for the current schema version, then the fitdocs test suite shall fail.
 8. When the fitdocs version recorded in the index differs from the running one, the refresh shall reapply every table and column description and record the running version.
 
