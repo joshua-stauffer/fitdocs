@@ -18,6 +18,7 @@ context:
   - tests/test_determinism.py
   - tests/test_preserved_guarantees.py
   - tests/golden/_serialize.py
+  - tests/test_contract.py
   - .kiro/steering/change-protocol.md
 blocked_by: []
 ---
@@ -57,6 +58,22 @@ More generally: every future task that pins a `mypy`-only claim inherits this
 hole, and the failure is invisible rather than noisy.
 
 ## Evidence
+
+**Additional baseline evidence, analytics-index task 2.5 (2026-10-05).**
+The implementer and independent reviewer confirmed six pre-existing errors
+in `tests/test_contract.py`, which remains outside the configured perimeter.
+The controller inspected their command logs but did not run a third duplicate
+check. At prerequisite base `08b794f`,
+`uv run mypy src/fitdocs/contract.py tests/test_contract.py` reports three
+`comparison-overlap` errors at 355–357 (EffortKind versus string), an optional
+integer comparison at 775, an unchecked optional LoadReading access at 1010,
+and an integer dictionary key at 1224. New reader tests shift the latter
+line numbers but introduce no new error. A saved HEAD test-file copy yielded
+the same six errors; canonical mypy and source-only mypy passed. Reproduce
+against the current module before adding it to the perimeter, and repair
+these existing errors alongside membership registration. Evidence:
+`/private/tmp/analytics-index-evidence/2.5/mypy-baseline.txt` and independent
+review artifacts under `/private/tmp/analytics-index-evidence/2.5/review/`.
 
 **Additional baseline evidence, analytics-index task 1.1 (2026-10-05).** At
 `c38abdc`, the controller ran
