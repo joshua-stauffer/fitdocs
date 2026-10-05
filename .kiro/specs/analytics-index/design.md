@@ -313,8 +313,12 @@ section.
     `corpus_fingerprint` and `combined_corpus_fingerprint`;
   - `corpus`: `scan_workout_pages`, `CorpusScan`, `LeftOutPage` and
     `corpus_snapshot`;
-  - test-only: `store.create_index`, `store.create_schema` and
-    `build.run_index_command`.
+  - test-only: `store.create_index`, `store.create_schema`,
+    `build.run_index_command` and `store.duckdb_version`;
+    `core.documents.CORE_DOCUMENTS`, `core.computed.CORE_COMPUTED` and
+    `schema.TableScope`, which group tables by producer and scope; and
+    monkeypatching `registry.DOCUMENT_PRODUCERS` and
+    `registry.CORPUS_PRODUCERS`, read at call time, as index task 6.2 does.
 - **Freshness reproduces the refresh's corpus fingerprints.** A reader calls
   `corpus_snapshot(data_root, scan, today=…, athlete_fingerprint=…,
   held=frozenset(bookkeeping.pages))` and then
