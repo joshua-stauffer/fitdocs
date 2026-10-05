@@ -635,7 +635,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 
 - [ ] 4. The store: the only DuckDB importer
 
-- [ ] 4.1 Open every connection under the fitdocs connection policy
+- [x] 4.1 Open every connection under the fitdocs connection policy
   - **The store's policy and facade**, per design.md § Store:
     - `MANDATORY_SETTINGS` and `WRITER_SETTINGS`;
     - `open_index` and `create_index`, with `ValueError` on a mandatory
@@ -1610,3 +1610,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 
 - 3.3: typed append-only core registries, call-time resolver forwarding and literal schema version 1 digest/model/comment pins. Raw missing-registry RED and flag OFF/ON/removed lifecycle saved. Independent review round2 APPROVED: 53 claimed observations plus two own probes produced named assertion failures and restored passes; full source-enabled/docs suite 9023 passed / two expected actionlint skips; canonical/scoped mypy and repository Ruff clean. Parent fresh completion gate 206 passed.
 - 3.3 fidelity learnings: dynamic registry fixtures require multiple distinguishable producers, multiple nonalphabetically ordered tables per producer and complete independent ResolvedTable expectations across bookkeeping/document/computed/corpus scopes. Partial name/scope comparisons miss table/column descriptions and corpus types/order; the digest deliberately excludes comments and default corpus is empty. Distinct metadata and exact injected-key literals pin forwarding; retain core model/version pins.
+
+- 4.1: lazy-only DuckDB store facade, mandatory seven-setting policy, writer compatibility/spill configuration and AST/subprocess/SQL guards. Raw missing-module and OFF/ON/removed RED/GREEN saved. Independent review round2 APPROVED: 65 claimed observations plus two own probes confirmed; full source-enabled/docs suite 9107 passed / two expected actionlint skips; canonical/scoped mypy and repository Ruff clean. Parent fresh completion gate 84 passed. Header version 64 remains PRESERVED-ONLY on DuckDB 1.5.6; captured configuration pins writer policy independently. Classification remains OTHER for task4.2.
+- 4.1 execution learning: raw DB-API execute blocks the aggregate COUNT before fetch; instrumented subprocess stopped at before-execute. The facade uses lazy connection.sql with parameters, preserving fetch-time error/interrupt behavior and immediate nonquery effects. Real bounded fetchmany interruption passes; preserve this strategy for query siblings. Official relational API documentation supports lazy evaluation.
+- 4.1 fixture/guard learnings: verify raw driver forwarding with live read-only/caller-setting checks plus a synthetic backend, nonquery effects and multi-parameter/batch cursor state. Compare original exception object identity across ordinary/interrupt execute/fetchmany/fetchall/open cases. AST imports need positional and literal keyword name forms plus aliases/submodules. SQL token controls must include every forbidden token, genuine docstrings versus branch/list strings, case sensitivity, SET whitespace/word boundary/anchor. Dangling symlinks are existing paths despite Path.exists returning False.
