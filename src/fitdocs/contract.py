@@ -156,6 +156,7 @@ __all__ = [
     "begin_marker",
     "document_date",
     "document_indoor",
+    "document_load_basis",
     "document_load",
     "document_modality",
     "document_sport",
@@ -1188,6 +1189,21 @@ def document_load(frontmatter: Mapping[str, object] | None) -> LoadReading | Non
     if not isinstance(methodology_value, str):
         return None
     return LoadReading(value=load, methodology=methodology_value)
+
+
+def document_load_basis(frontmatter: Mapping[str, object] | None) -> str | None:
+    """Read the recorded load basis independently of load-value validity.
+
+    A missing frontmatter mapping, missing key, non-string value, or string
+    containing only whitespace is absent. A nonblank recorded string is
+    returned verbatim, including surrounding whitespace and custom labels.
+    """
+    if frontmatter is None:
+        return None
+    value = frontmatter.get(_LOAD_BASIS_KEY)
+    if isinstance(value, str) and value.strip():
+        return value
+    return None
 
 
 @dataclass(frozen=True)

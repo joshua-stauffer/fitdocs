@@ -40,6 +40,7 @@ import dataclasses
 import inspect
 from datetime import UTC
 from pathlib import Path
+from types import MappingProxyType
 
 import pytest
 
@@ -1003,6 +1004,65 @@ def test_load_reading_is_a_frozen_dataclass() -> None:
 def test_document_load_returns_a_reading_for_a_well_formed_pair() -> None:
     reading = contract.document_load({"load_value": 150, "load_methodology": "tss"})
     assert reading == contract.LoadReading(value=150.0, methodology="tss")
+
+
+def test_document_load_basis_reads_recorded_nonblank_value_verbatim() -> None:
+    assert contract.document_load_basis({"load_basis": "  Custom-POWER  "}) == (
+        "  Custom-POWER  "
+    )
+    assert contract.document_load_basis({"load_basis": "power"}) == "power"
+
+
+@pytest.mark.parametrize(
+    "frontmatter",
+    (
+        None,
+        {},
+        {"load_basis": None},
+        {"load_basis": True},
+        {"load_basis": 5},
+        {"load_basis": ["power"]},
+        {"load_basis": ""},
+        {"load_basis": " \t\n "},
+        {"load_basis": "\u00a0\u2003"},
+    ),
+)
+def test_document_load_basis_returns_none_for_absent_or_invalid_value(
+    frontmatter: dict[str, object] | None,
+) -> None:
+    assert contract.document_load_basis(frontmatter) is None
+
+
+def test_document_load_basis_is_independent_of_other_load_keys() -> None:
+    assert contract.document_load_basis({"load_basis": "arbitrary label"}) == (
+        "arbitrary label"
+    )
+
+
+def test_document_load_basis_accepts_a_read_only_general_mapping() -> None:
+    frontmatter = MappingProxyType({"load_basis": "  Custom/Channel  "})
+    assert contract.document_load_basis(frontmatter) == "  Custom/Channel  "
+
+
+def test_document_load_basis_does_not_modify_frontmatter() -> None:
+    frontmatter: dict[str, object] = {
+        "load_basis": "  Mixed-Case Basis  ",
+        "load_value": 23.5,
+        "load_methodology": "retained",
+    }
+    before = dict(frontmatter)
+    assert contract.document_load_basis(frontmatter) == "  Mixed-Case Basis  "
+    assert frontmatter == before
+    assert (
+        contract.document_load_basis(
+            {"load_value": float("nan"), "load_methodology": 7, "load_basis": "pace"}
+        )
+        == "pace"
+    )
+
+
+def test_document_load_basis_is_a_public_contract_reader() -> None:
+    assert "document_load_basis" in contract.__all__
 
 
 def test_document_load_converts_an_int_to_float() -> None:

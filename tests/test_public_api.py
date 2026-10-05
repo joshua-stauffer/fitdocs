@@ -382,6 +382,7 @@ _CONTRACT_SURFACE = {
     "document_date",
     "document_indoor",
     "document_load",
+    "document_load_basis",
     "document_modality",
     "document_source_identity",
     "document_sport",

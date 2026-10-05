@@ -330,7 +330,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     yet.
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.6_
 
-- [ ] 2. The schema contract and the producer seam
+- [x] 2. The schema contract and the producer seam
 
 - [x] 2.1 Define the schema contract and the bookkeeping tables
   - **The schema module**, per design.md § Schema:
@@ -501,7 +501,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
   - _Requirements: 11.1, 11.2, 11.3_
   - _Boundary: Lock_
 
-- [ ] 2.5 Add the approved recorded-load-basis reader prerequisite
+- [x] 2.5 Add the approved recorded-load-basis reader prerequisite
   - Add `contract.document_load_basis(frontmatter: Mapping[str, object] | None) -> str | None`
     and export it in `contract.__all__`. Read the third `LOAD_KEYS` entry.
   - Return `None` for absent frontmatter, a missing key, non-string values,
@@ -1599,3 +1599,5 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 - 3.1 BLOCKED: tests-first RED 7 missing-module failures; partial documents producer and tests preserved uncommitted. contract.LoadReading contains only value/methodology, and no public reader exposes recorded load_basis. The halted payload-basis fallback would violate frontmatter provenance. Debug1 returned STOP_FOR_HUMAN (task decomposition): approve an additive document_load_basis reader prerequisite in contract.py/tests/test_contract.py, explicitly define absent/wrong-type/empty-string behavior, amend CoreDocuments and task ownership/dependency, and revalidate plan-resolution/history consumers. Preserve LoadReading/document_load and document bytes; use distinct recorded-vs-payload basis and a noncomputed recorded-basis fixture. Debug plan: /private/tmp/analytics-index-evidence/3.1/debug1/REPORT.md. No task3.1 completion or feature GO claimed; branch parked pending plan approval.
 - Approval resumed: maintainer approved document_load_basis and the proposed missing/non-string/blank semantics. Added prerequisite 2.5 and amended reader ownership, CoreDocuments and the upstream plan-resolution contract. Task3.1 now waits on 2.5; its partial source/tests are preserved under /private/tmp/analytics-index-evidence/3.1/parked/ until prerequisite verification finishes.
 - 2.5 public guard alignment: the approved new export also requires its literal entry in tests/test_public_api.py's existing exact export-set pin. Added that test file to prerequisite ownership after canonical regression exposed the omitted expectation; this is required by the existing approval of the public reader and changes no additional API semantics.
+- 2.5: approved additive document_load_basis reader exported publicly, None for missing/non-string/blank (Unicode whitespace included), nonblank recorded strings preserved verbatim for any Mapping and read without mutation or load-validity gating. Tests-first RED 11 failures; flag OFF 2 intended failures, ON/removed GREEN. Final independent review APPROVED: 12 claimed observations plus 2 new reviewer probes named RED/restored GREEN; full docs/source-enabled suite 8994 passed / 2 expected actionlint skips; canonical/source mypy and repository Ruff clean; scoped mypy retains six unchanged baseline test errors already queued. Fresh completion gate 282 API/contract/history/plan tests passed. Whole-module AST comparison proves all old definitions unchanged; public API expectation gained only the new literal.
+- 2.5 review learnings: mixed-case and Unicode-only whitespace fixtures are needed to pin verbatim/blank behavior; general Mapping and input-preservation pins prevent dict-only or destructive readers. Narrow mutation replacements to the target function and compare the entire restored source against HEAD: a generic blank-guard edit accidentally drifted document_date and was restored before acceptance. A new approved export requires updating the existing exact public API set pin; preserve the guard rather than weakening it. Prerequisite now clears task3.1's recorded-basis blocker.
