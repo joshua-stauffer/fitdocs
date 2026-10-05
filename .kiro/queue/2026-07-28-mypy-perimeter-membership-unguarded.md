@@ -15,6 +15,9 @@ context:
   - pyproject.toml
   - tests/test_docs_guarantees.py
   - tests/test_citation.py
+  - tests/test_determinism.py
+  - tests/test_preserved_guarantees.py
+  - tests/golden/_serialize.py
   - .kiro/steering/change-protocol.md
 blocked_by: []
 ---
@@ -54,6 +57,24 @@ More generally: every future task that pins a `mypy`-only claim inherits this
 hole, and the failure is invisible rather than noisy.
 
 ## Evidence
+
+**Additional baseline evidence, analytics-index task 1.1 (2026-10-05).** At
+`c38abdc`, the controller ran
+`uv run mypy tests/test_determinism.py tests/test_packaging.py tests/test_preserved_guarantees.py tests/sitebuild/test_repo_wiring.py`
+on unchanged main: exit 1, `Found 11 errors in 3 files (checked 4 source files)`.
+The independent reviewer reproduced the same errors on `impl/analytics-index`;
+canonical `uv run mypy` passed over 296 files. The errors belong to
+`tests/golden/_serialize.py:105` (sorting `object`),
+`tests/test_determinism.py:121,407,540,550` (an unused ignore, untyped open
+wrapper and incompatible tile stub), and
+`tests/test_preserved_guarantees.py:482-483` (untyped dict/subprocess wrapper
+and unused ignores). The dependency tests were not added to the configured
+perimeter by this feature. When repairing the perimeter, decide explicitly
+whether these modules enter it and fix their errors in the same change;
+the manifest edits themselves introduced no new type error. The full
+output is a session artifact at
+`/private/tmp/analytics-index-evidence/1.1/review/scoped-mypy-baseline.txt`;
+the command above is the reproducible evidence if that artifact has expired.
 
 At `8e3cb05`, in a worktree on `impl/fit-ingest`, the round-4 reviewer ran a
 paired probe:
