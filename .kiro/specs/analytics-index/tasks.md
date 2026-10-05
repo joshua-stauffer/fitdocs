@@ -222,7 +222,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 
 ---
 
-- [ ] 1. Foundation: the dependency, test isolation and the index location
+- [x] 1. Foundation: the dependency, test isolation and the index location
 
 - [x] 1.1 Add DuckDB as a core runtime dependency and reword the four dependency pins
   - **Dependency and lock.** Append `duckdb>=1.2,<2` to `[project].dependencies`
@@ -286,7 +286,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     and the full suite stays green. No production code changes.
   - _Requirements: 14.6_
 
-- [ ] 1.3 Create the index package and resolve the index location
+- [x] 1.3 Create the index package and resolve the index location
   - **The package.** Create `fitdocs.index` as a marker package. Its docstring
     says the index is a disposable projection and that the package never
     imports `duckdb` at import time. Also create the empty
@@ -1562,3 +1562,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 
 - 1.2: per-test autouse index-directory fixture; absolute/outside-home and marker isolation pins, plus actual pytest lifecycle pins for both existing and absent environment values. Tests-first RED 3 failures before fixture. Mutations: drop autouse with relative/home original values, share one session directory, direct environment assignment; each targeted assertion failed. Independent review added missing directory, deletion of existing env at teardown, absent env restored as empty string; all caught. First review rejected an unpinned cleanup behavior; remediation supplied the lifecycle pins. Final independent review APPROVED: full suite 8707 passed / 2 actionlint skips, canonical mypy 296 files clean, scoped ruff/type checks clean. Fresh completion gate 5 passed.
 - Full regression must use the normal warmed uv cache with sandbox escalation, rather than a fresh synthetic UV_CACHE_DIR: packaging builds/offline fixtures need cached hatchling and dependency wheels. A cold-cache review run failed setup; the canonical warmed-cache rerun passed. Task-local synthetic uv caches are not interchangeable with the canonical regression environment.
+
+- 1.3: exact Location API, lightweight index/core packages, resolved slug+16-hex key, env precedence/refusals and private creation of missing cache ancestors with existing modes retained. Flag OFF RED 10 failures; ON and removed GREEN. Final tests 11 passed. Independent review3 APPROVED: 44 claimed mutations and 3 reviewer mutations caught; full source-enabled suite 8718 passed / 2 actionlint skips; canonical mypy 299 files clean, scoped source/test mypy and ruff clean; fresh completion gate 11 passed.
+- 1.3 discrimination repairs: a root-path substring can match the child path, so refusal diagnostics now assert both labeled paths; equality must make the final per-root directory resolve to the root itself, with that precondition asserted (base_dir==root only tests a descendant); expected filenames and environment keys use literals, because deriving expectations from exported production constants makes constant-value changes invisible. Missing cache-base parents must be exercised; ordinary mkdir(parents=True) leaves intermediate modes dependent on umask.
+- Host allocation limit encountered at 1.3 remediation: new agent creation and resurrection of retired threads were refused. Remaining dispatch reuses an available Luna implementer thread and a separate available reviewer thread. This is a downgrade from fresh-per-task contexts; reviewer code/mutation checks remain independent from implementation, with actual current diff/spec as input.
