@@ -520,7 +520,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
   - _Requirements: 2.1; plan-resolution Amendment 1_
   - _Boundary: ContractReaders (approved additive prerequisite)_
 
-- [ ] 3. Core producers
+- [x] 3. Core producers
 
 - [x] 3.1 (P) Project document values: pages, sources, loads and quality flags
   - **The core documents producer**, per design.md § CoreDocuments and § Data
@@ -599,7 +599,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
   - _Boundary: CoreComputed_
   - _Depends: 2.1, 2.2, 2.3_
 
-- [ ] 3.3 Register the core producers and pin the schema
+- [x] 3.3 Register the core producers and pin the schema
   - **The registry module**: `DOCUMENT_PRODUCERS = (CORE_DOCUMENTS,)`,
     `COMPUTED_PRODUCERS = (CORE_COMPUTED,)`, `CORPUS_PRODUCERS = ()` and
     `registered_tables()`.
@@ -1607,3 +1607,6 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 
 - 3.2: pure core.computed producer and six exact computed-tier schemas with metric/sample columns generated from authoritative dataclass field order. Reported tests-first missing-module and OFF/ON/removal lifecycle retained; raw initial outputs were not saved and were not reconstructed. Independent review round2 APPROVED: 46 distinct claimed mutations plus two own probes produced named assertion failures and restored passes; full source-enabled/docs suite 9020 passed / two expected actionlint skips; canonical/scoped mypy and repository Ruff clean. Parent fresh completion gate nine passed.
 - 3.2 fixture learnings: retain real composition/compute regressions but also supply independent distinct scalar metrics, all-None/real-zero rows, contrasting headers and empty fingerprint to defeat recomputation and tied-value swaps. Athlete=None shadows per-channel missing times/spec branches; exercise each independently with other channels populated and distinct zone time tuples. Multiple extras pin provenance cardinality. String enums need exact stored-string type assertions. A datetime.min sentinel with negative offsets overflows before assertions; use a safe timestamp and report actual failure types.
+
+- 3.3: typed append-only core registries, call-time resolver forwarding and literal schema version 1 digest/model/comment pins. Raw missing-registry RED and flag OFF/ON/removed lifecycle saved. Independent review round2 APPROVED: 53 claimed observations plus two own probes produced named assertion failures and restored passes; full source-enabled/docs suite 9023 passed / two expected actionlint skips; canonical/scoped mypy and repository Ruff clean. Parent fresh completion gate 206 passed.
+- 3.3 fidelity learnings: dynamic registry fixtures require multiple distinguishable producers, multiple nonalphabetically ordered tables per producer and complete independent ResolvedTable expectations across bookkeeping/document/computed/corpus scopes. Partial name/scope comparisons miss table/column descriptions and corpus types/order; the digest deliberately excludes comments and default corpus is empty. Distinct metadata and exact injected-key literals pin forwarding; retain core model/version pins.

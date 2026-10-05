@@ -6,7 +6,7 @@ import hashlib
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import FrozenInstanceError, dataclass, fields, replace
-from typing import get_type_hints
+from typing import Any, get_type_hints
 
 import pytest
 
@@ -28,11 +28,14 @@ from fitdocs.index.schema import (
     SchemaError,
     TableScope,
     TableSpec,
+    _contains_unit_phrase,
     _matching_unit_suffix,
     resolve_tables,
     schema_digest,
     schema_manifest,
 )
+from fitdocs.metrics.types import DerivedMetrics
+from fitdocs.model import Lap, Samples, StrengthSet
 
 
 @dataclass(frozen=True)
@@ -1447,3 +1450,462 @@ def test_bookkeeping_contract_dataclasses_are_frozen(
 ) -> None:
     with pytest.raises(FrozenInstanceError):
         setattr(instance, attribute, replacement)
+
+
+# Task 3.3: registered schema, model drift, and registry extension seam.
+
+
+def _registered_tables() -> tuple[ResolvedTable, ...]:
+    from fitdocs.index.registry import registered_tables
+
+    return registered_tables()
+
+
+def _assert_model_field_columns(
+    resolved: ResolvedTable,
+    model: type[Any],
+    *,
+    excluded: frozenset[str] = frozenset(),
+    leading: tuple[str, ...] = (),
+) -> None:
+    actual = tuple(column.name for column in resolved.columns[1:])
+    expected = (
+        *leading,
+        *(field.name for field in fields(model) if field.name not in excluded),
+    )
+    assert actual == expected
+
+
+def test_registered_tables_pin_schema_and_model_fields() -> None:
+    resolution_error: SchemaError | None = None
+    resolved: tuple[ResolvedTable, ...] = ()
+    try:
+        resolved = _registered_tables()
+    except SchemaError as error:
+        resolution_error = error
+    assert resolution_error is None, "registered table descriptions must validate"
+    by_name = {item.name: item for item in resolved}
+    assert tuple(item.name for item in resolved) == (
+        "index_meta",
+        "index_pages",
+        "index_producers",
+        "pages",
+        "page_sources",
+        "loads",
+        "quality_flags",
+        "activities",
+        "records",
+        "laps",
+        "strength_sets",
+        "zone_times",
+        "channel_sources",
+    )
+    assert len(by_name) == 13
+    assert tuple(item.scope for item in resolved[:3]) == (
+        TableScope.BOOKKEEPING,
+        TableScope.BOOKKEEPING,
+        TableScope.BOOKKEEPING,
+    )
+    assert all(item.scope is TableScope.DOCUMENT for item in resolved[3:7])
+    assert all(item.scope is TableScope.COMPUTED for item in resolved[7:])
+    assert all(item.columns[0].name == "page_key" for item in resolved[3:])
+
+    for item in resolved:
+        assert item.description.strip()
+        for column_spec in item.columns:
+            assert column_spec.description.strip()
+            suffix = _matching_unit_suffix(column_spec.name)
+            if suffix is not None:
+                assert _contains_unit_phrase(column_spec.description, suffix[1])
+
+    records = by_name["records"]
+    _assert_model_field_columns(
+        records,
+        Samples,
+        excluded=frozenset({"time_s"}),
+        leading=("sample_index", "time_utc", "elapsed_s"),
+    )
+
+    @dataclass(frozen=True)
+    class SamplesWithAddedChannel(Samples):
+        test_only_channel: tuple[float | None, ...] = ()
+
+    with pytest.raises(AssertionError):
+        _assert_model_field_columns(
+            records,
+            SamplesWithAddedChannel,
+            excluded=frozenset({"time_s"}),
+            leading=("sample_index", "time_utc", "elapsed_s"),
+        )
+
+    activity_columns = tuple(
+        column_spec.name for column_spec in by_name["activities"].columns
+    )
+    metric_columns = activity_columns[7:-1]
+    excluded_metrics = frozenset(
+        {"hr_time_in_zone_s", "power_time_in_zone_s", "pace_time_in_zone_s"}
+    )
+    assert metric_columns == tuple(
+        field.name
+        for field in fields(DerivedMetrics)
+        if field.name not in excluded_metrics
+    )
+
+    lap_renames = {
+        "start_time": "start_utc",
+        "start_index": "start_sample",
+        "end_index": "end_sample",
+    }
+    assert tuple(column_spec.name for column_spec in by_name["laps"].columns[1:]) == (
+        "lap_index",
+        *(lap_renames.get(field.name, field.name) for field in fields(Lap)),
+    )
+    set_renames = {"start_time": "start_utc"}
+    assert tuple(
+        column_spec.name for column_spec in by_name["strength_sets"].columns[1:]
+    ) == (
+        "set_index",
+        *(
+            set_renames.get(field.name, field.name)
+            for field in fields(StrengthSet)
+            if field.name != "message_index"
+        ),
+    )
+
+
+def test_registry_forwards_all_producer_tuples_and_bookkeeping_at_call_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import fitdocs.index.registry as registry
+    from fitdocs.index.core.computed import CORE_COMPUTED
+    from fitdocs.index.core.documents import CORE_DOCUMENTS
+
+    assert registry.DOCUMENT_PRODUCERS == (CORE_DOCUMENTS,)
+    assert registry.COMPUTED_PRODUCERS == (CORE_COMPUTED,)
+    assert registry.CORPUS_PRODUCERS == ()
+    assert tuple(item.name for item in registry.registered_tables()) == (
+        "index_meta",
+        "index_pages",
+        "index_producers",
+        "pages",
+        "page_sources",
+        "loads",
+        "quality_flags",
+        "activities",
+        "records",
+        "laps",
+        "strength_sets",
+        "zone_times",
+        "channel_sources",
+    )
+
+    document_first = producer(
+        "probe.document.alpha",
+        table(
+            "z_doc",
+            (
+                column("z_enabled", ColumnType.BOOLEAN, "Document z enabled."),
+                column("z_label", ColumnType.VARCHAR, "Document z label."),
+            ),
+            "Document z table.",
+        ),
+        table(
+            "a_doc",
+            (
+                column("a_count", ColumnType.BIGINT, "Document a count."),
+                column("a_note", ColumnType.VARCHAR, "Document a note."),
+            ),
+            "Document a table.",
+        ),
+    )
+    document_second = producer(
+        "probe.document.beta",
+        table(
+            "m_doc",
+            (
+                column("m_day", ColumnType.DATE, "Document m day."),
+                column("m_value", ColumnType.DOUBLE, "Document m value."),
+            ),
+            "Document m table.",
+        ),
+        table(
+            "b_doc",
+            (
+                column("b_tags", ColumnType.VARCHAR_LIST, "Document b tags."),
+                column("b_ready", ColumnType.BOOLEAN, "Document b ready."),
+            ),
+            "Document b table.",
+        ),
+    )
+    computed_first = producer(
+        "probe.computed.alpha",
+        table(
+            "z_computed",
+            (
+                column("z_rate", ColumnType.DOUBLE, "Computed z rate."),
+                column("z_valid", ColumnType.BOOLEAN, "Computed z validity."),
+            ),
+            "Computed z table.",
+        ),
+        table(
+            "a_computed",
+            (
+                column("a_index", ColumnType.INTEGER, "Computed a index."),
+                column("a_text", ColumnType.VARCHAR, "Computed a text."),
+            ),
+            "Computed a table.",
+        ),
+    )
+    computed_second = producer(
+        "probe.computed.beta",
+        table(
+            "m_computed",
+            (
+                column("m_day", ColumnType.DATE, "Computed m day."),
+                column("m_amount", ColumnType.BIGINT, "Computed m amount."),
+            ),
+            "Computed m table.",
+        ),
+        table(
+            "b_computed",
+            (
+                column("b_values", ColumnType.VARCHAR_LIST, "Computed b values."),
+                column("b_score", ColumnType.DOUBLE, "Computed b score."),
+            ),
+            "Computed b table.",
+        ),
+    )
+    corpus_first = producer(
+        "probe.corpus.alpha",
+        table(
+            "z_corpus",
+            (
+                column("z_total", ColumnType.BIGINT, "Corpus z total."),
+                column("z_live", ColumnType.BOOLEAN, "Corpus z live."),
+            ),
+            "Corpus z table.",
+        ),
+        table(
+            "a_corpus",
+            (
+                column("a_day", ColumnType.DATE, "Corpus a day."),
+                column("a_ratio", ColumnType.DOUBLE, "Corpus a ratio."),
+            ),
+            "Corpus a table.",
+        ),
+    )
+    corpus_second = producer(
+        "probe.corpus.beta",
+        table(
+            "m_corpus",
+            (
+                column("m_label", ColumnType.VARCHAR, "Corpus m label."),
+                column("m_count", ColumnType.INTEGER, "Corpus m count."),
+            ),
+            "Corpus m table.",
+        ),
+        table(
+            "b_corpus",
+            (
+                column("b_codes", ColumnType.VARCHAR_LIST, "Corpus b codes."),
+                column("b_score", ColumnType.DOUBLE, "Corpus b score."),
+            ),
+            "Corpus b table.",
+        ),
+    )
+    bookkeeping_z = table(
+        "index_z_probe",
+        (
+            column("z_number", ColumnType.INTEGER, "Bookkeeping z number."),
+            column("z_text", ColumnType.VARCHAR, "Bookkeeping z text."),
+        ),
+        "Bookkeeping z table.",
+    )
+    bookkeeping_a = table(
+        "index_a_probe",
+        (
+            column("a_active", ColumnType.BOOLEAN, "Bookkeeping a active."),
+            column("a_date", ColumnType.DATE, "Bookkeeping a date."),
+        ),
+        "Bookkeeping a table.",
+    )
+
+    monkeypatch.setattr(
+        registry,
+        "DOCUMENT_PRODUCERS",
+        (document_first, document_second),
+    )
+    monkeypatch.setattr(
+        registry,
+        "COMPUTED_PRODUCERS",
+        (computed_first, computed_second),
+    )
+    monkeypatch.setattr(
+        registry,
+        "CORPUS_PRODUCERS",
+        (corpus_first, corpus_second),
+    )
+    monkeypatch.setattr(
+        registry,
+        "BOOKKEEPING_TABLES",
+        (bookkeeping_z, bookkeeping_a),
+    )
+
+    literal_page_key = ColumnSpec(
+        "page_key",
+        ColumnType.VARCHAR,
+        "Key of the workout page: the SHA-256 (64 hex) of the page's base file, "
+        "the last file its sources list.",
+    )
+    extended = registry.registered_tables()
+    expected = (
+        ResolvedTable(
+            "bookkeeping",
+            TableScope.BOOKKEEPING,
+            "index_z_probe",
+            "Bookkeeping z table.",
+            (
+                column("z_number", ColumnType.INTEGER, "Bookkeeping z number."),
+                column("z_text", ColumnType.VARCHAR, "Bookkeeping z text."),
+            ),
+        ),
+        ResolvedTable(
+            "bookkeeping",
+            TableScope.BOOKKEEPING,
+            "index_a_probe",
+            "Bookkeeping a table.",
+            (
+                column("a_active", ColumnType.BOOLEAN, "Bookkeeping a active."),
+                column("a_date", ColumnType.DATE, "Bookkeeping a date."),
+            ),
+        ),
+        ResolvedTable(
+            "probe.document.alpha",
+            TableScope.DOCUMENT,
+            "z_doc",
+            "Document z table.",
+            (
+                literal_page_key,
+                column("z_enabled", ColumnType.BOOLEAN, "Document z enabled."),
+                column("z_label", ColumnType.VARCHAR, "Document z label."),
+            ),
+        ),
+        ResolvedTable(
+            "probe.document.alpha",
+            TableScope.DOCUMENT,
+            "a_doc",
+            "Document a table.",
+            (
+                literal_page_key,
+                column("a_count", ColumnType.BIGINT, "Document a count."),
+                column("a_note", ColumnType.VARCHAR, "Document a note."),
+            ),
+        ),
+        ResolvedTable(
+            "probe.document.beta",
+            TableScope.DOCUMENT,
+            "m_doc",
+            "Document m table.",
+            (
+                literal_page_key,
+                column("m_day", ColumnType.DATE, "Document m day."),
+                column("m_value", ColumnType.DOUBLE, "Document m value."),
+            ),
+        ),
+        ResolvedTable(
+            "probe.document.beta",
+            TableScope.DOCUMENT,
+            "b_doc",
+            "Document b table.",
+            (
+                literal_page_key,
+                column("b_tags", ColumnType.VARCHAR_LIST, "Document b tags."),
+                column("b_ready", ColumnType.BOOLEAN, "Document b ready."),
+            ),
+        ),
+        ResolvedTable(
+            "probe.computed.alpha",
+            TableScope.COMPUTED,
+            "z_computed",
+            "Computed z table.",
+            (
+                literal_page_key,
+                column("z_rate", ColumnType.DOUBLE, "Computed z rate."),
+                column("z_valid", ColumnType.BOOLEAN, "Computed z validity."),
+            ),
+        ),
+        ResolvedTable(
+            "probe.computed.alpha",
+            TableScope.COMPUTED,
+            "a_computed",
+            "Computed a table.",
+            (
+                literal_page_key,
+                column("a_index", ColumnType.INTEGER, "Computed a index."),
+                column("a_text", ColumnType.VARCHAR, "Computed a text."),
+            ),
+        ),
+        ResolvedTable(
+            "probe.computed.beta",
+            TableScope.COMPUTED,
+            "m_computed",
+            "Computed m table.",
+            (
+                literal_page_key,
+                column("m_day", ColumnType.DATE, "Computed m day."),
+                column("m_amount", ColumnType.BIGINT, "Computed m amount."),
+            ),
+        ),
+        ResolvedTable(
+            "probe.computed.beta",
+            TableScope.COMPUTED,
+            "b_computed",
+            "Computed b table.",
+            (
+                literal_page_key,
+                column("b_values", ColumnType.VARCHAR_LIST, "Computed b values."),
+                column("b_score", ColumnType.DOUBLE, "Computed b score."),
+            ),
+        ),
+        ResolvedTable(
+            "probe.corpus.alpha",
+            TableScope.CORPUS,
+            "z_corpus",
+            "Corpus z table.",
+            (
+                column("z_total", ColumnType.BIGINT, "Corpus z total."),
+                column("z_live", ColumnType.BOOLEAN, "Corpus z live."),
+            ),
+        ),
+        ResolvedTable(
+            "probe.corpus.alpha",
+            TableScope.CORPUS,
+            "a_corpus",
+            "Corpus a table.",
+            (
+                column("a_day", ColumnType.DATE, "Corpus a day."),
+                column("a_ratio", ColumnType.DOUBLE, "Corpus a ratio."),
+            ),
+        ),
+        ResolvedTable(
+            "probe.corpus.beta",
+            TableScope.CORPUS,
+            "m_corpus",
+            "Corpus m table.",
+            (
+                column("m_label", ColumnType.VARCHAR, "Corpus m label."),
+                column("m_count", ColumnType.INTEGER, "Corpus m count."),
+            ),
+        ),
+        ResolvedTable(
+            "probe.corpus.beta",
+            TableScope.CORPUS,
+            "b_corpus",
+            "Corpus b table.",
+            (
+                column("b_codes", ColumnType.VARCHAR_LIST, "Corpus b codes."),
+                column("b_score", ColumnType.DOUBLE, "Corpus b score."),
+            ),
+        ),
+    )
+    assert extended == expected
