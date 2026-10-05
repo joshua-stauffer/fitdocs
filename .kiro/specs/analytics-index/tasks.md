@@ -101,7 +101,8 @@ sequential: never two of them `(P)` at once.
 - `src/fitdocs/sync.py`: 5.3 only. `src/fitdocs/docio.py`: 5.1 only.
 - `src/fitdocs/contract.py`: 2.5 (approved additive recorded-basis reader)
   and 8.1 (publication/version history), sequentially. `tests/test_contract.py`:
-  2.5 only; existing load/history/plan behavior stays unchanged.
+  2.5 only; `tests/test_public_api.py`'s literal contract export set also
+  belongs to 2.5. Existing load/history/plan behavior stays unchanged.
 - `docs/ownership-contract.md`, `tests/declaration_golden/*`, `CHANGELOG.md`
   and `docs/install.md`: 8.1 only.
 - `.kiro/steering/tech.md` and `.kiro/steering/structure.md`: 8.2 only.
@@ -510,6 +511,8 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     `LoadReading`, `document_load`, history/plan behavior and document bytes.
   - Tests in `tests/test_contract.py` pin every input shape, verbatim string
     preservation, independence from other load keys and the public export.
+    Append the approved reader to `tests/test_public_api.py`'s literal
+    `_CONTRACT_SURFACE`; keep the exact public-export assertion intact.
     Mutate the key, type/blank guards, normalization, load-validity gating and
     export; each named assertion must fail and pass after restoration.
   - Observable: contract tests, history document tests and plan corpus tests
@@ -1595,3 +1598,4 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 - 2.4 cleanup learnings: closing a descriptor itself releases flock, so an OS-level release check cannot pin an explicit unlock call. Independent event expectations pin unlock-before-close and exact flags/descriptors/byte counts across both backends' normal exit, body exception, contention, unexpected acquisition error and unlock error paths. Recording stubs do not reject arguments before assertions. Only contention errors map to WriterBusy; unrelated errors propagate.
 - 3.1 BLOCKED: tests-first RED 7 missing-module failures; partial documents producer and tests preserved uncommitted. contract.LoadReading contains only value/methodology, and no public reader exposes recorded load_basis. The halted payload-basis fallback would violate frontmatter provenance. Debug1 returned STOP_FOR_HUMAN (task decomposition): approve an additive document_load_basis reader prerequisite in contract.py/tests/test_contract.py, explicitly define absent/wrong-type/empty-string behavior, amend CoreDocuments and task ownership/dependency, and revalidate plan-resolution/history consumers. Preserve LoadReading/document_load and document bytes; use distinct recorded-vs-payload basis and a noncomputed recorded-basis fixture. Debug plan: /private/tmp/analytics-index-evidence/3.1/debug1/REPORT.md. No task3.1 completion or feature GO claimed; branch parked pending plan approval.
 - Approval resumed: maintainer approved document_load_basis and the proposed missing/non-string/blank semantics. Added prerequisite 2.5 and amended reader ownership, CoreDocuments and the upstream plan-resolution contract. Task3.1 now waits on 2.5; its partial source/tests are preserved under /private/tmp/analytics-index-evidence/3.1/parked/ until prerequisite verification finishes.
+- 2.5 public guard alignment: the approved new export also requires its literal entry in tests/test_public_api.py's existing exact export-set pin. Added that test file to prerequisite ownership after canonical regression exposed the omitted expectation; this is required by the existing approval of the public reader and changes no additional API semantics.
