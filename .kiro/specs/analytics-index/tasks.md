@@ -565,7 +565,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
   - _Boundary: CoreDocuments_
   - _Depends: 2.1, 2.2, 2.5_
 
-- [ ] 3.2 (P) Project computed values: activities, records, laps, sets, zone times and channel sources
+- [x] 3.2 (P) Project computed values: activities, records, laps, sets, zone times and channel sources
   - **The core computed producer**, per design.md § CoreComputed and § Data
     Models, covering six tables.
     - The `activities` metric columns are generated from `DerivedMetrics`'
@@ -1604,3 +1604,6 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 
 - 3.1: pure core.documents producer and four exact document-tier schemas; approved recorded-basis reader consumed independently of payload basis. Original missing-module/flag RED and restored GREEN retained. Independent review round2 APPROVED: 60 claimed observations plus two own probes produced named assertion failures and restored passes; full source-enabled/docs suite 9011 passed / two expected actionlint skips; canonical/scoped mypy and repository Ruff clean. Parent fresh completion gate 17 passed.
 - 3.1 fixture learnings: preserve real zeros separately from None in selected, nonselected and frontmatter loads; cross archive/nonarchive reference kinds with base/extra roles. Nullable fields require both populated and genuinely absent inputs, including bare valid effort optional fields and computed payload/result absence. Recorded basis must survive invalid/missing old load pairs. Schema descriptions with prescribed literals must match exactly.
+
+- 3.2: pure core.computed producer and six exact computed-tier schemas with metric/sample columns generated from authoritative dataclass field order. Reported tests-first missing-module and OFF/ON/removal lifecycle retained; raw initial outputs were not saved and were not reconstructed. Independent review round2 APPROVED: 46 distinct claimed mutations plus two own probes produced named assertion failures and restored passes; full source-enabled/docs suite 9020 passed / two expected actionlint skips; canonical/scoped mypy and repository Ruff clean. Parent fresh completion gate nine passed.
+- 3.2 fixture learnings: retain real composition/compute regressions but also supply independent distinct scalar metrics, all-None/real-zero rows, contrasting headers and empty fingerprint to defeat recomputation and tied-value swaps. Athlete=None shadows per-channel missing times/spec branches; exercise each independently with other channels populated and distinct zone time tuples. Multiple extras pin provenance cardinality. String enums need exact stored-string type assertions. A datetime.min sentinel with negative offsets overflows before assertions; use a safe timestamp and report actual failure types.
