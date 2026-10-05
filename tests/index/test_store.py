@@ -26,6 +26,7 @@ from fitdocs.index.store import (
     IndexStatementError,
     ResultColumn,
     SettingValue,
+    classify_error,
     create_index,
     duckdb_version,
     open_index,
@@ -284,8 +285,11 @@ def test_facade_wraps_original_backend_errors_for_every_operation(
     assert str(raised.value) == str(original)
 
 
+@pytest.mark.parametrize("create_with_api", [False, True])
 def test_open_error_preserves_original_backend_exception(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    create_with_api: bool,
 ) -> None:
     class BackendError(Exception):
         pass
@@ -293,7 +297,7 @@ def test_open_error_preserves_original_backend_exception(
     class BackendInterrupt(BackendError):
         pass
 
-    original = BackendError("original open failure")
+    original = BackendError("No such file or directory: synthetic backend open failure")
     backend = ModuleType("duckdb")
     backend.Error = BackendError  # type: ignore[attr-defined]
     backend.InterruptException = BackendInterrupt  # type: ignore[attr-defined]
@@ -303,10 +307,18 @@ def test_open_error_preserves_original_backend_exception(
 
     backend.connect = fail_connect  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "duckdb", backend)
+    path = tmp_path / "missing.duckdb"
     with pytest.raises(IndexOpenError) as raised:
-        open_index(tmp_path / "missing.duckdb", read_only=True)
+        if create_with_api:
+            create_index(path)
+        else:
+            open_index(path, read_only=True)
     assert raised.value.__cause__ is original
-    assert str(raised.value.__cause__) == "original open failure"
+    assert "No such file or directory" in str(original)
+    assert raised.value.fault.kind is FaultKind.MISSING
+    assert str(raised.value.__cause__) == str(original)
+    if create_with_api:
+        assert not path.exists()
 
 
 @pytest.mark.parametrize(
@@ -573,3 +585,192 @@ def test_duckdb_version_comes_from_installed_distribution_metadata() -> None:
 def test_created_connection_can_be_used_as_context_manager(tmp_path: Path) -> None:
     with create_index(tmp_path / "index.duckdb") as connection:
         assert connection.execute("SELECT 7").fetchall() == [(7,)]
+
+
+# Classification
+
+
+def _assert_open_fault(
+    path: Path,
+    *,
+    read_only: bool,
+    kind: FaultKind,
+    stem: str,
+    holder_pid: int | None = None,
+) -> None:
+    with pytest.raises(IndexOpenError) as raised:
+        open_index(path, read_only=read_only)
+    original = raised.value.__cause__
+    assert original is not None
+    message = str(original)
+    assert stem in message
+    assert raised.value.fault.message == message
+    assert raised.value.fault.kind is kind
+    assert raised.value.fault.holder_pid == holder_pid
+
+
+def _create_damaged_fixture(path: Path) -> None:
+    payload = "".join(str(index % 10) for index in range(48_000))
+    with create_index(path) as connection:
+        connection.execute("CREATE TABLE damage (payload VARCHAR)")
+        connection.execute("INSERT INTO damage VALUES (?)", (payload,))
+        connection.execute("CHECKPOINT")
+    assert path.stat().st_size > 4096
+
+
+def test_classifies_read_write_lock_and_extracts_holder_pid(tmp_path: Path) -> None:
+    from tests.index._helpers import hold_index
+
+    path = tmp_path / "index.duckdb"
+    with create_index(path):
+        pass
+    with hold_index(path, read_only=False) as holder_pid:
+        _assert_open_fault(
+            path,
+            read_only=False,
+            kind=FaultKind.LOCKED,
+            stem="Could not set lock on file",
+            holder_pid=holder_pid,
+        )
+
+
+def test_classifies_read_only_lock_when_writer_attempts_open(tmp_path: Path) -> None:
+    from tests.index._helpers import hold_index
+
+    path = tmp_path / "index.duckdb"
+    with create_index(path):
+        pass
+    with hold_index(path, read_only=True) as holder_pid:
+        _assert_open_fault(
+            path,
+            read_only=False,
+            kind=FaultKind.LOCKED,
+            stem="Could not set lock on file",
+            holder_pid=holder_pid,
+        )
+
+
+@pytest.mark.parametrize(
+    ("relative", "read_only", "stem"),
+    [
+        (False, True, "database does not exist"),
+        (True, False, "No such file or directory"),
+    ],
+)
+def test_classifies_missing_database(
+    tmp_path: Path, relative: bool, read_only: bool, stem: str
+) -> None:
+    path = (
+        tmp_path / "missing-dir" / "index.duckdb"
+        if relative
+        else tmp_path / "absent.duckdb"
+    )
+    _assert_open_fault(
+        path,
+        read_only=read_only,
+        kind=FaultKind.MISSING,
+        stem=stem,
+    )
+
+
+@pytest.mark.parametrize(
+    ("fixture", "stem"),
+    [
+        ("junk", "is not a valid DuckDB database file"),
+        ("empty", "is not a valid DuckDB database file"),
+        ("truncated", "Could not read enough bytes"),
+        ("flipped", "Corrupt database file"),
+    ],
+)
+def test_classifies_corrupt_database_files(
+    tmp_path: Path, fixture: str, stem: str
+) -> None:
+    path = tmp_path / f"{fixture}.duckdb"
+    if fixture == "junk":
+        path.write_bytes(b"not a duckdb file")
+    elif fixture == "empty":
+        path.write_bytes(b"")
+    else:
+        _create_damaged_fixture(path)
+        data = bytearray(path.read_bytes())
+        if fixture == "truncated":
+            del data[12_288:]
+        else:
+            data[4096 + 128] ^= 0x01
+        path.write_bytes(data)
+    _assert_open_fault(
+        path,
+        read_only=True,
+        kind=FaultKind.CORRUPT,
+        stem=stem,
+    )
+
+
+def test_classifies_forged_storage_version_as_incompatible(tmp_path: Path) -> None:
+    from tests.index._helpers import forge_storage_version
+
+    path = tmp_path / "index.duckdb"
+    with create_index(path):
+        pass
+    forge_storage_version(path, 69)
+    _assert_open_fault(
+        path,
+        read_only=True,
+        kind=FaultKind.INCOMPATIBLE,
+        stem="Trying to read a database file with version number",
+    )
+
+
+def test_classifies_unrecognized_duckdb_statement_as_other(
+    tmp_path: Path,
+) -> None:
+    with (
+        create_index(tmp_path / "index.duckdb") as connection,
+        pytest.raises(IndexStatementError) as raised,
+    ):
+        connection.execute("SELECT * FROM no_such_table").fetchall()
+    original = raised.value.__cause__
+    assert original is not None
+    assert str(original)
+    fault = classify_error(original)
+    assert fault.kind is FaultKind.OTHER
+    assert fault.message == str(original)
+    assert fault.holder_pid is None
+
+
+def test_non_duckdb_exception_with_lock_stem_is_other(tmp_path: Path) -> None:
+    with create_index(tmp_path / "classifier-gate.duckdb"):
+        pass
+    original = OSError("Could not set lock on file x")
+    fault = classify_error(original)
+    assert fault.kind is FaultKind.OTHER
+    assert fault.message == str(original)
+    assert fault.holder_pid is None
+
+
+def test_locked_duckdb_error_without_pid_preserves_message_and_cause(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class BackendError(Exception):
+        pass
+
+    class BackendInterrupt(BackendError):
+        pass
+
+    original = BackendError("Could not set lock on file synthetic lock")
+    backend = ModuleType("duckdb")
+    backend_module = cast(Any, backend)
+    backend_module.Error = BackendError
+    backend_module.InterruptException = BackendInterrupt
+
+    def fail_connect(*args: object, **kwargs: object) -> None:
+        raise original
+
+    backend_module.connect = fail_connect
+    monkeypatch.setitem(sys.modules, "duckdb", backend)
+
+    with pytest.raises(IndexOpenError) as raised:
+        open_index(tmp_path / "locked-without-pid.duckdb", read_only=True)
+
+    assert raised.value.__cause__ is original
+    assert raised.value.fault == IndexFault(FaultKind.LOCKED, str(original), None)

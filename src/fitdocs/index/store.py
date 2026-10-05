@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -144,8 +146,31 @@ class IndexConnection:
 
 
 def classify_error(error: BaseException) -> IndexFault:
-    """Keep the store's open-fault shape stable; task 4.2 adds classification."""
-    return IndexFault(FaultKind.OTHER, str(error), None)
+    """Classify real DuckDB failures by stable message stems."""
+    duckdb_module = sys.modules.get("duckdb")
+    error_type = getattr(duckdb_module, "Error", None)
+    message = str(error)
+    if not isinstance(error_type, type) or not isinstance(error, error_type):
+        return IndexFault(FaultKind.OTHER, message, None)
+
+    if "Could not set lock on file" in message:
+        pid_match = re.search(r"\(PID (\d+)\)", message)
+        holder_pid = int(pid_match.group(1)) if pid_match is not None else None
+        return IndexFault(FaultKind.LOCKED, message, holder_pid)
+    if "database does not exist" in message or "No such file or directory" in message:
+        return IndexFault(FaultKind.MISSING, message, None)
+    if "Trying to read a database file with version number" in message:
+        return IndexFault(FaultKind.INCOMPATIBLE, message, None)
+    if any(
+        stem in message
+        for stem in (
+            "Corrupt database file",
+            "is not a valid DuckDB database file",
+            "Could not read enough bytes",
+        )
+    ):
+        return IndexFault(FaultKind.CORRUPT, message, None)
+    return IndexFault(FaultKind.OTHER, message, None)
 
 
 def duckdb_version() -> str:
