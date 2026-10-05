@@ -327,7 +327,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     yet.
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.6_
 
-- [ ] 2. The schema contract and the producer seam
+- [x] 2. The schema contract and the producer seam
 
 - [x] 2.1 Define the schema contract and the bookkeeping tables
   - **The schema module**, per design.md § Schema:
@@ -476,7 +476,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
   - _Boundary: Fingerprint_
   - _Depends: 2.1, 2.2_
 
-- [ ] 2.4 (P) Guarantee one fitdocs writer with an OS advisory lock
+- [x] 2.4 (P) Guarantee one fitdocs writer with an OS advisory lock
   - **The lock module**, per design.md § Lock: `writer_lock(path)` uses a
     non-blocking `fcntl.flock`, with `msvcrt.locking` where `fcntl` is absent.
     `WriterBusy` is raised on contention. The file is opened `O_RDWR|O_CREAT`
@@ -1572,3 +1572,5 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 - 2.2 typing-test learnings: pin every generic alias argument independently, including Rows' str key, and import expected external types from their authoritative owner rather than the production module under test. In-process mypy.api.run raises Python's global recursion limit to 16384: restore the caller's limit in finally. Without cleanup, the later docs-site absurd-nesting test failed; the ordered pair reproduced RED before the fix and GREEN afterwards. Independent review verified exception-path cleanup. No production seam changes were needed.
 - 2.3: five pure fingerprint APIs with exact SHA-256/canonical JSON recipes, all athlete fields, dynamic tool version and unchanged producer exceptions. Tests-first/flag OFF RED 31 failed / 1 passed, flag ON and removed GREEN; EOF regression RED before grammar-aware fix. Final review APPROVED: 39 distinct recipe/target observations named RED/restored GREEN; full source-enabled/docs suite 8963 passed / 2 actionlint skips, canonical mypy 303 files and scoped mypy/Ruff clean. Fresh completion gate 38 passed.
 - 2.3 learnings: reconstructing a region_block and replacing its string misses valid end markers at EOF without a final newline; public docmerge.merge_regions splices grammar-valid content while retaining markers and unknown regions. Pin every effort exclusion and eligible managed field with complete literal payloads. All three zone precision fixtures use 1.12345678901/1.12345678902 (twelfth significant digit), not eight-digit substitutes; ten-decimal rounding collides before exact hashes differ. Expected-fingerprint setup must not populate the snapshot spy before the forwarding assertion: verify it is unset immediately before composition. Rename coverage physically writes, renames and rereads synthetic bytes, verifies the document hash moves, then checks render invariance.
+- 2.4: nonblocking advisory writer lock, fcntl with msvcrt fallback, mode 0600 creation and unchanged existing file bytes/mtime/size. Tests-first and flag-OFF RED 5 failures; ON and removed GREEN. Real subprocess contention, timeout-safe blocking mutation, SIGKILL release and normal/exception release are pinned. Final review APPROVED: 21 claimed mutations plus 2 new reviewer probes named RED/restored GREEN, full docs/source-enabled suite 8980 passed / 2 actionlint skips; canonical mypy 304 files and scoped mypy/Ruff clean. Fresh completion gate 17 passed. Windows backend tested synthetically on POSIX; native Windows execution unavailable.
+- 2.4 cleanup learnings: closing a descriptor itself releases flock, so an OS-level release check cannot pin an explicit unlock call. Independent event expectations pin unlock-before-close and exact flags/descriptors/byte counts across both backends' normal exit, body exception, contention, unexpected acquisition error and unlock error paths. Recording stubs do not reject arguments before assertions. Only contention errors map to WriterBusy; unrelated errors propagate.
