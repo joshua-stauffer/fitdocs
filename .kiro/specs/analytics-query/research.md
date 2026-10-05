@@ -286,14 +286,16 @@
 - **Context**: `query` runs arbitrary agent SQL, so its sandbox claim must hold
   on every release the pin admits. Every 1.1.x release creates
   `~/.duckdb/extensions/v1.1.x/<platform>` before refusing `INSTALL`.
-  `analytics-index` task 1.1 pins `duckdb>=1.1,<2`.
+  When this research ran, `analytics-index` task 1.1 pinned `duckdb>=1.1,<2`.
 - **Alternatives**:
   1. A runtime gate: `query` refuses to run below 1.2 with a message, and the
      pin stays.
   2. Raise the floor in the pin to 1.2.
 - **Selected**: Option 2, `duckdb>=1.2,<2`. The literal is `analytics-index`'s,
-  so it is raised to the controller as an upstream issue. This spec is written
-  assuming the raised floor.
+  so it was raised to the controller as upstream issue U1. Resolved:
+  `analytics-index`'s cross-spec round 1 adopted it (ruling C1), and its task
+  1.1 now pins `duckdb>=1.2,<2`. This spec's task 1.1 confirms the literal,
+  and its task 8.2 verifies the floor on 1.2.0.
 - **Rationale**:
   - The resolver enforces a floor statically, for every command. A runtime gate
     would leave installs that pip calls valid but on which one command refuses
@@ -379,8 +381,10 @@
   - Leaving leftovers: unbounded growth after crashes.
 - **Trade-offs**:
   - The index directory gains a transient name, `query-spill-<pid>/`. The
-    ownership contract's analytics-index section must name it (upstream
-    issue U3).
+    ownership contract's analytics-index section had to name it (upstream
+    issue U3). Resolved: `analytics-index`'s cross-spec round 1 (ruling C3)
+    names it in its task 8.1, beside the writer's own `writer-spill/`, and
+    pins the phrase.
   - PID reuse by an unrelated live process only delays a removal.
 
 ### Decision 5: Freshness is the refresh's own scan, run before the index is opened
@@ -402,8 +406,13 @@
   1.5 s at 2,500 pages, per analytics-index's estimate). A maintainer-only task
   measures it on the real data root.
 - **`--schema` only**:
-  - Corpus-table staleness: each registered `CorpusProducer.fingerprint`
-    against `index_producers`, using the same `corpus_fingerprint` function.
+  - Corpus-table staleness: each registered corpus producer's fingerprint
+    against `index_producers`. It is computed exactly as the refresh computes
+    it: `analytics-index`'s one builder, `corpus_snapshot`, with `held` set to
+    the bookkeeping's page keys, and its one composition,
+    `combined_corpus_fingerprint`, which supplies the fitdocs version and
+    `SCHEMA_VERSION` itself (cross-spec ruling C5). `held` comes from the
+    bookkeeping, so this runs after close, still outside the read lock.
   - Athlete-input drift: `activities.athlete_fingerprint` against the current
     `athlete.toml`'s fingerprint.
 
@@ -476,17 +485,31 @@
   - No `--schema` CSV.
   - No multi-statement scripts.
   - No contract-version bump: the contract's index section, `analytics-index`'s,
-    names the spill directory (U3).
+    names the spill directory (U3, its task 8.1).
 
 ## Risks & Mitigations
-- **The floor.** If the controller keeps `>=1.1`, Requirement 5.7 fails on
-  1.1.x (the `+HOME` row above). Mitigation: upstream issue U1, and a
-  stop-and-report in the tasks if `main` still admits 1.1.
+- **The floor.** Had the floor stayed `>=1.1`, Requirement 5.7 would have
+  failed on 1.1.x (the `+HOME` row above). Resolved by `analytics-index`'s
+  cross-spec round 1 (upstream issue U1, ruling C1): its task 1.1 pins
+  `duckdb>=1.2,<2`. Task 1.1 here confirms the literal and stops and reports
+  if `main` still admits 1.1; task 8.2 verifies the floor on 1.2.0.
 - **Facade fetch errors.** Errors and interrupts surface at `fetchmany`
-  (streaming). If `IndexResult.fetchmany` lets raw DuckDB exceptions escape,
-  `query` cannot classify them without importing DuckDB. Mitigation: upstream
-  issue U2 (`fetchmany`/`fetchall` raise `IndexStatementError`/`IndexInterrupted`
-  chained, like `execute`), and a prerequisite check in the tasks.
+  (streaming). Had `IndexResult.fetchmany` let raw DuckDB exceptions escape,
+  `query` could not have classified them without importing DuckDB. Resolved
+  by `analytics-index`'s cross-spec round 1 (upstream issue U2, ruling C2):
+  its task 4.1 makes `fetchmany`/`fetchall` raise
+  `IndexStatementError`/`IndexInterrupted` chained, like `execute`, and pins
+  it. Task 1.1 here confirms it and pins it again on query's read-only call
+  path.
+- **Reproducing the refresh's corpus fingerprints.** A reader that assembled
+  its own `CorpusSnapshot`, or composed the three-part fingerprint itself,
+  could drift from the refresh and report a corpus table behind right after a
+  refresh, for example after a page error left a new page out of the index.
+  Resolved by cross-spec ruling C5: `analytics-index` owns the one builder
+  (`corpus_snapshot`, whose snapshot also carries the left-out pages) and the
+  one composition (`combined_corpus_fingerprint`). `query` calls both, with
+  `held` set to the bookkeeping's page keys, and its freshness tests compare
+  against fingerprints a real refresh recorded.
 - **A future DuckDB adds another lock-bypassing function**, as `enable_logging`
   did in 1.4. Mitigations:
   - one statement per connection, which removes the cross-statement effect;
@@ -512,7 +535,8 @@
 ## References
 - DuckDB, Securing DuckDB: https://duckdb.org/docs/current/operations_manual/securing_duckdb/overview.html
 - DuckDB concurrency: https://duckdb.org/docs/stable/connect/concurrency
-- `analytics-index` design § Cross-spec seams (`.kiro/specs/analytics-index/design.md:166-280`)
-  and research P6 (`.kiro/specs/analytics-index/research.md:260-284`)
+- `analytics-index` design § Cross-spec seams (`.kiro/specs/analytics-index/design.md:178-337`
+  at ee70095, after its cross-spec round 1) and research P6 with its
+  disclosure (`.kiro/specs/analytics-index/research.md:277-316`)
 - Probe scripts and raw outputs (session scratchpad, not in the repo):
   `p10/query/probe/*.py`, `p10/query/runs/*`
