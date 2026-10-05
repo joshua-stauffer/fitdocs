@@ -97,8 +97,7 @@ def test_dependencies_unchanged_from_pre_feature_snapshot_as_set_and_ordered_lis
     head = _dependencies_on_disk()
 
     assert len(base) > 1  # the snapshot is non-trivial, not a vacuous pass
-    assert set(head) == set(base)
-    assert head == base  # ordering preserved too, not just membership
+    assert head == base + ["duckdb>=1.2,<2"]  # analytics-index's deliberate delta
 
 
 def test_no_new_runtime_optional_dependency_group_vs_pre_feature_snapshot() -> None:

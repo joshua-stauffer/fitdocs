@@ -62,13 +62,12 @@ def _test_names(source: str) -> list[str]:
 
 
 def test_runtime_dependencies_are_the_pre_spec_literals() -> None:
-    """Runtime dependencies and optional dependencies are unchanged (8.1).
+    """Analytics-index adds DuckDB as the deliberate runtime dependency delta.
 
-    Dies on: adding any entry to `[project].dependencies` (or an
-    `[project.optional-dependencies]` table) in `pyproject.toml`.
+    Dies on: adding any runtime dependency besides DuckDB.
     """
     project = _pyproject()["project"]
-    assert project["dependencies"] == PRE_SPEC_DEPENDENCIES
+    assert project["dependencies"] == PRE_SPEC_DEPENDENCIES + ["duckdb>=1.2,<2"]
     assert project.get("optional-dependencies", {}) == {}
 
 

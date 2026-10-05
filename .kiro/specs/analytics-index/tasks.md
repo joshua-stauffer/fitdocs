@@ -224,7 +224,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 
 - [ ] 1. Foundation: the dependency, test isolation and the index location
 
-- [ ] 1.1 Add DuckDB as a core runtime dependency and reword the four dependency pins
+- [x] 1.1 Add DuckDB as a core runtime dependency and reword the four dependency pins
   - **Dependency and lock.** Append `duckdb>=1.2,<2` to `[project].dependencies`
     and regenerate `uv.lock` with `uv lock`. No `[project.optional-dependencies]`
     appears. The floor is 1.2, not the brief's 1.1: every 1.1.x release writes
@@ -1552,3 +1552,10 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     within the frontmatter-scan order of magnitude (about 1.5 s at 2,500
     pages), or a follow-up is queued.
   - _Requirements: 7.4, 7.5_
+
+
+## Implementation Notes
+
+- 1.1: DuckDB `>=1.2,<2` added and locked at 1.5.6; four dependency pins retained their names. Tests-first RED: all four dependency pins failed before adding the dependency. Required mutations (remove DuckDB, restore floor 1.1, add optional-dependencies) each failed their targeted guards; independent review repeated them and added extra dependency, ordered-list swap and omitted upper bound, with no survivors. Restored guards: 5 passed. Reviewer full suite: 8696 passed / 8 skipped; CI boundary and sitebuild: 807 passed; source-enabled forbidden-string gate: 44 passed; canonical mypy: 296 files clean; ruff check/format clean. Offline packaging CI checks passed using the existing cache-warming fixtures; no new CI-runner step required.
+- Worktree setup: use `/Users/josh/.pyenv/versions/3.11.15/bin/python3.11`, matching main. Homebrew Python's executable resolution broke the docs-site fake-interpreter fixture; recreating only the worktree venv with pyenv resolved it. Real-data-root setup is unnecessary: all index tests use synthetic inputs.
+- Validation: `FITDOCS_FORBIDDEN_STRINGS=/Users/josh/.fitdocs-purge/forbidden-strings.tsv` enables the existing real-tree gate. Never print its contents. Use `uv run --group docs` for required site tooling; a plain `uv run` can remove the docs group. Scoped mypy on the three pre-existing unregistered dependency test modules reports 11 baseline errors, independently reproduced on main; canonical mypy is clean.

@@ -652,7 +652,7 @@ def test_the_repeat_run_comparison_detects_a_single_changed_byte(
         assert _written_tree(data_root) == baseline
 
 
-# --- 7. plugin discovery stays offline and dependency-free (plugin-api Req 7.1, 7.2)
+# --- 7. plugin discovery stays offline (plugin-api Req 7.1, 7.2)
 #
 # Sections 1-6 pin the parse/compute/render/write path's offline and
 # byte-identity guarantees. plugin-api adds a second entry point that runs
@@ -665,10 +665,9 @@ def test_the_repeat_run_comparison_detects_a_single_changed_byte(
 
 _PYPROJECT_PATH = Path(__file__).resolve().parents[1] / "pyproject.toml"
 
-#: The runtime dependency footprint as it stood before plugin-api. Any name
-#: added to ``[project].dependencies`` (or a runtime
-#: ``[project.optional-dependencies]`` group) to support plugin discovery
-#: changes this set and fails the test below (Req 7.2).
+#: The runtime dependency footprint after analytics-index added DuckDB for the
+#: index. Plugin discovery itself adds no dependency, and discovery never loads
+#: ``duckdb`` (Req 7.2; the lazy-import behavior is pinned by task 4.1).
 _BASELINE_RUNTIME_DEPENDENCIES = frozenset(
     {
         "garmin-fit-sdk>=21.208.0",
@@ -676,6 +675,7 @@ _BASELINE_RUNTIME_DEPENDENCIES = frozenset(
         "rich>=13",
         "pyyaml>=6.0",
         "tomli-w>=1.0",
+        "duckdb>=1.2,<2",
     }
 )
 
@@ -699,11 +699,10 @@ def test_plugin_discovery_performs_no_network_access(tmp_path: Path) -> None:
 
 
 def test_no_new_third_party_runtime_dependency_was_added() -> None:
-    """``[project].dependencies`` is unchanged from its pre-plugin-api baseline.
+    """Analytics-index's DuckDB addition is the only delta (Req 7.2, 12.3).
 
-    Mutation caught: adding any third-party package to ``dependencies`` -- or a
-    new runtime ``optional-dependencies`` group -- to support discovery fails
-    this test outright, rather than only being caught by review (Req 7.2).
+    Plugin discovery adds no dependency. Its subprocess no-import behavior is
+    pinned by analytics-index task 4.1.
     """
     with _PYPROJECT_PATH.open("rb") as handle:
         document = tomllib.load(handle)

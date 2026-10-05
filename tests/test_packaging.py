@@ -501,13 +501,7 @@ def test_sdist_allowlist_excludes_forbidden_paths_and_the_agent_log_symlink(
 
 
 def test_dependencies_declaration_is_unchanged() -> None:
-    """Requirement 10.1: becoming publishable costs no new runtime
-    dependency. PRESERVED-ONLY here: pinned by
-    ``tests/test_determinism.py::test_no_new_third_party_runtime_dependency_was_added``,
-    which already asserts ``[project].dependencies`` equals the frozen
-    pre-plugin-api baseline. Not duplicated; this test only asserts the
-    manifest's dependency list is present and matches that exact literal
-    list, byte for byte, so a reviewer can see the two tests agree."""
+    """DuckDB is the one declared runtime dependency added by analytics-index."""
     data = tomllib.loads((_PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     dependencies = data["project"]["dependencies"]
     assert dependencies == [
@@ -516,6 +510,7 @@ def test_dependencies_declaration_is_unchanged() -> None:
         "rich>=13",
         "pyyaml>=6.0",
         "tomli-w>=1.0",
+        "duckdb>=1.2,<2",
     ]
 
 
@@ -1038,7 +1033,7 @@ def test_install_and_no_data_root_commands_write_only_inside_uv_owned_dirs(
 def _uninstalled_checkout_python(
     tmp_path_factory: pytest.TempPathFactory, _real_uv_cache_dir: str
 ) -> Path:
-    """A scratch venv holding fitdocs' five runtime dependencies but NOT
+    """A scratch venv holding fitdocs' six runtime dependencies but NOT
     fitdocs itself as an installed distribution -- the REAL "uninstalled
     checkout" case (Req 2.4), distinct from task 1.1's patched-metadata-
     lookup simulation (``tests/test_version_identity.py``), which only
