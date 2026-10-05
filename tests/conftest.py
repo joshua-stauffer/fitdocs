@@ -16,6 +16,15 @@ from tests.fixtures import builder
 
 
 @pytest.fixture(autouse=True)
+def _isolate_index_directory(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Give each test its own temporary analytics-index directory."""
+    index_dir = tmp_path_factory.mktemp("fitdocs-index")
+    monkeypatch.setenv("FITDOCS_INDEX_DIR", str(index_dir))
+
+
+@pytest.fixture(autouse=True)
 def _reset_plugin_discovery() -> None:
     """Unregister every plugin-attributed calculator id after each test.
 
