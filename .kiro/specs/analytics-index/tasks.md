@@ -99,9 +99,11 @@ sequential: never two of them `(P)` at once.
 - `src/fitdocs/cli.py`: 7.1 (the `index` command and docstring), then 7.2
   (the post-pass wiring).
 - `src/fitdocs/sync.py`: 5.3 only. `src/fitdocs/docio.py`: 5.1 only.
-- `src/fitdocs/contract.py`, `docs/ownership-contract.md`,
-  `tests/declaration_golden/*`, `CHANGELOG.md` and `docs/install.md`: 8.1
-  only.
+- `src/fitdocs/contract.py`: 2.5 (approved additive recorded-basis reader)
+  and 8.1 (publication/version history), sequentially. `tests/test_contract.py`:
+  2.5 only; existing load/history/plan behavior stays unchanged.
+- `docs/ownership-contract.md`, `tests/declaration_golden/*`, `CHANGELOG.md`
+  and `docs/install.md`: 8.1 only.
 - `.kiro/steering/tech.md` and `.kiro/steering/structure.md`: 8.2 only.
 - Existing tests whose full stdout of `sync`/`regen`/`load` gains the index
   line: 7.2 only, each listed in its Implementation Notes.
@@ -327,7 +329,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     yet.
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.6_
 
-- [x] 2. The schema contract and the producer seam
+- [ ] 2. The schema contract and the producer seam
 
 - [x] 2.1 Define the schema contract and the bookkeeping tables
   - **The schema module**, per design.md § Schema:
@@ -498,6 +500,23 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
   - _Requirements: 11.1, 11.2, 11.3_
   - _Boundary: Lock_
 
+- [ ] 2.5 Add the approved recorded-load-basis reader prerequisite
+  - Add `contract.document_load_basis(frontmatter: Mapping[str, object] | None) -> str | None`
+    and export it in `contract.__all__`. Read the third `LOAD_KEYS` entry.
+  - Return `None` for absent frontmatter, a missing key, non-string values,
+    or strings empty after stripping whitespace. Return a valid recorded
+    string verbatim, preserving whitespace and arbitrary nonblank labels.
+  - Read basis independently of load value/methodology validity. Preserve
+    `LoadReading`, `document_load`, history/plan behavior and document bytes.
+  - Tests in `tests/test_contract.py` pin every input shape, verbatim string
+    preservation, independence from other load keys and the public export.
+    Mutate the key, type/blank guards, normalization, load-validity gating and
+    export; each named assertion must fail and pass after restoration.
+  - Observable: contract tests, history document tests and plan corpus tests
+    pass; scoped mypy/Ruff and canonical regression pass.
+  - _Requirements: 2.1; plan-resolution Amendment 1_
+  - _Boundary: ContractReaders (approved additive prerequisite)_
+
 - [ ] 3. Core producers
 
 - [ ] 3.1 (P) Project document values: pages, sources, loads and quality flags
@@ -541,8 +560,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     `resolve_tables` accepts.
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 4.1_
   - _Boundary: CoreDocuments_
-  - _Depends: 2.1, 2.2_
-  - _Blocked: Missing approved upstream recorded-load-basis reader. contract.document_load returns only LoadReading(value, methodology), while this task requires pages.load_basis from frontmatter through contract readers. Debug returned STOP_FOR_HUMAN: approve an additive reader prerequisite and amend ownership/design/dependencies before resuming; payload basis is not an equivalent source._
+  - _Depends: 2.1, 2.2, 2.5_
 
 - [ ] 3.2 (P) Project computed values: activities, records, laps, sets, zone times and channel sources
   - **The core computed producer**, per design.md § CoreComputed and § Data
@@ -1576,3 +1594,4 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 - 2.4: nonblocking advisory writer lock, fcntl with msvcrt fallback, mode 0600 creation and unchanged existing file bytes/mtime/size. Tests-first and flag-OFF RED 5 failures; ON and removed GREEN. Real subprocess contention, timeout-safe blocking mutation, SIGKILL release and normal/exception release are pinned. Final review APPROVED: 21 claimed mutations plus 2 new reviewer probes named RED/restored GREEN, full docs/source-enabled suite 8980 passed / 2 actionlint skips; canonical mypy 304 files and scoped mypy/Ruff clean. Fresh completion gate 17 passed. Windows backend tested synthetically on POSIX; native Windows execution unavailable.
 - 2.4 cleanup learnings: closing a descriptor itself releases flock, so an OS-level release check cannot pin an explicit unlock call. Independent event expectations pin unlock-before-close and exact flags/descriptors/byte counts across both backends' normal exit, body exception, contention, unexpected acquisition error and unlock error paths. Recording stubs do not reject arguments before assertions. Only contention errors map to WriterBusy; unrelated errors propagate.
 - 3.1 BLOCKED: tests-first RED 7 missing-module failures; partial documents producer and tests preserved uncommitted. contract.LoadReading contains only value/methodology, and no public reader exposes recorded load_basis. The halted payload-basis fallback would violate frontmatter provenance. Debug1 returned STOP_FOR_HUMAN (task decomposition): approve an additive document_load_basis reader prerequisite in contract.py/tests/test_contract.py, explicitly define absent/wrong-type/empty-string behavior, amend CoreDocuments and task ownership/dependency, and revalidate plan-resolution/history consumers. Preserve LoadReading/document_load and document bytes; use distinct recorded-vs-payload basis and a noncomputed recorded-basis fixture. Debug plan: /private/tmp/analytics-index-evidence/3.1/debug1/REPORT.md. No task3.1 completion or feature GO claimed; branch parked pending plan approval.
+- Approval resumed: maintainer approved document_load_basis and the proposed missing/non-string/blank semantics. Added prerequisite 2.5 and amended reader ownership, CoreDocuments and the upstream plan-resolution contract. Task3.1 now waits on 2.5; its partial source/tests are preserved under /private/tmp/analytics-index-evidence/3.1/parked/ until prerequisite verification finishes.

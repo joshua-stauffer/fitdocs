@@ -212,3 +212,14 @@ tell "not logged" from "upcoming".
 7. If any block reports a problem, or the plan pass reports an invalid, blocked or failed block, the fitdocs CLI shall exit with the per-file-failure status; if the plans, history or load settings table is malformed, the fitdocs CLI shall exit with the configuration-error status; otherwise the exit status shall be the command's own.
 8. During the reconciling pass, the fitdocs CLI shall create, modify and delete files only inside the rendered blocks location, shall write no workout document, no history page and no plan source, and shall write neither the athlete profile nor the settings file; and the pass shall be registered as a writing entry point of its own in the write-confinement guard.
 9. The fitdocs CLI shall run the reconciling pass with the plan pass's discovery, validation, foreign-file rule, atomic writes, stale removal, byte comparison and report unchanged, so that a block that fails validation is left exactly as `fitdocs plan` would leave it.
+
+
+## Amendment 1 (2026-10-05): additive recorded load-basis reader, approved for analytics-index
+
+Analytics-index prerequisite 2.5 adds `contract.document_load_basis(frontmatter)`
+for projection of the recorded `load_basis` field. It returns `None` for absent
+frontmatter, a missing/non-string value, or a blank string; valid strings are
+returned verbatim, independently of load value/methodology validity. Existing
+Requirements 1.2 and 1.5, `LoadReading(value, methodology)`, `document_load` and
+history/plan load selection remain unchanged. Tests: `tests/test_contract.py`
+and recorded-versus-payload pins in `tests/index/test_core_documents.py`.

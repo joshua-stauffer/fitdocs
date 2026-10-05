@@ -1671,3 +1671,15 @@ untouched) was preserved:
 The list in "Shared source files" (tasks.md) and item 6 above should be read
 with these additions; the `training-blocks` record (its Amendment 1, task
 3.4) states the same facts from that spec's side.
+
+
+## Amendment 2 (2026-10-05): approved additive recorded-basis reader for analytics-index
+
+ContractReaders additionally exports
+`document_load_basis(frontmatter: Mapping[str, object] | None) -> str | None`.
+It reads the third `LOAD_KEYS` entry, returning a nonblank recorded string
+verbatim or `None` for absent/missing/non-string/blank input. It does not gate
+on `document_load` validity or inspect the load region. Analytics-index task
+2.5 owns this additive change and its contract tests; task 3.1 consumes it for
+`pages.load_basis`. The existing two-field `LoadReading`, `document_load`
+parity rule, plan corpus and history behavior are preserved.

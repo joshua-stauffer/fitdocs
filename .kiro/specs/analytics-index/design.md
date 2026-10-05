@@ -1095,7 +1095,14 @@ def combined_corpus_fingerprint(producer: CorpusProducer, snapshot: CorpusSnapsh
     `document_sport`, `document_modality`, `document_indoor`, `document_uuid`
     and `document_source_identity`;
   - `effort_tag` and `source_refs`;
-  - the load keys through the frontmatter reader `document_load`.
+  - the load value/methodology through `document_load`, and the recorded
+    basis through the approved additive `document_load_basis` reader.
+
+  `document_load_basis(frontmatter: Mapping[str, object] | None) -> str | None`
+  returns `None` for absent/missing/non-string/blank basis, otherwise the
+  recorded string verbatim. It is independent of load value/methodology
+  validity and never substitutes a load-region payload's basis. Prerequisite
+  task 2.5 preserves `LoadReading` and `document_load` unchanged.
 
   A reader's `None` stays `None`.
 - **Loads and flags.** These come from `PageDocument.load`. A computed payload
