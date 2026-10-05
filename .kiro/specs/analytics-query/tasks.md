@@ -288,13 +288,13 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
       with no default), `combined_corpus_fingerprint` takes no version
       argument, `CorpusSnapshot` has `left_out`, and `LeftOutPage`'s fields
       end with `document_fingerprint`.
-    - **The test-only names outside Seam 5.** design.md § Allowed
-      Dependencies flags names these tests read that `analytics-index`'s
-      Seam 5 did not list at ee70095: `store.duckdb_version`,
-      `CORE_DOCUMENTS`, `CORE_COMPUTED`, `schema.TableScope`, and a
-      monkeypatch of `registry.DOCUMENT_PRODUCERS`. Each must be in Seam 5's
-      list on the branch, or admitted by a recorded controller ruling. If
-      neither holds, stop and report.
+    - **The test-only names in Seam 5.** `analytics-index` design.md Seam 5's
+      test-only bullet lists every test-only name these tests read (design.md
+      § Allowed Dependencies): `store.duckdb_version`,
+      `core.documents.CORE_DOCUMENTS`, `core.computed.CORE_COMPUTED`,
+      `schema.TableScope`, and monkeypatching `registry.DOCUMENT_PRODUCERS`
+      and `registry.CORPUS_PRODUCERS`. Confirm each is listed there on the
+      branch. If one is not, stop and report.
     - `tests/index/_helpers.py` exports `hold_index` and
       `forge_storage_version`.
     - **The importer guard is one-way** (`analytics-index` task 7.3, whose
@@ -622,7 +622,11 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
     - match any directory whose name ends in `spill` and carries no live PID,
       instead of `^query-spill-(\d+)$` (the `writer-spill/` pin reds).
   - **Observable:** `uv run pytest tests/query/test_spill.py` is green, no
-    spill directory or subprocess survives, and HOME stays empty.
+    `query-spill-*` directory or subprocess survives, and HOME stays empty.
+    A `writer-spill/` left in the setup's own tmp directory does not count:
+    `plain_database` builds through `store.create_index`, a writer connection
+    whose `temp_directory` is `writer-spill/` (`analytics-index`'s
+    `WRITER_SPILL_DIRNAME`), and DuckDB's removal of it on close is unprobed.
   - _Requirements: 6.3, 6.4, 7.3_
 
 - [ ] 3. Core: one screened, timed statement
@@ -1197,20 +1201,62 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
     - Their date windows are relative to `max(date)`, so they hold on the
       fixture.
   - **Derived producers.** If `analytics-derived` has landed (its producers
-    appear in `registered_tables()`):
-    - add one H3 and one `sql` fence per derived producer
-      (`derived.mean_max`, `derived.load_series`, `derived.benchmarks`,
-      `derived.blocks`), each selecting rows from one of that producer's
-      tables;
-    - take each example's window relative to the data (`max(date)` or the
-      table's own dates), never `current_date`, `now()` or "this year". The
-      fixture's activities are in September 2021;
-    - extend `derived_inputs()` in `tests/query/conftest.py`: plan sources as
-      extra files, with dates around `FIXTURE_TODAY`, and the `[benchmarks]`
-      table as appended `athlete.toml` text.
+    appear in `registered_tables()`), this task is the second lander. It takes
+    the four example topics and the fixture inputs from
+    `.kiro/specs/analytics-derived/design.md` § PublishedStatements and that
+    spec's task 6.2, so both landing orders produce the same artifacts. Read
+    both first; where this list and theirs differ, stop and report.
+    - **Fixture inputs.** Extend `derived_inputs()` in
+      `tests/query/conftest.py` (it returns `DerivedInputs(files=…,
+      athlete_toml=…)` from `tests/query/_helpers.py`; `indexed_root` writes
+      both before `fitdocs sync`, with `fitdocs.cli._today` pinned to
+      `FIXTURE_TODAY`, 2021-10-01):
+      - `files`: one valid plan source under the default plan directory
+        `plans/` (`fitdocs.layout.DEFAULT_PLANS_DIR`), in the grammar of
+        `tests/plans/fixtures/`, dated around `FIXTURE_TODAY`. Its mesocycle
+        window covers the fixture's activities (`FIT_TIMESTAMP_BASE`,
+        2021-09-08 UTC) and `FIXTURE_TODAY`. It has a planned workout dated
+        before `FIXTURE_TODAY` on a day with no activity and no override (not
+        logged), and one dated after it (upcoming). `derived_inputs()`
+        writes no `fitdocs.toml`, so 1.3's `[tiles] enabled = false` stays;
+      - `athlete_toml`: a `[benchmarks]` table appended to the base file,
+        which declares `profile_version = 2`. It holds a Ride `ftp_watts`
+        entry measured before the fixture's activities (for example
+        2021-09-01), equal to the base file's flat `ftp_watts`, so the loads
+        the fixture already computes stay put where the profile allows.
+    - **Worked examples.** Four H3s under `Worked examples`, one per derived
+      producer, each followed by one `sql` fence that selects rows from that
+      producer's table. No example is a bare aggregate, and none uses an
+      outer join that keeps rows once the producer's tables are emptied.
+      Every window is relative to the data, `max(date)` or the table's own
+      dates, worded "in the latest year of data": never "this year",
+      `current_date`, `now()` or today. Each predicate is checked against
+      what `indexed_root` holds before it is written.
+      1. **Best efforts** (`derived.mean_max`): the best power at each
+         duration in the latest year of data, with the page it came from
+         (`mean_max` joined to `pages`, one row per `duration_s` with a
+         power). Not a fixed 20-minute filter: the builder's ride records 10
+         seconds (`tests/fixtures/builder.py:298`), so the fixture holds only
+         the 1-, 5- and 10-second durations. The prose may name
+         `duration_s = 1200` as the 20-minute filter.
+      2. **Fitness, fatigue and form** (`derived.load_series`): the last four
+         weeks of the series `fitdocs history` shows by default (`daily_load`
+         joined to `load_series` where `history_default`, the window taken
+         from `load_series.series_end`). A default exists only when one
+         methodology is observed or one is configured; if the fixture records
+         two, stop and report rather than drop the filter. `fitdocs.toml` is
+         this spec's 1.3 fixture, but changing it here would make the two
+         landing orders differ.
+      3. **Thresholds in force** (`derived.benchmarks`): the FTP in force on
+         each ride's date in the latest year of data (`benchmark_periods`
+         joined to the ride pages on `starts_on` and `ends_before`, with
+         `ends_before` NULL while in force).
+      4. **Planned sessions not logged** (`derived.blocks`): the
+         `planned_workouts` rows whose `state` is `not logged`, in the block
+         with the latest `starts_on`.
 
-    Otherwise, record in Implementation Notes that the second lander does
-    both (Cross-spec shared files).
+    Otherwise, record in Implementation Notes that the second lander
+    (`analytics-derived` task 6.2) does both (Cross-spec shared files).
   - **Tests** (`tests/query/test_skill_examples.py`, `use_indexed_root`, HOME
     at `home_dir`):
     - every `sql` fence of the skill runs through `fitdocs query --format

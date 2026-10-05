@@ -110,10 +110,15 @@ the index.
     `analytics-derived` lands second may touch exactly three read-side files:
     - the worked examples in `src/fitdocs/skills/fitdocs-analytics/SKILL.md`;
     - the generated schema block in `docs/analytics.md`;
-    - the input section of the indexed fixture in `tests/query/conftest.py`
-      (plan sources, benchmark entries).
+    - the input section of the indexed fixture: the `derived_inputs()` hook in
+      `tests/query/conftest.py`, which returns `DerivedInputs(files,
+      athlete_toml)` from `tests/query/_helpers.py` (plan sources as `files`,
+      a `[benchmarks]` table as `athlete_toml`). `indexed_root` writes both
+      through `write_fixture_inputs` before `fitdocs sync`, with
+      `fitdocs.cli._today` pinned to `FIXTURE_TODAY` (2021-10-01).
 
-    Nothing else on the read side.
+    Nothing else on the read side; `DerivedInputs`, `write_fixture_inputs`
+    and `FIXTURE_TODAY` themselves stay this spec's.
 - **Making any other command read the index**, `fitdocs check` included.
 
 ### Allowed Dependencies
@@ -138,8 +143,14 @@ the index.
       `corpus_fingerprint`, `combined_corpus_fingerprint`;
     - `corpus`: `scan_workout_pages`, `CorpusScan`, `LeftOutPage`,
       `corpus_snapshot`;
-    - test-only: `store.create_index`, `store.create_schema` and
-      `build.run_index_command`.
+    - test-only: `store.create_index`, `store.create_schema`,
+      `build.run_index_command` and `store.duckdb_version` (the crash-vector
+      positive control, task 5.4); `core.documents.CORE_DOCUMENTS`,
+      `core.computed.CORE_COMPUTED` and `schema.TableScope`, which group
+      tables by producer and scope (the generic 11.5 pin, task 7.3); and
+      monkeypatching `registry.DOCUMENT_PRODUCERS` and
+      `registry.CORPUS_PRODUCERS`, read at call time (the freshness page-error
+      pin, task 4.1, appends a test-only document producer).
 
     The facade method `statement_types` is this spec's own append to
     `store.py` (StoreFacadeAddition). Source code calls `corpus_snapshot` and
@@ -147,14 +158,6 @@ the index.
     composes a corpus fingerprint itself (§ Freshness); the producer types,
     `document_fingerprint` and `corpus_fingerprint` are for annotations and
     tests.
-  - **Test-only names Seam 5 does not list yet.** These tests read them, and
-    `analytics-index`'s Seam 5 must gain them, or the tests change, before
-    implementation (raised to the controller at cross-spec round 1):
-    - `store.duckdb_version` (the crash-vector positive control, task 5.4);
-    - `core.documents.CORE_DOCUMENTS`, `core.computed.CORE_COMPUTED` and
-      `schema.TableScope` (the generic 11.5 pin, task 7.3);
-    - `registry.DOCUMENT_PRODUCERS`, monkeypatched to append a test-only
-      document producer (the freshness page-error pin, task 4.1).
   - `fitdocs.athlete` (`load_athlete_inputs`, `AthleteFileError`);
   - the standard library.
 
@@ -320,8 +323,8 @@ docs/analytics.md    # The analytics page, with the generated schema-reference b
 
 tests/query/
 ├── __init__.py
-├── conftest.py               # home_dir; module-scoped indexed data root (real sync + `fitdocs index`, own HOME and FITDOCS_INDEX_DIR); copies
-├── _helpers.py               # plain_database, schema_only_index (create_index + create_schema, no refresh), copy_indexed_root
+├── conftest.py               # home_dir; derived_inputs() (the second lander's append point); module-scoped indexed data root (real sync + `fitdocs index`, own HOME and FITDOCS_INDEX_DIR, today pinned to FIXTURE_TODAY); copies
+├── _helpers.py               # plain_database, schema_only_index (create_index + create_schema, no refresh), FIXTURE_TODAY (2021-10-01), DerivedInputs(files, athlete_toml), write_fixture_inputs, copy_indexed_root
 ├── test_fixtures.py          # self-tests of the fixtures and helpers
 ├── test_changelog_entry.py   # the [Unreleased] entry names the command, the skill and the page
 ├── test_store_facade.py      # statement_types facade addition
@@ -1143,8 +1146,14 @@ def query_command(
     blocks.
   - The generic pin (Testing Strategy) enforces this whichever spec lands
     second.
-  - The second lander also extends the indexed fixture's inputs, so that
-    each producer yields rows.
+  - The second lander also extends the indexed fixture's inputs, through the
+    `derived_inputs()` hook, so that each producer yields rows.
+  - **Data-relative windows.** Every worked example, core or derived, takes
+    its date window relative to the data: `max(date)`, or the table's own
+    dates (the derived examples word it "in the latest year of data"). None
+    uses `current_date`,
+    `now()`, today or "this year": the fixture's activities are from
+    September 2021 and its today is pinned to `FIXTURE_TODAY`.
 - **`fitdocs-workouts`** gains one "Further reading" bullet linking the
   analytics page and naming `fitdocs-analytics`. Its heading profile is
   unchanged.
@@ -1493,6 +1502,11 @@ Hard rules that apply to every test:
     - leaves it absent after close;
     - never creates `index.duckdb.tmp`.
   - Four concurrent subprocess spills all return the reference result.
+  - Afterwards no `query-spill-*` directory survives. The plain database is
+    built through `store.create_index`, a writer connection spilling into
+    `writer-spill/` (`analytics-index`'s `WRITER_SPILL_DIRNAME`), whose
+    removal on close is unprobed, so a leftover `writer-spill/` is not a
+    failure.
   - Mutation: drop the `temp_directory` setting (the concurrency pin reds, as in
     research.md; the observed red rate is recorded).
 - **Crash vectors** (subprocess, invoked as `[sys.executable, "-c", "from
