@@ -5,23 +5,27 @@
 - **`analytics-index` is merged on `main`.** This plan registers producers
   through its seam and reads its public pieces:
   - `fitdocs.index.producer` (`PageComputed`, `CorpusSnapshot`, `CorpusPage`,
-    `Rows`, the three protocols);
+    `CorpusLeftOut`, `Rows`, the three protocols);
   - `fitdocs.index.schema` (`ColumnSpec`, `TableSpec`, `ColumnType`,
     `SCHEMA_VERSION`, `resolve_tables`);
-  - `fitdocs.index.registry`, `fitdocs.index.corpus.scan_workout_pages`,
+  - `fitdocs.index.registry`, `fitdocs.index.corpus.scan_workout_pages` and
+    `fitdocs.index.corpus.corpus_snapshot` (the one snapshot builder),
+    `fitdocs.index.fingerprint.athlete_fingerprint`,
     `fitdocs.index.build.run_index_command`,
     `fitdocs.index.refresh.refresh_after_command`,
     `fitdocs.index.handoff.HandoffCollector`,
     `fitdocs.index.location.resolve_index_location`, the store's facade
-    (`open_index`), `fitdocs.sync.sync`'s `on_rendered` parameter,
-    `tests/index/conftest.py` and `tests/index/_helpers.py`.
+    (`open_index`, `read_bookkeeping`), `fitdocs.sync.sync`'s `on_rendered`
+    parameter, `tests/index/conftest.py` (its `core_registry` fixture
+    included) and `tests/index/_helpers.py`.
 
   A task that finds any of those shaped differently from
   `analytics-index/design.md` stops and reports rather than adapting.
 - **The sibling `analytics-query`** may land before or after this plan. It
-  never changes the schema. Where its work and this plan's meet
-  (`docs/analytics.md`, the analytics skill's examples), task 6.2 decides by
-  what is on `main` at the time.
+  never changes the schema. Where its work and this plan's meet (the three
+  bounded read-side files of Cross-spec shared files), task 6.2 decides by
+  what is on `main` at the time, and task 4.1 knows which of its tests go
+  red in between.
 - `main` also carries what the seams extract from: `history/engine.py`
   `run_history` (`:288-462`), `plans/engine.py` `run_plan` (`:456-577`),
   `plans/reconcile.py` (`:113-228`). A task that finds them restructured stops
@@ -89,8 +93,6 @@ sequential: never two of them `(P)` at once.
   `tests/index/derived/conftest.py` and `tests/index/derived/test_fixtures.py`:
   1.2 only. Later tasks import the conftest's fixture builder and helpers and
   never edit them; a missing fixture or helper is a stop-and-report.
-- `tests/index/derived/test_published.py`: 6.1, then 6.2 (its own headed
-  section).
 - `src/fitdocs/index/derived/inputs.py`: 1.3 only.
 - `src/fitdocs/index/registry.py`, `src/fitdocs/index/schema.py`,
   `tests/index/test_schema.py` and `tests/index/test_schema_version.py`: 4.1
@@ -122,26 +124,56 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
   names after analytics-index): this plan appends its eleven names.
   **Append-only. Owner: analytics-index.**
 - **`tests/test_confinement.py`** (`WRITING_ENTRY_POINTS`): this plan appends
-  `index-derived`. **Append-only. Siblings: analytics-index (`index`,
-  `sync-with-index`), analytics-query (its read-only check, if any).**
+  `EntryPoint(id="index-derived", …)`. **Append-only. Siblings:
+  analytics-index (the `index` and `sync-with-index` entries and the resolved
+  index directory), analytics-query (one standalone test that `query` writes
+  nothing outside its spill directory).**
 - **`CHANGELOG.md` `[Unreleased]`**: append under the existing `### Added`
   heading; create it only if absent. **Siblings: both.**
 - **`.kiro/steering/structure.md`**, the `index` dependency-direction sentence:
   this plan appends its derived-producers clause. **Siblings: analytics-index
   (the sentence), analytics-query (its package's line).**
 - **`pyproject.toml`'s mypy `files` list.** **Append-only. Siblings: both.**
-- **`docs/analytics.md` and the analytics agent skill's worked examples**
-  (owner: analytics-query). The rule both specs state: the second of
-  `analytics-query` and `analytics-derived` to land regenerates the docs
-  schema block and adds the derived skill examples, enforced by
-  `analytics-query`'s generic test (task 6.2).
+- **The second lander's three bounded read-side files** (owner:
+  analytics-query; its design § Out of Boundary and its Cross-spec shared
+  files state the same rule). Whichever of `analytics-query` and
+  `analytics-derived` lands second touches exactly these three, and nothing
+  else on the read side. Here that is task 6.2, and only when
+  `analytics-query` is on `main` when 6.2 runs; otherwise `analytics-query`'s
+  task 7.3 does it at its landing.
+  - **The generated schema-reference block in `docs/analytics.md`**, between
+    `<!-- schema-reference:start -->` and `<!-- schema-reference:end -->`,
+    regenerated with `uv run python -m tests.query.test_docs_analytics`.
+  - **The worked examples in `src/fitdocs/skills/fitdocs-analytics/SKILL.md`**:
+    four H3s under `Worked examples`, each with one `sql` fence, one per
+    derived producer (`derived.mean_max`, `derived.load_series`,
+    `derived.benchmarks`, `derived.blocks`). The core examples are not
+    edited.
+  - **`derived_inputs()` in `tests/query/conftest.py`**, the append point
+    analytics-query's task 1.3 creates: it returns `DerivedInputs(files=…,
+    athlete_toml=…)` (`tests/query/_helpers.py`), which `indexed_root` writes
+    before `fitdocs sync`. This plan fills it with plan sources and a
+    `[benchmarks]` table.
+- **`tests/query/test_docs_analytics.py` and
+  `tests/query/test_skill_examples.py`** (owner: analytics-query; this plan
+  never edits either). If `analytics-query` is on `main` when this plan is
+  implemented, registering the derived producers (task 4.1) turns these two
+  red: the docs block no longer equals the live schema, and four non-core
+  producers have no worked example. **They are the only tests expected red,
+  from 4.1 until task 6.2 turns them green.** Any other red test is a
+  stop-and-report (task 4.1). If `analytics-query` is not on `main`, nothing
+  here applies.
 - **`.kiro/steering/roadmap.md`**, the Phase 10 Specs and Existing Spec Updates
   ticks (task 6.1).
 
 Not touched by this plan, though shared among the siblings: `src/fitdocs/cli.py`
 and its command count, the no-network command list, `_INDEX_IMPORTERS`
-(the derived package lives inside `fitdocs.index`), `PACKAGED_SKILLS`, the
-store facade and the ownership contract.
+(the derived package lives inside `fitdocs.index`, which needs no entry),
+`PACKAGED_SKILLS`, the store facade, `docs/ownership-contract.md` and
+`CONTRACT_VERSION` (no new write location), and `tests/conftest.py`'s
+index-isolation fixture (used as is). `tests/index/conftest.py`, its
+`core_registry` fixture included, is analytics-index's and is only imported
+from here.
 
 ## Test File Ownership
 
@@ -168,8 +200,10 @@ store facade and the ownership contract.
 - `tests/index/derived/test_composed_and_upgrade.py`: **5.3**.
 - `tests/test_confinement.py` (the `index-derived` entry) and
   `tests/index/derived/test_preserved.py`: **5.4**.
-- `tests/index/derived/test_published.py`: **6.1** (and 6.2 appends its own
-  headed section only when it edits the docs).
+- `tests/index/derived/test_published.py`: **6.1**.
+- The `derived_inputs()` section of `tests/query/conftest.py`
+  (analytics-query's file): **6.2**, and only when `analytics-query` is on
+  `main` (Cross-spec shared files).
 
 ---
 
@@ -246,8 +280,15 @@ store facade and the ownership contract.
       `sync_with_handoff` below.
   - **Shared helpers**, in the same conftest, each taking `today` explicitly
     and reaching DuckDB only through `analytics-index`'s public functions:
-    - `snapshot_of(root, *, today)`: a `CorpusSnapshot` from
-      `scan_workout_pages`;
+    - `snapshot_of(root, *, today)`: `corpus_snapshot(root,
+      scan_workout_pages(root), today=today,
+      athlete_fingerprint=athlete_fingerprint(<the root's athlete inputs>),
+      held=…)`, analytics-index's one snapshot builder; the helper never
+      assembles a `CorpusSnapshot` by hand. `held` is `None` while the test's
+      isolated index directory holds no `index.duckdb`, and
+      `frozenset(bookkeeping.pages)` from `read_bookkeeping` on a read-only
+      `open_index` facade connection once `build_index` has built one, so it
+      reproduces the snapshot the refresh passes to the producers;
     - `build_index(root, *, today, rebuild=False)`: `run_index_command` with
       `environ` naming the test's isolated `FITDOCS_INDEX_DIR`, a nonexistent
       `home`, the root's athlete inputs and `progress=None`;
@@ -273,7 +314,9 @@ store facade and the ownership contract.
     - `run_reconcile(copy, today=TODAY)` reaches all five row states and all
       three confidences, reports one missing override stem and at least one
       unplanned page;
-    - `scan_workout_pages` leaves out the no-`sources` page;
+    - `scan_workout_pages` leaves out the no-`sources` page, and with no
+      index `snapshot_of` lists it in `left_out` with its document
+      fingerprint and every other workout page in `pages`;
     - on the stated day, the profile's `applicable` and the naive "latest
       `applies_from`" rule give different Ride FTP entries, and
       `applicable(FTP, Ride, d)` and `applicable(FTP, Run, d)` give different
@@ -284,7 +327,8 @@ store facade and the ownership contract.
       held pages;
     - a test-local corpus producer, monkeypatched into the registry tuple,
       records the `today` that `refresh` and `build_index` pass, and it equals
-      `TODAY`;
+      `TODAY`; the whole snapshot it records during a `refresh` equals
+      `snapshot_of(root, today=TODAY)` taken right after it;
     - with `build_index` run first, `sync_with_handoff` reports REFRESHED with
       the synced pages added, and a spy on `derive_page` shows no
       re-derivation for them; over a root with no index it raises on the
@@ -293,7 +337,8 @@ store facade and the ownership contract.
     move the retroactive Ride FTP so the two rules agree; give the Run FTP the
     Ride FTP's dates and values; date the upcoming row before `TODAY`; make
     `refresh` pass `date.today()` instead of `today`; drop `on_rendered` from
-    `sync_with_handoff`.
+    `sync_with_handoff`; make `snapshot_of` pass `athlete_fingerprint(None)`
+    (the snapshot-equality self-test reds).
   - **Observable:** `uv run pytest tests/index/derived/test_fixtures.py` is
     green; the root's pages and benchmark entries are listed in Implementation
     Notes with their roles; nothing outside `tests/index/derived/` and the
@@ -303,24 +348,50 @@ store facade and the ownership contract.
 - [ ] 1.3 Digest exactly the files a corpus producer reads
   - **The inputs module**, per design.md § DerivedInputs: file digests with
     markers for absent, directory, symlink and unreadable entries; the
-    workouts digest over held pages (from the snapshot) and every other
-    `*.md` directly in `workouts/`; the settings digest; the canonical-JSON
-    digest; the path-to-page-key map.
+    workouts digest over the snapshot's `pages` and `left_out` together, by
+    `(path, document_fingerprint)`, reading no file and globbing nothing; the
+    settings digest; the canonical-JSON digest; the path-to-page-key map.
+  - **Why the snapshot is enough**, stated in the module docstring with these
+    citations: history's `scan_documents`
+    (`src/fitdocs/history/documents.py:197-200`) and the plan corpus's
+    `scan_corpus` (`src/fitdocs/plans/corpus.py:184-187`) read
+    `sorted(workouts/*.md)` through `docio.read_frontmatter` and keep a file
+    only when `is_workout_document` holds. analytics-index's
+    `scan_workout_pages` reads the same glob through `docio.read_document`,
+    to which `read_frontmatter` delegates, keeps the same set, and
+    `corpus_snapshot` lists each such page exactly once in `pages` or
+    `left_out`. A file in neither (`AGENTS.md`, a non-workout page, a
+    symlink, an unreadable or fence-less file) is read by neither engine, and
+    a file entering or leaving the set adds or drops an entry.
   - **Tests** (`tests/index/derived/test_inputs.py`), each digest computed
-    before and after a single change, with the starting digests asserted
-    equal on an unchanged repeat first:
-    - a one-byte change to a held page, to a non-held `.md` (the
-      no-`sources` page, `AGENTS.md`), to `fitdocs.toml` and to
-      `athlete.toml` each moves exactly the digests that cover it;
-    - a file outside `workouts/` and a non-`.md` file in it move nothing;
-    - a symlinked page, a directory named `x.md` and an unreadable file
-      (`chmod 000`, skipped as root) give distinct markers and never raise;
-    - `page_keys` maps every held path and omits left-out pages.
-  - **Mutations:** digest held pages only (the non-held change reds); let an
-    unreadable file raise (the never-raise pin reds); fold `fitdocs.toml` into
-    the workouts digest (the separation pin reds); digest held pages by
-    `page_key` instead of `document_fingerprint` (the one-byte held-page change
-    reds).
+    from `snapshot_of` on a root with no index, before and after a single
+    change, with the starting digests asserted equal on an unchanged repeat
+    first:
+    - a one-byte change to a held page, to the left-out no-`sources` page
+      (asserted in `left_out` first), to `fitdocs.toml` and to `athlete.toml`
+      each moves exactly the digests that cover it; adding and removing a
+      workout page each move the workouts digest;
+    - a one-byte change to `workouts/AGENTS.md` and to a non-workout `.md`
+      page in `workouts/` (a `type` other than the workout type), each
+      asserted present on disk and absent from the snapshot first, a file
+      outside `workouts/` and a non-`.md` file in it move nothing;
+    - two snapshots of one scan, built with `corpus_snapshot` and `held=None`
+      and with a `held` set lacking one scanned key (that page asserted in
+      `left_out` first), give equal workouts digests and different
+      `page_keys`;
+    - `file_digest` of an absent path, a symlink, a directory and an
+      unreadable file (`chmod 000`, skipped as root) gives four distinct
+      markers and never raises;
+    - `page_keys` maps every path of `snapshot.pages` and omits every path of
+      `snapshot.left_out`.
+  - **Mutations:** digest `pages` only, dropping `left_out` (the left-out
+    change reds); glob `workouts/*.md` again and fold each file not in
+    `pages` in by `file_digest` (the `AGENTS.md` pin reds); digest `pages` and
+    `left_out` as two separate lists (the held-only difference pin reds); let
+    an unreadable file raise (the never-raise pin reds); fold `fitdocs.toml`
+    into the workouts digest (the separation pin reds); digest `pages` entries
+    by `page_key` instead of `document_fingerprint` (the one-byte held-page
+    change reds).
   - **Observable:** the inputs tests are green and the module imports only
     `fitdocs.index.producer`, `fitdocs.layout` and the standard library.
   - _Requirements: 7.1, 8.1, 8.2, 8.3, 8.6_
@@ -491,14 +562,16 @@ store facade and the ownership contract.
     - suppressed days hold NULL model values and `suppressed` TRUE;
     - an archive with no load gives three empty tables;
     - the fingerprint moves on a workout or settings change and not on a
-      different `today`;
+      different `today`, nor between two `corpus_snapshot`s of one scan that
+      differ only in `held` (history reads every workout page, held or not);
     - each of the three tables' descriptions contains "as of the last
       refresh" and `fitdocs history --methodology` (Req 9.3).
   - **Mutations** (each a re-implementation the fixture defeats): replace the
     engine's model values with a recursion re-implemented with `1/tau` in
     place of `1 - exp(-1/tau)`; recount `pages` as `pages_with_load`; build the
     series from `snapshot.pages`; read the model values without `day_rows`'
-    mask; add `today` to the fingerprint; drop the agreement sentence from
+    mask; add `today` to the fingerprint; add the path-to-page-key map to the
+    fingerprint (the `held` pin reds); drop the agreement sentence from
     `weekly_load`'s description.
   - **Observable:** the producer tests are green and mypy is clean.
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 4.1, 4.2, 4.3, 4.4, 7.1, 7.5, 8.1, 9.1, 9.3, 9.4_
@@ -541,8 +614,9 @@ store facade and the ownership contract.
 
 - [ ] 3.4 (P) Project blocks, mesocycles and planned workouts as the plan pass resolves them
   - **The block producer**, per design.md § BlockProducer and the five block
-    tables: the fingerprint (workouts, settings, plan sources, and `today`
-    only while a source exists, never raising) and rows from `resolve_plans`.
+    tables: the fingerprint (workouts, the path-to-page-key map, settings,
+    plan sources, and `today` only while a source exists, never raising) and
+    rows from `resolve_plans`.
   - **Tests** (`tests/index/derived/test_block_producer.py`), on the derived
     root with `today=TODAY`, against `run_reconcile(copy, today=TODAY)`:
     - every planned workout's state, confidence and override date, every
@@ -557,12 +631,16 @@ store facade and the ownership contract.
       string in each, absent from every row);
     - the fingerprint folds a malformed `fitdocs.toml` into a marker without
       raising, and includes `today` only while a source exists;
+    - the fingerprint moves between two `corpus_snapshot`s of one scan that
+      differ only in `held` (a claimed page moved to `left_out`, asserted
+      first), because the page's `page_key` column turns NULL;
     - all five descriptions contain "as of the last refresh" and `fitdocs
       plan` (Req 9.3).
   - **Mutations:** build the corpus from `snapshot.pages`; pass `today + 1
     day`; treat an invalid source as absent, emitting no `blocks` row for it;
     raise from the fingerprint on a settings error; include `today` with no
-    source; drop the agreement sentence from `unplanned_pages`.
+    source; drop the path-to-page-key map from the fingerprint (the `held`
+    pin reds); drop the agreement sentence from `unplanned_pages`.
   - **Observable:** the producer tests are green and mypy is clean.
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 7.1, 7.5, 8.3, 9.1, 9.3, 9.4_
   - _Boundary: BlockProducer_
@@ -593,12 +671,23 @@ store facade and the ownership contract.
     leave `SCHEMA_VERSION` at `main`'s value (the digest pin reds); bump it
     without a digest entry (the `max` pin reds).
   - **Observable:** the full suite (`uv run pytest`) is green, not only
-    `tests/index/`: registration changes every test that builds an index
-    (`tests/test_confinement.py`'s `index` and `sync-with-index` entries,
-    `tests/test_inbox_e2e.py`, `tests/connectors/test_e2e.py`,
-    `tests/test_determinism.py`, analytics-index's refresh and build tests). If
-    a test that is not on this plan's cross-spec shared list reds, stop and
-    report; never re-pin it silently.
+    `tests/index/`, with one stated exception. Registration reaches every test
+    that builds an index (`tests/test_confinement.py`'s `index` and
+    `sync-with-index` entries, `tests/test_inbox_e2e.py`,
+    `tests/connectors/test_e2e.py`, `tests/test_determinism.py`,
+    analytics-index's refresh and build tests). analytics-index keeps its own
+    tests independent of these producers: every refresh test that asserts an
+    exact write set or a no-op runs under its `core_registry` fixture (its
+    tasks 6.1 and 6.2), its determinism and non-empty assertions are scoped to
+    the core producers' tables (its 6.5), and `fitdocs index`'s schema line is
+    pinned as `f"Schema version: {SCHEMA_VERSION}"` (its 7.1).
+    - **The exception.** If `analytics-query` is on `main`,
+      `tests/query/test_docs_analytics.py` and
+      `tests/query/test_skill_examples.py` are expected red, and only those
+      two, from this task until 6.2 turns them green (Cross-spec shared
+      files). Record their red output in Implementation Notes.
+    - **Any other red test**, one not on this plan's Cross-spec shared files
+      list, is a stop-and-report; never re-pin it silently.
   - _Requirements: 1.5, 8.4, 9.2, 9.3, 9.5, 10.1_
   - _Depends: 3.1, 3.2, 3.3, 3.4_
 
@@ -680,14 +769,15 @@ store facade and the ownership contract.
     production mutation of this spec's can make the two differ. Recorded as
     PRESERVED-ONLY in Implementation Notes.
   - **Ordering precondition for the incremental leg**, asserted before
-    comparing: the non-held markdown files (the no-`sources` page,
-    `AGENTS.md`) are added first, and the last page added is a held page with
-    a load; no non-held `.md` changes after it. Otherwise a final non-held
-    change would move the digest under the mutation below, recompute over
-    every page and heal the stale state.
-  - **Mutation:** let the workouts digest cover only the first held page by
-    path (the incremental path then keeps a stale load series and block
-    resolution, and the incremental-versus-rebuild comparison reds).
+    comparing: the workout pages are added in path order, so the first page
+    by path never changes after the first refresh, and the last page added is
+    a held page with a load. Otherwise a late change to the first page would
+    move the digest under the mutation below, recompute over every page and
+    heal the stale state.
+  - **Mutation:** let the workouts digest cover only the first workout page
+    by path, of `pages` and `left_out` together (the incremental path then
+    keeps a stale load series, and the incremental-versus-rebuild comparison
+    reds).
   - **Observable:** the determinism tests are green.
   - _Requirements: 1.6, 8.7_
   - _Boundary: DerivedRefreshTests_
@@ -782,30 +872,89 @@ store facade and the ownership contract.
   - _Requirements: 10.3, 10.5, 10.6_
 
 - [ ] 6.2 Complete the analytics documentation if this plan lands second
-  - **The rule** (stated identically in `analytics-query`'s plan): the second
-    of `analytics-query` and `analytics-derived` to land regenerates the
-    `docs/analytics.md` schema block and adds the derived skill examples,
-    enforced by `analytics-query`'s generic test.
-  - **If `analytics-query` is on `main` when this task runs**: regenerate the
-    schema block by the mechanism its design defines, so its live-schema test
-    passes with the eleven derived tables; append worked examples to the
-    analytics skill: best 20-minute power this year (`mean_max` joined to
-    `pages`), form on a date (`daily_load` where `history_default`), FTP in
-    force on a ride's date (`benchmark_periods` on the date range), planned
-    sessions not logged (`planned_workouts`). Append a headed section to
-    `tests/index/derived/test_published.py` that runs each example through
-    `fitdocs query` on the derived root (index built at `TODAY`) and asserts a
-    non-empty result.
-  - **If it is not**: change no docs or skill file; write a `.kiro/queue/`
-    item (format in `.kiro/queue/README.md`) stating that `analytics-query`'s
-    lander owns the schema-block regeneration and these four examples, naming
-    the tables, with this spec's design.md § PublishedStatements as context.
-  - **Mutations** (first branch only): rename one example's table (its query
-    test reds); leave the schema block stale (the generic live-schema test
-    reds).
-  - **Observable:** in the first branch the docs, skill and query tests are
-    green; in the second the queue item exists and is named in Implementation
-    Notes.
+  - **The rule** (stated identically in `analytics-query`'s plan, Cross-spec
+    shared files): the second of `analytics-query` and `analytics-derived` to
+    land touches exactly the three bounded read-side files. It regenerates the
+    `docs/analytics.md` schema-reference block, adds one worked example per
+    derived producer to `src/fitdocs/skills/fitdocs-analytics/SKILL.md`, and
+    extends `derived_inputs()` in `tests/query/conftest.py` so that every
+    derived producer yields rows on `indexed_root`.
+    `tests/query/test_docs_analytics.py` and
+    `tests/query/test_skill_examples.py` enforce it.
+  - **If `analytics-query` is not on `main` when this task runs**: change none
+    of the three files. `analytics-query`'s task 7.3 does this work at its
+    landing, when these producers are already registered. Record that in
+    Implementation Notes; no queue item is needed, because query's plan
+    tracks it.
+  - **If it is**, do all three:
+    - **Fixture inputs.** Extend `derived_inputs()` (it returns
+      `DerivedInputs(files=…, athlete_toml=…)` from `tests/query/_helpers.py`;
+      `indexed_root` writes both before `fitdocs sync`, with
+      `fitdocs.cli._today` pinned to `FIXTURE_TODAY`, 2021-10-01):
+      - `files`: one valid plan source under the default plan directory
+        `plans/` (`fitdocs.layout.DEFAULT_PLANS_DIR`), in the grammar of
+        `tests/plans/fixtures/`, dated around `FIXTURE_TODAY`. Its mesocycle
+        window covers the fixture's activities (`FIT_TIMESTAMP_BASE`,
+        2021-09-08 UTC) and `FIXTURE_TODAY`. It has a planned workout dated
+        before `FIXTURE_TODAY` on a day with no activity and no override (not
+        logged), and one dated after it (upcoming). `fitdocs.toml` is not
+        written, so its `[tiles] enabled = false` stays;
+      - `athlete_toml`: a `[benchmarks]` table appended to the base file,
+        which declares `profile_version = 2`. It holds a Ride `ftp_watts`
+        entry measured before the fixture's activities (for example
+        2021-09-01), equal to the base file's flat `ftp_watts`, so the loads
+        the fixture already computes stay put where the profile allows.
+    - **Worked examples.** Four H3s under `Worked examples`, one per derived
+      producer, each followed by one `sql` fence that selects rows from that
+      producer's table. No example is a bare aggregate, which returns a row
+      when the table is empty, and none uses an outer join that keeps rows
+      once the producer's tables are emptied. Every window is relative to the
+      data, `max(date)` or the table's own dates, worded "in the latest year
+      of data": never "this year", `current_date`, `now()` or today. Each
+      predicate is checked against what `indexed_root` holds before it is
+      written.
+      1. **Best efforts** (`derived.mean_max`): the best power at each
+         duration in the latest year of data, with the page it came from
+         (`mean_max` joined to `pages`, one row per `duration_s` with a
+         power). Not a fixed 20-minute filter: the builder's ride records 10
+         seconds (`tests/fixtures/builder.py:298`), so the fixture holds only
+         the 1-, 5- and 10-second durations. The prose may name
+         `duration_s = 1200` as the 20-minute filter.
+      2. **Fitness, fatigue and form** (`derived.load_series`): the last four
+         weeks of the series `fitdocs history` shows by default (`daily_load`
+         joined to `load_series` where `history_default`, the window taken
+         from `load_series.series_end`). A default exists only when one
+         methodology is observed or one is configured; if the fixture records
+         two, stop and report rather than drop the filter (`fitdocs.toml` is
+         not this plan's to change).
+      3. **Thresholds in force** (`derived.benchmarks`): the FTP in force on
+         each ride's date in the latest year of data (`benchmark_periods`
+         joined to the ride pages on `starts_on` and `ends_before`, with
+         `ends_before` NULL while in force).
+      4. **Planned sessions not logged** (`derived.blocks`): the
+         `planned_workouts` rows whose `state` is `not logged`, in the block
+         with the latest `starts_on`.
+    - **The schema block.** Regenerate it with `uv run python -m
+      tests.query.test_docs_analytics`; a second run leaves `git diff`
+      empty.
+  - **Tests**: none of this plan's own. The proof is analytics-query's
+    `tests/query/test_skill_examples.py` on `indexed_root` (every `sql` fence
+    runs and returns rows, and each derived producer has an example that
+    returns no rows once that producer's tables are emptied) and
+    `tests/query/test_docs_analytics.py` (the block equals the live schema).
+    Both have been red since 4.1 and turn green here. Any other query test
+    that reds after the fixture extension is a stop-and-report.
+  - **Mutations** (second branch only): misspell a column in one derived
+    example (the execution pin reds); replace the best-efforts example with
+    `SELECT max(power_w) AS best FROM mean_max` (the emptied-copy pin reds);
+    take the best-efforts window from `current_date` (the fixture's data is
+    from 2021, so `row_count >= 1` reds); drop the `[benchmarks]` append (the
+    thresholds example returns no rows, and `row_count >= 1` reds); leave the schema block stale (the
+    block-equality pin reds).
+  - **Observable:** in the second branch, `uv run pytest tests/query
+    tests/index/derived` is green, with the four examples and the fixture
+    inputs recorded in Implementation Notes; in the first, the Implementation
+    Notes entry names `analytics-query`'s task 7.3.
   - _Requirements: 10.4_
   - _Depends: 6.1_
 

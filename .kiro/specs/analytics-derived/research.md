@@ -28,7 +28,12 @@
      (`history/documents.py:178-221`, `plans/corpus.py:168-206`). The index's
      `CorpusSnapshot.pages` omits pages left out for no base reference or a
      shared base (`analytics-index/design.md:886-891, 1079-1083`). The derived
-     tables must follow the engines' page set, not the snapshot's.
+     tables must follow the engines' page set, not the snapshot's. Since the
+     Phase 10 cross-spec review, round 1 (C5), the snapshot also lists those
+     pages in `left_out` (path and document fingerprint), and `pages` plus
+     `left_out` is exactly the set both engines read (§ Decision, "Corpus
+     tables follow the engines' page sets"). The producers fingerprint them
+     from the snapshot; their rows still come from the engines' own reads.
   3. **Only the plan pass depends on the date.** History's series ends at the
      last contributing day and reads no clock (`history/engine.py:87, 309-310`;
      load-history Req 1.8, 8.5). The profile's in-force rule takes an explicit
@@ -77,6 +82,24 @@
   - Allowed dependencies: later producers may import the engine they project,
     and from `fitdocs.index` only `producer`, `schema` and `fingerprint`
     (`design.md:137-140`).
+  - **Changed by the cross-spec review, round 1** (analytics-index at
+    ee70095; its design holds the current text):
+    - `CorpusSnapshot(data_root, pages, left_out, today,
+      athlete_fingerprint)`, with `left_out: tuple[CorpusLeftOut, ...]`
+      (`path`, `document_fingerprint`) holding every other scanned workout
+      page, built only by `corpus.corpus_snapshot(data_root, scan, *, today,
+      athlete_fingerprint, held)`. A reader passes
+      `held=frozenset(bookkeeping.pages)`; a tool with no index passes `None`
+      (C5);
+    - the refresh composes each corpus producer's stored fingerprint with
+      `fingerprint.combined_corpus_fingerprint(producer, snapshot)`, and a
+      `fingerprint()` that raises is that producer's error (C5, C7);
+    - the allowed imports admit a producer package's own modules (C11);
+    - Seam 2 and Requirement 13.6 advance `SCHEMA_VERSION` on every change
+      to how a producer derives rows from unchanged inputs (C8);
+    - index tests that assert an exact write set or a no-op run under a
+      `core_registry` fixture, so registering these producers does not move
+      them (C6).
 - **Implications**: mean-max is a `ComputedProducer` and inherits the
   stale-document rule; the three others are `CorpusProducer`s. Registration is
   an append to `registry.py`; nothing in the pass, store or read side changes.
@@ -291,7 +314,7 @@
   unit column and a generic `value`); the window start lets a reader find the
   effort in `records` and lets tests check a value independently.
 
-### Decision: Corpus tables follow the engines' page sets, fingerprinted without a seam change
+### Decision: Corpus tables follow the engines' page sets, fingerprinted from the snapshot's `pages` and `left_out`
 - **Context**: Finding 2.
 - **Alternatives**:
   1. Feed `CorpusSnapshot.pages` to the engines (disagrees on left-out pages).
@@ -299,23 +322,63 @@
      change, a revalidation trigger for the sibling).
   3. Call the engines' own readers in `rows`, and fingerprint the held pages
      from the snapshot plus every other `workouts/*.md` read directly.
-- **Selected**: Option 3. Left-out pages are few (usually none plus
-  `AGENTS.md`), so the extra reads per refresh are negligible.
-- **Trade-offs**: any byte change to any markdown file in `workouts/`
-  recomputes the load-series and block tables (about one corpus scan, 1-2 s at
-  2,500 pages). Over-inclusive, never stale.
-- **Follow-up**: recorded as an optional upstream improvement (Upstream
-  issues).
+- **Selected, first pass**: Option 3, with no seam change.
+- **Selected since the cross-spec review, round 1 (C5)**: Option 2, which
+  analytics-index adopted. The engines' own readers still produce the rows;
+  only the fingerprint changed. `workouts_digest` digests every `(path,
+  document_fingerprint)` of `pages` and `left_out` together and globs
+  nothing.
+- **Why the snapshot covers exactly what the engines read** (checked in the
+  code, 2026-10-05):
+  - history's `scan_documents` (`src/fitdocs/history/documents.py:197-200`)
+    and the plan corpus's `scan_corpus` (`src/fitdocs/plans/corpus.py:184-187`)
+    both glob `sorted(workouts/*.md)`, read each through
+    `docio.read_frontmatter` (`src/fitdocs/docio.py:74-95`: symlinks refused,
+    unreadable or undecodable files and missing fences give `None`, never
+    raising), and keep a file only when `is_workout_document`
+    (`src/fitdocs/contract.py:961-971`, `type` equal to the workout type)
+    holds;
+  - each reads only frontmatter values and the file's name or relative path
+    (history: `documents.py:202-218`; plans: `corpus.py:188-202`), both
+    inside analytics-index's `document_fingerprint` (path and bytes);
+  - analytics-index's `scan_workout_pages` globs the same pattern through
+    `docio.read_document`, to which `read_frontmatter` then delegates
+    (analytics-index task 5.1, so one read and one symlink refusal), keeps
+    pages where `is_workout_document` holds, and records a page without a
+    base reference, or with a duplicate base, as left out rather than
+    dropping it;
+    `corpus_snapshot` lists each scanned workout page exactly once in `pages`
+    or `left_out`.
+  - So `AGENTS.md` and every other non-workout markdown file in `workouts/`
+    can change without moving either engine's output, and the old design's
+    "a one-byte change to `AGENTS.md` moves the digest" pin is replaced by
+    its inverse (it moves nothing). No file outside `pages` and `left_out`
+    feeds either engine, so there is no gap to report upstream.
+- **Held-ness**: `workouts_digest` ignores which list a page is in, because
+  both engines read every workout page alike. The block tables' `page_key`
+  column does depend on it, so the block producer fingerprints
+  `page_keys(corpus)` as well. Under the first-pass design that dependency
+  was covered by accident: a page moving between lists changed its encoding
+  (`document_fingerprint` versus `file_digest`).
+- **Trade-offs**: any byte change to any workout page recomputes the
+  load-series and block tables (about one corpus scan, 1-2 s at 2,500
+  pages). Over-inclusive for edits the engines ignore (a `notes` region),
+  never stale.
 
 ### Decision: Fingerprints never raise for an input fault
-- **Context**: `analytics-index` states that an error in a producer's
-  replacement rolls back and is reported, but not what happens when
-  `fingerprint()` raises (`design.md:1399-1402`).
+- **Context**: when this spec was first written, `analytics-index` stated
+  that an error in a producer's replacement rolls back and is reported, but
+  not what happens when `fingerprint()` raises (`design.md:1399-1402`). Since
+  the cross-spec review, round 1 (C7), a raising `fingerprint()` is that
+  producer's error: no transaction, previous rows and stored fingerprint
+  kept, reported, retried next refresh.
 - **Selected**: each derived fingerprint folds an unreadable file or an
   unresolvable plan directory into its digest as a marker; `rows()` then calls
   the engine, which raises its own error, reported as that producer's failure.
-- **Rationale**: keeps a malformed `fitdocs.toml` from aborting the other
-  producers' refresh, whatever the upstream does with a raising fingerprint.
+- **Rationale**: the athlete sees the engine's own error message, the same one
+  its command gives, and the fingerprints' marker behaviour is pinned (tasks
+  1.3 and 3.4). Upstream now also isolates a raising fingerprint, so this is
+  belt and braces rather than the only guard.
 
 ### Decision: The block table records the date it was resolved under
 - **Context**: not-logged versus upcoming depends on the current date.
@@ -385,7 +448,8 @@
   follow-up.
 - **Per-page computed rows are not recomputed on a fitdocs upgrade.** A later
   change to the mean-max rule would leave old rows. Mitigation: a rule change
-  advances `SCHEMA_VERSION` (forcing a rebuild); the constants are pinned by
+  advances `SCHEMA_VERSION` (forcing a rebuild), by analytics-index's binding
+  rule (its design § Seam 2, Requirement 13.6); the constants are pinned by
   value in tests so a change is deliberate.
 - **Corpus-producer cost on every changed sync**: one history scan and one plan
   corpus scan (about 1-2 s each at 2,500 pages). Mitigation: measured by the
@@ -393,13 +457,31 @@
 - **Engine refactors could change bytes.** Mitigation: the history golden, the
   plan goldens and the existing engine suites run unchanged; each seam task
   asserts its command's output is byte-identical.
-- **Sibling ordering**: `SCHEMA_VERSION`, the table-set pin, `docs/analytics.md`
-  and the skill examples depend on which Phase 10 spec lands first.
-  Mitigation: tasks read `main`'s values at landing; cross-spec shared files
-  are append-only.
+- **Sibling ordering**: `SCHEMA_VERSION`, the table-set pin, `docs/analytics.md`,
+  the skill examples and the query fixture's `derived_inputs()` depend on
+  which Phase 10 spec lands first. Mitigation: tasks read `main`'s values at
+  landing; cross-spec shared files are append-only; if `analytics-query`
+  lands first, its two live-schema tests are named as the only expected-red
+  tests between registration (4.1) and the examples (6.2).
+- **Skill examples that pass on the real archive but not the fixture.** The
+  query fixture's activities are 10-second files from 2021, so a fixed
+  20-minute filter or a window from `current_date` returns no rows there.
+  Mitigation: examples take windows from the data and select durations the
+  fixture holds; analytics-query's `test_skill_examples.py` runs every one on
+  `indexed_root`.
 
 ## Upstream issues (for the controller)
-1. **`CorpusSnapshot` holds only the indexed pages**
+Status after the Phase 10 cross-spec review, round 1 (analytics-index at
+ee70095): issues 1 to 4 are resolved in analytics-index, each by the ruling
+named; issue 5 stays open and is queued by the controller. The original text
+of each is kept below its status for the record.
+
+1. **Resolved by C5.** `CorpusSnapshot` gains `left_out:
+   tuple[CorpusLeftOut, ...]` (path and document fingerprint of every other
+   scanned workout page), built only by `corpus.corpus_snapshot`; this spec's
+   `workouts_digest` digests `pages` and `left_out` and no longer globs
+   `workouts/` (design.md § DerivedInputs). Original issue: **`CorpusSnapshot`
+   holds only the indexed pages**
    (`.kiro/specs/analytics-index/design.md:886-891`, `:1079-1083`), while the
    history and plan engines read every workout page
    (`src/fitdocs/history/documents.py:178-221`,
@@ -407,33 +489,47 @@
    (the derived inputs helper reads the non-held `workouts/*.md` files). An
    optional improvement: carry the left-out pages' paths and document
    fingerprints in the snapshot.
-2. **A raising `CorpusProducer.fingerprint()` is unspecified**
-   (`design.md:1399-1402`; `tasks.md:939-945` tests only a raising
-   replacement). Designed around (derived fingerprints never raise). Smallest
-   change: one sentence and one test in analytics-index 6.2 treating a
-   fingerprint exception as that producer's error.
-3. **The derived producers' sibling imports.** `design.md:137-140` allows a
+2. **Resolved by C7.** analytics-index's Refresh step 5 treats a raising
+   `fingerprint()` as that producer's error (no transaction, previous rows and
+   stored fingerprint kept, reported, retried), with a test in its task 6.2.
+   This spec's fingerprints still never raise (§ Decision, "Fingerprints never
+   raise"). Original issue: **a raising `CorpusProducer.fingerprint()` is
+   unspecified** (`design.md:1399-1402`; `tasks.md:939-945` tests only a
+   raising replacement). Designed around (derived fingerprints never raise).
+   Smallest change: one sentence and one test in analytics-index 6.2 treating
+   a fingerprint exception as that producer's error.
+3. **Resolved by C11.** analytics-index's allowed-imports sentence now reads
+   "`producer`, `schema`, `fingerprint` and modules of their own producer
+   package (e.g. `fitdocs.index.derived.*`)", and its dependency direction
+   places `derived.*` beside `core.*`, left of `registry`. Original issue:
+   **the derived producers' sibling imports.** `design.md:137-140` allows a
    later producer to import only `producer`, `schema` and `fingerprint` from
    `fitdocs.index`; the derived producers also import their own package's
    helper (`fitdocs.index.derived.inputs`). Smallest change: allow "and the
    producer package's own modules". Nothing upstream enforces the sentence, so
    this spec's own boundary guard states the rule it follows.
-4. **The computed tier does not follow fitdocs upgrades.** `computed_due`
+4. **Resolved by C8.** analytics-index's Seam 2 binding rule and Requirement
+   13.6 now advance `SCHEMA_VERSION` on every change to how any producer
+   derives rows from unchanged inputs, because the per-page tiers do not
+   recompute on an upgrade; such a version's digest may equal the previous
+   one. This spec cites that rule instead of restating it (design.md
+   § Revalidation Triggers, § Migration Strategy). Original issue: **the
+   computed tier does not follow fitdocs upgrades.** `computed_due`
    (`design.md:1376-1381`) moves on the render fingerprint, never the fitdocs
    version, so a metric fix in a later release leaves existing `activities`
    and `mean_max` rows until a rebuild or regen. This spec mitigates for
    mean-max by advancing `SCHEMA_VERSION` on any rule change; the core tables
    have the same exposure.
-5. **An `athlete.toml` the refresh cannot load stops every producer.**
-   analytics-index's refresh loads the athlete inputs before reconciling
-   (`.kiro/specs/analytics-index/design.md:1366-1367`, step 6:
+5. **Open; queued by the controller.** An `athlete.toml` the refresh cannot
+   load stops every producer. analytics-index's refresh loads the athlete inputs before reconciling
+   (`.kiro/specs/analytics-index/design.md:1507-1508` at ee70095, step 6:
    `load_athlete_inputs` raising `AthleteFileError` gives FAILED). That
    loader rejects invalid TOML, an unsupported profile version and malformed
    flat keys (`src/fitdocs/athlete.py:62-91, 115-118, 130-183`) but never reads
    `[benchmarks]`. So this spec's Req 8.5 holds for a malformed benchmark entry
    in a valid profile (the benchmark producer alone fails), while a profile
    the upstream loader rejects fails the whole refresh and every table keeps its
-   rows. Requirement 8.5 was worded to say so. For the controller to queue.
+   rows. Requirement 8.5 was worded to say so.
 
 ## References
 - `.kiro/specs/analytics-index/{requirements,design,tasks,research}.md`: the

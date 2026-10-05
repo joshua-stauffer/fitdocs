@@ -66,16 +66,21 @@ ride" or "planned sessions missed this block" with one query.
 - **Registration and versioning**: the appends to `registry.py`, the
   `SCHEMA_VERSION` advance and its digest entry, the table-set pin update.
 - **Published statements and records**: the `CHANGELOG.md` entry, the
-  `structure.md` sentence, the fit-ingest amendment, the confinement entry, and
-  (as the second Phase 10 lander, if it is) the derived part of
-  `docs/analytics.md` and the agent skill's worked examples.
+  `structure.md` sentence, the fit-ingest amendment, the confinement entry,
+  and, only if this spec lands after `analytics-query`, the three bounded
+  read-side files that analytics-query's design allows the second lander:
+  the generated schema block in `docs/analytics.md`, the four derived worked
+  examples in `src/fitdocs/skills/fitdocs-analytics/SKILL.md` (windows "in
+  the latest year of data"), and `derived_inputs()` in
+  `tests/query/conftest.py` (§ PublishedStatements).
 
 ### Out of Boundary
 - Anything in `fitdocs.index` other than `registry.py`'s tuples, `schema.py`'s
   `SCHEMA_VERSION`, and the new `fitdocs.index.derived` package. The refresh,
   store, location, lock, build and CLI wiring are `analytics-index`'s.
 - The read side: `fitdocs query`, the sandbox, the schema view and the skill's
-  mechanics (`analytics-query`).
+  mechanics (`analytics-query`), apart from the three bounded files above when
+  this spec lands second.
 - What `fitdocs history`, the plan pass, `fitdocs derive-benchmarks` or the
   profile compute, render or write. The seams expose, never change.
 - `metrics/sources.py`'s `CONSTANT_SOURCES` and fit-ingest's pinned counts.
@@ -89,8 +94,10 @@ ride" or "planned sessions missed this block" with one query.
   `fitdocs.index`, ingest, or anything with I/O.
 - `fitdocs.index.derived.*` may import:
   - from `fitdocs.index`: `producer`, `schema`, and `fitdocs.index.derived.*`
-    (see Upstream issues, 3); never `store`, `refresh`, `build`, `corpus`,
-    `derive`, `handoff`, `lock`, `location`, `registry` or `duckdb`;
+    (analytics-index's allowed-imports sentence admits a producer package's
+    own modules; this spec does not need the `fingerprint` it also admits);
+    never `store`, `refresh`, `build`, `corpus`, `derive`, `handoff`, `lock`,
+    `location`, `registry` or `duckdb`;
   - `fitdocs.metrics.mean_max`, `fitdocs.history` (package root),
     `fitdocs.plans` (package root), `fitdocs.benchmarks`, `fitdocs.load.profile`,
     `fitdocs.layout`, `fitdocs.settings` (for `SettingsError`), `fitdocs.model`
@@ -102,10 +109,11 @@ ride" or "planned sessions missed this block" with one query.
 - No producer writes, reads the clock, opens the network or imports `duckdb`.
 
 ### Revalidation Triggers
-- **The mean-max rule** (the duration set, the maximum step, the grid or the
-  tie rule): changes existing rows that the computed tier does not recompute on
-  an upgrade, so it must advance `SCHEMA_VERSION`. A document section reusing
-  the function re-checks.
+- **How any derived producer derives rows from unchanged inputs**, the
+  mean-max rule above all (the duration set, the maximum step, the grid or the
+  tie rule): `SCHEMA_VERSION` advances, by analytics-index's binding rule
+  (its design § Seam 2 and Requirement 13.6), which this spec cites rather
+  than restates. A document section reusing the function re-checks.
 - **Any derived table name, column, type or order**: `SCHEMA_VERSION`,
   `analytics-query`'s docs pin and skill examples re-check.
 - **The history seam's fields** (`HistoryComputation`, `DayRow`) or the
@@ -116,16 +124,27 @@ ride" or "planned sessions missed this block" with one query.
 - **The profile's in-force rule** (`BenchmarkSet.applicable`): the period
   breakpoints re-check (they assume the rule decides by comparing the date with
   the entries' own dates).
-- **`analytics-index`'s `CorpusSnapshot`, `PageComputed` or registration
-  shape**: every producer here re-checks.
+- **`analytics-index`'s `CorpusSnapshot`, `CorpusLeftOut`, `PageComputed` or
+  registration shape**: every producer here re-checks.
+- **`analytics-index`'s snapshot construction** (`corpus.corpus_snapshot`,
+  what `scan_workout_pages` keeps) **or corpus-fingerprint composition**
+  (`fingerprint.combined_corpus_fingerprint`): the workouts digest and the
+  block fingerprint's page-key map re-check (analytics-index's own trigger
+  names this spec's digests).
+- **The engines' page set** (`history.documents.scan_documents`,
+  `plans.corpus.scan_corpus`): `workouts_digest` assumes both read exactly
+  the workout pages the index scans; a change to either re-checks it.
 
 ## Architecture
 
 ### Existing Architecture Analysis
 - **The index's producer seam** (`analytics-index` design § ProducerSeam): a
   computed producer gets one page's composed activity; a corpus producer gets
-  the data root, the held pages, `today` and the athlete fingerprint, declares
-  a fingerprint, and has its tables replaced whole when it moves.
+  the data root, the held pages, every other scanned workout page as
+  `left_out` (path and document fingerprint), `today` and the athlete
+  fingerprint, in a snapshot built only by `corpus.corpus_snapshot`. It
+  declares a fingerprint, and has its tables replaced whole when it moves; a
+  `fingerprint()` that raises is that producer's error (the refresh's step 5).
 - **History** reads settings and every workout page, computes one methodology's
   series, then renders and writes (`history/engine.py:288-462`). The middle is
   pure.
@@ -251,9 +270,12 @@ tests/index/derived/
 - `CHANGELOG.md`, `.kiro/steering/structure.md`,
   `.kiro/specs/fit-ingest/requirements.md` (and its `spec.json` amendments
   array), `.kiro/steering/roadmap.md` (ticks at landing).
-- As second Phase 10 lander only: `docs/analytics.md` (schema reference, by
-  analytics-query's own regeneration mechanism) and the analytics agent skill's
-  worked examples.
+- As second Phase 10 lander only, analytics-query's three bounded read-side
+  files: the generated schema-reference block of `docs/analytics.md`
+  (regenerated with `uv run python -m tests.query.test_docs_analytics`), the
+  four derived worked examples in `src/fitdocs/skills/fitdocs-analytics/SKILL.md`
+  (windows "in the latest year of data"), and `derived_inputs()` in
+  `tests/query/conftest.py`.
 - `pyproject.toml`: the new test modules in the mypy `files` list.
 
 ## System Flows
@@ -270,7 +292,7 @@ sequenceDiagram
     Prod->>In: digests of files it reads
     In-->>Prod: digest strings, never raising
     Prod-->>Ref: producer fingerprint
-    Ref->>Ref: combine with fitdocs and schema versions, compare
+    Ref->>Ref: combined corpus fingerprint with fitdocs and schema versions, compare
     alt fingerprint moved
         Ref->>Prod: rows snapshot
         Prod->>Eng: read and compute from the data root
@@ -351,9 +373,9 @@ graph TB
 | 7.3 | Command output and exits unchanged | HistorySeam, PlanSeam | Seam-equality tests; existing suites |
 | 7.4 | Corpus tables as inputs stood at the last refresh | Corpus producers | Fingerprints cover the profile, plans, settings, pages |
 | 7.5 | Tests against the engines' own output | Test strategy | Each producer test |
-| 8.1 | Load-series recompute inputs | LoadSeriesProducer, DerivedInputs | `fingerprint` |
+| 8.1 | Load-series recompute inputs | LoadSeriesProducer, DerivedInputs | `fingerprint`: `workouts_digest` (every workout page, held or not) and settings |
 | 8.2 | Benchmark recompute inputs | BenchmarkProducer | `fingerprint` |
-| 8.3 | Block recompute inputs, the date only with sources | BlockProducer | `fingerprint` |
+| 8.3 | Block recompute inputs, held pages, the date only with sources | BlockProducer, DerivedInputs | `fingerprint`: `workouts_digest`, the page-key map, settings, plan sources, `today` |
 | 8.4 | Whole-table replacement | Registration | Inherited (analytics-index Req 13.3) |
 | 8.5 | Failure keeps previous rows, others refresh | Corpus producers | Engine errors raised from `rows`; fingerprints never raise |
 | 8.6 | No-op leaves the index byte-identical | DerivedInputs | Stable digests |
@@ -366,7 +388,7 @@ graph TB
 | 10.1 | Version +1; digest | Registration | `SCHEMA_VERSION`, `_DIGESTS_BY_VERSION` |
 | 10.2 | Rebuild on the earlier version | DerivedRefreshTests | NEEDS_REBUILD, then `run_index_command` |
 | 10.3 | Release notes | PublishedStatements | `CHANGELOG.md` |
-| 10.4 | Docs schema reference and skill examples | PublishedStatements | Second Phase 10 lander |
+| 10.4 | Docs schema reference and skill examples | PublishedStatements | Second Phase 10 lander; proved by analytics-query's `test_skill_examples.py` and `test_docs_analytics.py` |
 | 10.5 | Steering dependency statement | PublishedStatements | `structure.md` |
 | 10.6 | fit-ingest amendment | PublishedStatements | Next free amendment number at landing |
 | 10.7 | No write location, network, clock, dependency; versions unchanged | DerivedGuards | Boundary and version pins |
@@ -632,19 +654,41 @@ class Reconciler:
 ```python
 def file_digest(path: Path) -> str: ...
     # "sha256:<hex>" of the bytes; "absent"; "directory"; "symlink:<target>"; "unreadable:<ExceptionType>"
-def workouts_digest(corpus: CorpusSnapshot) -> str: ...
+def workouts_digest(corpus: CorpusSnapshot) -> str: ...  # reads no file
 def settings_digest(data_root: Path) -> str: ...    # file_digest(layout.settings_path(data_root))
 def digest(parts: Mapping[str, str | None | Sequence[Sequence[str]]]) -> str: ...  # sha256 of canonical JSON
-def page_keys(corpus: CorpusSnapshot) -> Mapping[str, str]: ...                    # path -> page_key
+def page_keys(corpus: CorpusSnapshot) -> Mapping[str, str]: ...                    # path -> page_key, corpus.pages only
 ```
-- **`workouts_digest`** covers every markdown file directly in
-  `workouts/`: each held page by `(path, document_fingerprint)` from the
-  snapshot, and every other `*.md` entry of `workouts/` (left-out pages,
-  non-workout files, `AGENTS.md`) by `(relative path, file_digest)`. Both lists
-  sorted by path.
-- **Never raises** for a missing, unreadable, symlinked or directory entry; it
-  folds a marker into the digest instead.
-- Reads; never writes; no clock.
+- **`workouts_digest`** is the digest of every `(path,
+  document_fingerprint)` of `corpus.pages` and `corpus.left_out` together, as
+  one list sorted by path. It reads no file and globs nothing: the snapshot
+  already carries every workout page, held or left out (analytics-index
+  § Corpus, `corpus_snapshot`).
+- **Why that is exactly what the engines read.** History's `scan_documents`
+  (`history/documents.py:197-200`) and the plan corpus's `scan_corpus`
+  (`plans/corpus.py:184-187`) read `sorted(workouts/*.md)` through
+  `docio.read_frontmatter` and keep a file only when `is_workout_document`
+  holds (`contract.py:961-971`: `type` is the workout type). analytics-index's
+  `scan_workout_pages` reads the same glob through `docio.read_document`, to
+  which `read_frontmatter` delegates (one read, one symlink refusal, never
+  raising), keeps the same set, and puts each such page in `pages` or
+  `left_out` exactly once. So:
+  - a file in neither list (`AGENTS.md`, a non-workout page, a symlink, an
+    unreadable or fence-less file) is read by neither engine, and changing it
+    moves nothing;
+  - a file entering or leaving the set adds or drops an entry, so the digest
+    moves;
+  - each engine reads only the frontmatter and file name of a page, both
+    inside the document fingerprint (path and bytes).
+- **Held-ness is not in it.** Which list a page is in does not move the
+  digest, because history and the plan corpus read every workout page alike.
+  The one thing held-ness changes is the block tables' `page_key` column, so
+  the block producer fingerprints `page_keys(corpus)` itself
+  (§ BlockProducer).
+- `file_digest` **never raises** for a missing, unreadable, symlinked or
+  directory entry; it folds a marker into the digest instead. It serves
+  `fitdocs.toml`, `athlete.toml` and the plan sources.
+- Reads only through `file_digest`; never writes; no clock.
 
 #### MeanMaxProducer (`src/fitdocs/index/derived/mean_max.py`)
 
@@ -767,11 +811,15 @@ class BlockProducer:                    # satisfies CorpusProducer
 
 BLOCK_PRODUCER: Final[BlockProducer]
 ```
-- **`fingerprint`**: `digest({"workouts": workouts_digest(corpus), "settings":
+- **`fingerprint`**: `digest({"workouts": workouts_digest(corpus),
+  "page_keys": <sorted [path, page_key] of page_keys(corpus)>, "settings":
   settings_digest(data_root), "plans": <sorted [entry name, file_digest(entry)]
   of read_plan_sources(data_root).sources, or "error:<Type>: <message>" when it
   raises SettingsError>, "today": corpus.today ISO when at least one source was
   discovered, else None})`. It never raises for a malformed settings file.
+  The page-key map is there because the rows read it: a page the index starts
+  or stops holding, with its bytes unchanged, turns its `page_key` from NULL
+  to its key or back, and the tables must follow.
 - **`rows`**: `resolution = fitdocs.plans.resolve_plans(corpus.data_root,
   today=corpus.today)`; then:
   - one `blocks` row per `ParsedSource` (valid or not), `resolved_on =
@@ -849,14 +897,36 @@ BLOCK_PRODUCER: Final[BlockProducer]
   record module, outside Req 15.6's enumeration and `CONSTANT_SOURCES`. Its
   `spec.json` amendments array names the pinning tests.
 - **Second Phase 10 lander only**: if `analytics-query` is on `main` when this
-  spec lands, regenerate `docs/analytics.md`'s schema reference by the
-  mechanism its design defines and re-pin it, and append worked examples to
-  the analytics skill: best 20-minute power this year (`mean_max` joined to
-  `pages`), form on a date (`daily_load` where `history_default`), FTP in force
-  on a ride's date (`benchmark_periods` joined on date range), planned
-  sessions not logged (`planned_workouts`). If this spec lands first, the
-  same obligation passes to `analytics-query`'s lander, recorded in this
-  spec's tasks.
+  spec lands, this spec touches analytics-query's three bounded read-side
+  files, and nothing else on the read side:
+  - **`docs/analytics.md`'s generated schema block**, regenerated with `uv run
+    python -m tests.query.test_docs_analytics`;
+  - **four worked examples** appended under `Worked examples` in
+    `src/fitdocs/skills/fitdocs-analytics/SKILL.md`, one H3 and one `sql`
+    fence per derived producer, each selecting rows from that producer's
+    table (no bare aggregate, no outer join that keeps rows once the
+    producer's tables are emptied), every window relative to the data
+    (`max(date)` or the table's own dates), never `current_date`:
+    - the best power at each duration in the latest year of data, with its
+      page (`mean_max` joined to `pages`);
+    - the last four weeks of form for the methodology `fitdocs history` shows
+      by default (`daily_load` joined to `load_series` where
+      `history_default`, from `series_end`);
+    - the FTP in force on each ride's date in the latest year of data
+      (`benchmark_periods` joined to the ride pages on its date range);
+    - planned sessions not logged in the latest block (`planned_workouts`);
+  - **`derived_inputs()` in `tests/query/conftest.py`**, extended with a plan
+    source under `plans/` dated around the fixture's `FIXTURE_TODAY`
+    (2021-10-01) and a `[benchmarks]` table appended to the fixture's
+    `athlete.toml` (which declares `profile_version = 2`), both written
+    before `fitdocs sync`, so every derived producer yields rows on
+    `indexed_root`.
+
+  The proof is analytics-query's `tests/query/test_skill_examples.py` on
+  `indexed_root`, with `tests/query/test_docs_analytics.py` for the block.
+  Both go red when this spec registers its producers and green when the three
+  files are done; they are the only expected-red tests in between. If this
+  spec lands first, analytics-query's task 7.3 does the same at its landing.
 
 ## Data Models
 
@@ -1088,9 +1158,13 @@ directly in the test, never the index's earlier output.
   - `docs/reference` named nowhere in the two modules.
 - **Inputs** (`tests/index/derived/test_inputs.py`): each digest moves on a
   one-byte change of exactly its file and not on an unrelated file
-  (`athlete.toml` versus `fitdocs.toml`); `workouts_digest` moves when a
-  non-held `.md` changes (mutation: digest held pages only); a symlink, a
-  directory and an unreadable file give distinct markers and never raise.
+  (`athlete.toml` versus `fitdocs.toml`); `workouts_digest` moves when the
+  left-out no-`sources` page changes (mutation: digest `pages` only), does not
+  move when `AGENTS.md` or a non-workout page changes (mutation: glob
+  `workouts/*.md` again), and is equal for two snapshots of one scan that
+  differ only in `held` (mutation: digest the two lists separately);
+  `file_digest` gives distinct markers for an absent path, a symlink, a
+  directory and an unreadable file, and never raises.
 
 ### Seam tests
 - **History** (`tests/history/test_compute_seam.py`): over a fixture with two
@@ -1145,7 +1219,10 @@ directly in the test, never the index's earlier output.
   that page's `page_key` is NULL and its `path` set (mutation: build the corpus
   from the snapshot); a planned row dated `d` is `upcoming` and one dated
   `d - 1` is `not logged` (mutation: pass `today + 1 day`); `resolved_on ==
-  d`; an invalid source gives one `blocks` row and nothing else.
+  d`; an invalid source gives one `blocks` row and nothing else; the
+  fingerprint moves when a claimed page moves from `pages` to `left_out` with
+  its bytes unchanged (mutation: drop the page-key map), while the
+  load-series fingerprint does not (mutation: add the map there).
 
 ### End-to-end refresh tests (`tests/index/derived/test_refresh.py`)
 Through `analytics-index`'s real `run_index_command` and refresh, with a spy
@@ -1215,20 +1292,28 @@ advance).
   "schema version N; this fitdocs uses N+1; run 'fitdocs index' to rebuild it"
   on writing commands until the athlete runs `fitdocs index`, which rebuilds it
   with the derived tables. No document changes; no `regen` needed.
-- A later change to the best-effort rule advances `SCHEMA_VERSION` again.
+- A later change to how a derived producer derives rows, the best-effort rule
+  included, advances `SCHEMA_VERSION` again, by analytics-index's binding rule
+  (its design § Seam 2, Requirement 13.6).
 
 ## Upstream issues
-Recorded with evidence in `research.md` § Upstream issues; none blocks this
-design, which assumes no change to `analytics-index`:
-1. `CorpusSnapshot` holds only the indexed pages; worked around in
-   `inputs.workouts_digest`.
-2. A raising `fingerprint()` is unspecified; worked around by fingerprints that
-   never raise.
-3. The allowed-imports sentence does not mention a producer package's own
-   helper modules; this spec's boundary guard states the rule it follows.
-4. The computed tier does not follow fitdocs upgrades; mitigated here by
-   advancing `SCHEMA_VERSION` on any best-effort rule change.
-5. An `athlete.toml` that analytics-index's refresh cannot load (invalid TOML,
-   unsupported profile version, malformed flat keys) fails the whole refresh
-   before any producer runs, so Req 8.5's per-table isolation covers benchmark
-   errors in an otherwise valid profile only; recorded for the controller.
+Recorded with evidence in `research.md` § Upstream issues. Four were resolved
+in analytics-index during the Phase 10 cross-spec review, round 1; this design
+now relies on those resolutions:
+1. **Resolved (C5).** `CorpusSnapshot` carries the left-out workout pages in
+   `left_out`, built by the one `corpus_snapshot` builder;
+   `inputs.workouts_digest` digests `pages` and `left_out` and no longer
+   globs `workouts/`.
+2. **Resolved (C7).** A raising `fingerprint()` is that producer's error
+   (analytics-index Refresh step 5). The derived fingerprints still never
+   raise, so the athlete sees the engine's own error from `rows`.
+3. **Resolved (C11).** analytics-index's allowed-imports sentence admits a
+   producer package's own modules (`fitdocs.index.derived.*`).
+4. **Resolved (C8).** analytics-index's Seam 2 and Requirement 13.6 advance
+   `SCHEMA_VERSION` on every change to how a producer derives rows from
+   unchanged inputs; this spec cites that rule.
+5. **Open, queued by the controller.** An `athlete.toml` that
+   analytics-index's refresh cannot load (invalid TOML, unsupported profile
+   version, malformed flat keys) fails the whole refresh before any producer
+   runs, so Req 8.5's per-table isolation covers benchmark errors in an
+   otherwise valid profile only.

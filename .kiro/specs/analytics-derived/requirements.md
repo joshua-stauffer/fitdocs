@@ -184,9 +184,9 @@ recomputed only when what it is computed from changed, so that a routine sync
 costs no more than it must and an unchanged index stays byte-identical.
 
 #### Acceptance Criteria
-1. fitdocs shall recompute the load-series tables when, and only when, a markdown file directly in the data root's workouts folder or the settings file changed since they were last computed, or the fitdocs version or schema version changed.
+1. fitdocs shall recompute the load-series tables when, and only when, a workout page (held by the index or not) was added, removed or changed, or the settings file changed, since they were last computed, or the fitdocs version or schema version changed.
 2. fitdocs shall recompute the benchmark tables when, and only when, the athlete profile file changed since they were last computed, or the fitdocs version or schema version changed.
-3. fitdocs shall recompute the block tables when, and only when, a plan source, a markdown file directly in the data root's workouts folder or the settings file changed since they were last computed, the fitdocs version or schema version changed, or, while at least one plan source exists, the current date changed.
+3. fitdocs shall recompute the block tables when, and only when, a plan source changed, a workout page (held by the index or not) was added, removed or changed, the index began or stopped holding a workout page, or the settings file changed, since they were last computed, the fitdocs version or schema version changed, or, while at least one plan source exists, the current date changed.
 4. When fitdocs recomputes a corpus-level table, fitdocs shall replace it whole, so that a reader never sees part of the old table beside part of the new one.
 5. If computing a corpus-level table fails (a malformed settings file, a malformed benchmark entry in the athlete profile, a plan source directory the settings name that does not exist), then fitdocs shall keep that table's previous rows, report the failure as the index reports any table it could not refresh, retry at the next refresh, and refresh every other table as usual.
 6. When a refresh finds no workout page added, moved or removed and none of the inputs of criteria 1 to 3 changed, fitdocs shall leave every file in the index directory byte-identical.
