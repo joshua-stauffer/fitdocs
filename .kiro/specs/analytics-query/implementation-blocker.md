@@ -1,0 +1,80 @@
+# Task 1.1 blocked: interruption phase contract
+
+The Luna implementer made no edits and returned BLOCKED. Independent
+`kiro-debug` returned SPEC_CONFLICT / STOP_FOR_HUMAN. No implementation task
+is complete, and feature-level validation has not run.
+
+## Evidence
+
+Task 1.1 requires the aggregate's interruption assertion to fail when
+`IndexResult.fetchmany` rethrows the raw backend exception. Task 8.2 reruns
+this test on DuckDB 1.2.0. Fresh independent read-only probes showed:
+
+| DuckDB | Interruption phase | Raw-fetchmany mutation on real aggregate |
+| --- | --- | --- |
+| 1.2.0 | execute | passes: mutation survives |
+| 1.5.6 | fetchmany | fails |
+
+The independent debugger also observed a deterministic synthetic fetch
+interruption assertion fail under that mutation on 1.2.0. After restoring
+source, conversion pins, the real interruption regression, and the synthetic
+fetch interruption pin passed: four tests on each version. Subprocesses were
+bounded to 15 seconds; HOME directories stayed empty. These diagnostics
+confirm the existing facade contract; they do not complete the query task.
+
+## Proposed correction for approval
+
+1. In task 1.1, start the 0.5-second interrupt timer before execute. Run the
+   specified aggregate and `fetchmany(1)` inside one exception boundary;
+   require chained `IndexInterrupted` from either operation within the
+   existing 60-second subprocess bound. Record the observed phase.
+2. Add a separate deterministic fetch interruption test using a
+   non-forwarding synthetic backend relation that raises its
+   `InterruptException` during `fetchmany`. Require `IndexInterrupted`,
+   original cause identity, and matching message. Assign the raw-fetchmany
+   mutation's interruption assertion to this test; retain the conversion
+   error mutations and the real aggregate cancellation regression.
+3. Qualify the U2 phase claims in design.md under Upstream Prerequisites and
+   StoreFacadeAddition: exceptions may surface during execute or fetch.
+   Preserve the dependency floor, facade contract, and timer coverage of
+   both phases.
+
+After approval, a Luna implementer applies this correction and resumes task
+1.1 with fresh tests on both releases and independent review. Do not alter
+production code to force the aggregate to interrupt in a particular phase.
+
+The existing queue item
+`.kiro/queue/2026-10-06-query-interruption-phase-statements.md` tracks this
+issue. The approved plan itself remains unchanged apart from its explicit
+blocker annotation and this handoff.
+
+
+## Independent debugger transcript excerpts
+
+The fresh diagnostics below were reported by the independent debugger.
+Raw logs were printed in its tool transcript and were not saved separately;
+temporary probe directories were removed automatically. Historical raw phase
+outputs also remain under
+`/private/tmp/analytics-index-evidence/8.4/remediation-interruption/phase-floor.txt`
+and `phase-current.txt`.
+
+```text
+current exit=0 version=1.5.6 phase=fetchmany error=IndexInterrupted cause=InterruptException message=INTERRUPT Error: Interrupted!
+floor exit=0 version=1.2.0 phase=execute error=IndexInterrupted cause=InterruptException message=INTERRUPT Error: Interrupted!
+
+current-real-mutation exit=1
+FAILED tests/index/test_store.py::test_interrupt_during_execute_or_fetch_is_wrapped_in_bounded_subprocess
+1 failed in 1.96s
+
+floor-real-mutation exit=0
+1 passed in 0.75s
+
+floor-synthetic-mutation exit=1
+FAILED tests/index/test_store.py::test_facade_wraps_original_backend_errors_for_every_operation[fetchmany-True]
+1 failed in 0.09s
+
+source restored
+current baseline exit=0: 4 passed in 0.81s
+floor baseline exit=0: 4 passed in 0.75s
+git diff --exit-code and git status --short: no output, exit=0
+```

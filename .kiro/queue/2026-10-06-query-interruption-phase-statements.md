@@ -2,8 +2,8 @@
 id: 2026-10-06-query-interruption-phase-statements
 title: Qualify query design statements about execution and fetch interruption phases
 status: open
-importance: low
-importance_why: The planned timer ordering is correct, but the design overstates where DuckDB interruptions surface.
+importance: medium
+importance_why: Task 1.1 is blocked because its required fetch-only interruption mutation survives on supported DuckDB 1.2.0.
 effort: S
 kind: inconsistency
 area: analytics-query, .kiro/specs/analytics-query/design.md
@@ -14,6 +14,7 @@ resume_command: "do: qualify analytics-query design U2 statements so errors and 
 context:
   - .kiro/specs/analytics-query/design.md
   - .kiro/specs/analytics-query/tasks.md
+  - .kiro/specs/analytics-query/implementation-blocker.md
   - src/fitdocs/index/store.py
   - tests/index/test_store.py
   - .kiro/specs/analytics-index/tasks.md
@@ -60,3 +61,27 @@ the timer before execute and fetch; preserve that correct ordering.
 3. Ensure planned tests cover errors/interruption at execute and fetch, and
    cancellation is armed before either can do expensive work. The existing
    store test supplies the real cross-version regression evidence.
+
+
+## 2026-10-07 implementation blocker
+
+`/kiro-impl analytics-query` stopped at task 1.1 before implementation.
+The Luna implementer returned BLOCKED; an independent debugger returned
+SPEC_CONFLICT / STOP_FOR_HUMAN. The exact task mutation obligation also
+needs correction, beyond the previously identified design wording:
+
+- Fresh independent read-only probes: 1.2.0 interrupted at execute; 1.5.6
+  at fetchmany, both with chained `InterruptException`.
+- A raw-fetchmany mutation survived the real aggregate interruption test
+  on 1.2.0 and failed it on 1.5.6. A separate deterministic synthetic fetch
+  interruption pin failed under the mutation on 1.2.0.
+- Restored baselines passed four tests on each release. Source was restored
+  and the worktree was clean after diagnostics.
+- Task 1.1's interruption and mutation bullets, together with task 8.2's
+  floor rerun, demonstrate the conflict. The upstream facade is sound.
+
+Read `.kiro/specs/analytics-query/implementation-blocker.md` for the concrete
+proposed correction. Obtain approval for that bounded task-plan correction
+before resuming implementation. Preserve cancellation before both execute
+and fetch, the real aggregate regression, the separate fetch-wrapping pin,
+and the dependency floor.

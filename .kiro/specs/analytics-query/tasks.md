@@ -270,6 +270,7 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 - [ ] 1. Foundation: prerequisites, the test package, the facade method and the fixtures
 
 - [ ] 1.1 Confirm the upstream facts and create the isolated query test package
+  - _Blocked: 2026-10-07 independent debug returned STOP_FOR_HUMAN: the required raw-fetchmany mutation survives the real aggregate interruption test on supported DuckDB 1.2.0, where interruption occurs during execute. Approve the bounded test-plan correction in implementation-blocker.md before resuming._
   - **Prerequisite confirmations.** Each is a landed `analytics-index` fact,
     recorded in Implementation Notes with file:line evidence and the
     `analytics-index` task that provides it:
@@ -1384,3 +1385,8 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
   - **Observable:** the three timings are recorded. If the plain query exceeds
     3 s, a follow-up is queued.
   - _Requirements: 9.1_
+
+
+## Implementation Notes
+
+- 2026-10-07 task 1.1: Luna implementer BLOCKED before edits; independent debug confirmed SPEC_CONFLICT / STOP_FOR_HUMAN. Fresh read-only aggregate probes interrupted during execute on DuckDB 1.2.0 and fetchmany on 1.5.6. A temporary raw-fetchmany mutation survived the floor aggregate assertion and failed the current-version assertion; a deterministic synthetic fetch interruption pin failed on the floor. Source restored; no query implementation or task completed. Proposed correction and evidence: `implementation-blocker.md`; existing queue item `2026-10-06-query-interruption-phase-statements`. Upstream facade remains sound; preserve floor and timer-before-execute ordering.
