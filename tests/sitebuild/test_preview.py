@@ -22,6 +22,7 @@ import shutil
 import socket
 import stat
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -1062,7 +1063,8 @@ def test_live_preview_serves_edits_adds_deletes_failures_and_fixes(
     edited = pristine.replace(
         "A single valid tree", "EDITMARKERONE a single valid tree"
     )
-    breakage = edited.replace("section: Why\n", "section: Nowhere\n")
+    post_delete = edited.replace("EDITMARKERONE", "EDITMARKERONE DELETEGENERATIONREADY")
+    breakage = post_delete.replace("section: Why\n", "section: Nowhere\n")
     fixed = pristine.replace("A single valid tree", "EDITMARKERTWO a single valid tree")
     write(broken / why, breakage)
     reference = build(broken, tmp_path / "reference", repo_root=REPO_ROOT)
@@ -1143,6 +1145,7 @@ def test_live_preview_serves_edits_adds_deletes_failures_and_fixes(
             unchanged_across("edit", served("/why/", "EDITMARKERONE")),
             thread,
         )
+        assert "DELETEGENERATIONREADY" not in pages["/why/"]
 
         extra = content / "get-started" / "extra.md"
         assert fetch(addr, "/get-started/extra/")[0] == 404
@@ -1158,9 +1161,18 @@ def test_live_preview_serves_edits_adds_deletes_failures_and_fixes(
         )
 
         extra.unlink()
+        write(content / why, post_delete)
         wait_for(
             "a 404 for the deleted page",
             unchanged_across("delete", status_is("/get-started/extra/", 404)),
+            thread,
+        )
+        wait_for(
+            "the retained /why/ page after deletion",
+            unchanged_across(
+                "delete settled",
+                served("/why/", "EDITMARKERONE DELETEGENERATIONREADY"),
+            ),
             thread,
         )
         assert out.text() == ""
@@ -1178,6 +1190,7 @@ def test_live_preview_serves_edits_adds_deletes_failures_and_fixes(
         status, body = fetch(addr, "/why/")
         assert status == 200
         assert "EDITMARKERONE" in body
+        assert "DELETEGENERATIONREADY" in body
         assert "Nowhere" not in body
 
         write(content / why, fixed)
@@ -1205,3 +1218,66 @@ def test_live_preview_serves_edits_adds_deletes_failures_and_fixes(
     assert after_stop[0] is not None, "the serve process outlived the stop"
     with pytest.raises(ProcessLookupError):
         os.kill(procs[0].pid, 0)
+
+
+def test_live_preview_post_delete_wait_requires_last_good_readiness(
+    requires_zensical: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The live deletion sequence rejects responses from older generations.
+
+    Dies on: dropping the generation marker makes the existing final `/why/`
+    status assertion see a controlled 404, or making the marker present before
+    deletion violates the live test's generation precondition.
+    """
+    original_fetch = fetch
+    added = False
+    deleted = False
+    post_delete_responses: list[tuple[int | None, str]] = []
+    content_page = tmp_path / "content" / "why.md"
+
+    def malformed_page_written() -> bool:
+        return "section: Nowhere\n" in content_page.read_text(encoding="utf-8")
+
+    def controlled_fetch(addr: str, path: str) -> tuple[int | None, str]:
+        nonlocal added, deleted
+        if not deleted:
+            response = original_fetch(addr, path)
+            if path == "/get-started/extra/":
+                if response[0] == 200:
+                    added = True
+                elif added and response[0] == 404:
+                    deleted = True
+            return response
+
+        if malformed_page_written():
+            if path == "/why/" and len(post_delete_responses) < 4:
+                return 404, ""
+            return original_fetch(addr, path)
+        if path != "/why/":
+            return 404, ""
+
+        if len(post_delete_responses) == 0:
+            response = (404, "EDITMARKERONE DELETEGENERATIONREADY")
+        elif len(post_delete_responses) == 1:
+            response = (200, "DELETEGENERATIONREADY from the new document")
+        elif len(post_delete_responses) == 2:
+            response = (200, "EDITMARKERONE from the earlier generation")
+        else:
+            response = original_fetch(addr, path)
+        post_delete_responses.append(response)
+        return response
+
+    monkeypatch.setattr(sys.modules[__name__], "fetch", controlled_fetch)
+    test_live_preview_serves_edits_adds_deletes_failures_and_fixes(
+        requires_zensical, tmp_path, monkeypatch
+    )
+
+    assert post_delete_responses[:3] == [
+        (404, "EDITMARKERONE DELETEGENERATIONREADY"),
+        (200, "DELETEGENERATIONREADY from the new document"),
+        (200, "EDITMARKERONE from the earlier generation"),
+    ]
+    assert any(
+        status == 200 and "EDITMARKERONE" in body and "DELETEGENERATIONREADY" in body
+        for status, body in post_delete_responses[3:]
+    )
