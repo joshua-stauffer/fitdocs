@@ -214,6 +214,13 @@ def test_store_sql_guard_scans_reachable_setting_constant_but_not_docstrings() -
     assert _sql_guard_violations(source) == []
 
 
+def test_store_sql_guard_reaches_schema_and_insert_statements() -> None:
+    source = _STORE_PATH.read_text(encoding="utf-8")
+    constants = _string_constants_without_docstrings(source)
+    assert any(value.startswith("CREATE TABLE ") for value in constants)
+    assert any(value.startswith("INSERT INTO ") for value in constants)
+
+
 @pytest.mark.parametrize(
     "constant",
     [

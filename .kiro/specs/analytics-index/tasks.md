@@ -633,7 +633,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
   - _Requirements: 3.8, 4.6, 13.1, 13.4, 13.6, 13.7_
   - _Depends: 3.1, 3.2_
 
-- [ ] 4. The store: the only DuckDB importer
+- [x] 4. The store: the only DuckDB importer
 
 - [x] 4.1 Open every connection under the fitdocs connection policy
   - **The store's policy and facade**, per design.md § Store:
@@ -803,7 +803,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     classification (a reachability check).
   - _Requirements: 8.2, 9.3, 10.4_
 
-- [ ] 4.3 Create the schema, insert rows and keep bookkeeping in transactions
+- [x] 4.3 Create the schema, insert rows and keep bookkeeping in transactions
   - **The store's write side**, per design.md § Store:
     - `create_schema`: plain `CREATE TABLE` plus `COMMENT ON` for every table
       and column, with quotes doubled; never `CREATE OR REPLACE`; no
@@ -1617,3 +1617,6 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 
 - 4.2: real DuckDB error-subclass classification with all prescribed stems, exact original messages/causes and optional lock-holder PID. Shared facade-only hold_index and storage-version forger helpers are available for later tasks; consume them unchanged. Tests-first and OFF/ON/removed outputs retained. Independent review round2 APPROVED: 22 claimed observations plus two new reviewer mutations produced named assertion failures and restored passes; full docs/source-enabled suite 9127 passed / two expected actionlint skips; canonical/scoped mypy and repository Ruff clean. Parent fresh completion gate 104 passed.
 - 4.2 helper learnings: a failed startup may exit naturally, so no-live-child alone cannot pin explicit cleanup. Record cleanup calls on the exact captured Popen object, force-reap it before assertions, and inspect literal timeout arguments without waiting for hangs. Exercise both reap waits by making the first raise TimeoutExpired. Preserve None for a lock message without PID. The Corrupt database file stem is reached by the flipped-block fixture, not the junk fixture.
+
+- 4.3: store write-side schema/comments, typed JSON-columnar insert, scoped deletes/replacement, transactions, bookkeeping I/O and checkpoint APIs available. Tests-first missing-API and OFF13/ON75/removed75 outputs saved. Independent review round2 APPROVED: 60 distinct claimed observations plus two new reviewer probes confirmed, equivalent variants excluded; full docs/source-enabled suite 9157 passed / two expected actionlint skips, canonical/scoped mypy and repository Ruff clean. Parent fresh completion gate 134 passed. Final source unchanged by test remediation; CREATE/INSERT constant reachability added to boundary guard.
+- 4.3 fixture learnings: aware timestamps require valid scope/key preconditions; distinguish NULL array/empty tuple, False/True and numeric zero/None across scopes. Pin actual SQL types and complete comments through a fresh read-only connection, with multiple tables. Observe every computed state before overwrite, vary metadata versions and nullable fields, and assert complete producer registration rows. Keep matching corpus/bookkeeping rows present before per-page deletion. Record one multi-row INSERT with independent JSON arrays/parameters. Transaction tests cover BaseException and rollback errors preserving original identity. DuckDB from_json structure uses arrays of type strings for column arrays, nested for VARCHAR[]; max_depth=1 preserves list values.
