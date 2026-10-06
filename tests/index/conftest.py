@@ -3,16 +3,30 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import timedelta, timezone
+from dataclasses import dataclass
+from datetime import date, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
 from fitdocs import contract
 from fitdocs.docio import read_frontmatter
+from fitdocs.index import registry
+from fitdocs.index.bookkeeping import IndexMeta
+from fitdocs.index.fingerprint import athlete_fingerprint
+from fitdocs.index.refresh import RefreshInputs, reconcile
+from fitdocs.index.schema import SCHEMA_VERSION, ResolvedTable
+from fitdocs.index.store import (
+    create_index,
+    create_schema,
+    duckdb_version,
+    read_bookkeeping,
+    write_meta,
+)
 from fitdocs.layout import WORKOUTS_DIR
 from fitdocs.render.charts.map import TileRef
 from fitdocs.sync import sync
+from fitdocs.version import tool_version
 from tests.fixtures import builder, merge
 
 
@@ -21,6 +35,55 @@ class _SyntheticTiles:
 
     def resolve(self, refs: Sequence[TileRef]) -> dict[TileRef, bytes]:
         return {ref: b"synthetic-png" for ref in refs}
+
+
+@dataclass(frozen=True)
+class BuiltIndex:
+    data_root: Path
+    database: Path
+    tables: tuple[ResolvedTable, ...]
+
+
+@pytest.fixture
+def core_registry(monkeypatch: pytest.MonkeyPatch) -> tuple[ResolvedTable, ...]:
+    from fitdocs.index.core.computed import CORE_COMPUTED
+    from fitdocs.index.core.documents import CORE_DOCUMENTS
+
+    monkeypatch.setattr(registry, "DOCUMENT_PRODUCERS", (CORE_DOCUMENTS,))
+    monkeypatch.setattr(registry, "COMPUTED_PRODUCERS", (CORE_COMPUTED,))
+    monkeypatch.setattr(registry, "CORPUS_PRODUCERS", ())
+    return registry.registered_tables()
+
+
+@pytest.fixture
+def built_index(tmp_path: Path, core_registry: tuple[ResolvedTable, ...]) -> BuiltIndex:
+    data_root = tmp_path / "empty-data"
+    data_root.mkdir()
+    database = tmp_path / "index.duckdb"
+    today = date(2026, 10, 6)
+    with create_index(database) as connection:
+        create_schema(connection, core_registry)
+        write_meta(
+            connection,
+            IndexMeta(
+                schema_version=SCHEMA_VERSION,
+                fitdocs_version=tool_version(),
+                duckdb_version=duckdb_version(),
+                data_root=str(data_root.resolve()),
+                athlete_fingerprint=athlete_fingerprint(None),
+            ),
+        )
+        bookkeeping = read_bookkeeping(connection)
+        assert bookkeeping is not None
+        assert bookkeeping.pages == {}
+        initial = reconcile(
+            connection,
+            bookkeeping,
+            RefreshInputs(data_root, None, None, today, None),
+        )
+        assert initial.added == ()
+        assert initial.pages_held == 0
+    return BuiltIndex(data_root, database, core_registry)
 
 
 @pytest.fixture
