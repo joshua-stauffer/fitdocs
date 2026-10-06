@@ -58,9 +58,9 @@ the investigation established no CLI regression or production contract defect.
 
 ### Distinct added-page observation (analytics-index 8.2)
 
-At pre-steering base `9ecf5a7`, a canonical run failed at
+On the steering candidate based on `9ecf5a7`, a canonical run failed at
 `tests/sitebuild/test_preview.py:1154` / helper `:1023` with
-`not within 20.0s: the added page`: 9,384 passed, one failed and two expected
+`not within 20.0 s: the added page`: 9,384 passed, one failed and two expected
 actionlint skips. Its exact retry passed in 25.88s. Raw evidence is
 `/private/tmp/analytics-index-evidence/8.2/review2/canonical-full.txt` and
 the exact-retry output in that directory. The controller inspected the raw
