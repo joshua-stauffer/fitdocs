@@ -947,7 +947,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
   - _Boundary: Derive_
   - _Depends: 2.1_
 
-- [ ] 5.3 (P) Hand each rendered page out of the sync engine
+- [x] 5.3 (P) Hand each rendered page out of the sync engine
   - **`sync.py`** (workout-docs Amendment 4). Append the frozen `RenderedPage`
     and the keyword-only `on_rendered=None` parameter on `sync`, `drain` and
     `regen`.
@@ -1627,3 +1627,6 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 
 - 5.2: base_archive and derive_page reproduce the load-pass parse/compose/metrics sequence and missing/unreadable/undecodable states, with inline real-sync synthetic trio fixtures. Missing-module and OFF/ON/removed evidence saved. Independent review round2 APPROVED: 22 claimed probes plus two new reviewer mutations produced intended assertion failures and restored passes; full docs/source-enabled suite 9190 passed / two expected actionlint skips; canonical/scoped mypy and repository Ruff clean. Parent fresh completion gate 17 passed; genuine chmod unreadability ran without root skip.
 - 5.2 fixture learnings: the trio's base and composed metric values can coincide despite donated sample differences. Capture the real compute_metrics input and pin identity to returned composition.activity, while retaining integration comparisons. Unexpected parse/compose/metrics failures each preserve the exact exception object; generic OSError needs separate base/extra cases beyond PermissionError. Pin complete authoritative function annotations as well as frozen Derived carrier fields. Existing load/compose code remains unchanged.
+
+- 5.3: frozen RenderedPage and optional keyword-only on_rendered on sync/drain/regen, threaded through public planned/group/isolated/settle/page paths, synchronous immediately after successful writes. Initial API RED preceded partial carrier/signature work; that patch was preserved and explicitly reversed, expanded behavioral tests preceded callback logic, and OFF2/ON8/removed GREEN was saved. Final tests expanded afterwards; no claim that every final test preceded every API edit. Independent review round3 APPROVED: 38 claimed observations plus two new canonical-path probes produced intended assertion failures and restored passes; full docs/source-enabled suite 9209 passed / two expected actionlint skips; canonical/scoped mypy and repository Ruff clean. Parent fresh completion gate 630 passed; golden-document diff empty.
+- 5.3 branch/payload learnings: private settle tests do not pin public sync/drain/regen forwarding; regen's planned and isolated paths are distinct. Use actual stranded settle writes and unreferenced archive plans, populated athletes for drain/regen, complete nonempty composition provenance, and callback exception identity on settle as well as normal/isolated work. Compare equal reports and full byte trees across cloned callback/no-callback roots. Exact doc_ref must equal an independently known written path relative to the data root in POSIX form; basename and existence alone accept absolute or noncanonical paths. Keep bounded asynchronous-probe workers joined before restoration.

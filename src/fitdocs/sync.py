@@ -262,6 +262,7 @@ from fitdocs.layout import (
     held_path,
     source_ref,
 )
+from fitdocs.metrics.types import DerivedMetrics
 from fitdocs.quarantine import QuarantineEntry, QuarantineRecord, save_quarantine
 from fitdocs.render import Asset, DocContext, MapData, plan_map, render_document
 from fitdocs.tiles import TileSource, TileUnavailableError
@@ -439,6 +440,22 @@ class SyncReport:
     warnings: tuple[DocWarning, ...] = ()
 
 
+@dataclass(frozen=True)
+class RenderedPage:
+    """The render inputs and values for one page written by the sync engine."""
+
+    doc_ref: str
+    sources: tuple[str, ...]
+    composition: Composition
+    metrics: DerivedMetrics
+    athlete: AthleteInputs | None
+
+
+class _RenderedCallbackError(Exception):
+    def __init__(self, error: BaseException) -> None:
+        self.error = error
+
+
 def refresh_declarations(data_root: Path, warnings: list[DocWarning]) -> None:
     """Refresh every declared directory's ``AGENTS.md`` once per run (3.5, 3.6, 3.8).
 
@@ -539,6 +556,7 @@ def sync(
     tiles: TileSource,
     force: bool = False,
     precedence: Precedence = DEFAULT_PRECEDENCE,
+    on_rendered: Callable[[RenderedPage], None] | None = None,
 ) -> SyncReport:
     r"""Turn every ``.fit`` file under ``source_dir`` into a workout document.
 
@@ -627,6 +645,7 @@ def sync(
         skipped=skipped,
         failures=failures,
         warnings=warnings,
+        on_rendered=on_rendered,
     )
 
     settle_renames = _settle_pass(
@@ -639,6 +658,7 @@ def sync(
         written=written,
         failures=failures,
         warnings=warnings,
+        on_rendered=on_rendered,
     )
     _finish_holds(data_root, holds, task_renames, settle_renames)
 
@@ -730,6 +750,7 @@ def drain(
     retry_quarantined: bool = False,
     sleep: Callable[[float], None] = time.sleep,
     precedence: Precedence = DEFAULT_PRECEDENCE,
+    on_rendered: Callable[[RenderedPage], None] | None = None,
 ) -> DrainReport:
     r"""Drain the inbox: select, settle, quarantine-partition, then plan and
     apply the admitted ``.fit`` files as one run (design: DrainOrchestration,
@@ -906,6 +927,7 @@ def drain(
         skipped=skipped,
         failures=failures,
         warnings=warnings,
+        on_rendered=on_rendered,
     )
     failed_reasons = {failure.source: failure.reason for failure in failures}
 
@@ -988,6 +1010,7 @@ def drain(
         written=written,
         failures=failures,
         warnings=warnings,
+        on_rendered=on_rendered,
     )
     _finish_holds(data_root, holds, task_renames, settle_renames)
 
@@ -1059,6 +1082,7 @@ def regen(
     tz: tzinfo,
     tiles: TileSource,
     precedence: Precedence = DEFAULT_PRECEDENCE,
+    on_rendered: Callable[[RenderedPage], None] | None = None,
 ) -> SyncReport:
     r"""Rebuild every workout document from the data root alone (Req 4.3, 4.4).
 
@@ -1179,6 +1203,7 @@ def regen(
             failures=failures,
             warnings=warnings,
             ledger=ledger,
+            on_rendered=on_rendered,
         )
 
     # The pages are rebuilt: rescan, so "listed by no page" is judged against
@@ -1210,6 +1235,7 @@ def regen(
         skipped=skipped,
         failures=failures,
         warnings=warnings,
+        on_rendered=on_rendered,
         write_archive=False,
     )
 
@@ -1223,6 +1249,7 @@ def regen(
         written=written,
         failures=failures,
         warnings=warnings,
+        on_rendered=on_rendered,
     )
     _finish_holds(data_root, holds, task_renames, settle_renames)
     if holds.record.entries or held_path(data_root).exists():
@@ -1253,6 +1280,7 @@ def _process_isolated(
     failures: list[FileFailure],
     warnings: list[DocWarning],
     ledger: _RunLedger,
+    on_rendered: Callable[[RenderedPage], None] | None,
 ) -> None:
     """Rebuild one page from its listed files, isolating any failure (Req 1.3).
 
@@ -1294,7 +1322,10 @@ def _process_isolated(
             settling=False,
             quiet=False,
             expected_stem=None,
+            on_rendered=on_rendered,
         )
+    except _RenderedCallbackError as exc:
+        raise exc.error from exc
     except (FitDecodeError, RegionError) as exc:
         failures.append(FileFailure(source=source_label, reason=_reason(exc)))
     except Exception as exc:
@@ -1378,6 +1409,7 @@ def _run_planned(
     skipped: list[str],
     failures: list[FileFailure],
     warnings: list[DocWarning],
+    on_rendered: Callable[[RenderedPage], None] | None,
     write_archive: bool = True,
 ) -> dict[str, str]:
     """Plan and apply one run's files (activity-identity Req 4, 7.1, 7.5).
@@ -1463,6 +1495,7 @@ def _run_planned(
                 warnings=warnings,
                 renames=renames,
                 write_archive=write_archive,
+                on_rendered=on_rendered,
             )
 
     for position, primary in duplicate_of.items():
@@ -1516,6 +1549,7 @@ def _group_task(
     warnings: list[DocWarning],
     renames: dict[str, str],
     write_archive: bool = True,
+    on_rendered: Callable[[RenderedPage], None] | None = None,
 ) -> None:
     """One page task for the files the plan gave one page or one new page.
 
@@ -1560,7 +1594,10 @@ def _group_task(
             settling=False,
             quiet=False,
             expected_stem=None,
+            on_rendered=on_rendered,
         )
+    except _RenderedCallbackError as exc:
+        raise exc.error from exc
     except Exception as exc:
         for member in live:
             outcomes[member.position] = _Outcome("failed", _reason(exc))
@@ -1790,6 +1827,7 @@ def _page_task(
     settling: bool,
     quiet: bool,
     expected_stem: str | None,
+    on_rendered: Callable[[RenderedPage], None] | None,
 ) -> _TaskResult:
     """Write one page from its members: roles, render, rename, write, archive.
 
@@ -2043,6 +2081,19 @@ def _page_task(
         moved_from=moved_from,
         stale_assets=stale,
     )
+    if on_rendered is not None:
+        try:
+            on_rendered(
+                RenderedPage(
+                    doc_ref=doc_ref,
+                    sources=roles.sources,
+                    composition=composition,
+                    metrics=metrics,
+                    athlete=athlete,
+                )
+            )
+        except BaseException as exc:
+            raise _RenderedCallbackError(exc) from exc
     if moved_from is not None:
         old_ref = moved_from.relative_to(data_root).as_posix()
         reason = (
@@ -2127,6 +2178,7 @@ def _settle_pass(
     written: list[str],
     failures: list[FileFailure],
     warnings: list[DocWarning],
+    on_rendered: Callable[[RenderedPage], None] | None,
 ) -> dict[str, str]:
     """Move each page under a collision suffix to its unsuffixed name.
 
@@ -2184,7 +2236,10 @@ def _settle_pass(
                     settling=True,
                     quiet=not entry.opportunistic,
                     expected_stem=entry.unsuffixed,
+                    on_rendered=on_rendered,
                 )
+            except _RenderedCallbackError as exc:
+                raise exc.error from exc
             except Exception as exc:
                 if not entry.opportunistic:
                     failures.append(FileFailure(source=page_ref, reason=_reason(exc)))
