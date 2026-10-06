@@ -17,6 +17,15 @@ recorded as one.
 
 ### Added
 
+- `fitdocs index [--rebuild]` builds the disposable analytics index once;
+  writing commands refresh it after their document and load writes. The
+  per-data-root index lives outside the data root, resolved by
+  `FITDOCS_INDEX_DIR`, then `XDG_CACHE_HOME`, then the user's cache directory.
+  Run `fitdocs index` once to build it. The ownership contract now describes
+  this cache and the change requires no action for existing documents.
+- The runtime dependency `duckdb>=1.2,<2` (about 44 MB installed) powers the
+  analytics index. Prebuilt wheels are not available for musl-based Linux or
+  free-threaded Python builds.
 - A run page gains a Running Dynamics section, with its own chart, when the
   activity records running-dynamics channels (native `.fit`
   running-dynamics fields, or record-level developer fields such as those a
@@ -59,6 +68,9 @@ recorded as one.
 
 ### Changed
 
+- The ownership contract version advances from 8 to 9 to describe the
+  analytics index's external location, disposable-cache behavior and refresh
+  agreement. No action is needed for documents.
 - The generated document format advances (`doc_version` 5 to 6): run pages
   gain the Running Dynamics section, a 0 bpm heart-rate sample is no longer
   recorded (where the session records no average or maximum heart rate, those

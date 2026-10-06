@@ -8,5 +8,5 @@ These files are immutable inputs: they must not be edited, renamed, or deleted w
 ## Ownership
 
 Owner: `fitdocs`.
-Ownership contract version: `8`.
+Ownership contract version: `9`.
 Published ownership contract: https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md

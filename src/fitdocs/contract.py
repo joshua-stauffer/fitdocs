@@ -325,7 +325,7 @@ highest-ranked extra that records it. A page without extras renders as before
 and changes only this line (Req 8.2).
 """
 
-CONTRACT_VERSION: Final[str] = "8"
+CONTRACT_VERSION: Final[str] = "9"
 """The published ownership contract's version identifier (Req 2.8).
 
 A *string*, and deliberately not comparable with :data:`DOC_VERSION`: it
@@ -385,6 +385,20 @@ by up to 5 m or 20 % of the longer distance, whichever is larger. Elapsed time
 is compared only when a distance is missing. A file and its copy that end their
 sessions at different moments (a HealthFit copy ends when the workout is ended
 on the watch, a Stryd file at its last timer stop) are now one workout.
+The rule that decides whether two files are one workout no longer compares
+elapsed times when both files record a distance. Strict evidence requires
+distances no more than ``DISTANCE_TOLERANCE_FRACTION`` of the longer distance
+apart, whichever is larger. When a distance is missing, elapsed times are
+compared as before. Run ``fitdocs check`` to see pages that the rule now
+recognizes as one workout.
+
+Raised from ``8`` to ``9`` by analytics-index (Req 5.7, 12.6, 14.1-14.4).
+Document values follow every change of a page; computed values follow the
+page's rendering. ``fitdocs regen`` brings documents and the index forward
+together after the athlete inputs change, and a build computes every page
+under the athlete inputs current at that build. The disposable index is stored
+outside the data root, is never read back into a document, and is refreshed
+after every writing command without changing that command's exit code.
 """
 
 # --- document vocabulary -----------------------------------------------------

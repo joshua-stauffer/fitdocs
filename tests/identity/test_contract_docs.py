@@ -14,6 +14,7 @@ is checked for presence, and its anchor's resolution is checked by
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -133,6 +134,27 @@ def _flat(text: str) -> str:
     return " ".join(text.split())
 
 
+def _contract_version_history() -> str:
+    tree = ast.parse(Path(contract.__file__).read_text(encoding="utf-8"))
+    for index, node in enumerate(tree.body[:-1]):
+        if not isinstance(node, ast.AnnAssign):
+            continue
+        if (
+            not isinstance(node.target, ast.Name)
+            or node.target.id != "CONTRACT_VERSION"
+        ):
+            continue
+        following = tree.body[index + 1]
+        if (
+            isinstance(following, ast.Expr)
+            and isinstance(following.value, ast.Constant)
+            and isinstance(following.value.value, str)
+        ):
+            return _flat(following.value.value)
+        raise AssertionError("CONTRACT_VERSION has no adjacent history string")
+    raise AssertionError("CONTRACT_VERSION declaration was not found")
+
+
 def test_the_strict_bullet_states_the_amended_tier() -> None:
     section = _flat(_section())
     assert (
@@ -156,20 +178,34 @@ def test_the_changed_at_this_version_paragraph_names_the_amendment() -> None:
     head = _flat(_DOC.read_text(encoding="utf-8").split("\n## ", 1)[0])
     assert f"**Contract version:** `{contract.CONTRACT_VERSION}`" in head
     for phrase in (
-        "no longer compares elapsed times when both files record a distance",
-        "`DISTANCE_TOLERANCE_FRACTION` of the longer distance apart, whichever "
-        "is larger",
-        "When a distance is missing, elapsed times are compared as before.",
-        "Run `fitdocs check` to see pages that the rule now recognizes as one workout.",
+        "fitdocs keeps a disposable analytics index outside the data root",
+        "refreshes it after every writing command",
+        "The index is never read back into a document",
+        "Run `fitdocs index` once to build it",
     ):
         assert phrase in head, phrase
 
 
 def test_the_version_history_records_the_amendment() -> None:
-    source = Path(contract.__file__).read_text(encoding="utf-8")
-    history = _flat(source)
+    history = _contract_version_history()
     assert "Raised from ``7`` to ``8`` by activity-identity Amendment 1" in history
     assert "Elapsed time is compared only when a distance is missing." in history
+    assert "Raised from ``8`` to ``9`` by analytics-index" in history
+    assert (
+        "The rule that decides whether two files are one workout no longer compares "
+        "elapsed times when both files record a distance."
+    ) in history
+    assert (
+        "``DISTANCE_TOLERANCE_FRACTION`` of the longer distance apart, "
+        "whichever is larger"
+    ) in history
+    assert (
+        "When a distance is missing, elapsed times are compared as before." in history
+    )
+    assert (
+        "Run ``fitdocs check`` to see pages that the rule now recognizes as one "
+        "workout."
+    ) in history
 
 
 def test_the_unreleased_entry_states_the_rule_and_the_actions() -> None:

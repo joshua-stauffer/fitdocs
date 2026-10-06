@@ -1,20 +1,15 @@
 # fitdocs Ownership Contract
 
-**Contract version:** `8`
+**Contract version:** `9`
 
-**What changed at this version:** the rule that decides whether two files are
-one workout no longer compares elapsed times when both files record a
-distance. Strict evidence is now the same sport, starts no more than
-`START_TOLERANCE_S` apart, and distances no more than `DISTANCE_TOLERANCE_M` or
-`DISTANCE_TOLERANCE_FRACTION` of the longer distance apart, whichever is
-larger. When a distance is missing, elapsed times are compared as before.
-Two writers can end one workout's session at different moments. A HealthFit
-copy ends when the workout is ended on the watch, and a Stryd file ends at its
-last timer stop, so their elapsed times differ by as long as the athlete stayed
-paused. Such files now join one page instead of each making its own. Run
-`fitdocs check` to see pages that the rule now recognizes as one workout. See
-[Deciding that two files are one workout](#deciding-that-two-files-are-one-workout)
-below.
+**What changed at this version:** fitdocs keeps a disposable analytics index
+outside the data root and refreshes it after every writing command. Document
+values follow every change of a page; computed values follow the page's
+rendering. `fitdocs regen` brings documents and the index forward together
+after the athlete inputs change, and a build computes every page under the
+athlete inputs current at that build. The index is never read back into a
+document. Run `fitdocs index` once to build it; nothing is needed for existing
+documents.
 
 This document is the authoritative, published statement of what fitdocs owns
 in your data root, what you own, and the exact limits of every operation that
@@ -188,7 +183,56 @@ given run of fitdocs may write is therefore always *the owned paths above,
 union whatever your settings currently configure* — never more, apart from
 the files under [Shared and User-Owned Files](#shared-and-user-owned-files)
 that state their own write rule (`athlete.toml`, and outside the data root
-the connector credentials store).
+the connector credentials store) and the external analytics-index directory
+specified below.
+
+## The analytics index (outside the data root)
+
+The analytics index is a disposable cache, not user data. It can be deleted
+at any time; rebuilding it with `fitdocs index` costs only time. Fitdocs never
+reads the index back into a document or uses it to produce a document value.
+It writes index files only inside the resolved per-data-root index directory,
+which is outside the data root.
+
+The index base directory is resolved in this order: a non-empty
+`FITDOCS_INDEX_DIR`; otherwise `fitdocs/index` under an absolute
+`XDG_CACHE_HOME`; otherwise `.cache/fitdocs/index` under the user's home
+directory. Within that base, fitdocs names one directory
+`<slug>-<digest>` from the data root's fully resolved absolute path. The slug
+is the root basename lowercased, with runs of characters outside `[a-z0-9]`
+replaced by hyphens, trimmed, and cut to 24 characters (or `root` if empty);
+the digest is the first 16 hexadecimal characters of that path's SHA-256.
+Different data roots therefore do not share an index, and alternate spellings
+of the same root resolve to the same directory. A non-empty relative
+`FITDOCS_INDEX_DIR` is refused with a message naming the variable and value.
+Fitdocs also refuses an index directory that resolves to the data root itself
+or a location inside it, with a message naming both resolved paths, and writes
+nothing there. Newly created index directories have mode `0o700`, readable,
+writable and searchable only by the current user; existing directory
+permissions are left unchanged.
+
+The per-data-root directory contains the database `index.duckdb` and may
+contain its `.wal` recovery file (`index.duckdb.wal`), `index.lock`, the
+separate build file `.building` (`index.duckdb.building`), and the completed
+replacement `.rebuilt` (`index.duckdb.rebuilt`) while fitdocs operates.
+`writer-spill/`
+(transient; DuckDB's spill space for fitdocs's own index writes, set by the
+store) is used for index writes. `query-spill-<pid>/` (transient; created by
+`fitdocs query`, removed on close or by the next query) is used by a query.
+The complete set of index writes stays inside this resolved per-data-root
+directory; fitdocs does not add another location inside the data root.
+
+Document values follow every change of a page. Computed values follow the
+page's rendering. `fitdocs regen` brings documents and the index forward
+together after the athlete inputs change; a build computes every page under
+the athlete inputs current at that build.
+
+- **Refresh overwrite rule.** After every other write of a writing command,
+  refresh replaces only the rows of pages that moved. It writes only inside
+  the resolved per-data-root index directory and never changes that command's
+  exit code.
+- **`fitdocs index` overwrite rule.** It builds a separate file and swaps it
+  into place whole when the build is complete.
 
 ## User-Owned and Tool-Filled Regions
 
@@ -641,10 +685,10 @@ and to the recorded sources.
 
 ## Shared and User-Owned Files
 
-Three locations at the top of the data root (by default), and two outside
-it (the connector credentials store and the `.fitdocs/data-root` pointer
-file), are not part of the owned-path set above, and each has a distinct
-contract:
+Three locations at the top of the data root (by default), and three outside
+it (the connector credentials store, the `.fitdocs/data-root` pointer file,
+and the analytics-index directory), are not part of the owned-path set above,
+and each has a distinct contract:
 
 - **`athlete.toml`** — your athlete profile (tested max heart rate, a
   threshold pace, or whatever else the calculators you have installed

@@ -31,6 +31,10 @@ uv tool install --from /path/to/fitdocs-checkout fitdocs
 Once published, `uv tool install fitdocs` / `pipx install fitdocs` install
 the same way from the public index.
 
+The analytics index adds DuckDB, which occupies about 44 MB installed. Its
+prebuilt package is unavailable on musl-based Linux and free-threaded Python
+builds; on those platforms, installation needs a working native build toolchain.
+
 Installing or upgrading never creates a directory, configuration file,
 profile, or data root anywhere on your machine — nothing is written until you
 run a command against one.
