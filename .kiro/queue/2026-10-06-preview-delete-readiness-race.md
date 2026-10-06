@@ -273,3 +273,11 @@ The shared log also records downstream derived1.1 canonical9395/2skips
 and query1.3 canonical9477/2skips after the same repair; those sessions
 retain their own subsequent task gates. This confirms the analytics-index
 blocker is cleared; queue closure is left to the owning queue workflow.
+
+## analytics-derived added-page recurrence (2026-10-07)
+
+Task 1.1 records-only candidate at base `a413d15`, using canonical pyenv Python 3.11.15 and warm uv cache, failed its required full gate: 9,393 passed, one failed, two expected actionlint skips, 300.41 seconds. The unchanged controlled live-preview test failed at `tests/sitebuild/test_preview.py:1157`, helper `:1024`, `not within 20.0 s: the added page`; this is before deletion. Output only shows Serving/Build started and does not establish which transition stalled. No state was captured at timeout before cleanup; cause remains UNKNOWN. Source, preview tests and dependency declarations are unchanged by the candidate. This symptom matches an earlier unresolved added-page observation, not proof of a common mechanism or the repaired deletion race.
+
+Independent task-local evidence passes (113 scoped tests, static checks, 19 claimed plus two own mutations). Required canonical review remains REJECTED; debug round 2 returns STOP_FOR_HUMAN. The reviewer's already-started standalone run passed once in 22.89 seconds; it does not supersede the failed full gate. No third debug, guessed patch or unchanged retry was made. Raw evidence: `/private/tmp/analytics-derived-evidence/1.1/reviewer-r1/full-pytest.txt`; debug: `/private/tmp/analytics-derived-evidence/preview-debug/report.md`. Durable downstream handoff: `.kiro/specs/analytics-derived/implementation-blocker.md` on `impl/analytics-derived`.
+
+The next owning investigation must explicitly include the added-page deadline as well as the separately observed initial-edit deadline, with failure-time build/watcher/stage/sync/generator/HTTP capture before cleanup. Preserve all existing deadlines and assertions. A deletion-readiness repair or intermittent standalone pass cannot establish an added-page repair.
