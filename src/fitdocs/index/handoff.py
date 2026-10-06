@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from fitdocs.contract import sha_of_ref
-from fitdocs.sync import RenderedPage
+
+if TYPE_CHECKING:
+    from fitdocs.sync import RenderedPage
 
 HANDOFF_SAMPLE_BUDGET: Final[int] = 250_000
 

@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import inspect
+import subprocess
+import sys
 from collections.abc import Sequence
 from dataclasses import replace
 from datetime import datetime
+from pathlib import Path
 from typing import Final, get_type_hints
 
 from fitdocs.compose.types import ChannelProvenance, Composition, SourceContribution
@@ -16,6 +19,24 @@ from fitdocs.layout import source_ref
 from fitdocs.metrics.types import AthleteInputs, DerivedMetrics
 from fitdocs.sync import RenderedPage
 from tests.compose.builders import make_activity
+
+
+def test_importing_handoff_does_not_import_sync_engine() -> None:
+    script = """
+import sys
+assert 'fitdocs.sync' not in sys.modules
+import fitdocs.index.handoff
+assert 'fitdocs.sync' not in sys.modules
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        cwd=Path(__file__).parents[2],
+    )
+    assert completed.returncode == 0, completed.stderr
 
 
 def _page(
@@ -60,11 +81,15 @@ def test_public_budget_and_collector_contract() -> None:
         "budget": int,
         "return": type(None),
     }
-    assert get_type_hints(HandoffCollector.add) == {
+    assert get_type_hints(
+        HandoffCollector.add, localns={"RenderedPage": RenderedPage}
+    ) == {
         "page": RenderedPage,
         "return": type(None),
     }
-    assert get_type_hints(HandoffCollector.take) == {
+    assert get_type_hints(
+        HandoffCollector.take, localns={"RenderedPage": RenderedPage}
+    ) == {
         "page_key": str,
         "sources": Sequence[str],
         "return": RenderedPage | None,

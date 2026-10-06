@@ -9,7 +9,11 @@ cause/message and the original 60-second deadline. Fresh floor: 62/62 passed,
 existing synthetic HOME empty; current store: 91/91; full regression: 9,385
 passed, two expected skips. No dependency or runtime policy changed. The floor
 stop is resolved; the historical failed run below remains failed evidence.
-Handoff import repair and the remaining task 8.4/8.5 checks are still pending.
+The handoff import repair is independently approved: TYPE_CHECKING-only import,
+unchanged collector behavior, exact owner annotations retained. Fresh regression
+9,386 passed, two expected skips; scoped80/static clean, parent import/type pins
+passed. Both diagnosed findings are resolved. The remaining task 8.4/8.5 checks
+are still pending.
 
 
 ## Validation Report
@@ -24,8 +28,8 @@ Handoff import repair and the remaining task 8.4/8.5 checks are still pending.
 - Final fetch/rebase: `origin/main` was `f36bf46`; no rebase change required.
 - Integration: all 14 requirement sections and 94 criteria mapped to source
   and tests in a read-only assessment. Mapping is not complete verification.
-- LOCAL blocker: `src/fitdocs/index/handoff.py:9` imports `sync.RenderedPage`
-  at runtime, contrary to the design's `TYPE_CHECKING`-only allowance.
+- Resolved LOCAL finding: the annotation-only `sync.RenderedPage` import is
+  guarded under `TYPE_CHECKING` and has a clean-process regression pin.
 - Resolved floor blocker: the selected DuckDB 1.2.0 suite now passes after
   the reviewed timer-order repair. The earlier failure is retained below.
 - Manual work: task 8.5's real-data performance measurements remain pending.
@@ -61,12 +65,8 @@ Raw evidence on the implementation machine:
    their evidence in `diagnostic-authorized` and `review-interruption` under
    the scratch evidence directory. Any future dependency-floor change still
    requires the roadmap decision specified in task 8.4.
-2. Repair the handoff import through a Luna implementer. Guard `RenderedPage`
-   with `TYPE_CHECKING`, retaining its exact annotations and behavior. Give
-   annotation introspection tests explicit `localns` containing the owner's
-   `RenderedPage`. Add a clean-process import-isolation pin, prove original
-   source RED and repair GREEN, and discriminate a reintroduced runtime import.
-   Obtain independent review before committing the repair.
+2. The handoff boundary repair is complete and independently reviewed. Preserve
+   its evidence in `final/handoff-review` under the scratch evidence directory.
 3. Resume 8.4: register every added Python test module in the curated mypy list;
    pass the agreed floor selection with existing empty synthetic HOME; perform
    the final rebase and full validation in plain, `TZ=UTC`, and `CI=true` modes.
