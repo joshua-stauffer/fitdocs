@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date
+from enum import StrEnum
 from pathlib import Path
 from typing import Final
 
 from fitdocs import version
+from fitdocs.athlete import load_athlete_inputs
 from fitdocs.index import corpus, derive, fingerprint, registry
 from fitdocs.index.bookkeeping import (
     BOOKKEEPING_TABLES,
@@ -19,20 +21,34 @@ from fitdocs.index.bookkeeping import (
 )
 from fitdocs.index.corpus import LeftOutPage, ScannedPage
 from fitdocs.index.handoff import HandoffCollector
+from fitdocs.index.location import (
+    IndexLocation,
+    resolve_index_location,
+)
+from fitdocs.index.lock import WriterBusy, writer_lock
 from fitdocs.index.producer import (
     ComputedProducer,
     DocumentProducer,
     PageComputed,
     PageDocument,
 )
-from fitdocs.index.schema import ResolvedTable, TableScope, resolve_tables
+from fitdocs.index.schema import (
+    SCHEMA_VERSION,
+    ResolvedTable,
+    TableScope,
+    resolve_tables,
+)
 from fitdocs.index.store import (
+    FaultKind,
     IndexConnection,
+    IndexOpenError,
     apply_descriptions,
     delete_page_rows,
     delete_page_state,
     duckdb_version,
     insert_rows,
+    open_index,
+    read_bookkeeping,
     replace_table_rows,
     transaction,
     write_meta,
@@ -43,6 +59,109 @@ from fitdocs.metrics.types import AthleteInputs
 
 ProgressCallback = Callable[[int, int], None]
 PROGRESS_EVERY: Final[int] = 100
+
+
+class Outcome(StrEnum):
+    REFRESHED = "refreshed"
+    UNCHANGED = "unchanged"
+    BUILT = "built"
+    NOT_BUILT = "not_built"
+    NEEDS_REBUILD = "needs_rebuild"
+    BUSY = "busy"
+    STAGED = "staged"
+    FAILED = "failed"
+
+
+@dataclass(frozen=True)
+class IndexReport:
+    outcome: Outcome
+    location: IndexLocation | None
+    detail: str | None
+    holder_pid: int | None
+    result: RefreshResult | None
+
+
+def refresh_after_command(
+    data_root: Path,
+    *,
+    environ: Mapping[str, str],
+    home: Path,
+    handoff: HandoffCollector | None,
+    today: date,
+    progress: ProgressCallback | None,
+) -> IndexReport:
+    location: IndexLocation | None = None
+    try:
+        location = resolve_index_location(data_root, environ, home)
+        if not location.database.exists():
+            return IndexReport(Outcome.NOT_BUILT, location, None, None, None)
+
+        try:
+            with writer_lock(location.lock):
+                try:
+                    connection = open_index(location.database, read_only=False)
+                except IndexOpenError as error:
+                    fault = error.fault
+                    if fault.kind is FaultKind.LOCKED:
+                        return IndexReport(
+                            Outcome.BUSY,
+                            location,
+                            fault.message,
+                            fault.holder_pid,
+                            None,
+                        )
+                    if fault.kind is FaultKind.MISSING:
+                        return IndexReport(
+                            Outcome.NOT_BUILT, location, fault.message, None, None
+                        )
+                    return IndexReport(
+                        Outcome.NEEDS_REBUILD, location, fault.message, None, None
+                    )
+
+                with connection as conn:
+                    bookkeeping = read_bookkeeping(conn)
+                    if bookkeeping is None:
+                        return IndexReport(
+                            Outcome.NEEDS_REBUILD,
+                            location,
+                            "not a complete fitdocs index",
+                            None,
+                            None,
+                        )
+                    if bookkeeping.meta.schema_version != SCHEMA_VERSION:
+                        return IndexReport(
+                            Outcome.NEEDS_REBUILD,
+                            location,
+                            "schema version "
+                            f"{bookkeeping.meta.schema_version}; this fitdocs uses "
+                            f"{SCHEMA_VERSION}",
+                            None,
+                            None,
+                        )
+                    athlete = load_athlete_inputs(location.data_root)
+                    result = reconcile(
+                        conn,
+                        bookkeeping,
+                        RefreshInputs(
+                            data_root=location.data_root,
+                            athlete=athlete,
+                            handoff=handoff,
+                            today=today,
+                            progress=progress,
+                        ),
+                    )
+                    outcome = Outcome.REFRESHED if result.changed else Outcome.UNCHANGED
+                    return IndexReport(outcome, location, None, None, result)
+        except WriterBusy as error:
+            return IndexReport(Outcome.BUSY, location, str(error), None, None)
+    except Exception as error:
+        return IndexReport(
+            Outcome.FAILED,
+            location,
+            f"{type(error).__name__}: {error}",
+            None,
+            None,
+        )
 
 
 @dataclass(frozen=True)
