@@ -1000,7 +1000,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
   - _Requirements: 5.3, 7.5_
   - _Depends: 5.3_
 
-- [ ] 6. The refresh and the build
+- [x] 6. The refresh and the build
 
 - [x] 6.1 Reconcile pages: plan, document tier, computed tier, removals
   - **`refresh.py`'s `reconcile` page path**, per design.md § Refresh, steps
@@ -1220,7 +1220,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     Implementation Notes (research.md).
   - _Requirements: 1.6, 1.7, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.9_
 
-- [ ] 6.5 Prove interruption safety and determinism end to end
+- [x] 6.5 Prove interruption safety and determinism end to end
   - **Interruption** (`tests/index/test_interruption.py`):
     - **The setup.** A subprocess refreshes an index whose five pages are all
       due for computed values. A test-only computed producer is registered by
@@ -1644,3 +1644,5 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 - 6.3 fixture learnings: replacing fixtures lost the malformed-athlete complete report/byte-preservation pin and LOCKED/no-PID case. Debug1 restored both alongside stronger cleanup cases; retain positive and absent PID cases together. Byte-write mutation must pass all healthy report assertions before failing unchanged bytes. Keep authoritative bookkeeping snapshots populated before forwarding and compare complete result carriers. A retained real connection reference and explicit enter/exit ledger pin cleanup that garbage collection would otherwise mask.
 - 6.4: run_index_command builds missing/forced/invalid indexes in a separate file, removes stale building/WAL files, initializes all registered producers, reconciles empty bookkeeping, checkpoints/closes before swapping, removes the old WAL, and preserves/completes staged swaps. IndexLocationError and KeyboardInterrupt propagate; ordinary errors report FAILED and leave the former index intact. Tests-first API and OFF/ON/removed evidence retained with honest later-test chronology. Final independent review3 APPROVED: 37 retained claimed observations plus two new reviewer probes intended RED/restored GREEN, zero survivors; full docs/source-enabled suite 9299 passed/two expected actionlint skips, canonical/scoped mypy and repository Ruff clean. Parent fresh completion gate 17 passed. Native Windows replace behavior remains untested.
 - 6.4 fixture learnings: retain real connections to pin explicit close, observe complete metadata and EMPTY bookkeeping before reconciliation, and assert checkpoint-close-swap order. Registration fixtures need at least two independent producers per tier and two nonalphabetical tables per producer to reject truncation/order errors. Current-index forwarding needs populated athlete, distinct date and non-None progress on changed and unchanged paths. Repeated staged refusal must preserve both files and skip downstream work before a later successful swap. Keep full independent report/result carriers and all real crash-WAL/reader/byte-preservation cases when expanding fixtures. Remediation artifacts use separate round directories; original independent review evidence preserves historical observations.
+- 6.5: tests-only SIGKILL recovery at the fourth computed producer call proves pages 1–3 wholly new and 4–5 wholly old, followed by complete retry. The same five-page synthetic corpus yields equal nonempty rows in all ten core producer tables across incremental, reversed creation/shuffled mtime, handoff, re-derivation and rebuild paths with one today. Healthy baseline plus four named mutation RED/restored GREEN pairs; no new production behavior or feature-flag cycle claimed. Independent review1 APPROVED: four claimed observations plus two own probes intended RED/restored GREEN, zero survivors; full docs/source-enabled suite 9301 passed/two expected actionlint skips, canonical/scoped mypy and repository Ruff clean. Parent fresh completion gate two passed. Native Windows SIGKILL behavior remains untested.
+- 6.5 fixture learnings: use run/ride donations, strength sets, populated loads/quality and athlete zones to keep every core table nonempty. Old/new athlete inputs make actual rows differ, not just fingerprints. A blocker producer declares no tables and reports four keys before the bounded parent kill; always reap the child. Premature row-commit mutation must pass the old PageState assertion before failing row equality, independently of early-state-commit coverage. Mtime-derived metric mutation reaches the reverse-creation comparison. Keep observers scoped and source restoration byte-identical; all actual DB access stays behind the store facade.
