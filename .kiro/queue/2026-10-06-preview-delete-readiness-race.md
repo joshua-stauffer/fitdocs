@@ -56,6 +56,34 @@ the investigation established no CLI regression or production contract defect.
   `baseline-trace-1.txt`, `baseline-synchronization.txt`, `candidate-exact.txt`,
   `baseline-exact.txt`, and `restoration-and-identity.txt`.
 
+### Distinct added-page observation (analytics-index 8.2)
+
+At pre-steering base `9ecf5a7`, a canonical run failed at
+`tests/sitebuild/test_preview.py:1154` / helper `:1023` with
+`not within 20.0s: the added page`: 9,384 passed, one failed and two expected
+actionlint skips. Its exact retry passed in 25.88s. Raw evidence is
+`/private/tmp/analytics-index-evidence/8.2/review2/canonical-full.txt` and
+the exact-retry output in that directory. The controller inspected the raw
+failure and debugger report; it did not independently rerun the trace.
+
+The debugger's current pre-steering baseline detected, built, staged and
+served the added page within 4.16s, then candidate and baseline both hit the
+separate later deletion/404 assertion. The original failed fixture had
+already been removed, so its intermediate build/sync/HTTP state was
+unavailable. The added-page timeout's internal cause remains unresolved
+(MEDIUM confidence in transient preview-readiness classification); these
+observations do **not** establish the deletion race as its cause or the
+post-deletion wait as its fix. Diagnostic edits were restored. See
+`/private/tmp/analytics-index-evidence/8.2/debug1/REPORT.md`,
+`baseline-trace.txt` and `source-proof.json`.
+
+The task was accepted only after an unchanged retry passed a fresh canonical
+run: 9,385 passed, two expected skips, exit 0. Evidence:
+`/private/tmp/analytics-index-evidence/8.2/review2-debug1-retry/VERDICT.md`.
+The earlier failed run remains a failure. This item still owns the known
+post-deletion synchronization repair; this extra observation bounds what
+that repair can claim to resolve.
+
 ## How to pick it up
 
 1. Read the live-preview test's delete/break sequence and its bounded
@@ -68,3 +96,9 @@ the investigation established no CLI regression or production contract defect.
 3. Run the exact live-preview test and relevant sitebuild suite through
    `uv run --group docs pytest`, plus static checks. Use the project's correct
    interpreter and warm uv cache. Do not patch analytics-index around this test.
+4. If the separate added-page deadline recurs during verification, capture
+   polling build start/end, staged/HTML existence, sync containing the added
+   page, generator process status and HTTP status **at the timeout, before
+   fixture cleanup**. Diagnose that state before proposing another fix;
+   preserve the timeout and original assertions instead of attributing it
+   automatically to the post-deletion race.
