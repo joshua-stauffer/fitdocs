@@ -247,6 +247,7 @@ from fitdocs.tiles import TileStore, load_tile_settings, tile_settings_from_docu
 from fitdocs.version import UNKNOWN_VERSION, version_display
 
 if TYPE_CHECKING:
+    from fitdocs.index.handoff import HandoffCollector
     from fitdocs.index.refresh import IndexReport, ProgressCallback
 
 _EXIT_SUCCESS: int = 0
@@ -255,6 +256,7 @@ _EXIT_FILE_FAILURES: int = 1
 """One or more per-file failures occurred during the run (Req 1.5)."""
 _EXIT_CONFIG_ERROR: int = 2
 """A configuration error prevented the run: nothing was written (Req 2.2)."""
+
 
 app = typer.Typer(
     name="fitdocs",
@@ -438,6 +440,80 @@ def _index_progress() -> ProgressCallback:
     return report
 
 
+def _new_index_handoff() -> HandoffCollector:
+    from fitdocs.index.handoff import HandoffCollector
+
+    return HandoffCollector()
+
+
+def _run_index_pass(data_root: Path, *, handoff: HandoffCollector | None) -> None:
+    try:
+        from fitdocs.index.refresh import refresh_after_command
+
+        report = refresh_after_command(
+            data_root,
+            environ=os.environ,
+            home=Path.home(),
+            handoff=handoff,
+            today=_today(),
+            progress=_index_progress(),
+        )
+        _report_index_pass(report)
+    except Exception as exc:
+        Console(markup=False, highlight=False, soft_wrap=True).print(
+            f"Index: not refreshed; {type(exc).__name__}: {exc}."
+        )
+
+
+def _report_index_pass(report: IndexReport) -> None:
+    from fitdocs.index.refresh import Outcome
+
+    console = Console(markup=False, highlight=False, soft_wrap=True)
+    result = report.result
+    if (
+        report.outcome is Outcome.REFRESHED
+        and result is not None
+        and (result.added or result.updated or result.removed)
+    ):
+        console.print(
+            f"Index: {len(result.added)} added, {len(result.updated)} updated, "
+            f"{len(result.removed)} removed."
+        )
+    if result is not None:
+        for path, error in result.page_errors:
+            console.print(f"Index: could not index {path}: {error}")
+        for producer, error in result.producer_errors:
+            console.print(f"Index: could not refresh {producer}: {error}")
+    if report.outcome is Outcome.NOT_BUILT:
+        console.print("Index: not built; run 'fitdocs index' to build it.")
+    elif report.outcome is Outcome.NEEDS_REBUILD:
+        reason = report.detail or "the index is not readable"
+        console.print(f"Index: {reason}; run 'fitdocs index' to rebuild it.")
+    elif report.outcome is Outcome.BUSY:
+        if report.detail and report.detail.startswith("writer lock is held"):
+            console.print(
+                "Index: not refreshed; another fitdocs command is writing it. "
+                "The next writing command or 'fitdocs index' will catch up."
+            )
+        elif report.holder_pid is None:
+            console.print(
+                "Index: not refreshed; it is open in another program. "
+                "Close it; the next writing command or 'fitdocs index' will catch up."
+            )
+        else:
+            console.print(
+                "Index: not refreshed; it is open in another program "
+                f"(process {report.holder_pid}). Close it; the next writing "
+                "command or 'fitdocs index' will catch up."
+            )
+    elif report.outcome is Outcome.STAGED:
+        console.print("Index replacement staged; run 'fitdocs index' again to finish.")
+        if report.detail:
+            console.print(f"  {report.detail}")
+    elif report.outcome is Outcome.FAILED:
+        console.print(f"Index: not refreshed; {report.detail or 'unknown failure'}.")
+
+
 def _report_index_command(report: IndexReport) -> None:
     """Print the full `fitdocs index` result and any per-page detail."""
     from fitdocs.index.bookkeeping import ComputedState
@@ -542,7 +618,8 @@ def sync_command(
     command's exit status exactly like a per-file or load failure. Third-party
     calculator discovery runs once, before any engine call (plugin-api); a
     plugin load error is a warning, printed after the summaries -- never a
-    failure, and never changes the exit code.
+    failure, and never changes the exit code. The analytics index is refreshed
+    best-effort after the plan pass and cannot change this command's exit code.
     """
     tz = _local_tz()
     data_root = _resolved_data_root(out)
@@ -569,6 +646,7 @@ def sync_command(
         tiles = _tile_store(data_root)
         # Load [identity] once (a malformed table exits 2 here, before any write).
         identity = _identity_settings(data_root)
+        handoff = _new_index_handoff()
         try:
             report = sync(
                 source,
@@ -578,6 +656,7 @@ def sync_command(
                 tiles=tiles,
                 force=force,
                 precedence=identity.precedence,
+                on_rendered=handoff.add,
             )
         except HoldRecordError as exc:
             _hold_record_error(exc)
@@ -589,6 +668,7 @@ def sync_command(
         # The plan reconciling pass runs after the load pass, chained
         # (plan-resolution Req 8.1, 8.2, 8.5).
         plan_report = _run_plan_pass(data_root, today=_today(), chained=True)
+        _run_index_pass(data_root, handoff=handoff)
         _report_plugin_errors(plugin_report)
         # A per-file OR a per-document (load) OR a reconciling-pass failure
         # makes the run exit 1 (8.5, plan-resolution Req 8.7).
@@ -632,7 +712,9 @@ def _run_drain_passes(
     the inbox preflight, the drain, the drain report (titled with
     ``command``), the load pass, the plan pass, then plugin errors. Returns
     whether anything failed -- a per-file drain failure, a load failure, or
-    a reconciling-pass failure -- so the caller decides how to exit.
+    a reconciling-pass failure -- so the caller decides how to exit. The
+    analytics index is refreshed best-effort after the plan pass and cannot
+    change the returned failure state.
     """
     # Discover plugins once, before any engine call (a malformed [plugins] table
     # exits 2 here, before any write) -- same position as the explicit-source
@@ -647,6 +729,7 @@ def _run_drain_passes(
     except HoldRecordError as exc:
         _hold_record_error(exc)
     inbox_settings, inbox_paths, quarantine, tiles = _inbox_preflight(data_root)
+    handoff = _new_index_handoff()
     try:
         drain_report = drain(
             inbox_paths.inbox,
@@ -660,6 +743,7 @@ def _run_drain_passes(
             force=force,
             retry_quarantined=retry_quarantined,
             precedence=identity.precedence,
+            on_rendered=handoff.add,
         )
     except HoldRecordError as exc:
         _hold_record_error(exc)
@@ -670,6 +754,7 @@ def _run_drain_passes(
     # The plan reconciling pass runs after the load pass, chained
     # (plan-resolution Req 8.1, 8.2, 8.5), same as the explicit-source path.
     plan_report = _run_plan_pass(data_root, today=_today(), chained=True)
+    _run_index_pass(data_root, handoff=handoff)
     _report_plugin_errors(plugin_report)
     # Per-file failures, load failures and a reconciling-pass failure drive
     # the failure outcome -- deferrals, known-quarantined files, and failed
@@ -738,7 +823,8 @@ def regen_command(
     (plan-resolution Req 8.1). Third-party calculator discovery runs once,
     before any engine call (plugin-api); a plugin load error is a warning,
     printed after the summaries -- never a failure, and never changes the exit
-    code.
+    code. The analytics index is refreshed best-effort after the plan pass and
+    cannot change this command's exit code.
     """
     tz = _local_tz()
     data_root = _resolved_data_root(out)
@@ -750,12 +836,14 @@ def regen_command(
     # write); pass it to the engine as the always-supplied basemap-tile source.
     tiles = _tile_store(data_root)
     identity = _identity_settings(data_root)
+    handoff = _new_index_handoff()
     report = regen(
         data_root,
         athlete=athlete,
         tz=tz,
         tiles=tiles,
         precedence=identity.precedence,
+        on_rendered=handoff.add,
     )
     _report(report, command="regen")
     # regen is always non-interactive, which makes its load pass restore-only:
@@ -764,6 +852,7 @@ def regen_command(
     # The plan reconciling pass runs after the load pass, chained
     # (plan-resolution Req 8.1, 8.2, 8.5).
     plan_report = _run_plan_pass(data_root, today=_today(), chained=True)
+    _run_index_pass(data_root, handoff=handoff)
     _report_plugin_errors(plugin_report)
     _finish(
         failed=bool(report.failures) or bool(load_report.failures) or plan_report.failed
@@ -785,7 +874,8 @@ def load_command(
     Third-party calculator discovery runs once, before this pass (plugin-api),
     so --calculator can name a plugin-provided id; a plugin load error is a
     warning, printed after the summary -- never a failure, and never changes
-    the exit code.
+    the exit code. A best-effort index refresh follows the load pass and cannot
+    change the command's exit code.
     """
     # Standalone load pass (Req 8.2): resolve the root, build the session
     # (interactive only on a TTY with prompting enabled, Req 3.5), then run.
@@ -797,6 +887,7 @@ def load_command(
     load_report = _run_load_pass(
         data_root, session=session, calculator_id=calculator, recompute=recompute
     )
+    _run_index_pass(data_root, handoff=None)
     _report_plugin_errors(plugin_report)
     # Any per-document failure exits 1; all-skipped/all-restored is success (8.6).
     _finish(failed=bool(load_report.failures))
