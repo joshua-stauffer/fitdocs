@@ -168,6 +168,7 @@ re-syncing the same exports never duplicates a workout.
 > reworded.
 
 7. _(added by Amendment 3)_ When a document is rendered from a composition of several archived source files, the fitdocs CLI shall name in the document the archived source file each composed channel came from, so that the provenance recorded under criterion 4 is also recorded per channel.
+8. _(added by Amendment 4)_ After a workout document is successfully written, the sync command shall make the rendered page available in memory to the index post-pass, including its actual composed activity, derived metrics, source paths and roles, and athlete inputs. This handoff shall not change the rendered document or assets.
 
 ### Requirement 4: Idempotent and Deterministic Rendering
 **Objective:** As a user re-running sync freely, I want identical inputs to
@@ -311,3 +312,13 @@ offline.
 2. When invoked with `--help`, the fitdocs CLI shall document its commands and options; when invoked with `--version`, it shall report the installed version.
 3. The fitdocs CLI shall run on Python 3.11 or newer.
 4. The fitdocs CLI shall operate fully offline, requiring no network access for any operation.
+
+## Amendment 4 (2026-10-06): sync hands rendered pages to the index, landed by analytics-index
+
+Requirement 3 gains criterion 3.8 for the in-memory handoff after a successful
+document write. It carries the renderer's actual composition, metrics, source
+provenance and athlete inputs to the analytics-index post-pass; it does not
+change rendered pages or assets. The handoff is pinned by
+`tests/test_sync_handoff.py::test_handoff_preserves_complete_provenance_from_actual_renderer`
+and `tests/test_sync_handoff.py::test_populated_athlete_reaches_renderer_and_handoff`.
+No existing criterion is renumbered, reworded or withdrawn.

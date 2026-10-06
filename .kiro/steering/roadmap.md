@@ -2280,19 +2280,19 @@ Rejected:
 
 #### Existing Spec Updates
 
-- [ ] plugin-api — Req 7.2's guard (`tests/test_determinism.py:666-715`)
+- [x] plugin-api — Req 7.2's guard (`tests/test_determinism.py:666-715`)
   reworded. Plugin discovery adds no dependency and never imports
   `duckdb`, but the runtime baseline gains `duckdb` for the index. Carried
   out inside `analytics-index`. Dependencies: analytics-index
-- [ ] distribution — the exact dependency list
+- [x] distribution — the exact dependency list
   (`tests/test_packaging.py:503-519`, `tests/test_preserved_guarantees.py:93-108`),
   and the install footprint and platform gap in the install docs. Carried
   out inside `analytics-index`. Dependencies: analytics-index
-- [ ] docs-site — Req 8.1's "runtime dependency list stays as it was" pin
+- [x] docs-site — Req 8.1's runtime dependency baseline amendment
   (`tests/sitebuild/test_repo_wiring.py:18-24, 64-72`) amended for
   `duckdb` (docs-site Amendment 1). Carried out inside `analytics-index`.
   Found during the spec batch. Dependencies: analytics-index
-- [ ] workout-docs — an append-only in-memory handoff out of
+- [x] workout-docs — an append-only in-memory handoff out of
   `sync.py:_page_task` (the composed activity, metrics, identity and roles)
   for the post-pass. Nothing it renders changes. Carried out inside
   `analytics-index`. Dependencies: analytics-index
@@ -2300,7 +2300,7 @@ Rejected:
   (`tech.md`, `tests/connectors/test_e2e.py:205`). Carried out inside
   whichever spec adds each command: `analytics-index` takes connectors
   Amendment 1 (`index`), and `analytics-query` takes the next free number
-  at landing (`query`). Dependencies: analytics-index, analytics-query
+  at landing (`query`). (analytics-index part landed) Dependencies: analytics-index, analytics-query
 - [ ] fit-ingest — a new requirement for the mean-max computation in
   `fitdocs.metrics` (next free requirement and amendment numbers at
   landing). Carried out inside `analytics-derived`. Found during the spec

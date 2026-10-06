@@ -411,3 +411,16 @@ This also resolves the roadmap's Phase 8 Existing Spec Update line for
 pull, and its pins move... Req 8.1/8.2 (the skill also pulls) and Req 10.4
 (network beyond tiles is the explicit connector commands) are amended" —
 landed by `connectors`.
+
+## Amendment 4 (2026-10-06): DuckDB joins the runtime baseline, landed by analytics-index
+
+The runtime dependency list is the pre-feature list plus
+`duckdb>=1.2,<2`. The pre-feature dependency snapshot and package declaration
+are pinned by `tests/test_packaging.py::test_dependencies_declaration_is_unchanged`
+and `tests/test_preserved_guarantees.py::test_dependencies_unchanged_from_pre_feature_snapshot_as_set_and_ordered_list`;
+the published baseline is also pinned by
+`tests/sitebuild/test_repo_wiring.py::test_runtime_dependencies_are_the_pre_spec_literals`.
+The index adds about 44 MB when installed. No prebuilt DuckDB package is
+available for musl-based Linux or free-threaded Python, so those environments
+need a native build toolchain. The footprint and platform note are pinned by
+`tests/index/test_contract_docs.py::test_install_note_covers_duckdb_footprint_without_changing_format_version`.

@@ -185,7 +185,16 @@ mapping; it adds nothing to `layout.py` and touches no other spec's reader.
 
 #### Acceptance Criteria
 1. The fitdocs CLI shall discover and load plugins without any network access.
-2. The fitdocs tool shall add no new third-party runtime dependency in order to support plugin discovery.
+2. The fitdocs tool shall add no new third-party runtime dependency in order to support plugin discovery; dependencies added for other features do not change this guarantee.
 3. While no third-party calculators are installed and no local plugins are configured, repeated runs over the same inputs shall produce byte-identical documents and assets, unchanged from the behavior before this feature.
 4. The fitdocs CLI shall keep the shipped withdrawn calculator's registration, selection, and computed results unchanged.
 5. The fitdocs CLI shall confine plugin discovery to load calculators; no other part of the pipeline shall become extensible as a side effect of this feature.
+
+## Amendment 1 (2026-10-06): the runtime baseline includes the index, landed by analytics-index
+
+The analytics-index feature adds `duckdb>=1.2,<2` to fitdocs' runtime
+dependencies. This does not change Requirement 7 criterion 2: plugin
+discovery itself adds no dependency, and discovering plugins does not import
+DuckDB. The dependency declaration and import boundary are pinned by
+`tests/test_determinism.py::test_no_new_third_party_runtime_dependency_was_added`,
+and `tests/index/test_boundary.py::test_importing_cli_index_modules_and_discovering_plugins_stays_lazy`.

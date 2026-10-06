@@ -286,11 +286,11 @@ decision; the bytes are always archived first).
 **Objective:** As a privacy-conscious athlete, I want network access limited to explicit connector commands and the existing map tiles, and every statement about the network to be true, so that I know exactly when fitdocs talks to the outside world.
 
 #### Acceptance Criteria
-1. The fitdocs CLI shall make connector requests only during `fitdocs connect` and `fitdocs pull`; `sync`, `regen`, `load`, `check`, `history`, `plan`, `derive-benchmarks`, and rendering shall make none, whether or not connectors are configured, and shall keep their existing map-tile behavior unchanged.
+1. The fitdocs CLI shall make connector requests only during `fitdocs connect` and `fitdocs pull`; `index`, `sync`, `regen`, `load`, `check`, `history`, `plan`, `derive-benchmarks`, and rendering shall make none, whether or not connectors are configured, and shall keep their existing map-tile behavior unchanged.
 2. The fitdocs source shall hold network-capable code in exactly two places — the map-tile fetch and the connector transport — and an automated guard shall fail when any other module reaches for the network.
 3. The connector package shall not depend on rendering, training load, metrics, `.fit` ingestion, or the sync engine, and an automated guard shall enforce it.
 4. Every statement in the shipped code, the README, and the documentation that describes where fitdocs touches the network shall name both the map tiles and the connector commands, and none shall claim the map tiles are the only network access.
-5. The fitdocs CLI shall add no runtime dependency for connectors, so that the frozen runtime dependency list stays unchanged.
+5. The connector framework shall add no runtime dependency. This does not freeze fitdocs' overall runtime dependency list: analytics-index adds `duckdb>=1.2,<2` for the local index.
 6. The connector framework modules, their tests, and the framework sections of the connectors documentation shall name no online service's endpoint; a shipped service connector's own module, tests and documentation section are exempt; this spec ships no online-service connector.
 7. The project's technology steering shall state the network rule, the credential rule, and the stdlib-only rule for connectors.
 
@@ -306,3 +306,13 @@ decision; the bytes are always archived first).
 6. The settings documentation, the ownership contract, and the compatibility policy shall name the connectors table among the settings file's tables.
 7. The packaged `fitdocs-workouts` skill's routine shall pull and drain in one command and then check the tree; the skill shall document the pull report's channels in a table an automated test binds to the pull report's fields, and shall tell the agent never to run `fitdocs connect` itself and never to retry a failed authentication.
 8. The changelog's unreleased section shall record the two commands, the connectors table, and each governed-contract change together with the action a user must take.
+
+## Amendment 1 (2026-10-06): the index is offline and its dependency is scoped, landed by analytics-index
+
+Requirement 14 criterion 1 now includes `fitdocs index` among commands that
+make no connector requests; criterion 5 clarifies that connectors add no
+runtime dependency while the index adds `duckdb>=1.2,<2` to the overall
+runtime list. The no-network behavior is pinned by
+`tests/connectors/test_e2e.py::test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded`;
+the dependency boundary is pinned by
+`tests/test_determinism.py::test_no_new_third_party_runtime_dependency_was_added`.
