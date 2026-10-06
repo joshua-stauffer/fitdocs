@@ -1,8 +1,9 @@
-# Task 1.1 blocked: interruption phase contract
+# Task 1.1 interruption phase contract: correction approved
 
 The Luna implementer made no edits and returned BLOCKED. Independent
-`kiro-debug` returned SPEC_CONFLICT / STOP_FOR_HUMAN. No implementation task
-is complete, and feature-level validation has not run.
+`kiro-debug` returned SPEC_CONFLICT / STOP_FOR_HUMAN. At that initial block,
+no implementation task was complete. Task 1.1 has since been accepted after
+the approved correction below; feature-level validation has not run.
 
 ## Evidence
 
@@ -22,7 +23,7 @@ fetch interruption pin passed: four tests on each version. Subprocesses were
 bounded to 15 seconds; HOME directories stayed empty. These diagnostics
 confirm the existing facade contract; they do not complete the query task.
 
-## Proposed correction for approval
+## Correction approved on 2026-10-07
 
 1. In task 1.1, start the 0.5-second interrupt timer before execute. Run the
    specified aggregate and `fetchmany(1)` inside one exception boundary;
@@ -39,14 +40,18 @@ confirm the existing facade contract; they do not complete the query task.
    Preserve the dependency floor, facade contract, and timer coverage of
    both phases.
 
-After approval, a Luna implementer applies this correction and resumes task
+The maintainer explicitly approved this correction on 2026-10-07. The parent
+applied the bounded task/design wording correction; a Luna implementer resumes
 1.1 with fresh tests on both releases and independent review. Do not alter
 production code to force the aggregate to interrupt in a particular phase.
 
 The existing queue item
-`.kiro/queue/2026-10-06-query-interruption-phase-statements.md` tracks this
-issue. The approved plan itself remains unchanged apart from its explicit
-blocker annotation and this handoff.
+`.kiro/queue/closed/2026-10-06-query-interruption-phase-statements.md` tracks this
+issue. The approved plan now incorporates only the bounded correction above; the
+blocker annotation has been removed. Task 1.1 implementation and independent review are complete: round 3 APPROVED,
+canonical 9,397 passed with two optional skips, and fresh parent query 10 passed.
+The queue item moved to `closed/` with status done. Later feature tasks and
+feature-level validation remain pending.
 
 
 ## Independent debugger transcript excerpts

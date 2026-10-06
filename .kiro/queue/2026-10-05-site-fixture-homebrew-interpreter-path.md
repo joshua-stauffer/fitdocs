@@ -69,3 +69,20 @@ parent in `tests/sitebuild/conftest.py`.
    distributions, followed by the docs-site suite. The installed-tool
    case must pass and the missing-tool cases must retain their intended
    skip/error behavior.
+
+
+## 2026-10-07 analytics-query recurrence
+
+Task 1.1's independent review reproduced the installed-tool failure in the
+fresh Homebrew 3.11.15 worktree (full regression log outside Git:
+`/private/tmp/review-task11-fullsuite.log`). The parent then reproduced the
+helper's symlink control in isolated temporary directories, using each
+environment's `sys._base_executable` and placing a fake `zensical` next to
+the fake interpreter: Homebrew returned `False`, main's pyenv 3.11.15
+returned `True` for the exact `Path(sys.executable).parent` existence check.
+
+The worktree environment was retained outside the repository, then recreated
+with main's pyenv interpreter and the locked docs group. The task's production
+code and this upstream fixture were not changed. A separate cold-cache failure
+in the initial full run was repaired by warming an isolated UV cache with the
+locked dependency set, rather than modifying tests or dependencies.

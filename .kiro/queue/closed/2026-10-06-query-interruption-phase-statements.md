@@ -1,7 +1,7 @@
 ---
 id: 2026-10-06-query-interruption-phase-statements
 title: Qualify query design statements about execution and fetch interruption phases
-status: open
+status: done
 importance: medium
 importance_why: Task 1.1 is blocked because its required fetch-only interruption mutation survives on supported DuckDB 1.2.0.
 effort: S
@@ -85,3 +85,14 @@ proposed correction. Obtain approval for that bounded task-plan correction
 before resuming implementation. Preserve cancellation before both execute
 and fetch, the real aggregate regression, the separate fetch-wrapping pin,
 and the dependency floor.
+
+## Resolution (2026-10-07)
+
+The maintainer approved the bounded correction. Both design U2 claims now allow
+execute or fetch; task 1.1 starts cancellation before both and separately pins
+synthetic fetch interruption with exact message and original cause identity.
+Independent review reconfirmed current/floor raw-fetch mutations and all other
+claimed cases, with no survivors. Canonical regression: 9,397 passed, two optional
+actionlint skips, exit 0. Fresh parent query completion: 10 passed. Task 1.1 is
+accepted; runtime facade and dependency floor are unchanged. Historical blocker
+evidence above is retained.

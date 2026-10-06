@@ -194,7 +194,8 @@ missing.
 - **U2. Fetch errors are wrapped** (`analytics-index` task 4.1).
   `IndexResult.fetchmany` and `fetchall` raise
   `IndexStatementError`/`IndexInterrupted` chained, as `execute` does.
-  Execution streams, so errors and interrupts surface at fetch.
+  Errors and interruptions may surface during execute or fetch; cancellation
+  must be armed before either operation.
 - **U3. The contract names the spill directories** (`analytics-index` task
   8.1). The ownership contract's analytics-index section names
   "`query-spill-<pid>/` (transient; created by `fitdocs query`, removed on
@@ -573,7 +574,8 @@ class IndexConnection:
 - **Upstream fact U2** (`analytics-index` task 4.1, resolved in its cross-spec
   round 1). `IndexResult.fetchmany` and `fetchall` raise
   `IndexStatementError`/`IndexInterrupted` (chained), exactly as `execute`
-  does, because DuckDB executes lazily and errors surface at fetch.
+  does. Errors and interruptions may surface during execute or fetch,
+  depending on the statement and DuckDB version.
 
 ### Pure core
 

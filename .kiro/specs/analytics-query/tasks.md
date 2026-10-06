@@ -71,7 +71,8 @@
   default for a NULL.
 - **No fixture holds personal data.** Every `.fit` input comes from
   `tests/fixtures/builder.py`, `identity.py` or `merge.py`. No task reads the
-  real data root; task 8.3 is the maintainer's alone.
+  real data root except for task 8.3, which the maintainer explicitly authorized
+  the agent to run on the separate HealthFit timing root described below.
 - **No schema, document or contract change.**
   - `SCHEMA_VERSION`, every table, column and comment, `DOC_VERSION`,
     `MANAGED_KEYS`, `CONTRACT_VERSION`, `docs/ownership-contract.md` and the
@@ -269,8 +270,7 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 
 - [ ] 1. Foundation: prerequisites, the test package, the facade method and the fixtures
 
-- [ ] 1.1 Confirm the upstream facts and create the isolated query test package
-  - _Blocked: 2026-10-07 independent debug returned STOP_FOR_HUMAN: the required raw-fetchmany mutation survives the real aggregate interruption test on supported DuckDB 1.2.0, where interruption occurs during execute. Approve the bounded test-plan correction in implementation-blocker.md before resuming._
+- [x] 1.1 Confirm the upstream facts and create the isolated query test package
   - **Prerequisite confirmations.** Each is a landed `analytics-index` fact,
     recorded in Implementation Notes with file:line evidence and the
     `analytics-index` task that provides it:
@@ -327,10 +327,17 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
       `IndexStatementError` whose `__cause__` is set. The same holds for
       `fetchall()`, separately. Each test first asserts that `pytz` is not
       importable, so the fetch-time failure is real.
-    - `execute("SELECT count(*) FROM range(1000000000000)")`, then
-      `fetchmany(1)`, raises `IndexInterrupted` when a test timer calls
-      `interrupt()` after 0.5 s. This case runs in a subprocess with a 60 s
-      timeout, so a broken interrupt reds instead of hanging.
+    - Start a 0.5-second interrupt timer before
+      `execute("SELECT count(*) FROM range(1000000000000)")`. Run execute
+      and `fetchmany(1)` inside one exception boundary; require chained
+      `IndexInterrupted` from either operation and record the observed phase.
+      This case runs in a subprocess with a 60 s timeout, so a broken
+      interrupt reds instead of hanging.
+    - Separately, a non-forwarding synthetic backend relation raises its
+      `InterruptException` during `fetchmany`. Require `IndexInterrupted`,
+      original cause identity and matching message. This deterministic pin
+      tests fetch interruption wrapping independently of the real aggregate's
+      version-dependent interruption phase.
 
     If any fails on the unmodified branch, U2 does not hold: stop and
     report.
@@ -339,7 +346,8 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
     - make `assert_untouched` ignore files (its fixed-input test reds);
     - for U2, in `store.py`, let `fetchmany` re-raise the raw DuckDB
       exception, in place with a `cp` backup (the `fetchmany` pin and the
-      interrupt pin red); separately, the same for `fetchall` (the `fetchall`
+      deterministic fetch-interruption pin red); separately, the same for
+      `fetchall` (the `fetchall`
       pin reds).
   - **Observable:** `uv run pytest tests/query/test_fixtures.py
     tests/query/test_store_facade.py` is green, and each confirmation is
@@ -1372,9 +1380,12 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
     recorded in Implementation Notes.
   - _Requirements: 5.7, 5.8_
 
-- [ ] 8.3 (Maintainer-only) Measure `fitdocs query` on the real data root
-  - **Who runs it**: the maintainer, on their machine. No agent reads the real
-    data root.
+- [ ] 8.3 Measure `fitdocs query` on the authorized HealthFit timing data root
+  - **Who runs it**: the agent under the maintainer's explicit 2026-10-07
+    authorization. Create a separate data root from copies of iCloud
+    HealthFit `.fit` files; preserve originals and keep all personal inputs,
+    generated documents, SQL output and index files outside the repository.
+    Record only dataset counts and timings in the spec.
   - **What to run**:
     - `time fitdocs query "SELECT count(*) FROM pages"` (the freshness scan
       dominates);
@@ -1390,3 +1401,21 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 ## Implementation Notes
 
 - 2026-10-07 task 1.1: Luna implementer BLOCKED before edits; independent debug confirmed SPEC_CONFLICT / STOP_FOR_HUMAN. Fresh read-only aggregate probes interrupted during execute on DuckDB 1.2.0 and fetchmany on 1.5.6. A temporary raw-fetchmany mutation survived the floor aggregate assertion and failed the current-version assertion; a deterministic synthetic fetch interruption pin failed on the floor. Source restored; no query implementation or task completed. Proposed correction and evidence: `implementation-blocker.md`; existing queue item `2026-10-06-query-interruption-phase-statements`. Upstream facade remains sound; preserve floor and timer-before-execute ordering.
+- 2026-10-07 maintainer explicitly approved the bounded interruption testing correction: real aggregate cancellation may occur during execute or fetch, timer starts before either, and a separate deterministic fetch-interruption pin owns the raw-fetchmany mutation obligation. The prior blocker is cleared; runtime facade and dependency floor remain unchanged.
+- 2026-10-07 maintainer authorized the agent to run task 8.3 on a new data root populated from iCloud HealthFit FIT copies, overriding the maintainer-only restriction for that measurement. Located 2,517 local FIT files (171,192,835 bytes), no cloud placeholders; isolated timing workspace `/private/tmp/fitdocs-analytics-query-timings`, with copied sources and tiles disabled. Original files untouched.
+- 2026-10-07 task 1.1 review round 1 found one real fixture gap: directory contents were not tested; Luna added file/directory fixed-input cases and observed the directory-blind mutation fail. Initial full regression also failed under a cold UV cache and Homebrew's existing fake-interpreter fixture issue. Validation environment now matches main's pyenv 3.11.15, with locked all-groups tooling and warmed scratch cache `/private/tmp/analytics-query-uv-cache`; preserved previous environment outside the tree. Existing upstream queue item `2026-10-05-site-fixture-homebrew-interpreter-path` updated; no upstream production/test patch.
+
+### Task 1.1 upstream confirmations
+
+- U1, analytics-index 1.1: `pyproject.toml:31` pins `duckdb>=1.2,<2`.
+- U2, analytics-index 4.1: `src/fitdocs/index/store.py:122` and `:132` wrap fetchmany/fetchall; `tests/index/test_store.py:245` pins original exceptions for every operation, `:562` pins conversion errors, and `:577` pins bounded real interruption. Query's own read-only conversion/interruption pins and the deterministic fetch interruption pin exercise this contract.
+- U3, analytics-index 8.1: `docs/ownership-contract.md:218` names `writer-spill/` and `:220` names `query-spill-<pid>/` as transient.
+- Snapshot seam, analytics-index 2.2, 2.3 and 5.1: `src/fitdocs/index/producer.py:80` defines CorpusSnapshot with left_out at `:83`; `src/fitdocs/index/corpus.py:37` defines LeftOutPage ending in document_fingerprint at `:41`; `:91` defines corpus_snapshot with keyword-only held and no default; `src/fitdocs/index/fingerprint.py:102` defines combined_corpus_fingerprint(producer, snapshot) without a version argument.
+- Test-only Seam 5 names, analytics-index design.md:316-321 / tasks 2.2, 4.1, 5.1 and 6.2: create_index, create_schema, run_index_command, duckdb_version, CORE_DOCUMENTS, CORE_COMPUTED, TableScope and both monkeypatched producer registries are listed explicitly.
+- Helpers, analytics-index 4.2: `tests/index/_helpers.py:49` exports hold_index and `:82` exports forge_storage_version.
+- One-way importer guard, analytics-index 7.3: `tests/index/test_boundary.py:456` pins unlisted importers failing and absent listed modules remaining allowed. The initial independent task review ran this fixed-input guard successfully.
+- 2026-10-07 shared timing data preparation complete: copied 2,517 HealthFit FIT files outside Git; stable main sync exited 0 in 532.870 s and index rebuild exited 0 in 269.507 s. Read-only facade verified 2,502 pages/activities and 5,636,964 records. Shared root `/private/tmp/fitdocs-analytics-query-timings/data`, cache base `.../index`; readiness and private preparation evidence published to both peer sessions under explicit user authorization. Query timings remain pending task 8.3; these are preparation timings, not query performance claims.
+- 2026-10-07 task 1.1 review round 2 found a substring-only synthetic interruption message assertion; the second Luna remediation added exact equality and fixed-input symlink cases, including dangling links. Round 3 independently observed all 24 claimed mutation runs and three reviewer mutations go red, restored source, and observed current query 10/floor store 4 tests pass. Acceptance remains pending the canonical regression gate.
+- 2026-10-07 validation environment: default sandbox denies local preview socket binds (errno 1), independently resolved by an escalated loopback control. The first round-3 full run failed 15 tests with 30 errors because of socket permission and missing hatchling/PyYAML resolver metadata; tracked forbidden-content check passed, artifact checks failed to build rather than finding forbidden content. Warmed scratch build/docs tool metadata from stable main, leaving the locked worktree environment unchanged. Canonical rerun uses the required socket permissions; the earlier run remains failed.
+
+- 2026-10-07 task 1.1 accepted after round-3 APPROVED: escalated canonical suite 9,397 passed, two optional actionlint skips, exit 0 in 263.98 s; all 24 claimed mutation observations and three reviewer mutations red with no survivors. Fresh parent completion check: query 10 passed in 4.92 s, scoped mypy four files and Ruff check/format clean, diff check clean. No production source changes. Restricted earlier runs remain failed environment evidence.
