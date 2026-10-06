@@ -111,6 +111,27 @@ two expected skips, exit 0; `/private/tmp/analytics-index-evidence/8.3/review1-d
 The earlier failure remains a failure. Neither the known deletion repair nor
 the added-page observation explains or resolves this initial-edit stall.
 
+### UTC recurrence (analytics-index 8.4)
+
+The unchanged preview branch failed again at `test_preview.py:1179` during
+UTC validation on the candidate based on `3cf3c2e`: `/why/` returned 404
+instead of 200, with 9,385 passed, one failed and two expected skips in
+379.31s. Raw output is
+`/private/tmp/analytics-index-evidence/8.4/final-utc/pytest.txt`.
+The controller inspected the actual traceback. Plain validation and the
+DuckDB 1.2.0 floor check passed; CI validation was not run after the failure.
+
+Debug2 confirmed that preview/stage/generator/test/dependency bytes match
+the prior causal baseline and this is the same deletion/break assertion,
+distinct from the initial-edit and added-page deadlines above. The current
+fixture was unavailable after cleanup, so its precise assertion-time build
+state was not newly traced. The earlier causal baseline is the evidence for
+the known race; it is not a current-run trace. Report:
+`/private/tmp/analytics-index-evidence/8.4/debug2-preview/REPORT.md`.
+The failed UTC run remains failed; an unchanged fresh full UTC gate and CI
+gate are required before accepting analytics-index. No preview patch or
+timeout weakening was made in that feature.
+
 ## How to pick it up
 
 1. Read the live-preview test's delete/break sequence and its bounded
