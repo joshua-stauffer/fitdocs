@@ -13,8 +13,8 @@ disposable sandbox and diffing a whole-tree snapshot taken before and after.
 It is deliberately parameterized on the two axes the requirement pairs, so
 neither the sibling ingestion spec nor a later settings key forces a rewrite:
 
-* **(a) The entry point.** Registered in :data:`WRITING_ENTRY_POINTS` -- ``sync``,
-  ``regen``, ``load``, and (inbox task 5.2) ``drain`` today.
+* **(a) The entry point.** Registered in :data:`WRITING_ENTRY_POINTS`,
+  including explicit ``index`` and the external-cache ``sync`` post-pass.
 * **(b) The permitted set.** Computed by :func:`permitted_locations` as the owned
   paths **union** the contract-named shared files fitdocs legitimately writes
   **union** the locations resolved from the settings under test, never
@@ -49,6 +49,7 @@ capable code path never opens a socket.
 from __future__ import annotations
 
 import hashlib
+import os
 import socket
 import tempfile
 from collections.abc import Callable, Sequence
@@ -56,10 +57,13 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Final, NoReturn
+from unittest.mock import patch
 
 import pytest
+from typer.testing import CliRunner
 
 from fitdocs.athlete import ATHLETE_FILE, load_athlete_inputs
+from fitdocs.cli import app
 from fitdocs.connectors.connect import Connected, run_connect
 from fitdocs.connectors.credentials import CredentialStore
 from fitdocs.connectors.http import HttpResponse
@@ -109,6 +113,7 @@ from tests.load.conftest import ComputingCalculator
 # PINNED timezone: a FIXED -06:00 offset (never the system zone) so document
 # stems are stable wherever the suite runs.
 _TZ = timezone(timedelta(hours=-6))
+_CLI_RUNNER = CliRunner()
 
 #: The bytes the injected tile fetch serves. Any bytes will do -- the guard
 #: cares where tiles land (``.cache/tiles/...``), not what they contain.
@@ -315,6 +320,48 @@ def _run_sync(data_root: Path, source_dir: Path) -> None:
         athlete=load_athlete_inputs(data_root),
         tz=_TZ,
         tiles=_tiles(data_root),
+    )
+
+
+def _prepare_index_build(data_root: Path, source_dir: Path) -> None:
+    _stage_sources(source_dir)
+    _run_sync(data_root, source_dir)
+
+
+def _run_cli_index(data_root: Path, source_dir: Path) -> None:
+    index_dir = source_dir.parent / "index-cache"
+    with patch.dict(os.environ, {"FITDOCS_INDEX_DIR": str(index_dir)}):
+        result = _CLI_RUNNER.invoke(app, ["index", "--out", str(data_root)])
+    assert result.exit_code == 0, result.output
+
+
+def _prepare_sync_with_index(data_root: Path, source_dir: Path) -> None:
+    _prepare_index_build(data_root, source_dir)
+    _run_cli_index(data_root, source_dir)
+    # A new source makes the measured CLI sync write a new workout and refresh
+    # the already-populated external index.
+    (source_dir / "hike.fit").write_bytes(builder.hike_fit_bytes())
+
+
+def _run_cli_sync_with_index(data_root: Path, source_dir: Path) -> None:
+    index_dir = source_dir.parent / "index-cache"
+    with (
+        patch.dict(os.environ, {"FITDOCS_INDEX_DIR": str(index_dir)}),
+        patch("fitdocs.tiles._default_fetch", lambda _url: _TILE_PNG),
+    ):
+        result = _CLI_RUNNER.invoke(
+            app, ["sync", str(source_dir), "--out", str(data_root)]
+        )
+    assert result.exit_code == 0, result.output
+
+
+def _wrote_index_file(touched: Sequence[str]) -> bool:
+    return any(path.endswith("/index.duckdb") for path in touched)
+
+
+def _wrote_document_and_index(touched: Sequence[str]) -> bool:
+    return _wrote_index_file(touched) and any(
+        path.startswith("data/workouts/") and path.endswith(".md") for path in touched
     )
 
 
@@ -1025,6 +1072,18 @@ class EntryPoint:
 #: Every fitdocs entry point that writes into the data root (Req 7.6).
 WRITING_ENTRY_POINTS: Final[tuple[EntryPoint, ...]] = (
     EntryPoint(id="sync", prepare=_nothing, run=_run_sync),
+    EntryPoint(
+        id="index",
+        prepare=_prepare_index_build,
+        run=_run_cli_index,
+        non_vacuous=_wrote_index_file,
+    ),
+    EntryPoint(
+        id="sync-with-index",
+        prepare=_prepare_sync_with_index,
+        run=_run_cli_sync_with_index,
+        non_vacuous=_wrote_document_and_index,
+    ),
     EntryPoint(id="regen", prepare=_sync_once_then_drop_a_document, run=_run_regen),
     EntryPoint(id="load", prepare=_run_sync, run=_run_load),
     EntryPoint(id="drain", prepare=_stage_drain_inbox, run=_run_drain),
@@ -1118,7 +1177,8 @@ def test_entry_point_writes_only_inside_the_permitted_locations(
     owned), plus the locations the settings under test configure -- empty for
     ``sync``/``regen``/``load``/``history``, whose fixtures write no
     ``[inbox]`` table, and the configured inbox and processed-files
-    directories for ``drain``. The run is also asserted to have produced its
+    directories for ``drain``, plus an explicit external index cache for the
+    two index entry points. The run is also asserted to have produced its
     own observable, non-vacuous write (``entry_point.non_vacuous`` -- a
     workout document under ``workouts/`` for every entry point but
     ``history``, the history document itself for ``history``, since that
@@ -1136,6 +1196,10 @@ def test_entry_point_writes_only_inside_the_permitted_locations(
     _stage_sources(source_dir)
     entry_point.prepare(data_root, source_dir)
 
+    index_base = source_dir.parent / "index-cache"
+    if entry_point.id in {"index", "sync-with-index"}:
+        index_base.mkdir(parents=True, exist_ok=True)
+
     before = _snapshot(sandbox)
     entry_point.run(data_root, source_dir)
     after = _snapshot(sandbox)
@@ -1148,6 +1212,15 @@ def test_entry_point_writes_only_inside_the_permitted_locations(
         "write; the guard would pass vacuously over a pipeline that wrote nothing"
     )
     configured = configured_locations(data_root)
+    if entry_point.id in {"index", "sync-with-index"}:
+        from fitdocs.index.location import resolve_index_location
+
+        resolved_index = resolve_index_location(
+            data_root,
+            {"FITDOCS_INDEX_DIR": str(index_base)},
+            sandbox,
+        )
+        configured += (resolved_index.directory,)
     assert_confined(sandbox, permitted_locations(data_root, configured), before, after)
 
 
@@ -1161,6 +1234,11 @@ def test_derive_benchmarks_is_a_registered_writing_entry_point() -> None:
     assert "derive-benchmarks" in {
         entry_point.id for entry_point in WRITING_ENTRY_POINTS
     }
+
+
+@pytest.mark.parametrize("entry_id", ["index", "sync-with-index"])
+def test_index_commands_are_registered_writing_entry_points(entry_id: str) -> None:
+    assert entry_id in {entry_point.id for entry_point in WRITING_ENTRY_POINTS}
 
 
 def test_plan_is_a_registered_writing_entry_point() -> None:

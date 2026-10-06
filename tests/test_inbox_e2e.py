@@ -84,6 +84,14 @@ def _snapshot(root: Path) -> dict[str, str]:
     return state
 
 
+def _index_bytes(index_dir: Path) -> dict[str, bytes]:
+    return {
+        path.relative_to(index_dir).as_posix(): path.read_bytes()
+        for path in sorted(index_dir.rglob("*"))
+        if path.is_file()
+    }
+
+
 @pytest.fixture(autouse=True)
 def _offline_tiles(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep this suite network-free, mirroring ``tests/test_cli_sync_inbox.py``."""
@@ -135,6 +143,33 @@ def test_two_leave_in_place_drains_are_byte_identical_and_the_second_writes_noth
     # the second run succeeds outright.
     assert second.exit_code == 0
     assert snapshot_after_second == snapshot_after_first
+
+
+def test_second_drain_leaves_prebuilt_external_index_byte_identical(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    (data_root / "fitdocs.toml").write_text(_ZERO_SETTLE_TOML, encoding="utf-8")
+    _put(data_root / "inbox", "good.fit", builder.run_fit_bytes())
+    index_dir = tmp_path / "external-index"
+    monkeypatch.setenv("FITDOCS_INDEX_DIR", str(index_dir))
+
+    first = runner.invoke(app, ["sync", "--out", str(data_root), "--no-prompt"])
+    assert first.exit_code == 0, first.output
+    built = runner.invoke(app, ["index", "--out", str(data_root)])
+    assert built.exit_code == 0, built.output
+    databases = list(index_dir.rglob("index.duckdb"))
+    assert databases, first.output
+    database = databases[0]
+    assert database.stat().st_size > 0
+    before = _index_bytes(index_dir)
+    assert before, "the index fixture must be nonempty before the second drain"
+
+    second = runner.invoke(app, ["sync", "--out", str(data_root), "--no-prompt"])
+
+    assert second.exit_code == 0, second.output
+    assert _index_bytes(index_dir) == before
 
 
 def test_move_drain_idempotency_inbox_empties_and_second_drain_writes_nothing(

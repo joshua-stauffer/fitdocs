@@ -1263,7 +1263,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     process behind.
   - _Requirements: 4.5, 6.5, 9.6_
 
-- [ ] 7. CLI integration and guards
+- [x] 7. CLI integration and guards
 
 - [x] 7.1 Add the `fitdocs index` command
   - **`cli.py`:**
@@ -1346,7 +1346,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     no golden document changes.
   - _Requirements: 7.1, 7.5, 7.6, 8.1, 8.2, 9.1, 9.2_
 
-- [ ] 7.3 Extend the confinement, network and boundary guards to the index
+- [x] 7.3 Extend the confinement, network and boundary guards to the index
   - **`tests/test_confinement.py`:**
     - append `EntryPoint(id="index", …)`, running `fitdocs index` with
       `FITDOCS_INDEX_DIR=<sandbox>/index-cache`, non-vacuous only if
@@ -1651,3 +1651,4 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 - 7.1 debug1: unchanged live-preview test failed twice at /why/ 404 versus 200. An immutable pre-CLI baseline trace proved the deleted-route 404 readiness gate advances during the preceding generator rebuild; unchanged malformed content then recovers the correct retained page after 1.06 seconds. Candidate/baseline exact tests and wait-only diagnostic passed; no product contract defect or CLI source change required. Debug returned RETRY_TASK; reviewed files remained byte-identical, fresh exact/full canonical gates passed. Separate medium follow-up: .kiro/queue/2026-10-06-preview-delete-readiness-race.md. Diagnostic patches were restored; no preview workaround or gate waiver was applied.
 
 - 7.2: best-effort post-pass at four CLI sites covers five writing commands; collectors avoid archive derivation and index outcomes never alter original exit codes. Errors print even for UNCHANGED (9.2/9.4); healthy unchanged and corpus/meta-only changes are quiet. No existing stdout expectations or doubles required edits; reconcile comparison pins and document goldens remain untouched. Tests-first and actual flag OFF: 16 failures/2 passes; ON and removed: 18 passed before subsequent test additions. Final 28 focused and 441 complete CLI tests passed. Two bounded test/evidence repairs pinned distinct 2/3/4 counts, per-path order, wrapper contract/progress/interruption, and owned observer restoration. Historical try-body exit mutation survived and is excluded; corrected post-handler recipe fails. Independent review: 41 valid observations plus two new controls RED, no survivors or old-pin loss; canonical 9357 passed/2 expected skips, static/help/diff clean. Parent fresh gate: 28 passed. Evidence: /private/tmp/analytics-index-evidence/7.2/.
+- 7.3: tests-only CLI confinement/index-postpass entries, offline index comparison and zero-network/no-data-root-write checks, byte-identical second inbox drain, append-only importer guard, stale populated-index untouched commands, and active sync/load byte parity. Healthy baseline and targeted mutation RED/restored GREEN evidence retained; no feature flag or production change. Two bounded remediation rounds added independent literal nested-file bytes/mtime/key snapshots, exact registry key/object restoration after owned context closure, full untouched-command membership, positive AST forms and precise path normalization. Historical documents-pages KeyError is excluded; corrected successful empty build reaches the held-page-count assertion. Independent review3 APPROVED: 33 unique valid claimed observations plus two new controls intended RED, zero survivors or old-pin loss; full docs/source-enabled suite 9378 passed/two expected actionlint skips, canonical/scoped mypy and Ruff/help/goldens clean. Parent fresh gate 102 passed. Requirement 12.5 publication remains downstream documentation. Evidence: /private/tmp/analytics-index-evidence/7.3/.

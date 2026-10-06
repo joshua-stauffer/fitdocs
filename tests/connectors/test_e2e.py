@@ -24,23 +24,88 @@ guard, registry snapshot/restore, credentials/environment isolation):
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import os
 import socket
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
 import fitdocs.cli as cli_module
+from fitdocs import Modality
 from fitdocs.cli import app
 from fitdocs.connectors import registry as connector_registry
 from fitdocs.connectors.credentials import env_var_name
 from fitdocs.connectors.protocol import Capability, Fetched, Listing, RemoteActivity
+from fitdocs.index.location import resolve_index_location
+from fitdocs.index.store import open_index, read_bookkeeping
 from fitdocs.layout import archive_path
+from fitdocs.load import registry as load_registry
+from fitdocs.load.docedit import apply_frontmatter_load, replace_load_region
+from fitdocs.load.types import (
+    AthleteField,
+    Computed,
+    InteractionSession,
+    LoadContext,
+    LoadOutcome,
+    LoadResult,
+    ProfileView,
+)
+from fitdocs.metrics.types import DerivedMetrics
+from fitdocs.model import Activity
 from tests.connectors.conftest import ScriptedPersonalKeyConnector
 from tests.fixtures import builder
 
 runner = CliRunner()
+
+_STUB_CALCULATOR_ID = "stub-analytics-index-parity"
+
+
+class _FieldFreeIndexParityCalculator:
+    calculator_id = _STUB_CALCULATOR_ID
+    display_name = "Analytics Index Parity Stub"
+    supported_modalities = frozenset({Modality.RUN})
+
+    def required_athlete_fields(self) -> tuple[AthleteField, ...]:
+        return ()
+
+    def compute(
+        self,
+        activity: Activity,
+        metrics: DerivedMetrics,
+        profile: ProfileView,
+        session: InteractionSession,
+        context: LoadContext,
+    ) -> LoadOutcome:
+        if activity.modality is not Modality.RUN:
+            raise AssertionError("the test calculator only accepts RUN activities")
+        return Computed(
+            result=LoadResult(
+                calculator_id=self.calculator_id,
+                display_name=self.display_name,
+                value=42.0,
+                basis="stub e2e basis",
+                non_selected=(),
+                flags=(),
+                inputs_used=(),
+                notes=(),
+            )
+        )
+
+
+@contextlib.contextmanager
+def _forced_index_parity_calculator() -> Iterator[None]:
+    saved = dict(load_registry._REGISTRY)
+    load_registry._REGISTRY.clear()
+    load_registry.register(_FieldFreeIndexParityCalculator())
+    try:
+        yield
+    finally:
+        load_registry._REGISTRY.clear()
+        load_registry._REGISTRY.update(saved)
 
 
 def _write_settings(data_root: Path, *, connectors: str) -> None:
@@ -63,6 +128,48 @@ def _patch_pull_transport(monkeypatch: pytest.MonkeyPatch) -> None:
 def _collapsed(output: str) -> str:
     cleaned = "".join(ch for ch in output if ch not in "│╭╮╰╯─┃┏┓┗┛")
     return " ".join(cleaned.split())
+
+
+def _data_root_bytes(root: Path) -> dict[str, bytes]:
+    return {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
+def _data_root_snapshot(root: Path) -> dict[str, tuple[bytes, int]]:
+    return {
+        path.relative_to(root).as_posix(): (path.read_bytes(), path.stat().st_mtime_ns)
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
+def test_data_root_snapshot_matches_literal_nested_files_and_mtimes(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "literal-snapshot"
+    nested = root / "nested" / "deeper"
+    nested.mkdir(parents=True)
+    alpha = root / "alpha.bin"
+    beta = nested / "beta.bin"
+    alpha_bytes = b"literal alpha payload"
+    beta_bytes = b"\x00literal beta payload\xff"
+    alpha_mtime = 1_700_000_000_000_000_001
+    beta_mtime = 1_700_000_100_000_000_003
+    alpha.write_bytes(alpha_bytes)
+    beta.write_bytes(beta_bytes)
+    os.utime(alpha, ns=(alpha_mtime, alpha_mtime))
+    os.utime(beta, ns=(beta_mtime, beta_mtime))
+
+    assert _data_root_snapshot(root) == {
+        "alpha.bin": (b"literal alpha payload", 1_700_000_000_000_000_001),
+        "nested/deeper/beta.bin": (
+            b"\x00literal beta payload\xff",
+            1_700_000_100_000_000_003,
+        ),
+    }
 
 
 # =============================================================================
@@ -202,7 +309,16 @@ def _fresh_synced_root(tmp_path: Path, name: str, *, with_connectors: bool) -> P
 
 @pytest.mark.parametrize(
     "command",
-    ["sync", "regen", "load", "check", "history", "plan", "derive-benchmarks"],
+    [
+        "sync",
+        "regen",
+        "load",
+        "check",
+        "history",
+        "plan",
+        "derive-benchmarks",
+        "index",
+    ],
 )
 def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: str
@@ -218,6 +334,7 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
     )
     connector_registry.register(key_connector)
     monkeypatch.setenv(env_var_name("key-src", "api_key"), "s3cr3t-api-key")
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "fallback-xdg-cache"))
     bare_root = _fresh_synced_root(tmp_path, f"bare-{command}", with_connectors=False)
     wired_root = _fresh_synced_root(tmp_path, f"wired-{command}", with_connectors=True)
 
@@ -229,18 +346,204 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
 
     monkeypatch.setattr(socket, "socket", _record_and_refuse)
 
+    bare_root_before = _data_root_snapshot(bare_root)
+    wired_root_before = _data_root_snapshot(wired_root)
+    assert bare_root_before
+    assert wired_root_before
+    bare_index = tmp_path / f"bare-{command}-index"
+    wired_index = tmp_path / f"wired-{command}-index"
+    assert bare_index != wired_index
+    monkeypatch.setenv("FITDOCS_INDEX_DIR", str(bare_index))
     bare = runner.invoke(app, [command, "--out", str(bare_root)])
     bare_attempts = len(attempts)
+    monkeypatch.setenv("FITDOCS_INDEX_DIR", str(wired_index))
     wired = runner.invoke(app, [command, "--out", str(wired_root)])
+    bare_root_after = _data_root_snapshot(bare_root)
+    wired_root_after = _data_root_snapshot(wired_root)
 
     assert wired.exception is None, wired.output
     assert wired.exit_code == bare.exit_code, (bare.output, wired.output)
-    assert wired.output.replace(str(wired_root), "<root>") == bare.output.replace(
-        str(bare_root), "<root>"
+    bare_output = bare.output
+    wired_output = wired.output
+    bare_location = resolve_index_location(
+        bare_root, {"FITDOCS_INDEX_DIR": str(bare_index)}, tmp_path
     )
+    wired_location = resolve_index_location(
+        wired_root, {"FITDOCS_INDEX_DIR": str(wired_index)}, tmp_path
+    )
+    bare_output = bare_output.replace(str(bare_root), "<data-root>").replace(
+        str(bare_location.database), "<resolved-index-database>"
+    )
+    wired_output = wired_output.replace(str(wired_root), "<data-root>").replace(
+        str(wired_location.database), "<resolved-index-database>"
+    )
+    assert wired_output == bare_output
+    if command == "index":
+        assert bare_root_after == bare_root_before
+        assert wired_root_after == wired_root_before
+        bare_databases = list(bare_index.rglob("index.duckdb"))
+        wired_databases = list(wired_index.rglob("index.duckdb"))
+        assert len(bare_databases) == len(wired_databases) == 1
+        assert bare_databases[0].stat().st_size > 0
+        assert wired_databases[0].stat().st_size > 0
     # `regen` re-renders maps, so its tile fetch reaches for a socket in both
     # roots (and falls back): the wired run may make exactly as many attempts
     # as the bare one -- a swallowed connector request adds one.
-    assert len(attempts) - bare_attempts == bare_attempts
+    if command == "index":
+        assert bare_attempts == 0
+        assert len(attempts) == 0
+    else:
+        assert len(attempts) - bare_attempts == bare_attempts
     assert key_connector.verify_calls == []
     assert key_connector.list_calls == []
+
+
+def test_sync_and_load_parity_with_and_without_prebuilt_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "parity-source"
+    source.mkdir()
+    (source / "run.fit").write_bytes(builder.run_fit_bytes())
+    bare_root = tmp_path / "parity-bare"
+    indexed_root = tmp_path / "parity-indexed"
+    bare_root.mkdir()
+    indexed_root.mkdir()
+    bare_index = tmp_path / "parity-bare-cache"
+    indexed_index = tmp_path / "parity-indexed-cache"
+
+    def invoke(root: Path, index_dir: Path, arguments: list[str]) -> tuple[int, str]:
+        monkeypatch.setenv("FITDOCS_INDEX_DIR", str(index_dir))
+        result = runner.invoke(app, [*arguments, "--out", str(root)])
+        return result.exit_code, result.output
+
+    for root, cache in ((bare_root, bare_index), (indexed_root, indexed_index)):
+        initial_code, initial_output = invoke(root, cache, ["sync", str(source)])
+        assert initial_code == 0, initial_output
+    prebuilt_code, prebuilt_output = invoke(indexed_root, indexed_index, ["index"])
+    assert prebuilt_code == 0, prebuilt_output
+    database = next(indexed_index.rglob("index.duckdb"))
+    assert database.stat().st_size > 0
+    with open_index(database, read_only=True) as connection:
+        before_sync_bookkeeping = read_bookkeeping(connection)
+    assert before_sync_bookkeeping is not None
+    assert len(before_sync_bookkeeping.pages) == 1
+    assert _data_root_bytes(bare_root) == _data_root_bytes(indexed_root)
+
+    # Make sync do useful work after the index was built. The corresponding
+    # post-pass must refresh the existing index without putting index files in
+    # either data root.
+    (source / "run.fit").write_bytes(builder.run_native_dynamics_fit_bytes())
+    for root, cache in ((bare_root, bare_index), (indexed_root, indexed_index)):
+        synced_code, synced_output = invoke(root, cache, ["sync", str(source)])
+        assert synced_code == 0, synced_output
+    with open_index(database, read_only=True) as connection:
+        after_sync_bookkeeping = read_bookkeeping(connection)
+    assert after_sync_bookkeeping is not None
+    assert len(after_sync_bookkeeping.pages) == 1
+    assert set(after_sync_bookkeeping.pages) != set(before_sync_bookkeeping.pages)
+    assert database.stat().st_size > 0
+
+    def independent_root_bytes(root: Path) -> dict[str, bytes]:
+        files = tuple(sorted(path for path in root.rglob("*") if path.is_file()))
+        assert files
+        return {path.relative_to(root).as_posix(): path.read_bytes() for path in files}
+
+    before_sync_load = {
+        root: _data_root_bytes(root) for root in (bare_root, indexed_root)
+    }
+    assert before_sync_load[bare_root] == independent_root_bytes(bare_root)
+    assert before_sync_load[indexed_root] == independent_root_bytes(indexed_root)
+    assert len(before_sync_load[bare_root]) > 2
+    assert before_sync_load[bare_root] == before_sync_load[indexed_root]
+
+    docs_by_root: dict[Path, tuple[Path, ...]] = {}
+    for root in (bare_root, indexed_root):
+        docs = tuple(
+            sorted(
+                path
+                for path in (root / "workouts").glob("*.md")
+                if path.name != "AGENTS.md"
+            )
+        )
+        assert docs
+        docs_by_root[root] = docs
+        for number, document in enumerate(docs, start=1):
+            text = document.read_text(encoding="utf-8")
+            stale = apply_frontmatter_load(
+                text,
+                LoadResult(
+                    calculator_id="stale-calculator",
+                    display_name="Stale load",
+                    value=float(10 + number),
+                    basis=f"stale basis {number}",
+                    non_selected=(),
+                    flags=(),
+                    inputs_used=(),
+                    notes=(),
+                ),
+            )
+            stale = replace_load_region(stale, f"stale load content {number}")
+            document.write_text(stale, encoding="utf-8")
+            assert "stale-calculator" in document.read_text(encoding="utf-8")
+
+    before_load = {root: _data_root_bytes(root) for root in (bare_root, indexed_root)}
+    assert before_load[bare_root]
+    assert before_load[indexed_root]
+    assert before_load[bare_root] == independent_root_bytes(bare_root)
+    assert before_load[indexed_root] == independent_root_bytes(indexed_root)
+    assert len(before_load[bare_root]) > 2
+    assert before_load[bare_root] == before_load[indexed_root]
+    for _root, docs in docs_by_root.items():
+        for number, document in enumerate(docs, start=1):
+            from fitdocs.load.docedit import read_frontmatter_load
+
+            assert (
+                read_frontmatter_load(document.read_text(encoding="utf-8"))[
+                    "load_value"
+                ]
+                == 10 + number
+            )
+
+    original_calculators = dict(load_registry._REGISTRY)
+    with _forced_index_parity_calculator():
+        for root, cache in ((bare_root, bare_index), (indexed_root, indexed_index)):
+            loaded_code, loaded_output = invoke(
+                root,
+                cache,
+                [
+                    "load",
+                    "--no-prompt",
+                    "--recompute",
+                    "--calculator",
+                    _STUB_CALCULATOR_ID,
+                ],
+            )
+            assert loaded_code == 0, loaded_output
+    assert set(load_registry._REGISTRY) == set(original_calculators)
+    assert all(
+        load_registry._REGISTRY[key] is calculator
+        for key, calculator in original_calculators.items()
+    )
+    from fitdocs.load.docedit import read_frontmatter_load
+
+    after_load = {root: _data_root_bytes(root) for root in (bare_root, indexed_root)}
+    assert after_load[bare_root] != before_load[bare_root]
+    assert after_load[indexed_root] != before_load[indexed_root]
+    assert after_load[bare_root] == independent_root_bytes(bare_root)
+    assert after_load[indexed_root] == independent_root_bytes(indexed_root)
+    for docs in docs_by_root.values():
+        for document in docs:
+            loaded = read_frontmatter_load(document.read_text(encoding="utf-8"))
+            assert loaded["load_value"] == 42
+            assert loaded["load_methodology"] == _STUB_CALCULATOR_ID
+            assert loaded["load_basis"] == "stub e2e basis"
+    with open_index(database, read_only=True) as connection:
+        indexed_loads = connection.execute(
+            "SELECT calculator_id, load_value FROM loads"
+        ).fetchall()
+    assert indexed_loads
+    assert all(
+        (calculator_id, load_value) == (_STUB_CALCULATOR_ID, 42.0)
+        for calculator_id, load_value in indexed_loads
+    )
+    assert after_load[bare_root] == after_load[indexed_root]

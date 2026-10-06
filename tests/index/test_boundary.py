@@ -3,13 +3,22 @@
 from __future__ import annotations
 
 import ast
+import hashlib
+import json
 import os
 import re
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
+from typer.testing import CliRunner
+
+from fitdocs.cli import app
+from fitdocs.index.store import open_index, read_bookkeeping
+from tests.fixtures import builder
 
 _REPO_ROOT = Path(__file__).parents[2]
 _SOURCE_ROOT = _REPO_ROOT / "src" / "fitdocs"
@@ -24,6 +33,260 @@ _FORBIDDEN_SQL_TOKENS = (
     "https://",
     "PRAGMA",
 )
+_INDEX_IMPORTERS = frozenset({"fitdocs.cli", "fitdocs.query.statement"})
+_REQUIRED_INDEX_IMPORTERS = frozenset({"fitdocs.cli"})
+
+
+def _imports_index_runtime(source: str) -> bool:
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "fitdocs.index" or alias.name.startswith(
+                    "fitdocs.index."
+                ):
+                    return True
+        if isinstance(node, ast.ImportFrom) and node.module is not None:
+            if node.module == "fitdocs.index" or node.module.startswith(
+                "fitdocs.index."
+            ):
+                return True
+            if node.module == "fitdocs" and any(
+                alias.name == "index" for alias in node.names
+            ):
+                return True
+    return False
+
+
+def _unlisted_index_importers(sources: dict[str, str]) -> set[str]:
+    return {
+        module
+        for module, source in sources.items()
+        if _imports_index_runtime(source) and module not in _INDEX_IMPORTERS
+    }
+
+
+def _source_module(path: Path) -> str:
+    relative = path.relative_to(_REPO_ROOT / "src").with_suffix("")
+    parts = list(relative.parts)
+    if parts[-1] == "__init__":
+        parts.pop()
+    return ".".join(parts)
+
+
+def _external_index_snapshot(root: Path) -> dict[str, tuple[int, int, str]]:
+    return {
+        path.relative_to(root).as_posix(): (
+            path.stat().st_size,
+            path.stat().st_mtime_ns,
+            hashlib.sha256(path.read_bytes()).hexdigest(),
+        )
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
+@dataclass(frozen=True)
+class _UntouchedCommandObservation:
+    outputs: dict[str, str]
+    duckdb_loaded: dict[str, bool]
+    cache_before: dict[str, tuple[int, int, str]]
+    cache_expected: dict[str, tuple[int, int, str]]
+    sentinel_expected: dict[str, tuple[int, int, str]]
+    cache_after: dict[str, tuple[int, int, str]]
+
+
+@pytest.fixture(scope="module")
+def _untouched_command_observation(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> _UntouchedCommandObservation:
+    sandbox = tmp_path_factory.mktemp("untouched-index-commands")
+    source = sandbox / "source"
+    source.mkdir()
+    (source / "run.fit").write_bytes(builder.run_fit_bytes())
+    root = sandbox / "data"
+    root.mkdir()
+    (root / "fitdocs.toml").write_text(
+        "[connectors.folder-src]\n"
+        'connector = "folder"\n'
+        f'path = "{source.as_posix()}"\n',
+        encoding="utf-8",
+    )
+    index_base = sandbox / "index-cache"
+    synthetic_home = sandbox / "home"
+    synthetic_home.mkdir()
+    environment = {
+        **os.environ,
+        "FITDOCS_INDEX_DIR": str(index_base),
+        "HOME": str(synthetic_home),
+        "XDG_CACHE_HOME": str(sandbox / "xdg-cache"),
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
+    with patch.dict(os.environ, environment, clear=True):
+        synced = CliRunner().invoke(app, ["sync", str(source), "--out", str(root)])
+        assert synced.exit_code == 0, synced.output
+        built = CliRunner().invoke(app, ["index", "--out", str(root)])
+        assert built.exit_code == 0, built.output
+
+    databases = list(index_base.rglob("index.duckdb"))
+    assert len(databases) == 1
+    database = databases[0]
+    assert database.stat().st_size > 0
+    with open_index(database, read_only=True) as connection:
+        indexed_before_edit = read_bookkeeping(connection)
+    assert indexed_before_edit is not None
+    assert len(indexed_before_edit.pages) == 1
+    indexed_page = next(iter(indexed_before_edit.pages.values()))
+    assert indexed_page.path.startswith("workouts/")
+    pages = [
+        path for path in (root / "workouts").glob("*.md") if path.name != "AGENTS.md"
+    ]
+    assert len(pages) == 1
+    page = pages[0]
+    original = page.read_bytes()
+    edited = page.read_text(encoding="utf-8").replace(
+        "title:", "effort: race\ntitle:", 1
+    )
+    page.write_text(edited, encoding="utf-8")
+    assert page.read_bytes() != original
+
+    sentinel_one = database.parent / "snapshot-alpha.bin"
+    sentinel_two = database.parent / "snapshot-beta.bin"
+    sentinel_one_bytes = b"alpha-snapshot"
+    sentinel_two_bytes = b"beta-snapshot-content"
+    sentinel_one.write_bytes(sentinel_one_bytes)
+    sentinel_two.write_bytes(sentinel_two_bytes)
+    sentinel_one_mtime = 1_700_000_000_000_000_001
+    sentinel_two_mtime = 1_700_000_005_000_000_002
+    os.utime(sentinel_one, ns=(sentinel_one_mtime, sentinel_one_mtime))
+    os.utime(sentinel_two, ns=(sentinel_two_mtime, sentinel_two_mtime))
+    before = _external_index_snapshot(index_base)
+    actual_files = tuple(
+        sorted(path for path in index_base.rglob("*") if path.is_file())
+    )
+    expected_before = {
+        path.relative_to(index_base).as_posix(): (
+            path.stat().st_size,
+            path.stat().st_mtime_ns,
+            hashlib.sha256(path.read_bytes()).hexdigest(),
+        )
+        for path in actual_files
+    }
+    assert set(before) == {
+        path.relative_to(index_base).as_posix() for path in actual_files
+    }
+    sentinel_expected = {
+        sentinel_one.relative_to(index_base).as_posix(): (
+            len(sentinel_one_bytes),
+            sentinel_one_mtime,
+            hashlib.sha256(sentinel_one_bytes).hexdigest(),
+        ),
+        sentinel_two.relative_to(index_base).as_posix(): (
+            len(sentinel_two_bytes),
+            sentinel_two_mtime,
+            hashlib.sha256(sentinel_two_bytes).hexdigest(),
+        ),
+    }
+    assert len(before) >= 3
+
+    invocations = {
+        "check": ["check", "--out", str(root)],
+        "history": ["history", "--out", str(root)],
+        "plan": ["plan", "--out", str(root)],
+        "derive-benchmarks": ["derive-benchmarks", "--out", str(root)],
+        "plugins": ["plugins", "--out", str(root)],
+        "skill": ["skill"],
+        "version": ["--version"],
+        "connect": ["connect", "folder-src", "--out", str(root)],
+        "pull": ["pull", "--out", str(root)],
+    }
+    # The independent populated-row pin above ensures this is not only a
+    # schema/meta preservation check.
+    with open_index(database, read_only=True) as connection:
+        indexed = read_bookkeeping(connection)
+    assert indexed is not None
+    assert len(indexed.pages) == 1
+    assert next(iter(indexed.pages.values())).path.startswith("workouts/")
+    child = (
+        "import json, sys\n"
+        "from typer.testing import CliRunner\n"
+        "from fitdocs.cli import app\n"
+        "result = CliRunner().invoke(app, json.loads(sys.argv[1]))\n"
+        "print(json.dumps({'exit_code': result.exit_code, 'output': result.output, "
+        "'exception': None if result.exception is None else "
+        "type(result.exception).__name__, "
+        "'duckdb_loaded': 'duckdb' in sys.modules}))\n"
+    )
+    outputs: dict[str, str] = {}
+    duckdb_loaded: dict[str, bool] = {}
+    for name, arguments in invocations.items():
+        completed = subprocess.run(
+            [sys.executable, "-c", child, json.dumps(arguments)],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd=_REPO_ROOT,
+            env=environment,
+        )
+        assert completed.returncode == 0, completed.stderr
+        result = json.loads(completed.stdout)
+        assert result["exception"] is None, (name, result)
+        outputs[name] = result["output"]
+        duckdb_loaded[name] = result["duckdb_loaded"]
+
+    return _UntouchedCommandObservation(
+        outputs=outputs,
+        duckdb_loaded=duckdb_loaded,
+        cache_before=before,
+        cache_expected=expected_before,
+        sentinel_expected=sentinel_expected,
+        cache_after=_external_index_snapshot(index_base),
+    )
+
+
+def test_untouched_commands_do_not_import_duckdb(
+    _untouched_command_observation: _UntouchedCommandObservation,
+) -> None:
+    assert set(_untouched_command_observation.outputs) == {
+        "check",
+        "history",
+        "plan",
+        "derive-benchmarks",
+        "plugins",
+        "skill",
+        "version",
+        "connect",
+        "pull",
+    }
+    assert not any(_untouched_command_observation.duckdb_loaded.values())
+
+
+def test_untouched_commands_do_not_print_index_reports(
+    _untouched_command_observation: _UntouchedCommandObservation,
+) -> None:
+    index_lines = {
+        name: [
+            line for line in output.splitlines() if line.lstrip().startswith("Index:")
+        ]
+        for name, output in _untouched_command_observation.outputs.items()
+    }
+    assert not any(index_lines.values()), index_lines
+
+
+def test_untouched_commands_preserve_every_external_index_file(
+    _untouched_command_observation: _UntouchedCommandObservation,
+) -> None:
+    assert (
+        _untouched_command_observation.cache_before
+        == _untouched_command_observation.cache_expected
+    )
+    for name, expected in _untouched_command_observation.sentinel_expected.items():
+        assert _untouched_command_observation.cache_before[name] == expected
+    assert (
+        _untouched_command_observation.cache_after
+        == _untouched_command_observation.cache_before
+    )
 
 
 def _duckdb_imports(paths: tuple[Path, ...]) -> list[tuple[Path, int]]:
@@ -172,6 +435,64 @@ def test_only_index_store_imports_duckdb_and_scan_reaches_repository() -> None:
         (None, True),
         ("_connect", False),
     }
+
+
+def test_index_runtime_imports_are_confined_to_cli() -> None:
+    files = tuple(
+        path
+        for path in _SOURCE_ROOT.rglob("*.py")
+        if not path.is_relative_to(_SOURCE_ROOT / "index")
+    )
+    assert len(files) > 100
+    importers = {
+        _source_module(path): path.read_text(encoding="utf-8") for path in files
+    }
+    assert _REQUIRED_INDEX_IMPORTERS <= _INDEX_IMPORTERS
+    assert {
+        module for module, source in importers.items() if _imports_index_runtime(source)
+    } <= _INDEX_IMPORTERS
+
+
+def test_index_importer_guard_rejects_unlisted_and_does_not_resolve_allowlist() -> None:
+    assert _unlisted_index_importers(
+        {"fitdocs.history.engine": "from fitdocs.index import refresh\n"}
+    ) == {"fitdocs.history.engine"}
+    # An allowlisted importer absent from this fixed input is not an error:
+    # the guard checks observed import edges and does not import/resolve names.
+    assert _unlisted_index_importers({}) == set()
+    assert (
+        _unlisted_index_importers(
+            {"fitdocs.query.statement": "from fitdocs.index import registry\n"}
+        )
+        == set()
+    )
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import fitdocs.index\n",
+        "import fitdocs.index.refresh\n",
+        "import fitdocs.index.refresh as refresh\n",
+        "import fitdocs.index as index_runtime\n",
+        "from fitdocs.index import refresh\n",
+        "from fitdocs.index import refresh as refresh_runtime\n",
+        "from fitdocs import index\n",
+        "from fitdocs import index as index_runtime\n",
+    ],
+    ids=[
+        "plain-root",
+        "plain-submodule",
+        "aliased-submodule",
+        "aliased-root",
+        "from-submodule",
+        "from-aliased-submodule",
+        "from-fitdocs-root",
+        "from-aliased-fitdocs-root",
+    ],
+)
+def test_index_import_guard_detects_supported_ast_import_forms(source: str) -> None:
+    assert _imports_index_runtime(source)
 
 
 @pytest.mark.parametrize(
