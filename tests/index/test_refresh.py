@@ -5,18 +5,18 @@ from __future__ import annotations
 import hashlib
 import inspect
 import shutil
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, fields, replace
 from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Final, cast, get_type_hints
+from typing import Any, Final, cast, get_type_hints
 
 import pytest
 
-from fitdocs import Modality, contract
+from fitdocs import Modality, contract, version
 from fitdocs.docio import read_document, read_frontmatter
-from fitdocs.index import derive, refresh, registry
+from fitdocs.index import corpus, derive, refresh, registry
 from fitdocs.index.bookkeeping import Bookkeeping, ComputedState, IndexMeta, PageState
 from fitdocs.index.core.computed import CORE_COMPUTED
 from fitdocs.index.core.documents import CORE_DOCUMENTS
@@ -24,11 +24,15 @@ from fitdocs.index.corpus import LeftOutPage, scan_workout_pages
 from fitdocs.index.derive import Derived, base_archive, derive_page
 from fitdocs.index.fingerprint import (
     athlete_fingerprint,
+    combined_corpus_fingerprint,
     document_fingerprint,
     render_fingerprint,
 )
 from fitdocs.index.handoff import HandoffCollector
 from fitdocs.index.producer import (
+    CorpusLeftOut,
+    CorpusPage,
+    CorpusSnapshot,
     LoadRegionReading,
     PageComputed,
     PageDocument,
@@ -124,6 +128,8 @@ def _refresh(
     *,
     athlete: AthleteInputs | None = None,
     handoff: HandoffCollector | None = None,
+    progress: refresh.ProgressCallback | None = None,
+    today: date = date(2026, 10, 6),
 ) -> refresh.RefreshResult:
     with open_index(database, read_only=False) as connection:
         bookkeeping = read_bookkeeping(connection)
@@ -135,8 +141,8 @@ def _refresh(
                 data_root=data_root,
                 athlete=athlete,
                 handoff=handoff,
-                today=date(2026, 10, 6),
-                progress=None,
+                today=today,
+                progress=progress,
             ),
         )
 
@@ -148,7 +154,45 @@ def _query(
         return connection.execute(sql, params).fetchall()
 
 
-def _index_snapshot(index: BuiltIndex) -> tuple[object, ...]:
+@contextmanager
+def _record_sql_writes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[list[str]]:
+    statements: list[str] = []
+    original_execute = IndexConnection.execute
+
+    def execute(
+        connection: IndexConnection,
+        sql: str,
+        params: Sequence[object] = (),
+    ) -> Any:
+        normalized = " ".join(sql.split())
+        if normalized.split(" ", 1)[0].upper() in {
+            "BEGIN",
+            "COMMIT",
+            "ROLLBACK",
+            "DELETE",
+            "INSERT",
+            "UPDATE",
+            "COMMENT",
+        }:
+            statements.append(normalized)
+        return original_execute(connection, sql, params)
+
+    try:
+        with monkeypatch.context() as observer:
+            observer.setattr(IndexConnection, "execute", execute)
+            yield statements
+    finally:
+        assert IndexConnection.execute is original_execute
+
+
+def _index_snapshot(
+    index: BuiltIndex,
+) -> tuple[
+    tuple[tuple[str, int, int, str], ...],
+    tuple[tuple[str, tuple[str, ...], tuple[tuple[object, ...], ...]], ...],
+]:
     files = tuple(
         (
             path.name,
@@ -278,9 +322,12 @@ class _RecordingDocumentProducer:
     name: str
     tables: tuple[TableSpec, ...]
     seen: list[PageDocument]
+    rows_error: Exception | None = None
 
     def rows(self, page: PageDocument) -> Rows:
         self.seen.append(page)
+        if self.rows_error is not None:
+            raise self.rows_error
         title = page.frontmatter.get("title")
         assert isinstance(title, str)
         assert page.sources
@@ -304,6 +351,109 @@ class _RecordingComputedProducer:
             ),
             self.tables[1].name: ((page.metrics.distance_m, page.athlete_fingerprint),),
         }
+
+
+def _corpus_table_specs(prefix: str, first: str, second: str) -> tuple[TableSpec, ...]:
+    return (
+        TableSpec(
+            first,
+            f"Synthetic {prefix} corpus primary table.",
+            (
+                ColumnSpec("label", ColumnType.VARCHAR, "Producer label."),
+                ColumnSpec("score", ColumnType.DOUBLE, "Producer score."),
+            ),
+        ),
+        TableSpec(
+            second,
+            f"Synthetic {prefix} corpus secondary table.",
+            (
+                ColumnSpec("detail", ColumnType.VARCHAR, "Producer detail."),
+                ColumnSpec("count", ColumnType.INTEGER, "Producer count."),
+            ),
+        ),
+    )
+
+
+@dataclass
+class _RecordingCorpusProducer:
+    name: str
+    tables: tuple[TableSpec, ...]
+    fingerprint_value: str
+    label: str
+    fingerprint_snapshots: list[CorpusSnapshot]
+    row_snapshots: list[CorpusSnapshot]
+    fingerprint_error: Exception | None = None
+    rows_error: Exception | None = None
+    fingerprint_snapshot_contents: bool = False
+    rows_override: Rows | None = None
+
+    def fingerprint(self, snapshot: CorpusSnapshot) -> str:
+        self.fingerprint_snapshots.append(snapshot)
+        if self.fingerprint_error is not None:
+            raise self.fingerprint_error
+        if self.fingerprint_snapshot_contents:
+            pages = tuple(
+                (page.path, page.document_fingerprint) for page in snapshot.pages
+            )
+            left_out = tuple(
+                (page.path, page.document_fingerprint) for page in snapshot.left_out
+            )
+            return f"{self.fingerprint_value}:{pages!r}:{left_out!r}"
+        return self.fingerprint_value
+
+    def rows(self, snapshot: CorpusSnapshot) -> Rows:
+        self.row_snapshots.append(snapshot)
+        if self.rows_error is not None:
+            raise self.rows_error
+        if self.rows_override is not None:
+            return self.rows_override
+        return {
+            self.tables[0].name: ((self.label, 1.25),),
+            self.tables[1].name: ((f"{self.label}-detail", 7),),
+        }
+
+
+def _add_hike_page(source_root: Path, data_root: Path, *, serial: int) -> str:
+    source_root.mkdir()
+    (source_root / "hike.fit").write_bytes(
+        builder.small_sport_fit_bytes(serial, "hiking", timestamp_offset=serial)
+    )
+    before = {page.path for page in scan_workout_pages(data_root).pages}
+    report = sync(
+        source_root,
+        data_root,
+        athlete=None,
+        tz=UTC,
+        tiles=_SyntheticTiles(),
+    )
+    assert report.failures == ()
+    added = {page.path for page in scan_workout_pages(data_root).pages} - before
+    assert len(added) == 1
+    return next(iter(added))
+
+
+def _write_missing_source_pages(
+    data_root: Path, source_page: Path, page_count: int
+) -> tuple[str, ...]:
+    source_text = source_page.read_text(encoding="utf-8")
+    source_frontmatter = read_frontmatter(source_page)
+    assert source_frontmatter is not None
+    old_sources = contract.source_refs(source_frontmatter)
+    assert old_sources
+    generated_dir = data_root / "workouts"
+    generated_dir.mkdir()
+    paths: list[str] = []
+    for page_number in range(page_count):
+        rendered = source_text
+        for source_number, source_ref in enumerate(old_sources):
+            digest = hashlib.sha256(
+                f"missing-{page_number}-{source_number}".encode()
+            ).hexdigest()
+            rendered = rendered.replace(source_ref, f"fit-archive/{digest}.fit")
+        path = generated_dir / f"progress-{page_number:03}.md"
+        path.write_text(rendered, encoding="utf-8")
+        paths.append(path.relative_to(data_root).as_posix())
+    return tuple(paths)
 
 
 def test_refresh_public_carriers_are_frozen_and_typed() -> None:
@@ -646,6 +796,991 @@ def test_all_registered_page_producers_receive_and_write_complete_inputs(
     else:
         assert all(page.athlete == athlete for page in expected_computed)
     assert any(page.athlete == athlete for page in expected_computed)
+
+
+def test_corpus_producers_replace_tables_only_when_fingerprint_changes(
+    tmp_path: Path,
+    core_registry: tuple[ResolvedTable, ...],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_root = tmp_path / "corpus-data"
+    data_root.mkdir()
+    alpha = _RecordingCorpusProducer(
+        "test.corpus.alpha",
+        _corpus_table_specs("alpha", "z_corpus_alpha", "a_corpus_alpha"),
+        "alpha-input-v0",
+        "alpha-v0",
+        [],
+        [],
+    )
+    beta = _RecordingCorpusProducer(
+        "test.corpus.beta",
+        _corpus_table_specs("beta", "y_corpus_beta", "b_corpus_beta"),
+        "beta-input-v0",
+        "beta-v0",
+        [],
+        [],
+    )
+    monkeypatch.setattr(registry, "CORPUS_PRODUCERS", (alpha, beta))
+    tables = registry.registered_tables()
+    assert core_registry
+    assert tuple(
+        table.name for table in tables if table.scope is TableScope.CORPUS
+    ) == (
+        "z_corpus_alpha",
+        "a_corpus_alpha",
+        "y_corpus_beta",
+        "b_corpus_beta",
+    )
+
+    index = _empty_registered_index(tmp_path / "corpus-index.duckdb", data_root, tables)
+    expected_rows = {
+        "z_corpus_alpha": [("alpha-v0", 1.25)],
+        "a_corpus_alpha": [("alpha-v0-detail", 7)],
+        "y_corpus_beta": [("beta-v0", 1.25)],
+        "b_corpus_beta": [("beta-v0-detail", 7)],
+    }
+    assert {
+        table: _query(index.database, f"SELECT * FROM {table}")
+        for table in expected_rows
+    } == expected_rows
+    assert len(alpha.row_snapshots) == 1
+    assert len(beta.row_snapshots) == 1
+
+    with open_index(index.database, read_only=True) as connection:
+        initial_bookkeeping = read_bookkeeping(connection)
+    assert initial_bookkeeping is not None
+    initial_snapshot = corpus.corpus_snapshot(
+        data_root,
+        corpus.scan_workout_pages(data_root),
+        today=date(2026, 10, 6),
+        athlete_fingerprint=athlete_fingerprint(None),
+        held=frozenset(initial_bookkeeping.pages),
+    )
+    assert alpha.row_snapshots[-1] == initial_snapshot
+    assert beta.row_snapshots[-1] == initial_snapshot
+    assert initial_bookkeeping.producers[alpha.name] == combined_corpus_fingerprint(
+        alpha, initial_snapshot
+    )
+    assert initial_bookkeeping.producers[beta.name] == combined_corpus_fingerprint(
+        beta, initial_snapshot
+    )
+
+    before_noop = _index_snapshot(index)
+    with _record_sql_writes(monkeypatch) as writes:
+        noop = _refresh(index.database, data_root)
+    assert noop.corpus_refreshed == ()
+    assert len(alpha.row_snapshots) == 1
+    assert len(beta.row_snapshots) == 1
+    assert writes == []
+    assert _index_snapshot(index) == before_noop
+
+    alpha.fingerprint_value = "alpha-input-v1"
+    alpha.label = "alpha-v1"
+    with _record_sql_writes(monkeypatch) as writes:
+        updated = _refresh(index.database, data_root)
+
+    assert updated.corpus_refreshed == ("test.corpus.alpha",)
+    assert writes[0] == "BEGIN"
+    assert writes[-1] == "COMMIT"
+    assert sum(statement == "BEGIN" for statement in writes) == 1
+    assert tuple(
+        next(
+            name
+            for name in ("z_corpus_alpha", "a_corpus_alpha", "index_producers")
+            if name in statement
+        )
+        for statement in writes[1:-1]
+    ) == (
+        "z_corpus_alpha",
+        "z_corpus_alpha",
+        "a_corpus_alpha",
+        "a_corpus_alpha",
+        "index_producers",
+        "index_producers",
+    )
+    assert len(alpha.row_snapshots) == 2
+    assert len(beta.row_snapshots) == 1
+    assert _query(index.database, "SELECT * FROM z_corpus_alpha") == [
+        ("alpha-v1", 1.25)
+    ]
+    assert _query(index.database, "SELECT * FROM a_corpus_alpha") == [
+        ("alpha-v1-detail", 7)
+    ]
+    assert _query(index.database, "SELECT * FROM y_corpus_beta") == [("beta-v0", 1.25)]
+    assert _query(index.database, "SELECT * FROM b_corpus_beta") == [
+        ("beta-v0-detail", 7)
+    ]
+    with open_index(index.database, read_only=True) as connection:
+        updated_bookkeeping = read_bookkeeping(connection)
+    assert updated_bookkeeping is not None
+    assert updated_bookkeeping.producers[alpha.name] == combined_corpus_fingerprint(
+        alpha, alpha.fingerprint_snapshots[-1]
+    )
+    assert (
+        updated_bookkeeping.producers[beta.name]
+        == initial_bookkeeping.producers[beta.name]
+    )
+    assert _query(
+        index.database,
+        "SELECT producer, kind, tables, fingerprint FROM index_producers "
+        "ORDER BY producer",
+    ) == [
+        (
+            alpha.name,
+            "corpus",
+            ["z_corpus_alpha", "a_corpus_alpha"],
+            updated_bookkeeping.producers[alpha.name],
+        ),
+        (
+            beta.name,
+            "corpus",
+            ["y_corpus_beta", "b_corpus_beta"],
+            initial_bookkeeping.producers[beta.name],
+        ),
+    ]
+
+
+def test_corpus_snapshot_uses_pages_held_after_addition_and_removal(
+    tmp_path: Path,
+    core_registry: tuple[ResolvedTable, ...],
+    synced_corpus: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_root = tmp_path / "snapshot-data"
+    data_root.mkdir()
+    producer = _RecordingCorpusProducer(
+        "test.corpus.snapshot",
+        _corpus_table_specs("snapshot", "z_snapshot", "a_snapshot"),
+        "snapshot-v0",
+        "snapshot-v0",
+        [],
+        [],
+    )
+    producer.fingerprint_snapshot_contents = True
+    monkeypatch.setattr(registry, "CORPUS_PRODUCERS", (producer,))
+    tables = registry.registered_tables()
+    assert core_registry
+    index = _empty_registered_index(tmp_path / "snapshot.duckdb", data_root, tables)
+    shutil.copytree(synced_corpus, data_root, dirs_exist_ok=True)
+    initial = _refresh(index.database, data_root)
+    assert initial.added == tuple(
+        sorted(page.path for page in scan_workout_pages(data_root).pages)
+    )
+
+    before = scan_workout_pages(data_root)
+    held_path = before.pages[0].path
+    (data_root / held_path).unlink()
+    new_path = _add_hike_page(tmp_path / "new-hike-source", data_root, serial=88001)
+    producer.fingerprint_value = "snapshot-v1"
+    caller_today = date(2038, 3, 14)
+    athlete = AthleteInputs(
+        max_hr_bpm=188,
+        resting_hr_bpm=47,
+        ftp_watts=276.0,
+    )
+    expected_athlete_fingerprint = athlete_fingerprint(athlete)
+    original_scan = corpus.scan_workout_pages
+    original_snapshot_builder = corpus.corpus_snapshot
+    scan_calls: list[tuple[Path, corpus.CorpusScan]] = []
+    snapshot_calls: list[tuple[Path, corpus.CorpusScan, date, str, frozenset[str]]] = []
+
+    def observe_scan(root: Path) -> corpus.CorpusScan:
+        scanned = original_scan(root)
+        scan_calls.append((root, scanned))
+        return scanned
+
+    def observe_snapshot(
+        root: Path,
+        scanned: corpus.CorpusScan,
+        *,
+        today: date,
+        athlete_fingerprint: str,
+        held: frozenset[str],
+    ) -> CorpusSnapshot:
+        snapshot_calls.append((root, scanned, today, athlete_fingerprint, held))
+        return original_snapshot_builder(
+            root,
+            scanned,
+            today=today,
+            athlete_fingerprint=athlete_fingerprint,
+            held=held,
+        )
+
+    with monkeypatch.context() as observer:
+        observer.setattr(corpus, "scan_workout_pages", observe_scan)
+        observer.setattr(corpus, "corpus_snapshot", observe_snapshot)
+        result = _refresh(
+            index.database,
+            data_root,
+            athlete=athlete,
+            today=caller_today,
+        )
+    assert corpus.scan_workout_pages is original_scan
+    assert corpus.corpus_snapshot is original_snapshot_builder
+
+    assert result.removed == (held_path,)
+    assert result.added == (new_path,)
+    assert len(producer.row_snapshots) == 3
+    snapshot = producer.row_snapshots[-1]
+    assert len(scan_calls) == 1
+    assert scan_calls[0][0] == data_root
+    assert len(snapshot_calls) == 1
+    assert snapshot_calls[0][0] == data_root
+    assert snapshot_calls[0][1] is scan_calls[0][1]
+    assert snapshot_calls[0][2:] == (
+        caller_today,
+        expected_athlete_fingerprint,
+        frozenset(read_bookkeeping_for(index).pages),
+    )
+    bookkeeping = read_bookkeeping_for(index)
+    post_scan = original_scan(data_root)
+    assert post_scan == scan_calls[0][1]
+    held_after_pages = frozenset(bookkeeping.pages)
+    expected_pages = tuple(
+        CorpusPage(
+            page.page_key,
+            page.path,
+            page.frontmatter,
+            page.document_fingerprint,
+        )
+        for page in post_scan.pages
+        if page.page_key in held_after_pages
+    )
+    expected_left_out = tuple(
+        sorted(
+            [
+                CorpusLeftOut(page.path, page.document_fingerprint)
+                for page in post_scan.left_out
+            ]
+            + [
+                CorpusLeftOut(page.path, page.document_fingerprint)
+                for page in post_scan.pages
+                if page.page_key not in held_after_pages
+            ],
+            key=lambda page: page.path,
+        )
+    )
+    expected_snapshot = CorpusSnapshot(
+        data_root.resolve(),
+        expected_pages,
+        expected_left_out,
+        caller_today,
+        expected_athlete_fingerprint,
+    )
+    assert snapshot == expected_snapshot
+    assert snapshot == original_snapshot_builder(
+        data_root,
+        post_scan,
+        today=caller_today,
+        athlete_fingerprint=expected_athlete_fingerprint,
+        held=held_after_pages,
+    )
+    assert tuple(page.path for page in snapshot.pages) == tuple(
+        sorted(page.path for page in expected_pages)
+    )
+    assert tuple(page.path for page in snapshot.left_out) == tuple(
+        page.path for page in expected_left_out
+    )
+
+
+def test_corpus_snapshot_keeps_failed_held_page_and_reports_failed_new_page(
+    tmp_path: Path,
+    core_registry: tuple[ResolvedTable, ...],
+    synced_corpus: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_root = tmp_path / "snapshot-errors-data"
+    data_root.mkdir()
+    document_error = _RecordingDocumentProducer(
+        "test.documents.failure",
+        _document_table_specs("failure", "z_failure", "a_failure"),
+        [],
+    )
+    corpus_producer = _RecordingCorpusProducer(
+        "test.corpus.errors",
+        _corpus_table_specs("errors", "z_errors", "a_errors"),
+        "errors-v0",
+        "errors-v0",
+        [],
+        [],
+    )
+    corpus_producer.fingerprint_snapshot_contents = True
+    monkeypatch.setattr(
+        registry, "DOCUMENT_PRODUCERS", (CORE_DOCUMENTS, document_error)
+    )
+    monkeypatch.setattr(registry, "CORPUS_PRODUCERS", (corpus_producer,))
+    tables = registry.registered_tables()
+    assert core_registry
+    index = _empty_registered_index(
+        tmp_path / "snapshot-errors.duckdb", data_root, tables
+    )
+    shutil.copytree(synced_corpus, data_root, dirs_exist_ok=True)
+    initial = _refresh(index.database, data_root)
+    assert initial.added == tuple(
+        sorted(page.path for page in scan_workout_pages(data_root).pages)
+    )
+
+    initial_scan = scan_workout_pages(data_root)
+    assert len(initial_scan.pages) == 2
+    held_page = initial_scan.pages[0]
+    held_path = data_root / held_page.path
+    held_path.write_text(held_page.text + "\nA changed rendered body.\n")
+    removed_path = initial_scan.pages[1].path
+    (data_root / removed_path).unlink()
+    new_path = _add_hike_page(tmp_path / "failed-new-source", data_root, serial=88002)
+    document_error.rows_error = RuntimeError("deliberate page producer failure")
+    corpus_producer.fingerprint_value = "errors-v1"
+
+    failed = _refresh(index.database, data_root)
+    assert failed.removed == (removed_path,)
+    assert failed.page_errors == (
+        (held_page.path, "RuntimeError: deliberate page producer failure"),
+        (new_path, "RuntimeError: deliberate page producer failure"),
+    )
+    assert len(corpus_producer.row_snapshots) == 3
+    failed_snapshot = corpus_producer.row_snapshots[-1]
+    with open_index(index.database, read_only=True) as connection:
+        failed_bookkeeping = read_bookkeeping(connection)
+    assert failed_bookkeeping is not None
+    assert held_page.page_key in failed_bookkeeping.pages
+    assert failed_bookkeeping.pages[held_page.page_key].document_fingerprint == (
+        held_page.document_fingerprint
+    )
+    snapshot_held = next(
+        page for page in failed_snapshot.pages if page.path == held_page.path
+    )
+    current_held_scan = next(
+        page
+        for page in scan_workout_pages(data_root).pages
+        if page.path == held_page.path
+    )
+    assert snapshot_held.document_fingerprint == current_held_scan.document_fingerprint
+    assert (
+        snapshot_held.document_fingerprint
+        != failed_bookkeeping.pages[held_page.page_key].document_fingerprint
+    )
+    assert new_path not in {state.path for state in failed_bookkeeping.pages.values()}
+    assert failed_snapshot == corpus.corpus_snapshot(
+        data_root,
+        scan_workout_pages(data_root),
+        today=date(2026, 10, 6),
+        athlete_fingerprint=athlete_fingerprint(None),
+        held=frozenset(failed_bookkeeping.pages),
+    )
+    assert tuple(page.path for page in failed_snapshot.pages) == (held_page.path,)
+    assert tuple(page.path for page in failed_snapshot.left_out) == (new_path,)
+
+    document_error.rows_error = None
+    corpus_producer.fingerprint_value = "errors-v2"
+    recovered = _refresh(index.database, data_root)
+    assert recovered.page_errors == ()
+    assert new_path in {
+        state.path for state in read_bookkeeping_for(index).pages.values()
+    }
+    assert tuple(
+        page.path for page in corpus_producer.row_snapshots[-1].pages
+    ) == tuple(sorted(page.path for page in scan_workout_pages(data_root).pages))
+    assert corpus_producer.row_snapshots[-1].left_out == ()
+
+
+def read_bookkeeping_for(index: BuiltIndex) -> Bookkeeping:
+    with open_index(index.database, read_only=True) as connection:
+        bookkeeping = read_bookkeeping(connection)
+    assert bookkeeping is not None
+    return bookkeeping
+
+
+def test_refresh_updates_only_meta_for_athlete_input_change(
+    built_index: BuiltIndex,
+    synced_corpus: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    index = built_index
+    shutil.copytree(synced_corpus, index.data_root, dirs_exist_ok=True)
+    first = _refresh(index.database, index.data_root)
+    assert first.added
+    before = _index_snapshot(index)
+    athlete = AthleteInputs(
+        max_hr_bpm=194,
+        resting_hr_bpm=49,
+        ftp_watts=291.0,
+    )
+    previous_activity_rows = _query(
+        index.database,
+        "SELECT page_key, athlete_fingerprint FROM activities ORDER BY page_key",
+    )
+    previous_meta = read_bookkeeping_for(index).meta
+    current_athlete_fingerprint = athlete_fingerprint(athlete)
+    current_fitdocs_version = version.tool_version()
+    current_duckdb_version = duckdb_version()
+    assert previous_meta.schema_version == SCHEMA_VERSION
+    assert previous_meta.fitdocs_version == current_fitdocs_version
+    assert previous_meta.duckdb_version == current_duckdb_version
+    assert previous_meta.data_root == str(index.data_root.resolve())
+    assert previous_meta.athlete_fingerprint != current_athlete_fingerprint
+    assert previous_activity_rows
+    assert all(
+        row_fingerprint == previous_meta.athlete_fingerprint
+        for _, row_fingerprint in previous_activity_rows
+    )
+
+    with _record_sql_writes(monkeypatch) as writes:
+        result = _refresh(index.database, index.data_root, athlete=athlete)
+
+    assert result.added == ()
+    assert result.updated == ()
+    assert result.removed == ()
+    assert result.corpus_refreshed == ()
+    assert result.changed is False
+    after = _index_snapshot(index)
+    rows_before = {row[0]: row[2] for row in before[1]}
+    rows_after = {row[0]: row[2] for row in after[1]}
+    assert set(rows_before) == set(rows_after)
+    assert all(
+        rows_before[name] == rows_after[name]
+        for name in rows_before
+        if name != "index_meta"
+    )
+    assert (
+        _query(
+            index.database,
+            "SELECT page_key, athlete_fingerprint FROM activities ORDER BY page_key",
+        )
+        == previous_activity_rows
+    )
+    meta = read_bookkeeping_for(index).meta
+    assert meta == IndexMeta(
+        schema_version=SCHEMA_VERSION,
+        fitdocs_version=current_fitdocs_version,
+        duckdb_version=current_duckdb_version,
+        data_root=str(index.data_root.resolve()),
+        athlete_fingerprint=current_athlete_fingerprint,
+    )
+    data_statements = [
+        statement
+        for statement in writes
+        if statement.split(" ", 1)[0].upper()
+        in {"DELETE", "INSERT", "UPDATE", "COMMENT"}
+    ]
+    assert [tuple(statement.split(" ", 3)[:3]) for statement in data_statements] == [
+        ("DELETE", "FROM", "index_meta"),
+        ("INSERT", "INTO", "index_meta"),
+    ]
+    assert [
+        statement
+        for statement in writes
+        if statement in {"BEGIN", "COMMIT", "ROLLBACK"}
+    ] == ["BEGIN", "COMMIT"]
+
+
+def test_refresh_reapplies_descriptions_when_fitdocs_version_changes(
+    tmp_path: Path,
+    core_registry: tuple[ResolvedTable, ...],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_root = tmp_path / "description-data"
+    data_root.mkdir()
+    producer = _RecordingCorpusProducer(
+        "test.corpus.descriptions",
+        _corpus_table_specs("description-old", "z_descriptions", "a_descriptions"),
+        "same-inputs",
+        "same-rows",
+        [],
+        [],
+    )
+    monkeypatch.setattr(registry, "CORPUS_PRODUCERS", (producer,))
+    tables = registry.registered_tables()
+    assert core_registry
+    index = _empty_registered_index(tmp_path / "descriptions.duckdb", data_root, tables)
+    old_comments = _query(
+        index.database,
+        "SELECT column_name, comment FROM duckdb_columns() "
+        "WHERE table_name = 'z_descriptions' ORDER BY column_index",
+    )
+    assert old_comments == [("label", "Producer label."), ("score", "Producer score.")]
+    replacement_tables = _corpus_table_specs(
+        "description-new", "z_descriptions", "a_descriptions"
+    )
+    producer.tables = (
+        replace(
+            replacement_tables[0],
+            columns=(
+                replace(
+                    replacement_tables[0].columns[0],
+                    description="Updated producer label.",
+                ),
+                replacement_tables[0].columns[1],
+            ),
+        ),
+        replacement_tables[1],
+    )
+    original_tool_version = version.tool_version
+    previous_meta = read_bookkeeping_for(index).meta
+    assert previous_meta.fitdocs_version == original_tool_version()
+    assert previous_meta.duckdb_version == duckdb_version()
+    assert previous_meta.schema_version == SCHEMA_VERSION
+    assert previous_meta.data_root == str(data_root.resolve())
+    changed_fitdocs_version = "6.2-description-test"
+    expected_tables = registry.registered_tables()
+    with open_index(index.database, read_only=False) as connection:
+        for table in expected_tables:
+            connection.execute(f'COMMENT ON TABLE "{table.name}" IS NULL')
+            for column in table.columns:
+                connection.execute(
+                    f'COMMENT ON COLUMN "{table.name}"."{column.name}" IS NULL'
+                )
+    assert all(
+        _query(
+            index.database,
+            "SELECT comment FROM duckdb_tables() WHERE table_name = ?",
+            (table.name,),
+        )
+        == [(None,)]
+        for table in expected_tables
+    )
+    assert all(
+        _query(
+            index.database,
+            "SELECT column_name, comment FROM duckdb_columns() "
+            "WHERE table_name = ? ORDER BY column_index",
+            (table.name,),
+        )
+        == [(column.name, None) for column in table.columns]
+        for table in expected_tables
+    )
+
+    with monkeypatch.context() as version_override:
+        version_override.setattr(
+            version, "tool_version", lambda: changed_fitdocs_version
+        )
+        result = _refresh(index.database, data_root)
+    assert version.tool_version is original_tool_version
+
+    assert result.corpus_refreshed == (producer.name,)
+    assert read_bookkeeping_for(index).meta == IndexMeta(
+        schema_version=previous_meta.schema_version,
+        fitdocs_version=changed_fitdocs_version,
+        duckdb_version=previous_meta.duckdb_version,
+        data_root=previous_meta.data_root,
+        athlete_fingerprint=previous_meta.athlete_fingerprint,
+    )
+    for table in expected_tables:
+        assert _query(
+            index.database,
+            "SELECT comment FROM duckdb_tables() WHERE table_name = ?",
+            (table.name,),
+        ) == [(table.description,)]
+        assert _query(
+            index.database,
+            "SELECT column_name, comment FROM duckdb_columns() "
+            "WHERE table_name = ? ORDER BY column_index",
+            (table.name,),
+        ) == [(column.name, column.description) for column in table.columns]
+
+
+def test_refresh_updates_full_meta_on_duckdb_only_version_change(
+    built_index: BuiltIndex,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    index = built_index
+    previous_meta = read_bookkeeping_for(index).meta
+    duckdb_version_attr = "duckdb_version"
+    original_duckdb_version = cast(
+        Callable[[], str], getattr(refresh, duckdb_version_attr)
+    )
+    changed_duckdb_version = "synthetic-duckdb-version-change"
+    current_fitdocs_version = version.tool_version()
+    assert previous_meta.schema_version == SCHEMA_VERSION
+    assert previous_meta.fitdocs_version == current_fitdocs_version
+    assert previous_meta.duckdb_version == original_duckdb_version()
+    assert previous_meta.duckdb_version != changed_duckdb_version
+    assert previous_meta.data_root == str(index.data_root.resolve())
+
+    table_comment = "local table comment survives driver-only update"
+    column_comment = "local column comment survives driver-only update"
+    with open_index(index.database, read_only=False) as connection:
+        connection.execute(f"COMMENT ON TABLE \"activities\" IS '{table_comment}'")
+        connection.execute(
+            f'COMMENT ON COLUMN "activities"."page_key" IS \'{column_comment}\''
+        )
+    assert _query(
+        index.database,
+        "SELECT comment FROM duckdb_tables() WHERE table_name = 'activities'",
+    ) == [(table_comment,)]
+    assert _query(
+        index.database,
+        "SELECT comment FROM duckdb_columns() "
+        "WHERE table_name = 'activities' AND column_name = 'page_key'",
+    ) == [(column_comment,)]
+    before_rows = {row[0]: row[2] for row in _index_snapshot(index)[1]}
+
+    with monkeypatch.context() as version_override:
+        version_override.setattr(
+            refresh, "duckdb_version", lambda: changed_duckdb_version
+        )
+        with _record_sql_writes(monkeypatch) as writes:
+            result = _refresh(index.database, index.data_root)
+    assert getattr(refresh, duckdb_version_attr) is original_duckdb_version
+
+    assert result.corpus_refreshed == ()
+    assert read_bookkeeping_for(index).meta == IndexMeta(
+        schema_version=SCHEMA_VERSION,
+        fitdocs_version=current_fitdocs_version,
+        duckdb_version=changed_duckdb_version,
+        data_root=str(index.data_root.resolve()),
+        athlete_fingerprint=athlete_fingerprint(None),
+    )
+    after_rows = {row[0]: row[2] for row in _index_snapshot(index)[1]}
+    assert {
+        name: rows for name, rows in before_rows.items() if name != "index_meta"
+    } == {name: rows for name, rows in after_rows.items() if name != "index_meta"}
+    assert _query(
+        index.database,
+        "SELECT comment FROM duckdb_tables() WHERE table_name = 'activities'",
+    ) == [(table_comment,)]
+    assert _query(
+        index.database,
+        "SELECT comment FROM duckdb_columns() "
+        "WHERE table_name = 'activities' AND column_name = 'page_key'",
+    ) == [(column_comment,)]
+    data_statements = [
+        statement
+        for statement in writes
+        if statement.split(" ", 1)[0].upper()
+        in {"DELETE", "INSERT", "UPDATE", "COMMENT"}
+    ]
+    assert [tuple(statement.split(" ", 3)[:3]) for statement in data_statements] == [
+        ("DELETE", "FROM", "index_meta"),
+        ("INSERT", "INTO", "index_meta"),
+    ]
+    assert [
+        statement
+        for statement in writes
+        if statement in {"BEGIN", "COMMIT", "ROLLBACK"}
+    ] == ["BEGIN", "COMMIT"]
+
+
+@pytest.mark.parametrize(
+    ("page_count", "fail_first", "expected_calls"),
+    (
+        (100, False, ()),
+        (101, False, ((100, 101), (101, 101))),
+        (101, True, ((100, 101), (101, 101))),
+        (201, False, ((100, 201), (200, 201), (201, 201))),
+    ),
+)
+def test_refresh_progress_counts_only_large_computed_attempt_batches(
+    built_index: BuiltIndex,
+    synced_workout_pages: tuple[Path, ...],
+    page_count: int,
+    fail_first: bool,
+    expected_calls: tuple[tuple[int, int], ...],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    index = built_index
+    expected_paths = _write_missing_source_pages(
+        index.data_root, synced_workout_pages[0], page_count
+    )
+    actual_missing = scan_workout_pages(index.data_root)
+    assert len(actual_missing.pages) == page_count
+    assert all(
+        derive.base_archive(index.data_root, page.sources) is None
+        for page in actual_missing.pages
+    )
+    if fail_first:
+        original_compute = refresh._page_computed
+        failed_path = expected_paths[0]
+
+        def fail_first_page(
+            document: PageDocument,
+            inputs: refresh.RefreshInputs,
+            page: corpus.ScannedPage,
+        ) -> tuple[PageComputed | None, ComputedState]:
+            if page.path == failed_path:
+                raise RuntimeError("synthetic computed attempt failure")
+            return original_compute(document, inputs, page)
+
+        monkeypatch.setattr(refresh, "_page_computed", fail_first_page)
+    calls: list[tuple[int, int]] = []
+
+    result = _refresh(
+        index.database,
+        index.data_root,
+        progress=lambda done, total: calls.append((done, total)),
+    )
+
+    assert calls == list(expected_calls)
+    assert result.pages_held == page_count - int(fail_first)
+    assert result.page_errors == (
+        ((expected_paths[0], "RuntimeError: synthetic computed attempt failure"),)
+        if fail_first
+        else ()
+    )
+    assert result.without_computed == tuple(
+        (page.path, ComputedState.SOURCE_MISSING)
+        for page in actual_missing.pages
+        if not fail_first or page.path != expected_paths[0]
+    )
+
+
+def test_refresh_progress_excludes_document_only_changes(
+    built_index: BuiltIndex,
+    synced_workout_pages: tuple[Path, ...],
+) -> None:
+    index = built_index
+    paths = _write_missing_source_pages(index.data_root, synced_workout_pages[0], 101)
+    first = _refresh(index.database, index.data_root)
+    assert first.pages_held == 101
+    assert first.without_computed == tuple(
+        (path, ComputedState.SOURCE_MISSING) for path in paths
+    )
+    note_placeholder = (
+        "_Your notes go here. This section is preserved when "
+        "the document is regenerated._"
+    )
+    before_bookkeeping = read_bookkeeping_for(index)
+    for path in paths:
+        page_path = index.data_root / path
+        page_text = page_path.read_text(encoding="utf-8")
+        assert note_placeholder in page_text
+        page_path.write_text(
+            page_text.replace(note_placeholder, f"Changed note for {path}.", 1),
+            encoding="utf-8",
+        )
+    changed_scan = scan_workout_pages(index.data_root)
+    assert len(changed_scan.pages) == 101
+    for page in changed_scan.pages:
+        previous = before_bookkeeping.pages[page.page_key]
+        assert previous.document_fingerprint != page.document_fingerprint
+        assert previous.render_fingerprint == render_fingerprint(
+            page.text, page.frontmatter
+        )
+    calls: list[tuple[int, int]] = []
+
+    result = _refresh(
+        index.database,
+        index.data_root,
+        progress=lambda done, total: calls.append((done, total)),
+    )
+
+    assert calls == []
+    assert result.updated == paths
+    assert result.without_computed == tuple(
+        (path, ComputedState.SOURCE_MISSING) for path in paths
+    )
+
+
+def test_corpus_row_failure_rolls_back_only_its_producer_and_retries(
+    tmp_path: Path,
+    core_registry: tuple[ResolvedTable, ...],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_root = tmp_path / "row-failure-data"
+    data_root.mkdir()
+    alpha = _RecordingCorpusProducer(
+        "test.corpus.alpha",
+        _corpus_table_specs("alpha", "z_row_alpha", "a_row_alpha"),
+        "alpha-v0",
+        "alpha-v0",
+        [],
+        [],
+    )
+    beta = _RecordingCorpusProducer(
+        "test.corpus.beta",
+        _corpus_table_specs("beta", "z_row_beta", "a_row_beta"),
+        "beta-v0",
+        "beta-v0",
+        [],
+        [],
+    )
+    monkeypatch.setattr(registry, "CORPUS_PRODUCERS", (alpha, beta))
+    tables = registry.registered_tables()
+    assert core_registry
+    index = _empty_registered_index(tmp_path / "row-failure.duckdb", data_root, tables)
+
+    before_alpha = {
+        name: _query(index.database, f"SELECT * FROM {name}")
+        for name in ("z_row_alpha", "a_row_alpha")
+    }
+    before_beta = {
+        name: _query(index.database, f"SELECT * FROM {name}")
+        for name in ("z_row_beta", "a_row_beta")
+    }
+    before_bookkeeping = read_bookkeeping_for(index)
+    alpha.fingerprint_value = "alpha-v1"
+    alpha.label = "alpha-v1"
+    alpha.rows_error = ValueError("synthetic corpus row failure")
+    beta.fingerprint_value = "beta-v1"
+    beta.label = "beta-v1"
+    assert before_bookkeeping.producers[alpha.name] != combined_corpus_fingerprint(
+        alpha, alpha.fingerprint_snapshots[-1]
+    )
+    assert before_bookkeeping.producers[beta.name] != combined_corpus_fingerprint(
+        beta, beta.fingerprint_snapshots[-1]
+    )
+    with _record_sql_writes(monkeypatch) as writes:
+        failed = _refresh(index.database, data_root)
+    assert failed.corpus_refreshed == (beta.name,)
+    assert failed.producer_errors == (
+        (alpha.name, "ValueError: synthetic corpus row failure"),
+    )
+    assert {
+        name: _query(index.database, f"SELECT * FROM {name}") for name in before_alpha
+    } == before_alpha
+    assert {
+        name: _query(index.database, f"SELECT * FROM {name}") for name in before_beta
+    } == {
+        "z_row_beta": [("beta-v1", 1.25)],
+        "a_row_beta": [("beta-v1-detail", 7)],
+    }
+    after_failure = read_bookkeeping_for(index)
+    assert (
+        after_failure.producers[alpha.name] == before_bookkeeping.producers[alpha.name]
+    )
+    assert after_failure.producers[beta.name] != before_bookkeeping.producers[beta.name]
+    failed_transaction_statements = [
+        statement
+        for statement in writes
+        if statement in {"BEGIN", "COMMIT", "ROLLBACK"}
+    ]
+    assert any("z_row_beta" in statement for statement in writes)
+    assert any("a_row_beta" in statement for statement in writes)
+    assert not any(
+        "z_row_alpha" in statement or "a_row_alpha" in statement for statement in writes
+    )
+
+    alpha.rows_error = None
+    alpha.rows_override = {
+        "z_row_alpha": (("alpha-v1", 1.25),),
+        "a_row_alpha": (("alpha-v1-detail", "wrong integer type"),),
+    }
+    with _record_sql_writes(monkeypatch) as writes:
+        bad_shape = _refresh(index.database, data_root)
+    assert bad_shape.corpus_refreshed == ()
+    assert bad_shape.producer_errors[0][0] == alpha.name
+    assert bad_shape.producer_errors[0][1].startswith("RowShapeError:")
+    bad_shape_transaction_statements = [
+        statement
+        for statement in writes
+        if statement in {"BEGIN", "COMMIT", "ROLLBACK"}
+    ]
+    assert (
+        _query(index.database, "SELECT * FROM z_row_alpha")
+        == before_alpha["z_row_alpha"]
+    )
+    assert (
+        _query(index.database, "SELECT * FROM a_row_alpha")
+        == before_alpha["a_row_alpha"]
+    )
+    assert (
+        read_bookkeeping_for(index).producers[alpha.name]
+        == before_bookkeeping.producers[alpha.name]
+    )
+    assert bad_shape_transaction_statements == [
+        "BEGIN",
+        "ROLLBACK",
+    ]
+    assert failed_transaction_statements == [
+        "BEGIN",
+        "ROLLBACK",
+        "BEGIN",
+        "COMMIT",
+    ]
+
+    alpha.rows_override = None
+    with _record_sql_writes(monkeypatch) as writes:
+        retried = _refresh(index.database, data_root)
+    assert retried.corpus_refreshed == (alpha.name,)
+    assert _query(index.database, "SELECT * FROM z_row_alpha") == [("alpha-v1", 1.25)]
+    assert _query(index.database, "SELECT * FROM a_row_alpha") == [
+        ("alpha-v1-detail", 7)
+    ]
+
+
+def test_corpus_fingerprint_failure_skips_its_transaction_and_keeps_meta_current(
+    tmp_path: Path,
+    core_registry: tuple[ResolvedTable, ...],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_root = tmp_path / "fingerprint-failure-data"
+    data_root.mkdir()
+    alpha = _RecordingCorpusProducer(
+        "test.corpus.alpha",
+        _corpus_table_specs("alpha", "z_fp_alpha", "a_fp_alpha"),
+        "alpha-v0",
+        "alpha-v0",
+        [],
+        [],
+    )
+    beta = _RecordingCorpusProducer(
+        "test.corpus.beta",
+        _corpus_table_specs("beta", "z_fp_beta", "a_fp_beta"),
+        "beta-v0",
+        "beta-v0",
+        [],
+        [],
+    )
+    monkeypatch.setattr(registry, "CORPUS_PRODUCERS", (alpha, beta))
+    tables = registry.registered_tables()
+    assert core_registry
+    index = _empty_registered_index(
+        tmp_path / "fingerprint-failure.duckdb", data_root, tables
+    )
+    before = _index_snapshot(index)
+    before_bookkeeping = read_bookkeeping_for(index)
+    alpha.fingerprint_value = "alpha-v1"
+    alpha.label = "alpha-v1"
+    alpha.fingerprint_error = LookupError("synthetic fingerprint failure")
+    beta.fingerprint_value = "beta-v1"
+    beta.label = "beta-v1"
+    athlete = AthleteInputs(
+        max_hr_bpm=191,
+        resting_hr_bpm=51,
+        ftp_watts=283.0,
+    )
+    changed_snapshot = corpus.corpus_snapshot(
+        data_root,
+        scan_workout_pages(data_root),
+        today=date(2026, 10, 6),
+        athlete_fingerprint=athlete_fingerprint(athlete),
+        held=frozenset(),
+    )
+    assert before_bookkeeping.producers[beta.name] != combined_corpus_fingerprint(
+        beta, changed_snapshot
+    )
+
+    with _record_sql_writes(monkeypatch) as writes:
+        failed = _refresh(index.database, data_root, athlete=athlete)
+    assert failed.corpus_refreshed == (beta.name,)
+    assert failed.producer_errors == (
+        (alpha.name, "LookupError: synthetic fingerprint failure"),
+    )
+    assert len(alpha.row_snapshots) == 1
+    assert _query(index.database, "SELECT * FROM z_fp_alpha") == [("alpha-v0", 1.25)]
+    assert _query(index.database, "SELECT * FROM a_fp_alpha") == [
+        ("alpha-v0-detail", 7)
+    ]
+    assert _query(index.database, "SELECT * FROM z_fp_beta") == [("beta-v1", 1.25)]
+    after = read_bookkeeping_for(index)
+    assert after.producers[alpha.name] == before_bookkeeping.producers[alpha.name]
+    assert after.producers[beta.name] != before_bookkeeping.producers[beta.name]
+    assert after.meta.athlete_fingerprint == athlete_fingerprint(athlete)
+    assert after.meta.athlete_fingerprint != before_bookkeeping.meta.athlete_fingerprint
+    assert [
+        statement
+        for statement in writes
+        if statement in {"BEGIN", "COMMIT", "ROLLBACK"}
+    ] == ["BEGIN", "COMMIT", "BEGIN", "COMMIT"]
+    rows_after = {row[0]: row[2] for row in _index_snapshot(index)[1]}
+    rows_before = {row[0]: row[2] for row in before[1]}
+    for table in ("activities", "pages", "page_sources", "loads", "quality_flags"):
+        assert rows_after[table] == rows_before[table]
+
+    alpha.fingerprint_error = None
+    retried = _refresh(index.database, data_root, athlete=athlete)
+    assert retried.corpus_refreshed == (alpha.name,)
+    assert _query(index.database, "SELECT * FROM z_fp_alpha") == [("alpha-v1", 1.25)]
 
 
 def test_empty_index_refresh_adds_both_tiers_for_synthetic_pages(

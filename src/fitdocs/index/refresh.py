@@ -8,11 +8,13 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
+from fitdocs import version
 from fitdocs.index import corpus, derive, fingerprint, registry
 from fitdocs.index.bookkeeping import (
     BOOKKEEPING_TABLES,
     Bookkeeping,
     ComputedState,
+    IndexMeta,
     PageState,
 )
 from fitdocs.index.corpus import LeftOutPage, ScannedPage
@@ -26,11 +28,16 @@ from fitdocs.index.producer import (
 from fitdocs.index.schema import ResolvedTable, TableScope, resolve_tables
 from fitdocs.index.store import (
     IndexConnection,
+    apply_descriptions,
     delete_page_rows,
     delete_page_state,
+    duckdb_version,
     insert_rows,
+    replace_table_rows,
     transaction,
+    write_meta,
     write_page_state,
+    write_producer_state,
 )
 from fitdocs.metrics.types import AthleteInputs
 
@@ -157,9 +164,9 @@ def reconcile(
     page_errors: list[tuple[str, str]] = []
     scanned_keys: set[str] = set()
 
+    plans: list[tuple[ScannedPage, PageState | None, bool, str, bool]] = []
     for page in scan.pages:
         page_key = page.page_key
-        scanned_keys.add(page_key)
         previous = bookkeeping.pages.get(page_key)
         document_due = (
             previous is None
@@ -183,6 +190,22 @@ def reconcile(
                 and current_render_fingerprint != previous.render_fingerprint
             )
             computed_due = retry_due or render_due
+        plans.append(
+            (
+                page,
+                previous,
+                document_due,
+                current_render_fingerprint,
+                computed_due,
+            )
+        )
+
+    computed_total = sum(plan[4] for plan in plans)
+    computed_done = 0
+
+    for page, previous, document_due, current_render_fingerprint, computed_due in plans:
+        page_key = page.page_key
+        scanned_keys.add(page_key)
 
         if not document_due and not computed_due:
             continue
@@ -259,6 +282,18 @@ def reconcile(
                 updated.append(page.path)
         except Exception as error:
             page_errors.append((page.path, f"{type(error).__name__}: {error}"))
+        finally:
+            if computed_due:
+                computed_done += 1
+                if (
+                    inputs.progress is not None
+                    and computed_total > PROGRESS_EVERY
+                    and (
+                        computed_done % PROGRESS_EVERY == 0
+                        or computed_done == computed_total
+                    )
+                ):
+                    inputs.progress(computed_done, computed_total)
 
     removed_states = sorted(
         (state for key, state in bookkeeping.pages.items() if key not in scanned_keys),
@@ -271,6 +306,71 @@ def reconcile(
             delete_page_state(conn, state.page_key)
         states.pop(state.page_key, None)
         removed.append(state.path)
+
+    producer_errors: list[tuple[str, str]] = []
+    corpus_refreshed: list[str] = []
+    current_athlete_fingerprint = fingerprint.athlete_fingerprint(inputs.athlete)
+    snapshot = corpus.corpus_snapshot(
+        inputs.data_root,
+        scan,
+        today=inputs.today,
+        athlete_fingerprint=current_athlete_fingerprint,
+        held=frozenset(states),
+    )
+    corpus_tables = {
+        table.name: table for table in tables if table.scope is TableScope.CORPUS
+    }
+    for producer in registry.CORPUS_PRODUCERS:
+        try:
+            producer_fingerprint = fingerprint.combined_corpus_fingerprint(
+                producer, snapshot
+            )
+        except Exception as error:
+            producer_errors.append((producer.name, f"{type(error).__name__}: {error}"))
+            continue
+        if bookkeeping.producers.get(producer.name) == producer_fingerprint:
+            continue
+        try:
+            with transaction(conn):
+                producer_rows = producer.rows(snapshot)
+                for table_spec in producer.tables:
+                    replace_table_rows(
+                        conn,
+                        corpus_tables[table_spec.name],
+                        producer_rows[table_spec.name],
+                    )
+                write_producer_state(
+                    conn,
+                    producer.name,
+                    TableScope.CORPUS,
+                    tuple(table.name for table in producer.tables),
+                    producer_fingerprint,
+                )
+        except Exception as error:
+            producer_errors.append((producer.name, f"{type(error).__name__}: {error}"))
+        else:
+            corpus_refreshed.append(producer.name)
+
+    current_fitdocs_version = version.tool_version()
+    current_duckdb_version = duckdb_version()
+    if (
+        bookkeeping.meta.athlete_fingerprint != current_athlete_fingerprint
+        or bookkeeping.meta.fitdocs_version != current_fitdocs_version
+        or bookkeeping.meta.duckdb_version != current_duckdb_version
+    ):
+        with transaction(conn):
+            if bookkeeping.meta.fitdocs_version != current_fitdocs_version:
+                apply_descriptions(conn, tables)
+            write_meta(
+                conn,
+                IndexMeta(
+                    schema_version=bookkeeping.meta.schema_version,
+                    fitdocs_version=current_fitdocs_version,
+                    duckdb_version=current_duckdb_version,
+                    data_root=bookkeeping.meta.data_root,
+                    athlete_fingerprint=current_athlete_fingerprint,
+                ),
+            )
 
     without_computed = tuple(
         sorted(
@@ -288,8 +388,8 @@ def reconcile(
         removed=tuple(removed),
         without_computed=without_computed,
         page_errors=tuple(page_errors),
-        producer_errors=(),
+        producer_errors=tuple(producer_errors),
         left_out=scan.left_out,
-        corpus_refreshed=(),
+        corpus_refreshed=tuple(corpus_refreshed),
         pages_held=len(states),
     )
