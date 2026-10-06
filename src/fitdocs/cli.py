@@ -2,7 +2,7 @@
 
 A thin typer shell (design: CliApp, ``src/fitdocs/cli.py``): it parses flags,
 resolves configuration, calls the engine, and reports -- it contains no
-rendering or file-pipeline logic of its own. Eleven commands are registered
+rendering or file-pipeline logic of its own. Twelve commands are registered
 on top of the baseline ``--version`` / ``--help`` shell. The tree-processing
 commands documented here are:
 
@@ -30,6 +30,9 @@ commands documented here are:
   Req 8.2, 8.3, 8.6, 8.9; plan-resolution Req 4.3, 8.1). Standalone: this
   command is never chained onto ``sync``, ``regen``, ``load``, ``history`` or
   ``check``, and none of those commands change because it exists (Req 8.8).
+* ``fitdocs index [--out PATH] [--rebuild]`` -- build or refresh the disposable
+  analytics index from the data root's workout pages (analytics-index Req
+  10.1).
 
 Two further commands describe the installed tool rather than a tree and sit
 outside the list above: ``fitdocs plugins`` and ``fitdocs skill [NAME]`` --
@@ -121,7 +124,9 @@ Exit codes (Req 1.5, 2.2, 8.5, 8.7):
   ``[load]`` table is read inside the load pass itself (task 4.1); this
   module reads none of it directly. A configuration error writes nothing,
   and for ``check`` means nothing was
-  scanned either.
+  scanned either. ``fitdocs index`` exits 0 when it is current, 1 when it
+  cannot be brought current, and 2 for invalid configuration. The index
+  post-pass never changes another command's exit code.
 
 Data-root posture (stated here because ``check`` is the first new command to
 exercise it): *a command that describes a tree requires a data root; a
@@ -163,7 +168,7 @@ import sys
 import time
 from datetime import UTC, date, datetime, tzinfo
 from pathlib import Path
-from typing import Final, NoReturn
+from typing import TYPE_CHECKING, Final, NoReturn
 
 import typer
 from rich.console import Console
@@ -241,6 +246,9 @@ from fitdocs.sync import DrainReport, SyncReport, drain, regen, sync
 from fitdocs.tiles import TileStore, load_tile_settings, tile_settings_from_document
 from fitdocs.version import UNKNOWN_VERSION, version_display
 
+if TYPE_CHECKING:
+    from fitdocs.index.refresh import IndexReport, ProgressCallback
+
 _EXIT_SUCCESS: int = 0
 """Everything written and/or skipped; no failures (an all-skipped run, too)."""
 _EXIT_FILE_FAILURES: int = 1
@@ -297,6 +305,11 @@ _OUT_OPTION = typer.Option(
     None,
     "--out",
     help="Output data root; overrides FITDOCS_DATA and any pointer file.",
+)
+_REBUILD_INDEX_OPTION = typer.Option(
+    False,
+    "--rebuild",
+    help="Build a fresh index and atomically replace any existing one.",
 )
 _FORCE_OPTION = typer.Option(
     False,
@@ -372,6 +385,128 @@ _SYNC_OPTION = typer.Option(
     help="Then drain the inbox exactly as `fitdocs sync` does.",
 )
 _SINCE_DATE_RE: Final[re.Pattern[str]] = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+@app.command("index")
+def index_command(
+    out: Path | None = _OUT_OPTION,
+    rebuild: bool = _REBUILD_INDEX_OPTION,
+) -> None:
+    """Build or refresh the disposable analytics index."""
+    from fitdocs.index.build import run_index_command
+    from fitdocs.index.location import IndexLocationError
+    from fitdocs.index.refresh import Outcome
+
+    data_root = _resolved_data_root(out)
+    athlete = _loaded_athlete(data_root)
+    try:
+        report = run_index_command(
+            data_root,
+            environ=os.environ,
+            home=Path.home(),
+            athlete=athlete,
+            today=_today(),
+            rebuild=rebuild,
+            progress=_index_progress(),
+        )
+    except IndexLocationError as error:
+        _config_error(str(error))
+
+    _report_index_command(report)
+    result = report.result
+    successful_outcome = report.outcome in {
+        Outcome.BUILT,
+        Outcome.REFRESHED,
+        Outcome.UNCHANGED,
+    }
+    has_errors = result is not None and bool(
+        result.page_errors or result.producer_errors
+    )
+    if successful_outcome and not has_errors:
+        raise typer.Exit(code=_EXIT_SUCCESS)
+    raise typer.Exit(code=_EXIT_FILE_FAILURES)
+
+
+def _index_progress() -> ProgressCallback:
+    """Print index computation progress on stderr, separate from the report."""
+
+    def report(done: int, total: int) -> None:
+        Console(stderr=True, markup=False, highlight=False, soft_wrap=True).print(
+            f"Indexing: {done}/{total} pages"
+        )
+
+    return report
+
+
+def _report_index_command(report: IndexReport) -> None:
+    """Print the full `fitdocs index` result and any per-page detail."""
+    from fitdocs.index.bookkeeping import ComputedState
+    from fitdocs.index.schema import SCHEMA_VERSION
+
+    console = Console(markup=False, highlight=False, soft_wrap=True)
+    result = report.result
+    table = Table(title="fitdocs index")
+    table.add_column("Result")
+    table.add_column("Count", justify="right")
+    table.add_row("Result", report.outcome.value.replace("_", " ").upper())
+    table.add_row("Pages held", str(result.pages_held if result is not None else 0))
+    table.add_row("Added", str(len(result.added) if result is not None else 0))
+    table.add_row("Updated", str(len(result.updated) if result is not None else 0))
+    table.add_row("Removed", str(len(result.removed) if result is not None else 0))
+    table.add_row(
+        "Without computed values",
+        str(len(result.without_computed) if result is not None else 0),
+    )
+    table.add_row("Left out", str(len(result.left_out) if result is not None else 0))
+    error_count = (
+        len(result.page_errors) + len(result.producer_errors)
+        if result is not None
+        else 0
+    )
+    table.add_row("Errors", str(error_count))
+    console.print(table)
+
+    if report.location is not None:
+        console.print(f"Index file: {report.location.database}")
+        console.print(f"Schema version: {SCHEMA_VERSION}")
+    if report.outcome.value in {"built", "needs_rebuild"} and report.detail is not None:
+        console.print(f"Rebuilt: {report.detail}")
+    elif report.outcome.value == "staged":
+        console.print("Index replacement staged; run 'fitdocs index' again to finish.")
+        if report.detail:
+            console.print(f"  {report.detail}")
+    elif report.outcome.value == "busy":
+        if report.holder_pid is None:
+            console.print("Index is busy; close the other writer and try again.")
+        else:
+            console.print(
+                f"Index is open in another program (process {report.holder_pid}); "
+                "close it and try again."
+            )
+    elif report.outcome.value == "failed" and report.detail is not None:
+        console.print(f"Index failed: {report.detail}")
+    elif report.outcome.value == "not_built":
+        console.print("Index is not built.")
+
+    if result is None:
+        return
+    missing_messages = {
+        ComputedState.SOURCE_MISSING: "base file missing from the archive",
+        ComputedState.SOURCE_UNREADABLE: "base file could not be read",
+        ComputedState.SOURCE_UNDECODABLE: "base file could not be decoded",
+    }
+    for path, state in result.without_computed:
+        console.print(f"{path}: {missing_messages[state]}")
+    for item in result.left_out:
+        if item.reason == "no_base_reference":
+            detail = "no archived base reference"
+        else:
+            detail = f"lists the same base file as {item.collides_with}; not indexed"
+        console.print(f"{item.path}: {detail}")
+    for path, error in result.page_errors:
+        console.print(f"Could not index {path}: {error}")
+    for producer, error in result.producer_errors:
+        console.print(f"Could not refresh {producer}: {error}")
 
 
 @app.command("sync")
