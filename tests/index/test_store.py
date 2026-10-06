@@ -574,25 +574,36 @@ def test_fetch_conversion_errors_are_wrapped_and_chained(
         assert str(raised.value) == str(raised.value.__cause__)
 
 
-def test_interrupt_at_fetch_is_wrapped_in_bounded_subprocess(tmp_path: Path) -> None:
+def test_interrupt_during_execute_or_fetch_is_wrapped_in_bounded_subprocess(
+    tmp_path: Path,
+) -> None:
     script = """
 import threading
 from pathlib import Path
 from fitdocs.index.store import IndexInterrupted, create_index
 
 connection = create_index(Path(__import__('sys').argv[1]))
+timer = threading.Timer(0.5, connection.interrupt)
+phase = 'execute'
 try:
-    result = connection.execute('SELECT count(*) FROM range(1000000000000)')
-    timer = threading.Timer(0.5, connection.interrupt)
     timer.start()
     try:
+        result = connection.execute('SELECT count(*) FROM range(1000000000000)')
+        phase = 'fetch'
         result.fetchmany(1)
-    except IndexInterrupted:
-        print('interrupt-wrapped')
+    except IndexInterrupted as error:
+        cause = error.__cause__
+        cause_name = type(cause).__name__ if cause is not None else 'NONE'
+        cause_message = str(cause) if cause is not None else 'NONE'
+        print(f'phase={phase}')
+        print(f'cause={cause_name}')
+        print(f'message={error}')
+        print(f'cause-message={cause_message}')
     else:
-        raise AssertionError('large query was not interrupted at fetch')
+        raise AssertionError('large query was not interrupted during execute or fetch')
     finally:
         timer.cancel()
+        timer.join(timeout=5)
 finally:
     connection.close()
 """
@@ -605,7 +616,13 @@ finally:
         cwd=Path(__file__).parents[2],
     )
     assert completed.returncode == 0, completed.stderr
-    assert completed.stdout.strip() == "interrupt-wrapped"
+    lines = completed.stdout.splitlines()
+    assert lines[1] == "cause=InterruptException"
+    assert (
+        lines[2].removeprefix("message=")
+        == lines[3].removeprefix("cause-message=")
+        != ""
+    )
 
 
 def test_duckdb_version_comes_from_installed_distribution_metadata() -> None:

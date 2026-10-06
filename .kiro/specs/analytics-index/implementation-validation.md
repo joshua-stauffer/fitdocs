@@ -1,5 +1,17 @@
 # Implementation handoff — 2026-10-06
 
+## Interruption update
+
+The maintainer authorized the bounded diagnostic. It confirmed that the test
+started its timer after a potentially expensive execute call. A reviewed
+test-only repair now arms the timer first and preserves interruption mapping,
+cause/message and the original 60-second deadline. Fresh floor: 62/62 passed,
+existing synthetic HOME empty; current store: 91/91; full regression: 9,385
+passed, two expected skips. No dependency or runtime policy changed. The floor
+stop is resolved; the historical failed run below remains failed evidence.
+Handoff import repair and the remaining task 8.4/8.5 checks are still pending.
+
+
 ## Validation Report
 
 - DECISION: NO-GO
@@ -14,8 +26,8 @@
   and tests in a read-only assessment. Mapping is not complete verification.
 - LOCAL blocker: `src/fitdocs/index/handoff.py:9` imports `sync.RenderedPage`
   at runtime, contrary to the design's `TYPE_CHECKING`-only allowance.
-- UNCLEAR blocker: the selected DuckDB 1.2.0 floor suite failed. Its internal
-  cause is unproven; task 8.4 explicitly requires stopping on any failure.
+- Resolved floor blocker: the selected DuckDB 1.2.0 suite now passes after
+  the reviewed timer-order repair. The earlier failure is retained below.
 - Manual work: task 8.5's real-data performance measurements remain pending.
 - Final build and built-artifact smoke: unrun after the floor stop.
 
@@ -45,11 +57,10 @@ Raw evidence on the implementation machine:
 
 ## Resume
 
-1. Obtain authorization to resume the stopped floor investigation. Use a
-   bounded synthetic reproduction through the store facade to record create,
-   execute, timer start/fire, fetch and close phases. Preserve the original
-   assertions and timeout. Any dependency-floor change requires the roadmap
-   decision specified in task 8.4. Do not read the real data root.
+1. The authorized floor diagnostic and test repair are complete. Preserve
+   their evidence in `diagnostic-authorized` and `review-interruption` under
+   the scratch evidence directory. Any future dependency-floor change still
+   requires the roadmap decision specified in task 8.4.
 2. Repair the handoff import through a Luna implementer. Guard `RenderedPage`
    with `TYPE_CHECKING`, retaining its exact annotations and behavior. Give
    annotation introspection tests explicit `localns` containing the owner's
