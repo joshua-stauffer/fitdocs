@@ -624,3 +624,62 @@ def test_naming_the_connector_package_instead_of_the_module_reds_the_module_pin(
     # The command-name half is untouched by this mutation -- it is a
     # different assertion catching a different defect.
     assert _names_tiles_and_both_commands(mutated_window)
+
+
+def test_analytics_index_is_published_in_steering_without_changing_network_scope() -> (
+    None
+):
+    steering = _REPO_ROOT / ".kiro" / "steering"
+    tech = (steering / "tech.md").read_text(encoding="utf-8")
+    structure = (steering / "structure.md").read_text(encoding="utf-8")
+
+    architecture = tech.split("## Architecture", 1)[1].split("## Core Technologies", 1)[
+        0
+    ]
+    flat_architecture = " ".join(architecture.split())
+    assert (
+        "No server, no background jobs. One database: a derived, disposable "
+        "analytics index outside the data root, rebuilt from the documents "
+        "and archived `.fit` files, never read back into a document."
+    ) in flat_architecture
+    assert (
+        "Everything is re-derivable from the `.fit` + profile" not in flat_architecture
+    )
+    assert (
+        "the index itself is a cache, not state, and deleting it costs only "
+        "rebuild time." in flat_architecture
+    )
+    assert "Planned (Phase 10" not in flat_architecture
+
+    libraries = tech.split("## Key Libraries", 1)[1].split(
+        "## Network and Credentials", 1
+    )[0]
+    assert (
+        "`duckdb` — the analytics index, imported only by `fitdocs.index.store`; "
+        "index connections use no extensions or external file access."
+    ) in " ".join(libraries.split())
+
+    network = tech.split("## Network and Credentials", 1)[1].split(
+        "## Development Standards", 1
+    )[0]
+    flat_network = " ".join(network.split())
+    assert (
+        "`history`, `plan`, `derive-benchmarks`, `index`, and rendering — makes "
+        "no connector request"
+    ) in flat_network
+    assert (
+        "Every DuckDB connection fitdocs opens has extension auto-install, "
+        "extension auto-load and external file access disabled; the allow-list "
+        "binds fitdocs's own connections, not an outside client that opens the "
+        "index file."
+    ) in flat_network
+    assert "connectors add no runtime dependency" in flat_network
+    assert "the frozen runtime dependency list is unchanged" not in flat_network
+
+    organization = structure.split("## Code Organization Principles", 1)[1]
+    assert (
+        "`index` (the analytics index) imports `model`, `metrics`, `compose`, "
+        "`ingest`, `contract`, `docio`, `docmerge`, `layout`, `athlete`, "
+        "`settings`, `version` and the load payload readers; only `cli` imports "
+        "it; only `index.store` imports `duckdb`."
+    ) in " ".join(organization.split())

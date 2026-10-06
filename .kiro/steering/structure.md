@@ -81,6 +81,10 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
 - `LoadCalculator` implementations declare their required inputs so the CLI
   can prompt for missing data generically — no calculator-specific prompting
   code in the CLI.
+- `index` (the analytics index) imports `model`, `metrics`, `compose`,
+  `ingest`, `contract`, `docio`, `docmerge`, `layout`, `athlete`, `settings`,
+  `version` and the load payload readers; only `cli` imports it; only
+  `index.store` imports `duckdb`.
 - Output documents must be valid, readable markdown in any renderer
   (GitHub, Obsidian, plain `cat`); PKM-specific affordances (frontmatter,
   wikilinks) degrade gracefully.

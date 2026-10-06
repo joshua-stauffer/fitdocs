@@ -9,19 +9,12 @@ Installable Python CLI with a one-way pipeline:
          → load calculators (pluggable) → markdown + SVG render → data root
 ```
 
-No server, no database, no background jobs. State = the user's files
-(source `.fit`s, generated markdown/SVG, a small athlete profile file, the
-per-user connector credentials files outside the data root, and the
-connector ledgers under `.fitdocs/`).
-Everything is re-derivable from the `.fit` + profile.
-
-*Planned (Phase 10 of the roadmap, discovery 2026-10-04):* a derived
-DuckDB analytics index, one file per data root in a per-user cache
-directory outside the data root. It is a cache, not state: it is rebuilt
-from the documents and the archived `.fit` files, never read back into a
-document, and deleting it costs only rebuild time. This note is not a
-contradiction of the rule above. `analytics-index` amends this section,
-Key Libraries and Network and Credentials when it lands.
+No server, no background jobs. One database: a derived, disposable analytics
+index outside the data root, rebuilt from the documents and archived `.fit`
+files, never read back into a document. Workout documents and their derived
+values remain re-derivable from archived `.fit` sources and the athlete
+profile; the index itself is a cache, not state, and deleting it costs only
+rebuild time.
 
 ## Core Technologies
 
@@ -34,6 +27,8 @@ Key Libraries and Network and Credentials when it lands.
 ## Key Libraries
 
 - `garmin-fit-sdk` — `.fit` decode (records, sessions, laps, sets, devices)
+- `duckdb` — the analytics index, imported only by `fitdocs.index.store`; index
+  connections use no extensions or external file access.
 - CLI + prompting: `typer` + `rich` (interactive prompts for missing
   load-calculator inputs)
 - Charts: **hand-generated SVG** (no runtime JS). Embedded in markdown via
@@ -49,15 +44,17 @@ Network-capable code lives in exactly two places: the map-tile fetch
 `fitdocs connect` (one authentication call per attempt) and `fitdocs pull`
 (a single-attempt token renewal when a login-style token is due, then
 bounded, retried data calls); every other command — `sync`, `regen`,
-`load`, `check`, `history`, `plan`, `derive-benchmarks`, and rendering —
+`load`, `check`, `history`, `plan`, `derive-benchmarks`, `index`, and rendering —
 makes no connector request, whether or not connectors are configured, and
 keeps its existing map-tile behavior (rendering a map may fetch missing
 basemap tiles unless tile requests are disabled). Both network paths go
 through the standard library's `urllib` only, sending the one composed
 fitdocs User-Agent; connectors add no runtime dependency (beyond the
-standard library they use only the already-required `tomli_w`; the frozen
-runtime dependency list is unchanged). Connector credentials and tokens are
-stored per user outside the data root — one TOML file per instance in a
+standard library they use only the already-required `tomli_w`). Every DuckDB
+connection fitdocs opens has extension auto-install, extension auto-load and
+external file access disabled; the allow-list binds fitdocs's own connections,
+not an outside client that opens the index file. Connector credentials and
+tokens are stored per user outside the data root — one TOML file per instance in a
 per-user directory, never inside the data root (a credentials directory
 that resolves there is refused) — and the connectors package makes no
 clock call of its own (`now` and `sleep`
