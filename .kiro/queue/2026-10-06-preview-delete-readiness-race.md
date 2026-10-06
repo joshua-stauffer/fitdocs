@@ -84,6 +84,33 @@ The earlier failed run remains a failure. This item still owns the known
 post-deletion synchronization repair; this extra observation bounds what
 that repair can claim to resolve.
 
+### Distinct initial-edit observation (analytics-index 8.3)
+
+On the six-document amendment candidate based on `3e2191a`, the canonical
+run failed at `tests/sitebuild/test_preview.py:1141` / helper `:1023` with
+`not within 20.0 s: the edited text of /why/`: 9,384 passed, one failed and
+two expected skips. Captured output said `Build started` without a completion
+message; this does not establish which build, watcher or HTTP stage stalled.
+The exact retry passed in 20.24s. The controller inspected the raw canonical
+failure, exact retry and debugger report, but did not rerun the trace.
+Evidence: `/private/tmp/analytics-index-evidence/8.3/review1/canonical-full.txt`
+and `preview-exact-retry.txt` in that directory.
+
+A detached pre-task `3e2191a` trace detected the edit at 4.223s, completed
+build/sync at 7.476s and served the marker at 8.496s, 4.355s after the write.
+It subsequently failed at the separate later deletion/404 assertion. The
+initial-edit timeout was not reproduced, its original fixture was gone, and
+its internal cause remains unresolved (MEDIUM readiness classification,
+LOW exact mechanism). Preview code, tests and dependencies were byte-identical
+before the amendment task. Diagnostic edits were restored. See
+`/private/tmp/analytics-index-evidence/8.3/debug1/REPORT.md`,
+`baseline-trace.txt` and `runtime-identity.json`.
+
+Acceptance required an unchanged retry through a fresh full run: 9,385 passed,
+two expected skips, exit 0; `/private/tmp/analytics-index-evidence/8.3/review1-debug1-retry/VERDICT.md`.
+The earlier failure remains a failure. Neither the known deletion repair nor
+the added-page observation explains or resolves this initial-edit stall.
+
 ## How to pick it up
 
 1. Read the live-preview test's delete/break sequence and its bounded
@@ -96,7 +123,7 @@ that repair can claim to resolve.
 3. Run the exact live-preview test and relevant sitebuild suite through
    `uv run --group docs pytest`, plus static checks. Use the project's correct
    interpreter and warm uv cache. Do not patch analytics-index around this test.
-4. If the separate added-page deadline recurs during verification, capture
+4. If the separate initial-edit or added-page deadline recurs during verification, capture
    polling build start/end, staged/HTML existence, sync containing the added
    page, generator process status and HTTP status **at the timeout, before
    fixture cleanup**. Diagnose that state before proposing another fix;
