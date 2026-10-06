@@ -156,6 +156,13 @@ class IndexConnection:
     def close(self) -> None:
         self._connection.close()
 
+    def statement_types(self, sql: str) -> tuple[str, ...]:
+        try:
+            statements = self._connection.extract_statements(sql)
+        except self._errors.error_type as error:
+            raise IndexStatementError(str(error)) from error
+        return tuple(statement.type.name for statement in statements)
+
     def __enter__(self) -> IndexConnection:
         return self
 

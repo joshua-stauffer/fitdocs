@@ -354,7 +354,7 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
     recorded in Implementation Notes with its `analytics-index` task.
   - _Requirements: 4.2, 6.1_
 
-- [ ] 1.2 Append the statement-type facade method
+- [x] 1.2 Append the statement-type facade method
   - **The method.** Append `IndexConnection.statement_types(sql)` to
     `store.py`, per design.md § StoreFacadeAddition:
     - it returns DuckDB's statement-type names, without the `StatementType.`
@@ -1419,3 +1419,5 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 - 2026-10-07 validation environment: default sandbox denies local preview socket binds (errno 1), independently resolved by an escalated loopback control. The first round-3 full run failed 15 tests with 30 errors because of socket permission and missing hatchling/PyYAML resolver metadata; tracked forbidden-content check passed, artifact checks failed to build rather than finding forbidden content. Warmed scratch build/docs tool metadata from stable main, leaving the locked worktree environment unchanged. Canonical rerun uses the required socket permissions; the earlier run remains failed.
 
 - 2026-10-07 task 1.1 accepted after round-3 APPROVED: escalated canonical suite 9,397 passed, two optional actionlint skips, exit 0 in 263.98 s; all 24 claimed mutation observations and three reviewer mutations red with no survivors. Fresh parent completion check: query 10 passed in 4.92 s, scoped mypy four files and Ruff check/format clean, diff check clean. No production source changes. Restricted earlier runs remain failed environment evidence.
+
+- 2026-10-07 task 1.2 accepted and independently APPROVED after one test-only remediation: append-only seven-line statement_types facade using extract_statements/type.name; all 14 claimed entries, five reviewer mutations and 30 literal-row mutations observed sole red, no survivors. Direct PRAGMA syntax, exact parser message/original cause and non-forwarding facade/backend execution recorders close the first-review gaps. Canonical 9,430 passed/two optional skips; floor 33 passed; fresh parent store/query/boundary 177 passed in 11.96 s, mypy/Ruff/diff clean. Full command-level 1.5/5.2 behavior remains owned by later tasks.
