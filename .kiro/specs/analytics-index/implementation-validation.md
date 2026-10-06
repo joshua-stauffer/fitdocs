@@ -1,3 +1,33 @@
+# Merge authorization — verification deferred
+
+On 2026-10-07 the maintainer explicitly authorized merging analytics-index
+to main before finishing verification, to unblock analytics-query and
+analytics-derived. This overrides the normal pre-merge validation gate;
+it does not establish feature-level GO or complete tasks 8.4 and 8.5.
+
+The reviewed implementation and approved `document_load_basis` reader are
+available for both downstream specs after this merge. Schema version is 1;
+contract version is 9, advanced once from the pre-landing main value of 8.
+Later verification must check that landing history, not bump the contract
+again solely because this feature is now on main.
+
+## Verification still owed
+
+- Task 8.4: resolve the distinct docs-site initial-edit timeout, apply and
+  review the preserved 27-module mypy registration patch, then complete
+  fresh floor/plain/UTC/CI/static gates and release/artifact/installed-wheel
+  smoke. The latest UTC run failed both preview cases before deletion.
+- Task 8.5: rebuild wall time/database size and no-change/five-file sync
+  index-pass timings. The requested data-root and five FIT-file paths are
+  still missing; no real measurements have run.
+- Keep both tasks and feature-completion status open. Downstream work may
+  proceed under the maintainer's explicit merge authorization.
+
+All earlier failures and evidence below remain valid historical records.
+Their statements prohibiting merge describe the earlier authorization state.
+
+---
+
 # Current implementation handoff — after owning docs-site repair
 
 ## Validation Report
