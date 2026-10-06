@@ -44,6 +44,7 @@ the contract's"), just no longer duplicated once per engine.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
@@ -86,10 +87,31 @@ def read_frontmatter(path: Path) -> dict[str, object] | None:
     :func:`fitdocs.contract.parse_frontmatter` (Req 1.2). In every case the
     caller simply skips the file and the scan continues.
     """
+    document = read_document(path)
+    return None if document is None else document.frontmatter
+
+
+@dataclass(frozen=True)
+class DocumentRead:
+    """The original document bytes, decoded text and parsed frontmatter."""
+
+    data: bytes
+    text: str
+    frontmatter: dict[str, object] | None
+
+
+def read_document(path: Path) -> DocumentRead | None:
+    """Read a document once, returning its bytes and interpretations, or None.
+
+    The symlink refusal is shared with :func:`read_frontmatter`. Unreadable or
+    undecodable files yield ``None``; malformed or absent frontmatter is kept
+    as a document with ``frontmatter=None``. This function never raises.
+    """
     if path.is_symlink():
         return None
     try:
-        text = path.read_text(encoding="utf-8")
+        data = path.read_bytes()
+        text = data.decode("utf-8")
     except (OSError, UnicodeDecodeError):
         return None
-    return parse_frontmatter(text)
+    return DocumentRead(data, text, parse_frontmatter(text))
