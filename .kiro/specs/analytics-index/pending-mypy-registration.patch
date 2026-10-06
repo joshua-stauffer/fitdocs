@@ -1,0 +1,38 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index 05185a4..a0eb643 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -191,6 +191,33 @@ files = [
+     "tests/test_compose_e2e.py",
+     "tests/test_compose_passes_e2e.py",
+     "scripts",
++    "tests/index/__init__.py",
++    "tests/index/_helpers.py",
++    "tests/index/conftest.py",
++    "tests/index/test_boundary.py",
++    "tests/index/test_build.py",
++    "tests/index/test_cli_index.py",
++    "tests/index/test_cli_post_pass.py",
++    "tests/index/test_contract_docs.py",
++    "tests/index/test_core_computed.py",
++    "tests/index/test_core_documents.py",
++    "tests/index/test_corpus.py",
++    "tests/index/test_derive.py",
++    "tests/index/test_determinism.py",
++    "tests/index/test_fingerprint.py",
++    "tests/index/test_handoff.py",
++    "tests/index/test_helpers.py",
++    "tests/index/test_interruption.py",
++    "tests/index/test_isolation.py",
++    "tests/index/test_location.py",
++    "tests/index/test_lock.py",
++    "tests/index/test_post_pass.py",
++    "tests/index/test_producer.py",
++    "tests/index/test_refresh.py",
++    "tests/index/test_schema.py",
++    "tests/index/test_schema_version.py",
++    "tests/index/test_store.py",
++    "tests/test_sync_handoff.py",
+ ]
+ 
+ [tool.pytest.ini_options]

@@ -132,6 +132,14 @@ The failed UTC run remains failed; an unchanged fresh full UTC gate and CI
 gate are required before accepting analytics-index. No preview patch or
 timeout weakening was made in that feature.
 
+The unchanged debug2 full UTC retry reproduced the same `:1179` / 404 failure:
+9,385 passed, one failed, two expected skips in 269.65s, exit 1. The controller
+inspected the final raw output at
+`/private/tmp/analytics-index-evidence/8.4/final-utc-debug2-retry/pytest.txt`.
+The two-debug-cycle limit was exhausted; task 8.4 is blocked on the owning
+docs-site repair. CI mode remains unrun. Both UTC failures are preserved;
+neither is replaced by the passing plain or floor checks.
+
 ## How to pick it up
 
 1. Read the live-preview test's delete/break sequence and its bounded
