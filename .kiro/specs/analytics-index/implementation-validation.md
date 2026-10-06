@@ -1,3 +1,59 @@
+# Current implementation handoff — after owning docs-site repair
+
+## Validation Report
+
+- DECISION: NO-GO
+- Branch: `impl/analytics-index`, rebased and pushed at `3a0b507` onto main
+  `2c17eb3`; no analytics merge. 29/31 executable tasks completed.
+- Owning docs-site deletion-generation repair is independently approved,
+  merged and pushed. It does not claim to resolve every preview timing issue.
+- Source audit: 14 sections/94 criteria mapped, no remaining concrete local
+  integration finding; all 183 runtime Python files identical after rebase.
+- Fresh floor: 62/62 passed on DuckDB 1.2.0/Python 3.11.15; existing
+  synthetic HOME empty before and after. No case excluded or floor changed.
+- Fresh plain: 9,387 passed, two expected actionlint skips, 243.52s;
+  Ruff check/format and canonical mypy (340 files) all exit 0.
+- Fresh UTC: 9,385 passed, two failed, two expected skips, 274.60s; exit 1.
+  Both original and controlled live-preview cases timed out on the
+  **initial edit**, at test_preview.py:1143/helper:1024, before deletion.
+- Native cause unknown: no assertion-time runtime trace. Both debug-cycle
+  limits are exhausted; no further debug, unchanged retry or gate waiver.
+- UTC statics, CI and build/artifact smoke remain unrun after the failed gate.
+- All 27 added Python tests exactly match the pending mypy append. It is
+  unaccepted and preserved in `pending-mypy-registration.patch`; the exact
+  local append was backed up and reversibly removed to leave a clean tree.
+- Task 8.5 is user-authorized: the latest request overrides its usual
+  maintainer-only restriction. Required data-root and five distinct FIT
+  paths remain missing. No actual data accessed or measurements recorded.
+
+## Remaining work
+
+1. Scope the distinct docs-site initial-edit timeout as the next owning
+   investigation; collect build/watcher/stage/HTTP state at timeout before
+   cleanup. Preserve original assertions and deadlines. Existing queue:
+   `.kiro/queue/2026-10-06-preview-delete-readiness-race.md`.
+2. After an approved repair lands, reclaim/rebase analytics and reapply the
+   exact pending registration patch. Run fresh floor/plain/UTC/CI/static
+   gates, release build, artifact gate and installed-wheel smoke.
+3. Supply the data-root and five FIT paths for authorized numbers-only
+   rebuild wall-time/size and no-change/five-file sync index-pass timings.
+   Prepared runner: `/private/tmp/analytics-index-evidence/8.5-authorized/`.
+4. Keep 8.4/8.5 and the analytics roadmap Specs entry unchecked until required
+   evidence is complete. No feature GO or analytics merge.
+
+## Fresh evidence
+
+- `/private/tmp/docs-site-readiness-evidence/review-generation-final/`
+- `/private/tmp/analytics-index-evidence/8.4/final-authorized-local/`
+- `/private/tmp/analytics-index-evidence/8.4/final-authorized-review/`
+- `/private/tmp/analytics-index-evidence/final-authorized/`
+
+The failure above is distinct from the old post-delete 404 failures.
+The historical handoff below retains those failures and earlier limitations;
+its maintainer-only statements describe the earlier authorization state.
+
+---
+
 # Implementation handoff — 2026-10-06
 
 ## Validation Report

@@ -158,3 +158,33 @@ neither is replaced by the passing plain or floor checks.
    fixture cleanup**. Diagnose that state before proposing another fix;
    preserve the timeout and original assertions instead of attributing it
    automatically to the post-deletion race.
+
+## Owning repair landed; distinct initial-edit blocker remains (2026-10-06)
+
+The generation-aware deletion repair landed on main and was pushed as
+`2c17eb3`. A unique valid marker written after unlink must be served along
+with the original marker before malformed input is written. Independent
+review reproduced five claimed and two independent intended assertion
+failures/restored passes; fresh unmodified full suite: 8,703 passed, two
+expected skips, 162.58s, all statics clean. Parent completion: three passed
+in 31.67s. Runtime and dependencies were unchanged. Evidence:
+`/private/tmp/docs-site-readiness-evidence/review-generation-final/VERDICT.md`.
+
+After analytics rebase onto that repair (`3a0b507`), plain full validation
+passed 9,387 tests with two expected skips in 243.52s and all statics passed.
+UTC failed both live-preview cases at the **initial edit**,
+`test_preview.py:1143` / helper `:1024`: `not within 20.0 s: the edited text
+of /why/`. Both failures occurred before deletion or the new generation wait.
+UTC result: 9,385 passed, two failed, two expected skips, 274.60s, exit 1.
+Raw: `/private/tmp/analytics-index-evidence/8.4/final-authorized-review/utc/pytest.txt`.
+The controller inspected both tracebacks. No state was captured at timeout
+before cleanup; native timing cause remains unknown. This is separate from
+the repaired predicate gap, and a plain pass does not waive the UTC failure.
+
+The existing initial-edit/add observations remain open context. Both the
+analytics task and owning repair exhausted their two debug rounds; no third
+debug or unchanged retry was run. Next work must explicitly scope the
+remaining initial-edit stall and capture polling/build/sync/HTTP state at
+timeout before proposing a repair. Preserve all deadlines and assertions.
+The original deletion-focused pickup recipe above is historical after
+`2c17eb3`; this initial-edit investigation is the remaining follow-up.
