@@ -19,6 +19,8 @@ context:
   - tests/test_preserved_guarantees.py
   - tests/golden/_serialize.py
   - tests/test_contract.py
+  - tests/test_effort_tags_e2e.py
+  - src/fitdocs/load/types.py
   - .kiro/steering/change-protocol.md
 blocked_by: []
 ---
@@ -58,6 +60,24 @@ More generally: every future task that pins a `mypy`-only claim inherits this
 hole, and the failure is invisible rather than noisy.
 
 ## Evidence
+
+**Additional reported baseline evidence, analytics-index task 7.3
+(2026-10-06).** During remediation, importing an existing calculator test
+helper pulled `tests/test_effort_tags_e2e.py` into scoped mypy. The implementer
+reported eight errors in three files: six serialization/determinism errors
+already recorded below, plus two `attr-defined` errors at
+`tests/test_effort_tags_e2e.py:53`: `fitdocs.load.types` does not explicitly
+export `Activity` or `DerivedMetrics`. The controller inspected the raw output
+at `/private/tmp/analytics-index-evidence/7.3/remediation1/mypy.txt` and the
+imports, but did not independently rerun that typing command. At `2e97221`,
+`git diff --exit-code main -- tests/test_effort_tags_e2e.py tests/golden/_serialize.py src/fitdocs/load/types.py`
+returned exit 0 against main `f36bf46`; these files are unchanged by this
+feature. The guard task uses its own typed calculator fixture and its scoped
+and canonical mypy pass. Before registering the effort-tag E2E module,
+reproduce with `uv run mypy tests/test_effort_tags_e2e.py`, decide whether its
+imports should use the authoritative owners, and repair the errors alongside
+membership registration. This extends the existing perimeter item rather
+than opening duplicate work.
 
 **Additional baseline evidence, analytics-index task 2.5 (2026-10-05).**
 The implementer and independent reviewer confirmed six pre-existing errors
