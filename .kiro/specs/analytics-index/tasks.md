@@ -852,7 +852,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     `INSERT INTO` constant in `store.py`.
   - _Requirements: 4.1, 4.3, 6.3, 6.5, 9.6, 13.5_
 
-- [ ] 5. Reading the corpus and the hand-over
+- [x] 5. Reading the corpus and the hand-over
 
 - [x] 5.1 (P) Scan the workout pages once per refresh
   - **`docio.read_document`.** Append it to `docio`: bytes, text and
@@ -979,7 +979,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
   - _Requirements: 7.5, 9.7, 14.3_
   - _Boundary: SyncHandoff_
 
-- [ ] 5.4 Collect hand-overs within a memory bound
+- [x] 5.4 Collect hand-overs within a memory bound
   - **The handoff module**, per design.md § Handoff:
     `HANDOFF_SAMPLE_BUDGET = 250_000` and `HandoffCollector`. It keys by the
     base sha, uses budget admission, replaces on a repeated key, and checks
@@ -1630,3 +1630,6 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 
 - 5.3: frozen RenderedPage and optional keyword-only on_rendered on sync/drain/regen, threaded through public planned/group/isolated/settle/page paths, synchronous immediately after successful writes. Initial API RED preceded partial carrier/signature work; that patch was preserved and explicitly reversed, expanded behavioral tests preceded callback logic, and OFF2/ON8/removed GREEN was saved. Final tests expanded afterwards; no claim that every final test preceded every API edit. Independent review round3 APPROVED: 38 claimed observations plus two new canonical-path probes produced intended assertion failures and restored passes; full docs/source-enabled suite 9209 passed / two expected actionlint skips; canonical/scoped mypy and repository Ruff clean. Parent fresh completion gate 630 passed; golden-document diff empty.
 - 5.3 branch/payload learnings: private settle tests do not pin public sync/drain/regen forwarding; regen's planned and isolated paths are distinct. Use actual stranded settle writes and unreferenced archive plans, populated athletes for drain/regen, complete nonempty composition provenance, and callback exception identity on settle as well as normal/isolated work. Compare equal reports and full byte trees across cloned callback/no-callback roots. Exact doc_ref must equal an independently known written path relative to the data root in POSIX form; basename and existence alone accept absolute or noncanonical paths. Keep bounded asynchronous-probe workers joined before restoration.
+
+- 5.4: HandoffCollector and fixed Final 250000-sample default budget, base-SHA keys, ordered source matching, readonly retained count, replacement and over-budget admission. Missing-module and OFF4/ON5/removed GREEN saved. Independent review round2 APPROVED: 28 claimed outcomes reproduced (27 intended assertion failures plus one honestly excluded historical KeyError), two new reviewer probes intended RED/restored GREEN; full docs/source-enabled suite 9220 passed / two expected actionlint skips, canonical/scoped mypy and repository Ruff clean. Parent fresh completion gate 11 passed.
+- 5.4 fixture learnings: budget0 must reject a positive page as well as admitting an empty one. Empty/nonarchive sources must preserve count and valid-peer capacity without callback exceptions. Use populated athlete/metrics/donor provenance in whole-carrier preservation fixtures. Clearing peers before pop raises KeyError before the promised retention assertion; the corrected after-pop mutation reaches that assertion. Retain historical early-error output rather than relabelling it as proof. Replacement admission subtracts the old entry before considering its successor, preserving the memory bound.
