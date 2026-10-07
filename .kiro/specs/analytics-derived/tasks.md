@@ -399,7 +399,7 @@ from here.
 
 - [ ] 2. The best-effort computation and the engine seams
 
-- [ ] 2.1 (P) Compute best efforts under the stated continuity rule
+- [x] 2.1 (P) Compute best efforts under the stated continuity rule
   - **The rule module**, per design.md § MeanMaxRule: the three channels, the
     point type, the duration accessor and the curve function; recorded finite
     values only; stretches cut at a step greater than the maximum step; the
@@ -997,3 +997,5 @@ from here.
 - User explicitly authorizes agent-run task 6.4 measurements, overriding its maintainer-only restriction, using the peer-created HealthFit root at `/private/tmp/fitdocs-analytics-query-timings/data` once positively READY. The user confirms this root is equivalent to their actual fitdocs install. Use a private complete copy for writer measurements; never mutate the shared root/index concurrently. Only aggregate counts/timings enter research; personal FITs, pages and source paths remain outside Git. No measurements have run. The earlier 39-file private copy is not the final timing dataset.
 
 - 2026-10-07 resumed task 1.1 accepted after owning polling-watcher repair `0b92561`: fresh independent review APPROVED; canonical 9,395 passed/two optional actionlint skips (262.54s), scoped 113 passed, static checks clean, all 19 claimed plus two new own mutations intended RED/restored GREEN. Parent fresh scoped verification 113 passed. Earlier failed runs retained; no preview deadline or assertion changed. User requests parallel independent tasks in isolated worktrees and a fresh Sol instance for every dispatch; Luna remains the implementer for each task.
+
+- 2026-10-07 task 2.1 accepted after fresh Luna remediation and fresh independent Sol approval: canonical 9,409 passed/two optional actionlint skips; all 23 claimed mutation entries and six new independent variants RED/restored GREEN, including separate power/HR integer exactness. Parent fresh metrics regression 308 passed. Prior invalid flag chronology retained; separately evidenced API-only OFF shell, new test, OFF RED, ON implementation/GREEN, then flag removal satisfies the repair. Producer integration remains later-owned; plain imports are covered by the existing global boundary guard.
