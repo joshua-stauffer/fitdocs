@@ -373,6 +373,43 @@ def _suppressed_day_indices(series: DailySeries, weeks: Sequence[WeekRow]) -> se
     return indices
 
 
+@dataclass(frozen=True)
+class DayRow:
+    """One daily history value, with model values absent on suppressed days."""
+
+    day: date
+    recorded_load: float
+    pages: int
+    pages_with_load: int
+    fitness: float | None
+    fatigue: float | None
+    form: float | None
+    suppressed: bool
+
+
+def day_rows(
+    series: DailySeries, model: ModelSeries, weeks: Sequence[WeekRow]
+) -> tuple[DayRow, ...]:
+    """Pair daily loads with model values, suppressing the same days as chart."""
+    suppressed_indices = _suppressed_day_indices(series, weeks)
+    rows: list[DayRow] = []
+    for index, day_load in enumerate(series.days):
+        suppressed = index in suppressed_indices
+        rows.append(
+            DayRow(
+                day=day_load.day,
+                recorded_load=day_load.recorded_load,
+                pages=day_load.pages,
+                pages_with_load=day_load.pages_with_load,
+                fitness=None if suppressed else model.fitness[index],
+                fatigue=None if suppressed else model.fatigue[index],
+                form=None if suppressed else model.form[index],
+                suppressed=suppressed,
+            )
+        )
+    return tuple(rows)
+
+
 def _contiguous_bands(indices: set[int]) -> tuple[CalendarBand, ...]:
     """Group a set of day indices into contiguous inclusive `CalendarBand`
     ranges, sorted ascending."""

@@ -931,6 +931,13 @@ _HISTORY_SURFACE = {
     "HistoryReport",
     "MethodologyConfigurationError",
     "run_history",
+    "HistoryInputs",
+    "HistoryComputation",
+    "read_history_inputs",
+    "observed_methodologies",
+    "compute_history",
+    "DayRow",
+    "day_rows",
 }
 
 #: Which submodule defines each published name -- the object the identity
@@ -957,6 +964,13 @@ _HISTORY_SURFACE_OWNERS = {
     "HistoryReport": fitdocs.history.engine,
     "MethodologyConfigurationError": fitdocs.history.engine,
     "run_history": fitdocs.history.engine,
+    "HistoryInputs": fitdocs.history.engine,
+    "HistoryComputation": fitdocs.history.engine,
+    "read_history_inputs": fitdocs.history.engine,
+    "observed_methodologies": fitdocs.history.engine,
+    "compute_history": fitdocs.history.engine,
+    "DayRow": fitdocs.history.page,
+    "day_rows": fitdocs.history.page,
 }
 
 

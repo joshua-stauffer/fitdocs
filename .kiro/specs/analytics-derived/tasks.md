@@ -437,7 +437,7 @@ from here.
   - _Boundary: MeanMaxRule_
   - _Depends: 1.1_
 
-- [ ] 2.2 (P) Expose history's computation without its writes
+- [x] 2.2 (P) Expose history's computation without its writes
   - **The history seam**, per design.md § HistorySeam: the inputs and
     computation types, `read_history_inputs`, `observed_methodologies` and
     `compute_history` in `engine.py`, which `run_history` composes; `DayRow`
@@ -999,3 +999,5 @@ from here.
 - 2026-10-07 resumed task 1.1 accepted after owning polling-watcher repair `0b92561`: fresh independent review APPROVED; canonical 9,395 passed/two optional actionlint skips (262.54s), scoped 113 passed, static checks clean, all 19 claimed plus two new own mutations intended RED/restored GREEN. Parent fresh scoped verification 113 passed. Earlier failed runs retained; no preview deadline or assertion changed. User requests parallel independent tasks in isolated worktrees and a fresh Sol instance for every dispatch; Luna remains the implementer for each task.
 
 - 2026-10-07 task 2.1 accepted after fresh Luna remediation and fresh independent Sol approval: canonical 9,409 passed/two optional actionlint skips; all 23 claimed mutation entries and six new independent variants RED/restored GREEN, including separate power/HR integer exactness. Parent fresh metrics regression 308 passed. Prior invalid flag chronology retained; separately evidenced API-only OFF shell, new test, OFF RED, ON implementation/GREEN, then flag removal satisfies the repair. Producer integration remains later-owned; plain imports are covered by the existing global boundary guard.
+
+- 2026-10-07 task 2.2 accepted after complete-date and per-field projection assertions closed the omission survivor: fresh independent canonical 9,392 passed/two optional skips, preservation 475 passed, 17 distinct claimed and three new own mutants RED/restored GREEN; parent fresh seam/API 52 passed. History reports and bytes equal original engine over seven copied scenarios; chart helpers, imports and goldens preserved. The history public surface includes defining-owner entries. Task 2.3 now owns the next plans-only public surface append.
