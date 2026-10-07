@@ -4,18 +4,21 @@ from __future__ import annotations
 
 import os
 import time
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, fields
 from pathlib import Path
 from typing import cast
 
 import pytest
 
 from fitdocs.index import store
+from fitdocs.index.corpus import LeftOutPage
 from fitdocs.index.location import IndexLocation, resolve_index_location
 from fitdocs.index.registry import registered_tables
 from fitdocs.index.schema import UNIT_SUFFIXES
 from fitdocs.index.store import IndexConnection, IndexResult
+from fitdocs.query import format as query_format
 from fitdocs.query import sandbox, schemaview
+from fitdocs.query.freshness import AthleteDrift, CorpusDrift, PageDrift
 from tests.query._helpers import plain_database, schema_only_index
 from tests.query.conftest import HomeDirectory
 
@@ -146,7 +149,9 @@ def test_units_match_registered_columns_and_longest_fixed_suffixes(
                 assert catalog_columns[column_spec.name].unit == expected
                 if expected is not None:
                     unit_columns += 1
-                    assert expected in column_spec.description
+                    assert _description_contains_unit_word(
+                        expected, column_spec.description
+                    )
         assert unit_columns > 0
     finally:
         connection.close()
@@ -381,3 +386,798 @@ def test_schema_created_without_refresh_has_no_missing_descriptions(
     finally:
         connection.close()
     home_dir.assert_untouched()
+
+
+# State view (task 5.1)
+
+
+def _state_fixture(tmp_path: Path) -> schemaview.IndexState:
+    return schemaview.IndexState(
+        database=tmp_path / 'opaque "index".duckdb',
+        recorded_schema_version=17,
+        reads_schema_version=29,
+        fitdocs_version="fitdocs-3.7.11",
+        drift=PageDrift(43, 31, 5, 7, 11),
+        left_out=(
+            LeftOutPage(
+                "workouts/alpha.md",
+                "no_base_reference",
+                "archive/a",
+                "SECRET_FINGERPRINT_ALPHA",
+            ),
+            LeftOutPage(
+                "workouts/beta.md", "duplicate_base", None, "SECRET_FINGERPRINT_BETA"
+            ),
+        ),
+        without_computed={"source_missing": 13, "source_unreadable": 19},
+        athlete=AthleteDrift(23, None),
+        corpus=CorpusDrift(
+            ("weekly_load", "power_curve"),
+            (("derived-a", "ValueError: one"), ("derived-b", "OSError: two")),
+        ),
+        rebuild_reason="schema version differs: 17 != 29",
+    )
+
+
+def test_render_state_text_reports_every_populated_state_field(tmp_path: Path) -> None:
+    state = _state_fixture(tmp_path)
+    text = schemaview.render_state_text(state)
+    expected_fragments = (
+        f"Database: {state.database}",
+        "Recorded schema version: 17",
+        "Read schema version: 29",
+        "Written by fitdocs: fitdocs-3.7.11",
+        "Pages held: 31 / workout pages: 43",
+        "Added: 5",
+        "Changed: 7",
+        "Removed: 11",
+        "Behind: true",
+        "workouts/alpha.md",
+        "no_base_reference",
+        "archive/a",
+        "workouts/beta.md: duplicate_base; collides_with: none",
+        "source_missing: 13",
+        "source_unreadable: 19",
+        "Activities with other athlete inputs: 23",
+        "weekly_load",
+        "power_curve",
+        "derived-a",
+        "ValueError: one",
+        "derived-b",
+        "OSError: two",
+        "schema version differs: 17 != 29",
+        "fitdocs regen",
+        "fitdocs index",
+    )
+    for fragment in expected_fragments:
+        assert fragment in text
+    assert "SECRET_FINGERPRINT_" not in text
+
+
+def test_render_state_text_keeps_unassessed_distinct_from_zero(tmp_path: Path) -> None:
+    state = schemaview.IndexState(
+        database=tmp_path / "index.duckdb",
+        recorded_schema_version=None,
+        reads_schema_version=29,
+        fitdocs_version=None,
+        drift=None,
+        left_out=(),
+        without_computed={"computed": 0},
+        athlete=AthleteDrift(None, "athlete.toml is unreadable"),
+        corpus=None,
+        rebuild_reason=None,
+    )
+    text = schemaview.render_state_text(state)
+    assert "Recorded schema version: unknown" in text
+    assert "Written by fitdocs: unknown" in text
+    assert "Pages held: unknown" in text
+    assert "Behind: unknown" in text
+    assert "Activities with other athlete inputs: unassessed" in text
+    assert "athlete.toml is unreadable" in text
+    assert "computed: 0" in text
+    assert "Rebuild reason: none" in text
+
+
+def test_render_schema_json_has_exact_literal_projection(tmp_path: Path) -> None:
+    import json
+
+    state = _state_fixture(tmp_path)
+    tables = (
+        schemaview.CatalogTable(
+            "zeta|table",
+            'quote " and newline\n雪',
+            (
+                schemaview.CatalogColumn(
+                    "power|w", "DOUBLE", "watt|unit", 'quoted "column"'
+                ),
+            ),
+        ),
+        schemaview.CatalogTable(
+            "alpha",
+            None,
+            (schemaview.CatalogColumn("blank", "VARCHAR", None, None),),
+        ),
+    )
+    rendered = schemaview.render_schema_json(
+        state, tables, {"zeta|table": 37, "alpha": 41}
+    )
+    parsed = json.loads(rendered)
+    assert set(parsed) == {"index", "tables"}
+    index = parsed["index"]
+    assert set(index) == {
+        "database",
+        "schema_version",
+        "reads_schema_version",
+        "fitdocs_version",
+        "pages_held",
+        "workout_pages",
+        "behind",
+        "added",
+        "changed",
+        "removed",
+        "left_out",
+        "without_computed",
+        "athlete",
+        "corpus_behind",
+        "corpus_unassessed",
+        "rebuild_reason",
+    }
+    assert set(index["left_out"][0]) == {"path", "reason", "collides_with"}
+    assert set(index["athlete"]) == {"activities_other_inputs", "skipped_reason"}
+    assert [set(table) for table in parsed["tables"]] == [
+        {"name", "description", "rows", "columns"},
+        {"name", "description", "rows", "columns"},
+    ]
+    assert set(parsed["tables"][0]["columns"][0]) == {
+        "name",
+        "type",
+        "unit",
+        "description",
+    }
+    assert set(parsed["tables"][1]["columns"][0]) == {
+        "name",
+        "type",
+        "unit",
+        "description",
+    }
+    assert type(index["behind"]) is bool
+    assert type(index["added"]) is int
+    assert parsed == {
+        "index": {
+            "database": str(state.database),
+            "schema_version": 17,
+            "reads_schema_version": 29,
+            "fitdocs_version": "fitdocs-3.7.11",
+            "pages_held": 31,
+            "workout_pages": 43,
+            "behind": True,
+            "added": 5,
+            "changed": 7,
+            "removed": 11,
+            "left_out": [
+                {
+                    "path": "workouts/alpha.md",
+                    "reason": "no_base_reference",
+                    "collides_with": "archive/a",
+                },
+                {
+                    "path": "workouts/beta.md",
+                    "reason": "duplicate_base",
+                    "collides_with": None,
+                },
+            ],
+            "without_computed": {"source_missing": 13, "source_unreadable": 19},
+            "athlete": {"activities_other_inputs": 23, "skipped_reason": None},
+            "corpus_behind": ["weekly_load", "power_curve"],
+            "corpus_unassessed": [
+                ["derived-a", "ValueError: one"],
+                ["derived-b", "OSError: two"],
+            ],
+            "rebuild_reason": "schema version differs: 17 != 29",
+        },
+        "tables": [
+            {
+                "name": "zeta|table",
+                "description": 'quote " and newline\n雪',
+                "rows": 37,
+                "columns": [
+                    {
+                        "name": "power|w",
+                        "type": "DOUBLE",
+                        "unit": "watt|unit",
+                        "description": 'quoted "column"',
+                    }
+                ],
+            },
+            {
+                "name": "alpha",
+                "description": None,
+                "rows": 41,
+                "columns": [
+                    {
+                        "name": "blank",
+                        "type": "VARCHAR",
+                        "unit": None,
+                        "description": None,
+                    }
+                ],
+            },
+        ],
+    }
+    assert "SECRET_FINGERPRINT_" not in rendered
+
+
+def test_render_schema_json_preserves_absent_assessments_as_null(
+    tmp_path: Path,
+) -> None:
+    import json
+
+    state = schemaview.IndexState(
+        database=tmp_path / "absent.duckdb",
+        recorded_schema_version=None,
+        reads_schema_version=29,
+        fitdocs_version=None,
+        drift=None,
+        left_out=(),
+        without_computed={},
+        athlete=None,
+        corpus=None,
+        rebuild_reason=None,
+    )
+    index = json.loads(schemaview.render_schema_json(state, (), {}))["index"]
+    assert index == {
+        "database": str(state.database),
+        "schema_version": None,
+        "reads_schema_version": 29,
+        "fitdocs_version": None,
+        "pages_held": None,
+        "workout_pages": None,
+        "behind": None,
+        "added": None,
+        "changed": None,
+        "removed": None,
+        "left_out": [],
+        "without_computed": {},
+        "athlete": {"activities_other_inputs": None, "skipped_reason": None},
+        "corpus_behind": None,
+        "corpus_unassessed": None,
+        "rebuild_reason": None,
+    }
+    zero = schemaview.IndexState(
+        database=tmp_path / "zero.duckdb",
+        recorded_schema_version=29,
+        reads_schema_version=29,
+        fitdocs_version="0.0.1",
+        drift=PageDrift(0, 0, 0, 0, 0),
+        left_out=(),
+        without_computed={"computed": 0},
+        athlete=AthleteDrift(0, None),
+        corpus=CorpusDrift((), ()),
+        rebuild_reason=None,
+    )
+    zero_index = json.loads(schemaview.render_schema_json(zero, (), {}))["index"]
+    assert zero_index["pages_held"] == 0 and zero_index["behind"] is False
+    assert zero_index["athlete"]["activities_other_inputs"] == 0
+    assert zero_index["corpus_behind"] == [] and zero_index["corpus_unassessed"] == []
+    assert zero_index["rebuild_reason"] is None
+
+
+def test_render_schema_text_adds_counts_and_named_defect_and_clean_case(
+    tmp_path: Path,
+) -> None:
+    state = _state_fixture(tmp_path)
+    tables = (
+        schemaview.CatalogTable(
+            "one",
+            None,
+            (schemaview.CatalogColumn("absent", "INTEGER", None, None),),
+        ),
+        schemaview.CatalogTable(
+            "decoy",
+            "### `two`",
+            (schemaview.CatalogColumn("decoy_value", "VARCHAR", None, "Present"),),
+        ),
+        schemaview.CatalogTable(
+            "two",
+            "Known table",
+            (schemaview.CatalogColumn("known", "VARCHAR", None, "Known column"),),
+        ),
+    )
+    text = schemaview.render_schema_text(
+        state, tables, {"one": 53, "decoy": 57, "two": 59}
+    )
+    assert "### `one` (53 rows)" in text
+    assert "### `two` (59 rows)" in text
+    assert text.splitlines().count("### `two` (59 rows)") == 1
+    assert "### `decoy` (57 rows)\n### `two`\n\n" in text
+    assert "| decoy_value | VARCHAR |  | Present |" in text
+    assert "### `two` (59 rows)\nKnown table" in text
+    assert "### `one` (53 rows)\n(no description)" in text
+    assert "fitdocs defect: missing descriptions for: one, one.absent" in text
+    assert "| absent | INTEGER |  | (no description) |" in text
+    assert "| known | VARCHAR |  | Known column |" in text
+    assert text.index("Pages held:") < text.index("### `one` (53 rows)")
+    clean = (
+        schemaview.CatalogTable(
+            "clean",
+            "Described",
+            (schemaview.CatalogColumn("value", "INTEGER", None, "Value"),),
+        ),
+    )
+    clean_text = schemaview.render_schema_text(state, clean, {"clean": 61})
+    assert "### `clean` (61 rows)" in clean_text
+    assert "fitdocs defect" not in clean_text
+
+
+def test_render_schema_text_keeps_markdown_escaping_with_counted_heading(
+    tmp_path: Path,
+) -> None:
+    state = _state_fixture(tmp_path)
+    table = schemaview.CatalogTable(
+        "power|output",
+        "Power | output",
+        (
+            schemaview.CatalogColumn(
+                "power|w",
+                "DOUBLE|precise",
+                "watts|units",
+                "Power | measured",
+            ),
+        ),
+    )
+    output = schemaview.render_schema_text(state, (table,), {"power|output": 67})
+    expected = (
+        "### `power\\|output` (67 rows)\n"
+        "Power \\| output\n\n"
+        "| Column | Type | Unit | Description |\n"
+        "| --- | --- | --- | --- |\n"
+        "| power\\|w | DOUBLE\\|precise | watts\\|units | Power \\| measured |"
+    )
+    assert output.endswith(expected)
+
+
+def test_index_state_is_frozen(tmp_path: Path) -> None:
+    state = _state_fixture(tmp_path)
+    assert [field.name for field in fields(state)] == [
+        "database",
+        "recorded_schema_version",
+        "reads_schema_version",
+        "fitdocs_version",
+        "drift",
+        "left_out",
+        "without_computed",
+        "athlete",
+        "corpus",
+        "rebuild_reason",
+    ]
+    with pytest.raises(FrozenInstanceError):
+        state.reads_schema_version = 30  # type: ignore[misc]
+
+
+def test_render_state_text_reports_skipped_athlete_and_empty_assessed_corpus(
+    tmp_path: Path,
+) -> None:
+    import json
+
+    state = schemaview.IndexState(
+        database=tmp_path / "skip.duckdb",
+        recorded_schema_version=29,
+        reads_schema_version=29,
+        fitdocs_version="fitdocs-4.2.0",
+        drift=PageDrift(0, 0, 0, 0, 0),
+        left_out=(),
+        without_computed={},
+        athlete=AthleteDrift(None, "athlete file unreadable: detail-unique"),
+        corpus=CorpusDrift((), ()),
+        rebuild_reason=None,
+    )
+    text = schemaview.render_state_text(state)
+    assert "Activities with other athlete inputs: unassessed" in text
+    assert (
+        "Athlete drift skipped reason: athlete file unreadable: detail-unique" in text
+    )
+    assert "Corpus tables behind: none" in text
+    assert "Corpus producers unassessed:\n  none" in text
+    assert "Pages held: 0 / workout pages: 0" in text
+    assert "Behind: false" in text
+    index = json.loads(schemaview.render_schema_json(state, (), {}))["index"]
+    assert index["athlete"] == {
+        "activities_other_inputs": None,
+        "skipped_reason": "athlete file unreadable: detail-unique",
+    }
+
+
+def test_render_schema_json_delegates_the_complete_object_to_json_value(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import json
+
+    state = _state_fixture(tmp_path)
+    original = query_format.json_value
+    observed: list[object] = []
+
+    def recording_json_value(value: object) -> str:
+        observed.append(value)
+        return original(value)
+
+    monkeypatch.setattr(query_format, "json_value", recording_json_value)
+    output = schemaview.render_schema_json(state, (), {})
+    assert observed
+    assert isinstance(observed[0], dict)
+    assert set(observed[0]) == {"index", "tables"}
+    assert json.loads(output)["index"]["reads_schema_version"] == 29
+
+
+def test_state_json_assessed_zero_values_are_typed_and_complete(tmp_path: Path) -> None:
+    import json
+
+    state = schemaview.IndexState(
+        tmp_path / "zero.duckdb",
+        29,
+        31,
+        "writer-5.1",
+        PageDrift(0, 0, 0, 0, 0),
+        (),
+        {"source_missing": 0},
+        AthleteDrift(0, None),
+        CorpusDrift((), ()),
+        None,
+    )
+    parsed = json.loads(schemaview.render_schema_json(state, (), {}))
+    index = parsed["index"]
+    for field in ("pages_held", "workout_pages", "added", "changed", "removed"):
+        assert type(index[field]) is int
+        assert index[field] == 0
+    assert type(index["behind"]) is bool
+    assert index["behind"] is False
+    assert type(index["athlete"]["activities_other_inputs"]) is int
+    assert index["athlete"]["activities_other_inputs"] == 0
+    assert index["without_computed"] == {"source_missing": 0}
+    assert type(index["without_computed"]["source_missing"]) is int
+    assert index["corpus_behind"] == []
+    assert index["corpus_unassessed"] == []
+    assert parsed["tables"] == []
+
+
+def test_populated_json_counts_are_integer_primitives(tmp_path: Path) -> None:
+    import json
+
+    table = schemaview.CatalogTable(
+        "populated",
+        "Populated table",
+        (schemaview.CatalogColumn("value", "INTEGER", None, "Value"),),
+    )
+    parsed = json.loads(
+        schemaview.render_schema_json(
+            _state_fixture(tmp_path), (table,), {"populated": 13}
+        )
+    )
+    index = parsed["index"]
+    for field in (
+        "schema_version",
+        "reads_schema_version",
+        "pages_held",
+        "workout_pages",
+        "added",
+        "changed",
+        "removed",
+    ):
+        assert type(index[field]) is int
+    assert all(type(value) is int for value in index["without_computed"].values())
+    assert type(index["athlete"]["activities_other_inputs"]) is int
+    assert type(parsed["tables"][0]["rows"]) is int
+
+
+def test_state_json_absence_is_null_and_not_assessed_empty(tmp_path: Path) -> None:
+    import json
+
+    state = schemaview.IndexState(
+        tmp_path / "absent.duckdb", None, 31, None, None, (), {}, None, None, None
+    )
+    index = json.loads(schemaview.render_schema_json(state, (), {}))["index"]
+    assert index["schema_version"] is None
+    assert index["fitdocs_version"] is None
+    for field in (
+        "pages_held",
+        "workout_pages",
+        "behind",
+        "added",
+        "changed",
+        "removed",
+        "corpus_behind",
+        "corpus_unassessed",
+        "rebuild_reason",
+    ):
+        assert index[field] is None
+    assert index["athlete"] == {
+        "activities_other_inputs": None,
+        "skipped_reason": None,
+    }
+    assert index["without_computed"] == {}
+    assert index["left_out"] == []
+
+
+def test_state_text_pins_unassessed_and_assessed_empty_lines(tmp_path: Path) -> None:
+    absent = schemaview.IndexState(
+        tmp_path / "absent.duckdb", None, 31, None, None, (), {}, None, None, None
+    )
+    absent_lines = schemaview.render_state_text(absent).splitlines()
+    for line in (
+        "Pages held: unknown / workout pages: unknown",
+        "Behind: unknown",
+        "Added: unknown",
+        "Changed: unknown",
+        "Removed: unknown",
+        "Left-out pages: none",
+        "  none",
+        "Activities with other athlete inputs: unassessed",
+        "Athlete drift skipped reason: unavailable",
+        "Corpus tables behind: unassessed",
+        "Corpus producers unassessed: unassessed",
+        "Rebuild reason: none",
+    ):
+        assert line in absent_lines
+
+    zero = schemaview.IndexState(
+        tmp_path / "zero.duckdb",
+        29,
+        31,
+        "writer-5.1",
+        PageDrift(0, 0, 0, 0, 0),
+        (),
+        {},
+        AthleteDrift(0, None),
+        CorpusDrift((), ()),
+        None,
+    )
+    zero_lines = schemaview.render_state_text(zero).splitlines()
+    for line in (
+        "Pages held: 0 / workout pages: 0",
+        "Behind: false",
+        "Added: 0",
+        "Changed: 0",
+        "Removed: 0",
+        "Left-out pages: none",
+        "Pages without computed values:",
+        "  none",
+        "Activities with other athlete inputs: 0",
+        "Athlete drift skipped reason: none",
+        "Corpus tables behind: none",
+        "Corpus producers unassessed:",
+    ):
+        assert line in zero_lines
+
+
+def test_corpus_text_keeps_each_unassessed_producer_with_its_reason(
+    tmp_path: Path,
+) -> None:
+    lines = schemaview.render_state_text(_state_fixture(tmp_path)).splitlines()
+    assert "  derived-a: ValueError: one" in lines
+    assert "  derived-b: OSError: two" in lines
+
+
+def test_schema_wrappers_preserve_supplied_order_and_zero_row_heading(
+    tmp_path: Path,
+) -> None:
+    import json
+
+    tables = (
+        schemaview.CatalogTable(
+            "zulu",
+            "Last alphabetically",
+            (
+                schemaview.CatalogColumn("zeta", "BIGINT", "count", "First"),
+                schemaview.CatalogColumn("alpha", "VARCHAR", None, "Second"),
+            ),
+        ),
+        schemaview.CatalogTable(
+            "alpha",
+            "First alphabetically",
+            (schemaview.CatalogColumn("only", "INTEGER", None, "Only"),),
+        ),
+    )
+    state = _state_fixture(tmp_path)
+    text = schemaview.render_schema_text(state, tables, {"zulu": 0, "alpha": 7})
+    assert text.index("### `zulu` (0 rows)") < text.index("### `alpha` (7 rows)")
+    parsed = json.loads(
+        schemaview.render_schema_json(state, tables, {"zulu": 0, "alpha": 7})
+    )
+    assert [table["name"] for table in parsed["tables"]] == ["zulu", "alpha"]
+    assert type(parsed["tables"][0]["rows"]) is int
+    assert parsed["tables"][0]["rows"] == 0
+    assert [column["name"] for column in parsed["tables"][0]["columns"]] == [
+        "zeta",
+        "alpha",
+    ]
+
+
+def test_schema_json_encoder_receives_complete_payload_first(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state = _state_fixture(tmp_path)
+    tables = (
+        schemaview.CatalogTable(
+            "payload_table",
+            "Payload description",
+            (schemaview.CatalogColumn("payload_col", "INTEGER", "items", "Payload"),),
+        ),
+    )
+    expected = {
+        "index": {
+            "database": str(state.database),
+            "schema_version": 17,
+            "reads_schema_version": 29,
+            "fitdocs_version": "fitdocs-3.7.11",
+            "pages_held": 31,
+            "workout_pages": 43,
+            "behind": True,
+            "added": 5,
+            "changed": 7,
+            "removed": 11,
+            "left_out": [
+                {
+                    "path": "workouts/alpha.md",
+                    "reason": "no_base_reference",
+                    "collides_with": "archive/a",
+                },
+                {
+                    "path": "workouts/beta.md",
+                    "reason": "duplicate_base",
+                    "collides_with": None,
+                },
+            ],
+            "without_computed": {"source_missing": 13, "source_unreadable": 19},
+            "athlete": {"activities_other_inputs": 23, "skipped_reason": None},
+            "corpus_behind": ["weekly_load", "power_curve"],
+            "corpus_unassessed": [
+                ["derived-a", "ValueError: one"],
+                ["derived-b", "OSError: two"],
+            ],
+            "rebuild_reason": "schema version differs: 17 != 29",
+        },
+        "tables": [
+            {
+                "name": "payload_table",
+                "description": "Payload description",
+                "rows": 2,
+                "columns": [
+                    {
+                        "name": "payload_col",
+                        "type": "INTEGER",
+                        "unit": "items",
+                        "description": "Payload",
+                    }
+                ],
+            }
+        ],
+    }
+    original = query_format.json_value
+    observed: list[object] = []
+    sentinel = "encoder-result-sentinel"
+
+    def record(value: object) -> str:
+        observed.append(value)
+        if len(observed) == 1:
+            return sentinel
+        return original(value)
+
+    monkeypatch.setattr(query_format, "json_value", record)
+    output = schemaview.render_schema_json(state, tables, {"payload_table": 2})
+    assert observed[0] == expected
+    assert output == sentinel
+
+
+def test_json_type_and_key_ordering_controls_cover_two_columns(tmp_path: Path) -> None:
+    import json
+
+    tables = (
+        schemaview.CatalogTable(
+            "zulu",
+            None,
+            (
+                schemaview.CatalogColumn("zeta", "BIGINT", "count", "First"),
+                schemaview.CatalogColumn("alpha", "VARCHAR", None, None),
+            ),
+        ),
+        schemaview.CatalogTable(
+            "alpha",
+            "Known",
+            (schemaview.CatalogColumn("only", "INTEGER", None, "Only"),),
+        ),
+    )
+    parsed = json.loads(
+        schemaview.render_schema_json(
+            _state_fixture(tmp_path), tables, {"zulu": 0, "alpha": 9}
+        )
+    )
+    assert [table["name"] for table in parsed["tables"]] == ["zulu", "alpha"]
+    assert [column["name"] for column in parsed["tables"][0]["columns"]] == [
+        "zeta",
+        "alpha",
+    ]
+    assert parsed["tables"][0]["columns"] == [
+        {"name": "zeta", "type": "BIGINT", "unit": "count", "description": "First"},
+        {"name": "alpha", "type": "VARCHAR", "unit": None, "description": None},
+    ]
+
+
+def test_render_state_text_absent_values_bind_empty_markers_to_sections(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "opaque.duckdb"
+    state = schemaview.IndexState(
+        database, None, 31, None, None, (), {}, None, None, None
+    )
+    expected = [
+        f"Database: {database}",
+        "Recorded schema version: unknown",
+        "Read schema version: 31",
+        "Written by fitdocs: unknown",
+        "Pages held: unknown / workout pages: unknown",
+        "Behind: unknown",
+        "Added: unknown",
+        "Changed: unknown",
+        "Removed: unknown",
+        "Left-out pages: none",
+        "Pages without computed values:",
+        "  none",
+        "Activities with other athlete inputs: unassessed",
+        "Athlete drift skipped reason: unavailable",
+        "Corpus tables behind: unassessed",
+        "Corpus producers unassessed: unassessed",
+        "Rebuild reason: none",
+        "Run fitdocs regen to update workout pages and athlete inputs.",
+        "Run fitdocs index to rebuild the index when it is incompatible.",
+    ]
+    assert schemaview.render_state_text(state).splitlines() == expected
+
+
+def test_render_state_text_assessed_zero_binds_empty_markers_to_sections(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "opaque.duckdb"
+    state = schemaview.IndexState(
+        database,
+        29,
+        31,
+        "writer",
+        PageDrift(0, 0, 0, 0, 0),
+        (),
+        {},
+        AthleteDrift(0, None),
+        CorpusDrift((), ()),
+        None,
+    )
+    expected = [
+        f"Database: {database}",
+        "Recorded schema version: 29",
+        "Read schema version: 31",
+        "Written by fitdocs: writer",
+        "Pages held: 0 / workout pages: 0",
+        "Behind: false",
+        "Added: 0",
+        "Changed: 0",
+        "Removed: 0",
+        "Left-out pages: none",
+        "Pages without computed values:",
+        "  none",
+        "Activities with other athlete inputs: 0",
+        "Athlete drift skipped reason: none",
+        "Corpus tables behind: none",
+        "Corpus producers unassessed:",
+        "  none",
+        "Rebuild reason: none",
+        "Run fitdocs regen to update workout pages and athlete inputs.",
+        "Run fitdocs index to rebuild the index when it is incompatible.",
+    ]
+    assert schemaview.render_state_text(state).splitlines() == expected
+
+
+def _description_contains_unit_word(unit: str, description: str) -> bool:
+    return unit.casefold() in description.casefold()
+
+
+def test_unit_word_presence_ignores_case_and_rejects_absence() -> None:
+    assert _description_contains_unit_word("seconds", "elapsed in seconds")
+    assert _description_contains_unit_word("seconds", "Seconds since activity start")
+    assert not _description_contains_unit_word("seconds", "Elapsed time in minutes")

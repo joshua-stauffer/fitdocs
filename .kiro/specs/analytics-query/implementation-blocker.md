@@ -1,7 +1,7 @@
 # Implementation progress after the upstream preview repair
 
-Verified analytics-index main `995db58`, including the landed registry-fixture
-isolation correction, is consumed on this branch. The owning
+Verified peer main `f8cc39b`, including analytics-index registry-fixture
+isolation and completed analytics-derived schema2/24tables, is consumed on this branch. The owning
 preview polling-watcher repair is present; earlier preview failures remain
 historical and no longer block implementation.
 
@@ -71,15 +71,23 @@ approved hashes. Evidence:
 `/private/tmp/analytics-query-parent-spill-matrix-completion/verification.md`.
 Task3.1 is now unlocked.
 
-State5.1 remains unchecked after independent REJECTED: canonical9,614 passed/
-two optional skips and full statics passed; all42 claimed variants were RED,
-but32 independently witnessed variants survived the current tests. The
-bounded repair covers numeric zero/null/type distinctions, absent and empty
-text states, corpus producer/reason pairing, actual encoder forwarding, and
-table/column order. Correct production remains unchanged; Luna is performing
-one comprehensive test-only correction preserving the26 accepted catalog
-cases and all existing state tests. Evidence:
-`/private/tmp/analytics-query-review-state/verdict.md`.
+State5.1 is accepted after final independent APPROVED:123 claimed plus3 new
+controls RED/restoredGREEN,72 PINNED/2 PRESERVED/0 UNPINNED. The rebased
+main integration exposed a catalog test capitalization assumption; bounded
+Luna test-only correction accepts unit words case-insensitively without
+changing stored descriptions. Delta independent APPROVED: canonical9881/
+twooptional skips260.59s,4 claimed plus4 own controlsRED, all statics pass.
+Fresh parent302 scoped tests10.23s/fullstatics/strict2/exactc53+f2 hashes/
+privateHOMEempty verified. State source and every earlier state assertion
+remain exact. Evidence:
+`/private/tmp/analytics-query-review-state-sections/verdict.md`,
+`/private/tmp/analytics-query-review-state-derived-units/verdict.md`, and
+`/private/tmp/analytics-query-parent-state-derived-completion/verification.md`.
+
+Executor3.1 remains unchecked pending final independent review. A real timer
+callback's interrupt action was observed completing after execute_statement
+returned; remaining test gaps are under finite review before Luna repair.
+No premature runtime acceptance or new human decision is required.
 
 Publication8.1 remains unchecked after independent REJECTED. Its original
 canonical reported9,586 passed/two failed/two optional skips: the required
@@ -94,8 +102,9 @@ Evidence: `/private/tmp/analytics-query-publication-repair/handoff.md` and
 `/private/tmp/analytics-query-review-publication/verdict.md`.
 
 Completion roadmap ticks await merge. The shared HealthFit root remains
-ready for both peers; query timings await the completed CLI. Eight of21
-leaves are accepted (1.1/1.2/1.3/2.1/2.2/2.3/4.1/4.2); no feature GO or merge yet.
+ready for both peers; a private schema2 timing cache is prepared without
+changing shared data/cache. Query timings await the completed CLI. Nine of21
+leaves are accepted (1.1/1.2/1.3/2.1/2.2/2.3/4.1/4.2/5.1); no feature GO or merge yet.
 
 ## Historical tasks 1.3 and 2.1 preview blocker
 
