@@ -22,21 +22,23 @@ prefix preservation verified. Latest task2.1 evidence:
 The committed pending-task-2.1.patch is a historical preceding snapshot;
 accepted live files supersede it.
 
-## Current sandbox correction and dispatch capacity
+## Current sandbox acceptance and dispatch capacity
 
-Sandbox 2.2 remains unchecked. Its first fresh review passed canonical 9,486
-tests/two optional skips and all statics, but rejected absent-row and later-key
-verifier test gaps. A NEW Luna implementer is correcting per-key absent, wrong
-and NULL cases in `/private/tmp/fitdocs-query-task-2-2`, preserving correct
-production and all previous pins. Candidate snapshot pending-task-2.2.patch
-remains unaccepted; evidence `/private/tmp/analytics-query-review2-2/verdict.md`.
+Sandbox 2.2 is accepted after fresh independent APPROVED: canonical 9,510
+passed/two optional skips, full/scoped statics and all45 mutation observations
+RED/restored GREEN with zero survivors. Eight task-local clause groups are
+pinned, including every absent/wrong/NULL readback. Correct production remains
+unchanged. Parent byte-equal integration passed230 query/index-boundary/exact
+UUID-guard tests in8.46s, full Ruff/checkformat536/mypy343 and stricttwo-file
+mypy. Evidence `/private/tmp/analytics-query-review-sandbox-correction/verdict.md`
+and `/private/tmp/analytics-query-parent-sandbox-completion/verification.md`.
 
-Concurrent fresh launches return `agent thread limit reached`, while a fresh
-launch succeeds after the preceding agent completes. Dispatch proceeds with
-new contexts in sequence; no completed Sol agent is reused. Task4.1 has not
-started; its prepared clean worktree is based on rebased9e9b2da. The data root
-remains ready for both peers; query timings require the completed command.
-Four of21 leaves are accepted (1.1/1.2/1.3/2.1); no feature GO or merge yet.
+Task4.1 is running in a fresh Luna context in its isolated worktree based on
+accepted91b0e74. Concurrent launches have hit the thread limit; new contexts
+continue as slots allow, with no completed Sol agent reused. Spill2.3 is next.
+The shared data root remains ready for both peers; query timings require the
+completed command. Five of21 leaves are accepted (1.1/1.2/1.3/2.1/2.2);
+no feature GO or merge yet.
 
 ## Historical tasks 1.3 and 2.1 preview blocker
 
