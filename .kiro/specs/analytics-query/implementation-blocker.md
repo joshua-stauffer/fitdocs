@@ -91,7 +91,19 @@ closed: canonical9939/twooptional, fourclaimed+fournew controls RED/restoredGREE
 65 PINNED/2 PRESERVED/0 UNPINNED. Parent360scope/fullstatics/strict2/hash/HOMEempty
 pass. Evidence `/private/tmp/analytics-query-review-executor-message-literals/verdict.md`
 and `/private/tmp/analytics-query-parent-executor-completion/verification.md`.
-Task3.2 statement screening is now unlocked.
+Task3.2 statement gate is implemented in its preserved isolated candidate but
+unaccepted: independent review found no local gap (396scope/fullstatics,
+33claimed selections32unique+11own controls RED,47PINNED/3PRESERVED/0UNPINNED),
+but canonical9974passed/onepreviewfailure/twooptional309.09s. The final-fix
+marker timed out at preview1197/1024 despite the existing polling repair.
+An unchanged isolated run passed25.11s; freshdebug BLOCK_TASK confirms unknown
+mechanism and no causal fix. Owning diagnostics capture failure-time state
+before cleanup; no query patch, deadline weakening or unchangedcanonicalretry.
+Candidate source8b4fa260/test8d934db7 and genuine parent OFF checkpoint remain
+private, with pending-task-3.2.patch a record-only snapshot. Evidence
+`/private/tmp/analytics-query-review-gate-3-2/verdict.md` and
+`/private/tmp/analytics-query-debug-preview-fix-stage/REPORT.md`.
+Existing preview queue records this recurrence; downstream runtime tasks wait.
 
 Publication8.1 remains unchecked after independent REJECTED. Its original
 canonical reported9,586 passed/two failed/two optional skips: the required

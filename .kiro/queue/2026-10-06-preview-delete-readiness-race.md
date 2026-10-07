@@ -335,3 +335,33 @@ So the polling watcher did not eliminate the initial-edit stall; it only made
 it rarer. The memory-level claim "FIXED 0b92561" is too strong. The pickup
 recipe's step 4 (capture build/watcher/stage/sync/HTTP state at timeout,
 before cleanup) still stands.
+
+## analytics-query final-fix recurrence after polling repair (2026-10-07)
+
+On task3.2 candidate based on accepted214a125/mainf8cc39b, independent canonical
+failed with9974 passed, onefailed, twooptional actionlint skips in309.09s.
+The unchanged live-preview sequence reached its final repair step, then
+`tests/sitebuild/test_preview.py:1197` / helper1024 timed out20s waiting
+for `EDITMARKERTWO` at `/why/`. Captured native output ends with `Build started`;
+no failure-time snapshot/build/sync/process/HTTP state was retained. Existing
+`generator.start_serve` already sets `ZENSICAL_POLL_WATCHER=1`.
+
+Root inspected actual canonical stdout and isolated stdout: the same test
+passed unchanged in25.11s. This demonstrates intermittency, not a causal fix.
+Gate scope396, fullstatics,33claimed selections/32unique variants plus11new
+independent controls pass; no gate-specific gap was found. Task3.2 is held
+unaccepted pending an owning causal investigation and fresh canonical PASS.
+
+Evidence `/private/tmp/analytics-query-review-gate-3-2/canonical.stdout`,
+`canonical.command.json`, `canonical.result.json`, `preview-isolated.stdout`,
+`verdict.md`; debug `/private/tmp/analytics-query-debug-preview-fix-stage/REPORT.md`
+returns BLOCK_TASK with mechanism unknown. Earlier canonical failures and
+isolated PASS remain separate evidence, and no timeout or assertion was weakened.
+
+Next investigation must capture state before cleanup for this final-fix phase,
+including whether the fixed input was detected, pipeline build completed, live
+staged tree contains the marker, native serve remained alive, and HTTP status/body
+advanced. Record process output with timestamps and bounded child cleanup.
+A new observer diagnostic is useful work; an unchanged canonical retry provides
+no causal evidence. Repair only an observed owning defect, then verify its
+discriminator and consume the owning fix before query acceptance.
