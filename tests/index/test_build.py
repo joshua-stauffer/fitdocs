@@ -246,7 +246,10 @@ def test_build_forwards_all_caller_inputs_to_the_single_reconcile(
 
 
 def test_built_report_relays_every_refresh_result_field(
-    synced_corpus: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    synced_corpus: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    core_registry: None,
 ) -> None:
     expected = RefreshResult(
         added=("workouts/added.md",),
@@ -672,6 +675,7 @@ def test_current_index_uses_refresh_for_changes_then_reports_unchanged(
     synced_workout_pages: tuple[Path, ...],
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    core_registry: None,
 ) -> None:
     base = tmp_path / "cache"
     initial = _seed(synced_corpus, base)

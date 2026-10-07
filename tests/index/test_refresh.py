@@ -2665,19 +2665,19 @@ def test_missing_base_noop_retries_when_archive_reappears(
     def unexpected_retry(*args: object, **kwargs: object) -> object:
         raise AssertionError("a still-missing base is not retried without a change")
 
-    monkeypatch.setattr(derive, "derive_page", unexpected_retry)
-    unchanged = _refresh(index.database, index.data_root)
-    database_after = (
-        index.database.stat().st_size,
-        index.database.stat().st_mtime_ns,
-        hashlib.sha256(index.database.read_bytes()).hexdigest(),
-    )
-    assert unchanged.updated == ()
-    assert unchanged.page_errors == ()
-    assert unchanged.without_computed == first.without_computed
-    assert database_after == database_before
+    with monkeypatch.context() as scoped:
+        scoped.setattr(derive, "derive_page", unexpected_retry)
+        unchanged = _refresh(index.database, index.data_root)
+        database_after = (
+            index.database.stat().st_size,
+            index.database.stat().st_mtime_ns,
+            hashlib.sha256(index.database.read_bytes()).hexdigest(),
+        )
+        assert unchanged.updated == ()
+        assert unchanged.page_errors == ()
+        assert unchanged.without_computed == first.without_computed
+        assert database_after == database_before
 
-    monkeypatch.undo()
     archived_base = base_archive(synced_corpus, sources)
     assert archived_base is not None and archived_base.is_file()
     destination = index.data_root / archived_base.relative_to(synced_corpus)
@@ -2734,22 +2734,6 @@ def test_unreadable_extra_records_state_and_retries_later(
     changed_text = original_text + "\nRetry an unreadable listed extra.\n"
     assert changed_text != original_text
     page.write_text(changed_text, encoding="utf-8")
-    monkeypatch.setattr(Path, "read_bytes", deny_extra)
-    failed_source = _refresh(index.database, index.data_root)
-
-    assert failed_source.page_errors == ()
-    assert failed_source.without_computed == (
-        (relative_page.as_posix(), ComputedState.SOURCE_UNREADABLE),
-    )
-    key = contract.sha_of_ref(sources[-1])
-    assert key is not None
-    assert _query(
-        index.database,
-        "SELECT COUNT(*) FROM activities WHERE page_key = ?",
-        (key,),
-    ) == [(0,)]
-
-    before_repeat = _index_snapshot(index)
     original_derive = derive.derive_page
     repeated_attempts = 0
 
@@ -2758,17 +2742,33 @@ def test_unreadable_extra_records_state_and_retries_later(
         repeated_attempts += 1
         return original_derive(*args, **kwargs)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(derive, "derive_page", count_repeated_attempt)
-    repeated = _refresh(index.database, index.data_root)
-    after_repeat = _index_snapshot(index)
-    assert repeated_attempts == 1
-    assert (
-        repeated.updated,
-        repeated.without_computed,
-        after_repeat,
-    ) == ((), failed_source.without_computed, before_repeat)
+    with monkeypatch.context() as scoped:
+        scoped.setattr(Path, "read_bytes", deny_extra)
+        failed_source = _refresh(index.database, index.data_root)
 
-    monkeypatch.undo()
+        assert failed_source.page_errors == ()
+        assert failed_source.without_computed == (
+            (relative_page.as_posix(), ComputedState.SOURCE_UNREADABLE),
+        )
+        key = contract.sha_of_ref(sources[-1])
+        assert key is not None
+        assert _query(
+            index.database,
+            "SELECT COUNT(*) FROM activities WHERE page_key = ?",
+            (key,),
+        ) == [(0,)]
+
+        before_repeat = _index_snapshot(index)
+        scoped.setattr(derive, "derive_page", count_repeated_attempt)
+        repeated = _refresh(index.database, index.data_root)
+        after_repeat = _index_snapshot(index)
+        assert repeated_attempts == 1
+        assert (
+            repeated.updated,
+            repeated.without_computed,
+            after_repeat,
+        ) == ((), failed_source.without_computed, before_repeat)
+
     retried = _refresh(index.database, index.data_root)
     assert retried.page_errors == ()
     assert all(path != relative_page.as_posix() for path, _ in retried.without_computed)
@@ -2827,16 +2827,16 @@ def test_undecodable_base_records_state_and_retries_later(
         repeated_attempts += 1
         return original_derive(*args, **kwargs)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(derive, "derive_page", count_repeated_attempt)
-    repeated = _refresh(index.database, index.data_root)
-    after_repeat = _index_snapshot(index_snapshot)
-    assert repeated_attempts == 1
-    assert (
-        repeated.updated,
-        repeated.without_computed,
-        after_repeat,
-    ) == ((), failed_source.without_computed, before_repeat)
-    monkeypatch.undo()
+    with monkeypatch.context() as scoped:
+        scoped.setattr(derive, "derive_page", count_repeated_attempt)
+        repeated = _refresh(index.database, index.data_root)
+        after_repeat = _index_snapshot(index_snapshot)
+        assert repeated_attempts == 1
+        assert (
+            repeated.updated,
+            repeated.without_computed,
+            after_repeat,
+        ) == ((), failed_source.without_computed, before_repeat)
 
     base.write_bytes(valid_bytes)
     retried = _refresh(index.database, index.data_root)
