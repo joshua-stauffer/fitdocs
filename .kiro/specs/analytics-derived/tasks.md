@@ -783,7 +783,7 @@ from here.
   - _Boundary: DerivedRefreshTests_
   - _Depends: 4.1_
 
-- [ ] 5.3 (P) Prove composed best efforts and the rebuild on the version advance
+- [x] 5.3 (P) Prove composed best efforts and the rebuild on the version advance
   - **Tests** (`tests/index/derived/test_composed_and_upgrade.py`), at
     `TODAY` through 1.2's helpers:
     - **Composed**: the ride pair, synced with `sync_with_handoff`, has
@@ -1028,3 +1028,5 @@ from here.
 - 4.2 accepted after bounded kiro-debug finite inventory repair:114controls, original89ASTs preserved, test-onlyproducerboundary/metricsclockwrites/reversewalk/stdlibpositives. Fresh independent canonical9581/2optional267.47s withactualexit0saved; everypriorboundedclaim,25newentries(21unique),7sourcepairbranches and3own mutationchecks RED/restoredGREEN; finiteinventory28PINNED/5PRESERVED-ONLY redundantfallbacks/extensions/0UNPINNED. Explicitmypy/Ruffclean; parentfresh114 andintegratedguard/registration119passed. EarliermissinginitialREDhonestlyqualified, debugtests-firstcorrectguardGREENcheckpointthenprospectiveparentGO_VERIFY mutations; no artificialbaselineRED. Implementerfulloutcomelost andterminatedduplicate notacceptanceevidence. Version/dependency equality later5.4/6.3. Runtime/snapshots unchanged. Evidence: /private/tmp/analytics-derived-evidence/resume/4.2/review-debug-retry/verdict.md.
 
 - 5.2 accepted: actual five indexing routes and all eleven complete physical row sets/nonempty outputs at fixedTODAY; fresh independent canonical9487/2optional290.13s exit0, all29claimed+2own mutations RED/restoredGREEN, explicitmypy/Ruff clean and source/helper hashes preserved. First-only digest fails incremental comparison after first-page stablebytes/fingerprint and lastheld-load97 guards; independent observer confirms exactly load_series/daily_load/weekly_load differ. Handoff versus re-derivation independence PRESERVED-ONLY under analytics-index Req4.5, actual bothroutes still exercised. Parentfreshleaf1 and integratedregistration6 passed. Prior implementerfull predates finalroute refinement and is not acceptanceevidence. Evidence: /private/tmp/analytics-derived-evidence/resume/5.2/review/verdict.md.
+
+- 5.3 accepted: actual composed-handoff HR versus independent mean-max engine, base-alone HR absent before sync; core-only current-schema index downgraded through facade, NEEDS_REBUILD names bothversions, ordinary no-force build recreates all eleven physically present/nonempty tables. Fresh independent canonical9602/2optional299.93s exit0; all17reported controls plus12additionalproduction mutants confirmed/no survivors, all11table emptiness pins and BLOCKinventoryassert beforeSQL. Explicitmypy/Ruff clean, originaltest-onlybaselineGREEN honestlyqualified; source/helper byte restoration verified. Parentfreshleaf2 and integratedcomposition/determinism/registration8 passed. Evidence: /private/tmp/analytics-derived-evidence/resume/5.3/review/verdict.md.
