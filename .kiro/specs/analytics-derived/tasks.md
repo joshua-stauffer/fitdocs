@@ -246,7 +246,7 @@ from here.
     tests/metrics/test_sources.py` is green and mypy is clean on the module.
   - _Requirements: 2.1, 2.2, 2.7_
 
-- [ ] 1.2 Create the derived package, the derived fixture root and the shared index helpers
+- [x] 1.2 Create the derived package, the derived fixture root and the shared index helpers
   - **Markers.** Create `fitdocs.index.derived` (its docstring states the four
     producers and the imports they may use, design.md § Allowed Dependencies;
     it imports nothing) and the `tests/index/derived` test package, so the
@@ -1001,3 +1001,6 @@ from here.
 - 2026-10-07 task 2.1 accepted after fresh Luna remediation and fresh independent Sol approval: canonical 9,409 passed/two optional actionlint skips; all 23 claimed mutation entries and six new independent variants RED/restored GREEN, including separate power/HR integer exactness. Parent fresh metrics regression 308 passed. Prior invalid flag chronology retained; separately evidenced API-only OFF shell, new test, OFF RED, ON implementation/GREEN, then flag removal satisfies the repair. Producer integration remains later-owned; plain imports are covered by the existing global boundary guard.
 
 - 2026-10-07 task 2.2 accepted after complete-date and per-field projection assertions closed the omission survivor: fresh independent canonical 9,392 passed/two optional skips, preservation 475 passed, 17 distinct claimed and three new own mutants RED/restored GREEN; parent fresh seam/API 52 passed. History reports and bytes equal original engine over seven copied scenarios; chart helpers, imports and goldens preserved. The history public surface includes defining-owner entries. Task 2.3 now owns the next plans-only public surface append.
+
+- 2026-10-07 task 1.2 accepted: corrected canonical 9,398 passed/two optional skips; parent fresh fixture 10 passed; all retained 59 executions, seven latest exact-row claims and three new own valid controls RED/restored GREEN. Earlier reviewer cold-cache/restricted gate failed (15 failed, 31 errors) from uncached PyPI DNS and localhost PermissionError; corrected default warm cache plus authorized socket access passed unchanged code. Do not set UV_CACHE_DIR.
+- Fixture roles: threshold loads 11/23/31/59/71 plus left-out 83; banister_1991 loads 17/43; two Ride pages on February 3; two loadless pages February 13/14; no-source page dated February 15 has stem 2026-02-14-left-out and is matched by no-sources-match. Synthetic plan supplies exact/absorbed/ambiguous, missing-stem override, skipped/not-logged/upcoming, unplanned, and invalid source. Ride FTP 260 measured February 10 applies January 1 versus 271 measured February 5 applies February 1, profile versus naive differs on February 11; Run FTP 283 measured February 7, Run LTHR 172 with full derived provenance, athlete max HR 203, flat FTP 999. Composed switch supplies actual builder run and merge ride pair; all helpers require explicit TODAY 2026-02-24, public store facade and isolated index. Producer parity remains later-owned.
