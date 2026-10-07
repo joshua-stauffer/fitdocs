@@ -1017,3 +1017,360 @@ def test_late_callback_cannot_interrupt_after_timer_start_error(
     assert len(interrupt_actions) == interrupt_count_before_late_callback
     assert events == ["start", "cancel"]
     assert not list(home.iterdir())
+
+
+# Task 3.2: statement gate. Every run_statement execution target is intercepted.
+@pytest.fixture
+def gate_connection(
+    tmp_path: Path, home_dir: HomeDirectory
+) -> Iterator[IndexConnection]:
+    database = plain_database(
+        tmp_path / "gate.duckdb", "CREATE TABLE t (value INTEGER)"
+    )
+    root = tmp_path / "data"
+    root.mkdir()
+    location = resolve_index_location(
+        root,
+        {"FITDOCS_INDEX_DIR": str(tmp_path / "gate-index")},
+        home=home_dir.path,
+    )
+    location.directory.mkdir(parents=True, exist_ok=True)
+    database.replace(location.database)
+    connection = sandbox.open_sandboxed(
+        location,
+        pid=97232,
+        monotonic=lambda: 0.0,
+        sleep=lambda _: None,
+        on_wait=lambda _: None,
+    )
+    try:
+        yield connection
+    finally:
+        connection.close()
+        home_dir.assert_untouched()
+
+
+GATE_SENTINEL = ResultSet(
+    columns=("gate",), rows=((731,),), truncated=True, max_rows=17
+)
+
+
+@pytest.mark.parametrize(
+    ("sql", "raw_kind", "display_kind"),
+    [
+        ("INSTALL httpfs", "LOAD", "INSTALL or LOAD"),
+        ("LOAD httpfs", "LOAD", "INSTALL or LOAD"),
+        ("ATTACH ':memory:' AS m", "ATTACH", "ATTACH"),
+        ("COPY (SELECT 1) TO 'x.csv'", "COPY", "COPY"),
+        ("EXPORT DATABASE 'x'", "EXPORT", "EXPORT"),
+        ("SET threads = 1", "SET", "SET, RESET or USE"),
+        ("RESET threads", "SET", "SET, RESET or USE"),
+        ("USE system", "SET", "SET, RESET or USE"),
+        ("SET VARIABLE v = 1", "SET", "SET, RESET or USE"),
+        ("CREATE TEMP TABLE t AS SELECT 1", "CREATE", "CREATE"),
+        ("CALL pragma_version()", "CALL", "CALL"),
+        ("CHECKPOINT", "CALL", "CALL"),
+    ],
+    ids=[
+        "install-httpfs",
+        "load-httpfs",
+        "attach-memory",
+        "copy-out",
+        "export-database",
+        "set-threads",
+        "reset-threads",
+        "use-system",
+        "set-variable",
+        "create-temp-table",
+        "call-pragma-version",
+        "checkpoint",
+    ],
+)
+def test_gate_refuses_each_non_query_kind_without_execution(
+    sql: str,
+    raw_kind: str,
+    display_kind: str,
+    gate_connection: IndexConnection,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[object, ...]] = []
+
+    def recorder(*args: object, **kwargs: object) -> ResultSet:
+        calls.append((*args, kwargs))
+        raise AssertionError("refused SQL reached the execution recorder")
+
+    monkeypatch.setattr(statement, "execute_statement", recorder)
+    with pytest.raises(statement.StatementRefused) as raised:
+        statement.run_statement(gate_connection, sql, max_rows=17, timeout_s=2.75)
+    assert raised.value.restriction is statement.Restriction.STATEMENT_KIND
+    assert raised.value.detail == raw_kind
+    assert str(raised.value).startswith(
+        "the query sandbox runs only queries and EXPLAIN; "
+        f"this is a {display_kind} statement"
+    )
+    if raw_kind == "CALL":
+        assert "use SELECT * FROM <function>(…) instead" in str(raised.value)
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "sql", ["SELECT 1; SELECT 2", "-- only a comment"], ids=["multiple", "comment-only"]
+)
+def test_gate_refuses_wrong_statement_count_without_execution(
+    sql: str,
+    gate_connection: IndexConnection,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[object, ...]] = []
+
+    def recorder(*args: object, **kwargs: object) -> ResultSet:
+        calls.append((*args, kwargs))
+        raise AssertionError("count-refused SQL reached the execution recorder")
+
+    monkeypatch.setattr(statement, "execute_statement", recorder)
+    with pytest.raises(statement.StatementRefused) as raised:
+        statement.run_statement(gate_connection, sql, max_rows=17, timeout_s=2.75)
+    assert raised.value.restriction is statement.Restriction.ONE_STATEMENT
+    assert str(raised.value).startswith("fitdocs query runs exactly one statement")
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT 1",
+        "FROM t",
+        "DESCRIBE t",
+        "PRAGMA table_info('t')",
+        "EXPLAIN SELECT 1",
+        "WITH q AS (SELECT 1 AS value) SELECT value FROM q",
+        "VALUES (1)",
+        "SHOW TABLES",
+        "SUMMARIZE t",
+    ],
+    ids=[
+        "select",
+        "from",
+        "describe",
+        "pragma",
+        "explain",
+        "with",
+        "values",
+        "show",
+        "summarize",
+    ],
+)
+def test_gate_allows_query_forms_and_delegates_once(
+    sql: str,
+    gate_connection: IndexConnection,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+    def forbidden_timer(
+        timeout: float, callback: Callable[[], None]
+    ) -> threading.Timer:
+        raise AssertionError(
+            "non-forwarding execution recorder invoked the timer factory"
+        )
+
+    def recorder(*args: object, **kwargs: object) -> ResultSet:
+        calls.append((args, kwargs))
+        return GATE_SENTINEL
+
+    monkeypatch.setattr(statement, "execute_statement", recorder)
+    result = statement.run_statement(
+        gate_connection,
+        sql,
+        max_rows=17,
+        timeout_s=2.75,
+        timer=forbidden_timer,
+    )
+    assert result is GATE_SENTINEL
+    assert len(calls) == 1
+    args, kwargs = calls[0]
+    assert args == (gate_connection, sql)
+    assert kwargs == {
+        "max_rows": 17,
+        "timeout_s": 2.75,
+        "timer": forbidden_timer,
+    }
+
+
+def test_gate_parse_error_propagates_without_execution(
+    gate_connection: IndexConnection,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[object, ...]] = []
+
+    def recorder(*args: object, **kwargs: object) -> ResultSet:
+        calls.append((*args, kwargs))
+        raise AssertionError("parse-error SQL reached the execution recorder")
+
+    monkeypatch.setattr(statement, "execute_statement", recorder)
+    with pytest.raises(IndexStatementError) as raised:
+        statement.run_statement(gate_connection, "SELEC 1", max_rows=17, timeout_s=2.75)
+    assert "syntax" in str(raised.value).lower()
+    assert calls == []
+
+
+def test_statement_type_allow_list_is_exact_and_literal() -> None:
+    assert type(statement.ALLOWED_STATEMENT_TYPES) is frozenset
+    assert frozenset({"SELECT", "EXPLAIN"}) == statement.ALLOWED_STATEMENT_TYPES
+
+
+@pytest.mark.parametrize(
+    ("types", "restriction", "detail"),
+    [
+        ((), statement.Restriction.ONE_STATEMENT, ""),
+        (("SELECT", "SELECT"), statement.Restriction.ONE_STATEMENT, ""),
+        (("LOAD", "SELECT"), statement.Restriction.ONE_STATEMENT, ""),
+        (("SELECT",), None, ""),
+        (("EXPLAIN",), None, ""),
+        (("LOAD",), statement.Restriction.STATEMENT_KIND, "LOAD"),
+        (("SET",), statement.Restriction.STATEMENT_KIND, "SET"),
+        (("CALL",), statement.Restriction.STATEMENT_KIND, "CALL"),
+    ],
+    ids=[
+        "zero-types",
+        "two-select-types",
+        "kind-and-count",
+        "one-select",
+        "one-explain",
+        "load",
+        "set",
+        "call",
+    ],
+)
+def test_screen_statement_uses_facade_types_without_execution(
+    types: tuple[str, ...],
+    restriction: statement.Restriction | None,
+    detail: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sql = " exact SQL input "
+    seen: list[str] = []
+
+    class FixedConnection:
+        def statement_types(self, value: str) -> tuple[str, ...]:
+            seen.append(value)
+            return types
+
+        def execute(self, value: str) -> object:
+            seen.append("EXECUTED:" + value)
+            raise AssertionError("screening executed SQL")
+
+        def interrupt(self) -> None:
+            seen.append("INTERRUPTED")
+
+    def forbidden_timer(
+        timeout: float, callback: Callable[[], None]
+    ) -> threading.Timer:
+        raise AssertionError("screening constructed a timer")
+
+    monkeypatch.setattr(threading, "Timer", forbidden_timer)
+    if restriction is None:
+        statement.screen_statement(cast(IndexConnection, FixedConnection()), sql)
+    else:
+        with pytest.raises(statement.StatementRefused) as raised:
+            statement.screen_statement(cast(IndexConnection, FixedConnection()), sql)
+        assert raised.value.restriction is restriction
+        if detail:
+            assert raised.value.detail == detail
+    assert seen == [sql]
+
+
+def test_screen_statement_preserves_parse_exception_identity() -> None:
+    error = IndexStatementError("fixed parser error")
+    original_cause = RuntimeError("fixed parser cause")
+    error.__cause__ = original_cause
+
+    class FixedConnection:
+        def statement_types(self, sql: str) -> tuple[str, ...]:
+            raise error
+
+    with pytest.raises(IndexStatementError) as raised:
+        statement.screen_statement(cast(IndexConnection, FixedConnection()), "SELEC 1")
+    assert raised.value is error
+    assert str(raised.value) == "fixed parser error"
+    assert raised.value.__cause__ is original_cause
+
+
+def test_run_statement_forwards_default_timer(
+    gate_connection: IndexConnection,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected_default_timer = threading.Timer
+    sentinel = ResultSet(
+        columns=("default",), rows=((612,),), truncated=False, max_rows=17
+    )
+    timers: list[Callable[[float, Callable[[], None]], threading.Timer]] = []
+
+    def recorder(
+        conn: IndexConnection,
+        sql: str,
+        *,
+        max_rows: int,
+        timeout_s: float,
+        timer: Callable[[float, Callable[[], None]], threading.Timer],
+    ) -> ResultSet:
+        assert conn is gate_connection
+        assert sql == "SELECT 1"
+        assert max_rows == 17
+        assert timeout_s == 2.75
+        timers.append(timer)
+        return sentinel
+
+    monkeypatch.setattr(statement, "execute_statement", recorder)
+    result = statement.run_statement(
+        gate_connection, "SELECT 1", max_rows=17, timeout_s=2.75
+    )
+    assert result is sentinel
+    assert timers == [expected_default_timer]
+
+
+def test_run_statement_screens_once_before_delegating_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    conn = cast(IndexConnection, object())
+    sql = "SELECT controlled"
+    sentinel = ResultSet(columns=("x",), rows=((928,),), truncated=False, max_rows=17)
+
+    def timer_marker(timeout: float, callback: Callable[[], None]) -> threading.Timer:
+        raise AssertionError(
+            "non-forwarding execution recorder must not construct timer"
+        )
+
+    def screen(received_conn: IndexConnection, received_sql: str) -> None:
+        events.append("screen")
+        assert received_conn is conn
+        assert received_sql == sql
+
+    def execute(
+        received_conn: IndexConnection,
+        received_sql: str,
+        *,
+        max_rows: int,
+        timeout_s: float,
+        timer: Callable[[float, Callable[[], None]], threading.Timer],
+    ) -> ResultSet:
+        events.append("execute")
+        assert received_conn is conn
+        assert received_sql == sql
+        assert max_rows == 17
+        assert timeout_s == 2.75
+        assert timer is timer_marker
+        return sentinel
+
+    monkeypatch.setattr(statement, "screen_statement", screen)
+    monkeypatch.setattr(statement, "execute_statement", execute)
+    result = statement.run_statement(
+        conn,
+        sql,
+        max_rows=17,
+        timeout_s=2.75,
+        timer=timer_marker,
+    )
+    assert events == ["screen", "execute"]
+    assert result is sentinel

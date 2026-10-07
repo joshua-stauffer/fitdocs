@@ -91,19 +91,27 @@ closed: canonical9939/twooptional, fourclaimed+fournew controls RED/restoredGREE
 65 PINNED/2 PRESERVED/0 UNPINNED. Parent360scope/fullstatics/strict2/hash/HOMEempty
 pass. Evidence `/private/tmp/analytics-query-review-executor-message-literals/verdict.md`
 and `/private/tmp/analytics-query-parent-executor-completion/verification.md`.
-Task3.2 statement gate is implemented in its preserved isolated candidate but
-unaccepted: independent review found no local gap (396scope/fullstatics,
-33claimed selections32unique+11own controls RED,47PINNED/3PRESERVED/0UNPINNED),
-but canonical9974passed/onepreviewfailure/twooptional309.09s. The final-fix
-marker timed out at preview1197/1024 despite the existing polling repair.
-An unchanged isolated run passed25.11s; freshdebug BLOCK_TASK confirms unknown
-mechanism and no causal fix. Owning diagnostics capture failure-time state
-before cleanup; no query patch, deadline weakening or unchangedcanonicalretry.
-Candidate source8b4fa260/test8d934db7 and genuine parent OFF checkpoint remain
-private, with pending-task-3.2.patch a record-only snapshot. Evidence
-`/private/tmp/analytics-query-review-gate-3-2/verdict.md` and
-`/private/tmp/analytics-query-debug-preview-fix-stage/REPORT.md`.
-Existing preview queue records this recurrence; downstream runtime tasks wait.
+Task3.2 statement gate is accepted after supplementary independent APPROVED.
+Original canonical9974/onepreviewfailure/twooptional309.09s and its rejection
+remain preserved. Bounded owning diagnostics did not reproduce the timeout;
+mechanism remains UNKNOWN and the existing preview queue stays OPEN. One
+full-context instrumented diagnostic passed9975/twooptional277.98s with all
+eight waits succeeding, zero observer errors and all1500trackedentries unchanged.
+Independent reassessment justified exactly one fresh unmodified canonical gate:
+9975passed/twooptional283.37s, exit0, all1500tracked hashes/modes unchanged,
+HOMEempty and no owned process-group survivors. This is current query-task
+verification, not a causal preview repair. No source/test/deadline changes were
+made to the preview workload.
+
+Gate scope396/fullstatics,33claimed selections32unique+11own controls RED,
+47PINNED/3PRESERVED/0UNPINNED and genuine parent OFF-before-body chronology
+remain verified. Fresh parent byte-equal integration passed396 tests16.75s,
+fullstatics/strict2/diff/hash/HOMEempty. Accepted source8b4fa260/test8d934db7
+supersede the historical pending-task-3.2.patch. Evidence:
+`/private/tmp/analytics-query-review-gate-3-2/verdict.md`, original rejection
+`verdict-original-rejection.md`, supplementary `decision.md`, and
+`/private/tmp/analytics-query-parent-gate-completion/verification.md`.
+Task5.2 orchestration is now unlocked.
 
 Publication8.1 remains unchecked after independent REJECTED. Its original
 canonical reported9,586 passed/two failed/two optional skips: the required
@@ -119,8 +127,8 @@ Evidence: `/private/tmp/analytics-query-publication-repair/handoff.md` and
 
 Completion roadmap ticks await merge. The shared HealthFit root remains
 ready for both peers; a private schema2 timing cache is prepared without
-changing shared data/cache. Query timings await the completed CLI. Ten of21
-leaves are accepted (1.1/1.2/1.3/2.1/2.2/2.3/3.1/4.1/4.2/5.1); no feature GO or merge yet.
+changing shared data/cache. Query timings await the completed CLI. Eleven of21
+leaves are accepted (1.1/1.2/1.3/2.1/2.2/2.3/3.1/3.2/4.1/4.2/5.1); no feature GO or merge yet.
 
 ## Historical tasks 1.3 and 2.1 preview blocker
 

@@ -365,3 +365,30 @@ advanced. Record process output with timestamps and bounded child cleanup.
 A new observer diagnostic is useful work; an unchanged canonical retry provides
 no causal evidence. Repair only an observed owning defect, then verify its
 discriminator and consume the owning fix before query acceptance.
+
+
+## analytics-query full-context observation and bounded gate reassessment (2026-10-07)
+
+The owning investigation ran five bounded standalone trials (three valid
+instrumented passes, one uninstrumented pass, and one invalid observer-induced
+failure preserved separately), followed by exactly one full-context diagnostic.
+The full-context run passed 9,975 tests with two optional actionlint skips in
+277.98 s. All eight readiness waits succeeded; the final-fix wait took 1.894 s.
+The observer registered/restored with zero errors; all 1,500 tracked entries
+and modes matched before/after, HOME stayed empty, and no owned process-group
+PIDs remained. No failure-time native capture was produced because the timeout
+did not recur. No product repair occurred; mechanism remains UNKNOWN and this
+queue item remains OPEN. Private evidence:
+`/private/tmp/analytics-query-preview-full-context-capture/FULL-REPORT.md`.
+
+Independent review reassessed the outstanding query gate in
+`/private/tmp/analytics-query-review-gate-3-2/decision.md`: this materially new
+full-context evidence justifies exactly one fresh unmodified canonical run.
+The diagnostic itself cannot substitute for that gate. A PASS may support the
+unchanged query candidate's current verification while preserving the original
+failure and this OPEN upstream follow-up; it cannot establish a causal preview
+repair. A FAIL keeps the query task rejected and preserves a new owning witness,
+with no automatic retry loop. This bounded gate reassessment supersedes the
+prior blanket requirement to consume a causal repair before query acceptance;
+it does not change the owning investigation's requirement for evidence before
+any guessed product patch.

@@ -44,8 +44,19 @@ class StatementRefused(Exception):
     def __init__(self, restriction: Restriction, detail: str) -> None:
         self.restriction = restriction
         self.detail = detail
-        clause = RESTRICTION_TEXT[restriction]
-        super().__init__(f"{clause}: {detail}")
+        if restriction is Restriction.ONE_STATEMENT:
+            super().__init__(RESTRICTION_TEXT[restriction])
+            return
+        if restriction is Restriction.STATEMENT_KIND:
+            display = {"LOAD": "INSTALL or LOAD", "SET": "SET, RESET or USE"}.get(
+                detail, detail
+            )
+            message = RESTRICTION_TEXT[restriction].format(TYPE=display)
+            if detail == "CALL":
+                message += "; use SELECT * FROM <function>(…) instead"
+            super().__init__(message)
+            return
+        super().__init__(f"{RESTRICTION_TEXT[restriction]}: {detail}")
 
 
 class StatementFailed(Exception):
@@ -154,4 +165,32 @@ def execute_statement(
         rows=tuple(rows[:max_rows]),
         truncated=len(rows) > max_rows,
         max_rows=max_rows,
+    )
+
+
+ALLOWED_STATEMENT_TYPES: Final[frozenset[str]] = frozenset({"SELECT", "EXPLAIN"})
+
+
+def screen_statement(conn: IndexConnection, sql: str) -> None:
+    """Refuse empty, multiple, or non-query statements before execution."""
+    types = conn.statement_types(sql)
+    if len(types) != 1:
+        raise StatementRefused(Restriction.ONE_STATEMENT, ", ".join(types))
+    statement_type = types[0]
+    if statement_type not in ALLOWED_STATEMENT_TYPES:
+        raise StatementRefused(Restriction.STATEMENT_KIND, statement_type)
+
+
+def run_statement(
+    conn: IndexConnection,
+    sql: str,
+    *,
+    max_rows: int,
+    timeout_s: float,
+    timer: TimerFactory = threading.Timer,
+) -> ResultSet:
+    """Screen a statement before passing it to the timed executor."""
+    screen_statement(conn, sql)
+    return execute_statement(
+        conn, sql, max_rows=max_rows, timeout_s=timeout_s, timer=timer
     )
