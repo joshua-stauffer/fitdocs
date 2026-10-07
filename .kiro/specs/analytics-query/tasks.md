@@ -242,7 +242,11 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 - **2.1**: `tests/query/test_format.py`, and `tests/query/test_boundary.py`
   (format-purity section).
 - **2.2**: `tests/query/test_sandbox.py`.
-- **2.3**: `tests/query/test_spill.py`.
+- **2.3**: `tests/query/test_spill.py`, plus only the exact opening-settings
+  expectation in `test_non_locked_open_fault_is_not_retried` in
+  `tests/query/test_sandbox.py`: add the required per-PID `temp_directory`
+  while preserving the full resource/read-only/error assertion. This evolves
+  the phase-2.2 expectation when task2.3 adds its specified setting.
 - **3.1**: `tests/query/test_statement.py` (execution section). **3.2**: the same
   file (gate section).
 - **4.1**: `tests/query/test_freshness.py`.
@@ -723,7 +727,7 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 
 - [ ] 4. Core: freshness and the schema catalog
 
-- [ ] 4.1 (P) Measure how far the index is from the data root
+- [x] 4.1 (P) Measure how far the index is from the data root
   - **`freshness.py`**, per design.md § Freshness:
     - `PageDrift`/`page_drift`;
     - `CorpusDrift`/`corpus_fingerprints`/`corpus_drift`.
@@ -1439,3 +1443,9 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 - 2026-10-07 task2.1 accepted after fresh independent APPROVED: canonical9,535 passed/two optional actionlint skips in293.24s; full/scoped statics pass, 107 meaningful mutation trials and12 isolated controls RED/restored GREEN/no survivors. All52 clauses PINNED, 75 assertions inventoried (74PINNED/one preserved structural source-path precondition), all prior65 retained. Exact whitespace/header fixtures close final gaps; canonical UUID outputs use equivalent generic fallback, owning guard unchanged. Fresh parent after integration on verified-index9e9b2da lineage: query/index-boundary/exactUUIDguard197passed8.82s, fullRuff/checkformat534/mypy342 and strictthreeownedfiles pass, diffcheck clean. Evidence `/private/tmp/analytics-query-review-format-whitespace/verdict.md` and `/private/tmp/analytics-query-parent-format-completion/verification.md`. Historical pending-task-2.1.patch is superseded by accepted live files; keep original failed/incomplete evidence as history.
 
 - 2026-10-07 task2.2 accepted after fresh independent APPROVED: canonical9,510 passed/two optional skips, full/scoped statics and45 meaningful mutation observations RED/restoredGREEN, eight clause groups PINNED/no survivors. Per-key missing/wrong/NULL readbacks close both original gaps without changing correct production. Parent byte-equal integration on91b0e74 passed230 query/index-boundary/exactUUIDguard tests8.46s, fullRuff/checkformat536/mypy343 and stricttwoownedfiles, diffcheck clean. Evidence `/private/tmp/analytics-query-review-sandbox-correction/verdict.md` and `/private/tmp/analytics-query-parent-sandbox-completion/verification.md`. Older pending-task-2.2.patch is superseded by accepted live files. Spill configuration and cleanup remain task2.3.
+
+- 2026-10-07 task4.1 first independent review REJECTED despite canonical9540 passed/two optional skips and full/scoped statics: saved pre-flag backup equals complete production source, so retrospective flag capture does not prove tests-first. All25 claimed mutations RED, but three reviewer variants survive whole task tests: workout_pages uses held length, pages_held uses scan length, IS DISTINCT FROM becomes NULL-insensitive <>. Three fixed-input controls GREEN originally and soleRED under respective variants. Candidate restored/hashes preserved; evidence `/private/tmp/analytics-query-review4-1/verdict.md`. Fresh Luna remediation in cleanf7dfd76 tree copies tests only, requires parent-inspected API-shell/OFFRED checkpoint BEFORE implementation, preserves prior pins and adds exact differing page totals/NULL athlete controls. No4.1 acceptance.
+
+- 2026-10-07 task4.1 first remediation review REJECTED only for9.5 directory purity: genuine forward parent-inspected OFFcheckpoint/ONGREEN/removedGREEN verified; canonical9573 passed/two optional skips, exactUUIDscope235 and full/strictstatics green, all33claims+2own variants RED. Parent-suggested emptydirectory creation under data_root survives full5tests because _tree_bytes records files only. Source restored01e740ec..., test7cd9db57..., no acceptance. Fresh Luna secondbounded TEST-ONLY repair preserves production/phasehistory/allpriorpins, adds treeentries/types+filebytes fixedcontrols; parent independently observed2intended oldhelperRED failures (bothroots) BEFORE GO_FIX_GUARD, proof `/private/tmp/analytics-query-task4-1-purity/evidence/parent-guard-checkpoint.json`. Review `/private/tmp/analytics-query-review4-1-repair/verdict.md`; laterfreshreview must replay all35 and newguard/directory controls.
+
+- 2026-10-07 task4.1 accepted after fresh independent APPROVED: correctedrestoredcanonical9579passed/twooptional skips/exactexit0, all41claimed+2newown mutations RED/restoredGREEN, allfive requirement groups PINNED/no survivors. Production01e740ec... remains unchanged through test-only purity correction; test57e3ea62... pins directory/filebytes/live-and-broken-symlink entries and bothroot mkdir writes. Genuine parent-inspected preimplementation OFF/ON/remove chronology and tests-first guardRED verified; original retrospective/failedwrapper evidence preserved as history. Parent byte-equal integration onf7dfd76 passed241 query/indexboundary/exactUUIDguard13.75s, fullRuff/checkformat538/mypy344 andstrict2 plusdiffcheck. Evidence `/private/tmp/analytics-query-review4-1-purity/verdict.md` and `/private/tmp/analytics-query-parent-freshness-completion/verification.md`. Six/21leavesaccepted; freshLuna2.3 spill running isolatedf7dfd76 with earlycheckpoint, catalog4.2 queued. Bounded2.3 testownership clarification permits only its required perPID opening-settings expectation evolution, without changing requirements/runtime behavior of2.2.

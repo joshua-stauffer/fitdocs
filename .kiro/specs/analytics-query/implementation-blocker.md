@@ -33,12 +33,26 @@ UUID-guard tests in8.46s, full Ruff/checkformat536/mypy343 and stricttwo-file
 mypy. Evidence `/private/tmp/analytics-query-review-sandbox-correction/verdict.md`
 and `/private/tmp/analytics-query-parent-sandbox-completion/verification.md`.
 
-Task4.1 is running in a fresh Luna context in its isolated worktree based on
-accepted91b0e74. Concurrent launches have hit the thread limit; new contexts
-continue as slots allow, with no completed Sol agent reused. Spill2.3 is next.
-The shared data root remains ready for both peers; query timings require the
-completed command. Five of21 leaves are accepted (1.1/1.2/1.3/2.1/2.2);
-no feature GO or merge yet.
+Task4.1 is accepted after NEW independentAPPROVED: corrected canonical9,579
+passed/two optional skips/exactexit0, all41claimed+2new own mutation controls
+RED/restoredGREEN, five requirement groups PINNED/no survivors. Genuine
+parent-inspected API-shell/OFFRED before implementation, ON/GREEN/remove,
+and later guardtests-firstRED chronology are verified. Test snapshots cover
+directories, filebytes and live/broken symlink targets in bothroots. Production
+remains01e740ec..., test57e3ea62...; rejected history and initial readonly-zsh
+status wrapper failure remain preserved. Parent byte-equal integration passed
+241 exactquery/index-boundary/UUIDguard tests13.75s, fullRuff/checkformat538,
+mypy344 andstrict2, diffcheck. Evidence
+`/private/tmp/analytics-query-review4-1-purity/verdict.md` and
+`/private/tmp/analytics-query-parent-freshness-completion/verification.md`.
+
+A NEW Luna task2.3 spill implementer is running in isolatedf7dfd76;
+parent requires new-featureAPI-shell/OFFRED checkpoint before behavior, while
+preserving accepted2.2 bodies. Catalog4.2 tree/brief remains queued. Concurrent
+launches have hit the threadlimit; newcontexts continue as slotsallow, with no
+completed Sol reused. The shared HealthFit root remains ready for both peers;
+query timings await the completedCLI (runner prepared, noqueryrun yet).
+Six of21 leaves accepted (1.1/1.2/1.3/2.1/2.2/4.1); nofeatureGO/merge yet.
 
 ## Historical tasks 1.3 and 2.1 preview blocker
 
