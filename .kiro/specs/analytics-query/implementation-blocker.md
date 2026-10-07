@@ -1,6 +1,7 @@
 # Implementation progress after the upstream preview repair
 
-Verified analytics-index main `63d79a3` is consumed on this branch. The owning
+Verified analytics-index main `995db58`, including the landed registry-fixture
+isolation correction, is consumed on this branch. The owning
 preview polling-watcher repair is present; earlier preview failures remain
 historical and no longer block implementation.
 
@@ -46,13 +47,33 @@ mypy344 andstrict2, diffcheck. Evidence
 `/private/tmp/analytics-query-review4-1-purity/verdict.md` and
 `/private/tmp/analytics-query-parent-freshness-completion/verification.md`.
 
-A NEW Luna task2.3 spill implementer is running in isolatedf7dfd76;
-parent requires new-featureAPI-shell/OFFRED checkpoint before behavior, while
-preserving accepted2.2 bodies. Catalog4.2 tree/brief remains queued. Concurrent
-launches have hit the threadlimit; newcontexts continue as slotsallow, with no
-completed Sol reused. The shared HealthFit root remains ready for both peers;
-query timings await the completedCLI (runner prepared, noqueryrun yet).
-Six of21 leaves accepted (1.1/1.2/1.3/2.1/2.2/4.1); nofeatureGO/merge yet.
+The maintainer revoked the extra fresh-agent-per-subcall restriction; standard
+harness reuse now permits parallel implementation and independent review.
+All implementers remain Luna. Spill 2.3 and catalog 4.2 are implemented but
+remain unchecked after independent reviews found bounded test gaps.
+
+Spill review passed both canonical runs (9,579 passed/two optional skips),
+all statics and all 24 claimed mutation trials. Independent variants exposed
+serial query execution, missing near-match cleanup names, listing before the
+skip-cleanup hook returns, and unexpected index-directory writes. Luna is
+repairing only test_spill.py; sandbox.py and test_sandbox.py remain byte-identical.
+The parent independently observed the new actual execute-through-fetch overlap
+guard fail under the old serial harness before authorizing its fix. Evidence:
+`/private/tmp/analytics-query-review2-3/verdict.md` and
+`/private/tmp/analytics-query-spill-test-repair/parent-guard-checkpoint.json`.
+
+Catalog review passed canonical 9,586/two optional skips, all statics and all
+17 claimed variants. Its exhaustive 41-variant sweep found four insensitive
+variants: registry-sourced table/column comments, trimming nonblank padding,
+and space-only recognition of blank comments. A test-only repair is queued;
+correct source and all seven prior tests must remain intact. The catalog
+mutation rationale now records runtime-equivalent filters and creation-time
+description application accurately. Evidence:
+`/private/tmp/analytics-query-review4-2/verdict.md`.
+
+The shared HealthFit root remains ready for both peers; query timings await
+the completed CLI (runner prepared, no query timing run yet). Six of 21 leaves
+are accepted (1.1/1.2/1.3/2.1/2.2/4.1); no feature GO or merge yet.
 
 ## Historical tasks 1.3 and 2.1 preview blocker
 

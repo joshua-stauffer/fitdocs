@@ -851,13 +851,18 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
       `undescribed(read_catalog(…)) == ()`, with `len(tables) >= 13` asserted
       first.
   - **Mutations:**
-    - drop the `database_name = current_database()` filter (system views
-      appear and the exclusion pin reds);
+    - drop the `database_name = current_database()` filter (the forwarding
+      SQL recorder's filter pin reds). DuckDB's table catalog contains no
+      system-view rows; its temporary objects use the `temp` database, so
+      runtime exclusion alone cannot distinguish every required predicate.
+      Keep real system-view and temporary-table positive controls, and pin
+      both catalog queries' database/schema filters directly;
     - match unit suffixes shortest-first (the `_s_per_km` and `_kn_m` pins
       red);
     - make `store.create_schema` skip `COMMENT ON COLUMN`, in place, with a
-      `cp` backup (the 10.9 pin reds, since no `apply_descriptions` runs on
-      this path);
+      `cp` backup (the 10.9 pin reds). `create_schema` applies descriptions
+      during creation; no later refresh or description reapplication repairs
+      the deliberately omitted column comments in this fixture;
     - let `undescribed` skip columns (its fixed-input test reds).
   - **Observable:** the catalog section is green, and mypy is clean.
   - _Requirements: 10.1, 10.5, 10.9, 12.5_
@@ -1449,3 +1454,6 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 - 2026-10-07 task4.1 first remediation review REJECTED only for9.5 directory purity: genuine forward parent-inspected OFFcheckpoint/ONGREEN/removedGREEN verified; canonical9573 passed/two optional skips, exactUUIDscope235 and full/strictstatics green, all33claims+2own variants RED. Parent-suggested emptydirectory creation under data_root survives full5tests because _tree_bytes records files only. Source restored01e740ec..., test7cd9db57..., no acceptance. Fresh Luna secondbounded TEST-ONLY repair preserves production/phasehistory/allpriorpins, adds treeentries/types+filebytes fixedcontrols; parent independently observed2intended oldhelperRED failures (bothroots) BEFORE GO_FIX_GUARD, proof `/private/tmp/analytics-query-task4-1-purity/evidence/parent-guard-checkpoint.json`. Review `/private/tmp/analytics-query-review4-1-repair/verdict.md`; laterfreshreview must replay all35 and newguard/directory controls.
 
 - 2026-10-07 task4.1 accepted after fresh independent APPROVED: correctedrestoredcanonical9579passed/twooptional skips/exactexit0, all41claimed+2newown mutations RED/restoredGREEN, allfive requirement groups PINNED/no survivors. Production01e740ec... remains unchanged through test-only purity correction; test57e3ea62... pins directory/filebytes/live-and-broken-symlink entries and bothroot mkdir writes. Genuine parent-inspected preimplementation OFF/ON/remove chronology and tests-first guardRED verified; original retrospective/failedwrapper evidence preserved as history. Parent byte-equal integration onf7dfd76 passed241 query/indexboundary/exactUUIDguard13.75s, fullRuff/checkformat538/mypy344 andstrict2 plusdiffcheck. Evidence `/private/tmp/analytics-query-review4-1-purity/verdict.md` and `/private/tmp/analytics-query-parent-freshness-completion/verification.md`. Six/21leavesaccepted; freshLuna2.3 spill running isolatedf7dfd76 with earlycheckpoint, catalog4.2 queued. Bounded2.3 testownership clarification permits only its required perPID opening-settings expectation evolution, without changing requirements/runtime behavior of2.2.
+
+- 2026-10-07 standard harness reuse authorized by the maintainer; Luna implementers persist. Parent rebased onto main995db58's owning index fixture correction. Spill2.3 independent REJECTED despite canonical9579/2 optional, all24 claimed RED/restored and clean statics: actual work intervals were serial; near-match names, hook listing and inside-index arbitrary writes survive. Test-only repair preserves correct source and prior settings test; parent independently observed overlap guard soleRED under old serial harness before GO_FIX_GUARD. Evidence `/private/tmp/analytics-query-review2-3/verdict.md` and `/private/tmp/analytics-query-spill-test-repair/parent-guard-checkpoint.json`.
+- 2026-10-07 catalog4.2 independent REJECTED despite canonical9586/2 optional, all17 claimed RED/restored and clean statics: exhaustive41 unique variants found four survivors, live table/column registry substitutions, nonblank comment trimming and space-only blank normalization. Independent literal live-COMMENT controls discriminate each; bounded test-only repair must retain all seven prior tests and correct source. Task mutation prose clarified without changing runtime requirements: real catalog filters can be output-equivalent on current DuckDB, so a forwarding SQL recorder pins each required predicate; create_schema applies descriptions at creation with no later refresh reapplication. Evidence `/private/tmp/analytics-query-review4-2/verdict.md`. Neither task is accepted yet.
