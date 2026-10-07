@@ -1354,6 +1354,9 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
     - the grep output, before and after, is recorded in Implementation Notes;
     - `/kiro-spec-status connectors` is clean.
   - _Requirements: 7.5, 12.6, 12.7_
+  - _Depends: 6.1_
+  - Publication links require the Analytics project URL declaration owned by
+    6.1; independent review exposed this canonical packaging prerequisite.
 
 - [ ] 8.2 Register the test modules, verify the duckdb floor and validate the feature
   - **mypy registration**: append every new `tests/query/` module to
@@ -1465,3 +1468,5 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 - 2026-10-07 catalog4.2 independent REJECTED despite canonical9586/2 optional, all17 claimed RED/restored and clean statics: exhaustive41 unique variants found four survivors, live table/column registry substitutions, nonblank comment trimming and space-only blank normalization. Independent literal live-COMMENT controls discriminate each; bounded test-only repair must retain all seven prior tests and correct source. Task mutation prose clarified without changing runtime requirements: real catalog filters can be output-equivalent on current DuckDB, so a forwarding SQL recorder pins each required predicate; create_schema applies descriptions at creation with no later refresh reapplication. Evidence `/private/tmp/analytics-query-review4-2/verdict.md`. Neither task is accepted yet.
 
 - 2026-10-07 task4.2 accepted after independent APPROVED: canonical9605/two optional skips, all38 claimed plus10 new distinct reviewer variants RED/restored GREEN,42PINNED/0UNPINNED, original seven tests preserved. Fresh parent267 scoped tests9.76s, full Ruff/checkformat540/mypy345 and strict both files plus diff check passed; hashes match restored approved candidate. Evidence `/private/tmp/analytics-query-review-catalog-repair/verdict.md` and `/private/tmp/analytics-query-parent-catalog-completion/verification.md`. Spill2.3 second review found only inventory helper fixture gaps (nested descendants/special entries); source remains correct and unaccepted, exhaustive test-only repair pending.
+
+- 2026-10-07 task8.1 independent REJECTED: canonical9586passed/2failed/2optional skips, statics and all20 claimed mutations passed; one of11 independent variants exposed inaccurate terminal/piped default prose and token-only pin. Four hardcoded released-version literals violate version identity; owned test/changelog repair deferred with preservedcandidate. Required analytics URL fails packaging until task6.1 declares its project URL. Added dependency6.1 to encode this existing integration prerequisite; no8.1 pyproject ownership expansion, no unchanged canonical retry. Eight candidate files restored; record-only clauses mechanically preserved. Evidence `/private/tmp/analytics-query-review-publication/verdict.md`. Allpublicationroadmap ticks remain deferredactualmerge; source/tests not accepted.

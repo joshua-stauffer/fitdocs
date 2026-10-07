@@ -68,8 +68,17 @@ A bounded test-only nested-payload/special-node fixture repair is next;
 production and existing sandbox tests remain unchanged. Evidence:
 `/private/tmp/analytics-query-review-spill-repair/verdict.md`.
 
-Publication8.1 is running independently in its isolated tree. Completion
-roadmap ticks await actual merge. The shared HealthFit root remains ready
+Publication8.1 remains unchecked after independent REJECTED. Canonical
+reported9,586 passed/two failed/two optional skips: the required analytics
+URL awaits the project declaration owned by6.1, and four new test literals
+violate the existing released-version guard. A reviewer variant also exposes
+incorrect terminal/piped default prose and its token-only pin. The bounded
+owned changelog/test repair and renewed integration review are deferred until
+6.1; tasks now encodes that prerequisite. Failed evidence and restored eight
+candidate files are retained at
+`/private/tmp/analytics-query-review-publication/verdict.md`.
+Spill second fixture repair is under independent review; state5.1 is running
+in a separate tree from accepted4.2. Completion roadmap ticks await merge. The shared HealthFit root remains ready
 for both peers; query timings await the completed CLI. Seven of21 leaves
 are accepted (1.1/1.2/1.3/2.1/2.2/4.1/4.2); no feature GO or merge yet.
 
