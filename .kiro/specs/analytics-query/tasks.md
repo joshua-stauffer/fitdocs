@@ -146,7 +146,8 @@ Each file below is shared with `analytics-index` (landed) or `analytics-derived`
 never rewrite or reorder another spec's. **On rebase, keep both.**
 
 - **`src/fitdocs/cli.py`**, the docstring command count, and
-  `tests/test_cli_skill.py:262-270`.
+  `tests/test_cli_skill.py:262-270`, and the command-count literal in
+  `tests/index/test_cli_index.py::test_module_docstring_describes_command_count_and_exit_behavior`.
   - This plan moves the count from `main`'s value to that value plus one: from
     "Twelve" to "Thirteen", and from 12 to 13.
   - `analytics-derived` adds no command.
@@ -253,7 +254,9 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 - **4.2**: `tests/query/test_schemaview.py` (catalog section). **5.1**: the same
   file (state section).
 - **5.2**: `tests/query/test_command.py`.
-- **5.3**: `tests/query/test_cli_query.py` and `tests/test_cli_skill.py:262-270`.
+- **5.3**: `tests/query/test_cli_query.py`, `tests/test_cli_skill.py:262-270`,
+  and only the command-count literal in
+  `tests/index/test_cli_index.py::test_module_docstring_describes_command_count_and_exit_behavior`.
 - **5.4**:
   - `tests/test_confinement.py` (an appended test);
   - `tests/connectors/test_e2e.py:203-246`;
@@ -962,7 +965,7 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
     HOME stays empty.
   - _Requirements: 1.6, 4.3, 6.4, 6.6, 8.1, 8.2, 10.2, 10.4, 10.7, 10.8_
 
-- [ ] 5.3 Add the `fitdocs query` command
+- [x] 5.3 Add the `fitdocs query` command
   - **`cli.py`**, per design.md § CliWiring:
     - the option singletons (`--file`, `--schema`, `--format` as a
       case-insensitive `OutputFormat` choice, `--max-rows` with `min=1`,
@@ -980,6 +983,10 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
       `query` entry and its exit codes.
 
     `tests/test_cli_skill.py:262-270` goes from 12 to 13, and "Thirteen".
+    The existing index CLI docstring test changes only its "Twelve"
+    count expectation to "Thirteen"; all index-command and exit-behavior
+    assertions remain unchanged. The full suite exposed this additional
+    shared count literal during task 5.3 review.
   - **Tests** (`tests/query/test_cli_query.py`, `use_indexed_root` and
     `home_dir`):
     - **Forms**:
@@ -1486,3 +1493,5 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 - 2026-10-07 task3.2 accepted after supplementary independent APPROVED: materially new full-context diagnostic9975/twooptional/0observererrors permitted exactlyone fresh unmodified canonical, which passed9975/twooptional283.37s, all1500tracked hashes/modes unchanged/HOMEempty/ownedPGgone. Original9974/onepreviewfailure and original rejection remain preserved; no causalpreviewrepair is claimed, existing upstreamqueue staysOPEN. Frozenlocalproofs33claimed selections32unique+11own RED/restoredGREEN,47PINNED/3PRESERVED/0UNPINNED and genuine parentOFF25assertionFAIL-before-body chronology retained. Parent byte-equal integration396passed16.75s/fullstatics/strict2/diff/hash/HOMEempty VERIFIED. Evidence `/private/tmp/analytics-query-review-gate-3-2/verdict.md`, `decision.md`, `/private/tmp/analytics-query-preview-full-context-capture/FULL-REPORT.md`, `/private/tmp/analytics-query-parent-gate-completion/verification.md`. Elevenof21 accepted; major3 complete;5.2 command now unlocked. Historical pending-task-3.2.patch is superseded by live files.
 
 - 2026-10-08 task 5.2 accepted after independent APPROVED: final canonical 10,026 passed/two optional skips, all 74 claimed plus two independent controls RED/restored GREEN, all ten task-owned requirement groups pinned. Current date and athlete corpus forwarding use asymmetric fixtures: change a valid copied profile after index creation and establish current fingerprint differs from stored metadata; do not rebuild away the distinction. Correct source unchanged during test-only remediation. Fresh parent 447 scoped tests, whole Ruff/format/configured mypy, strict both files and exact hashes/HOME purity VERIFIED. Original pre-body 45 intended failures plus one incorrect catalog oracle, invalid unused-marker ON, later partial focused failure with unavailable trace, and interrupted first review gate remain honestly historical; no causal spill/preview repair claimed. Evidence `/private/tmp/analytics-query-review-command-5-2/round1/verdict.md`, `/private/tmp/analytics-query-parent-command-5-2-final/verification.md`. Twelve of 21 leaves accepted; query orchestration is available for CLI task 5.3.
+
+- 2026-10-08 task 5.3 accepted after independent APPROVED: corrected canonical 10,056 passed/two optional actionlint skips, exit 0; 36 claimed and six independent controls RED/restored GREEN, zero survivors at representative responsibility granularity. The sole prior canonical failure was an additional existing index CLI command-count expectation; its Twelve-to-Thirteen literal evolution is explicitly owned, all other index assertions retained. Original three CLI files unchanged during this repair. Fresh parent 497 scoped tests plus whole Ruff/format/configured mypy and strict all four files, exact hashes and HOME purity VERIFIED. Original controller-interrupted permission run and completed stale-count failure remain historical evidence; no production repair attributed to either. Evidence `/private/tmp/analytics-query-task5-3-independent-review-count2/REVIEW-VERDICT.md`, `/private/tmp/analytics-query-parent-cli5-3-final/verification.md`. Thirteen of 21 leaves accepted; CLI forms/streams/exits available for documentation and integrated guards.

@@ -2,7 +2,7 @@
 
 A thin typer shell (design: CliApp, ``src/fitdocs/cli.py``): it parses flags,
 resolves configuration, calls the engine, and reports -- it contains no
-rendering or file-pipeline logic of its own. Twelve commands are registered
+rendering or file-pipeline logic of its own. Thirteen commands are registered
 on top of the baseline ``--version`` / ``--help`` shell. The tree-processing
 commands documented here are:
 
@@ -30,6 +30,9 @@ commands documented here are:
   Req 8.2, 8.3, 8.6, 8.9; plan-resolution Req 4.3, 8.1). Standalone: this
   command is never chained onto ``sync``, ``regen``, ``load``, ``history`` or
   ``check``, and none of those commands change because it exists (Req 8.8).
+* ``fitdocs query [SQL | -] [--file PATH] [--schema] [--format table|csv|json]
+[--max-rows N] [--timeout SECONDS] [--out PATH]`` -- read-only: run one SQL
+statement against the analytics index in a sandbox, or describe its schema.
 * ``fitdocs index [--out PATH] [--rebuild]`` -- build or refresh the disposable
   analytics index from the data root's workout pages (analytics-index Req
   10.1).
@@ -100,7 +103,8 @@ Exit codes (Req 1.5, 2.2, 8.5, 8.7):
   and/or skipped, nothing failed), a ``check`` run that reports nothing, a
   ``plan`` run with no plan sources present, or a ``pull`` run with no
   connector configured or whose only exceptional entries are deferrals and
-  skips (connectors Req 6.3, 11.4);
+  skips (connectors Req 6.3, 11.4); ``query`` also exits 0 for a result or
+  schema description, including a result cut at its row limit;
 * ``1`` -- one or more per-file *or* per-document (load) failures occurred,
   ``check`` reports one or more findings, ``plan`` finds an invalid, blocked,
   or failed block, the plan reconciling pass -- chained after ``sync``'s
@@ -109,6 +113,8 @@ Exit codes (Req 1.5, 2.2, 8.5, 8.7):
   instance or activity failure (connectors Req 11.4), or (``--sync``) the
   chained drain -- the inbox drain, its load pass, or its reconciling pass --
   failed (connectors Req 12.5);
+  ``query`` exits 1 when its statement is refused, fails or times out, the
+  sandbox cannot be verified, or the index is unavailable or incompatible;
 * ``2`` -- a configuration error: an unresolvable data root (its message lists
   the three configuration options), a malformed ``athlete.toml`` / profile, a
   malformed ``fitdocs.toml`` ``[tiles]``, ``[load]``, ``[history]`` or
@@ -116,7 +122,8 @@ Exit codes (Req 1.5, 2.2, 8.5, 8.7):
   before it ever calls the plan engine, plan-resolution Req 8.7), an unknown
   ``--calculator``/configured-default id, or a missing source directory --
   including a configured plan-source directory that does not exist or is not
-  a directory -- or (``skill``) an unknown or absent packaged skill name.
+  a directory -- or (``query``) invalid query input or data-root/index
+  location, or (``skill``) an unknown or absent packaged skill name.
   ``pull`` adds its own preflight configuration errors: an unknown connector
   instance name, an invalid ``--since`` date, ``--sync`` combined with
   ``--dry-run``, and a credentials directory that is the data root or lies
@@ -162,9 +169,11 @@ Requirements 1.3, 1.4, 1.5, 2.1, 3.5, 8.1, 8.2, 8.3, 8.4, 8.6, 14.1, 14.2, 14.4.
 from __future__ import annotations
 
 import getpass
+import math
 import os
 import re
 import sys
+import threading
 import time
 from datetime import UTC, date, datetime, tzinfo
 from pathlib import Path
@@ -215,6 +224,7 @@ from fitdocs.inbox import (
     load_inbox_settings,
     validate_inbox_paths,
 )
+from fitdocs.index.location import IndexLocationError
 from fitdocs.layout import block_doc_path, settings_path
 from fitdocs.load.engine import DocLoadEntry, LoadReport, apply_load
 from fitdocs.load.profile import ProfileError
@@ -241,6 +251,23 @@ from fitdocs.plugins import (
     load_plugin_settings,
 )
 from fitdocs.quarantine import QuarantineError, QuarantineRecord, load_quarantine
+from fitdocs.query.command import (
+    DEFAULT_MAX_ROWS,
+    DEFAULT_TIMEOUT_S,
+    OutcomeKind,
+    QueryEnvironment,
+    QueryRequest,
+    run_query,
+)
+from fitdocs.query.format import OutputFormat, default_format, render_result
+from fitdocs.query.sandbox import process_is_running
+from fitdocs.query.schemaview import (
+    render_schema_json,
+    render_schema_text,
+    render_state_text,
+    undescribed,
+)
+from fitdocs.query.statement import RESTRICTION_TEXT, Restriction
 from fitdocs.settings import SettingsError, load_settings_document
 from fitdocs.sync import DrainReport, SyncReport, drain, regen, sync
 from fitdocs.tiles import TileStore, load_tile_settings, tile_settings_from_document
@@ -312,6 +339,27 @@ _REBUILD_INDEX_OPTION = typer.Option(
     False,
     "--rebuild",
     help="Build a fresh index and atomically replace any existing one.",
+)
+_QUERY_SQL_ARGUMENT = typer.Argument(
+    None, help="One SQL statement, or '-' to read it from standard input."
+)
+_QUERY_FILE_OPTION = typer.Option(
+    None, "--file", help="Read the SQL statement from PATH."
+)
+_QUERY_SCHEMA_OPTION = typer.Option(
+    False, "--schema", help="Describe the indexed schema."
+)
+_QUERY_FORMAT_OPTION = typer.Option(
+    None,
+    "--format",
+    case_sensitive=False,
+    help="Result format: table, csv, or json (default depends on stdout).",
+)
+_QUERY_MAX_ROWS_OPTION = typer.Option(
+    DEFAULT_MAX_ROWS, "--max-rows", min=1, help="Maximum result rows to print."
+)
+_QUERY_TIMEOUT_OPTION = typer.Option(
+    DEFAULT_TIMEOUT_S, "--timeout", help="Query time limit in seconds."
 )
 _FORCE_OPTION = typer.Option(
     False,
@@ -1810,6 +1858,202 @@ def _local_tz() -> tzinfo:
     local = datetime.now().astimezone().tzinfo
     assert local is not None  # astimezone() always attaches the local tzinfo
     return local
+
+
+@app.command("query")
+def query_command(
+    sql: str | None = _QUERY_SQL_ARGUMENT,
+    file: Path | None = _QUERY_FILE_OPTION,
+    schema: bool = _QUERY_SCHEMA_OPTION,
+    output_format: OutputFormat | None = _QUERY_FORMAT_OPTION,
+    max_rows: int = _QUERY_MAX_ROWS_OPTION,
+    timeout: float = _QUERY_TIMEOUT_OPTION,
+    out: Path | None = _OUT_OPTION,
+) -> None:
+    """Run one read-only SQL statement against the analytics index,
+    or describe its schema."""
+    console = Console(stderr=True, markup=False, highlight=False, soft_wrap=True)
+
+    if not math.isfinite(timeout) or timeout <= 0:
+        _config_error("--timeout must be a finite number greater than zero.")
+    if schema and output_format is OutputFormat.CSV:
+        _config_error("fitdocs query does not support --format csv with --schema.")
+
+    positional_source = sql is not None and sql != "-"
+    stdin_source = sql == "-"
+    file_source = file is not None
+    source_count = sum((positional_source, stdin_source, file_source))
+    if (schema and source_count != 0) or (not schema and source_count != 1):
+        _config_error(
+            "provide exactly one SQL source (SQL, --file PATH, or '-' for "
+            "standard input); --schema accepts no SQL source."
+        )
+
+    statement = None if schema else _read_statement(sql, file)
+
+    data_root = _resolved_data_root(out)
+
+    def on_wait(holder_pid: int | None) -> None:
+        process = f" (process {holder_pid})" if holder_pid is not None else ""
+        console.print(
+            f"Index: waiting for another process{process} to finish writing the index…"
+        )
+
+    request = QueryRequest(
+        data_root=data_root,
+        sql=statement,
+        schema=schema,
+        max_rows=max_rows,
+        timeout_s=timeout,
+        today=_today(),
+    )
+    environment = QueryEnvironment(
+        environ=os.environ,
+        home=Path.home(),
+        pid=os.getpid(),
+        monotonic=time.monotonic,
+        sleep=time.sleep,
+        on_wait=on_wait,
+        is_running=process_is_running,
+        timer=threading.Timer,
+    )
+    try:
+        outcome = run_query(request, environment)
+    except IndexLocationError as error:
+        _config_error(str(error))
+
+    if (
+        schema
+        and outcome.kind not in {OutcomeKind.RESULT, OutcomeKind.SCHEMA}
+        and outcome.state is not None
+    ):
+        console.print(render_state_text(outcome.state))
+
+    drift = outcome.drift
+    if outcome.kind is OutcomeKind.SCHEMA and outcome.schema is not None:
+        drift = outcome.drift or outcome.schema.state.drift
+
+    if outcome.kind in {OutcomeKind.RESULT, OutcomeKind.SCHEMA}:
+        if drift is not None and drift.behind:
+            console.print(
+                "Index: behind the data root "
+                f"({drift.added} added, {drift.changed} changed, "
+                f"{drift.removed} removed pages since the last refresh); "
+                "run 'fitdocs index' to bring it level."
+            )
+        if outcome.kind is OutcomeKind.RESULT:
+            assert outcome.result is not None
+            if output_format is not None:
+                selected_format = output_format
+            else:
+                selected_format = default_format(_stdout_is_terminal())
+            rendered = render_result(
+                outcome.result,
+                selected_format,
+                freshness=drift.as_mapping() if drift is not None else {},
+            )
+            typer.echo(rendered, nl=False)
+            if outcome.result.truncated:
+                console.print(
+                    f"Query: showing the first {outcome.result.max_rows} rows; "
+                    "the result has more. Narrow or aggregate the query, or "
+                    "raise --max-rows."
+                )
+        else:
+            assert outcome.schema is not None
+            report = outcome.schema
+            if output_format is OutputFormat.JSON:
+                rendered = render_schema_json(
+                    report.state, report.tables, report.counts
+                )
+            else:
+                rendered = render_schema_text(
+                    report.state, report.tables, report.counts
+                )
+            typer.echo(rendered, nl=False)
+            for name in undescribed(report.tables):
+                console.print(
+                    f"Schema: {name} has no description. This is a fitdocs defect; "
+                    "please report it."
+                )
+        return
+
+    if outcome.kind is OutcomeKind.NOT_BUILT:
+        console.print("Index: not built; run 'fitdocs index' to build it.")
+    elif outcome.kind is OutcomeKind.NEEDS_REBUILD:
+        reason = outcome.message or "the index is incompatible"
+        console.print(f"Index: {reason}; run 'fitdocs index' to rebuild it.")
+    elif outcome.kind is OutcomeKind.BUSY:
+        holder = (
+            f" by process {outcome.holder_pid}"
+            if outcome.holder_pid is not None
+            else ""
+        )
+        console.print(
+            "Index: still locked after 10 s"
+            f"{holder}: a fitdocs command is refreshing it, or another program "
+            "has it open for writing. Run the query again once that finishes."
+        )
+    elif outcome.kind is OutcomeKind.UNVERIFIED:
+        message = outcome.message or "the sandbox settings could not be verified"
+        console.print(
+            f"Query not run: {message}. This is a fitdocs defect; please report it."
+        )
+    elif outcome.kind is OutcomeKind.REFUSED:
+        restriction = outcome.restriction
+        detail = outcome.message or ""
+        if restriction is Restriction.ONE_STATEMENT:
+            refusal = RESTRICTION_TEXT[restriction]
+            console.print(f"Query refused: {refusal}.")
+        elif restriction is Restriction.STATEMENT_KIND:
+            display = {"LOAD": "INSTALL or LOAD", "SET": "SET, RESET or USE"}.get(
+                detail, detail
+            )
+            refusal = RESTRICTION_TEXT[restriction].format(TYPE=display)
+            if detail == "CALL":
+                refusal += "; use SELECT * FROM <function>(…) instead"
+            console.print(f"Query refused: {refusal}.")
+        elif restriction is not None:
+            console.print(f"Query refused: {RESTRICTION_TEXT[restriction]}.")
+            console.print(f"DuckDB: {detail}")
+        else:
+            console.print(f"Query refused: {detail}.")
+    elif outcome.kind is OutcomeKind.FAILED:
+        console.print(f"Query failed: {outcome.message or 'unknown query error'}")
+        if outcome.hint:
+            console.print(f"Hint: {outcome.hint}")
+    elif outcome.kind is OutcomeKind.TIMED_OUT:
+        console.print(
+            f"Query stopped: it ran longer than {timeout:g} s. "
+            "Narrow it, or raise --timeout."
+        )
+    else:
+        raise AssertionError(f"Unhandled query outcome: {outcome.kind}")
+    raise typer.Exit(code=_EXIT_FILE_FAILURES)
+
+
+def _stdout_is_terminal() -> bool:
+    """Report whether the query result stream is an interactive terminal."""
+    return sys.stdout.isatty()
+
+
+def _read_statement(sql: str | None, file: Path | None) -> str:
+    """Read the already-selected query source as strict UTF-8 text."""
+    statement: str | None
+    try:
+        if file is not None:
+            statement = file.read_bytes().decode("utf-8", errors="strict")
+        elif sql == "-":
+            statement = sys.stdin.buffer.read().decode("utf-8", errors="strict")
+        else:
+            statement = sql
+    except UnicodeDecodeError as error:
+        _config_error(f"SQL source is not valid UTF-8: {error}.")
+    except OSError as error:
+        _config_error(f"cannot read SQL source: {error}.")
+    if statement is None or not statement.strip():
+        _config_error("SQL statement cannot be empty or whitespace-only.")
+    return statement
 
 
 def _today() -> date:

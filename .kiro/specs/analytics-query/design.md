@@ -370,6 +370,8 @@ tests/query/
 - `.kiro/steering/roadmap.md`: the ticks.
 - Tests amended:
   - `tests/test_cli_skill.py:262-270` (12 becomes 13, "Thirteen");
+  - `tests/index/test_cli_index.py` (only its existing module-docstring
+    command-count expectation, "Twelve" becomes "Thirteen");
   - `tests/test_agent_skill.py` (import, `_ANALYTICS_HEADINGS`, profile);
   - `tests/test_skill_locator.py:29-58` (`_PUBLIC_NAMES`, registry order);
   - `tests/connectors/test_e2e.py:203-246` (an argument column; a `query`
