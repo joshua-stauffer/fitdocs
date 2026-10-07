@@ -521,7 +521,7 @@ from here.
   - _Requirements: 6.1, 6.6, 6.7, 7.3_
   - _Depends: 2.2_
 
-- [ ] 3. The four producers
+- [x] 3. The four producers
 
 - [x] 3.1 (P) Project each page's best efforts
   - **The mean-max producer**, per design.md § MeanMaxProducer and the
@@ -612,7 +612,7 @@ from here.
   - _Boundary: BenchmarkProducer_
   - _Depends: 1.3_
 
-- [ ] 3.4 (P) Project blocks, mesocycles and planned workouts as the plan pass resolves them
+- [x] 3.4 (P) Project blocks, mesocycles and planned workouts as the plan pass resolves them
   - **The block producer**, per design.md § BlockProducer and the five block
     tables: the fingerprint (workouts, the path-to-page-key map, settings,
     plan sources, and `today` only while a source exists, never raising) and
@@ -1018,3 +1018,5 @@ from here.
 - 6.2 accepted ownership decision: main 63d79a364fa5fef71875888f474c8cd0982e2fe4 does not contain analytics-query branch f7dfd762d1349a0dd5b13a605e0a7b4f01df723c (merge-base ancestor check exit 1; main...query counts 0 8). First-lander path makes no change to docs/analytics.md, src/fitdocs/skills/fitdocs-analytics/SKILL.md, or tests/query/conftest.py. Analytics-query task 7.3 owns the generated schema reference, four derived worked examples, and derived_inputs fixtures at its landing. No queue item is needed. Recheck main at final rebase: if query lands first, perform the bounded second-lander path before feature GO. Fresh independent review APPROVED with canonical 9467 passed/2 optional skips and all three bounded paths unchanged. Parent fresh ancestry recheck also confirms current query 63014ff6663a606451c4ef4f31663ad7d9674f75 is absent from main (ancestor exit 1; divergence 0 9); paths remain absent and diff check clean. Evidence: /private/tmp/analytics-derived-evidence/resume/6.2/review/report.md.
 
 - 3.3 accepted: frozen benchmark producer uses the profile's own applicable rule with exact maximal periods, all five kinds and profile-only fingerprints. Fresh independent canonical 9452 passed/2 optional skips, final scope 168, all 27 original plus six repair claims and 25 own mutation variants assertion-RED/restored GREEN; all 12 task requirements pinned with existing-owner qualifications. Source byte-identical to initial final implementation; test repair adds independent literal nine-row periods and fractional pace. Genuine initial OFF RED is qualified: CorpusProducer identity test repair preceded computation, BenchmarkProducer identity repair followed ON; no corrected-OFF claim. Parent fresh scope 168 and integrated derived/benchmark scope 213 passed, explicit two-file mypy/Ruff clean. Evidence: /private/tmp/analytics-derived-evidence/resume/3.3/review-remediation1/report.md.
+
+- 3.4 accepted: frozen five-table block producer delegates the complete plan resolution and keeps left-out page matches/loads with NULL held keys. Fresh independent canonical 9465 passed/2 optional skips, 81 original variants, eight prior independent faults, eight repair recipes, both sole held-only controls, five new filesystem faults and three inventory diagnostic faults all RED/restored GREEN; all 15 listed clauses pinned. Production unchanged; test repair pins physical row multiplicities, distinct unplanned left-out load97/NULLkey, complete entry/type/byte inventory before reference copying, and exact owning SettingsError marker. Explicit both-file mypy/Ruff clean; parent fresh scope565 and integrated derived/plans618 passed. Genuine original API-only OFF checkpoint precedes GO_IMPLEMENT. Evidence: /private/tmp/analytics-derived-evidence/resume/3.4/review-remediation1/report.md. All four producers now accepted; registration remains4.1.
