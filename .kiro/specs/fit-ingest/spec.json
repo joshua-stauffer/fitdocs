@@ -176,6 +176,21 @@
           "tests/ingest/test_parse.py::test_garmin_devices_names_equal_the_profile_entries"
         ]
       }
+    },
+    {
+      "date": "2026-10-07",
+      "requirement": "19 (Best Efforts) -- Amendment 6, landed by analytics-derived",
+      "reason": "The analytics-derived feature exposes best-effort computation as a library function so consumers can use the rule independently of document rendering. Its duration set and maximum step are fitdocs' own methodological choices and are recorded under criterion 15.8.",
+      "also": "Additive: the best-effort computation is available at library level. No existing criterion is renumbered or reworded. The duration set and maximum step remain outside criterion 15.6's enumeration.",
+      "cross_spec": "Implemented by analytics-derived. Its records and computation are owned by that spec; no existing fit-ingest runtime behavior changes.",
+      "tests": {
+        "19.1": [
+          "tests/metrics/test_mean_max.py"
+        ],
+        "19.2": [
+          "tests/metrics/test_mean_max_sources.py"
+        ]
+      }
     }
   ]
 }

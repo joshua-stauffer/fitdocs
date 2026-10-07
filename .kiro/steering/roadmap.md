@@ -2301,10 +2301,11 @@ Rejected:
   whichever spec adds each command: `analytics-index` takes connectors
   Amendment 1 (`index`), and `analytics-query` takes the next free number
   at landing (`query`). (analytics-index part landed) Dependencies: analytics-index, analytics-query
-- [ ] fit-ingest — a new requirement for the mean-max computation in
-  `fitdocs.metrics` (next free requirement and amendment numbers at
-  landing). Carried out inside `analytics-derived`. Found during the spec
-  batch. Dependencies: analytics-derived
+- [x] fit-ingest — Requirement 19 and Amendment 6 publish best-effort
+  computation at library level and classify its duration and step choices
+  under criterion 15.8, outside criterion 15.6's enumeration. Carried out
+  inside `analytics-derived`. Found during the spec batch. Dependencies:
+  analytics-derived
 
 `analytics-derived` also extracts behaviour-preserving seams from the
 history and plans engines, and appends them to the `fitdocs.history` and
