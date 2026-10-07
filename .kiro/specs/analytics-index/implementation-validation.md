@@ -1,4 +1,74 @@
-# Merge authorization — verification deferred
+# Final verification — 2026-10-07
+
+## Validation Report
+
+- DECISION: GO
+- Candidate: main `0b92561` plus the exact 27-module mypy registration;
+  analytics runtime source unchanged from the accepted implementation.
+- Task 8.4 independently APPROVED; all 31 executable tasks are complete.
+- Coverage: all 14 requirement sections and 94 criteria mapped; fresh
+  independent source review found no integration gaps, orphaned code,
+  architecture drift or dependency violations.
+- Contract version: 9, advanced once from 8 at the original analytics-index
+  landing. Schema version: 1. No second contract bump was made.
+- The owning preview repair `9384516` uses `ZENSICAL_POLL_WATCHER=1` to
+  bypass starved FSEvents. No test deadlines or assertions were weakened.
+
+| Gate | Result | Test wall time |
+| --- | --- | ---: |
+| Plain full suite | 9388 passed, 2 expected actionlint skips | 269.43 s |
+| TZ=UTC full suite | 9388 passed, 2 expected actionlint skips | 265.59 s |
+| CI=true full suite | 9388 passed, 2 expected actionlint skips | 283.53 s |
+| Ruff check, format, mypy after each mode | PASS; 525 formatted files, 340 type-checked files | — |
+| DuckDB 1.2.0 floor | 62 passed; existing HOME empty before/after | 1.35 s |
+| Fresh wheel and sdist build | PASS | — |
+| Forbidden-content artifact gate | PASS; missing-data control exited 1 with gate_not_run | — |
+| Offline wheel installation and four CLI smokes | PASS | — |
+
+Canonical test/static commands used `uv run --python
+/Users/josh/.pyenv/versions/3.11.15/bin/python3.11 --group docs`, with
+`FITDOCS_REQUIRE_SITE_TOOLING=1` and the existing real forbidden-string
+match data. Each mode ran pytest, Ruff check, Ruff format check and mypy
+sequentially, with default pytest capture. Full-suite runs had no temporary
+instrumentation, concurrent production imports or bytecode override.
+The exact 27 appended modules exist and are unique; all 81 prior mypy
+entries are preserved, for 108 entries total. [Per-case floor table](floor-verification.md).
+
+Fresh release commands were `python -B -m scripts.build_release --out-dir`
+and `python -B -m scripts.check_artifacts --no-version-check --dist-dir`,
+using the canonical uv environment. The installed wheel ran `--version`,
+`--help`, `plugins`, and `index --help` from outside the repository, with
+an isolated HOME/config/cache/index and no PYTHONPATH. All exited 0.
+
+Task 8.5's independently approved real-data measurements remain valid:
+rebuild 257.850022 seconds / 192425984 bytes; no-op index 1.712151 seconds;
+five-file index 2.162097 seconds with exactly five additions and distinct
+successful handoffs. See research.md and the authorized-measurement section
+below. Personal inputs and outputs remain outside Git.
+
+Fresh evidence:
+
+- `/private/tmp/analytics-index-evidence/verification-polling/local/`
+- `/private/tmp/analytics-index-evidence/verification-polling/review/VERDICT.md`
+- `/private/tmp/analytics-index-evidence/verification-polling/artifacts/results.json`
+- `/private/tmp/analytics-index-evidence/verification-resume/source-integration-final.md`
+
+## Verification Result
+
+- STATUS: VERIFIED
+- CLAIM_TYPE: FEATURE_GO
+- CLAIM: analytics-index is complete and verified after the owning preview repair.
+- EVIDENCE: independent task approval, three full suites and statics, fresh
+  floor and HOME checks, fresh release/artifact/installed-wheel checks,
+  requirements/design/integration audit, and approved real-data measurements.
+- GAPS: None remaining for analytics-index; no blocked executable tasks.
+- NOTES: Earlier failed runs remain failed historical evidence below. The
+  pending-registration patch is now applied and accepted; its file is kept
+  as historical evidence. Downstream specs retain their own verification gates.
+
+---
+
+# Historical merge authorization — verification deferred
 
 On 2026-10-07 the maintainer explicitly authorized merging analytics-index
 to main before finishing verification, to unblock analytics-query and

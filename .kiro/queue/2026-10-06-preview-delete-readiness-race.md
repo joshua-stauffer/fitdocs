@@ -260,3 +260,16 @@ Under continued load, with `fseventsd` at about 100 % CPU:
 
 Peers blocked on the live-preview gate should rebase onto the merge and
 rerun their gates.
+
+### Analytics-index confirmation — 2026-10-07
+
+After consuming main0b92561/polling repair9384516, independent unmodified
+plain, UTC and CI suites each passed9,388 tests with two expected skips
+in269.43/265.59/283.53 seconds respectively. Every mode's statics passed;
+task8.4 independently APPROVED. Fresh floor62 and release/installed-wheel
+checks passed. Earlier failures remain failed records. Evidence:
+`/private/tmp/analytics-index-evidence/verification-polling/review/VERDICT.md`.
+The shared log also records downstream derived1.1 canonical9395/2skips
+and query1.3 canonical9477/2skips after the same repair; those sessions
+retain their own subsequent task gates. This confirms the analytics-index
+blocker is cleared; queue closure is left to the owning queue workflow.

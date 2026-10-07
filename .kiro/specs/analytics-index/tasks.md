@@ -1415,7 +1415,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     suites are green.
   - _Requirements: 1.5, 5.6, 7.4, 7.8, 9.7, 10.10, 12.4, 12.5, 14.7_
 
-- [ ] 8. Published contract, steering, records and final validation
+- [x] 8. Published contract, steering, records and final validation
 
 - [x] 8.1 Publish the index in the ownership contract and the release notes
   - **The ownership contract.** `docs/ownership-contract.md` gains the
@@ -1527,8 +1527,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     amendment names its pinning tests by path.
   - _Requirements: 14.8_
 
-- [ ] 8.4 Register test modules, verify the duckdb floor and validate the feature
-  - _Blocked: resumed verification of main a413d15 plus the pending registrations failed the unmodified plain gate: 9386 passed, one initial-edit preview timeout (1143/1024), two expected skips. Native cause remains unknown after the final allowed diagnostic returned STOP_FOR_HUMAN. No further retry, timeout weakening or downstream workaround. Fresh floor62, local statics, release build/artifact check and four installed-wheel smokes passed independently; required UTC/CI and post-plain statics remain unrun. See implementation-validation.md._
+- [x] 8.4 Register test modules, verify the duckdb floor and validate the feature
   - **mypy registration.** Append every new test module to `pyproject.toml`'s
     mypy `files` list.
   - **The floor check.** Run `tests/index/test_store.py`'s policy and
@@ -1578,6 +1577,8 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 
 
 ## Implementation Notes
+
+- 2026-10-07 FINAL GO after consuming owning preview polling repair on main0b92561: task8.4 independently APPROVED. Exact27mypy append accepted, 81 prior entries retained (108 total); fresh DuckDB1.2.0/Python3.11.15 floor62/62 and HOMEempty, per-case table in floor-verification.md. Plain9388pass/2expectedskips269.43s, UTC9388/2skip265.59s, CI9388/2skip283.53s; after each mode Ruffcheck/format525/mypy340 all exit0, real forbidden-string/site-tooling gates enabled. Fresh wheel+sdist/artifact gate/fail-closed control/offline wheel install and version/help/plugins/index-help all as expected. Independent source audit14/14 sections94/94criteria: no concrete integration/design/boundary gap. Contract9 advanced from8 at original landing, schema1, no second bump. Prior failures retained as history; pending-registration patch now applied/accepted. All31 executable tasks complete; task8.5 remains independently approved. Full commands/results in implementation-validation.md and verification-polling scratch evidence.
 
 - 2026-10-07 resumed verification: task8.4 remains blocked. Independent unmodified plain9386passed/1initial-edit preview failure/2expectedskips297.67s; final diagnostic9387passed/2skips287.82s did not reproduce and returned STOP_FOR_HUMAN. Fresh floor62/HOMEempty, local mypy340/Ruff, release build/artifact check and installed-wheel version/help/plugins/index-help passed independently. No UTC/CI or post-plain statics; no further retry/GO. Exact27registration append backed up and reversibly removed; committed pending patch retained. Latest details in implementation-validation.md.
 - 2026-10-07 task8.5 APPROVED independently after actual authorized measurements on private complete peer-root copy: baseline2497pages, rebuild257.850022s/database192425984bytes; no-op index1.712151s (total166.482504s), zero writes/errors/warnings and unchanged database/cache-file hashes/mtimes; five-file index2.162097s (total173.532453s), added5/written5/final2502pages, zero errors, warnings5, successful distinct handoffs5/retained21668samples. No-op meets planned scan scale; one-run timing difference does not isolate per-page compute. Shared data/index and originals unchanged, no new iCloud pulls. Numbers/method in research.md and implementation-validation.md; task8.4/feature completion remain open. 30/31 executable tasks accepted.

@@ -2337,7 +2337,7 @@ None. Every piece of the work has a spec home.
 
 #### Specs (dependency order)
 
-- [ ] analytics-index — **implementation landing authorized 2026-10-07; final verification pending (8.4/8.5 open). The maintainer authorized main merge to unblock analytics-query and analytics-derived; no feature-level GO is claimed.** **spec written 2026-10-05** (Phase 10 batch, wave 1, `tasks-generated`, all approvals set; 14 requirements / 94 criteria, 8 majors / 30 executable tasks, 8.5 maintainer-only; independent Step 3.5 review, two rounds; cross-spec reviewed, two rounds, READY; DuckDB floor raised to `>=1.2,<2`; carries plugin-api, distribution, workout-docs, docs-site and connectors Amendment 1). Implement first. The derived DuckDB index:
+- [x] analytics-index — **implemented and verified 2026-10-07; all31 executable tasks complete, feature GO. Plain/UTC/CI each9388 passed with two expected skips; floor62, artifacts/installed-wheel smoke and authorized real-data measurements approved.** **spec written 2026-10-05** (Phase 10 batch, wave 1, `implementation-complete`, all approvals set; 14 requirements / 94 criteria, 8 majors / 31 executable tasks, 8.5 explicitly delegated by the maintainer; independent Step 3.5 review, two rounds; cross-spec reviewed, two rounds, READY; DuckDB floor raised to `>=1.2,<2`; carries plugin-api, distribution, workout-docs, docs-site and connectors Amendment 1). Implement first. The derived DuckDB index:
   - per-user location outside the data root;
   - core dependency with the reworded guards and the connection policy;
   - core schema with comments and a schema version;
@@ -2348,13 +2348,13 @@ None. Every piece of the work has a spec home.
   - failure isolation;
   - steering updates.
   Dependencies: none
-- [ ] analytics-query — **spec written 2026-10-05** (Phase 10 batch, wave 2, `tasks-generated`, all approvals set; 12 requirements / 79 criteria, 8 majors / 21 executable tasks, 8.3 maintainer-only; independent Step 3.5 review, two rounds; cross-spec reviewed, two rounds, READY; connectors Amendment 2). Analytics-index merge prerequisite satisfied by the maintainer-authorized landing on 2026-10-07; may proceed with analytics-index verification pending. Parallel with analytics-derived, and whichever of the two lands second does the docs schema block and the derived skill examples. `fitdocs query`:
+- [ ] analytics-query — **spec written 2026-10-05** (Phase 10 batch, wave 2, `tasks-generated`, all approvals set; 12 requirements / 79 criteria, 8 majors / 21 executable tasks, 8.3 maintainer-only; independent Step 3.5 review, two rounds; cross-spec reviewed, two rounds, READY; connectors Amendment 2). Analytics-index prerequisite fully verified on 2026-10-07 and available on main. Parallel with analytics-derived, and whichever of the two lands second does the docs schema block and the derived skill examples. `fitdocs query`:
   - sandboxed read-only connection, statement timeout, formats, row cap;
   - schema introspection and freshness reporting, lock retry;
   - the packaged agent skill;
   - `docs/analytics.md` with a live-schema pin.
   Dependencies: analytics-index
-- [ ] analytics-derived — **spec written 2026-10-05** (Phase 10 batch, wave 2, `tasks-generated`, all approvals set; 10 requirements / 64 criteria, 6 majors / 20 executable tasks, 6.4 maintainer-only; independent Step 3.5 review, two rounds; cross-spec reviewed, two rounds, READY; SCHEMA_VERSION main+1 at landing; fit-ingest amendment, next free number). Analytics-index merge prerequisite satisfied by the maintainer-authorized landing on 2026-10-07; may proceed with analytics-index verification pending. Parallel with analytics-query. Four producers through the seam:
+- [ ] analytics-derived — **spec written 2026-10-05** (Phase 10 batch, wave 2, `tasks-generated`, all approvals set; 10 requirements / 64 criteria, 6 majors / 20 executable tasks, 6.4 maintainer-only; independent Step 3.5 review, two rounds; cross-spec reviewed, two rounds, READY; SCHEMA_VERSION main+1 at landing; fit-ingest amendment, next free number). Analytics-index prerequisite fully verified on 2026-10-07 and available on main. Parallel with analytics-query. Four producers through the seam:
   - mean-max curves (new `fitdocs.metrics` function);
   - daily load series (history's builder);
   - benchmark timeline (`athlete.toml`);
