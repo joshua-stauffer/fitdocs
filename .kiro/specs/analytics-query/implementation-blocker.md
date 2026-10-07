@@ -58,29 +58,44 @@ full Ruff/checkformat540/mypy345 and strict both files, with exact approved
 hashes. Evidence: `/private/tmp/analytics-query-review-catalog-repair/verdict.md`
 and `/private/tmp/analytics-query-parent-catalog-completion/verification.md`.
 
-Spill 2.3 remains unchecked. Its test repair resolves the four prior gaps:
-actual simultaneous execute/fetch intervals with nonempty spill witnesses,
-near-match cleanup names, skip-hook return before listing, and complete index
-entry comparisons. The second independent review passed canonical 9,581/two
-optional skips, statics and all43 claimed mutations, but found two new helper
-fixture survivors: omitted inventory recursion and omitted special entries.
-A bounded test-only nested-payload/special-node fixture repair is next;
-production and existing sandbox tests remain unchanged. Evidence:
-`/private/tmp/analytics-query-review-spill-repair/verdict.md`.
+Spill 2.3 remains unchecked. Its overlap, cleanup-name, skip-hook and complete
+index-entry controls are preserved. A third independent review passed
+9,582 canonical tests/two optional skips and all 52 prior observations plus
+four new reviewer controls, but found four further inventory fixture gaps:
+empty regular files, file-target symlinks, raw relative link targets, and
+character/block entries. Fresh debugging returned RETRY_TASK with a bounded
+finite POSIX matrix; correct production remains unchanged. A fresh Luna
+implementer has completed that test-only matrix, including rejecting reads
+through FIFO link aliases. It is now under independent review. Evidence:
+`/private/tmp/analytics-query-debug-spill-matrix/REPORT.md`,
+`/private/tmp/analytics-query-spill-matrix/handoff.md`, and
+`/private/tmp/analytics-query-review-spill-second-repair/verdict.md`.
 
-Publication8.1 remains unchecked after independent REJECTED. Canonical
-reported9,586 passed/two failed/two optional skips: the required analytics
-URL awaits the project declaration owned by6.1, and four new test literals
-violate the existing released-version guard. A reviewer variant also exposes
-incorrect terminal/piped default prose and its token-only pin. The bounded
-owned changelog/test repair and renewed integration review are deferred until
-6.1; tasks now encodes that prerequisite. Failed evidence and restored eight
-candidate files are retained at
+State5.1 remains unchecked after independent REJECTED: canonical9,614 passed/
+two optional skips and full statics passed; all42 claimed variants were RED,
+but32 independently witnessed variants survived the current tests. The
+bounded repair covers numeric zero/null/type distinctions, absent and empty
+text states, corpus producer/reason pairing, actual encoder forwarding, and
+table/column order. Correct production remains unchanged; Luna is performing
+one comprehensive test-only correction preserving the26 accepted catalog
+cases and all existing state tests. Evidence:
+`/private/tmp/analytics-query-review-state/verdict.md`.
+
+Publication8.1 remains unchecked after independent REJECTED. Its original
+canonical reported9,586 passed/two failed/two optional skips: the required
+analytics URL awaits the project declaration owned by6.1, and four new test
+literals violated the released-version guard. Luna has completed the bounded
+changelog/test repair: terminal table/piped CSV/explicit-format prose and
+metadata-derived release headings. All39 repair mutation observations and
+219 bounded tests passed; the six other publication files are unchanged.
+Acceptance and fresh canonical integration review remain deferred until6.1;
+no project-URL ownership expansion or unchanged failed-gate retry occurred.
+Evidence: `/private/tmp/analytics-query-publication-repair/handoff.md` and
 `/private/tmp/analytics-query-review-publication/verdict.md`.
-Spill second fixture repair is under independent review; state5.1 is running
-in a separate tree from accepted4.2. Completion roadmap ticks await merge. The shared HealthFit root remains ready
-for both peers; query timings await the completed CLI. Seven of21 leaves
-are accepted (1.1/1.2/1.3/2.1/2.2/4.1/4.2); no feature GO or merge yet.
+
+Completion roadmap ticks await merge. The shared HealthFit root remains
+ready for both peers; query timings await the completed CLI. Seven of21
+leaves are accepted (1.1/1.2/1.3/2.1/2.2/4.1/4.2); no feature GO or merge yet.
 
 ## Historical tasks 1.3 and 2.1 preview blocker
 
