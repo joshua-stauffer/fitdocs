@@ -207,7 +207,7 @@ from here.
 
 ---
 
-- [ ] 1. Foundation: the best-effort records, the derived package, its fixtures and its input digests
+- [x] 1. Foundation: the best-effort records, the derived package, its fixtures and its input digests
 
 - [x] 1.1 Record the duration set and the maximum step as fitdocs's own choices
   - **The records module**, per design.md § MeanMaxRecords: two `FitdocsChoice`
@@ -345,7 +345,7 @@ from here.
     package marker changed.
   - _Requirements: 7.1, 7.5_
 
-- [ ] 1.3 Digest exactly the files a corpus producer reads
+- [x] 1.3 Digest exactly the files a corpus producer reads
   - **The inputs module**, per design.md § DerivedInputs: file digests with
     markers for absent, directory, symlink and unreadable entries; the
     workouts digest over the snapshot's `pages` and `left_out` together, by
@@ -1006,3 +1006,5 @@ from here.
 - Fixture roles: threshold loads 11/23/31/59/71 plus left-out 83; banister_1991 loads 17/43; two Ride pages on February 3; two loadless pages February 13/14; no-source page dated February 15 has stem 2026-02-14-left-out and is matched by no-sources-match. Synthetic plan supplies exact/absorbed/ambiguous, missing-stem override, skipped/not-logged/upcoming, unplanned, and invalid source. Ride FTP 260 measured February 10 applies January 1 versus 271 measured February 5 applies February 1, profile versus naive differs on February 11; Run FTP 283 measured February 7, Run LTHR 172 with full derived provenance, athlete max HR 203, flat FTP 999. Composed switch supplies actual builder run and merge ride pair; all helpers require explicit TODAY 2026-02-24, public store facade and isolated index. Producer parity remains later-owned.
 
 - 2026-10-07 task 3.1 accepted: fresh independent canonical 9,428 passed/two optional actionlint skips, explicit scoped mypy/Ruff clean, all 33 claimed and 15 own mutations RED/restored GREEN; parent fresh producer/rule 19 passed. Exact frozen seven-column mean_max schema and pure composed-activity engine projection verified. Registry integration and real composition/handoff remain tasks 4.1 and 5.3; no producer re-computation or base-file read.
+
+- 1.3 accepted: immutable snapshot/file/layout/held-key digests; fresh independent canonical suite 9439 passed/2 optional skips, all 32 mutation executions RED/restored GREEN, explicit two-file mypy and scoped Ruff clean. Parent fresh derived scope 26 passed. Typing-only repair preserves every assertion AST and production bytes; always explicitly type-check newly added test paths until 6.3 registration. Evidence: /private/tmp/analytics-derived-evidence/resume/1.3/review-remediation1/report.md.
