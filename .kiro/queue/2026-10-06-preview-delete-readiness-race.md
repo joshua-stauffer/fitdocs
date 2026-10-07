@@ -281,3 +281,8 @@ Task 1.1 records-only candidate at base `a413d15`, using canonical pyenv Python 
 Independent task-local evidence passes (113 scoped tests, static checks, 19 claimed plus two own mutations). Required canonical review remains REJECTED; debug round 2 returns STOP_FOR_HUMAN. The reviewer's already-started standalone run passed once in 22.89 seconds; it does not supersede the failed full gate. No third debug, guessed patch or unchanged retry was made. Raw evidence: `/private/tmp/analytics-derived-evidence/1.1/reviewer-r1/full-pytest.txt`; debug: `/private/tmp/analytics-derived-evidence/preview-debug/report.md`. Durable downstream handoff: `.kiro/specs/analytics-derived/implementation-blocker.md` on `impl/analytics-derived`.
 
 The next owning investigation must explicitly include the added-page deadline as well as the separately observed initial-edit deadline, with failure-time build/watcher/stage/sync/generator/HTTP capture before cleanup. Preserve all existing deadlines and assertions. A deletion-readiness repair or intermittent standalone pass cannot establish an added-page repair.
+
+
+## analytics-derived confirms fresh gate after polling repair (2026-10-07)
+
+After rebase onto owning repair `0b92561`, independent task 1.1 review passed its fresh canonical gate: 9,395 passed, two optional actionlint skips, 262.54 seconds, exit 0. Both original live-preview tests pass without deadline or assertion changes. Task-local mutations and static checks pass; parent scoped verification is 113 passed. The earlier failed canonical runs remain historical failed records. This confirms analytics-derived's task 1.1 gate; other peer confirmations still belong to their controllers.

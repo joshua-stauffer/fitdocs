@@ -209,8 +209,7 @@ from here.
 
 - [ ] 1. Foundation: the best-effort records, the derived package, its fixtures and its input digests
 
-- [ ] 1.1 Record the duration set and the maximum step as fitdocs's own choices
-  - _Blocked: docs-site canonical added-page preview timeout; debug round 2 returned STOP_FOR_HUMAN. Task-local code and discrimination pass, but review is REJECTED until the owning investigation repairs the regression and a fresh full gate passes._
+- [x] 1.1 Record the duration set and the maximum step as fitdocs's own choices
   - **The records module**, per design.md § MeanMaxRecords: two `FitdocsChoice`
     records (durations, maximum step), the 28 duration `CitedConstant`s in
     ascending order each sourced by the durations choice, the maximum step at
@@ -996,3 +995,5 @@ from here.
 - Environment debug resolved a separate Homebrew interpreter mismatch: unchanged tooling tests 17 passed/one failed under Homebrew 3.11.15 versus 18 passed under pyenv 3.11.15; a fake interpreter symlink resolves differently. The worktree now uses canonical `/Users/josh/.pyenv/versions/3.11.15/bin/python3.11` and the default warm uv cache with `--group docs`. Existing queue `2026-10-05-site-fixture-homebrew-interpreter-path` tracks the issue.
 - Final task 1.1 canonical gate FAILED: 9,393 passed, one failed, two expected actionlint skips in 300.41 seconds. Unchanged `tests/sitebuild/test_preview.py` controlled live case failed at line 1157 waiting 20 seconds for the added page, before deletion. Native mechanism UNKNOWN; no failure-time state captured. Independent review REJECTED; debug round 2 returned STOP_FOR_HUMAN. Existing queue `2026-10-06-preview-delete-readiness-race` receives this evidence. No downstream patch, weakened deadline, or additional unchanged retry was made; the reviewer's already-started standalone pass does not supersede this gate.
 - User explicitly authorizes agent-run task 6.4 measurements, overriding its maintainer-only restriction, using the peer-created HealthFit root at `/private/tmp/fitdocs-analytics-query-timings/data` once positively READY. The user confirms this root is equivalent to their actual fitdocs install. Use a private complete copy for writer measurements; never mutate the shared root/index concurrently. Only aggregate counts/timings enter research; personal FITs, pages and source paths remain outside Git. No measurements have run. The earlier 39-file private copy is not the final timing dataset.
+
+- 2026-10-07 resumed task 1.1 accepted after owning polling-watcher repair `0b92561`: fresh independent review APPROVED; canonical 9,395 passed/two optional actionlint skips (262.54s), scoped 113 passed, static checks clean, all 19 claimed plus two new own mutations intended RED/restored GREEN. Parent fresh scoped verification 113 passed. Earlier failed runs retained; no preview deadline or assertion changed. User requests parallel independent tasks in isolated worktrees and a fresh Sol instance for every dispatch; Luna remains the implementer for each task.
