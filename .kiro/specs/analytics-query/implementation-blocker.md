@@ -1,4 +1,20 @@
-# Tasks 1.3 and 2.1: upstream preview propagation blocks acceptance
+# Resumed after the upstream preview repair
+
+The owning polling-watcher repair landed through `0b92561`. This branch was
+rebased onto it with all eight candidate files preserved. Task 1.3 has now
+received fresh independent approval: 9,477 canonical tests passed with two
+optional actionlint skips, all 31 preview tests passed, and scoped/canonical
+statics passed. Parent completion checks passed 107 fixture/boundary tests and
+the six-file statics. The fixture prerequisite is accepted; sandbox and
+freshness work can proceed. Fresh task 2.1 review is still in progress and has
+identified a repeated-column assertion lost during its earlier order-fixture
+correction. It must retain both order and repeated-name checks before acceptance.
+
+Fresh evidence: `/private/tmp/analytics-query-resume-review1-3/verdict.md`,
+`full-suite.txt`, mutation inventories and hash integrity records. The earlier
+failures below remain historical evidence, not the current prerequisite state.
+
+## Historical tasks 1.3 and 2.1 preview blocker
 
 Task 2.1's independent formatter work is also unchecked and blocked. Initial
 review found twelve insensitive fixture/guard variants. A fresh Luna

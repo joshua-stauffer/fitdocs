@@ -387,8 +387,7 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
     the `analytics-index` store and boundary suites stay green.
   - _Requirements: 1.5, 5.2_
 
-- [ ] 1.3 Create the query package, the indexed fixtures and the importer guards
-  - _Blocked: owning docs-site live-generator propagation failure after successful validation/sync; canonical initial-edit and deleted-route timeouts retained. See implementation-blocker.md and queue 2026-10-06-preview-delete-readiness-race. Independent debug recommends BLOCK_TASK; dependent tasks wait for causal owner repair._
+- [x] 1.3 Create the query package, the indexed fixtures and the importer guards
   - **The package.** `src/fitdocs/query/__init__.py` is a docstring only: the
     read side, never imports `duckdb`, imported only by `fitdocs.cli`.
   - **`_INDEX_IMPORTERS`**: append the five query modules design.md and
@@ -1401,6 +1400,8 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 
 
 ## Implementation Notes
+
+- 2026-10-07 resumed task 1.3 accepted after rebase onto owning polling-watcher fix 0b92561: fresh independent Sol review APPROVED, canonical 9,477 passed/two optional actionlint skips in 281.27 s, all 31 preview tests passed; scoped/canonical Ruff and mypy clean. Fresh replay 79 observations: 78 red, one explicitly permitted module-date pin green; four new reviewer mutants and five fixture probes discriminate. Parent completion: 107 fixture/boundary tests, strict mypy six files, Ruff and diff checks passed. Statement creator annotation names 3.1. The old preview failures remain historical records; 1.3 prerequisites are now accepted. Task 2.1 remains under fresh independent review.
 
 - 2026-10-07 task 2.1 remains unchecked and blocked after its independent review and fresh debug: locally correct formatter candidate, initial review demonstrated twelve test/guard mutation survivors. Fresh Luna remediation corrected bounded Decimal/duration/order/alignment fixtures and literal import purity classification; implementer reports thirteen focused mutants red/restored green, 187 scoped tests and clean statics. These corrections remain unaccepted candidates pending fresh independent review and the causal owning preview repair/canonical gate. Debug confirms all other query tasks depend on unaccepted core tasks or the same mandatory gate. Preserve pending-task-1.3.patch and pending-task-2.1.patch; do not mark the feature GO or run query timings before the command exists.
 

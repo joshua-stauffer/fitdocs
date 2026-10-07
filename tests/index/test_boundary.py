@@ -33,7 +33,16 @@ _FORBIDDEN_SQL_TOKENS = (
     "https://",
     "PRAGMA",
 )
-_INDEX_IMPORTERS = frozenset({"fitdocs.cli", "fitdocs.query.statement"})
+_INDEX_IMPORTERS = frozenset(
+    {
+        "fitdocs.cli",
+        "fitdocs.query.statement",  # Created by analytics-query task 3.1.
+        "fitdocs.query.sandbox",  # Created by analytics-query task 2.2.
+        "fitdocs.query.freshness",  # Created by analytics-query task 4.1.
+        "fitdocs.query.schemaview",  # Created by analytics-query task 4.2.
+        "fitdocs.query.command",  # Created by analytics-query task 5.2.
+    }
+)
 _REQUIRED_INDEX_IMPORTERS = frozenset({"fitdocs.cli"})
 
 
