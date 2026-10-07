@@ -95,7 +95,7 @@ def resolve_single_table(scope: str, spec: TableSpec) -> tuple[ResolvedTable, ..
 
 
 def test_schema_public_types_and_constants_match_the_contract() -> None:
-    assert SCHEMA_VERSION == 1
+    assert SCHEMA_VERSION == 2
     assert all(isinstance(member, str) for member in ColumnType)
     assert all(isinstance(member, str) for member in TableScope)
     assert [member.value for member in ColumnType] == [
@@ -1499,16 +1499,28 @@ def test_registered_tables_pin_schema_and_model_fields() -> None:
         "strength_sets",
         "zone_times",
         "channel_sources",
+        "mean_max",
+        "load_series",
+        "daily_load",
+        "weekly_load",
+        "benchmarks",
+        "benchmark_periods",
+        "blocks",
+        "mesocycles",
+        "planned_workouts",
+        "planned_workout_pages",
+        "unplanned_pages",
     )
-    assert len(by_name) == 13
+    assert len(by_name) == 24
     assert tuple(item.scope for item in resolved[:3]) == (
         TableScope.BOOKKEEPING,
         TableScope.BOOKKEEPING,
         TableScope.BOOKKEEPING,
     )
     assert all(item.scope is TableScope.DOCUMENT for item in resolved[3:7])
-    assert all(item.scope is TableScope.COMPUTED for item in resolved[7:])
-    assert all(item.columns[0].name == "page_key" for item in resolved[3:])
+    assert all(item.scope is TableScope.COMPUTED for item in resolved[7:14])
+    assert all(item.scope is TableScope.CORPUS for item in resolved[14:])
+    assert all(item.columns[0].name == "page_key" for item in resolved[3:14])
 
     for item in resolved:
         assert item.description.strip()
@@ -1579,10 +1591,18 @@ def test_registry_forwards_all_producer_tuples_and_bookkeeping_at_call_time(
     import fitdocs.index.registry as registry
     from fitdocs.index.core.computed import CORE_COMPUTED
     from fitdocs.index.core.documents import CORE_DOCUMENTS
+    from fitdocs.index.derived.benchmarks import BENCHMARK_PRODUCER
+    from fitdocs.index.derived.blocks import BLOCK_PRODUCER
+    from fitdocs.index.derived.load_series import LOAD_SERIES_PRODUCER
+    from fitdocs.index.derived.mean_max import MEAN_MAX_PRODUCER
 
     assert registry.DOCUMENT_PRODUCERS == (CORE_DOCUMENTS,)
-    assert registry.COMPUTED_PRODUCERS == (CORE_COMPUTED,)
-    assert registry.CORPUS_PRODUCERS == ()
+    assert registry.COMPUTED_PRODUCERS == (CORE_COMPUTED, MEAN_MAX_PRODUCER)
+    assert registry.CORPUS_PRODUCERS == (
+        LOAD_SERIES_PRODUCER,
+        BENCHMARK_PRODUCER,
+        BLOCK_PRODUCER,
+    )
     assert tuple(item.name for item in registry.registered_tables()) == (
         "index_meta",
         "index_pages",
@@ -1597,6 +1617,17 @@ def test_registry_forwards_all_producer_tuples_and_bookkeeping_at_call_time(
         "strength_sets",
         "zone_times",
         "channel_sources",
+        "mean_max",
+        "load_series",
+        "daily_load",
+        "weekly_load",
+        "benchmarks",
+        "benchmark_periods",
+        "blocks",
+        "mesocycles",
+        "planned_workouts",
+        "planned_workout_pages",
+        "unplanned_pages",
     )
 
     document_first = producer(
