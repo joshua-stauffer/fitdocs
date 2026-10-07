@@ -503,6 +503,7 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 - [ ] 2. Core: output rendering and the sandboxed connection
 
 - [ ] 2.1 (P) Render results as a table, CSV or JSON
+  - _Blocked: mandatory canonical acceptance awaits the owning docs-site generator propagation repair. Formatter/purity candidate and bounded test corrections are preserved in pending-task-2.1.patch; implementer reports 187 scoped tests passed, but remediation has not received independent acceptance. Fresh debug recommends BLOCK_TASK; see implementation-blocker.md._
   - **`format.py`**, per design.md § Format:
     - `OutputFormat`, `ResultSet` and `default_format`;
     - `render_result`;
@@ -1400,6 +1401,8 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 
 
 ## Implementation Notes
+
+- 2026-10-07 task 2.1 remains unchecked and blocked after its independent review and fresh debug: locally correct formatter candidate, initial review demonstrated twelve test/guard mutation survivors. Fresh Luna remediation corrected bounded Decimal/duration/order/alignment fixtures and literal import purity classification; implementer reports thirteen focused mutants red/restored green, 187 scoped tests and clean statics. These corrections remain unaccepted candidates pending fresh independent review and the causal owning preview repair/canonical gate. Debug confirms all other query tasks depend on unaccepted core tasks or the same mandatory gate. Preserve pending-task-1.3.patch and pending-task-2.1.patch; do not mark the feature GO or run query timings before the command exists.
 
 - 2026-10-07 task 1.3 remains blocked after independent review round 3 and fresh debug1: 138 scoped tests and all meaningful claimed/reviewer mutations pass, but canonical 9,474 passed/two failed/two optional skips at distinct preview initial-edit and deleted-route stages. A focused diagnostic localized reproduced stale HTML after successful validation/sync; native cause and retained deletion mechanism are unknown. Route repair to docs-site owning queue; do not retry unchanged or weaken assertions. The creating-task annotation was corrected to 3.1 by Luna (focused test passed), without task acceptance. Candidate recovery patch and blocker evidence accompany this handoff. Module-date pin remains explicitly permitted UNPINNED; function-date pin is PINNED. Independent tasks may proceed, dependent tasks wait.
 

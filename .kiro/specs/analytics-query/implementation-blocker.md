@@ -1,4 +1,29 @@
-# Task 1.3: upstream preview propagation blocks acceptance
+# Tasks 1.3 and 2.1: upstream preview propagation blocks acceptance
+
+Task 2.1's independent formatter work is also unchecked and blocked. Initial
+review found twelve insensitive fixture/guard variants. A fresh Luna
+remediation added exact Decimal fraction/trailing-zero, duration, order and
+boolean alignment controls and repaired third-party classification within the
+existing literal-import grammar. The implementer reports thirteen focused
+RED/restored-GREEN variants, 86 formatter/boundary tests and 187 combined
+query/index-boundary tests, with scoped statics clean. The corrections have
+not received independent acceptance; scoped green does not replace the
+retained failed canonical gate. Evidence:
+`/private/tmp/analytics-query-review2-1/verdict.md` and
+`/private/tmp/analytics-query-remediation2-1/handoff.md` with mutation logs.
+
+Fresh debug returned `BLOCK_TASK` for 2.1 and confirmed that every remaining
+query task requires unaccepted core prerequisites or the mandatory regression
+gate. Report: `/private/tmp/analytics-query-debug2-1/REPORT.md`. No native
+repair or unchanged preview/full-suite retry was made. The run is parked with
+two of 21 leaf tasks accepted (1.1 and 1.2); no merge or feature GO.
+
+The exact task 1.3 candidate is preserved in `pending-task-1.3.patch`; task
+2.1's new formatter, tests and appended purity section are in
+`pending-task-2.1.patch`. Apply 1.3 then 2.1 to a clean copy of the handoff
+branch; the current worktree already contains both candidates, so do not apply
+them there. Resume owner repair, rebase without discarding candidates, then
+fresh independent review of both blocked tasks and all required gates.
 
 Task 1.3 remains unchecked. Its synthetic fixture and bounded importer guard
 passed scoped verification (138 tests) and independent discrimination review
@@ -23,8 +48,9 @@ Route the generator propagation investigation to the owning docs-site
 boundary through `.kiro/queue/2026-10-06-preview-delete-readiness-race.md`.
 After an independently verified causal owner repair, verify both exact
 preview tests, sitebuild checks, the corrected task scope, and one serialized
-canonical suite. Independent query tasks may proceed; tasks depending on
-1.3 wait. Personal HealthFit data remains ready outside Git for both peers;
+canonical suite. Read-only planning may proceed; all remaining query task
+acceptance waits for unaccepted core prerequisites or the mandatory canonical
+gate. Personal HealthFit data remains ready outside Git for both peers;
 query timings still require the completed query command.
 
 Private evidence: `/private/tmp/analytics-query-review-round3/verdict.md`,

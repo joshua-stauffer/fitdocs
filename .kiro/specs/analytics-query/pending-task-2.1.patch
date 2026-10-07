@@ -1,0 +1,617 @@
+diff --git a/src/fitdocs/query/format.py b/src/fitdocs/query/format.py
+new file mode 100644
+index 0000000..92c2b22
+--- /dev/null
++++ b/src/fitdocs/query/format.py
+@@ -0,0 +1,258 @@
++"""Pure formatting helpers for in-memory query results."""
++
++from __future__ import annotations
++
++import datetime as dt
++import json
++import math
++import uuid
++from collections.abc import Mapping
++from dataclasses import dataclass
++from decimal import Decimal
++from enum import StrEnum
++
++
++class OutputFormat(StrEnum):
++    """Supported query output formats."""
++
++    TABLE = "table"
++    CSV = "csv"
++    JSON = "json"
++
++
++@dataclass(frozen=True)
++class ResultSet:
++    """Rows and result metadata captured before rendering."""
++
++    columns: tuple[str, ...]
++    rows: tuple[tuple[object, ...], ...]
++    truncated: bool
++    max_rows: int
++
++
++FreshnessFields = Mapping[str, int | bool]
++
++
++def default_format(stdout_is_terminal: bool) -> OutputFormat:
++    """Choose a human-readable format only for an interactive terminal."""
++    return OutputFormat.TABLE if stdout_is_terminal else OutputFormat.CSV
++
++
++def _duration(value: dt.timedelta) -> str:
++    total_microseconds = (
++        value.days * 86400 + value.seconds
++    ) * 1_000_000 + value.microseconds
++    if total_microseconds == 0:
++        return "PT0S"
++    sign = "-" if total_microseconds < 0 else ""
++    remaining = abs(total_microseconds)
++    days, remaining = divmod(remaining, 86_400_000_000)
++    hours, remaining = divmod(remaining, 3_600_000_000)
++    minutes, remaining = divmod(remaining, 60_000_000)
++    seconds, micros = divmod(remaining, 1_000_000)
++    pieces = ["P"]
++    if days:
++        pieces.append(f"{days}D")
++    time_parts: list[str] = []
++    if hours:
++        time_parts.append(f"{hours}H")
++    if minutes:
++        time_parts.append(f"{minutes}M")
++    if seconds or micros or not days and not hours and not minutes:
++        second_text = str(seconds)
++        if micros:
++            second_text += "." + f"{micros:06d}".rstrip("0")
++        time_parts.append(second_text + "S")
++    if time_parts:
++        pieces.append("T" + "".join(time_parts))
++    return sign + "".join(pieces)
++
++
++def _json_string(value: str) -> str:
++    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
++
++
++def text_value(value: object) -> str:
++    """Convert a non-NULL database value to its specified textual value."""
++    if isinstance(value, bool):
++        return "true" if value else "false"
++    if isinstance(value, int):
++        return str(value)
++    if isinstance(value, float):
++        if math.isnan(value):
++            return "NaN"
++        if math.isinf(value):
++            return "Infinity" if value > 0 else "-Infinity"
++        return repr(value)
++    if isinstance(value, Decimal):
++        return format(value, "f")
++    if isinstance(value, str):
++        return value
++    if isinstance(value, dt.datetime):
++        return value.isoformat()
++    if isinstance(value, (dt.date, dt.time)):
++        return value.isoformat()
++    if isinstance(value, dt.timedelta):
++        return _duration(value)
++    if isinstance(value, uuid.UUID):
++        return str(value)
++    if isinstance(value, bytes):
++        return value.hex()
++    if isinstance(value, (list, tuple, dict)):
++        return json_value(value)
++    return str(value)
++
++
++def table_cell(value: object) -> str:
++    """Render a table value, escaping control characters to keep rows intact."""
++    if value is None:
++        return "NULL"
++    rendered = text_value(value)
++    escaped: list[str] = []
++    for character in rendered:
++        codepoint = ord(character)
++        if character == "\n":
++            escaped.append(r"\n")
++        elif character == "\t":
++            escaped.append(r"\t")
++        elif character == "\r":
++            escaped.append(r"\r")
++        elif codepoint < 32 or codepoint == 127:
++            escaped.append(
++                f"\\x{codepoint:02x}" if codepoint <= 255 else f"\\u{codepoint:04x}"
++            )
++        else:
++            escaped.append(character)
++    return "".join(escaped)
++
++
++def csv_field(value: object) -> str:
++    """Return an RFC-style CSV field, keeping NULL distinct from empty text."""
++    if value is None:
++        return ""
++    rendered = text_value(value)
++    if any(character in rendered for character in ',"\r\n') or rendered == "":
++        return '"' + rendered.replace('"', '""') + '"'
++    return rendered
++
++
++def json_value(value: object) -> str:
++    """Return one JSON token, retaining exact Decimal digits as a number."""
++    if value is None:
++        return "null"
++    if isinstance(value, bool):
++        return "true" if value else "false"
++    if isinstance(value, int):
++        return str(value)
++    if isinstance(value, float):
++        if not math.isfinite(value):
++            return _json_string(text_value(value))
++        return repr(value)
++    if isinstance(value, Decimal):
++        return format(value, "f")
++    if isinstance(value, str):
++        return _json_string(value)
++    if isinstance(value, dt.datetime):
++        return _json_string(value.isoformat())
++    if isinstance(value, (dt.date, dt.time)):
++        return _json_string(value.isoformat())
++    if isinstance(value, dt.timedelta):
++        return _json_string(_duration(value))
++    if isinstance(value, uuid.UUID):
++        return _json_string(str(value))
++    if isinstance(value, bytes):
++        return _json_string(value.hex())
++    if isinstance(value, (list, tuple)):
++        return "[" + ", ".join(json_value(item) for item in value) + "]"
++    if isinstance(value, dict):
++        pairs = (
++            _json_string(text_value(key)) + ": " + json_value(item)
++            for key, item in value.items()
++        )
++        return "{" + ", ".join(pairs) + "}"
++    return _json_string(str(value))
++
++
++def _table(result: ResultSet) -> str:
++    headers = [table_cell(column) for column in result.columns]
++    rows = [[table_cell(value) for value in row] for row in result.rows]
++    widths = [
++        max([len(headers[index]), *(len(row[index]) for row in rows)], default=0)
++        for index in range(len(headers))
++    ]
++    rendered = [
++        "  ".join(value.ljust(widths[index]) for index, value in enumerate(headers)),
++        "  ".join("-" * width for width in widths),
++    ]
++    rendered.extend(
++        "  ".join(
++            value.rjust(widths[index])
++            if isinstance(result.rows[row_index][index], (int, float, Decimal))
++            and not isinstance(result.rows[row_index][index], bool)
++            else value.ljust(widths[index])
++            for index, value in enumerate(row)
++        )
++        for row_index, row in enumerate(rows)
++    )
++    count = len(result.rows)
++    footer = (
++        f"(first {count} rows; the result has more)"
++        if result.truncated
++        else f"({count} rows)"
++    )
++    rendered.append(footer)
++    return "\n".join(rendered)
++
++
++def _csv(result: ResultSet) -> str:
++    lines = [",".join(csv_field(column) for column in result.columns)]
++    lines.extend(",".join(csv_field(value) for value in row) for row in result.rows)
++    return "\n".join(lines)
++
++
++def _json(result: ResultSet, freshness: FreshnessFields) -> str:
++    columns = "[" + ", ".join(_json_string(column) for column in result.columns) + "]"
++    rows = (
++        "[]"
++        if not result.rows
++        else "[\n"
++        + ",\n".join(
++            "[" + ", ".join(json_value(value) for value in row) + "]"
++            for row in result.rows
++        )
++        + "\n]"
++    )
++    freshness_json = (
++        "{"
++        + ", ".join(
++            _json_string(key) + ": " + json_value(value)
++            for key, value in freshness.items()
++        )
++        + "}"
++    )
++    return (
++        '{"columns": '
++        + columns
++        + ', "rows": '
++        + rows
++        + f', "row_count": {len(result.rows)}, '
++        + f'"truncated": {json_value(result.truncated)}, '
++        + f'"max_rows": {result.max_rows}, "freshness": {freshness_json}'
++        + "}"
++    )
++
++
++def render_result(
++    result: ResultSet,
++    fmt: OutputFormat,
++    *,
++    freshness: FreshnessFields,
++) -> str:
++    """Render one result document in the chosen format."""
++    if fmt is OutputFormat.TABLE:
++        return _table(result)
++    if fmt is OutputFormat.CSV:
++        return _csv(result)
++    if fmt is OutputFormat.JSON:
++        return _json(result, freshness)
++    raise ValueError(f"Unsupported output format: {fmt}")
+diff --git a/tests/query/test_format.py b/tests/query/test_format.py
+new file mode 100644
+index 0000000..42b55f0
+--- /dev/null
++++ b/tests/query/test_format.py
+@@ -0,0 +1,288 @@
++"""Pure in-memory tests for query result rendering."""
++
++from __future__ import annotations
++
++import datetime as dt
++import uuid
++from dataclasses import FrozenInstanceError
++from decimal import Decimal
++
++import pytest
++
++from fitdocs.query.format import (
++    OutputFormat,
++    ResultSet,
++    csv_field,
++    default_format,
++    json_value,
++    render_result,
++    table_cell,
++    text_value,
++)
++
++EMPTY_FRESHNESS: dict[str, int | bool] = {
++    "missing": 0,
++    "changed": 0,
++    "removed": 0,
++}
++
++
++@pytest.mark.parametrize(
++    ("value", "text", "json"),
++    [
++        (None, "NULL", "null"),
++        (True, "true", "true"),
++        (False, "false", "false"),
++        (0, "0", "0"),
++        (-12, "-12", "-12"),
++        (0.0, "0.0", "0.0"),
++        (1.25, "1.25", "1.25"),
++        (1.2345678901234567, "1.2345678901234567", "1.2345678901234567"),
++        (Decimal("1E+2"), "100", "100"),
++        (
++            Decimal("12345678901234567890.1234500"),
++            "12345678901234567890.1234500",
++            "12345678901234567890.1234500",
++        ),
++        ("hello", "hello", '"hello"'),
++        ("café", "café", '"café"'),
++        (dt.date(2024, 2, 3), "2024-02-03", '"2024-02-03"'),
++        (dt.time(4, 5, 6), "04:05:06", '"04:05:06"'),
++        (
++            dt.time(4, 5, 6, tzinfo=dt.timezone(dt.timedelta(hours=2))),
++            "04:05:06+02:00",
++            '"04:05:06+02:00"',
++        ),
++        (
++            dt.datetime(2024, 2, 3, 4, 5, 6),
++            "2024-02-03T04:05:06",
++            '"2024-02-03T04:05:06"',
++        ),
++        (
++            dt.datetime(2024, 2, 3, 4, 5, 6, tzinfo=dt.timezone(dt.timedelta(hours=2))),
++            "2024-02-03T04:05:06+02:00",
++            '"2024-02-03T04:05:06+02:00"',
++        ),
++        (
++            uuid.UUID("abcdef12-3456-abcd-ef12-abcdef123456"),
++            "abcdef12-3456-abcd-ef12-abcdef123456",
++            '"abcdef12-3456-abcd-ef12-abcdef123456"',
++        ),
++        (b"\x00\xff", "00ff", '"00ff"'),
++        ([1, None, "x"], '[1, null, "x"]', '[1, null, "x"]'),
++        ((1, False), "[1, false]", "[1, false]"),
++        ({"a": 1}, '{"a": 1}', '{"a": 1}'),
++        ({1: "one"}, '{"1": "one"}', '{"1": "one"}'),
++        ({Decimal("1E+2"): "hundred"}, '{"100": "hundred"}', '{"100": "hundred"}'),
++    ],
++)
++def test_value_rules(value: object, text: str, json: str) -> None:
++    if value is None:
++        assert table_cell(value) == text
++        assert csv_field(value) == ""
++        assert json_value(value) == json
++    else:
++        assert text_value(value) == text
++        assert table_cell(value) == text
++        csv_expected = (
++            '"' + text.replace('"', '""') + '"'
++            if any(character in text for character in ',"\r\n') or text == ""
++            else text
++        )
++        assert csv_field(value) == csv_expected
++        assert json_value(value) == json
++
++
++@pytest.mark.parametrize(
++    ("value", "expected"),
++    [(float("nan"), "NaN"), (float("inf"), "Infinity"), (float("-inf"), "-Infinity")],
++)
++def test_nonfinite_float_tokens_in_each_format(value: float, expected: str) -> None:
++    result = ResultSet(("v",), ((value,),), False, 10)
++    assert table_cell(value) == expected
++    assert csv_field(value) == expected
++    assert f'"{expected}"' in render_result(
++        result, OutputFormat.JSON, freshness=EMPTY_FRESHNESS
++    )
++
++
++def test_null_empty_zero_float_false_and_null_text_are_distinct() -> None:
++    result = ResultSet(
++        ("v", "v", "v", "v", "v", "v"),
++        ((None, 0, 0.0, "", False, "NULL"),),
++        False,
++        10,
++    )
++    csv = render_result(result, OutputFormat.CSV, freshness=EMPTY_FRESHNESS)
++    assert csv.splitlines()[1] == ',0,0.0,"",false,NULL'
++    parsed = json_value((None, 0, 0.0, "", False, "NULL"))
++    assert parsed == '[null, 0, 0.0, "", false, "NULL"]'
++    rendered_json = render_result(result, OutputFormat.JSON, freshness=EMPTY_FRESHNESS)
++    assert '[null, 0, 0.0, "", false, "NULL"]' in rendered_json
++    table_values = tuple(table_cell(value) for value in result.rows[0])
++    assert table_values == ("NULL", "0", "0.0", "", "false", "NULL")
++    assert table_cell(None) == "NULL"
++    assert csv_field(None) == ""
++    assert json_value(None) == "null"
++
++
++def test_table_layout_alignment_control_escaping_and_truncated_footer() -> None:
++    result = ResultSet(
++        ("name", "n", "note"),
++        (("A\nB\t\x01\rC", 12, "x"),),
++        True,
++        1,
++    )
++    rendered = render_result(result, OutputFormat.TABLE, freshness=EMPTY_FRESHNESS)
++    assert "A\\nB\\t\\x01\\rC" in rendered
++    assert " 12  " in rendered
++    assert rendered.splitlines()[-1] == "(first 1 rows; the result has more)"
++
++
++def test_table_right_aligns_numeric_cells_in_mixed_columns() -> None:
++    result = ResultSet(
++        ("value",), (("long",), (2,), (3.14,), (Decimal("1.5"),)), False, 10
++    )
++    rendered = render_result(result, OutputFormat.TABLE, freshness=EMPTY_FRESHNESS)
++    assert rendered.splitlines() == [
++        "value",
++        "-----",
++        "long ",
++        "    2",
++        " 3.14",
++        "  1.5",
++        "(4 rows)",
++    ]
++
++
++def test_table_left_aligns_bools_even_in_a_numeric_column() -> None:
++    result = ResultSet(("value",), (("much-longer",), (True,), (False,)), False, 10)
++    rendered = render_result(result, OutputFormat.TABLE, freshness=EMPTY_FRESHNESS)
++    assert rendered.splitlines() == [
++        "value      ",
++        "-----------",
++        "much-longer",
++        "true       ",
++        "false      ",
++        "(3 rows)",
++    ]
++
++
++def test_csv_preserves_unquoted_control_characters_and_quotes_line_breaks() -> None:
++    result = ResultSet(("v",), (("tab\tcontrol\x01\nline",),), False, 1)
++    rendered = render_result(result, OutputFormat.CSV, freshness=EMPTY_FRESHNESS)
++    assert rendered == 'v\n"tab\tcontrol\x01\nline"'
++
++
++def test_duration_formatting_keeps_fraction_and_negative_sign() -> None:
++    duration = dt.timedelta(days=1, seconds=3661, microseconds=500000)
++    assert text_value(duration) == "P1DT1H1M1.5S"
++    assert json_value(duration) == '"P1DT1H1M1.5S"'
++    assert text_value(dt.timedelta()) == "PT0S"
++    assert text_value(-dt.timedelta(seconds=1, microseconds=250000)) == "-PT1.25S"
++    assert json_value(dt.timedelta()) == '"PT0S"'
++    assert json_value(-dt.timedelta(seconds=1, microseconds=250000)) == '"-PT1.25S"'
++    assert text_value(dt.timedelta(days=2)) == "P2D"
++    assert json_value(dt.timedelta(days=2)) == '"P2D"'
++
++
++def test_csv_quotes_delimiters_quotes_cr_lf_and_empty_text() -> None:
++    values = ("a,b", 'a"b', "a\rb", "a\nb", "")
++    assert tuple(csv_field(value) for value in values) == (
++        '"a,b"',
++        '"a""b"',
++        '"a\rb"',
++        '"a\nb"',
++        '""',
++    )
++    output = render_result(
++        ResultSet(("a,b", 'q"q', "cr", "lf", "empty"), (values,), False, 10),
++        OutputFormat.CSV,
++        freshness=EMPTY_FRESHNESS,
++    )
++    assert output == '"a,b","q""q",cr,lf,empty\n"a,b","a""b","a\rb","a\nb",""'
++
++
++def test_json_duplicate_columns_order_freshness_and_exact_decimal() -> None:
++    result = ResultSet(
++        ("first", "second"),
++        ((Decimal("1E+2"), 2), (Decimal("12345678901234567890.1234500"), 3)),
++        False,
++        5,
++    )
++    rendered = render_result(
++        result,
++        OutputFormat.JSON,
++        freshness={"missing": 3, "changed": 2, "removed": 1},
++    )
++    assert rendered == (
++        '{"columns": ["first", "second"], "rows": [\n'
++        "[100, 2],\n[12345678901234567890.1234500, 3]\n], "
++        '"row_count": 2, "truncated": false, "max_rows": 5, '
++        '"freshness": {"missing": 3, "changed": 2, "removed": 1}}'
++    )
++    assert render_result(result, OutputFormat.CSV, freshness=EMPTY_FRESHNESS) == (
++        "first,second\n100,2\n12345678901234567890.1234500,3"
++    )
++    assert render_result(result, OutputFormat.TABLE, freshness=EMPTY_FRESHNESS) == (
++        "first                         second\n"
++        "----------------------------  ------\n"
++        "                         100       2\n"
++        "12345678901234567890.1234500       3\n(2 rows)"
++    )
++
++
++def test_json_truncation_metadata_matches_printed_rows_and_limit() -> None:
++    rendered = render_result(
++        ResultSet(("n",), ((3,), (5,)), True, 2),
++        OutputFormat.JSON,
++        freshness=EMPTY_FRESHNESS,
++    )
++    assert '"row_count": 2' in rendered
++    assert '"truncated": true' in rendered
++    assert '"max_rows": 2' in rendered
++
++
++def test_json_puts_each_result_row_on_its_own_line() -> None:
++    rendered = render_result(
++        ResultSet(("n",), ((3,), (5,)), False, 10),
++        OutputFormat.JSON,
++        freshness=EMPTY_FRESHNESS,
++    )
++    assert '"rows": [\n[3],\n[5]\n]' in rendered
++
++
++@pytest.mark.parametrize("fmt", list(OutputFormat))
++def test_zero_rows_have_format_structure(fmt: OutputFormat) -> None:
++    rendered = render_result(
++        ResultSet(("a", "b"), (), False, 10), fmt, freshness=EMPTY_FRESHNESS
++    )
++    if fmt is OutputFormat.TABLE:
++        assert rendered == "a  b\n-  -\n(0 rows)"
++    elif fmt is OutputFormat.CSV:
++        assert rendered == "a,b"
++    else:
++        assert '"rows": []' in rendered and '"row_count": 0' in rendered
++
++
++def test_default_format_tracks_terminal_state() -> None:
++    assert default_format(True) is OutputFormat.TABLE
++    assert default_format(False) is OutputFormat.CSV
++
++
++def test_output_format_values_and_result_set_frozen_contract() -> None:
++    assert tuple(fmt.value for fmt in OutputFormat) == ("table", "csv", "json")
++    assert all(isinstance(fmt, str) for fmt in OutputFormat)
++    result = ResultSet(("a",), ((1,),), False, 5)
++    with pytest.raises(FrozenInstanceError):
++        result.max_rows = 6  # type: ignore[misc]
++
++
++def test_unknown_value_falls_back_to_text_and_json_string() -> None:
++    class Strange:
++        def __str__(self) -> str:
++            return "strange-value"
++
++    value = Strange()
++    assert text_value(value) == "strange-value"
++    assert json_value(value) == '"strange-value"'
+diff --git a/tests/query/test_boundary.py b/tests/query/test_boundary.py
+--- a/tests/query/test_boundary.py
++++ b/tests/query/test_boundary.py
+@@ -482,3 +482,55 @@
+     source: str,
+ ) -> None:
+     assert _unlisted_query_importers({"fitdocs.history.engine": source}) == set()
++
++
++# --- Task 2.1: formatter purity boundary ----------------------------------
++
++
++def _forbidden_format_imports(source: str) -> set[str]:
++    targets = _import_targets(source, "fitdocs.query.format")
++    stdlib_roots = set(__import__("sys").stdlib_module_names)
++    forbidden: set[str] = set()
++    for target in targets:
++        root = target.split(".", 1)[0]
++        if root == "fitdocs":
++            forbidden.add(target)
++        elif root not in stdlib_roots:
++            forbidden.add(root)
++    return forbidden
++
++
++def test_format_module_uses_standard_library_only() -> None:
++    path = _SOURCE_ROOT / "query" / "format.py"
++    assert path.is_file(), f"formatter source not found: {path}"
++    source = path.read_text(encoding="utf-8")
++    scanned = ast.walk(ast.parse(source))
++    nodes = tuple(scanned)
++    assert nodes, "the formatter source walk found no syntax nodes"
++    assert _forbidden_format_imports(source) == set()
++
++
++def test_format_purity_guard_flags_fitdocs_index_positive_control() -> None:
++    synthetic = "import fitdocs.index.schema\n"
++    assert _forbidden_format_imports(synthetic) == {"fitdocs.index.schema"}
++    dynamic = "import importlib\nimportlib.import_module('fitdocs.index.schema')\n"
++    assert _forbidden_format_imports(dynamic) == {"fitdocs.index.schema"}
++    assert _forbidden_format_imports("import numpy\n") == {"numpy"}
++
++
++def test_format_purity_guard_classifies_all_supported_import_targets() -> None:
++    dynamic_stdlib = "import importlib\nimportlib.import_module('json.decoder')\n"
++    assert _forbidden_format_imports(dynamic_stdlib) == set()
++
++
++def test_format_purity_guard_rejects_bare_fitdocs_root() -> None:
++    assert _forbidden_format_imports("import fitdocs\n") == {"fitdocs"}
++
++
++def test_format_purity_guard_rejects_third_party_from_import() -> None:
++    assert _forbidden_format_imports("from numpy.linalg import norm\n") == {"numpy"}
++
++
++def test_format_purity_guard_rejects_dynamic_third_party_import() -> None:
++    dynamic_third_party = "import importlib\nimportlib.import_module('numpy.linalg')\n"
++    assert _forbidden_format_imports(dynamic_third_party) == {"numpy"}
