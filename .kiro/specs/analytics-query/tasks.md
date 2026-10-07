@@ -268,7 +268,11 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
   - `tests/test_releasing_docs.py:569-573`.
 - **7.2**: `tests/test_agent_skill.py` (teaching-order pin).
 - **7.3**: `tests/query/test_skill_examples.py`.
-- **8.1**: `tests/query/test_changelog_entry.py`.
+- **8.1**: `tests/query/test_changelog_entry.py`, plus only the existing
+  index dependency-direction expected literal in
+  `tests/connectors/test_network_statements.py::test_analytics_index_is_published_in_steering_without_changing_network_scope`.
+  Publishing the approved query read side changes the old "only cli" claim
+  to include query. Preserve every other assertion and helper in that test.
 
 ---
 
@@ -1323,7 +1327,9 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
     - one clause on the read-only, locked DuckDB configuration with external
       access and extension loading off.
   - **`structure.md`**: the `query` dependency-direction sentence of
-    design.md.
+    design.md, and the existing index sentence's consumer clause includes
+    query beside cli. Evolve only its corresponding literal expectation in
+    the steering publication test; all other pins remain unchanged.
   - **The connectors amendment**: append connectors Amendment 2, the next free
     number at landing ("Amendment 2 (date): Req 14.1 gains `query`, landed by
     analytics-query"; if another spec has taken 2 by then, the next free
