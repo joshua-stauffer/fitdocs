@@ -397,7 +397,7 @@ from here.
   - _Requirements: 7.1, 8.1, 8.2, 8.3, 8.6_
   - _Depends: 1.2_
 
-- [ ] 2. The best-effort computation and the engine seams
+- [x] 2. The best-effort computation and the engine seams
 
 - [x] 2.1 (P) Compute best efforts under the stated continuity rule
   - **The rule module**, per design.md § MeanMaxRule: the three channels, the
@@ -482,7 +482,7 @@ from here.
   - _Requirements: 3.2, 3.3, 3.4, 4.1, 4.2, 7.3_
   - _Boundary: HistorySeam_
 
-- [ ] 2.3 Expose the plan pass's resolution without its writes
+- [x] 2.3 Expose the plan pass's resolution without its writes
   - **The plans seam**, per design.md § PlanSeam: `ParsedSource`,
     `PlanSources`, `read_plan_sources` (the settings, directory, discovery and
     parse half of `run_plan`, which now calls it), `Reconciler.reconcile`
@@ -1010,3 +1010,5 @@ from here.
 - 1.3 accepted: immutable snapshot/file/layout/held-key digests; fresh independent canonical suite 9439 passed/2 optional skips, all 32 mutation executions RED/restored GREEN, explicit two-file mypy and scoped Ruff clean. Parent fresh derived scope 26 passed. Typing-only repair preserves every assertion AST and production bytes; always explicitly type-check newly added test paths until 6.3 registration. Evidence: /private/tmp/analytics-derived-evidence/resume/1.3/review-remediation1/report.md.
 
 - 6.1 accepted: derived release notes, structure dependency clause, fit-ingest Requirement 19 and actual Amendment 6 with both test paths. Canonical fresh independent suite 9415 passed/2 optional skips; 21 claimed plus seven own mutations RED/restored GREEN, explicit mypy/Ruff clean, parent fresh 75 publication/changelog checks passed. Derived roadmap tick remains deferred until feature merge; final rebase must preserve analytics-index main 63d79a3 peer completion and registrations. Evidence: /private/tmp/analytics-derived-evidence/resume/6.1/review-remediation1/report.md.
+
+- 2.3 accepted: pure read_plan_sources/resolve_plans and frozen ParsedSource/PlanSources/PlanResolution; original plan writes/bytes and lazy scanning preserved. Fresh independent canonical 9422 passed/2 optional skips, preservation 640, all 31 claimed plus six own mutations RED/restored GREEN; explicit five-file mypy/Ruff clean. Parent fresh post-review restoration engine/API scope 61 passed. Earlier overlapping controller check excluded from acceptance evidence; final verification serialized after reviewer restoration. Invalid-only corpus and methodology are explicitly None; complete sources and ordered block payloads pinned. Evidence: /private/tmp/analytics-derived-evidence/resume/2.3/review-remediation2/report.md.

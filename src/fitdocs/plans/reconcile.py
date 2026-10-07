@@ -71,7 +71,13 @@ import fitdocs.load.settings
 from fitdocs.layout import settings_path
 from fitdocs.plans.aggregate import aggregate_mesocycles
 from fitdocs.plans.corpus import Corpus, scan_corpus
-from fitdocs.plans.engine import PlanReport, Resolver, run_plan
+from fitdocs.plans.engine import (
+    PlanReport,
+    PlanSources,
+    Resolver,
+    read_plan_sources,
+    run_plan,
+)
 from fitdocs.plans.matching import match_rows
 from fitdocs.plans.model import Block
 from fitdocs.plans.placement import BlockReconciliation, place_resolution
@@ -79,10 +85,24 @@ from fitdocs.plans.resolution import Resolution
 from fitdocs.settings import load_settings_document
 
 __all__ = [
+    "PlanResolution",
     "ReconcileReport",
     "reconcile_block",
+    "resolve_plans",
     "run_reconcile",
 ]
+
+
+@dataclass(frozen=True)
+class PlanResolution:
+    """Parsed plan sources and the pure reconciliation of each valid block."""
+
+    sources: PlanSources
+    corpus: Corpus | None
+    methodology: (
+        fitdocs.history.MethodologyChoice | fitdocs.history.MethodologyProblem | None
+    )
+    blocks: tuple[BlockReconciliation, ...]
 
 
 @dataclass(frozen=True)
@@ -164,6 +184,12 @@ class Reconciler:
         self._blocks: dict[str, BlockReconciliation] = {}
 
     def __call__(self, block: Block) -> Resolution:
+        reconciliation = self.reconcile(block)
+        assert self._corpus is not None
+        return place_resolution(block, reconciliation, self._corpus)
+
+    def reconcile(self, block: Block) -> BlockReconciliation:
+        """Lazily scan and reconcile one valid block without rendering it."""
         if self._corpus is None:
             self._corpus = scan_corpus(self._data_root)
             self._methodology = fitdocs.history.select_methodology(
@@ -175,7 +201,7 @@ class Reconciler:
             block, self._corpus, today=self._today, methodology=self._methodology
         )
         self._blocks[block.id] = reconciliation
-        return place_resolution(block, reconciliation, self._corpus)
+        return reconciliation
 
     @property
     def blocks(self) -> dict[str, BlockReconciliation]:
@@ -191,6 +217,38 @@ class Reconciler:
         `__call__` (no valid block resolved yet)."""
         return self._methodology
 
+    @property
+    def corpus(self) -> Corpus | None:
+        """The one lazily scanned corpus, or ``None`` before reconciliation."""
+        return self._corpus
+
+
+def _configured_methodology(data_root: Path) -> str | None:
+    """Read both shared configuration tables from one settings document."""
+    settings_file = settings_path(data_root)
+    document = load_settings_document(data_root)
+    history_settings = fitdocs.history.load_history_settings(document, settings_file)
+    load_settings = fitdocs.load.settings.load_load_settings(document, settings_file)
+    return history_settings.methodology or load_settings.default_calculator
+
+
+def resolve_plans(data_root: Path, *, today: date) -> PlanResolution:
+    """Resolve valid plan sources without rendering, writing or declarations."""
+    configured = _configured_methodology(data_root)
+    sources = read_plan_sources(data_root)
+    reconciler = Reconciler(data_root, today=today, configured=configured)
+    blocks = tuple(
+        reconciler.reconcile(source.block)
+        for source in sources.sources
+        if source.block is not None
+    )
+    return PlanResolution(
+        sources=sources,
+        corpus=reconciler.corpus,
+        methodology=reconciler.methodology,
+        blocks=blocks,
+    )
+
 
 def run_reconcile(data_root: Path, *, today: date) -> ReconcileReport:
     """Run the whole reconciling pass over `data_root` and return its
@@ -205,15 +263,7 @@ def run_reconcile(data_root: Path, *, today: date) -> ReconcileReport:
     and returns a `ReconcileReport` pairing that call's `PlanReport` with
     every resolved block's `BlockReconciliation`, in `plan.blocks`' own
     order, and the resolver's own final `methodology` reading."""
-    settings_file = settings_path(data_root)
-    document = load_settings_document(data_root)
-    history_settings = fitdocs.history.load_history_settings(
-        document, settings_file
-    )  # HistorySettingsError propagates
-    load_settings = fitdocs.load.settings.load_load_settings(
-        document, settings_file
-    )  # LoadSettingsError propagates
-    configured = history_settings.methodology or load_settings.default_calculator
+    configured = _configured_methodology(data_root)
 
     reconciler = Reconciler(data_root, today=today, configured=configured)
     resolver: Resolver = reconciler
