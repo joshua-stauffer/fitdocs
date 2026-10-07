@@ -646,7 +646,7 @@ from here.
   - _Boundary: BlockProducer_
   - _Depends: 1.3, 2.3_
 
-- [ ] 4. Registration, the schema version and the boundary
+- [x] 4. Registration, the schema version and the boundary
 
 - [x] 4.1 Register the four producers and advance the schema version
   - **Registration**: append the computed producer and the three corpus
@@ -691,7 +691,7 @@ from here.
   - _Requirements: 1.5, 8.4, 9.2, 9.3, 9.5, 10.1_
   - _Depends: 3.1, 3.2, 3.3, 3.4_
 
-- [ ] 4.2 Guard the derived package's boundary
+- [x] 4.2 Guard the derived package's boundary
   - **The boundary test** (`tests/index/derived/test_boundary.py`), an AST
     walk per design.md § DerivedGuards: the derived modules' allowed imports;
     the rule and records modules' allowed imports; no clock spelling and no
@@ -1024,3 +1024,5 @@ from here.
 - 6.4 accepted: user-authorized equivalent shared HealthFit root, private writer copy; all 2,517 source FITs and 2,502 composed pages measured without parse/composition errors or input changes. Fresh independent pyenv canonical 9,475 passed/two optional skips; all 112 numeric/dash cells, formulas and inventories independently checked and freshly verified by parent. Core rebuild287.473370624939s, derived285.86776125011966s, mean-max8.511576691875234s/2.977452460764906%,30,802 rows. Single-run times imply no causal speedup. All six channel/duration loss rates below5%; no exact union loss inferred. Ten other derived tables and core loads are zero; athlete profile/plan sources absent, so corpus timings cover empty outputs. Previous Homebrew-environment review9474/1fail/2skip retained, canonical environment corrected without source changes. Final accepted runtime must match all11 measurement-source-hashes.json entries before reuse under4.1/6.3; affected runtime changes require affected measurement reruns. Evidence: /private/tmp/analytics-derived-evidence/resume/6.4/review-pyenv/verdict.md.
 
 - 4.1 accepted: core-first registration of four accepted producers,24tables/eleven derived names, currentmain995db58 schema1 advancedto2 withappend-onlydigest. Fresh independent canonical9486/2optional315.32s, all15claimed+2own mutants sole-target RED/restored211GREEN, explicitfive-filemypy/Ruff clean; parentfresh211passed. Allfour metadata/version requirementsPINNED,two existing refresh clausesPRESERVED-ONLY. Earlier9479/2skip/7failuregate retained and resolvedby separatelylanded analytics-index owner correction main995db58. Query63014ffstillnotonmain, so no temporaryqueryexception. All11 measuredruntimehashes matchfinalacceptedregistration bytes; task6.4 measurementreusegate satisfied withoriginalempty-output/single-runlimits. Evidence: /private/tmp/analytics-derived-evidence/resume/4.1/review-ownerlanded/verdict.md.
+
+- 4.2 accepted after bounded kiro-debug finite inventory repair:114controls, original89ASTs preserved, test-onlyproducerboundary/metricsclockwrites/reversewalk/stdlibpositives. Fresh independent canonical9581/2optional267.47s withactualexit0saved; everypriorboundedclaim,25newentries(21unique),7sourcepairbranches and3own mutationchecks RED/restoredGREEN; finiteinventory28PINNED/5PRESERVED-ONLY redundantfallbacks/extensions/0UNPINNED. Explicitmypy/Ruffclean; parentfresh114 andintegratedguard/registration119passed. EarliermissinginitialREDhonestlyqualified, debugtests-firstcorrectguardGREENcheckpointthenprospectiveparentGO_VERIFY mutations; no artificialbaselineRED. Implementerfulloutcomelost andterminatedduplicate notacceptanceevidence. Version/dependency equality later5.4/6.3. Runtime/snapshots unchanged. Evidence: /private/tmp/analytics-derived-evidence/resume/4.2/review-debug-retry/verdict.md.
