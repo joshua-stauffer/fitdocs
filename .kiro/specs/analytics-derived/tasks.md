@@ -711,7 +711,7 @@ from here.
     it at this task.
   - _Requirements: 2.8, 10.7_
 
-- [ ] 5. End to end through the real refresh
+- [x] 5. End to end through the real refresh
 
 - [x] 5.1 Prove when each derived table moves and what a failure keeps
   - **Tests** (`tests/index/derived/test_refresh.py`), building and refreshing
@@ -806,7 +806,7 @@ from here.
   - _Boundary: DerivedRefreshTests_
   - _Depends: 4.1_
 
-- [ ] 5.4 (P) Confine the derived producers and prove the data root unchanged
+- [x] 5.4 (P) Confine the derived producers and prove the data root unchanged
   - **`tests/test_confinement.py`**: append `EntryPoint(id="index-derived",
     …)`, running `fitdocs index` over the derived root with composed pages,
     `FITDOCS_INDEX_DIR` sandboxed and `fitdocs.cli._today` monkeypatched to
@@ -1032,3 +1032,5 @@ from here.
 - 5.3 accepted: actual composed-handoff HR versus independent mean-max engine, base-alone HR absent before sync; core-only current-schema index downgraded through facade, NEEDS_REBUILD names bothversions, ordinary no-force build recreates all eleven physically present/nonempty tables. Fresh independent canonical9602/2optional299.93s exit0; all17reported controls plus12additionalproduction mutants confirmed/no survivors, all11table emptiness pins and BLOCKinventoryassert beforeSQL. Explicitmypy/Ruff clean, originaltest-onlybaselineGREEN honestlyqualified; source/helper byte restoration verified. Parentfreshleaf2 and integratedcomposition/determinism/registration8 passed. Evidence: /private/tmp/analytics-derived-evidence/resume/5.3/review/verdict.md.
 
 - 5.1 accepted after complete preservation/renderer/recursive-inventory repair: eight scenarios, every ten failed corpus tables nonempty/distinct before errors and preserved afterward, actual CLI could-not-refresh lines and next-good physical recovery. Fresh independent canonical9494/2optional323.03s exit0, all26claims+3ownsource mutations RED/restoredGREEN, exhaustiveeightrequirements with inheritedclauses PRESERVED-ONLY, explicitmypy/Ruff clean; inventory field/nofollow controls independently verified. Parentfreshleaf8 and integratedrefresh/determinism/composition/registration16passed. Initial unacceptedtest bytes unavailable: no historicalASTequality claim, alloriginalscenarios/13mutants independently retained. Nestedpositivecontrol genuine1fail7pass before recursivehelperfix; earlierfull predatesrepair qualified. Evidence: /private/tmp/analytics-derived-evidence/resume/5.1/review-remediation1/verdict.md.
+
+- 5.4 accepted after bounded strict-inventory remediation: real index CLI over full composed fixture, fixed TODAY/external cache, all eleven physical tables populated through read-only facade; successful sync/regen/load compare complete roots with fresh/prebuilt index. Independent final canonical 9618 passed/2 optional actionlint skips in308.41s, exit0;41 claimed executions/39 distinct recipes plus2 own mutants all intended RED/restored GREEN. Nine strict field/branch controls include independent bytes/mtime/mode, directory presence/mode, link target, finite FIFO/socket kinds, no-follow and exact cache ancestry. All74 original assertion ASTs and12 EntryPoint definitions preserved; parent integrated53 checks and explicit2-file mypy/Ruff pass. Existing generic dangling-link snapshot issue separately queued, not repaired here. Earlier full suites predate remediation and are not acceptance evidence. Evidence: /private/tmp/analytics-derived-evidence/resume/5.4/review-remediation2/verdict.md.

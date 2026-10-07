@@ -51,6 +51,7 @@ from __future__ import annotations
 import hashlib
 import os
 import socket
+import stat
 import tempfile
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -267,6 +268,68 @@ def assert_confined(
     assert not strays, (
         f"wrote outside the permitted locations: {strays}; "
         f"permitted: {[str(location) for location in permitted]}"
+    )
+
+
+def _derived_guard_snapshot(
+    root: Path, index_directory: Path
+) -> dict[str, tuple[object, ...]]:
+    """Inventory every non-index entry without following links.
+
+    File bytes and lstat metadata catch content changes and same-byte rewrites.
+    Directory mtimes are omitted because a legitimate index write changes the
+    cache's ancestor timestamps; directory presence and mode remain pinned.
+    """
+    entries: dict[str, tuple[object, ...]] = {}
+
+    def visit(directory: Path) -> None:
+        for child in sorted(directory.iterdir()):
+            if _inside(child, index_directory):
+                continue
+            relative = child.relative_to(root).as_posix()
+            metadata = child.lstat()
+            mode = metadata.st_mode
+            if stat.S_ISLNK(mode):
+                entries[relative] = (
+                    "symlink",
+                    os.readlink(child),
+                    stat.S_IMODE(mode),
+                    metadata.st_mtime_ns,
+                )
+            elif stat.S_ISDIR(mode):
+                entries[relative] = ("directory", stat.S_IMODE(mode))
+                visit(child)
+            elif stat.S_ISREG(mode):
+                entries[relative] = (
+                    "file",
+                    child.read_bytes(),
+                    stat.S_IMODE(mode),
+                    metadata.st_mtime_ns,
+                )
+            else:
+                entries[relative] = (
+                    "other",
+                    stat.S_IFMT(mode),
+                    stat.S_IMODE(mode),
+                    metadata.st_mtime_ns,
+                )
+
+    visit(root)
+    return entries
+
+
+def _assert_derived_index_unchanged_outside_cache(
+    before: dict[str, tuple[object, ...]],
+    after: dict[str, tuple[object, ...]],
+) -> None:
+    """Require the derived-index pass to leave all non-cache entries intact."""
+    changed = tuple(
+        sorted(
+            key for key in set(before) | set(after) if before.get(key) != after.get(key)
+        )
+    )
+    assert not changed, (
+        f"derived index changed data/source entries outside external index: {changed}"
     )
 
 
@@ -1069,6 +1132,78 @@ class EntryPoint:
     non_vacuous: Callable[[Sequence[str]], bool] = _wrote_a_workout_document
 
 
+# analytics-derived task 5.4: the full derived fixture includes composed pages,
+# benchmark entries, recorded loads and plan sources so every derived table has
+# rows when the CLI's registered producers are exercised.
+def _prepare_derived_index(data_root: Path, source_dir: Path) -> None:
+    import shutil
+
+    from tests.index.derived.conftest import build_fixture_root
+
+    build_fixture_root(data_root, composed=True)
+    fixture_source = data_root / "composed-source"
+    shutil.copytree(fixture_source, source_dir, dirs_exist_ok=True)
+    sync(
+        source_dir,
+        data_root,
+        athlete=load_athlete_inputs(data_root),
+        tz=_TZ,
+        tiles=_tiles(data_root),
+    )
+
+
+_DERIVED_INDEX_DATABASE: Path | None = None
+
+
+def _run_cli_derived_index(data_root: Path, source_dir: Path) -> None:
+    global _DERIVED_INDEX_DATABASE
+    from fitdocs.index.location import resolve_index_location
+    from tests.index.derived.conftest import TODAY
+
+    index_dir = source_dir.parent / "derived-index-cache"
+
+    _DERIVED_INDEX_DATABASE = resolve_index_location(
+        data_root, {"FITDOCS_INDEX_DIR": str(index_dir)}, source_dir.parent
+    ).database
+    with (
+        patch.dict(os.environ, {"FITDOCS_INDEX_DIR": str(index_dir)}),
+        patch("fitdocs.cli._today", lambda: TODAY),
+    ):
+        result = _CLI_RUNNER.invoke(app, ["index", "--out", str(data_root)])
+    assert result.exit_code == 0, result.output
+
+
+def _derived_tables_populated(touched: Sequence[str]) -> bool:
+    from fitdocs.index.store import open_index
+
+    table_names = (
+        "mean_max",
+        "load_series",
+        "daily_load",
+        "weekly_load",
+        "benchmarks",
+        "benchmark_periods",
+        "blocks",
+        "mesocycles",
+        "planned_workouts",
+        "planned_workout_pages",
+        "unplanned_pages",
+    )
+    if not any(relative.endswith("/index.duckdb") for relative in touched):
+        return False
+    if _DERIVED_INDEX_DATABASE is None:
+        return False
+    with open_index(_DERIVED_INDEX_DATABASE, read_only=True) as connection:
+        counts = {
+            name: connection.execute(f'SELECT count(*) FROM "{name}"').fetchall()[0][0]
+            for name in table_names
+        }
+    assert all(isinstance(count, int) and count > 0 for count in counts.values()), (
+        counts
+    )
+    return True
+
+
 #: Every fitdocs entry point that writes into the data root (Req 7.6).
 WRITING_ENTRY_POINTS: Final[tuple[EntryPoint, ...]] = (
     EntryPoint(id="sync", prepare=_nothing, run=_run_sync),
@@ -1153,6 +1288,12 @@ WRITING_ENTRY_POINTS: Final[tuple[EntryPoint, ...]] = (
         run=_run_pull,
         non_vacuous=_wrote_a_ledger_and_a_delivery,
     ),
+    EntryPoint(
+        id="index-derived",
+        prepare=_prepare_derived_index,
+        run=_run_cli_derived_index,
+        non_vacuous=_derived_tables_populated,
+    ),
 )
 
 
@@ -1196,9 +1337,23 @@ def test_entry_point_writes_only_inside_the_permitted_locations(
     _stage_sources(source_dir)
     entry_point.prepare(data_root, source_dir)
 
-    index_base = source_dir.parent / "index-cache"
-    if entry_point.id in {"index", "sync-with-index"}:
+    index_base = source_dir.parent / (
+        "derived-index-cache" if entry_point.id == "index-derived" else "index-cache"
+    )
+    if entry_point.id in {"index", "sync-with-index", "index-derived"}:
         index_base.mkdir(parents=True, exist_ok=True)
+
+    derived_before: dict[str, tuple[object, ...]] | None = None
+    derived_index_directory: Path | None = None
+    if entry_point.id == "index-derived":
+        from fitdocs.index.location import resolve_index_location
+
+        derived_index_directory = resolve_index_location(
+            data_root,
+            {"FITDOCS_INDEX_DIR": str(index_base)},
+            sandbox,
+        ).directory
+        derived_before = _derived_guard_snapshot(sandbox, derived_index_directory)
 
     before = _snapshot(sandbox)
     entry_point.run(data_root, source_dir)
@@ -1212,7 +1367,7 @@ def test_entry_point_writes_only_inside_the_permitted_locations(
         "write; the guard would pass vacuously over a pipeline that wrote nothing"
     )
     configured = configured_locations(data_root)
-    if entry_point.id in {"index", "sync-with-index"}:
+    if entry_point.id in {"index", "sync-with-index", "index-derived"}:
         from fitdocs.index.location import resolve_index_location
 
         resolved_index = resolve_index_location(
@@ -1221,7 +1376,282 @@ def test_entry_point_writes_only_inside_the_permitted_locations(
             sandbox,
         )
         configured += (resolved_index.directory,)
-    assert_confined(sandbox, permitted_locations(data_root, configured), before, after)
+    if entry_point.id == "index-derived":
+        assert derived_before is not None
+        assert derived_index_directory is not None
+        derived_after = _derived_guard_snapshot(sandbox, derived_index_directory)
+        _assert_derived_index_unchanged_outside_cache(derived_before, derived_after)
+    else:
+        assert_confined(
+            sandbox, permitted_locations(data_root, configured), before, after
+        )
+
+
+def test_derived_index_rejects_managed_workout_write_negative_control(
+    tmp_path: Path,
+) -> None:
+    """The derived-index entry point may write only to its external index.
+
+    The producer mutation appends to an existing managed workout on a full
+    fixture. Generic ownership confinement permits that path, so this
+    derived-only negative control must be rejected by the stricter boundary.
+    """
+    from fitdocs.index.derived.blocks import BlockProducer
+    from fitdocs.index.producer import CorpusSnapshot, Rows
+
+    derived_entry = next(
+        entry for entry in WRITING_ENTRY_POINTS if entry.id == "index-derived"
+    )
+    original_rows = BlockProducer.rows
+    marker = b"\n<!-- simulated derived producer write -->\n"
+    writes: list[tuple[Path, bytes, bytes]] = []
+
+    def append_to_existing_workout(
+        producer: BlockProducer, corpus: CorpusSnapshot
+    ) -> Rows:
+        rows = original_rows(producer, corpus)
+        workout = corpus.data_root / "workouts" / "2026-02-02-run-a.md"
+        if workout.is_file():
+            before_bytes = workout.read_bytes()
+            after_bytes = before_bytes + marker
+            workout.write_bytes(after_bytes)
+            writes.append((workout, before_bytes, after_bytes))
+        return rows
+
+    failure: AssertionError | None = None
+    with patch.object(BlockProducer, "rows", append_to_existing_workout):
+        try:
+            test_entry_point_writes_only_inside_the_permitted_locations(
+                derived_entry, tmp_path
+            )
+        except AssertionError as error:
+            failure = error
+
+    expected_path = tmp_path / "data" / "workouts" / "2026-02-02-run-a.md"
+    assert len(writes) == 1
+    assert writes[0][0] == expected_path
+    assert writes[0][2] == writes[0][1] + marker
+    assert expected_path.read_bytes() == writes[0][2]
+    assert failure is not None, "DID NOT RAISE: derived-only strict confinement"
+    assert "derived index changed data/source entries outside external index" in str(
+        failure
+    )
+    assert "data/workouts/2026-02-02-run-a.md" in str(failure)
+
+
+def _assert_derived_snapshot_rejects(
+    before: dict[str, tuple[object, ...]],
+    after: dict[str, tuple[object, ...]],
+    relative_path: str,
+) -> None:
+    with pytest.raises(
+        AssertionError,
+        match="derived index changed data/source entries outside external index",
+    ) as caught:
+        _assert_derived_index_unchanged_outside_cache(before, after)
+    assert relative_path in str(caught.value)
+
+
+def test_derived_guard_snapshot_pins_file_bytes_independent_of_mtime(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "bytes-sensitivity"
+    root.mkdir()
+    file = root / "page.md"
+    original = b"original payload"
+    replacement = b"different payload"
+    file.write_bytes(original)
+    fixed_ns = 1_700_000_000_000_000_000
+    os.utime(file, ns=(fixed_ns, fixed_ns))
+    before = _derived_guard_snapshot(root, root / "cache" / "index")
+
+    file.write_bytes(replacement)
+    os.utime(file, ns=(fixed_ns, fixed_ns))
+    after = _derived_guard_snapshot(root, root / "cache" / "index")
+
+    assert before["page.md"][1] == original
+    assert after["page.md"] == (
+        "file",
+        replacement,
+        stat.S_IMODE(file.lstat().st_mode),
+        fixed_ns,
+    )
+    assert after["page.md"][2:] == before["page.md"][2:]
+    _assert_derived_snapshot_rejects(before, after, "page.md")
+
+
+def test_derived_guard_snapshot_pins_mtime_independent_of_file_bytes(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "mtime-sensitivity"
+    root.mkdir()
+    file = root / "page.md"
+    contents = b"unchanged payload"
+    file.write_bytes(contents)
+    original_ns = 1_700_000_000_000_000_000
+    changed_ns = original_ns + 5_000_000_000
+    os.utime(file, ns=(original_ns, original_ns))
+    before = _derived_guard_snapshot(root, root / "cache" / "index")
+
+    os.utime(file, ns=(changed_ns, changed_ns))
+    after = _derived_guard_snapshot(root, root / "cache" / "index")
+
+    assert before["page.md"][1] == after["page.md"][1] == contents
+    assert before["page.md"][3] == original_ns
+    assert after["page.md"][3] == changed_ns
+    _assert_derived_snapshot_rejects(before, after, "page.md")
+
+
+def test_derived_guard_snapshot_pins_file_permissions(tmp_path: Path) -> None:
+    root = tmp_path / "permission-sensitivity"
+    root.mkdir()
+    file = root / "page.md"
+    file.write_bytes(b"same bytes")
+    file.chmod(0o600)
+    fixed_ns = 1_700_000_000_000_000_000
+    os.utime(file, ns=(fixed_ns, fixed_ns))
+    before = _derived_guard_snapshot(root, root / "cache" / "index")
+
+    file.chmod(0o640)
+    after = _derived_guard_snapshot(root, root / "cache" / "index")
+
+    assert before["page.md"][1] == after["page.md"][1] == b"same bytes"
+    assert before["page.md"][2] == 0o600
+    assert after["page.md"][2] == 0o640
+    assert before["page.md"][3] == after["page.md"][3] == fixed_ns
+    _assert_derived_snapshot_rejects(before, after, "page.md")
+
+
+def test_derived_guard_snapshot_pins_empty_directory_presence(tmp_path: Path) -> None:
+    root = tmp_path / "directory-sensitivity"
+    root.mkdir()
+    before = _derived_guard_snapshot(root, root / "cache" / "index")
+
+    empty = root / "empty"
+    empty.mkdir()
+    after = _derived_guard_snapshot(root, root / "cache" / "index")
+
+    assert after["empty"] == ("directory", stat.S_IMODE(empty.lstat().st_mode))
+    _assert_derived_snapshot_rejects(before, after, "empty")
+
+
+def test_derived_guard_snapshot_pins_directory_permissions(tmp_path: Path) -> None:
+    root = tmp_path / "directory-permission-sensitivity"
+    root.mkdir()
+    directory = root / "empty"
+    directory.mkdir()
+    directory.chmod(0o700)
+    before = _derived_guard_snapshot(root, root / "cache" / "index")
+
+    directory.chmod(0o750)
+    after = _derived_guard_snapshot(root, root / "cache" / "index")
+
+    assert before["empty"] == ("directory", 0o700)
+    assert after["empty"] == ("directory", 0o750)
+    _assert_derived_snapshot_rejects(before, after, "empty")
+
+
+def test_derived_guard_snapshot_pins_link_target_with_metadata_held(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "link-sensitivity"
+    root.mkdir()
+    (root / "first.txt").write_bytes(b"first")
+    (root / "second.txt").write_bytes(b"second")
+    link = root / "link"
+    link.symlink_to("first.txt")
+    original = link.lstat()
+    os.utime(
+        link,
+        ns=(original.st_atime_ns, original.st_mtime_ns),
+        follow_symlinks=False,
+    )
+    before = _derived_guard_snapshot(root, root / "cache" / "index")
+
+    link.unlink()
+    link.symlink_to("second.txt")
+    os.utime(
+        link,
+        ns=(original.st_atime_ns, original.st_mtime_ns),
+        follow_symlinks=False,
+    )
+    after = _derived_guard_snapshot(root, root / "cache" / "index")
+
+    assert before["link"][0] == after["link"][0] == "symlink"
+    assert before["link"][1] == "first.txt"
+    assert after["link"][1] == "second.txt"
+    assert before["link"][2:] == after["link"][2:]
+    _assert_derived_snapshot_rejects(before, after, "link")
+
+
+def test_derived_guard_snapshot_pins_distinct_special_file_kinds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    if not hasattr(os, "mkfifo") or not hasattr(socket, "AF_UNIX"):
+        pytest.skip("FIFO and Unix-domain sockets are required")
+    root = tmp_path / "special-kind-sensitivity"
+    root.mkdir()
+    special = root / "special"
+    os.mkfifo(special)
+    before = _derived_guard_snapshot(root, root / "cache" / "index")
+
+    special.unlink()
+    monkeypatch.chdir(root)
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        sock.bind("special")
+        after = _derived_guard_snapshot(root, root / "cache" / "index")
+    finally:
+        sock.close()
+
+    assert before["special"][0:2] == ("other", stat.S_IFIFO)
+    assert after["special"][0:2] == ("other", stat.S_IFSOCK)
+    _assert_derived_snapshot_rejects(before, after, "special")
+
+
+def test_derived_guard_snapshot_records_dangling_and_loop_links_without_following(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "nofollow-sensitivity"
+    root.mkdir()
+    dangling = root / "dangling"
+    dangling.symlink_to("missing-target")
+    loop = root / "loop"
+    loop.symlink_to(".")
+
+    snapshot = _derived_guard_snapshot(root, root / "cache" / "index")
+
+    assert snapshot["dangling"][0:2] == ("symlink", "missing-target")
+    assert snapshot["loop"][0:2] == ("symlink", ".")
+
+
+def test_derived_guard_snapshot_excludes_exact_cache_subtree_only(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "cache-boundary-sensitivity"
+    cache_parent = root / "cache"
+    index_directory = cache_parent / "index-data"
+    sibling = cache_parent / "index-data-neighbor"
+    index_directory.mkdir(parents=True)
+    sibling.mkdir()
+    sibling_file = sibling / "page.txt"
+    sibling_file.write_bytes(b"before")
+    before = _derived_guard_snapshot(root, index_directory)
+
+    assert "cache/index-data" not in before
+    assert "cache/index-data/page.duckdb" not in before
+    assert "cache/index-data-neighbor" in before
+    assert "cache/index-data-neighbor/page.txt" in before
+    (index_directory / "page.duckdb").write_bytes(b"cache output")
+    cache_after = _derived_guard_snapshot(root, index_directory)
+    assert cache_after == before
+
+    sibling_file.write_bytes(b"after")
+    sibling_after = _derived_guard_snapshot(root, index_directory)
+    assert sibling_after["cache/index-data-neighbor/page.txt"][1] == b"after"
+    _assert_derived_snapshot_rejects(
+        before, sibling_after, "cache/index-data-neighbor/page.txt"
+    )
 
 
 def test_derive_benchmarks_is_a_registered_writing_entry_point() -> None:
@@ -1877,3 +2307,7 @@ def test_connect_writes_only_the_credentials_file(tmp_path: Path) -> None:
         assert not key.startswith("src/"), (
             f"connect wrote under the source directory: {key}"
         )
+
+
+def test_index_derived_is_a_registered_writing_entry_point() -> None:
+    assert "index-derived" in {entry_point.id for entry_point in WRITING_ENTRY_POINTS}
