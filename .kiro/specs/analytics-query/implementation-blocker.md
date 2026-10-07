@@ -84,10 +84,14 @@ remain exact. Evidence:
 `/private/tmp/analytics-query-review-state-derived-units/verdict.md`, and
 `/private/tmp/analytics-query-parent-state-derived-completion/verification.md`.
 
-Executor3.1 remains unchecked pending final independent review. A real timer
-callback's interrupt action was observed completing after execute_statement
-returned; remaining test gaps are under finite review before Luna repair.
-No premature runtime acceptance or new human decision is required.
+Executor3.1 is accepted after independent APPROVED and fresh parent VERIFIED.
+Real timer callbacks finish their interrupt action before return; later callbacks
+no-op on every exit. All finite enum/classifier/row-cap/cleanup/message pins are
+closed: canonical9939/twooptional, fourclaimed+fournew controls RED/restoredGREEN,
+65 PINNED/2 PRESERVED/0 UNPINNED. Parent360scope/fullstatics/strict2/hash/HOMEempty
+pass. Evidence `/private/tmp/analytics-query-review-executor-message-literals/verdict.md`
+and `/private/tmp/analytics-query-parent-executor-completion/verification.md`.
+Task3.2 statement screening is now unlocked.
 
 Publication8.1 remains unchecked after independent REJECTED. Its original
 canonical reported9,586 passed/two failed/two optional skips: the required
@@ -103,8 +107,8 @@ Evidence: `/private/tmp/analytics-query-publication-repair/handoff.md` and
 
 Completion roadmap ticks await merge. The shared HealthFit root remains
 ready for both peers; a private schema2 timing cache is prepared without
-changing shared data/cache. Query timings await the completed CLI. Nine of21
-leaves are accepted (1.1/1.2/1.3/2.1/2.2/2.3/4.1/4.2/5.1); no feature GO or merge yet.
+changing shared data/cache. Query timings await the completed CLI. Ten of21
+leaves are accepted (1.1/1.2/1.3/2.1/2.2/2.3/3.1/4.1/4.2/5.1); no feature GO or merge yet.
 
 ## Historical tasks 1.3 and 2.1 preview blocker
 
