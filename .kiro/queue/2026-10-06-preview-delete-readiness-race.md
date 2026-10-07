@@ -189,6 +189,36 @@ timeout before proposing a repair. Preserve all deadlines and assertions.
 The original deletion-focused pickup recipe above is historical after
 `2c17eb3`; this initial-edit investigation is the remaining follow-up.
 
+## Historical query fixture gate and generator propagation evidence (2026-10-07)
+
+At query branch `c88c599` plus the six-file task 1.3 candidate, a serialized
+canonical run with pyenv 3.11.15, locked Zensical 0.0.65, warm isolated UV
+cache, private HOME and loopback permission failed: 9,474 passed, two failed,
+two optional actionlint skips in 325.13 s. The initial-edit marker timed out
+at `test_preview.py:1143`; the controlled second case timed out on deleted
+route 404 at `:1165`. The controller inspected the raw trace. No external
+probes ran concurrently; source hashes matched before and after. Evidence:
+`/private/tmp/analytics-query-review-round3/full-suite.txt` and `verdict.md`.
+
+Fresh debug localized a reproduced initial-edit stall after successful
+validated build and live-tree sync. At the timeout, staged/check HTML held
+the edit, the generator was alive, Python preview was polling, and live HTML
+and HTTP still held the original page. This establishes a propagation stall
+after sync, without distinguishing native watch detection from rebuild
+execution. The second diagnostic passed deletion and later stalled on fix;
+it cannot explain the original canonical deletion timeout. Diagnostic:
+two failed in 65.81 s, no source edits, deadlines/assertions preserved.
+Controller inspected `/private/tmp/analytics-query-debug1-3/REPORT.md`;
+raw trace and events are `targeted-trace.txt`, `events.jsonl` and
+`stage-summary.json` in that directory. Original fixtures' post-cleanup
+snapshots are explicitly later observations, not timeout-state evidence.
+
+At this point task 1.3 remained blocked; the debugger recommended owning docs-site
+investigation before another acceptance gate. Capture the native rebuild/watch
+state at a stalled initial edit or deletion before choosing a repair. Preserve
+20-second waits and original HTTP/content/preservation assertions. No guessed
+dependency upgrade, watcher patch or unchanged retry was made.
+
 ### Index verification resume — 2026-10-07
 
 On main landing `a413d15` with the pending 27 mypy registrations, independent

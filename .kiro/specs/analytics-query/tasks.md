@@ -388,6 +388,7 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
   - _Requirements: 1.5, 5.2_
 
 - [ ] 1.3 Create the query package, the indexed fixtures and the importer guards
+  - _Blocked: owning docs-site live-generator propagation failure after successful validation/sync; canonical initial-edit and deleted-route timeouts retained. See implementation-blocker.md and queue 2026-10-06-preview-delete-readiness-race. Independent debug recommends BLOCK_TASK; dependent tasks wait for causal owner repair._
   - **The package.** `src/fitdocs/query/__init__.py` is a docstring only: the
     read side, never imports `duckdb`, imported only by `fitdocs.cli`.
   - **`_INDEX_IMPORTERS`**: append the five query modules design.md and
@@ -1399,6 +1400,8 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 
 
 ## Implementation Notes
+
+- 2026-10-07 task 1.3 remains blocked after independent review round 3 and fresh debug1: 138 scoped tests and all meaningful claimed/reviewer mutations pass, but canonical 9,474 passed/two failed/two optional skips at distinct preview initial-edit and deleted-route stages. A focused diagnostic localized reproduced stale HTML after successful validation/sync; native cause and retained deletion mechanism are unknown. Route repair to docs-site owning queue; do not retry unchanged or weaken assertions. The creating-task annotation was corrected to 3.1 by Luna (focused test passed), without task acceptance. Candidate recovery patch and blocker evidence accompany this handoff. Module-date pin remains explicitly permitted UNPINNED; function-date pin is PINNED. Independent tasks may proceed, dependent tasks wait.
 
 - 2026-10-07 task 1.1: Luna implementer BLOCKED before edits; independent debug confirmed SPEC_CONFLICT / STOP_FOR_HUMAN. Fresh read-only aggregate probes interrupted during execute on DuckDB 1.2.0 and fetchmany on 1.5.6. A temporary raw-fetchmany mutation survived the floor aggregate assertion and failed the current-version assertion; a deterministic synthetic fetch interruption pin failed on the floor. Source restored; no query implementation or task completed. Proposed correction and evidence: `implementation-blocker.md`; existing queue item `2026-10-06-query-interruption-phase-statements`. Upstream facade remains sound; preserve floor and timer-before-execute ordering.
 - 2026-10-07 maintainer explicitly approved the bounded interruption testing correction: real aggregate cancellation may occur during execute or fetch, timer starts before either, and a separate deterministic fetch-interruption pin owns the raw-fetchmany mutation obligation. The prior blocker is cleared; runtime facade and dependency floor remain unchanged.

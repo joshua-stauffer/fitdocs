@@ -1,0 +1,1011 @@
+diff --git a/src/fitdocs/query/__init__.py b/src/fitdocs/query/__init__.py
+new file mode 100644
+index 0000000..1bf7f4a
+--- /dev/null
++++ b/src/fitdocs/query/__init__.py
+@@ -0,0 +1 @@
++"""Read-side analytics query support; imported only by the CLI."""
+diff --git a/tests/index/test_boundary.py b/tests/index/test_boundary.py
+index 472f7ec..2ec573e 100644
+--- a/tests/index/test_boundary.py
++++ b/tests/index/test_boundary.py
+@@ -33,7 +33,16 @@ _FORBIDDEN_SQL_TOKENS = (
+     "https://",
+     "PRAGMA",
+ )
+-_INDEX_IMPORTERS = frozenset({"fitdocs.cli", "fitdocs.query.statement"})
++_INDEX_IMPORTERS = frozenset(
++    {
++        "fitdocs.cli",
++        "fitdocs.query.statement",  # Created by analytics-query task 3.1.
++        "fitdocs.query.sandbox",  # Created by analytics-query task 2.2.
++        "fitdocs.query.freshness",  # Created by analytics-query task 4.1.
++        "fitdocs.query.schemaview",  # Created by analytics-query task 4.2.
++        "fitdocs.query.command",  # Created by analytics-query task 5.2.
++    }
++)
+ _REQUIRED_INDEX_IMPORTERS = frozenset({"fitdocs.cli"})
+ 
+ 
+diff --git a/tests/query/_helpers.py b/tests/query/_helpers.py
+new file mode 100644
+index 0000000..986c707
+--- /dev/null
++++ b/tests/query/_helpers.py
+@@ -0,0 +1,71 @@
++"""Shared synthetic database and indexed-root helpers for query tests."""
++
++from __future__ import annotations
++
++import shutil
++from collections.abc import Mapping
++from dataclasses import dataclass
++from datetime import date
++from pathlib import Path
++
++from fitdocs.index.location import resolve_index_location
++from fitdocs.index.registry import registered_tables
++from fitdocs.index.store import create_index, create_schema
++
++
++@dataclass(frozen=True)
++class DerivedInputs:
++    files: Mapping[str, str]
++    athlete_toml: str
++
++
++FIXTURE_TODAY = date(2021, 10, 1)
++
++
++def plain_database(path: Path, *statements: str) -> Path:
++
++    with create_index(path) as connection:
++        for statement in statements:
++            connection.execute(statement)
++    return path
++
++
++def schema_only_index(path: Path) -> Path:
++    with create_index(path) as connection:
++        create_schema(connection, registered_tables())
++    return path
++
++
++def write_fixture_inputs(
++    root: Path, base_athlete_toml: str, inputs: DerivedInputs
++) -> None:
++    resolved_root = root.resolve()
++    athlete_path = resolved_root / "athlete.toml"
++    athlete_path.write_text(base_athlete_toml + inputs.athlete_toml, encoding="utf-8")
++    for relative, contents in inputs.files.items():
++        target = (resolved_root / relative).resolve()
++        if not target.is_relative_to(resolved_root):
++            raise ValueError(f"fixture input path escapes root: {relative!r}")
++        target.parent.mkdir(parents=True, exist_ok=True)
++        target.write_text(contents, encoding="utf-8")
++
++
++def copy_indexed_root(
++    src_root: Path, src_index_dir: Path, dst: Path
++) -> tuple[Path, Path]:
++    root = dst / "root"
++    shutil.copytree(src_root, root)
++    home = dst / "home"
++    home.mkdir(parents=True, exist_ok=True)
++    location = resolve_index_location(
++        root,
++        environ={"FITDOCS_INDEX_DIR": str(dst / "index-cache")},
++        home=home,
++    )
++    location.directory.mkdir(parents=True, exist_ok=True)
++    source_database = src_index_dir / "index.duckdb"
++    shutil.copy2(source_database, location.database)
++    source_wal = src_index_dir / "index.duckdb.wal"
++    if source_wal.exists():
++        shutil.copy2(source_wal, location.wal)
++    return root, location.directory
+diff --git a/tests/query/conftest.py b/tests/query/conftest.py
+index 2d2dbb4..499469c 100644
+--- a/tests/query/conftest.py
++++ b/tests/query/conftest.py
+@@ -2,9 +2,24 @@
+ 
+ from __future__ import annotations
+ 
++import os
++from collections.abc import Iterator
+ from pathlib import Path
+ 
+ import pytest
++from typer.testing import CliRunner
++
++from fitdocs.cli import app
++from fitdocs.index.location import resolve_index_location
++from tests.fixtures import builder
++from tests.query._helpers import (
++    FIXTURE_TODAY,
++    DerivedInputs,
++    write_fixture_inputs,
++)
++from tests.query._helpers import (
++    copy_indexed_root as copy_indexed_root_helper,
++)
+ 
+ _REAL_HOME = Path.home()
+ 
+@@ -30,3 +45,112 @@ def home_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> HomeDirectory:
+     home.mkdir()
+     monkeypatch.setenv("HOME", str(home))
+     return HomeDirectory(home)
++
++
++@pytest.fixture(scope="module")
++def derived_inputs() -> DerivedInputs:
++    """Append point for analytics-derived fixture inputs."""
++    return DerivedInputs(files={}, athlete_toml="")
++
++
++@pytest.fixture(scope="module")
++def indexed_root(
++    tmp_path_factory: pytest.TempPathFactory, derived_inputs: DerivedInputs
++) -> Iterator[tuple[Path, Path]]:
++    base = tmp_path_factory.mktemp("query-indexed")
++    root = base / "data"
++    root.mkdir()
++    home = base / "home"
++    home.mkdir()
++    index_base = base / "index-cache"
++    athlete = """profile_version = 2
++ftp_watts = 250
++resting_hr_bpm = 45
++max_hr_bpm = 190
++hr_zones = [100, 120, 140, 160]
++power_zones = [100, 150, 200, 250]
++pace_zones = [240, 300, 360, 420]
++
++[[benchmarks.run.ftp_watts]]
++value = 250
++measured_on = 2021-09-01
++[[benchmarks.run.lthr_bpm]]
++value = 165
++measured_on = 2021-09-01
++[[benchmarks.run.threshold_pace_s_per_km]]
++value = 300
++measured_on = 2021-09-01
++[[benchmarks.ride.ftp_watts]]
++value = 250
++measured_on = 2021-09-01
++[[benchmarks.ride.lthr_bpm]]
++value = 165
++measured_on = 2021-09-01
++[[benchmarks.athlete.max_hr_bpm]]
++value = 190
++measured_on = 2021-09-01
++[[benchmarks.athlete.resting_hr_bpm]]
++value = 45
++measured_on = 2021-09-01
++"""
++    with pytest.MonkeyPatch.context() as isolated:
++        isolated.setenv("HOME", str(home))
++        isolated.setenv("FITDOCS_INDEX_DIR", str(index_base))
++        isolated.setenv("XDG_CACHE_HOME", str(base / "user-xdg"))
++        isolated.delenv("XDG_CACHE_HOME", raising=False)
++        assert "XDG_CACHE_HOME" not in os.environ
++        import fitdocs.cli as cli_module
++
++        isolated.setattr(cli_module, "_today", lambda: FIXTURE_TODAY)
++        (root / "fitdocs.toml").write_text(
++            "[tiles]\nenabled = false\n"
++            '[load]\ndefault_calculator = "threshold"\n'
++            "benchmark_staleness_days = 4000\n"
++            "[load.sufficiency]\nmin_duration_s = 1\n",
++            encoding="utf-8",
++        )
++        write_fixture_inputs(root, athlete, derived_inputs)
++        source = base / "source"
++        source.mkdir()
++        (source / "run.fit").write_bytes(builder.run_fit_bytes())
++        (source / "ride.fit").write_bytes(builder.ride_fit_bytes())
++        synced = CliRunner().invoke(
++            app, ["sync", str(source), "--out", str(root), "--no-prompt"]
++        )
++        assert synced.exit_code == 0, synced.output
++        pages = tuple((root / "workouts").glob("*.md"))
++        tagged = pages[0]
++        tag = (
++            "effort: race\n"
++            "effort_distance_m: 42195\n"
++            "effort_time_s: 12345\n"
++            'effort_event: "Fixture Marathon"\n'
++        )
++        original = tagged.read_text(encoding="utf-8")
++        assert "effort:" not in original
++        tagged.write_text(original.replace("---\n", "---\n" + tag, 1), encoding="utf-8")
++        indexed = CliRunner().invoke(app, ["index", "--out", str(root)])
++        assert indexed.exit_code == 0, indexed.output
++        location = resolve_index_location(root, os.environ, home)
++        yield root, location.directory
++        assert tuple(home.iterdir()) == ()
++
++
++@pytest.fixture
++def use_indexed_root(
++    indexed_root: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
++) -> tuple[Path, Path]:
++    root, index_dir = indexed_root
++    monkeypatch.setenv("FITDOCS_INDEX_DIR", str(index_dir.parent))
++    import fitdocs.cli as cli_module
++
++    monkeypatch.setattr(cli_module, "_today", lambda: FIXTURE_TODAY)
++    return root, index_dir
++
++
++@pytest.fixture
++def copy_indexed_root(
++    indexed_root: tuple[Path, Path], tmp_path: Path
++) -> tuple[Path, Path]:
++    root, index_dir = indexed_root
++    return copy_indexed_root_helper(root, index_dir, tmp_path)
+diff --git a/tests/query/test_fixtures.py b/tests/query/test_fixtures.py
+index 0f68e9a..d8f82f8 100644
+--- a/tests/query/test_fixtures.py
++++ b/tests/query/test_fixtures.py
+@@ -1,9 +1,28 @@
+ """Self-tests for the query test fixtures."""
+ 
++from __future__ import annotations
++
++import os
++from datetime import date
+ from pathlib import Path
+ 
+ import pytest
+ 
++from fitdocs.athlete import load_athlete_inputs
++from fitdocs.index.corpus import scan_workout_pages
++from fitdocs.index.location import resolve_index_location
++from fitdocs.index.registry import registered_tables
++from fitdocs.index.store import IndexOpenError, open_index, read_bookkeeping
++from tests.query._helpers import (
++    FIXTURE_TODAY,
++    DerivedInputs,
++    plain_database,
++    schema_only_index,
++    write_fixture_inputs,
++)
++from tests.query._helpers import (
++    copy_indexed_root as copy_indexed_root_helper,
++)
+ from tests.query.conftest import _REAL_HOME, HomeDirectory
+ 
+ 
+@@ -39,3 +58,239 @@ def test_assert_untouched_tracks_contents(
+     assert tuple(home_dir.path.iterdir()) == (entry,)
+     with pytest.raises(AssertionError):
+         home_dir.assert_untouched()
++
++
++def test_indexed_root_has_multi_page_nonempty_core_data(
++    indexed_root: tuple[Path, Path], home_dir: HomeDirectory
++) -> None:
++    _, index_dir = indexed_root
++    assert index_dir.resolve() != _REAL_HOME and not index_dir.resolve().is_relative_to(
++        _REAL_HOME
++    )
++    database = index_dir / "index.duckdb"
++    with open_index(database, read_only=True) as connection:
++        page_count = connection.execute("SELECT count(*) FROM pages").fetchall()[0][0]
++        heart_zone_count = connection.execute(
++            "SELECT count(*) FROM zone_times WHERE channel = 'heart_rate'"
++        ).fetchall()[0][0]
++        selected_count = connection.execute(
++            "SELECT count(*) FROM loads WHERE selected"
++        ).fetchall()[0][0]
++        effort_rows = connection.execute(
++            "SELECT effort, effort_distance_m, effort_time_s, effort_event "
++            "FROM pages WHERE effort IS NOT NULL"
++        ).fetchall()
++        dates = connection.execute("SELECT date FROM pages").fetchall()
++    assert isinstance(page_count, int) and page_count >= 2
++    assert isinstance(heart_zone_count, int) and heart_zone_count > 0
++    assert isinstance(selected_count, int) and selected_count > 0
++    assert len(effort_rows) == 1
++    tagged = effort_rows[0]
++    assert len({str(value) for value in tagged}) == len(tagged)
++    assert tagged == ("race", 42195.0, 12345.0, "Fixture Marathon")
++    assert all(isinstance(item[0], date) and item[0] < FIXTURE_TODAY for item in dates)
++    home_dir.assert_untouched()
++
++
++def test_write_fixture_inputs_preserves_base_keys_and_appends_benchmarks(
++    tmp_path: Path,
++) -> None:
++    base = """profile_version = 2
++ftp_watts = 250
++resting_hr_bpm = 45
++max_hr_bpm = 190
++hr_zones = [100, 120, 140, 160]
++power_zones = [100, 150, 200, 250]
++pace_zones = [240, 300, 360, 420]
++"""
++    root = tmp_path / "root"
++    root.mkdir()
++    inputs = DerivedInputs(
++        files={"plans/plan.toml": "name = 'synthetic'\n"},
++        athlete_toml="\n[benchmarks]\nexample = 77\n",
++    )
++    write_fixture_inputs(root, base, inputs)
++    loaded = load_athlete_inputs(root)
++    assert loaded is not None
++    assert loaded.ftp_watts == 250
++    assert loaded.resting_hr_bpm == 45
++    assert loaded.max_hr_bpm == 190
++    assert loaded.hr_zones is not None
++    assert loaded.power_zones is not None
++    assert loaded.pace_zones is not None
++    assert "[benchmarks]" in (root / "athlete.toml").read_text(encoding="utf-8")
++    assert (root / "plans" / "plan.toml").read_text(
++        encoding="utf-8"
++    ) == "name = 'synthetic'\n"
++
++
++def test_write_fixture_inputs_refuses_escape_and_symlink_escape(tmp_path: Path) -> None:
++    root = tmp_path / "root"
++    root.mkdir()
++    outside = tmp_path / "outside.txt"
++    with pytest.raises(ValueError):
++        write_fixture_inputs(
++            root, "profile_version = 2\n", DerivedInputs({"../outside.txt": "x"}, "")
++        )
++    assert not outside.exists()
++    linked = root / "linked"
++    linked.symlink_to(tmp_path, target_is_directory=True)
++    with pytest.raises(ValueError):
++        write_fixture_inputs(
++            root,
++            "profile_version = 2\n",
++            DerivedInputs({"linked/escaped.txt": "x"}, ""),
++        )
++    assert not outside.exists()
++    assert not (linked / "escaped.txt").exists()
++
++
++def test_plain_database_runs_facade_statements_without_bookkeeping(
++    tmp_path: Path, home_dir: HomeDirectory
++) -> None:
++    database = plain_database(
++        tmp_path / "plain.duckdb",
++        "CREATE TABLE sample (value INTEGER)",
++        "INSERT INTO sample VALUES (19), (23)",
++    )
++    with open_index(database, read_only=True) as connection:
++        assert connection.execute(
++            "SELECT value FROM sample ORDER BY value"
++        ).fetchall() == [
++            (19,),
++            (23,),
++        ]
++        assert read_bookkeeping(connection) is None
++    home_dir.assert_untouched()
++
++
++def test_schema_only_index_has_registered_empty_tables(
++    tmp_path: Path, home_dir: HomeDirectory
++) -> None:
++    database = schema_only_index(tmp_path / "schema.duckdb")
++    tables = registered_tables()
++    assert len(tables) >= 10
++    with open_index(database, read_only=True) as connection:
++        names = {
++            row[0]
++            for row in connection.execute(
++                "SELECT table_name FROM information_schema.tables "
++                "WHERE table_schema = 'main'"
++            ).fetchall()
++        }
++        assert {table.name for table in tables} <= names
++        counts = {
++            table.name: connection.execute(
++                f'SELECT count(*) FROM "{table.name}"'
++            ).fetchall()[0][0]
++            for table in tables
++        }
++    assert set(counts.values()) == {0}
++    home_dir.assert_untouched()
++
++
++def test_copy_indexed_root_copies_wal_when_present(
++    indexed_root: tuple[Path, Path], tmp_path: Path
++) -> None:
++    source_root, source_index_dir = indexed_root
++    source_with_wal = tmp_path / "source-index"
++    source_with_wal.mkdir()
++    # Copy a valid database and a deterministic sidecar from an isolated input.
++    source_db = source_with_wal / "index.duckdb"
++    source_db.write_bytes((source_index_dir / "index.duckdb").read_bytes())
++    wal_payload = b"fixture-wal-sidecar"
++    (source_with_wal / "index.duckdb.wal").write_bytes(wal_payload)
++    _, copied_index_dir = copy_indexed_root_helper(
++        source_root, source_with_wal, tmp_path / "copy-with-wal"
++    )
++    assert (copied_index_dir / "index.duckdb.wal").read_bytes() == wal_payload
++
++
++def test_copy_indexed_root_preserves_path_key_and_page_drift(
++    indexed_root: tuple[Path, Path], tmp_path: Path, home_dir: HomeDirectory
++) -> None:
++    source_root, source_index_dir = indexed_root
++    before = resolve_index_location(
++        source_root, {"FITDOCS_INDEX_DIR": str(source_index_dir.parent)}, tmp_path
++    )
++    copied_root, copied_index_dir = copy_indexed_root_helper(
++        source_root, source_index_dir, tmp_path / "copy"
++    )
++    after = resolve_index_location(
++        copied_root,
++        {"FITDOCS_INDEX_DIR": str(copied_index_dir.parent)},
++        copied_index_dir.parent.parent / "home",
++    )
++    assert before.database != after.database
++    try:
++        connection_context = open_index(after.database, read_only=True)
++    except IndexOpenError as error:
++        pytest.fail(f"copied index returned NOT_BUILT: {error.fault.kind.value}")
++    with connection_context as connection:
++        bookkeeping = read_bookkeeping(connection)
++        assert bookkeeping is not None
++    snapshot = scan_workout_pages(copied_root)
++    assert len(bookkeeping.pages) >= 2
++    assert {page.page_key for page in snapshot.pages} == set(bookkeeping.pages)
++    assert all(
++        page.path == bookkeeping.pages[page.page_key].path
++        and page.document_fingerprint
++        == bookkeeping.pages[page.page_key].document_fingerprint
++        for page in snapshot.pages
++    )
++    home_dir.assert_untouched()
++
++
++def test_use_indexed_root_fixture_overwrites_wrong_cache_and_today(
++    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    request.getfixturevalue("indexed_root")
++    import fitdocs.cli as cli_module
++
++    wrong_cache = Path("/tmp/not-the-indexed-fixture")
++    wrong_today = date(2022, 1, 1)
++    monkeypatch.setenv("FITDOCS_INDEX_DIR", str(wrong_cache))
++    monkeypatch.setattr(cli_module, "_today", lambda: wrong_today)
++    assert Path(os.environ["FITDOCS_INDEX_DIR"]) == wrong_cache
++    assert cli_module._today() == wrong_today
++    assert wrong_today != FIXTURE_TODAY
++
++    root, index_dir = request.getfixturevalue("use_indexed_root")
++
++    assert Path(os.environ["FITDOCS_INDEX_DIR"]) == index_dir.parent
++    assert cli_module._today() == FIXTURE_TODAY
++    assert (root / "workouts").is_dir()
++
++
++def test_copy_indexed_root_fixture_returns_independent_relocated_copy(
++    request: pytest.FixtureRequest,
++    indexed_root: tuple[Path, Path],
++    tmp_path: Path,
++    home_dir: HomeDirectory,
++) -> None:
++    source_root, source_index_dir = indexed_root
++    copied_root, copied_index_dir = request.getfixturevalue("copy_indexed_root")
++
++    assert copied_root != source_root
++    assert copied_index_dir != source_index_dir
++    expected_location = resolve_index_location(
++        tmp_path / "root",
++        {"FITDOCS_INDEX_DIR": str(tmp_path / "index-cache")},
++        tmp_path / "home",
++    )
++    assert copied_root == tmp_path / "root"
++    assert copied_index_dir == expected_location.directory
++    assert copied_root.is_dir() and copied_index_dir.is_dir()
++    assert (copied_index_dir / "index.duckdb").is_file()
++    assert (copied_root / "fitdocs.toml").read_bytes() == (
++        source_root / "fitdocs.toml"
++    ).read_bytes()
++    assert (copied_index_dir / "index.duckdb").read_bytes() == (
++        source_index_dir / "index.duckdb"
++    ).read_bytes()
++
++    with open_index(copied_index_dir / "index.duckdb", read_only=True) as connection:
++        bookkeeping = read_bookkeeping(connection)
++    assert bookkeeping is not None
++    assert len(bookkeeping.pages) >= 2
++    home_dir.assert_untouched()
+diff --git a/tests/query/test_boundary.py b/tests/query/test_boundary.py
+new file mode 100644
+index 0000000..8ef6992
+--- /dev/null
++++ b/tests/query/test_boundary.py
+@@ -0,0 +1,484 @@
++"""Read-side package and import-boundary guards for analytics-query task 1.3."""
++
++from __future__ import annotations
++
++import ast
++import importlib.util
++from pathlib import Path
++
++import pytest
++
++from tests.index.test_boundary import _INDEX_IMPORTERS
++
++_REPO_ROOT = Path(__file__).parents[2]
++_SOURCE_ROOT = _REPO_ROOT / "src" / "fitdocs"
++_QUERY_IMPORTERS = frozenset({"fitdocs.cli"})
++
++
++def _source_module(path: Path) -> str:
++    relative = path.relative_to(_REPO_ROOT / "src").with_suffix("")
++    parts = list(relative.parts)
++    return ".".join(parts)
++
++
++def _import_targets(source: str, module: str) -> set[str]:
++    tree = ast.parse(source)
++    targets: set[str] = set()
++    importlib_aliases: set[str] = set()
++    import_module_aliases: set[str] = set()
++    builtin_module_aliases: set[str] = set()
++    builtin_import_aliases: set[str] = set()
++    relative_import_names: set[str] = set()
++    for node in ast.walk(tree):
++        if isinstance(node, ast.Import):
++            for alias in node.names:
++                if alias.name == "importlib" or (
++                    alias.name.startswith("importlib.") and alias.asname is None
++                ):
++                    importlib_aliases.add(alias.asname or "importlib")
++                elif alias.name == "builtins":
++                    builtin_module_aliases.add(alias.asname or "builtins")
++        elif (
++            isinstance(node, ast.ImportFrom)
++            and node.level == 0
++            and node.module == "importlib"
++        ):
++            for alias in node.names:
++                if alias.name == "import_module":
++                    import_module_aliases.add(alias.asname or alias.name)
++        elif (
++            isinstance(node, ast.ImportFrom)
++            and node.level == 0
++            and node.module == "builtins"
++        ):
++            for alias in node.names:
++                if alias.name == "__import__":
++                    builtin_import_aliases.add(alias.asname or alias.name)
++        elif isinstance(node, ast.ImportFrom) and node.level > 0:
++            relative_import_names.update(
++                alias.asname or alias.name for alias in node.names
++            )
++    for node in ast.walk(tree):
++        if isinstance(node, ast.Import):
++            targets.update(alias.name for alias in node.names)
++        elif isinstance(node, ast.ImportFrom):
++            if node.level:
++                package = (
++                    module.removesuffix(".__init__")
++                    if module.endswith(".__init__")
++                    else module.rpartition(".")[0]
++                )
++                try:
++                    imported_from = importlib.util.resolve_name(
++                        "." * node.level + (node.module or ""), package
++                    )
++                except (ImportError, ValueError):
++                    continue
++            else:
++                imported_from = node.module or ""
++            if imported_from:
++                targets.add(imported_from)
++            targets.update(
++                f"{imported_from}.{alias.name}"
++                for alias in node.names
++                if imported_from and alias.name != "*"
++            )
++        elif isinstance(node, ast.Call):
++            target = node.func
++            is_builtin_import = (
++                isinstance(target, ast.Name)
++                and (
++                    target.id in builtin_import_aliases
++                    or (
++                        target.id == "__import__"
++                        and target.id not in relative_import_names
++                    )
++                )
++            ) or (
++                isinstance(target, ast.Attribute)
++                and target.attr == "__import__"
++                and isinstance(target.value, ast.Name)
++                and target.value.id in builtin_module_aliases
++            )
++            is_importlib_import = (
++                isinstance(target, ast.Name) and target.id in import_module_aliases
++            ) or (
++                isinstance(target, ast.Attribute)
++                and target.attr == "import_module"
++                and isinstance(target.value, ast.Name)
++                and target.value.id in importlib_aliases
++            )
++            dynamic = is_builtin_import or is_importlib_import
++            module_name = (
++                node.args[0]
++                if node.args
++                else next(
++                    (
++                        keyword.value
++                        for keyword in node.keywords
++                        if keyword.arg == "name"
++                    ),
++                    None,
++                )
++            )
++            if (
++                dynamic
++                and isinstance(module_name, ast.Constant)
++                and isinstance(module_name.value, str)
++            ):
++                resolved_name = module_name.value
++                if is_importlib_import and resolved_name.startswith("."):
++                    package_node = (
++                        node.args[1]
++                        if len(node.args) > 1
++                        else next(
++                            (
++                                keyword.value
++                                for keyword in node.keywords
++                                if keyword.arg == "package"
++                            ),
++                            None,
++                        )
++                    )
++                    if isinstance(package_node, ast.Constant) and isinstance(
++                        package_node.value, str
++                    ):
++                        try:
++                            resolved_name = importlib.util.resolve_name(
++                                resolved_name, package_node.value
++                            )
++                        except (ImportError, ValueError):
++                            continue
++                elif is_builtin_import:
++                    level_node = (
++                        node.args[4]
++                        if len(node.args) > 4
++                        else next(
++                            (
++                                keyword.value
++                                for keyword in node.keywords
++                                if keyword.arg == "level"
++                            ),
++                            None,
++                        )
++                    )
++                    if (
++                        isinstance(level_node, ast.Constant)
++                        and isinstance(level_node.value, int)
++                        and level_node.value > 0
++                    ):
++                        package = (
++                            module.removesuffix(".__init__")
++                            if module.endswith(".__init__")
++                            else module.rpartition(".")[0]
++                        )
++                        try:
++                            resolved_name = importlib.util.resolve_name(
++                                "." * level_node.value + resolved_name, package
++                            )
++                        except (ImportError, ValueError):
++                            continue
++                targets.add(resolved_name)
++                if is_builtin_import:
++                    fromlist_node = (
++                        node.args[3]
++                        if len(node.args) > 3
++                        else next(
++                            (
++                                keyword.value
++                                for keyword in node.keywords
++                                if keyword.arg == "fromlist"
++                            ),
++                            None,
++                        )
++                    )
++                    if isinstance(fromlist_node, (ast.List, ast.Tuple)):
++                        targets.update(
++                            f"{resolved_name}.{item.value}"
++                            for item in fromlist_node.elts
++                            if isinstance(item, ast.Constant)
++                            and isinstance(item.value, str)
++                        )
++    return targets
++
++
++def _unlisted_query_importers(sources: dict[str, str]) -> set[str]:
++    return {
++        module
++        for module, source in sources.items()
++        if any(
++            target == "fitdocs.query" or target.startswith("fitdocs.query.")
++            for target in _import_targets(source, module)
++        )
++        and module not in _QUERY_IMPORTERS
++        and module != "fitdocs.query"
++        and not module.startswith("fitdocs.query.")
++    }
++
++
++def test_query_modules_are_registered_as_index_importers() -> None:
++    expected = {
++        "fitdocs.query.sandbox",
++        "fitdocs.query.statement",
++        "fitdocs.query.freshness",
++        "fitdocs.query.schemaview",
++        "fitdocs.query.command",
++    }
++    assert expected <= _INDEX_IMPORTERS
++
++
++def test_query_importers_are_confined_and_source_walk_is_live() -> None:
++    files = tuple(_SOURCE_ROOT.rglob("*.py"))
++    assert len(files) > 100
++    sources = {
++        _source_module(path): path.read_text(encoding="utf-8")
++        for path in files
++        if not path.is_relative_to(_SOURCE_ROOT / "query")
++    }
++    assert _unlisted_query_importers(sources) == set()
++
++
++def test_query_importer_guard_detects_all_import_forms() -> None:
++    forms = (
++        "import fitdocs.query.sandbox",
++        "import fitdocs.query.command as query_command",
++        "from fitdocs.query import statement",
++        "from fitdocs import query as query_package",
++        "import importlib as loader\nloader.import_module('fitdocs.query.freshness')",
++        "from importlib import import_module as load\n"
++        "load(name='fitdocs.query.schemaview')",
++        "__import__('fitdocs.query.command')",
++        "__import__(name='fitdocs.query.statement')",
++    )
++    for source in forms:
++        assert _unlisted_query_importers({"fitdocs.history.engine": source}) == {
++            "fitdocs.history.engine"
++        }
++    assert (
++        _unlisted_query_importers(
++            {"fitdocs.cli": "from fitdocs.query.command import run_query"}
++        )
++        == set()
++    )
++    assert _unlisted_query_importers(
++        {
++            "fitdocs.history.engine": (
++                "import importlib\nimportlib.import_module('fitdocs.query')"
++            )
++        }
++    ) == {"fitdocs.history.engine"}
++    assert _unlisted_query_importers(
++        {
++            "fitdocs.history.engine": "import importlib.util\n"
++            "importlib.import_module('fitdocs.query')"
++        }
++    ) == {"fitdocs.history.engine"}
++    assert (
++        _unlisted_query_importers(
++            {"fitdocs.history.engine": "label = 'fitdocs.query.command'"}
++        )
++        == set()
++    )
++    assert (
++        _unlisted_query_importers(
++            {
++                "fitdocs.history.engine": (
++                    "def import_module(name): pass\nimport_module('fitdocs.query')"
++                )
++            }
++        )
++        == set()
++    )
++    assert (
++        _unlisted_query_importers(
++            {"fitdocs.query.command": "from fitdocs.query.statement import run"}
++        )
++        == set()
++    )
++
++
++def test_source_module_names_regular_and_package_files() -> None:
++    assert _source_module(_REPO_ROOT / "src/fitdocs/cli.py") == "fitdocs.cli"
++    assert (
++        _source_module(_REPO_ROOT / "src/fitdocs/history/__init__.py")
++        == "fitdocs.history.__init__"
++    )
++    assert (
++        _source_module(_REPO_ROOT / "src/fitdocs/history/engine.py")
++        == "fitdocs.history.engine"
++    )
++
++
++@pytest.mark.parametrize(
++    ("module", "source"),
++    [
++        ("fitdocs.history.engine", "from .. import query"),
++        ("fitdocs.history.engine", "from .. import query as query_package"),
++        ("fitdocs.history.engine", "from ..query import command"),
++        ("fitdocs.history.__init__", "from .. import query"),
++        ("fitdocs.history.__init__", "from ..query import command as run_query"),
++    ],
++    ids=[
++        "ordinary-from-root",
++        "ordinary-from-root-alias",
++        "ordinary-from-submodule",
++        "package-init-from-root",
++        "package-init-from-submodule-alias",
++    ],
++)
++def test_query_importer_guard_resolves_relative_imports(
++    module: str, source: str
++) -> None:
++    assert _unlisted_query_importers({module: source}) == {module}
++
++
++@pytest.mark.parametrize(
++    ("module", "source", "expected"),
++    [
++        ("fitdocs.history.engine", "from . import query", set()),
++        (
++            "fitdocs.queryevil",
++            "from fitdocs.query.command import run_query",
++            {"fitdocs.queryevil"},
++        ),
++        (
++            "fitdocs.query.helpers",
++            "from fitdocs.query.command import run_query",
++            set(),
++        ),
++    ],
++    ids=["local-relative-query", "near-prefix-is-external", "query-child-exempt"],
++)
++def test_query_importer_guard_classifies_namespace_edges(
++    module: str, source: str, expected: set[str]
++) -> None:
++    assert _unlisted_query_importers({module: source}) == expected
++
++
++def test_query_importer_guard_rejects_query_sibling_target() -> None:
++    assert (
++        _unlisted_query_importers(
++            {"fitdocs.history.engine": "import fitdocs.queryevil"}
++        )
++        == set()
++    )
++
++
++@pytest.mark.parametrize(
++    "source",
++    ["from fitdocs.query import *"],
++    ids=["wildcard"],
++)
++def test_query_importer_guard_detects_wildcard_from_import(source: str) -> None:
++    assert _unlisted_query_importers({"fitdocs.history.engine": source}) == {
++        "fitdocs.history.engine"
++    }
++
++
++@pytest.mark.parametrize(
++    "source",
++    [
++        "from .importlib import import_module\nimport_module('fitdocs.query')",
++        "from .importlib import import_module as load\nload('fitdocs.query')",
++        "from .builtins import __import__\n__import__('fitdocs.query')",
++        "from .builtins import __import__ as load\nload('fitdocs.query')",
++    ],
++    ids=[
++        "relative-importlib-no-alias",
++        "relative-importlib-alias",
++        "relative-builtins-no-alias",
++        "relative-builtins-alias",
++    ],
++)
++def test_query_importer_guard_ignores_relative_stdlib_name_bindings(
++    source: str,
++) -> None:
++    assert _unlisted_query_importers({"fitdocs.history.engine": source}) == set()
++
++
++def test_query_importer_guard_ignores_aliased_importlib_submodule() -> None:
++    assert (
++        _unlisted_query_importers(
++            {
++                "fitdocs.history.engine": "import importlib.util as loader\n"
++                "loader.import_module('fitdocs.query')"
++            }
++        )
++        == set()
++    )
++
++
++@pytest.mark.parametrize(
++    "source",
++    [
++        "import importlib\nimportlib.import_module('.query', 'fitdocs')",
++        "import importlib as loader\nloader.import_module('.query', package='fitdocs')",
++        "from importlib import import_module as load\nload('.query', 'fitdocs')",
++        "__import__('query', globals(), locals(), [], 2)",
++        "__import__('query', globals(), locals(), [], level=2)",
++        "__import__('fitdocs', globals(), locals(), ('query',))",
++        "__import__('fitdocs', globals(), locals(), ['query'])",
++        "__import__('fitdocs', globals(), locals(), fromlist=('query',))",
++        "__import__('fitdocs', fromlist=['query'])",
++        "from builtins import __import__ as load\nload('fitdocs.query')",
++        "import builtins as loader\nloader.__import__('fitdocs.query')",
++        "from builtins import __import__ as load\n"
++        "load('query', globals(), locals(), [], 2)",
++        "import builtins as loader\nloader.__import__('query', level=2)",
++    ],
++    ids=[
++        "import-module-positional-package",
++        "import-module-keyword-package",
++        "import-module-aliased-package",
++        "dunder-import-positional-level",
++        "dunder-import-keyword-level",
++        "dunder-import-tuple-fromlist",
++        "dunder-import-list-fromlist",
++        "dunder-import-keyword-tuple-fromlist",
++        "dunder-import-keyword-list-fromlist",
++        "dunder-import-from-builtin-alias",
++        "dunder-import-builtins-module-alias",
++        "dunder-import-from-builtin-alias-relative",
++        "dunder-import-builtins-module-alias-relative",
++    ],
++)
++def test_query_importer_guard_resolves_literal_relative_dynamic_imports(
++    source: str,
++) -> None:
++    assert _unlisted_query_importers({"fitdocs.history.engine": source}) == {
++        "fitdocs.history.engine"
++    }
++
++
++@pytest.mark.parametrize(
++    "source",
++    [
++        "import importlib\nimportlib.import_module('.query', 'fitdocs.history')",
++        "__import__('query', globals(), locals(), [], 1)",
++        "__import__('fitdocs.history', globals(), locals(), ('query',))",
++    ],
++    ids=[
++        "import-module-local-relative",
++        "dunder-import-local-relative",
++        "dunder-import-fromlist-local-relative",
++    ],
++)
++def test_query_importer_guard_allows_local_relative_dynamic_imports(
++    source: str,
++) -> None:
++    assert _unlisted_query_importers({"fitdocs.history.engine": source}) == set()
++
++
++@pytest.mark.parametrize(
++    "source",
++    [
++        "def load(name):\n    return None\nload('fitdocs.query')",
++        "class loader:\n    def __import__(self, name):\n        return None\n"
++        "loader.__import__('fitdocs.query')",
++    ],
++    ids=["local-function", "local-object-method"],
++)
++def test_query_importer_guard_ignores_unbound_import_call_names(
++    source: str,
++) -> None:
++    assert _unlisted_query_importers({"fitdocs.history.engine": source}) == set()

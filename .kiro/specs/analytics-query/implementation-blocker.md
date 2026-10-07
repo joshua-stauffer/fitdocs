@@ -1,4 +1,39 @@
-# Task 1.1 interruption phase contract: correction approved
+# Task 1.3: upstream preview propagation blocks acceptance
+
+Task 1.3 remains unchecked. Its synthetic fixture and bounded importer guard
+passed scoped verification (138 tests) and independent discrimination review
+(64 claims, four new reviewer mutations; only the explicitly permitted
+module-date pin remains UNPINNED). Review round 3 rejected an incorrect
+statement creating-task annotation and the mandatory canonical regression
+gate: 9,474 passed, two failed, two optional actionlint skips in 325.13 s.
+The first live-preview test timed out on the initial edit at
+`tests/sitebuild/test_preview.py:1143`; the second timed out waiting for a
+deleted-route 404 at `:1165`. These are distinct stages. Candidate sources
+were restored and hash-identical, and no external probes ran during the gate.
+
+Fresh independent debugging returned `NEXT_ACTION: BLOCK_TASK`. A focused
+diagnostic reproduced an initial-edit timeout after validation and sync had
+completed: the generator process remained alive while generated HTML and HTTP
+responses stayed stale. The native mechanism remains unknown. The diagnostic
+second case passed deletion, then stalled on a later fix; it does not explain
+the retained canonical deletion failure. No native repair, timeout weakening
+or unchanged full-suite retry is justified by these observations.
+
+Route the generator propagation investigation to the owning docs-site
+boundary through `.kiro/queue/2026-10-06-preview-delete-readiness-race.md`.
+After an independently verified causal owner repair, verify both exact
+preview tests, sitebuild checks, the corrected task scope, and one serialized
+canonical suite. Independent query tasks may proceed; tasks depending on
+1.3 wait. Personal HealthFit data remains ready outside Git for both peers;
+query timings still require the completed query command.
+
+Private evidence: `/private/tmp/analytics-query-review-round3/verdict.md`,
+`full-suite.txt`, `independent-exhaustive-sweep.json`, and
+`/private/tmp/analytics-query-debug1-3/REPORT.md`, `events.jsonl`,
+`stage-summary.json`, `source-integrity.json`. The original failed canonical
+and failed diagnostic (two failures in 65.81 s) remain failed evidence.
+
+## Historical task 1.1 interruption phase contract: correction approved
 
 The Luna implementer made no edits and returned BLOCKED. Independent
 `kiro-debug` returned SPEC_CONFLICT / STOP_FOR_HUMAN. At that initial block,
