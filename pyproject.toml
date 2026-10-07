@@ -218,6 +218,27 @@ files = [
     "tests/index/test_schema_version.py",
     "tests/index/test_store.py",
     "tests/test_sync_handoff.py",
+    # analytics-derived task 6.3: type-check every test and fixture module
+    # added by this feature.
+    "tests/history/test_compute_seam.py",
+    "tests/index/derived/__init__.py",
+    "tests/index/derived/conftest.py",
+    "tests/index/derived/test_benchmark_producer.py",
+    "tests/index/derived/test_block_producer.py",
+    "tests/index/derived/test_boundary.py",
+    "tests/index/derived/test_composed_and_upgrade.py",
+    "tests/index/derived/test_determinism.py",
+    "tests/index/derived/test_fixtures.py",
+    "tests/index/derived/test_inputs.py",
+    "tests/index/derived/test_load_series_producer.py",
+    "tests/index/derived/test_mean_max_producer.py",
+    "tests/index/derived/test_preserved.py",
+    "tests/index/derived/test_published.py",
+    "tests/index/derived/test_refresh.py",
+    "tests/index/derived/test_registration.py",
+    "tests/metrics/test_mean_max.py",
+    "tests/metrics/test_mean_max_sources.py",
+    "tests/plans/test_resolve_seam.py",
 ]
 
 [tool.pytest.ini_options]
