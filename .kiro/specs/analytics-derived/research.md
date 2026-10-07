@@ -543,3 +543,54 @@ of each is kept below its status for the record.
   date).
 - `.kiro/specs/fit-ingest/requirements.md` Req 15, 16: the provenance regime
   the mean-max constants follow.
+
+## Measurements
+
+| Source (metadata label) | Files | `step <= 0` | `0 < step <= 1` | `1 < step <= 5` | `5 < step <= 10` | `step > 10` |
+|---|---:|---:|---:|---:|---:|---:|
+| HealthFit (development) | 2,516 | 5 | 5,637,095 | 422 | 641 | 11,546 |
+| Garmin | 1 | 0 | 7,076 | 2 | 1 | 3 |
+| Stryd | 0 | 0 | 0 | 0 | 0 | 0 |
+
+| Channel | Pages carrying channel | 20 min supported at 5 s | 20 min supported at 10 s | 20 min lost at 5 s vs 10 s | Loss (%) | 60 min supported at 5 s | 60 min supported at 10 s | 60 min lost at 5 s vs 10 s | Loss (%) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Power | 1,043 | 854 | 859 | 5 | 0.479 | 181 | 185 | 4 | 0.384 |
+| Speed | 1,365 | 1,005 | 1,009 | 4 | 0.293 | 221 | 224 | 3 | 0.220 |
+| Heart rate | 2,313 | 932 | 944 | 12 | 0.519 | 110 | 117 | 7 | 0.303 |
+
+| Rebuild measurement | Time (s) | Mean-max share (%) | Pages held | Page errors | Producer errors |
+|---|---:|---:|---:|---:|---:|
+| Core producers | 287.473370624939 | — | 2,502 | 0 | 0 |
+| Derived producers | 285.86776125011966 | — | 2,502 | 0 | 0 |
+| Mean-max computation (2,502 calls) | 8.511576691875234 | 2.977452460764906 | 2,502 | — | — |
+
+| Corpus producer recompute | Time (s) | `load_series` rows | `daily_load` rows | `weekly_load` rows | `benchmarks` rows | `benchmark_periods` rows | `blocks` rows | `mesocycles` rows | `planned_workouts` rows | `planned_workout_pages` rows | `unplanned_pages` rows |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Load series | 1.1984361668583006 | 0 | 0 | 0 | — | — | — | — | — | — | — |
+| Benchmarks | 0.00003450014628469944 | — | — | — | 0 | 0 | — | — | — | — | — |
+| Blocks | 0.00020433287136256695 | — | — | — | — | — | 0 | 0 | 0 | 0 | 0 |
+
+| Root and input count | Count |
+|---|---:|
+| Root files | 8,309 |
+| Archive FIT files | 2,517 |
+| HealthFit (development metadata) files | 2,516 |
+| Garmin files | 1 |
+| Stryd files | 0 |
+| Athlete profile files | 0 |
+| Settings files | 1 |
+| Plan sources | 0 |
+
+| Derived table | Rows |
+|---|---:|
+| `mean_max` | 30,802 |
+| `load_series` | 0 |
+| `daily_load` | 0 |
+| `weekly_load` | 0 |
+| `benchmarks` | 0 |
+| `benchmark_periods` | 0 |
+| `blocks` | 0 |
+| `mesocycles` | 0 |
+| `planned_workouts` | 0 |
+| `planned_workout_pages` | 0 |
+| `unplanned_pages` | 0 |
