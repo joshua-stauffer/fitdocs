@@ -545,7 +545,7 @@ from here.
   - _Boundary: MeanMaxProducer_
   - _Depends: 1.2, 2.1_
 
-- [ ] 3.2 (P) Project history's series for every methodology
+- [x] 3.2 (P) Project history's series for every methodology
   - **The load-series producer**, per design.md § LoadSeriesProducer and the
     `load_series`, `daily_load` and `weekly_load` tables: the fingerprint
     (workouts and settings digests, no date) and rows from
@@ -1012,3 +1012,5 @@ from here.
 - 6.1 accepted: derived release notes, structure dependency clause, fit-ingest Requirement 19 and actual Amendment 6 with both test paths. Canonical fresh independent suite 9415 passed/2 optional skips; 21 claimed plus seven own mutations RED/restored GREEN, explicit mypy/Ruff clean, parent fresh 75 publication/changelog checks passed. Derived roadmap tick remains deferred until feature merge; final rebase must preserve analytics-index main 63d79a3 peer completion and registrations. Evidence: /private/tmp/analytics-derived-evidence/resume/6.1/review-remediation1/report.md.
 
 - 2.3 accepted: pure read_plan_sources/resolve_plans and frozen ParsedSource/PlanSources/PlanResolution; original plan writes/bytes and lazy scanning preserved. Fresh independent canonical 9422 passed/2 optional skips, preservation 640, all 31 claimed plus six own mutations RED/restored GREEN; explicit five-file mypy/Ruff clean. Parent fresh post-review restoration engine/API scope 61 passed. Earlier overlapping controller check excluded from acceptance evidence; final verification serialized after reviewer restoration. Invalid-only corpus and methodology are explicitly None; complete sources and ordered block payloads pinned. Evidence: /private/tmp/analytics-derived-evidence/resume/2.3/review-remediation2/report.md.
+
+- 3.2 accepted: frozen load-series producer delegates every methodology, day mask, weekly row, constants and selection to the history seam; fingerprint includes workouts/settings only. Fresh independent restored canonical 9452 passed/2 optional skips, 30 claimed and 15 own mutations assertion-RED/restored GREEN, all 15 task projection sections pinned; explicit two-file mypy/Ruff clean. Parent fresh producer/history 310 passed. Configured nonseed constants/threshold and fractional loads close prior default-only and integer-only blind spots; NULL-preserving rounding replaces prior unrelated TypeError evidence. Genuine original API/OFF RED chronology verified; later final OFF is supplementary. Parent accepted-eight integration also passed 9459/2 optional before this addition. Evidence: /private/tmp/analytics-derived-evidence/resume/3.2/review-remediation1/report.md.
