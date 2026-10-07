@@ -101,8 +101,11 @@ from fitdocs.settings import load_settings_document
 __all__ = [
     "BlockOutcome",
     "BlockStatus",
+    "ParsedSource",
+    "PlanSources",
     "PlanReport",
     "Resolver",
+    "read_plan_sources",
     "run_plan",
 ]
 
@@ -157,6 +160,26 @@ class BlockOutcome:
     failures: tuple[tuple[str, str], ...]
     """`(path, reason)` pairs; `path` is `"render"` for a renderer failure,
     else the write path in progress when an `OSError` was raised."""
+
+
+@dataclass(frozen=True)
+class ParsedSource:
+    """One discovered plan source, including an invalid source's problems."""
+
+    entry: Path
+    source: str
+    block_id: str
+    block: Block | None
+    problems: tuple[PlanProblem, ...]
+
+
+@dataclass(frozen=True)
+class PlanSources:
+    """The sorted source set and its resolved directory."""
+
+    source_dir: Path
+    present: bool
+    sources: tuple[ParsedSource, ...]
 
 
 @dataclass(frozen=True)
@@ -291,6 +314,51 @@ def _discover(source_dir: Path) -> list[Path]:
     ]
     candidates.sort(key=lambda entry: entry.name)
     return candidates
+
+
+def read_plan_sources(data_root: Path) -> PlanSources:
+    """Read settings and every top-level plan source without writing pages."""
+    settings_file = settings_path(data_root)
+    document = load_settings_document(data_root)
+    plan_settings = load_plan_settings(document, settings_file)
+    source_dir = resolve_plans_dir(data_root, plan_settings, settings_file)
+
+    if not source_dir.exists():
+        if plan_settings.path is None:
+            return PlanSources(source_dir=source_dir, present=False, sources=())
+        raise PlanSettingsError(
+            f"{settings_file}: [plans] path resolves to {source_dir}, "
+            "which does not exist"
+        )
+    if not source_dir.is_dir():
+        raise PlanSettingsError(
+            f"{settings_file}: [plans] path resolves to {source_dir}, "
+            "which is not a directory"
+        )
+
+    parsed: list[ParsedSource] = []
+    for entry in _discover(source_dir):
+        block_id = entry.stem
+        entry_report = _report_path(data_root, entry)
+        if entry.is_symlink():
+            problems = (
+                PlanProblem(
+                    entry="file",
+                    field=None,
+                    message="is a symlink; a plan source must be a regular file",
+                ),
+            )
+            parsed.append(ParsedSource(entry, entry_report, block_id, None, problems))
+            continue
+        try:
+            block = load_block(entry, block_id=block_id)
+        except PlanValidationError as exc:
+            parsed.append(
+                ParsedSource(entry, entry_report, block_id, None, exc.problems)
+            )
+            continue
+        parsed.append(ParsedSource(entry, entry_report, block_id, block, ()))
+    return PlanSources(source_dir, True, tuple(parsed))
 
 
 def _unsourced(data_root: Path, discovered_ids: set[str]) -> tuple[str, ...]:
@@ -475,65 +543,24 @@ def run_plan(data_root: Path, *, resolve: Resolver | None = None) -> PlanReport:
     rendering; the default ignores its argument and returns
     `plans.resolution.unresolved()`. Takes no `today` and calls no clock.
     """
-    settings_file = settings_path(data_root)
-    document = load_settings_document(data_root)
-    plan_settings = load_plan_settings(document, settings_file)
-    source_dir = resolve_plans_dir(data_root, plan_settings, settings_file)
+    plan_sources = read_plan_sources(data_root)
+    source_dir = plan_sources.source_dir
     source_report = _report_path(data_root, source_dir)
-
-    if not source_dir.exists():
-        if plan_settings.path is None:
-            return PlanReport(
-                source_dir=source_report,
-                blocks=(),
-                unsourced=(),
-                declarations_foreign=(),
-                note=f"no plan source directory at {source_report}",
-            )
-        raise PlanSettingsError(
-            f"{settings_file}: [plans] path resolves to {source_dir}, "
-            "which does not exist"
-        )
-    if not source_dir.is_dir():
-        raise PlanSettingsError(
-            f"{settings_file}: [plans] path resolves to {source_dir}, "
-            "which is not a directory"
+    if not plan_sources.present:
+        return PlanReport(
+            source_dir=source_report,
+            blocks=(),
+            unsourced=(),
+            declarations_foreign=(),
+            note=f"no plan source directory at {source_report}",
         )
 
-    entries = _discover(source_dir)
-
-    discovered_ids: set[str] = set()
-    parsed: list[tuple[Path, Block | None, tuple[PlanProblem, ...]]] = []
-    for entry in entries:
-        block_id = entry.stem
-        discovered_ids.add(block_id)
-        if entry.is_symlink():
-            parsed.append(
-                (
-                    entry,
-                    None,
-                    (
-                        PlanProblem(
-                            entry="file",
-                            field=None,
-                            message=(
-                                "is a symlink; a plan source must be a regular file"
-                            ),
-                        ),
-                    ),
-                )
-            )
-            continue
-        try:
-            loaded_block = load_block(entry, block_id=block_id)
-        except PlanValidationError as exc:
-            parsed.append((entry, None, exc.problems))
-            continue
-        parsed.append((entry, loaded_block, ()))
-
+    discovered_ids = {source.block_id for source in plan_sources.sources}
     unsourced = _unsourced(data_root, discovered_ids)
 
-    valid_blocks = [block for _, block, _ in parsed if block is not None]
+    valid_blocks = [
+        source.block for source in plan_sources.sources if source.block is not None
+    ]
     declarations_foreign: tuple[str, ...] = ()
     if valid_blocks:
         declaration_outcomes = ensure_declarations(data_root)
@@ -547,9 +574,11 @@ def run_plan(data_root: Path, *, resolve: Resolver | None = None) -> PlanReport:
     resolver: Resolver = resolve if resolve is not None else default_resolver
 
     outcomes: list[BlockOutcome] = []
-    for entry, block, problems in parsed:
-        block_id = entry.stem
-        entry_report = _report_path(data_root, entry)
+    for source in plan_sources.sources:
+        block_id = source.block_id
+        entry_report = source.source
+        block = source.block
+        problems = source.problems
         if block is None:
             outcomes.append(
                 BlockOutcome(
@@ -566,7 +595,7 @@ def run_plan(data_root: Path, *, resolve: Resolver | None = None) -> PlanReport:
             continue
         outcomes.append(_render_and_write(data_root, entry_report, block, resolver))
 
-    note = None if entries else f"no plan sources under {source_report}"
+    note = None if plan_sources.sources else f"no plan sources under {source_report}"
 
     return PlanReport(
         source_dir=source_report,

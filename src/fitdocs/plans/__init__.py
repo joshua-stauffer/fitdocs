@@ -23,8 +23,11 @@ from fitdocs.plans.corpus import Corpus, LoggedWorkout, scan_corpus
 from fitdocs.plans.engine import (
     BlockOutcome,
     BlockStatus,
+    ParsedSource,
     PlanReport,
+    PlanSources,
     Resolver,
+    read_plan_sources,
     run_plan,
 )
 from fitdocs.plans.matching import (
@@ -97,7 +100,13 @@ from fitdocs.plans.placement import (
     place_resolution,
 )
 from fitdocs.plans.planned_page import render_planned_page
-from fitdocs.plans.reconcile import ReconcileReport, reconcile_block, run_reconcile
+from fitdocs.plans.reconcile import (
+    PlanResolution,
+    ReconcileReport,
+    reconcile_block,
+    resolve_plans,
+    run_reconcile,
+)
 from fitdocs.plans.resolution import (
     UNRESOLVED_ROW,
     MesocycleResolution,
@@ -196,6 +205,10 @@ __all__: list[str] = [
     "PlanReport",
     "Resolver",
     "run_plan",
+    # -- plans.engine (analytics-derived task 2.3) --
+    "ParsedSource",
+    "PlanSources",
+    "read_plan_sources",
     # -- plans.corpus (plan-resolution task 2.1) --
     "LoggedWorkout",
     "Corpus",
@@ -218,4 +231,7 @@ __all__: list[str] = [
     "ReconcileReport",
     "reconcile_block",
     "run_reconcile",
+    # -- plans.reconcile (analytics-derived task 2.3) --
+    "PlanResolution",
+    "resolve_plans",
 ]

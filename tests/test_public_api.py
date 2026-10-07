@@ -1195,6 +1195,9 @@ _PLANS_SURFACE = {
     "PlanReport",
     "Resolver",
     "run_plan",
+    "ParsedSource",
+    "PlanSources",
+    "read_plan_sources",
     # -- plans.corpus (plan-resolution 2.1) --
     "LoggedWorkout",
     "Corpus",
@@ -1217,6 +1220,8 @@ _PLANS_SURFACE = {
     "ReconcileReport",
     "reconcile_block",
     "run_reconcile",
+    "PlanResolution",
+    "resolve_plans",
 }
 
 #: Which submodule defines each published name -- the object the identity
@@ -1295,6 +1300,9 @@ _PLANS_SURFACE_OWNERS = {
     "PlanReport": fitdocs.plans.engine,
     "Resolver": fitdocs.plans.engine,
     "run_plan": fitdocs.plans.engine,
+    "ParsedSource": fitdocs.plans.engine,
+    "PlanSources": fitdocs.plans.engine,
+    "read_plan_sources": fitdocs.plans.engine,
     "LoggedWorkout": fitdocs.plans.corpus,
     "Corpus": fitdocs.plans.corpus,
     "scan_corpus": fitdocs.plans.corpus,
@@ -1312,6 +1320,8 @@ _PLANS_SURFACE_OWNERS = {
     "ReconcileReport": fitdocs.plans.reconcile,
     "reconcile_block": fitdocs.plans.reconcile,
     "run_reconcile": fitdocs.plans.reconcile,
+    "PlanResolution": fitdocs.plans.reconcile,
+    "resolve_plans": fitdocs.plans.reconcile,
 }
 
 
