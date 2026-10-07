@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import os
+import re
+import shutil
 from collections.abc import Callable, Mapping
+from pathlib import Path
 from typing import Final
 
 from fitdocs.index import store
@@ -31,6 +35,53 @@ REQUIRED_SANDBOX: Final[Mapping[str, str]] = {
 }
 LOCK_RETRY_WINDOW_S: Final[float] = 10.0
 LOCK_RETRY_DELAYS_S: Final[tuple[float, ...]] = (0.05, 0.1, 0.2, 0.4, 0.8, 1.6, 2.0)
+
+SPILL_PREFIX: Final[str] = "query-spill-"
+_SKIPS_SPILL_CLEANUP: bool = os.name == "nt"
+
+
+def spill_directory(location: IndexLocation, pid: int) -> Path:
+    return location.directory / f"{SPILL_PREFIX}{pid}"
+
+
+def process_is_running(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def remove_stale_spill(
+    location: IndexLocation,
+    *,
+    own_pid: int,
+    is_running: Callable[[int], bool],
+) -> tuple[Path, ...]:
+    if _SKIPS_SPILL_CLEANUP:
+        return ()
+
+    try:
+        entries = tuple(location.directory.iterdir())
+    except (FileNotFoundError, NotADirectoryError):
+        return ()
+
+    removed: list[Path] = []
+    for entry in entries:
+        match = re.fullmatch(r"query-spill-(\d+)", entry.name)
+        if match is None or entry.is_symlink() or not entry.is_dir():
+            continue
+        pid = int(match.group(1))
+        if pid == own_pid or is_running(pid):
+            continue
+        try:
+            shutil.rmtree(entry)
+        except OSError:
+            continue
+        removed.append(entry)
+    return tuple(removed)
 
 
 class SandboxUnverified(Exception):
@@ -83,10 +134,13 @@ def open_sandboxed(
     wait_reported = False
     while True:
         try:
+            settings = dict(RESOURCE_SETTINGS) | {
+                "temp_directory": str(spill_directory(location, pid))
+            }
             connection = store.open_index(
                 location.database,
                 read_only=True,
-                settings=RESOURCE_SETTINGS,
+                settings=settings,
             )
         except IndexOpenError as error:
             if error.fault.kind is not FaultKind.LOCKED:

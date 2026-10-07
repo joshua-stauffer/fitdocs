@@ -507,7 +507,7 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
     after).
   - _Requirements: 7.3, 11.4_
 
-- [ ] 2. Core: output rendering and the sandboxed connection
+- [x] 2. Core: output rendering and the sandboxed connection
 
 - [x] 2.1 (P) Render results as a table, CSV or JSON
   - **`format.py`**, per design.md § Format:
@@ -594,7 +594,7 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
   - _Boundary: Sandbox_
   - _Depends: 1.3_
 
-- [ ] 2.3 Give every query process its own spill directory and remove stale ones
+- [x] 2.3 Give every query process its own spill directory and remove stale ones
   - **`sandbox.py`** gains `SPILL_PREFIX`, `spill_directory`,
     `process_is_running`, the module-level hook `_SKIPS_SPILL_CLEANUP` and
     `remove_stale_spill`, per design.md. `open_sandboxed` sets
@@ -1474,3 +1474,5 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 - 2026-10-07 spill2.3 third review retained all52 observations/four new RED controls and canonical9582/two optional skips, but exposed empty-file, file-target-link, raw-relative-link and character/block fixture gaps. Fresh debug RETRY_TASK identified an incomplete finite input partition, with correct source unchanged. Fresh Luna full POSIX matrix READY; independent review pending. Evidence `/private/tmp/analytics-query-debug-spill-matrix/REPORT.md` and `/private/tmp/analytics-query-spill-matrix/handoff.md`. Direct preservation counts require reviewer reconciliation against the actual predecessor AST; no unverified count is promoted to acceptance.
 - 2026-10-07 state5.1 first review REJECTED: canonical9614/two optional skips, full statics, all42 claimed mutations RED/restored GREEN;32 of53 independent variants survived35 owned/276 scoped tests and each has a sole-RED/restored-GREEN independent witness. Comprehensive test-only repair covers zero/null/primitive distinctions, optional text, corpus pairing, actual encoder payload and table/column ordering while preserving correct source and26 catalog cases. Evidence `/private/tmp/analytics-query-review-state/verdict.md`. CLI defaults and exits belong to5.3, orchestration to5.2.
 - 2026-10-07 publication8.1 owned prose/version-fixture repair READY: all31 prior/reviewer variants plus six distinct format and two version-guard controls RED/restored GREEN;219 bounded tests and strict/static checks pass. Actual release heading comes from project metadata, synthetic versions remain distinct. Six other publication surfaces are byte-identical. Canonical review/acceptance still waits6.1 project URL declaration; no feature GO. Evidence `/private/tmp/analytics-query-publication-repair/handoff.md`.
+
+- 2026-10-07 task2.3 accepted after independent APPROVED: canonical9620/two optional skips/exactexit0, fullstatics and75 claimed observations+9 new reviewer controls RED/restoredGREEN/no survivors, all3 bounded requirement groups PINNED. Finite POSIX matrix closes all four prior survivors and preserves19 prior functions/84 total assertions (81 within tests). Broad following-stat evidence erratum retained; independent selective control reaches actual metadata assertion. Fresh parent282 scoped tests/fullRuff/format541/configmypy345/strictALL3/diff and approved3hashes passed. Evidence `/private/tmp/analytics-query-review-spill-matrix/verdict.md` and `/private/tmp/analytics-query-parent-spill-matrix-completion/verification.md`. Eightof21leaves accepted; major2 complete. Statement3.1 now unlocked, state5.1 testrepair remains pending review.

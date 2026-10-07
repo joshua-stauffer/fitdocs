@@ -368,7 +368,14 @@ def test_non_locked_open_fault_is_not_retried(
             on_wait=lambda _: None,
         )
     assert raised.value.fault.kind is FaultKind.CORRUPT
-    assert calls == [(location.database, True, dict(sandbox.RESOURCE_SETTINGS))]
+    assert calls == [
+        (
+            location.database,
+            True,
+            dict(sandbox.RESOURCE_SETTINGS)
+            | {"temp_directory": str(location.directory / "query-spill-27187")},
+        )
+    ]
     home_dir.assert_untouched()
 
 

@@ -58,18 +58,18 @@ full Ruff/checkformat540/mypy345 and strict both files, with exact approved
 hashes. Evidence: `/private/tmp/analytics-query-review-catalog-repair/verdict.md`
 and `/private/tmp/analytics-query-parent-catalog-completion/verification.md`.
 
-Spill 2.3 remains unchecked. Its overlap, cleanup-name, skip-hook and complete
-index-entry controls are preserved. A third independent review passed
-9,582 canonical tests/two optional skips and all 52 prior observations plus
-four new reviewer controls, but found four further inventory fixture gaps:
-empty regular files, file-target symlinks, raw relative link targets, and
-character/block entries. Fresh debugging returned RETRY_TASK with a bounded
-finite POSIX matrix; correct production remains unchanged. A fresh Luna
-implementer has completed that test-only matrix, including rejecting reads
-through FIFO link aliases. It is now under independent review. Evidence:
-`/private/tmp/analytics-query-debug-spill-matrix/REPORT.md`,
-`/private/tmp/analytics-query-spill-matrix/handoff.md`, and
-`/private/tmp/analytics-query-review-spill-second-repair/verdict.md`.
+Spill2.3 is accepted after independent APPROVED: canonical9,620 passed/two
+optional skips, fullstatics and75 claimed observations plus9 new reviewer
+controls RED/restoredGREEN, zero survivors. The complete finite POSIX matrix
+preserves19 prior function bodies and84 total assertions (81 inside tests).
+The broad following-stat evidence error is preserved and corrected; an
+independent selective control genuinely reaches the metadata assertion.
+Fresh parent byte-equal integration passed282 scoped tests, full Ruff/
+format541/configmypy345/strictallthree files and diff checks with exact
+approved hashes. Evidence:
+`/private/tmp/analytics-query-review-spill-matrix/verdict.md` and
+`/private/tmp/analytics-query-parent-spill-matrix-completion/verification.md`.
+Task3.1 is now unlocked.
 
 State5.1 remains unchecked after independent REJECTED: canonical9,614 passed/
 two optional skips and full statics passed; all42 claimed variants were RED,
@@ -94,8 +94,8 @@ Evidence: `/private/tmp/analytics-query-publication-repair/handoff.md` and
 `/private/tmp/analytics-query-review-publication/verdict.md`.
 
 Completion roadmap ticks await merge. The shared HealthFit root remains
-ready for both peers; query timings await the completed CLI. Seven of21
-leaves are accepted (1.1/1.2/1.3/2.1/2.2/4.1/4.2); no feature GO or merge yet.
+ready for both peers; query timings await the completed CLI. Eight of21
+leaves are accepted (1.1/1.2/1.3/2.1/2.2/2.3/4.1/4.2); no feature GO or merge yet.
 
 ## Historical tasks 1.3 and 2.1 preview blocker
 
