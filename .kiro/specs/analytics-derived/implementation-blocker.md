@@ -1,4 +1,8 @@
-# analytics-derived implementation handoff
+# Historical analytics-derived handoff — task 1.1 resumed
+
+The earlier blocker below was resolved by the owning polling-watcher fix `0b92561`. Fresh independent task 1.1 review is APPROVED: canonical 9,395 passed and two optional actionlint skips in 262.54 seconds; all 19 claimed plus two reviewer mutations failed as intended and restored green. Parent scoped verification: 113 passed. Task 1.1 is accepted; later tasks and measurements remain pending. The feature is not yet complete or merged. The recovery patch below is historical and must not be applied over the accepted files.
+
+# Earlier handoff (historical)
 
 Task 1.1 is pending acceptance; zero of 20 leaf tasks are complete. All later implementation and task 6.4 measurements are unrun. The feature is not validated or merged.
 
