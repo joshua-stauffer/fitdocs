@@ -188,3 +188,18 @@ remaining initial-edit stall and capture polling/build/sync/HTTP state at
 timeout before proposing a repair. Preserve all deadlines and assertions.
 The original deletion-focused pickup recipe above is historical after
 `2c17eb3`; this initial-edit investigation is the remaining follow-up.
+
+### Index verification resume — 2026-10-07
+
+On main landing `a413d15` with the pending 27 mypy registrations, independent
+unmodified plain acceptance failed: 9,386 passed, one failed, two expected
+skips, 297.67 seconds. The original live case timed out at initial edit
+1143/helper1024, before deletion. UTC/CI were not run after that failure.
+The final allowed failure-only diagnostic passed 9,387 tests/two skips in
+287.82 seconds; no failure capture fired, so native cause remains unknown.
+Original source was restored exactly. Debug returned `STOP_FOR_HUMAN`;
+the diagnostic pass does not replace failed acceptance, and there was no
+third debug round or retry. Evidence:
+`/private/tmp/analytics-index-evidence/verification-resume/final-review/`
+and `initial-edit-debug2/REPORT.md`. Floor, release artifacts and installed
+wheel smoke passed independently. Task 8.4 remains blocked on this owner.

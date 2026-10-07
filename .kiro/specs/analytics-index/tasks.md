@@ -1528,7 +1528,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
   - _Requirements: 14.8_
 
 - [ ] 8.4 Register test modules, verify the duckdb floor and validate the feature
-  - _Blocked: after the reviewed docs-site generation repair landed as 2c17eb3 and final rebase, UTC failed both live-preview cases at the initial-edit wait (1143/1024, edited text of /why/ not served within 20 seconds), before deletion. Native cause remains unknown. Both debug-cycle limits are exhausted; no further retry, timeout weakening or downstream workaround. Fresh floor and plain checks pass; UTC statics, CI and build/smoke remain unrun._
+  - _Blocked: resumed verification of main a413d15 plus the pending registrations failed the unmodified plain gate: 9386 passed, one initial-edit preview timeout (1143/1024), two expected skips. Native cause remains unknown after the final allowed diagnostic returned STOP_FOR_HUMAN. No further retry, timeout weakening or downstream workaround. Fresh floor62, local statics, release build/artifact check and four installed-wheel smokes passed independently; required UTC/CI and post-plain statics remain unrun. See implementation-validation.md._
   - **mypy registration.** Append every new test module to `pyproject.toml`'s
     mypy `files` list.
   - **The floor check.** Run `tests/index/test_store.py`'s policy and
@@ -1562,7 +1562,7 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
     commands' output recorded in Implementation Notes.
   - _Requirements: 11.4, 12.1, 12.3_
 
-- [ ] 8.5 (Maintainer-only) Measure the index on the real data root
+- [x] 8.5 (Maintainer-only) Measure the index on the real data root
   - **Who runs it.** The maintainer, on their machine. No agent reads the real
     data root.
   - **What to run:**
@@ -1578,6 +1578,9 @@ entry, a row, a field or a block, and never rewrite or reorder a sibling's.
 
 
 ## Implementation Notes
+
+- 2026-10-07 resumed verification: task8.4 remains blocked. Independent unmodified plain9386passed/1initial-edit preview failure/2expectedskips297.67s; final diagnostic9387passed/2skips287.82s did not reproduce and returned STOP_FOR_HUMAN. Fresh floor62/HOMEempty, local mypy340/Ruff, release build/artifact check and installed-wheel version/help/plugins/index-help passed independently. No UTC/CI or post-plain statics; no further retry/GO. Exact27registration append backed up and reversibly removed; committed pending patch retained. Latest details in implementation-validation.md.
+- 2026-10-07 task8.5 APPROVED independently after actual authorized measurements on private complete peer-root copy: baseline2497pages, rebuild257.850022s/database192425984bytes; no-op index1.712151s (total166.482504s), zero writes/errors/warnings and unchanged database/cache-file hashes/mtimes; five-file index2.162097s (total173.532453s), added5/written5/final2502pages, zero errors, warnings5, successful distinct handoffs5/retained21668samples. No-op meets planned scan scale; one-run timing difference does not isolate per-page compute. Shared data/index and originals unchanged, no new iCloud pulls. Numbers/method in research.md and implementation-validation.md; task8.4/feature completion remain open. 30/31 executable tasks accepted.
 
 - 1.1: DuckDB `>=1.2,<2` added and locked at 1.5.6; four dependency pins retained their names. Tests-first RED: all four dependency pins failed before adding the dependency. Required mutations (remove DuckDB, restore floor 1.1, add optional-dependencies) each failed their targeted guards; independent review repeated them and added extra dependency, ordered-list swap and omitted upper bound, with no survivors. Restored guards: 5 passed. Reviewer full suite: 8696 passed / 8 skipped; CI boundary and sitebuild: 807 passed; source-enabled forbidden-string gate: 44 passed; canonical mypy: 296 files clean; ruff check/format clean. Offline packaging CI checks passed using the existing cache-warming fixtures; no new CI-runner step required.
 - Worktree setup: use `/Users/josh/.pyenv/versions/3.11.15/bin/python3.11`, matching main. Homebrew Python's executable resolution broke the docs-site fake-interpreter fixture; recreating only the worktree venv with pyenv resolved it. Real-data-root setup is unnecessary: all index tests use synthetic inputs.

@@ -13,18 +13,87 @@ again solely because this feature is now on main.
 
 ## Verification still owed
 
-- Task 8.4: resolve the distinct docs-site initial-edit timeout, apply and
-  review the preserved 27-module mypy registration patch, then complete
-  fresh floor/plain/UTC/CI/static gates and release/artifact/installed-wheel
-  smoke. The latest UTC run failed both preview cases before deletion.
-- Task 8.5: rebuild wall time/database size and no-change/five-file sync
-  index-pass timings. The requested data-root and five FIT-file paths are
-  still missing; no real measurements have run.
-- Keep both tasks and feature-completion status open. Downstream work may
+- Task 8.4: resolve the distinct docs-site initial-edit timeout, review the
+  preserved 27-module mypy registration patch, then complete the required
+  plain/UTC/CI/static gates. The resumed unmodified plain gate failed;
+  floor, release build, artifact check and installed-wheel smoke passed
+  independently, as recorded below.
+- Task 8.5: the authorized real-data measurements are now recorded below
+  and in research.md. The no-op index pass meets the planned scan scale.
+- Keep task 8.4 and feature-completion status open. Downstream work may
   proceed under the maintainer's explicit merge authorization.
 
 All earlier failures and evidence below remain valid historical records.
 Their statements prohibiting merge describe the earlier authorization state.
+
+## Resumed verification — 2026-10-07
+
+Candidate: main landing `a413d15` plus exactly 27 pending mypy registrations.
+Production and test source remained unchanged.
+
+- Local registration inventory: 27 new entries, all 81 old entries retained;
+  canonical mypy 340 files and Ruff check/format passed.
+- Fresh floor: 62 cases passed on DuckDB 1.2.0/Python 3.11.15; the existing
+  synthetic HOME remained empty.
+- Fresh release wheel and sdist built; forbidden-content artifact check
+  passed. An isolated offline wheel installation passed `--version`,
+  `--help`, `plugins`, and `index --help` from outside the repository.
+- Independent unmodified plain acceptance: **9,386 passed, one failed,
+  two expected skips**, 297.67 seconds. Original live preview timed out at
+  the initial-edit wait (test_preview.py:1143/helper:1024), before deletion.
+  UTC, CI and post-plain statics were not run after that failure.
+- Final allowed initial-edit diagnostic: failure-only capture run passed
+  9,387 tests with two expected skips, 287.82 seconds. No timeout capture
+  fired. This instrumented pass does not replace the failed unmodified
+  gate. Exact original test source was restored; native cause remains
+  unknown. Debug verdict: `STOP_FOR_HUMAN`; no further retry or guessed fix.
+- The first resumed diagnostic was invalid as acceptance: 9,386 passed,
+  one bytecode-hygiene failure, two skips. A concurrent FIT preparation
+  helper imported production code without `-B`; all later helpers were
+  serialized and used `-B`. The cache actor is strongly supported rather
+  than conclusively proven by retained creation timestamps.
+
+Evidence: `/private/tmp/analytics-index-evidence/verification-resume/`,
+including `registration-local/`, `artifacts/`, `final-review/`, and
+`initial-edit-debug2/REPORT.md`. Task 8.4 remains unaccepted; feature NO-GO.
+
+## Authorized real-data measurements — 2026-10-07
+
+The maintainer authorized agent measurements and sharing the peer's completed
+root. Measurements used a private copy and a fresh private index cache;
+the shared root/cache and original iCloud files were unchanged. Five unique
+base activity pages and their matching archives were held out, then restored
+through a five-file sync. Exactly ten private files were removed for setup;
+all retained private file bytes were checked unchanged. No additional iCloud
+files were pulled. The baseline had 2,497 activities; the final root had 2,502.
+
+| Measurement | Index pass / rebuild seconds | Total command seconds | Database bytes |
+| --- | ---: | ---: | ---: |
+| Rebuild | 257.850022 | 257.850022 | 192425984 |
+| No-change sync | 1.712151 | 166.482504 | 192425984 |
+| Five-file sync | 2.162097 | 173.532453 | 192425984 |
+
+All commands exited 0. Rebuild indexed all 2,497 baseline pages without page
+or producer errors. No-change sync reported zero writes, failures, warnings,
+additions, updates and removals; database bytes and index-directory file
+hashes/mtimes were unchanged. Five-file sync wrote and added exactly five
+pages, with no updates, removals, page errors, producer errors or sync
+failures; it reported five warnings. Five render callbacks produced five
+successful distinct handoffs, retaining 21,668 samples. Warning contents and
+personal values are not recorded here.
+
+The no-op index pass is in the planned ~1.5-second order of magnitude at
+~2,500 pages. The 0.449946-second difference between the two sync index
+passes is a single-run observation, not an isolated compute-cost benchmark.
+The timings wrap the actual CLI handlers and include index reporting; total
+sync command time includes existing work outside the index pass. The date
+was held constant across commands. This evidence completes the measurement
+scope only; task 8.4 and feature-level acceptance remain blocked.
+
+Numbers-only evidence:
+`/private/tmp/fitdocs-analytics-index-full-timings/evidence/numeric-results.json`.
+Scratch method: `/private/tmp/analytics-index-evidence/8.5-authorized/measure_fullroot.py`
+and `measure.py`. Neither personal inputs nor generated documents are committed.
 
 ---
 

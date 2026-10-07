@@ -541,6 +541,33 @@ claims no Windows support. Hence the staged-rebuild fallback (Requirement
   isolated. The isolation fixture makes that deterministic, and the tasks name
   the output-pinning tests to update.
 
+## Implementation measurements — 2026-10-07
+
+Maintainer-authorized measurements on a private copy of the completed shared
+real-data root, using a fresh private cache. Five unique activity page/archive
+pairs were held out from 2,502 activities for the baseline, then restored by
+sync. Only aggregate counts and timings are recorded.
+
+| Operation | Pages held | Index/rebuild seconds | Total command seconds | Database bytes |
+| --- | ---: | ---: | ---: | ---: |
+| Rebuild | 2497 | 257.850022 | 257.850022 | 192425984 |
+| No-change sync | 2497 | 1.712151 | 166.482504 | 192425984 |
+| Five-file sync | 2502 | 2.162097 | 173.532453 | 192425984 |
+
+All three commands exited 0 with zero page/producer errors. The no-op had
+zero writes/failures/warnings and unchanged database bytes and cache-file
+hashes/mtimes. The incremental sync wrote/added exactly five pages, no
+updates/removals/failures, five warnings, five successful distinct handoffs
+from five render callbacks, and 21,668 retained samples.
+
+The 1.712151-second no-op index pass meets the planned ~1.5-second scan scale
+at ~2,500 pages. Total command time includes sync work outside that pass.
+The incremental-minus-no-op difference, 0.449946 seconds, is one observation
+and does not independently prove isolated per-page compute cost. Date held
+constant; shared inputs/cache unchanged. Task 8.4 remains blocked; these
+measurements establish no feature-level GO. Full method and verification
+status: implementation-validation.md.
+
 ## References
 - DuckDB concurrency: https://duckdb.org/docs/stable/connect/concurrency
 - DuckDB storage versions: https://duckdb.org/internals/storage
