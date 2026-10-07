@@ -61,6 +61,7 @@ from pathlib import Path
 
 from fitdocs.index import registry
 from fitdocs.index.core.computed import CORE_COMPUTED
+from fitdocs.index.core.documents import CORE_DOCUMENTS
 from fitdocs.index.producer import PageComputed
 from fitdocs.index.refresh import RefreshInputs, reconcile
 from fitdocs.index.store import open_index, read_bookkeeping
@@ -79,7 +80,20 @@ class BlockingComputedProducer:
             signal.pause()
         return {}
 
-registry.COMPUTED_PRODUCERS = (*registry.COMPUTED_PRODUCERS, BlockingComputedProducer())
+blocker = BlockingComputedProducer()
+registry.DOCUMENT_PRODUCERS = (CORE_DOCUMENTS,)
+registry.COMPUTED_PRODUCERS = (CORE_COMPUTED, blocker)
+registry.CORPUS_PRODUCERS = ()
+assert (
+    len(registry.DOCUMENT_PRODUCERS) == 1
+    and registry.DOCUMENT_PRODUCERS[0] is CORE_DOCUMENTS
+), "child document registry must contain exactly CORE_DOCUMENTS"
+assert (
+    len(registry.COMPUTED_PRODUCERS) == 2
+    and registry.COMPUTED_PRODUCERS[0] is CORE_COMPUTED
+    and registry.COMPUTED_PRODUCERS[1] is blocker
+), "child computed registry must contain CORE_COMPUTED followed by its blocker"
+assert registry.CORPUS_PRODUCERS == (), "child corpus registry must be empty"
 athlete = AthleteInputs(
     ftp_watts=273.75,
     resting_hr_bpm=55,

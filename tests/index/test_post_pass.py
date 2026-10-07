@@ -26,7 +26,7 @@ from fitdocs.index.refresh import (
     RefreshResult,
     refresh_after_command,
 )
-from fitdocs.index.schema import TableScope
+from fitdocs.index.schema import SCHEMA_VERSION, TableScope
 from fitdocs.index.store import (
     FaultKind,
     IndexConnection,
@@ -330,7 +330,7 @@ def test_duckdb_lock_returns_busy_with_holder_pid(
         ("junk", "not a valid DuckDB database file"),
         ("incompatible", "Trying to read a database file with version number"),
         ("missing_meta", "not a complete fitdocs index"),
-        ("schema", "schema version 99; this fitdocs uses 1"),
+        ("schema", f"schema version 99; this fitdocs uses {SCHEMA_VERSION}"),
     ],
 )
 def test_unusable_index_reports_rebuild_reason_and_preserves_bytes(
