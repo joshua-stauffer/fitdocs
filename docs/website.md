@@ -304,3 +304,10 @@ and deploys it.
    generator's problems still translate into one line each.
 4. Run `FITDOCS_REQUIRE_SITE_TOOLING=1 uv run --group docs pytest tests/sitebuild`.
 5. Read the release notes for changes to configuration keys.
+6. Confirm the new release still reads `ZENSICAL_POLL_WATCHER`. The preview
+   sets it so that `zensical serve` polls for changes instead of relying on
+   macOS FSEvents, which stalls under heavy file activity. The unit test only
+   checks that the variable is passed. If Zensical stops reading it, the
+   preview goes back to serving stale pages under load.
+   `strings .venv/lib/python3.*/site-packages/zensical/zensical.abi3.so | grep ZENSICAL_POLL_WATCHER`
+   must print a match.
