@@ -834,7 +834,7 @@ from here.
   - _Boundary: DerivedGuards_
   - _Depends: 4.1_
 
-- [ ] 6. Published statements, records and final validation
+- [x] 6. Published statements, records and final validation
 
 - [x] 6.1 Publish the derived tables and record the amendment
   - **`CHANGELOG.md` `[Unreleased]` `### Added`**: the four derived tables and
@@ -958,7 +958,7 @@ from here.
   - _Requirements: 10.4_
   - _Depends: 6.1_
 
-- [ ] 6.3 Register test modules, re-pin after rebase and validate the feature
+- [x] 6.3 Register test modules, re-pin after rebase and validate the feature
   - **mypy registration**: append every new test module to `pyproject.toml`'s
     mypy `files` list.
   - **After the final rebase onto `main`**: `SCHEMA_VERSION == main's value +
@@ -1034,3 +1034,7 @@ from here.
 - 5.1 accepted after complete preservation/renderer/recursive-inventory repair: eight scenarios, every ten failed corpus tables nonempty/distinct before errors and preserved afterward, actual CLI could-not-refresh lines and next-good physical recovery. Fresh independent canonical9494/2optional323.03s exit0, all26claims+3ownsource mutations RED/restoredGREEN, exhaustiveeightrequirements with inheritedclauses PRESERVED-ONLY, explicitmypy/Ruff clean; inventory field/nofollow controls independently verified. Parentfreshleaf8 and integratedrefresh/determinism/composition/registration16passed. Initial unacceptedtest bytes unavailable: no historicalASTequality claim, alloriginalscenarios/13mutants independently retained. Nestedpositivecontrol genuine1fail7pass before recursivehelperfix; earlierfull predatesrepair qualified. Evidence: /private/tmp/analytics-derived-evidence/resume/5.1/review-remediation1/verdict.md.
 
 - 5.4 accepted after bounded strict-inventory remediation: real index CLI over full composed fixture, fixed TODAY/external cache, all eleven physical tables populated through read-only facade; successful sync/regen/load compare complete roots with fresh/prebuilt index. Independent final canonical 9618 passed/2 optional actionlint skips in308.41s, exit0;41 claimed executions/39 distinct recipes plus2 own mutants all intended RED/restored GREEN. Nine strict field/branch controls include independent bytes/mtime/mode, directory presence/mode, link target, finite FIFO/socket kinds, no-follow and exact cache ancestry. All74 original assertion ASTs and12 EntryPoint definitions preserved; parent integrated53 checks and explicit2-file mypy/Ruff pass. Existing generic dangling-link snapshot issue separately queued, not repaired here. Earlier full suites predate remediation and are not acceptance evidence. Evidence: /private/tmp/analytics-derived-evidence/resume/5.4/review-remediation2/verdict.md.
+
+- 6.3 accepted: append all 19 new test/fixture modules after the exact 108 existing mypy entries, preserving main's 27 index registrations and six runtime dependencies. Final rebase main995db58 remains schema1; feature schema2/digest and document/contract version9 pins hold. Plain, TZ=UTC and CI=true canonical suites each9629 passed/2 expected actionlint skips, actual exit0 (288.84/290.92/287.31s); all nine static gates exit0, Ruff format552 files/mypy367 files. Independent fresh plain9629/2 in296.33s and whole statics passed; parent integrated217/schema checks plus whole Ruff/format/mypy passed. All618 frozen source/test/config hashes and11 measured runtime hashes match. Initial restricted-cache precollection exit2 attempts retained and qualified; authorized default-cache canonical runs passed. Config-only structural missing-registration RED precedes append; no tests changed/discrimination N/A. Evidence: /private/tmp/analytics-derived-evidence/resume/6.3/review/verdict.md. All20 leaf tasks accepted; feature GO/merge remains the controller's next gate.
+
+- Latest user instruction restores standard harness agent reuse; it supersedes the earlier fresh-Sol-per-subcall request. All implementers remained Luna, and each task received independent review.
