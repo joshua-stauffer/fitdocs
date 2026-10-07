@@ -103,11 +103,15 @@ from fitdocs import contract
 from fitdocs.contract import EffortKind
 from fitdocs.declaration import ensure_declarations
 from fitdocs.history.documents import DocumentScan, SkippedPage, scan_documents
-from fitdocs.history.model import run_model
+from fitdocs.history.model import ModelSeries, run_model
 from fitdocs.history.page import render_history
 from fitdocs.history.series import (
+    Coverage,
+    CriterionPoints,
+    DailySeries,
     MethodologyChoice,
     MethodologyProblem,
+    WeekRow,
     build_daily_series,
     coverage_report,
     criterion_points,
@@ -116,13 +120,22 @@ from fitdocs.history.series import (
     suppressed_weeks,
     week_rows,
 )
-from fitdocs.history.settings import load_history_settings, resolve_constants
-from fitdocs.history.sources import COVERAGE_THRESHOLD
+from fitdocs.history.settings import (
+    HistorySettings,
+    load_history_settings,
+    resolve_constants,
+)
+from fitdocs.history.sources import COVERAGE_THRESHOLD, ModelConstants
 from fitdocs.layout import history_doc_path, settings_path
 from fitdocs.load.settings import load_load_settings
 from fitdocs.settings import SettingsError, load_settings_document
 
 __all__ = [
+    "HistoryInputs",
+    "HistoryComputation",
+    "read_history_inputs",
+    "observed_methodologies",
+    "compute_history",
     "HistoryReport",
     "MethodologyConfigurationError",
     "run_history",
@@ -162,6 +175,99 @@ class MethodologyConfigurationError(SettingsError):
     message -- the ambiguous-methodology and configured-but-absent messages
     `select_methodology` already built.
     """
+
+
+@dataclass(frozen=True)
+class HistoryInputs:
+    """The settings and complete document scan consumed by history."""
+
+    scan: DocumentScan
+    history_settings: HistorySettings
+    configured: str | None
+
+
+@dataclass(frozen=True)
+class HistoryComputation:
+    """The pure products of resolving and computing one history series."""
+
+    choice: MethodologyChoice
+    series: DailySeries
+    model: ModelSeries
+    weeks: tuple[WeekRow, ...]
+    coverage: tuple[Coverage, ...]
+    criterion: CriterionPoints
+    constants: ModelConstants
+    threshold: float
+
+
+def read_history_inputs(data_root: Path) -> HistoryInputs:
+    """Read settings and scan workout documents once."""
+    settings_file = settings_path(data_root)
+    settings_document = load_settings_document(data_root)
+    history_settings = load_history_settings(settings_document, settings_file)
+    load_settings = load_load_settings(settings_document, settings_file)
+    return HistoryInputs(
+        scan=scan_documents(data_root),
+        history_settings=history_settings,
+        configured=history_settings.methodology or load_settings.default_calculator,
+    )
+
+
+def observed_methodologies(inputs: HistoryInputs) -> tuple[str, ...]:
+    """Return distinct recorded methodologies in stable sorted order."""
+    return tuple(
+        sorted(
+            {
+                page.methodology
+                for page in inputs.scan.pages
+                if page.methodology is not None
+            }
+        )
+    )
+
+
+def compute_history(
+    inputs: HistoryInputs, *, methodology: str | None
+) -> HistoryComputation | None:
+    """Compute a history series without rendering or writing anything."""
+    scan = inputs.scan
+    if all(page.load is None for page in scan.pages):
+        return None
+
+    choice = select_methodology(
+        scan.pages, requested=methodology, configured=inputs.configured
+    )
+    if isinstance(choice, MethodologyProblem):
+        raise MethodologyConfigurationError(choice.detail)
+    assert isinstance(choice, MethodologyChoice)
+
+    included, excluded = partition_pages(scan.pages, choice)
+    series = build_daily_series(included)
+    assert series is not None, (
+        "a resolved MethodologyChoice guarantees at least one loaded, included "
+        "page -- build_daily_series must not return None here"
+    )
+    constants = resolve_constants(inputs.history_settings)
+    threshold = (
+        inputs.history_settings.coverage_threshold
+        if inputs.history_settings.coverage_threshold is not None
+        else COVERAGE_THRESHOLD.value
+    )
+    model = run_model([day.recorded_load for day in series.days], constants)
+    suppressed = suppressed_weeks(series, threshold)
+    weeks = week_rows(series, model, suppressed)
+    coverage = coverage_report(series, excluded, choice, len(scan.skipped))
+    criterion = criterion_points(scan.pages)
+    return HistoryComputation(
+        choice=choice,
+        series=series,
+        model=model,
+        weeks=weeks,
+        coverage=coverage,
+        criterion=criterion,
+        constants=constants,
+        threshold=threshold,
+    )
 
 
 @dataclass(frozen=True)
@@ -309,54 +415,20 @@ def run_history(data_root: Path, *, methodology: str | None = None) -> HistoryRe
     No `today` parameter, no clock read anywhere in this function or in
     anything it calls.
     """
-    settings_file = settings_path(data_root)
-    settings_document = load_settings_document(data_root)  # SettingsError propagates
-    history_settings = load_history_settings(
-        settings_document, settings_file
-    )  # HistorySettingsError propagates
-    load_settings = load_load_settings(
-        settings_document, settings_file
-    )  # LoadSettingsError propagates
-
-    scan = scan_documents(data_root)
-
-    if all(page.load is None for page in scan.pages):
+    inputs = read_history_inputs(data_root)
+    scan = inputs.scan
+    computation = compute_history(inputs, methodology=methodology)
+    if computation is None:
         return _empty_archive_report(scan)
-
-    configured = history_settings.methodology or load_settings.default_calculator
-    choice = select_methodology(
-        scan.pages, requested=methodology, configured=configured
-    )
-    if isinstance(choice, MethodologyProblem):
-        raise MethodologyConfigurationError(choice.detail)
-    assert isinstance(choice, MethodologyChoice)  # narrows for the type checker
-
-    included, excluded = partition_pages(scan.pages, choice)
-    series = build_daily_series(included)
-    # `choice.methodology` is guaranteed present among `scan.pages`' own
-    # methodologies (`select_methodology`'s own postcondition on every
-    # non-Problem branch), and a page recording a methodology always records
-    # a load with it (`documents._read_load`'s own invariant) -- so at least
-    # one included page has `load is not None`, and `build_daily_series`
-    # cannot return `None` here.
-    assert series is not None, (
-        "a resolved MethodologyChoice guarantees at least one loaded, "
-        "included page -- build_daily_series must not return None here"
-    )
-
-    constants = resolve_constants(history_settings)
-    threshold = (
-        history_settings.coverage_threshold
-        if history_settings.coverage_threshold is not None
-        else COVERAGE_THRESHOLD.value
-    )
-
-    daily_loads = [day.recorded_load for day in series.days]
-    model = run_model(daily_loads, constants)
-    suppressed = suppressed_weeks(series, threshold)
-    weeks = week_rows(series, model, suppressed)
-    coverage = coverage_report(series, excluded, choice, len(scan.skipped))
-    criterion = criterion_points(scan.pages)
+    choice = computation.choice
+    included, _excluded = partition_pages(scan.pages, choice)
+    series = computation.series
+    model = computation.model
+    weeks = computation.weeks
+    coverage = computation.coverage
+    criterion = computation.criterion
+    constants = computation.constants
+    threshold = computation.threshold
 
     # Race markers only (Implementation Notes for 5.2, from the 4.3 review):
     # `render_history` labels EVERY marker it is handed as a race, so a
@@ -453,7 +525,7 @@ def run_history(data_root: Path, *, methodology: str | None = None) -> HistoryRe
         pages_excluded=choice.excluded,
         pages_out_of_span=pages_out_of_span,
         skipped=scan.skipped,
-        suppressed_weeks=len(suppressed),
+        suppressed_weeks=sum(week.suppressed for week in weeks),
         criterion_points=criterion.count,
         methodology=choice.methodology,
         foreign=tuple(foreign),

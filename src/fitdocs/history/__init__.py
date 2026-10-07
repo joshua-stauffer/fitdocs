@@ -16,8 +16,13 @@ earlier task's published names.
 from __future__ import annotations
 
 from fitdocs.history.engine import (
+    HistoryComputation,
+    HistoryInputs,
     HistoryReport,
     MethodologyConfigurationError,
+    compute_history,
+    observed_methodologies,
+    read_history_inputs,
     run_history,
 )
 from fitdocs.history.model import ModelSeries, run_model, unscaled_accumulators
@@ -27,6 +32,8 @@ from fitdocs.history.page import (
     HISTORY_TYPE,
     HISTORY_VERSION,
     HISTORY_VERSION_KEY,
+    DayRow,
+    day_rows,
 )
 from fitdocs.history.series import (
     MethodologyChoice,
@@ -65,4 +72,11 @@ __all__: list[str] = [
     "HistoryReport",
     "MethodologyConfigurationError",
     "run_history",
+    "HistoryInputs",
+    "HistoryComputation",
+    "read_history_inputs",
+    "observed_methodologies",
+    "compute_history",
+    "DayRow",
+    "day_rows",
 ]
