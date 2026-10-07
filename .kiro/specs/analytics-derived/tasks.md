@@ -523,7 +523,7 @@ from here.
 
 - [ ] 3. The four producers
 
-- [ ] 3.1 (P) Project each page's best efforts
+- [x] 3.1 (P) Project each page's best efforts
   - **The mean-max producer**, per design.md § MeanMaxProducer and the
     `mean_max` table of § Data Models: every column and description, rows from
     the composed activity's three curves, a row only where some channel has a
@@ -1004,3 +1004,5 @@ from here.
 
 - 2026-10-07 task 1.2 accepted: corrected canonical 9,398 passed/two optional skips; parent fresh fixture 10 passed; all retained 59 executions, seven latest exact-row claims and three new own valid controls RED/restored GREEN. Earlier reviewer cold-cache/restricted gate failed (15 failed, 31 errors) from uncached PyPI DNS and localhost PermissionError; corrected default warm cache plus authorized socket access passed unchanged code. Do not set UV_CACHE_DIR.
 - Fixture roles: threshold loads 11/23/31/59/71 plus left-out 83; banister_1991 loads 17/43; two Ride pages on February 3; two loadless pages February 13/14; no-source page dated February 15 has stem 2026-02-14-left-out and is matched by no-sources-match. Synthetic plan supplies exact/absorbed/ambiguous, missing-stem override, skipped/not-logged/upcoming, unplanned, and invalid source. Ride FTP 260 measured February 10 applies January 1 versus 271 measured February 5 applies February 1, profile versus naive differs on February 11; Run FTP 283 measured February 7, Run LTHR 172 with full derived provenance, athlete max HR 203, flat FTP 999. Composed switch supplies actual builder run and merge ride pair; all helpers require explicit TODAY 2026-02-24, public store facade and isolated index. Producer parity remains later-owned.
+
+- 2026-10-07 task 3.1 accepted: fresh independent canonical 9,428 passed/two optional actionlint skips, explicit scoped mypy/Ruff clean, all 33 claimed and 15 own mutations RED/restored GREEN; parent fresh producer/rule 19 passed. Exact frozen seven-column mean_max schema and pure composed-activity engine projection verified. Registry integration and real composition/handoff remain tasks 4.1 and 5.3; no producer re-computation or base-file read.
