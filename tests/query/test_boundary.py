@@ -482,3 +482,55 @@ def test_query_importer_guard_ignores_unbound_import_call_names(
     source: str,
 ) -> None:
     assert _unlisted_query_importers({"fitdocs.history.engine": source}) == set()
+
+
+# --- Task 2.1: formatter purity boundary ----------------------------------
+
+
+def _forbidden_format_imports(source: str) -> set[str]:
+    targets = _import_targets(source, "fitdocs.query.format")
+    stdlib_roots = set(__import__("sys").stdlib_module_names)
+    forbidden: set[str] = set()
+    for target in targets:
+        root = target.split(".", 1)[0]
+        if root == "fitdocs":
+            forbidden.add(target)
+        elif root not in stdlib_roots:
+            forbidden.add(root)
+    return forbidden
+
+
+def test_format_module_uses_standard_library_only() -> None:
+    path = _SOURCE_ROOT / "query" / "format.py"
+    assert path.is_file(), f"formatter source not found: {path}"
+    source = path.read_text(encoding="utf-8")
+    scanned = ast.walk(ast.parse(source))
+    nodes = tuple(scanned)
+    assert nodes, "the formatter source walk found no syntax nodes"
+    assert _forbidden_format_imports(source) == set()
+
+
+def test_format_purity_guard_flags_fitdocs_index_positive_control() -> None:
+    synthetic = "import fitdocs.index.schema\n"
+    assert _forbidden_format_imports(synthetic) == {"fitdocs.index.schema"}
+    dynamic = "import importlib\nimportlib.import_module('fitdocs.index.schema')\n"
+    assert _forbidden_format_imports(dynamic) == {"fitdocs.index.schema"}
+    assert _forbidden_format_imports("import numpy\n") == {"numpy"}
+
+
+def test_format_purity_guard_classifies_all_supported_import_targets() -> None:
+    dynamic_stdlib = "import importlib\nimportlib.import_module('json.decoder')\n"
+    assert _forbidden_format_imports(dynamic_stdlib) == set()
+
+
+def test_format_purity_guard_rejects_bare_fitdocs_root() -> None:
+    assert _forbidden_format_imports("import fitdocs\n") == {"fitdocs"}
+
+
+def test_format_purity_guard_rejects_third_party_from_import() -> None:
+    assert _forbidden_format_imports("from numpy.linalg import norm\n") == {"numpy"}
+
+
+def test_format_purity_guard_rejects_dynamic_third_party_import() -> None:
+    dynamic_third_party = "import importlib\nimportlib.import_module('numpy.linalg')\n"
+    assert _forbidden_format_imports(dynamic_third_party) == {"numpy"}

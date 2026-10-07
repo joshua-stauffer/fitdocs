@@ -1,18 +1,42 @@
-# Resumed after the upstream preview repair
+# Implementation progress after the upstream preview repair
 
-The owning polling-watcher repair landed through `0b92561`. This branch was
-rebased onto it with all eight candidate files preserved. Task 1.3 has now
-received fresh independent approval: 9,477 canonical tests passed with two
-optional actionlint skips, all 31 preview tests passed, and scoped/canonical
-statics passed. Parent completion checks passed 107 fixture/boundary tests and
-the six-file statics. The fixture prerequisite is accepted; sandbox and
-freshness work can proceed. Fresh task 2.1 review is still in progress and has
-identified a repeated-column assertion lost during its earlier order-fixture
-correction. It must retain both order and repeated-name checks before acceptance.
+Verified analytics-index main `63d79a3` is consumed on this branch. The owning
+preview polling-watcher repair is present; earlier preview failures remain
+historical and no longer block implementation.
 
-Fresh evidence: `/private/tmp/analytics-query-resume-review1-3/verdict.md`,
-`full-suite.txt`, mutation inventories and hash integrity records. The earlier
-failures below remain historical evidence, not the current prerequisite state.
+Task 1.3 is accepted after fresh canonical 9,477 passed/two optional skips,
+all 31 preview tests passed, and parent completion checks. Task 2.1 is now
+accepted after fresh independent APPROVED: canonical 9,535 passed/two optional
+skips and full/scoped statics passed, 107 mutation trials and twelve isolated
+controls RED/restored GREEN with zero survivors. All 52 clause groups are
+pinned and all prior assertions retained. Generic UUID fallback preserves
+outputs without changing the session guard. Separate duplicate-name/order,
+DEL, whitespace and exact header fixtures retain all earlier controls.
+
+Parent integration on the rebased verified-index lineage passed 197
+query/index-boundary/exact UUID-guard tests in 8.82 s, full Ruff/checkformat,
+mypy342 and strict three-owned-file mypy, with source equality and predecessor
+prefix preservation verified. Latest task2.1 evidence:
+`/private/tmp/analytics-query-review-format-whitespace/verdict.md` and
+`/private/tmp/analytics-query-parent-format-completion/verification.md`.
+The committed pending-task-2.1.patch is a historical preceding snapshot;
+accepted live files supersede it.
+
+## Current sandbox correction and dispatch capacity
+
+Sandbox 2.2 remains unchecked. Its first fresh review passed canonical 9,486
+tests/two optional skips and all statics, but rejected absent-row and later-key
+verifier test gaps. A NEW Luna implementer is correcting per-key absent, wrong
+and NULL cases in `/private/tmp/fitdocs-query-task-2-2`, preserving correct
+production and all previous pins. Candidate snapshot pending-task-2.2.patch
+remains unaccepted; evidence `/private/tmp/analytics-query-review2-2/verdict.md`.
+
+Concurrent fresh launches return `agent thread limit reached`, while a fresh
+launch succeeds after the preceding agent completes. Dispatch proceeds with
+new contexts in sequence; no completed Sol agent is reused. Task4.1 has not
+started; its prepared clean worktree is based on rebased9e9b2da. The data root
+remains ready for both peers; query timings require the completed command.
+Four of21 leaves are accepted (1.1/1.2/1.3/2.1); no feature GO or merge yet.
 
 ## Historical tasks 1.3 and 2.1 preview blocker
 
