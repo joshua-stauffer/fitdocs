@@ -290,6 +290,18 @@ named alike however its file arrived.
 The implementing spec is `.kiro/specs/intervals-connector/`; the tests pinning
 each new criterion are listed in this spec's `spec.json` `amendments` array.
 
+## Amendment 6 (2026-10-07): best efforts, landed by analytics-derived
+
+The analytics-derived feature makes best-effort computation available as a
+library function, so consumers can use the rule without invoking document
+rendering. Requirement 19 records that addition. Its duration set and maximum
+step are fitdocs' own methodological choices under criterion 15.8, outside
+criterion 15.6's enumeration; the records include their justification and
+search basis.
+
+The implementing spec is `.kiro/specs/analytics-derived/`; its
+`spec.json` amendment entry names the tests pinning Requirement 19.
+
 ## Introduction
 
 fit-ingest is the foundation layer of fitdocs: a pure library that decodes a
@@ -609,3 +621,19 @@ computed under two different sets of constants without telling me.
 3. While documents written before Amendment 1 remain unregenerated, the fitdocs audit shall report them as stale rather than as current.
 4. If a constant's primary-text value equals the value the fit-ingest library already computed with, then the fit-ingest library shall report identical metric values and no document shall be made stale on that constant's account.
 5. The fit-ingest library shall itself read, write, and migrate no document; its only contribution to this correction is reporting a different value from the same input bytes.
+
+### Requirement 19: Best Efforts
+_(added by Amendment 6, landed by analytics-derived)_
+
+**Objective:** As a consumer of fit-ingest's library, I want best-effort
+computation available independently of document rendering, so that other
+features can use the same rule over an activity model.
+
+#### Acceptance Criteria
+1. The fit-ingest library shall expose the best-effort computation at library
+   level, so consumers can compute it from an activity model without invoking
+   document rendering.
+2. The duration set and maximum step used by this computation are fitdocs'
+   own methodological choices under criterion 15.8, outside the enumeration
+   in criterion 15.6; each record shall include its justification and search
+   basis.

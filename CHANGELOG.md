@@ -23,6 +23,10 @@ recorded as one.
   `FITDOCS_INDEX_DIR`, then `XDG_CACHE_HOME`, then the user's cache directory.
   Run `fitdocs index` once to build it. The ownership contract now describes
   this cache and the change requires no action for existing documents.
+- The analytics index adds four derived projections: best efforts, daily and
+  weekly load series, a benchmark timeline, and training blocks. Run
+  `fitdocs index` once after upgrading: the index schema version changed, and
+  writing commands report that the index needs a rebuild until it is rebuilt.
 - The runtime dependency `duckdb>=1.2,<2` (about 44 MB installed) powers the
   analytics index. Prebuilt wheels are not available for musl-based Linux or
   free-threaded Python builds.

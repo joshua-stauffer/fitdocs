@@ -84,7 +84,10 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
 - `index` (the analytics index) imports `model`, `metrics`, `compose`,
   `ingest`, `contract`, `docio`, `docmerge`, `layout`, `athlete`, `settings`,
   `version` and the load payload readers; only `cli` imports it; only
-  `index.store` imports `duckdb`.
+  `index.store` imports `duckdb`. Its derived producers (`index.derived`) also
+  import `history`, `plans`, `benchmarks` and `load.profile`, and
+  `metrics.mean_max` computes best efforts; only `index.registry` imports
+  `index.derived`.
 - Output documents must be valid, readable markdown in any renderer
   (GitHub, Obsidian, plain `cat`); PKM-specific affordances (frontmatter,
   wikilinks) degrade gracefully.

@@ -836,7 +836,7 @@ from here.
 
 - [ ] 6. Published statements, records and final validation
 
-- [ ] 6.1 Publish the derived tables and record the amendment
+- [x] 6.1 Publish the derived tables and record the amendment
   - **`CHANGELOG.md` `[Unreleased]` `### Added`**: the four derived tables and
     "run `fitdocs index` once after upgrading", per design.md
     § PublishedStatements.
@@ -1008,3 +1008,5 @@ from here.
 - 2026-10-07 task 3.1 accepted: fresh independent canonical 9,428 passed/two optional actionlint skips, explicit scoped mypy/Ruff clean, all 33 claimed and 15 own mutations RED/restored GREEN; parent fresh producer/rule 19 passed. Exact frozen seven-column mean_max schema and pure composed-activity engine projection verified. Registry integration and real composition/handoff remain tasks 4.1 and 5.3; no producer re-computation or base-file read.
 
 - 1.3 accepted: immutable snapshot/file/layout/held-key digests; fresh independent canonical suite 9439 passed/2 optional skips, all 32 mutation executions RED/restored GREEN, explicit two-file mypy and scoped Ruff clean. Parent fresh derived scope 26 passed. Typing-only repair preserves every assertion AST and production bytes; always explicitly type-check newly added test paths until 6.3 registration. Evidence: /private/tmp/analytics-derived-evidence/resume/1.3/review-remediation1/report.md.
+
+- 6.1 accepted: derived release notes, structure dependency clause, fit-ingest Requirement 19 and actual Amendment 6 with both test paths. Canonical fresh independent suite 9415 passed/2 optional skips; 21 claimed plus seven own mutations RED/restored GREEN, explicit mypy/Ruff clean, parent fresh 75 publication/changelog checks passed. Derived roadmap tick remains deferred until feature merge; final rebase must preserve analytics-index main 63d79a3 peer completion and registrations. Evidence: /private/tmp/analytics-derived-evidence/resume/6.1/review-remediation1/report.md.
