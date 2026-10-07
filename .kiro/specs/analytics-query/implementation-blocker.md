@@ -49,31 +49,29 @@ mypy344 andstrict2, diffcheck. Evidence
 
 The maintainer revoked the extra fresh-agent-per-subcall restriction; standard
 harness reuse now permits parallel implementation and independent review.
-All implementers remain Luna. Spill 2.3 and catalog 4.2 are implemented but
-remain unchecked after independent reviews found bounded test gaps.
+All implementers remain Luna. Catalog 4.2 is accepted after independent
+APPROVED: canonical 9,605 passed/two optional skips, all 38 claimed mutations
+and ten new distinct reviewer variants RED/restored GREEN, 42 clause groups
+PINNED with no survivors. All seven original tests and correct production
+were preserved. Fresh parent integration passed 267 scoped tests in 9.76 s,
+full Ruff/checkformat540/mypy345 and strict both files, with exact approved
+hashes. Evidence: `/private/tmp/analytics-query-review-catalog-repair/verdict.md`
+and `/private/tmp/analytics-query-parent-catalog-completion/verification.md`.
 
-Spill review passed both canonical runs (9,579 passed/two optional skips),
-all statics and all 24 claimed mutation trials. Independent variants exposed
-serial query execution, missing near-match cleanup names, listing before the
-skip-cleanup hook returns, and unexpected index-directory writes. Luna is
-repairing only test_spill.py; sandbox.py and test_sandbox.py remain byte-identical.
-The parent independently observed the new actual execute-through-fetch overlap
-guard fail under the old serial harness before authorizing its fix. Evidence:
-`/private/tmp/analytics-query-review2-3/verdict.md` and
-`/private/tmp/analytics-query-spill-test-repair/parent-guard-checkpoint.json`.
+Spill 2.3 remains unchecked. Its test repair resolves the four prior gaps:
+actual simultaneous execute/fetch intervals with nonempty spill witnesses,
+near-match cleanup names, skip-hook return before listing, and complete index
+entry comparisons. The second independent review passed canonical 9,581/two
+optional skips, statics and all43 claimed mutations, but found two new helper
+fixture survivors: omitted inventory recursion and omitted special entries.
+A bounded test-only nested-payload/special-node fixture repair is next;
+production and existing sandbox tests remain unchanged. Evidence:
+`/private/tmp/analytics-query-review-spill-repair/verdict.md`.
 
-Catalog review passed canonical 9,586/two optional skips, all statics and all
-17 claimed variants. Its exhaustive 41-variant sweep found four insensitive
-variants: registry-sourced table/column comments, trimming nonblank padding,
-and space-only recognition of blank comments. A test-only repair is queued;
-correct source and all seven prior tests must remain intact. The catalog
-mutation rationale now records runtime-equivalent filters and creation-time
-description application accurately. Evidence:
-`/private/tmp/analytics-query-review4-2/verdict.md`.
-
-The shared HealthFit root remains ready for both peers; query timings await
-the completed CLI (runner prepared, no query timing run yet). Six of 21 leaves
-are accepted (1.1/1.2/1.3/2.1/2.2/4.1); no feature GO or merge yet.
+Publication8.1 is running independently in its isolated tree. Completion
+roadmap ticks await actual merge. The shared HealthFit root remains ready
+for both peers; query timings await the completed CLI. Seven of21 leaves
+are accepted (1.1/1.2/1.3/2.1/2.2/4.1/4.2); no feature GO or merge yet.
 
 ## Historical tasks 1.3 and 2.1 preview blocker
 

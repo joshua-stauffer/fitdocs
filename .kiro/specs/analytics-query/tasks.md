@@ -729,7 +729,7 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
     no refused statement reached execution.
   - _Requirements: 1.5, 5.2, 5.5, 5.8_
 
-- [ ] 4. Core: freshness and the schema catalog
+- [x] 4. Core: freshness and the schema catalog
 
 - [x] 4.1 (P) Measure how far the index is from the data root
   - **`freshness.py`**, per design.md § Freshness:
@@ -830,7 +830,7 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
   - _Boundary: Freshness_
   - _Depends: 1.3_
 
-- [ ] 4.2 (P) Read the live catalog and render the schema reference
+- [x] 4.2 (P) Read the live catalog and render the schema reference
   - **`schemaview.py`**, catalog part, per design.md § SchemaView:
     - `CatalogColumn`/`CatalogTable`;
     - `read_catalog`, with the `current_database()`/`main`/not-temporary
@@ -1463,3 +1463,5 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 
 - 2026-10-07 standard harness reuse authorized by the maintainer; Luna implementers persist. Parent rebased onto main995db58's owning index fixture correction. Spill2.3 independent REJECTED despite canonical9579/2 optional, all24 claimed RED/restored and clean statics: actual work intervals were serial; near-match names, hook listing and inside-index arbitrary writes survive. Test-only repair preserves correct source and prior settings test; parent independently observed overlap guard soleRED under old serial harness before GO_FIX_GUARD. Evidence `/private/tmp/analytics-query-review2-3/verdict.md` and `/private/tmp/analytics-query-spill-test-repair/parent-guard-checkpoint.json`.
 - 2026-10-07 catalog4.2 independent REJECTED despite canonical9586/2 optional, all17 claimed RED/restored and clean statics: exhaustive41 unique variants found four survivors, live table/column registry substitutions, nonblank comment trimming and space-only blank normalization. Independent literal live-COMMENT controls discriminate each; bounded test-only repair must retain all seven prior tests and correct source. Task mutation prose clarified without changing runtime requirements: real catalog filters can be output-equivalent on current DuckDB, so a forwarding SQL recorder pins each required predicate; create_schema applies descriptions at creation with no later refresh reapplication. Evidence `/private/tmp/analytics-query-review4-2/verdict.md`. Neither task is accepted yet.
+
+- 2026-10-07 task4.2 accepted after independent APPROVED: canonical9605/two optional skips, all38 claimed plus10 new distinct reviewer variants RED/restored GREEN,42PINNED/0UNPINNED, original seven tests preserved. Fresh parent267 scoped tests9.76s, full Ruff/checkformat540/mypy345 and strict both files plus diff check passed; hashes match restored approved candidate. Evidence `/private/tmp/analytics-query-review-catalog-repair/verdict.md` and `/private/tmp/analytics-query-parent-catalog-completion/verification.md`. Spill2.3 second review found only inventory helper fixture gaps (nested descendants/special entries); source remains correct and unaccepted, exhaustive test-only repair pending.
