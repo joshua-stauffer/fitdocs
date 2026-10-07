@@ -1,6 +1,6 @@
-# Historical analytics-derived handoff — task 1.1 resumed
+# Historical analytics-derived handoff — implementation complete
 
-The earlier blocker below was resolved by the owning polling-watcher fix `0b92561`. Fresh independent task 1.1 review is APPROVED: canonical 9,395 passed and two optional actionlint skips in 262.54 seconds; all 19 claimed plus two reviewer mutations failed as intended and restored green. Parent scoped verification: 113 passed. Task 1.1 is accepted; later tasks and measurements remain pending. The feature is not yet complete or merged. The recovery patch below is historical and must not be applied over the accepted files.
+The earlier preview blocker was resolved by the owning polling-watcher fix `0b92561`. All 20 leaf tasks and equivalent HealthFit measurements are now independently accepted. Fresh feature validation is GO; see `implementation-validation.md` for canonical gates, coverage, integration and limits. The recovery patch below is historical and must not be applied over accepted files. Merge-back is recorded separately in the shared agent log after main push.
 
 # Earlier handoff (historical)
 

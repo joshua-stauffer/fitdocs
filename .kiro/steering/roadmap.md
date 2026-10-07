@@ -2355,7 +2355,7 @@ None. Every piece of the work has a spec home.
   - the packaged agent skill;
   - `docs/analytics.md` with a live-schema pin.
   Dependencies: analytics-index
-- [ ] analytics-derived — **spec written 2026-10-05** (Phase 10 batch, wave 2, `tasks-generated`, all approvals set; 10 requirements / 64 criteria, 6 majors / 20 executable tasks, 6.4 maintainer-only; independent Step 3.5 review, two rounds; cross-spec reviewed, two rounds, READY; SCHEMA_VERSION main+1 at landing; fit-ingest amendment, next free number). Analytics-index prerequisite fully verified on 2026-10-07 and available on main. Parallel with analytics-query. Four producers through the seam:
+- [x] analytics-derived — **implemented and verified 2026-10-07** (20/20 leaf tasks accepted; plain/UTC/CI and final canonical 9629 passed/2 optional skips; artifact/liveness gates and review of all 64 criteria passed; first-lander publication handoff to analytics-query task 7.3). **Spec written 2026-10-05** (Phase 10 batch, wave 2, `tasks-generated`, all approvals set; 10 requirements / 64 criteria, 6 majors / 20 executable tasks, 6.4 maintainer-only; independent Step 3.5 review, two rounds; cross-spec reviewed, two rounds, READY; SCHEMA_VERSION main+1 at landing; fit-ingest amendment, next free number). Analytics-index prerequisite fully verified on 2026-10-07 and available on main. Parallel with analytics-query. Four producers through the seam:
   - mean-max curves (new `fitdocs.metrics` function);
   - daily load series (history's builder);
   - benchmark timeline (`athlete.toml`);
