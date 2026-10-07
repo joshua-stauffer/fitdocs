@@ -930,8 +930,9 @@ def sync_tree(tree: Mapping[str, bytes], root: Path) -> None: ...
 - **Serve.** Starts `zensical serve -f mkdocs.yml -a <addr>` in a live root
   and returns the process handle. The caller owns its lifetime. The process
   inherits the caller's environment plus `ZENSICAL_POLL_WATCHER=1`, which
-  selects Zensical's polling watcher (every 500 ms). The native watcher uses
-  macOS FSEvents, which drops or delays events while `fseventsd` is
+  selects Zensical's polling watcher (every 500 ms) on every platform,
+  including Linux CI, which used inotify before. On macOS the native watcher
+  uses FSEvents, which drops or delays events while `fseventsd` is
   saturated, and serve then keeps serving stale pages (amended 2026-10-07;
   evidence in `.kiro/queue/2026-10-06-preview-delete-readiness-race.md`).
 
@@ -1640,8 +1641,8 @@ tracked, because the tracked-file guard refuses any non-regular file.
 - **Target.** A full build of the 21-page draft completes in a few seconds on
   a laptop. The generator measured ~0.3 s at discovery, and the script's work
   is linear in content size.
-- **Preview latency.** Detection within the 0.5 s poll, plus two generator
-  builds (check, then serve's own), is about 1–2 s per save at the draft's
-  size.
+- **Preview latency.** Detection within the 0.5 s poll, plus serve's own
+  0.5 s poll of `live/`, plus two generator builds (check, then serve's own),
+  is about 1–2 s per save at the draft's size.
 - **Pages limits.** The site is limited to 1 GB and deploys to 10 min. The
   draft site is about 1.5 MB.
