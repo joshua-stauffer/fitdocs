@@ -203,3 +203,38 @@ third debug round or retry. Evidence:
 `/private/tmp/analytics-index-evidence/verification-resume/final-review/`
 and `initial-edit-debug2/REPORT.md`. Floor, release artifacts and installed
 wheel smoke passed independently. Task 8.4 remains blocked on this owner.
+
+### Native cause found: fseventsd starvation, not fitdocs or Zensical (2026-10-07)
+
+A standalone reproducer outside pytest (`/private/tmp/docs-site-preview-fsevents-evidence/repro.py`)
+drove the real build → `sync_tree` → `zensical serve` 0.0.65 path and
+stalled at the initial edit in 8 of 38 trials. A `sample` of every stalled
+generator showed it idle: all `zrx/executor` threads parked, the
+`notify-rs fsevents loop` thread in `CFRunLoopRun`. No event had arrived.
+
+An independent minimal FSEvents watcher (`fsw.c`, `FileEvents|NoDefer`,
+latency 0.05 s) on the same `live/` directory missed the same events. In
+**every** stalled run3 trial (4, 5, 6, 7, 14) it got no `staged/why.md` event
+for the edit within 20 s: none at all, or only after the later touch at
+about 69–75 s. Healthy trials got the event within about 2 s of the sync.
+Neither stream saw drop flags. So macOS delivered the events late or not at
+all to both subscribers, and Zensical only inherits that.
+
+At the time, `fseventsd` was using 176 % CPU (load average 41–51). The main
+churn was another project's runaway review harness running
+`cp -R /. <tmpdir>`, a recursive copy of the whole root filesystem (6.2 GB
+written, data volume 94 % full). Peer sessions here also cause heavy file
+churn: HealthFit corpus copies, full syncs and concurrent full suites. The
+earlier unexplained initial-edit, add and fix-stage stalls (live process
+alive, staged bytes correct, HTML stale) match this mechanism. The
+deletion-predicate repair `2c17eb3` is still correct and separate.
+
+Implication: no fitdocs or Zensical patch removes this. Any FSEvents
+watcher stalls while `fseventsd` is saturated. Before running a canonical
+gate, check `ps -o pcpu= -p $(pgrep -x fseventsd)`. Do not run
+the live-preview tests while it is saturated, and do not treat a stall
+under that condition as a regression. A product-side hardening option for a
+human decision: `preview.serve` already knows when it synced. It could
+restart, or otherwise force, the generator when served output stays stale.
+That changes the docs-site design's one-process contract and needs approval
+first.
