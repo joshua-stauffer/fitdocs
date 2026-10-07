@@ -614,3 +614,39 @@ def test_start_serve_returns_the_live_process(
         "127.0.0.1:8123",
     ]
     assert record_lines(record / "cwd") == [str(root.resolve())]
+
+
+def test_start_serve_selects_the_polling_watcher(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The serve process polls for changes and keeps the caller's environment.
+
+    The native watcher relies on macOS FSEvents. When `fseventsd` is saturated,
+    those events arrive late or not at all, and the preview keeps serving stale
+    pages (`.kiro/queue/2026-10-06-preview-delete-readiness-race.md`). Zensical
+    uses its polling watcher when `ZENSICAL_POLL_WATCHER` is set.
+
+    Dies on: the variable dropped (`unset`); the inherited environment replaced
+    by the variable alone (the sentinel is lost).
+    """
+    bin_dir = fake_interpreter(tmp_path, monkeypatch)
+    monkeypatch.delenv("ZENSICAL_POLL_WATCHER", raising=False)
+    monkeypatch.setenv("FITDOCS_SERVE_SENTINEL", "kept")
+    record = tmp_path / "record"
+    record.mkdir()
+    write_stub(
+        bin_dir / "zensical",
+        f"printf '%s\\n' \"${{ZENSICAL_POLL_WATCHER-unset}}\" > '{record}/poll'\n"
+        f"printf '%s\\n' \"${{FITDOCS_SERVE_SENTINEL-unset}}\" > '{record}/sentinel'\n",
+    )
+    root = tmp_path / "root"
+    root.mkdir()
+    process = start_serve(root, "127.0.0.1:8123")
+    try:
+        assert process.wait(timeout=30) == 0
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+    assert record_lines(record / "poll") == ["1"]
+    assert record_lines(record / "sentinel") == ["kept"]

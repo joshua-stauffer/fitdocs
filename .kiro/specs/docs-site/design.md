@@ -928,7 +928,12 @@ def sync_tree(tree: Mapping[str, bytes], root: Path) -> None: ...
   - The traceback is never reported.
 - The full output is returned for `--verbose`.
 - **Serve.** Starts `zensical serve -f mkdocs.yml -a <addr>` in a live root
-  and returns the process handle. The caller owns its lifetime.
+  and returns the process handle. The caller owns its lifetime. The process
+  inherits the caller's environment plus `ZENSICAL_POLL_WATCHER=1`, which
+  selects Zensical's polling watcher (every 500 ms). The native watcher uses
+  macOS FSEvents, which drops or delays events while `fseventsd` is
+  saturated, and serve then keeps serving stale pages (amended 2026-10-07;
+  evidence in `.kiro/queue/2026-10-06-preview-delete-readiness-race.md`).
 
 **Contracts**: Service [x]
 

@@ -238,3 +238,25 @@ human decision: `preview.serve` already knows when it synced. It could
 restart, or otherwise force, the generator when served output stays stale.
 That changes the docs-site design's one-process contract and needs approval
 first.
+
+### Repair: Zensical polling watcher (2026-10-07)
+
+Josh approved the product-side repair. `generator.start_serve` now starts
+`zensical serve` with the caller's environment plus `ZENSICAL_POLL_WATCHER=1`.
+Zensical 0.0.65 reads that variable in
+`crates/zensical-watch/src/agent/monitor.rs`, and any value selects notify's
+`PollWatcher` (500 ms, or `ZENSICAL_POLL_INTERVAL`). No FSEvents are involved.
+
+Under continued load, with `fseventsd` at about 100 % CPU:
+- The reproducer with polling ran 24 of 24 trials with no stall; the edit was
+  served 0.31–0.42 s after the sync. In the same trials the independent
+  FSEvents watcher missed the edit 19 times (`run4-poll/`).
+- Both live-preview tests, run six times each: 12 of 12 passed with the fix.
+  Six runs at the unfixed `HEAD` the same way failed 4 of 12, with
+  `the added page` (twice) and `the fixed text of /why/` hitting the 20 s
+  limit. Deadlines and assertions are unchanged.
+- Unit pin: `test_start_serve_selects_the_polling_watcher`. It fails when the
+  variable is dropped or when the inherited environment is replaced.
+
+Peers blocked on the live-preview gate should rebase onto the merge and
+rerun their gates.

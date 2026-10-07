@@ -6,6 +6,7 @@ report into `Problem` lines; a traceback is never part of one.
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -17,6 +18,10 @@ from scripts.sitebuild.model import Problem
 GENERATOR_PATH = "site generator"  # Problem.path for a problem naming no file
 _ABORT_MESSAGE = "Aborted because --strict flag is set"
 _TRACEBACK_HEADER = "Traceback (most recent call last):"
+# Any value selects Zensical's polling watcher (every 500 ms). Its native
+# watcher uses macOS FSEvents, which drops or delays events while `fseventsd`
+# is saturated, and serve then keeps serving stale pages.
+_POLL_WATCHER = {"ZENSICAL_POLL_WATCHER": "1"}
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 _REPORT_LINE = re.compile(r"^(Warning|Error|RuntimeError):(.*)$")
@@ -121,8 +126,9 @@ def _warning(message: str, following: list[str]) -> Problem:
 
 
 def start_serve(root: Path, addr: str) -> subprocess.Popen[bytes]:
-    """Start ``zensical serve`` in ``root``; the caller owns the process."""
+    """Start ``zensical serve`` in ``root``, polling for changes; the caller owns it."""
     return subprocess.Popen(
         [str(generator_executable()), "serve", "-f", "mkdocs.yml", "-a", addr],
         cwd=root,
+        env={**os.environ, **_POLL_WATCHER},
     )
