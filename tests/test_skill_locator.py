@@ -16,6 +16,7 @@ import pytest
 import fitdocs
 from fitdocs import agentskill
 from fitdocs.agentskill import (
+    ANALYTICS_SKILL_NAME,
     BLOCK_SKILL_NAME,
     INBOX_SKILL_NAME,
     PACKAGED_SKILLS,
@@ -30,6 +31,7 @@ _PUBLIC_NAMES = {
     "SKILLS_DIR",
     "SKILL_FILENAME",
     "BLOCK_SKILL_NAME",
+    "ANALYTICS_SKILL_NAME",
     "INBOX_SKILL_NAME",
     "PACKAGED_SKILLS",
     "skill_root",
@@ -54,8 +56,18 @@ def test_registry_contains_the_inbox_skill_name() -> None:
     assert INBOX_SKILL_NAME == "fitdocs-workouts"
 
 
-def test_registry_order_is_block_then_inbox() -> None:
-    assert PACKAGED_SKILLS == (BLOCK_SKILL_NAME, INBOX_SKILL_NAME)
+def test_registry_order_is_block_then_inbox_then_analytics() -> None:
+    assert PACKAGED_SKILLS == (BLOCK_SKILL_NAME, INBOX_SKILL_NAME, ANALYTICS_SKILL_NAME)
+
+
+def test_analytics_skill_is_the_third_registered_skill() -> None:
+    assert ANALYTICS_SKILL_NAME == "fitdocs-analytics"
+    assert PACKAGED_SKILLS == (BLOCK_SKILL_NAME, INBOX_SKILL_NAME, ANALYTICS_SKILL_NAME)
+    root = skill_root(ANALYTICS_SKILL_NAME)
+    assert root is not None
+    assert root.name == ANALYTICS_SKILL_NAME
+    assert skill_file(ANALYTICS_SKILL_NAME) == root / SKILL_FILENAME
+    assert skill_files(ANALYTICS_SKILL_NAME) == (root / SKILL_FILENAME,)
 
 
 def test_skill_root_is_a_real_directory_named_for_the_skill() -> None:

@@ -16,6 +16,7 @@ installed directory, one line per skill:
 $ fitdocs skill
 build-training-block  /path/to/site-packages/fitdocs/skills/build-training-block
 fitdocs-workouts  /path/to/site-packages/fitdocs/skills/fitdocs-workouts
+fitdocs-analytics  /path/to/site-packages/fitdocs/skills/fitdocs-analytics
 ```
 
 - **`build-training-block`** walks an agent through building a training
@@ -25,6 +26,9 @@ fitdocs-workouts  /path/to/site-packages/fitdocs/skills/fitdocs-workouts
   configured connectors, drains the fitdocs inbox into workout documents,
   and reads the resulting pull and drain reports — the turnkey workflow for
   a wiki's agent to run whenever new `.fit` files have arrived.
+- **`fitdocs-analytics`** reads the local analytics index and teaches an
+  agent to check freshness, write read-only SQL, and report the query with
+  each answer.
 
 ## Installing a skill
 

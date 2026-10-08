@@ -58,6 +58,7 @@ required = [
     "fitdocs/skills/build-training-block/SKILL.md",
     "fitdocs/skills/build-training-block/example-block.toml",
     "fitdocs/skills/fitdocs-workouts/SKILL.md",
+    "fitdocs/skills/fitdocs-analytics/SKILL.md",
 ]
 
 [sdist]

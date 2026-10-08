@@ -140,7 +140,7 @@ def test_real_policy_loads() -> None:
     assert isinstance(policy, ArtifactPolicy)
 
 
-def test_wheel_required_has_the_five_design_members_including_the_inbox_skill() -> None:
+def test_wheel_required_has_the_six_design_members_including_packaged_skills() -> None:
     policy = load_policy(REAL_POLICY_PATH)
     for member in (
         "fitdocs/__init__.py",
@@ -148,6 +148,7 @@ def test_wheel_required_has_the_five_design_members_including_the_inbox_skill() 
         "fitdocs/skills/build-training-block/SKILL.md",
         "fitdocs/skills/build-training-block/example-block.toml",
         "fitdocs/skills/fitdocs-workouts/SKILL.md",
+        "fitdocs/skills/fitdocs-analytics/SKILL.md",
     ):
         assert member in policy.wheel_required
 
@@ -980,6 +981,7 @@ _CLEAN_WHEEL_MEMBERS = {
     "fitdocs/skills/build-training-block/SKILL.md": b"# skill",
     "fitdocs/skills/build-training-block/example-block.toml": b"",
     "fitdocs/skills/fitdocs-workouts/SKILL.md": b"# skill",
+    "fitdocs/skills/fitdocs-analytics/SKILL.md": b"# skill",
 }
 
 _CLEAN_SDIST_MEMBERS = {

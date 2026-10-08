@@ -16,7 +16,9 @@ its sports/modality vocabularies, its byte-identical TOML example, and its
 `regen`-scoping rule) that no other packaged skill is required to carry.
 Distribution task 4.2 adds the inbox skill's entry to ``_SKILL_PROFILES``
 (its heading tuple and its channel binding) and its own channel-binding
-test, without touching the shared-contract tests above it.
+test, without touching the shared-contract tests above it. Task 7.1 adds the
+analytics skill's heading profile, so the shared contract tests apply to it
+through the same registry-driven parameterization.
 
 See change-protocol § Fixture Discrimination for the mutation each
 assertion here is meant to red.
@@ -38,6 +40,7 @@ import typer.main
 import yaml
 
 from fitdocs.agentskill import (
+    ANALYTICS_SKILL_NAME,
     BLOCK_SKILL_NAME,
     INBOX_SKILL_NAME,
     PACKAGED_SKILLS,
@@ -82,6 +85,17 @@ _INBOX_HEADINGS: tuple[str, ...] = (
     "Commands to run",
     "Reading the report",
     "Ownership boundary",
+    "Further reading",
+)
+
+_ANALYTICS_HEADINGS: tuple[str, ...] = (
+    "When this applies",
+    "Check the index first",
+    "Ask with fitdocs query",
+    "Worked examples",
+    "Reporting an answer",
+    "What the sandbox refuses",
+    "Ownership",
     "Further reading",
 )
 
@@ -195,6 +209,7 @@ _SKILL_PROFILES: dict[str, _SkillProfile] = {
         channels=_INBOX_CHANNELS_LITERAL,
         pull_channels=_PULL_CHANNELS_LITERAL,
     ),
+    ANALYTICS_SKILL_NAME: _SkillProfile(headings=_ANALYTICS_HEADINGS),
 }
 
 
@@ -491,6 +506,202 @@ def test_heading_order_matches_the_profile(name: str) -> None:
     _frontmatter, body = _split_frontmatter(text)
     order = _heading_order(body)
     assert order == _SKILL_PROFILES[name].headings
+
+
+def test_analytics_skill_teaches_query_limits_formats_and_refusals() -> None:
+    text = _skill_text(ANALYTICS_SKILL_NAME)
+    _frontmatter, body = _split_frontmatter(text)
+    sections = _sections(body)
+    query = sections["Ask with fitdocs query"]
+    refusals = sections["What the sandbox refuses"]
+    query_text = " ".join(query.split())
+    refusal_text = " ".join(refusals.split())
+    format_sentence = (
+        "Use `--format table`, `--format csv`, or `--format json`; the default is a "
+        "table in a terminal and CSV when output is redirected."
+    )
+    assert format_sentence in query_text
+    limits_sentence = (
+        "Results are limited to 1,000 rows by default. Set another positive limit "
+        "with `--max-rows`. Each query has a default time limit of 30 seconds; set "
+        "a different positive duration with `--timeout`."
+    )
+    assert limits_sentence in query_text
+    refusals_sentence = (
+        "It refuses writes, multiple statements, changing settings, loading or "
+        "installing extensions, attaching databases, copying files, file access "
+        "outside the index, and network access."
+    )
+    assert refusals_sentence in refusal_text
+
+
+def test_analytics_skill_has_four_sql_examples_and_expected_command_shape() -> None:
+    text = _skill_text(ANALYTICS_SKILL_NAME)
+    _frontmatter, body = _split_frontmatter(text)
+    stripped, fences = _strip_fences(body)
+    worked_examples = _sections(body)["Worked examples"]
+    heading_matches = list(re.finditer(r"(?m)^### (.+)$", worked_examples))
+    headings = tuple(match.group(1).strip() for match in heading_matches)
+    core_headings = (
+        "Weekly running volume",
+        "Time in zones",
+        "Training load",
+        "Races, tests and hard efforts",
+    )
+    languages = tuple(language for language, _content in fences)
+    inline_spans = _code_spans_in(stripped)
+    assert (
+        tuple(heading for heading in headings if heading in core_headings)
+        == core_headings
+    ), "the four core example headings must remain in order"
+    for index, match in enumerate(heading_matches):
+        heading = match.group(1).strip()
+        if heading not in core_headings:
+            continue
+        end = (
+            heading_matches[index + 1].start()
+            if index + 1 < len(heading_matches)
+            else len(worked_examples)
+        )
+        _core_text, core_fences = _strip_fences(worked_examples[match.end() : end])
+        assert sum(language == "sql" for language, _content in core_fences) == 1, (
+            f"core example {heading!r} must have exactly one SQL fence"
+        )
+    assert languages.count("bash") == 1
+    assert "fitdocs query --schema" in inline_spans
+    assert "fitdocs index" in inline_spans
+
+
+def test_analytics_core_example_guard_allows_appended_derived_example(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Task 7.3 may append derived examples after the four core examples."""
+    original_text = _skill_text(ANALYTICS_SKILL_NAME)
+    derived_example = "### Best efforts\n\n```sql\nSELECT * FROM mean_max;\n```\n\n"
+    extended_text = original_text.replace(
+        "## Reporting an answer", derived_example + "## Reporting an answer", 1
+    )
+    assert extended_text != original_text, "vacuous control: insertion point missing"
+    monkeypatch.setitem(
+        globals(),
+        "_skill_text",
+        lambda name: extended_text if name == ANALYTICS_SKILL_NAME else original_text,
+    )
+
+    test_analytics_skill_has_four_sql_examples_and_expected_command_shape()
+
+
+def test_analytics_core_example_guard_checks_fences_per_core_subsection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Four SQL fences cannot compensate for an uneven core distribution."""
+    malformed_core_skill = """---
+name: fitdocs-analytics
+description: Use when asking about training.
+license: MIT
+compatibility: fitdocs command and a built index
+metadata:
+  version: 1.0.0
+---
+## When this applies
+## Check the index first
+Use `fitdocs query --schema` and `fitdocs index`.
+## Ask with fitdocs query
+```bash
+fitdocs query --schema
+```
+## Worked examples
+### Weekly running volume
+```sql
+SELECT 1;
+```
+```sql
+SELECT 2;
+```
+### Time in zones
+No SQL fence here.
+### Training load
+```sql
+SELECT 3;
+```
+### Races, tests and hard efforts
+```sql
+SELECT 4;
+```
+## Reporting an answer
+## What the sandbox refuses
+## Ownership
+## Further reading
+"""
+    assert malformed_core_skill.count("```sql") == 4
+    for heading in (
+        "Weekly running volume",
+        "Time in zones",
+        "Training load",
+        "Races, tests and hard efforts",
+    ):
+        assert f"### {heading}" in malformed_core_skill
+
+    with monkeypatch.context() as scoped_patch:
+        scoped_patch.setitem(
+            globals(),
+            "_skill_text",
+            lambda name: malformed_core_skill if name == ANALYTICS_SKILL_NAME else "",
+        )
+        with pytest.raises(AssertionError, match="core example"):
+            test_analytics_skill_has_four_sql_examples_and_expected_command_shape()
+
+
+def test_analytics_core_example_guards_allow_four_appended_derived_examples(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Task 7.3 examples coexist with both core-example guard controls."""
+    original_text = _skill_text(ANALYTICS_SKILL_NAME)
+    derived_examples = (
+        "### Best efforts\n\n```sql\nSELECT * FROM mean_max;\n```\n\n"
+        "### Fitness, fatigue and form\n\n```sql\nSELECT * FROM load_series;\n```\n\n"
+        "### Thresholds in force\n\n```sql\nSELECT * FROM benchmark_periods;\n```\n\n"
+        "### Planned sessions not logged\n\n"
+        "```sql\nSELECT * FROM planned_workouts;\n```\n\n"
+    )
+    extended_text = original_text.replace(
+        "## Reporting an answer", derived_examples + "## Reporting an answer", 1
+    )
+    assert extended_text != original_text, (
+        "the derived-example insertion point is missing"
+    )
+    for heading in (
+        "Best efforts",
+        "Fitness, fatigue and form",
+        "Thresholds in force",
+        "Planned sessions not logged",
+    ):
+        assert f"### {heading}" in extended_text.splitlines()
+
+    with monkeypatch.context() as scoped_patch:
+        scoped_patch.setitem(
+            globals(),
+            "_skill_text",
+            lambda name: (
+                extended_text if name == ANALYTICS_SKILL_NAME else original_text
+            ),
+        )
+        test_analytics_skill_has_four_sql_examples_and_expected_command_shape()
+        test_analytics_core_example_guard_checks_fences_per_core_subsection(
+            scoped_patch
+        )
+
+
+def test_analytics_skill_has_wiki_listing_line_and_description_bullet() -> None:
+    wiki_text = (_PROJECT_ROOT / "docs" / "wiki-integration.md").read_text(
+        encoding="utf-8"
+    )
+    section = _sections(wiki_text)["The packaged skills"]
+    assert (
+        "fitdocs-analytics  /path/to/site-packages/fitdocs/skills/fitdocs-analytics"
+        in section
+    )
+    assert "- **`fitdocs-analytics`**" in section
 
 
 # --- channel binding (Req 8.2, 8.8) -----------------------------------------

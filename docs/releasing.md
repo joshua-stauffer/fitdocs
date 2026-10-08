@@ -71,13 +71,15 @@ open a fresh `## [Unreleased]` above it for the next round of work:
 ## [X.Y.Z] - YYYY-MM-DD
 ```
 
-The released version literal must be bumped to the same `X.Y.Z` in **three**
-tracked places in the same change, not one: `[project].version` in
-[`pyproject.toml`](../pyproject.toml), and `metadata.version` in **both**
+The released version literal must be bumped to the same `X.Y.Z` in the four tracked places:
+`[project].version` in
+[`pyproject.toml`](../pyproject.toml), and `metadata.version` in all three
 packaged skills' frontmatter —
 [`src/fitdocs/skills/fitdocs-workouts/SKILL.md`](../src/fitdocs/skills/fitdocs-workouts/SKILL.md)
 and
-[`src/fitdocs/skills/build-training-block/SKILL.md`](../src/fitdocs/skills/build-training-block/SKILL.md).
+[`src/fitdocs/skills/build-training-block/SKILL.md`](../src/fitdocs/skills/build-training-block/SKILL.md),
+and
+[`src/fitdocs/skills/fitdocs-analytics/SKILL.md`](../src/fitdocs/skills/fitdocs-analytics/SKILL.md).
 Follow [`CHANGELOG.md`](../CHANGELOG.md)'s own convention note for the entry
 itself. `tests/test_changelog.py`, `tests/test_version_identity.py`, and
 `tests/test_agent_skill.py` keep this honest — run them before moving on:
