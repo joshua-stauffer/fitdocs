@@ -1119,6 +1119,7 @@ _REQUIRED_ENTRY_POINT_LINKS = [
     "plugins.md",
     "compatibility.md",
     "releasing.md",
+    "analytics.md",
     "../CONTRIBUTING.md",
 ]
 

@@ -1082,9 +1082,9 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
     boundary suites are green.
   - _Requirements: 1.5, 5.8, 7.1, 7.2, 7.3, 7.4, 7.5, 9.5_
 
-- [ ] 6. The analytics documentation
+- [x] 6. The analytics documentation
 
-- [ ] 6.1 Publish `docs/analytics.md` with its schema reference held to the live schema
+- [x] 6.1 Publish `docs/analytics.md` with its schema reference held to the live schema
   - **`docs/analytics.md`**: the seven sections of design.md § Docs and
     Records.
     - The schema reference sits between `<!-- schema-reference:start -->` and
@@ -1499,3 +1499,5 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 - Task 8.3 (2026-10-08): authorized copied-root measurements recorded in research (2,517 FIT files; 2,502 pages; 5,636,964 records); pages/schema/records aggregate 1.530/1.501/1.457 s, each exit 0. Preparation durations are separate. Independent supplementary unmodified canonical 10,056 passed/two optional skips, actual exit 0, with inventories/HOME/process preservation. Parent independently verified saved receipts and nonempty outputs privately without repeating the measurements. Original OOM failure and open reliability queue remain; healthy full-context diagnostics and the fresh gate establish no causal repair.
 
 - Task 5.4: four guard surfaces accepted with actual facade-only attachment setup and single logging exit membership {0,1}. Independent canonical 10,069 passed/two optional skips, exit 0; fresh parent 236 relevant tests plus whole Ruff/format/configured mypy/strict all four and exact hashes/HOME passed. Nine runtime controls and four reviewer controls discriminate; timeout-disabled control proves finite reachability/reaping only. Genuine pre-helper OFF failures preserved; historical ON source snapshot remains unavailable, and earlier 19/35 totals are not promoted. Source unchanged; spill and preview reliability queues remain open without causal-repair claims.
+
+- Task 6.1: analytics guide, live schema-reference regeneration and docs/package wiring accepted. Independent final canonical 10,081 passed/two optional skips, exit 0; fresh parent 54 tests/whole Ruff and format/configured mypy/strict both owned test modules and exact hashes/HOME passed. Required no-argument regeneration now uses the module-relative page, retains explicit PAGE and rejects extra arguments; actual parent no-argument command leaves page bytes unchanged and HOME empty. The earlier explicit-only approval and actual missing-command failure are historical; corrected body-absent OFF was independently reproduced before ON/removal. Four new claimed and two meaningful independent controls discriminate, plus three retained helper-interaction rechecks. Duplicate identical write probe is harness-only; no exactly-once spec claim. Prior 19 finite controls and declared partial semantic-prose coverage remain bounded. Evidence `/private/tmp/analytics-query-docs-default-entry-independent-review/REVIEW.md` and `/private/tmp/analytics-query-docs-default-parent-final/verification.md`. Sixteen of 21 leaves accepted; skill registration and publication records are unlocked.
