@@ -572,6 +572,23 @@ def test_analytics_skill_has_four_sql_examples_and_expected_command_shape() -> N
     assert "fitdocs index" in inline_spans
 
 
+def test_analytics_skill_teaches_query_order_with_prose_outside_fences() -> None:
+    text = _skill_text(ANALYTICS_SKILL_NAME)
+    _frontmatter, body = _split_frontmatter(text)
+    prose, _fences = _strip_fences(body)
+    required_phrases = (
+        "fitdocs query --schema",
+        "Prefer the index for counts, totals, averages, distributions and trends.",
+        "Show the SQL used to support your answer.",
+        "NULL means absent, never zero.",
+    )
+    positions = []
+    for phrase in required_phrases:
+        assert phrase in prose, f"missing teaching phrase outside fences: {phrase!r}"
+        positions.append(prose.index(phrase))
+    assert positions == sorted(positions), "analytics teaching phrases are out of order"
+
+
 def test_analytics_core_example_guard_allows_appended_derived_example(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -873,6 +890,9 @@ def test_pull_error_row_states_never_connect_and_never_retry() -> None:
 _CONNECTORS_DOC_URL = (
     "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md"
 )
+_ANALYTICS_DOC_URL = (
+    "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/analytics.md"
+)
 
 
 def test_inbox_commands_section_states_the_three_routine_sentences() -> None:
@@ -924,6 +944,84 @@ def test_inbox_further_reading_links_the_connectors_doc() -> None:
     sections = _sections(body)
     further_reading = sections["Further reading"]
     assert _CONNECTORS_DOC_URL in further_reading
+
+
+def test_inbox_further_reading_links_the_analytics_doc() -> None:
+    text = _skill_text(INBOX_SKILL_NAME)
+    _frontmatter, body = _split_frontmatter(text)
+    further_reading, _fences = _strip_fences(_sections(body)["Further reading"])
+    matching_bullets = [
+        line
+        for line in further_reading.splitlines()
+        if re.match(r"^[ \t]*-[ \t]+", line)
+        and _ANALYTICS_DOC_URL in _LINK_TARGET_RE.findall(line)
+        and re.search(r"(?<![A-Za-z0-9_-])fitdocs-analytics(?![A-Za-z0-9_-])", line)
+    ]
+    assert len(matching_bullets) == 1, (
+        "Further reading needs exactly one bullet linking the analytics page "
+        "and naming fitdocs-analytics"
+    )
+
+
+@pytest.mark.parametrize(
+    "pointer_mutation",
+    (
+        "url-in-label-target-wrong",
+        "dash-without-separator",
+        "fenced-bullet",
+        "identifier-prefix",
+        "identifier-suffix",
+    ),
+)
+def test_inbox_analytics_link_guard_rejects_malformed_pointer_inputs(
+    monkeypatch: pytest.MonkeyPatch, pointer_mutation: str
+) -> None:
+    original_text = _skill_text(INBOX_SKILL_NAME)
+    bullet = next(
+        line for line in original_text.splitlines() if _ANALYTICS_DOC_URL in line
+    )
+    assert _ANALYTICS_DOC_URL in _LINK_TARGET_RE.findall(bullet)
+    assert "fitdocs-analytics" in bullet
+    if pointer_mutation == "url-in-label-target-wrong":
+        wrong_target = _ANALYTICS_DOC_URL.replace("analytics.md", "inbox.md")
+        mutated_bullet = (
+            f"- [{_ANALYTICS_DOC_URL}]({wrong_target}) — use the `fitdocs-analytics` "
+            "skill for statistical questions and query guidance."
+        )
+    elif pointer_mutation == "dash-without-separator":
+        mutated_bullet = (
+            f"-[Querying the analytics index]({_ANALYTICS_DOC_URL}) — use the "
+            "`fitdocs-analytics` skill for statistical questions and query guidance."
+        )
+    elif pointer_mutation == "fenced-bullet":
+        fenced_bullet = (
+            f"- [Querying the analytics index]({_ANALYTICS_DOC_URL}) — use the "
+            "`fitdocs-analytics` skill for statistical questions and query guidance."
+        )
+        mutated_bullet = f"```text\n{fenced_bullet}\n```"
+    elif pointer_mutation == "identifier-suffix":
+        mutated_bullet = (
+            f"- [Querying the analytics index]({_ANALYTICS_DOC_URL}) — use the "
+            "`fitdocs-analytics-extra` skill for statistical questions and "
+            "query guidance."
+        )
+    else:
+        mutated_bullet = (
+            f"- [Querying the analytics index]({_ANALYTICS_DOC_URL}) — use the "
+            "`other-fitdocs-analytics` skill for statistical questions and "
+            "query guidance."
+        )
+    mutated_text = original_text.replace(bullet, mutated_bullet, 1)
+    assert mutated_text != original_text
+
+    with monkeypatch.context() as scoped_patch:
+        scoped_patch.setitem(
+            globals(),
+            "_skill_text",
+            lambda name: mutated_text if name == INBOX_SKILL_NAME else original_text,
+        )
+        with pytest.raises(AssertionError, match="exactly one bullet"):
+            test_inbox_further_reading_links_the_analytics_doc()
 
 
 def test_move_failures_row_states_processed_and_retried_never_reprocess() -> None:

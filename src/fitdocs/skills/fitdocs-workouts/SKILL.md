@@ -110,6 +110,7 @@ this skill.
 
 ## Further reading
 
+- [Querying the analytics index](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/analytics.md) — use the `fitdocs-analytics` skill for statistical questions and query guidance.
 - [Inbox interface](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/inbox.md) -- default location, every settings key, drain semantics, and the safeguards.
 - [Connectors](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md) -- what a connector is, `[connectors.<name>]` keys, `fitdocs connect`/`fitdocs pull`, credentials, and what leaves the machine.
 - [Ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md) -- the published detail behind the in-tree declaration.
