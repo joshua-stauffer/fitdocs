@@ -225,7 +225,7 @@ def test_file_and_explicit_stdin_are_strict_utf8_and_sql_is_untrimmed(
     file_result = _invoke(["--file", str(source)])
     assert (file_result.exit_code, file_result.stdout, file_result.stderr) == (
         0,
-        "marker\n731",
+        "marker\n731\n",
         "",
     )
     stdin_result = _invoke(["-"], input_text="SELECT 419")
@@ -309,7 +309,7 @@ def test_timeout_and_row_limit_are_forwarded_as_distinct_typed_values(
         '{"columns": ["marker"], "rows": [\n'
         "[731]\n"
         '], "row_count": 1, "truncated": false, "max_rows": 7, '
-        '"freshness": {}}',
+        '"freshness": {}}\n',
         "",
     )
     assert len(calls) == 1
@@ -341,7 +341,7 @@ def test_default_limit_timeout_and_explicit_format_contract(
     request, _env = calls[0]
     assert request.max_rows == DEFAULT_MAX_ROWS
     assert request.timeout_s == DEFAULT_TIMEOUT_S
-    assert result.stdout == "marker\n731"
+    assert result.stdout == "marker\n731\n"
     home_dir.assert_untouched()
 
 
@@ -384,7 +384,7 @@ def test_actual_fixture_result_schema_json_and_schema_text_defaults(
     root, _index_dir = use_indexed_root
     monkeypatch.setattr(cli, "_stdout_is_terminal", lambda: False)
     result = _invoke(["SELECT 731 AS marker", "--out", str(root)])
-    assert (result.exit_code, result.stdout, result.stderr) == (0, "marker\n731", "")
+    assert (result.exit_code, result.stdout, result.stderr) == (0, "marker\n731\n", "")
     schema_json = _invoke(["--schema", "--format", "json", "--out", str(root)])
     assert schema_json.exit_code == 0
     parsed = json.loads(schema_json.stdout)
@@ -412,9 +412,9 @@ def test_default_result_format_switches_with_tty_and_explicit_wins(
     outcome = _outcome(tmp_path, home_dir.path, OutcomeKind.RESULT, result=result_set)
     _mock_outcome(monkeypatch, tmp_path, outcome)
     for terminal, args, expected in (
-        (False, ["SELECT 1"], "marker\n731"),
-        (True, ["SELECT 1"], "marker\n------\n   731\n(1 rows)"),
-        (True, ["SELECT 1", "--format", "csv"], "marker\n731"),
+        (False, ["SELECT 1"], "marker\n731\n"),
+        (True, ["SELECT 1"], "marker\n------\n   731\n(1 row)\n"),
+        (True, ["SELECT 1", "--format", "csv"], "marker\n731\n"),
     ):
         monkeypatch.setattr(
             cli, "_stdout_is_terminal", lambda terminal=terminal: terminal
@@ -478,7 +478,7 @@ def test_result_not_built_behind_truncated_and_waiting_streams(
     monkeypatch.setattr(cli, "run_query", busy_after_wait)
     result = _invoke(["SELECT 731", "--max-rows", "1"])
     assert result.exit_code == 0
-    assert result.stdout == "marker\n731"
+    assert result.stdout == "marker\n731\n"
     assert result.stderr.splitlines() == [
         "Index: waiting for another process (process 4317) to finish "
         "writing the index…",
@@ -550,7 +550,7 @@ def test_outcome_error_categories_keep_exact_typed_messages_and_codes(
             ),
             1,
             "Query refused: the query sandbox runs only queries and EXPLAIN; "
-            "this is a INSTALL or LOAD statement.",
+            "this is an INSTALL or LOAD statement.",
         ),
         (
             _outcome(
@@ -718,7 +718,7 @@ def test_schema_failure_state_is_printed_and_missing_descriptions_split_streams(
         )
         result = _invoke(["--schema"])
         assert result.exit_code == 0
-        assert result.stdout == rendered
+        assert result.stdout == rendered + "\n"
         assert (
             "fitdocs defect: missing descriptions for: special_table, "
             "special_table.special_value" in result.stdout
@@ -810,3 +810,51 @@ def test_registered_command_count_and_module_help_count() -> None:
     assert isinstance(command, typer.core.TyperGroup)
     assert len(command.commands) == 13
     assert "Thirteen" in (cli.__doc__ or "")[:400]
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["SELECT 1", "--format", "table"],
+        ["SELECT 1", "--format", "csv"],
+        ["SELECT 1", "--format", "json"],
+        ["--schema"],
+        ["--schema", "--format", "json"],
+    ],
+    ids=["table", "csv", "json", "schema-text", "schema-json"],
+)
+def test_stdout_ends_with_exactly_one_newline(
+    args: list[str],
+    tmp_path: Path,
+    home_dir: HomeDirectory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import fitdocs.cli as cli
+
+    report = SchemaReport(
+        _state(tmp_path / "index.duckdb"),
+        (
+            CatalogTable(
+                "t", "described", (CatalogColumn("c", "INTEGER", None, "described"),)
+            ),
+        ),
+        {"t": 1},
+    )
+    if "--schema" in args:
+        outcome = _outcome(tmp_path, home_dir.path, OutcomeKind.SCHEMA, schema=report)
+    else:
+        outcome = _outcome(
+            tmp_path,
+            home_dir.path,
+            OutcomeKind.RESULT,
+            result=ResultSet(("marker",), ((731,),), False, DEFAULT_MAX_ROWS),
+        )
+    _mock_outcome(monkeypatch, tmp_path, outcome)
+    monkeypatch.setattr(cli, "_stdout_is_terminal", lambda: False)
+
+    result = _invoke(args)
+
+    assert result.exit_code == 0, result.stderr
+    assert result.stdout.strip() != ""
+    assert result.stdout.endswith("\n")
+    assert not result.stdout.endswith("\n\n")

@@ -2477,3 +2477,55 @@ def test_location_error_propagates_before_any_owned_operation(
         command.run_query(_request(root), env)
     assert raised.value is marker
     assert tuple(home.iterdir()) == ()
+
+
+@pytest.mark.parametrize(
+    "failing_read",
+    ["read_bookkeeping", "read_catalog", "row_counts", "athlete_drift"],
+)
+def test_schema_read_interrupt_interrupts_then_closes_and_raises_keyboard_interrupt(
+    indexed_root: tuple[Path, Path],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failing_read: str,
+) -> None:
+    root, index_dir, home = _copy(indexed_root, tmp_path)
+    events: list[str] = []
+    actual_open = command.open_sandboxed
+
+    class ConnectionSpy:
+        def __init__(self, conn: Any) -> None:
+            self.conn = conn
+
+        def interrupt(self) -> None:
+            events.append("interrupt")
+            self.conn.interrupt()
+
+        def close(self) -> None:
+            events.append("close")
+            self.conn.close()
+
+        def __getattr__(self, name: Any) -> Any:
+            return getattr(self.conn, name)
+
+    def interrupted(*args: Any, **kwargs: Any) -> Any:
+        events.append(failing_read)
+        error = RuntimeError("Query interrupted")
+        error.__cause__ = KeyboardInterrupt()
+        raise error
+
+    monkeypatch.setattr(
+        command,
+        "open_sandboxed",
+        lambda *args, **kwargs: ConnectionSpy(actual_open(*args, **kwargs)),
+    )
+    monkeypatch.setattr(command, failing_read, interrupted)
+
+    with pytest.raises(KeyboardInterrupt) as raised:
+        command.run_query(
+            _request(root, sql=None, schema=True),
+            _env(home, index_dir.parent),
+        )
+
+    assert type(raised.value.__cause__) is RuntimeError
+    assert events == [failing_read, "interrupt", "close"]

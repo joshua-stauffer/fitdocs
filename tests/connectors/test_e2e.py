@@ -411,7 +411,7 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
     )
     assert wired_output == bare_output
     if is_query:
-        assert bare.stdout == "n\n1"
+        assert bare.stdout == "n\n1\n"
         assert bare_attempts == 0
         assert len(attempts) == 0
     if command == "index":

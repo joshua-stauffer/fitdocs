@@ -642,3 +642,9 @@ def _unrepresented_producers(
         ):
             missing.add(producer)
     return tuple(sorted(missing))
+
+
+def test_skill_states_the_interrupt_message_and_exit_code() -> None:
+    skill = Path(registry.__file__).resolve().parents[1] / "skills"
+    text = " ".join((skill / "fitdocs-analytics" / "SKILL.md").read_text().split())
+    assert "an interrupt (Ctrl-C) prints `Query interrupted.` and exits 130" in text

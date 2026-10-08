@@ -145,6 +145,16 @@ class IndexState:
     rebuild_reason: str | None
 
 
+# Requirement 10.3 (regen) and 10.4 (index); Requirement 8.2 names `fitdocs index`
+# as the rebuild for an incompatible index.
+STATE_ADVICE: tuple[str, str] = (
+    "Run fitdocs regen to bring documents and the index forward together "
+    "under the current athlete profile.",
+    "Run fitdocs index to bring corpus tables that are behind level, "
+    "or to rebuild an incompatible index.",
+)
+
+
 def render_state_text(state: IndexState) -> str:
     drift = state.drift
     lines = [
@@ -216,8 +226,7 @@ def render_state_text(state: IndexState) -> str:
         "Rebuild reason: "
         + (state.rebuild_reason if state.rebuild_reason is not None else "none")
     )
-    lines.append("Run fitdocs regen to update workout pages and athlete inputs.")
-    lines.append("Run fitdocs index to rebuild the index when it is incompatible.")
+    lines.extend(STATE_ADVICE)
     return "\n".join(lines)
 
 
@@ -228,7 +237,8 @@ def render_schema_text(
     for table in tables:
         heading = f"### `{_markdown(table.name)}`"
         section = render_reference((table,))
-        counted_heading = f"{heading} ({counts[table.name]} rows)"
+        count = counts[table.name]
+        counted_heading = f"{heading} ({count} {'row' if count == 1 else 'rows'})"
         sections.append(section.replace(heading, counted_heading, 1))
     reference = "\n\n".join(sections)
     state_text = render_state_text(state)
@@ -277,6 +287,7 @@ def render_schema_json(
         if corpus is not None
         else None,
         "rebuild_reason": state.rebuild_reason,
+        "advice": list(STATE_ADVICE),
     }
     table_values = [
         {

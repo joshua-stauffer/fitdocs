@@ -45,6 +45,8 @@ from fitdocs.query.statement import (
     StatementRefused,
     StatementTimedOut,
     TimerFactory,
+    interrupt_quietly,
+    is_user_interrupt,
     run_statement,
 )
 
@@ -233,6 +235,14 @@ def run_query(request: QueryRequest, env: QueryEnvironment) -> QueryOutcome:
                 timeout = error
             except IndexStatementError as error:
                 parse_failure = error
+    except BaseException as exc:
+        # The statement path has already interrupted and converted; the
+        # bookkeeping and schema reads have not. Stop whatever is running so
+        # close() returns, and give DuckDB's interrupt the same shape.
+        interrupt_quietly(connection)
+        if not isinstance(exc, KeyboardInterrupt) and is_user_interrupt(exc):
+            raise KeyboardInterrupt from exc
+        raise
     finally:
         connection.close()
 

@@ -338,6 +338,7 @@ tests/query/
 ├── test_command.py           # orchestration outcomes and ordering
 ├── test_cli_query.py         # input forms, options, exit codes, streams, formats on the CLI
 ├── test_crash_vectors.py     # subprocess pins for the multi-statement abort
+├── test_interrupt.py         # real-process SIGINT: exit 130, clean stderr, spill removed
 ├── test_boundary.py          # query importers, format purity, in-package direction
 ├── test_skill_examples.py    # every SQL example runs and returns rows; one example per non-core table
 └── test_docs_analytics.py    # reference block equality (+ `python -m` regeneration), doc pins
@@ -495,7 +496,7 @@ stateDiagram-v2
 | 6.3 | Spill dir per process, removed | Sandbox | `temp_directory=query-spill-<pid>` |
 | 6.4 | Stale spill removed | Sandbox | `remove_stale_spill` |
 | 6.5 | Bad `--timeout` → 2 | CliWiring | Positive, finite |
-| 6.6 | Interrupt closes | Command | `try/finally: conn.close()`; timer cancelled |
+| 6.6 | Interrupt closes | Statement, Command, CliWiring | `conn.interrupt()` on any exception escaping a running statement or a read, then `try/finally: conn.close()`; timer cancelled; `Query interrupted.`, exit 130 |
 | 7.1 | No network | Sandbox, Statement | Settings; gate refuses LOAD; read-back |
 | 7.2 | No data-root write | Command | Confinement test |
 | 7.3 | Nothing outside the index dir but spill | Sandbox, Command | Confinement test with HOME in the sandbox |
@@ -632,7 +633,7 @@ def json_value(value: object) -> str: ...     # one JSON token
   - numbers (`int`, `float`, `Decimal`) are right-aligned, and everything else
     left-aligned;
   - a footer: `(N rows)`, or `(first N rows; the result has more)` when
-    truncated;
+    truncated (`row` when N is 1);
   - zero rows give the header, the rule and `(0 rows)`.
 - **`csv`**:
   - the header (column names quoted by the same rule), then one line per row;
@@ -761,7 +762,7 @@ def failure_hint(exc: IndexStatementError) -> str | None: ...
 | Restriction | Text |
 |---|---|
 | ONE_STATEMENT | `fitdocs query runs exactly one statement` |
-| STATEMENT_KIND | `the query sandbox runs only queries and EXPLAIN; this is a {TYPE} statement` (LOAD is shown as `INSTALL or LOAD`, SET as `SET, RESET or USE`; CALL adds `use SELECT * FROM <function>(…) instead`) |
+| STATEMENT_KIND | `the query sandbox runs only queries and EXPLAIN; this is {ARTICLE} {TYPE} statement` (`{ARTICLE}` is `an` before a vowel letter, else `a`; LOAD is shown as `INSTALL or LOAD`, SET as `SET, RESET or USE`; CALL adds `use SELECT * FROM <function>(…) instead`) |
 | OUTSIDE_INDEX | `the query sandbox cannot read or write files or addresses outside the index` |
 | LOCKED_SETTING | `the query sandbox's settings are locked` |
 | READ_ONLY | `the index is open read-only` |
@@ -779,10 +780,13 @@ def failure_hint(exc: IndexStatementError) -> str | None: ...
   - Then `result = conn.execute(sql)` and `rows = result.fetchmany(max_rows + 1)`,
     in a `try/finally` that cancels the timer.
   - `IndexInterrupted` while fired raises `StatementTimedOut`. An
-    `IndexInterrupted` without the timer re-raises (the user's interrupt).
+    `IndexInterrupted` without the timer re-raises. A user's Ctrl-C does not arrive as `IndexInterrupted`: both tested runtimes deliver `RuntimeError('Query interrupted')` with a `KeyboardInterrupt` `__cause__`, handled below.
   - `IndexStatementError` goes to `classify_statement_error`: a restriction
     raises `StatementRefused`, `None` raises `StatementFailed(message,
     failure_hint(exc))`.
+  - Any other `BaseException` calls `conn.interrupt()` (failure suppressed),
+    and the `RuntimeError`-with-`KeyboardInterrupt`-cause shape is re-raised as
+    `KeyboardInterrupt`.
   - It returns `ResultSet(columns=tuple(c.name for c in result.columns),
     rows=tuple(rows[:max_rows]), truncated=len(rows) > max_rows, max_rows)`.
 - **`classify_statement_error`** looks at `type(exc.__cause__).__name__` and the
@@ -939,7 +943,7 @@ def render_schema_json(state: IndexState, tables: Sequence[CatalogTable], counts
   - The output is deterministic (no counts, no paths), so the docs block can
     equal it.
 - **`render_schema_text`** prints `render_state_text`, then
-  `render_reference`, with each table heading extended by `(N rows)`. When
+  `render_reference`, with each table heading extended by `(N rows)` (`(1 row)` when N is 1). When
   `undescribed` is non-empty, a closing line names them as a fitdocs defect.
 - **`render_schema_json`** prints `{"index": {state fields}, "tables": [{"name",
   "description", "rows", "columns": [{"name", "type", "unit", "description"}]}]}`
@@ -1025,8 +1029,29 @@ def run_query(request: QueryRequest, env: QueryEnvironment) -> QueryOutcome: ...
      `corpus_drift` against `bookkeeping.producers`, unless the athlete
      fingerprint is an `AthleteFileError` (every corpus producer is then
      unassessed), and then the `IndexState`.
-- **`KeyboardInterrupt`** propagates after the `finally` has closed the
-  connection, which removes the spill directory (6.6).
+- **A user interrupt (Ctrl-C)** ends the command with `Query interrupted.` on
+  stderr, no traceback, and exit 130 (128 + SIGINT; no other fitdocs command
+  defines an interrupt exit, so this is the shell convention).
+  - **How DuckDB delivers it.** On both tested runtimes a SIGINT during a
+    running statement surfaces as `RuntimeError('Query interrupted')` with a
+    `KeyboardInterrupt` `__cause__`, not as the facade's `IndexInterrupted`. On
+    1.5.6 it is raised from `fetchmany`; on 1.2.0 from `IndexConnection.execute`,
+    because `sql(..., params=())` runs the statement eagerly there.
+  - **Statement path.** `execute_statement`, on any `BaseException` escaping a
+    running statement, calls `conn.interrupt()` (the call the deadline timer
+    uses; its own failure is suppressed) before the timer is cancelled, and
+    re-raises a bare `KeyboardInterrupt` for the
+    `RuntimeError`-with-`KeyboardInterrupt`-cause shape.
+  - **Other reads.** `run_query`'s `BaseException` branch interrupts the
+    connection and applies the same conversion, so the bookkeeping, catalog,
+    row-count and athlete-drift reads behave alike. That conversion is what
+    makes `--schema` exit 130 instead of printing a traceback.
+  - **Why the interrupt call.** Without it, `connection.close()` blocks in
+    DuckDB's `ClientContext` destructor until the statement finishes
+    (intermittent: 8 of 14 manual CLI runs without the interrupt call hung).
+    The `finally` then closes the connection, which removes the spill
+    directory (6.6), and `query_command` turns the `KeyboardInterrupt` into the
+    message and exit code.
 - **No `fitdocs.index` writer is imported**, so no build or refresh is
   reachable (7.4, boundary test).
 
@@ -1072,7 +1097,9 @@ def query_command(
     is_running=process_is_running, timer=threading.Timer))`.
   - `IndexLocationError` goes to `_config_error`.
 - **Streams.**
-  - Results go to stdout with `typer.echo(text, nl=False)`.
+  - Results go to stdout with `typer.echo(text)`: every rendered result and
+    `--schema` document ends with exactly one newline (the renderers return
+    text without one).
   - Every other line goes to `Console(stderr=True)`, printed with
     `markup=False, highlight=False, soft_wrap=True`.
   - The format is `output_format or default_format(_stdout_is_terminal())`,
@@ -1090,12 +1117,14 @@ def query_command(
 | REFUSED | `Query refused: {RESTRICTION_TEXT}.` then `DuckDB: {detail}` when the detail is DuckDB's |
 | FAILED | `Query failed: {message}`, then `Hint: {hint}` when present |
 | TIMED_OUT | `Query stopped: it ran longer than {T:g} s. Narrow it, or raise --timeout.` |
+| user interrupt | `Query interrupted.` (no outcome; a `KeyboardInterrupt` caught in `query_command`) |
 | behind (RESULT or SCHEMA) | `Index: behind the data root ({a} added, {c} changed, {r} removed pages since the last refresh); run 'fitdocs index' to bring it level.` |
 | truncated | `Query: showing the first {N} rows; the result has more. Narrow or aggregate the query, or raise --max-rows.` |
 | undescribed (SCHEMA) | `Schema: {name} has no description. This is a fitdocs defect; please report it.` (one per name) |
 
 - **Exit codes**: RESULT and SCHEMA exit 0, cut results included. Every other
-  outcome exits 1. Validation, data-root and location errors exit 2. For
+  outcome exits 1. Validation, data-root and location errors exit 2. A user
+  interrupt prints `Query interrupted.` and exits 130 (`_EXIT_INTERRUPTED`). For
   `--schema` failures, `render_state_text(outcome.state)` is printed to stderr
   when a state was read.
 - **The module docstring**:
@@ -1248,7 +1277,10 @@ There are no database changes: `query` reads the schema `analytics-index` and
     - `"without_computed": {state: n}`;
     - `"athlete": {"activities_other_inputs", "skipped_reason"}`;
     - `"corpus_behind": [...]` and `"corpus_unassessed": [[producer, reason]]`;
-    - `"rebuild_reason"`.
+    - `"rebuild_reason"`;
+    - `"advice"`: the two recovery lines of the text view (`regen` brings
+      documents and the index forward together; `index` brings behind corpus
+      tables level or rebuilds an incompatible index) as a list of strings.
   - `tables`: as stated under SchemaView.
 - **CSV**: a header row, then data rows. NULL is an empty unquoted field, and
   the empty string is `""`.
@@ -1283,6 +1315,7 @@ There are no database changes: `query` reads the schema `analytics-index` and
 | File/address, locked setting, read-only, extension | REFUSED | 1 | the restriction + DuckDB's message |
 | Syntax, binder, type, runtime error; TIMESTAMPTZ fetch; out of memory | FAILED | 1 | DuckDB's message (+ hint) |
 | Time limit | TIMED_OUT | 1 | the limit, `--timeout` |
+| User interrupt (Ctrl-C) | — (`KeyboardInterrupt`) | 130 | `Query interrupted.` |
 | Result over the row limit | RESULT (truncated) | 0 | the limit, `--max-rows` |
 | Behind the data root | RESULT/SCHEMA + notice | 0 | the counts, `fitdocs index` |
 | Process abort inside DuckDB (a library defect) | — | signal | none possible; the next `query` removes its spill |
@@ -1494,18 +1527,41 @@ Hard rules that apply to every test:
     {"source_missing": 1}` and the left-out entry.
   - The close pin: a connection spy shows `close` called on every outcome,
     and on a `KeyboardInterrupt` raised from `execute`.
+  - The schema-read interrupt pin: `read_bookkeeping`, `read_catalog`,
+    `row_counts` and `athlete_drift` each raise `RuntimeError("Query
+    interrupted")` with a `KeyboardInterrupt` cause. The events read the
+    failing read, then `interrupt`, then `close`, and `KeyboardInterrupt` is
+    raised with the `RuntimeError` as its cause.
   - Mutations:
     - scan after opening;
+    - drop only `run_query`'s `interrupt_quietly` (mutation M1b; the
+      schema-read pin reds 4/4), or its conversion (also 4/4);
     - drop the `finally` (the `KeyboardInterrupt` close pin reds);
     - hand `corpus_fingerprints` the scan's keys instead of the bookkeeping's
       (the corpus-inputs pin reds).
+- **Interrupt** (`test_interrupt.py`, real process).
+  - The child runs the real CLI with a marker file written when
+    `IndexConnection.execute` is entered for the statement's SQL (valid on 1.2.0
+    and 1.5.6), then the test waits 0.5 s and sends SIGINT.
+  - Two statements: a minutes-long parallel join aggregate (14 trials, because
+    the hang is intermittent) and a spilling window sort at the spill test's
+    memory limit (2 trials, with a nonempty spill file required before the
+    signal).
+  - Each trial asserts exit within 20 s (`pytest.fail` otherwise, the child
+    killed by process group), exit code 130, empty stdout, stderr exactly
+    `Query interrupted.`, no traceback, no surviving process, and no
+    `query-spill-*` directory left.
+  - Mutation: remove both `interrupt_quietly` calls; the join case fails by the
+    20 s bound, not by hanging the suite.
 - **Spill.**
-  - **Approved reliability amendment (2026-10-08):** the historical 48MB/3M-row sorted group-by witness requires owning task 2.3 reliability work before floor acceptance. At most two fresh-process baseline captures per admitted tested runtime (1.2.0/current1.5.6), then one evidence-supported controlled contrast per failing runtime; preserve raw failures/settings/plan/resource observations and HOME/inventory/process evidence. If causal evidence is absent, stop rather than count green captures as a repair. A fixture-contract revision needs evidence for its exact budget/cardinality and independent review, preserving actual nonempty process-specific spill, correct results, cleanup/purity, four-process overlap and temp-directory discrimination. Production settings and the dependency declaration remain unchanged.
+  - **Approved reliability amendment (2026-10-08):** the historical 48MB/3M-row sorted group-by witness needed owning task 2.3 reliability work before floor acceptance. The allowance was at most two fresh-process baseline captures per admitted tested runtime (1.2.0/current1.5.6), then one evidence-supported controlled contrast per failing runtime, preserving raw failures/settings/plan/resource observations and HOME/inventory/process evidence. That bounded allowance was exhausted without establishing a causal repair, and on 2026-10-08 the maintainer approved a measured test-contract revision instead (see the Implementation Notes of tasks.md). A fixture-contract revision needs evidence for its exact budget/cardinality and independent review, preserving actual nonempty process-specific spill, correct results, cleanup/purity, four-process overlap and temp-directory discrimination. Production settings and the dependency declaration remain unchanged.
   - With `RESOURCE_SETTINGS` monkeypatched to `memory_limit='64MB'` (a measured
     test-contract value shared with the subprocess settings), a pure sorted
     `ORDER BY` query over a 3M-row plain database. It replaced a sorted
-    group-by because on duckdb 1.2.0 the group-by does not spill before it runs
-    out of memory, so no measured limit (48-256MB, plus the rows/buckets grid) gave a nonempty spill witness on both runtimes:
+    group-by because on duckdb 1.2.0 the group-by gave no spill witness without
+    an out-of-memory failure: at 48MB it ran out of memory on 12 of 12 runs and at 64MB on 7 of 12, and at 96-256MB
+    it completes in memory without spilling, so no measured limit (48-256MB,
+    plus the rows/buckets grid) gave a nonempty spill witness on both runtimes:
     - creates `query-spill-<pid>/` (observed by a watcher thread);
     - leaves it absent after close;
     - never creates `index.duckdb.tmp`.
@@ -1604,7 +1660,7 @@ Hard rules that apply to every test:
     - state `500` as the default.
 
 ### Floor Verification and Performance
-- **Approved C1 clarification (2026-10-08):** stop on any floor failure or HOME write and retain receipts. A reduced-memory workload OOM is distinct from an established refusal-safety/HOME-artifact defect and does not alone justify changing the upstream floor. Resolve owning task 2.3 reliability under its bounded diagnostic allowance before resuming task 8.2. All six prescribed floor modules must pass after independent correction review; no skips, shims, expected failures or retry-until-green. Floor safety remains incomplete until that gate passes.
+- **Approved C1 clarification (2026-10-08):** stop on any floor failure or HOME write and retain receipts. A reduced-memory workload OOM is distinct from an established refusal-safety/HOME-artifact defect and does not alone justify changing the upstream floor. Task 2.3 reliability was resolved by the maintainer-approved test-contract revision of 2026-10-08 (the bounded diagnostic allowance was exhausted without a causal repair), before task 8.2 resumed. All six prescribed floor modules must pass after independent correction review; no skips, shims, expected failures or retry-until-green. Floor safety remains incomplete until that gate passes.
 - **Floor (`duckdb==1.2.0`)**, the floor of `duckdb>=1.2,<2` (U1), as task
   8.2 runs it:
   - `tests/query/test_store_facade.py`, `test_sandbox.py`, `test_spill.py`,

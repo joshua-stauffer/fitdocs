@@ -190,10 +190,11 @@ def _table(result: ResultSet) -> str:
         for row_index, row in enumerate(rows)
     )
     count = len(result.rows)
+    noun = "row" if count == 1 else "rows"
     footer = (
-        f"(first {count} rows; the result has more)"
+        f"(first {count} {noun}; the result has more)"
         if result.truncated
-        else f"({count} rows)"
+        else f"({count} {noun})"
     )
     rendered.append(footer)
     return "\n".join(rendered)

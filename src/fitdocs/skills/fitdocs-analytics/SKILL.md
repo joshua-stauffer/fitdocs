@@ -35,7 +35,7 @@ redirected. Results are limited to 1,000 rows by default. Set another positive
 limit with `--max-rows`. Each query has a default time limit of 30 seconds; set a
 different positive duration with `--timeout`. A query or schema view succeeds
 with exit code 0. Query failures and sandbox refusals exit 1; invalid input or
-option values exit 2. Results go to standard output and notices go to standard
+option values exit 2; an interrupt (Ctrl-C) prints `Query interrupted.` and exits 130. Results go to standard output and notices go to standard
 error.
 
 ```bash

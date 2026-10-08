@@ -55,7 +55,7 @@ def test_restriction_text_is_the_approved_literal_mapping() -> None:
         statement.Restriction.ONE_STATEMENT: "fitdocs query runs exactly one statement",
         statement.Restriction.STATEMENT_KIND: (
             "the query sandbox runs only queries and EXPLAIN; "
-            "this is a {TYPE} statement"
+            "this is {ARTICLE} {TYPE} statement"
         ),
         statement.Restriction.OUTSIDE_INDEX: (
             "the query sandbox cannot read or write files or addresses "
@@ -953,7 +953,9 @@ def test_late_callback_cannot_interrupt_after_error_exit(
         assert isinstance(raised.value, statement.StatementTimedOut)
         assert raised.value.timeout_s == 0.75
 
-    expected_interrupts = 1 if kind == "timer-fired" else 0
+    # The deadline timer interrupts once; an error escaping the statement
+    # interrupts once too, so DuckDB is not left running it (Req 6.6).
+    expected_interrupts = 1 if kind in {"timer-fired", "keyboard", "other"} else 0
     expected_events = ["start"]
     if expected_interrupts:
         expected_events.append("interrupt")
@@ -1055,6 +1057,19 @@ GATE_SENTINEL = ResultSet(
 )
 
 
+# Written out, not derived: the vowel rule lives in production code.
+_ARTICLE = {
+    "INSTALL or LOAD": "an",
+    "ATTACH": "an",
+    "COPY": "a",
+    "EXPORT": "an",
+    "SET, RESET or USE": "a",
+    "CREATE": "a",
+    "CALL": "a",
+    "UPDATE": "an",
+}
+
+
 @pytest.mark.parametrize(
     ("sql", "raw_kind", "display_kind"),
     [
@@ -1070,6 +1085,7 @@ GATE_SENTINEL = ResultSet(
         ("CREATE TEMP TABLE t AS SELECT 1", "CREATE", "CREATE"),
         ("CALL pragma_version()", "CALL", "CALL"),
         ("CHECKPOINT", "CALL", "CALL"),
+        ("UPDATE pages SET path = 'x'", "UPDATE", "UPDATE"),
     ],
     ids=[
         "install-httpfs",
@@ -1084,6 +1100,7 @@ GATE_SENTINEL = ResultSet(
         "create-temp-table",
         "call-pragma-version",
         "checkpoint",
+        "update-pages",
     ],
 )
 def test_gate_refuses_each_non_query_kind_without_execution(
@@ -1106,7 +1123,7 @@ def test_gate_refuses_each_non_query_kind_without_execution(
     assert raised.value.detail == raw_kind
     assert str(raised.value).startswith(
         "the query sandbox runs only queries and EXPLAIN; "
-        f"this is a {display_kind} statement"
+        f"this is {_ARTICLE[display_kind]} {display_kind} statement"
     )
     if raw_kind == "CALL":
         assert "use SELECT * FROM <function>(…) instead" in str(raised.value)
@@ -1374,3 +1391,61 @@ def test_run_statement_screens_once_before_delegating_once(
     )
     assert events == ["screen", "execute"]
     assert result is sentinel
+
+
+def _interrupt_events(
+    escaping: BaseException, *, interrupt_fails: bool = False
+) -> tuple[BaseException, list[str]]:
+    events: list[str] = []
+
+    class Result:
+        columns: tuple[()] = ()
+
+        def fetchmany(self, size: int) -> list[tuple[int, ...]]:
+            raise escaping
+
+    class Connection:
+        def execute(self, sql: str) -> Result:
+            return Result()
+
+        def interrupt(self) -> None:
+            events.append("interrupt")
+            if interrupt_fails:
+                raise OSError("interrupt failed")
+
+    with pytest.raises(BaseException) as raised:  # noqa: PT011
+        statement.execute_statement(
+            cast(IndexConnection, Connection()), "SELECT 1", max_rows=2, timeout_s=3.0
+        )
+    return raised.value, events
+
+
+def test_duckdb_interrupt_runtime_error_becomes_keyboard_interrupt() -> None:
+    cause = KeyboardInterrupt()
+    escaping = RuntimeError("Query interrupted")
+    escaping.__cause__ = cause
+
+    raised, events = _interrupt_events(escaping)
+
+    assert type(raised) is KeyboardInterrupt
+    assert raised.__cause__ is escaping
+    assert events == ["interrupt"]
+
+
+def test_runtime_error_without_keyboard_interrupt_cause_stays_unchanged() -> None:
+    escaping = RuntimeError("unrelated")
+
+    raised, events = _interrupt_events(escaping)
+
+    assert raised is escaping
+    assert events == ["interrupt"]
+
+
+def test_failing_interrupt_does_not_mask_the_escaping_error() -> None:
+    escaping = RuntimeError("Query interrupted")
+    escaping.__cause__ = KeyboardInterrupt()
+
+    raised, events = _interrupt_events(escaping, interrupt_fails=True)
+
+    assert type(raised) is KeyboardInterrupt
+    assert events == ["interrupt"]

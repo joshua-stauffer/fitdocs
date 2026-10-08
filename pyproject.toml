@@ -250,6 +250,7 @@ files = [
     "tests/query/test_cli_query.py",
     "tests/query/test_command.py",
     "tests/query/test_crash_vectors.py",
+    "tests/query/test_interrupt.py",
     "tests/query/test_docs_analytics.py",
     "tests/query/test_fixtures.py",
     "tests/query/test_format.py",

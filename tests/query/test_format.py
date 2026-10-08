@@ -136,7 +136,7 @@ def test_table_layout_alignment_control_escaping_and_truncated_footer() -> None:
     rendered = render_result(result, OutputFormat.TABLE, freshness=EMPTY_FRESHNESS)
     assert "A\\nB\\t\\x01\\rC" in rendered
     assert " 12  " in rendered
-    assert rendered.splitlines()[-1] == "(first 1 rows; the result has more)"
+    assert rendered.splitlines()[-1] == "(first 1 row; the result has more)"
 
 
 def test_table_right_aligns_numeric_cells_in_mixed_columns() -> None:
@@ -246,7 +246,7 @@ def test_json_repeated_column_names_keep_each_ordered_value() -> None:
 def test_table_escapes_delete_control_character() -> None:
     result = ResultSet(("value",), (("before\x7fafter",),), False, 1)
     rendered = render_result(result, OutputFormat.TABLE, freshness=EMPTY_FRESHNESS)
-    assert rendered == ("value          \n---------------\nbefore\\x7fafter\n(1 rows)")
+    assert rendered == ("value          \n---------------\nbefore\\x7fafter\n(1 row)")
 
 
 def test_json_truncation_metadata_matches_printed_rows_and_limit() -> None:
@@ -292,7 +292,7 @@ def test_whitespace_strings_are_preserved_in_exact_rendered_documents() -> None:
         " leading  trailing    both      \n"
         "--------  ---------  ------  ---\n"
         " leading  trailing    both      \n"
-        "(1 rows)"
+        "(1 row)"
     )
     assert render_result(result, OutputFormat.JSON, freshness=EMPTY_FRESHNESS) == (
         '{"columns": [" leading", "trailing ", " both ", "   "], "rows": [\n'

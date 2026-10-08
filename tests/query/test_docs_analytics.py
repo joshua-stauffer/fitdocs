@@ -161,6 +161,10 @@ def test_documented_query_contract_matches_the_implementation() -> None:
     assert f"**{int(DEFAULT_TIMEOUT_S)} seconds**" in running
     assert "`--timeout`" in running
     assert "exit 0" in running and "exit 1" in running and "exit 2" in running
+    normalized_exits = " ".join(running.split())
+    assert "prints `Query interrupted.` on standard error, and exits 130" in (
+        normalized_exits
+    )
     assert "freshness notice" in running and "bring it up to date" in running
 
     schema = _section(page, "The schema view")

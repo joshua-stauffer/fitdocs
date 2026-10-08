@@ -2641,7 +2641,7 @@ def test_query_writes_nothing_outside_its_spill_directory(
         app,
         ["query", "SELECT count(*) AS n FROM pages", "--out", str(data_root)],
     )
-    assert (select.exit_code, select.stdout, select.stderr) == (0, "n\n1", "")
+    assert (select.exit_code, select.stdout, select.stderr) == (0, "n\n1\n", "")
     assert snapshot() == before
     assert tuple(home.iterdir()) == ()
 
@@ -2700,7 +2700,7 @@ def test_query_writes_nothing_outside_its_spill_directory(
     assert attach.exit_code == 1
     assert attach.stderr.splitlines()[0] == (
         "Query refused: the query sandbox runs only queries and EXPLAIN; "
-        "this is a ATTACH statement."
+        "this is an ATTACH statement."
     )
     assert snapshot() == before
     assert tuple(home.iterdir()) == ()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import threading
 from collections.abc import Callable, Mapping
 from enum import StrEnum
@@ -25,7 +26,8 @@ class Restriction(StrEnum):
 RESTRICTION_TEXT: Final[Mapping[Restriction, str]] = {
     Restriction.ONE_STATEMENT: "fitdocs query runs exactly one statement",
     Restriction.STATEMENT_KIND: (
-        "the query sandbox runs only queries and EXPLAIN; this is a {TYPE} statement"
+        "the query sandbox runs only queries and EXPLAIN; "
+        "this is {ARTICLE} {TYPE} statement"
     ),
     Restriction.OUTSIDE_INDEX: (
         "the query sandbox cannot read or write files or addresses outside the index"
@@ -38,6 +40,20 @@ RESTRICTION_TEXT: Final[Mapping[Restriction, str]] = {
 TimerFactory = Callable[[float, Callable[[], None]], threading.Timer]
 
 
+def statement_kind_refusal(statement_type: str) -> str:
+    """The refusal text for a statement of type ``statement_type`` (no full stop)."""
+    display = {"LOAD": "INSTALL or LOAD", "SET": "SET, RESET or USE"}.get(
+        statement_type, statement_type
+    )
+    article = "an" if display[:1].upper() in "AEIOU" else "a"
+    message = RESTRICTION_TEXT[Restriction.STATEMENT_KIND].format(
+        ARTICLE=article, TYPE=display
+    )
+    if statement_type == "CALL":
+        message += "; use SELECT * FROM <function>(…) instead"
+    return message
+
+
 class StatementRefused(Exception):
     """An executed statement was blocked by the sandbox."""
 
@@ -48,13 +64,7 @@ class StatementRefused(Exception):
             super().__init__(RESTRICTION_TEXT[restriction])
             return
         if restriction is Restriction.STATEMENT_KIND:
-            display = {"LOAD": "INSTALL or LOAD", "SET": "SET, RESET or USE"}.get(
-                detail, detail
-            )
-            message = RESTRICTION_TEXT[restriction].format(TYPE=display)
-            if detail == "CALL":
-                message += "; use SELECT * FROM <function>(…) instead"
-            super().__init__(message)
+            super().__init__(statement_kind_refusal(detail))
             return
         super().__init__(f"{RESTRICTION_TEXT[restriction]}: {detail}")
 
@@ -115,6 +125,25 @@ def failure_hint(exc: IndexStatementError) -> str | None:
     return None
 
 
+def is_user_interrupt(exc: BaseException) -> bool:
+    """Whether ``exc`` is a Ctrl-C, however the DuckDB binding surfaced it.
+
+    A SIGINT during a running statement reaches Python as a bare
+    ``KeyboardInterrupt`` or, from inside DuckDB's fetch, as a
+    ``RuntimeError("Query interrupted")`` whose ``__cause__`` is the
+    ``KeyboardInterrupt``.
+    """
+    return isinstance(exc, KeyboardInterrupt) or isinstance(
+        exc.__cause__, KeyboardInterrupt
+    )
+
+
+def interrupt_quietly(conn: IndexConnection) -> None:
+    """Interrupt ``conn``; a failure to do so must not mask the real error."""
+    with contextlib.suppress(Exception):
+        conn.interrupt()
+
+
 def execute_statement(
     conn: IndexConnection,
     sql: str,
@@ -150,6 +179,14 @@ def execute_statement(
             if restriction is not None:
                 raise StatementRefused(restriction, str(exc)) from exc
             raise StatementFailed(str(exc), failure_hint(exc)) from exc
+        except BaseException as exc:
+            # Anything else escaping a running statement (a user interrupt, a
+            # defect) leaves DuckDB executing it; ``close()`` would then block
+            # in its destructor until the statement finished. Interrupt first.
+            interrupt_quietly(conn)
+            if not isinstance(exc, KeyboardInterrupt) and is_user_interrupt(exc):
+                raise KeyboardInterrupt from exc
+            raise
     finally:
         try:
             deadline.cancel()

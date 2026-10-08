@@ -60,6 +60,14 @@ class _RecordingConnection:
         return self.connection.execute(sql)
 
 
+_ADVICE = [
+    "Run fitdocs regen to bring documents and the index forward together "
+    "under the current athlete profile.",
+    "Run fitdocs index to bring corpus tables that are behind level, "
+    "or to rebuild an incompatible index.",
+]
+
+
 def test_read_catalog_excludes_system_views_and_temporary_tables(
     catalog_location: IndexLocation, home_dir: HomeDirectory
 ) -> None:
@@ -521,6 +529,7 @@ def test_render_schema_json_has_exact_literal_projection(tmp_path: Path) -> None
         "corpus_behind",
         "corpus_unassessed",
         "rebuild_reason",
+        "advice",
     }
     assert set(index["left_out"][0]) == {"path", "reason", "collides_with"}
     assert set(index["athlete"]) == {"activities_other_inputs", "skipped_reason"}
@@ -574,6 +583,7 @@ def test_render_schema_json_has_exact_literal_projection(tmp_path: Path) -> None
                 ["derived-b", "OSError: two"],
             ],
             "rebuild_reason": "schema version differs: 17 != 29",
+            "advice": _ADVICE,
         },
         "tables": [
             {
@@ -642,6 +652,7 @@ def test_render_schema_json_preserves_absent_assessments_as_null(
         "corpus_behind": None,
         "corpus_unassessed": None,
         "rebuild_reason": None,
+        "advice": _ADVICE,
     }
     zero = schemaview.IndexState(
         database=tmp_path / "zero.duckdb",
@@ -707,6 +718,9 @@ def test_render_schema_text_adds_counts_and_named_defect_and_clean_case(
     clean_text = schemaview.render_schema_text(state, clean, {"clean": 61})
     assert "### `clean` (61 rows)" in clean_text
     assert "fitdocs defect" not in clean_text
+    single = schemaview.render_schema_text(state, clean, {"clean": 1})
+    assert "### `clean` (1 row)\n" in single
+    assert "(1 rows)" not in single
 
 
 def test_render_schema_text_keeps_markdown_escaping_with_counted_heading(
@@ -1034,6 +1048,7 @@ def test_schema_json_encoder_receives_complete_payload_first(
                 ["derived-b", "OSError: two"],
             ],
             "rebuild_reason": "schema version differs: 17 != 29",
+            "advice": _ADVICE,
         },
         "tables": [
             {
@@ -1126,8 +1141,7 @@ def test_render_state_text_absent_values_bind_empty_markers_to_sections(
         "Corpus tables behind: unassessed",
         "Corpus producers unassessed: unassessed",
         "Rebuild reason: none",
-        "Run fitdocs regen to update workout pages and athlete inputs.",
-        "Run fitdocs index to rebuild the index when it is incompatible.",
+        *_ADVICE,
     ]
     assert schemaview.render_state_text(state).splitlines() == expected
 
@@ -1167,8 +1181,7 @@ def test_render_state_text_assessed_zero_binds_empty_markers_to_sections(
         "Corpus producers unassessed:",
         "  none",
         "Rebuild reason: none",
-        "Run fitdocs regen to update workout pages and athlete inputs.",
-        "Run fitdocs index to rebuild the index when it is incompatible.",
+        *_ADVICE,
     ]
     assert schemaview.render_state_text(state).splitlines() == expected
 

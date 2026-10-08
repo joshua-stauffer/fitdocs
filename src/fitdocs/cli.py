@@ -267,7 +267,11 @@ from fitdocs.query.schemaview import (
     render_state_text,
     undescribed,
 )
-from fitdocs.query.statement import RESTRICTION_TEXT, Restriction
+from fitdocs.query.statement import (
+    RESTRICTION_TEXT,
+    Restriction,
+    statement_kind_refusal,
+)
 from fitdocs.settings import SettingsError, load_settings_document
 from fitdocs.sync import DrainReport, SyncReport, drain, regen, sync
 from fitdocs.tiles import TileStore, load_tile_settings, tile_settings_from_document
@@ -281,6 +285,8 @@ _EXIT_SUCCESS: int = 0
 """Everything written and/or skipped; no failures (an all-skipped run, too)."""
 _EXIT_FILE_FAILURES: int = 1
 """One or more per-file failures occurred during the run (Req 1.5)."""
+_EXIT_INTERRUPTED: int = 130
+"""A user interrupt (SIGINT) ended `fitdocs query`: 128 + 2, the shell convention."""
 _EXIT_CONFIG_ERROR: int = 2
 """A configuration error prevented the run: nothing was written (Req 2.2)."""
 
@@ -1921,6 +1927,9 @@ def query_command(
         outcome = run_query(request, environment)
     except IndexLocationError as error:
         _config_error(str(error))
+    except KeyboardInterrupt:
+        console.print("Query interrupted.")
+        raise typer.Exit(code=_EXIT_INTERRUPTED) from None
 
     if (
         schema
@@ -1952,7 +1961,7 @@ def query_command(
                 selected_format,
                 freshness=drift.as_mapping() if drift is not None else {},
             )
-            typer.echo(rendered, nl=False)
+            typer.echo(rendered)
             if outcome.result.truncated:
                 console.print(
                     f"Query: showing the first {outcome.result.max_rows} rows; "
@@ -1970,7 +1979,7 @@ def query_command(
                 rendered = render_schema_text(
                     report.state, report.tables, report.counts
                 )
-            typer.echo(rendered, nl=False)
+            typer.echo(rendered)
             for name in undescribed(report.tables):
                 console.print(
                     f"Schema: {name} has no description. This is a fitdocs defect; "
@@ -2006,12 +2015,7 @@ def query_command(
             refusal = RESTRICTION_TEXT[restriction]
             console.print(f"Query refused: {refusal}.")
         elif restriction is Restriction.STATEMENT_KIND:
-            display = {"LOAD": "INSTALL or LOAD", "SET": "SET, RESET or USE"}.get(
-                detail, detail
-            )
-            refusal = RESTRICTION_TEXT[restriction].format(TYPE=display)
-            if detail == "CALL":
-                refusal += "; use SELECT * FROM <function>(…) instead"
+            refusal = statement_kind_refusal(detail)
             console.print(f"Query refused: {refusal}.")
         elif restriction is not None:
             console.print(f"Query refused: {RESTRICTION_TEXT[restriction]}.")

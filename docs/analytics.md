@@ -48,7 +48,8 @@ with `--timeout`.
 
 Successful queries and schema views exit 0. Query failures, sandbox refusals,
 timeouts, and an unavailable or busy index exit 1. Invalid input forms or
-option values exit 2. Results go to standard output; notices and errors go to
+option values exit 2. Pressing Ctrl-C during a query stops it, prints
+`Query interrupted.` on standard error, and exits 130. Results go to standard output; notices and errors go to
 standard error. If the index is behind the data root, fitdocs prints a
 freshness notice and tells you to run `fitdocs index` to bring it up to date.
 
