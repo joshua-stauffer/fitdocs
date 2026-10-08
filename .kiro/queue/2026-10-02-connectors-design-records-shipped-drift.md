@@ -16,6 +16,7 @@ context:
   - .kiro/specs/connectors/tasks.md
   - src/fitdocs/cli.py
   - docs/connectors.md
+  - .kiro/specs/activity-identity/design.md
 blocked_by: []
 ---
 
@@ -80,6 +81,17 @@ implementer to "restore" the design's version.
 Every line reference above read at `ad985b3`. The drift list was compiled by
 the feature-validation coverage reviewer and the task 5.1/5.3/7/8.1 reviewers;
 each item was re-checked against the files in this session.
+
+Re-confirmed 2026-10-08 at `f8cc39b` by `/kiro-validate-impl activity-identity`
+(reviewer subagent, signature re-read by the controller): `_run_drain_passes`
+now sits at `src/fitdocs/cli.py:697-731`, still has no `precedence`
+parameter, and loads `_identity_settings`/`load_holds` itself (`:726-728`).
+The same ruling R3 shape is also written into the **activity-identity**
+spec, so fix both records together: `.kiro/specs/activity-identity/design.md:259-271`
+and `.kiro/specs/activity-identity/tasks.md:725-742`. Behaviour is covered by
+`tests/connectors/test_cli_connectors.py` and `tests/test_cli_identity.py`; what
+the deviation gives up is the design's `TypeError` pin on a dropped
+`precedence=`. Record that in the amendment as accepted, or restore the pin.
 
 ## How to pick it up
 1. Open design.md at each cited line and the cited code side by side.

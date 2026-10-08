@@ -286,3 +286,22 @@ The next owning investigation must explicitly include the added-page deadline as
 ## analytics-derived confirms fresh gate after polling repair (2026-10-07)
 
 After rebase onto owning repair `0b92561`, independent task 1.1 review passed its fresh canonical gate: 9,395 passed, two optional actionlint skips, 262.54 seconds, exit 0. Both original live-preview tests pass without deadline or assertion changes. Task-local mutations and static checks pass; parent scoped verification is 113 passed. The earlier failed canonical runs remain historical failed records. This confirms analytics-derived's task 1.1 gate; other peer confirmations still belong to their controllers.
+
+## Initial-edit recurrence after the polling repair (2026-10-08)
+
+On main `f8cc39b`, which contains polling repair `0b92561`
+(`scripts/sitebuild/generator.py:24` sets `ZENSICAL_POLL_WATCHER=1`), an
+unmodified full run during `/kiro-validate-impl activity-identity` failed
+`test_live_preview_post_delete_wait_requires_last_good_readiness` at the
+**initial edit**: `tests/sitebuild/test_preview.py:1143` / helper `:1024`,
+`not within 20.0 s: the edited text of /why/`, entered via `:1271`.
+Result: 1 failed, 9,622 passed, 8 skipped (2 actionlint, 6 forbidden-strings
+unset), 235.58 s; plain mode, interpreter from `uv run`. No state was captured
+at timeout. The exact test then passed 3/3 standalone (9.72/5.79/5.39 s) and an
+unchanged full rerun passed: 9,623 passed, 8 skipped, 228.59 s, exit 0. The
+machine was concurrently running other sessions' work.
+
+So the polling watcher did not eliminate the initial-edit stall; it only made
+it rarer. The memory-level claim "FIXED 0b92561" is too strong. The pickup
+recipe's step 4 (capture build/watcher/stage/sync/HTTP state at timeout,
+before cleanup) still stands.
