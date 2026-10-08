@@ -65,6 +65,30 @@ nonempty spill witness with an empty directory would hide the issue.
   memory despite out-of-core support:
   <https://duckdb.org/docs/current/guides/performance/how_to_tune_workloads#limitations>.
 
+- At accepted CLI head `a91bbec7e71fbdabe37c1e6b9014c4544e489f13`, an independent
+  task 8.3 canonical run failed in the same node: 10,055 passed, one failed,
+  two optional skips in 272.09 s, exit 1. This recurrence has durable raw
+  evidence, independently inspected by root:
+  `/private/tmp/analytics-query-task8-3-independent-review/canonical-failure-traces.txt`,
+  `pytest.stdout`, `canonical-result.json`, and `REVIEW.md`. The traceback
+  identifies `IndexResult.fetchall` delegating to `_relation.fetchall`,
+  with 256 KiB allocation failure at 45.5/45.7 MiB. HOME was empty, tracked
+  hashes/modes unchanged and owned processes reaped. No timing query failed.
+- Fresh bounded owning investigation retained 32 baseline 750k-group and
+  32 contrast 375k-group successful probes, all under the normative 3M rows,
+  48MB, two threads and 4GB setting. Both plans use hash aggregation and
+  sorting, with nonempty active spill and exact results/cleanup/purity.
+  This does not establish the intermittent allocation stage or a causal
+  cardinality repair. Exact report and raw captures:
+  `/private/tmp/analytics-query-debug-spill-recurrence/REPORT.md`,
+  `/private/tmp/analytics-query-debug-spill-recurrence/STATUS.md`. Debug
+  outcome is BLOCK_TASK with LOW causal confidence. Preserve the fixture
+  pending bounded failing-suite-context diagnostics; do not accept a guessed
+  reduction merely because all isolated probes passed.
+
+- One bounded passive full-suite diagnostic passed: 10,056 passed/two optional skips in 257.35 s, exit 0, approved 3M-row/750k-group/48MB/two-thread/4GB workload, real active spill, zero observer errors, restored wrappers, unchanged inventories, empty HOME and reaped owned process group. Configured snapshots, RSS and spill observations are distinct; no failing-time native allocation evidence or causal correction was obtained. Report: `/private/tmp/analytics-query-spill-full-context/REPORT.md`.
+- Independent supplementary decision justified exactly one fresh unmodified acceptance gate after the new full-context capture. That gate passed 10,056 tests/two optional skips in 271.36 s, exit 0; all source/test/venv inventories were unchanged, HOME empty and owned group gone. Task 8.3 is accepted for its measurements; this reliability issue remains **open** and the original failed run is preserved. Decision and final review: `/private/tmp/analytics-query-task8-3-independent-review/SUPPLEMENT-GATE.md` and `/private/tmp/analytics-query-task8-3-unmodified-supplementary-review/REVIEW.md`.
+
 ## How to pick it up
 
 1. Read task 2.3 and design's Spill test strategy, then the current fixture

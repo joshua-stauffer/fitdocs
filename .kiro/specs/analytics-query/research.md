@@ -271,6 +271,11 @@
 - `allowed_directories` and `allowed_paths` exist, but `query` needs none: the
   index is the only file, opened at connect.
 
+### Task 8.3: query timing on the authorized copied-data root (2026-10-08)
+- **Scope**: 2,517 FIT files (171,192,835 bytes); schema 2 index; 2,502 pages and 5,636,964 records. Python 3.11.15.
+- **Preparation measurements (2026-10-07; not query timings)**: sync 532.870 s, exit 0; index rebuild 269.507 s, exit 0.
+- **Query measurements (2026-10-08)**: `SELECT count(*) FROM pages`, 1.530 s, exit 0; `--schema`, 1.501 s, exit 0; `SELECT count(*), avg(heart_rate_bpm) FROM records`, 1.457 s, exit 0.
+
 ## Architecture Pattern Evaluation
 
 | Option | Description | Strengths | Risks / Limitations | Verdict |
