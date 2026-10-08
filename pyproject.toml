@@ -240,6 +240,26 @@ files = [
     "tests/metrics/test_mean_max.py",
     "tests/metrics/test_mean_max_sources.py",
     "tests/plans/test_resolve_seam.py",
+    # analytics-query task 8.2: type-check every test and fixture module
+    # added by this feature.
+    "tests/query/__init__.py",
+    "tests/query/_helpers.py",
+    "tests/query/conftest.py",
+    "tests/query/test_boundary.py",
+    "tests/query/test_changelog_entry.py",
+    "tests/query/test_cli_query.py",
+    "tests/query/test_command.py",
+    "tests/query/test_crash_vectors.py",
+    "tests/query/test_docs_analytics.py",
+    "tests/query/test_fixtures.py",
+    "tests/query/test_format.py",
+    "tests/query/test_freshness.py",
+    "tests/query/test_sandbox.py",
+    "tests/query/test_schemaview.py",
+    "tests/query/test_skill_examples.py",
+    "tests/query/test_spill.py",
+    "tests/query/test_statement.py",
+    "tests/query/test_store_facade.py",
 ]
 
 [tool.pytest.ini_options]
