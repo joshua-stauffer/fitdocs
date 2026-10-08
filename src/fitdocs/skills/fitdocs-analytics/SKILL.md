@@ -60,12 +60,13 @@ WITH data_end AS (
     FROM activities
 )
 SELECT date_trunc('week', CAST(a.start_utc AS DATE))::DATE AS week_start,
+       a.sport,
        sum(a.distance_m) / 1000.0 AS distance_km
 FROM activities AS a
 CROSS JOIN data_end
 WHERE a.sport = 'Run'
   AND CAST(a.start_utc AS DATE) >= data_end.latest_day - INTERVAL '12 weeks'
-GROUP BY week_start
+GROUP BY week_start, a.sport
 ORDER BY week_start;
 ```
 
@@ -80,14 +81,14 @@ WITH data_end AS (
     SELECT max(CAST(start_utc AS DATE)) AS latest_day
     FROM activities
 )
-SELECT z.zone, sum(z.time_s) / 60.0 AS minutes
+SELECT z.channel, z.bound_unit, z.zone, sum(z.time_s) AS seconds
 FROM zone_times AS z
 JOIN activities AS a USING (page_key)
 CROSS JOIN data_end
 WHERE z.channel = 'heart_rate'
   AND a.sport = 'Run'
   AND CAST(a.start_utc AS DATE) >= data_end.latest_day - INTERVAL '12 weeks'
-GROUP BY z.zone
+GROUP BY z.channel, z.bound_unit, z.zone
 ORDER BY z.zone;
 ```
 
@@ -102,13 +103,15 @@ WITH data_end AS (
     FROM pages
 )
 SELECT date_trunc('week', p.date)::DATE AS week_start,
+       l.calculator_id, l.selected,
        sum(l.load_value) AS selected_load
 FROM pages AS p
 JOIN loads AS l USING (page_key)
 CROSS JOIN data_end
-WHERE l.selected
+WHERE l.selected IS TRUE
+  AND l.calculator_id = 'threshold'
   AND p.date >= data_end.latest_day - INTERVAL '12 weeks'
-GROUP BY week_start
+GROUP BY week_start, l.calculator_id, l.selected
 ORDER BY week_start;
 ```
 
@@ -128,6 +131,87 @@ CROSS JOIN data_end
 WHERE effort IN ('race', 'test', 'hard')
   AND date >= data_end.latest_day - INTERVAL '1 year'
 ORDER BY date, effort;
+```
+
+### Best efforts
+
+Show the best recorded power for each duration in the latest year of data,
+with the workout page it came from. This fixture's ride supports 1-, 5- and
+10-second efforts; a fixed 20-minute filter would return no row.
+
+```sql
+WITH data_end AS (
+    SELECT max(date) AS latest_day
+    FROM pages
+)
+SELECT p.date, p.path, p.title, p.sport, m.duration_s, m.power_w
+FROM mean_max AS m
+JOIN pages AS p USING (page_key)
+CROSS JOIN data_end
+WHERE m.power_w IS NOT NULL
+  AND p.date >= data_end.latest_day - INTERVAL '1 year'
+QUALIFY row_number() OVER (
+    PARTITION BY m.duration_s
+    ORDER BY m.power_w DESC, p.date DESC, p.page_key
+) = 1
+ORDER BY m.duration_s;
+```
+
+### Fitness, fatigue and form
+
+Show the last four weeks of form for the methodology `fitdocs history`
+chooses by default. The window is measured back from that series' end date.
+
+```sql
+SELECT d.day, d.methodology, d.fitness, d.fatigue, d.form
+FROM daily_load AS d
+JOIN load_series AS s USING (methodology)
+WHERE s.history_default
+  AND d.day >= s.series_end - INTERVAL '28 days'
+ORDER BY d.day;
+```
+
+### Thresholds in force
+
+Show the FTP in force on each ride's date in the latest year of data. The
+period's end is open while that benchmark remains in force.
+
+```sql
+WITH data_end AS (
+    SELECT max(date) AS latest_day
+    FROM pages
+)
+SELECT p.date, p.sport, b.kind, b.discipline, b.starts_on, b.ends_before,
+       b.value, b.unit, b.measured_on
+FROM benchmark_periods AS b
+JOIN pages AS p
+  ON p.sport = 'Ride'
+ AND p.date >= b.starts_on
+ AND (b.ends_before IS NULL OR p.date < b.ends_before)
+CROSS JOIN data_end
+WHERE b.kind = 'ftp_watts'
+  AND b.discipline = 'Ride'
+  AND p.date >= data_end.latest_day - INTERVAL '1 year'
+ORDER BY p.date;
+```
+
+### Planned sessions not logged
+
+List the sessions still marked not logged in the latest valid block. A
+session dated after the index's resolved-on day is upcoming instead.
+
+```sql
+SELECT p.block_id, p.workout_id, p.day, p.sport, p.title, p.state
+FROM planned_workouts AS p
+JOIN blocks AS b USING (block_id)
+WHERE b.valid
+  AND b.starts_on = (
+      SELECT max(starts_on)
+      FROM blocks
+      WHERE valid
+  )
+  AND p.state = 'not logged'
+ORDER BY p.day, p.workout_id;
 ```
 
 ## Reporting an answer
