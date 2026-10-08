@@ -510,7 +510,7 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
     after).
   - _Requirements: 7.3, 11.4_
 
-- [x] 2. Core: output rendering and the sandboxed connection
+- [ ] 2. Core: output rendering and the sandboxed connection
 
 - [x] 2.1 (P) Render results as a table, CSV or JSON
   - **`format.py`**, per design.md § Format:
@@ -597,7 +597,10 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
   - _Boundary: Sandbox_
   - _Depends: 1.3_
 
-- [x] 2.3 Give every query process its own spill directory and remove stale ones
+- [ ] 2.3 Give every query process its own spill directory and remove stale ones
+  - **Approved reliability reopening (2026-10-08).** Prior runtime implementation and review remain historical. Resolve the existing sorted-group-by spill reliability item before task 8.2 resumes; no production setting or dependency-floor change is authorized.
+  - **Bounded diagnostic allowance.** At most two fresh-process baseline captures per runtime (1.2.0 and current 1.5.6), recording failure phase, effective settings, plan, resource/spill observations, raw output, empty HOME, unchanged inventories and process reaping. If a failure supports a specific workload hypothesis, permit one controlled contrast per failing runtime. Stop if neither runtime yields causal evidence; successful captures alone are not a repair.
+  - **Correction acceptance.** Any revised fixture budget/cardinality must be justified by captured evidence and independently reviewed as a causal correction or explicitly identified test-contract revision. Preserve nonempty process-specific spill, exact results, cleanup/purity, actual four-process overlap, directory/liveness protections and temp-directory mutation discrimination. No guessed adjustment, skip, expected failure or retry-until-green. Production remains 1GB/two threads/4GB and the DuckDB dependency declaration is unchanged.
   - **`sandbox.py`** gains `SPILL_PREFIX`, `spill_directory`,
     `process_is_running`, the module-level hook `_SKIPS_SPILL_CLEANUP` and
     `remove_stale_spill`, per design.md. `open_sandboxed` sets
@@ -1366,7 +1369,7 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
     6.1; independent review exposed this canonical packaging prerequisite.
 
 - [ ] 8.2 Register the test modules, verify the duckdb floor and validate the feature
-  - _Blocked: DuckDB 1.2.0 reduced-memory sorted group-by fixture exhausted its 48MB budget during execute; underlying native cause is unknown and an unsafe floor is not established. Task 8.2 requires a C1 roadmap decision before continuation; fresh debug returned SPEC_CONFLICT / STOP_FOR_HUMAN. See the existing spill reliability queue and Implementation Notes._
+  - _Blocked pending owning task 2.3 reliability correction. Maintainer approved the bounded C1 amendment/diagnostic proposal on 2026-10-08; floor acceptance remains incomplete._
   - **mypy registration**: append every new `tests/query/` module to
     `pyproject.toml`'s mypy `files`.
   - **The floor check**:
@@ -1388,9 +1391,8 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
     - **Recording**: pass or fail per test, plus the `memory_limit` and
       `max_temp_directory_size` strings 1.2.0 reports. The `enable_logging`
       cases are expected to see the function absent.
-    - If any test of the run fails on 1.2.0, or HOME is not empty, stop and
-      report: the floor `analytics-index` task 1.1 set (U1, cross-spec ruling
-      C1) is wrong, and changing it again is a roadmap decision.
+    - If any test fails on 1.2.0 or HOME is not empty, stop and preserve the failed receipt. Classify actual refusal/HOME-artifact defects separately from reduced-memory workload viability failures; an OOM alone does not establish that the analytics-index task 1.1 floor (U1/C1) is unsafe. Route fixture reliability to task 2.3 under the approved bounded allowance; changing the dependency floor still requires a roadmap decision. Every required floor test must pass after the independently reviewed correction; no skip, shim or retry-until-green.
+    - _Depends: reopened task 2.3 reliability correction._
   - **Full validation**, after the final rebase:
     - `uv run pytest && uv run ruff check . && uv run ruff format --check . &&
       uv run mypy`, plain, with `TZ=UTC`, and with `CI=true`;
@@ -1512,3 +1514,5 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 - Task 7.3: all eight core/derived SQL examples and generic registry-derived four-producer/eleven-table coverage accepted; generated24-table docs reference was a NOOP. Fresh debug corrected grouped pytest selectors, then strict dynamic boundaries and existential attempts; historical FTP first-review finding corrected by removing only extra open-period filter and adding genuine tests-first actual-CLI closed-period regression. Parent independently replayed body-absent helper RED, comment witness RED and historical preSQL RED beforeGO; invalid initial unusedflag and exploratory selector/control receipts retained without credit. Independent canonical10,125 passed/two optional skips273.98s, exact20,550 raw source/tests/venv entries unchanged/Git/HOME/processgroup intact. All17 prior claimed+three own controls independently RED/restoredGREEN; new predicate restoration and ancillary copied-date precondition plus two own interval boundary mutations independently RED/restoredGREEN. Fresh parent all query/derived/skill/benchmark scope, whole Ruff+format/configured mypy/strict both/diff/hash/HOME passed. Best-effort rank is a SQL-shape pin; single power page does not independently prove global maxima for equivalent SQL. Evidence `/private/tmp/analytics-query-task7-3-threshold-independent-review/verdict.md` and `/private/tmp/analytics-query-task7-3-parent-final/verification.md`. Twenty of21 leaves accepted;8.2 floor andfinalvalidation remains. Upstream pytest selector-order follow-up retained; no fixture shim.
 
 - Task 8.2 (2026-10-08): BLOCKED, not accepted. Sole designated DuckDB1.2.0 floor attempt: store facade37 passed, sandbox33 passed, spill14 passed/one failed/no skips; statement/crash-vector/command modules unrun after mandatory STOP. Sorted group-by execute refused an8MiB allocation at40.5/45.7MiB under fixture48MB. Separate native normal settings953.6MiB/two threads/3.7GiB and standalone version1.2.0 are interpreter controls, not the unrun crash-vector positive test. Controlled loopback probe reachable outside and EPERM inside deny-network sandbox. Parent independently compared complete snapshots: source/tests/config, designated floor venv and Git unchanged; HOME empty. Raw failure and structured report preserved at `/private/tmp/analytics-query-task8-2-implementation/`; fresh read-only debug `/private/tmp/analytics-query-debug-floor-spill/REPORT.md` returned SPEC_CONFLICT / STOP_FOR_HUMAN. Underlying allocation trigger/determinism UNKNOWN, unsafe floor NOT ESTABLISHED, floor safety acceptance INCOMPLETE. No retry, guessed fixture correction, dependency bump or final validation occurred. Proposed owner is task2.3, pending explicit C1 roadmap/spec decision. Candidate18-line mypy append remains isolated/unaccepted;20of21 tasks remain accepted.
+
+- 2026-10-08 maintainer approved `/private/tmp/analytics-query-floor-owner-decision.md`: reopen owning task2.3 reliability as prerequisite to8.2; bounded two baseline captures per runtime and one evidence-supported contrast per failing runtime; preserve floor/production settings/nonempty spill/results/purity/concurrency/mutation discrimination. Amend acceptance policy to distinguish workload OOM from established refusal/HOME defects. No numeric correction or floor safety is established; future floor acceptance still requires all six modules passing. Prior8.2 STOP receipt retained.

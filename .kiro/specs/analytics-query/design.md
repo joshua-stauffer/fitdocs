@@ -1500,6 +1500,7 @@ Hard rules that apply to every test:
     - hand `corpus_fingerprints` the scan's keys instead of the bookkeeping's
       (the corpus-inputs pin reds).
 - **Spill.**
+  - **Approved reliability amendment (2026-10-08):** the historical 48MB/3M-row sorted group-by witness requires owning task 2.3 reliability work before floor acceptance. At most two fresh-process baseline captures per admitted tested runtime (1.2.0/current1.5.6), then one evidence-supported controlled contrast per failing runtime; preserve raw failures/settings/plan/resource observations and HOME/inventory/process evidence. If causal evidence is absent, stop rather than count green captures as a repair. A fixture-contract revision needs evidence for its exact budget/cardinality and independent review, preserving actual nonempty process-specific spill, correct results, cleanup/purity, four-process overlap and temp-directory discrimination. Production settings and the dependency declaration remain unchanged.
   - With `RESOURCE_SETTINGS` monkeypatched to `memory_limit='48MB'`, a sorted
     group-by over a 3M-row plain database:
     - creates `query-spill-<pid>/` (observed by a watcher thread);
@@ -1600,6 +1601,7 @@ Hard rules that apply to every test:
     - state `500` as the default.
 
 ### Floor Verification and Performance
+- **Approved C1 clarification (2026-10-08):** stop on any floor failure or HOME write and retain receipts. A reduced-memory workload OOM is distinct from an established refusal-safety/HOME-artifact defect and does not alone justify changing the upstream floor. Resolve owning task 2.3 reliability under its bounded diagnostic allowance before resuming task 8.2. All six prescribed floor modules must pass after independent correction review; no skips, shims, expected failures or retry-until-green. Floor safety remains incomplete until that gate passes.
 - **Floor (`duckdb==1.2.0`)**, the floor of `duckdb>=1.2,<2` (U1), as task
   8.2 runs it:
   - `tests/query/test_store_facade.py`, `test_sandbox.py`, `test_spill.py`,

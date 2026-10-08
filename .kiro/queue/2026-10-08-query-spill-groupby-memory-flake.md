@@ -106,11 +106,7 @@ nonempty spill witness with an empty directory would hide the issue.
 
 ## How to pick it up
 
-0. Obtain the task 8.2/C1 roadmap decision before any new diagnostic,
-   fixture edit or floor retry. Recommended route: reopen owning task 2.3
-   as a prerequisite and amend its spill-test acceptance contract explicitly;
-   preserve the dependency declaration and production 1GB/two-thread/4GB
-   settings. The following investigation steps are conditional on approval.
+0. Maintainer approved the bounded owner decision on 2026-10-08: task 2.3 is reopened as prerequisite to 8.2. Read the amended task/design contract before diagnostics. The allowance is at most two baseline captures per runtime (1.2.0/current1.5.6) and one evidence-supported contrast per failing runtime; stop if no causal evidence. Preserve dependency declaration and production settings. No numeric adjustment is established, and floor rerun waits for independently reviewed owning correction.
 
 1. Read task 2.3 and design's Spill test strategy, then the current fixture
    and sandbox/store seams. Verify the live runtime version and prescribed
