@@ -104,9 +104,11 @@ nonempty spill witness with an empty directory would hide the issue.
   Task 8.2 explicitly requires a C1 roadmap decision on any failed floor
   test. No floor bump, fixture correction or retry is authorized by this item.
 
+- The maintainer-approved bounded owning diagnostic at `93b27ea` exhausted its allowance: floor baselines2/2 reproduced the same execute OOM, current baselines2/2 passed with exact results/nonempty active files. Sole floor375k-group contrast returned exact results but failed the required observed nonempty spill witness. Zero observed payloads does not prove no transient native spill. One private observer import error preceded any query/fixture execution; it is retained separately from five actual workloads. Root independently inspected raw receipts and exact before/after inventories:21891 repo/current-venv entries and1171 floor-venv entries equal, Git equal/clean, allsix launch groups reaped, HOME empty. Report `/private/tmp/analytics-query-spill-owner-bounded-diagnostic/REPORT.md` returned SPEC_CONFLICT / STOP_FOR_HUMAN. No viable numeric correction or current-version causal repair is established. Any new workload capture needs a new explicit bounded decision.
+
 ## How to pick it up
 
-0. Maintainer approved the bounded owner decision on 2026-10-08: task 2.3 is reopened as prerequisite to 8.2. Read the amended task/design contract before diagnostics. The allowance is at most two baseline captures per runtime (1.2.0/current1.5.6) and one evidence-supported contrast per failing runtime; stop if no causal evidence. Preserve dependency declaration and production settings. No numeric adjustment is established, and floor rerun waits for independently reviewed owning correction.
+0. Maintainer approved the bounded owner decision on 2026-10-08: task 2.3 is reopened as prerequisite to 8.2. That allowance is now exhausted without a correction. Obtain a new explicit diagnostic decision before any workload; read the amended task/design contract before diagnostics. The allowance is at most two baseline captures per runtime (1.2.0/current1.5.6) and one evidence-supported contrast per failing runtime; stop if no causal evidence. Preserve dependency declaration and production settings. No numeric adjustment is established, and floor rerun waits for independently reviewed owning correction.
 
 1. Read task 2.3 and design's Spill test strategy, then the current fixture
    and sandbox/store seams. Verify the live runtime version and prescribed
