@@ -680,6 +680,6 @@ def test_analytics_index_is_published_in_steering_without_changing_network_scope
     assert (
         "`index` (the analytics index) imports `model`, `metrics`, `compose`, "
         "`ingest`, `contract`, `docio`, `docmerge`, `layout`, `athlete`, "
-        "`settings`, `version` and the load payload readers; only `cli` imports "
-        "it; only `index.store` imports `duckdb`."
+        "`settings`, `version` and the load payload readers; only `cli` and "
+        "`query` import it; only `index.store` imports `duckdb`."
     ) in " ".join(organization.split())

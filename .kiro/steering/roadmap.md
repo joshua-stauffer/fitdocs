@@ -2299,8 +2299,9 @@ Rejected:
 - [ ] connectors — `index` and `query` join the no-network command list
   (`tech.md`, `tests/connectors/test_e2e.py:205`). Carried out inside
   whichever spec adds each command: `analytics-index` takes connectors
-  Amendment 1 (`index`), and `analytics-query` takes the next free number
-  at landing (`query`). (analytics-index part landed) Dependencies: analytics-index, analytics-query
+  Amendment 1 (`index`), and `analytics-query` records Amendment 2 (`query`)
+  on its feature branch, pending merge. (analytics-index part landed)
+  Dependencies: analytics-index, analytics-query
 - [x] fit-ingest — Requirement 19 and Amendment 6 publish best-effort
   computation at library level and classify its duration and step choices
   under criterion 15.8, outside criterion 15.6's enumeration. Carried out

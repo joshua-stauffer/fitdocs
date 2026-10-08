@@ -44,16 +44,18 @@ Network-capable code lives in exactly two places: the map-tile fetch
 `fitdocs connect` (one authentication call per attempt) and `fitdocs pull`
 (a single-attempt token renewal when a login-style token is due, then
 bounded, retried data calls); every other command — `sync`, `regen`,
-`load`, `check`, `history`, `plan`, `derive-benchmarks`, `index`, and rendering —
-makes no connector request, whether or not connectors are configured, and
-keeps its existing map-tile behavior (rendering a map may fetch missing
+`load`, `check`, `query`, `history`, `plan`, `derive-benchmarks`, `index`, and
+rendering — makes no connector request, whether or not connectors are
+configured, and keeps its existing map-tile behavior (rendering a map may fetch missing
 basemap tiles unless tile requests are disabled). Both network paths go
 through the standard library's `urllib` only, sending the one composed
 fitdocs User-Agent; connectors add no runtime dependency (beyond the
-standard library they use only the already-required `tomli_w`). Every DuckDB
-connection fitdocs opens has extension auto-install, extension auto-load and
-external file access disabled; the allow-list binds fitdocs's own connections,
-not an outside client that opens the index file. Connector credentials and
+standard library they use only the already-required `tomli_w`). `fitdocs
+query` runs agent SQL read-only under a locked DuckDB configuration with
+external access and extension loading off. Every DuckDB connection fitdocs
+opens has extension auto-install, extension auto-load and external file
+access disabled; the allow-list binds fitdocs's own connections, not an
+outside client that opens the index file. Connector credentials and
 tokens are stored per user outside the data root — one TOML file per instance in a
 per-user directory, never inside the data root (a credentials directory
 that resolves there is refused) — and the connectors package makes no

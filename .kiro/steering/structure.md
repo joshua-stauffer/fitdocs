@@ -78,14 +78,17 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   `layout` and `ingest`; `sync`, the load and benchmark passes and
   `render` (its types only: `DocContext`'s provenance field, and
   `render.provenance` with the alignment constants) import it.
+- `query` (the read side) imports `index` (location, store, schema, bookkeeping,
+  corpus, fingerprint, producer types, registry) and `athlete`; only `cli`
+  imports it; it never imports `duckdb` or an index writer.
 - `LoadCalculator` implementations declare their required inputs so the CLI
   can prompt for missing data generically — no calculator-specific prompting
   code in the CLI.
 - `index` (the analytics index) imports `model`, `metrics`, `compose`,
   `ingest`, `contract`, `docio`, `docmerge`, `layout`, `athlete`, `settings`,
-  `version` and the load payload readers; only `cli` imports it; only
-  `index.store` imports `duckdb`. Its derived producers (`index.derived`) also
-  import `history`, `plans`, `benchmarks` and `load.profile`, and
+  `version` and the load payload readers; only `cli` and `query` import it;
+  only `index.store` imports `duckdb`. Its derived producers (`index.derived`)
+  also import `history`, `plans`, `benchmarks` and `load.profile`, and
   `metrics.mean_max` computes best efforts; only `index.registry` imports
   `index.derived`.
 - Output documents must be valid, readable markdown in any renderer

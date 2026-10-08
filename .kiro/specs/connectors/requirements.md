@@ -286,7 +286,7 @@ decision; the bytes are always archived first).
 **Objective:** As a privacy-conscious athlete, I want network access limited to explicit connector commands and the existing map tiles, and every statement about the network to be true, so that I know exactly when fitdocs talks to the outside world.
 
 #### Acceptance Criteria
-1. The fitdocs CLI shall make connector requests only during `fitdocs connect` and `fitdocs pull`; `index`, `sync`, `regen`, `load`, `check`, `history`, `plan`, `derive-benchmarks`, and rendering shall make none, whether or not connectors are configured, and shall keep their existing map-tile behavior unchanged.
+1. The fitdocs CLI shall make connector requests only during `fitdocs connect` and `fitdocs pull`; `index`, `query`, `sync`, `regen`, `load`, `check`, `history`, `plan`, `derive-benchmarks`, and rendering shall make none, whether or not connectors are configured, and shall keep their existing map-tile behavior unchanged.
 2. The fitdocs source shall hold network-capable code in exactly two places — the map-tile fetch and the connector transport — and an automated guard shall fail when any other module reaches for the network.
 3. The connector package shall not depend on rendering, training load, metrics, `.fit` ingestion, or the sync engine, and an automated guard shall enforce it.
 4. Every statement in the shipped code, the README, and the documentation that describes where fitdocs touches the network shall name both the map tiles and the connector commands, and none shall claim the map tiles are the only network access.
@@ -316,3 +316,11 @@ runtime list. The no-network behavior is pinned by
 `tests/connectors/test_e2e.py::test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded`;
 the dependency boundary is pinned by
 `tests/test_determinism.py::test_no_new_third_party_runtime_dependency_was_added`.
+
+## Amendment 2 (2026-10-07): query joins Req 14.1, landed by analytics-query
+
+Requirement 14 criterion 1 adds `query` to the list of commands that make no
+connector requests. Analytics-query task 5.4 adds the query case to the
+socket-guarded no-network parametrization in `tests/connectors/test_e2e.py`.
+That guard is implemented and accepted on the analytics-query feature branch;
+it awaits the feature merge to main.

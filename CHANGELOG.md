@@ -27,6 +27,12 @@ recorded as one.
   weekly load series, a benchmark timeline, and training blocks. Run
   `fitdocs index` once after upgrading: the index schema version changed, and
   writing commands report that the index needs a rebuild until it is rebuilt.
+- `fitdocs query` accepts one SQL statement as a positional argument or on
+  standard input (`-`), with `--file` for a file; its default is a table on a
+  terminal and CSV when piped. The `--format` option explicitly selects
+  table, CSV, or JSON, and it supports the sandboxed `--schema` view. The
+  packaged `fitdocs-analytics` skill teaches safe SQL; see the
+  [analytics guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/analytics.md).
 - The runtime dependency `duckdb>=1.2,<2` (about 44 MB installed) powers the
   analytics index. Prebuilt wheels are not available for musl-based Linux or
   free-threaded Python builds.
