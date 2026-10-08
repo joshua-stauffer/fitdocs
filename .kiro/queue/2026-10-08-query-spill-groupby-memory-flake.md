@@ -3,7 +3,7 @@ id: 2026-10-08-query-spill-groupby-memory-flake
 title: Investigate intermittent OOM in the 48MB sorted group-by spill fixture
 status: open
 importance: medium
-importance_why: A query spill regression fixture can fail unrelated integration gates without an established runtime defect.
+importance_why: The reduced-memory fixture now blocks mandatory floor acceptance; a runtime defect and causal correction remain unestablished.
 effort: M
 kind: research
 area: analytics-query, tests/query/test_spill.py
@@ -89,7 +89,28 @@ nonempty spill witness with an empty directory would hide the issue.
 - One bounded passive full-suite diagnostic passed: 10,056 passed/two optional skips in 257.35 s, exit 0, approved 3M-row/750k-group/48MB/two-thread/4GB workload, real active spill, zero observer errors, restored wrappers, unchanged inventories, empty HOME and reaped owned process group. Configured snapshots, RSS and spill observations are distinct; no failing-time native allocation evidence or causal correction was obtained. Report: `/private/tmp/analytics-query-spill-full-context/REPORT.md`.
 - Independent supplementary decision justified exactly one fresh unmodified acceptance gate after the new full-context capture. That gate passed 10,056 tests/two optional skips in 271.36 s, exit 0; all source/test/venv inventories were unchanged, HOME empty and owned group gone. Task 8.3 is accepted for its measurements; this reliability issue remains **open** and the original failed run is preserved. Decision and final review: `/private/tmp/analytics-query-task8-3-independent-review/SUPPLEMENT-GATE.md` and `/private/tmp/analytics-query-task8-3-unmodified-supplementary-review/REVIEW.md`.
 
+- At accepted head `6194487`, task 8.2's sole designated DuckDB 1.2.0
+  floor attempt failed during `IndexConnection.execute`, refusing an 8.0 MiB
+  allocation at 40.5/45.7 MiB under the same 48MB workload. Store facade:
+  37 passed; sandbox: 33 passed; spill: 14 passed/one failed/no skips.
+  Statement, crash-vector and command modules remained unrun after STOP.
+  Root inspected raw `test_spill.stdout` and independently compared complete
+  before/after snapshots: source/tests/config, floor venv and Git unchanged,
+  HOME empty. Evidence: `/private/tmp/analytics-query-task8-2-implementation/floor/`.
+  Fresh read-only debug `/private/tmp/analytics-query-debug-floor-spill/REPORT.md`
+  returned SPEC_CONFLICT / STOP_FOR_HUMAN. Failure phases differ from the
+  retained 1.5.6 failure; a shared native cause is UNKNOWN. An unsafe floor
+  is NOT ESTABLISHED, and floor safety acceptance remains INCOMPLETE.
+  Task 8.2 explicitly requires a C1 roadmap decision on any failed floor
+  test. No floor bump, fixture correction or retry is authorized by this item.
+
 ## How to pick it up
+
+0. Obtain the task 8.2/C1 roadmap decision before any new diagnostic,
+   fixture edit or floor retry. Recommended route: reopen owning task 2.3
+   as a prerequisite and amend its spill-test acceptance contract explicitly;
+   preserve the dependency declaration and production 1GB/two-thread/4GB
+   settings. The following investigation steps are conditional on approval.
 
 1. Read task 2.3 and design's Spill test strategy, then the current fixture
    and sandbox/store seams. Verify the live runtime version and prescribed
