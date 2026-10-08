@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import socket
 import stat
 import tempfile
@@ -2311,3 +2312,422 @@ def test_connect_writes_only_the_credentials_file(tmp_path: Path) -> None:
 
 def test_index_derived_is_a_registered_writing_entry_point() -> None:
     assert "index-derived" in {entry_point.id for entry_point in WRITING_ENTRY_POINTS}
+
+
+# Query-local inventory preparation is intentionally independent of the generic
+# writer snapshot above: query permits only real per-process spill directories.
+def _query_inventory(root: Path) -> dict[str, tuple[object, ...]]:
+    inventory: dict[str, tuple[object, ...]] = {}
+    pending = [root]
+    while pending:
+        directory = pending.pop()
+        with os.scandir(directory) as entries:
+            for entry in sorted(entries, key=lambda item: item.name):
+                path = Path(entry.path)
+                relative = path.relative_to(root).as_posix()
+                if entry.is_symlink():
+                    metadata = entry.stat(follow_symlinks=False)
+                    inventory[relative] = (
+                        "symlink",
+                        metadata.st_size,
+                        metadata.st_mtime_ns,
+                        os.readlink(path),
+                    )
+                elif entry.is_dir(follow_symlinks=False):
+                    inventory[relative] = ("directory",)
+                    pending.append(path)
+                elif entry.is_file(follow_symlinks=False):
+                    metadata = entry.stat(follow_symlinks=False)
+                    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                    inventory[relative] = (
+                        "file",
+                        metadata.st_size,
+                        metadata.st_mtime_ns,
+                        digest,
+                    )
+    return inventory
+
+
+def _query_spill_exemptions(root: Path, index_dir: Path) -> frozenset[str]:
+    resolved_root = root.resolve()
+    resolved_index = index_dir.resolve()
+    if not resolved_index.is_relative_to(resolved_root) or not resolved_index.is_dir():
+        return frozenset()
+    exemptions: set[str] = set()
+    with os.scandir(resolved_index) as entries:
+        for entry in entries:
+            if re.fullmatch(r"query-spill-\d+", entry.name) is None:
+                continue
+            if entry.is_dir(follow_symlinks=False):
+                path = Path(entry.path)
+                exemptions.add(Path(os.path.relpath(path, resolved_root)).as_posix())
+    return frozenset(exemptions)
+
+
+def test_query_inventory_fixed_input_types_and_spill_scope(tmp_path: Path) -> None:
+    root = tmp_path / "sandbox"
+    index = root / "index"
+    index.mkdir(parents=True)
+    (root / "empty").write_bytes(b"")
+    (root / "binary").write_bytes(b"\x00A\xff")
+    (index / "query-spill-123").mkdir()
+    (index / "query-spill-123" / "payload").write_bytes(b"spill")
+    (index / "query-spill-123" / "empty-child").mkdir()
+    (index / "query-spill-123" / "query-spill-246").mkdir()
+    (index / "query-spill-123-neighbor").mkdir()
+    (index / "query-spill-456").write_text("file", encoding="utf-8")
+    outside = root / "elsewhere"
+    outside.mkdir()
+    (outside / "query-spill-123").mkdir()
+    (index / "query-spill-789").symlink_to("../elsewhere")
+    (root / "link").symlink_to("empty")
+    (root / "raw-relative").symlink_to("../elsewhere")
+    (root / "dangling").symlink_to("absent")
+    (root / "loop-a").symlink_to("loop-b")
+    (root / "loop-b").symlink_to("loop-a")
+    fixed_mtime_ns = 1_700_000_000_123_456_789
+    for file_path in (
+        root / "empty",
+        root / "binary",
+        index / "query-spill-123" / "payload",
+        index / "query-spill-456",
+    ):
+        os.utime(file_path, ns=(fixed_mtime_ns, fixed_mtime_ns))
+    for link_path in (
+        root / "link",
+        root / "raw-relative",
+        root / "dangling",
+        root / "loop-a",
+        root / "loop-b",
+        index / "query-spill-789",
+    ):
+        os.utime(
+            link_path,
+            ns=(fixed_mtime_ns, fixed_mtime_ns),
+            follow_symlinks=False,
+        )
+
+    inventory = _query_inventory(root)
+    assert inventory == {
+        "binary": (
+            "file",
+            3,
+            fixed_mtime_ns,
+            "fae12c85cb1b6aca5070c8837c2b720665f35afabe2dcd504d6c970de880d834",
+        ),
+        "dangling": ("symlink", 6, fixed_mtime_ns, "absent"),
+        "empty": (
+            "file",
+            0,
+            fixed_mtime_ns,
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        ),
+        "elsewhere": ("directory",),
+        "elsewhere/query-spill-123": ("directory",),
+        "index": ("directory",),
+        "index/query-spill-123": ("directory",),
+        "index/query-spill-123/empty-child": ("directory",),
+        "index/query-spill-123/query-spill-246": ("directory",),
+        "index/query-spill-123/payload": (
+            "file",
+            5,
+            fixed_mtime_ns,
+            "234a838aaa5e6ae0a9a2076d47b8e1d571c40e8e42c72d07719cfaceab508225",
+        ),
+        "index/query-spill-123-neighbor": ("directory",),
+        "index/query-spill-456": (
+            "file",
+            4,
+            fixed_mtime_ns,
+            "3b9c358f36f0a31b6ad3e14f309c7cf198ac9246e8316f9ce543d5b19ac02b80",
+        ),
+        "index/query-spill-789": ("symlink", 12, fixed_mtime_ns, "../elsewhere"),
+        "link": ("symlink", 5, fixed_mtime_ns, "empty"),
+        "loop-a": ("symlink", 6, fixed_mtime_ns, "loop-b"),
+        "loop-b": ("symlink", 6, fixed_mtime_ns, "loop-a"),
+        "raw-relative": ("symlink", 12, fixed_mtime_ns, "../elsewhere"),
+    }
+    assert _query_spill_exemptions(root, index) == frozenset({"index/query-spill-123"})
+    external_index = tmp_path / "external-index"
+    external_index.mkdir()
+    (external_index / "query-spill-654").mkdir()
+    assert _query_spill_exemptions(root, external_index) == frozenset()
+
+
+def test_query_inventory_discriminates_size_mtime_digest_and_path_changes(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "inventory-deltas"
+    root.mkdir()
+    sized = root / "size"
+    timed = root / "mtime"
+    digested = root / "digest"
+    retargeted = root / "retarget"
+    sized.write_bytes(b"A")
+    timed.write_bytes(b"same")
+    digested.write_bytes(b"ABCD")
+    retargeted.symlink_to("one")
+    timed_ns = 1_700_000_000_123_456_789
+    os.utime(timed, ns=(timed_ns, timed_ns))
+    link_mtime_ns = 1_700_000_000_223_456_789
+    os.utime(retargeted, ns=(link_mtime_ns, link_mtime_ns), follow_symlinks=False)
+    initial = _query_inventory(root)
+    assert set(initial) == {"size", "mtime", "digest", "retarget"}
+    assert initial["size"][1] == 1
+    assert initial["mtime"] == (
+        "file",
+        4,
+        timed_ns,
+        "0967115f2813a3541eaef77de9d9d5773f1c0c04314b0bbfe4ff3b3b1c55b5d5",
+    )
+    assert initial["digest"][1] == 4
+    assert initial["retarget"] == ("symlink", 3, link_mtime_ns, "one")
+
+    sized.write_bytes(b"AB")
+    after_size = _query_inventory(root)
+    assert after_size["size"][1] == 2
+
+    updated_time_ns = timed_ns + 10_000_000
+    os.utime(timed, ns=(updated_time_ns, updated_time_ns))
+    after_mtime = _query_inventory(root)
+    assert after_mtime["mtime"] == (
+        "file",
+        4,
+        updated_time_ns,
+        "0967115f2813a3541eaef77de9d9d5773f1c0c04314b0bbfe4ff3b3b1c55b5d5",
+    )
+
+    original_digest_mtime = digested.stat().st_mtime_ns
+    digested.write_bytes(b"WXYZ")
+    os.utime(digested, ns=(original_digest_mtime, original_digest_mtime))
+    after_digest = _query_inventory(root)
+    assert after_digest["digest"] == (
+        "file",
+        4,
+        original_digest_mtime,
+        "21e32f5321cad49ab4cf78ba5ed231e0f36d0c78d34108fda1be939f33fba149",
+    )
+
+    original_link_stat = retargeted.lstat()
+    retargeted.unlink()
+    retargeted.symlink_to("two")
+    os.utime(
+        retargeted,
+        ns=(original_link_stat.st_atime_ns, original_link_stat.st_mtime_ns),
+        follow_symlinks=False,
+    )
+    changed_link_stat = retargeted.lstat()
+    assert changed_link_stat.st_size == original_link_stat.st_size
+    assert changed_link_stat.st_mtime_ns == original_link_stat.st_mtime_ns
+    after_retarget = _query_inventory(root)
+    assert after_retarget["retarget"] == ("symlink", 3, link_mtime_ns, "two")
+
+    (root / "added-empty").mkdir()
+    after_add = _query_inventory(root)
+    assert "added-empty" in after_add
+    (root / "added-empty").rmdir()
+    (root / "size").unlink()
+    after_delete = _query_inventory(root)
+    assert "added-empty" not in after_delete
+    assert "size" not in after_delete
+
+
+def test_query_inventory_keeps_directory_symlink_without_walking_target(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "symlink-walk"
+    target = root / "target"
+    target.mkdir(parents=True)
+    (target / "child").write_bytes(b"x")
+    alias = root / "alias"
+    alias.symlink_to("target")
+    fixed_mtime_ns = 1_700_000_000_333_456_789
+    os.utime(target / "child", ns=(fixed_mtime_ns, fixed_mtime_ns))
+    os.utime(alias, ns=(fixed_mtime_ns, fixed_mtime_ns), follow_symlinks=False)
+
+    inventory = _query_inventory(root)
+    assert inventory == {
+        "alias": ("symlink", 6, fixed_mtime_ns, "target"),
+        "target": ("directory",),
+        "target/child": (
+            "file",
+            1,
+            fixed_mtime_ns,
+            "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        ),
+    }
+
+
+def test_query_writes_nothing_outside_its_spill_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from fitdocs.index.location import resolve_index_location
+    from fitdocs.index.store import create_index, open_index, read_bookkeeping
+
+    sandbox = tmp_path / "query-confinement"
+    sandbox.mkdir()
+    data_root = sandbox / "data"
+    data_root.mkdir()
+    source = sandbox / "source"
+    source.mkdir()
+    (source / "run.fit").write_bytes(builder.run_fit_bytes())
+    index_base = sandbox / "index-cache"
+    home = sandbox / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("FITDOCS_INDEX_DIR", str(index_base))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(sandbox / "xdg-cache"))
+    (data_root / "fitdocs.toml").write_text(
+        "[tiles]\nenabled = false\n", encoding="utf-8"
+    )
+
+    synced = _CLI_RUNNER.invoke(
+        app, ["sync", str(source), "--out", str(data_root), "--no-prompt"]
+    )
+    assert synced.exit_code == 0, synced.output
+    indexed = _CLI_RUNNER.invoke(app, ["index", "--out", str(data_root)])
+    assert indexed.exit_code == 0, indexed.output
+
+    location = resolve_index_location(data_root, os.environ, home)
+    index_dir = location.directory.resolve()
+    database = location.database
+    page_paths = tuple(
+        sorted(
+            path
+            for path in (data_root / WORKOUTS_DIR).glob("*.md")
+            if path.name != "AGENTS.md"
+        )
+    )
+    assert len(page_paths) == 1
+    page = page_paths[0]
+    assert page.read_bytes()
+    assert database.is_file() and database.stat().st_size > 0
+    with open_index(database, read_only=True) as connection:
+        bookkeeping = read_bookkeeping(connection)
+    assert bookkeeping is not None
+    assert len(bookkeeping.pages) == 1
+    assert (
+        next(iter(bookkeeping.pages.values())).path
+        == page.relative_to(data_root).as_posix()
+    )
+
+    copy_target = data_root / "copy-output.csv"
+    csv_decoy = data_root / "readable-decoy.csv"
+    csv_decoy.write_text("answer\n42\n", encoding="utf-8")
+    assert csv_decoy.read_text(encoding="utf-8") == "answer\n42\n"
+    attached_database = data_root / "valid-attachment.duckdb"
+    with create_index(attached_database) as attachment:
+        attachment.execute("CREATE TABLE fixture (answer INTEGER)")
+        attachment.execute("INSERT INTO fixture VALUES (42)")
+    assert attached_database.is_file() and attached_database.stat().st_size > 0
+    assert not copy_target.exists()
+    assert tuple(home.iterdir()) == ()
+
+    monkeypatch.setattr("fitdocs.cli._stdout_is_terminal", lambda: False)
+
+    def snapshot() -> dict[str, tuple[object, ...]]:
+        inventory = _query_inventory(sandbox)
+        spill_paths = _query_spill_exemptions(sandbox, index_dir)
+        return {
+            path: entry for path, entry in inventory.items() if path not in spill_paths
+        }
+
+    before = snapshot()
+    assert before
+    assert f"data/{page.relative_to(data_root).as_posix()}" in before
+    assert any(path.endswith("index.duckdb") for path in before)
+
+    select = _CLI_RUNNER.invoke(
+        app,
+        ["query", "SELECT count(*) AS n FROM pages", "--out", str(data_root)],
+    )
+    assert (select.exit_code, select.stdout, select.stderr) == (0, "n\n1", "")
+    assert snapshot() == before
+    assert tuple(home.iterdir()) == ()
+
+    schema = _CLI_RUNNER.invoke(app, ["query", "--schema", "--out", str(data_root)])
+    assert schema.exit_code == 0, schema.output
+    assert "Database:" in schema.stdout and "pages" in schema.stdout
+    assert snapshot() == before
+    assert tuple(home.iterdir()) == ()
+
+    copy = _CLI_RUNNER.invoke(
+        app,
+        [
+            "query",
+            f"COPY (SELECT 1) TO '{copy_target}' (HEADER, DELIMITER ',')",
+            "--out",
+            str(data_root),
+        ],
+    )
+    assert copy.exit_code == 1
+    assert copy.stderr.splitlines()[0] == (
+        "Query refused: the query sandbox runs only queries and EXPLAIN; "
+        "this is a COPY statement."
+    )
+    assert not copy_target.exists()
+    assert snapshot() == before
+    assert tuple(home.iterdir()) == ()
+
+    read_file = _CLI_RUNNER.invoke(
+        app,
+        [
+            "query",
+            f"SELECT * FROM read_csv_auto('{csv_decoy}')",
+            "--out",
+            str(data_root),
+        ],
+    )
+    assert read_file.exit_code == 1
+    assert read_file.stderr.splitlines()[0] == (
+        "Query refused: the query sandbox cannot read or write files or "
+        "addresses outside the index."
+    )
+    assert read_file.stderr.splitlines()[1].startswith("DuckDB: ")
+    assert snapshot() == before
+    assert tuple(home.iterdir()) == ()
+
+    attach = _CLI_RUNNER.invoke(
+        app,
+        [
+            "query",
+            f"ATTACH '{attached_database}' AS external_db",
+            "--out",
+            str(data_root),
+        ],
+    )
+    assert attached_database.is_file() and attached_database.stat().st_size > 0
+    assert attach.exit_code == 1
+    assert attach.stderr.splitlines()[0] == (
+        "Query refused: the query sandbox runs only queries and EXPLAIN; "
+        "this is a ATTACH statement."
+    )
+    assert snapshot() == before
+    assert tuple(home.iterdir()) == ()
+
+    malformed = _CLI_RUNNER.invoke(app, ["query", "SELEC 1", "--out", str(data_root)])
+    assert malformed.exit_code == 1
+    assert malformed.stderr == (
+        'Query failed: Parser Error: syntax error at or near "SELEC"\n\n'
+        "LINE 1: SELEC 1\n        ^\n"
+    )
+    assert snapshot() == before
+    assert tuple(home.iterdir()) == ()
+
+    timed_out = _CLI_RUNNER.invoke(
+        app,
+        [
+            "query",
+            "SELECT sum(i) FROM range(1000000000000) AS r(i)",
+            "--timeout",
+            "0.5",
+            "--out",
+            str(data_root),
+        ],
+    )
+    assert timed_out.exit_code == 1
+    assert timed_out.stderr == (
+        "Query stopped: it ran longer than 0.5 s. Narrow it, or raise --timeout.\n"
+    )
+    assert snapshot() == before
+    assert tuple(home.iterdir()) == ()

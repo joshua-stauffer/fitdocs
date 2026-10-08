@@ -534,3 +534,203 @@ def test_format_purity_guard_rejects_third_party_from_import() -> None:
 def test_format_purity_guard_rejects_dynamic_third_party_import() -> None:
     dynamic_third_party = "import importlib\nimportlib.import_module('numpy.linalg')\n"
     assert _forbidden_format_imports(dynamic_third_party) == {"numpy"}
+
+
+# The direction matrix uses ordered implementation modules only.
+_QUERY_DIRECTION = (
+    "format",
+    "sandbox",
+    "statement",
+    "freshness",
+    "schemaview",
+    "command",
+)
+
+
+def _query_direction_allows(sender: int, target: int) -> bool:
+    return 0 <= target < sender < len(_QUERY_DIRECTION)
+
+
+def test_query_direction_matrix_fixed_oracle() -> None:
+    allowed_edges = frozenset(
+        {
+            (1, 0),
+            (2, 0),
+            (2, 1),
+            (3, 0),
+            (3, 1),
+            (3, 2),
+            (4, 0),
+            (4, 1),
+            (4, 2),
+            (4, 3),
+            (5, 0),
+            (5, 1),
+            (5, 2),
+            (5, 3),
+            (5, 4),
+        }
+    )
+    observed = {
+        (sender, target): _query_direction_allows(sender, target)
+        for sender in range(len(_QUERY_DIRECTION))
+        for target in range(len(_QUERY_DIRECTION))
+    }
+    expected = {
+        (sender, target): (sender, target) in allowed_edges
+        for sender in range(6)
+        for target in range(6)
+    }
+    assert observed == expected
+
+
+def _query_forbidden_target(target: str) -> bool:
+    forbidden_roots = (
+        "fitdocs.cli",
+        "fitdocs.sync",
+        "fitdocs.render",
+        "fitdocs.connectors",
+        "fitdocs.tiles",
+        "fitdocs.plugins",
+        "fitdocs.index.refresh",
+        "fitdocs.index.build",
+        "fitdocs.index.lock",
+        "fitdocs.index.handoff",
+        "fitdocs.index.derive",
+    )
+    return any(
+        target == root or target.startswith(f"{root}.") for root in forbidden_roots
+    )
+
+
+def test_query_forbidden_roots_and_dotted_boundaries_fixed_oracle() -> None:
+    forbidden_roots = (
+        "fitdocs.cli",
+        "fitdocs.sync",
+        "fitdocs.render",
+        "fitdocs.connectors",
+        "fitdocs.tiles",
+        "fitdocs.plugins",
+        "fitdocs.index.refresh",
+        "fitdocs.index.build",
+        "fitdocs.index.lock",
+        "fitdocs.index.handoff",
+        "fitdocs.index.derive",
+    )
+    for root in forbidden_roots:
+        assert _query_forbidden_target(root)
+        assert _query_forbidden_target(f"{root}.child")
+    assert not _query_forbidden_target("fitdocs.sync_extra")
+    assert not _query_forbidden_target("fitdocs.index.refresh_extra")
+    assert not _query_forbidden_target("fitdocs.index.schema")
+    assert not _query_forbidden_target("fitdocs.query")
+    assert not _query_forbidden_target("json.decoder")
+
+
+def test_query_direction_reuses_import_target_parser_for_literal_forms() -> None:
+    cases: tuple[tuple[str, str, set[str]], ...] = (
+        ("import fitdocs.cli as cli", "fitdocs.history.engine", {"fitdocs.cli"}),
+        (
+            "from fitdocs import cli",
+            "fitdocs.history.engine",
+            {"fitdocs", "fitdocs.cli"},
+        ),
+        (
+            "from fitdocs.query import statement",
+            "fitdocs.query.__init__",
+            {"fitdocs.query", "fitdocs.query.statement"},
+        ),
+        (
+            "from . import sandbox",
+            "fitdocs.query.__init__",
+            {"fitdocs.query", "fitdocs.query.sandbox"},
+        ),
+        (
+            "from ..sync import engine",
+            "fitdocs.query.command",
+            {"fitdocs.sync", "fitdocs.sync.engine"},
+        ),
+        (
+            "import importlib as loader\nloader.import_module(name='fitdocs.sync')",
+            "fitdocs.query.command",
+            {"importlib", "fitdocs.sync"},
+        ),
+        (
+            "from importlib import import_module as load\n"
+            "load('.sync', package='fitdocs')",
+            "fitdocs.query.command",
+            {"importlib", "importlib.import_module", "fitdocs.sync"},
+        ),
+        (
+            "import importlib\nimportlib.import_module('.sync', package='fitdocs')",
+            "fitdocs.query.command",
+            {"importlib", "fitdocs.sync"},
+        ),
+        (
+            "import builtins as bi\nbi.__import__('fitdocs.index.refresh')",
+            "fitdocs.query.command",
+            {"builtins", "fitdocs.index.refresh"},
+        ),
+        (
+            "import builtins\n"
+            "builtins.__import__(name='sync', globals=globals(), locals=locals(), "
+            "fromlist=('engine',), level=1)",
+            "fitdocs.query.command",
+            {"builtins", "fitdocs.query.sync", "fitdocs.query.sync.engine"},
+        ),
+        (
+            "label = 'fitdocs.sync'\nlocal_import_module('fitdocs.cli')",
+            "fitdocs.query.command",
+            set(),
+        ),
+    )
+    for source, module, expected in cases:
+        assert _import_targets(source, module) == expected
+
+
+def _query_import_violations(sources: dict[str, str]) -> set[tuple[str, str]]:
+    ranks = {
+        f"fitdocs.query.{name}": rank for rank, name in enumerate(_QUERY_DIRECTION)
+    }
+    violations: set[tuple[str, str]] = set()
+    for module, source in sources.items():
+        for target in _import_targets(source, module):
+            if _query_forbidden_target(target):
+                violations.add((module, target))
+            sender_rank = ranks.get(module)
+            target_rank = ranks.get(target)
+            if (
+                sender_rank is not None
+                and target_rank is not None
+                and not _query_direction_allows(sender_rank, target_rank)
+            ):
+                violations.add((module, target))
+    return violations
+
+
+def test_query_import_violation_wiring_fixed_sources() -> None:
+    synthetic = {
+        "fitdocs.query.command": "import fitdocs.cli\nfrom . import format\n",
+        "fitdocs.query.format": "from . import command\n",
+        "fitdocs.query.__init__": "import fitdocs.query\n",
+    }
+    assert _query_import_violations(synthetic) == {
+        ("fitdocs.query.command", "fitdocs.cli"),
+        ("fitdocs.query.format", "fitdocs.query.command"),
+    }
+
+
+def test_query_live_direction_scan_is_nonempty() -> None:
+    query_root = _SOURCE_ROOT / "query"
+    files = tuple(query_root.glob("*.py"))
+    assert len(files) >= len(_QUERY_DIRECTION) + 1
+    scanned = {_source_module(path): path.read_text(encoding="utf-8") for path in files}
+    assert scanned
+    live_targets = {
+        target
+        for module, source in scanned.items()
+        for target in _import_targets(source, module)
+    }
+    assert len(live_targets) >= 24
+    violations = _query_import_violations(scanned)
+    assert violations == set()

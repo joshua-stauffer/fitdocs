@@ -16,10 +16,11 @@ guard, registry snapshot/restore, credentials/environment isolation):
    never the pull's.
 2. With ``[connectors]`` configured, every command Req 14.1 names that is
    not ``connect``/``pull`` itself -- ``sync``, ``regen``, ``load``,
-   ``check``, ``history``, ``plan``, ``derive-benchmarks`` -- completing
-   exactly as it would with no ``[connectors]`` table at all: same exit
-   code and output, the same number of socket attempts as the bare run (an
-   in-test recorder that also raises), and no call on a scripted connector.
+   ``check``, ``history``, ``plan``, ``derive-benchmarks``, ``index`` and
+   ``query`` -- completing exactly as it would with no ``[connectors]`` table
+   at all: same exit code and output, the same number of socket attempts as
+   the bare run (an in-test recorder that also raises), and no call on a
+   scripted connector.
 """
 
 from __future__ import annotations
@@ -284,7 +285,13 @@ def test_pull_sync_folder_and_personal_key_second_run_removes_only_its_own(
 # =============================================================================
 
 
-def _fresh_synced_root(tmp_path: Path, name: str, *, with_connectors: bool) -> Path:
+def _fresh_synced_root(
+    tmp_path: Path,
+    name: str,
+    *,
+    with_connectors: bool,
+    tiles_disabled: bool = False,
+) -> Path:
     """A freshly synced data root with one workout document, optionally
     carrying a `[connectors]` table naming the built-in folder connector
     and the scripted personal-key connector."""
@@ -293,35 +300,41 @@ def _fresh_synced_root(tmp_path: Path, name: str, *, with_connectors: bool) -> P
     (source / "run.fit").write_bytes(builder.run_fit_bytes())
     data_root = tmp_path / f"{name}-root"
     data_root.mkdir()
+    settings = ""
     if with_connectors:
-        _write_settings(
-            data_root,
-            connectors=(
-                '[connectors.folder-src]\nconnector = "folder"\n'
-                'path = "unused-folder"\n\n'
-                '[connectors.key-src]\nconnector = "personal-key"\n'
-            ),
+        settings += (
+            '[connectors.folder-src]\nconnector = "folder"\n'
+            'path = "unused-folder"\n\n'
+            '[connectors.key-src]\nconnector = "personal-key"\n'
         )
+    if tiles_disabled:
+        settings += "\n[tiles]\nenabled = false\n"
+    if settings:
+        _write_settings(data_root, connectors=settings)
     result = runner.invoke(app, ["sync", str(source), "--out", str(data_root)])
     assert result.exit_code == 0, result.output
     return data_root
 
 
 @pytest.mark.parametrize(
-    "command",
+    "command,args",
     [
-        "sync",
-        "regen",
-        "load",
-        "check",
-        "history",
-        "plan",
-        "derive-benchmarks",
-        "index",
+        ("sync", []),
+        ("regen", []),
+        ("load", []),
+        ("check", []),
+        ("history", []),
+        ("plan", []),
+        ("derive-benchmarks", []),
+        ("index", []),
+        ("query", ["SELECT count(*) AS n FROM pages"]),
     ],
 )
 def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+    args: list[str],
 ) -> None:
     """Every command Req 14.1 names, other than `connect`/`pull`, completes
     exactly as it would with no `[connectors]` table -- compared directly
@@ -335,8 +348,30 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
     connector_registry.register(key_connector)
     monkeypatch.setenv(env_var_name("key-src", "api_key"), "s3cr3t-api-key")
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "fallback-xdg-cache"))
-    bare_root = _fresh_synced_root(tmp_path, f"bare-{command}", with_connectors=False)
-    wired_root = _fresh_synced_root(tmp_path, f"wired-{command}", with_connectors=True)
+    is_query = command == "query"
+    bare_root = _fresh_synced_root(
+        tmp_path,
+        f"bare-{command}",
+        with_connectors=False,
+        tiles_disabled=is_query,
+    )
+    wired_root = _fresh_synced_root(
+        tmp_path,
+        f"wired-{command}",
+        with_connectors=True,
+        tiles_disabled=is_query,
+    )
+
+    bare_index = tmp_path / f"bare-{command}-index"
+    wired_index = tmp_path / f"wired-{command}-index"
+    assert bare_index != wired_index
+    if is_query:
+        for root, index_dir in ((bare_root, bare_index), (wired_root, wired_index)):
+            monkeypatch.setenv("FITDOCS_INDEX_DIR", str(index_dir))
+            built = runner.invoke(app, ["index", "--out", str(root)])
+            assert built.exit_code == 0, built.output
+            database = next(index_dir.rglob("index.duckdb"))
+            assert database.stat().st_size > 0
 
     attempts: list[object] = []
 
@@ -350,14 +385,11 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
     wired_root_before = _data_root_snapshot(wired_root)
     assert bare_root_before
     assert wired_root_before
-    bare_index = tmp_path / f"bare-{command}-index"
-    wired_index = tmp_path / f"wired-{command}-index"
-    assert bare_index != wired_index
     monkeypatch.setenv("FITDOCS_INDEX_DIR", str(bare_index))
-    bare = runner.invoke(app, [command, "--out", str(bare_root)])
+    bare = runner.invoke(app, [command, *args, "--out", str(bare_root)])
     bare_attempts = len(attempts)
     monkeypatch.setenv("FITDOCS_INDEX_DIR", str(wired_index))
-    wired = runner.invoke(app, [command, "--out", str(wired_root)])
+    wired = runner.invoke(app, [command, *args, "--out", str(wired_root)])
     bare_root_after = _data_root_snapshot(bare_root)
     wired_root_after = _data_root_snapshot(wired_root)
 
@@ -378,6 +410,10 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
         str(wired_location.database), "<resolved-index-database>"
     )
     assert wired_output == bare_output
+    if is_query:
+        assert bare.stdout == "n\n1"
+        assert bare_attempts == 0
+        assert len(attempts) == 0
     if command == "index":
         assert bare_root_after == bare_root_before
         assert wired_root_after == wired_root_before
@@ -396,6 +432,7 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
         assert len(attempts) - bare_attempts == bare_attempts
     assert key_connector.verify_calls == []
     assert key_connector.list_calls == []
+    assert key_connector.fetch_calls == []
 
 
 def test_sync_and_load_parity_with_and_without_prebuilt_index(

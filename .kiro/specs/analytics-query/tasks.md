@@ -876,7 +876,7 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
   - _Boundary: SchemaView_
   - _Depends: 2.2_
 
-- [ ] 5. Integration: the state view, the command, the CLI and the guards
+- [x] 5. Integration: the state view, the command, the CLI and the guards
 
 - [x] 5.1 Render the index state and the full schema view
   - **`schemaview.py`** gains `IndexState`, `render_state_text`,
@@ -1024,7 +1024,7 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
     the plain sentence.
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.2, 2.3, 3.2, 3.5, 4.1, 4.4, 4.5, 6.5, 9.2, 9.4, 10.6, 10.7, 10.8_
 
-- [ ] 5.4 Extend the confinement, network, boundary and crash-vector guards to `query`
+- [x] 5.4 Extend the confinement, network, boundary and crash-vector guards to `query`
   - **`tests/test_confinement.py`**: append a standalone
     `test_query_writes_nothing_outside_its_spill_directory`, modelled on
     `test_connect_writes_only_the_credentials_file`.
@@ -1497,3 +1497,5 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 - 2026-10-08 task 5.3 accepted after independent APPROVED: corrected canonical 10,056 passed/two optional actionlint skips, exit 0; 36 claimed and six independent controls RED/restored GREEN, zero survivors at representative responsibility granularity. The sole prior canonical failure was an additional existing index CLI command-count expectation; its Twelve-to-Thirteen literal evolution is explicitly owned, all other index assertions retained. Original three CLI files unchanged during this repair. Fresh parent 497 scoped tests plus whole Ruff/format/configured mypy and strict all four files, exact hashes and HOME purity VERIFIED. Original controller-interrupted permission run and completed stale-count failure remain historical evidence; no production repair attributed to either. Evidence `/private/tmp/analytics-query-task5-3-independent-review-count2/REVIEW-VERDICT.md`, `/private/tmp/analytics-query-parent-cli5-3-final/verification.md`. Thirteen of 21 leaves accepted; CLI forms/streams/exits available for documentation and integrated guards.
 
 - Task 8.3 (2026-10-08): authorized copied-root measurements recorded in research (2,517 FIT files; 2,502 pages; 5,636,964 records); pages/schema/records aggregate 1.530/1.501/1.457 s, each exit 0. Preparation durations are separate. Independent supplementary unmodified canonical 10,056 passed/two optional skips, actual exit 0, with inventories/HOME/process preservation. Parent independently verified saved receipts and nonempty outputs privately without repeating the measurements. Original OOM failure and open reliability queue remain; healthy full-context diagnostics and the fresh gate establish no causal repair.
+
+- Task 5.4: four guard surfaces accepted with actual facade-only attachment setup and single logging exit membership {0,1}. Independent canonical 10,069 passed/two optional skips, exit 0; fresh parent 236 relevant tests plus whole Ruff/format/configured mypy/strict all four and exact hashes/HOME passed. Nine runtime controls and four reviewer controls discriminate; timeout-disabled control proves finite reachability/reaping only. Genuine pre-helper OFF failures preserved; historical ON source snapshot remains unavailable, and earlier 19/35 totals are not promoted. Source unchanged; spill and preview reliability queues remain open without causal-repair claims.
