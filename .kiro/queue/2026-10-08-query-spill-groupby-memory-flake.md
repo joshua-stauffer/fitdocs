@@ -127,3 +127,10 @@ nonempty spill witness with an empty directory would hide the issue.
    stale/live/own-PID, symlink and writer-directory assertions. A different
    memory limit needs reconciliation with the explicit approved spec; do not
    change production's 1GB limit as a fixture workaround.
+
+## Update 2026-10-08: measured sweep and test-contract revision
+
+- Fresh-process sweep through `open_sandboxed` on duckdb 1.2.0 and 1.5.6 (receipts `/Users/josh/code/fitdocs-private-evidence/analytics-query-2.3-revision/`, all `*.jsonl`): the sorted group-by (3M rows, 750k buckets) on 1.2.0 OOMs at 48MB (12/12) and 64MB (7/12) and above that finishes without ever writing a spill file; on 1.5.6 it spills at 48-128MB but OOMed 1/12 at 96MB. Rows/bucket sweeps never produced a 1.2.0 witness. No measured limit (48-256MB, plus the rows/buckets grid) satisfies spill-witness plus no-OOM on both runtimes for that query.
+- A pure sort (`ORDER BY (i*2654435761) % 1000003 DESC, i`) spills with exact results and no OOM in 15/15 runs at 48MB and 64MB on both runtimes; the window/four-process test does too. The fixture now uses that sort at one named constant of 64MB.
+- OOM cause on 1.2.0 remains UNKNOWN; this is not a causal correction.
+- Status: resolved by test-contract revision, pending review. Left open (not moved to closed/).

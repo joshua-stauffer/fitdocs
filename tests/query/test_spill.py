@@ -24,10 +24,29 @@ from fitdocs.query import sandbox
 from tests.query.conftest import HomeDirectory
 
 _ROW_COUNT = 3_000_000
-_GROUP_SQL = (
-    "SELECT i % 750000 AS bucket, sum(i) AS total "
-    "FROM spill_rows GROUP BY bucket ORDER BY bucket DESC"
+# Measured test-contract value, not a derivation of DuckDB's minimum sort
+# memory: with the workloads below, a nonempty spill file appears and no
+# out-of-memory error occurs in every fresh-process run on duckdb 1.2.0 and
+# 1.5.6 at this limit and at 48MB, one step below. Receipts:
+# /Users/josh/code/fitdocs-private-evidence/analytics-query-2.3-revision/
+# (grid3.jsonl for the sort, matrix-floor.jsonl and matrix-locked.jsonl for
+# the window query).
+_SPILL_MEMORY_LIMIT = "64MB"
+_SORT_SQL = (
+    "SELECT i, i * 3 AS tripled FROM spill_rows "
+    "ORDER BY (i * 2654435761) % 1000003 DESC, i"
 )
+
+
+# Rows at the two ends of _SORT_SQL's order, derived independently of DuckDB
+# by scanning range(_ROW_COUNT) for the extreme keys (ties broken by i ascending).
+def _sort_position(i: int) -> tuple[int, int]:
+    """Position of row ``i`` under _SORT_SQL: key descending, then i ascending."""
+    return (-((i * 2654435761) % 1000003), i)
+
+
+_SORT_FIRST_ROW = (569_241, 1_707_723)
+_SORT_LAST_ROW = (2_000_006, 6_000_018)
 _WINDOW_SQL = (
     "SELECT sum(total), max(total), count(*) FROM ("
     "SELECT row_number() OVER (ORDER BY i DESC) AS total FROM spill_rows)"
@@ -97,7 +116,11 @@ def low_memory(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         sandbox,
         "RESOURCE_SETTINGS",
-        {"memory_limit": "48MB", "threads": 2, "max_temp_directory_size": "4GB"},
+        {
+            "memory_limit": _SPILL_MEMORY_LIMIT,
+            "threads": 2,
+            "max_temp_directory_size": "4GB",
+        },
     )
 
 
@@ -111,7 +134,7 @@ def _open(location: IndexLocation, pid: int | None = None) -> IndexConnection:
     )
 
 
-def test_sorted_group_by_spills_to_its_process_directory_and_close_removes_it(
+def test_sorted_query_spills_to_its_process_directory_and_close_removes_it(
     plain_database: tuple[Path, IndexLocation, Path],
     home_dir: HomeDirectory,
 ) -> None:
@@ -135,9 +158,17 @@ def test_sorted_group_by_spills_to_its_process_directory_and_close_removes_it(
     connection: IndexConnection | None = None
     try:
         connection = _open(location)
-        result = connection.execute(_GROUP_SQL).fetchall()
-        assert len(result) == 750_000
-        assert result[0][0] == 749_999
+        result = cast(list[tuple[int, int]], connection.execute(_SORT_SQL).fetchall())
+        assert len(result) == _ROW_COUNT
+        assert result[0] == _SORT_FIRST_ROW
+        assert result[-1] == _SORT_LAST_ROW
+        assert sum(row[0] for row in result) == _ROW_COUNT * (_ROW_COUNT - 1) // 2
+        assert all(row[1] == row[0] * 3 for row in result)
+        assert all(0 <= row[0] < _ROW_COUNT for row in result)
+        assert all(
+            _sort_position(earlier[0]) < _sort_position(later[0])
+            for earlier, later in zip(result, result[1:], strict=False)
+        )
         assert seen.is_set()
         assert spill.is_dir()
         assert not (location.directory / "index.duckdb.tmp").exists()
@@ -194,13 +225,14 @@ import time
 from pathlib import Path
 from fitdocs.index.location import resolve_index_location
 from fitdocs.query import sandbox
-root, base, home, coordination = map(Path, sys.argv[1:])
+root, base, home, coordination = map(Path, sys.argv[1:5])
+memory_limit = sys.argv[5]
 os.environ['HOME'] = str(home)
 location = resolve_index_location(
     root, {'FITDOCS_INDEX_DIR': str(base)}, home
 )
 sandbox.RESOURCE_SETTINGS = {
-    'memory_limit': '48MB',
+    'memory_limit': memory_limit,
     'threads': 2,
     'max_temp_directory_size': '4GB',
 }
@@ -297,6 +329,7 @@ finally:
                         str(location.base_dir),
                         str(child_home),
                         str(coordination),
+                        _SPILL_MEMORY_LIMIT,
                     ],
                     env={**os.environ, "HOME": str(child_home)},
                     stdin=subprocess.PIPE,

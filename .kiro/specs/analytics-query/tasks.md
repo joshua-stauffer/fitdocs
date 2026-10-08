@@ -510,7 +510,7 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
     after).
   - _Requirements: 7.3, 11.4_
 
-- [ ] 2. Core: output rendering and the sandboxed connection
+- [x] 2. Core: output rendering and the sandboxed connection
 
 - [x] 2.1 (P) Render results as a table, CSV or JSON
   - **`format.py`**, per design.md § Format:
@@ -597,8 +597,8 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
   - _Boundary: Sandbox_
   - _Depends: 1.3_
 
-- [ ] 2.3 Give every query process its own spill directory and remove stale ones
-  - _Blocked: debug attempted twice, still failing — the maintainer-approved owned-Python initial-attach preparation remains independently REJECTED for abnormal cleanup transitions, late owned-generation signalling, shared deadline publication and collection discrimination. No native target, workload or debugger attach occurred. The previous bounded spill investigation established no correction; allocation cause remains unknown. The kiro-impl two-debug-round limit stops further automatic remediation._
+- [x] 2.3 Give every query process its own spill directory and remove stale ones
+  - _Unblocked by maintainer decision (2026-10-08, after the native-attach preparation was blocked at the two-debug-round limit): the reduced-memory fixture becomes an **explicitly identified test-contract revision**, not a causal correction. The test's contract is process-specific spill placement, cleanup and concurrency, not DuckDB's minimum sort memory. Choose the fixture's `memory_limit`/cardinality by measurement on both duckdb 1.2.0 and the locked current version, with demonstrated headroom on both, while every preservation item under "Correction acceptance" below still holds. The native-debugger plan is abandoned; the OOM cause on 1.2.0 stays UNKNOWN and is recorded as such. The dependency floor and production settings are unchanged._
   - **Approved reliability reopening (2026-10-08).** Prior runtime implementation and review remain historical. Resolve the existing sorted-group-by spill reliability item before task 8.2 resumes; no production setting or dependency-floor change is authorized.
   - **Bounded diagnostic allowance.** At most two fresh-process baseline captures per runtime (1.2.0 and current 1.5.6), recording failure phase, effective settings, plan, resource/spill observations, raw output, empty HOME, unchanged inventories and process reaping. If a failure supports a specific workload hypothesis, permit one controlled contrast per failing runtime. Stop if neither runtime yields causal evidence; successful captures alone are not a repair.
   - **Correction acceptance.** Any revised fixture budget/cardinality must be justified by captured evidence and independently reviewed as a causal correction or explicitly identified test-contract revision. Preserve nonempty process-specific spill, exact results, cleanup/purity, actual four-process overlap, directory/liveness protections and temp-directory mutation discrimination. No guessed adjustment, skip, expected failure or retry-until-green. Production remains 1GB/two threads/4GB and the DuckDB dependency declaration is unchanged.
@@ -610,9 +610,10 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
     - **Setup.** A module-scoped `plain_database` holds a 3M-row table, built
       inside `pytest.MonkeyPatch.context()` with HOME at a `tmp_path_factory`
       directory that is asserted empty at teardown.
-      `sandbox.RESOURCE_SETTINGS` is monkeypatched to `memory_limit='48MB'`.
-    - A sorted group-by creates `query-spill-<pid>/`, observed by a watcher
-      thread.
+      `sandbox.RESOURCE_SETTINGS` is monkeypatched to `memory_limit='64MB'`, one
+      named measured test-contract constant shared with the subprocess settings.
+    - A sorted query (a pure `ORDER BY` over the 3M rows, not a group-by) creates
+      `query-spill-<pid>/`, observed by a watcher thread.
     - The directory is absent after close, and `index.duckdb.tmp` never
       exists.
     - **Concurrency.** Four subprocesses, each opening with `open_sandboxed`,
@@ -640,8 +641,10 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
       red rate over 5 runs);
     - drop the liveness check (the live-PID pin reds);
     - drop the own-PID check (the own-PID pin reds);
-    - follow symlinks, `shutil.rmtree(path.resolve())` (the symlink-target pin
-      reds);
+    - follow symlinks: `shutil.rmtree(entry.resolve())` **and** drop the
+      `entry.is_symlink()` guard (the cleanup pin reds). The resolve edit alone
+      stays green because the guard skips links first; the guard removal alone
+      is equivalent because `shutil.rmtree` refuses symlinks;
     - ignore the hook (the hook pin reds);
     - match any directory whose name ends in `spill` and carries no live PID,
       instead of `^query-spill-(\d+)$` (the `writer-spill/` pin reds).
@@ -1370,7 +1373,7 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
     6.1; independent review exposed this canonical packaging prerequisite.
 
 - [ ] 8.2 Register the test modules, verify the duckdb floor and validate the feature
-  - _Blocked pending owning task 2.3 reliability correction. Maintainer approved the bounded C1 amendment/diagnostic proposal on 2026-10-08; floor acceptance remains incomplete._
+  - _Unblocked 2026-10-08: task 2.3 accepted as a measured test-contract revision (64MB pure-sort spill witness; test_spill.py passes on duckdb 1.2.0 under sandbox-exec deny-network with HOME empty). Dependency floor unchanged._
   - **mypy registration**: append every new `tests/query/` module to
     `pyproject.toml`'s mypy `files`.
   - **The floor check**:
@@ -1523,3 +1526,5 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
 - Native debugger preparation (2026-10-08): maintainer approved the reviewed native plan, then static host preflight found `/usr/bin/sandbox-exec` restricted/compressed with SIP enabled. Apple protected-runtime policy and the Darwin debug-launch task-port prerequisite conflict with controlling that system executable before Python exec. This is a policy-level preparation result, not an observed launch refusal. Luna stopped before writing executable scripts; zero debugger/target/query/probe launches, no native allowance consumed. Fresh debug `/private/tmp/analytics-query-native-launch-policy-debug/REPORT.md` returned SPEC_CONFLICT / STOP_FOR_HUMAN because owned-Python initial attachment replaces explicitly approved first-instruction/exec-stop stages. Concrete revision `/private/tmp/analytics-query-native-launch-policy-debug/ATTACH-PLAN.md` preserves the original two-target/one-original-plus-one-conditional-contrast bounds, unchanged interpreter/floor/production/network/purity requirements and first-setup-failure STOP. Its attach feasibility is unknown and its process-model scope remains pending independent review/maintainer decision. Host report `/private/tmp/analytics-query-feature-integration-audit/NATIVE-HOST-PREFLIGHT.md`. No fixture correction, floor acceptance, final validation, merge or cleanup occurred.
 
 - Reopened task2.3 (2026-10-08): maintainer approved the owned-Python initial-attach revision, but private preparation exhausted two fresh debug cycles and remains REJECTED. Final independent host baseline/restored64 passed; all51 applicable claimed mutations were independently discriminated (50 assertion failures and one expected ACK consumer failure), while two new collection-identity/historical-owner mutations survived. Actual inert lifecycle reproductions expose normal cleanup ignoring a late abort, delayed STOP after controller death, late owned children acquired but unsignalled after the sole KILL pass, an intervening deadline-publication race and an extra wait beyond the original cap. No native target/workload/attach occurred; no new spill/floor acceptance evidence exists. Full review `/private/tmp/analytics-query-native-debugger/owned-cleanup-cycle2-review/REVIEW.md` SHA256 `5217af025ba7d8a6e895cc34462d61b627265d7c1e705bc61bc4834a20c113a1`; fresh parent64-pass host receipt `/private/tmp/analytics-query-owned-cleanup-cycle2-parent-check/verification.json`. Frozen private scripts and all historical evidence retained; canonical runtime manifest remains deliberately unbound. Under kiro-impl max2-debug-round policy task2.3 remains blocked, task8.2 remains dependent/blocked,19of21 accepted. No source/dependency/fixture correction, feature GO, main merge or shared-data cleanup is claimed.
+
+- Task 2.3 test-contract revision (2026-10-08, maintainer decision; NOT a causal correction): fixture `memory_limit` is now one named constant `_SPILL_MEMORY_LIMIT = "64MB"` in `tests/query/test_spill.py`, shared by the autouse fixture and the four subprocesses, and the sorted group-by is replaced by a pure sort (`SELECT i, i*3 FROM spill_rows ORDER BY (i*2654435761) % 1000003 DESC, i`, result checked exactly). Measured in fresh processes through `open_sandboxed`, 1.2.0 venv vs locked 1.5.6 (OOM / nonempty spill witness / exact of N runs). Old group-by (3M rows, 750k buckets, 12 runs): 1.2.0 48MB 12 OOM, 64MB 7 OOM, 96MB-256MB 0 OOM but 0 witness; 1.5.6 48MB/64MB 0 OOM 12 witness, 96MB 1 OOM, 128MB 9 witness, 192MB+ 0 witness; bucket/row sweeps (3M/6M rows, 750k-20k buckets) never produced a 1.2.0 witness. Window (12 runs + 5 four-process runs per limit): spills with exact results on both runtimes at 48MB and 64MB; 1.2.0 also to 128MB, 1.5.6 not at 96MB+. Sort (15 runs): 1.2.0 and 1.5.6 at 48MB and 64MB both 0 OOM, 15/15 witness, 15/15 exact (also 8/8 at 96-192MB on 1.2.0 and 96MB+ no witness on 1.5.6). Chosen 64MB, margin: 48MB also passes everywhere. Receipts: `/Users/josh/code/fitdocs-private-evidence/analytics-query-2.3-revision/` (`matrix-*.jsonl`, `grid*.jsonl`, `mut.out`). OOM cause on 1.2.0 remains UNKNOWN; the evidence only shows the group-by does not spill before it OOMs there. Mutations through `uv run pytest tests/query/test_spill.py`: drop `temp_directory` red 5/5 (sorted-query and four-process tests); drop liveness, drop own-PID, ignore hook, any-`spill` regex each red 1/1 on their own pins; `rmtree(entry.resolve())` alone stays green because `is_symlink()` filters first, with the `is_symlink()` guard also removed it reds the cleanup pin 1/1. Floor 1.2.0 under sandbox-exec: 15/15 of test_spill.py pass, HOME empty. Task 8.2 still owns the full six-file floor run.

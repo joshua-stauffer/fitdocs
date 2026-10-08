@@ -1501,8 +1501,11 @@ Hard rules that apply to every test:
       (the corpus-inputs pin reds).
 - **Spill.**
   - **Approved reliability amendment (2026-10-08):** the historical 48MB/3M-row sorted group-by witness requires owning task 2.3 reliability work before floor acceptance. At most two fresh-process baseline captures per admitted tested runtime (1.2.0/current1.5.6), then one evidence-supported controlled contrast per failing runtime; preserve raw failures/settings/plan/resource observations and HOME/inventory/process evidence. If causal evidence is absent, stop rather than count green captures as a repair. A fixture-contract revision needs evidence for its exact budget/cardinality and independent review, preserving actual nonempty process-specific spill, correct results, cleanup/purity, four-process overlap and temp-directory discrimination. Production settings and the dependency declaration remain unchanged.
-  - With `RESOURCE_SETTINGS` monkeypatched to `memory_limit='48MB'`, a sorted
-    group-by over a 3M-row plain database:
+  - With `RESOURCE_SETTINGS` monkeypatched to `memory_limit='64MB'` (a measured
+    test-contract value shared with the subprocess settings), a pure sorted
+    `ORDER BY` query over a 3M-row plain database. It replaced a sorted
+    group-by because on duckdb 1.2.0 the group-by does not spill before it runs
+    out of memory, so no measured limit (48-256MB, plus the rows/buckets grid) gave a nonempty spill witness on both runtimes:
     - creates `query-spill-<pid>/` (observed by a watcher thread);
     - leaves it absent after close;
     - never creates `index.duckdb.tmp`.
