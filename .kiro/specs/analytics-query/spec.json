@@ -1,9 +1,9 @@
 {
   "feature_name": "analytics-query",
   "created_at": "2026-10-04T22:27:11Z",
-  "updated_at": "2026-10-05T02:10:00Z",
+  "updated_at": "2026-10-08T15:48:46Z",
   "language": "en",
-  "phase": "tasks-generated",
+  "phase": "implementation-complete",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -19,5 +19,5 @@
     }
   },
   "ready_for_implementation": true,
-  "phase_note": "Generated 2026-10-04/05 by the Phase 10 spec batch (wave 2) in auto-approve mode. 12 requirements / 79 acceptance criteria; 11 design components; 8 major / 21 leaf tasks ((P): 2.1, 2.2, 4.1, 4.2; 8.3 maintainer-only). Research: three read-only Explore subagents surveyed the codebase in parallel; about fifteen DuckDB probes across twelve 1.x releases ran in network-blocked scratch venvs (sandbox-exec deny network, fresh HOME); no research downgrade. Step 3.5 task-graph review ran as an independent reviewer dispatched by the controller, twice. Round 1: NEEDS_FIXES (14 should-fix, 9 nit), all applied, including the controller ruling that the skill-example pin is keyed on the producer and that the second lander may touch exactly three read-side files. Round 2: NEEDS_FIXES (2 should-fix, 4 nit), applied without a third review because the skill bounds the loop at one re-review. Three upstream issues against analytics-index (U1 duckdb floor >=1.2,<2; U2 fetch errors wrapped like execute; U3 the contract names query-spill-<pid>/) were absorbed into analytics-index in cross-spec round 1 (its tasks 1.1, 4.1, 8.1); task 1.1 confirms each and stops and reports if missing. Cross-spec round 1 also routed corpus fingerprints through index's corpus_snapshot/combined_corpus_fingerprint and moved query's connectors record to Amendment 2. Accepted trade-off: design.md exceeds the template's 1000-line advisory; it carries the sandbox contract, the output value rules and the per-class test mutations agents and reviewers depend on."
+  "phase_note": "Generated 2026-10-04/05 by the Phase 10 spec batch (wave 2) in auto-approve mode. 12 requirements / 79 acceptance criteria; 11 design components; 8 major / 21 leaf tasks ((P): 2.1, 2.2, 4.1, 4.2; 8.3 maintainer-only). Research: three read-only Explore subagents surveyed the codebase in parallel; about fifteen DuckDB probes across twelve 1.x releases ran in network-blocked scratch venvs (sandbox-exec deny network, fresh HOME); no research downgrade. Step 3.5 task-graph review ran as an independent reviewer dispatched by the controller, twice. Round 1: NEEDS_FIXES (14 should-fix, 9 nit), all applied, including the controller ruling that the skill-example pin is keyed on the producer and that the second lander may touch exactly three read-side files. Round 2: NEEDS_FIXES (2 should-fix, 4 nit), applied without a third review because the skill bounds the loop at one re-review. Three upstream issues against analytics-index (U1 duckdb floor >=1.2,<2; U2 fetch errors wrapped like execute; U3 the contract names query-spill-<pid>/) were absorbed into analytics-index in cross-spec round 1 (its tasks 1.1, 4.1, 8.1); task 1.1 confirms each and stops and reports if missing. Cross-spec round 1 also routed corpus fingerprints through index's corpus_snapshot/combined_corpus_fingerprint and moved query's connectors record to Amendment 2. Accepted trade-off: design.md exceeds the template's 1000-line advisory; it carries the sandbox contract, the output value rules and the per-class test mutations agents and reviewers depend on. Implementation complete 2026-10-08: 21/21 tasks accepted with independent review; feature validation GO after remediation round 1 (fresh full suite 10135 passed/8 skipped; ruff, format, mypy clean; smoke incl. SIGINT on duckdb 1.2.0 and 1.5.6)."
 }

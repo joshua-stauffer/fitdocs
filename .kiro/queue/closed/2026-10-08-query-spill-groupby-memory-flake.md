@@ -1,7 +1,7 @@
 ---
 id: 2026-10-08-query-spill-groupby-memory-flake
 title: Investigate intermittent OOM in the 48MB sorted group-by spill fixture
-status: open
+status: done
 importance: medium
 importance_why: The reduced-memory fixture now blocks mandatory floor acceptance; a runtime defect and causal correction remain unestablished.
 effort: M
@@ -134,3 +134,15 @@ nonempty spill witness with an empty directory would hide the issue.
 - A pure sort (`ORDER BY (i*2654435761) % 1000003 DESC, i`) spills with exact results and no OOM in 15/15 runs at 48MB and 64MB on both runtimes; the window/four-process test does too. The fixture now uses that sort at one named constant of 64MB.
 - OOM cause on 1.2.0 remains UNKNOWN; this is not a causal correction.
 - Status: resolved by test-contract revision, pending review. Left open (not moved to closed/).
+
+## Resolution (2026-10-08) — done
+
+Resolved by a maintainer-approved, measured test-contract revision, not by a
+causal fix. The spill witness is now a pure `ORDER BY` at the shared
+`_SPILL_MEMORY_LIMIT = "64MB"` in `tests/query/test_spill.py`; 48MB also
+passes on both runtimes (one step of margin). Independently reviewed and
+accepted as analytics-query task 2.3 (7488ca2; 0d98f45 pre-rebase). On duckdb
+1.2.0 the old sorted group-by either runs out of memory (48MB 12/12, 64MB
+7/12) or completes in memory without spilling (96–256MB), so no measured
+limit gives a spill witness without OOM. The OOM cause on 1.2.0 remains
+UNKNOWN; production settings and the dependency floor are unchanged.

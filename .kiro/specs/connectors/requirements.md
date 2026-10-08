@@ -322,5 +322,5 @@ the dependency boundary is pinned by
 Requirement 14 criterion 1 adds `query` to the list of commands that make no
 connector requests. Analytics-query task 5.4 adds the query case to the
 socket-guarded no-network parametrization in `tests/connectors/test_e2e.py`.
-That guard is implemented and accepted on the analytics-query feature branch;
-it awaits the feature merge to main.
+That guard was implemented and accepted on the analytics-query feature branch
+and landed on main with the analytics-query merge (2026-10-08).

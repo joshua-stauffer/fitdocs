@@ -2296,11 +2296,12 @@ Rejected:
   `sync.py:_page_task` (the composed activity, metrics, identity and roles)
   for the post-pass. Nothing it renders changes. Carried out inside
   `analytics-index`. Dependencies: analytics-index
-- [ ] connectors — `index` and `query` join the no-network command list
+- [x] connectors — `index` and `query` join the no-network command list
   (`tech.md`, `tests/connectors/test_e2e.py:205`). Carried out inside
   whichever spec adds each command: `analytics-index` takes connectors
   Amendment 1 (`index`), and `analytics-query` records Amendment 2 (`query`)
-  on its feature branch, pending merge. (analytics-index part landed)
+  on its feature branch. (Both parts landed; Amendment 2 with the
+  analytics-query merge, 2026-10-08.)
   Dependencies: analytics-index, analytics-query
 - [x] fit-ingest — Requirement 19 and Amendment 6 publish best-effort
   computation at library level and classify its duration and step choices
@@ -2350,7 +2351,7 @@ None. Every piece of the work has a spec home.
   - failure isolation;
   - steering updates.
   Dependencies: none
-- [ ] analytics-query — **spec written 2026-10-05** (Phase 10 batch, wave 2, `tasks-generated`, all approvals set; 12 requirements / 79 criteria, 8 majors / 21 executable tasks, 8.3 maintainer-only; independent Step 3.5 review, two rounds; cross-spec reviewed, two rounds, READY; connectors Amendment 2). Analytics-index prerequisite fully verified on 2026-10-07 and available on main. Parallel with analytics-derived, and whichever of the two lands second does the docs schema block and the derived skill examples. `fitdocs query`:
+- [x] analytics-query — **implemented and verified 2026-10-08** (21/21 leaf tasks accepted; task 2.3 resolved by a maintainer-approved measured test-contract revision of the spill fixture; duckdb 1.2.0 floor 233/233 under sandbox-exec; feature validation GO after one remediation round: clean Ctrl-C exit 130, trailing newline, schema advice; full suite 10135 passed/8 skipped plus plain/UTC/CI and forbidden-strings modes). **Spec written 2026-10-05** (Phase 10 batch, wave 2, `tasks-generated`, all approvals set; 12 requirements / 79 criteria, 8 majors / 21 executable tasks, 8.3 maintainer-only; independent Step 3.5 review, two rounds; cross-spec reviewed, two rounds, READY; connectors Amendment 2). Analytics-index prerequisite fully verified on 2026-10-07 and available on main. Parallel with analytics-derived, and whichever of the two lands second does the docs schema block and the derived skill examples. `fitdocs query`:
   - sandboxed read-only connection, statement timeout, formats, row cap;
   - schema introspection and freshness reporting, lock retry;
   - the packaged agent skill;
