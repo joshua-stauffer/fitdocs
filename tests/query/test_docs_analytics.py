@@ -10,6 +10,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import tomllib
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -348,7 +349,7 @@ def test_regeneration_replaces_only_the_marked_live_schema_block(
     assert expected_tables
     expected = render_reference(expected_tables)
 
-    private_tmp = Path(os.environ["TMPDIR"])
+    private_tmp = Path(tempfile.gettempdir())
     index_paths: list[Path] = []
     helper_home_records: list[tuple[Path, bool]] = []
     original_schema_only_index = regeneration.schema_only_index
