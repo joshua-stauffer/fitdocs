@@ -1565,7 +1565,9 @@ Hard rules that apply to every test:
     - creates `query-spill-<pid>/` (observed by a watcher thread);
     - leaves it absent after close;
     - never creates `index.duckdb.tmp`.
-  - Four concurrent subprocess spills all return the reference result.
+  - Four concurrent subprocess spills all return the reference result;
+    their execution intervals overlap, and each process's own spill
+    directory holds a nonempty file during its own execution.
   - Afterwards no `query-spill-*` directory survives. The plain database is
     built through `store.create_index`, a writer connection spilling into
     `writer-spill/` (`analytics-index`'s `WRITER_SPILL_DIRNAME`), whose

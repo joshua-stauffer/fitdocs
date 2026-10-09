@@ -268,10 +268,9 @@ finally:
     observed: set[Path] = set()
     # Per-process witnesses: each child's own spill directory holds a nonempty
     # file while that child is executing. Requiring all four at one polled
-    # instant flaked on the x86_64 Linux CI runner (2 of 14 runs), where the
-    # four spill windows are brief and not aligned; the requirement is
-    # process-specific spill during actual four-process overlap, which the
-    # per-process witness times checked against the common interval prove.
+    # instant flaked on the x86_64 Linux CI runner (2 of 14 runs); spill
+    # windows need not coincide. Four-process overlap is pinned on the
+    # execution intervals below, not on the spill witnesses.
     process_witnesses: dict[int, list[int]] = {}
     spill_paths: dict[int, Path] = {}
 

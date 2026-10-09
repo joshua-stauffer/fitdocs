@@ -617,8 +617,12 @@ never rewrite or reorder another spec's. **On rebase, keep both.**
     - The directory is absent after close, and `index.duckdb.tmp` never
       exists.
     - **Concurrency.** Four subprocesses, each opening with `open_sandboxed`,
-      run a spilling window query at the same time. Every one returns the
-      reference result computed with a large memory limit.
+      run a spilling window query at the same time: the four execution
+      intervals share a common overlap, and each process's own
+      `query-spill-<pid>/` holds a nonempty file during its own execution.
+      Spill files of all four need not coexist at one instant (that stricter
+      check flaked on the x86_64 Linux CI runner, 2026-10-09). Every one
+      returns the reference result computed with a large memory limit.
     - **`remove_stale_spill`**, with directories planted in a `tmp_path` index
       directory:
       - it removes the directory of a dead PID (a reaped subprocess's PID);
