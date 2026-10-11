@@ -59,7 +59,9 @@ Terms used below:
 - The **reference backgrounds** are `#ffffff` (light), `#1e1e1e` (Obsidian
   dark), `#0d1117` (GitHub dark) and `#1e2129` (Material slate). The latter
   three are the **dark backgrounds**.
-- An **ink** is any colour the kit draws with: text, axes, ticks and series.
+- An **ink** is a colour the kit draws text, axes, tick marks or series marks
+  with. Gridlines and the translucent fill behind an outlined series are
+  **decorative**: they carry no information of their own.
 
 ## Boundary Context
 
@@ -192,7 +194,7 @@ text on a dark page.
 
 #### Acceptance Criteria
 1. The chart kit shall draw every SVG chart on a transparent background.
-2. The chart kit shall draw every ink, as it appears without any style rule applied, at a contrast ratio of at least 3:1 against each of the four reference backgrounds.
+2. The chart kit shall draw every ink, as it appears without any style rule applied, at a contrast ratio of at least 3:1 against each of the four reference backgrounds; decorative gridlines and fills are exempt.
 3. The chart kit shall embed in each SVG chart one style element whose dark-scheme rule raises all text to at least 4.5:1 against each dark background, and whose light-scheme rule raises all text to at least 4.5:1 against `#ffffff`, wherever the viewer applies those rules.
 4. The chart kit shall keep every ink set by either scheme rule at a contrast ratio of at least 3:1 against all four reference backgrounds, so that a viewer applying the wrong scheme never drops text below 3:1.
 5. The chart kit shall theme every kind, including appended kinds, through this one mechanism, and no kind shall set its own text, axis or gridline colours.

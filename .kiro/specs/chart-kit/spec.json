@@ -1,16 +1,16 @@
 {
   "feature_name": "chart-kit",
   "created_at": "2026-10-11T20:07:16Z",
-  "updated_at": "2026-10-11T20:40:00Z",
+  "updated_at": "2026-10-11T22:10:00Z",
   "language": "en",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {
