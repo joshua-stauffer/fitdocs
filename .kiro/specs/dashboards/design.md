@@ -177,7 +177,10 @@ implementation and take the next free number if another spec took it first).
 - **connectors — Amendment 3 (`dashboard` makes no connector request)**:
   Req 14.1 lists `dashboard`; `tech.md`'s list gains `dashboard` before
   `check` (both existing tail pins stay green) and a new pin covers it;
-  `tests/connectors/test_e2e.py:321-332` gains `("dashboard", ["check"])`;
+  `tests/connectors/test_e2e.py:321-332` gains `("dashboard", ["refresh"])`,
+  run like the `query` case (`:352-369`: `FITDOCS_INDEX_DIR` set and the
+  index built) over a staged page with one relative chart, so the command
+  really opens the index under the socket guard;
   `requirements.md` `## Amendment 3`, `spec.json` entry.
 
 ## Settled Seams for the Parallel Sibling (`chart-catalog`)
@@ -195,8 +198,11 @@ implementation and take the next free number if another spec took it first).
   registered-kind count. dashboards pins no count; the only artifact is the
   block. The skill names only core kinds in examples and points at
   `fitdocs dashboard kinds`. Task 7.3 carries the conditional.
-- Shared append-only surfaces kept on rebase: `pyproject.toml
-  [tool.mypy].files`, `CHANGELOG.md` Unreleased, `.kiro/steering/structure.md`.
+- Files shared with `chart-catalog`: only `CHANGELOG.md` Unreleased
+  (append-only; keep both sides on rebase) and the kinds block above.
+  `pyproject.toml [tool.mypy].files` and `.kiro/steering/structure.md` are
+  shared with `chart-kit`, which lands first, so they are edited in
+  sequence, not in parallel; chart-catalog edits neither.
 
 ## Architecture
 
@@ -294,6 +300,7 @@ tests/dashboards/
 ├── test_e2e.py            # Real index: sync -> charts; regen; index --rebuild; no index
 ├── test_boundary.py       # Imports, rank matrix, clock, network, only-cli importer
 ├── test_docs_dashboards.py  # Kinds block live pin + regenerate main; docs phrases; bash commands
+├── test_published.py      # CHANGELOG bullet; tech.md and structure.md statements (task 8.2)
 └── golden/<case>.md       # Whole-page region goldens (markdown only)
 tests/declaration_golden/dashboards.AGENTS.md
 ```
@@ -883,6 +890,12 @@ def kinds_markdown(listings: Sequence[Mapping[str, object]]) -> str: ...
   options, and a `Bound:` line. Cells pass through a local escaper of `|`
   and newlines (descriptions are kit-authored text). No line starts with
   `<!-- fitdocs:`.
+- The local escaper is deliberate, not a duplicate to fold into the kit's
+  `escape_markdown`: the rank rule confines `kit.format` to `region` (gap
+  G1's narrowest accommodation), and a table cell needs only `|` and line
+  breaks neutralised, whereas `escape_markdown` would also backslash the
+  `_`, `*` and `#` that appear in kit-authored channel, option and rule
+  text.
 
 ### Shell
 
@@ -1291,7 +1304,8 @@ lines.
   charts", "Windows with $today", "Columns, units and pace", "Running
   cadence", "The check loop", "Traps", "Ownership", "Further reading". It
   points at `fitdocs dashboard kinds` and copies no channel or option list
-  (18.2–18.6).
+  (18.2–18.6). "Columns, units and pace" carries the missing-row and
+  non-finite notes below.
 - `docs/dashboards.md`: H2s "Before you start", "A dashboard page", "The
   chart directive", "Chart regions and assets", "Relative and frozen
   charts", "Writing the SQL", "Checking a page", "The fitdocs dashboard
@@ -1299,6 +1313,34 @@ lines.
   "Version control". Every `fitdocs …` in a bash block is a registered
   command and option (as `tests/query/test_docs_analytics.py:268-305`).
   Examples of directives sit inside fenced blocks (they are not live, 3.6).
+  "Writing the SQL" carries the `$today`, alias, pace, non-finite and
+  missing-row notes.
+- **Chart-kit's notes for dashboards** (chart-kit design § Settled Seams,
+  "Notes `dashboards` must carry"), and where each is carried:
+  - *Cadence trap*: the skill's "Running cadence" section (18.5); the skill
+    never calls FIT cadence "steps".
+  - *Pace from speed*, *non-finite refused*: skill "Columns, units and pace"
+    and docs "Writing the SQL" (18.3): the pace expression with `NULLIF`, and
+    that a non-finite value (a division by zero, say) is refused with the
+    kit's `non_finite` problem rather than drawn or hidden.
+  - *Aliases keep their suffix*: the same two sections (18.3).
+  - *A missing row is not an absent value*: the same two sections (18.3): a
+    gap in a line needs a row whose value is NULL (for example from a
+    calendar of weeks left-joined to the data), and a stacked week with no
+    activity needs an explicit zero (`COALESCE(…, 0)`); a week with no row
+    is simply not drawn, and a line bridges over it.
+  - *Decimal as-is; time, lists, structs, bytes, UUIDs refused;
+    TIMESTAMPTZ*: the adapter (§ Binding: `TYPE_KINDS`, `column_type`, the
+    fetch-time `sql_failed` with the cast hint).
+  - *Option strings passed through unchanged*: § Directive (scalars stay
+    text) and § Engine (`ChartRequest` built from them).
+  - *`validate_chart` for the check form with columns only*: a dashboard has
+    columns only after running its SQL, which also yields the rows, so the
+    check form calls `render_chart` in memory; its stage 1 is
+    `validate_chart`'s check, so the check reports every request-level
+    problem `validate_chart` would, then the data and shape problems
+    (research.md, gap G3). Without an index, a relative chart's encodings are
+    not checked and the chart reports `index_unavailable`.
 
 ## Data Models
 

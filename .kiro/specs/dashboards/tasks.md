@@ -148,15 +148,17 @@ sequential, never two `(P)` tasks at once.
 
 ## Cross-spec shared files
 
-- **With `chart-catalog`** (parallel):
+- **With `chart-catalog`** (parallel), and only these two:
   - the kinds block in `docs/dashboards.md` (7.2 creates it; 7.3 and
     chart-catalog's second-lander task regenerate it);
   - `CHANGELOG.md` Unreleased (8.2 adds one bullet; chart-catalog may add
-    its own) and `pyproject.toml` `[tool.mypy].files` (1.1 appends
-    `tests/dashboards`): append-only, keep both sides on rebase;
-  - `.kiro/steering/structure.md` (8.2 edits the `query` bullet and adds a
-    `dashboards` bullet; chart-kit's 7.1 edited the `index` bullet and added
-    the kit paragraph): keep both.
+    its own): append-only, keep both sides on rebase.
+- **With `chart-kit`** (lands first, so these are sequential, not
+  contended): `pyproject.toml` `[tool.mypy].files` (chart-kit's 1.1/1.2
+  added its entries; 1.1 here appends `tests/dashboards`) and
+  `.kiro/steering/structure.md` (chart-kit's 7.1 edited the `index` bullet
+  and added the `units`/kit paragraph; 8.2 here edits the `query` bullet and
+  adds a `dashboards` bullet). chart-catalog edits neither.
 - **Append-only, keep both sides on rebase**: the `cli.py` command count
   and docstring list (13 → 14), the no-network command list,
   `WRITING_ENTRY_POINTS`, `OWNED_PATHS` / `DECLARED_DIRS`,
@@ -939,7 +941,10 @@ sequential, never two `(P)` tasks at once.
     directive and its keys with one complete example in a fenced block;
     relative vs frozen and `fitdocs dashboard freeze`; `$today - 84` and the
     INTERVAL-is-a-timestamp warning; alias suffixes; pace from speed
-    (`1000.0 / NULLIF(speed_mps, 0) AS pace_s_per_km`); the running-cadence
+    (`1000.0 / NULLIF(speed_mps, 0) AS pace_s_per_km`) and that a non-finite
+    result is refused, not hidden; that a missing row is not an absent value
+    (a gap needs a row with a NULL value; a stacked week with no activity
+    needs `COALESCE(…, 0)`), in "Columns, units and pace"; the running-cadence
     strides warning (one foot, FIT convention; doubling loses the suffix);
     the check loop with `fitdocs dashboard check --format json`; the traps
     (column 0, no indentation, no `-->`/`--!>`, `sql: |`) and Obsidian Live
@@ -975,6 +980,8 @@ sequential, never two `(P)` tasks at once.
     profile and any per-skill phrase pins it applies to every skill.
   - **Tests**: the skill profile (headings in order); phrase pins for the
     cadence warning ("strides per minute", "steps"), the pace expression,
+    the non-finite note ("non-finite"), the missing-row note ("missing row",
+    "NULL", "COALESCE") found inside the "Columns, units and pace" section,
     `$today - 84`, `fitdocs dashboard kinds`, `fitdocs dashboard check`;
     every `kind:` value in the skill's example directives is in
     `kind_names()` (read live; no literal list) and the skill holds no
@@ -982,7 +989,8 @@ sequential, never two `(P)` tasks at once.
     that `"dashboards/"` is in `OWNED_PATHS` and that the skill body mentions
     "dashboards directory", so the substring guard at `:1533-1545` is live
     for this skill rather than passing vacuously.
-  - **Mutations:** drop the cadence paragraph; paste a kinds table into the
+  - **Mutations:** drop the cadence paragraph; drop the missing-row
+    paragraph (its section-scoped pin reds); paste a kinds table into the
     skill (guard reds); write "the `dashboards/` directory" in the skill (the
     owned-path guard reds); use a kind name absent from the registry in an
     example; remove the policy entry (release-artifact test reds).
@@ -1001,7 +1009,9 @@ sequential, never two `(P)` tasks at once.
     directive reference; regions and assets; relative vs frozen and the
     snapshot files (`*.snapshot-<n>.json`, never deleted; do not
     git-ignore them even if images are ignored); writing the SQL (windows,
-    suffixes, pace); the check loop; the command's forms, targets, formats
+    suffixes, pace, non-finite results refused, and the missing-row note: a
+    gap needs a row with a NULL value, a stacked empty week needs
+    `COALESCE(…, 0)`); the check loop; the command's forms, targets, formats
     and exit codes; ownership; the traps and Live Preview; links from
     outside `dashboards/` are not protected from image cleanup; the kinds
     block between `<!-- dashboard-kinds:start -->` and
@@ -1013,10 +1023,14 @@ sequential, never two `(P)` tasks at once.
     the block equals `kinds_markdown(describe_kinds())`; `regenerate_kinds_block`
     and a module `__main__` (`uv run python -m tests.dashboards.test_docs_dashboards`),
     failing on duplicate or reversed markers; the H2 list; phrase pins for
-    18.2–18.4; every `fitdocs …` line in a bash block names a registered
+    18.2–18.4, including the missing-row note ("missing row", "NULL",
+    "COALESCE") and the non-finite note inside "Writing the SQL"; every
+    `fitdocs …` line in a bash block names a registered
     command and option; directive examples sit inside fences (scanning the
     doc with `scan_page` finds no live directive).
-  - **Mutations:** leave one kind's line stale in the block; move an example
+  - **Mutations:** drop the missing-row paragraph from "Writing the SQL"
+    (its section-scoped pin reds); leave one kind's line stale in the block;
+    move an example
     directive out of its fence (the live-directive check reds); misspell an
     option in a bash example.
   - **Observable:** `uv run pytest tests/dashboards/test_docs_dashboards.py
@@ -1100,7 +1114,11 @@ sequential, never two `(P)` tasks at once.
     and `dashboards` import it"; a new `dashboards` bullet: imports `query`
     (in `dashboards.binding` only), the chart kit facade (and `kit.format`
     in `dashboards.region`), `units`, `layout`, `contract` and `yaml`; only
-    `cli` imports it; it never imports `duckdb`, `index` or a clock. Leave
+    `cli` imports it; it never imports `duckdb`, `index` or a clock. Do not
+    amend chart-kit's `units` paragraph: check that it names no exhaustive
+    list of `units`' importers (chart-kit words it that way), so
+    `dashboards.binding` importing `units` contradicts nothing; if it does
+    carry an exhaustive list, stop and report rather than editing it. Leave
     the `index` bullet unchanged, and check before and after the edit that
     its pins (`tests/connectors/test_network_statements.py:675-680`,
     `tests/index/derived/test_published.py:28-33`) are green; if either is
