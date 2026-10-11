@@ -955,8 +955,9 @@ beforehand.
   class in the stated order with the stated geometry, a cross for absent and
   an outline for zero; `legend_entries` order and labels; legend swatch
   geometry equals `cell_marks` for a 10 px cell; `negative_problem` names
-  row 2 and count 2. Mutations: close bins on the left (zero joins bin 1);
-  drop the zero outline element; draw absent cells as zero outlines; use the
+  row 2 and count 2. Mutations: classify with `<` instead of `<=` (the
+  on-edge value moves bin); delete the `value == 0` branch in `classify`
+  (zero falls in bin 1); drop the zero outline element; draw absent cells as zero outlines; use the
   bottom `n` ramp entries; make `fraction` linear; drop `integer` from the
   `linear_ticks` call.
 - **Each kind** (`test_<kind>.py`, through `_helpers.render_case`): each

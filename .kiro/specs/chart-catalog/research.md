@@ -299,7 +299,7 @@
   path an explicit no-op recorded in Implementation Notes ("no queue item is
   needed, because the other plan tracks it"), and proved the second-lander
   path with the other spec's own tests.
-- **Implications**: task 4.2 copies that shape. It reads `dashboards`'
+- **Implications**: task 4.1 copies that shape. It reads `dashboards`'
   tasks.md for the exact writer, block and count pins at landing time,
   because `dashboards` is being specified in parallel.
 
