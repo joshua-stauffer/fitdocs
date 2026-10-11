@@ -306,6 +306,11 @@
   at N = 20,000,000. Task 2.1 uses N = 5,000,000 in a child process and
   asserts the child's peak RSS, so observing the mutation costs ~300 MB, not
   gigabytes.
+- **Empty mapping** (same probe set): `connection.execute("SELECT 1", {})`
+  and `connection.execute("SELECT 1")` both return `[(1,)]`, and both raise
+  the same "Values were not provided … today" error for `SELECT $today`, so
+  "binds nothing for an empty mapping" is observable only as the call shape
+  (task 2.1 pins it with a recording proxy).
 
 ### Decision: escaping caption and alt text with the kit's formatter
 - **Context**: the image link's text is the athlete's title; captions carry
