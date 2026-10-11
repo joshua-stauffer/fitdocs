@@ -354,15 +354,15 @@ tests/
 ├── test_units.py                  # Vocabulary rows, projection equality, lookup, units-module guard
 └── render/charts/kit/
     ├── __init__.py
-    ├── cases.py                   # Every golden case (request + data), shared by tests and the writer
-    ├── goldens.py                 # assert_golden (bytes), golden paths
-    ├── test_goldens.py            # Parametrised golden comparison + comparator tamper test + main() writer
+    ├── _helpers.py                # Column/ChartData/ChartRequest builders, Case, render_case (render_spec)
+    ├── goldens.py                 # golden_path, assert_golden (bytes), write_golden (main() only)
+    ├── test_goldens_harness.py    # Comparator tamper test; missing golden fails and is not created
     ├── test_data.py  test_problems.py  test_schema.py  test_validate.py
     ├── test_format.py  test_ticks.py  test_scales.py  test_theme.py
     ├── test_layout.py  test_frame.py  test_marks.py  test_cartesian.py
     ├── test_registry.py  test_api.py
-    ├── test_line.py  test_area.py  test_bar.py  test_hbar.py
-    ├── test_scatter.py  test_histogram.py  test_stat.py  test_table.py
+    ├── test_line.py  test_area.py  test_bar.py  test_hbar.py       # each: unit tests, CASES,
+    ├── test_scatter.py  test_histogram.py  test_stat.py  test_table.py  #   goldens, main() writer
     ├── test_theme_coverage.py     # Walks every SVG golden: style, role classes, colour whitelist, no ids
     ├── test_size_budget.py        # Typical-chart budgets and the at-bound ceiling
     ├── test_determinism.py        # Cross-process: hash seed and TZ varied, identical digests
@@ -538,8 +538,8 @@ once per column and code.
 | 17.1 | Renderers byte-identical | (no edits); existing goldens | |
 | 17.2 | Primitives unchanged; relaxation documented | `svg.py` docstring | |
 | 17.3 | No runtime dependency | `pyproject.toml` deps unchanged | |
-| 18.1 | SVG goldens per case | Tests | `cases.py` |
-| 18.2 | Markdown goldens | Tests | `cases.py` |
+| 18.1 | SVG goldens per case | Tests | Each kind test module's `CASES` |
+| 18.2 | Markdown goldens | Tests | `test_stat.py`, `test_table.py` `CASES` |
 | 18.3 | Byte-exact, shown able to fail | Tests | `goldens.py` tamper test, named mutations |
 | 18.4 | Independent contrast and distance | Tests | `test_theme.py` reimplements |
 | 18.5 | Boundary guards with controls | Tests | `test_boundary.py`, `test_units.py` |
@@ -1435,7 +1435,7 @@ Fixture Discrimination); task notes name them. Mutations are run through
   trend geometry against a hand-computed least-squares fit, histogram edges
   for each binning rule with values on bin edges.
 
-### Golden tests (`cases.py`, `test_goldens.py`)
+### Golden tests (each kind's `test_<kind>.py`, `goldens.py`)
 - Each SVG kind: `typical` (with an absent value, so the gap or note
   appears), `empty`, `all_absent`, `single`, `negative`, `long_labels`,
   `at_bound`; plus variants `line_log`, `line_dates_gap`, `area_stacked`,
@@ -1445,9 +1445,11 @@ Fixture Discrimination); task notes name them. Mutations are run through
   `absent_value`, `absent_compare`, `no_rows`, `special_chars`. `table`:
   `typical` (every value kind, units, absent cells), `no_rows`,
   `special_chars`, `at_bound`.
-- Comparison is bytes (`rendered.encode("utf-8") == path.read_bytes()`); a
+- Each kind's test module exposes `CASES` (a tuple of `Case(name, request,
+  data)`), compares one golden per case and carries a `main()` writer.
+  Comparison is bytes (`rendered.encode("utf-8") == path.read_bytes()`); a
   missing golden fails (never auto-created). Regeneration is
-  `uv run python -m tests.render.charts.kit.test_goldens` (the repo's
+  `uv run python -m tests.render.charts.kit.test_<kind>` (the repo's
   per-module `main()` convention). A tamper test flips one byte of a copy and
   shows `assert_golden` fails.
 - Each golden is shown able to fail by a named mutation of kit code recorded
