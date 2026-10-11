@@ -54,8 +54,8 @@ or existing behaviour changes.
   grid scale legend shared by the two grid kinds.
 - **Appended shared values**: four `ProblemCode` members, the
   `SEQUENTIAL_RAMP`/`SEQUENTIAL_COLORS` palette entries, and the
-  conditional helpers A1 (`format.format_durations`) and A2
-  (`frame.not_drawn_note`).
+  conditional helpers A1 (`format.format_durations`), A2
+  (`frame.not_drawn_note`) and A3 (`format.duration_axis_title`).
 - **The registry entries** for the eight kinds, appended after `table`.
 - **Re-pins of chart-kit's named full pins**: the kit module tuple and layer
   rank matrix in `tests/render/charts/kit/test_boundary.py`, and the colour
@@ -65,7 +65,7 @@ or existing behaviour changes.
   the catalog contract pins, and the sequential replay of chart-kit's
   shared-layer golden-class mutations over catalog goldens.
 - **One CHANGELOG line**, and the conditional second-lander update of the
-  kinds listing and counts `dashboards` owns (task 4.2).
+  kinds listing and counts `dashboards` owns (task 4.1).
 
 ### Out of Boundary
 - Everything chart-kit owns: the data contract, request, problem shape,
@@ -75,7 +75,7 @@ or existing behaviour changes.
 - Everything `dashboards` owns: pages, directives, SQL execution,
   `$today`, snapshots, refresh, `fitdocs dashboard` (including its `kinds`
   form), the `fitdocs-dashboards` skill and `docs/dashboards.md`. The
-  catalog touches `dashboards`' files only in task 4.2, and only when
+  catalog touches `dashboards`' files only in task 4.1, and only when
   `dashboards` landed first.
 - The analytics index, its schema and its unit suffixes.
 - The four existing renderers and their goldens.
@@ -100,7 +100,7 @@ or existing behaviour changes.
 None to another spec's documents. The catalog appends to chart-kit's
 **source and test files** exactly as chart-kit's tasks.md § Cross-spec shared
 files permits (append-only values, and the three named re-pin points). It
-never edits chart-kit's spec files. If `dashboards` landed first, task 4.2
+never edits chart-kit's spec files. If `dashboards` landed first, task 4.1
 re-pins `dashboards`' kinds listing and kind counts (Requirement 13.1).
 
 ### Revalidation Triggers
@@ -205,12 +205,14 @@ graph TB
 imports only from ranks to its left):
 
 `units` → `data` → `problems` → `schema` → `format` → `ticks` → `theme` →
-`layout` → `scales` → `frame` → `marks` → `cartesian` → **`cells`** →
+`layout` → `scales` → **`cells`** → `frame` → `marks` → `cartesian` →
 `validate` → `kinds/*` → `registry` → `api` → `__init__`
 
 - `cells` may import `data`, `problems`, `schema`, `format`, `ticks`,
   `theme`, `layout`, `scales` and the primitives `svg` and `palette`. It
-  never imports `frame`, `marks`, `cartesian`, `validate` or a kind.
+  ranks directly after `scales`, below `frame`, `marks`, `cartesian` and
+  `validate`, so the rank matrix rejects any import of those or of a kind
+  (positive control: `from . import marks` in `cells.py` reds it).
 - The eight catalog kind modules share chart-kit's kind rank: they never
   import one another, `registry` or `api`.
 - `test_boundary.py`'s rank matrix enforces this (task 1.1 re-pins it).
@@ -247,7 +249,7 @@ tests/render/charts/kit/
 ├── test_catalog_contract.py       # NEW: appended codes, catalog registry order and listing, coverage counts
 ├── test_sequential_ramp.py        # NEW: ramp contrast, monotonicity, CVD distances (independent arithmetic)
 ├── test_cells.py                  # NEW: binning, classification, cell marks, grid legend
-├── test_shared_appends.py         # NEW (only if A1/A2 are appended): format_durations, not_drawn_note
+├── test_shared_appends.py         # NEW (only if A1, A2 or A3 is appended)
 ├── test_calendar_heatmap.py       # NEW: unit tests, CASES, main() writer   (chart-kit convention)
 ├── test_heatmap.py  test_dual_axis.py  test_band.py  test_box.py           # NEW, same shape
 ├── test_mean_max.py  test_small_multiples.py  test_stacked_100.py          # NEW, same shape
@@ -266,7 +268,9 @@ tests/render/charts/kit/
   (`name -> (hex, oklch source)`) and `SEQUENTIAL_RAMP` (5 hex, light end
   first). Existing constants untouched.
 - `src/fitdocs/render/charts/kit/format.py` — **only if** the landed module
-  has no public one-form duration labeller: append `format_durations` (A1).
+  has no public one-form duration labeller: append `format_durations` (A1);
+  **only if** it has no public way to title a duration axis in a given form:
+  append `duration_axis_title` (A3).
 - `src/fitdocs/render/charts/kit/frame.py` — **only if** the landed module
   has no public `Not drawn:` note builder: append `not_drawn_note` (A2).
 - `tests/render/charts/test_palette.py` — `_all_documented()` also walks
@@ -274,12 +278,12 @@ tests/render/charts/kit/
   assertions kept.
 - `tests/render/charts/kit/test_boundary.py` — re-pin point: the module
   tuple gains `cells` and the eight kind modules; the rank matrix gains
-  `cells` between `cartesian` and `validate` and the eight kinds at the kind
+  `cells` between `scales` and `frame` and the eight kinds at the kind
   rank.
 - `tests/render/charts/kit/test_theme_coverage.py` — re-pin point: the
   colour whitelist adds `SEQUENTIAL_RAMP`.
 - `CHANGELOG.md` — one `[Unreleased]` → `### Added` line.
-- **Conditional (task 4.2, only when `dashboards` is on `main`)**: the kinds
+- **Conditional (task 4.1, only when `dashboards` is on `main`)**: the kinds
   block in `docs/dashboards.md`, regenerated by `dashboards`' own writer, and
   every kind-count pin `dashboards`' tasks.md names.
 
@@ -356,9 +360,9 @@ in exactly one state.
 | 12.4 | Budgets and ceiling | `test_catalog_budgets.py` | |
 | 12.5 | Independent ramp arithmetic | `test_sequential_ramp.py` | |
 | 12.6 | Guards cover catalog | `test_boundary.py` re-pin, chart-kit determinism | |
-| 12.7 | Core and renderer goldens unchanged | existing golden tests | Diff evidence in task 4.3 |
-| 13.1 | Second lander updates listing | task 4.2 | `dashboards`' writer |
-| 13.2 | First lander touches nothing of dashboards | task 4.2 | No-op path |
+| 12.7 | Core and renderer goldens unchanged | existing golden tests | Diff evidence in task 4.2 |
+| 13.1 | Second lander updates listing | task 4.1 | `dashboards`' writer |
+| 13.2 | First lander touches nothing of dashboards | task 4.1 | No-op path |
 | 13.3 | Release note | CHANGELOG | |
 
 ## Components and Interfaces
@@ -369,13 +373,14 @@ in exactly one state.
 | SequentialRamp (`palette.py` append) | Primitive | Five in-band ramp colours with oklch sources | 2.1, 3.9 | palette convention (P0) | State |
 | DurationLabels A1 (`format.py` append, conditional) | Shared | One-form duration labels | 3.6, 9.3 | `format_duration` (P0) | Service |
 | NotDrawnNote A2 (`frame.py` append, conditional) | Shared | The `Not drawn:` line | 2.6 | chart-kit wording (P0) | Service |
+| DurationTitle A3 (`format.py` append, conditional) | Shared | A duration axis title in a stated form | 3.6, 9.3 | `axis_title` (P0) | Service |
 | Cells (`cells.py`) | Shared | Binned scale, cell marks, grid legend | 2.1–2.3, 3.1–3.8 | ticks, format, theme, layout, palette (P0) | Service |
 | CalendarHeatmap | Kind | One cell per day in week columns | 4.x, 3.x | Cells, scales, frame (P0) | Service |
 | Heatmap | Kind | Value over two band axes | 5.x, 3.x | Cells, scales, frame (P0) | Service |
 | DualAxis | Kind | Two series, two y axes | 6.x | scales, frame, marks (P0) | Service |
 | Band | Kind | Low–high band with centre line | 7.x | marks, scales, frame (P0) | Service |
 | Box | Kind | Box-and-whisker from given quartiles | 8.x | scales, frame (P0) | Service |
-| MeanMax | Kind | Best-effort curves on a log duration axis | 9.x | scales, marks, cartesian, A1 (P0) | Service |
+| MeanMax | Kind | Best-effort curves on a log duration axis | 9.x | scales, marks, cartesian, A1, A3 (P0) | Service |
 | SmallMultiples | Kind | Panels of mini lines | 10.x | layout, scales, marks, frame (P0) | Service |
 | Stacked100 | Kind | Composition bars summing to 100% | 11.x | cartesian, scales, marks, frame (P0) | Service |
 | RegistryEntries (`registry.py` append) | Registry | Eight entries after `table` | 1.1, 1.4 | kinds (P0) | State |
@@ -454,6 +459,26 @@ def not_drawn_note(counts: Sequence[tuple[str, int]]) -> str | None: ...
 - Users: every catalog kind that can leave a row or value undrawn. The
   catalog's counting rule (§ Kinds, common rules) produces `counts`.
 
+#### DurationTitle (A3) — `kit/format.py` (append, conditional)
+
+```python
+def duration_axis_title(column: Column, *, hours: bool) -> str: ...
+```
+- chart-kit's `axis_title(column)` picks `(h:mm:ss)` or `(m:ss)` "per the
+  axis's label form" but takes no form argument; the catalog labels two
+  duration scales outside `numeric_scale` (the grid legend's edges and
+  mean-max's landmark ticks), so it must state the form itself.
+- Returns `display_label(column)` followed by ` (h:mm:ss)` when `hours`, else
+  ` (m:ss)`, for a DURATION column or a NUMBER column whose unit's family is
+  DURATION; any other column → `axis_title(column)` unchanged.
+- **Condition**: the same exact-vector rule as A1 and A2 (task 1.1): if the
+  landed kit exposes a public function producing exactly these titles for a
+  stated form, the catalog calls it; otherwise this is appended.
+- Users: `cells` (the legend's lead entry for a duration value, in the form
+  the edge labels use) and `mean-max` (its x axis title, in the form its
+  tick labels use). Axes built by `numeric_scale` are titled exactly as the
+  core kinds title them (task 1.1 records how).
+
 ### Shared catalog layer
 
 #### Cells — `kit/cells.py`
@@ -526,7 +551,8 @@ def legend(plan: FramePlan, scale: BinnedScale, entries: Sequence[LegendEntry]) 
   Cells keep the order given within each element; coordinates through
   `fmt_num`.
 - `legend_entries`: a lead entry whose label is the value column's
-  `axis_title` (no swatch), then the zero entry (`zero_label`) when
+  `axis_title`, or A3's title in the edge labels' form for a duration value
+  (no swatch), then the zero entry (`zero_label`) when
   `has_zero`, then one entry per bin labelled `"≤ " + labels[i]`, then the
   absent entry (`ABSENT_LABEL`) when `has_absent`. `LegendEntry.style`
   carries the swatch colour; `swatch` is `"block"` (placement only).
@@ -539,7 +565,7 @@ def legend(plan: FramePlan, scale: BinnedScale, entries: Sequence[LegendEntry]) 
 - Integration: the grid kinds pass `legend_entries(...)` to
   `layout.plan_frame(..., legend=...)` so the legend rows are planned like
   any legend, and call `cells.legend` instead of `frame.legend`.
-- Validation: `test_cells.py` (task 1.3).
+- Validation: `test_cells.py` (task 1.4).
 - Risks: an all-zero grid has no bins; its legend shows the lead and zero
   entries only (3.8).
 
@@ -553,6 +579,12 @@ def legend(plan: FramePlan, scale: BinnedScale, entries: Sequence[LegendEntry]) 
   value → the same (the second line appears). `h` is the kind's default
   height, or 160 px for an auto-height kind (chart-kit's hbar precedent),
   or the request's `height` when set.
+- **Grid kinds**: an absent value is a drawable mark (a cross), so
+  Requirement 2.5's no-data state applies to a grid kind only when no row
+  can be placed at all: in `calendar-heatmap`, when every row's date is
+  absent; in `heatmap`, never, because an absent x or y forms a `—` band.
+  A grid whose values are all absent draws crosses and a legend with its
+  lead and absent entries.
 - Otherwise: plan the frame with `layout.plan_frame`, build scales, draw
   gridlines (where the kind has a numeric value axis), marks, axes, legend,
   title text and notes, and wrap with `frame.document` including
@@ -834,8 +866,8 @@ def legend(plan: FramePlan, scale: BinnedScale, entries: Sequence[LegendEntry]) 
     top, each `marks.bar` of height `share × plot height`, 80% of the band,
     at most 48 px wide, coloured by its group; adjacent segments separated
     by a 1 px gap (each internal boundary leaves 0.5 px on either side);
-  - total zero → `marks.zero_stub(x, zero_px, width, "#7f7f7f")` (the
-    stroke ink's base value) and a note `Zero total, no shares drawn: <n>
+  - total zero → `marks.zero_stub(x, zero_px, width, theme.STROKE.base)`
+    (the stroke ink's base colour, no literal) and a note `Zero total, no shares drawn: <n>
     bar(s).` (`1 bar`, `2 bars`);
   - a missing (x, part) row draws no segment;
   - legend: `block` swatches in legend order (= stacking order, chart-kit's
@@ -934,10 +966,13 @@ beforehand.
 ### Golden tests (each kind's `CASES`, chart-kit's harness)
 - `calendar-heatmap`: `typical` (about six months of daily load with zeros,
   absent values, missing days, rows out of date order), `empty`,
-  `all_absent`, `single` (one day), `constant`, `all_zero`, `durations`,
-  `long_labels`, `at_bound` (54 weeks).
+  `all_absent` (dates present, every value absent: crosses and a legend of
+  lead and absent entries), `absent_dates` (every date absent: the no-data
+  state's second line), `single` (one day), `constant`, `all_zero`,
+  `durations`, `long_labels`, `at_bound` (54 weeks).
 - `heatmap`: `typical` (zone numbers × week dates in seconds with a zero, an
-  absent value and a missing cell), `empty`, `all_absent`, `single`,
+  absent value and a missing cell), `empty`, `all_absent` (positions
+  present, every value absent: crosses), `single`,
   `categories` (weekday × hour as categories, first appearance not
   alphabetical), `absent_axis` (an absent y value → `—` row), `long_labels`,
   `at_bound` (60 × 25 cells).
@@ -945,7 +980,8 @@ beforehand.
   each series), `empty`, `all_absent`, `single`, `negative`, `zero` (both
   zero options), `long_labels`, `at_bound`.
 - `band`: `typical` (weekly p10/median/p90 with an absent low), `empty`,
-  `all_absent`, `single`, `negative`, `no_mid`, `isolated` (a band point
+  `all_absent`, `single` (one row with low = mid = high, so both axes are
+  degenerate), `negative`, `no_mid`, `isolated` (a band point
   between gaps), `long_labels`, `at_bound`.
 - `box`: `typical` (blocks with one absent median and one absent whisker
   end), `empty`, `all_absent`, `single`, `negative`, `zero_whisker` (low ==

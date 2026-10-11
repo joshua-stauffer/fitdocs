@@ -109,7 +109,7 @@ trustworthy and readable as a line chart.
 2. The chart catalog shall never make colour the only carrier of meaning: every value class, series, axis side or part that a catalog kind distinguishes by colour shall also be distinguished by size, shape, dash pattern, position matched to the legend order, or text.
 3. The chart catalog shall never draw an absent value as zero, and shall never substitute zero, a default or an interpolated value for an absent value.
 4. When a catalog chart has no rows, the chart catalog shall draw the chart kit's no-data state at the kind's normal size.
-5. When a catalog chart has rows but none holds a value the kind can draw, the chart catalog shall draw the chart kit's no-data state stating that the rows hold no values.
+5. When a catalog chart has rows but none of them leaves a mark (a grid kind marks a row whose value is absent with a cross, so for the grid kinds this means that no row can be placed), the chart catalog shall draw the chart kit's no-data state stating that the rows hold no values.
 6. When a row cannot be placed because a value the kind needs to position it is absent, the chart catalog shall state on the chart and in its description how many rows are not drawn and for which channel.
 7. When a category, colour or facet value is absent, the chart catalog shall show those rows as their own category, series or panel labelled with an em dash and ordered last.
 8. The chart catalog shall state a mark bound for every catalog kind, and shall draw a chart whose count equals the bound.
