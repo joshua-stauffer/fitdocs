@@ -2681,23 +2681,35 @@ Rejected:
 - [ ] analytics-index — Req 5.6 gains the named dashboards exception, and
   the copies of the rule move in the same change (see Decisions).
   `cli._run_index_pass` returns its `IndexReport` outcome instead of
-  discarding it (`cli.py:503-519`). The `IndexConnection.execute` params
-  path moves to `execute` + `fetchmany`, taking a `Mapping`. Carried out
-  inside `dashboards`. Dependencies: dashboards
+  discarding it (`cli.py:503-519`). The facade gains
+  `IndexConnection.execute_named(sql, Mapping)`, which streams through
+  `connection.execute` + `fetchmany`. Positional `IndexConnection.execute`
+  is left as it is, because the index writer binds `$1` through it in seven
+  places. *(Corrected 2026-10-12 by the Phase 11 spec batch: this line used
+  to say the `execute` params path itself moves to a `Mapping`, which would
+  have broken every index write.)* This is analytics-index Amendment 1,
+  carried out inside `dashboards`. Dependencies: dashboards
+- [ ] analytics-index (unnumbered, value-preserving) —
+  `index.schema.UNIT_SUFFIXES` becomes a projection of the new single unit
+  table `fitdocs.units`, with its value unchanged. A dated note goes into
+  analytics-index's `design.md`. `units` joins the `index` bullet in
+  `structure.md`, and its text pin moves. Carried out inside `chart-kit`.
+  Dependencies: chart-kit
 - [ ] analytics-query — result columns keep their type names (dropped at
   `statement.py:200-205`). `fitdocs.dashboards` joins the importer
   allow-list (`tests/query/test_boundary.py:15`). The out-of-scope line on
   saved queries and charting (`requirements.md:85-88`) is marked superseded.
-  Carried out inside `dashboards`. Dependencies: dashboards
+  This is analytics-query Amendment 1, carried out inside `dashboards`.
+  Dependencies: dashboards
 - [ ] wiki-contract — a new owned location and declared directory
   (`dashboards/`, `dashboards/assets/`), the inverse ownership shape
   (fitdocs-owned chart regions inside an athlete-owned page) as a new
   category in `docs/ownership-contract.md`, the page type, and
-  `CONTRACT_VERSION` `"9"` → `"10"`. Carried out inside `dashboards`.
-  Dependencies: dashboards
+  `CONTRACT_VERSION` `"9"` → `"10"`. This is wiki-contract Amendment 5,
+  carried out inside `dashboards`. Dependencies: dashboards
 - [ ] connectors — `dashboard` joins the no-network command list (`tech.md`,
-  `tests/connectors/test_e2e.py:205`). Carried out inside `dashboards`.
-  Dependencies: dashboards
+  `tests/connectors/test_e2e.py:205`). This is connectors Amendment 3,
+  carried out inside `dashboards`. Dependencies: dashboards
 
 #### Direct Implementation Candidates
 
