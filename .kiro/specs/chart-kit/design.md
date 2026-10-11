@@ -114,6 +114,7 @@ render_chart(request: ChartRequest, data: ChartData) -> RenderedChart   # raises
 describe_kinds() -> tuple[KindListing, ...]                             # JSON-ready, registration order
 kind_names() -> tuple[str, ...]
 RenderedChart(kind: str, output: Output, text: str)                     # text: no trailing newline
+# kit.api.render_spec(spec, request, data) -> RenderedChart: the same pipeline for one KindSpec (kind tests)
 ```
 
 **Data contract** (`kit.data`):
@@ -1345,11 +1346,18 @@ class RenderedChart:
 
 def validate_chart(request: ChartRequest, columns: Sequence[Column]) -> tuple[ChartProblem, ...]: ...
 def render_chart(request: ChartRequest, data: ChartData) -> RenderedChart: ...
+def render_spec(spec: KindSpec, request: ChartRequest, data: ChartData) -> RenderedChart: ...
 ```
 
-- `render_chart` runs the three stages (System Flows); on any problem it
-  raises `ChartError` with all problems of the failing stage and returns
-  nothing else. Every kind, core or appended, goes through this one path.
+- `render_chart` looks the kind up in `KINDS` (an unknown name is stage 1's
+  `unknown_kind`) and then calls `render_spec`, which runs the three stages
+  (System Flows); on any problem it raises `ChartError` with all problems of
+  the failing stage and returns nothing else. Every kind, core or appended,
+  goes through this one path.
+- `render_spec` is public so that a kind's own tests (core and
+  `chart-catalog`) exercise the full pipeline for a `KindSpec` before, and
+  independently of, its registry entry. It is not re-exported from the
+  facade.
 
 ## Data Models
 
