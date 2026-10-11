@@ -35,9 +35,10 @@
     light-to-dark ramp in both themes for free, but its low steps fall far
     below 3:1 as drawn (25% of `#3284d0` over white is about 1.3:1), which
     chart-kit Requirement 8.2 forbids for an information-bearing mark.
-  - chart-kit's settled seams cover almost every kind. Four small gaps were
-    found: no public one-form duration labeller, no public builder for the
-    `Not drawn:` note line, `band_scale`'s label-thinning rule measures width
+  - chart-kit's settled seams cover almost every kind. Five small gaps were
+    found: no public one-form duration labeller, no public way to title a
+    duration axis in a stated form, no public builder for the `Not drawn:`
+    note line, `band_scale`'s label-thinning rule measures width
     (so it fits horizontal axes only), and two behaviours the design does not
     pin (`frame.axis` title placement on `Side.RIGHT`, `marks.band_path`'s
     return shape). Each gets the narrowest append-only accommodation or an
@@ -260,6 +261,14 @@
   `frame.not_drawn_note(counts) -> str | None` producing exactly that
   wording. If the landed `frame.py` already exposes a public builder,
   consume it instead.
+- **The duration form of an axis title.** `axis_title(column, *,
+  clock_date=None)` picks `(h:mm:ss)` or `(m:ss)` "per the axis's label form"
+  but takes no form argument, so a caller that labels a duration scale
+  outside `numeric_scale` cannot make the title agree with its labels (found
+  by the Step 3.5 review, round 1). **Accommodation A3**: append
+  `format.duration_axis_title(column, *, hours)`, unless the landed kit
+  exposes a public equivalent, decided by the same exact-vector rule as A1
+  and A2.
 - **Vertical band labels.** `band_scale` labels every band when the widest
   label fits the band *width* minus 4 px, which is the right test for a
   horizontal axis and the wrong one for a vertical axis of rows. No
@@ -386,6 +395,11 @@
   spec lands first.
 
 ## Synthesis Outcomes
+- **Rank of `cells`** (Step 3.5 round 1, controller ruling): `cells` needs
+  nothing ranked after `scales`, so it ranks directly after `scales` and
+  before `frame`. The rank matrix then rejects a `cells` import of `frame`,
+  `marks`, `cartesian` or `validate`, and `from . import marks` in `cells.py`
+  is a real positive control.
 - **Generalization**: the two grid kinds are one problem (value classes over
   positioned cells); `cells` holds it once. The four multi-value kinds
   (`dual-axis`, `band`, `box`, `small-multiples`) share one counting rule
