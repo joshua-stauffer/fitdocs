@@ -7,12 +7,14 @@
   shipped specs), on top of a parallel-built upstream (`chart-kit`, designed
   but not yet implemented at base `560f909`).
 - **Key Findings**:
-  - The query layer has **no parameter path and no column types** today:
-    `screen_statement` reads only statement types, `execute_statement` calls
-    `conn.execute(sql)` bare, `ResultSet` drops type names, and the facade's
-    `IndexConnection.execute(sql, params: Sequence)` routes params through
-    `.sql(params=)`, which materialises the whole result. `$today` therefore
-    needs facade and query amendments before dashboards can bind it.
+  - The query layer has **no named-parameter path and no column types**
+    today: `screen_statement` reads only statement types, `execute_statement`
+    calls `conn.execute(sql)` bare, `ResultSet` drops type names, and the
+    facade's `IndexConnection.execute(sql, params: Sequence)` — used with
+    positional `$1` by the index writer and `freshness.athlete_drift` —
+    routes params through `.sql(params=)`, which materialises the whole
+    result. `$today` therefore needs a new streaming facade read and query
+    amendments before dashboards can bind it; `execute` itself stays as it is.
   - DuckDB 1.5.6 reports `?` and `$1` as the named parameter `'1'`, so
     positional parameters are detectable from `Statement.named_parameters`
     alone; `'$today'` in a literal or comment is not reported (probe P1).
@@ -268,15 +270,42 @@
   the interrupt workaround (`interrupt_quietly` before close) is reused, not
   copied.
 
-### Decision: the parameter path is `execute` + `fetchmany`, used only when params are non-empty
+### Decision: a new named-parameter read on the facade; `execute` untouched
 - **Context**: viability (materialisation on `.sql(params=)`), Req 7.3.
-- **Selected Approach**: `IndexConnection.execute(sql, params: Mapping[str, object] = {})`
-  keeps `.sql(sql)` for empty params (query's path and its pins unchanged)
-  and uses `connection.execute(sql, dict(params))` with `description` and
-  `fetchmany` for non-empty params. `freshness.athlete_drift`, the one
-  existing positional caller, moves to a named parameter.
-- **Trade-offs**: the two paths report type names in different
-  vocabularies on 1.2.0; the dashboards type map covers both.
+- **Correction (Step 3.5 round 1)**: the first design widened
+  `IndexConnection.execute`'s params to a `Mapping` and called
+  `freshness.athlete_drift` "the one existing positional caller". That was
+  false: the index writer binds positional `$1` through `execute` at
+  `store.py:400`, `:426`, `:486`, `:500`, `:513`, `:523-524`, and tests
+  monkeypatch `execute` with the `Sequence` signature
+  (`tests/index/test_store.py:1172-1179`, `:1510-1517`, `:1541-1546`;
+  `tests/query/test_store_facade.py:264`). Widening it would have broken
+  every index write (`dict((page_key,))` raises) and mypy. The error came
+  from generalising a subagent's "only query-side use of a parameter" to the
+  whole facade.
+- **Alternatives Considered** (controller's options): (a) a new
+  named-parameter method, `execute` unchanged; (b) accept both shapes in
+  `execute`; (c) migrate every positional caller to named parameters.
+- **Selected Approach** (controller ruling: option a):
+  `IndexConnection.execute_named(sql, params: Mapping[str, object])` runs
+  `connection.execute(sql, dict(params))`, or `connection.execute(sql)` for
+  an empty mapping (nothing bound), and streams `fetchmany` from the cursor.
+  `execute` keeps its signature, its `.sql(params=)` routing and all of its
+  callers and tests. The query session always reads through `execute_named`;
+  `fitdocs query` keeps the relation path.
+- **Trade-offs**: positional `execute` keeps the materialisation hazard for
+  any future large positional read; the amendment states it as out of scope
+  and the controller queues the residual. The relation path (query) and the
+  cursor path (dashboards) report type names in different vocabularies on
+  1.2.0; the dashboards type map covers both.
+- **Evidence for the latency pin** (probe P3, duckdb 1.5.6, network-blocked,
+  2026-10-11): for `SELECT range AS n FROM range(N) WHERE range >= $lo`, the
+  first `fetchmany(10)` took 0.006 s at 42 MB peak RSS through
+  `execute` + `fetchmany` versus 0.879 s at ~297 MB through
+  `.sql(params=)` at N = 5,000,000, and 0.000 s / 42 MB versus 3.5 s / ~930 MB
+  at N = 20,000,000. Task 2.1 uses N = 5,000,000 in a child process and
+  asserts the child's peak RSS, so observing the mutation costs ~300 MB, not
+  gigabytes.
 
 ### Decision: escaping caption and alt text with the kit's formatter
 - **Context**: the image link's text is the athlete's title; captions carry

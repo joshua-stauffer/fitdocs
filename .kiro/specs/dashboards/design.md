@@ -116,16 +116,27 @@ Each is a task in `tasks.md`, executed at implementation time; the amendment
 number is the next free one in the target spec at `560f909` (re-check at
 implementation and take the next free number if another spec took it first).
 
-- **analytics-index — Amendment 1 (facade parameters, post-pass outcome, the
-  named exception)**:
-  - `index/store.py`: `IndexConnection.execute(sql, params: Mapping[str, object] = MappingProxyType({}))`;
-    empty params keep `.sql(sql)` unchanged; non-empty params run
-    `connection.execute(sql, dict(params))` and the result reads
-    `description` and `fetchmany`/`fetchall` from that cursor.
-    `IndexConnection.statement_parameters(sql) -> tuple[frozenset[str], ...]`
-    from `extract_statements(...)[i].named_parameters`.
-  - `query/freshness.py:athlete_drift`: its positional `$1` becomes the named
-    parameter `$fingerprint` (the only existing params caller).
+- **analytics-index — Amendment 1 (a named-parameter read, the post-pass
+  outcome, the named exception)**:
+  - `index/store.py`: two **new** facade methods, nothing existing changed
+    (controller ruling, Step 3.5 round 1):
+    - `IndexConnection.execute_named(sql, params: Mapping[str, object]) -> IndexResult`
+      runs `connection.execute(sql, dict(params))` — or `connection.execute(sql)`
+      when the mapping is empty, so nothing is bound that the SQL does not
+      use — and the result reads `description` and streams
+      `fetchmany`/`fetchall` from that cursor;
+    - `IndexConnection.statement_parameters(sql) -> tuple[frozenset[str], ...]`
+      from `extract_statements(...)[i].named_parameters`.
+  - **Unchanged, by design**: `IndexConnection.execute(sql, params: Sequence[object] = ())`,
+    its `.sql(sql, params=params)` routing, every caller (the index writer at
+    `store.py:400`, `:426`, `:486`, `:500`, `:513`, `:523-524` and
+    `query/freshness.py:119`) and every test that monkeypatches it
+    (`tests/index/test_store.py:1172-1179`, `:1510-1517`, `:1541-1546`,
+    `tests/query/test_store_facade.py:264`). Positional `execute` with params
+    still materialises its whole result before `fetchmany` caps it (the
+    viability hazard); no present caller reads a large positional result, and
+    moving positional reads to a streaming path is **out of this amendment's
+    scope** (the controller queues the residual).
   - `cli._run_index_pass` returns `IndexReport | None` (None when it caught an
     exception); pin moves in `tests/index/test_cli_post_pass.py:533-543` and
     the `returned is None` assertion.
@@ -141,7 +152,9 @@ implementation and take the next free number if another spec took it first).
 - **analytics-query — Amendment 1 (parameters, column types, the session)**:
   - `query/format.py`: `ResultSet.column_types: tuple[str, ...] = ()`.
   - `query/statement.py`: `execute_statement` and `run_statement` take
-    `params: Mapping[str, object] = MappingProxyType({})` and fill
+    `params: Mapping[str, object] | None = None` — `None` keeps today's
+    `conn.execute(sql)` call byte-for-byte; a mapping (even an empty one)
+    goes through `conn.execute_named(sql, params)` — and fill
     `column_types`; `statement_parameters(conn, sql) -> frozenset[str]`.
   - `query/command.py`: `open_session`, `QuerySession`, `SessionUnavailable`;
     `run_query` reuses the open-and-check helper, its behaviour unchanged.
@@ -242,7 +255,7 @@ package.
 |---|---|---|---|
 | Runtime | Python ≥ 3.11 stdlib | All dashboards code | No new dependency |
 | YAML | PyYAML ≥ 6.0 (existing) | Directive body | Resolver-free loader; event walk |
-| Database | duckdb ≥ 1.2,<2 (existing), via `fitdocs.query` only | Chart SQL | `execute` + `fetchmany` for params |
+| Database | duckdb ≥ 1.2,<2 (existing), via `fitdocs.query` only | Chart SQL | `execute_named`: `execute` + `fetchmany` |
 | Charts | chart-kit facade (this phase) | Drawing | No local drawing code |
 | CLI | typer, rich (existing) | `fitdocs dashboard` | One root command |
 
@@ -291,8 +304,9 @@ tests/declaration_golden/dashboards.AGENTS.md
   `dashboards/`; docstrings.
 - `src/fitdocs/declaration.py` — dashboards fragments and branch.
 - `src/fitdocs/contract.py` — `CONTRACT_VERSION` main+1 and history entry.
-- `src/fitdocs/index/store.py` — parameter path, `statement_parameters`.
-- `src/fitdocs/query/{format,statement,command,freshness}.py` — Amendment 1.
+- `src/fitdocs/index/store.py` — two new methods, `execute_named` and
+  `statement_parameters`; nothing existing changes.
+- `src/fitdocs/query/{format,statement,command}.py` — Amendment 1.
 - `src/fitdocs/cli.py` — `dashboard` command; `_query_environment()` shared
   with `query`; `_run_index_pass` return value; `_run_dashboard_pass` at five
   call sites (sync, drain, regen, load; `pull --sync` through drain);
@@ -974,8 +988,15 @@ class QueryChartSource:                        # implements ChartSource
   Any other name (TIME, `TIMESTAMP WITH TIME ZONE`, `…[]`, STRUCT, MAP,
   BLOB, UUID, `Time`, `list`, `dict`, `BINARY`, `UUID`, JSON, …) →
   `column_type` naming the column and type with the fix "Cast it in SQL (for
-  example `CAST(x AS TIMESTAMP)`) or leave it out of the SELECT.", raised for
-  every column of the result before any row is read beyond the cap fetch.
+  example `CAST(x AS TIMESTAMP)`) or leave it out of the SELECT.", one
+  problem per such column. Where the database cannot convert a value while
+  fetching (a `TIMESTAMP WITH TIME ZONE` value without `pytz`, which fitdocs
+  does not install), the fetch fails first and the chart gets `sql_failed`
+  carrying the query layer's hint to cast to TIMESTAMP; either way the chart
+  is refused with a cast fix. UUID is refused by its type name only: no
+  dashboards module imports `uuid` or binds a name `uuid`
+  (`tests/test_contract_consumers.py:597-624` forbids both outside
+  `contract.py`).
 - **Values** (8.4, 8.6): every present value must fit its kind (`int` not
   `bool`, `float`, `Decimal` for NUMBER; `date` not `datetime` for DATE;
   naive `datetime` for DATETIME; `timedelta`; `str`; `bool`), else
@@ -1174,16 +1195,23 @@ def _run_dashboard_pass(data_root: Path, index_report: IndexReport | None) -> No
 
 #### Upstream amendments
 
-**IndexFacade (analytics-index Amendment 1)** — `index/store.py`:
+**IndexFacade (analytics-index Amendment 1)** — `index/store.py`, two new
+methods beside the unchanged `execute(sql, params: Sequence[object] = ())`:
 ```python
-def execute(self, sql: str, params: Mapping[str, object] = MappingProxyType({})) -> IndexResult: ...
+def execute_named(self, sql: str, params: Mapping[str, object]) -> IndexResult: ...
 def statement_parameters(self, sql: str) -> tuple[frozenset[str], ...]: ...
 ```
-- Empty params: unchanged (`.sql(sql)`; relation types). Non-empty:
-  `self._connection.execute(sql, dict(params))`; `IndexResult` wraps the
-  cursor: `columns` from `description` (`str(name)`, `str(type)`),
-  `fetchmany`/`fetchall` from the cursor, errors wrapped as today
-  (`IndexStatementError`, `IndexInterrupted`).
+- `execute_named`: `self._connection.execute(sql, dict(params))` when
+  `params` is non-empty, `self._connection.execute(sql)` when it is empty
+  (binds nothing); `IndexResult` gains a cursor-backed form: `columns` from
+  `description` (`str(name)`, `str(type)`), `fetchmany`/`fetchall` streamed
+  from the cursor, errors wrapped exactly as the relation form wraps them
+  (`IndexStatementError`, `IndexInterrupted`). The statement runs on the
+  facade's own connection, so `interrupt()` stops it.
+- `execute` is untouched: the index writer and `freshness.athlete_drift` keep
+  their positional `$1` calls through `.sql(params=)`; its materialisation
+  hazard for a future large positional read is recorded in the amendment as
+  out of scope.
 - `statement_parameters`: `extract_statements` errors wrap as
   `IndexStatementError`; one `frozenset(statement.named_parameters)` per
   statement.
@@ -1194,9 +1222,9 @@ def statement_parameters(self, sql: str) -> tuple[frozenset[str], ...]: ...
 class ResultSet: columns; rows; truncated; max_rows; column_types: tuple[str, ...] = ()
 def statement_parameters(conn: IndexConnection, sql: str) -> frozenset[str]: ...   # one statement assumed
 def execute_statement(conn, sql, *, max_rows, timeout_s, timer=threading.Timer,
-                      params: Mapping[str, object] = MappingProxyType({})) -> ResultSet: ...
+                      params: Mapping[str, object] | None = None) -> ResultSet: ...  # None: conn.execute(sql)
 def run_statement(conn, sql, *, max_rows, timeout_s, timer=threading.Timer,
-                  params: Mapping[str, object] = MappingProxyType({})) -> ResultSet: ...
+                  params: Mapping[str, object] | None = None) -> ResultSet: ...      # mapping: conn.execute_named
 
 @dataclass(frozen=True)
 class ScreenedStatement:
@@ -1218,6 +1246,9 @@ def open_session(data_root: Path, env: QueryEnvironment) -> QuerySession | Sessi
   missing file, `open_sandboxed` and its exceptions, bookkeeping and schema
   version) through one private helper that `run_query` also uses; every
   existing query test passes unedited.
+- `QuerySession.run` always passes a mapping (possibly empty), so every
+  dashboards statement takes the streaming `execute_named` path and reports
+  `description` type names; `fitdocs query` keeps the relation path.
 - `QuerySession.run` raises only `StatementRefused`, `StatementFailed`
   (including parse failures, converted from `IndexStatementError`),
   `StatementTimedOut` and `KeyboardInterrupt`; on any `BaseException` it
