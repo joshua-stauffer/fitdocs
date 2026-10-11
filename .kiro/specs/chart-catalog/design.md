@@ -968,8 +968,9 @@ beforehand.
   absent values, missing days, rows out of date order), `empty`,
   `all_absent` (dates present, every value absent: crosses and a legend of
   lead and absent entries), `absent_dates` (every date absent: the no-data
-  state's second line), `single` (one day), `constant`, `all_zero`,
-  `durations`, `long_labels`, `at_bound` (54 weeks).
+  state's second line), `single` (one day), `constant` (every value equal and
+  on a round edge), `all_zero`, `durations` (edges below and above one
+  hour), `long_labels`, `at_bound` (54 weeks).
 - `heatmap`: `typical` (zone numbers × week dates in seconds with a zero, an
   absent value and a missing cell), `empty`, `all_absent` (positions
   present, every value absent: crosses), `single`,
@@ -987,7 +988,7 @@ beforehand.
   end), `empty`, `all_absent`, `single`, `negative`, `zero_whisker` (low ==
   q1), `long_labels`, `at_bound`.
 - `mean-max`: `typical` (two periods, power at mean_max's durations from 1 s
-  to 1 h), `empty`, `all_absent`, `single`, `negative`, `pace` (seconds per
+  to 1 h, one absent power value), `empty`, `all_absent`, `single`, `negative`, `pace` (seconds per
   kilometre), `long_labels`, `at_bound`.
 - `small-multiples`: `typical` (four facets, shared y, an absent y),
   `empty`, `all_absent`, `single`, `negative`, `independent`,
