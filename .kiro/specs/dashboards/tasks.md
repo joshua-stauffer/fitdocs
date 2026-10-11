@@ -158,7 +158,10 @@ sequential, never two `(P)` tasks at once.
   added its entries; 1.1 here appends `tests/dashboards`) and
   `.kiro/steering/structure.md` (chart-kit's 7.1 edited the `index` bullet
   and added the `units`/kit paragraph; 8.2 here edits the `query` bullet and
-  adds a `dashboards` bullet). chart-catalog edits neither.
+  adds a `dashboards` bullet) and `tests/connectors/test_network_statements.py`
+  (chart-kit's 7.1 re-pinned the `index`-bullet phrase first; 6.5 here adds
+  the `load`, `dashboard`, `check` pin and 8.2 moves the tech.md
+  Architecture pin, in separate hunks). chart-catalog edits none of these.
 - **Append-only, keep both sides on rebase**: the `cli.py` command count
   and docstring list (13 → 14), the no-network command list,
   `WRITING_ENTRY_POINTS`, `OWNED_PATHS` / `DECLARED_DIRS`,
@@ -219,9 +222,11 @@ sequential, never two `(P)` tasks at once.
     characters. Record the queue item's status, `CONTRACT_VERSION` on `main`,
     the next free amendment numbers of analytics-index (1), analytics-query
     (1), wiki-contract (5) and connectors (3), and whether
-    `tests/connectors/test_network_statements.py:675-680` (the
-    `structure.md` `index`-bullet pin) is green on `main` after chart-kit's
-    7.1 (a check, not a claim: if it is red, stop and report).
+    the `structure.md` `index`-bullet phrase pin in
+    `tests/connectors/test_network_statements.py` (the phrase chart-kit's
+    7.1 re-pinned to include `units`; cite it by content, its line numbers
+    move) is green on `main` after chart-kit's 7.1 (a check, not a claim: if
+    it is red, stop and report).
   - **Package**: `src/fitdocs/dashboards/__init__.py` (docstring only:
     dashboard pages, imported only by the CLI); `problems.py` per design §
     Problems (`Source`, `Severity`, `DashboardCode` with the 38 values in
@@ -1120,7 +1125,8 @@ sequential, never two `(P)` tasks at once.
     `dashboards.binding` importing `units` contradicts nothing; if it does
     carry an exhaustive list, stop and report rather than editing it. Leave
     the `index` bullet unchanged, and check before and after the edit that
-    its pins (`tests/connectors/test_network_statements.py:675-680`,
+    its pins (the `index`-bullet phrase chart-kit's 7.1 re-pinned with
+    `units` in `tests/connectors/test_network_statements.py`, and
     `tests/index/derived/test_published.py:28-33`) are green; if either is
     red before this task's edit, stop and report (a cross-spec issue for the
     controller, not this task's to fix).
