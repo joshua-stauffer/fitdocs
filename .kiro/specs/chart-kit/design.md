@@ -345,8 +345,8 @@ violations are errors):
 
 The order is enforced by a rank matrix in `test_boundary.py` (precedent:
 `tests/query/test_boundary.py` `_QUERY_DIRECTION`): every kit import must
-point at a strictly lower rank; the eight kind modules share one rank and may
-not import each other.
+point at a strictly lower rank; the kind modules and `kinds/__init__` share
+one rank and may not import each other.
 
 `format`, `theme`, `frame` and `marks` may also import the shared primitives
 `svg`, `series` and `palette`. `validate` imports `schema`, `data`, `problems`
@@ -607,7 +607,7 @@ once per column and code.
 | Formatter (`format.py`) | Shared | Labels and value/tick text | 1.6, 2.4–2.8, 9.8, 13.5 | units, data (P0) | Service |
 | Ticks (`ticks.py`) | Shared | Nice steps and ladders | 6.2 | — | Service |
 | Scales (`scales.py`) | Shared | Domains, positions, ticks | 6.1–6.5, 6.7 | ticks, format (P0) | Service |
-| Theme (`theme.py`) | Shared | Inks, style, series styles | 8.1–8.8 | palette (P0) | Service |
+| Theme (`theme.py`) | Shared | Inks, style, series styles, marker geometry | 8.1–8.8 | palette, svg (P0) | Service |
 | Layout (`layout.py`) | Shared | Text width, truncation, frame plan | 6.3, 7.3–7.5 | theme (P1) | Service |
 | Frame (`frame.py`) | Shared | Root, metadata, axes, legend, notes, no-data | 7.1, 7.2, 8.1, 8.3, 9.3, 9.6, 9.7, 10.1–10.3 | svg, layout, theme, scales (P0) | Service |
 | Marks (`marks.py`) | Shared | Mark geometry to SVG | 8.8, 9.1, 9.2 | svg, series, theme (P0) | Service |
