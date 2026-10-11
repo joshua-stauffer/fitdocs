@@ -177,7 +177,10 @@ sequential, never two `(P)` tasks at once.
   `tests/render/charts/kit/test_boundary.py` (1.1), the colour whitelist in
   `tests/render/charts/kit/test_theme_coverage.py` (3.1).
 - **`CHANGELOG.md` `[Unreleased]`** (4.2): append one line under the
-  existing `### Added`; create the heading only if absent. **Siblings:
+  existing `### Added`; create the heading only if absent. The line opens
+  with the kind names and never with `` - `fitdocs dashboard` ``:
+  `dashboards`' task 8.2 pins exactly one Unreleased › Added bullet with that
+  opening. **Siblings:
   `dashboards`** (keep both lines on rebase).
 - **The second lander's bounded update** (4.1; the rule `dashboards`' design
   § Settled Seams for the Parallel Sibling and the roadmap state): whichever
@@ -371,9 +374,11 @@ sequential, never two `(P)` tasks at once.
     `Mon`/`Wed`/`Fri`/`Sun`, cells and legend through `cells`, notes through
     A2; the no-data second line only when every date is absent).
   - **Tests** (`test_calendar_heatmap.py`, through `_helpers.render_case`):
-    a Sunday lands in row 6 of the previous Monday's column (fixture dates
-    out of order); the grid starts on the Monday before a Thursday first
-    date; 54 week columns render and 55 refuse; a duplicate date at row 3
+    `KIND.description` contains `negative values are refused` and `a day
+    with no row draws nothing` (design § Published Seams: the guidance
+    travels in the registry listing); a Sunday lands in row 6 of the
+    previous Monday's column (fixture dates out of order); the grid starts
+    on the Monday before a Thursday first date; 54 week columns render and 55 refuse; a duplicate date at row 3
     refuses naming row 3; a negative value refuses (`negative_value`); an
     absent date is counted in the note and description; one absent value,
     one zero and one missing day give exactly one cross, one outline and no
@@ -390,7 +395,8 @@ sequential, never two `(P)` tasks at once.
     `durations` (edges below and above one hour), `long_labels`, `at_bound`;
     a `main()` writer.
   - **Mutations** (kind-local, in `kinds/calendar_heatmap.py` only; each
-    recorded with the goldens it reds): Sunday-start weeks (`typical`);
+    recorded with the goldens it reds): drop the no-row clause from the
+    description (the phrase test reds); Sunday-start weeks (`typical`);
     columns counted from the first present date instead of its Monday
     (`typical`, whose first date is a Thursday); drop the `CAL_MAX_CELL` cap
     (`single`); `>` → `>=` in the week-bound comparison (`at_bound`
@@ -413,7 +419,9 @@ sequential, never two `(P)` tasks at once.
     value; band order by kind with numbers ascending and `—` last; x bands by
     `band_scale`, y bands built directly with the height rule; auto height;
     axes through `frame.axis`; cells and legend through `cells`).
-  - **Tests** (`test_heatmap.py`): number bands ascending from rows given 3,
+  - **Tests** (`test_heatmap.py`): `KIND.description` contains `negative
+    values are refused` and `a position with no row draws nothing`; number
+    bands ascending from rows given 3,
     1, 2; categories in first appearance (not alphabetical); dates ascending
     from unsorted rows; an absent y forms the last `—` row; a duplicate (x, y)
     at row 4 refuses; 1500 cells render and 1501 refuse; 60 x values render
@@ -427,7 +435,9 @@ sequential, never two `(P)` tasks at once.
     `empty`, `all_absent` (positions present, every value absent), `single`,
     `categories`, `absent_axis`, `long_labels`, `at_bound` (60 × 25); a
     `main()` writer.
-  - **Mutations** (kind-local, in `kinds/heatmap.py` only): order number
+  - **Mutations** (kind-local, in `kinds/heatmap.py` only): drop the
+    negative-values clause from the description (the phrase test reds);
+    order number
     bands by first appearance (`typical`); sort category bands
     alphabetically (`categories`); put the `—` band first (`absent_axis`);
     label every y row whatever its pitch (the 9 px test reds); `>` → `>=` in
@@ -449,7 +459,9 @@ sequential, never two `(P)` tasks at once.
     gridlines only, right axis through `frame.axis(Side.RIGHT)`, `y` solid in
     `series_style(0)`, `y2` dashed in `series_style(1)`, legend naming each
     side, per-series undrawn counts through A2).
-  - **Tests** (`test_dual_axis.py`): `shared_unit` for one column on both
+  - **Tests** (`test_dual_axis.py`): `KIND.description` contains `prefer
+    small-multiples or one line with a colour column`; `shared_unit` for one
+    column on both
     channels, for two `bpm` columns, for two DURATION columns, and for a
     DURATION column against a NUMBER column with unit `s`; no problem for
     `bpm` against `s_per_km` or for two unitless numbers; `validate_chart`
@@ -464,7 +476,9 @@ sequential, never two `(P)` tasks at once.
     rate, an absent value in each series, rows out of order), `empty`,
     `all_absent`, `single`, `negative`, `zero`, `long_labels`, `at_bound`; a
     `main()` writer.
-  - **Mutations** (kind-local, in `kinds/dual_axis.py` only): draw `y2` in
+  - **Mutations** (kind-local, in `kinds/dual_axis.py` only): drop the
+    prefer-small-multiples clause from the description (the phrase test
+    reds); draw `y2` in
     `series_style(0)` (`typical`); draw gridlines from the right scale
     (`typical`); swap the scales the two series are drawn against
     (`typical`); ignore `y2_zero` (`zero`); drop the `shared_unit` check (its
@@ -580,7 +594,8 @@ sequential, never two `(P)` tasks at once.
     linearly (`typical`); skip the per-period x sort (`typical`); format the
     description's y range with `format_duration` instead of `format_value`
     for a pace column (`pace`: `numeric_scale` labels the axis, and the kind
-    formats only the range it passes to `frame.describe`); replace an absent `y` with 0
+    formats only the range it passes to `frame.describe`); replace an absent
+    `y` with 0
     before building points (`typical`).
   - **Observable:** `uv run pytest tests/render/charts/kit/test_mean_max.py`
     is green, and every golden outside the classes 3.2 covers has a recorded
@@ -698,7 +713,8 @@ sequential, never two `(P)` tasks at once.
     each kind's first `CASES` entry, `typical`, reds beside the kind's own
     test: it visits the catalog kinds).
   - **Observable:** `uv run pytest tests/render/charts/kit` is green with
-    sixteen registered kinds, and Implementation Notes record, for each of
+    the eight catalog kinds registered after the core eight (a prefix; no
+    total count is pinned), and Implementation Notes record, for each of
     the three cross-cutting chart-kit tests, the mutation that reddened it
     on a catalog kind.
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.6, 2.1, 2.11, 12.2, 12.6_
@@ -816,9 +832,12 @@ sequential, never two `(P)` tasks at once.
 
 - [ ] 4.2 Record the release note and run the full validation
   - **`CHANGELOG.md`** (`[Unreleased]` → `### Added`, append): one line
-    naming the eight kinds as available to dashboard charts, stating that a
-    grid cell with no value shows a cross and a zero an outlined square, and
-    that signed values on a grid kind are refused.
+    that opens with the kind names (for example ``- Chart kinds
+    `calendar-heatmap`, `heatmap`, …``), never with `` - `fitdocs
+    dashboard` `` (`dashboards`' task 8.2 pins exactly one bullet with that
+    opening), naming the eight kinds as available to dashboard charts,
+    stating that a grid cell with no value shows a cross and a zero an
+    outlined square, and that signed values on a grid kind are refused.
   - **Preservation evidence (no new test)**: chart-kit's core kind golden
     tests, the four renderers' golden tests
     (`tests/render/charts/test_{hero,calendar,zones,map_golden}.py`,
