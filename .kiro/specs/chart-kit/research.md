@@ -287,6 +287,31 @@
 - **Rationale**: no misapplied scheme drops below 3:1; appending a role never
   changes a core golden.
 
+### Decision: marker geometry lives in the theme
+- **Context**: the legend's shape swatch (frame) and the scatter points
+  (marks) draw the same markers, and `frame` sits below `marks` in the layer
+  order, so it may not import it (Step 3.5 review, round 1).
+- **Selected Approach**: `theme.shape_path(shape, centres, color)` is the one
+  geometry; `marks.points` returns exactly it and the legend calls it for one
+  centre. A test asserts the swatch equals `marks.points` at the same centre
+  for every shape.
+
+### Decision: integer ticks are a shared-layer option
+- **Context**: histogram counts need whole-number ticks; `chart-catalog`'s
+  count-valued kinds will too (Step 3.5 review, round 1; controller ruling).
+- **Selected Approach**: `integer: bool = False` on `ticks.linear_ticks` and
+  `scales.numeric_scale`; no step below 1; a degenerate integer domain pads
+  by 1.
+
+### Decision: append-only tuples are pinned by prefix
+- **Context**: `chart-catalog` appends to `KINDS`, `ProblemCode`,
+  `INK_ROLES` and the categorical palette; a full-value pin would go red on
+  every append (Step 3.5 review, round 1; controller ruling).
+- **Selected Approach**: tests pin the ordered core prefix. The full pins that
+  cannot be prefixes (the kit module list and layer ranks, the golden colour
+  whitelist) are named re-pin points; cross-cutting tests find appended kinds'
+  cases by a test-module naming convention.
+
 ### Decision: colour is never alone
 - **Selected Approach**: line and area outlines carry a per-series dash
   pattern; scatter series carry a per-series marker shape; bar series are

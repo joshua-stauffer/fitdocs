@@ -69,6 +69,20 @@ four existing renderers and every existing golden are untouched.
   unit suffix (a schema decision; see the cadence note).
 - The four existing renderers, `sections.py`, `render/format.py`.
 
+### Existing Spec Updates Carried by This Spec
+- **analytics-index** (carried by `chart-kit`, value-preserving):
+  - `src/fitdocs/index/schema.py`: `UNIT_SUFFIXES` becomes the projection
+    `tuple((u.suffix, u.phrase) for u in fitdocs.units.UNITS)`; its value,
+    order, `Final` type and `SCHEMA_VERSION` are unchanged, and its pins
+    (`tests/index/test_schema.py:181-205`, `tests/query/test_schemaview.py`,
+    `tests/index/derived/test_registration.py`) stay green unedited;
+  - `.kiro/specs/analytics-index/design.md`: a dated note beside its
+    unit-suffix table naming `fitdocs.units.UNITS` as the table's single
+    source;
+  - `.kiro/steering/structure.md`: the `index` bullet's import list gains
+    `units`.
+  The roadmap's Existing Spec Updates entry for this is the controller's.
+
 ### Allowed Dependencies
 - Standard library only (Python ≥ 3.11).
 - `fitdocs.render.charts.svg` (`el`, `text`, `fmt_num`), `fitdocs.render.charts.series`
@@ -200,11 +214,17 @@ value unchanged) and by the kit. `dashboards` calls `unit_for_column` and puts
 - one `<style>` per SVG: `@media (prefers-color-scheme:light){.ck-t{fill:#707070}.ck-s{stroke:#707070}}@media (prefers-color-scheme:dark){.ck-t{fill:#8e8e8e}.ck-s{stroke:#8e8e8e}}`;
   `#707070` is 4.95:1 on white, `#8e8e8e` ≥4.91:1 on every dark, and each is
   still ≥3.25:1 on all four backgrounds (mismatch-safe);
-- roles: `TEXT` (`ck-t`, fill) and `STROKE` (`ck-s`, stroke); API
-  `ink(role) -> dict[str, str]`, `style_element(extra: tuple[InkRole, ...] = ()) -> str`;
-  an appended role's rule is emitted only when a chart passes it;
+- roles: `TEXT` (`ck-t`, fill) and `STROKE` (`ck-s`, stroke) are
+  `CORE_ROLES`; `INK_ROLES` is every role, core first, append-only, and is read
+  only by tests (contrast arithmetic). API `ink(role) -> dict[str, str]`,
+  `style_element(extra: tuple[InkRole, ...] = ()) -> str`, which emits the
+  `CORE_ROLES` rules then each `extra` role's and **never iterates
+  `INK_ROLES`**: an appended role's rule appears only in a chart that passes it,
+  so appending a role changes no existing output;
 - series: `series_style(i) -> SeriesStyle(color, dash, shape)` over the
-  8-colour `palette.CATEGORICAL_RAMP`; `MAX_SERIES = 8`.
+  8-colour `palette.CATEGORICAL_RAMP`; `MAX_SERIES = 8`;
+  `shape_path(shape, centres, color) -> str` is the one marker geometry, used by
+  `marks.points` and by the legend's shape swatch alike.
 
 **Determinism**: same request + data → same bytes; no clock, ids, randomness,
 environment or I/O; categories in first-appearance order (dates ascending);
@@ -217,6 +237,30 @@ rows, `scatter` 2000 rows (refuse); `histogram` 100 bins (reduce: any number
 of values is binned; refuse if a binning yields more than 100 bins); `stat` 1
 row, `table` 100 rows and 12 columns (refuse). Colour channels: at most 8
 series.
+
+**Scales and ticks** (`kit.scales`, `kit.ticks`):
+```python
+numeric_scale(values, column, start_px, end_px, *, scale: ScaleType, include_zero: bool,
+              nice: bool, horizontal: bool, integer: bool = False) -> NumericScale
+linear_ticks(lo, hi, max_count, *, duration: bool, integer: bool = False) -> tuple[float, float, tuple[float, ...]]
+band_scale(labels, start_px, end_px, *, font_px) -> BandScale
+```
+`integer=True` restricts steps to whole numbers (≥1 on the 1-2-5 ladder) and
+pads a degenerate domain by 1: count axes (histogram; chart-catalog's counts).
+
+**Registry reads and test conventions**: `kind_named`, `kind_names` and
+`describe_kinds` read `KINDS` at call time (no import-time index). The test
+module of kind `<name>` is `tests/render/charts/kit/test_<name with - as _>.py`;
+it exposes `CASES: tuple[Case, ...]` (`Case` from
+`tests/render/charts/kit/_helpers.py`) and a `main()` writer, and its goldens
+live in `tests/render/charts/kit/golden/<name>/`. The cross-cutting tests
+(registry round trip, theme coverage, determinism) find every registered
+kind's cases through this convention, so an appended kind is covered without
+editing them. Pins on append-only tuples (`KINDS`, `ProblemCode`,
+`INK_ROLES`, `CATEGORICAL_*`) are ordered **prefix** pins of the core values;
+the full pins that remain (the kit module list and layer ranks in
+`test_boundary.py`, the colour whitelist in `test_theme_coverage.py`) are
+explicit re-pin points for an appending spec.
 
 **Extension rules for `chart-catalog`**: append a kind module and its
 registry entry; append, never alter, shared-layer functions, roles, problem
@@ -298,6 +342,11 @@ violations are errors):
 `units` → `data` → `problems` → `schema` → `format` → `ticks` → `theme` →
 `layout` → `scales` → `frame` → `marks` → `cartesian` → `validate` →
 `kinds/*` → `registry` → `api` → `__init__`
+
+The order is enforced by a rank matrix in `test_boundary.py` (precedent:
+`tests/query/test_boundary.py` `_QUERY_DIRECTION`): every kit import must
+point at a strictly lower rank; the eight kind modules share one rank and may
+not import each other.
 
 `format`, `theme`, `frame` and `marks` may also import the shared primitives
 `svg`, `series` and `palette`. `validate` imports `schema`, `data`, `problems`
@@ -389,6 +438,9 @@ tests/
 - `.kiro/steering/structure.md` — one paragraph: `units` imports only the
   standard library and is imported by `index.schema` and the kit; the kit
   imports only the standard library, `units` and `render.charts.{svg,series,palette}`.
+  The existing `index` bullet's import list gains `units` (its
+  `index.derived` sentence stays inside that bullet, which
+  `tests/index/derived/test_published.py:28-33` parses).
 - `.kiro/specs/analytics-index/design.md` — a dated note beside its unit-suffix
   table: the table's single source is now `fitdocs.units.UNITS`; values
   unchanged.
@@ -708,7 +760,8 @@ class ChartError(ValueError):
 
 - `message` and `fix` are one sentence each, ending with a full stop, naming
   the chart by `ref` only through the field (not repeated in the text).
-- Codes are append-only; the test pins the ordered tuple of values.
+- Codes are append-only; the test pins the ordered prefix of the 23 core
+  values (`tuple(ProblemCode)[:23]`), so an appended code keeps it green.
 
 #### KindSchema — `kit/schema.py`
 
@@ -836,7 +889,8 @@ CLOCK_STEPS: Final[tuple[int, ...]] = (60, 300, 900, 1800, 3600, 7200, 10800, 21
 class CalendarStep(StrEnum): DAY="day"; TWO_DAYS="2day"; WEEK="week"; MONTH="month"; QUARTER="quarter"; HALF="half"; YEAR="year"; YEARS_2="2year"; YEARS_5="5year"; YEARS_10="10year"
 
 def nice_step(raw: float, *, duration: bool) -> float: ...       # smallest ladder step >= raw
-def linear_ticks(lo: float, hi: float, max_count: int, *, duration: bool) -> tuple[float, float, tuple[float, ...]]: ...
+def linear_ticks(lo: float, hi: float, max_count: int, *, duration: bool,
+                 integer: bool = False) -> tuple[float, float, tuple[float, ...]]: ...
 def log_ticks(lo: float, hi: float, max_count: int, *, duration: bool) -> tuple[float, float, tuple[float, ...]]: ...
 def calendar_ticks(first: date, last: date, max_count: int) -> tuple[CalendarStep, tuple[date, ...]]: ...
 def clock_ticks(lo_s: float, hi_s: float, max_count: int) -> tuple[int, tuple[float, ...]]: ...
@@ -846,7 +900,7 @@ def clock_ticks(lo_s: float, hi_s: float, max_count: int) -> tuple[int, tuple[fl
   steps above, then 1, 2, 5 × 10^k days; never below 1 s.
 - `linear_ticks` returns the niced domain (outermost ticks enclosing `[lo,
   hi]`) and the ticks, using the smallest ladder step giving at most
-  `max_count` ticks.
+  `max_count` ticks; with `integer=True` no step below 1 is chosen.
 - `log_ticks`: plain numbers → decades in the domain; when fewer than three
   decades, also 2× and 5× each decade. Durations → the `LOG_DURATION_TICKS`
   (and further decimal days) inside the domain, thinned to `max_count` by
@@ -894,7 +948,8 @@ class BandScale:
     def centre(self, index: int) -> float: ...
 
 def numeric_scale(values: Sequence[float], column: Column, start_px: float, end_px: float, *,
-                  scale: ScaleType, include_zero: bool, nice: bool, horizontal: bool) -> NumericScale: ...
+                  scale: ScaleType, include_zero: bool, nice: bool, horizontal: bool,
+                  integer: bool = False) -> NumericScale: ...
 def band_scale(labels: Sequence[str], start_px: float, end_px: float, *, font_px: float) -> BandScale: ...
 ```
 
@@ -908,6 +963,8 @@ Rules:
   unit when `v == 0`; with `include_zero` and every value 0 → `[0, 1]`. LOG →
   `[v/10, v*10]`, then decade rounding. DATE → ±1 day. DATETIME → ±3600 s.
   No-value axes never reach a scale (the no-data state is drawn instead).
+- `integer=True` (count axes) passes `integer` to `linear_ticks` and makes
+  the degenerate pad 1 (`[0, 1]` for all-zero counts with `include_zero`).
 - `nice=True` (value axes: y of line/area/bar/scatter/histogram; x of
   hbar/scatter/histogram) extends the domain to enclosing ticks. `nice=False`
   (x of line/area) keeps the exact data extent and places ticks inside it.
@@ -946,7 +1003,8 @@ class InkRole:
 
 TEXT: Final = InkRole("ck-t", "fill", "#7f7f7f", "#707070", "#8e8e8e", True)
 STROKE: Final = InkRole("ck-s", "stroke", "#7f7f7f", "#707070", "#8e8e8e", False)
-INK_ROLES: Final[tuple[InkRole, ...]] = (TEXT, STROKE)          # append-only
+CORE_ROLES: Final[tuple[InkRole, ...]] = (TEXT, STROKE)
+INK_ROLES: Final[tuple[InkRole, ...]] = (*CORE_ROLES,)          # append-only; read by tests only
 REFERENCE_BACKGROUNDS: Final = ("#ffffff", "#1e1e1e", "#0d1117", "#1e2129")
 GRID_OPACITY: Final = "0.25"
 
@@ -965,11 +1023,21 @@ DASHES: Final[tuple[str | None, ...]] = (None, "6 3", "2 2", "8 3 2 3", "12 4", 
 SHAPES: Final[tuple[Shape, ...]] = tuple(Shape)
 MAX_SERIES: Final = 8
 def series_style(index: int) -> SeriesStyle: ...       # index < MAX_SERIES
+def shape_path(shape: Shape, centres: Sequence[tuple[float, float]], color: str) -> str: ...
 ```
 
-- `style_element()` emits, for `INK_ROLES` then each `extra` role in order,
-  `@media (prefers-color-scheme:light){…}` with every role's light rule, then
-  the same for dark. The core string is exactly the one in Settled Seams.
+- `style_element(extra)` emits `@media (prefers-color-scheme:light){…}` with
+  the light rule of each `CORE_ROLES` role then each `extra` role, then the
+  same for dark. It never iterates `INK_ROLES`, so appending a role changes no
+  existing output. With no `extra` the string is exactly the one in Settled
+  Seams.
+- `shape_path` is the one marker geometry: a single `<path>` holding one
+  subpath per centre. CIRCLE and SQUARE are zero-length subpaths (`M x yh0`)
+  stroked at width 7 with round or square caps; the four triangles and the
+  diamond are filled relative subpaths inscribed in a 7 px square; PLUS is
+  stroked `h7`/`v7` subpaths at width 2. `marks.points` and the legend's shape
+  swatch both call it, which is why it sits in `theme` (below both `frame`
+  and `marks`).
 - Colours: series `i` takes `palette.CATEGORICAL_RAMP[i]`, `DASHES[i]` and
   `SHAPES[i]`. No kind writes a colour literal; every text element takes
   `ink(TEXT)`, every axis, tick and gridline `ink(STROKE)` (gridlines add
@@ -1089,8 +1157,8 @@ def describe(kind: str, title: str, channels: Sequence[tuple[str, Column]], *, r
   the axis title from `axis_title`. Bottom labels centred on ticks; left labels
   end-anchored; right labels start-anchored.
 - Legend swatches: `line` (a 20 px line sample with the series dash), `shape`
-  (the series marker at the swatch centre), `block` (a 10×10 square; bars
-  and stacked areas).
+  (`theme.shape_path` at the swatch centre; `frame` never imports `marks`),
+  `block` (a 10×10 square; bars and stacked areas).
 - Notes (bottom-left, one per line, fitted to width), exact wording:
   `Not drawn: 1 row without y.` / `Not drawn: 3 rows without x, 2 rows without y.`
   and `No trend line for Bike, Swim: fewer than 2 distinct x values.`
@@ -1131,10 +1199,8 @@ def trend(x0: float, y0: float, x1: float, y1: float, color: str) -> str: ...
   by stacked areas; exposed for `chart-catalog`'s `band`).
 - `bar`: one `<rect>`; negative values are drawn below the zero line.
   `zero_stub`: a 2 px tall `<rect>` centred on the zero line.
-- `points`: one `<path>` per series: CIRCLE/SQUARE as zero-length subpaths
-  with `stroke-width="7"` and round/square caps; triangles and diamond as
-  filled relative subpaths inscribed in a 7 px square; PLUS as stroked
-  `h7`/`v7` subpaths with `stroke-width="2"`.
+- `points`: one `<path>` per series, exactly `theme.shape_path(style.shape,
+  centres, style.color)`; marks holds no shape geometry of its own.
 - `trend`: a `<line>` in the series colour, `stroke-width="1.2"`,
   `stroke-dasharray="5 3"`.
 - All coordinates through `fmt_num`.
@@ -1286,7 +1352,8 @@ Per-kind rules beyond the table:
   `bin_width` → `w` as given, first edge `floor(min/w)*w`. Every bin is
   `[a, a+w)` except the last, which includes its upper edge. All values equal
   → one bin of width `nice_step(|v|/10)` (1 when `v == 0`) starting at
-  `floor(v/w)*w`. y is the count, includes zero, integer ticks only; absent
+  `floor(v/w)*w`. y is the count, includes zero, ticks through
+  `numeric_scale(..., integer=True)`; absent
   values counted in the note; x labelled in the column's unit.
 - **stat** — `_validate`: `compare` bound and (value kind not NUMBER/DURATION
   or compare kind differs) → `channel_kind`; units differ → `unit_mismatch`.
@@ -1322,7 +1389,11 @@ def describe_kinds() -> tuple[KindListing, ...]: ...
 
 - Declared, not scanned (like `PACKAGED_SKILLS`). `chart-catalog` appends its
   imports and entries after `table.KIND`.
-- Invariants pinned by tests: `kind_names()[:8] == CORE_KIND_NAMES`; names
+- `kind_named`, `kind_names` and `describe_kinds` read the module attribute
+  `KINDS` at call time and build no import-time index, so a test that
+  monkeypatches `KINDS` sees its stub kinds.
+- Invariants pinned by tests: `kind_names()[:8] == CORE_KIND_NAMES` (a prefix
+  pin, so an appended kind changes nothing here); names
   unique and matching the kind grammar; per kind, channel and option names
   unique, grammatical and disjoint; every default satisfies its own option
   spec; SVG kinds' options end with `width`, `height`; markdown kinds have
@@ -1458,8 +1529,9 @@ Fixture Discrimination); task notes name them. Mutations are run through
   palette entries).
 
 ### Cross-cutting tests
-- **Theme coverage** over every SVG golden: exactly one `<style>` equal to
-  `style_element()`; every `<text>` carries `class="ck-t"`; every stroked element inside
+- **Theme coverage** over every SVG golden of every registered SVG kind (the
+  expected file count is the sum of those kinds' `CASES`, found by the test
+  module convention): exactly one `<style>` equal to `style_element()`; every `<text>` carries `class="ck-t"`; every stroked element inside
   `ck-axis` and `ck-grid` groups carries `class="ck-s"`; every colour literal is one of the
   inks or `CATEGORICAL_RAMP`; no `id=`, `light-dark(`, `currentColor`,
   `<image`, `<script`; first children are `<title>` then `<desc>`; root has
@@ -1469,14 +1541,19 @@ Fixture Discrimination); task notes name them. Mutations are run through
   dated bars ≤ 12,000; bar stacked 52×3 ≤ 22,000; hbar 20 bars ≤ 8,000;
   scatter 500 points in 3 series with trend ≤ 18,000; histogram of 1,000
   values ≤ 8,000; no-data state ≤ 3,000; table 20×5 ≤ 3,000; stat ≤ 200.
-  Ceiling (11.5): every `at_bound` golden ≤ 80,000. Budgets are measured at
-  implementation and lowered, never raised, if the measured size leaves more
-  than 40% headroom. Mutation: emit one `<circle>` per point.
+  Ceiling (11.5): every `at_bound` golden ≤ 80,000. These are the **initial**
+  budgets: they are measured at implementation and lowered, never raised, when
+  the measured size leaves more than 40% headroom, and from then on
+  `tests/render/charts/kit/test_size_budget.py` is the source of truth for the
+  numbers. Mutation: emit one `<circle>` per point.
 - **Determinism**: render every case twice in-process (equal), and in two
-  subprocesses with `PYTHONHASHSEED` 0/1 and `TZ` `UTC`/`Pacific/Auckland`
-  (equal SHA-256 per case).
+  subprocesses with `PYTHONHASHSEED` 0/1, `TZ` `UTC`/`Pacific/Auckland` and
+  `LC_ALL` `C`/`C.UTF-8` (equal SHA-256 per case). The child environment is
+  `{**os.environ, …}` (keeping the root conftest's
+  `PYTHONDONTWRITEBYTECODE=1`) with the repository root as working directory.
 - **Boundary** (`test_boundary.py`, `test_units.py`): the kit's module list
-  equals `rglob` both ways with a positive control; every import is stdlib
+  equals `rglob` both ways with a positive control; the layer rank matrix of
+  § Architecture (kit imports point strictly down; kinds share a rank); every import is stdlib
   (`sys.stdlib_module_names`) or in the allow-list (`fitdocs.render.charts.svg`,
   `.series`, `.palette`, `fitdocs.render.charts.kit.*`, `fitdocs.units`);
   forbidden roots `fitdocs.index`, `fitdocs.query`, `fitdocs.dashboards`,
