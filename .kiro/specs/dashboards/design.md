@@ -80,8 +80,10 @@ history or block document, no index schema and no chart-kit code.
 - Standard library; `yaml` (PyYAML, already a dependency) in `directive` only.
 - `fitdocs.render.charts.kit` facade (`validate_chart`, `render_chart`,
   `describe_kinds`, `kind_names`, `ChartRequest`, `ChartData`, `Column`,
-  `ValueKind`, `ChartProblem`, `ProblemCode`, `ChartError`, `RenderedChart`,
-  `Output`); `fitdocs.render.charts.kit.format` for `escape_markdown` and
+  `ValueKind`, `ChartProblem`, `ProblemCode`, `ChartError`, `RenderedChart`);
+  `RenderedChart.output` is compared by its string value (`"svg"`), and a kind
+  listing is read as a `Mapping[str, object]`, so neither `Output` nor
+  `KindListing` needs to be a facade export; `fitdocs.render.charts.kit.format` for `escape_markdown` and
   `clean_text` only, in `region` only (research.md, gap G1).
 - `fitdocs.units` (`unit_for_column`), in `binding` only.
 - `fitdocs.query.command` (`open_session`, `QuerySession`,
@@ -252,7 +254,7 @@ src/fitdocs/dashboards/
 ├── __init__.py      # Docstring only: "Dashboard pages; imported only by the CLI."
 ├── problems.py      # DashboardCode, Source, Severity, Problem, from_chart_problem, ProblemDict
 ├── grammar.py       # Slug grammar, markers, reference line, fence-aware scan_page -> PageScan
-├── directive.py     # Strict YAML: parse_directive(block) -> Directive | problems; sql_digest
+├── directive.py     # Strict YAML: parse_directive(body, open_line, page) -> Directive | problems
 ├── snapshot.py      # Snapshot codec (encode/decode, format v1) and snapshot path naming
 ├── region.py        # Region body composition, body classification, splice into page text
 ├── source.py        # ChartSource protocol, Fetched, SourceUnavailable, SourceOpener
@@ -519,7 +521,7 @@ values (10.9); the snapshot is written only when that render succeeds (10.1).
 |---|---|---|---|---|---|
 | Problems (`problems.py`) | Core | Codes and the problem record | 4.8, 15.1–15.3, 15.6 | kit facade (P1) | Service |
 | Grammar (`grammar.py`) | Core | Fence-aware page scan | 1.3, 3.1–3.6, 5.1, 5.7, 16.5 | problems (P0) | Service |
-| Directive (`directive.py`) | Core | Strict directive parsing | 4.1–4.4, 4.6, 4.7, 4.9, 4.10 | yaml, grammar (P0) | Service |
+| Directive (`directive.py`) | Core | Strict directive parsing | 4.1–4.4, 4.6, 4.7, 4.9, 4.10 | yaml, problems (P0) | Service |
 | SnapshotCodec (`snapshot.py`) | Core | Snapshot format and naming | 10.1, 10.9 | kit facade (P0) | Service, State |
 | Region (`region.py`) | Core | Region body and splice | 1.6, 2.1, 2.2, 5.2–5.6, 9.3, 9.4, 10.3, 12.3 | kit facade, kit format (P0) | Service |
 | Source (`source.py`) | Core | Data-source protocol | 7.8 | kit facade (P0) | Service |
@@ -701,7 +703,8 @@ class Directive:
     @property
     def sql_sha256(self) -> str: ...   # sha256 of sql.encode("utf-8"), hex
 
-def parse_directive(block: DirectiveBlock, *, page: str) -> Directive | tuple[Problem, ...]: ...
+def parse_directive(body: str, *, open_line: int, page: str) -> Directive | tuple[Problem, ...]: ...
+# takes the block's body text and opener line, not grammar types: directive imports only problems and yaml
 ```
 - **Loader**: a `yaml.SafeLoader` subclass with `yaml_implicit_resolvers = {}`;
   every plain scalar is `str` (4.1). The body is first walked with
@@ -851,8 +854,8 @@ SourceOpener = Callable[[], ChartSource | SourceUnavailable]
 | Requirements | 14.5, 18.7, 20.1 |
 
 ```python
-def kinds_text(listings: Sequence[KindListing]) -> str: ...
-def kinds_markdown(listings: Sequence[KindListing]) -> str: ...
+def kinds_text(listings: Sequence[Mapping[str, object]]) -> str: ...      # describe_kinds() entries
+def kinds_markdown(listings: Sequence[Mapping[str, object]]) -> str: ...
 ```
 - Both iterate the given listings (from `describe_kinds()`, called by the
   caller at run time) in registration order and hold no kind name.
@@ -1053,7 +1056,9 @@ Behaviour:
 - **Targets** (14.6): `page` or `page:chart`; an unknown page →
   `TargetError` listing page names; an unknown chart id (among the page's
   parseable directives) → `TargetError` listing that page's chart ids.
-  Duplicate targets collapse.
+  Duplicate targets collapse. With a chart target, only that chart is
+  fetched, rendered, written and reported; the page's other charts and
+  regions are left as they are (page-level problems are still reported).
 - **Planning** per page: `read_page` refusals → page problems
   (`page_unreadable`, `page_encoding`) (12.5); `scan_page`;
   `parse_directive` per block; ids shared by two parsed directives →

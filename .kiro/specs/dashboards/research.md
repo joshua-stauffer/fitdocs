@@ -317,7 +317,7 @@
   interrupts before close; a real-process SIGINT test (precedent
   `tests/query/test_interrupt.py`) covers `fitdocs dashboard refresh`.
 - 1.2.0 type and parameter vocabularies unverified locally — the binding
-  type map is a two-vocabulary table plus value checks; task 3.2 runs the
+  type map is a two-vocabulary table plus value checks; task 4.3 runs the
   parameter and type tests on 1.2.0 where the environment allows, and an
   unrecognised spelling degrades to a `column_type` problem, never a wrong
   kind.
