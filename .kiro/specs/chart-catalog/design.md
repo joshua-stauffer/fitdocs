@@ -796,7 +796,8 @@ def legend(plan: FramePlan, scale: BinnedScale, entries: Sequence[LegendEntry]) 
     its estimated label width does not overlap any accepted label plus
     10 px; accepted ticks sorted ascending; labels from A1 over the
     accepted values in the long form when the domain's upper end is ≥ 3600
-    s. The scale is rebuilt with `dataclasses.replace(scale, ticks=…)`;
+    s, and the x axis title from A3 in that same form. The scale is rebuilt
+    with `dataclasses.replace(scale, ticks=…)`;
   - y: `numeric_scale(..., LINEAR, include_zero=y_zero, nice=True)`; pace
     not inverted (chart-kit rule);
   - one `marks.line_series` per group over its rows sorted by x, in its
