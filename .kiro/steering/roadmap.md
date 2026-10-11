@@ -2743,8 +2743,13 @@ Rejected:
 
 #### Specs (dependency order)
 
-- [ ] chart-kit — **brief written 2026-10-11.** A generic, stdlib-only SVG
-  chart kit:
+- [ ] chart-kit — **brief written 2026-10-11; spec written 2026-10-12**
+  (Phase 11 batch, wave 1, `tasks-generated`, all approvals set; 18
+  requirements / 105 criteria, 7 majors / 28 executable tasks plus the
+  optional maintainer-only visual check 7.2*; independent Step 3.5 review,
+  two rounds; cross-spec reviewed, two rounds, READY; owns the single unit
+  table `fitdocs.units` and the facade `fitdocs.render.charts.kit`). A
+  generic, stdlib-only SVG chart kit:
   - the typed data contract;
   - scales (linear, log, date, category), nice ticks and unit-aware labels;
   - axes, legend and layout;
@@ -2756,8 +2761,14 @@ Rejected:
     `histogram`, plus the markdown kinds `stat` and `table`.
 
   Implement first. Dependencies: none
-- [ ] dashboards — **brief written 2026-10-11.** The `dashboards/` owned
-  location and its declaration:
+- [ ] dashboards — **brief written 2026-10-11; spec written 2026-10-12**
+  (Phase 11 batch, wave 2, `tasks-generated`, all approvals set; 20
+  requirements / 129 criteria, 8 majors / 28 executable tasks; independent
+  Step 3.5 review: RETURN_TO_DESIGN on the params path, which became
+  `IndexConnection.execute_named`, then NEEDS_FIXES, applied; cross-spec
+  reviewed, two rounds, READY; carries analytics-index Amendment 1,
+  analytics-query Amendment 1, wiki-contract Amendment 5 and connectors
+  Amendment 3). The `dashboards/` owned location and its declaration:
   - hidden chart directives with fitdocs-owned regions;
   - sandboxed execution with `$today`;
   - frozen snapshots;
@@ -2768,8 +2779,14 @@ Rejected:
   - analytics-index, analytics-query, wiki-contract and connectors updates.
 
   Parallel with chart-catalog. Dependencies: chart-kit
-- [ ] chart-catalog — **brief written 2026-10-11.** Eight more kinds through
-  chart-kit's registry: `calendar-heatmap`, `heatmap`, `dual-axis`, `band`,
-  `box`, `mean-max`, `small-multiples` and `stacked-100`, plus any
-  appended shared-layer extension a kind proves it needs. Parallel with
-  dashboards. Dependencies: chart-kit
+- [ ] chart-catalog — **brief written 2026-10-11; spec written 2026-10-12**
+  (Phase 11 batch, wave 2, `tasks-generated`, all approvals set; 13
+  requirements / 92 criteria, 4 majors / 17 executable tasks plus the
+  optional maintainer-only visual check 4.3*; independent Step 3.5 review,
+  two rounds, PASS; cross-spec reviewed, two rounds, READY; grid kinds
+  carry magnitude by cell area with colour second, and signed grid values
+  are refused). Eight more kinds through chart-kit's registry:
+  `calendar-heatmap`, `heatmap`, `dual-axis`, `band`, `box`, `mean-max`,
+  `small-multiples` and `stacked-100`, plus any appended shared-layer
+  extension a kind proves it needs. Parallel with dashboards.
+  Dependencies: chart-kit
