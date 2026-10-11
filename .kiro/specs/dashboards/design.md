@@ -1203,10 +1203,13 @@ def statement_parameters(self, sql: str) -> tuple[frozenset[str], ...]: ...
 ```
 - `execute_named`: `self._connection.execute(sql, dict(params))` when
   `params` is non-empty, `self._connection.execute(sql)` when it is empty
-  (binds nothing); `IndexResult` gains a cursor-backed form: `columns` from
-  `description` (`str(name)`, `str(type)`), `fetchmany`/`fetchall` streamed
-  from the cursor, errors wrapped exactly as the relation form wraps them
-  (`IndexStatementError`, `IndexInterrupted`). The statement runs on the
+  (binds nothing); the result comes from a new classmethod
+  `IndexResult.from_cursor(cursor, errors)`: `columns` from `description`
+  (`str(name)`, `str(type)`), `fetchmany`/`fetchall` streamed from the
+  cursor, errors wrapped exactly as the relation form wraps them
+  (`IndexStatementError`, `IndexInterrupted`). The positional constructor
+  `IndexResult(relation, errors)` is unchanged
+  (`tests/query/test_store_facade.py:119` builds it). The statement runs on the
   facade's own connection, so `interrupt()` stops it.
 - `execute` is untouched: the index writer and `freshness.athlete_drift` keep
   their positional `$1` calls through `.sql(params=)`; its materialisation
