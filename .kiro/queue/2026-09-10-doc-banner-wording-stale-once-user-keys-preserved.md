@@ -38,6 +38,15 @@ It will say the tag is discarded when the tag is in fact preserved.
   (commit c574cfb on `chore/spec-batch-phase6`) record the deferral: the
   brief forbids a `DOC_VERSION` bump unless one is forced, and any banner
   change is a byte change in every document.
+- Added 2026-10-11 (Phase 11 discovery): the same banner is written onto
+  pages that have none of the regions it names. `history/page.py:693` emits
+  `contract.DOC_BANNER` on the training-history page, which has no region at
+  all (`declaration.py:278-282`). `plans/page.py:224-228`'s `banner()` puts
+  it on block pages, which have only a `notes` region, and on planned pages
+  (`plans/planned_page.py:106`), which have none. A reword should either be
+  page-type-aware or name no specific regions. The `dashboards` spec (Phase
+  11) must not write it at all (`.kiro/specs/dashboards/brief.md`,
+  Constraints).
 
 ## How to pick it up
 1. Wait for whichever change next bumps `DOC_VERSION` for its own reason.

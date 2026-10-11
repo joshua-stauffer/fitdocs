@@ -29,13 +29,26 @@ inside a vendor platform.
    `[[wikilinks]]`, and provenance back to the source `.fit` file, so they
    slot directly into a larger PKM (the reference integration is the
    joshua-stauffer/pkm wiki). Standalone use is equally supported.
-5. **Queryable by agents** *(planned: Phase 10 of the roadmap, discovery
-   2026-10-04)*. A derived DuckDB index of every workout lets agents
+5. **Queryable by agents** *(Phase 10 of the roadmap, shipped 2026-10-08)*.
+   A derived DuckDB index of every workout lets agents
    answer statistical questions with standard SQL through `fitdocs query`,
    instead of reading documents and doing the arithmetic themselves. It
    covers summaries, laps, sets, per-second streams, zone times, loads,
    mean-max curves, fitness and form, benchmarks and blocks. The index is a
    disposable cache; the documents stay the truth.
+6. **Dashboards in the wiki** *(planned: Phase 11 of the roadmap, discovery
+   2026-10-11)*.
+   - **What a dashboard is.** A page under `dashboards/`, written by the
+     athlete or their LLM assistant, with charts that fitdocs draws from the
+     analytics index.
+   - **How charts are declared.** Hidden directives in the page declare
+     each chart's kind and SQL.
+   - **Relative and frozen.** Relative charts refresh with the most recent
+     data after every index refresh. Frozen charts are snapshots that always
+     show the same thing.
+   - **Who owns what.** fitdocs owns the charts, which are lightweight SVG
+     behind ordinary image links. The athlete owns every word of prose
+     around them.
 
 ## Target Use Cases
 

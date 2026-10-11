@@ -2065,7 +2065,9 @@ blocks.
   (`tech.md`) with the request, and answers the earlier rejection of a load
   database for "duplicating truth"
   (`.kiro/specs/training-load/research.md:79`). Nothing reads the index
-  back into a document.
+  back into a document. *(Phase 11, 2026-10-11, makes one named exception:
+  dashboard chart regions and their assets are produced from the index.
+  Workout, history and block documents still never read it.)*
 
 Rejected:
 - *Inline write hooks*, inserting rows at each write site from objects in
@@ -2229,9 +2231,12 @@ Rejected:
   - existing passes reading the index;
   - documents showing anything new (a mean-max section is a follow-on);
   - free-text columns;
-  - write access, user tables, saved queries;
+  - write access, user tables, saved queries *(saved queries lifted in
+    Phase 11, 2026-10-11: a dashboard chart directive is a saved SELECT —
+    `dashboards`)*;
   - cross-machine sync;
-  - charting query results;
+  - charting query results *(lifted in Phase 11, 2026-10-11 — `chart-kit`,
+    `dashboards`, `chart-catalog`)*;
   - new load or fitness methodologies.
 
 #### Constraints
@@ -2364,3 +2369,395 @@ None. Every piece of the work has a spec home.
   - training blocks with planned-versus-logged resolution (plan
     resolution).
   Dependencies: analytics-index
+
+### Phase 11 — analytics dashboards (discovery 2026-10-11)
+
+**Goal**: turn what the athlete learns from the analytics index into
+charts on pages in their wiki. Phase 10 made the training corpus answerable
+in SQL. Its first real use (2026-10-11, 2,562 workouts) asked "how do
+cadence, HR and pace relate?" and got answers in one or two seconds per
+query. But those answers live in a chat transcript:
+
+- nothing puts a chart of them on a wiki page next to the athlete's own
+  reading of it;
+- nothing keeps a "last 12 weeks" chart current as workouts arrive;
+- nothing holds a point-in-time finding still once the data under it moves.
+
+The maintainer wants a fitdocs-owned directory of dashboard pages, written
+by the athlete's LLM assistant against an API fitdocs ships. Charts come in
+two kinds:
+
+- **frozen**, which always shows the same thing;
+- **relative**, which re-queries the most recent data on a cadence.
+
+There should be a broad set of chart kinds, markdown-native and as
+lightweight as possible. **fitdocs builds the charts. The athlete, with or
+without an LLM, owns all the prose that gives them context.**
+
+**Approach decision — hidden chart directives in athlete-owned pages,
+rendered by a generic SVG chart kit.**
+
+- **Pages.** A dashboard is a markdown page under `dashboards/` in the data
+  root. The athlete or their agent writes everything on it: frontmatter,
+  headings, prose.
+- **Directives.** Each chart is declared by a hidden, multi-line HTML
+  comment, `<!-- fitdocs:chart … -->`, wherever the prose wants it. Its YAML
+  body gives an id, kind, mode, SQL, encodings and a title.
+- **Regions.** Directly below each directive, fitdocs owns one region
+  (`<!-- fitdocs:begin:chart:<id> -->` … `end`). It holds:
+  - a standard image link to an SVG in `dashboards/assets/`;
+  - a caption;
+  - optionally, the plotted rows as a small markdown table.
+
+  fitdocs rewrites only the bytes between its markers, the
+  `load/docedit.py` polarity. It never touches the prose or the directive.
+- **Relative charts** re-run their SQL in `analytics-query`'s locked,
+  read-only sandbox, with `$today` bound to the run's local date. They do
+  this after every successful index refresh (sync, drain, `pull --sync`,
+  regen, load) and on demand.
+- **Frozen charts are snapshots.**
+  - The SQL runs once, and fitdocs stores the result rows with the chart.
+  - Every later render draws from the stored rows and never re-queries. So a
+    frozen chart survives index deletion, a schema bump, and a machine with
+    no index.
+- **The chart kit.**
+  - **Shared layer:** scales, nice ticks, unit-aware labels, axes, legend and
+    a light/dark theme.
+  - **Kind registry:** a registry of named kinds over that layer takes typed
+    columns plus named encodings and writes byte-deterministic,
+    dependency-free SVG.
+  - **Markdown kinds:** two kinds, `stat` and `table`, are plain markdown.
+
+Rejected:
+- *Mermaid code blocks.* Text-only and diffable, but Mermaid can only draw
+  bar, line, pie and quadrant charts: no scatter, heatmap, histogram or
+  dual axis. Rendering also varies by viewer. Phase 1 rejected it for the
+  hero chart on the same grounds.
+- *Inline `<svg>` in the page.* GitHub's sanitizer strips it, and kilobytes
+  of markup bury the prose for anyone reading the plain text.
+- *Pinned-range frozen charts* (absolute dates, re-queried on every
+  refresh). The picture changes silently when the data moves (a late
+  import, a threshold or methodology change), and a schema bump can break
+  it. That is not "always shows the same thing".
+- *A separate spec file per dashboard* (`dashboards/<name>.toml` generating
+  the page, with prose in user regions). Two files per dashboard, and prose
+  can only go in the slots fitdocs leaves.
+- *A CLI-only API* (`fitdocs dashboard add-chart …`). Worst for hand edits
+  and for an agent iterating on SQL.
+- *Visible fenced directives* (```` ```fitdocs-chart ````). Every chart
+  would sit under 10–15 lines of YAML and SQL in reading view.
+- *A composable chart grammar* (Vega-Lite-style marks × encodings ×
+  transforms). Far larger to build and test, and it gives an agent many
+  more ways to write a valid but wrong spec.
+- *A plotting dependency* (matplotlib or similar). It's heavy, and it emits
+  large SVGs with text drawn as paths and random ids, which are hard to
+  theme or pin with goldens. `tech.md` keeps matplotlib out unless a spec
+  proves the need.
+
+#### Decisions taken at discovery (2026-10-11)
+
+- **Path E: three new specs, plus existing-spec updates carried out inside
+  them** (maintainer, 2026-10-11): `chart-kit`, `dashboards`,
+  `chart-catalog`, in the shape chart-kit → (dashboards ∥ chart-catalog).
+  This mirrors Phase 10's index → (query ∥ derived).
+- **SVG files plus standard image links** (maintainer, 2026-10-11), as
+  workout charts already do. This was chosen over Mermaid and inline SVG.
+- **Frozen means snapshot** (maintainer, 2026-10-11), over a pinned date
+  range.
+- **The chart definition is an inline directive in the page** (maintainer,
+  2026-10-11), over a separate spec file or a CLI-only API.
+- **The directive is a hidden HTML comment** (maintainer, 2026-10-11), over
+  a visible fenced block.
+- **Relative charts refresh after every successful index refresh, plus on
+  demand** (maintainer, 2026-10-11), over an explicit-only or regen-only
+  cadence.
+- **Named kinds over a shared layer** (maintainer, 2026-10-11), over a
+  composable grammar or a plotting dependency. The four existing renderers
+  (hero, calendar, zone strip, map) are left alone.
+- **The whole catalogue ships in this phase** (maintainer, 2026-10-11):
+  - `chart-kit` holds the shared layer and the core kinds:
+    - SVG: `line`, `area`, `bar`, `hbar`, `scatter`, `histogram`;
+    - markdown: `stat`, `table`.
+  - `chart-catalog` holds `calendar-heatmap`, `heatmap`, `dual-axis`,
+    `band`, `box`, `mean-max`, `small-multiples` and `stacked-100`.
+  - Pie and donut are excluded on purpose.
+- **Consequence: the Phase 10 rule "the index is never read back into a
+  document" gets one named exception.** Dashboard chart regions and their
+  assets are the only document content produced from the index. Workout,
+  history and block documents still never read it. The rule's copies move
+  with `dashboards`:
+  - `tech.md:12-17`;
+  - `docs/ownership-contract.md:10-11` and `:191-193`;
+  - analytics-index Req 5.6;
+  - the text pins in `tests/index/test_contract_docs.py:56`,
+    `tests/identity/test_contract_docs.py:183` and
+    `tests/connectors/test_network_statements.py:640-644`.
+  Until it lands, `tech.md` keeps the Phase 10 wording, because those tests
+  pin it.
+- **Viability (2026-10-11)**: probes are in the discovery session's scratch
+  directory; no showstopper. Every item below is a constraint the specs
+  own.
+  - **Theme through `<img>`.**
+    - An SVG drawn by an element answers `prefers-color-scheme` from that
+      element's used `color-scheme`. That is Chromium commit 2e97c36
+      (crbug 1345247) and Media Queries 5.
+    - In Chromium and Firefox it follows the embedding page's theme:
+      - **Obsidian desktop**: `.theme-dark { color-scheme: dark }` in the
+        1.14.4 bundle. It follows Obsidian's theme, not the OS, on
+        installers with Chromium ≥ 110.
+      - **GitHub**: `?sanitize=true` keeps `<style>` and media queries, and
+        Primer sets `color-scheme` from the site theme.
+      - **The docs site**: Zensical maps `default`/`slate` to light/dark.
+    - On WebKit (Obsidian iOS, Safari) an SVG in `<img>` ignores the query
+      (bug 199134) or follows only the system appearance. WebKit never
+      honours the page's `color-scheme` (bug 316640).
+    - Hence chart-kit's rule:
+      - a transparent background;
+      - base inks that reach at least 3:1 on `#ffffff`, `#1e1e1e`,
+        `#0d1117` and `#1e2129`;
+      - an embedded `<style>` that raises small text to at least 4.5:1
+        where the query is honoured.
+    - `light-dark()`, `currentColor` and `<picture>` don't help.
+    - **Today's workout charts are unreadable in dark mode.** Their text,
+      `#333333`, is 1.32:1 on `#1e1e1e` (see Follow-on).
+  - **Hidden directive.**
+    - **Where it hides.** The example directive, with blank lines, a
+      `sql: |` block, `--` comments, `<`, `<>`, `>=` and `$today`, stays
+      hidden in every renderer tested:
+      - Python-Markdown with Zensical's default extensions;
+      - cmark-gfm;
+      - markdown-it;
+      - GitHub's `/markdown` API;
+      - Obsidian Reading view (its bundled remark tokenizer).
+    - **Live Preview.** Obsidian Live Preview shows it as dimmed source.
+    - **What breaks it.** A body containing `-->` or `--!>`, or starting
+      with `>` or `->`, ends the comment early and leaks the SQL. Four
+      spaces of indent turn it into a visible code block.
+  - **`$today` under the sandbox** (duckdb 1.2.0 and 1.5.6, locked
+    configuration replicated):
+    - **What works.** Binding works, and `extract_statements` still
+      classifies the statement as SELECT. `Statement.named_parameters`
+      reports `today` only when it is used outside literals and comments.
+    - **Binding when unused is an error.** Binding `today` when the SQL
+      doesn't use it fails ("excess parameters").
+    - **Date arithmetic.** `$today - INTERVAL 12 WEEK` is a TIMESTAMP, and
+      `$today - 84` is a DATE.
+    - **Issue.** The facade's `IndexConnection.execute` uses
+      `.sql(sql, params=…)`. With params, that materialises the whole result
+      before `fetchmany` caps it: 60M rows reached 7 GB on 1.5.6, and a 2 s
+      interrupt landed at 21 s. `connection.execute(sql, params)` +
+      `fetchmany` stays flat. The query sandbox has never run a
+      parameterised statement, so nothing shipped is affected yet.
+    - **Type names differ by version.** `cursor.description` spells them
+      differently on each (1.2.0 `Date`/`NUMBER`, 1.5.6
+      `DATE`/`DOUBLE`/`BIGINT`).
+  - **pkm.** There's no collision: pkm defines no `dashboards/` and no
+    `type: dashboard`. But pkm's `wiki-schema.md` registers only
+    `workouts/`, `fit-archive/`, `.cache/` and `.fitdocs/`.
+    - `history/` was never registered.
+    - `blocks/` is tracked in Phase 7 › Direct Implementation Candidates.
+    - pkm's rule "never add a region marker to a document that lacks one"
+      conflicts with dashboards' inverse ownership shape.
+  - **YAML.** PyYAML `safe_load` silently changes values:
+    - `mode: no` becomes `False`;
+    - `id: 2026-10-11` becomes a date, and `012` becomes 10;
+    - with duplicate keys, the last one wins;
+    - a plain `sql: SELECT 1 # x` loses its tail;
+    - a folded `sql: >` merges a `--` comment line into the next line.
+  - **Markers.** `docmerge._MARKER_RE` isn't fence-aware.
+  - **Asset names.** `assets/<page>-<id>.svg` can collide across pages.
+- Taken without asking, consistent with the above:
+  - **The run date never enters rendered bytes.** Captions state the window
+    as written and the latest date in the result, never the run date. A day
+    with no new data rewrites nothing in an iCloud- and git-backed wiki, and
+    "a second sync changes nothing" holds.
+  - **No pass ever builds the index** (the Phase 10 rule is unchanged).
+    When the refresh didn't succeed, relative charts are left as they were
+    and the report says why.
+  - **Dashboard failures never cost the pipeline.** The pass never fails a
+    command and never changes its exit code. One chart's failure never
+    blocks another chart or page.
+  - **Snapshots are the one tool-written artifact in the data root that
+    can't be re-derived.** They are never deleted automatically, and they
+    survive `regen`, `index --rebuild` and chart-kit upgrades.
+  - **SQL runs only through `analytics-query`'s sandbox**: SELECT only, the
+    same settings and timeout. There is no second SQL surface.
+  - **Units ride on column-name suffixes** (`index/schema.py:77-97`). An
+    alias keeps its suffix (`AS distance_km`) to get unit-aware axes.
+  - **No network.** `dashboard` joins the no-network command list, and
+    there is no map kind in this phase.
+  - **One clock read.** `$today` comes from `cli._today()`. Neither
+    `chart-kit` nor `dashboards` reads a clock.
+  - **One new command**, `fitdocs dashboard`, taking the command count from
+    13 to 14. Its forms (check, refresh, freeze, kinds) are a design
+    decision.
+  - **A fourth packaged skill**, `fitdocs-dashboards`.
+
+#### Scope
+
+- **In**:
+  - the generic chart kit (data contract, shared layer, theme, registry,
+    validation, mark bounds) with the core kinds;
+  - the extended kinds;
+  - the `dashboards/` owned location, with its declaration and contract
+    entry;
+  - the directive and region grammar;
+  - sandboxed execution with `$today` and typed columns;
+  - frozen snapshots and their lifecycle;
+  - the chained pass and `fitdocs dashboard`;
+  - per-chart failure isolation;
+  - idempotence;
+  - the packaged skill and `docs/dashboards.md`;
+  - the existing-spec updates below;
+  - steering updates (`tech.md`'s database and network paragraphs,
+    `structure.md`'s import direction);
+  - CHANGELOG entries.
+- **Out**:
+  - charts in workout, history or block documents;
+  - moving the four existing renderers onto the kit (follow-on);
+  - fitdocs writing prose or calling an LLM;
+  - interactive or JavaScript charts, HTML dashboards;
+  - a scheduler or daemon;
+  - write SQL, user tables, persisted views;
+  - map, pie and donut kinds;
+  - an auto-generated index page of dashboards;
+  - cross-machine coordination of relative renders.
+
+#### Constraints
+
+- **Absent data is never drawn as zero** (CLAUDE.md hard rule):
+  - NULL is a gap, a missing bar, or an em dash;
+  - an empty result renders an explicit no-data state;
+  - a heatmap cell with no value differs visibly from one whose value is
+    zero.
+- **Stdlib only.** Neither `chart-kit` nor `chart-catalog` adds a runtime
+  dependency. `dashboards` adds none beyond the existing `duckdb` and
+  `pyyaml`.
+- **Byte-deterministic** for the same inputs (relative charts: for the same
+  rows). Pinned by goldens.
+- **Write confinement.** Writes go only to `dashboards/` and
+  `dashboards/assets/`. Symlinks and foreign occupants are refused the way
+  history and plans refuse them, and writes are atomic.
+- **Import direction.**
+  - `chart-kit` and `chart-catalog` import nothing from `index`, `query`,
+    `dashboards`, `model` or `ingest`.
+  - `dashboards` reaches DuckDB only through `fitdocs.query`.
+  - Only `fitdocs.index.store` imports `duckdb`.
+- Python 3.11 floor, `mypy --strict`. Every new assertion owes a named
+  mutation it dies on.
+
+#### Boundary Strategy
+
+- **Why this split**:
+  - **`chart-kit`** owns how any chart looks: data contract, layout, theme,
+    units, the registry and encoding validation. It knows nothing about SQL
+    or pages.
+  - **`dashboards`** owns pages, directives, regions, data binding,
+    snapshots, refresh and the agent surface. It draws only through the
+    registry.
+  - **`chart-catalog`** only appends kinds.
+
+  Once chart-kit lands, dashboards and chart-catalog proceed in parallel.
+- **Shared seams to watch**:
+  - The **data contract and encoding schema**. This is what `dashboards`
+    builds from query results and what `chart-catalog` renders. Settle it
+    in chart-kit's design, as Phase 10 settled the producer seam in
+    analytics-index's.
+  - The **unit vocabulary**. `index/schema.py`'s suffixes name units, and
+    chart-kit formats them. `dashboards` maps one to the other. One table
+    of unit tokens, not two drifting copies.
+  - The **kind registry**: append-only. Whichever of `dashboards` and
+    `chart-catalog` lands second re-pins any registered-kind count and the
+    kinds block in `docs/dashboards.md`, which is pinned live against the
+    registry. The skill points at `fitdocs dashboard`'s kinds listing
+    rather than copying the catalogue.
+  - The **theme**. One mechanism, from chart-kit, for every kind.
+  - **`cli.py` command count, the no-network command list,
+    `WRITING_ENTRY_POINTS`, `OWNED_PATHS`/`DECLARED_DIRS` and
+    `PACKAGED_SKILLS`**: append-only. Keep both sides on rebase.
+
+#### Existing Spec Updates
+
+- [ ] analytics-index — Req 5.6 gains the named dashboards exception, and
+  the copies of the rule move in the same change (see Decisions).
+  `cli._run_index_pass` returns its `IndexReport` outcome instead of
+  discarding it (`cli.py:503-519`). The `IndexConnection.execute` params
+  path moves to `execute` + `fetchmany`, taking a `Mapping`. Carried out
+  inside `dashboards`. Dependencies: dashboards
+- [ ] analytics-query — result columns keep their type names (dropped at
+  `statement.py:200-205`). `fitdocs.dashboards` joins the importer
+  allow-list (`tests/query/test_boundary.py:15`). The out-of-scope line on
+  saved queries and charting (`requirements.md:85-88`) is marked superseded.
+  Carried out inside `dashboards`. Dependencies: dashboards
+- [ ] wiki-contract — a new owned location and declared directory
+  (`dashboards/`, `dashboards/assets/`), the inverse ownership shape
+  (fitdocs-owned chart regions inside an athlete-owned page) as a new
+  category in `docs/ownership-contract.md`, the page type, and
+  `CONTRACT_VERSION` `"9"` → `"10"`. Carried out inside `dashboards`.
+  Dependencies: dashboards
+- [ ] connectors — `dashboard` joins the no-network command list (`tech.md`,
+  `tests/connectors/test_e2e.py:205`). Carried out inside `dashboards`.
+  Dependencies: dashboards
+
+#### Direct Implementation Candidates
+
+- [ ] pkm repository (external): register `dashboards/` and
+  `dashboards/assets/` in `wiki-schema.md`. That means:
+  - an owned-paths row;
+  - a frontmatter exemption, and a reconciliation with "never add a region
+    marker to a document that lacks one";
+  - an area line in `index.md`;
+  - a `.gitignore` decision. GitHub shows charts only if
+    `dashboards/assets/` is committed, while `workouts/assets/` is ignored
+    today.
+
+  While there, register the missing `history/`, which has been unregistered
+  since Phase 6. This is not this repository's work; it's recorded so the
+  install target isn't forgotten when `dashboards` ships.
+
+#### Follow-on candidates (not scheduled)
+
+- Moving the hero, calendar, zone-strip and map renderers onto chart-kit's
+  shared layer and theme. Workout and history charts are unreadable in dark
+  mode today (`#333333` text is 1.32:1 on Obsidian's `#1e1e1e`; viability
+  2026-10-11).
+- Chart directives outside `dashboards/`: in a block page's `notes` region,
+  for example, or in a race report.
+- An auto-generated index page listing every dashboard.
+- A stdio MCP tool that renders a chart from a directive (pairs with
+  Phase 10's MCP follow-on).
+- A mean-max section in workout documents (Phase 10's follow-on) drawn with
+  the `mean-max` kind.
+
+#### Specs (dependency order)
+
+- [ ] chart-kit — **brief written 2026-10-11.** A generic, stdlib-only SVG
+  chart kit:
+  - the typed data contract;
+  - scales (linear, log, date, category), nice ticks and unit-aware labels;
+  - axes, legend and layout;
+  - the light/dark theme mechanism from viability;
+  - the declared kind registry with encoding schemas and structured
+    validation;
+  - mark bounds;
+  - the core kinds `line`, `area`, `bar`, `hbar`, `scatter` and
+    `histogram`, plus the markdown kinds `stat` and `table`.
+
+  Implement first. Dependencies: none
+- [ ] dashboards — **brief written 2026-10-11.** The `dashboards/` owned
+  location and its declaration:
+  - hidden chart directives with fitdocs-owned regions;
+  - sandboxed execution with `$today`;
+  - frozen snapshots;
+  - the pass chained after a successful index refresh;
+  - `fitdocs dashboard`;
+  - per-chart failure isolation;
+  - the `fitdocs-dashboards` skill and `docs/dashboards.md`;
+  - analytics-index, analytics-query, wiki-contract and connectors updates.
+
+  Parallel with chart-catalog. Dependencies: chart-kit
+- [ ] chart-catalog — **brief written 2026-10-11.** Eight more kinds through
+  chart-kit's registry: `calendar-heatmap`, `heatmap`, `dual-axis`, `band`,
+  `box`, `mean-max`, `small-multiples` and `stacked-100`, plus any
+  appended shared-layer extension a kind proves it needs. Parallel with
+  dashboards. Dependencies: chart-kit
