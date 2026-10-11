@@ -80,7 +80,15 @@ four existing renderers and every existing golden are untouched.
     unit-suffix table naming `fitdocs.units.UNITS` as the table's single
     source;
   - `.kiro/steering/structure.md`: the `index` bullet's import list gains
-    `units`.
+    `units`, so its first sentence reads "`index` (the analytics index)
+    imports `model`, `metrics`, `compose`, `ingest`, `contract`, `docio`,
+    `docmerge`, `layout`, `athlete`, `settings`, `version`, `units` and the
+    load payload readers; only `cli` and `query` import it; only
+    `index.store` imports `duckdb`."; and a new paragraph describes `units`
+    and the kit;
+  - `tests/connectors/test_network_statements.py:680-685`: the exact-phrase
+    pin of that `index` bullet is re-pinned to the new wording in the same
+    change (controller ruling), so the bullet stays accurate and pinned.
   The roadmap's Existing Spec Updates entry for this is the controller's.
 
 ### Allowed Dependencies
@@ -109,7 +117,15 @@ Any of these changes requires `dashboards` and `chart-catalog` to re-check:
 - the inks, the style element text, the categorical palette, dash patterns or
   marker shapes;
 - the absent-data rules, default sizes, mark bounds or layout constants (all
-  of which move core goldens).
+  of which move core goldens);
+- the signature or behaviour of `kit.format.escape_markdown` or
+  `kit.format.clean_text` (imported directly by `dashboards`);
+- the kind test-module convention: `tests/render/charts/kit/test_<name with -
+  as _>.py` exposing `CASES` of `Case(name, request, data)` from
+  `tests/render/charts/kit/_helpers.py`, goldens in `golden/<name>/`
+  (`dashboards`' and `chart-catalog`'s tests iterate it);
+- the markdown text the `stat` and `table` kinds produce (embedded in
+  `dashboards`' page goldens).
 
 ## Settled Seams for Wave 2
 
@@ -120,8 +136,20 @@ below is final; full contracts are in Components and Interfaces.
 `units.py` · `render/charts/kit/{__init__,data,problems,schema,validate,format,ticks,scales,theme,layout,frame,marks,cartesian,registry,api}.py` ·
 `render/charts/kit/kinds/{line,area,bar,hbar,scatter,histogram,stat,table}.py`.
 
-**Facade** (`fitdocs.render.charts.kit`, re-exported from `api`, `data`,
-`problems`, `schema`, `registry`):
+**Facade** (`fitdocs.render.charts.kit`). Its `__all__` is exactly these 17
+names, in this order, re-exported from `data`, `schema`, `problems`, `api`
+and `registry`:
+
+`ValueKind`, `Value`, `Column`, `ChartData`, `ChartRequest`, `OptionValue`,
+`Output`, `ProblemCode`, `ChartProblem`, `ProblemDict`, `ChartError`,
+`RenderedChart`, `validate_chart`, `render_chart`, `describe_kinds`,
+`kind_names`, `KindListing`.
+
+Nothing else is re-exported (not `render_spec`, not the format helpers).
+Beyond the facade, two public-module imports are permitted to callers:
+`fitdocs.render.charts.kit.format.escape_markdown` and
+`fitdocs.render.charts.kit.format.clean_text` (for text a caller writes beside
+a chart); kind modules and `chart-catalog` import any kit module.
 ```python
 validate_chart(request: ChartRequest, columns: Sequence[Column]) -> tuple[ChartProblem, ...]
 render_chart(request: ChartRequest, data: ChartData) -> RenderedChart   # raises ChartError
@@ -269,7 +297,8 @@ must stay byte-identical (they are the regression gate); its kinds' goldens go
 under `tests/render/charts/kit/golden/<kind>/`. Shared hooks it is expected to
 use: a second `scales.numeric_scale` drawn with `frame.axis(..., Side.RIGHT, ...)`
 (dual axes),
-`marks.band_path` (bands), drawing into a `layout.Rect` (small multiples),
+`marks.band_path` (bands; it returns the `d` attribute value, not an
+element), drawing into a `layout.Rect` (small multiples),
 `ticks` duration ladder on log axes (mean-max), `cartesian.series_groups` and
 stack helpers (stacked-100).
 
@@ -435,12 +464,15 @@ tests/
   `CATEGORICAL_COLORS`; one test pins the eight sources in order.
 - `pyproject.toml` — `[tool.mypy].files` gains `tests/test_units.py` and
   `tests/render/charts/kit`.
-- `.kiro/steering/structure.md` — one paragraph: `units` imports only the
-  standard library and is imported by `index.schema` and the kit; the kit
-  imports only the standard library, `units` and `render.charts.{svg,series,palette}`.
+- `.kiro/steering/structure.md` — one paragraph: `units` (the unit
+  vocabulary) imports only the standard library and is a leaf module any
+  layer may import (today `index.schema` and the kit do); the kit imports
+  only the standard library, `units` and `render.charts.{svg,series,palette}`.
   The existing `index` bullet's import list gains `units` (its
   `index.derived` sentence stays inside that bullet, which
   `tests/index/derived/test_published.py:28-33` parses).
+- `tests/connectors/test_network_statements.py` — the exact-phrase pin of the
+  `index` bullet (`:680-685`) re-pinned to the wording with `units`.
 - `.kiro/specs/analytics-index/design.md` — a dated note beside its unit-suffix
   table: the table's single source is now `fitdocs.units.UNITS`; values
   unchanged.
@@ -629,7 +661,8 @@ once per column and code.
 **Responsibilities & Constraints**
 - Holds all 19 units in exactly today's `UNIT_SUFFIXES` order (longest suffix
   first, so first match is most specific).
-- Imports only the standard library; imported by `index.schema` and the kit.
+- Imports only the standard library; a leaf module any layer may import
+  (today `index.schema` and the kit do; `dashboards` will).
 - Owned by this spec; adding or changing a row is a schema-visible change
   (the analytics index's pins fail), never a chart-only change.
 
@@ -1182,7 +1215,7 @@ def describe(kind: str, title: str, channels: Sequence[tuple[str, Column]], *, r
 def line_series(points: Sequence[tuple[float, float | None]], style: SeriesStyle) -> list[str]: ...
 def area_series(points: Sequence[tuple[float, float | None]], baseline_px: float, style: SeriesStyle,
                 *, opacity: str | None) -> list[str]: ...
-def band_path(xs: Sequence[float], lower: Sequence[float], upper: Sequence[float]) -> str: ...
+def band_path(xs: Sequence[float], lower: Sequence[float], upper: Sequence[float]) -> str: ...  # `d` value only
 def bar(x: float, y: float, width: float, height: float, color: str) -> str: ...
 def zero_stub(x: float, zero_px: float, width: float, color: str) -> str: ...
 def points(xy: Sequence[tuple[float, float]], style: SeriesStyle) -> str: ...
@@ -1195,8 +1228,10 @@ def trend(x0: float, y0: float, x1: float, y1: float, color: str) -> str: ...
   stroke-width="5" stroke-linecap="round">` in the series colour).
 - `area_series`: per segment, a filled `<path>` down to `baseline_px`
   (`fill-opacity` = `opacity` when given) under an outline polyline as above.
-  `band_path(xs, lower, upper)` is the closed polygon between two edges (used
-  by stacked areas; exposed for `chart-catalog`'s `band`).
+  `band_path(xs, lower, upper)` returns the `d` attribute **value** (a
+  string `M… Z`: the upper edge forward, then the lower edge backward,
+  closed), not a `<path>` element; the caller wraps it with its own fill
+  attributes (used by stacked areas; exposed for `chart-catalog`'s `band`).
 - `bar`: one `<rect>`; negative values are drawn below the zero line.
   `zero_stub`: a 2 px tall `<rect>` centred on the zero line.
 - `points`: one `<path>` per series, exactly `theme.shape_path(style.shape,

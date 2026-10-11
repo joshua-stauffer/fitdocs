@@ -17,10 +17,12 @@
   Updates Carried by This Spec). One **analytics-index** update, value-preserving:
   `src/fitdocs/index/schema.py` projects `UNIT_SUFFIXES` from
   `fitdocs.units.UNITS` (task 1.1); `.kiro/specs/analytics-index/design.md`
-  gains a dated note beside its unit-suffix table, and
-  `.kiro/steering/structure.md`'s `index` bullet gains `units` (task 7.1). The
-  roadmap's Existing Spec Updates line for it is the batch controller's, not
-  this plan's.
+  gains a dated note beside its unit-suffix table,
+  `.kiro/steering/structure.md`'s `index` bullet gains `units`, and the
+  exact-phrase pin of that bullet in
+  `tests/connectors/test_network_statements.py:680-685` is re-pinned to the
+  new wording (task 7.1; controller ruling). The roadmap's Existing Spec
+  Updates line for it is the batch controller's, not this plan's.
 - **Downstream specs start from design.md § Settled Seams.** `dashboards` and
   `chart-catalog` are written in parallel against it. Any change to a name,
   field, code, default, ink, palette entry, bound or rule listed there is a
@@ -105,7 +107,8 @@ sequential, never two `(P)` tasks at once.
 - `src/fitdocs/render/charts/kit/ticks.py`: 2.3 only (including
   `linear_ticks`' `integer` option); 4.1 consumes it.
 - `src/fitdocs/render/charts/svg.py`, `.kiro/steering/structure.md`,
-  `.kiro/specs/analytics-index/design.md`: 7.1 only.
+  `.kiro/specs/analytics-index/design.md` and
+  `tests/connectors/test_network_statements.py`: 7.1 only.
 
 ## Cross-spec shared files
 
@@ -123,7 +126,18 @@ during this plan. These files become seams for `chart-catalog` (and, for
 - `palette.py` `CATEGORICAL_RAMP` / `CATEGORICAL_COLORS` — the first eight
   entries (`test_palette.py`, `test_theme.py`, 2.4);
 - `pyproject.toml`'s mypy `files` (the kit test directory entry already covers
-  appended kit test modules); `.kiro/steering/structure.md`.
+  appended kit test modules); `.kiro/steering/structure.md`;
+- `tests/render/charts/test_palette.py` `_all_documented()` — the append
+  point for an appended palette's `name -> (hex, oklch source)` mapping
+  (`chart-catalog` adds its `SEQUENTIAL_COLORS` there); 2.4 extends it with
+  `CATEGORICAL_COLORS` and pins only the first eight categorical sources.
+
+**Shared with `dashboards`** — keep both on rebase:
+- `tests/connectors/test_network_statements.py:680-685`, the exact-phrase pin
+  of `structure.md`'s `index` bullet: 7.1 re-pins it to the wording with
+  `units` ("… `settings`, `version`, `units` and the load payload readers;
+  only `cli` and `query` import it; only `index.store` imports `duckdb`.");
+  `dashboards` checks the same pin in its own tasks.
 
 **Full pins, explicit re-pin points** — an appending spec edits them in the
 same change:
@@ -161,6 +175,8 @@ every registered kind and find its cases by the test-module convention
   `golden/hbar/`: **5.4**; `test_scatter.py` + `golden/scatter/`: **5.5**;
   `test_histogram.py` + `golden/histogram/`: **5.6**; `test_stat.py` +
   `golden/stat/`: **5.7**; `test_table.py` + `golden/table/`: **5.8**.
+- `tests/connectors/test_network_statements.py` (only the `index`-bullet
+  phrase at `:680-685`): **7.1**.
 - `test_registry.py`: **6.1**. Task 6.2 adds no test file (its evidence is
   the existing kind golden tests going red together). `test_theme_coverage.py`,
   `test_size_budget.py`: **6.3**. `test_determinism.py`: **6.4**.
@@ -452,8 +468,14 @@ every registered kind and find its cases by the test-module convention
     `KindListing` family of `TypedDict`s (design § Registry).
   - **`kit/api.py`**: `RenderedChart`, `validate_chart`, `render_chart`,
     `render_spec` (design § Api and System Flows).
-  - **`kit/__init__.py`**: re-export the facade names listed in design §
-    Settled Seams (not `render_spec`).
+  - **`kit/__init__.py`**: re-export exactly the 17 names of design §
+    Settled Seams "Facade", in that order, as `__all__` (`ValueKind`,
+    `Value`, `Column`, `ChartData`, `ChartRequest`, `OptionValue`, `Output`,
+    `ProblemCode`, `ChartProblem`, `ProblemDict`, `ChartError`,
+    `RenderedChart`, `validate_chart`, `render_chart`, `describe_kinds`,
+    `kind_names`, `KindListing`); not `render_spec` and not the
+    `kit.format` helpers (`dashboards` imports `escape_markdown` and
+    `clean_text` from `kit.format` directly).
   - **`_helpers.py`** (append): `render_case(spec, request, data)` over
     `render_spec`, and `problems_of(spec, request, data)` returning the
     `ChartError`'s problems.
@@ -471,11 +493,14 @@ every registered kind and find its cases by the test-module convention
     - `describe_kinds()` over the same monkeypatch gives two listings in
       registration order, with lists, plain strings and `json.dumps` success;
     - `kind_named`, `kind_names` and `describe_kinds` read `KINDS` at call
-      time (the monkeypatch above is the evidence; no import-time index).
+      time (the monkeypatch above is the evidence; no import-time index);
+    - `fitdocs.render.charts.kit.__all__` equals the design's 17-name tuple
+      and every name resolves on the package.
   - **Mutations:** run `draw` before `check`; merge stage-1 and stage-2
     problems; return a `RenderedChart` with empty text instead of raising;
     emit tuples in the listing; build a name→spec dict at import time
-    (the monkeypatch tests red); sort `kind_names()`.
+    (the monkeypatch tests red); sort `kind_names()`; drop `ChartError` from
+    the re-exports (the `__all__` test reds).
   - **Observable:** `uv run pytest tests/render/charts/kit/test_api.py` is
     green; `from fitdocs.render.charts.kit import render_chart` works.
   - _Requirements: 3.2, 4.4, 5.3, 5.5, 5.6_
@@ -512,7 +537,8 @@ every registered kind and find its cases by the test-module convention
       present point between `None`s yields one round-cap dot; the dash
       attribute is present for series 1–7 and absent for series 0;
     - `area_series` closes each segment to the baseline; `band_path`
-      returns a closed polygon visiting the upper edge forward and the lower
+      returns the `d` attribute value only (a `str` starting `M` and ending
+      `Z`, containing no `<`), visiting the upper edge forward and the lower
       edge backward;
     - `zero_stub` is 2 px tall centred on the zero line;
     - `points` emits one `<path>` per call and equals
@@ -1027,12 +1053,21 @@ every registered kind and find its cases by the test-module convention
     chart-kit SVG carries exactly one `<style>` element (the theme's media
     queries). Code unchanged.
   - **`.kiro/steering/structure.md`**: the design's paragraph on `units` and
-    the kit's import direction, appended to Code Organization Principles; and
-    `units` added to the existing `index` bullet's import list, keeping that
-    bullet's `index.derived` sentence inside it
-    (`tests/index/derived/test_published.py:28-33` finds the bullet by
-    splitting the file on its leading ``- `index` `` marker; run that test
-    afterwards).
+    the kit's import direction, appended to Code Organization Principles,
+    worded without an exhaustive importer list (`units` "imports only the
+    standard library and is a leaf module any layer may import; today
+    `index.schema` and the kit do"); and `units` added to the existing
+    `index` bullet's import list ("… `settings`, `version`, `units` and the
+    load payload readers; …"), keeping that bullet's `index.derived`
+    sentence inside it (`tests/index/derived/test_published.py:28-33` finds
+    the bullet by splitting the file on its leading ``- `index` `` marker).
+  - **`tests/connectors/test_network_statements.py:680-685`** (controller
+    ruling): re-pin the exact `index`-bullet phrase to the new wording
+    ("`settings`, `version`, `units` and the load payload readers; only
+    `cli` and `query` import it; only `index.store` imports `duckdb`.").
+    Mutation: drop `units` from the bullet in `structure.md` (the re-pinned
+    phrase reds); restore from a `cp`. Run that file and
+    `tests/index/derived/test_published.py` afterwards.
   - **`.kiro/specs/analytics-index/design.md`**: a dated note beside its
     unit-suffix table that the table's single source is now
     `fitdocs.units.UNITS` and its values are unchanged.
