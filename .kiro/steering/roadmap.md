@@ -2852,8 +2852,9 @@ Rejected:
     "permanent copies". A public tool that writes markdown for an LLM-run
     wiki cannot honour either. That is Stryd's reason (Phase 8), applied
     again.
-  - intervals.icu already aggregates all of these, and the Garmin export
-    files cover Garmin history without any login.
+  - intervals.icu already relays wellness from Garmin, COROS, Polar,
+    Suunto, Oura, WHOOP, Zepp and Huawei, though not from Fitbit or Withings.
+    The Garmin export files cover Garmin history without any login.
 - *A readiness verdict or score.* The recovery page and the morning-of block
   are descriptive: each signal against the athlete's own baseline and normal
   range. They give no status label and no advice. load-history's "no
@@ -3097,10 +3098,10 @@ Rejected:
     consumes. One computation, so the page and the block never disagree.
   - **`CONTRACT_VERSION`.** Three specs add owned locations or page types:
     `wellness-store`, `recovery` and `workout-wellness` if a key is added.
-    `dashboards` (Phase 11) is taking "10" now. Each lander re-derives main
-    + 1 at landing. The same goes for `DOC_VERSION` (`workout-wellness`) and
-    the index `SCHEMA_VERSION` (`wellness-store`, plus `recovery` if it adds
-    a table).
+    `dashboards` (Phase 11) is taking "10" now. Each lander re-derives
+    main + 1 at landing. The same goes for `DOC_VERSION`
+    (`workout-wellness`) and the index `SCHEMA_VERSION` (`wellness-store`,
+    plus `recovery` if it adds a table).
   - **Append-only lists. Keep both sides on rebase**:
     - `OWNED_PATHS` / `DECLARED_DIRS`;
     - the `cli.py` command count;
