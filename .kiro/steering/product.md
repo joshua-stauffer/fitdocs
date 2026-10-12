@@ -49,6 +49,19 @@ inside a vendor platform.
    - **Who owns what.** fitdocs owns the charts, which are lightweight SVG
      behind ordinary image links. The athlete owns every word of prose
      around them.
+7. **Wellness and recovery** *(planned: Phase 12 of the roadmap, discovery
+   2026-10-12)*.
+   - **Sources.** Daily wellness is resting HR, HRV, sleep, weight, SpO2,
+     VO2max and steps. It arrives through the inbox like any file: an
+     intervals.icu pull, a Garmin data export, an Apple Health export.
+     fitdocs archives it and keeps one normalized daily series, with every
+     value tagged by its source.
+   - **What the athlete sees.** A recovery page puts each signal against the
+     athlete's own baseline and normal range, beside fitness, fatigue and
+     form. Each workout page shows the morning's numbers. The view is
+     descriptive, never a verdict.
+   - **What load gains.** Resting and max HR are derived automatically into
+     the benchmark timeline, and a hand-recorded value always wins.
 
 ## Target Use Cases
 
@@ -86,7 +99,10 @@ inside a vendor platform.
   already held enriches its document instead of duplicating it
   (`activity-identity`, `channel-merge`, `running-dynamics`).)* Still
   deferred: pushing to platforms (Strava posts, intervals.icu uploads and
-  planned workouts), pulling thresholds, wellness or plans, and device sync.
+  planned workouts), pulling thresholds or plans, and device sync.
+  *(Pulling wellness was deferred here too until 2026-10-12. Phase 12
+  lifted it: `wellness-pull` drives the reserved `pull-wellness`
+  capability.)*
 
 ---
 _Focus on patterns and purpose, not exhaustive feature lists_

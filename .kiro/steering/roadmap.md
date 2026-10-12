@@ -1135,6 +1135,7 @@ would leave the derived numbers invisible to the athlete).
 - Critical-speed derivation once an athlete has two or more tagged races at
   different distances (Monod & Scherrer 1965; Jones & Vanhatalo 2017).
 - Maximum and resting heart-rate derivation, if a defensible method exists.
+  *(Promoted 2026-10-12 to Phase 12's `hr-derivation`.)*
 
 #### Specs (dependency order)
 
@@ -1539,7 +1540,8 @@ Rejected:
 - **Out**:
   - any push: Strava posts, intervals.icu uploads or descriptions, planned
     workouts;
-  - pulling thresholds, wellness, workout libraries or plans;
+  - pulling thresholds, wellness, workout libraries or plans (wellness
+    promoted 2026-10-12 to Phase 12's `wellness-pull`);
   - a direct Garmin Connect connector, and a Garmin export-zip importer;
   - a shipped Stryd connector (see the decisions above);
   - a daemon, watcher or scheduler (the OS schedules the one-shot command);
@@ -1756,7 +1758,9 @@ credential store are designed for them now and built later.
   - pull workout plans and library items as a proposal the plan-source
     skill can adopt (fitdocs never writes the plan source,
     `docs/ownership-contract.md:444-449`);
-  - pull wellness and fitness series.
+  - pull wellness and fitness series. *(Wellness promoted 2026-10-12 to
+    Phase 12's `wellness-pull`; intervals.icu's computed fitness series
+    stay out, because fitdocs computes its own.)*
 - **Strava, push only.**
   - Auth: OAuth2 with the athlete's own registered app. A Strava
     subscription is required to register one since 2026-06-01. The access
@@ -2790,3 +2794,480 @@ Rejected:
   `small-multiples` and `stacked-100`, plus any appended shared-layer
   extension a kind proves it needs. Parallel with dashboards.
   Dependencies: chart-kit
+
+### Phase 12 — wellness and recovery (discovery 2026-10-12)
+
+**Goal**: let fitdocs see the days between workouts. The maintainer wants
+the athlete's full wellness data — resting HR, HRV, sleep, weight, SpO2,
+VO2max, steps, stress — inside fitdocs. The aim is to understand how
+training and recovery are going, and how life outside workouts affects
+fitness. It should also work for athletes on Garmin, COROS and other
+platforms, not only for the maintainer's Apple Watch.
+
+At the very least the data should derive max and resting HR. Load already
+consumes both (TRIMP's heart-rate reserve and the threshold HR channel),
+but today they exist only as hand-typed values that nobody keeps current.
+
+**Approach decision — wellness files fill the inbox; the engine archives
+them and normalizes them into one daily series.**
+
+- **Delivery** follows Phase 8's rule, extended from activities to wellness:
+  connectors fill the inbox, and the engine reconciles (maintainer,
+  2026-10-12).
+  - A wellness file dropped by hand and one a connector delivers are handled
+    identically.
+  - The intervals.icu connector delivers wellness now. A future Garmin or
+    HealthFit connector would do the same.
+- **The drain**:
+  1. recognizes a wellness file through a format registry;
+  2. archives it, content-hashed, in a new `wellness-archive/` beside
+     `fit-archive/`;
+  3. parses it into per-day, per-field records tagged with their source;
+  4. merges the sources by a per-field precedence into one normalized daily
+     series, written as fitdocs-owned yearly files.
+- **Consumers.** Every consumer reads that series:
+  - the analytics index;
+  - a new recovery page;
+  - a morning-of block on each workout page;
+  - a derivation pass that writes resting and max HR into the benchmark
+    timeline.
+- `regen` rebuilds the series from the archive.
+
+Rejected:
+
+- *Archive only, re-parsed on every pass.* One truth, but an Apple Health
+  export is gigabytes of XML: about 10 s per GB, on every pass. It would push
+  toward a parse cache that `.cache/` (re-fetchable data only) cannot hold.
+- *Index-backed.* Wellness would live only in the DuckDB index. Workout pages
+  carrying a morning-of block would then depend on a per-machine cache, and
+  a fresh machine would render different pages. That breaks determinism and
+  the Phase 10 rule that documents never read the index.
+- *Direct per-platform connectors now.*
+  - Garmin's Health API is business-only, and new applications are paused in
+    2026.
+  - Suunto offers no personal API.
+  - The Fitbit Web API shuts down on 2026-10-30.
+  - Oura's API agreement (effective 2026-06-08) bars storing or caching user
+    data and supplying it to AI. WHOOP's terms (effective 2026-10-06) bar
+    "permanent copies". A public tool that writes markdown for an LLM-run
+    wiki cannot honour either. That is Stryd's reason (Phase 8), applied
+    again.
+  - intervals.icu already aggregates all of these, and the Garmin export
+    files cover Garmin history without any login.
+- *A readiness verdict or score.* The recovery page and the morning-of block
+  are descriptive: each signal against the athlete's own baseline and normal
+  range. They give no status label and no advice. load-history's "no
+  readiness verdict" stance (Req 2.11) carries over.
+- *Archiving the whole Apple Health export.* The maintainer chose this first,
+  then reversed it after viability (see below).
+
+#### Decisions taken at discovery (2026-10-12)
+
+- **Path E: six new specs, plus existing-spec updates carried out inside
+  them** (maintainer, 2026-10-12). The shape is `wellness-store` →
+  (`wellness-pull` ∥ `apple-health-import` ∥ `hr-derivation` ∥ `recovery`) →
+  `workout-wellness`.
+- **Wellness reaches four surfaces** (maintainer, 2026-10-12):
+  - the analytics index;
+  - a recovery document;
+  - a morning-of block on workout pages;
+  - derived HR benchmarks.
+- **The inbox approach for every source** (maintainer, 2026-10-12): accept
+  whatever arrives in the inbox.
+  - intervals.icu is pulled now.
+  - Garmin's "Export Your Data" wellness JSON is imported. It is the
+    maintainer's 2018-11 → 2023-02 history.
+  - An Apple Health export fills 2023-03 → 2025-06 and adds sleep stages.
+- **Derived HR applies automatically, as a dated benchmark source**
+  (maintainer, 2026-10-12), over suggestions the athlete adopts. A
+  hand-recorded value always wins. Benchmarks resolve by date alone today
+  (`benchmarks.py:189-243`), so `hr-derivation`'s requirements must make the
+  rule precise. The maintainer is asked at requirements approval. Historic HR
+  load moves when the derivation moves, and the maintainer accepted that.
+- **Archive plus series** (maintainer, 2026-10-12), over archive-only and
+  index-backed storage.
+- **Apple Health archives a canonical extract, not the export** (maintainer,
+  2026-10-12, after viability reversed "archive the whole file"):
+  - the extract holds only the wellness record types, as raw records,
+    deterministic and compressed;
+  - it carries the original's sha256, size and export date;
+  - a later export's extract supersedes the earlier one.
+- **The recovery page is descriptive** (maintainer, 2026-10-12), over a
+  readiness verdict and over bare charts:
+  - HRV as a 7-day ln mean against a 60-day normal range;
+  - resting HR and sleep against rolling baselines;
+  - days outside the range are marked;
+  - fitness, fatigue and form on the same axis;
+  - every method cited.
+- Taken without asking, consistent with the above and the research:
+  - **Baselines are per source and metric.** Apple's SDNN and the rMSSD that
+    Garmin, Oura, WHOOP and Polar report are never spliced or converted.
+    Even two rMSSD sources measure over different windows. Resting HR
+    definitions also differ by platform:
+    - Garmin: the lowest 30-minute average;
+    - Apple: a sedentary estimate, revised during the day;
+    - Oura and Suunto: the lowest HR in sleep;
+    - Polar: none.
+  - **Default source precedence**: a device-native export (Garmin export,
+    Apple Health) outranks the intervals.icu relay. This mirrors Phase 8's
+    "a device original outranks a partner-API or phone-side copy". It is
+    configurable.
+  - **intervals.icu's computed fields are never imported**: `ctl`, `atl`,
+    `rampRate` and `sportInfo` eFTP/W′. fitdocs computes its own model.
+  - **A non-activity FIT never becomes a workout page.** A Garmin
+    monitoring or sleep FIT is held and reported; parsing its wellness
+    messages is a follow-on.
+  - **The day-boundary rule for nights is set once**, in `wellness-store`'s
+    model.
+
+#### Measured at discovery (2026-10-12, maintainer's data, shapes only)
+
+- **intervals.icu**: one read-only GET at the maintainer's request.
+  - `GET /api/v1/athlete/0/wellness` returns 483 day records with 47
+    fields, 2025-06-17 → 2026-10-12.
+  - Non-null counts:
+
+    | Field | Days |
+    |---|---|
+    | `restingHR` | 452 |
+    | `hrvSDNN` | 481 |
+    | `hrv` (rMSSD) | 0 |
+    | `sleepSecs` | 476 (no stages, score or sleeping HR) |
+    | `spO2` | 479 |
+    | `steps` | 481 |
+    | `vo2max` | 242 |
+    | `weight` | 29 |
+    | subjective scores | 10 |
+    | respiration, readiness | 0 |
+
+  - The source is HealthFit relaying Apple Health.
+  - Every record has `updated`.
+  - The athlete object lists per-integration `*_wellness_keys` and download
+    switches for Garmin, COROS, Polar, Suunto, Oura, WHOOP, Zepp, Huawei and
+    Google.
+- **HealthFit's iCloud folder** holds no wellness. It has 2,520 `.fit` and
+  2,517 `.gpx` activity files and 13 app-database CSVs (gear, goals,
+  routes, workout names and notes). HealthFit sends health metrics straight
+  to intervals.icu.
+- **Garmin export** (`pkm-data/raw/garmin_complete_dump_2026_09_12/`):
+  - wellness is real only from 2018-11 to 2023-02;
+  - `UDSFile` daily summaries give resting HR on 937 days, min/max HR,
+    stress, body battery (2022), respiration, SpO2 and steps;
+  - `sleepData` has 1,065 nights, 604 with stages;
+  - `MetricsMaxMetData` gives VO2max, and `userBioMetrics` 23 weights;
+  - there is no HRV JSON. Garmin keeps HRV in FIT files inside the upload
+    zips;
+  - after 2023-02 the Garmin is a bike computer, and its files are near
+    empty.
+- **The gap**: 2023-03 → 2025-06 exists only in Apple Health.
+
+#### Viability (2026-10-12)
+
+- **Apple Health parsing is viable on the stdlib.**
+  - Streaming `iterparse` over a `zipfile` member, with root clearing, runs
+    at about 10 s per GB of XML with flat ~33 MiB RSS on 3.11 and 3.13.
+  - ZIP64 members over 4 GB stream fine.
+  - Three export defects each break `iterparse`, and each has a byte-level
+    fix:
+    - the iOS 16 malformed DOCTYPE;
+    - stray C0 control characters;
+    - a duplicate `startDate` on `WorkoutStatistics` (Apple forum 714063).
+  - Errors surface mid-stream, so an import is all-or-nothing.
+- **Archiving the whole Apple export is unworkable**, hence the extract
+  decision:
+  - GitHub blocks files over 100 MiB, and LFS caps a file at 2 GB on the
+    free plan;
+  - every export is the whole history, so the hash-based archive never
+    de-duplicates, and the archive grows by a full export each time;
+  - in an iCloud git repository, each copy is stored and synced twice;
+  - under "Optimize Mac Storage", macOS does not materialise an evicted file
+    on read by default, so a rebuild from it would fail.
+- **The inbox and the connector delivery path are FIT-only in many places.**
+  `wellness-store` and `wellness-pull` list the pins they must move. Today a
+  `.json` or `.zip` in the inbox is silently ignored, forever. The drain reads
+  every candidate whole into memory (`sync.py:890`), so wellness candidates
+  must stream.
+- **Garmin-origin data on intervals.icu is at risk**
+  (<https://forum.intervals.icu/t/api-access-to-intervals-icu/609>).
+  - #752 (2026-10-09): the block is "likely".
+  - #816 (2026-10-12): it would "probably" cover activities, FIT files,
+    streams *and* wellness, and "likely" historical data received through
+    Garmin's API. Manual uploads are unaffected. There is no timeline, and
+    personal API keys are unanswered.
+  - The maintainer's wellness comes from HealthFit and is unaffected. The
+    maintainer's Garmin rides, which Phase 8 pulls through intervals.icu,
+    may be affected (queued, see Direct Implementation Candidates).
+  - For Garmin athletes, the Garmin-export route in `wellness-store` is the
+    fallback.
+
+#### Scope
+
+- **In**:
+  - the wellness format registry and non-FIT inbox recognition;
+  - the wellness archive (`wellness-archive/`) and the normalized series
+    location;
+  - the per-day, per-field, source-attributed model, with a day-boundary
+    rule;
+  - per-field source precedence;
+  - the rebuild on `regen`;
+  - the parsers:
+    - intervals.icu wellness JSON;
+    - Garmin export JSON (`UDSFile`, `sleepData`, `MetricsMaxMetData`,
+      `userBioMetrics`), as individual files;
+    - Apple Health `export.zip`/`export.xml`, through a canonical extract;
+  - the intervals.icu wellness pull, with the connector protocol, dispatch,
+    delivery and ledger changes it needs;
+  - derived resting and max HR as dated benchmark entries;
+  - per-source baselines;
+  - the recovery page and its owned location;
+  - the morning-of block on workout pages, with targeted re-render;
+  - the `wellness_daily` index table (and a baselines table if the design
+    needs one);
+  - the non-activity-FIT guard;
+  - docs, the packaged skills, CHANGELOG entries and the existing-spec
+    updates below.
+- **Out**:
+  - Garmin wellness FIT messages: monitoring, sleep, HRV status, Body
+    Battery;
+  - a whole Garmin-export-zip importer;
+  - direct connectors for Garmin, COROS, Polar, Withings, Oura, WHOOP,
+    Fitbit, Suunto and Zepp;
+  - Health Auto Export and other third-party file exporters;
+  - a generic wellness CSV;
+  - intervals.icu custom wellness fields;
+  - any push of wellness;
+  - a readiness score, status label, recommendation or overload warning;
+  - wellness on the history page;
+  - fitdocs writing into athlete-owned daily notes;
+  - HRV-derived thresholds;
+  - nutrition, blood pressure, glucose and menstrual-cycle analysis. The
+    model may reserve names, but nothing renders them.
+
+#### Constraints
+
+- **Personal data never enters the repository.** Tests use synthetic files
+  shaped like the measured ones.
+- **Absent is `None`, never 0.** That covers:
+  - wellness values;
+  - source sentinels (Garmin `-1`/`-2` stress);
+  - baselines with too few days;
+  - a derived benchmark with no qualifying evidence: no entry at all.
+- **No new runtime dependency.** JSON, XML, zipfile and CSV come from the
+  stdlib.
+- **The network is used only by `fitdocs pull`.** The drain, `regen`, the
+  recovery command and every renderer stay offline.
+- **Determinism.** Same archive, series and profile give the same bytes. The
+  run date never enters a page (Phase 11's rule against daily churn).
+- **Churn.** Two things land in the maintainer's iCloud and git wiki, and
+  both must stay sparse:
+  - morning-of re-renders, which happen only when a page's own day's inputs
+    change;
+  - derived-HR entries, which use hysteresis.
+- **Writes are confined** to declared owned locations, atomically. Symlinks
+  and foreign occupants are refused the way history and dashboards refuse
+  them.
+- Python 3.11 floor, `mypy --strict`. Every new assertion owes a named
+  mutation it dies on.
+
+#### Boundary Strategy
+
+- **Why this split**:
+  - **`wellness-store`** owns what a wellness value *is*: format
+    recognition, archive, model, merge, series and the index table. Every
+    other spec plugs into it or reads from it.
+  - **`wellness-pull`** is connector work only: protocol, dispatch, delivery,
+    ledger and the intervals.icu endpoint.
+  - **`apple-health-import`** is the one heavy parser: streaming, defects,
+    reduction, the extract. It is isolated so its risk does not hold the
+    store.
+  - **`hr-derivation`** touches benchmarks and load provenance, a different
+    review surface from documents.
+  - **`recovery`** owns baselines and the page. **`workout-wellness`** owns
+    the page block and its re-render pass. It consumes the baselines, so it
+    goes last.
+- **Shared seams to watch**:
+  - **The format registry and the delivered-file contract.**
+    `wellness-pull`'s file must satisfy `wellness-store`'s intervals.icu
+    parser, and `apple-health-import` registers through the same registry.
+    Settle the registry in `wellness-store`'s design, as Phase 10 settled the
+    producer seam.
+  - **The series schema and the day-boundary rule.** Settle them once, in
+    `wellness-store`. Every consumer reads them and none redefines them.
+  - **The baselines library** from `recovery`, which `workout-wellness`
+    consumes. One computation, so the page and the block never disagree.
+  - **`CONTRACT_VERSION`.** Three specs add owned locations or page types:
+    `wellness-store`, `recovery` and `workout-wellness` if a key is added.
+    `dashboards` (Phase 11) is taking "10" now. Each lander re-derives main
+    + 1 at landing. The same goes for `DOC_VERSION` (`workout-wellness`) and
+    the index `SCHEMA_VERSION` (`wellness-store`, plus `recovery` if it adds
+    a table).
+  - **Append-only lists. Keep both sides on rebase**:
+    - `OWNED_PATHS` / `DECLARED_DIRS`;
+    - the `cli.py` command count;
+    - the no-network command list;
+    - `WRITING_ENTRY_POINTS`;
+    - `PACKAGED_SKILLS`;
+    - the connectors surface pin (`tests/connectors/test_surface.py`).
+  - **The derived-benchmark write.** `with_derived_benchmarks` replaces the
+    whole derived subset today (`load/profile.py:342-447`). `hr-derivation`
+    partitions it, so the performance pass and the HR pass never erase each
+    other.
+
+#### Existing Spec Updates
+
+All carried out inside the new specs, as in Phases 10 and 11. Amendment
+numbers are the next free number at landing.
+
+- [ ] inbox — non-FIT recognition through the wellness format registry, a
+  reported "unrecognized" channel, and streamed reads for large candidates.
+  The folder connector's reuse of `select_candidates` must not silently
+  widen. Dependencies: wellness-store
+- [ ] fit-ingest — the non-activity-FIT guard (`file_id.type` and the
+  absence of a session), if the design places it in ingest.
+  Dependencies: wellness-store
+- [ ] wiki-contract — owned locations and declared directories for
+  `wellness-archive/`, the series location and the recovery page and its
+  assets; `CONTRACT_VERSION` main + 1 per lander. Dependencies:
+  wellness-store, recovery
+- [ ] analytics-derived / analytics-index — the `wellness_daily` corpus
+  producer (and an optional baselines table), `SCHEMA_VERSION` + 1, and the
+  regenerated `docs/analytics.md` block. Dependencies: wellness-store,
+  recovery
+- [ ] connectors — `pull-wellness` becomes driven:
+  - a new optional operation and capability dispatch;
+  - format-keyed delivery instead of FIT-only;
+  - a ledger keyspace and watermark for wellness;
+  - Req 1.2-1.4 and 1.9 amended.
+
+  The recovery command joins the no-network list. Dependencies:
+  wellness-pull, recovery
+- [ ] intervals-connector — the wellness endpoint, the trailing-window
+  `updated` diff, the capability declaration and re-pinned mutation, the
+  enable setting, and the Garmin attribution derived from
+  `*_wellness_keys`. Dependencies: wellness-pull
+- [ ] athlete-benchmarks — provenance for a series-derived entry (`document`
+  relaxed or a series reference) and the precise hand-wins rule.
+  Dependencies: hr-derivation
+- [ ] performance-benchmarks — Req 10.4 ("shall derive no maximum heart rate
+  and no resting heart rate") lifted, and the derived write partitioned.
+  Dependencies: hr-derivation
+- [ ] workout-docs — the morning-of section and any frontmatter key, plus
+  the `DOC_VERSION` bump. Dependencies: workout-wellness
+
+#### Direct Implementation Candidates
+
+- [x] `product.md`: capability 7 (wellness and recovery, planned) added,
+  and "wellness" lifted from the "Still deferred" acquisition line, in this
+  discovery change.
+- [x] Queue: Garmin-origin data may be blocked from the intervals.icu API,
+  which threatens Phase 8's Garmin-ride pull. Recorded in this discovery
+  change as `.kiro/queue/2026-10-12-intervals-garmin-data-block-risk.md`.
+- [ ] pkm repository (external): register the new owned locations in
+  `wiki-schema.md` when they ship. That means `wellness-archive/`, the
+  series location and the recovery page, with `.gitignore` decisions and an
+  area line in `index.md`. This is not this repository's work.
+
+#### Follow-on candidates (not scheduled)
+
+- **Garmin wellness FIT messages**, all in the public profile 21.218:
+  - `monitoring_hr_data` (resting HR);
+  - `sleep_level` and `sleep_assessment`;
+  - `hrv_status_summary` and `hrv_value`;
+  - `hsa_body_battery_data`, `respiration_rate`, `spo2_data` and
+    `skin_temp_overnight`.
+
+  Dispatch on message types, not `file_id.type`: Garmin's sleep and
+  HRV-status file types are not in the public enum. A Garmin connector or a
+  whole-export importer would need these. It would also bring Garmin
+  overnight HRV, which the JSON export lacks.
+- **A Garmin export-zip importer**: Phase 8's follow-on, now covering both
+  activities and wellness.
+- **Connectors where terms allow a personal client**:
+  - Polar AccessLink: any Polar Flow user can register a client, but list
+    endpoints cover only 28 days, and the licence is framed around
+    proprietary applications, so check it;
+  - Withings: a public API, no contract;
+  - COROS: self-service OAuth through its MCP server since May 2026, a
+    non-REST protocol, terms unverified.
+- **File exporters through the folder connector**: Health Auto Export's
+  iCloud JSON/CSV (a paid tier, which runs only while the phone is unlocked),
+  and HealthFit if it ever writes wellness files. HealthFit 12.16 adds a
+  "Recovery HRV" export to platforms.
+- **Apple's rMSSD.** iOS/watchOS 27 adds
+  `HeartRateVariabilityRMSSD` ("Recovery HRV" on Series 12 / Ultra 4). Once
+  it is documented, it is a new metric in the model, never a continuation of
+  SDNN.
+- A generic wellness CSV, and intervals.icu custom wellness fields (users
+  keep sleep stages there).
+- A readiness score, if a published, citable method earns it. Rejected for
+  now.
+- Wellness overlays in dashboards: through `wellness_daily` and the chart
+  catalogue, this needs no new spec.
+
+#### Specs (dependency order)
+
+- [ ] wellness-store — **brief written 2026-10-12**. The foundation:
+  - the wellness format registry and non-FIT inbox recognition;
+  - `wellness-archive/` (originals for JSON formats, a canonical extract
+    where a format declares one);
+  - the per-day, per-field, source-attributed model and the day-boundary
+    rule;
+  - per-field source precedence, with device-native exports over the
+    intervals.icu relay by default;
+  - fitdocs-owned yearly series files, rebuilt on `regen`;
+  - the intervals.icu wellness JSON and Garmin export JSON parsers;
+  - the non-activity-FIT guard and `check` findings;
+  - the `wellness_daily` index table;
+  - the inbox, wiki-contract, analytics-index and (optional) fit-ingest
+    updates.
+
+  Implement first. Dependencies: none
+- [ ] wellness-pull — **brief written 2026-10-12**. The connector side:
+  - `pull-wellness` driven through a new optional operation and a capability
+    dispatch;
+  - format-keyed delivery of non-FIT bytes, and a ledger keyspace and
+    watermark;
+  - the intervals.icu wellness endpoint with trailing-window `updated`
+    diffs, first-pull backfill and Garmin attribution;
+  - connectors and intervals-connector amendments.
+
+  Parallel with apple-health-import, hr-derivation and recovery.
+  Dependencies: wellness-store
+- [ ] apple-health-import — **brief written 2026-10-12**:
+  - streaming stdlib parsing of `export.zip`/`export.xml`, with the three
+    defect rewrites and all-or-nothing imports;
+  - the canonical extract as the archived form;
+  - per-type daily reductions (final resting-HR sample, an SDNN daily
+    statistic, sleep-segment union by source preference);
+  - source de-duplication, and supersession by a later export.
+
+  Dependencies: wellness-store
+- [ ] hr-derivation — **brief written 2026-10-12**:
+  - derived resting HR from the series (per-source baselines, hysteresis);
+  - derived max HR from workout HR (sustained maxima, artifact and
+    cadence-lock rejection, recency window);
+  - both as dated derived benchmark entries that apply automatically, with
+    hand-recorded entries winning;
+  - athlete-benchmarks and performance-benchmarks amendments, with the
+    derived write partitioned.
+
+  Dependencies: wellness-store
+- [ ] recovery — **brief written 2026-10-12**:
+  - per-source, per-metric baselines (HRV 7-day ln mean against a 60-day
+    range, resting HR, sleep);
+  - a descriptive, cited recovery page with fitness, fatigue and form
+    computed through load-history's functions, and the page's owned
+    location;
+  - charts from chart-kit and chart-catalog kinds;
+  - an optional baselines index table;
+  - wiki-contract and connectors amendments.
+
+  Dependencies: wellness-store, chart-catalog
+- [ ] workout-wellness — **brief written 2026-10-12**:
+  - the morning-of block on workout pages (that morning's resting HR and HRV
+    against baseline, and the previous night's sleep);
+  - a per-page wellness fingerprint and a targeted re-render pass when a
+    day's wellness arrives;
+  - the `DOC_VERSION` bump and the workout-docs amendment.
+
+  Implement last. Dependencies: recovery
