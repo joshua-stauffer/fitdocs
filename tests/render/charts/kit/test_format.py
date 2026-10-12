@@ -254,6 +254,28 @@ def test_format_duration_boundaries() -> None:
     assert format_duration(-3599) == "-59:59"
 
 
+def test_format_duration_hours_forms() -> None:
+    cases = {
+        59: ("0:59", "0:00:59", "0:59"),
+        3599.5: ("1:00:00", "1:00:00", "60:00"),
+        5400: ("1:30:00", "1:30:00", "90:00"),
+    }
+    for seconds, (auto, forced_hours, forced_minutes) in cases.items():
+        assert format_duration(seconds) == auto
+        assert format_duration(seconds, hours=None) == auto
+        assert format_duration(seconds, hours=True) == forced_hours
+        assert format_duration(seconds, hours=False) == forced_minutes
+
+
+def test_format_duration_hours_forms_keep_sign_and_rounding() -> None:
+    assert format_duration(-90, hours=True) == "-0:01:30"
+    assert format_duration(-5400, hours=False) == "-90:00"
+    assert format_duration(2.5, hours=True) == "0:00:02"
+    assert format_duration(3.5, hours=False) == "0:04"
+    assert format_duration(0, hours=True) == "0:00:00"
+    assert format_duration(360000, hours=False) == "6000:00"
+
+
 def test_format_duration_rounds_half_to_even() -> None:
     # 0.5 and 2.5 round down, 1.5 and 3.5 round up; 2.7 is not truncated
     assert format_duration(0.5) == "0:00"

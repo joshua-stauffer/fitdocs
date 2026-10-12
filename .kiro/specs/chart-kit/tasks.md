@@ -863,7 +863,7 @@ every registered kind and find its cases by the test-module convention
   - _Boundary: stat kind_
   - _Depends: 2.1, 2.2, 3.1, 1.4_
 
-- [ ] 5.8 (P) Implement the table kind with its goldens
+- [x] 5.8 (P) Implement the table kind with its goldens
   - **`kit/kinds/table.py`**: `KIND` per the kind table (no channels,
     `uses_all_columns`, bound 100 rows and 12 columns) and rules (headers
     from `axis_title`, right alignment for NUMBER/DURATION, cells without
@@ -1111,3 +1111,4 @@ every registered kind and find its cases by the test-module convention
 - 3.4 (controller ruling): `cartesian.duplicate_problem(bound, keys, *, skip_absent=())` — rows absent on any bound channel named in `skip_absent` are exempt; unbound key channels are skipped (an unbound colour is one series). Line and area pass `skip_absent=("x",)`, hbar `("y",)`, bar nothing (an absent x is the `—` category). `stack_problems` never builds styles, so it is safe before `series_problem` refuses >8 series; `series_groups` (draw only) raises beyond 8.
 - 3.1 (controller ruling): `render_spec(spec, request, data)` takes `RenderedChart.kind` from `spec.name` (a request kind mismatch is not checked). `render_chart` on an unknown kind raises `ChartError` with all of stage 1 (`unknown_kind`, `empty_title`, `duplicate_column`). Nested listing TypedDicts are `ChannelListing`, `OptionListing`, `BoundListing` (not re-exported).
 - 4.1 (controller rulings): `NumericScale` gained trailing `clock_date: date | None = None` (the date a same-day date-time axis puts in its title) and `hours: bool = True` (the duration label form); frame passes both to `axis_title`. Label fit = adjacent centre distance ≥ (w1+w2)/2 + 10 px. Time axes keep their exact extent (ignore `nice`/`include_zero`); log ignores `include_zero`. Date-time clock ticks are computed relative to midnight of lo's day and filtered to [lo, hi]. `band_scale` thins by band size, which suits horizontal bands; hbar (5.4) must not thin its row labels by 26 px row height.
+- 5.8 (controller ruling): `format.format_duration(seconds, *, hours: bool | None = None)` — None is the per-value form (unchanged), True forces `h:mm:ss`, False forces `m:ss` with unbounded minutes. The table decides each duration-family column once (`h` = any present value with rounded magnitude ≥ 3600; no present values → `(m:ss)`) and uses that `h` for both the header `axis_title(c, hours=h)` and every cell, so header and cells always agree. Table headers go through `clean_text` then `escape_markdown`. Design § Formatter/§ Kinds (table) to be amended.

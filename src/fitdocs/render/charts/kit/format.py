@@ -154,18 +154,23 @@ def format_number_tick(value: float, step: float, unit: Unit | None) -> str:
     return text
 
 
-def _clock(seconds: float, *, hours: bool) -> str:
+def _clock(seconds: float, *, hours: bool | None) -> str:
+    """``hours`` None: h:mm:ss from one hour; True: always; False: never."""
     whole = round(seconds)
     sign = "-" if whole < 0 else ""
     whole = abs(whole)
-    if hours and whole >= 3600:
+    if hours is True or (hours is None and whole >= 3600):
         return f"{sign}{whole // 3600}:{whole % 3600 // 60:02d}:{whole % 60:02d}"
     return f"{sign}{whole // 60}:{whole % 60:02d}"
 
 
-def format_duration(seconds: float) -> str:
-    """Whole seconds (half to even) as ``m:ss`` or, from one hour, ``h:mm:ss``."""
-    return _clock(seconds, hours=True)
+def format_duration(seconds: float, *, hours: bool | None = None) -> str:
+    """Whole seconds (half to even) as ``m:ss`` or, from one hour, ``h:mm:ss``.
+
+    ``hours=True`` always writes ``h:mm:ss``; ``hours=False`` always writes
+    ``m:ss`` with unbounded minutes (5400 s is ``90:00``).
+    """
+    return _clock(seconds, hours=hours)
 
 
 def format_pace(seconds_per_km: float) -> str:
