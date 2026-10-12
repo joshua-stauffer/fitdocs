@@ -29,11 +29,12 @@
   load-channels (1.3), wiki-contract (4.2).
 - **Peers.** `impl-dashboards` (not on main) edits `cli.py`'s drain-pass
   block, not `derive_benchmarks_command`, and takes `CONTRACT_VERSION`
-  9 → 10. wellness-store, recovery and wellness-pull also raise
-  `CONTRACT_VERSION` and may add head- or history-paragraph pins; whichever
-  lands later re-derives main + 1 and keeps every pin it finds.
-  `apple-health-import` and `workout-wellness` touch none of this plan's
-  source files except the append-only lists below.
+  9 → 10. `CONTRACT_VERSION` is raised by dashboards and by all five Phase
+  12 bumpers — wellness-store, wellness-pull, hr-derivation, recovery and
+  workout-wellness — each of which may add head- or history-paragraph pins;
+  whichever lands later re-derives main + 1 and keeps every pin it finds.
+  `apple-health-import` touches none of this plan's source files, and
+  `workout-wellness` none except the append-only lists below.
 
 **Hard rules for every task**
 
@@ -121,6 +122,9 @@ Each file below has more than one writer; its writers are sequential.
   `CHANGELOG.md`: 4.4.
 - `pyproject.toml`: 2.1 (append `tests/hr_benchmarks` to
   `[tool.mypy].files`).
+- `src/fitdocs/index/derived/benchmarks.py` (the `source_page` description),
+  `tests/index/derived/test_benchmark_producer.py`, `docs/analytics.md`: 4.3
+  only.
 
 ## Cross-spec shared files (append-only, keep both sides on rebase)
 
@@ -132,7 +136,9 @@ version line, the contract head-paragraph and history pins,
 registry (`tests/test_contract_consumers.py`), `[tool.mypy].files`,
 `CHANGELOG.md` Unreleased, `.kiro/steering/structure.md`, the public API
 pins (`tests/test_public_api.py`), the workouts skill and
-`tests/test_agent_skill.py`.
+`tests/test_agent_skill.py`, `docs/ownership-contract.md`, `README.md`,
+`docs/configuration.md`, and the generated `docs/analytics.md` block
+(regenerate it after the rebase rather than merging it by hand).
 
 ## Test File Ownership
 
@@ -500,13 +506,14 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - **Tests** (tmp data root; series staged only through
     `tests/wellness/builders_series.py::write_series`): a malformed
     `[wellness]` table and a malformed `[load.flags]` table each raise the
-    settings error; an absent series gives no evidence; an unreadable
-    manifest gives a failure naming `wellness/manifest.toml` and no
-    exception; configured precedence changes the chosen source; the document
+    settings error; an absent series and a series with no
+    `resting_hr_bpm` value each give no evidence and the empty-series signal
+    (not a failure); an unreadable manifest gives a failure naming
+    `wellness/manifest.toml` and no exception; configured precedence changes the chosen source; the document
     of an entry dated in a given year is that year's series file.
   - **Mutations:** ignore the configured precedence (use the default order);
-    turn the unreadable series into an empty one; drop the licensed-caller
-    entry (the guard reds).
+    turn the unreadable series into an empty one; report an empty series as
+    a failure; drop the licensed-caller entry (the guard reds).
   - **Observable:** `uv run pytest tests/hr_benchmarks/test_engine.py
     tests/load/test_settings.py` green.
   - _Requirements: 1.8, 1.9, 2.1, 2.9_
@@ -539,7 +546,9 @@ pins (`tests/test_public_api.py`), the workouts skill and
 - [ ] 3.3 Reconcile, write the heart-rate partition once, and report
   - Complete design § HrStageEngine: load the profile once after the
     evidence; hand-recorded entries per kind; the timeline per kind, or the
-    kind's entries on file when its evidence failed; the partitioned write
+    kind's entries on file when its evidence failed or, for resting heart
+    rate, when the series is absent or holds no resting value (with the
+    report's note); the partitioned write
     only when the heart-rate partition changed and never under preview;
     takeovers new to this run; back-reach changes (hand entries whose cover
     differs between the profile before and after the run); inconsistencies
@@ -555,11 +564,15 @@ pins (`tests/test_public_api.py`), the workouts skill and
     from the full span to the days before the first derived entry, and a
     takeover after its date only when later evidence disagrees; a failure
     keeps that kind's entries byte-equivalent while the other kind updates;
+    with derived resting entries on file, an absent series and a series with
+    no resting values each keep them byte-equivalent, report the note, record
+    no failure and exit the stage successfully;
     the accepted-set substitution changes the inconsistency list in preview;
     no flat top-level key is written; no file but `athlete.toml` changes.
   - **Mutations:** write even when unchanged; write under preview; report
     every takeover rather than new ones; report the back-reach change on
-    every run; ignore the kept-partition rule.
+    every run; ignore the kept-partition rule; remove the resting partition
+    on an empty series.
   - **Observable:** `uv run pytest tests/hr_benchmarks` green.
   - _Requirements: 1.2, 1.3, 1.4, 1.10, 2.8, 4.6, 4.7, 4.9, 5.7, 5.8, 6.1, 8.2, 8.3, 9.3, 10.4, 10.6_
   - _Depends: 1.2, 2.6, 2.7, 3.1, 3.2_
@@ -662,12 +675,17 @@ pins (`tests/test_public_api.py`), the workouts skill and
     `tests/compose/test_contract_docs.py`); the "What changed at this version"
     head-paragraph pin at `tests/identity/test_contract_docs.py:177-187`
     and every peer head-paragraph pin present at landing (dashboards,
-    wellness-store, recovery, wellness-pull), each moved to the new head or
-    retired the way its own spec retired its predecessor's; a new pin on the
-    history paragraph's content ("Raised from ``{v-1}`` to ``{v}`` by
-    hr-derivation" plus the sentence), because the existing
+    wellness-store, wellness-pull, recovery, workout-wellness), each moved to
+    the new head or
+    retired the way its own spec retired its predecessor's (find them by
+    grepping the outgoing "What changed at this version" paragraph's
+    phrases); and a LITERAL pin on the history paragraph's content, appended
+    to `test_the_version_history_records_the_amendment`: "Raised from ``N``
+    to ``N+1`` by hr-derivation" with the landed numbers written as literals
+    (5.2 rewrites them if the rebase moves main), plus the sentence. Never
+    compute the pin from the live `CONTRACT_VERSION`; the existing
     `_contract_version_history` helper fails only when no docstring is
-    adjacent.
+    adjacent, so only a literal content pin catches a dropped paragraph.
   - **Mutations:** leave `CONTRACT_VERSION` at main's value; drop the new
     history paragraph's hr-derivation sentence (the content pin reds); leave
     one golden un-regenerated.
@@ -690,20 +708,32 @@ pins (`tests/test_public_api.py`), the workouts skill and
     wellness series; at most one write per stage; never modifies a
     hand-recorded entry); `.kiro/steering/structure.md` dependency bullet
     for `hr_benchmarks`.
+  - The index column description: in `src/fitdocs/index/derived/benchmarks.py`
+    the `source_page` description becomes "Data-root-relative page or
+    wellness series file used to derive the entry; NULL when not recorded."
+    Descriptions are outside the schema digest (`index/schema.py:243-265`),
+    so `SCHEMA_VERSION` does not move. Re-pin the literal at
+    `tests/index/derived/test_benchmark_producer.py:121-125` and regenerate
+    the `docs/analytics.md` block with
+    `uv run python -m tests.query.test_docs_analytics`.
   - Synthetic numbers only.
   - **Tests**: existing doc pins re-run; any phrase pin that moves is
     updated in the same commit; `tests/hr_benchmarks/test_docs.py` pins the
     two steps, the confirmation days and the `check` listing rule in the
     configuration guide against the constants.
-  - **Mutations:** change a step constant (the doc pin reds).
+  - **Mutations:** change a step constant (the doc pin reds); revert the
+    `source_page` description (the producer pin and the docs regeneration
+    test red).
   - **Observable:** `uv run pytest tests/test_docs_guarantees.py
-    tests/test_ownership_contract.py tests/hr_benchmarks` green.
+    tests/test_ownership_contract.py tests/hr_benchmarks
+    tests/index/derived/test_benchmark_producer.py
+    tests/query/test_docs_analytics.py` green.
   - _Requirements: 11.1, 11.2, 11.3, 11.6_
   - _Depends: 4.2_
 
 - [ ] 4.4 Teach the workouts skill the new findings and record the release notes
   - The workouts skill: how to read `hr_benchmark_takeover`,
-    `hr_benchmarks_inconsistent` and `athlete_profile_unreadable`; relay a
+    `hr_benchmark_inconsistent` and `athlete_profile_unreadable`; relay a
     takeover to the athlete and never answer it; never run
     `load --recompute` unasked.
   - CHANGELOG Unreleased, naming the governed contracts per the file's
@@ -752,6 +782,9 @@ pins (`tests/test_public_api.py`), the workouts skill and
 - [ ] 5.2 Land: rebase, contract version, full validation, follow-ups
   - Rebase onto `main`; keep both sides of every append-only list;
     re-derive `CONTRACT_VERSION` as main + 1 and every amendment number;
+    write the landed numbers as literals into the history-paragraph content
+    pin (append-only, never `{v-1}`/`{v}` from the live constant) and re-pin
+    every peer head-paragraph pin now on main;
     confirm no other version constant moved and `BenchmarkSet.applicable`
     is unchanged; full `uv run pytest`, `ruff check`, `ruff format --check`,
     `mypy`; check the branch CI before merging;

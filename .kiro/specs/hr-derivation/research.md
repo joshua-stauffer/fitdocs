@@ -236,7 +236,8 @@
 - **Selected Approach**: 2. Earlier releases read the entry as a valid
   derived entry (they ignore the unknown key).
 - **Trade-offs**: the analytics `source_page` column shows a series file for
-  these entries; its description still says "page" (follow-up).
+  these entries; its description is reworded to "page or wellness series
+  file" (cross-spec review M-5; descriptions are outside the schema digest).
 
 ### Decision: partition the derived write by kind
 - **Selected Approach**: `with_derived_benchmarks(entries, *, kinds)` with

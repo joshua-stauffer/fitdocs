@@ -55,7 +55,7 @@ document format, index schema or configuration key changes.
 - The heart-rate stage's place in `fitdocs derive-benchmarks`: settings
   preflight, ordering after the tagged-effort stage, report, exit status.
 - Three `check` findings: `hr_benchmark_takeover`,
-  `hr_benchmarks_inconsistent`, `athlete_profile_unreadable`.
+  `hr_benchmark_inconsistent`, `athlete_profile_unreadable`.
 - These amendments, carried out by this spec's implementation:
   - **athlete-benchmarks** (Amendment N, expected 3): provenance only — the
     optional `series` key; the Boundary Context names the heart-rate stage
@@ -276,6 +276,13 @@ tests/hr_benchmarks/
   (`tests/declaration_golden/*`).
 - `src/fitdocs/load/channels/heart_rate.py` — two reported inputs
   `resting_hr_measured_on`, `max_hr_measured_on`.
+- `src/fitdocs/index/derived/benchmarks.py` — the `source_page` column
+  description becomes "Data-root-relative page or wellness series file used
+  to derive the entry; NULL when not recorded." Descriptions are outside the
+  schema digest (`index/schema.py:243-265`), so `SCHEMA_VERSION` does not
+  move. The pin at `tests/index/derived/test_benchmark_producer.py:121-125`
+  moves, and the `docs/analytics.md` block (today line 197) is regenerated
+  with `uv run python -m tests.query.test_docs_analytics`.
 - `src/fitdocs/audit.py` — three `FindingKind` members and
   `_benchmark_findings(data_root)`.
 - `src/fitdocs/cli.py` — `derive_benchmarks_command` preflight (reads
@@ -393,7 +400,7 @@ flowchart TD
 | 2.2, 2.6 | 28-day median, half up | RestingEvidence, HrSources | `RESTING_*` constants | — |
 | 2.4, 2.5 | Source choice per day | RestingEvidence | `resting_evidence(order=)` | — |
 | 2.7 | Source change | Timeline, RestingEvidence | `Evidence.key`, `series` | Walk |
-| 2.8 | No values, no entry | Timeline | `derive_timeline` | Walk |
+| 2.8 | Empty series keeps the resting partition, with a note | HrStageEngine | `KindOutcome.kept`, `HrStageReport.notes` | — |
 | 2.9 | Unreadable series | HrStageEngine | `HrFailure`, kept partition | — |
 | 3.1, 3.5, 3.9 | Every document, composition, skips | HrStageEngine | `NoEvidenceReason` | — |
 | 3.2, 3.3, 3.4 | Rejection, cadence lock, 30-s peak | SessionPeaks | `session_peak` | — |
@@ -452,9 +459,9 @@ flowchart TD
 | SessionPeaks | hr_benchmarks (pure) | One session's sustained peak | 3.2-3.5, 3.8 | qa.cadence (P0), model (P0) | Service |
 | MaxEvidence | hr_benchmarks (pure) | Windowed maximum evidence | 3.6, 3.7, 7.2 | HrSources (P0) | Service |
 | RestingEvidence | hr_benchmarks (pure) | Per-source baseline and source choice | 2.1-2.7, 7.3 | HrSources (P0) | Service |
-| Timeline | hr_benchmarks (pure) | Hand-aware step and confirmation walk | 2.7, 2.8, 4.2, 4.3, 4.4, 4.5, 4.10, 4.11, 5.1, 5.2, 5.3, 5.4, 5.5, 5.8, 6.2, 7.1, 9.6 | benchmarks selection (P0) | Service |
+| Timeline | hr_benchmarks (pure) | Hand-aware step and confirmation walk | 2.7, 4.2, 4.3, 4.4, 4.5, 4.10, 4.11, 5.1, 5.2, 5.3, 5.4, 5.5, 5.8, 6.2, 7.1, 9.6 | benchmarks selection (P0) | Service |
 | Inspect | hr_benchmarks (pure) | Structural takeovers, back-reach cover, inconsistencies | 5.7, 6.3, 6.4, 9.1, 9.2 | benchmarks selection (P0) | Service |
-| HrStageEngine | hr_benchmarks (I/O) | The stage | 1.2, 1.3, 1.4, 1.7, 1.8, 1.9, 1.10, 2.9, 3.1, 3.9, 3.10, 4.6, 4.9, 5.7, 8.2, 8.3, 9.3, 10.4, 10.6 | compose, wellness, profile (P0) | Batch |
+| HrStageEngine | hr_benchmarks (I/O) | The stage | 1.2, 1.3, 1.4, 1.7, 1.8, 1.9, 1.10, 2.8, 2.9, 3.1, 3.9, 3.10, 4.6, 4.9, 5.7, 8.2, 8.3, 9.3, 10.4, 10.6 | compose, wellness, profile (P0) | Batch |
 | BenchmarkSelection | benchmarks (unchanged, pinned) | Selection stays exactly as today | 5.6, 6.5, 10.7 | — | — |
 | BenchmarkProvenance | benchmarks/profile (amendment) | `series` key | 7.4, 7.5 | — | State |
 | ProfileDerivedWrite | load.profile (amendment) | Partitioned derived write | 4.6, 5.1, 8.1-8.5 | — | Service |
@@ -568,7 +575,7 @@ class KindOutcome:
     entries: tuple[Benchmark, ...]     # derived entries of the kind after the run
     added: tuple[Benchmark, ...]
     removed: tuple[Benchmark, ...]
-    kept_on_failure: bool
+    kept: bool                         # partition left as on file (failure or empty series)
 
 @dataclass(frozen=True)
 class HrStageReport:
@@ -582,6 +589,7 @@ class HrStageReport:
     back_reach_changes: tuple[BackReachChange, ...]          # covers this run changed
     inconsistencies: tuple[Inconsistency, ...]
     failures: tuple[HrFailure, ...]
+    notes: tuple[str, ...]                                   # e.g. an empty series kept the resting partition
     written: bool
     changed: bool                                            # the HR partition changed
 ```
@@ -731,7 +739,7 @@ def resting_evidence(
 | Field | Detail |
 |-------|--------|
 | Intent | Turn one kind's evidence and hand-recorded entries into derived entries and takeovers |
-| Requirements | 2.7, 2.8, 4.2, 4.3, 4.4, 4.5, 4.10, 4.11, 5.1, 5.2, 5.3, 5.4, 5.5, 5.8, 6.2, 7.1, 9.6 |
+| Requirements | 2.7, 4.2, 4.3, 4.4, 4.5, 4.10, 4.11, 5.1, 5.2, 5.3, 5.4, 5.5, 5.8, 6.2, 7.1, 9.6 |
 
 ```python
 @dataclass(frozen=True)
@@ -782,7 +790,7 @@ def derive_timeline(
 - A new recorded entry changes the value in force from its date, so the
   next run's walk decides every later day against it (5.8).
 - Never clamps or drops a value to avoid an inconsistency (9.6); with no
-  evidence returns no entry (4.10, 2.8).
+  evidence returns no entry (4.10).
 - **Postconditions**: entries sorted by date, none on a recorded date,
   each with derived provenance and no `applies_from`; `takeovers` lists each
   entry whose start-day value in force was hand-recorded, paired with that
@@ -843,7 +851,7 @@ def inconsistencies(benchmarks: BenchmarkSet) -> tuple[Inconsistency, ...]: ...
 | Field | Detail |
 |-------|--------|
 | Intent | The heart-rate stage: read evidence, read the profile once, write the HR partition once |
-| Requirements | 1.2, 1.3, 1.4, 1.7, 1.8, 1.9, 1.10, 2.1, 2.9, 3.1, 3.5, 3.9, 3.10, 4.6, 4.7, 4.9, 5.7, 8.2, 8.3, 9.3, 10.4, 10.6 |
+| Requirements | 1.2, 1.3, 1.4, 1.7, 1.8, 1.9, 1.10, 2.1, 2.8, 2.9, 3.1, 3.5, 3.9, 3.10, 4.6, 4.7, 4.9, 5.7, 8.2, 8.3, 9.3, 10.4, 10.6 |
 
 ```python
 @dataclass(frozen=True)
@@ -882,7 +890,11 @@ def derive_hr_benchmarks(
   then `session_peak`. `progress(done, considered_total)` after each page.
 - **Series**: `read_series(data_root)`; `SeriesReadError` →
   `HrFailure(RESTING_HR_BPM, "wellness/manifest.toml", ...)` and the resting
-  partition is kept; else values of `Metric.RESTING_HR_BPM` per source from
+  partition is kept; an absent series (no manifest) or one with no
+  `resting_hr_bpm` value also keeps the resting partition, with the note
+  "the wellness series holds no resting heart rate; derived resting entries
+  kept as on file" and no failure (2.8; cross-spec review M-6); else values
+  of `Metric.RESTING_HR_BPM` per source from
   `series.sources(...)` / `series.by_source(...)`;
   `document_for_year` = `layout.wellness_series_path(data_root,
   year).relative_to(data_root).as_posix()`.
@@ -1043,7 +1055,7 @@ def with_derived_benchmarks(
 | `FindingKind` | Subject | Detail | Remedy |
 |---------------|---------|--------|--------|
 | `HR_BENCHMARK_TAKEOVER` (`hr_benchmark_takeover`) | `athlete.toml` | "`<kind>`: derived `<v>` bpm from `<date>` takes over from your hand-recorded `<hv>` bpm of `<hdate>`; evidence: `<inputs>`" | "to keep your own value, record a new `<kind>` entry by hand (it wins from its date); to accept the derived value, leave it — this listing ends when a later `<kind>` entry exists" |
-| `HR_BENCHMARKS_INCONSISTENT` (`hr_benchmarks_inconsistent`) | `athlete.toml` | the violation, period, values, dates, which are derived, discipline | "heart-rate load is not computed in this period; record the correct value by hand for the one that is wrong" |
+| `HR_BENCHMARK_INCONSISTENT` (`hr_benchmark_inconsistent`) | `athlete.toml` | the violation, period, values, dates, which are derived, discipline | "heart-rate load is not computed in this period; record the correct value by hand for the one that is wrong" |
 | `ATHLETE_PROFILE_UNREADABLE` (`athlete_profile_unreadable`) | `athlete.toml` | the error | "fix `athlete.toml`; load and derive-benchmarks refuse to run until it is valid" |
 
 - `_benchmark_findings(data_root)`: `load_profile` (absent → empty, no
@@ -1074,7 +1086,7 @@ def with_derived_benchmarks(
   back-reach changes (one line per changed hand entry: "your `<v>` bpm of
   `<date>` (applies from `<af>`) now covers `<start>` to `<end>`; derived
   values apply from `<end>`; recompute load to rescore those days"),
-  inconsistencies, skipped documents, failures; and, when `changed`, the
+  inconsistencies, skipped documents, failures, notes; and, when `changed`, the
   line "The heart-rate timeline changed: run `fitdocs load --recompute` to
   rescore documents whose load was already computed." All `markup=False`.
 - Progress: `"\rheart rate: <done>/<total>"` on stderr only when stderr is a
@@ -1122,7 +1134,9 @@ citation = "max_hr_sustained_peak_choice"
 
 ### Data Contracts & Integration
 - **Index**: `benchmarks.source_page` carries `document` (a series year file
-  for resting entries); `benchmark_periods` follows the unchanged selection.
+  for resting entries); its column description is reworded to "page or
+  wellness series file" (descriptions are outside the schema digest,
+  `index/schema.py:243-265`, so `SCHEMA_VERSION` does not move); `benchmark_periods` follows the unchanged selection.
   No column or table changes.
 
 ## Error Handling
@@ -1136,7 +1150,7 @@ citation = "max_hr_sustained_peak_choice"
 | Archive missing / undecodable | HR engine | skipped, listed | 0 |
 | Archive exists, unreadable | HR engine | `HrFailure`, maximum partition kept | 1 |
 | Series unreadable | HR engine | `HrFailure`, resting partition kept | 1 |
-| Series empty | HR engine | no resting evidence, resting entries removed | 0 |
+| Series absent or without resting HR | HR engine | resting partition kept, note reported | 0 |
 | Write would be unreadable | `save_profile` re-parse | refused, file unchanged | 2 |
 | `athlete.toml` unreadable during `check` | audit | `athlete_profile_unreadable` finding | 1 |
 
@@ -1208,7 +1222,9 @@ built by `tests/hr_benchmarks/builders.py`; no maintainer value appears.
   per reason; second run writes nothing (mtime unchanged); `dry_run` writes
   nothing and reports identically; an unreadable archive keeps the max
   partition and fails; an unreadable series keeps the resting partition and
-  fails; a hand entry whose back-reach covers the corpus yields derived
+  fails; an absent series, or one with no resting values, keeps the resting
+  partition with a note and does not fail (mutation: remove the resting
+  partition on an empty series); a hand entry whose back-reach covers the corpus yields derived
   entries before its date (applying on their own dates), a back-reach
   takeover, one back-reach change reported once, and no second report on a
   rerun.
@@ -1286,13 +1302,16 @@ landing.
 - **wiki-contract** (Amendment N): `CONTRACT_VERSION` main + 1 because the
   published `derive-benchmarks` guarantee changes (what it reads, and "at
   most once per run" becomes "at most once per stage"); history paragraph
-  "Raised from ``N`` to ``N+1`` by hr-derivation …", the "What changed at
+  "Raised from ``N`` to ``N+1`` by hr-derivation …" (pinned with the landed
+  numbers as literals, never computed from the live constant), the "What changed at
   this version" paragraph, regenerated declarations.
 - **threshold-load**, **training-load**: none; threshold-load Req 11.6
   holds, and training-load Amendment 4's selection is untouched.
 - **wellness-store**: none.
-- **analytics-index**, **analytics-derived**: none (findings are additive;
-  no schema change).
+- **analytics-derived**: the wording of the `benchmarks.source_page`
+  column description only ("page or wellness series file"); no requirement,
+  column or `SCHEMA_VERSION` change, so no amendment record.
+- **analytics-index**: none (findings are additive; no schema change).
 
 ## Decisions Taken Without Asking
 Taken in auto-approve mode, consistent with the roadmap's "Decisions taken at
@@ -1342,7 +1361,8 @@ revisable at review.
     against the timeline both stages would leave.
 18. The resting level is not shared with `recovery`.
 19. No index schema change; `source_page` shows the series file for resting
-    entries.
+    entries, and its description says "page or wellness series file"
+    (cross-spec review M-5).
 20. Derived heart-rate entries never carry `applies_from`.
 21. `[load]` is read once per `derive-benchmarks` run, by the heart-rate
     preflight, and handed to the tagged-effort stage (controller ruling R3).

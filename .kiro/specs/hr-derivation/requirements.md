@@ -207,7 +207,7 @@ each source keeps its own baseline, and baselines are never spliced.)
 5. When no source's baseline is formed on a day, the heart-rate stage shall take no resting-heart-rate evidence from that day.
 6. The heart-rate stage shall express a baseline as whole beats per minute, rounding a value exactly halfway between two whole numbers up.
 7. When the source supplying the evidence changes from one day to the next, the heart-rate stage shall treat the new source's baseline like any other evidence: it shall start a new derived entry only under Requirements 4 and 5, and that entry shall name the new source.
-8. If the wellness series holds no resting-heart-rate value, the heart-rate stage shall derive no resting-heart-rate entry.
+8. If the wellness series is absent or holds no resting-heart-rate value, the heart-rate stage shall leave every derived resting-heart-rate entry on file unchanged in that run and shall report a note saying the series holds no resting heart rate; on a profile with no such entry it therefore derives none.
 9. If the wellness series cannot be read, the heart-rate stage shall record a failure naming the series and the reason, and shall leave every derived resting-heart-rate entry on file unchanged in that run.
 
 ### Requirement 3: Maximum Heart Rate From Workout Heart Rate
@@ -240,7 +240,7 @@ churn on noise.
 3. When maximum-heart-rate evidence differs from the value in force by more than the step, the heart-rate stage shall start a derived maximum-heart-rate entry on that evidence day carrying that day's evidence.
 4. When resting-heart-rate evidence from one source differs from the value in force by more than the step on each of 14 consecutive calendar days, the heart-rate stage shall start a derived resting-heart-rate entry on the first of those days carrying that day's evidence; a day without evidence, a day within the step, or a change of source shall end the run of days.
 5. The heart-rate stage shall write no applies-from date on a derived entry, so that a derived entry applies from its own date only.
-6. When the heart-rate stage runs, it shall work out the whole timeline of each kind from all the evidence and the hand-recorded entries on file, and shall replace its earlier derived entries of that kind with the result, so that evidence that is gone takes its entries with it.
+6. When the heart-rate stage runs, it shall work out the whole timeline of each kind from all the evidence and the hand-recorded entries on file, and shall replace its earlier derived entries of that kind with the result, so that evidence that is gone takes its entries with it, except where Requirements 2.8, 2.9 and 3.10 keep a kind's entries unchanged.
 7. The heart-rate stage shall produce identical entries and identical profile bytes from an identical wellness series, identical workout documents and archived sources, an identical profile and identical configuration, independent of the order documents are found in, the machine, the locale and the system time zone.
 8. The heart-rate stage shall consult no clock and shall date no entry from the run date, a file's timestamps, or anything but an evidence day.
 9. When the heart-rate stage runs twice over unchanged inputs, the second run shall leave the profile byte-identical and untouched.
