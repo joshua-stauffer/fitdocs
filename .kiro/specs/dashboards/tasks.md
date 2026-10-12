@@ -453,7 +453,7 @@ sequential, never two `(P)` tasks at once.
 
 - [ ] 3. The pure core
 
-- [ ] 3.1 (P) Scan pages: lines, fences, directives, regions and near misses
+- [x] 3.1 (P) Scan pages: lines, fences, directives, regions and near misses
   - **`src/fitdocs/dashboards/grammar.py`** per design § Grammar: `SLUG`,
     `PAGE_NAME_RE`, `CHART_ID_RE`, `OPENER`, `CLOSER`, `begin_marker`,
     `end_marker`, `REFERENCE_RE`, `Line`, `DirectiveBlock`, `RegionBlock`,
@@ -1339,3 +1339,19 @@ sequential, never two `(P)` tasks at once.
   smoke tests (interrupt one in a bounded subprocess). A cursor-backed result
   is the connection: the next statement on that connection replaces an
   unfinished result (2.2's session must finish one result before the next).
+- **3.1 (3 review rounds; controller rulings):** (R1) fence state is also
+  tracked inside a region body — a fence-opening line in the body opens a
+  fence, a column-0 `<!-- fitdocs:` line inside it neither closes nor cuts the
+  region, a fence open at end of page runs the region to the end unclosed
+  (`end_line`/`intruder_line` None); fences stay untracked inside directive
+  bodies. Reason: the fence-blind region scan let a fenced example after an
+  unclosed region go live and let a fenced end marker "close" a region over
+  user prose (Req 3.6 / 2.1). (R2) `DirectiveBlock.body: str | None`, None
+  when unclosed (absent is None). Both deviate from design § Grammar; the
+  design is amended at validation. BOM is kept in `Line.text` (exact round
+  trip) and ignored only on line 1 for opener, fence and marker comparisons.
+  `split_lines` splits on `\n` only (lone `\r` is text). `following_region`
+  returns unclosed regions; None after an unclosed directive. An intruder
+  always has `end_line` None, so **5.1 tells `region_contents`
+  (`intruder_line` set) from `region_unclosed` (both None) by
+  `intruder_line`.** Orphan end-marker message contains "no open region".
