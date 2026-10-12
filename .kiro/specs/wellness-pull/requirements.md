@@ -68,8 +68,9 @@ Terms used below:
   wellness deliveries; the wellness report and exit codes; the intervals.icu
   wellness listing, packaging, attribution and failure mapping; the live check
   against the maintainer's account; the documentation, the packaged skill's
-  report table, the changelog, and the amendment records on `connectors` and
-  `intervals-connector`.
+  report table, the changelog, the ownership contract's `pull` statement and
+  its version, and the amendment records on `connectors`,
+  `intervals-connector` and `wiki-contract`.
 - **Out of scope**: recognizing, archiving, parsing, merging or storing
   wellness values (`wellness-store`); intervals.icu's own computed fields
   (fitness, fatigue, ramp rate, load, eFTP and W′), which pass through the
@@ -237,10 +238,10 @@ Terms used below:
 1. The connectors documentation shall describe the `wellness` key, the wellness pull, its re-check of recent days by the look-back, its first pull's whole-history backfill and `--since`, the wellness report, the delivery and removal of wellness files, and the ledger's wellness records and newer format version.
 2. The connectors documentation's intervals.icu section shall describe enabling wellness, the attribution rule and its limits, the freshness trap (some platforms reach intervals.icu only when the athlete opens it, which the re-check covers), the possible Garmin restriction and the Garmin export route, that intervals.icu's computed fields are delivered but never imported, and that a day intervals.icu deletes is not removed from fitdocs.
 3. The wellness documentation shall name the intervals.icu pull as a way wellness files reach the inbox, and link the connectors documentation.
-4. The ownership contract's statement of what `fitdocs pull` writes shall name wellness deliveries and state that the pull never writes the wellness archive or the series, keeping every guarantee it already states.
+4. The ownership contract's statement of what `fitdocs pull` writes and removes shall name wellness deliveries in the instance's inbox subdirectory, their removal once the wellness archive holds identical bytes, and that the pull never writes the wellness archive or the series, keeping every guarantee it already states; and the contract's version shall advance by one from its value at landing, with a statement of what changed.
 5. The packaged workouts skill shall document the wellness report's channels in a table that an automated test binds to the report's fields, and shall tell the agent which of them need the athlete.
 6. The changelog's unreleased section shall record the wellness pull, the `wellness` key, the attribution and the ledger format change, with the action a user must take: enabling wellness, and knowing that an older fitdocs refuses a ledger holding wellness records.
-7. The `connectors` and `intervals-connector` specs shall each carry an amendment record for the changes this feature makes to them.
+7. The `connectors`, `intervals-connector` and `wiki-contract` specs shall each carry an amendment record for the changes this feature makes to them.
 
 ### Requirement 13: Offline, Deterministic and Private
 **Objective:** As an athlete, I want the wellness pull to keep fitdocs's network, determinism and privacy rules, so that it is safe to run unattended.

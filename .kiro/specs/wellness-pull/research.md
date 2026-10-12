@@ -225,16 +225,19 @@
   or HealthFit connector. The intervals-connector amendment records that its
   instances use it.
 
-### Decision: no `CONTRACT_VERSION` advance
+### Decision: `CONTRACT_VERSION` advances (reversed at Step 3.5)
 - **Context**: the ownership contract's `pull` bullet says "fetches new
   activity files" and lists what the pull never writes.
-- **Rationale**: wiki-contract Req 2.15's guarantees (deliveries only under
-  the configured inbox, only the instance's own archived hash-identical
-  deliveries removed, the ledger as tool-owned state) are unchanged; the
-  edit names a new kind of delivery and adds `wellness-archive/` and
-  `wellness/` (owned and versioned by `wellness-store`) to the never-writes
-  list. The version identifies "the guarantees, not the file format"
-  (`contract.py:47-49`), and no guarantee changes.
+- **Draft position (rejected)**: no advance, because wiki-contract Req 2.15's
+  guarantees were read as unchanged.
+- **Controller ruling R1 (Step 3.5, round 1)**: advance to main + 1 at
+  landing. The pull's stated removal guarantee now covers a second archive
+  (`wellness-archive/`), it writes a non-activity file into the inbox, and
+  its never-writes list grows. `contract.py:329-335` says the version
+  "changes whenever a stated guarantee changes", and connectors' own 5 → 6
+  bump (`contract.py:355-366`) was for exactly what `pull` writes and
+  removes. A wiki-contract amendment records it; the declaration goldens are
+  regenerated.
 
 ## Synthesis
 - **Generalization**: "a connector delivers bytes with a declared form" covers

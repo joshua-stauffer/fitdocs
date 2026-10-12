@@ -21,8 +21,10 @@ HealthFit connector declaring `pull-wellness`).
 grows by four names; the ledger gains a `[wellness]` table and format
 version 2 when it holds one; the pull report gains a per-instance wellness
 section; the intervals.icu connector declares `{PULL_ACTIVITIES,
-PULL_WELLNESS}`. No document, page, index or owned location changes;
-`CONTRACT_VERSION`, `DOC_VERSION` and the index `SCHEMA_VERSION` do not move.
+PULL_WELLNESS}`. The ownership contract's `pull` guarantee widens to
+wellness deliveries, so `CONTRACT_VERSION` advances to main + 1 at landing
+(controller ruling R1, Decision 13). No document, page, index or owned
+location changes; `DOC_VERSION` and the index `SCHEMA_VERSION` do not move.
 
 ### Goals
 - An intervals.icu instance with `wellness = true` delivers, per pull, one
@@ -57,9 +59,11 @@ PULL_WELLNESS}`. No document, page, index or owned location changes;
   bytes), attribution from `*_wellness_keys`, and the wellness status
   mapping, plus the connector's capability declaration.
 - The CLI wellness table, the skill's wellness channel table, the connectors
-  documentation, the `wellness.md` and ownership-contract wording this
-  feature needs, the CHANGELOG entry, the live check and its findings, and
-  the `connectors` and `intervals-connector` amendment records.
+  documentation, the `wellness.md` passage, the ownership contract's `pull`
+  statement with `CONTRACT_VERSION` main + 1 and its history paragraph, the
+  regenerated declaration goldens, the CHANGELOG entry, the live check and
+  its findings, and the `connectors`, `intervals-connector` and
+  `wiki-contract` amendment records.
 
 ### Out of Boundary
 - Everything `wellness-store` owns: recognition, the archive layout and its
@@ -104,6 +108,9 @@ PULL_WELLNESS}`. No document, page, index or owned location changes;
   future wellness connector, the surface pin).
 - Any change to the ledger's `[wellness]` shape or the version rule (the
   ledger reader of every later fitdocs).
+- `CONTRACT_VERSION`: re-derived as main + 1 at landing, like every Phase 12
+  lander (the declaration goldens and the two literal version pins move with
+  it).
 - Any change to `WellnessPullReport`'s fields (the CLI table, the skill
   binding).
 - A live-check contradiction (Requirement 11): repair tasks here, and a
@@ -229,21 +236,29 @@ tests/connectors/
 - `src/fitdocs/connectors/intervals.py` — capability set, wellness constants,
   `list_wellness`, `package_wellness`, helpers, status mapping.
 - `src/fitdocs/connectors/__init__.py` — four names appended to `__all__`
-  (46 → 50) and imported; docstring count.
+  (46 → 50) and imported; the docstring's count at `:21`.
 - `src/fitdocs/cli.py` — `_WELLNESS_REPORT_ROWS`, the wellness table in
   `_report_pull`, the `pull` command docstring.
 - `src/fitdocs/skills/fitdocs-workouts/SKILL.md` — the `Wellness channel`
   table and one routine sentence.
-- `docs/connectors.md`, `docs/wellness.md`, `docs/ownership-contract.md`
-  (the `pull` bullet only), `CHANGELOG.md`.
+- `src/fitdocs/contract.py` — `CONTRACT_VERSION` main + 1 and its history
+  paragraph (ContractWording).
+- `docs/connectors.md`, `docs/wellness.md`, `CHANGELOG.md`;
+  `docs/ownership-contract.md`: the version line, the "What changed at this
+  version" paragraph (replacing the previous lander's) and the `pull` bullet.
+- `tests/declaration_golden/*.AGENTS.md` — regenerated for the new version
+  line (every golden on `main` at landing, including peers').
 - `.kiro/specs/connectors/{requirements.md,spec.json}`,
-  `.kiro/specs/intervals-connector/{requirements.md,spec.json}` — amendment
+  `.kiro/specs/intervals-connector/{requirements.md,spec.json}`,
+  `.kiro/specs/wiki-contract/{requirements.md,spec.json}` — amendment
   records; `.kiro/steering/roadmap.md` — the Phase 12 `wellness-pull` line
-  and the two Existing Spec Update lines ticked at landing.
+  and the Existing Spec Update lines ticked by the completion gate.
 - Tests re-pinned (append-only where the pin is a list):
   `tests/connectors/test_protocol.py:191-194` (driven set),
   `tests/connectors/test_surface.py` (`EXPECTED_ALL`, `_DEFINING_MODULE`,
-  `:117-119` count 46 → 50), `tests/connectors/test_intervals.py:118`
+  the count at `:117-119` and
+  `test_import_fitdocs_connectors_exposes_exactly_46_names` at `:147-149`,
+  46 → 50), `tests/connectors/test_intervals.py:118`
   (capability set), `tests/connectors/conftest.py:359` and
   `tests/connectors/test_cli_connectors.py:106` (the "non-driven" default
   moves from `PULL_WELLNESS` to `PULL_PLANS`),
@@ -251,12 +266,20 @@ tests/connectors/
   the nothing-to-pull detail), `tests/connectors/test_ledger.py`
   (`LEDGER_VERSION` references at `:50`, `:146`, `:445-448`, `:651`),
   `tests/connectors/test_delivery.py` (escalation stays `.fit`),
-  `tests/connectors/test_docs.py` (`_EXPECTED_HEADINGS`),
+  `tests/connectors/test_docs.py` (`_EXPECTED_HEADINGS`; the instance-table
+  key pin at `:353-361`, which becomes `== _RESERVED_KEYS`),
+  `tests/connectors/test_settings.py:853-855` (`ConnectorInstance` field
+  names gain `wellness`),
+  `tests/connectors/test_cli_connectors.py:1737-1738` (the channel set
+  derived from `InstancePullReport` excludes `wellness`),
   `tests/connectors/test_intervals_docs.py:60-65` (subsection list),
   `tests/connectors/test_e2e.py` (`_fresh_synced_root` settings gain a
   wellness-enabled intervals instance and its key variable),
-  `tests/test_agent_skill.py` (`_PULL_EXCLUSIONS` gains `wellness`; the
-  wellness binding), `tests/test_confinement.py` (`WRITING_ENTRY_POINTS`
+  `tests/test_agent_skill.py` (`_PULL_EXCLUSIONS` at `:141` gains
+  `wellness` together with the report field; then the wellness binding),
+  `tests/index/test_contract_docs.py:140` and
+  `tests/index/derived/test_preserved.py:246` (the literal
+  `CONTRACT_VERSION`), `tests/test_confinement.py` (`WRITING_ENTRY_POINTS`
   gains `pull-wellness`), `tests/connectors/test_boundary.py` only if a
   module's import set changes (none planned).
 - `pyproject.toml` — unchanged: `[tool.mypy].files` already lists the
@@ -424,10 +447,10 @@ delivery's and lowers the mark.
 | 12.1 | connectors docs, framework | ConnectorsDocs | `docs/connectors.md` | — |
 | 12.2 | connectors docs, intervals.icu | ConnectorsDocs | `docs/connectors.md` `### Wellness` | — |
 | 12.3 | wellness docs | WellnessDocs | `docs/wellness.md` | — |
-| 12.4 | contract `pull` bullet | ContractWording | `docs/ownership-contract.md` | — |
+| 12.4 | contract `pull` bullet and version | ContractWording | `docs/ownership-contract.md`, `CONTRACT_VERSION`, declaration goldens | — |
 | 12.5 | skill table | SkillWellnessTable | `SKILL.md`, `tests/test_agent_skill.py` | — |
 | 12.6 | changelog | ChangelogEntry | `CHANGELOG.md` | — |
-| 12.7 | amendment records | SpecRecords | `requirements.md` of two specs | — |
+| 12.7 | amendment records | SpecRecords | `requirements.md` of three specs | — |
 | 13.1 | offline elsewhere | OfflineGuard | `tests/connectors/test_e2e.py` | — |
 | 13.2 | no dependency | OfflineGuard | `tests/test_determinism.py` | — |
 | 13.3 | determinism | IntervalsWellness, WellnessLedger | canonical bytes, sorted ledger | — |
@@ -518,7 +541,8 @@ class WellnessPuller(Protocol):
   `"WellnessDay"`, `"WellnessListing"` and `"WellnessPackage"` at its end, so
   the existing order is untouched; 46 → 50 names, pinned by
   `tests/connectors/test_surface.py` (`EXPECTED_ALL`, `_DEFINING_MODULE`,
-  the count at `:117-119`). The docstring's count follows (1.7).
+  the count at `:117-119`, and the import count at `:147-149`, whose test
+  name says 46). The docstring's count at `__init__.py:21` follows (1.7).
 
 #### WellnessSettingsKey (`connectors/settings.py`)
 - `_WELLNESS_KEY = "wellness"` joins `_RESERVED_KEYS` (`settings.py:74`), so
@@ -529,7 +553,8 @@ class WellnessPuller(Protocol):
   (<type>)"; `True` while `PULL_WELLNESS` is not in
   `connector.capabilities` → error "the <connector id> connector does not
   pull wellness" (2.3). `False` is accepted on any connector.
-- `ConnectorInstance` gains `wellness: bool = False` as its last field.
+- `ConnectorInstance` gains `wellness: bool = False` as its last field
+  (re-pin `tests/connectors/test_settings.py:853-855`).
 - The folder connector's `capabilities` stays `{PULL_ACTIVITIES}`
   (`folder.py`), so `wellness = true` on a folder instance is refused (2.5).
 
@@ -948,8 +973,11 @@ _WELLNESS_REPORT_ROWS: Final[tuple[tuple[str, str], ...]] = (
   tell the athlete (a platform's attribution vanished; that platform's own
   export can fill the gap); error → report the printed next step, never edit
   `fitdocs.toml` or set `wellness = false` yourself (12.5).
-- `tests/test_agent_skill.py`: `_PULL_EXCLUSIONS` gains `"wellness"` (the
-  pull table stays eight channels); `_WELLNESS_EXCLUSIONS =
+- `tests/test_agent_skill.py`: `_PULL_EXCLUSIONS` gains `"wellness"` in the
+  same change that adds `InstancePullReport.wellness` (otherwise
+  `test_literal_pull_channel_set_matches_the_derived_dataclass_fields`,
+  `:173-185`, reds at once; the pull table stays eight channels); then
+  `_WELLNESS_EXCLUSIONS =
   frozenset({"listed"})`, `_WELLNESS_CHANNELS_LITERAL` (seven names),
   `_SkillProfile.wellness_channels`, and three tests mirroring
   `:161-178`, `:798-827`, `:839-855` against `WellnessPullReport` and
@@ -989,15 +1017,37 @@ _WELLNESS_REPORT_ROWS: Final[tuple[tuple[str, str], ...]] = (
   `connectors.md#wellness` (12.3).
 - `docs/ownership-contract.md` `pull` bullet (`:881-899`): "fetches new
   activity files and, for an instance with wellness enabled, wellness files
-  …"; the never-writes list gains `wellness-archive/*` and `wellness/*`; no
-  version change (12.4; Decision 13).
+  …", each written under `<inbox>/<name>/` and removed by a later pull once
+  `wellness-archive/` holds identical bytes; the never-writes list gains
+  `wellness-archive/*` and `wellness/*` (12.4).
+- **ContractWording: the version.** `CONTRACT_VERSION` advances to main + 1
+  at landing (controller ruling R1, Decision 13): the pull's stated removal
+  guarantee now covers a second archive, it writes a non-activity file into
+  the inbox, and its never-writes list grows; `contract.py:329-335` says the
+  version "changes whenever a stated guarantee changes", and connectors' own
+  5 → 6 bump (`contract.py:355-366`) was for exactly what `pull` writes and
+  removes. The history paragraph: "Raised from ``N`` to ``N+1`` by
+  wellness-pull because the stated guarantees about what ``fitdocs pull``
+  writes and removes changed. For an instance with ``wellness = true`` the
+  pull also writes wellness files, ``wellness-<first>_<last>.json`` holding
+  the records the service returned, under ``<inbox>/<name>/``, and removes
+  each one once ``wellness-archive/`` holds identical bytes; it never writes
+  ``wellness-archive/`` or ``wellness/``. A connector's ledger that holds
+  wellness records is ledger format 2. Nothing is needed for existing
+  documents; set ``wellness = true`` on an instance to pull wellness." The
+  doc's version line and "What changed at this version" paragraph state the
+  same; the declaration goldens are regenerated; the literal pins
+  `tests/index/test_contract_docs.py:140` and
+  `tests/index/derived/test_preserved.py:246` move; the adjacency and head
+  pins (`tests/identity/test_contract_docs.py:144-179`) bind the paragraph
+  and the doc line to the constant.
 - `CHANGELOG.md` `[Unreleased]`: Added (the wellness pull, the `wellness`
   key, attribution, the wellness report table); Changed (ledger format 2 when
   wellness is enabled; an older fitdocs refuses such a ledger; to enable,
   set `wellness = true` and run `fitdocs pull --sync`) (12.6).
-- `connectors` Amendment N and `intervals-connector` Amendment 1 (next free
-  numbers at landing), text in [Existing Spec Amendments](#existing-spec-amendments)
-  (12.7).
+- `connectors` Amendment N, `intervals-connector` Amendment 1 and
+  `wiki-contract` Amendment N (next free numbers at landing), text in
+  [Existing Spec Amendments](#existing-spec-amendments) (12.7).
 
 ### Guards and pins
 - **OfflineGuard** (13.1, 13.2): `tests/connectors/test_e2e.py`'s
@@ -1078,6 +1128,14 @@ Every new assertion names the production mutation it dies on
 key `ik-synthetic-7Q2x9`, records built in the test with invented values and
 dates from `tests/fixtures/builder.py`'s epoch, athlete objects with invented
 lists. No real value, date or identifier.
+
+Shared helper: `tests/connectors/conftest.py` gains `ScriptedWellnessPuller`,
+built on `_ScriptedActivityPullerMixin` with a `capabilities=` override
+(default `{PULL_WELLNESS}`; `{PULL_ACTIVITIES, PULL_WELLNESS}` for run-order
+tests whose scripted activity listing raises), the way
+`ScriptedLoginConnector` is built (`conftest.py:331-368`), with
+`_typed_*` structural lines for it as a `Connector` and a `WellnessPuller`
+beside `conftest.py:418-427`.
 
 ### Unit
 - Protocol: `DRIVEN_CAPABILITIES` is exactly the two (mutation: leave
@@ -1224,9 +1282,13 @@ types, booleans and counts.
 Findings are appended to `research.md` "Live check findings" with the check
 date and each TBC confirmed or contradicted (11.5). A contradiction amends
 this design at its TBC marker and adds a numbered repair task before
-completion (11.6): TBC-W3 or TBC-W4 contradicted → a `wellness-store`
-intervals-format amendment (its `FIELD_METRICS`, its revision normalization,
-`rules_version` + 1, `docs/wellness.md`'s table) carried by the repair task;
+completion (11.6): TBC-W1 contradicted → `list_wellness`'s body and `id`
+checks and `_wellness_windows`, plus a `wellness-store` intervals-format
+amendment, because its recognizer (rule a, the `YYYY-MM-DD` `id`) and its
+parser (`date(id)`) read the same form; TBC-W3 or TBC-W4 contradicted → a
+`wellness-store` intervals-format amendment (its `FIELD_METRICS`, its
+revision normalization, `rules_version` + 1, `docs/wellness.md`'s table)
+carried by the repair task;
 TBC-W5 → `_wellness_origins` gains the switch; TBC-W6 → the connector's
 revision becomes the content digest of the record without `updated` and the
 computed fields; TBC-W2 or TBC-W7 → `_wellness_windows`.
@@ -1251,6 +1313,14 @@ landing.
   the wellness items, recorded in wellness-pull's `research.md`
   (wellness-pull Req 11); Req 10.1 gains the wellness documentation
   (wellness-pull Req 12.2).
+- **wiki-contract (Amendment N; wellness-store and recovery each take one
+  too)**: Requirement 2 criterion 2.15's statement of what `pull` writes and
+  removes extends to wellness deliveries (written under the instance's inbox
+  subdirectory, removed once `wellness-archive/` holds identical bytes) and
+  to the pull never writing `wellness-archive/` or `wellness/`; the published
+  contract's version identifier changes on account of it (main + 1 at
+  landing); that bump and its document are wellness-pull's to make
+  (wellness-pull Req 12.4).
 
 ## Settled Seams (for later specs)
 - `fitdocs.connectors.WellnessPuller`, `WellnessDay`, `WellnessListing`,
@@ -1262,6 +1332,8 @@ landing.
 - Delivered files: `<inbox>/<instance>/wellness-<first>_<last>.json`, one per
   calendar year of changed days; origin tokens per `wellness-store` seam 4.
 - Ledger `[wellness]` table, version 2.
+- `CONTRACT_VERSION` advances once here (main + 1 at landing); later Phase 12
+  landers re-derive main + 1 again.
 - Downstream display: values whose `origin` is `garmin` carry Garmin
   attribution wherever a page shows them (intervals.icu terms §1.1), which
   `recovery` and `workout-wellness` own.
@@ -1294,8 +1366,14 @@ decisions; each is revisable at review.
     and the remedies, not the generic blocked-client step.
 12. Activities run before wellness; only an activity authentication failure
     skips wellness.
-13. No `CONTRACT_VERSION` advance: the `pull` bullet's wording changes, its
-    guarantees do not.
+13. **Reversed at the Step 3.5 review (controller ruling R1):**
+    `CONTRACT_VERSION` advances to main + 1 at landing. The draft argued the
+    `pull` bullet's guarantees were unchanged; they are not: the removal
+    guarantee now covers a second archive, the pull writes non-activity files
+    into the inbox, and the never-writes list grows. `contract.py:329-335`
+    ties the version to any stated guarantee, and the 5 → 6 precedent
+    (`contract.py:355-366`) bumped for exactly what `pull` writes and
+    removes.
 14. A separate wellness report section and CLI table; the skill gets a second
     bound table.
 15. One athlete-settings request per package.
