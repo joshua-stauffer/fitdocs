@@ -1,0 +1,23 @@
+{
+  "feature_name": "workout-wellness",
+  "created_at": "2026-10-12T22:21:00Z",
+  "updated_at": "2026-10-12T23:04:29Z",
+  "language": "en",
+  "phase": "tasks-generated",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  },
+  "ready_for_implementation": true,
+  "phase_note": "Generated 2026-10-12/13 by the Phase 12 spec batch (wave 3) in auto-approve mode from base c2a7908 (wellness-store, recovery, wellness-pull, apple-health-import, hr-derivation specs merged, not implemented). 12 requirements / 66 acceptance criteria; 5 major / 15 leaf tasks. Design: a refreshed `morning` region (contract.REFRESHED_REGIONS, not preserved; DOC_BANNER unchanged) placed before Training Load on every view, filled by the whole-root morning-of pass (fitdocs.morning) chained after the page writes of sync, the drain, pull --sync and regen, before the load and index passes; block figures only from recovery's Baselines.shown/on, formatted like the recovery page; printed-facts fingerprint in a stamp line, byte comparison decides writes; Garmin attribution from the origins of every value a printed figure draws on; index render fingerprint blanks REFRESHED_REGIONS (analytics-index amendment). DOC_VERSION and CONTRACT_VERSION main + 1 at landing; SCHEMA_VERSION unchanged. Amendments carried: workout-docs, wiki-contract, analytics-index. Step 3.5: independent reviewer via the controller, round 1 NEEDS_FIXES (14 findings + rulings R1-R4, applied), round 2 resolved + 5 minor items applied without further review. Implement last: waits for wellness-store and recovery on main."
+}
