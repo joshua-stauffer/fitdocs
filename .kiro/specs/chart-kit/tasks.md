@@ -281,7 +281,7 @@ every registered kind and find its cases by the test-module convention
     green.
   - _Requirements: 3.1, 5.1, 7.5, 11.1_
 
-- [ ] 1.4 Build the golden harness and the test data builders
+- [x] 1.4 Build the golden harness and the test data builders
   - **`tests/render/charts/kit/goldens.py`**: `golden_path(kind, case,
     suffix)` under `tests/render/charts/kit/golden/<kind>/`;
     `assert_golden(path, text)` comparing `text.encode("utf-8")` with
