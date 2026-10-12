@@ -20,9 +20,10 @@ only through `fitdocs.wellness.read_series`.
 **Impact**: `wellness-store`'s registry gains one source (`apple-health`,
 kind HUB) and one format (`apple-health`, suffixes `.zip` and `.xml`). The
 drain therefore treats `.zip` and `.xml` inbox files as wellness candidates.
-`wellness-archive/apple-health/` holds extracts. One amendment to
-`wellness-store`'s rebuild engine (A1) stops it parsing superseded entries.
-No owned location, page type, frontmatter key or index table is added, so
+`wellness-archive/apple-health/` holds extracts. Because the default source
+order gains `apple-health`, the effective precedence recorded in every series
+manifest changes, so every existing series is rebuilt once after upgrade
+(byte-identical year files when no Apple entry exists). No owned location, page type, frontmatter key or index table is added, so
 `CONTRACT_VERSION`, `DOC_VERSION` and the index `SCHEMA_VERSION` do not move.
 
 ### Goals
@@ -53,15 +54,18 @@ No owned location, page type, frontmatter key or index table is added, so
 - The extract layout `fitdocs.apple-health-extract` (version 1) and the
   promise that every later fitdocs reads every version written.
 - The rules recorded by `RULES_VERSION` of the `apple-health` format.
-- Amendment A1 to `wellness-store` (engine and archive: parse only the latest
-  entry of a `LATEST_ENTRY` format), carried out by this spec's tasks.
 - The Apple Health parts of `docs/wellness.md` and `docs/inbox.md`, and the
   CHANGELOG entries.
 
 ### Out of Boundary
-- Recognition dispatch, hashing, settling, the commit protocol, quarantine,
-  disposition, the merge, precedence, the series files, the reader, `check`
-  and the index table (`wellness-store`). This spec implements the registry
+- Recognition dispatch, hashing, settling, the commit protocol (including
+  how an extractor error, an `OSError` and an interrupt are classified),
+  quarantine, disposition, the rebuild engine (including reading only the
+  order of a superseded `LATEST_ENTRY` entry through
+  `archive.read_entry_order`), the merge, precedence, the series files, the
+  reader, `check` and the index table (`wellness-store`; the controller
+  folded the order-only rebuild and the extractor edge behaviours into
+  `wellness-store`'s own spec at the Phase 12 cross-spec review). This spec implements the registry
   contract and never re-implements any of them.
 - The day-boundary rule: this spec calls `wellness_day_of_sleep_end` and the
   local date of a recorded offset; it defines no boundary.
@@ -89,8 +93,6 @@ No owned location, page type, frontmatter key or index table is added, so
 - `fitdocs.wellness.registry` imports the package (`from
   fitdocs.wellness.formats import apple`) and appends `apple.SOURCE` and
   `apple.FORMAT`.
-- Amendment A1 touches only `fitdocs.wellness.archive` and
-  `fitdocs.wellness.engine`, inside their existing dependencies.
 
 ### Revalidation Triggers
 - Any change to the metrics an Apple record type feeds, the writing-source
@@ -101,7 +103,8 @@ No owned location, page type, frontmatter key or index table is added, so
   old one).
 - The source id `apple-health`, its kind, or the origin token `apple`.
 - Upstream: any change to `FormatSpec`, `ExtractContext`, `DaySnapshot`,
-  `wellness_day_of_sleep_end`, `accept_value` or the merge's `LATEST_ENTRY`
+  `wellness_day_of_sleep_end`, `accept_value`, `archive.read_entry_order`,
+  the engine's order-only reading of superseded entries, or the merge's `LATEST_ENTRY`
   rule.
 
 ## Architecture
@@ -128,8 +131,12 @@ No owned location, page type, frontmatter key or index table is added, so
   `wellness-archive/<format>/<sha256 of the original><archived_suffix>`; the
   temp file `.incoming-*.tmp` is removed on any outcome but success.
 - **Merge** (§ Merge): `LATEST_ENTRY` keeps the greatest `(order, ref)`; the
-  others are recorded as superseded. `rebuild_series` (§ Engine) calls
-  `parse_entry` on **every** entry first, which A1 changes.
+  others are recorded as superseded. As amended by the controller (folded
+  into `wellness-store`'s spec), `rebuild_series` reads each `LATEST_ENTRY`
+  entry's order through `archive.read_entry_order` and calls `parse_entry`
+  on the winner only, so a superseded extract costs one header read
+  (Req 6.5 is met by this together with `entry_order` reading the header
+  alone).
 - **Day rule** (§ Seams 4): `wellness_day_of_sleep_end(end)` is the date of
   `end + 6 h` in `end`'s own offset; a naive datetime raises `ValueError`.
 - **Current code**: the drain reads FIT candidates whole
@@ -204,37 +211,44 @@ tests/wellness/apple/
 ├── __init__.py
 ├── builders.py            # synthetic export.xml / export.zip builder (defect, ZIP64, localized-name options)
 ├── test_records.py        # RawRecord, normalize_device
+├── test_builders.py       # positive controls: each injected defect breaks stdlib iterparse; ZIP64 header
 ├── test_defects.py        # the three rewrites, chunk boundaries, line breaks, counts
 ├── test_sleep.py          # sweep, overlap, priorities, asleep unions
 ├── test_reader.py         # recognition helpers, zip/xml opening, ZIP64, depth-1, ExportDate, errors,
 │                          #   progress throttle, memory flatness
 ├── test_extract.py        # codec round trip, determinism, header, trailer, versions, corruption
-├── test_reduce.py         # writer classes, per-type rules, units, validation, order and TZ independence
+├── test_reduce.py         # writer classes, FINAL/LARGEST_TOTAL/LATEST rules, units, validation, order
+│                          #   independence (resting HR, VO2max, steps and weight records only)
+├── test_reduce_nights.py  # sleep nights, readings taken asleep, unknown sleep state, day assignment
 ├── test_format.py         # FormatSpec, registration, recognize matrix, extract→parse through the contract
 ├── test_import.py         # through wellness-store's intake, commit, engine and drain: supersession,
-│                          #   all-or-nothing, quarantine, changed-during-run, CLI progress, confinement
+│                          #   all-or-nothing, quarantine, changed-during-run, drain progress, confinement
+├── test_e2e.py            # CLI: sync, check, regen, query
+├── test_determinism.py    # child processes under two TZs; offline drain
 └── test_docs_apple.py     # docs table equals POLICIES; suffixes; how-to-export section
-tests/wellness/test_engine_latest_entry.py   # Amendment A1
 ```
 
 ### Modified Files
 - `src/fitdocs/wellness/registry.py` — append `apple.SOURCE` to `SOURCES`
   and `apple.FORMAT` to `FORMATS` (append-only; keep both sides on rebase).
-- `src/fitdocs/wellness/archive.py` — A1: `read_entry_order(entry)`.
-- `src/fitdocs/wellness/engine.py` — A1: `rebuild_series` parses only the
-  latest entry of each `LATEST_ENTRY` format.
-- `.kiro/specs/wellness-store/requirements.md` — A1 recorded as the next
-  free amendment number (Req 17.3 extended).
 - `tests/wellness/test_boundary.py` — rank-table rows and the literal module
-  list gain the seven apple modules (order of § Allowed Dependencies).
-- `wellness-store` pins that enumerate the registry: the
+  list gain the seven apple modules (order of § Allowed Dependencies),
+  inserted into the gapped ranks `wellness-store` leaves between `spec` and
+  `registry` (tuple ranks if no gap exists), never renumbering.
+- `wellness-store` pins that enumerate the registry or its consequences: the
   `candidate_suffixes()` value (`{".json"}` → `{".json", ".xml",
   ".zip"}`), the `default_source_order()` value (→ `("garmin-export",
-  "apple-health", "intervals-icu")`), and any count of `SOURCES`/`FORMATS`;
-  each is re-pinned append-only.
+  "apple-health", "intervals-icu")`), any count of `SOURCES`/`FORMATS`, and
+  every literal manifest `[precedence] default` list or `inputs_digest` value
+  (the effective order per metric gains `apple-health`); each is re-pinned
+  append-only.
 - `docs/wellness.md` — the "Apple Health" section and Apple's per-metric
   definitions; `docs/inbox.md` — `.zip`/`.xml` as wellness candidates and
-  the long import; `CHANGELOG.md` — Unreleased entries.
+  the long import; `CHANGELOG.md` — Unreleased entries; any other text that
+  names `.json` as the only wellness suffix or `garmin-export, intervals-icu`
+  as the default order (candidates: `docs/configuration.md` `[wellness]`,
+  the `unrecognized` row of `src/fitdocs/skills/fitdocs-workouts/SKILL.md`,
+  the `DEFAULT_IGNORE_PATTERNS` docstring in `src/fitdocs/inbox.py`).
 
 ## System Flows
 
@@ -291,7 +305,7 @@ Every stage streams; the only buffers are the filter's prolog (≤ 1 MiB), a
 carried partial `WorkoutStatistics` tag (≤ 64 KiB), the reader's chunk and the
 current depth-1 element, which is cleared with the root after each use.
 
-### Rebuild with Amendment A1
+### Rebuild (provided by `wellness-store`, as amended by the controller)
 
 ```mermaid
 flowchart TD
@@ -305,6 +319,10 @@ flowchart TD
     Super --> Merge
     ParseAll --> Merge
 ```
+
+This spec's part is `entry_order`, which reads the extract's header line and
+nothing else, so a superseded extract whose records are damaged still orders
+correctly and costs one line of decompression.
 
 ## Requirements Traceability
 
@@ -326,7 +344,7 @@ flowchart TD
 | 3.5 | Other malformations fail naming the line | Reader | `WellnessFormatError` | Extractor |
 | 3.6 | Export never modified | AppleFormat | read-only open | Extractor |
 | 4.1 | Failure archives nothing, series unchanged | AppleFormat, wellness-store Archive | `Invalid` | Import |
-| 4.2 | Quarantined like any wellness file | wellness-store DrainWellnessStep | quarantine record | Import |
+| 4.2 | Quarantined like any wellness file; not imported again | wellness-store DrainWellnessStep | quarantine record | Import |
 | 4.3 | Changed during import deferred | wellness-store Archive | post-extract re-hash | Import |
 | 4.4 | Interrupted import leaves nothing | wellness-store Archive | temp removal | Import |
 | 5.1, 5.6 | Extract holds the eight types' records only, verbatim | Reader, ExtractCodec, Records | `RawRecord`, `normalize_device` | Extractor |
@@ -337,7 +355,7 @@ flowchart TD
 | 5.9 | Every extract version stays readable | ExtractCodec | `READABLE_VERSIONS` | — |
 | 5.10 | Original treated like any handled file | wellness-store DrainWellnessStep | disposition | Import |
 | 6.1, 6.2, 6.3, 6.4 | Latest export date wins; ties by ref; superseded kept | AppleFormat, wellness-store Merge | `entry_order`, `Supersession.LATEST_ENTRY` | Rebuild |
-| 6.5 | Superseded extracts read only for their order | EngineLatestOnly (A1) | `read_entry_order`, `rebuild_series` | Rebuild |
+| 6.5 | Superseded extracts read only for their order | AppleFormat, ExtractCodec; wellness-store Engine | `entry_order` via `read_header`; `archive.read_entry_order` | Rebuild |
 | 6.6 | Consequences documented | Docs | `docs/wellness.md` | — |
 | 7.1, 7.6, 7.7 | Type-to-metric map; nothing else | Reduce | `POLICIES` | Parse |
 | 7.2 | Source `apple-health` | AppleFormat | `SOURCE` | — |
@@ -382,9 +400,8 @@ flowchart TD
 | ExtractCodec | apple I/O | Write and read the extract | 3.4, 5.1-5.7, 5.9 | Records, spec (P0) | Service, State |
 | Sleep | apple core | Per-stage sweep and asleep unions | 10.1-10.3, 11.3 | — | Service |
 | Reduce | apple core | Writer rules and daily values | 7, 8, 9, 10.4-10.8, 11, 12 | Records, Sleep, model (P0) | Service |
-| AppleFormat | apple declaration | `SOURCE`, `FORMAT`, the four callables | 1, 3.6, 4.1, 5.8, 6.1-6.4, 7.2 | all of the above, probe (P0) | Service |
+| AppleFormat | apple declaration | `SOURCE`, `FORMAT`, the four callables | 1, 3.6, 4.1, 5.8, 6.1-6.5, 7.2 | all of the above, probe (P0) | Service |
 | Registration | wellness registry | Append the source and format | 1.1, 1.2, 7.2 | AppleFormat (P0) | State |
-| EngineLatestOnly | wellness engine (A1) | Parse only the latest entry | 6.5 | archive, merge (P0) | Batch |
 | Docs | docs | How to export; what is imported; release notes | 1.6, 2.5, 6.6, 8.7, 9.8, 10.8, 13 | — | — |
 | Builders | tests | Synthetic exports | 14.4 | — | — |
 
@@ -826,35 +843,6 @@ def entry_order(stream: BinaryIO) -> str: ...
   `default_source_order()` becomes `("garmin-export", "apple-health",
   "intervals-icu")` (7.2).
 
-### Upstream Amendment
-
-#### EngineLatestOnly — Amendment A1 to `wellness-store` (`wellness/archive.py`, `wellness/engine.py`)
-
-| Field | Detail |
-|-------|--------|
-| Intent | Read only the order of a superseded entry; parse only the winner |
-| Requirements | 6.5 |
-
-**Contracts**: Batch [x]
-- `archive.read_entry_order(entry) -> str | None`: opens the entry and
-  returns `entry.format.entry_order(stream)` (or `None` when the format
-  declares none); `OSError` and `WellnessFormatError` propagate exactly like
-  `parse_entry`'s.
-- `engine.rebuild_series`: for each format with `Supersession.LATEST_ENTRY`,
-  read every entry's order, pick the greatest `(order, ref)`, `parse_entry`
-  it alone, and pass each other entry to `merge` as `ParsedEntry(entry_ref,
-  format_id, source_id, LATEST_ENTRY, order, snapshots=())`; entries of other
-  formats are parsed as before. `merge`, the manifest, `SeriesReport` and
-  `check` are unchanged (the merge selects the same winner from the same
-  orders).
-- Error semantics: an unreadable order → `DEFERRED`, an invalid one →
-  `FAILED`, as today; a superseded entry whose records are invalid no longer
-  fails a rebuild, since it is not parsed.
-- Record: `wellness-store` requirements.md gains "Amendment N (date): parse
-  only the latest entry, landed by apple-health-import", extending Req 17.3
-  with "and shall read from an entry that a later entry supersedes only what
-  its order needs".
-
 ### Documentation
 
 #### Docs (`docs/wellness.md`, `docs/inbox.md`, `CHANGELOG.md`)
@@ -874,14 +862,23 @@ def entry_order(stream: BinaryIO) -> str: ...
   iCloud inbox avoids a re-hash on every drain), naps, absent HRV for nights
   without the watch, and what is not imported. Apple's definition of each of
   its 12 metrics is added wherever the page states per-source definitions.
+  The day rules refer to the page's one statement of the day-boundary rule
+  and never restate it (`wellness-store` pins that statement to appear
+  exactly once across `docs/`).
 - `docs/inbox.md`: `.zip` and `.xml` join the wellness candidate suffixes; a
   `.zip` or `.xml` that is not an Apple Health export is reported
   unrecognized and is silenced with an `[inbox] ignore` pattern; an export
   import takes minutes and prints progress on a terminal.
 - `CHANGELOG.md` Unreleased — Added: the Apple Health import (what it reads,
   the extract, supersession); Changed (inbox interface): `.zip` and `.xml`
-  inbox files are wellness candidates, with the `[inbox] ignore` action.
-  Links are absolute `https://` URLs (`tests/test_changelog.py`).
+  inbox files are wellness candidates, with the `[inbox] ignore` action; the
+  default source order gains `apple-health`, so the first `fitdocs sync` or
+  `fitdocs regen` after upgrading rebuilds the series once. Links are
+  absolute `https://` URLs (`tests/test_changelog.py`).
+- Every other text that names `.json` as the only wellness suffix or
+  `garmin-export, intervals-icu` as the whole default order is updated
+  (found by grep across `docs/`, `src/fitdocs/skills/` and `src/fitdocs/`
+  docstrings; candidates in Modified Files).
 
 ## Data Models
 
@@ -1005,7 +1002,10 @@ a translated main-document name with its `_cda` companion, a `__MACOSX` copy).
   through real `CandidateProbe`s for the zip, the bare XML, a Garmin export
   zip, an `export_cda.xml`, a random XML (only the first two claimed); the
   probe's counting opener shows recognition read nothing beyond the head and
-  central directory.
+  central directory (with a positive control that it observed reads of the
+  candidate); `entry_order` over an extract with a valid header and corrupt
+  record lines returns the header's UTC export date (6.5; mutation:
+  `entry_order` through `read_records`).
 - **Import** (through `wellness-store`'s intake and engine): a zip export
   drained → entry `wellness-archive/apple-health/<sha of the zip>.jsonl.gz`,
   header sha and size equal the zip's; series values for `apple-health` with
@@ -1014,16 +1014,16 @@ a translated main-document name with its `_cda` companion, a `__MACOSX` copy).
   differs; an older export drained later → still superseded; a defective
   export imports with counts in the trailer; a malformed export and an export
   with an unknown unit → failure, no entry, no temp file, series bytes and
-  mtimes untouched, quarantined, reported quarantined on the next drain; the
-  candidate modified inside the extractor → deferred; a `KeyboardInterrupt`
-  raised from the progress callback mid-import propagates and leaves no entry
-  and no temp file (4.4); the original left in the inbox (leave) or moved
-  (move); a CLI drain on a terminal prints percentage
-  lines (test-forced tty) and none otherwise.
-- **A1**: three entries of a test `LATEST_ENTRY` format → `parse` called once
-  (counting wrapper); a superseded entry with a valid header and a corrupt
-  body → `REBUILT`; an unreadable superseded header → `DEFERRED`. Mutation:
-  parse every entry.
+  mtimes untouched, quarantined, reported quarantined on the next drain
+  without being extracted again (the probe and hash reads are allowed); a
+  bare `.xml` candidate rewritten in place, same length, inside already-read
+  bytes during the import → deferred as changed during the run; a
+  `KeyboardInterrupt` raised from the progress callback mid-import
+  propagates and leaves no entry and no temp file (4.4); a superseded extract
+  corrupted after archiving still lets `regen` report `REBUILT` (6.5); the
+  original left in the inbox (leave) or moved (move); the drain's progress
+  callback receives increasing percents ending at 100. The terminal printer
+  that turns those calls into lines is `wellness-store`'s and tested there.
 
 ### E2E Tests
 - `fitdocs sync` (drain) on an inbox with a synthetic `export.zip`: exit 0,
@@ -1036,8 +1036,11 @@ a translated main-document name with its `_cda` companion, a `__MACOSX` copy).
   N records and of 4N records (mostly unread heart-rate records) differs by
   less than 50 % (mutation: drop `root.clear()`, the 4N peak grows about
   fourfold).
-- The extractor reads the candidate only through bounded reads (a counting
-  wrapper sees no unsized `read()`).
+- The extractor reads the candidate only through bounded reads: every read a
+  counting wrapper sees requests at most `CHUNK_BYTES`, or is `zipfile`'s
+  end-record read beginning within `ZIP_MAX_COMMENT + 22` bytes of the end of
+  the file (Python 3.11's `zipfile._EndRecData` reads that tail unsized); the
+  wrapper's positive control is that it observed reads of the candidate.
 - The extract and the snapshots are identical when built in child processes
   under `TZ=Pacific/Auckland` and `TZ=America/Los_Angeles`.
 - Import time is not asserted in CI; the maintainer-only smoke task measures
@@ -1061,14 +1064,29 @@ a translated main-document name with its `_cda` companion, a `__MACOSX` copy).
 - Rebuild: one pass over the latest extract (JSON decode per record; seconds
   to tens of seconds for a decade), memory proportional to sleep segments and
   spot readings (tens of MB); superseded extracts cost one header read each
-  (A1).
+  (`wellness-store`'s order-only rebuild plus the header-only
+  `entry_order`).
 - Extract size: the eight types only; steps dominate. Expected a few MB to a
   few tens of MB compressed for a decade; the smoke task records it.
 
-## Upstream Amendments to `wellness-store`
-- **A1 — parse only the latest entry** (engine, archive, Req 17.3): see
-  [EngineLatestOnly](#enginelatestonly--amendment-a1-to-wellness-store-wellnessarchivepy-wellnessenginepy).
-  The amendment number is the next free one at landing.
+## Upstream Behaviour Consumed from `wellness-store`
+This spec carries no amendment. At the Phase 12 cross-spec review the
+controller folded two needs of this spec into `wellness-store`'s own spec, and
+this spec consumes them as provided:
+- **Order-only rebuild**: `archive.read_entry_order(entry)`; `rebuild_series`
+  parses only the greatest `(order, ref)` entry of a `LATEST_ENTRY` format
+  (`wellness-store` Req 17.3, § Archive, § Engine, § Seams 3; its tasks 2.6
+  and 3.2; a header-only test-only `entry_order` in its 1.3 helper).
+- **Extractor edge behaviour in `commit_extract`**: an extractor
+  `WellnessFormatError` → `Invalid` (failed, quarantined); an extractor
+  `OSError` → `Unreadable` (deferred); the `.incoming-*` temp file removed on
+  `KeyboardInterrupt`; the original re-hashed **before** an extractor error is
+  classified, so a file changed or truncated mid-read is deferred, not
+  quarantined (`wellness-store` task 2.6).
+- **Boundary guard ranks** left gapped between `spec` and `registry`
+  (`wellness-store` task 1.4), and the counting opener's read rule (at most
+  `CHUNK_BYTES`, or `zipfile`'s end-record read within `ZIP_MAX_COMMENT + 22`
+  bytes of end of file; `wellness-store` task 1.2).
 
 ## Decisions Taken Without Asking
 Taken in auto-approve mode, consistent with the roadmap's "Decisions taken
@@ -1112,7 +1130,9 @@ at discovery" and the brief; each is revisable at review.
 16. Progress is the share of the main document's (uncompressed) bytes, at most
     once per whole percent.
 17. `covers` is all 12 metrics and `revision` is `None` on every snapshot.
-18. Amendment A1 instead of parsing every superseded extract on each rebuild.
+18. Superseded extracts are read for their order only. `entry_order` reads
+    the header line alone, and `wellness-store`'s rebuild parses only the
+    winner. The controller folded the rebuild half into `wellness-store`.
 19. No owned location, page or key: `CONTRACT_VERSION`, `DOC_VERSION` and
     `SCHEMA_VERSION` unchanged; no packaged-skill change (the drain's report
     channels are unchanged).

@@ -131,7 +131,7 @@ series.
 
 #### Acceptance Criteria
 1. If any part of an export cannot be read or does not satisfy this feature's rules, then fitdocs shall archive nothing for the export, leave the series unchanged, and report the export as failed with the reason.
-2. When an import fails, fitdocs shall record the export in the inbox quarantine record exactly as for any wellness file that cannot be parsed, so that later drains report it as quarantined without reading it again until a retry is requested.
+2. When an import fails, fitdocs shall record the export in the inbox quarantine record exactly as for any wellness file that cannot be parsed, so that later drains report it as quarantined without importing it again until a retry is requested.
 3. If an export's bytes change while it is being imported, then fitdocs shall archive nothing for it and defer it to a later drain with a reason saying it changed during the run.
 4. If an import is interrupted, then fitdocs shall leave no archive entry and no partial file of it in the wellness archive.
 

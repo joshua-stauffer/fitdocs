@@ -172,8 +172,10 @@
     feature emits exist already, so no metric or unit is added.
   - CLI (§ CliWellness): a progress printer writes `"<rel>: <percent>%"` to
     stderr on a terminal; it does not throttle, so the extractor must.
-- **Implications**: the format is a pure plug-in; the only upstream change is
-  amendment A1 (below).
+- **Implications**: the format is a pure plug-in. Its one upstream need, a
+  rebuild that reads superseded entries only for their order, was proposed
+  as amendment A1 and folded by the controller into `wellness-store`'s own
+  spec at the Step 3.5 review (below).
 
 ### Current code that bounds the design (main at the branch base)
 - `sync.py:888-890` reads each stable FIT candidate whole
@@ -312,13 +314,21 @@
   and invalid UTF-8; they fail the import with a line number and become a
   follow-up if seen.
 
-### Decision: Amendment A1 to `wellness-store` — parse only the latest entry
+### Decision: Superseded extracts are read for their order only
 - **Context**: Req 6.5; with monthly exports the rebuild would parse every
   past extract (seconds each) on every `regen`.
-- **Selected**: `rebuild_series` reads `entry_order` for every entry of a
-  `LATEST_ENTRY` format first (header only), and calls `parse_entry` only for
-  the greatest `(order, ref)`; superseded entries reach the merge with no
-  snapshots. The merge, the manifest and `check` are unchanged.
+- **Selected**: `entry_order` reads the extract's header line alone; the
+  rebuild reads every `LATEST_ENTRY` entry's order through
+  `archive.read_entry_order` and calls `parse_entry` only for the greatest
+  `(order, ref)`. Proposed here as amendment A1; at the Step 3.5 review the
+  controller folded the rebuild half (with the extractor edge behaviours of
+  `commit_extract`, gapped boundary-guard ranks and the counting opener's
+  zipfile end-record rule) into `wellness-store`'s own spec, so this spec
+  consumes it as provided.
+- **Verified evidence for the counting-opener rule**: CPython 3.11.15
+  `zipfile._EndRecData` calls `fpin.read()` without a size after seeking to
+  the end record (`zipfile.py:320`, `:342`); `is_zipfile` and `ZipFile()`
+  both go through it.
 
 ## Risks & Mitigations
 - Identifier or unit strings differ from knowledge (VO2max unit, SpO2
