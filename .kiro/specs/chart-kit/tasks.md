@@ -799,7 +799,7 @@ every registered kind and find its cases by the test-module convention
   - _Boundary: scatter kind_
   - _Depends: 3.1, 3.3, 3.4, 4.2_
 
-- [ ] 5.6 (P) Implement the histogram kind with its goldens
+- [x] 5.6 (P) Implement the histogram kind with its goldens
   - **`kit/kinds/histogram.py`**: `KIND` per the kind table (`bins`,
     `bin_width`, bound 100 bins reduce) and rules (`_validate`: both options
     → `option_conflict`; `_check`: more than 100 bins → `over_bound`; the
