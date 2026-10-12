@@ -81,9 +81,11 @@ No owned location, page type, frontmatter key or index table is added, so
   `registry` or any module to its right in `wellness-store`'s one-way order,
   nor `sync`, `inbox`, `cli`, `index`, `layout` or anything with network or
   clock access.
-- Inside the package the order is one-way: `records`, `defects`, `sleep`
-  (leaves) → `reader`, `extract` → `reduce` → the package `__init__` (the
-  format declaration). No module imports one to its right.
+- Inside the package the order is one-way: `records`, `sleep` (leaves) →
+  `defects` → `reader`, `extract` → `reduce` → the package `__init__` (the
+  format declaration). `extract` imports only `records`; `reader` imports
+  `records` and `defects`; `reduce` imports `records` and `sleep`. No module
+  imports one to its right.
 - `fitdocs.wellness.registry` imports the package (`from
   fitdocs.wellness.formats import apple`) and appends `apple.SOURCE` and
   `apple.FORMAT`.
@@ -187,11 +189,12 @@ graph TB
 src/fitdocs/wellness/formats/apple/
 ├── __init__.py   # The format declaration: SOURCE, FORMAT, METRICS, FORMAT_ID, ARCHIVED_SUFFIX,
 │                 #   RULES_VERSION, recognize, extract, parse, entry_order (composes the modules below)
-├── records.py    # AppleType, SleepState, RECORD_ATTRIBUTES, RawRecord, normalize_device (leaf)
-├── defects.py    # DefectFilter, Corrections, CONTROL_BYTES, PROLOG_LIMIT, MAX_TAG_BYTES (leaf)
+├── records.py    # AppleType, SleepState, RECORD_ATTRIBUTES, RawRecord, ExportDate, Corrections,
+│                 #   ExportItem, normalize_device (leaf: the item types every module exchanges)
+├── defects.py    # DefectFilter, CONTROL_BYTES, PROLOG_LIMIT, MAX_TAG_BYTES
 ├── sleep.py      # Stage, Segment, NightTotals, night_totals, asleep_intervals (pure, leaf)
 ├── reader.py     # MAIN_DOCUMENT, main_member, looks_like_export_document, MainDocument,
-│                 #   open_main_document, ExportDate, ExportItem, iter_items (streaming XML)
+│                 #   open_main_document, iter_items (streaming XML)
 ├── extract.py    # EXTRACT_FORMAT, EXTRACT_VERSION, ExtractHeader, export_date_utc, write_extract,
 │                 #   read_header, read_records (the extract codec)
 └── reduce.py     # Writer, writer_of, device_maker_model, TypePolicy, POLICIES, APPLE_ORIGIN,
@@ -373,10 +376,10 @@ flowchart TD
 
 | Component | Domain/Layer | Intent | Req Coverage | Key Dependencies | Contracts |
 |-----------|--------------|--------|--------------|------------------|-----------|
-| Records | apple core | Record types, sleep states, the raw record | 5.1, 7.1, 10.6 | — | State |
-| DefectFilter | apple I/O | Byte-level rewrites of the three defects | 3.1-3.4, 3.6 | spec (P0) | Service |
+| Records | apple core | Record types, sleep states, the exchanged items | 3.4, 5.1, 7.1, 10.6 | — | State |
+| DefectFilter | apple I/O | Byte-level rewrites of the three defects | 3.1-3.4, 3.6 | Records, spec (P0) | Service |
 | Reader | apple I/O | Recognition helpers; stream the main document's items | 1.1-1.5, 2.1-2.4, 3.5, 5.1, 5.6 | Records, DefectFilter (P0) | Service |
-| ExtractCodec | apple I/O | Write and read the extract | 3.4, 5.1-5.9 | Records, spec (P0) | Service, State |
+| ExtractCodec | apple I/O | Write and read the extract | 3.4, 5.1-5.7, 5.9 | Records, spec (P0) | Service, State |
 | Sleep | apple core | Per-stage sweep and asleep unions | 10.1-10.3, 11.3 | — | Service |
 | Reduce | apple core | Writer rules and daily values | 7, 8, 9, 10.4-10.8, 11, 12 | Records, Sleep, model (P0) | Service |
 | AppleFormat | apple declaration | `SOURCE`, `FORMAT`, the four callables | 1, 3.6, 4.1, 5.8, 6.1-6.4, 7.2 | all of the above, probe (P0) | Service |
@@ -391,8 +394,8 @@ flowchart TD
 
 | Field | Detail |
 |-------|--------|
-| Intent | The eight record types, the sleep states and the raw record that travels from reader to codec to reducer |
-| Requirements | 5.1, 7.1, 10.6 |
+| Intent | The eight record types, the sleep states, and the items that travel from reader to codec to reducer |
+| Requirements | 3.4, 5.1, 7.1, 10.6 |
 
 **Responsibilities & Constraints**
 - `AppleType` lists exactly the eight identifiers read (the extract set).
@@ -437,6 +440,18 @@ class RawRecord:
     end_date: str | None
     value: str | None
     metadata: tuple[tuple[str, str], ...] = ()
+
+@dataclass(frozen=True)
+class ExportDate:
+    text: str            # verbatim, e.g. "2024-02-06 14:30:00 -0800"
+
+@dataclass(frozen=True)
+class Corrections:
+    doctype_removed: int
+    control_characters_removed: int
+    duplicate_attributes_removed: int
+
+ExportItem = ExportDate | RawRecord | Corrections
 
 def normalize_device(text: str) -> str: ...
 ```
@@ -640,12 +655,6 @@ PROLOG_LIMIT: Final[int] = 1_048_576
 MAX_TAG_BYTES: Final[int] = 65_536
 CHUNK_BYTES: Final[int] = 1_048_576
 
-@dataclass(frozen=True)
-class Corrections:
-    doctype_removed: int
-    control_characters_removed: int
-    duplicate_attributes_removed: int
-
 class DefectFilter:
     def __init__(self, upstream: BinaryIO, *, chunk_bytes: int = CHUNK_BYTES) -> None: ...
     def read(self, size: int = -1) -> bytes: ...           # raises WellnessFormatError
@@ -712,12 +721,6 @@ class MainDocument:
 
 @contextmanager
 def open_main_document(candidate: Path) -> Iterator[MainDocument]: ...
-
-@dataclass(frozen=True)
-class ExportDate:
-    text: str            # verbatim, e.g. "2024-02-06 14:30:00 -0800"
-
-ExportItem = ExportDate | RawRecord | Corrections
 
 def iter_items(document: MainDocument, *,
                progress: Callable[[int, int], None] | None) -> Iterator[ExportItem]: ...
