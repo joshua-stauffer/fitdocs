@@ -213,7 +213,8 @@ tests/connectors/
 ├── test_intervals_wellness_pull.py  # run_pull with the real intervals connector and FakeTransport
 ├── test_cli_wellness.py        # the wellness table and exit codes through CliRunner
 ├── test_wellness_docs.py       # connectors.md wellness passages pinned to code constants
-├── test_wellness_records.py    # wellness.md link, contract bullet, changelog, amendment headings
+├── test_wellness_records.py    # wellness.md link, contract bullet and head paragraph, changelog,
+│                               #   amendment headings (the history pin lives in tests/identity)
 └── test_wellness_e2e.py        # CLI pull --sync through the real drain; second pull sweeps
 ```
 
@@ -281,7 +282,8 @@ tests/connectors/
   `tests/index/derived/test_preserved.py:246` (the literal
   `CONTRACT_VERSION`), `tests/identity/test_contract_docs.py:177-187` (the
   "What changed at this version" phrases, plus any peer's head-paragraph pin
-  on `main` at landing), `tests/test_confinement.py` (`WRITING_ENTRY_POINTS`
+  on `main` at landing) and `:189-209` (two literal history assertions
+  appended), `tests/test_confinement.py` (`WRITING_ENTRY_POINTS`
   gains `pull-wellness`), `tests/connectors/test_boundary.py` only if a
   module's import set changes (none planned).
 - `pyproject.toml` — unchanged: `[tool.mypy].files` already lists the
@@ -1045,13 +1047,16 @@ _WELLNESS_REPORT_ROWS: Final[tuple[tuple[str, str], ...]] = (
   outgoing lander's "What changed" phrases), and any head-paragraph pin a
   peer has added on `main` by then, is re-pinned to wellness-pull's
   paragraph, its outgoing phrases moving into an assertion on the history
-  docstring; `tests/connectors/test_wellness_records.py` asserts the history
-  docstring contains "Raised from ``{v-1}`` to ``{v}`` by wellness-pull"
-  (`v = int(CONTRACT_VERSION)`) and one sentence of the paragraph above. The
-  version-following pins (`tests/test_ownership_contract.py:82-85`,
-  `tests/test_declaration.py:98`) and the history pins
-  (`tests/identity/test_contract_docs.py:189-209`,
-  `tests/compose/test_contract_docs.py:144-158`) stay green unchanged.
+  docstring. `test_the_version_history_records_the_amendment`
+  (`tests/identity/test_contract_docs.py:189-209`) gains, append-only, two
+  literal assertions: "Raised from ``N`` to ``N+1`` by wellness-pull" with
+  the landed numbers written as literals (5.2 writes the branch's numbers,
+  6.2 rewrites them to the landed ones), never computed from the live
+  `CONTRACT_VERSION` (a relative pin goes red when a later spec bumps), and
+  one sentence of the paragraph above. The version-following pins
+  (`tests/test_ownership_contract.py:82-85`, `tests/test_declaration.py:98`)
+  and the existing history pins (`tests/identity/test_contract_docs.py:189-209`,
+  `tests/compose/test_contract_docs.py:144-158`) stay green.
 - `CHANGELOG.md` `[Unreleased]`: Added (the wellness pull, the `wellness`
   key, attribution, the wellness report table); Changed (ledger format 2 when
   wellness is enabled; an older fitdocs refuses such a ledger; to enable,

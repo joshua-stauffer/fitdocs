@@ -11,8 +11,11 @@
 - **One version constant moves.** `CONTRACT_VERSION` advances to **main + 1
   at landing** (design Decision 13, controller ruling R1): 5.2 makes the
   bump against the branch's base and 6.2 re-derives it after the final
-  rebase, like every Phase 12 lander (`dashboards`, `wellness-store` and
-  `recovery` each take one). `DOC_VERSION` and the index `SCHEMA_VERSION` are
+  rebase. The other `CONTRACT_VERSION` bumpers, any of which may land first,
+  are `dashboards` (Phase 11) and the four other Phase 12 landers that bump
+  it: `wellness-store`, `hr-derivation`, `recovery` and `workout-wellness`
+  (five Phase 12 bumpers in all, counting this one; `apple-health-import`
+  does not bump). `DOC_VERSION` and the index `SCHEMA_VERSION` are
   untouched. `LEDGER_VERSION` is connectors-internal and moves in 2.2 only.
 - **Peers.** `dashboards` (connectors Amendment 3, a row in
   `tests/connectors/test_e2e.py`'s offline parametrize list) and `recovery`
@@ -100,7 +103,8 @@ Each file below has more than one writer; its writers are sequential.
   and its pins in `tests/connectors/test_docs.py` and
   `tests/connectors/test_intervals_docs.py`: 5.1 only.
 - `src/fitdocs/contract.py`, `docs/ownership-contract.md`, the declaration
-  goldens, the literal version pins and the head-paragraph phrase pins: 5.2,
+  goldens, the literal version pins, the head-paragraph phrase pins and the
+  literal history assertion in `tests/identity/test_contract_docs.py`: 5.2,
   then 6.2 (re-derivation).
 - `tests/connectors/test_wellness_records.py`: 5.2 creates it (contract
   records), then 5.3 appends (guide, changelog, amendment headings).
@@ -119,6 +123,9 @@ its history paragraph, the declaration goldens' version line,
 `docs/ownership-contract.md` (the version line, the "What changed at this
 version" paragraph each lander replaces, and the `pull` bullet),
 `.kiro/specs/wiki-contract/requirements.md`'s amendment list,
+`tests/identity/test_contract_docs.py` (each bumper appends literal
+assertions to `test_the_version_history_records_the_amendment` and re-pins
+the head-paragraph phrases),
 `docs/wellness.md` (`wellness-store`'s page; one passage), the
 `fitdocs-workouts` skill's `## Reading the report`, the connectors
 requirements' amendment list.
@@ -534,23 +541,29 @@ requirements' amendment list.
     phrase pin `tests/identity/test_contract_docs.py:177-187` (and any
     head-paragraph pin a peer has added on `main`; grep for the outgoing
     paragraph's phrases) re-pinned to wellness-pull's paragraph, the outgoing
-    phrases moved into an assertion on the history docstring; `## Amendment N` on
+    phrases moved into an assertion on the history docstring;
+    `test_the_version_history_records_the_amendment`
+    (`tests/identity/test_contract_docs.py:189-209`) gains, append-only, the
+    literal assertion "Raised from ``N`` to ``N+1`` by wellness-pull" with
+    the branch's numbers written as literals (6.2 rewrites them to the landed
+    numbers; never computed from the live `CONTRACT_VERSION`, which would go
+    red at a later spec's bump) and one literal sentence of design §
+    ContractWording's paragraph; `## Amendment N` on
     `.kiro/specs/wiki-contract/requirements.md` (Requirement 2 criterion
     2.15 extended) with `spec.json`'s `updated_at`.
   - **Tests** (`tests/connectors/test_wellness_records.py`): the `pull`
     bullet names wellness files, `wellness-archive/` and `wellness/`; the
-    "What changed at this version" paragraph names wellness-pull's change;
-    the history docstring adjacent to `CONTRACT_VERSION` contains "Raised
-    from ``{v-1}`` to ``{v}`` by wellness-pull" (`v =
-    int(CONTRACT_VERSION)`) and one sentence of design § ContractWording's
-    paragraph. The version-following pins
+    "What changed at this version" paragraph names wellness-pull's change.
+    The two literal history assertions above live in
+    `tests/identity/test_contract_docs.py`. The version-following pins
     (`tests/test_ownership_contract.py:82-85`, `tests/test_declaration.py:98`)
-    and the history pins (`tests/identity/test_contract_docs.py:189-209`,
-    `tests/compose/test_contract_docs.py:144-158`) stay green unchanged.
+    and the existing history assertions
+    (`tests/identity/test_contract_docs.py:189-209`,
+    `tests/compose/test_contract_docs.py:144-158`) stay green.
   - **Mutations:** delete the bullet's wellness clause (its pin reds); leave
     `CONTRACT_VERSION` at the base value (the literal pins and the doc head
     pin red); drop wellness-pull's paragraph from the history docstring (the
-    records test's history assertion reds).
+    appended literal history assertion reds).
   - **Observable:** `uv run pytest tests/connectors/test_wellness_records.py
     tests/identity tests/index/test_contract_docs.py
     tests/index/derived/test_preserved.py tests/test_declaration.py
@@ -613,8 +626,10 @@ requirements' amendment list.
     above; re-derive `CONTRACT_VERSION` as main + 1 (the history paragraph's
     numbers, the doc's version line and "What changed" paragraph, every
     declaration golden including peers', the two literal pins, any
-    head-paragraph pin a peer added, the CHANGELOG entry's "from N to N+1"
-    numbers and any records-test pin on them); re-derive
+    head-paragraph pin a peer added, the literal numbers in this plan's
+    history assertion in `tests/identity/test_contract_docs.py` (rewritten
+    to the landed numbers, never made relative), the CHANGELOG entry's
+    "from N to N+1" numbers and any records-test pin on them); re-derive
     the connectors and wiki-contract amendment numbers; re-run `uv run pytest
     && uv run ruff check . && uv run ruff format --check . && uv run mypy`;
     check branch CI with `gh run list --branch`.
@@ -638,10 +653,11 @@ requirements' amendment list.
     `_wellness_windows`, plus the same `wellness-store` amendment (its
     recognizer and parser read the `id` form too).
   - Then tick the roadmap's `wellness-pull` Specs line and the
-    `intervals-connector` Existing Spec Update line; tick the `connectors` and
-    `wiki-contract` lines only if their other landers' halves (`recovery`;
-    `wellness-store` and `recovery`) are on `main`, else annotate this half
-    as landed.
+    `intervals-connector` Existing Spec Update line. Tick the `connectors`
+    line only if `recovery`'s half is on `main`. Tick the `wiki-contract`
+    line only when all five Phase 12 wiki-contract halves are on `main`
+    (`wellness-store`, `wellness-pull`, `hr-derivation`, `recovery` and
+    `workout-wellness`). Otherwise annotate this spec's half as landed.
   - **Observable:** every contradicted item has an amended marker and a
     ticked repair task; the roadmap lines ticked or annotated; `spec.json`
     records completion.
