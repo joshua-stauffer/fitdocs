@@ -966,10 +966,11 @@ def clock_ticks(lo_s: float, hi_s: float, max_count: int) -> tuple[int, tuple[fl
   enclose it), so a caller measures the ticks it gets back, not `max_count`.
   Degenerate input (`lo >= hi` or non-finite for `linear_ticks`/`log_ticks`,
   `first > last` or `lo_s > hi_s` for the calendar/clock ladders) raises
-  `ValueError`; Scales widens a degenerate domain first. The full precondition
-  set: `linear_ticks` needs `lo < hi`, finite input and `max_count >= 2`;
+  `ValueError`; Scales widens a degenerate domain first. The preconditions
+  include: `linear_ticks` needs `lo < hi`, finite input and `max_count >= 2`;
   `log_ticks` needs `0 < lo < hi` (so `lo <= 0` raises) and `max_count >= 2`;
-  `calendar_ticks` and `clock_ticks` need `max_count >= 1`.
+  `clock_ticks` needs finite input and `max_count >= 1`; `calendar_ticks`
+  needs `max_count >= 1`.
 
 #### Scales — `kit/scales.py`
 
