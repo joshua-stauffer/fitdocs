@@ -586,7 +586,7 @@ every registered kind and find its cases by the test-module convention
 
 - [ ] 4. Scales and the chart frame
 
-- [ ] 4.1 Build numeric and band scales with the domain rules
+- [x] 4.1 Build numeric and band scales with the domain rules
   - **`kit/scales.py`** per design § Scales: `ScaleType`, `Side`, `Tick`,
     `NumericScale`, `BandScale`, `numeric_scale`, `band_scale`; scale
     choice by column kind; `include_zero` before degeneracy; the degenerate
@@ -1110,3 +1110,4 @@ every registered kind and find its cases by the test-module convention
 - 3.2 → 4.2: `FramePlan.y_title_y`/`x_title_y` are `float | None` (None when there is no such title; design § Layout typed them `float`). Frame must handle None. The title→legend and y-title→plot `PAD` gaps are this task's choices (Req 7.3). With a legend and no y title the plot top abuts the last legend row: frame must keep the top y tick label clear of it.
 - 3.4 (controller ruling): `cartesian.duplicate_problem(bound, keys, *, skip_absent=())` — rows absent on any bound channel named in `skip_absent` are exempt; unbound key channels are skipped (an unbound colour is one series). Line and area pass `skip_absent=("x",)`, hbar `("y",)`, bar nothing (an absent x is the `—` category). `stack_problems` never builds styles, so it is safe before `series_problem` refuses >8 series; `series_groups` (draw only) raises beyond 8.
 - 3.1 (controller ruling): `render_spec(spec, request, data)` takes `RenderedChart.kind` from `spec.name` (a request kind mismatch is not checked). `render_chart` on an unknown kind raises `ChartError` with all of stage 1 (`unknown_kind`, `empty_title`, `duplicate_column`). Nested listing TypedDicts are `ChannelListing`, `OptionListing`, `BoundListing` (not re-exported).
+- 4.1 (controller rulings): `NumericScale` gained trailing `clock_date: date | None = None` (the date a same-day date-time axis puts in its title) and `hours: bool = True` (the duration label form); frame passes both to `axis_title`. Label fit = adjacent centre distance ≥ (w1+w2)/2 + 10 px. Time axes keep their exact extent (ignore `nice`/`include_zero`); log ignores `include_zero`. Date-time clock ticks are computed relative to midnight of lo's day and filtered to [lo, hi]. `band_scale` thins by band size, which suits horizontal bands; hbar (5.4) must not thin its row labels by 26 px row height.
