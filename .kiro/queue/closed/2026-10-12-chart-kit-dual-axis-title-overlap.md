@@ -1,7 +1,7 @@
 ---
 id: 2026-10-12-chart-kit-dual-axis-title-overlap
 title: Dual-axis charts: left and right axis titles can overlap
-status: open
+status: done
 importance: medium
 importance_why: chart-catalog task 1.1 item 3 is a stop-and-report seam check that will fail against the landed frame.axis.
 effort: S
@@ -29,3 +29,6 @@ Validation probe (chart-kit validate-impl, 2026-10-12): two long titles at width
 
 ## How to pick it up
 Decide whether frame.axis takes a shared title-row budget (e.g. an optional `max_title_width`) or chart-catalog splits the row itself; add a test with both titles long at width 720 asserting no overlap. Read chart-catalog tasks.md 1.1 item 3 first.
+
+## Resolution
+Done 2026-10-12 by impl-chart-catalog: `frame.axis(..., title_room=)` landed on main at 431a5a7 (reviewed, 2 rounds); chart-catalog design § DualAxis amended on impl/chart-catalog at a9594a5 so both axes pass `(plot.right - plot.left - PAD) / 2`.
