@@ -186,7 +186,7 @@ every registered kind and find its cases by the test-module convention
 
 - [ ] 1. Foundation: the unit vocabulary, the kit package and its contracts, and the golden harness
 
-- [ ] 1.1 Create the one unit vocabulary and make the index schema project it
+- [x] 1.1 Create the one unit vocabulary and make the index schema project it
   - **`src/fitdocs/units.py`** per design § UnitVocabulary: `UnitFamily`,
     the frozen `Unit` (with the `suffix` property), the 19-row `UNITS` table
     exactly as the design lists it (order, phrases, symbols, families,

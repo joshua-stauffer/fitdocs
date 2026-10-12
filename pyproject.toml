@@ -156,6 +156,7 @@ files = [
     "tests/test_skill_wheel.py",
     "tests/test_skill_e2e.py",
     "tests/test_version_identity.py",
+    "tests/test_units.py",
     "tests/test_changelog.py",
     "tests/test_release_artifacts.py",
     "tests/test_compatibility_policy.py",

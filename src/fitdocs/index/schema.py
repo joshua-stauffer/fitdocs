@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final, Protocol
 
+from fitdocs.units import UNITS
+
 SCHEMA_VERSION: Final[int] = 2
 RESERVED_PREFIX: Final[str] = "index_"
 
@@ -74,26 +76,8 @@ PAGE_KEY_COLUMN: Final[ColumnSpec] = ColumnSpec(
     ),
 )
 
-UNIT_SUFFIXES: Final[tuple[tuple[str, str], ...]] = (
-    ("_s_per_km", "seconds per kilometre"),
-    ("_local", "local"),
-    ("_kn_m", "kilonewtons per metre"),
-    ("_kcal", "kilocalories"),
-    ("_mps", "metres per second"),
-    ("_bpm", "beats per minute"),
-    ("_rpm", "revolutions per minute"),
-    ("_deg", "degrees"),
-    ("_pct", "percent"),
-    ("_utc", "UTC"),
-    ("_mm", "millimetres"),
-    ("_ms", "milliseconds"),
-    ("_bw", "body weights"),
-    ("_kg", "kilograms"),
-    ("_km", "kilometres"),
-    ("_m", "metres"),
-    ("_s", "seconds"),
-    ("_w", "watts"),
-    ("_c", "degrees Celsius"),
+UNIT_SUFFIXES: Final[tuple[tuple[str, str], ...]] = tuple(
+    (unit.suffix, unit.phrase) for unit in UNITS
 )
 
 
