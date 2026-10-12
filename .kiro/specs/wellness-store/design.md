@@ -90,7 +90,14 @@ vocabulary gains two units.
   → `spec` → `formats/*` → `registry` → `settings`, `merge` and `archive`
   (mutually independent) → `series` → `intake`, `engine` → `inspect`; the
   facade re-exports from `model`, `series` and `settings`. No module imports
-  one to its right.
+  one to its right. The boundary guard (`tests/wellness/test_boundary.py`)
+  encodes this order as a rank table with **gapped ranks** (multiples of 10:
+  `model`/`probe` 10, `spec` 20, `formats.*` 30, `registry` 40,
+  `settings`/`merge`/`archive` 50, `series` 60, `intake`/`engine` 70,
+  `inspect` 80, the facade 90); a module may import only strictly lower
+  ranks. A downstream spec inserts its modules into the gaps (for example
+  apple-health-import's `formats/apple/*` between 20 and 40) and never
+  renumbers an existing rank.
 - `fitdocs.connectors` never imports `fitdocs.wellness`; it reaches the
   archive only through `fitdocs.layout.wellness_archive_path`.
 
@@ -218,7 +225,8 @@ src/fitdocs/wellness/
 
 src/fitdocs/index/derived/wellness.py   # WELLNESS_DAILY_TABLE, WellnessProducer, WELLNESS_PRODUCER
 docs/wellness.md                         # the wellness guide
-tests/wellness/                          # builders.py (synthetic files) + one test module per wellness module,
+tests/wellness/builders_series.py        # write_series: the one sanctioned way to stage a series without the drain
+tests/wellness/                          # synthetic file builders + one test module per wellness module,
                                          #   test_boundary.py, test_drain_wellness.py, test_cli_wellness.py,
                                          #   test_docs_wellness.py
 tests/index/derived/test_wellness_producer.py
@@ -315,10 +323,11 @@ flowchart TD
     Assess -->|occupied| Blocked[BLOCKED nothing written]
     Assess -->|series unreadable| Deferred[DEFERRED nothing written]
     Assess -->|fresh and not forced| Unchanged[UNCHANGED]
-    Assess -->|stale or forced| Parse[parse every entry]
+    Assess -->|stale or forced| Order[read LATEST_ENTRY orders and pick winners]
+    Order --> Parse[parse winners and every other entry]
     Parse -->|entry unreadable| Deferred
     Parse -->|entry invalid| Failed[FAILED nothing written]
-    Parse --> Merge[merge snapshots]
+    Parse --> Merge[merge snapshots of winners and unsuperseded entries]
     Merge --> Encode[encode year files and manifest]
     Encode --> Write[write changed files then manifest]
     Write --> Rebuilt[REBUILT or UNCHANGED]
@@ -343,7 +352,7 @@ assessment reports as stale and the next drain repairs.
 | 2.4 | Write-once after full read and parse | Archive | commit protocol | Drain |
 | 2.5 | Already archived | Intake | `archive_identified` | Drain |
 | 2.6, 2.7 | Failure, quarantine, retry | DrainWellnessStep | quarantine record | Drain |
-| 2.8 | Changed during run | Archive | `Changed` result | Drain |
+| 2.8 | Changed during run, also when the change made the content fail | Archive | `Changed` result; re-hash before classifying | Drain |
 | 2.9, 2.10 | Disposition; never delete | DrainWellnessStep | `inbox.move_processed` | Drain |
 | 3.1, 3.2, 3.3 | Streaming hash/copy, bounded recognition | Probe, Archive | `hash_file`, `HEAD_BYTES`, `JSON_PROBE_LIMIT` | Drain |
 | 3.4 | Progress | Registry, DrainWellnessStep, CliWellness | `ExtractContext.progress` | Drain |
@@ -351,7 +360,7 @@ assessment reports as stale and the next drain repairs.
 | 4.2, 4.3, 4.4, 4.6 | Skip, warn, leave; activity/untyped processed; no failure, no quarantine | NonActivityGuard | `is_activity_file`, `_run_planned` | Drain |
 | 4.5 | Existing pages kept and rebuilt by regen | NonActivityGuard | `regen` page part unchanged | — |
 | 5.1, 5.2, 5.3, 5.4 | Metric vocabulary, SDNN/rMSSD distinct, ratings as recorded | Model | `Metric`, `METRICS` | — |
-| 5.5 | Definitions documented | Docs, Model | `MetricInfo.description` | — |
+| 5.5 | Labels, units and definitions documented | Docs, Model | `MetricInfo.label`, `MetricInfo.description` | — |
 | 5.6 | No computed fields imported | IntervalsFormat, GarminFormats | field maps | — |
 | 6.1, 6.5 | Absent = no row, reader returns None | Series, Model | `WellnessSeries.value/canonical` | — |
 | 6.2, 6.3, 6.4 | Placeholders, zero-absent, range | Model, formats | `accept_value` | — |
@@ -361,7 +370,7 @@ assessment reports as stale and the next drain repairs.
 | 8.1, 8.2 | Source and origin per value; all sources kept | Merge, Series | `SeriesValue` | Rebuild |
 | 8.3, 8.4 | intervals origins; Garmin origin | IntervalsFormat, GarminFormats | envelope `origins` | — |
 | 9.1, 9.2, 9.5 | Latest revision wins; later absence; equal values no conflict | Merge | `merge` | Rebuild |
-| 9.3 | Latest-entry supersession | Merge, Registry | `Supersession.LATEST_ENTRY` | Rebuild |
+| 9.3 | Latest-entry supersession; only the winner parsed | Engine, Archive, Merge, Registry | `read_entry_order`, `Supersession.LATEST_ENTRY` | Rebuild |
 | 9.4 | Conflicting duplicate | Merge, Series, Inspect | `Conflict`, manifest | Rebuild |
 | 10.1, 10.2 | Canonical by precedence; default by kind | Merge, Registry, Settings | `effective_order`, `default_source_order` | Rebuild |
 | 10.3, 10.4, 10.5 | `[wellness]` keys and validation | Settings, CliWellness | `load_wellness_settings` | Drain |
@@ -394,7 +403,7 @@ assessment reports as stale and the next drain repairs.
 | 16.7, 16.8 | Original bytes; no zip, no FIT wellness | GarminFormats | — | — |
 | 17.1, 17.4, 17.5 | Added formats reuse everything; rules version; new metric no structure change | Registry, Series, IndexProducer | `FormatSpec.rules_version` | — |
 | 17.2 | Extract protocol | Archive | `commit_extract` | Drain |
-| 17.3 | Supersession order | Merge | `entry_order` | Rebuild |
+| 17.3 | Supersession order; superseded entries read for their order only | Engine, Archive | `entry_order`, `read_entry_order` | Rebuild |
 | 18.1, 18.2, 18.3 | `wellness_daily` table, refresh, isolation | IndexProducer | `WellnessProducer` | — |
 | 18.4 | Schema version, docs block | IndexProducer, Docs | `SCHEMA_VERSION` | — |
 | 18.5 | Documents never read the index | IndexProducer | unchanged rule | — |
@@ -413,12 +422,12 @@ assessment reports as stale and the next drain repairs.
 | Probe | wellness I/O | Bounded recognition input, streamed hashing | 1.3, 3.1-3.3 | — | Service |
 | IntervalsFormat | wellness formats | intervals.icu list and envelope | 5.6, 8.3, 15 | Registry, Model (P0) | Service |
 | GarminFormats | wellness formats | Four Garmin export kinds | 5.6, 8.4, 16 | Registry, Model (P0) | Service |
-| Archive | wellness I/O | Layout, listing, commit protocol, entry parsing | 2.2-2.5, 2.8, 3.1, 3.3, 17.2 | Registry, layout (P0) | Service, State |
+| Archive | wellness I/O | Layout, listing, commit protocol, entry parsing, header-only order read | 2.2-2.5, 2.8, 3.1, 3.3, 17.2, 17.3 | Registry, layout (P0) | Service, State |
 | Intake | wellness I/O | Per-candidate outcomes for the drain | 1.3-1.5, 2.5-2.8 | Archive, Registry, Probe (P0) | Service |
 | Settings | wellness core | `[wellness]` reader, effective order | 10.2-10.6 | Registry, settings (P0) | Service |
 | Merge | wellness core | Snapshot resolution, conflicts, precedence | 8.1, 8.2, 9, 10.1 | Model (P0) | Service |
 | Series | wellness core | CSV/manifest codec, reader, inputs digest | 6.1, 11.2-11.4, 11.8, 12.1, 12.7 | Model, layout (P0) | Service, State |
-| Engine | wellness I/O | The only series writer | 11.1, 11.5, 11.6, 12.1-12.6, 13.2-13.4 | Archive, Merge, Series, Settings (P0) | Batch, State |
+| Engine | wellness I/O | The only series writer; chooses LATEST_ENTRY winners before parsing | 9.3, 11.1, 11.5, 11.6, 12.1-12.6, 13.2-13.4, 17.3 | Archive, Merge, Series, Settings (P0) | Batch, State |
 | Inspect | wellness I/O | Read-only problems for check | 14 | Archive, Series, Settings (P0) | Service |
 | Facade | wellness API | What consumers import | 11.8 | Series, Model, Settings | Service |
 | OwnedLocations | layout/contract/declaration | Constants, helpers, declarations, version | 2.1, 11.1, 11.7, 19.1 | — | State |
@@ -445,7 +454,11 @@ assessment reports as stale and the next drain repairs.
 **Responsibilities & Constraints**
 - `Metric` is a `StrEnum` whose values are the canonical names (table in
   [Data Models](#the-metric-vocabulary)); `METRICS: Final[Mapping[Metric, MetricInfo]]`
-  covers every member exactly once. Unit tokens come from `fitdocs.units`
+  covers every member exactly once. `MetricInfo.label` is the metric's short
+  human label (the Label column); labels are pairwise distinct, and every
+  consumer that shows a metric to the athlete (recovery's page,
+  workout-wellness's block, docs) uses it and holds no label table of its
+  own. Unit tokens come from `fitdocs.units`
   (`unit_named(token)` must resolve); unitless metrics have `unit=None`.
 - `accept_value(metric, value)` returns `None` for a non-finite value or a
   value outside `[minimum, maximum]` (so zero is absent for every metric whose
@@ -468,6 +481,7 @@ class Metric(StrEnum):
 @dataclass(frozen=True)
 class MetricInfo:
     metric: Metric
+    label: str                    # short human label (recovery headings, workout-wellness block); unique
     unit: str | None              # fitdocs.units token, or None
     minimum: float                # inclusive
     maximum: float                # inclusive
@@ -612,7 +626,23 @@ def validate_registry() -> None: ...   # raises ValueError naming the offending 
   `json()` parses the whole file only when `size <= JSON_PROBE_LIMIT`, caches
   the result, and returns `None` on a decode error or an oversize file;
   `zip_members()` returns the member names of a zip (central directory only)
-  or `None`. Every read error propagates as `OSError` (the intake maps it to
+  or `None`. It goes through `zipfile.ZipFile`, whose reads are not all ours:
+  the end-of-central-directory read is an **unsized** `read()` on Python 3.11
+  (3.12+ pass a size), starting at or after `size − (1 << 16) −
+  zipfile.sizeEndCentDir` (within 65,558 bytes of EOF; measured on 3.11.15,
+  where the commented-zip fallback starts exactly 65,558 bytes from EOF), and
+  the central directory is read in **one** sized read of the length the end
+  record declares (measured 1,940,000 bytes for 20,000 members, above
+  `CHUNK_BYTES`; 3.11 and 3.13 alike). A zip candidate is therefore read
+  within bounds set by its own structure: the end record (at most 65,558
+  bytes, read once), the central directory (exactly the size the end record
+  declares, read once), and member data, which an extractor streams in
+  requests of at most `CHUNK_BYTES` (`ZipExtFile` then reads the file in
+  pieces no larger than the request; measured on 3.11 and 3.13). **Memory
+  bound**: recognizing or extracting a zip holds at most its central
+  directory (about 100 bytes per member) plus 65,558 bytes plus one
+  `CHUNK_BYTES` buffer at a time, independent of the size of its member data.
+  Every read error propagates as `OSError` (the intake maps it to
   deferral).
 - `hash_file(path)` streams `CHUNK_BYTES` at a time and returns
   `(sha256 hex, size)`.
@@ -670,12 +700,13 @@ def effective_order(settings: WellnessSettings, metric: Metric) -> tuple[str, ..
 | Field | Detail |
 |-------|--------|
 | Intent | Pure resolution of parsed entries into series values and conflicts |
-| Requirements | 8.1, 8.2, 9.1, 9.2, 9.3, 9.4, 9.5, 10.1, 17.3 |
+| Requirements | 8.1, 8.2, 9.1, 9.2, 9.3, 9.4, 9.5, 10.1 |
 
 **Algorithm (normative)**
-1. **Supersession.** For each format with `LATEST_ENTRY`, only the entry with
-   the greatest `(order, entry_ref)` contributes; the others are returned in
-   `superseded`.
+1. **Precondition (supersession is the engine's).** For a format with
+   `LATEST_ENTRY` the engine passes only that format's winning entry (see §
+   Engine: superseded entries are never parsed); `merge` raises
+   `ValueError` if it receives two entries of one `LATEST_ENTRY` format.
 2. **Within-source resolution.** Group contributing snapshots by
    `(source, day, metric)` for each metric in `covers`. Let `R` be the
    greatest revision (`None` below every string). Among snapshots with
@@ -699,7 +730,6 @@ class ParsedEntry:
     format_id: str
     source_id: str
     supersession: Supersession
-    order: str | None
     snapshots: tuple[DaySnapshot, ...]
 
 @dataclass(frozen=True)
@@ -715,7 +745,6 @@ class Conflict:
 class MergeResult:
     values: tuple[SeriesValue, ...]
     conflicts: tuple[Conflict, ...]
-    superseded: tuple[str, ...]
 
 def merge(entries: Sequence[ParsedEntry], *, order_for: Callable[[Metric], tuple[str, ...]]) -> MergeResult: ...
 ```
@@ -876,7 +905,7 @@ FORMAT: Final[FormatSpec]
 | Field | Detail |
 |-------|--------|
 | Intent | The archive layout, its listing, and the write-once commit protocol |
-| Requirements | 2.2, 2.3, 2.4, 2.5, 2.8, 3.1, 3.3, 17.2 |
+| Requirements | 2.2, 2.3, 2.4, 2.5, 2.8, 3.1, 3.3, 17.2, 17.3 |
 
 **Layout**: `wellness-archive/<format id>/<sha256 of the original><archived suffix>`
 (`layout.wellness_archive_path`). An entry ref is the data-root-relative
@@ -898,13 +927,26 @@ outcome but success):
   then `os.replace` onto the entry path unless it already exists (`Exists`,
   temp discarded).
 - `commit_extract`: call `format.extract(candidate_path, temp, ExtractContext)`
-  (the extractor opens the candidate itself, read-only, and may seek); then
-  re-hash the candidate — hash ≠ expected → `Changed`; parse the temp extract
-  (and `entry_order` when declared) → `Invalid` on error; then replace as
-  above.
+  (the extractor opens the candidate itself, read-only, and may seek). Then,
+  **whether the extractor returned or raised an `Exception`**, re-hash the
+  candidate **before classifying anything**: the re-hash raising `OSError` →
+  `Unreadable`; hash ≠ expected → `Changed` (so a candidate changed or
+  truncated mid-read is deferred, never quarantined, even when the change is
+  what made the extractor fail). Only with the hash confirmed: the extractor
+  raised `WellnessFormatError` → `Invalid` (failure and quarantine); it raised
+  `OSError` → `Unreadable`; it returned → parse the temp extract (and
+  `entry_order` when declared) → `Invalid` on error; then replace as above.
+  A `BaseException` that is not an `Exception` (`KeyboardInterrupt`,
+  `SystemExit`) propagates unchanged after the temp file is removed (a
+  `finally`), with no re-hash and no entry.
 - An `OSError` reading the candidate → `Unreadable(reason)`.
 - `parse_entry(entry)` opens an archived entry and returns its validated
-  snapshots (ordinals assigned in parse order) and order key.
+  snapshots (ordinals assigned in parse order).
+- `read_entry_order(entry)` opens an entry of a `LATEST_ENTRY` format and
+  returns `format.entry_order(stream)`; the format's `entry_order` reads only
+  the entry's header (a bounded prefix), never its body. It raises `OSError`
+  for an unreadable entry and `WellnessFormatError` for an unreadable
+  header.
 
 ```python
 @dataclass(frozen=True)
@@ -953,6 +995,7 @@ def commit_original(data_root: Path, format: FormatSpec, candidate: Path, expect
 def commit_extract(data_root: Path, format: FormatSpec, candidate: Path, expected_sha256: str, size: int,
                    progress: Callable[[int, int], None] | None) -> CommitResult: ...
 def parse_entry(entry: ArchiveEntry) -> ParsedEntry: ...   # raises OSError or WellnessFormatError
+def read_entry_order(entry: ArchiveEntry) -> str: ...      # header only; raises OSError or WellnessFormatError
 ```
 
 #### Intake (`src/fitdocs/wellness/intake.py`)
@@ -1008,7 +1051,7 @@ def archive_identified(data_root: Path, path: Path, identified: Identified,
 | Field | Detail |
 |-------|--------|
 | Intent | Assess and rebuild the series; the only writer of `wellness/` series files |
-| Requirements | 11.1, 11.5, 11.6, 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 13.2, 13.3, 13.4, 13.6 |
+| Requirements | 9.3, 11.1, 11.5, 11.6, 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 13.2, 13.3, 13.4, 13.6, 17.3 |
 
 **Contracts**: Batch [x] / State [x]
 
@@ -1022,6 +1065,15 @@ def archive_identified(data_root: Path, path: Path, identified: Identified,
   file → `DEFERRED`; manifest and files consistent with the current
   `inputs_digest` and their recorded hashes (or no entries and no manifest)
   → fresh.
+- **Parsing (normative)**: for each `LATEST_ENTRY` format with entries, the
+  engine reads every entry's order with `read_entry_order`, selects the
+  winner by the greatest `(order, ref)`, parses **only the winner** with
+  `parse_entry`, and records the others as `superseded` in the manifest.
+  A superseded entry is never parsed, so a damaged body in a superseded
+  entry never fails a rebuild. An entry whose order cannot be read is
+  `DEFERRED` (`OSError`) or `FAILED` (`WellnessFormatError`), because the
+  winner cannot be chosen without it. Every entry of a `NONE`-supersession
+  format is parsed.
 - **Ownership marker**: a year file (`wellness/<YYYY>.csv`, the only names
   the engine touches) is fitdocs's when its first line equals
   `SERIES_HEADER`; the manifest is fitdocs's when it parses and records
@@ -1326,30 +1378,36 @@ suffix (checked by the schema digest staying equal apart from the new table).
 
 ### The Metric Vocabulary
 
-| Metric | Unit | Valid range | Zero absent | Meaning |
-|--------|------|-------------|-------------|---------|
-| `resting_hr_bpm` | bpm | 1–250 | yes | The day's resting heart rate, as the source defines it |
-| `min_hr_bpm` | bpm | 1–250 | yes | Lowest heart rate recorded that day |
-| `max_hr_bpm` | bpm | 1–250 | yes | Highest heart rate recorded that day, workouts included |
-| `hrv_sdnn_ms` | ms | 1–1000 | yes | Heart-rate variability as SDNN |
-| `hrv_rmssd_ms` | ms | 1–1000 | yes | Heart-rate variability as rMSSD |
-| `sleep_s` | s | 1–86400 | yes | Total sleep (excluding awake time) of the night ending on the day |
-| `sleep_deep_s` | s | 0–86400 | no | Deep sleep of that night |
-| `sleep_light_s` | s | 0–86400 | no | Light sleep of that night |
-| `sleep_rem_s` | s | 0–86400 | no | REM sleep of that night |
-| `sleep_awake_s` | s | 0–86400 | no | Awake time within that night's sleep |
-| `sleep_hr_bpm` | bpm | 1–250 | yes | Average heart rate during that night's sleep |
-| `respiration_brpm` | brpm | 1–100 | yes | Average respiration rate, as the source defines it |
-| `spo2_pct` | pct | 1–100 | yes | Average blood-oxygen saturation, as the source defines it |
-| `weight_kg` | kg | 1–500 | yes | Body weight |
-| `vo2max_ml_per_kg_min` | ml_per_kg_min | 1–100 | yes | VO2max estimate not tied to a sport by its source |
-| `vo2max_run_ml_per_kg_min` | ml_per_kg_min | 1–100 | yes | Running VO2max estimate |
-| `vo2max_ride_ml_per_kg_min` | ml_per_kg_min | 1–100 | yes | Cycling VO2max estimate |
-| `steps` | — | 1–1000000 | yes | Steps that day |
-| `stress_level` | — | 1–100 | yes | Average all-day stress level (Garmin's 0–100 scale) |
-| `body_battery_highest` | — | 1–100 | yes | Highest body battery that day |
-| `body_battery_lowest` | — | 1–100 | yes | Lowest body battery that day |
-| `fatigue_rating`, `mood_rating`, `motivation_rating`, `soreness_rating`, `stress_rating`, `injury_rating`, `hydration_rating` | — | 1–4 | yes | The athlete's subjective rating, as recorded on the source's 1–4 scale |
+| Metric | Label | Unit | Valid range | Zero absent | Meaning |
+|--------|-------|------|-------------|-------------|---------|
+| `resting_hr_bpm` | Resting HR | bpm | 1–250 | yes | The day's resting heart rate, as the source defines it |
+| `min_hr_bpm` | Lowest HR | bpm | 1–250 | yes | Lowest heart rate recorded that day |
+| `max_hr_bpm` | Highest HR | bpm | 1–250 | yes | Highest heart rate recorded that day, workouts included |
+| `hrv_sdnn_ms` | HRV (SDNN) | ms | 1–1000 | yes | Heart-rate variability as SDNN |
+| `hrv_rmssd_ms` | HRV (rMSSD) | ms | 1–1000 | yes | Heart-rate variability as rMSSD |
+| `sleep_s` | Sleep | s | 1–86400 | yes | Total sleep (excluding awake time) of the night ending on the day |
+| `sleep_deep_s` | Deep sleep | s | 0–86400 | no | Deep sleep of that night |
+| `sleep_light_s` | Light sleep | s | 0–86400 | no | Light sleep of that night |
+| `sleep_rem_s` | REM sleep | s | 0–86400 | no | REM sleep of that night |
+| `sleep_awake_s` | Awake in sleep | s | 0–86400 | no | Awake time within that night's sleep |
+| `sleep_hr_bpm` | Sleeping HR | bpm | 1–250 | yes | Average heart rate during that night's sleep |
+| `respiration_brpm` | Respiration | brpm | 1–100 | yes | Average respiration rate, as the source defines it |
+| `spo2_pct` | SpO2 | pct | 1–100 | yes | Average blood-oxygen saturation, as the source defines it |
+| `weight_kg` | Weight | kg | 1–500 | yes | Body weight |
+| `vo2max_ml_per_kg_min` | VO2max | ml_per_kg_min | 1–100 | yes | VO2max estimate not tied to a sport by its source |
+| `vo2max_run_ml_per_kg_min` | VO2max (running) | ml_per_kg_min | 1–100 | yes | Running VO2max estimate |
+| `vo2max_ride_ml_per_kg_min` | VO2max (cycling) | ml_per_kg_min | 1–100 | yes | Cycling VO2max estimate |
+| `steps` | Steps | — | 1–1000000 | yes | Steps that day |
+| `stress_level` | Stress level | — | 1–100 | yes | Average all-day stress level (Garmin's 0–100 scale) |
+| `body_battery_highest` | Body battery (highest) | — | 1–100 | yes | Highest body battery that day |
+| `body_battery_lowest` | Body battery (lowest) | — | 1–100 | yes | Lowest body battery that day |
+| `fatigue_rating` | Fatigue (rating) | — | 1–4 | yes | The athlete's subjective rating, as recorded on the source's 1–4 scale |
+| `mood_rating` | Mood (rating) | — | 1–4 | yes | As `fatigue_rating` |
+| `motivation_rating` | Motivation (rating) | — | 1–4 | yes | As `fatigue_rating` |
+| `soreness_rating` | Soreness (rating) | — | 1–4 | yes | As `fatigue_rating` |
+| `stress_rating` | Stress (rating) | — | 1–4 | yes | As `fatigue_rating` |
+| `injury_rating` | Injury (rating) | — | 1–4 | yes | As `fatigue_rating` |
+| `hydration_rating` | Hydration (rating) | — | 1–4 | yes | As `fatigue_rating` |
 
 Stage seconds may be a real zero because a parser emits them only for a
 night whose total sleep is present. `hrv_sdnn_ms` and `hrv_rmssd_ms` are
@@ -1456,6 +1514,10 @@ re-parse the archive or re-implement the merge.
   yielding (apple-health-import's reducers live in its parser).
 - **Rules version**: bump `rules_version` whenever the parse output for the
   same archived bytes changes; the series becomes stale and rebuilds (17.4).
+- **New modules**: a downstream spec's wellness modules (for example
+  `formats/apple/*`) get rows in the boundary guard's rank table, inserted
+  into the gapped ranks (multiples of 10) without renumbering existing rows,
+  and are added to its literal module-list pin.
 
 ### 2. The delivered-file contract for the intervals.icu pull
 - **Bytes**: a UTF-8 JSON object, serialized by
@@ -1500,9 +1562,13 @@ re-parse the archive or re-implement the merge.
   writes the extract to `sink`, and may call `context.progress(bytes_read,
   total)`; it raises `WellnessFormatError` for invalid content (any failure
   leaves the archive and series untouched: the temp file is discarded).
-- After `extract` returns, the framework re-hashes the candidate; a mismatch
-  with `context.expected_sha256` defers it as changed during the run. Then it
-  parses the extract with `parse` (and `entry_order`), and only then commits
+- After `extract` returns **or raises**, the framework re-hashes the
+  candidate before classifying anything; a mismatch with
+  `context.expected_sha256` defers it as changed during the run (also when
+  the change is what made the extractor raise). With the hash confirmed, an
+  extractor `WellnessFormatError` is a failure (quarantined) and an extractor
+  `OSError` a deferral; a returned extract is parsed with `parse` (and
+  `entry_order`), and only then does the framework commit
   `wellness-archive/<format id>/<sha256 of the ORIGINAL><archived_suffix>`.
   The original's sha, size and export date belong inside the extract (its
   header); the entry name already carries the sha.
@@ -1511,18 +1577,23 @@ re-parse the archive or re-implement the merge.
   timestamp and name fields, for example `gzip.GzipFile(mtime=0, filename="")`).
 - **Supersession**: `supersession = Supersession.LATEST_ENTRY` with
   `entry_order(stream) -> str` (for example the ISO export date read from the
-  extract header). Only the entry with the greatest `(order, ref)`
-  contributes; the others are recorded as `superseded` in the manifest and
-  stay in the archive.
+  extract header). `entry_order` must read only the header, never the body.
+  The engine reads every entry's order through `archive.read_entry_order`,
+  selects the greatest `(order, ref)`, parses **only that winner**, and
+  records the others as `superseded` in the manifest; they stay in the
+  archive and are never parsed, so a damaged superseded body never fails a
+  rebuild (an unreadable header does: `DEFERRED` or `FAILED`).
 - Source: `SourceSpec("apple-health", "Apple Health", SourceKind.HUB)` gives
   the default order `garmin-export`, `apple-health`, `intervals-icu`.
 - Large candidates are never read whole by the framework (hashing and copying
   stream 1 MiB chunks); the extractor must stream too.
 
 ### 4. The model
-- **Metric names, units, ranges, zero rules**: the table in
+- **Metric names, labels, units, ranges, zero rules**: the table in
   [The Metric Vocabulary](#the-metric-vocabulary); `fitdocs.wellness.METRICS`
-  is the code form. A new metric is added by amending this spec's model and
+  is the code form. `METRICS[metric].label` is the one display label every
+  consumer uses (recovery, workout-wellness); no consumer keeps its own
+  label table. A new metric is added by amending this spec's model and
   docs; it needs no series or index structure change (17.5). Apple's
   rMSSD, when documented, is `hrv_rmssd_ms` from source `apple-health`, never
   a continuation of `hrv_sdnn_ms`.
@@ -1573,6 +1644,20 @@ re-parse the archive or re-implement the merge.
 - `SeriesReport.days` (from `rebuild_series`, carried on
   `DrainReport.wellness_series`) names every day whose lines changed in that
   run — workout-wellness's targeted re-render input.
+- **Staging a series in a test**: `tests/wellness/builders_series.py`
+  `write_series(data_root, values: Iterable[SeriesValue]) -> tuple[Path, ...]`
+  is the **only sanctioned way** to stage a series without the drain. It
+  writes the year files and `manifest.toml` through the real codec
+  (`encode_year` and the manifest encoder, which stay unpublished: no
+  downstream test imports them; the manifest's `inputs` is the fixed marker
+  `"staged-by-test"` and it lists no entries), validates the series
+  invariants first (one
+  value per day, metric and source; exactly one canonical per day and
+  metric; else `ValueError`), and returns the written paths. A staged series
+  records no archive entries, so `assess_series` and `check` report it stale
+  and a drain or `regen` over a data root without matching archive entries
+  rebuilds it away; a test that needs the rebuild stages archive entries
+  instead (builder JSON through `commit_original`).
 - **Determinism**: same archive, registry rules and `[wellness]` → same bytes;
   no clock, no run date, no machine timezone.
 - The series is rebuilt **before** pages render in a drain and in `regen`.
@@ -1616,7 +1701,10 @@ re-parse the archive or re-implement the merge.
 | No format / several formats | identify | `unrecognized`, left in place | 0 |
 | Content invalid for its format | commit | `wellness_failures` + quarantine record | 1 |
 | Same bytes, quarantined, no retry | drain | `quarantined` | 0 |
-| Bytes changed during the run | commit | `deferred` | 0 |
+| Bytes changed during the run (also when the change made an extractor fail) | commit, re-hash first | `deferred`, not quarantined | 0 |
+| Extractor interrupted (`KeyboardInterrupt`) | commit | temp file removed, interrupt propagates | — |
+| Superseded `LATEST_ENTRY` entry with a damaged body | engine | never parsed; recorded superseded | 0 |
+| `LATEST_ENTRY` entry whose order header is unreadable / invalid | engine | series `DEFERRED` / `FAILED` | 0 / 1 |
 | Unexpected exception in intake | drain | `wellness_failures`, not quarantined | 1 |
 | Archive entry unreadable in rebuild | engine | series `DEFERRED`, untouched | 0 |
 | Archive entry invalid in rebuild | engine | series `FAILED`, untouched | 1 |
@@ -1703,8 +1791,16 @@ invented values; no maintainer value, file name or id.
   `.json` reads at most `HEAD_BYTES` (asserted through a counting opener) and
   `json()` returns `None`.
 - Hashing and committing read the candidate only in reads of at most
-  `CHUNK_BYTES` (asserted through a counting file wrapper); no unsized
-  `read()` reaches a candidate.
+  `CHUNK_BYTES` (asserted through a counting file wrapper). The wrapper's
+  rule for every read it records on a candidate: the read requests at most
+  `CHUNK_BYTES` (hashing, copying, and zip member data streamed in requests
+  of at most `CHUNK_BYTES`), or it is one of `zipfile`'s two structural
+  reads, each at most once per open — the end-of-central-directory read
+  (unsized on Python 3.11) starting at or after `size − (1 << 16) −
+  zipfile.sizeEndCentDir`, or the central-directory read of exactly the size
+  the end record declares. Any other unsized or larger read fails the test,
+  which bounds memory by the zip's own structure (§ Probe), not by its
+  member data.
 
 ## Security Considerations
 - Archive and series paths are composed only from registered format ids,
@@ -1720,8 +1816,11 @@ invented values; no maintainer value, file name or id.
   manifest parse, hashing the year files (hundreds of KB). Hashing a recognized
   candidate under the leave disposition is ~1 s per GB on every drain until
   the athlete removes it or uses the move disposition.
-- A rebuild parses every entry (JSON files of kilobytes to a few MB); the
-  apple extract's cost is apple-health-import's to bound.
+- A rebuild parses every entry of a `NONE`-supersession format (JSON files
+  of kilobytes to a few MB) and, for a `LATEST_ENTRY` format, reads every
+  entry's header but parses only the winner, so superseded Apple extracts
+  cost one header read each; the winning extract's parse cost is
+  apple-health-import's to bound.
 
 ## Existing Spec Amendments
 Carried out by this spec's implementation; numbers are the next free at

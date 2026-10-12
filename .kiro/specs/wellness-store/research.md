@@ -213,6 +213,40 @@
   field names come from `.kiro/specs/wellness-pull/brief.md` and the roadmap.
   The parser maps only fields named there.
 
+### Folded wave-2 amendments (2026-10-12, controller rulings)
+- **`MetricInfo.label`** (from recovery, ruling R1): one short label per
+  metric, pairwise distinct, owned here; recovery and workout-wellness hold
+  no label table. The labels are the ones recovery's design was written
+  against.
+- **`LATEST_ENTRY` parses only the winner** (from apple-health-import): the
+  engine reads each entry's order header through `archive.read_entry_order`
+  and parses only the greatest `(order, ref)`; a damaged superseded body no
+  longer fails a rebuild. Supersession moved from the merge to the engine;
+  the merge keeps a one-winner precondition.
+- **Extractor edge cases**: the original is re-hashed before an extractor's
+  error is classified, so a candidate changed or truncated mid-read is
+  deferred rather than quarantined; `KeyboardInterrupt` removes the temp file
+  and propagates.
+- **Gapped boundary ranks** (multiples of 10) so apple-health-import inserts
+  its seven `formats/apple/*` modules without renumbering.
+- **zipfile reads, measured** (stdlib scripts in the session scratchpad,
+  CPython 3.11.15, 3.12.13, 3.13.14):
+  - `_EndRecData` issues an **unsized** `read()` on 3.11 (sized on 3.12+):
+    22 bytes before EOF for a comment-less zip, and in the comment fallback
+    from `size − (1 << 16) − 22`, i.e. **65,558** bytes before EOF — one more
+    than `ZIP_MAX_COMMENT + 22` (65,557), the bound first proposed.
+  - `_RealGetContents` reads the whole central directory in one sized read:
+    1,940,000 bytes for 20,000 members (above `CHUNK_BYTES`) on 3.11 and 3.13.
+  - Streaming a member with `ZipFile.open(...).read(CHUNK_BYTES)` never asks
+    the file for more than `CHUNK_BYTES` (stored and deflated members).
+  - Consequence: the counting-opener rule admits the two structural reads
+    once each and bounds memory by the zip's own structure (central directory
+    + 65,558 bytes + one chunk), not by member data.
+- **Sanctioned series builder**: `tests/wellness/builders_series.py`
+  `write_series` stages a series through the real codec, so downstream tests
+  (recovery, workout-wellness) never import `encode_year` or the manifest
+  encoder.
+
 ## Architecture Pattern Evaluation
 
 | Option | Description | Strengths | Risks / Limitations | Notes |

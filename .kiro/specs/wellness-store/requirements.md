@@ -142,7 +142,7 @@ on the original staying in the inbox.
 5. When a recognized candidate's original SHA-256 already names an archive entry of its format, fitdocs shall report it as already archived and shall not read it further.
 6. If a recognized candidate cannot be parsed, then fitdocs shall archive nothing for it, report it as failed with the reason, and record it in the inbox quarantine record so that later drains report it as quarantined without parsing it again, exactly as for a `.fit` file whose bytes cannot be decoded.
 7. When the drain is run with `--retry-quarantined`, fitdocs shall re-attempt a quarantined wellness candidate exactly as it re-attempts a quarantined `.fit` file.
-8. If a candidate's bytes change between being hashed and being archived, then fitdocs shall archive nothing for it and defer it with a reason that says it changed during the run.
+8. If a candidate's bytes change between being hashed and being archived, then fitdocs shall archive nothing for it and defer it with a reason that says it changed during the run, also when the change made its content unreadable or invalid, and shall not record it in the quarantine record.
 9. Where the configured disposition moves processed files, fitdocs shall move a wellness candidate out of the inbox exactly when its archive entry exists and it did not fail in this drain, and shall otherwise leave it in place, as it does for `.fit` files.
 10. fitdocs shall never delete a wellness file from the inbox.
 
@@ -180,7 +180,7 @@ wherever I read it.
 2. fitdocs shall provide at least these metrics: resting heart rate, lowest and highest heart rate of the day, HRV as SDNN, HRV as rMSSD, total sleep, deep, light, REM and awake time in sleep, average heart rate in sleep, respiration rate, blood-oxygen saturation, body weight, VO2max (unspecified, running and cycling), steps, stress level, the day's highest and lowest body battery, and the subjective ratings for fatigue, mood, motivation, soreness, stress, injury and hydration.
 3. fitdocs shall keep HRV measured as SDNN and HRV measured as rMSSD as two separate metrics, and shall never convert a value of one into the other or place it under the other's name.
 4. fitdocs shall store a subjective rating as the number the source recorded, on the source's own scale, without reinterpreting it.
-5. fitdocs shall document, for each metric, its unit and each supported source's definition of it.
+5. fitdocs shall give each metric one short display label, distinct from every other metric's, and shall document, for each metric, its label, its unit and each supported source's definition of it.
 6. fitdocs shall never import a value another tool computed from its own training model, including intervals.icu's fitness, fatigue, ramp rate and estimated FTP fields.
 
 ### Requirement 6: Absent Values
@@ -334,7 +334,7 @@ plugs in without changing how the archive, merge or series work.
 #### Acceptance Criteria
 1. Where a format is added, fitdocs shall recognize, archive, parse, merge and report its files through the same rules as the formats this feature ships, with no change to the archive layout, the series files or the reading interface.
 2. Where a format declares a canonical extract, fitdocs shall build the extract by streaming the original, confirm afterwards that the original still hashes to the SHA-256 that names the entry, and archive the extract only after it parses successfully.
-3. Where a format declares that its latest entry supersedes earlier ones, fitdocs shall order its entries by the format's own rule, using the entry's name only to break a tie.
+3. Where a format declares that its latest entry supersedes earlier ones, fitdocs shall order its entries by the format's own rule, using the entry's name only to break a tie, and shall read a superseded entry only as far as needed to order it, so that damage beyond that point in a superseded entry never fails a rebuild.
 4. Where a format's parsing rules change in a way that changes the values it produces, the next drain shall treat the series as out of date and rebuild it.
 5. When a format adds a metric to the vocabulary, the series files and the analytics-index table shall accept it without a change to their structure.
 

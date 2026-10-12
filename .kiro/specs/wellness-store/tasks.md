@@ -63,7 +63,9 @@
   defines it locally in its own test module; it never edits the shared
   files, `tests/wellness/test_boundary.py`, or another stream's module.
   `(P)` tasks add only the modules 1.4's rank table names; a needed extra
-  module is a stop-and-report. The
+  module is a stop-and-report. The rank table uses gapped ranks (multiples
+  of 10); a downstream spec (apple-health-import's `formats/apple/*`) inserts
+  its modules into the gaps and never renumbers an existing rank. The
   full suite runs at each group's integration point (3.1, 4.1) and in 6.2.
 - **Never run the CLI by hand while a full `uv run pytest` is in flight in
   the same worktree** (`tests/test_bytecode_hygiene.py`).
@@ -142,7 +144,9 @@ preflight and keeps every call dashboards placed).
   **1.6**.
 - `tests/wellness/builders_intervals.py`, `test_intervals.py`: **2.1**.
   `builders_garmin.py`, `test_garmin.py`: **2.2**. `test_merge.py`: **2.3**.
-  `test_series.py`: **2.4** (3.2 adds the digest cases). `test_settings.py`:
+  `test_series.py` and `builders_series.py` (the sanctioned series builder
+  downstream specs' tests import): **2.4** (3.2 adds the digest cases to
+  `test_series.py`). `test_settings.py`:
   **2.5**. `test_archive.py`: **2.6**. `tests/test_inbox.py` additions and
   the folder pin in `tests/connectors/test_folder.py`: **2.7**.
 - `tests/wellness/test_registered_formats.py`: **3.1**. `test_engine.py`:
@@ -182,15 +186,17 @@ preflight and keeps every call dashboards placed).
     amendment.
   - **Package**: `src/fitdocs/wellness/__init__.py` (docstring only for now)
     and `model.py` per design § Model: `Metric` (28 members, design table
-    order), `MetricInfo` (unit token resolving through `unit_named`, inclusive
-    range, description, derived `zero_is_absent`), `METRICS`, `accept_value`,
+    order), `MetricInfo` (required `label`, unit token resolving through
+    `unit_named`, inclusive range, description, derived `zero_is_absent`),
+    `METRICS` with the design table's labels, `accept_value`,
     `DaySnapshot`, `SeriesValue`, `ORIGIN_PATTERN`/`is_origin`,
     `wellness_day_of_sleep_end`.
   - **`pyproject.toml`**: append `tests/wellness` to `[tool.mypy].files`.
   - **Tests** (`tests/wellness/test_model.py`): `METRICS` covers every
     `Metric` exactly once and its rows equal a test-local literal of the
-    design table (names, units, ranges); every unit token resolves; names end
-    in their unit token; `accept_value` at each bound of three metrics with
+    design table (names, labels, units, ranges); the 28 labels are pairwise
+    distinct and non-empty; every unit token resolves; names end in their
+    unit token; `accept_value` at each bound of three metrics with
     different ranges (inclusive both ends), zero for `resting_hr_bpm` (absent)
     vs `sleep_rem_s` (kept), NaN and ±inf absent, negative stress absent;
     `wellness_day_of_sleep_end` for ends at D−1 17:59 and D−1 18:00 in
@@ -200,27 +206,48 @@ preflight and keeps every call dashboards placed).
   - **Mutations:** `<=` → `<` on the upper bound; drop the non-finite check;
     `hours=6` → `hours=5`; replace the offset arithmetic with
     `.astimezone()`; swap `hrv_sdnn_ms`'s and `hrv_rmssd_ms`'s unit or range
-    rows (the literal pin reds).
+    rows (the literal pin reds); give `stress_rating` the label of
+    `stress_level` (the distinctness pin and the literal pin red).
   - **Observable:** `uv run pytest tests/test_units.py tests/wellness` green;
     `uv run mypy` covers `tests/wellness`.
-  - _Requirements: 5.1, 5.2, 5.3, 5.4, 6.3, 6.4, 6.5, 7.1, 7.2, 7.3, 7.5_
+  - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 6.3, 6.4, 6.5, 7.1, 7.2, 7.3, 7.5_
 
 - [ ] 1.2 Read candidates in bounded pieces: the probe, streamed hashing, and the shared test helpers
   - **`probe.py`** per design § Probe: `HEAD_BYTES`, `JSON_PROBE_LIMIT`,
     `CHUNK_BYTES`, `CandidateProbe` (stat, head, cached capped `json()`,
     `zip_members()`), `hash_file`.
   - **Shared helpers**: create `tests/wellness/_helpers.py` with a
-    data-root factory and a counting file opener (counts every `read` and its
-    requested size per opened path, and flags an unsized `read()`), and
-    `tests/wellness/conftest.py` exposing the data-root fixture. 1.3 appends
-    the registry helpers; the files are frozen after 1.3.
+    data-root factory and a counting file opener (records every `read` with
+    its start offset and requested size per opened path) plus its checker
+    for the design's read rule (§ Probe, § Testing Strategy › Performance):
+    every recorded read requests at most `CHUNK_BYTES`, or is one of
+    `zipfile`'s two structural reads, each at most once per open — the
+    end-of-central-directory read (an **unsized** `read()` on Python 3.11,
+    `zipfile.py` `_EndRecData`; sized on 3.12+) starting at or after
+    `size − (1 << 16) − zipfile.sizeEndCentDir` (65,558 bytes before EOF), or
+    the central-directory read (`_RealGetContents`) of exactly the size the
+    end record declares, which may exceed `CHUNK_BYTES`. Any other unsized or
+    larger read is a violation. Also create `tests/wellness/conftest.py`
+    exposing the data-root fixture. 1.3 appends the registry helpers; the
+    files are frozen after 1.3.
   - **Tests** (`test_probe.py`): `json()` returns `None` above the (patched)
     limit after reading at most `HEAD_BYTES` (counting opener), and for
     invalid JSON; `json()` is parsed once across two calls; `zip_members()`
-    on a small zip and on a non-zip; `hash_file` equals `hashlib.sha256` of
-    the bytes and reads only in `CHUNK_BYTES` pieces with no unsized read.
+    on a non-zip, on a small zip, on a zip with a 40,000-byte comment (the
+    3.11 fallback end-record read starts 65,558 bytes before EOF) and on a
+    zip whose central directory exceeds `CHUNK_BYTES` (about 12,000 empty
+    members with 50-character names; the test first asserts the declared
+    central-directory size exceeds `CHUNK_BYTES`) — each returns the member
+    names and its recorded reads satisfy the checker on the interpreter
+    running the suite; a checker unit test
+    with synthetic read logs: an unsized read 65,559 bytes before EOF, a
+    second central-directory-sized read, and a 2 × `CHUNK_BYTES` read at
+    offset 0 are each violations; `hash_file` equals `hashlib.sha256` of the
+    bytes and reads only in `CHUNK_BYTES` pieces with no unsized read.
   - **Mutations:** read the whole file in `json()` regardless of size;
-    `hash_file` with one unsized `read()`; drop the `json()` cache.
+    `hash_file` with one unsized `read()`; drop the `json()` cache;
+    widen the checker's end-record window by one byte (the 65,559 case
+    reds).
   - **Observable:** `uv run pytest tests/wellness/test_probe.py` green.
   - _Requirements: 3.1, 3.2_
 
@@ -237,7 +264,11 @@ preflight and keeps every call dashboards placed).
   - **Shared helpers** (append to `tests/wellness/_helpers.py`, which 1.2
     created; frozen after this task): a test-only ORIGINAL format and a
     test-only EXTRACT format with LATEST_ENTRY (a JSON-lines extract whose
-    header carries an order key), each with its own test-only source;
+    first line is a header carrying the order key; its `entry_order` reads
+    that first line only, so an entry with a valid header and a corrupt body
+    still yields its order while `parse` raises), each with its own
+    test-only source; a builder for such an extract with a chosen order and
+    an optionally corrupt body;
     `use_formats(monkeypatch, formats, sources)`; `tree_snapshot(path)` →
     bytes and `st_mtime_ns` of every file; `assert_untouched(before, after)`.
     The test-only recognizers build on `CandidateProbe` (1.2).
@@ -262,13 +293,16 @@ preflight and keeps every call dashboards placed).
   - Create `src/fitdocs/wellness/formats/__init__.py` (docstring only), so the
     group-2 format streams add modules without an add/add conflict.
   - **Boundary guard** (`tests/wellness/test_boundary.py`, AST walk): a rank
-    table naming every module of design § File Structure Plan (`model`,
-    `probe`, `spec`, `formats.intervals`, `formats.garmin`, `registry`,
-    `settings`, `merge`, `archive`, `series`, `intake`, `engine`, `inspect`,
-    the package `__init__` and `formats.__init__`) with its rank; each
-    existing module may import only the standard library, `tomli_w`,
+    table naming every module of design § File Structure Plan with a
+    **gapped** rank (multiples of 10, design § Allowed Dependencies:
+    `model`/`probe` 10, `spec` 20, `formats.__init__`/`formats.intervals`/
+    `formats.garmin` 30, `registry` 40, `settings`/`merge`/`archive` 50,
+    `series` 60, `intake`/`engine` 70, `inspect` 80, the package `__init__`
+    90), so that a downstream spec inserts its modules into the gaps without
+    renumbering (apple-health-import's `formats/apple/*` between 20 and 40).
+    Each existing module may import only the standard library, `tomli_w`,
     `fitdocs.layout`, `fitdocs.settings`, `fitdocs.units` and wellness
-    modules of lower rank (the facade may import any); no clock call
+    modules of strictly lower rank; no clock call
     (`date.today`, `datetime.now`, `datetime.utcnow`, `time.*`), no
     argument-less `astimezone()`, no network module. A module present on disk
     but missing from the rank table fails. **Positive control**: the set of
@@ -418,24 +452,27 @@ preflight and keeps every call dashboards placed).
   - _Boundary: GarminFormats_
 
 - [ ] 2.3 (P) Merge parsed entries into series values
-  - `merge.py` per design § Merge (supersession, revision resolution,
-    absence by a later snapshot, conflict keep-rule, precedence, ordering);
-    `Conflict`, `MergeResult`.
+  - `merge.py` per design § Merge (the one-winner precondition for a
+    `LATEST_ENTRY` format, revision resolution, absence by a later snapshot,
+    conflict keep-rule, precedence, ordering); `Conflict`, `MergeResult`.
+    Supersession itself is the engine's (3.2).
   - **Tests** (synthetic `ParsedEntry`s): later revision wins where the later
     value is smaller and the later entry ref sorts first; a later snapshot
     covering the metric without a value yields no value; two `None`-revision
     snapshots, one with a value, yield that value; equal values from two
     entries yield no conflict; two equal-revision distinct values conflict
     and keep the greater `(ref, ordinal)` with ref order and value order
-    disagreeing; LATEST_ENTRY keeps only the greatest `order` (order and ref
-    disagree) and lists the rest as superseded; precedence marks exactly one
+    disagreeing; two entries of one `LATEST_ENTRY` format raise
+    `ValueError`, while one such entry beside `NONE` entries merges;
+    precedence marks exactly one
     canonical per day and metric across three sources with pairwise-distinct
     values, skipping a top source without a value; every source's value
     kept; output order by `(day, metric name, source)` from shuffled input.
   - **Mutations:** `max` → `min` on revisions; drop the absence branch;
-    choose canonical by source id; keep superseded entries.
+    choose canonical by source id; drop the `LATEST_ENTRY` precondition (the
+    `ValueError` test reds).
   - **Observable:** `uv run pytest tests/wellness/test_merge.py` green.
-  - _Requirements: 8.1, 8.2, 9.1, 9.2, 9.3, 9.4, 9.5, 10.1, 17.3_
+  - _Requirements: 8.1, 8.2, 9.1, 9.2, 9.3, 9.4, 9.5, 10.1_
   - _Boundary: Merge_
 
 - [ ] 2.4 (P) Encode, decode and read the series files
@@ -443,6 +480,15 @@ preflight and keeps every call dashboards placed).
     `format_value`, `encode_year`, `decode_year`, manifest encode/decode
     (`generator`, `series_version`, newer-version detection), `WellnessSeries`
     with every method, `read_series`, `series_files`, `SeriesReadError`.
+  - **Series test builder** (`tests/wellness/builders_series.py`, owned by
+    this task; the one sanctioned way for any spec's tests to stage a series
+    without the drain, design § Seams 6): `write_series(data_root, values:
+    Iterable[SeriesValue]) -> tuple[Path, ...]` writes the year files and
+    `manifest.toml` through the real `encode_year` and manifest encoder
+    (`inputs` set to a fixed `"staged-by-test"` marker, no entries), after
+    checking the series invariants (one value per day, metric and source;
+    exactly one canonical per day and metric) and raising `ValueError`
+    otherwise; returns the written paths.
   - **Tests**: byte golden of a small synthetic year file; round trip;
     `52.0` → `52`, `48.6` → `48.6`, `1e20` handled; line order with metric
     names whose enum order differs from lexicographic; `\n` endings, no BOM;
@@ -452,10 +498,17 @@ preflight and keeps every call dashboards placed).
     listing a missing file → `SeriesReadError`, ignoring an unlisted year
     file; `canonical`/`value`/`by_source`/`sources`/`for_day`/
     `canonical_series` on a fixture with two sources and a canonical switch;
-    `day_digest` stable across reads and different when one value changes.
+    `day_digest` stable across reads and different when one value changes;
+    builder positive control: `write_series` over values spanning two years,
+    two sources and a canonical switch, given in shuffled order, then
+    `read_series(data_root).values` equals the sorted input exactly, and the
+    year files' bytes equal `encode_year` of each year's values; builder
+    refusals: a duplicate `(day, metric, source)` and a day/metric with zero
+    or two canonical values each raise `ValueError` and write nothing.
   - **Mutations:** emit `\r\n`; sort by enum order; `format_value` always
     `repr`; `read_series` reads every `*.csv` instead of the listed files;
-    `day_digest` hashing only values.
+    `day_digest` hashing only values; drop the builder's canonical check (the
+    two-canonical refusal reds).
   - **Observable:** `uv run pytest tests/wellness/test_series.py` green.
   - _Requirements: 6.1, 11.2, 11.3, 11.4, 11.8_
   - _Boundary: Series_
@@ -479,8 +532,9 @@ preflight and keeps every call dashboards placed).
 - [ ] 2.6 (P) Archive layout, listing and the write-once commit protocol
   - `archive.py` per design § Archive: `ArchiveEntry`, `Orphan`,
     `ArchiveListing`, `entry_ref`, `list_archive`, `commit_original`,
-    `commit_extract`, `parse_entry` (snapshot invariants validated, ordinals
-    assigned).
+    `commit_extract` (re-hash before classifying, design § Archive),
+    `parse_entry` (snapshot invariants validated, ordinals assigned),
+    `read_entry_order` (header only).
   - **Tests** (test-only formats): commit of an original creates exactly
     `wellness-archive/<fmt>/<sha><suffix>` with the candidate's bytes and no
     leftover temp file; invalid content → `Invalid`, no entry, no temp;
@@ -494,10 +548,33 @@ preflight and keeps every call dashboards placed).
     bad name, a wrong suffix and a symlink each an orphan, no file opened
     (counting opener); `parse_entry` rejects a snapshot whose values exceed
     its covers, whose value `accept_value` rejects, whose origin is invalid.
+  - **Extractor edge cases** (test-only EXTRACT format with injectable
+    extractor behaviour):
+    - the extractor raises `WellnessFormatError` on an unchanged candidate →
+      `Invalid`, no entry, no temp file (the drain then fails and
+      quarantines it, 4.2);
+    - the extractor raises `OSError` on an unchanged candidate →
+      `Unreadable`, no entry, no temp file;
+    - the extractor raises `KeyboardInterrupt` → the exception propagates
+      unchanged, no `.incoming-*` file remains, no entry;
+    - the extractor truncates the candidate mid-read and then raises
+      `WellnessFormatError` (its content no longer parses) → `Changed`, not
+      `Invalid`;
+    - the re-hash itself raising `OSError` (candidate `chmod 000` by the
+      extractor) → `Unreadable`.
+  - **`read_entry_order`**: on an extract with a valid header and a corrupt
+    body it returns the header's order while `parse_entry` raises; on a
+    corrupt header it raises `WellnessFormatError`; on a `chmod 000` entry
+    `OSError`.
   - **Mutations:** commit before parsing; skip the post-extract re-hash;
-    overwrite an existing entry; list a symlink as an entry.
+    overwrite an existing entry; list a symlink as an entry; classify the
+    extractor's error before re-hashing (the truncation case returns
+    `Invalid` and reds); drop the temp-file `finally` (the interrupt case
+    leaves `.incoming-*` and reds); map an extractor `OSError` to `Invalid`;
+    implement `read_entry_order` through `parse_entry` (the corrupt-body case
+    raises and reds).
   - **Observable:** `uv run pytest tests/wellness/test_archive.py` green.
-  - _Requirements: 2.2, 2.3, 2.4, 2.8, 3.1, 3.3, 17.2_
+  - _Requirements: 2.2, 2.3, 2.4, 2.8, 3.1, 3.3, 17.2, 17.3_
   - _Boundary: Archive_
   - _Depends: 1.5_
 
@@ -547,7 +624,11 @@ preflight and keeps every call dashboards placed).
     `assess_series`, `rebuild_series`), writing year files and the manifest
     atomically (temp + `os.replace`, manifest last), skipping unchanged
     bytes, removing emptied years, recording entries (contributed or
-    superseded), effective precedence and conflicts.
+    superseded), effective precedence and conflicts. Supersession is done
+    here, before parsing: for each `LATEST_ENTRY` format, read every entry's
+    order with `read_entry_order`, pick the greatest `(order, ref)`, parse
+    only the winner, record the others superseded (design § Engine,
+    Parsing).
   - **Tests** (`test_engine.py`, real registry plus test formats where an
     extract is needed): first build from Garmin and intervals entries writes
     the expected years and manifest; second build `UNCHANGED` with bytes and
@@ -560,15 +641,23 @@ preflight and keeps every call dashboards placed).
     `DEFERRED` for a `chmod 000` entry and for an unreadable year file;
     `FAILED` for an entry made invalid after archiving; zero entries → no
     year files and no manifest; an emptied year removed; report counts and
-    `days` for added, changed, removed and canonical-only changes; a
-    LATEST_ENTRY pair recorded as one contributed and one superseded.
+    `days` for added, changed, removed and canonical-only changes.
+    **LATEST_ENTRY**: three entries of the test-only EXTRACT format whose
+    order and ref disagree; the series holds only the greatest-order entry's
+    values, the manifest records it `contributed` and the other two
+    `superseded`; one superseded entry has a valid header and a corrupt body
+    and the rebuild is still `REBUILT`; an entry with a corrupt header →
+    `FAILED` naming it; a `chmod 000` entry of that format → `DEFERRED`.
   - **Mutations:** write the manifest first; skip the occupancy check for
     the manifest; leave `rules_version` out of the digest; rewrite unchanged
-    files; drop `days` for canonical-only changes.
+    files; drop `days` for canonical-only changes; parse every
+    `LATEST_ENTRY` entry (the corrupt superseded body makes the rebuild
+    `FAILED` and the `REBUILT` assertion reds); pick the winner by ref only
+    (the contributed-entry assertion reds).
   - **Observable:** `uv run pytest tests/wellness/test_engine.py
     tests/wellness/test_series.py` green.
   - _Depends: 2.3, 2.4, 2.5, 2.6, 3.1_
-  - _Requirements: 10.6, 11.1, 11.5, 11.6, 12.1, 12.4, 12.5, 12.6, 12.7, 17.4_
+  - _Requirements: 9.3, 10.6, 11.1, 11.5, 11.6, 12.1, 12.4, 12.5, 12.6, 12.7, 17.3, 17.4_
 
 - [ ] 3.3 (P) Decide a wellness candidate's intake outcome
   - `intake.py` per design § Intake (`identify`, `archive_identified` and the
@@ -674,7 +763,10 @@ preflight and keeps every call dashboards placed).
     after it is fixed in place (entry removed from the record); move
     disposition moves archived and already-archived wellness files and
     leaves unrecognized, failed and deferred ones; an unreadable candidate
-    deferred; `sync SOURCE` with a `.json` in the source tree touches no
+    deferred; with the test-only EXTRACT format registered, a candidate whose
+    extractor raises `WellnessFormatError` lands in `wellness_failures` with
+    a quarantine entry, and a candidate truncated during extraction lands in
+    `deferred` with **no** quarantine entry; `sync SOURCE` with a `.json` in the source tree touches no
     wellness path.
   - **Mutations:** settle the wellness candidates separately; rebuild after
     the FIT loop; move a failed candidate; skip the quarantine check.
