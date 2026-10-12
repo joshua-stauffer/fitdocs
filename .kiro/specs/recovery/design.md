@@ -1157,10 +1157,11 @@ history Req 8.8).
 
 Every new assertion names the production mutation it dies on
 (`change-protocol.md` § Fixture Discrimination). Fixtures are synthetic
-series built by `tests/recovery/builders.py` through wellness-store's own
-series codec (`fitdocs.wellness.series.encode_year` and its manifest
-encoder — test-only use of an unpublished seam, verified before building on
-it and checked at cross-spec review) and synthetic workout pages; no
+series built by `tests/recovery/builders.py` — in memory as
+`WellnessSeries(values=tuple(sorted(values)))`, and on disk only through
+wellness-store's sanctioned `tests/wellness/builders_series.py::write_series`
+(controller ruling, 2026-10-12; recovery never imports
+`fitdocs.wellness.series` internals) — and synthetic workout pages; no
 maintainer value. End-to-end staging goes through the drain with a
 synthetic intervals.icu delivery (wellness-store design § Seams 2), which
 carries 17 metrics and no sleep stages or body battery.
