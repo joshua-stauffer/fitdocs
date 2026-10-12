@@ -82,9 +82,9 @@ Terms used below:
     (`analytics-index`);
   - the derived tables (`analytics-derived`);
   - an MCP or HTTP server, and a natural-language "ask" wrapper;
-  - write access, user tables, saved queries, and statements spanning several
-    invocations;
-  - charting query results;
+  - write access, user tables, and statements spanning several invocations;
+    saved queries are superseded by Phase 11 `dashboards` (Amendment 1);
+  - charting query results, superseded by Phase 11 `dashboards` (Amendment 1);
   - any existing command reading the index, `fitdocs check` included;
   - the ownership contract's statements about the index directory
     (`analytics-index` owns them; this feature relies on them).
@@ -263,3 +263,35 @@ Terms used below:
 5. The analytics page shall carry a schema reference listing every table and column with its type, unit and description, generated from the descriptions stored in an index built by this fitdocs. If the reference differs from them, then the fitdocs test suite shall fail.
 6. The documentation index shall link the analytics page. The release notes shall state, under the unreleased entry, the `fitdocs query` command, the `fitdocs-analytics` skill and the analytics page.
 7. The steering documents shall list `fitdocs query` among the commands that make no network request, and shall record the read side's place in the dependency direction. The `connectors` amendment record shall name `query` in its no-network command list.
+
+## Amendment 1 (2026-10-12): parameters, typed columns and a session, landed by dashboards
+
+The two out-of-scope lines for saved queries and for charting query results
+are superseded by Phase 11 `dashboards`, which stores queries in pages it
+reads and draws their results. `fitdocs query` itself is unchanged: its
+statement path still calls `conn.execute(sql)` (the relation form) and its
+outcomes, messages and exit codes are the same.
+
+The query layer gains what `dashboards` consumes:
+
+- `ResultSet.column_types`, a defaulted trailing field holding the database's
+  type name for each column. It is not part of `ResultSet` equality.
+- `params` on `execute_statement` and `run_statement`, and
+  `statement_parameters`. `params=None` keeps the relation path; any mapping,
+  even an empty one, takes the streaming named-parameter path. On that path a
+  failure of any kind after the statement's deadline fired is a timeout, and
+  an interrupt that no deadline caused is a statement failure, because
+  DuckDB can report a streamed interrupt as a statement error and a streamed
+  statement error as an interrupt.
+- `open_session`, `QuerySession`, `ScreenedStatement` and `SessionUnavailable`
+  in `fitdocs.query.command`: one sandboxed connection running many
+  statements, classifying an unavailable index exactly as `run_query` does.
+  `run_query` and `open_session` share the open-and-check helpers.
+
+`tests/query/test_boundary.py` adds `fitdocs.dashboards` to query's forbidden
+import targets (query never imports dashboards). Dashboards task 4.3 adds the
+importer allow-list entry for `fitdocs.dashboards.binding` and task 7.1 adds
+the `fitdocs-dashboards` pointer to the `fitdocs-analytics` skill.
+Pinned by `tests/query/test_statement.py` (column types on both paths, the
+`params` split, the timeout rulings), `tests/query/test_command.py` (the
+session tests) and `tests/query/test_format.py` (the defaulted field).

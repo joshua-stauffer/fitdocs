@@ -384,3 +384,24 @@ def test_uuid_values_in_nested_json_use_canonical_lowercase() -> None:
         '{"abcdef12-3456-abcd-ef12-abcdef123456": '
         '"abcdef12-3456-abcd-ef12-abcdef123456"}'
     )
+
+
+def test_column_types_is_a_defaulted_trailing_field() -> None:
+    import dataclasses
+
+    names = [field.name for field in dataclasses.fields(ResultSet)]
+    assert names == ["columns", "rows", "truncated", "max_rows", "column_types"]
+    positional = ResultSet(("a",), ((1,),), False, 5)
+    assert positional.column_types == ()
+    typed = ResultSet(("a", "b"), ((1, "x"),), False, 5, ("BIGINT", "VARCHAR"))
+    assert typed.column_types == ("BIGINT", "VARCHAR")
+    assert typed.rows == ((1, "x"),)
+    assert typed.max_rows == 5
+    with pytest.raises(FrozenInstanceError):
+        typed.column_types = ()  # type: ignore[misc]
+
+
+def test_equality_ignores_column_types() -> None:
+    typed = ResultSet(("a",), ((1,),), False, 5, ("BIGINT",))
+    assert typed == ResultSet(("a",), ((1,),), False, 5)
+    assert typed != ResultSet(("a",), ((2,),), False, 5, ("BIGINT",))
