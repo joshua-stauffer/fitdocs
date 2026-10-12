@@ -20,7 +20,7 @@ Two things happen here and nowhere else:
   can make lives in a module-level fragment table, each written exactly once
   and reused across directories -- `declaration_text` only selects and orders
   fragments, so a claim can never be fixed in one directory's text while an
-  unpinned copy stands in another's. The four emitted texts are pinned as
+  unpinned copy stands in another's. The five emitted texts are pinned as
   committed byte-goldens under ``tests/declaration_golden/`` rather than
   substring assertions.
 - **Placement** (:func:`ensure_declarations`) writes only when a directory's
@@ -56,6 +56,7 @@ from fitdocs.contract import (
 from fitdocs.layout import (
     ARCHIVE_DIR,
     BLOCKS_DIR,
+    DASHBOARDS_DIR,
     DECLARED_DIRS,
     HISTORY_DIR,
     WORKOUTS_DIR,
@@ -339,9 +340,53 @@ _BLOCKS_RERUNNABLE: Final[str] = (
 # directory; `plans.settings.resolve_plans_dir` refuses an owned location;
 # `tests/test_confinement.py`'s `plan` entry.
 
+_DASHBOARDS_PAGES: Final[str] = (
+    "The pages in `dashboards/` belong to the athlete; fitdocs writes only the "
+    "chart regions inside them and the files in `dashboards/assets/`."
+)
+# CLAIM ANCHOR: dashboards `storage` writes a page only by replacing the bytes
+# between a chart region's markers (`region.py`) and writes nothing else under
+# `dashboards/` but `assets/`; `layout.OWNED_PATHS` lists `dashboards/` and
+# `dashboards/assets/` and the confinement guard permits no other write.
+
+_DASHBOARDS_DIRECTIVE: Final[str] = (
+    "A page declares a chart in a hidden `<!-- fitdocs:chart ... -->` "
+    "directive written by the athlete or their assistant; directly below it, "
+    "fitdocs maintains a region between `<!-- fitdocs:begin:chart:<id> -->` "
+    "and `<!-- fitdocs:end:chart:<id> -->` and rewrites only the bytes between "
+    "those markers, after a successful index refresh and when `fitdocs "
+    "dashboard refresh` runs. Edit the prose, frontmatter and directives "
+    "freely; do not edit inside a chart region."
+)
+# CLAIM ANCHOR: dashboards `grammar`/`directive` (the directive comment),
+# `region` (the begin/end markers and the in-place rewrite), `engine` and
+# `cli._run_index_pass` (the refresh after a successful index pass) and
+# `fitdocs dashboard refresh`.
+
+_DASHBOARDS_ASSETS: Final[str] = (
+    "Frozen charts are drawn from snapshot files in `dashboards/assets/`, "
+    "which fitdocs never modifies or deletes; the chart images there are "
+    "rewritten as needed."
+)
+# CLAIM ANCHOR: dashboards `storage` (snapshot files are written once and never
+# touched again; chart images are rewritten atomically).
+
+_DASHBOARDS_CHECK: Final[str] = (
+    "Check a page with `fitdocs dashboard check`; the packaged "
+    "`fitdocs-dashboards` skill (`fitdocs skill fitdocs-dashboards`) explains "
+    "the directive."
+)
+# CLAIM ANCHOR: dashboards `cli` (`fitdocs dashboard check`) and the packaged
+# `fitdocs-dashboards` skill reached by `fitdocs skill`.
+
+_DASHBOARDS_OWNER: Final[str] = (
+    "the athlete (pages); fitdocs (chart regions and dashboards/assets/)"
+)
+# CLAIM ANCHOR: the same split as `_DASHBOARDS_PAGES`.
+
 _OWNER_BLOCK: Final[str] = (
     "## Ownership\n\n"
-    "Owner: `{generator}`.\n"
+    "Owner: {owner}.\n"
     "Ownership contract version: `{contract_version}`.\n"
     "Published ownership contract: {contract_url}\n"
 )
@@ -385,11 +430,11 @@ def declaration_text(directory: str) -> str:
     is deferred to the published ownership contract (task 7.1), reached by
     ``CONTRACT_DOCUMENTATION_URL``.
 
-    Dispatches explicitly on ``directory`` over exactly the four members of
+    Dispatches explicitly on ``directory`` over exactly the five members of
     `layout.DECLARED_DIRS` -- ``workouts/``, ``history/``, ``fit-archive/``,
-    ``blocks/`` -- with **no fall-through branch**: a ``directory`` this
-    function does not recognize raises :class:`ValueError` rather than
-    silently inheriting another directory's prose.
+    ``blocks/``, ``dashboards/`` -- with **no fall-through branch**: a
+    ``directory`` this function does not recognize raises :class:`ValueError`
+    rather than silently inheriting another directory's prose.
 
     For the directory holding generated workout documents (``workouts/``):
     the written-and-tool-owned statement, the user-owned region names, the
@@ -418,6 +463,11 @@ def declaration_text(directory: str) -> str:
     7.2, 7.5, 7.6) -- the effort-tag user-owned-key element and the
     never-add-a-marker rule do not apply here, because a block page has no
     effort-tag frontmatter and this branch never selects those fragments.
+    For the dashboards directory (``dashboards/``), the one
+    co-owned location: no written-and-tool-owned statement (its pages belong
+    to the athlete), the chart regions and ``dashboards/assets/`` fitdocs
+    does write, the directive grammar in one paragraph, the snapshot rule,
+    and the check command, under an Owner line naming both owners.
 
     No fragment quantifies over documents ("each"/"every"/"all
     documents"/"any document"): only :func:`~fitdocs.render.views.render_strength`
@@ -435,8 +485,9 @@ def declaration_text(directory: str) -> str:
     user_regions_list = _english_list(f"`{region}`" for region in USER_REGIONS)
     user_keys_list = _english_list(f"`{key}`" for key in EFFORT_KEYS)
 
+    owner = _DASHBOARDS_OWNER if directory == DASHBOARDS_DIR + "/" else f"`{GENERATOR}`"
     owner_block = _OWNER_BLOCK.format(
-        generator=GENERATOR,
+        owner=owner,
         contract_version=CONTRACT_VERSION,
         contract_url=CONTRACT_DOCUMENTATION_URL,
     )
@@ -470,6 +521,14 @@ def declaration_text(directory: str) -> str:
             f"{_BLOCKS_CONTENT}\n\n"
             f"{_BLOCKS_NOTES}\n\n"
             f"{_BLOCKS_RERUNNABLE}\n\n"
+        )
+    elif directory == DASHBOARDS_DIR + "/":
+        heading = "Dashboards"
+        body = (
+            f"{_DASHBOARDS_PAGES}\n\n"
+            f"{_DASHBOARDS_DIRECTIVE}\n\n"
+            f"{_DASHBOARDS_ASSETS}\n\n"
+            f"{_DASHBOARDS_CHECK}\n\n"
         )
     else:
         raise ValueError(

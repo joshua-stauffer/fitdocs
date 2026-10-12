@@ -10,5 +10,5 @@ The page is re-derivable from the workout documents alone: deleting it costs onl
 ## Ownership
 
 Owner: `fitdocs`.
-Ownership contract version: `9`.
+Ownership contract version: `10`.
 Published ownership contract: https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md

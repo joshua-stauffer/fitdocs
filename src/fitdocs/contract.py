@@ -325,7 +325,7 @@ highest-ranked extra that records it. A page without extras renders as before
 and changes only this line (Req 8.2).
 """
 
-CONTRACT_VERSION: Final[str] = "9"
+CONTRACT_VERSION: Final[str] = "10"
 """The published ownership contract's version identifier (Req 2.8).
 
 A *string*, and deliberately not comparable with :data:`DOC_VERSION`: it
@@ -399,6 +399,15 @@ together after the athlete inputs change, and a build computes every page
 under the athlete inputs current at that build. The disposable index is stored
 outside the data root, is never read back into a document, and is refreshed
 after every writing command without changing that command's exit code.
+
+Raised from ``9`` to ``10`` by dashboards (Req 1.1, 1.2, 19.2) because the
+stated guarantees about the data root changed. A new owned location,
+``dashboards/``, is co-owned: its pages belong to the athlete, while fitdocs
+owns their chart regions and ``dashboards/assets/``. Dashboard chart regions
+and assets are the only document content produced from the analytics index;
+workout, history and block documents never read it. Run ``fitdocs sync`` or
+``fitdocs regen`` once to place ``dashboards/AGENTS.md``; nothing is needed for
+existing documents.
 """
 
 # --- document vocabulary -----------------------------------------------------
