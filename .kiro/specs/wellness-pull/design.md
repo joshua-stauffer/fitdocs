@@ -203,6 +203,10 @@ tests/connectors/
 ├── test_wellness_pull.py       # the wellness step and run order (ScriptedWellnessPuller)
 ├── test_intervals_wellness.py  # intervals listing, envelope, attribution, status mapping, literal pins,
 │                               #   contract test through wellness-store's recognizer and parser
+├── test_intervals_wellness_pull.py  # run_pull with the real intervals connector and FakeTransport
+├── test_cli_wellness.py        # the wellness table and exit codes through CliRunner
+├── test_wellness_docs.py       # connectors.md wellness passages pinned to code constants
+├── test_wellness_records.py    # wellness.md link, contract bullet, changelog, amendment headings
 └── test_wellness_e2e.py        # CLI pull --sync through the real drain; second pull sweeps
 ```
 
@@ -255,8 +259,8 @@ tests/connectors/
   wellness binding), `tests/test_confinement.py` (`WRITING_ENTRY_POINTS`
   gains `pull-wellness`), `tests/connectors/test_boundary.py` only if a
   module's import set changes (none planned).
-- `pyproject.toml` — the new test modules in `[tool.mypy].files` where the
-  list enumerates test modules.
+- `pyproject.toml` — unchanged: `[tool.mypy].files` already lists the
+  `tests/connectors` directory, which holds every new test module.
 
 ## System Flows
 
