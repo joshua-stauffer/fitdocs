@@ -107,17 +107,22 @@
   title and none in its chart images.
 - **Implications**: the block decides attribution from the origins of every
   value its printed figures are computed from (the day, the 7-day window, the
-  60-day window), not only the day value's origin. The recovery gap is
-  reported to the controller for cross-spec review.
+  60-day window), not only the day value's origin. The recovery gap was
+  settled at the Phase 12 cross-spec review (round 1, I-1): recovery adds
+  `GARMIN_ORIGIN`, `WellnessAttribution`, `wellness_attribution` and
+  `wellness_attribution_line` to `render/attribution.py`, and both the
+  recovery page and this block call them.
 
 ### Upstream seams consumed
 - **wellness-store** (`design.md § Seams for downstream specs`, `:1485-1692`):
   `read_series`, `SeriesReadError`, `WellnessSeries.by_source`, `METRICS[m]
-  .label/.unit`; the day-boundary rule (`:1608-1618`). Not used:
+  .label/.unit`; the day-boundary rule (`:1608-1618`). Not used (and, after
+  the Phase 12 cross-spec review, dropped from wellness-store):
   `WellnessSeries.day_digest` and `SeriesReport.days` (see Decisions).
 - **recovery** (`design.md § Seams for downstream specs`, `:1102-1137`):
   `Baselines.of`, `shown`, `shown_source`, `on`, `BaselineDay`,
-  `RangePosition`, `METHODS`, `BASELINED_METRICS`, `SLEEP_METRICS`. Not used:
+  `RangePosition`, `METHODS`, `BASELINED_METRICS`, `SLEEP_METRICS`. Not used
+  (and dropped from recovery at the cross-spec review):
   `baseline_key` (see Decisions). Recovery's SleepView rule for stage rows
   ("`baselines.on(m, s, night)` for each `m` in `SLEEP_METRICS` that source `s`
   records that night", `:616-619`) is reused unchanged.

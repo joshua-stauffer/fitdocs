@@ -78,12 +78,19 @@ setting, frontmatter key, owned location or index table.
 - The training-load region, the load pass, the plan pass, the index pass and
   dashboards' dashboard pass, which keep their behavior and their order.
 - `fitdocs recovery`, which stays standalone (recovery Req 1.8).
+- The wellness Garmin-attribution rule and its line text:
+  `fitdocs.render.attribution.GARMIN_ORIGIN`, `WellnessAttribution`,
+  `wellness_attribution` and `wellness_attribution_line`, which recovery
+  adds (append-only) and both the recovery page and this block call
+  (Phase 12 cross-spec review, round 1, I-1). This spec decides only which
+  origins feed it.
 
 ### Allowed Dependencies
 - `fitdocs.morning.block` imports only the standard library, the
   `fitdocs.wellness` facade, the `fitdocs.recovery` facade,
   `fitdocs.render.format` (`ABSENT`), `fitdocs.render.attribution`
-  (`SOLE_SOURCE_PREFIX`, `SOURCES_PREFIX`), the chart kit facade
+  (`WellnessAttribution`, `wellness_attribution`,
+  `wellness_attribution_line`, which recovery adds), the chart kit facade
   `fitdocs.render.charts.kit` (`Column`, `ValueKind`) and
   `fitdocs.render.charts.kit.format` (`format_value`, `escape_markdown`).
 - `fitdocs.morning.docedit` imports only the standard library,
@@ -110,6 +117,9 @@ setting, frontmatter key, owned location or index table.
   the block tests; no code change needed unless fields change.
 - A change to wellness-store's `WellnessSeries` API, `METRICS` labels or
   units, origin tokens or the day rule.
+- A change to `render.attribution`'s `wellness_attribution` rule or
+  `wellness_attribution_line` text (recovery owns them): the block's line
+  and every block golden move.
 - A change to `docmerge`'s marker grammar, to `PRESERVED_REGIONS`, or to the
   index's render-fingerprint rule.
 - A new page-writing command: it must run the morning-of pass after its page
@@ -201,7 +211,8 @@ renumbered).
 - **Formatting**: `render/format.py:33` (`ABSENT`, en dash),
   `render/charts/kit/format.py:116` (`format_value`), `:202`
   (`escape_markdown`); the page-title Garmin line's prefixes at
-  `render/attribution.py:19-20`.
+  `render/attribution.py:19-20`; recovery appends the shared wellness
+  attribution names to the same module before this spec lands.
 
 ### Architecture Pattern & Boundary Map
 
@@ -251,7 +262,7 @@ graph TB
 ```
 src/fitdocs/morning/
 ├── __init__.py   # docstring only: what the package is, who may import what
-├── block.py      # MORNING_BLOCK_VERSION, Attribution, RowSource, SignalRow, SleepRow, Windows,
+├── block.py      # MORNING_BLOCK_VERSION, RowSource, SignalRow, SleepRow, Windows,
 │                 #   MorningBlock (facts, fingerprint), MorningInputs (of, block), render_region,
 │                 #   parse_stamp, STAMP_PATTERN, MORNING_HEADING (pure)
 ├── docedit.py    # MorningRegionMissing, read_morning, replace_morning (pure, byte-local)
@@ -385,7 +396,7 @@ flowchart TD
 | 2.5 | Recovery's formatting | MorningBlock | `format_value` | — |
 | 2.6, 2.7 | Absence marker; carried source | MorningBlock | `ABSENT` | — |
 | 3.1-3.5 | Sleep table, stages from the shown source only | MorningBlock | `SleepRow`, `Baselines.on` | — |
-| 4.1-4.6 | Sources, origins, Garmin line | MorningBlock | `RowSource`, `Attribution` | — |
+| 4.1-4.6 | Sources, origins, Garmin line | MorningBlock | `RowSource`, `wellness_attribution`, `wellness_attribution_line` | — |
 | 5.1-5.3 | Descriptive only | MorningBlock | fixed text; forbidden-phrase test | — |
 | 6.1-6.3 | Fingerprint of printed facts | MorningBlock | `facts`, `fingerprint`, stamp | — |
 | 6.4 | Change only when printed facts change | MorningBlock, MorningPass | byte comparison | One page |
@@ -476,16 +487,19 @@ flowchart TD
   `origins` are the sorted distinct recorded origins of the row source's
   values on those days; `unattributed` is true when any such value has no
   recorded origin (4.1, 4.6).
-- **Attribution (normative)**: `garmin` (the wellness origin token) among the
-  union of every row's origins → `SOLE` when that union is exactly
-  `{"garmin"}` and no row is `unattributed`, otherwise `CONTRIBUTING`; no
-  `garmin` → `NONE` (4.2-4.5).
+- **Attribution (normative)**: `block.attribution =
+  render.attribution.wellness_attribution(origins)`, where `origins` is the
+  union of every row's `origins` plus one `None` when any row is
+  `unattributed`. The shared function (recovery's) gives `NONE` without
+  `"garmin"`, `SOLE` when the recorded origins are exactly `{"garmin"}` and
+  none is `None`, and `CONTRIBUTING` otherwise (4.2-4.5). This module holds
+  no attribution enum, origin constant or line text of its own.
 - **Facts and fingerprint**: `facts()` is
   `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)`
   of `{"day": D.isoformat(), "windows": [r, B], "signals": [[metric, source,
   origins, day_value, rolling_mean, normal_range, position], …], "sleep":
   [[metric, source, origins, night_value, rolling_mean, baseline_mean], …],
-  "attribution": attribution}` with `None` as JSON `null` and lists in row
+  "attribution": attribution.value}` with `None` as JSON `null` and lists in row
   order; `fingerprint()` is the SHA-256 hex of its UTF-8 bytes (6.1-6.3).
   Only what the block prints is a fact: a row's `unattributed` flag is not
   printed (it reaches the page only through `attribution`), so it is not in
@@ -500,13 +514,9 @@ flowchart TD
 ```python
 MORNING_BLOCK_VERSION: Final[int] = 1
 MORNING_HEADING: Final[str] = "Morning Of"
-GARMIN_ORIGIN: Final[str] = "garmin"
 STAMP_PATTERN: Final[re.Pattern[str]]   # ^<!-- fitdocs-morning:v([1-9][0-9]*) ([0-9a-f]{64}) -->$
-
-class Attribution(StrEnum):
-    NONE = "none"
-    SOLE = "sole"
-    CONTRIBUTING = "contributing"
+# WellnessAttribution, wellness_attribution, wellness_attribution_line come
+# from fitdocs.render.attribution (recovery's addition); none is redefined here.
 
 @dataclass(frozen=True)
 class Windows:
@@ -542,7 +552,7 @@ class MorningBlock:
     windows: Windows
     signals: tuple[SignalRow, ...]
     sleep: tuple[SleepRow, ...]
-    attribution: Attribution
+    attribution: WellnessAttribution
     def facts(self) -> str: ...
     def fingerprint(self) -> str: ...
 
@@ -836,11 +846,13 @@ MORNING_PLACEHOLDER: Final[str] = ""
   from `wellness-archive/` and `[wellness]`), the athlete profile, the
   timezone and the tile source.
 - `docs/wellness.md` (wellness-store's guide): a section "Wellness on workout
-  pages": what the block shows, the day rule (the night before a workout on
-  D is wellness day D), the windows, sources and origins, the Garmin line,
-  the absence marker, when pages are refreshed (every `sync`, `pull --sync`,
-  `regen`), that edits are replaced, that it states no verdict, that it
-  shares `fitdocs recovery`'s numbers.
+  pages": what the block shows, that it shows the wellness day equal to the
+  page's date (with a link to the guide's own day-boundary section, never a
+  restatement: wellness-store Req 7.6 pins that statement exactly once across
+  `docs/`), the windows, sources and origins, the Garmin line, the absence
+  marker, when pages are refreshed (every `sync`, `pull --sync`, `regen`),
+  that edits are replaced, that it states no verdict, that it shares
+  `fitdocs recovery`'s numbers.
 - Workouts skill: after the drain table, a paragraph: `Morning of:` lines
   follow the drain report; "updated"/"removed" need nothing; "could not
   update" → read the reason and tell the user (damaged markers need a human);
@@ -857,8 +869,8 @@ MORNING_PLACEHOLDER: Final[str] = ""
   the analytics index recompute a page's computed values).
 - `.kiro/steering/structure.md`: "`morning` (the morning-of block and its
   pass) imports the `wellness` and `recovery` facades, `contract`, `docmerge`,
-  `docio`, `layout`, the render layer's absence marker and attribution
-  prefixes and the chart kit's value formatter; only `cli` imports
+  `docio`, `layout`, the render layer's absence marker and wellness
+  attribution helpers and the chart kit's value formatter; only `cli` imports
   `morning.engine`; `render` never imports `morning`."
 
 ## Data Models
@@ -872,9 +884,10 @@ non-blank lines):
 
 1. The stamp: `<!-- fitdocs-morning:v{MORNING_BLOCK_VERSION} {fingerprint} -->`.
 2. `## Morning Of`.
-3. Only when attribution is not `NONE`: `Data source: Garmin` (`SOLE`) or
-   `Data sources: Garmin and other sources` (`CONTRIBUTING`), built from
-   `render.attribution.SOLE_SOURCE_PREFIX` / `SOURCES_PREFIX`.
+3. Only when attribution is not `NONE`: the line
+   `render.attribution.wellness_attribution_line(block.attribution)`
+   returns, today `Data source: Garmin` (`SOLE`) or `Data sources: Garmin
+   and other sources` (`CONTRIBUTING`).
 4. The sentence: `Wellness for {D}, the day of this workout, against the
    athlete's own baseline for each source: {r}-day means cover {D-(r-1)} to
    {D}, and normal ranges and {B}-day means cover {D-B} to {D-1}.`
@@ -965,11 +978,14 @@ sync SOURCE`, which neither archives wellness nor rebuilds the series.
   `shown(m, D)` per stage instead of `on(m, shown_source, D)`); a source
   without stages gives the total row alone (mutation: emit a row for an
   absent stage).
-- Origins and attribution: Garmin origin only inside the 60-day window while
-  the day value is `apple` → `CONTRIBUTING` (mutation: read only
-  `BaselineDay.origin`); all values `garmin` → `SOLE`; one value with no
-  origin among `garmin` values → `CONTRIBUTING` (mutation: ignore `None`
-  origins); no `garmin` → no line; a `garmin` value exactly one day outside a
+- Origins and attribution (the rule itself is recovery's and tested there;
+  these tests pin which origins the block feeds it): Garmin origin only
+  inside the 60-day window while the day value is `apple` → `CONTRIBUTING`
+  (mutation: read only `BaselineDay.origin`); all values `garmin` → `SOLE`;
+  one value with no origin among `garmin` values → `CONTRIBUTING` (mutation:
+  drop the `None` added for an `unattributed` row); no `garmin` → no line;
+  the printed line equals `wellness_attribution_line(block.attribution)`
+  (mutation: a local line string); a `garmin` value exactly one day outside a
   window (D−(B+1) for the 60-day window, D−r for a rolling-only row) does not
   count (mutation: widen the window by one day).
 - Windows: the sentence and headers read `METHODS` (a patched method table
@@ -980,7 +996,7 @@ sync SOURCE`, which neither archives wellness nor rebuilds the series.
 - Fingerprint: equal facts → equal fingerprints across two `MorningInputs`
   built from differently ordered value tuples; a resting-HR change below the
   printed precision gives byte-identical region text (mutation: fingerprint
-  `baseline_key` instead of printed facts); a change in a printed figure, a
+  `repr` of the raw `BaselineDay`s instead of the printed facts); a change in a printed figure, a
   steps value on D (no change: the block shows no steps), a different origin
   each move or keep the fingerprint as stated; an origin turning from
   unrecorded to one already listed, with no Garmin anywhere, leaves the
@@ -1109,15 +1125,17 @@ and the brief; each is revisable at review (research.md has the trade-offs).
 1. **A refreshed region filled by a pass** (not a re-render, not a preserved
    tool region): no `.fit` decode, banner unchanged, index cost avoided.
 2. **The fingerprint is of the printed facts**, and the pass compares bytes;
-   `WellnessSeries.day_digest` and `recovery.baseline_key` are not used,
-   because both move for changes the block does not print. Controller
+   wellness-store's `day_digest` and recovery's `baseline_key` were not
+   used (both since dropped upstream), because both move for changes the
+   block does not print. Controller
    ruling R1 (Step 3.5, round 1) accepted this, with the correction that a
    row's `unattributed` flag is not a fact (it is never printed).
 3. **The pass visits every page**; `SeriesReport.days` is not an input. The
    X..X+60 bound is a test oracle. Self-healing after an interrupted run,
    correct after `sync SOURCE`, `regen` and upgrades. Accepted by R1; what
-   this leaves unused upstream (`day_digest`, `SeriesReport.days`) is
-   settled at the cross-spec review.
+   this left unused upstream was dropped from wellness-store (`day_digest`,
+   `SeriesReport.days`) and recovery (`baseline_key`) at the cross-spec
+   review.
 4. **Placement immediately before Training Load.**
 5. **Signals**: the baselined signals and the sleep signals only; weight,
    SpO2, respiration, steps, stress, body battery and ratings stay on the
@@ -1125,8 +1143,9 @@ and the brief; each is revisable at review (research.md has the trade-offs).
 6. **Sleep stages only from the shown source of total sleep**, recovery's
    SleepView rule.
 7. **Garmin attribution** from the origins of every value a printed figure
-   is computed from; "Data source: Garmin" or "Data sources: Garmin and
-   other sources", directly beneath the heading.
+   is computed from, decided and worded by recovery's shared
+   `wellness_attribution` / `wellness_attribution_line` (cross-spec
+   settlement), directly beneath the heading.
 8. **Range text** `"<low> to <high> <symbol>"`, the recovery page's numbers
    and precision.
 9. **An unreadable series is a notice, not a failure** (the pass is chained,
