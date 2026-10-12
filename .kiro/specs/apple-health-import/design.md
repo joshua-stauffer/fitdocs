@@ -1020,7 +1020,9 @@ a translated main-document name with its `_cda` companion, a `__MACOSX` copy).
   bytes during the import → deferred as changed during the run; a
   `KeyboardInterrupt` raised from the progress callback mid-import
   propagates and leaves no entry and no temp file (4.4); a superseded extract
-  corrupted after archiving still lets `regen` report `REBUILT` (6.5); the
+  corrupted after archiving leaves `regen` neither `FAILED` nor `DEFERRED`,
+  with no notes and the year-file and manifest bytes and mtimes unchanged
+  (6.5); the
   original left in the inbox (leave) or moved (move); the drain's progress
   callback receives increasing percents ending at 100. The terminal printer
   that turns those calls into lines is `wellness-store`'s and tested there.
@@ -1039,8 +1041,11 @@ a translated main-document name with its `_cda` companion, a `__MACOSX` copy).
 - The extractor reads the candidate only through bounded reads: every read a
   counting wrapper sees requests at most `CHUNK_BYTES`, or is `zipfile`'s
   end-record read beginning within `ZIP_MAX_COMMENT + 22` bytes of the end of
-  the file (Python 3.11's `zipfile._EndRecData` reads that tail unsized); the
-  wrapper's positive control is that it observed reads of the candidate.
+  the file (Python 3.11's `zipfile._EndRecData` reads that tail unsized), or
+  `zipfile`'s central-directory read of exactly the size the end record
+  states (one read, which may exceed `CHUNK_BYTES`;
+  `ZipFile._RealGetContents`); the wrapper's positive control is that it
+  observed reads of the candidate.
 - The extract and the snapshots are identical when built in child processes
   under `TZ=Pacific/Auckland` and `TZ=America/Los_Angeles`.
 - Import time is not asserted in CI; the maintainer-only smoke task measures
@@ -1084,9 +1089,12 @@ this spec consumes them as provided:
   classified, so a file changed or truncated mid-read is deferred, not
   quarantined (`wellness-store` task 2.6).
 - **Boundary guard ranks** left gapped between `spec` and `registry`
-  (`wellness-store` task 1.4), and the counting opener's read rule (at most
+  (`wellness-store` task 1.4; if no gap exists this spec uses tuple ranks and
+  never renumbers), and the counting opener's read rule (at most
   `CHUNK_BYTES`, or `zipfile`'s end-record read within `ZIP_MAX_COMMENT + 22`
-  bytes of end of file; `wellness-store` task 1.2).
+  bytes of end of file (`_EndRecData`), or `zipfile`'s central-directory read
+  of exactly the size the end record states, which may exceed `CHUNK_BYTES`
+  (`_RealGetContents`); `wellness-store` task 1.2).
 
 ## Decisions Taken Without Asking
 Taken in auto-approve mode, consistent with the roadmap's "Decisions taken
