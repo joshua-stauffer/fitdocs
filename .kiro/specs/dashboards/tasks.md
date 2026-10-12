@@ -791,7 +791,7 @@ sequential, never two `(P)` tasks at once.
     with every mutation recorded red.
   - _Requirements: 6.1, 6.2, 6.4, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 11.1, 11.2, 11.3, 11.4, 14.4_
 
-- [ ] 5.4 Render the run report as text and JSON
+- [x] 5.4 Render the run report as text and JSON
   - **`src/fitdocs/dashboards/report.py`** per design § Report:
     `render_json`, `render_text(…, chained=…)`.
   - **Tests** (`test_report.py`, `RunReport` values built directly): JSON
@@ -1461,3 +1461,21 @@ sequential, never two `(P)` tasks at once.
   true for any unusable location or any listed markdown. `page_name` is
   reported on whole runs only. Chart problems are stable-sorted by line;
   pages in name order. A terminator directive is still parsed.
+- **5.4 (3 review rounds; rulings R5, R6 — design § Report amended at
+  validation):** the report sorts on its own, stably, in both forms: pages
+  by name, charts by line, problems/notices by line (no line first,
+  same-line kit order kept), location problems by page (None first),
+  `removed` by code point. Text collapses every whitespace run in message,
+  fix and accepted values to one space (a multi-line database error cannot
+  break a line); JSON stays raw, `indent=2`, `ensure_ascii=False`, no
+  trailing newline (6.1 echoes it with one). Text layout: location then
+  index problems at column 0 (`<code>: <message> <fix>`), a bare `<page>`
+  header for page-level findings, chart headers `<page>:<line> <id>
+  <outcome>` (`-` for no trusted id), problems before notices, notice label
+  from `severity`; `option` not rendered in text. (R5) summary
+  `Dashboards: <r> rendered, <u> unchanged, <f> failed[, <n> checked][, <k>
+  images removed].` — `checked` only when n > 0; JSON summary keys unchanged
+  (`charts`, `rendered`, `unchanged`, `failed`). (R6) text appends
+  ` Accepted: a, b, c.` when `accepted` is non-empty. Chained text is `""`
+  unless a chart is RENDERED or FAILED, any problem/notice exists, a page was
+  written, or images were removed (extends the design's wording).
