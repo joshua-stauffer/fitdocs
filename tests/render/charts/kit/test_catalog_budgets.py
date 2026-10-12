@@ -3,7 +3,8 @@
 Requirement 12.4. The numbers here are the source of truth: the design's
 initial budgets, lowered to measured + 25% (rounded up to 100) where the
 measurement left more than 40% headroom, and set to measured + 25% by
-controller ruling where the measurement exceeded the design (calendar-heatmap, box, stacked-100).
+controller ruling where the measurement exceeded the design (calendar-heatmap,
+box, stacked-100).
 The measured sizes are recorded in tasks.md, Implementation Notes.
 """
 

@@ -75,6 +75,11 @@ recorded as one.
   no action needed): `[connectors.<name>]` gains the `sources` key for this
   connector. See
   [the connectors reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md).
+- Chart kinds `calendar-heatmap`, `heatmap`, `dual-axis`, `band`, `box`,
+  `mean-max`, `small-multiples` and `stacked-100` join the chart kit,
+  ready for dashboard charts. On the grid kinds (`calendar-heatmap` and
+  `heatmap`) a row with no value shows a cross, a zero an outlined square
+  and a missing row nothing, and a negative value is refused.
 
 ### Changed
 

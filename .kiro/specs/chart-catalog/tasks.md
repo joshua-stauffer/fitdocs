@@ -787,7 +787,7 @@ sequential, never two `(P)` tasks at once.
     mutation reds it.
   - _Requirements: 12.4_
 
-- [ ] 4. Landing
+- [x] 4. Landing
 
 - [x] 4.1 Bring `dashboards`' kinds block up to date if this plan lands second
   - **The rule** (`dashboards`' design § Settled Seams for the Parallel
@@ -830,7 +830,7 @@ sequential, never two `(P)` tasks at once.
   - _Requirements: 13.1, 13.2_
   - _Depends: 3.1_
 
-- [ ] 4.2 Record the release note and run the full validation
+- [x] 4.2 Record the release note and run the full validation
   - **`CHANGELOG.md`** (`[Unreleased]` → `### Added`, append): one line
     that opens with the kind names (for example ``- Chart kinds
     `calendar-heatmap`, `heatmap`, …``), never with `` - `fitdocs
@@ -914,3 +914,6 @@ sequential, never two `(P)` tasks at once.
 - **3.3 mutations** (each `cp` snapshot, one edit, `uv run pytest tests/render/charts/kit/test_catalog_budgets.py -q -p no:randomly`, `cp` restore, `cmp`): (1) `cells.cell_marks` emits one `<rect>` per bin cell instead of one path per class -> red `calendar-heatmap 365 days` and `heatmap 52x5` (the other seven pass); (2) `dual_axis` appends one `<circle>` per present point after `line_series` -> red `dual-axis 2x365` only; (3) beyond the task's two: `mean_max` appends one `<circle>` per present point -> red `mean-max 3x28` (11,606 > 8,000); a shared mutation in `svg.el` appending a 25-character attribute to every element -> red heatmap, dual-axis, band, box, small-multiples, stacked-100 (calendar-heatmap and mean-max draw few elements and stay green; they are pinned by (1) and (3)). Every budget is therefore pinned by at least one named production mutation. The at-bound assertion is pinned only by the existing goldens (no production mutation fits without regenerating them); it reuses `GOLDEN_ROOT` and fails if a catalog kind lacks or duplicates an `at_bound` golden. Restore evidence: `cells.py`, `kinds/dual_axis.py`, `kinds/mean_max.py`, `svg.py` each `cmp`-identical to the snapshot; `git status --short` shows only the new test file and this record.
 - 3.3 review: three false sentences (exceeded-budget list and count, the calendar fixture's "gaps") corrected by the controller after a prose-only rejection, without a second review round (downgrade, stated). The `svg.el` pad mutation that reds six budgets appends a 37-character attribute per element; a 25-character one reds four.
 - 4.1 (2026-10-12, controller): `git ls-tree origin/main src/fitdocs/dashboards` lists nothing — `dashboards` is not on `main` (it is in progress on `impl/dashboards`). First branch: no `dashboards`-owned file changed; `dashboards`' task 7.3 regenerates the `docs/dashboards.md` kinds block at its landing, when all sixteen kinds are registered (its plan tracks it; no queue item). Re-checked at the final rebase.
+- 4.2 (2026-10-12, controller ruling after review): CHANGELOG `[Unreleased]` → `### Added` gained one bullet: "Chart kinds `calendar-heatmap`, `heatmap`, `dual-axis`, `band`, `box`, `mean-max`, `small-multiples` and `stacked-100` join the chart kit, ready for dashboard charts. On the grid kinds (`calendar-heatmap` and `heatmap`) a row with no value shows a cross, a zero an outlined square and a missing row nothing, and a negative value is refused." It departs from the task text ("available to dashboard charts", "signed values") because `dashboards` is not on `main` when this lands (no command reaches the kinds yet) and the code refuses negative values only; `dashboards`' task 8.2 may tighten "ready for" to "available to" when it lands (keep both lines on rebase).
+- 4.2 preservation evidence (merge-base `431a5a7`): the Hard rules' `git diff --stat $(git merge-base HEAD main) -- <list>` printed nothing (exit 0); `git diff $(git merge-base HEAD main) -- pyproject.toml` is empty (0 bytes). Core kind tests (test_registry, test_determinism, test_size_budget, test_problems, test_{line,area,bar,hbar,scatter,histogram,stat,table}) 485 passed; `tests/render/charts/test_{hero,calendar,zones,map_golden}.py`, `tests/render/test_golden_docs.py`, `tests/history/test_page.py`, `tests/render/charts/test_palette.py` 173 passed; all unmodified except `tests/render/charts/test_palette.py`, whose original assertions are unmodified (task 1.2 appended the sequential-ramp tests, +23 lines, 0 removed).
+- 4.2 full validation: `uv run pytest -q` 12249 passed, 8 skipped (actionlint x2, forbidden-strings x6) in 342.61s; `ruff format --check .` 657 files already formatted; `mypy` no issues in 472 source files; `ruff check .` first failed with one E501 at `tests/render/charts/kit/test_catalog_budgets.py:6` (the controller's 3.3 docstring correction ran past 88 columns); the controller re-wrapped that docstring line and `ruff check .` then passed (All checks passed), `ruff format --check .` 657 files formatted, the budgets module 9 passed.
