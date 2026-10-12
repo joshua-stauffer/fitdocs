@@ -151,7 +151,7 @@ exhaust my machine.
 
 #### Acceptance Criteria
 1. fitdocs shall hash, recognize, copy and parse a wellness candidate by reading it in bounded chunks, never by reading the whole file into memory at once.
-2. fitdocs shall decide recognition from a bounded prefix of the candidate's bytes, or, for a format that reads JSON, from the parsed JSON of a file no larger than a stated size limit.
+2. fitdocs shall decide recognition by reading a bounded part of the candidate (a prefix of its bytes, a zip file's member list, or, for a format that reads JSON, the parsed JSON of a file no larger than a stated size limit), never the whole of a larger file.
 3. While a wellness candidate is being archived, fitdocs shall hold no more than a bounded amount of its content in memory, independent of the file's size, apart from what the format's own parsed result requires.
 4. Where a format reports progress while it reads a large candidate, the drain shall show that progress to the athlete.
 
@@ -331,7 +331,7 @@ plugs in without changing how the archive, merge or series work.
 
 #### Acceptance Criteria
 1. Where a format is added, fitdocs shall recognize, archive, parse, merge and report its files through the same rules as the formats this feature ships, with no change to the archive layout, the series files or the reading interface.
-2. Where a format declares a canonical extract, fitdocs shall build the extract from one streamed read of the original, verify that the bytes it read are the bytes it hashed, and archive the extract only after it parses successfully.
+2. Where a format declares a canonical extract, fitdocs shall build the extract by streaming the original, confirm afterwards that the original still hashes to the SHA-256 that names the entry, and archive the extract only after it parses successfully.
 3. Where a format declares that its latest entry supersedes earlier ones, fitdocs shall order its entries by the format's own rule, using the entry's name only to break a tie.
 4. Where a format's parsing rules change in a way that changes the values it produces, the next drain shall treat the series as out of date and rebuild it.
 5. When a format adds a metric to the vocabulary, the series files and the analytics-index table shall accept it without a change to their structure.
