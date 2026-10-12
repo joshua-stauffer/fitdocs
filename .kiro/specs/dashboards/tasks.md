@@ -612,7 +612,7 @@ sequential, never two `(P)` tasks at once.
   - _Boundary: Storage_
   - _Depends: 3.1, 3.3_
 
-- [ ] 4.3 (P) Bind chart SQL to the query session with typed columns
+- [x] 4.3 (P) Bind chart SQL to the query session with typed columns
   - **`src/fitdocs/dashboards/binding.py`** per design § Binding:
     `ROW_CAP`, `TODAY`, `TYPE_KINDS`, `column_kind`, `QueryChartSource`,
     `source_opener`. UUID is refused by type name only: no `uuid` import and
@@ -1392,3 +1392,23 @@ sequential, never two `(P)` tasks at once.
   closer), adding `\n` when it has none — **5.x passes `after_line` for
   replace edits too**. Edits are position-sorted internally. `NOTE_RE` is
   used with `fullmatch` (5.1 too).
+- **4.3 (2 review rounds; controller rulings R3, R4 — design § Binding
+  amended at validation):** (R3) a query hint becomes the fix via
+  `_sentence(error.hint)` (adds the stop, does not capitalise), so
+  `Problem.fix` stays a sentence. (R4) screen-stage refusals (ONE_STATEMENT,
+  STATEMENT_KIND) use binding's chart message ("a chart runs exactly one
+  SELECT statement; this is <kind>"), because the query layer's
+  `RESTRICTION_TEXT` ("runs only queries and EXPLAIN", "fitdocs query runs
+  exactly one statement") misleads chart authors; run-stage refusals keep
+  `RESTRICTION_TEXT`. `sql_refused` fix is per restriction (one SELECT /
+  read only the index's tables / remove the setting / remove the write /
+  remove the extension). Parenthesis strip is a fullmatch on `name(...)`, so
+  `DECIMAL(18,3)[]` stays unsupported. A `column_types`/`columns` length
+  mismatch raises `RuntimeError` ("fitdocs defect") — the engine lets it
+  propagate. `row_cap` precedes type checks; no `rows` on `row_cap`.
+  TIMESTAMPTZ: refused with a cast fix on both versions (1.5.6 `sql_failed`
+  with the cast hint; 1.2.0 reports `DATETIME` and, only if pytz is
+  importable — it is not in the lock — would give `value_kind`).
+  `source_opener` memoises its first result incl. `SourceUnavailable`.
+  `__all__` re-exports `DEFAULT_TIMEOUT_S` (monkeypatched by tests).
+  duckdb 1.2.0: test_binding 133 passed.
