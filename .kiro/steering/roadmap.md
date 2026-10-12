@@ -2743,7 +2743,7 @@ Rejected:
 
 #### Specs (dependency order)
 
-- [ ] chart-kit — **brief written 2026-10-11; spec written 2026-10-12**
+- [x] chart-kit — **implemented and verified 2026-10-12** (28/28 leaf tasks accepted, 7.2* maintainer-only visual check open; ~20 controller rulings recorded in the spec's tasks.md Implementation Notes and design.md amended to match — dashboards and chart-catalog read those first; hbar 20-bar size budget raised 8,000 → 13,400 by ruling; validate-impl GO, full suite 11459 passed/44 skipped, CI green; 9 follow-ups queued as `2026-10-12-chart-kit-*`). **Brief written 2026-10-11; spec written 2026-10-12**
   (Phase 11 batch, wave 1, `tasks-generated`, all approvals set; 18
   requirements / 105 criteria, 7 majors / 28 executable tasks plus the
   optional maintainer-only visual check 7.2*; independent Step 3.5 review,
