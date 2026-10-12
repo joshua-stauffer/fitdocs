@@ -914,7 +914,7 @@ sequential, never two `(P)` tasks at once.
     three entries listed in the parametrize ids.
   - _Requirements: 2.1, 16.6_
 
-- [ ] 6.5 Add `dashboard` to the no-network list (connectors Amendment 3)
+- [x] 6.5 Add `dashboard` to the no-network list (connectors Amendment 3)
   - **`.kiro/steering/tech.md`**: the list becomes "`sync`, `regen`,
     `load`, `dashboard`, `check`, `query`, …" (inserted before `check`, so
     the tail pins in `tests/connectors/test_network_statements.py:666-669`
@@ -1553,3 +1553,13 @@ sequential, never two `(P)` tasks at once.
   new subprocess test `test_importing_the_cli_loads_no_dashboards_module`.
   `kinds` JSON `ensure_ascii=False` is an equivalent mutant today (ASCII
   registry).
+- **6.5 (1 review round):** tech.md no-network list is "`sync`, `regen`,
+  `load`, `dashboard`, `check`, `query`, `history`, …"; pinned by
+  "`load`, `dashboard`, `check`, `query`, `history`" in
+  `tests/connectors/test_network_statements.py`. `test_e2e.py` gains
+  `("dashboard", ["refresh"])` with a staged one-chart page in both roots,
+  per-root `FITDOCS_INDEX_DIR` and index build, and asserts the region and
+  image written in both (non-vacuous) and `Dashboards: 1 rendered,`. It
+  imports `tests.dashboards._helpers.write_page` (first sibling-subpackage
+  test import). connectors Amendment 3 dated 2026-10-13 (controller set the
+  placeholder dates); next free connectors amendment is 4.
