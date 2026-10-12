@@ -30,9 +30,11 @@ it.
   phase) provides the normalized, source-attributed daily series.
 - **Charts.**
   - `chart-kit` is on main (d03e85e).
-  - `chart-catalog` is in implementation (2026-10-12). Its `band` (low/high
-    with a centre line), `dual-axis` and `calendar-heatmap` kinds are the
-    shapes a recovery view needs.
+  - `chart-catalog` is on main too (implemented 2026-10-12). Its `band`
+    (low/high with a centre line), `dual-axis` and `calendar-heatmap` kinds
+    are the shapes a recovery view needs. Read its `tasks.md`
+    Implementation Notes before consuming them: rulings there changed seam
+    details.
 - **Owned locations.**
   - Today: `workouts/`, `history/`, `blocks/`, `fit-archive/`, `.cache/` and
     `.fitdocs/` (`layout.py:133-142`).
