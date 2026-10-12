@@ -747,7 +747,7 @@ sequential, never two `(P)` tasks at once.
     with every mutation recorded red.
   - _Requirements: 4.8, 5.6, 7.8, 9.1, 9.2, 9.3, 12.1, 12.2, 12.3, 12.4, 12.5, 14.2, 14.3, 14.7, 15.5, 17.1, 20.1_
 
-- [ ] 5.3 Freeze, re-freeze and clean up
+- [x] 5.3 Freeze, re-freeze and clean up
   - **`engine.py`**: the frozen paths per design § Engine and § Chart
     decision — recorded snapshot, latest generation, first freeze (encode,
     decode, render, create), `sql_changed` notice, `snapshot_missing` /
@@ -1508,3 +1508,27 @@ sequential, never two `(P)` tasks at once.
   returns `SourceUnavailable`); replace the interim FREEZE/CHECKED
   behaviour; cleanup removes a new image left unreferenced by
   `page_changed`/`write_failed` in the same run.
+- **5.3 (2 review rounds; the round-2 one-test close-out — O38 — was
+  verified by the controller's own mutation run, a downgrade from a 3rd
+  review; rulings R7–R12):** `_settle` serves both modes: a FETCH chart
+  fetches (a frozen one is encoded, decoded and drawn from the decoded rows,
+  units re-derived by name); RECORDED/LATEST read + decode. Per page: snapshots,
+  then assets, then one `replace_page`; a fresh region records the path
+  `create_snapshot` returns. `ChartResult.snapshot` = created path, else
+  planned, else None. `sql_changed` is a chart notice on both the recorded and
+  adopted-latest paths. Cleanup runs once after all pages for REFRESH and
+  FREEZE, never CHECK (outcome-equivalent to "after every page"); it also
+  removes images left unreferenced by `page_changed`/`write_failed`.
+  **R7** unstorable cell on a first freeze → `write_failed` with `column`,
+  fix "Exclude or cast the non-finite values in the SQL."; no snapshot; under
+  REFRESH a never-rendered chart gets the 12.3 note, under FREEZE nothing.
+  **R8** `Directive.sql_sha256` hashes `sql.rstrip("\r\n")`. **R9** a FREEZE
+  page target leaves relative charts untouched (CHECKED, no problem);
+  `freeze_relative` only for an explicit chart target. **R10** a failing
+  explicit FREEZE writes no note. **R11** engine imports
+  `fitdocs.units.unit_for_column` (design § Allowed Dependencies amended at
+  validation; **8.4 must allow `engine`**). **R12** a cleanup OSError is
+  unhandled (queued). A failed re-freeze can leave an unused extra
+  generation; a failed first freeze's snapshot is adopted next run (10.4).
+  Equivalent mutants: F8 (draw from fetched vs decoded rows — round-trip is
+  the identity, probed), O26 (CR half of the digest strip unreachable).
