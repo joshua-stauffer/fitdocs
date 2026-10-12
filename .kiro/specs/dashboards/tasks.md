@@ -876,7 +876,7 @@ sequential, never two `(P)` tasks at once.
     focused modules.
   - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7_
 
-- [ ] 6.3 Prove a real interrupt ends a run cleanly
+- [x] 6.3 Prove a real interrupt ends a run cleanly
   - **Tests** (`test_interrupt.py`, harness after
     `tests/query/test_interrupt.py`): a child `fitdocs dashboard refresh`
     against the real index fixture with one relative chart whose SQL runs
@@ -1563,3 +1563,21 @@ sequential, never two `(P)` tasks at once.
   imports `tests.dashboards._helpers.write_page` (first sibling-subpackage
   test import). connectors Amendment 3 dated 2026-10-13 (controller set the
   placeholder dates); next free connectors amendment is 4.
+- **6.3 (2 review rounds):** `tests/dashboards/test_interrupt.py` runs 14
+  trials (fresh child, per-trial marker) of a real `dashboard refresh` over a
+  `copy_dashboard_root` copy; the store hook wraps `execute` and
+  `execute_named` (only `execute_named` fires for a bound chart); the chart is
+  an aggregating cross join (a SIGINT during a streaming non-aggregating
+  statement is not honoured for >20 s — queued). Each trial: exit 130, empty
+  stdout, stderr ends `Dashboard run interrupted.`, no traceback, page and
+  `dashboards/` bytes+mtime untouched, no svg, no `.dashboards-*.tmp`.
+  Measured exit after SIGINT ≈0.05–0.07 s unloaded (both duckdb versions),
+  ≤0.19 s under load. **Controller ruling (amended in review):** task-named
+  mutation 1 (`QuerySession.close` skips `interrupt_quietly`) is masked on
+  this path by the `interrupt_quietly` in `execute_statement` and
+  `QuerySession.run`; it is pinned in-process by
+  `tests/query/test_command.py` (`test_close_after_an_interrupted_statement_
+  interrupts_first_and_is_idempotent`, `test_session_context_manager_closes_
+  once_on_exit`). The real-process substitute — all three calls removed —
+  hangs intermittently (7/16 on 1.5.6, 2/6 on 1.2.0), hence 14 trials; it
+  reds (1.5.6 at trials 0/2/9, 1.2.0 at trial 3).
