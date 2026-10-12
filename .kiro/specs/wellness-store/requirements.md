@@ -25,8 +25,10 @@ per-metric, source-attributed values, and every source's values are merged by
 a configurable per-metric source precedence into one normalized daily series,
 written as fitdocs-owned yearly files in a new `wellness/` location. The drain
 reports what it added or changed. `regen` rebuilds the series from the archive
-alone. A file fitdocs cannot use is reported and left alone, and a FIT file
-that is not an activity is never rendered as a workout. `check` reports an
+alone. A file fitdocs cannot use is reported and left alone, and a `.fit`
+file whose header declares a type other than an activity gets no workout
+page; a page that already lists one is kept and rebuilt by `fitdocs regen`.
+`check` reports an
 orphaned archive entry, a series out of date and a conflicting duplicate. A
 `wellness_daily` table brings the series into the analytics index. This
 feature ships the intervals.icu and Garmin-export formats and settles the

@@ -1154,8 +1154,9 @@ from `fitdocs.wellness.engine` (`SeriesReport`, `SeriesStatus`) only.
   rebuilt from the archive and the ``[wellness]`` settings by the drain and by
   ``fitdocs regen``. The inbox drain now archives recognized wellness files
   and reports files it cannot use as unrecognized, leaving them in place. A
-  ``.fit`` file whose header declares a type other than an activity is no
-  longer rendered as a workout. Run ``fitdocs sync`` or ``fitdocs regen`` once
+  ``.fit`` file whose header declares a type other than an activity no longer
+  gets a workout page; a page that already lists one is kept and rebuilt by
+  ``fitdocs regen``. Run ``fitdocs sync`` or ``fitdocs regen`` once
   to place ``wellness/AGENTS.md`` and ``wellness-archive/AGENTS.md``."
 - `docs/ownership-contract.md`: version line, a new "What changed" paragraph
   replacing the previous one, the two owned-path bullets, the declared-
