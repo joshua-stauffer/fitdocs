@@ -16,11 +16,11 @@ guard, registry snapshot/restore, credentials/environment isolation):
    never the pull's.
 2. With ``[connectors]`` configured, every command Req 14.1 names that is
    not ``connect``/``pull`` itself -- ``sync``, ``regen``, ``load``,
-   ``check``, ``history``, ``plan``, ``derive-benchmarks``, ``index`` and
-   ``query`` -- completing exactly as it would with no ``[connectors]`` table
-   at all: same exit code and output, the same number of socket attempts as
-   the bare run (an in-test recorder that also raises), and no call on a
-   scripted connector.
+   ``check``, ``history``, ``plan``, ``derive-benchmarks``, ``index``,
+   ``query`` and ``dashboard refresh`` -- completing exactly as it would
+   with no ``[connectors]`` table at all: same exit code and output, the
+   same number of socket attempts as the bare run (an in-test recorder that
+   also raises), and no call on a scripted connector.
 """
 
 from __future__ import annotations
@@ -58,6 +58,7 @@ from fitdocs.load.types import (
 from fitdocs.metrics.types import DerivedMetrics
 from fitdocs.model import Activity
 from tests.connectors.conftest import ScriptedPersonalKeyConnector
+from tests.dashboards._helpers import write_page
 from tests.fixtures import builder
 
 runner = CliRunner()
@@ -316,6 +317,27 @@ def _fresh_synced_root(
     return data_root
 
 
+_DASHBOARD_REGION_BEGIN = "<!-- fitdocs:begin:chart:runs -->"
+_DASHBOARD_PAGE = (
+    "<!-- fitdocs:chart\n"
+    "id: runs\n"
+    "kind: bar\n"
+    "mode: relative\n"
+    "title: Activities\n"
+    "sql: |\n"
+    "  SELECT CAST(row_number() OVER (ORDER BY start_utc) AS VARCHAR) AS label,\n"
+    "         1.0 AS value FROM activities\n"
+    "channels:\n"
+    "  x: label\n"
+    "  y: value\n"
+    "-->\n"
+)
+
+
+def _page_bytes(root: Path) -> str:
+    return (root / "dashboards" / "e2e.md").read_text(encoding="utf-8")
+
+
 @pytest.mark.parametrize(
     "command,args",
     [
@@ -328,6 +350,7 @@ def _fresh_synced_root(
         ("derive-benchmarks", []),
         ("index", []),
         ("query", ["SELECT count(*) AS n FROM pages"]),
+        ("dashboard", ["refresh"]),
     ],
 )
 def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
@@ -349,23 +372,29 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
     monkeypatch.setenv(env_var_name("key-src", "api_key"), "s3cr3t-api-key")
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "fallback-xdg-cache"))
     is_query = command == "query"
+    is_dashboard = command == "dashboard"
+    needs_index = is_query or is_dashboard
     bare_root = _fresh_synced_root(
         tmp_path,
         f"bare-{command}",
         with_connectors=False,
-        tiles_disabled=is_query,
+        tiles_disabled=needs_index,
     )
     wired_root = _fresh_synced_root(
         tmp_path,
         f"wired-{command}",
         with_connectors=True,
-        tiles_disabled=is_query,
+        tiles_disabled=needs_index,
     )
+    if is_dashboard:
+        for root in (bare_root, wired_root):
+            write_page(root, "e2e", _DASHBOARD_PAGE)
+            assert _DASHBOARD_REGION_BEGIN not in _page_bytes(root)
 
     bare_index = tmp_path / f"bare-{command}-index"
     wired_index = tmp_path / f"wired-{command}-index"
     assert bare_index != wired_index
-    if is_query:
+    if needs_index:
         for root, index_dir in ((bare_root, bare_index), (wired_root, wired_index)):
             monkeypatch.setenv("FITDOCS_INDEX_DIR", str(index_dir))
             built = runner.invoke(app, ["index", "--out", str(root)])
@@ -412,6 +441,16 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
     assert wired_output == bare_output
     if is_query:
         assert bare.stdout == "n\n1\n"
+        assert bare_attempts == 0
+        assert len(attempts) == 0
+    if is_dashboard:
+        assert bare.exit_code == 0, bare.output
+        assert "Dashboards: 1 rendered," in bare.stdout
+        for root in (bare_root, wired_root):
+            written = _page_bytes(root)
+            assert _DASHBOARD_REGION_BEGIN in written
+            assert "![" in written.split(_DASHBOARD_REGION_BEGIN, 1)[1]
+            assert (root / "dashboards" / "assets" / "e2e" / "runs.svg").is_file()
         assert bare_attempts == 0
         assert len(attempts) == 0
     if command == "index":

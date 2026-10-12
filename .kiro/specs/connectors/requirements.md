@@ -286,7 +286,7 @@ decision; the bytes are always archived first).
 **Objective:** As a privacy-conscious athlete, I want network access limited to explicit connector commands and the existing map tiles, and every statement about the network to be true, so that I know exactly when fitdocs talks to the outside world.
 
 #### Acceptance Criteria
-1. The fitdocs CLI shall make connector requests only during `fitdocs connect` and `fitdocs pull`; `index`, `query`, `sync`, `regen`, `load`, `check`, `history`, `plan`, `derive-benchmarks`, and rendering shall make none, whether or not connectors are configured, and shall keep their existing map-tile behavior unchanged.
+1. The fitdocs CLI shall make connector requests only during `fitdocs connect` and `fitdocs pull`; `index`, `query`, `sync`, `regen`, `load`, `dashboard`, `check`, `history`, `plan`, `derive-benchmarks`, and rendering shall make none, whether or not connectors are configured, and shall keep their existing map-tile behavior unchanged.
 2. The fitdocs source shall hold network-capable code in exactly two places — the map-tile fetch and the connector transport — and an automated guard shall fail when any other module reaches for the network.
 3. The connector package shall not depend on rendering, training load, metrics, `.fit` ingestion, or the sync engine, and an automated guard shall enforce it.
 4. Every statement in the shipped code, the README, and the documentation that describes where fitdocs touches the network shall name both the map tiles and the connector commands, and none shall claim the map tiles are the only network access.
@@ -324,3 +324,14 @@ connector requests. Analytics-query task 5.4 adds the query case to the
 socket-guarded no-network parametrization in `tests/connectors/test_e2e.py`.
 That guard was implemented and accepted on the analytics-query feature branch
 and landed on main with the analytics-query merge (2026-10-08).
+
+## Amendment 3 (2026-10-13): dashboard joins Req 14.1, landed by dashboards
+
+Requirement 14 criterion 1 adds `dashboard` to the list of commands that make
+no connector requests. Dashboards task 6.5 adds the `dashboard refresh` case to
+the socket-guarded no-network parametrization in
+`tests/connectors/test_e2e.py` (a staged dashboard page with one chart in both
+the bare and the wired data root, an index built per root, and the chart's
+region asserted written, so the command really opens the index and renders
+under the socket guard), and pins the tech.md phrase "`load`, `dashboard`,
+`check`" in `tests/connectors/test_network_statements.py`.

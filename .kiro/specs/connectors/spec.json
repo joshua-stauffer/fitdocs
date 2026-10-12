@@ -26,6 +26,12 @@
       "requirement": "14.1 amended",
       "reason": "analytics-query task 8.1 adds query to the no-connector-request command list. The runtime query command landed on main with the analytics-query merge (2026-10-08).",
       "also": "requirements.md gains Amendment 2 (2026-10-07), adding query to Requirement 14 criterion 1. Analytics-query task 5.4 added the query case to the socket-guarded no-network parametrization in tests/connectors/test_e2e.py. That guard is implemented and accepted on the analytics-query feature branch, which landed on main with the analytics-query merge (2026-10-08)."
+    },
+    {
+      "date": "2026-10-13",
+      "requirement": "14.1 amended",
+      "reason": "dashboards task 6.5 adds dashboard to the no-connector-request command list.",
+      "also": "requirements.md gains Amendment 3 (2026-10-13), adding dashboard to Requirement 14 criterion 1. Pinned by the dashboard refresh case in tests/connectors/test_e2e.py::test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded and by the tech.md phrase pin in tests/connectors/test_network_statements.py."
     }
   ]
 }

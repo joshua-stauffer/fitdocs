@@ -663,6 +663,7 @@ def test_analytics_index_is_published_in_steering_without_changing_network_scope
         "## Development Standards", 1
     )[0]
     flat_network = " ".join(network.split())
+    assert ("`load`, `dashboard`, `check`, `query`, `history`") in flat_network
     assert (
         "`history`, `plan`, `derive-benchmarks`, `index`, and rendering — makes "
         "no connector request"
