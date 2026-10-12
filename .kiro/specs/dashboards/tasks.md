@@ -507,7 +507,7 @@ sequential, never two `(P)` tasks at once.
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.6, 4.7, 4.9, 4.10_
   - _Boundary: Directive_
 
-- [ ] 3.3 (P) Encode and decode snapshots, and name their files
+- [x] 3.3 (P) Encode and decode snapshots, and name their files
   - **`src/fitdocs/dashboards/snapshot.py`** per design § SnapshotCodec:
     `SNAPSHOT_FORMAT`, `SNAPSHOT_VERSION`, `SNAPSHOT_NAME_RE`, `Snapshot`,
     `snapshot_rel_path`, `encode`, `decode`, `SnapshotFormatError`.
@@ -1293,3 +1293,17 @@ sequential, never two `(P)` tasks at once.
   the contract's narrative sections (index "never read back", the "those four
   files" example, unpinned "five owned"); 6.4 refreshes stale counts in
   `tests/test_confinement.py` and `tests/test_declaration_refresh.py` prose.
+- **3.3 (4 review rounds):** units and labels are not stored (decoded
+  columns carry `unit=None`; the engine re-derives units from names).
+  `encode` raises `ValueError` on any non-storable cell (non-finite number,
+  aware datetime, wrong kind, wrong row width). `decode` refuses: other than
+  the exact keys, format, version 1, known kinds, row widths, per-kind JSON
+  type/shape (Decimal strings `-?[0-9]+(\.[0-9]+)?`, dates
+  `YYYY-MM-DD`, datetimes with exactly 0 or 6 fraction digits), finite
+  numbers, slug page/chart; byte layout beyond UTF-8 + one trailing newline
+  is not enforced; `sql_sha256` is not checked against `sql`.
+  `SNAPSHOT_NAME_RE` = `(?P<id>SLUG)\.snapshot-(?P<generation>[1-9][0-9]*)\.json`
+  (fullmatch). **5.3 must handle** `encode`'s `ValueError` on a first freeze:
+  a NaN in an UNUSED number column renders fine (kit validates used columns
+  only) but cannot be stored. The local `_SLUG` copy is reconciled with
+  `grammar.SLUG` at the group-3 merge.
