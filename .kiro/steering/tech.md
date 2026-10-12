@@ -44,7 +44,7 @@ Network-capable code lives in exactly two places: the map-tile fetch
 `fitdocs connect` (one authentication call per attempt) and `fitdocs pull`
 (a single-attempt token renewal when a login-style token is due, then
 bounded, retried data calls); every other command — `sync`, `regen`,
-`load`, `check`, `query`, `history`, `plan`, `derive-benchmarks`, `index`, and
+`load`, `dashboard`, `check`, `query`, `history`, `plan`, `derive-benchmarks`, `index`, and
 rendering — makes no connector request, whether or not connectors are
 configured, and keeps its existing map-tile behavior (rendering a map may fetch missing
 basemap tiles unless tile requests are disabled). Both network paths go
