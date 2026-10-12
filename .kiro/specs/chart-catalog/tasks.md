@@ -219,7 +219,7 @@ sequential, never two `(P)` tasks at once.
 
 ---
 
-- [ ] 1. Foundation: verified seams, appended codes, the ramp, shared helpers and the cell layer
+- [x] 1. Foundation: verified seams, appended codes, the ramp, shared helpers and the cell layer
 
 - [x] 1.1 Verify chart-kit's seams, scaffold the catalog modules, append the problem codes and re-pin the boundary guard
   - **Upstream verification**: check items 1–9 of Upstream Prerequisites
@@ -363,9 +363,9 @@ sequential, never two `(P)` tasks at once.
   - _Requirements: 2.2, 2.3, 3.1, 3.2, 3.3, 3.4, 3.6, 3.7, 3.8_
   - _Depends: 1.2, 1.3_
 
-- [ ] 2. The eight catalog kinds
+- [x] 2. The eight catalog kinds
 
-- [ ] 2.1 (P) Implement the calendar-heatmap kind with its goldens
+- [x] 2.1 (P) Implement the calendar-heatmap kind with its goldens
   - **`kinds/calendar_heatmap.py`**: `KIND` per design § CalendarHeatmap
     (channels `date`, `value`; `svg_options(height=None)`; bound 54 weeks,
     kind-local wording; `_check`: weeks, duplicate date, negative value;
@@ -893,3 +893,4 @@ sequential, never two `(P)` tasks at once.
 - 2.6 (mean-max, reviewer-ratified): `_check` post-edits `cartesian.log_problem` with `dataclasses.replace` — fix "Remove the rows with a duration at or below zero.", `option=None` — because mean-max has no `x_scale` option (upstream parameter queued); when no landmark duration lies in the domain (multi-day, sub-second) the kind keeps `numeric_scale`'s own ticks and form; the landmark label form is `h:mm:ss` exactly when the axis's rounded-out upper end reaches 3600 s; the `typical` golden is drawn at 480 px because at 720 px with a 1 s–1 h domain `numeric_scale`'s own ticks equal the landmark ticks (so "keep numeric_scale ticks" could not red it); `typical` uses `MEAN_MAX_DURATIONS_S` up to 3600 (pinned against the metrics module). RED phase was not run test-first; the reviewer accepted 22 + 27 mutations as the evidence (stated).
 - 2.7 (small-multiples, reviewer-ratified): outer x/y titles are drawn by a local `_label` (byte-identical to frame's text at FONT_TEXT, `ink(TEXT)`) because `frame.axis(title=…)` always draws a baseline; unlabelled panel axes are `dataclasses.replace(scale, ticks=())`; gridlines on every panel from the full scale; with `independent` y and a duration column, every panel's labels take `h:mm:ss` when any panel needs it (`_in_one_form`) so the one outer y title matches; an explicit `columns` is honoured literally (2 panels with columns 6 → plot width / 6). Undrawn: a row without x counts under x only; y counts among rows with an x (design rule; 2.7's last review asked only for this fix and its test — the controller applied it and showed the both-counted rule red instead of a third review round, downgrade stated). Zero-area panels for large explicit `columns`/`height` are a design gap queued for the maintainer.
 - 2.2 (heatmap, reviewer-ratified): the x/y limits count distinct present values (the `—` band is not a value: 60 present + `—` renders as 61 columns); y label room is the widest y label capped at 40% of the width; a duration-family NUMBER axis labels its bands with A1 `format_durations` and titles them with `axis_title(col, hours=<form of those labels>)`, the same string feeding `frame.axis` and `frame.describe`; band ordering re-implements `category_order` (per-row indices needed; identical labels); no undrawn counts (a row absent on x and y lands in the (—, —) cell). Implementation was written before its tests (RED shown as an import error; mutation evidence accepted by the reviewer, stated). Round 2 asked only for a sub-hour y-axis test; the controller added it and showed the default-title mutation red instead of a third review round (downgrade, stated).
+- 2.1 (calendar-heatmap, design § CalendarHeatmap amended): explicit height caps the pitch at `plot.height / 7`; auto height via a probe plan with a 160 px floor; the right date-label reserve is measured past the grid's end and re-planned in a bounded loop (a one-shot reserve overshot the canvas by up to ~1.9 px for capped-pitch widths; a 39,528-render width sweep is now clean at 1e-6, pinned by the `narrow_1000`, `weeks_40_at_859` and `weeks_53_at_1125` text cases); `over_bound` carries `rows=weeks`; describe names `date: day; value: <legend lead>` with the value range over placed rows. (The 53-week case was added by the controller after the round-2 APPROVED, from the reviewer's optional hardening; it reds under the plot.right measurement.)

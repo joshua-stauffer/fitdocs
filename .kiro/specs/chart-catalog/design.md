@@ -633,9 +633,14 @@ def legend(plan: FramePlan, scale: BinnedScale, entries: Sequence[LegendEntry]) 
     last Sunday = the Sunday on or after the latest; `W` week columns;
   - `plan_frame(..., legend=cells.legend_entries(...),
     y_label_width=text_width("Mon"), has_x_title=True, has_y_title=False,
-    notes=…)`; pitch `p = min(plot.width / W, CAL_MAX_CELL)`; the grid is
-    `W × p` wide from `plot.left` and `7 × p` tall; auto height sizes the
-    plan so that `plot.height == 7 × p` (a fixed second planning pass);
+    notes=…)`; pitch `p = min(plot.width / W, CAL_MAX_CELL)`, and with an
+    explicit `height` also `≤ plot.height / 7` so the rows stay above the date
+    axis; the grid is `W × p` wide from `plot.left` and `7 × p` tall; auto
+    height is `max(160, ceil(frame + 7 × p))`, the frame size read from a probe
+    plan (a fixed second planning pass); the date labels' left overhang is
+    measured to the pad and the right overhang past the grid's right end, and
+    the plan is re-made with the larger reserve until no label reaches past it
+    (bounded passes) (amended 2026-10-12: task 2.1);
   - day `d` sits in column `(d − m0).days // 7`, row `d.weekday()`
     (Monday 0); cells per row in the given row order;
   - date axis: `numeric_scale((m0, last Sunday + 1 day) as day numbers,
