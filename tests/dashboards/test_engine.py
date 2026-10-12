@@ -1,4 +1,4 @@
-"""Engine: pages, targets, associations, data need, relative charts written.
+"""Engine: pages, targets, associations, data need, charts written, frozen charts.
 
 The planning tests read the report of a ``CHECK`` run over a source that answers
 every ``chart`` with the same two rows. The rendering tests give each chart its
@@ -8,6 +8,7 @@ bytes, image bytes and ``st_mtime_ns``.
 
 from __future__ import annotations
 
+import hashlib
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -41,6 +42,7 @@ from fitdocs.dashboards.problems import (
     Source,
     dashboard_problem,
 )
+from fitdocs.dashboards.snapshot import decode
 from fitdocs.dashboards.source import ChartSource, SourceUnavailable
 from fitdocs.dashboards.storage import ASSET_MARK, PageFile, Refusal
 from fitdocs.render.charts.kit import (
@@ -58,9 +60,12 @@ from tests.dashboards._helpers import (
     FetchCall,
     MustNotOpen,
     assert_untouched,
+    category_column,
     category_number_data,
+    chart_data,
     directive_block,
     make_data_root,
+    number_column,
     page_text,
     region_block,
     snapshot_of,
@@ -2031,18 +2036,6 @@ def test_a_chart_target_fetches_and_writes_only_that_chart(tmp_path: Path) -> No
     assert [each.chart for each in report.pages[0].charts] == ["two"]
 
 
-def test_a_frozen_chart_is_left_to_the_freeze_task(tmp_path: Path) -> None:
-    root = make_data_root(tmp_path)
-    write_page(root, "p", page_text(own("lead"), own("fro", mode="frozen")))
-    source = source_of({"lead": DATA_A})
-    report = go(root, source)
-    assert [each.chart for each in source.calls] == ["lead"], "only lead is queried"
-    text = page_bytes(root, "p")
-    assert f"{BEGIN_PREFIX}lead -->" in text and f"{BEGIN_PREFIX}fro" not in text
-    assert not asset_path(root, "p", "fro").exists()
-    assert report.pages[0].charts[1].chart == "fro"
-
-
 def test_a_chart_and_its_rows_table_both_refused_report_the_chart_first(
     tmp_path: Path,
 ) -> None:
@@ -2080,3 +2073,821 @@ def test_an_opener_that_raises_ends_the_run_before_any_write(tmp_path: Path) -> 
         run_dashboards(request(root, action=Action.REFRESH), broken)
     assert_untouched(before, snapshot_of(root))
     assert not (root / "dashboards" / "assets").exists()
+
+
+# -- frozen charts: first freeze, stored snapshots, re-freeze, cleanup -----------
+
+DATA_C = category_number_data([("kappa", 3.0), ("iota", 8.0), ("lambda", 6.0)])
+
+
+def fro(chart_id: str, **more: object) -> str:
+    """A frozen chart whose SQL is ``select <id>``."""
+    return own(chart_id, mode="frozen", **more)
+
+
+def digest(sql: str) -> str:
+    return hashlib.sha256(sql.encode("utf-8")).hexdigest()
+
+
+def snap_ref(page: str, chart_id: str, generation: int) -> str:
+    return (
+        f"<!-- fitdocs:snapshot assets/{page}/{chart_id}.snapshot-{generation}.json -->"
+    )
+
+
+def snap_path(root: Path, page: str, chart_id: str, generation: int) -> Path:
+    return (
+        root / "dashboards" / "assets" / page / f"{chart_id}.snapshot-{generation}.json"
+    )
+
+
+def snap_files(root: Path, page: str) -> list[str]:
+    folder = root / "dashboards" / "assets" / page
+    if not folder.is_dir():
+        return []
+    return sorted(each for each in os.listdir(folder) if ".snapshot-" in each)
+
+
+def go_offline(
+    root: Path,
+    *targets: Target,
+    action: Action = Action.REFRESH,
+    today: date = D2,
+) -> RunReport:
+    """A run whose source must never be opened."""
+    opener = MustNotOpen()
+    report = run_dashboards(RunRequest(action, root, tuple(targets), today), opener)
+    assert opener.attempts == 0, "the source was opened"
+    return report
+
+
+def frozen_root(tmp_path: Path, name: str = "data") -> Path:
+    """Page ``p``: frozen ``lead`` then frozen ``fro``; both taken at ``D1``."""
+    root = make_data_root(tmp_path, name)
+    write_page(root, "p", page_text("# Weekly", fro("lead"), "between", fro("fro")))
+    first = go(root, source_of({"lead": DATA_B, "fro": DATA_A}), today=D1)
+    assert not first.failed
+    return root
+
+
+def test_a_first_freeze_stores_generation_one_and_the_region_records_it(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "p", page_text("# Weekly", fro("lead"), "between", fro("fro")))
+    assert not (root / "dashboards" / "assets").exists()
+    source = source_of({"lead": DATA_B, "fro": DATA_A})
+    report = go(root, source, today=D1)
+    assert not report.failed and report.index == "ready"
+    assert snap_files(root, "p") == ["fro.snapshot-1.json", "lead.snapshot-1.json"]
+    stored = decode(snap_path(root, "p", "fro", 1).read_bytes())
+    assert (stored.page, stored.chart, stored.generation) == ("p", "fro", 1)
+    assert stored.today == D1
+    assert stored.sql == "select fro\n"
+    assert stored.sql_sha256 == digest("select fro")
+    assert stored.data == DATA_A
+    other = decode(snap_path(root, "p", "lead", 1).read_bytes())
+    assert other.data == DATA_B and other.sql_sha256 == digest("select lead")
+    text = page_bytes(root, "p")
+    assert region_lines(text, "fro") == [
+        snap_ref("p", "fro", 1),
+        "",
+        "![Title of fro](assets/p/fro.svg)",
+        "",
+        "*Snapshot 2026-10-12*",
+        "",
+    ]
+    assert region_lines(text, "lead")[0] == snap_ref("p", "lead", 1)
+    page = report.pages[0]
+    assert [(c.chart, c.outcome) for c in page.charts] == [
+        ("lead", Outcome.RENDERED),
+        ("fro", Outcome.RENDERED),
+    ]
+    assert page.charts[1].snapshot == "assets/p/fro.snapshot-1.json"
+    assert "alpha" in asset_path(root, "p", "fro").read_text()
+
+    age(root)
+    before = snapshot_of(root)
+    again = go_offline(root, today=D2)
+    assert_untouched(before, snapshot_of(root))
+    assert [c.outcome for c in again.pages[0].charts] == [Outcome.UNCHANGED] * 2
+    assert not again.failed and again.index == "not_needed"
+    assert [c.snapshot for c in again.pages[0].charts] == [
+        "assets/p/lead.snapshot-1.json",
+        "assets/p/fro.snapshot-1.json",
+    ]
+
+
+def test_a_frozen_chart_redraws_from_its_rows_when_its_presentation_changes(
+    tmp_path: Path,
+) -> None:
+    root = frozen_root(tmp_path)
+    age(root)
+    before = snapshot_of(root / "dashboards")
+    old_image = asset_path(root, "p", "fro").read_bytes()
+    text = page_bytes(root, "p")
+    old_directive = fro("fro")
+    assert old_directive in text
+    new_directive = fro(
+        "fro",
+        kind="hbar",
+        channels="\n  x: value\n  y: label",
+        extra=[("window", "28 days"), ("show_rows", "true")],
+    )
+    retitled = text.replace(old_directive, new_directive)
+    assert retitled.count("title: Title of fro") == 1
+    write_page(root, "p", retitled.replace("title: Title of fro", "title: Renamed"))
+    age_page = root / "dashboards" / "p.md"
+    os.utime(age_page, ns=(OLD_TIME_NS, OLD_TIME_NS))
+    report = go_offline(root)
+    redrawn = page_bytes(root, "p")
+    lines = region_lines(redrawn, "fro")
+    assert lines[0] == snap_ref("p", "fro", 1)
+    assert lines[4] == "*Snapshot 2026-10-12 · 28 days*"
+    assert "![Renamed](assets/p/fro.svg)" in lines
+    assert any(each.startswith("| ") for each in lines), "the rows table was added"
+    assert asset_path(root, "p", "fro").read_bytes() != old_image
+    after = snapshot_of(root / "dashboards")
+    for name in ("assets/p/fro.snapshot-1.json", "assets/p/lead.snapshot-1.json"):
+        assert after[name] == before[name], name
+    assert after["assets/p/lead.svg"] == before["assets/p/lead.svg"]
+    assert [(c.chart, c.outcome) for c in report.pages[0].charts] == [
+        ("lead", Outcome.UNCHANGED),
+        ("fro", Outcome.RENDERED),
+    ]
+    assert snap_files(root, "p") == ["fro.snapshot-1.json", "lead.snapshot-1.json"]
+
+
+def test_a_changed_sql_keeps_the_snapshot_and_reports_a_notice(tmp_path: Path) -> None:
+    root = frozen_root(tmp_path)
+    age(root)
+    before = snapshot_of(root / "dashboards")
+    text = page_bytes(root, "p")
+    new_directive = chart("fro", mode="frozen", sql="select changed")
+    assert fro("fro") in text
+    write_page(root, "p", text.replace(fro("fro"), new_directive))
+    os.utime(root / "dashboards" / "p.md", ns=(OLD_TIME_NS, OLD_TIME_NS))
+    page_before = snapshot_of(root / "dashboards")["p.md"]
+    report = go_offline(root)
+    after = snapshot_of(root / "dashboards")
+    assert after["p.md"] == page_before, "the page is not rewritten"
+    for name in before:
+        if name != "p.md":
+            assert after[name] == before[name], name
+    page = report.pages[0]
+    first, second = page.charts
+    assert (first.notices, first.problems) == ((), ())
+    assert codes(second.notices) == ["sql_changed"]
+    assert second.problems == ()
+    notice = second.notices[0]
+    assert notice.severity is Severity.NOTICE
+    assert (notice.page, notice.chart, notice.line) == ("p", "fro", second.line)
+    assert "p:fro" in notice.fix
+    assert "assets/p/fro.snapshot-1.json" in notice.message
+    assert second.outcome is Outcome.UNCHANGED
+    assert report.failed is False
+
+
+@pytest.mark.parametrize("changed", [True, False])
+def test_an_adopted_latest_snapshot_reports_a_changed_sql(
+    tmp_path: Path, changed: bool
+) -> None:
+    root = frozen_root(tmp_path)
+    text = page_bytes(root, "p")
+    if changed:
+        text = text.replace(
+            fro("fro"), chart("fro", mode="frozen", sql="select changed")
+        )
+    stripped = remove_region(text, "fro")
+    write_page(root, "p", stripped)
+    assert snap_ref("p", "fro", 1) not in stripped
+    report = go_offline(root)
+    chart_result = result_of(report.pages[0], "fro")
+    assert region_lines(page_bytes(root, "p"), "fro")[0] == snap_ref("p", "fro", 1)
+    assert chart_result.problems == ()
+    assert chart_result.outcome is Outcome.RENDERED
+    if changed:
+        assert codes(chart_result.notices) == ["sql_changed"]
+        assert "assets/p/fro.snapshot-1.json" in chart_result.notices[0].message
+    else:
+        assert chart_result.notices == ()
+    assert report.failed is False
+
+
+def test_moving_a_key_after_sql_is_not_a_sql_change(tmp_path: Path) -> None:
+    root = make_data_root(tmp_path)
+    sql_last = directive_block(
+        [
+            ("id", "fro"),
+            ("kind", "bar"),
+            ("mode", "frozen"),
+            ("title", "Title of fro"),
+            ("channels", GOOD_CHANNELS),
+            ("sql", "|\n  select fro"),
+        ]
+    )
+    write_page(root, "p", page_text(fro("lead"), sql_last))
+    go(root, source_of({"lead": DATA_B, "fro": DATA_A}), today=D1)
+    stored = decode(snap_path(root, "p", "fro", 1).read_bytes())
+    assert stored.sql == "select fro", "the block was last, so it had no final newline"
+    text = page_bytes(root, "p")
+    sql_first = directive_block(
+        [
+            ("id", "fro"),
+            ("kind", "bar"),
+            ("mode", "frozen"),
+            ("title", "Title of fro"),
+            ("sql", "|\n  select fro"),
+            ("channels", GOOD_CHANNELS),
+        ]
+    )
+    assert sql_last in text
+    write_page(root, "p", text.replace(sql_last, sql_first))
+    report = go_offline(root, today=D1)
+    second = report.pages[0].charts[1]
+    assert (second.chart, second.notices, second.problems) == ("fro", (), ())
+    assert report.failed is False
+
+
+@pytest.mark.parametrize("damage", ["missing", "corrupt"])
+def test_a_recorded_snapshot_that_cannot_be_used_leaves_the_chart_alone(
+    tmp_path: Path, damage: str
+) -> None:
+    root = frozen_root(tmp_path)
+    path = snap_path(root, "p", "fro", 1)
+    if damage == "missing":
+        path.unlink()
+    else:
+        path.write_bytes(b"this is not a snapshot\n")
+    age(root)
+    before = snapshot_of(root)
+    report = go_offline(root)
+    assert_untouched(before, snapshot_of(root))
+    first, second = report.pages[0].charts
+    assert first.outcome is Outcome.UNCHANGED and first.problems == ()
+    assert second.outcome is Outcome.FAILED
+    expected = "snapshot_missing" if damage == "missing" else "snapshot_unreadable"
+    assert codes(second.problems) == [expected]
+    (problem,) = second.problems
+    assert problem.source is Source.DASHBOARD
+    assert (problem.page, problem.chart, problem.line) == ("p", "fro", second.line)
+    assert "assets/p/fro.snapshot-1.json" in problem.message
+    assert "fitdocs dashboard freeze p:fro" in problem.fix
+    assert report.failed
+
+
+def test_a_deleted_region_adopts_the_highest_generation_without_a_fetch(
+    tmp_path: Path,
+) -> None:
+    root = frozen_root(tmp_path)
+    again = go(
+        root, source_of({"fro": DATA_B}), Target("p", "fro"), action=Action.FREEZE
+    )
+    assert not again.failed
+    assert snap_files(root, "p") == [
+        "fro.snapshot-1.json",
+        "fro.snapshot-2.json",
+        "lead.snapshot-1.json",
+    ]
+    stripped = remove_region(page_bytes(root, "p"), "fro")
+    write_page(root, "p", stripped)
+    assert snap_ref("p", "fro", 2) not in stripped
+    asset_path(root, "p", "fro").unlink()
+    before = snapshot_of(root / "dashboards")
+    report = go_offline(root)
+    text = page_bytes(root, "p")
+    assert region_lines(text, "fro")[0] == snap_ref("p", "fro", 2)
+    assert "zeta" in asset_path(root, "p", "fro").read_text()
+    assert "alpha" not in asset_path(root, "p", "fro").read_text()
+    assert report.pages[0].charts[1].snapshot == "assets/p/fro.snapshot-2.json"
+    after = snapshot_of(root / "dashboards")
+    for name in before:
+        if name.startswith("assets/p/") and ".snapshot-" in name:
+            assert after[name] == before[name], name
+    assert snap_files(root, "p") == [
+        "fro.snapshot-1.json",
+        "fro.snapshot-2.json",
+        "lead.snapshot-1.json",
+    ]
+
+
+def test_a_renamed_page_keeps_its_recorded_snapshot_and_moves_its_image(
+    tmp_path: Path,
+) -> None:
+    root = frozen_root(tmp_path)
+    old = root / "dashboards" / "p.md"
+    old.rename(root / "dashboards" / "q.md")
+    snapshot_before = snapshot_of(root / "dashboards")
+    report = go_offline(root)
+    text = page_bytes(root, "q")
+    lines = region_lines(text, "fro")
+    assert lines[0] == snap_ref("p", "fro", 1), "the record still names the old page"
+    assert lines[2] == "![Title of fro](assets/q/fro.svg)"
+    assert asset_path(root, "q", "fro").exists()
+    assert not asset_path(root, "p", "fro").exists(), "the old image is gone"
+    assert not asset_path(root, "p", "lead").exists()
+    assert report.removed == ("assets/p/fro.svg", "assets/p/lead.svg")
+    after = snapshot_of(root / "dashboards")
+    for name in ("assets/p/fro.snapshot-1.json", "assets/p/lead.snapshot-1.json"):
+        assert after[name] == snapshot_before[name], name
+    assert snap_files(root, "q") == [], "no snapshot was taken for the new name"
+    assert "alpha" in asset_path(root, "q", "fro").read_text()
+
+
+def test_freezing_one_of_two_pages_sharing_a_snapshot_repoints_only_that_page(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "a", page_text(fro("lead"), fro("fro")))
+    go(root, source_of({"lead": DATA_B, "fro": DATA_A}), today=D1)
+    shared = page_bytes(root, "a")
+    write_page(root, "b", shared)
+    go_offline(root)  # b draws its own image from a's snapshot
+    assert region_lines(page_bytes(root, "b"), "fro")[0] == snap_ref("a", "fro", 1)
+    assert snap_files(root, "b") == []
+
+    age(root)
+    before = snapshot_of(root / "dashboards")
+    report = go(
+        root, source_of({"fro": DATA_B}), Target("a", "fro"), action=Action.FREEZE
+    )
+    assert not report.failed
+    assert snap_files(root, "a") == [
+        "fro.snapshot-1.json",
+        "fro.snapshot-2.json",
+        "lead.snapshot-1.json",
+    ]
+    assert region_lines(page_bytes(root, "a"), "fro")[0] == snap_ref("a", "fro", 2)
+    after = snapshot_of(root / "dashboards")
+    for name in before:
+        if name.startswith(("b.md", "assets/b/")) or name.endswith("snapshot-1.json"):
+            assert after[name] == before[name], name
+    assert region_lines(page_bytes(root, "b"), "fro")[0] == snap_ref("a", "fro", 1)
+    assert "alpha" in asset_path(root, "b", "fro").read_text()
+
+    other = go(
+        root, source_of({"fro": DATA_C}), Target("b", "fro"), action=Action.FREEZE
+    )
+    assert not other.failed
+    assert snap_files(root, "b") == ["fro.snapshot-1.json"]
+    assert region_lines(page_bytes(root, "b"), "fro")[0] == snap_ref("b", "fro", 1)
+    assert region_lines(page_bytes(root, "a"), "fro")[0] == snap_ref("a", "fro", 2)
+    assert "kappa" in asset_path(root, "b", "fro").read_text()
+    assert "zeta" in asset_path(root, "a", "fro").read_text()
+
+
+def test_a_freeze_never_overwrites_an_earlier_generation(tmp_path: Path) -> None:
+    root = frozen_root(tmp_path)
+    first = snap_path(root, "p", "fro", 1).read_bytes()
+    first_mtime = snap_path(root, "p", "fro", 1).stat().st_mtime_ns
+    go(
+        root,
+        source_of({"fro": DATA_B}),
+        Target("p", "fro"),
+        action=Action.FREEZE,
+        today=D2,
+    )
+    go(root, source_of({"fro": DATA_C}), Target("p", "fro"), action=Action.FREEZE)
+    assert snap_files(root, "p") == [
+        "fro.snapshot-1.json",
+        "fro.snapshot-2.json",
+        "fro.snapshot-3.json",
+        "lead.snapshot-1.json",
+    ]
+    assert snap_path(root, "p", "fro", 1).read_bytes() == first
+    assert snap_path(root, "p", "fro", 1).stat().st_mtime_ns == first_mtime
+    second = decode(snap_path(root, "p", "fro", 2).read_bytes())
+    third = decode(snap_path(root, "p", "fro", 3).read_bytes())
+    assert (second.generation, second.data, second.today) == (2, DATA_B, D2)
+    assert (third.generation, third.data) == (3, DATA_C)
+    assert region_lines(page_bytes(root, "p"), "fro")[0] == snap_ref("p", "fro", 3)
+
+
+def test_freezing_a_relative_chart_is_refused_naming_its_mode(tmp_path: Path) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "p", page_text(fro("lead"), own("rel")))
+    go(root, source_of({"lead": DATA_B, "rel": DATA_A}), today=D1)
+    age(root)
+    before = snapshot_of(root)
+    report = go_offline(root, Target("p", "rel"), action=Action.FREEZE)
+    assert_untouched(before, snapshot_of(root))
+    (only,) = report.pages[0].charts
+    assert only.outcome is Outcome.FAILED
+    assert codes(only.problems) == ["freeze_relative"]
+    (problem,) = only.problems
+    assert "relative" in problem.message and "mode: frozen" in problem.fix
+    assert (problem.page, problem.chart, problem.line) == ("p", "rel", only.line)
+    assert report.failed and report.index == "not_needed"
+
+
+def test_a_page_target_freezes_the_frozen_charts_and_leaves_relative_ones_alone(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "p", page_text(fro("lead"), own("rel"), fro("fro")))
+    go(root, source_of({"lead": DATA_A, "rel": DATA_B, "fro": DATA_A}), today=D1)
+    age(root)
+    before = snapshot_of(root / "dashboards")
+    rel_region = region_lines(page_bytes(root, "p"), "rel")
+    assert rel_region, "the relative chart has a rendered region to keep"
+    source = source_of({"lead": DATA_C, "fro": DATA_C})
+    report = go(root, source, Target("p", None), action=Action.FREEZE, today=D2)
+    assert [each.chart for each in source.calls] == ["lead", "fro"]
+    by_id = {each.chart: each for each in report.pages[0].charts}
+    assert by_id["rel"].problems == () and by_id["rel"].notices == ()
+    assert by_id["rel"].outcome is Outcome.CHECKED
+    assert by_id["lead"].outcome is Outcome.RENDERED
+    assert by_id["fro"].outcome is Outcome.RENDERED
+    assert report.failed is False
+    after = snapshot_of(root / "dashboards")
+    assert after["assets/p/rel.svg"] == before["assets/p/rel.svg"]
+    assert "assets/p/fro.snapshot-2.json" in after
+    assert "assets/p/lead.snapshot-2.json" in after
+    text = page_bytes(root, "p")
+    assert region_lines(text, "fro")[0] == snap_ref("p", "fro", 2)
+    assert region_lines(text, "rel") == rel_region
+
+
+def test_a_chart_target_naming_a_relative_chart_is_still_refused_in_a_mixed_page(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "p", page_text(fro("lead"), own("rel")))
+    go(root, source_of({"lead": DATA_A, "rel": DATA_B}), today=D1)
+    age(root)
+    before = snapshot_of(root)
+    report = go_offline(root, Target("p", "rel"), action=Action.FREEZE)
+    assert_untouched(before, snapshot_of(root))
+    (only,) = report.pages[0].charts
+    assert codes(only.problems) == ["freeze_relative"]
+    assert report.failed
+
+
+@pytest.mark.parametrize("cause", ["sql", "kit"])
+@pytest.mark.parametrize("action", [Action.FREEZE, Action.REFRESH])
+def test_a_failing_first_freeze_writes_a_note_on_refresh_but_nothing_on_freeze(
+    tmp_path: Path, cause: str, action: Action
+) -> None:
+    root = make_data_root(tmp_path)
+    channels = "\n  x: nope\n  y: value" if cause == "kit" else GOOD_CHANNELS
+    write_page(root, "p", page_text("# Weekly", fro("fro", channels=channels)))
+    age(root)
+    before = snapshot_of(root)
+    answer = _sql_failed("fro") if cause == "sql" else DATA_B
+    report = go(root, source_of({"fro": answer}), Target("p", "fro"), action=action)
+    (only,) = report.pages[0].charts
+    assert only.outcome is Outcome.FAILED and only.problems
+    if action is Action.FREEZE:
+        assert_untouched(before, snapshot_of(root))
+        assert not (root / "dashboards" / "assets").exists()
+        assert report.pages[0].written is False
+    else:
+        assert region_lines(page_bytes(root, "p"), "fro")[0].startswith(
+            "*Not rendered:"
+        )
+        assert snap_files(root, "p") == []
+
+
+@pytest.mark.parametrize("cause", ["sql", "kit"])
+def test_a_failing_freeze_leaves_region_image_and_snapshots_alone(
+    tmp_path: Path, cause: str
+) -> None:
+    root = frozen_root(tmp_path)
+    if cause == "kit":
+        text = page_bytes(root, "p")
+        broken = fro("fro", channels="\n  x: nope\n  y: value")
+        write_page(root, "p", text.replace(fro("fro"), broken))
+    age(root)
+    before = snapshot_of(root)
+    answer = _sql_failed("fro") if cause == "sql" else DATA_B
+    source = source_of({"fro": answer})
+    report = go(root, source, Target("p", "fro"), action=Action.FREEZE)
+    assert len(source.calls) == 1, "the freeze did reach the source"
+    assert_untouched(before, snapshot_of(root))
+    (only,) = report.pages[0].charts
+    assert only.outcome is Outcome.FAILED
+    assert codes(only.problems) == [
+        "sql_failed" if cause == "sql" else "unknown_column"
+    ]
+    assert report.pages[0].written is False
+
+
+def test_a_freeze_without_an_index_is_refused_with_the_indexs_state(
+    tmp_path: Path,
+) -> None:
+    root = frozen_root(tmp_path)
+    age(root)
+    before = snapshot_of(root)
+    report = run_dashboards(
+        RunRequest(Action.FREEZE, root, (Target("p", "fro"),), D2),
+        unavailable_opener(UNAVAILABLE),
+    )
+    assert_untouched(before, snapshot_of(root))
+    assert report.index == "not_built"
+    (only,) = report.pages[0].charts
+    assert codes(only.problems) == ["index_unavailable"]
+    assert "the index is not built." in only.problems[0].message
+    assert only.problems[0].fix == UNAVAILABLE.fix
+    assert report.failed
+
+
+def test_charts_that_need_no_query_still_render_while_the_index_is_unavailable(
+    tmp_path: Path,
+) -> None:
+    root = frozen_root(tmp_path)
+    text = page_bytes(root, "p")
+    retitled = fro("fro", extra=[("window", "6 weeks")])
+    write_page(
+        root, "p", text.replace(fro("fro"), retitled) + own("rel") + fro("newbie")
+    )
+    age(root)
+    report = run_dashboards(
+        RunRequest(Action.REFRESH, root, (), D2), unavailable_opener(UNAVAILABLE)
+    )
+    assert report.index == "not_built" and report.index_problem is not None
+    by_id = {each.chart: each for each in report.pages[0].charts}
+    assert by_id["fro"].outcome is Outcome.RENDERED and by_id["fro"].problems == ()
+    assert by_id["lead"].outcome is Outcome.UNCHANGED
+    assert codes(by_id["rel"].problems) == ["index_unavailable"]
+    assert codes(by_id["newbie"].problems) == ["index_unavailable"]
+    assert "6 weeks" in "".join(region_lines(page_bytes(root, "p"), "fro"))
+    assert snap_files(root, "p") == ["fro.snapshot-1.json", "lead.snapshot-1.json"]
+
+
+def test_a_first_freeze_whose_render_fails_creates_no_snapshot(tmp_path: Path) -> None:
+    root = make_data_root(tmp_path)
+    write_page(
+        root,
+        "p",
+        page_text(
+            fro("lead"), fro("bad", channels="\n  x: nope\n  y: value"), fro("later")
+        ),
+    )
+    report = go(root, source_of({"lead": DATA_A, "bad": DATA_B, "later": DATA_C}))
+    bad = report.pages[0].charts[1]
+    assert codes(bad.problems) == ["unknown_column"]
+    assert snap_files(root, "p") == [
+        "later.snapshot-1.json",
+        "lead.snapshot-1.json",
+    ]
+    assert not asset_path(root, "p", "bad").exists()
+    assert region_lines(page_bytes(root, "p"), "bad")[0].startswith("*Not rendered:")
+    assert bad.snapshot is None
+    assert [c.outcome for c in report.pages[0].charts] == [
+        Outcome.RENDERED,
+        Outcome.FAILED,
+        Outcome.RENDERED,
+    ]
+
+
+def test_check_of_a_never_frozen_chart_fetches_but_creates_no_snapshot(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "p", page_text(own("lead"), fro("fro")))
+    age(root)
+    before = snapshot_of(root)
+    source = source_of({"lead": DATA_B, "fro": DATA_A})
+    report = go(root, source, action=Action.CHECK)
+    assert [each.chart for each in source.calls] == ["lead", "fro"]
+    assert_untouched(before, snapshot_of(root))
+    assert not (root / "dashboards" / "assets").exists()
+    assert [c.outcome for c in report.pages[0].charts] == [Outcome.CHECKED] * 2
+    assert report.pages[0].charts[1].snapshot is None
+
+
+def test_check_of_a_frozen_chart_with_a_snapshot_reads_it_and_changes_nothing(
+    tmp_path: Path,
+) -> None:
+    root = frozen_root(tmp_path)
+    age(root)
+    before = snapshot_of(root)
+    report = go_offline(root, action=Action.CHECK)
+    assert_untouched(before, snapshot_of(root))
+    assert [c.outcome for c in report.pages[0].charts] == [Outcome.CHECKED] * 2
+    assert not report.failed
+
+
+def test_a_result_with_a_value_that_cannot_be_stored_fails_the_freeze(
+    tmp_path: Path,
+) -> None:
+    unusable = chart_data(
+        (category_column("label"), number_column("value"), number_column("extra")),
+        [("one", 1.0, 2.0), ("two", 2.0, float("nan")), ("three", 3.0, 4.0)],
+    )
+    root = make_data_root(tmp_path)
+    write_page(root, "p", page_text(own("ctl"), fro("lead"), fro("fro")))
+    source = source_of({"ctl": unusable, "lead": DATA_B, "fro": unusable})
+    report = go(root, source, today=D1)
+    by_id = {each.chart: each for each in report.pages[0].charts}
+    assert by_id["ctl"].outcome is Outcome.RENDERED, "the same rows draw as relative"
+    assert by_id["lead"].outcome is Outcome.RENDERED
+    failed = by_id["fro"]
+    assert failed.outcome is Outcome.FAILED
+    assert codes(failed.problems) == ["write_failed"]
+    (problem,) = failed.problems
+    assert "`extra`" in problem.message and "`value`" not in problem.message
+    assert "number column" in problem.message
+    assert problem.column == "extra"
+    assert problem.fix == "Exclude or cast the non-finite values in the SQL."
+    assert (problem.page, problem.chart, problem.line) == ("p", "fro", failed.line)
+    assert snap_files(root, "p") == ["lead.snapshot-1.json"]
+    assert not asset_path(root, "p", "fro").exists()
+    assert region_lines(page_bytes(root, "p"), "fro")[0].startswith("*Not rendered:")
+    assert failed.snapshot is None
+
+
+def test_rows_wider_than_their_columns_are_a_defect_not_a_chart_failure(
+    tmp_path: Path,
+) -> None:
+    wide = ChartData(DATA_A.columns, (("one", 1.0, 99.0),))
+    root = make_data_root(tmp_path)
+    write_page(root, "p", page_text(fro("fro")))
+    age(root)
+    before = snapshot_of(root)
+    with pytest.raises(ValueError, match="width"):
+        go(root, source_of({"fro": wide}))
+    assert_untouched(before, snapshot_of(root))
+
+
+def test_a_snapshot_that_cannot_be_created_fails_the_chart_and_writes_no_image(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "p", page_text(fro("lead"), fro("fro")))
+    (root / "dashboards" / "assets").mkdir()
+    (root / "dashboards" / "assets" / "p").write_text("in the way\n")
+    report = go(root, source_of({"lead": DATA_B, "fro": DATA_A}))
+    for each in report.pages[0].charts:
+        assert codes(each.problems) == ["write_failed"], each.chart
+        assert each.outcome is Outcome.FAILED
+        assert "snapshot" in each.problems[0].message
+    assert (root / "dashboards" / "assets" / "p").read_text() == "in the way\n"
+    assert BEGIN_PREFIX not in page_bytes(root, "p")
+
+
+def test_a_frozen_chart_draws_the_same_bytes_as_a_relative_one_over_the_same_rows(
+    tmp_path: Path,
+) -> None:
+    pace = chart_data(
+        (
+            category_column("label"),
+            number_column("pace_s_per_km", unit="s_per_km"),
+        ),
+        [("beta", 341.0), ("alpha", 305.0), ("gamma", 322.0)],
+    )
+    bare = chart_data(
+        (category_column("label"), number_column("pace_s_per_km")),
+        [("beta", 341.0), ("alpha", 305.0), ("gamma", 322.0)],
+    )
+    channels = "\n  x: label\n  y: pace_s_per_km"
+    root = make_data_root(tmp_path)
+    for name, mode in (("rel", "relative"), ("bare", "relative"), ("froz", "frozen")):
+        write_page(
+            root,
+            name,
+            page_text(
+                own("pad", mode=mode),
+                chart("pace", mode=mode, sql="select pace", channels=channels),
+            ),
+        )
+    source = FakeSource()
+    source.queue("select pad\n", DATA_A)
+    source.queue("select pad", DATA_A)
+    source.queue("select pace\n", pace)
+    source.queue("select pace", pace)
+    go(root, source, Target("rel", None), Target("froz", None))
+    bare_source = FakeSource()
+    bare_source.queue("select pad\n", DATA_A)
+    bare_source.queue("select pace\n", bare)
+    go(root, bare_source, Target("bare", None))
+    relative = asset_path(root, "rel", "pace").read_bytes()
+    assert asset_path(root, "bare", "pace").read_bytes() != relative, "units matter"
+    assert asset_path(root, "froz", "pace").read_bytes() == relative
+    asset_path(root, "froz", "pace").unlink()
+    go_offline(root, Target("froz", None))
+    assert asset_path(root, "froz", "pace").read_bytes() == relative
+
+
+# -- cleanup ---------------------------------------------------------------------
+
+
+def test_cleanup_removes_unreferenced_images_and_keeps_every_snapshot(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "a", page_text(own("keep"), fro("gone"), fro("stay")))
+    write_page(root, "b", page_text(own("other")))
+    go(
+        root,
+        source_of({"keep": DATA_A, "gone": DATA_B, "stay": DATA_C, "other": DATA_A}),
+    )
+    assert (
+        asset_path(root, "a", "gone").exists()
+        and asset_path(root, "b", "other").exists()
+    )
+    text = page_bytes(root, "a")
+    trimmed = remove_region(text.replace(fro("gone"), ""), "gone")
+    write_page(root, "a", trimmed)
+    (root / "dashboards" / "b.md").unlink()
+    snapshots = {
+        name: state
+        for name, state in snapshot_of(root / "dashboards").items()
+        if ".snapshot-" in name
+    }
+    assert snapshots, "there are snapshots to keep"
+
+    checked = go(root, source_of({"keep": DATA_A, "stay": DATA_C}), action=Action.CHECK)
+    assert checked.removed == () and asset_path(root, "a", "gone").exists()
+    assert asset_path(root, "b", "other").exists(), "check never cleans up"
+
+    report = go(root, source_of({"keep": DATA_A, "stay": DATA_C}), Target("a", "keep"))
+    assert report.removed == ("assets/a/gone.svg", "assets/b/other.svg")
+    assert not asset_path(root, "a", "gone").exists()
+    assert not asset_path(root, "b", "other").exists()
+    assert (
+        not (root / "dashboards" / "assets" / "b").exists()
+        or snap_files(root, "b") == []
+    )
+    assert (
+        asset_path(root, "a", "keep").exists()
+        and asset_path(root, "a", "stay").exists()
+    )
+    after = {
+        name: state
+        for name, state in snapshot_of(root / "dashboards").items()
+        if ".snapshot-" in name
+    }
+    assert after == snapshots, "no snapshot was touched"
+
+
+def test_a_freeze_run_cleans_up_too(tmp_path: Path) -> None:
+    root = frozen_root(tmp_path)
+    stripped = remove_region(page_bytes(root, "p").replace(fro("lead"), ""), "lead")
+    write_page(root, "p", stripped)
+    report = go(
+        root, source_of({"fro": DATA_B}), Target("p", "fro"), action=Action.FREEZE
+    )
+    assert report.removed == ("assets/p/lead.svg",)
+    assert snap_path(root, "p", "lead", 1).exists()
+
+
+@pytest.mark.parametrize("how", ["changed", "failed"])
+def test_an_image_left_unreferenced_by_a_failed_page_write_is_removed_in_the_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, how: str
+) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "a", page_text(own("a1")))
+    go(root, source_of({"a1": DATA_A}))
+    write_page(root, "a", page_bytes(root, "a") + own("a2"))
+    real = storage.replace_page
+
+    def racing(page: PageFile, text: str) -> str:
+        if how == "failed":
+            raise OSError("disk full")
+        page.path.write_bytes(page.raw + b"edited elsewhere\n")
+        return real(page, text)
+
+    monkeypatch.setattr(engine, "replace_page", racing)
+    report = go(root, source_of({"a1": DATA_A, "a2": DATA_B}))
+    expected = "page_changed" if how == "changed" else "write_failed"
+    assert codes(report.pages[0].charts[1].problems) == [expected]
+    assert report.removed == ("assets/a/a2.svg",)
+    assert not asset_path(root, "a", "a2").exists()
+    assert asset_path(root, "a", "a1").exists()
+
+
+def test_every_chart_gets_its_own_image_whatever_the_names_share(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    labels = {
+        ("a-b", "c"): "p1",
+        ("a", "b-c"): "p2",
+        ("x", "pace"): "p3",
+        ("y", "pace"): "p4",
+    }
+    source = FakeSource()
+    for (page, chart_id), label in labels.items():
+        write_page(root, page, page_text(own(chart_id)))
+        for suffix in ("\n", ""):
+            source.queue(
+                f"select {chart_id}{suffix}", category_number_data([(label, 1.0)])
+            )
+    report = go(root, source)
+    assert not report.failed
+    seen: dict[str, tuple[str, str]] = {}
+    for (page, chart_id), label in labels.items():
+        rel = storage.asset_rel_path(page, chart_id)
+        text = (root / "dashboards" / rel).read_text()
+        assert label in text, rel
+        assert text not in seen, "two charts share one image"
+        seen[text] = (page, chart_id)
+        assert f"]({rel})" in page_bytes(root, page), "the link is the asset path"
+    assert len(seen) == 4
+    assert len(list((root / "dashboards" / "assets").rglob("*.svg"))) == 4
+    again = FakeSource()
+    again.results = {key: list(value) for key, value in source.results.items()}
+    cleaned = go(root, again, Target("a-b", "c"))
+    assert cleaned.removed == (), "cleanup kept all four images"
+    assert len(list((root / "dashboards" / "assets").rglob("*.svg"))) == 4
