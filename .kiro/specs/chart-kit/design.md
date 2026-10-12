@@ -856,10 +856,10 @@ def svg_options(*own: OptionSpec, height: int | None) -> tuple[OptionSpec, ...]:
 ABSENT: Final = "—"                 # em dash
 ELLIPSIS: Final = "…"
 def display_label(column: Column) -> str: ...
-def axis_title(column: Column, *, clock_date: date | None = None) -> str: ...
+def axis_title(column: Column, *, clock_date: date | None = None, hours: bool = True) -> str: ...  # (amended 2026-10-12: tasks 2.2, 4.1)
 def format_value(value: Value, column: Column, *, with_unit: bool) -> str: ...
 def format_number_tick(value: float, step: float, unit: Unit | None) -> str: ...
-def format_duration(seconds: float) -> str: ...
+def format_duration(seconds: float, *, hours: bool | None = None) -> str: ...  # (amended 2026-10-12: task 5.8)
 def format_pace(seconds_per_km: float) -> str: ...
 def format_delta(delta: float, column: Column) -> str: ...
 def clean_text(text: str) -> str: ...
@@ -875,7 +875,9 @@ Rules (all locale-free: no `locale`, no `strftime`, no `n` format; Python
   CLOCK units give `(UTC)` / `(local time)`; DURATION columns (and `s` units)
   give `(h:mm:ss)` or `(m:ss)` per the axis's label form; `clock_date`
   appends `, YYYY-MM-DD` inside the parentheses for a clock-ladder axis whose
-  ticks fall on one date.
+  ticks fall on one date. (Amended 2026-10-12: tasks 2.2, 4.1: the `hours`
+  keyword chooses the duration form: `True` (the default) writes `(h:mm:ss)`,
+  `False` writes `(m:ss)`; Scales passes the axis's label form.)
 - `format_value`: absent → `ABSENT`. NUMBER: `int` → no decimals; `float` or
   `Decimal` → the unit's `decimals` for QUANTITY/PERCENT, at most 2 decimals
   with trailing zeros trimmed when unitless; `-0` normalised; no digit
@@ -888,7 +890,10 @@ Rules (all locale-free: no `locale`, no `strftime`, no `n` format; Python
 - `format_duration`: round half-to-even to whole seconds; `m:ss` when the
   magnitude is under 3600 s, else `h:mm:ss` (hours unbounded); a leading `-`
   for negatives. Callers labelling an axis use one form for every tick
-  (h:mm:ss if any tick reaches 3600 s).
+  (h:mm:ss if any tick reaches 3600 s). (Amended 2026-10-12: task 5.8:
+  `hours=None` is this per-value form, unchanged; `hours=True` forces
+  `h:mm:ss`; `hours=False` forces `m:ss` with unbounded minutes, so 5400 s is
+  `90:00`. The table decides one form per duration-family column; see Kinds.)
 - `format_pace`: `m:ss`, minutes unbounded.
 - `format_number_tick`: decimals = `max(0, -floor(log10(step)))` for steps on
   the 1-2-5 ladder; PERCENT appends `%`.
@@ -942,10 +947,24 @@ def clock_ticks(lo_s: float, hi_s: float, max_count: int) -> tuple[int, tuple[fl
 - `calendar_ticks`: the smallest step in DAY, 2 days, WEEK (Mondays), MONTH
   (1st), QUARTER (Jan/Apr/Jul/Oct 1st), HALF (Jan/Jul 1st), YEAR (Jan 1st),
   2/5/10 years (Jan 1st of multiples) with at most `max_count` ticks inside
-  `[first, last]`.
+  `[first, last]`. (Amended 2026-10-12: task 2.3 controller ruling: never
+  empty or a lone tick when some step holds two or more ticks. With
+  `allowed = max(max_count, 2)`: take the finest step with 2..`allowed`
+  ticks; else thin the coarsest overflowing step, keeping every k-th tick
+  from the first; else (every step holds fewer than 2 ticks) keep the finest
+  step. So `max_count=1` may yield 2 ticks, and "at most `max_count`" is
+  refined to "at most `max(max_count, 2)`".)
 - `clock_ticks` (date-times spanning under two days): the smallest
   `CLOCK_STEPS` step with at most `max_count` ticks, aligned to multiples of
-  the step since midnight.
+  the step since midnight. (Amended 2026-10-12: task 2.3: the same
+  never-empty rule as `calendar_ticks`, with `allowed = max(max_count, 2)`
+  over `CLOCK_STEPS`.)
+- Preconditions (amended 2026-10-12: tasks 2.3, 4.1): `linear_ticks` returns 3
+  ticks for `max_count=2` on a range with `lo < 0 < hi` (two ticks cannot
+  enclose it), so a caller measures the ticks it gets back, not `max_count`.
+  Degenerate input (`lo >= hi` or non-finite for `linear_ticks`/`log_ticks`,
+  `first > last` or `lo_s > hi_s` for the calendar/clock ladders) raises
+  `ValueError`; Scales widens a degenerate domain first.
 
 #### Scales — `kit/scales.py`
 
@@ -970,6 +989,8 @@ class NumericScale:
     start_px: float; end_px: float       # range (end < start for vertical axes)
     ticks: tuple[Tick, ...]
     column: Column
+    clock_date: date | None = None       # (amended 2026-10-12: task 4.1) the date a same-day date-time axis puts in its title
+    hours: bool = True                   # (amended 2026-10-12: task 4.1) duration label form: True h:mm:ss, False m:ss
     def position(self, value: float) -> float: ...
 
 @dataclass(frozen=True)
@@ -1013,6 +1034,15 @@ Rules:
   `format_duration`/`format_pace` (one form per axis). Numbers by
   `format_number_tick`.
 - Pace axes are not inverted.
+- (Amended 2026-10-12: task 4.1 controller rulings.) The label-fit rule for
+  horizontal axes is: adjacent label centres are at least `(w1 + w2)/2 + 10`
+  px apart, measured on the ticks actually returned. Time axes keep their
+  exact extent (they ignore `nice` and `include_zero`); LOG ignores
+  `include_zero`. Date-time clock ticks are computed relative to midnight of
+  `lo`'s day and filtered to `[lo, hi]`. `NumericScale.clock_date` and
+  `.hours` carry what `axis_title` needs; `frame` passes both. `band_scale`
+  thins by band size, which suits horizontal bands; hbar must not thin its
+  row labels by the 26 px row height.
 - `band_scale`: equal bands in the given order; `labelled` is every band when
   the widest label fits the band width minus 4 px; otherwise every k-th band
   (smallest k that fits), counting from band 0.
@@ -1129,9 +1159,9 @@ class FramePlan:
     legend_rows: tuple[tuple[tuple[LegendEntry, float], ...], ...]   # rows of (entry, x)
     legend_top: float
     plot: Rect
-    y_title_y: float
+    y_title_y: float | None   # (amended 2026-10-12: task 3.2) None when there is no such title
     x_labels_y: float
-    x_title_y: float
+    x_title_y: float | None   # (amended 2026-10-12: task 3.2)
     notes_y: tuple[float, ...]
 
 def text_width(text: str, font_px: float) -> float: ...       # len(text) * font_px * CHAR_EM
@@ -1152,6 +1182,11 @@ def plan_frame(width: int, height: int, *, legend: Sequence[LegendEntry], y_labe
 - Horizontal: left = `PAD + y_label_width + TICK_GAP + TICK_LEN`; right =
   `max(16, x_label_overhang + 4) + right_label_width` (the latter for a right
   axis or hbar value labels).
+- (Amended 2026-10-12: task 3.2, Req 7.3.) The title-to-legend and the
+  y-title-to-plot gaps are each `PAD`. With a legend and no y title the plot
+  top abuts the last legend row, so Frame keeps the top y tick label clear of
+  it. `y_title_y` and `x_title_y` are `None` when the chart has no such
+  title, and Frame handles `None`.
 - Layout runs a fixed two passes: y ticks from the plot height, then left
   margin, then x ticks on the provisional width, then the right margin from
   the widest x label, then x ticks once more on the final width.
@@ -1168,11 +1203,14 @@ def document(width: int, height: int, *, title: str, description: str, body: Seq
              extra_roles: tuple[InkRole, ...] = ()) -> str: ...
 def title_text(plan: FramePlan, title: str) -> str: ...
 def grid(scale: NumericScale, plot: Rect, *, horizontal_lines: bool) -> str: ...
-def axis(scale: NumericScale | BandScale, plot: Rect, side: Side, *, title: str, plan: FramePlan) -> str: ...
+def axis(scale: NumericScale | BandScale, plot: Rect, side: Side, *, title: str | None = None, plan: FramePlan) -> str: ...  # (amended 2026-10-12: task 4.2)
+def not_drawn_note(counts: Sequence[tuple[str, int]]) -> str | None: ...   # (amended 2026-10-12: task 4.2) public; chart-catalog A2 contract
+def no_trend_note(series: Sequence[str]) -> str: ...                       # (amended 2026-10-12: task 4.2)
 def legend(plan: FramePlan) -> str: ...
 def notes(plan: FramePlan, lines: Sequence[str]) -> str: ...
 def no_data(bound: BoundChart, *, height: int) -> str: ...
-def describe(kind: str, title: str, channels: Sequence[tuple[str, Column]], *, rows: int,
+def describe(kind: str, title: str, channels: Sequence[tuple[str, Column | str]], *, rows: int,  # str: drawn axis title (amended 2026-10-12: step X)
+            
              series: int | None, undrawn: Sequence[tuple[str, int]],
              ranges: Sequence[tuple[str, str, str]]) -> str: ...
 ```
@@ -1188,16 +1226,34 @@ def describe(kind: str, title: str, channels: Sequence[tuple[str, Column]], *, r
   every `<text>` anywhere carries `ck-t`.
 - Axis: a baseline, tick marks and tick labels in `ink(STROKE)`/`ink(TEXT)`;
   the axis title from `axis_title`. Bottom labels centred on ticks; left labels
-  end-anchored; right labels start-anchored.
+  end-anchored; right labels start-anchored. (Amended 2026-10-12: task 4.2:
+  `title=None` derives `axis_title(column, clock_date, hours)` for a
+  `NumericScale`; a string is used verbatim; `""` draws no title; a
+  `BandScale` needs a string. Every axis title and every bottom band label is
+  fitted to the room at its own anchor and stays inside `[PAD, width − PAD]`;
+  bottom band labels are cleaned (`clean_text`) and fitted to
+  `min(k·band − 4, edge clamp)`.)
 - Legend swatches: `line` (a 20 px line sample with the series dash), `shape`
   (`theme.shape_path` at the swatch centre; `frame` never imports `marks`),
   `block` (a 10×10 square; bars and stacked areas).
 - Notes (bottom-left, one per line, fitted to width), exact wording:
   `Not drawn: 1 row without y.` / `Not drawn: 3 rows without x, 2 rows without y.`
   and `No trend line for Bike, Swim: fewer than 2 distinct x values.`
+  (Amended 2026-10-12: task 4.2: `not_drawn_note(counts) -> str | None` and
+  `no_trend_note(series) -> str` are public; `not_drawn_note` follows
+  chart-catalog A2 exactly: zero counts skipped, given order, `None` when all
+  counts are zero; `n = 1` is singular, `1 row`.)
 - `describe` wording, one paragraph:
   `"<Kind> chart: <title>. <channel>: <axis title>; … <n> rows[, <k> series]. [Not drawn: …. ]<axis> from <min> to <max>; …"`,
-  where min/max are the present data's extremes formatted with units. No-data:
+  where min/max are the present data's extremes formatted with units.
+  (Amended 2026-10-12: tasks 5.1-5.6, step X: `channels` entries are
+  `(name, Column | str)`, a string being the drawn axis title (`clean_text`'d);
+  each range is named by the drawn axis title
+  `axis_title(col, clock_date=scale.clock_date, hours=scale.hours)`; the
+  bounds are the drawn values' extremes; duration-family bounds (DURATION kind
+  or a duration-family unit such as `s`) are formatted
+  `format_duration(v, hours=scale.hours)`; pinned per kind and unit family by
+  `test_describe_ranges.py`. A count of one reads `1 row`/`the 1 row`.) No-data:
   `"<Kind> chart: <title>. No data: no rows."` or `"… No data: none of the <n> rows has a value to draw."`
 - `no_data`: the chart's width and the given height (the kind's default; hbar
   its minimum, 160); title text; centred `No data` (13 px) and, when
@@ -1233,6 +1289,11 @@ def trend(x0: float, y0: float, x1: float, y1: float, color: str) -> str: ...
   closed), not a `<path>` element; the caller wraps it with its own fill
   attributes (used by stacked areas; exposed for `chart-catalog`'s `band`).
 - `bar`: one `<rect>`; negative values are drawn below the zero line.
+  (Amended 2026-10-12: task 3.3 controller ruling: signed convention. `y` is
+  the zero-line pixel and `height` is signed (positive = upward); `x` is
+  likewise the zero line of a horizontal bar and `width` is signed (negative
+  extends left of `x`), so hbar calls `bar` with `x` = the zero-line pixel and
+  a signed width. Emitted width and height are non-negative.)
   `zero_stub`: a 2 px tall `<rect>` centred on the zero line.
 - `points`: one `<path>` per series, exactly `theme.shape_path(style.shape,
   centres, style.color)`; marks holds no shape geometry of its own.
@@ -1260,7 +1321,7 @@ def numbers(bound: BoundChart, channel: str) -> tuple[float | None, ...]: ...
 def undrawn(bound: BoundChart, channels: Sequence[str]) -> tuple[tuple[str, int], ...]: ...
 def bound_problem(bound: BoundChart, count: int) -> tuple[ChartProblem, ...]: ...
 def series_problem(bound: BoundChart) -> tuple[ChartProblem, ...]: ...
-def duplicate_problem(bound: BoundChart, keys: Sequence[str]) -> tuple[ChartProblem, ...]: ...
+def duplicate_problem(bound: BoundChart, keys: Sequence[str], *, skip_absent: Sequence[str] = ()) -> tuple[ChartProblem, ...]: ...  # (amended 2026-10-12: task 3.4)
 def log_problem(bound: BoundChart, channel: str) -> tuple[ChartProblem, ...]: ...
 def stack_problems(bound: BoundChart, *, x: str, y: str, complete: bool) -> tuple[ChartProblem, ...]: ...
 ```
@@ -1280,10 +1341,19 @@ def stack_problems(bound: BoundChart, *, x: str, y: str, complete: bool) -> tupl
 - `series_problem` (`too_many_series`): more than `MAX_SERIES` groups.
 - `duplicate_problem` (`duplicate_position`): two rows share the key tuple
   (for example series and x); names the first duplicate row and the values.
+  (Amended 2026-10-12: task 3.4 controller ruling: rows absent on any bound
+  channel named in `skip_absent` are exempt; key channels that are not bound
+  are skipped, so an unbound colour is one series. The fix wording is built
+  from `keys`: "bind a column to <keys joined by 'or'> that separates them".
+  Line and area pass `skip_absent=("x",)`, hbar `("y",)`, bar nothing: an
+  absent x is bar's `—` category.)
 - `log_problem` (`log_domain`): a present value ≤ 0 on a log axis.
 - `stack_problems`: `stack_absent` (an absent y), `stack_negative` (a
   negative y), and when `complete`, `stack_incomplete` (an x of the union
-  without a row for some series), naming the series and x.
+  without a row for some series), naming the series and x. (Amended
+  2026-10-12: task 3.4: `stack_problems` never builds styles, so it is safe
+  before `series_problem` refuses more than 8 series; `series_groups`, used
+  only by drawing, raises beyond 8.)
 
 ### Core
 
@@ -1316,6 +1386,16 @@ def parse_option(spec: OptionSpec, raw: OptionValue) -> OptionValue | None: ... 
   INTEGER/NUMBER bounds inclusive; NUMBER finite; CHOICE exact.
 
 #### Kinds — `kit/kinds/*.py`
+
+(Amended 2026-10-12: tasks 4.2, 5.1-5.6 cross-kind controller rulings. Every
+text stays inside `[PAD, width − 4]`: each cartesian kind reserves the first x
+tick label's left overhang (widening the left margin) and the last one's right
+overhang, measured on a provisional plot, and pins it with a test over its
+`CASES`. Kinds call `frame.axis`, `frame.describe`, `frame.not_drawn_note` and
+`frame.no_trend_note` as amended in § Frame. Describe ranges are named by the
+drawn axis title; duration-family bounds use
+`format_duration(v, hours=scale.hours)`; ranges are the drawn values'
+extremes.)
 
 Each module exports `KIND: Final[KindSpec]` and private `_validate`, `_check`,
 `_draw`. Common to every SVG kind: when there are no rows, or no row has a
@@ -1371,6 +1451,11 @@ Per-kind rules beyond the table:
   margin fits the widest label up to 40% of the width; x includes zero;
   negatives extend left of zero; a value label after each bar end
   (`format_value(..., with_unit=False)`), `—` for absent, a zero stub for zero.
+  (Amended 2026-10-12: tasks 3.3, 5.4: the labels sit in a `<g class="ck-values">`
+  group drawn after the marks; a negative bar's, zero's and absent value's
+  label sits at the zero line + 4 px, a positive bar's 4 px after its end;
+  bars call `marks.bar` with the zero-line pixel and a signed width; row
+  labels are not thinned.)
 - **scatter** — `_validate`: `trend` with any log scale, or log on a time
   column → `option_conflict`. `_check`: bound, series, `log_domain`. Draw:
   both axes `nice=True`; one `points` path per series; absent x or y rows
@@ -1389,7 +1474,13 @@ Per-kind rules beyond the table:
   → one bin of width `nice_step(|v|/10)` (1 when `v == 0`) starting at
   `floor(v/w)*w`. y is the count, includes zero, ticks through
   `numeric_scale(..., integer=True)`; absent
-  values counted in the note; x labelled in the column's unit.
+  values counted in the note; x labelled in the column's unit. (Amended
+  2026-10-12: task 5.6: `_validate` reports `option_conflict` (both `bins` and
+  `bin_width`) and `option_value` (`bin_width` ≤ 0) together. The x axis
+  spans the first to the last bin edge and each bar is drawn between its two
+  edges; edges are rounded to 15 significant digits. The describe ranges are
+  the x column's value extremes (named by the drawn x title) and `Count`,
+  `min..max` of the bin counts.)
 - **stat** — `_validate`: `compare` bound and (value kind not NUMBER/DURATION
   or compare kind differs) → `channel_kind`; units differ → `unit_mismatch`.
   `_check`: more than one row → `over_bound`. Output: `**<title>:** <value>`
@@ -1400,11 +1491,19 @@ Per-kind rules beyond the table:
   data)`; absent value: `—` in its place; absent compare: `(— vs —)`.
 - **table** — `_validate`: more than 12 columns → `over_bound`. `_check`:
   more than 100 rows → `over_bound`. Output: a header row of
-  `escape_markdown(axis_title(column))`, a delimiter row with `---:` for
-  NUMBER/DURATION columns and `---` otherwise, then one row per data row of
+  `escape_markdown(clean_text(axis_title(column, hours=h)))`
+  (amended 2026-10-12: task 5.8 controller ruling: the header goes through
+  `clean_text` first, and `h` is the column's one duration form, below), a
+  delimiter row with `---:` for NUMBER/DURATION columns and `---` otherwise, then one row per data row of
   `format_value(with_unit=False)` (category text escaped; `|` as `\|`; line
   breaks as spaces). No rows: header and delimiter, a blank line, then
-  `No data`.
+  `No data`. (Amended 2026-10-12: task 5.8: each duration-family column
+  decides its form once: `h` = true when any present value's rounded
+  magnitude is ≥ 3600 s (no present value gives `(m:ss)`), and that same `h`
+  is used for the header `axis_title(c, hours=h)` and every cell
+  `format_duration(v, hours=h)`, so header and cells always agree. This
+  changes the `table` markdown text, a Revalidation Trigger: `dashboards`' page
+  goldens embed it.)
 
 #### Registry — `kit/registry.py`
 
@@ -1460,6 +1559,10 @@ def render_spec(spec: KindSpec, request: ChartRequest, data: ChartData) -> Rende
   (System Flows); on any problem it raises `ChartError` with all problems of
   the failing stage and returns nothing else. Every kind, core or appended,
   goes through this one path.
+- (Amended 2026-10-12: task 3.1 controller ruling: `render_spec` takes
+  `RenderedChart.kind` from `spec.name`; a mismatch with `request.kind` is not
+  checked. `render_chart` on an unknown kind raises `ChartError` carrying all
+  of stage 1: `unknown_kind`, `empty_title`, `duplicate_column`.)
 - `render_spec` is public so that a kind's own tests (core and
   `chart-catalog`) exercise the full pipeline for a `KindSpec` before, and
   independently of, its registry entry. It is not re-exported from the
@@ -1573,14 +1676,24 @@ Fixture Discrimination); task notes name them. Mutations are run through
   `role="img"`. Mutation: give one kind a literal `#333333`.
 - **Size budgets** (Requirement 11.4; bytes of `text.encode()`): line 3×365
   dated points with one gap ≤ 24,000; area stacked 3×52 ≤ 14,000; bar 52
-  dated bars ≤ 12,000; bar stacked 52×3 ≤ 22,000; hbar 20 bars ≤ 8,000;
+  dated bars ≤ 12,000; bar stacked 52×3 ≤ 22,000; hbar 20 bars ≤ 13,400
+  (amended 2026-10-12: task 6.3 controller ruling: raised from the initial
+  8,000; measured 9,310 to 10,689, dominated by per-row y tick and label
+  elements);
   scatter 500 points in 3 series with trend ≤ 18,000; histogram of 1,000
   values ≤ 8,000; no-data state ≤ 3,000; table 20×5 ≤ 3,000; stat ≤ 200.
   Ceiling (11.5): every `at_bound` golden ≤ 80,000. These are the **initial**
   budgets: they are measured at implementation and lowered, never raised, when
   the measured size leaves more than 40% headroom, and from then on
   `tests/render/charts/kit/test_size_budget.py` is the source of truth for the
-  numbers. Mutation: emit one `<circle>` per point.
+  numbers. (Amended 2026-10-12: task 6.3: the budgets as landed in that file: line
+  24,000; area stacked 14,000; bar 9,424 (lowered from 12,000, measured 7,539
+  plus 25%); bar stacked 22,000; hbar 13,400 (raised by controller ruling, see
+  above, the one exception to "never raised"); scatter 18,000; histogram 5,774
+  (lowered from 8,000, measured 4,619 plus 25%); no-data state 739 (lowered
+  from 3,000, measured 591); table 20×5 1,390 (lowered from 3,000, measured
+  1,112); stat 62 (lowered from 200, measured 49); at-bound ceiling 80,000
+  unchanged, largest golden 42,902. The SVG golden count is 52.) Mutation: emit one `<circle>` per point.
 - **Determinism**: render every case twice in-process (equal), and in two
   subprocesses with `PYTHONHASHSEED` 0/1, `TZ` `UTC`/`Pacific/Auckland` and
   `LC_ALL` `C`/`C.UTF-8` (equal SHA-256 per case). The child environment is
