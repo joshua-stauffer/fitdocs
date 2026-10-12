@@ -537,8 +537,12 @@ def legend(plan: FramePlan, scale: BinnedScale, entries: Sequence[LegendEntry]) 
   `format.format_number_tick(edge, step, unit)` with `step = e1`; durations by
   A1 over the edges; pace by `format.format_pace`.
 - `classify`: `None` → `None`; `0` → `0`; else the smallest `i` with
-  `value <= edges[i]` (bins exclude their lower edge). Negative values never
-  reach it (the kinds refuse them first).
+  `value <= edges[i]` (bins exclude their lower edge); a present value above
+  `edges[-1]` lands in bin `n` (amended 2026-10-12: task 1.4 — `linear_ticks`
+  tolerance and rounding can leave the last edge a hair below the maximum it
+  was built from, e.g. `0.1 + 0.2`). Negative values never reach it (the
+  kinds refuse them first); a negative value, or a positive one on a scale
+  with no bins, raises `ValueError`.
 - `color`: the top `n` ramp entries, so the largest bin is always
   `SEQUENTIAL_5`; `fraction`: area proportional to the bin index.
 - `negative_problem` (`negative_value`): message `"<column> has a negative
