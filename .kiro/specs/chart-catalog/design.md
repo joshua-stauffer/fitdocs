@@ -707,7 +707,11 @@ def legend(plan: FramePlan, scale: BinnedScale, entries: Sequence[LegendEntry]) 
     TICK_LEN, has_y_title=True)`;
   - gridlines: `frame.grid(left scale, …)` only;
   - axes: `frame.axis(x, BOTTOM)`, `frame.axis(y, LEFT,
-    title=axis_title(y))`, `frame.axis(y2, RIGHT, title=axis_title(y2))`;
+    title=axis_title(y), title_room=share)`, `frame.axis(y2, RIGHT,
+    title=axis_title(y2), title_room=share)` with `share = (plot.right -
+    plot.left - PAD) / 2`, so the two titles on the shared y-title row stay
+    `PAD` apart (amended 2026-10-12: upstream chart-kit fix 431a5a7, queue
+    `2026-10-12-chart-kit-dual-axis-title-overlap`);
   - series: each through `marks.line_series` over rows sorted by x, `y` in
     `series_style(0)` (solid), `y2` in `series_style(1)` (dashed);
   - legend: `LegendEntry("<display_label(y)> (left axis)", series_style(0),
