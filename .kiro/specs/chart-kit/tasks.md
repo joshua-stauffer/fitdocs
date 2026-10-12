@@ -184,7 +184,7 @@ every registered kind and find its cases by the test-module convention
 
 ---
 
-- [ ] 1. Foundation: the unit vocabulary, the kit package and its contracts, and the golden harness
+- [x] 1. Foundation: the unit vocabulary, the kit package and its contracts, and the golden harness
 
 - [x] 1.1 Create the one unit vocabulary and make the index schema project it
   - **`src/fitdocs/units.py`** per design § UnitVocabulary: `UnitFamily`,
@@ -303,7 +303,7 @@ every registered kind and find its cases by the test-module convention
     reds exactly them.
   - _Requirements: 18.3_
 
-- [ ] 2. Core contract and shared primitives
+- [x] 2. Core contract and shared primitives
 
 - [x] 2.1 (P) Validate requests and data, parse options and bind
   - **`kit/validate.py`** per design § Validator and the stage table in §
@@ -460,7 +460,7 @@ every registered kind and find its cases by the test-module convention
     isolate its assertion (it fails contrast, say), pick another that does
     and record it.
 
-- [ ] 3. Shared layer and the entry points
+- [x] 3. Shared layer and the entry points
 
 - [x] 3.1 (P) Create the entry points, the registry skeleton and the facade
   - **`kit/registry.py`** with `KINDS: Final[tuple[KindSpec, ...]] = ()`,
@@ -584,7 +584,7 @@ every registered kind and find its cases by the test-module convention
   - _Boundary: Cartesian_
   - _Depends: 2.2, 2.4_
 
-- [ ] 4. Scales and the chart frame
+- [x] 4. Scales and the chart frame
 
 - [x] 4.1 Build numeric and band scales with the domain rules
   - **`kit/scales.py`** per design § Scales: `ScaleType`, `Side`, `Tick`,
@@ -648,7 +648,7 @@ every registered kind and find its cases by the test-module convention
   - _Requirements: 7.1, 7.2, 8.1, 8.3, 8.5, 9.3, 9.6, 9.7, 10.1, 10.2, 10.3_
   - _Depends: 3.3, 4.1_
 
-- [ ] 5. The eight core kinds
+- [x] 5. The eight core kinds
 
 - [x] 5.1 (P) Implement the line kind with its goldens
   - **`kit/kinds/line.py`**: `KIND` per the design's kind table (channels,
@@ -891,7 +891,7 @@ every registered kind and find its cases by the test-module convention
   - _Boundary: table kind_
   - _Depends: 2.1, 2.2, 3.1, 1.4_
 
-- [ ] 6. Integration and cross-cutting validation
+- [x] 6. Integration and cross-cutting validation
 
 - [x] 6.1 Register the core kinds and pin the registry
   - **`kit/registry.py`**: `KINDS` becomes the eight core kinds in the
@@ -1045,7 +1045,7 @@ every registered kind and find its cases by the test-module convention
     is green; each mutation reds it.
   - _Requirements: 16.3, 16.4, 18.5_
 
-- [ ] 7. Records and final validation
+- [x] 7. Records and final validation
 
 - [x] 7.1 Record the relaxation and the import direction, and run the full suite
   - **`src/fitdocs/render/charts/svg.py`**: docstring only — the element
