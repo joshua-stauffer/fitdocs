@@ -841,7 +841,7 @@ sequential, never two `(P)` tasks at once.
   - _Requirements: 14.1, 14.5, 14.6, 14.8, 14.9_
   - _Depends: 4.3, 5.3, 5.4_
 
-- [ ] 6.2 Return the index outcome and chain the dashboard pass (analytics-index Amendment 1, post-pass)
+- [x] 6.2 Return the index outcome and chain the dashboard pass (analytics-index Amendment 1, post-pass)
   - **`src/fitdocs/cli.py`** per design § CliPass: `_run_index_pass` returns
     `IndexReport | None` (unchanged output); `_run_dashboard_pass(data_root,
     index_report)`; called immediately after `_run_index_pass` in sync
@@ -1581,3 +1581,19 @@ sequential, never two `(P)` tasks at once.
   once_on_exit`). The real-process substitute — all three calls removed —
   hangs intermittently (7/16 on 1.5.6, 2/6 on 1.2.0), hence 14 trials; it
   reds (1.5.6 at trials 0/2/9, 1.2.0 at trial 3).
+- **6.2 (2 review rounds):** `_run_index_pass` returns `IndexReport | None`;
+  `_run_dashboard_pass(data_root, index_report)` is called right after it at 4
+  sites (sync SOURCE, `_run_drain_passes` = drain + `pull --sync`, regen,
+  load). Silent when `has_dashboards` is false (checked first, inside the
+  `try`); runs `Action.REFRESH` over every page only for REFRESHED,
+  UNCHANGED, BUILT (exhaustive partition test over `set(Outcome)`); otherwise
+  one line `Dashboards: not refreshed; <fixed reason per Outcome.value>.`
+  (`report.detail` is not repeated — the index line printed it). Catches
+  `Exception` only (one whitespace-collapsed line, exit code unchanged);
+  `KeyboardInterrupt`/`SystemExit` propagate with identity. Chained text via
+  `render_text(chained=True)` printed with the default newline. All the
+  pass's Consoles use `emoji=False` (`:a:` in a key printed as 🅰 before).
+  13.3 pinned by an absent `index-cache` before and after refusing runs. The
+  post_pass harness is inline (not importable), so `test_pass.py` duplicates
+  its five arg lists. "Untouched" checks exclude `dashboards/AGENTS.md`
+  (sync, drain, pull --sync, regen write it themselves; load does not).
