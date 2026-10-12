@@ -537,7 +537,7 @@ sequential, never two `(P)` tasks at once.
   - _Requirements: 10.1, 10.9_
   - _Boundary: SnapshotCodec_
 
-- [ ] 3.4 (P) List the registered kinds as text and markdown
+- [x] 3.4 (P) List the registered kinds as text and markdown
   - **`src/fitdocs/dashboards/kinds.py`** per design § Kinds: `kinds_text`,
     `kinds_markdown` over a sequence of `KindListing`.
   - **Tests** (`test_kinds.py`): output for two stub listings (built as
@@ -1272,3 +1272,13 @@ sequential, never two `(P)` tasks at once.
   and apply its `environ` via monkeypatch (the module fixture leaves the
   shared `FITDOCS_INDEX_DIR` in `os.environ`). Teardown HOME-purity names
   fitdocs paths only.
+- **3.4 (3 review rounds, test-side only):** formats are the implementer's
+  reading of a loose design. Text: `name (output) — desc`, `  channels:` with
+  `    x* number|date`, options `    name type [default=X] [choices=a|b]
+  [range=lo..hi]` (open ends empty), `  bound: …`; empty sections omitted.
+  Markdown: H3 per kind, channels/options tables omitted when empty (design
+  lists channels unconditionally — accepted deviation), values `a, b` /
+  `lo to hi` / `lo and up` / `up to hi` / `-`. All free text collapsed to one
+  line (no output line can start `<!-- fitdocs:`). Design § Testing's
+  monkeypatched-`KINDS` test realised as dict stubs per task text; a CLI-level
+  "registry read at call time" test is not carried by any task (queued).
