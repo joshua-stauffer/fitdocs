@@ -162,10 +162,10 @@ appears.
 
 #### Acceptance Criteria
 1. fitdocs shall read the file type a `.fit` file's own header declares, and shall record it as absent when the header does not declare one.
-2. When a `.fit` file that no workout page lists declares a file type other than an activity, the sync, drain and `regen` runs shall neither render a workout page for it nor archive it, and shall report it as skipped with a warning naming the file and its declared type.
+2. When a sync, drain or `regen` run would process a `.fit` file that declares a file type other than an activity (a new file, an archived file no workout page lists, or a file re-processed under `--force`), it shall write no workout page from it, shall not archive it when it is not already archived, and shall report it as skipped with a warning naming the file and its declared type.
 3. When such a file sits in the inbox, the drain shall leave it untouched in the inbox under every disposition.
 4. fitdocs shall continue to process as an activity a `.fit` file that declares the activity type or declares no file type.
-5. fitdocs shall leave unchanged a workout page that already exists, whatever type the file it was rendered from declares.
+5. fitdocs shall never delete or rename a workout page because a file it lists declares a non-activity type, and `fitdocs regen` shall continue to rebuild such a page from the files it lists.
 6. The guard shall not count a non-activity FIT file as a failure and shall not record it in the quarantine record.
 
 ### Requirement 5: The Wellness Metrics

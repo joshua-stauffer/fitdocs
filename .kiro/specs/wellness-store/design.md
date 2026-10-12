@@ -349,7 +349,7 @@ assessment reports as stale and the next drain repairs.
 | 3.4 | Progress | Registry, DrainWellnessStep, CliWellness | `ExtractContext.progress` | Drain |
 | 4.1 | Read file type | FitIngestFileType | `FileIdentity.file_type` | — |
 | 4.2, 4.3, 4.4, 4.6 | Skip, warn, leave; activity/untyped processed; no failure, no quarantine | NonActivityGuard | `is_activity_file`, `_run_planned` | Drain |
-| 4.5 | Existing pages untouched | NonActivityGuard | `regen` page part unchanged | — |
+| 4.5 | Existing pages kept and rebuilt by regen | NonActivityGuard | `regen` page part unchanged | — |
 | 5.1, 5.2, 5.3, 5.4 | Metric vocabulary, SDNN/rMSSD distinct, ratings as recorded | Model | `Metric`, `METRICS` | — |
 | 5.5 | Definitions documented | Docs, Model | `MetricInfo.description` | — |
 | 5.6 | No computed fields imported | IntervalsFormat, GarminFormats | field maps | — |
@@ -523,8 +523,10 @@ def wellness_day_of_sleep_end(end: datetime) -> date: ...
   suffix; exactly one claim → that format; none → `Unrecognized` with reason
   "no supported wellness format reads this file"; several → `Unrecognized`
   naming every claimant. A recognizer that raises counts as no claim.
-- `validate_registry()` (called by a test and by `candidate_suffixes()` on
-  first use): ids match `[a-z0-9]+(-[a-z0-9]+)*` and are unique among
+- No registry function caches: each reads `SOURCES`/`FORMATS` at call time,
+  so a test that patches the tuples sees its own formats everywhere.
+- `validate_registry()` (called by tests on the real registry and on test
+  formats; nothing calls it at runtime): ids match `[a-z0-9]+(-[a-z0-9]+)*` and are unique among
   sources and among formats; every format's source is in `SOURCES`;
   suffixes are lowercase, start with `.`, are not `.fit`; `ORIGINAL` ⇒
   `archived_suffix in suffixes` and `extract is None`; `EXTRACT` ⇒ `extract`
@@ -1222,11 +1224,18 @@ def select_wellness_candidates(inbox: Path, settings: InboxSettings,
 - In `_run_planned`'s preparation, right after `parse_fit(data)`
   (`sync.py:1446`): a file failing `is_activity_file` gets outcome `skipped`
   and a `DocWarning(doc=item.label, detail="not an activity file: its FIT
-  header declares the file type '<type>'; fitdocs renders only activity
-  files, so it was neither rendered nor archived and was left where it is")`,
-  is not planned and therefore not archived. In the drain its archive check
-  fails, so the disposition never moves it, and it is not a failure, so it is
-  never quarantined. `regen`'s page part never reaches this code (4.5).
+  header declares the file type '<type>'; fitdocs writes workout pages only
+  for activity files, so it wrote no page from it and left the file where it
+  is")`, and is not planned, so nothing archives it. The guard therefore
+  covers every file `_run_planned` parses: a new file (sync, drain), an
+  archived file no page lists (`regen`'s second part), and an archived,
+  page-listed file re-processed under `sync --force`, whose page is then left
+  untouched by that run. The warning text is true in all three (the file is
+  left in the source directory, the inbox or the archive). In the drain the
+  file's archive check fails, so the disposition never moves it, and it is
+  not a failure, so it is never quarantined. `regen`'s page part
+  (`_process_isolated` → `_page_task`) never reaches this code, so `regen`
+  keeps rebuilding a page that already lists such a file (4.5).
 
 #### AuditWellness (`audit.py`)
 
@@ -1582,9 +1591,11 @@ re-parse the archive or re-implement the merge.
   `AGENTS.md`.
 
 ### 9. The non-activity-FIT guard
-- `FileIdentity.file_type` and `fitdocs.ingest.file_id.is_activity_file`; a
-  non-activity file no page lists is skipped with a warning, not archived,
-  left in the inbox. `.fit` is never a wellness candidate suffix: a follow-on
+- `FileIdentity.file_type` and `fitdocs.ingest.file_id.is_activity_file`;
+  every non-activity file the planner would process (new, unlisted archived,
+  or re-processed under `--force`) is skipped with a warning, writes no page,
+  is never newly archived, and is left where it is; `regen` keeps rebuilding
+  existing pages from their listed files. `.fit` is never a wellness candidate suffix: a follow-on
   that parses Garmin wellness FIT messages amends this guard to hand such
   files to a wellness format instead of skipping them.
 
@@ -1739,8 +1750,9 @@ discovery"; each is revisable at review.
    dates kept; recorded offset only.
 5. Garmin resting HR from `currentDayRestingHeartRate` (measured:
    `restingHeartRate` is a seven-day rolling mean).
-6. Non-activity FIT: skipped + warning, not archived, left in place; existing
-   pages untouched.
+6. Non-activity FIT: skipped + warning wherever the planner would process
+   it (new, unlisted archived, or re-processed under `--force`), never newly
+   archived, left in place; `regen` keeps rebuilding existing pages.
 7. Only registered suffixes become candidates; other suffixes stay silently
    ignored.
 8. Within-source resolution by snapshot and revision; unresolved ties are
