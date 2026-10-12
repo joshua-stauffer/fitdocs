@@ -231,7 +231,10 @@ def _draw(bound: BoundChart) -> str:
     ]
     x_low, x_high = _extremes(bound, "x", rows, x_scale)
     y_low, y_high = _extremes(bound, "y", rows, y_scale)
-    channels = [(name, column) for name, column in bound.columns.items()]
+    drawn_titles = {"x": _axis_title(x_scale), "y": _axis_title(y_scale)}
+    channels = [
+        (name, drawn_titles.get(name, column)) for name, column in bound.columns.items()
+    ]
     description = frame.describe(
         "line",
         bound.request.title,

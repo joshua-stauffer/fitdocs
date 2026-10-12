@@ -261,14 +261,20 @@ def _draw(bound: BoundChart) -> str:
             high,
         )
 
+    x_range, y_range = extent("x", x_scale), extent("y", y_scale)
+    drawn = {"x": x_range[0], "y": y_range[0]}
     description = frame.describe(
         bound.spec.name,
         bound.request.title,
-        [(c, bound.columns[c]) for c in ("x", "y", "color") if c in bound.columns],
+        [
+            (c, drawn.get(c, bound.columns[c]))
+            for c in ("x", "y", "color")
+            if c in bound.columns
+        ],
         rows=len(bound.rows),
         series=len(groups) if bound.column("color") is not None else None,
         undrawn=undrawn,
-        ranges=[extent("x", x_scale), extent("y", y_scale)],
+        ranges=[x_range, y_range],
     )
     body = [
         frame.grid(y_scale, plan.plot, horizontal_lines=True),

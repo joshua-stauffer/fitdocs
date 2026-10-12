@@ -246,10 +246,11 @@ def _draw(bound: BoundChart) -> str:
         (_title_of(x_scale), *_extremes(bound, "x", drawn, x_scale)),
         (_title_of(y_scale), *_extremes(bound, "y", drawn, y_scale)),
     ]
+    titles = {"x": ranges[0][0], "y": ranges[1][0]}
     description = frame.describe(
         "area",
         bound.request.title,
-        [(name, col) for name, col in bound.columns.items()],
+        [(name, titles.get(name, col)) for name, col in bound.columns.items()],
         rows=len(bound.rows),
         series=len(groups) if bound.column("color") is not None else None,
         undrawn=missing,

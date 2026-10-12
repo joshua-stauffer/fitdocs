@@ -245,8 +245,15 @@ def _draw(bound: BoundChart) -> str:
 
     build = _stacked if stacked else _grouped
     low, high = _extremes(bound, y_axis)
+    y_title = axis_title(
+        bound.columns["y"], clock_date=y_axis.clock_date, hours=y_axis.hours
+    )
+    x_title = axis_title(bound.columns["x"])
+    drawn: dict[str, str] = {"x": x_title, "y": y_title}
     channels = [
-        (ch, bound.columns[ch]) for ch in ("x", "y", "color") if bound.column(ch)
+        (ch, drawn.get(ch, bound.columns[ch]))
+        for ch in ("x", "y", "color")
+        if bound.column(ch)
     ]
     description = frame.describe(
         "bar",
@@ -256,16 +263,8 @@ def _draw(bound: BoundChart) -> str:
         series=len(groups) if coloured else None,
         undrawn=not_drawn,
         ranges=(
-            (axis_title(bound.columns["x"]), labels[0], labels[-1]),
-            (
-                axis_title(
-                    bound.columns["y"],
-                    clock_date=y_axis.clock_date,
-                    hours=y_axis.hours,
-                ),
-                low,
-                high,
-            ),
+            (x_title, labels[0], labels[-1]),
+            (y_title, low, high),
         ),
     )
     body = [

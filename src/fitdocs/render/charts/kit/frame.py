@@ -113,7 +113,7 @@ def no_trend_note(series: Sequence[str]) -> str:
 def describe(
     kind: str,
     title: str,
-    channels: Sequence[tuple[str, Column]],
+    channels: Sequence[tuple[str, Column | str]],
     *,
     rows: int,
     series: int | None,
@@ -124,6 +124,8 @@ def describe(
 
     No rows, or rows but no ``ranges`` (nothing was drawable), give the two
     no-data forms; ``channels``, ``series`` and ``undrawn`` are then unused.
+    A channel is ``(name, Column)`` (titled by default) or ``(name, str)``, the
+    drawn axis title used verbatim after ``clean_text``.
     """
     head = f"{kind[:1].upper()}{kind[1:]} chart: {clean_text(title)}."
     if rows == 0:
@@ -133,7 +135,11 @@ def describe(
     parts = [head]
     if channels:
         parts.append(
-            "; ".join(f"{ch}: {axis_title(col)}" for ch, col in channels) + "."
+            "; ".join(
+                f"{ch}: {clean_text(col) if isinstance(col, str) else axis_title(col)}"
+                for ch, col in channels
+            )
+            + "."
         )
     count = _count(rows, "row")
     if series is not None:

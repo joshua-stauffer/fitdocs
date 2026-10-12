@@ -831,6 +831,66 @@ def test_describe_all_zero_undrawn_counts_add_no_sentence() -> None:
     assert out == "Bar chart: T. x: day. 5 rows. day from 2026-01-05 to 2026-03-02."
 
 
+def test_describe_a_string_channel_is_the_drawn_title_verbatim() -> None:
+    out = describe(
+        "line",
+        "T",
+        [
+            ("x", "moving (m:ss)"),
+            ("y", "start (UTC, 2026-03-02)"),
+            ("color", SPORT),
+        ],
+        rows=2,
+        series=None,
+        undrawn=[],
+        ranges=RANGES[:1],
+    )
+    assert out == (
+        "Line chart: T. x: moving (m:ss); y: start (UTC, 2026-03-02);"
+        " color: sport. 2 rows. day from 2026-01-05 to 2026-03-02."
+    )
+
+
+def test_describe_a_string_channel_differs_from_the_column_default() -> None:
+    column = Column("moving", ValueKind.DURATION)
+    ranges = RANGES[:1]
+    default = describe(
+        "bar", "T", [("y", column)], rows=1, series=None, undrawn=[], ranges=ranges
+    )
+    drawn = describe(
+        "bar",
+        "T",
+        [("y", "moving (m:ss)")],
+        rows=1,
+        series=None,
+        undrawn=[],
+        ranges=ranges,
+    )
+    assert (
+        default == "Bar chart: T. y: moving (h:mm:ss). 1 row."
+        " day from 2026-01-05 to 2026-03-02."
+    )
+    assert (
+        drawn
+        == "Bar chart: T. y: moving (m:ss). 1 row. day from 2026-01-05 to 2026-03-02."
+    )
+
+
+def test_describe_a_string_channel_is_cleaned() -> None:
+    out = describe(
+        "bar",
+        "T",
+        [("y", "a\x01b\nc")],
+        rows=1,
+        series=None,
+        undrawn=[],
+        ranges=RANGES[:1],
+    )
+    assert (
+        out == "Bar chart: T. y: a\ufffdb c. 1 row. day from 2026-01-05 to 2026-03-02."
+    )
+
+
 def test_describe_without_channels_has_no_channel_sentence() -> None:
     out = describe("bar", "T", [], rows=2, series=None, undrawn=[], ranges=RANGES[:1])
     assert out == "Bar chart: T. 2 rows. day from 2026-01-05 to 2026-03-02."

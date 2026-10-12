@@ -228,7 +228,7 @@ def _draw(bound: BoundChart) -> str:
     description = frame.describe(
         "hbar",
         bound.request.title,
-        (("y", y_col), ("x", x_col)),
+        (("y", axis_title(y_col)), ("x", x_title)),
         rows=rows,
         series=None,
         undrawn=(),

@@ -346,7 +346,7 @@ def _draw(bound: BoundChart) -> str:
     description = frame.describe(
         bound.spec.name,
         bound.request.title,
-        (("x", x_column),),
+        (("x", axis_title(x_column, clock_date=x.clock_date, hours=x.hours)),),
         rows=len(bound.rows),
         series=None,
         undrawn=absent,
