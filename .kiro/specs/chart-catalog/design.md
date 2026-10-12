@@ -1051,6 +1051,11 @@ beforehand.
   `band` 52 weeks with mid ≤ 8,000; `box` 12 boxes ≤ 6,000; `mean-max` 3 ×
   28 ≤ 8,000; `small-multiples` 6 × 52 ≤ 18,000; `stacked-100` 52 × 5 ≤
   22,000; every catalog `at_bound` golden ≤ 80,000 (chart-kit's ceiling).
+  (amended 2026-10-12: task 3.3 measured; by controller ruling, as chart-kit's
+  hbar, the three exceeded budgets were raised to measured + 25% —
+  `calendar-heatmap` 20,200 (16,150), `box` 13,300 (10,605), `stacked-100`
+  28,600 (22,823) — and two lowered: `band` 6,700, `small-multiples` 12,700;
+  `test_catalog_budgets.py` is the source of truth.)
   Mutation: draw one `<rect>` per grid cell instead of one path per class.
 - **Boundary** (`test_boundary.py` re-pin): the module tuple and rank
   matrix (§ Architecture); positive control: `from . import marks` added to
