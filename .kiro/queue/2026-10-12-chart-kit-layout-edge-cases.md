@@ -27,5 +27,7 @@ Small but real layout correctness gaps.
 ## Evidence
 5.1/5.2/5.4 reviews; frame.py:277-288; hbar `_FIT_SLACK`.
 
+- chart-catalog (2026-10-12, impl/chart-catalog c52da2d): calendar-heatmap hit (2) hard — a one-shot provisional reserve let the last date label end up to ~1.9 px past the canvas (1,205 of 39,528 width-sweep renders); fixed kind-locally by measuring the right overhang past the grid's end and re-planning in a bounded loop (`kinds/calendar_heatmap.py` `_overhangs` / `_RESERVE_PASSES`), sweep then clean at 1e-6. That recipe is the candidate shared fix for line/area/histogram (reviewer scratch sweep `scan2.py`, reported by reviewer subagent; line/area not re-measured in this run).
+
 ## How to pick it up
 Refuse or note a collapsed plot; iterate the overhang pass to a fixed point or add slack; compute band-label room from the plan directly; state the hbar height asymmetry in design or cap it.

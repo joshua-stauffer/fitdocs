@@ -26,5 +26,7 @@ Any caller passing large absolute values (epoch seconds, big counters) gets ceil
 ## Evidence
 4.1 review: clock_ticks on epoch seconds misplaced ticks; clock_ticks(43220.0, 43800.0, 8) correct. ticks.py:166,:357 (at d03e85e).
 
+- chart-catalog (2026-10-12, c52da2d): the non-enclosure also happens for SMALL values: `linear_ticks(0, 0.1 + 0.2, 6)` ends at 0.3 < hi (rounding to 12 significant figures + `_ceil` snapping within tolerance), while the `linear_ticks` docstring (`ticks.py` ~line 148) says the outermost ticks enclose the data. `cells.BinnedScale.classify` now clamps a value above the last edge into the top bin as a workaround (design § Cells amended, task 1.4). Fixing the tick contract would let that clamp go.
+
 ## How to pick it up
 Make the tolerance relative to the step or span instead of the magnitude; add tests with 1e10-scale linear inputs and epoch-second clock inputs; keep the scales relative-base workaround or drop it once ticks is fixed.

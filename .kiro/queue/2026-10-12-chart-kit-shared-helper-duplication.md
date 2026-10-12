@@ -31,5 +31,7 @@ Each copy is pinned by its own tests today, but chart-catalog will add more copi
 ## Evidence
 chart-kit validate-impl integration review (2026-10-12) E2 file:line list; tests/render/charts/kit/test_describe_ranges.py pins the behaviour cross-kind.
 
+- chart-catalog (2026-10-12, c52da2d) adds more copies: `_overhangs` in calendar_heatmap, mean_max, dual_axis, band, small_multiples; duration-family checks in stacked_100 (`_y_hours`), heatmap, mean_max, small_multiples (`_in_one_form`); `_exact` (10-significant-digit value_order fallback) duplicated in band and box; cells copies frame.legend's offsets (rank forbids importing frame; pinned by a parity test in test_cells.py).
+
 ## How to pick it up
 Add public helpers (e.g. `layout.x_label_overhangs`, `units`/`format.is_duration_family`, `frame.range_text`) and migrate the kinds; goldens must stay byte-identical (test_describe_ranges and every kind golden are the safety net). Do it before chart-catalog implementation if possible.

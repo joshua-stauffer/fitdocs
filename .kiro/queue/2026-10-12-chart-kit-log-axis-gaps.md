@@ -27,5 +27,7 @@ A tickless axis fails Req 6.2/7.1.
 ## Evidence
 5.1 review probe (x log, 6..9); 2.3 review (log_ticks edge); 4.1 review (scatter date nice, y_zero+log).
 
+- chart-catalog (2026-10-12, c52da2d): (5) a sub-second log-duration domain labels every tick `0:00` (rows 0.1 s and 0.4 s → three `0:00` x ticks) because `format_duration` rounds to whole seconds — any kind with a log duration axis inherits it (`scales.numeric_scale`, `ticks._log_duration_ladder`). mean-max keeps `numeric_scale`'s own ticks when no landmark is in the domain, so it shows this; its tests deliberately do not pin the broken labels. Reported by the 2.6 reviewer, reproduced in review scratch.
+
 ## How to pick it up
 Rule a minimum of 2 log ticks (fall back to 1-2-5 mantissas inside the exact extent), decide edge-tick retention, add an option_conflict for y_zero+log; amend design § Scales.

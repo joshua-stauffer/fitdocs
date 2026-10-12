@@ -2779,7 +2779,7 @@ Rejected:
   - analytics-index, analytics-query, wiki-contract and connectors updates.
 
   Parallel with chart-catalog. Dependencies: chart-kit
-- [ ] chart-catalog — **brief written 2026-10-11; spec written 2026-10-12**
+- [x] chart-catalog — **implemented and verified 2026-10-12** (21/21 leaf tasks accepted, 4.3* maintainer-only visual check open; landed first of the Phase 11 pair, so `dashboards`' task 7.3 regenerates the docs/dashboards.md kinds block; upstream chart-kit fix `frame.axis(title_room=)` at 431a5a7; budgets for calendar-heatmap, box and stacked-100 raised by controller ruling; design.md amended to the implementation rulings; validate-impl GO, full suite 12249 passed/8 skipped, CI green; follow-ups queued 2026-10-12). **Brief written 2026-10-11; spec written 2026-10-12**
   (Phase 11 batch, wave 2, `tasks-generated`, all approvals set; 13
   requirements / 92 criteria, 4 majors / 17 executable tasks plus the
   optional maintainer-only visual check 4.3*; independent Step 3.5 review,
