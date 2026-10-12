@@ -555,7 +555,7 @@ every registered kind and find its cases by the test-module convention
   - _Boundary: Marks_
   - _Depends: 2.4_
 
-- [ ] 3.4 (P) Share series grouping, numeric extraction and the x/y checks
+- [x] 3.4 (P) Share series grouping, numeric extraction and the x/y checks
   - **`kit/cartesian.py`** per design § Cartesian: `SeriesGroup`,
     `series_groups`, `category_order`, `numbers`, `undrawn`, `bound_problem`,
     `series_problem`, `duplicate_problem`, `log_problem`, `stack_problems`,
@@ -1108,3 +1108,4 @@ every registered kind and find its cases by the test-module convention
 - 2.2: `axis_title(column, *, hours=True)` gained the `hours` keyword (design signature lacked a way to choose `(m:ss)` vs `(h:mm:ss)`); Scales passes the axis's label form.
 - 3.3 (controller ruling): `marks.bar(x, y, width, height, color)` — `y` is the zero-line pixel, `height` signed (positive = upward); `width` signed the same way (negative extends left from `x`), so hbar calls `bar` with `x` = zero-line pixel and a signed width. Emitted width/height are non-negative. Bar and hbar kinds (5.3, 5.4) must call it this way.
 - 3.2 → 4.2: `FramePlan.y_title_y`/`x_title_y` are `float | None` (None when there is no such title; design § Layout typed them `float`). Frame must handle None. The title→legend and y-title→plot `PAD` gaps are this task's choices (Req 7.3). With a legend and no y title the plot top abuts the last legend row: frame must keep the top y tick label clear of it.
+- 3.4 (controller ruling): `cartesian.duplicate_problem(bound, keys, *, skip_absent=())` — rows absent on any bound channel named in `skip_absent` are exempt; unbound key channels are skipped (an unbound colour is one series). Line and area pass `skip_absent=("x",)`, hbar `("y",)`, bar nothing (an absent x is the `—` category). `stack_problems` never builds styles, so it is safe before `series_problem` refuses >8 series; `series_groups` (draw only) raises beyond 8.
