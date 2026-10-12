@@ -205,6 +205,10 @@ def grid(scale: NumericScale, plot: Rect, *, horizontal_lines: bool) -> str:
 # --------------------------------------------------------------------- axis
 
 
+def _capped(room: float, cap: float | None) -> float:
+    return room if cap is None else min(room, cap)
+
+
 def axis(
     scale: NumericScale | BandScale,
     plot: Rect,
@@ -212,6 +216,7 @@ def axis(
     *,
     title: str | None = None,
     plan: FramePlan,
+    title_room: float | None = None,
 ) -> str:
     """One axis: baseline, tick marks, tick labels, then its title.
 
@@ -219,7 +224,9 @@ def axis(
     (``axis_title`` with the scale's ``clock_date`` and ``hours``); a string is
     used exactly as given and ``""`` draws no title. A ``BandScale`` has no
     column, so its ``title`` must be given. A title is drawn only where the
-    plan has a row for it. Each title is fitted to the room at its own anchor.
+    plan has a row for it. Each title is fitted to the room at its own anchor,
+    or to ``title_room`` when that is narrower: a chart drawing a left and a
+    right axis passes each side its share of the shared y-title row.
     """
     if isinstance(scale, NumericScale):
         marks = [(scale.position(t.value), t.label) for t in scale.ticks]
@@ -269,7 +276,9 @@ def axis(
                 plan.x_title_y,
                 fit_text(
                     shown,
-                    2 * min(centre - PAD, plan.width - PAD - centre),
+                    _capped(
+                        2 * min(centre - PAD, plan.width - PAD - centre), title_room
+                    ),
                     FONT_TEXT,
                 ),
                 size=FONT_TEXT,
@@ -302,14 +311,14 @@ def axis(
                     anchor="end" if left else "start",
                 )
             )
-        title_room = plan.width - PAD - plot.left if left else plot.right - PAD
+        anchor_room = plan.width - PAD - plot.left if left else plot.right - PAD
         title_el = (
             None
             if plan.y_title_y is None or not shown
             else _text(
                 edge,
                 plan.y_title_y,
-                fit_text(shown, title_room, FONT_TEXT),
+                fit_text(shown, _capped(anchor_room, title_room), FONT_TEXT),
                 size=FONT_TEXT,
                 anchor="start" if left else "end",
             )

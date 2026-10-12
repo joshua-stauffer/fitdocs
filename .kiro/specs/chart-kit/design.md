@@ -296,7 +296,8 @@ codes and palette entries; any new shared module lives in `kit/`; core goldens
 must stay byte-identical (they are the regression gate); its kinds' goldens go
 under `tests/render/charts/kit/golden/<kind>/`. Shared hooks it is expected to
 use: a second `scales.numeric_scale` drawn with `frame.axis(..., Side.RIGHT, ...)`
-(dual axes),
+(dual axes; both axes pass `title_room=(plot.right - plot.left - PAD) / 2` so
+the two titles share the y-title row, amended 2026-10-12),
 `marks.band_path` (bands; it returns the `d` attribute value, not an
 element), drawing into a `layout.Rect` (small multiples),
 `ticks` duration ladder on log axes (mean-max), `cartesian.series_groups` and
@@ -1209,7 +1210,8 @@ def document(width: int, height: int, *, title: str, description: str, body: Seq
              extra_roles: tuple[InkRole, ...] = ()) -> str: ...
 def title_text(plan: FramePlan, title: str) -> str: ...
 def grid(scale: NumericScale, plot: Rect, *, horizontal_lines: bool) -> str: ...
-def axis(scale: NumericScale | BandScale, plot: Rect, side: Side, *, title: str | None = None, plan: FramePlan) -> str: ...  # (amended 2026-10-12: task 4.2)
+def axis(scale: NumericScale | BandScale, plot: Rect, side: Side, *, title: str | None = None, plan: FramePlan,
+         title_room: float | None = None) -> str: ...  # (amended 2026-10-12: task 4.2; title_room: dual-axis title-overlap fix — the title is fitted to min(room at its anchor, title_room))
 def not_drawn_note(counts: Sequence[tuple[str, int]]) -> str | None: ...   # (amended 2026-10-12: task 4.2) public; chart-catalog A2 contract
 def no_trend_note(series: Sequence[str]) -> str: ...                       # (amended 2026-10-12: task 4.2)
 def legend(plan: FramePlan) -> str: ...

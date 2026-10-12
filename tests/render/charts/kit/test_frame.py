@@ -33,9 +33,11 @@ from fitdocs.render.charts.kit.frame import (
 )
 from fitdocs.render.charts.kit.layout import (
     FONT_TEXT,
+    PAD,
     LegendEntry,
     Rect,
     plan_frame,
+    text_width,
 )
 from fitdocs.render.charts.kit.scales import (
     BandScale,
@@ -1061,3 +1063,34 @@ def test_every_text_carries_ck_t_and_every_stroked_grid_and_axis_element_ck_s() 
     )
     axis_lines = re.findall(r'<g class="ck-axis">(.*?)</g>', out)
     assert not any("stroke-opacity" in g for g in axis_lines)
+
+
+def test_title_room_caps_each_side_so_a_left_and_right_title_share_the_row() -> None:
+    long = "x" * 80
+    share = (PLOT.right - PLOT.left - PAD) / 2
+    assert share == 169.75
+    fitted = "x" * 23 + "…"  # the longest fit within 169.75 px at 11 px
+    spans = []
+    for side, anchor in ((Side.LEFT, "start"), (Side.RIGHT, "end")):
+        default = axis(BANDS, PLOT, side, title=long, plan=PLAN)
+        capped = axis(BANDS, PLOT, side, title=long, plan=PLAN, title_room=share)
+        found = re.findall(rf'text-anchor="{anchor}"[^>]*>(x+…)</text>', capped)
+        assert found == [fitted]
+        uncapped = re.findall(rf'text-anchor="{anchor}"[^>]*>(x+…)</text>', default)
+        assert len(uncapped[0]) > len(fitted)  # uncapped, the title is wider
+        width = text_width(fitted, FONT_TEXT)
+        edge = PLOT.left if side is Side.LEFT else PLOT.right
+        spans.append(
+            (edge, edge + width) if side is Side.LEFT else (edge - width, edge)
+        )
+    (_, left_end), (right_start, _) = spans
+    assert left_end + PAD <= right_start
+    bottom = axis(BANDS, PLOT, Side.BOTTOM, title=long, plan=PLAN, title_room=share)
+    assert re.findall(r'text-anchor="middle"[^>]*>(x+…)</text>', bottom) == [fitted]
+
+
+def test_title_room_wider_than_the_anchor_room_changes_nothing() -> None:
+    for side in (Side.LEFT, Side.RIGHT, Side.BOTTOM):
+        assert axis(
+            BANDS, PLOT, side, title="x" * 80, plan=PLAN, title_room=10_000
+        ) == (axis(BANDS, PLOT, side, title="x" * 80, plan=PLAN))
