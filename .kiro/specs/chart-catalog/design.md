@@ -442,8 +442,9 @@ tritanopia (measured 0.049, 0.049, 0.052, 0.037; research.md).
 ```python
 def format_durations(values: Sequence[float]) -> tuple[str, ...]: ...
 ```
-- Formats every value in one form: `h:mm:ss` when any `|value|` ≥ 3600,
-  else `m:ss`; each value rounded half-to-even to whole seconds exactly as
+- Formats every value in one form: `h:mm:ss` when any value's rounded
+  magnitude is ≥ 3600 (amended 2026-10-12: task 1.3; so 3599.6 s reads
+  `1:00:00`, as `format_duration` does), else `m:ss`; each value rounded half-to-even to whole seconds exactly as
   `format_duration`; a leading `-` for negatives. For any sequence whose
   values all lie below 3600 s (or all at or above it) the result equals
   `format_duration` applied to each value.

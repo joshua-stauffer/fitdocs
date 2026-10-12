@@ -8,6 +8,7 @@ units. Absent values show as :data:`ABSENT`, never as zero.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Final
@@ -201,3 +202,11 @@ def clean_text(text: str) -> str:
 def escape_markdown(text: str) -> str:
     """Backslash-escape the markdown-significant characters of caller text."""
     return text.translate(_MARKDOWN_TABLE)
+
+
+def format_durations(values: Sequence[float]) -> tuple[str, ...]:
+    """Every value in one form: ``h:mm:ss`` when any rounded ``|value|`` is at
+    least an hour, else ``m:ss``; each rounded half to even as
+    :func:`format_duration` does, negatives with a leading ``-``."""
+    hours = any(abs(round(v)) >= 3600 for v in values)
+    return tuple(format_duration(v, hours=hours) for v in values)
