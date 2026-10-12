@@ -342,7 +342,7 @@ every registered kind and find its cases by the test-module convention
   - _Requirements: 1.3, 1.4, 1.5, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 4.2, 4.3, 16.2_
   - _Boundary: Validator_
 
-- [ ] 2.2 (P) Format labels, values and ticks by unit
+- [x] 2.2 (P) Format labels, values and ticks by unit
   - **`kit/format.py`** per design § Formatter: `ABSENT` (U+2014),
     `ELLIPSIS`, `display_label`, `axis_title`, `format_value`,
     `format_number_tick`, `format_duration`, `format_pace`, `format_delta`,
