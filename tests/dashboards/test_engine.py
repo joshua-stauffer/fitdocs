@@ -1,19 +1,22 @@
-"""Engine, discovery and planning half: pages, targets, associations, data need.
+"""Engine: pages, targets, associations, data need, relative charts written.
 
-``run`` passes an opener that raises, because the planning half renders nothing
-and opens no source. ``test_planning_changes_no_file`` compares bytes and
-``st_mtime_ns`` of the whole data root before and after a run.
+The planning tests read the report of a ``CHECK`` run over a source that answers
+every ``chart`` with the same two rows. The rendering tests give each chart its
+own SQL (``select <id>``) and its own rows, run ``REFRESH``, and compare page
+bytes, image bytes and ``st_mtime_ns``.
 """
 
 from __future__ import annotations
 
+import os
 from collections.abc import Sequence
-from datetime import date
+from dataclasses import dataclass
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
 
-from fitdocs.dashboards import engine
+from fitdocs.dashboards import engine, storage
 from fitdocs.dashboards.engine import (
     Action,
     ChartResult,
@@ -35,17 +38,33 @@ from fitdocs.dashboards.problems import (
     DashboardCode,
     Problem,
     Severity,
+    Source,
     dashboard_problem,
 )
-from fitdocs.dashboards.storage import Refusal
+from fitdocs.dashboards.source import ChartSource, SourceUnavailable
+from fitdocs.dashboards.storage import ASSET_MARK, PageFile, Refusal
+from fitdocs.render.charts.kit import (
+    ChartData,
+    ChartRequest,
+    Output,
+    RenderedChart,
+    kind_names,
+    registry,
+    render_chart,
+)
+from fitdocs.render.charts.kit.schema import KindSpec, MarkBound, OverBound
 from tests.dashboards._helpers import (
+    FakeSource,
+    FetchCall,
     MustNotOpen,
     assert_untouched,
+    category_number_data,
     directive_block,
     make_data_root,
     page_text,
     region_block,
     snapshot_of,
+    unavailable_opener,
     write_page,
 )
 
@@ -56,18 +75,52 @@ GOLDEN = (
 OPENER = "<!-- fitdocs:chart"
 
 
-def keys(chart_id: str, *, mode: str = "relative") -> list[tuple[str, str]]:
+GOOD_CHANNELS = "\n  x: label\n  y: value"
+DEFAULT_SQL = "select 1 as a"
+DEFAULT_DATA = category_number_data([("one", 1.0), ("two", 2.0)])
+
+
+def keys(
+    chart_id: str,
+    *,
+    mode: str = "relative",
+    sql: str = DEFAULT_SQL,
+    kind: str = "bar",
+    channels: str | None = GOOD_CHANNELS,
+    extra: Sequence[tuple[str, str]] = (),
+) -> list[tuple[str, str]]:
     return [
         ("id", chart_id),
-        ("kind", "bar"),
+        ("kind", kind),
         ("mode", mode),
         ("title", f"Title of {chart_id}"),
-        ("sql", "|\n  select 1 as a"),
+        ("sql", f"|\n  {sql}"),
+        *([("channels", channels)] if channels is not None else []),
+        *extra,
     ]
 
 
-def chart(chart_id: str, *, mode: str = "relative") -> str:
-    return directive_block(keys(chart_id, mode=mode))
+def chart(
+    chart_id: str,
+    *,
+    mode: str = "relative",
+    sql: str = DEFAULT_SQL,
+    kind: str = "bar",
+    channels: str | None = GOOD_CHANNELS,
+    extra: Sequence[tuple[str, str]] = (),
+) -> str:
+    return directive_block(
+        keys(chart_id, mode=mode, sql=sql, kind=kind, channels=channels, extra=extra)
+    )
+
+
+def own(chart_id: str, **more: object) -> str:
+    """A relative chart whose SQL is ``select <id>``, so a source can tell it apart."""
+    return chart(chart_id, sql=f"select {chart_id}", **more)  # type: ignore[arg-type]
+
+
+def fetch_key(chart_id: str) -> str:
+    return f"select {chart_id}\n"
 
 
 def line_of(text: str, needle: str, nth: int = 0) -> int:
@@ -88,10 +141,9 @@ def request(
 
 
 def run(root: Path, *targets: Target, action: Action = Action.CHECK) -> RunReport:
-    guard = MustNotOpen()
-    report = run_dashboards(request(root, *targets, action=action), guard)
-    assert guard.attempts == 0, "5.1 plans only: the source is never opened"
-    return report
+    source = FakeSource()
+    source.queue(f"{DEFAULT_SQL}\n", DEFAULT_DATA)
+    return run_dashboards(request(root, *targets, action=action), source.opener())
 
 
 def page_of(report: RunReport, name: str) -> PageResult:
@@ -396,7 +448,10 @@ def test_a_chart_problems_are_in_page_line_order(
 ) -> None:
     root = make_data_root(tmp_path)
     extra = [("zzz", "1"), ("channels", "nope")]
-    ordered = [*keys("late"), *(extra if unknown_first else extra[::-1])]
+    ordered = [
+        *keys("late", channels=None),
+        *(extra if unknown_first else extra[::-1]),
+    ]
     text = page_text(chart("first"), directive_block(ordered))
     write_page(root, "p", text)
     result = result_of(run(root).pages[0], "late")
@@ -1014,11 +1069,8 @@ def test_planning_changes_no_file(tmp_path: Path, action: Action) -> None:
     _write_files(root, ["fro.snapshot-2.json"])
     write_page(root, "q", page_text(chart("a"), chart("b")))
     before = snapshot_of(root)
-    report = run(root, action=action)
-    assert report.action is action
-    assert report.index == "not_needed" and report.index_problem is None
-    assert report.removed == ()
-    assert not any(each.written for each in report.pages)
+    plan = plan_run(request(root, action=action))
+    assert [each.name for each in plan.pages] == ["p", "q"]
     assert_untouched(before, snapshot_of(root))
 
 
@@ -1063,3 +1115,968 @@ def test_failed_counts_problems_anywhere_and_never_notices() -> None:
     assert _report(page_problems=(_problem(DashboardCode.PAGE_UNREADABLE),)).failed
     assert _report(charts=(_chart_result(problems=(_problem(),)),)).failed
     assert not RunReport(Action.CHECK, "ready", None, (), (), ()).failed
+
+
+# -- rendering and writing relative charts -------------------------------------
+
+D1 = date(2026, 10, 12)
+D2 = date(2026, 10, 13)
+DATA_A = category_number_data([("beta", 2.0), ("alpha", 7.0), ("gamma", 4.0)])
+DATA_B = category_number_data([("zeta", 11.0), ("eta", 5.0), ("theta", 9.0)])
+OLD_TIME_NS = 1_000_000_000 * 10**9
+BEGIN_PREFIX = "<!-- fitdocs:begin:chart:"
+END_PREFIX = "<!-- fitdocs:end:chart:"
+
+
+def source_of(answers: dict[str, ChartData | tuple[Problem, ...]]) -> FakeSource:
+    """A source answering ``select <id>`` for each chart id in ``answers``."""
+    source = FakeSource()
+    for chart_id, answer in answers.items():
+        # A literal block keeps its final newline only when another key follows.
+        source.queue(fetch_key(chart_id), answer)
+        source.queue(fetch_key(chart_id).rstrip("\n"), answer)
+    return source
+
+
+def go(
+    root: Path,
+    source: FakeSource,
+    *targets: Target,
+    action: Action = Action.REFRESH,
+    today: date = D1,
+) -> RunReport:
+    return run_dashboards(
+        RunRequest(action, root, tuple(targets), today), source.opener()
+    )
+
+
+def age(root: Path) -> None:
+    """Give every file under ``root`` an old, fixed mtime, so a rewrite shows."""
+    for current, _directories, names in os.walk(root):
+        for name in names:
+            os.utime(Path(current) / name, ns=(OLD_TIME_NS, OLD_TIME_NS))
+
+
+def page_bytes(root: Path, name: str) -> str:
+    return (root / "dashboards" / f"{name}.md").read_bytes().decode("utf-8")
+
+
+def asset_path(root: Path, page: str, chart_id: str) -> Path:
+    return root / "dashboards" / "assets" / page / f"{chart_id}.svg"
+
+
+def region_lines(text: str, chart_id: str) -> list[str]:
+    """The lines strictly between the chart's markers (the region must be closed)."""
+    lines = text.split("\n")
+    start = lines.index(f"{BEGIN_PREFIX}{chart_id} -->")
+    end = lines.index(f"{END_PREFIX}{chart_id} -->", start)
+    return lines[start + 1 : end]
+
+
+def strip_regions(text: str) -> str:
+    """The text without any closed region, markers included."""
+    kept: list[str] = []
+    inside = False
+    for each in text.split("\n"):
+        if each.startswith(BEGIN_PREFIX):
+            inside = True
+        if not inside:
+            kept.append(each)
+        if each.startswith(END_PREFIX):
+            inside = False
+    return "\n".join(kept)
+
+
+def remove_region(text: str, chart_id: str) -> str:
+    """The text without the chart's closed region, markers included."""
+    lines = text.split("\n")
+    start = lines.index(f"{BEGIN_PREFIX}{chart_id} -->")
+    end = lines.index(f"{END_PREFIX}{chart_id} -->", start)
+    return "\n".join(lines[:start] + lines[end + 1 :])
+
+
+def test_a_second_chart_gets_a_region_and_an_image_and_a_rerun_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    original = page_text(
+        "# Weekly",
+        own("one"),
+        "Prose between the charts.",
+        own("two", extra=[("window", "last 12 weeks")]),
+        "Closing prose.",
+    )
+    write_page(root, "p", original)
+    assert (
+        BEGIN_PREFIX not in original and not (root / "dashboards" / "assets").exists()
+    )
+    first = go(root, source_of({"one": DATA_B, "two": DATA_A}))
+    text = page_bytes(root, "p")
+    assert strip_regions(text) == strip_regions(original) == original
+    assert text.count(BEGIN_PREFIX) == 2
+    assert region_lines(text, "two") == [
+        "![Title of two](assets/p/two.svg)",
+        "",
+        "*last 12 weeks*",
+        "",
+    ]
+    assert region_lines(text, "one")[0] == "![Title of one](assets/p/one.svg)"
+    assert text.index(f"{BEGIN_PREFIX}one -->") < text.index("Prose between")
+    assert text.index("Prose between") < text.index(f"{BEGIN_PREFIX}two -->")
+    one_svg = asset_path(root, "p", "one").read_bytes().decode("utf-8")
+    two_svg = asset_path(root, "p", "two").read_bytes().decode("utf-8")
+    assert one_svg.startswith(ASSET_MARK + "\n<svg")
+    assert two_svg.startswith(ASSET_MARK + "\n<svg")
+    assert "alpha" in two_svg and "alpha" not in one_svg
+    assert "zeta" in one_svg and "zeta" not in two_svg
+    page = first.pages[0]
+    assert page.written
+    assert [(each.chart, each.outcome) for each in page.charts] == [
+        ("one", Outcome.RENDERED),
+        ("two", Outcome.RENDERED),
+    ]
+    assert not first.failed and first.index == "ready"
+
+    age(root)
+    before = snapshot_of(root)
+    again_source = source_of({"one": DATA_B, "two": DATA_A})
+    again = go(root, again_source)
+    assert_untouched(before, snapshot_of(root))
+    assert again.pages[0].written is False
+    assert [each.outcome for each in again.pages[0].charts] == [Outcome.UNCHANGED] * 2
+    assert not again.failed
+    assert len(again_source.calls) == 2, "the rerun did reach the source"
+
+
+def test_the_source_is_asked_in_page_order_with_the_run_date_and_directive_line(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    late = page_text(own("zeta"), own("mid"), own("alpha"))
+    write_page(root, "b", late)
+    first = page_text("intro", own("only"))
+    write_page(root, "a", first)
+    source = source_of({"zeta": DATA_A, "mid": DATA_B, "alpha": DATA_A, "only": DATA_B})
+    go(root, source, today=D2)
+    assert source.calls == [
+        FetchCall(fetch_key("only"), D2, "a", "only", line_of(first, OPENER, 0)),
+        FetchCall(fetch_key("zeta"), D2, "b", "zeta", line_of(late, OPENER, 0)),
+        FetchCall(fetch_key("mid"), D2, "b", "mid", line_of(late, OPENER, 1)),
+        FetchCall(fetch_key("alpha"), D2, "b", "alpha", line_of(late, OPENER, 2)),
+    ]
+    assert source.opened == 1 and source.closed == 1
+
+
+def test_a_changed_result_rewrites_the_image_and_leaves_an_unchanged_page_alone(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "p", page_text(own("lead"), own("flow")))
+    go(root, source_of({"lead": DATA_B, "flow": DATA_A}))
+    age(root)
+    page_before = snapshot_of(root / "dashboards")["p.md"]
+    image_before = asset_path(root, "p", "flow").read_bytes()
+    other_before = snapshot_of(root / "dashboards")["assets/p/lead.svg"]
+    changed = category_number_data([("beta", 20.0), ("alpha", 70.0), ("gamma", 40.0)])
+    report = go(root, source_of({"lead": DATA_B, "flow": changed}))
+    after = snapshot_of(root / "dashboards")
+    assert after["p.md"] == page_before, "the page bytes and mtime are untouched"
+    assert after["assets/p/lead.svg"] == other_before
+    assert asset_path(root, "p", "flow").read_bytes() != image_before
+    assert after["assets/p/flow.svg"][1] != OLD_TIME_NS
+    page = report.pages[0]
+    assert page.written is False
+    assert [(c.chart, c.outcome) for c in page.charts] == [
+        ("lead", Outcome.UNCHANGED),
+        ("flow", Outcome.RENDERED),
+    ]
+
+
+def test_the_run_date_is_in_no_byte_a_relative_chart_writes(tmp_path: Path) -> None:
+    root = make_data_root(tmp_path)
+    write_page(
+        root, "p", page_text(own("lead"), own("pace", extra=[("window", "84 days")]))
+    )
+    answers: dict[str, ChartData | tuple[Problem, ...]] = {
+        "lead": DATA_B,
+        "pace": DATA_A,
+    }
+    first_source = source_of(answers)
+    go(root, first_source, today=D1)
+    written = snapshot_of(root)
+    for name, (data, _mtime) in written.items():
+        text = data.decode("utf-8")
+        assert D1.isoformat() not in text and D2.isoformat() not in text, name
+        assert D1.strftime("%d") + " Oct" not in text, name
+    age(root)
+    before = snapshot_of(root)
+    second_source = source_of(answers)
+    report = go(root, second_source, today=D2)
+    assert_untouched(before, snapshot_of(root))
+    assert [each.today for each in first_source.calls] == [D1, D1]
+    assert [each.today for each in second_source.calls] == [D2, D2]
+    assert timedelta(days=1) == D2 - D1
+    assert [each.outcome for each in report.pages[0].charts] == [Outcome.UNCHANGED] * 2
+
+
+OLD_BODY = "![Old](assets/p/kept.svg)\n\n*the old caption*\n"
+
+
+def _sql_failed(chart_id: str) -> tuple[Problem, ...]:
+    return (
+        dashboard_problem(
+            DashboardCode.SQL_FAILED,
+            f"The statement for {chart_id} failed: boom.",
+            "Fix the SQL.",
+            page="p",
+            chart=chart_id,
+            line=1,
+        ),
+    )
+
+
+def test_a_failing_chart_costs_only_that_chart(tmp_path: Path) -> None:
+    root = make_data_root(tmp_path)
+    kept_region = region_block("kept", OLD_BODY)
+    contents_region = region_block("contents", "half", closed=False)
+    text = page_text(
+        own("ok"),
+        own("kept", channels="\n  x: label\n  y: nope"),
+        kept_region,
+        own("fresh"),
+        own("blank"),
+        region_block("blank"),
+        own("contents"),
+        contents_region,
+        own("tail"),
+    )
+    write_page(root, "p", text)
+    write_page(root, "q", page_text(own("qok")))
+    source = source_of(
+        {
+            "ok": DATA_A,
+            "kept": DATA_B,
+            "fresh": _sql_failed("fresh"),
+            "blank": _sql_failed("blank"),
+            "tail": DATA_B,
+            "qok": DATA_A,
+        }
+    )
+    report = go(root, source)
+    page = page_of(report, "p")
+    outcome = {each.chart: each for each in page.charts}
+    assert {name: each.outcome for name, each in outcome.items()} == {
+        "ok": Outcome.RENDERED,
+        "kept": Outcome.FAILED,
+        "fresh": Outcome.FAILED,
+        "blank": Outcome.FAILED,
+        "contents": Outcome.FAILED,
+        "tail": Outcome.RENDERED,
+    }
+    assert codes(outcome["kept"].problems) == ["unknown_column"]
+    assert outcome["kept"].problems[0].source is Source.CHART
+    assert codes(outcome["fresh"].problems) == [DashboardCode.SQL_FAILED.value]
+    assert codes(outcome["blank"].problems) == [DashboardCode.SQL_FAILED.value]
+    assert codes(outcome["contents"].problems) == [DashboardCode.REGION_CONTENTS.value]
+    assert page_of(report, "q").charts[0].outcome is Outcome.RENDERED
+    assert [each.chart for each in source.calls] == [
+        "ok",
+        "kept",
+        "fresh",
+        "blank",
+        "tail",
+        "qok",
+    ], "a chart with a planning problem is never queried"
+
+    now = page_bytes(root, "p")
+    assert kept_region in now, "a chart rendered before keeps its region exactly"
+    assert contents_region in now, "a chart with a region problem is not touched"
+    written_ids = ("ok", "fresh", "blank", "tail")
+    outside = now
+    for chart_id in written_ids:
+        outside = remove_region(outside, chart_id)
+    assert outside == remove_region(text, "blank"), "only those regions changed"
+    for noted in ("fresh", "blank"):
+        body = region_lines(now, noted)
+        assert body[0].startswith("*Not rendered: The statement for ")
+        assert "boom" in body[0] and body[0].endswith("*")
+        assert body[1:] == [""]
+        assert not asset_path(root, "p", noted).exists()
+    assert not asset_path(root, "p", "kept").exists()
+    for healthy in ("ok", "tail"):
+        assert region_lines(now, healthy)[0] == (
+            f"![Title of {healthy}](assets/p/{healthy}.svg)"
+        )
+        assert (
+            asset_path(root, "p", healthy).read_bytes().startswith(ASSET_MARK.encode())
+        )
+    assert region_lines(page_bytes(root, "q"), "qok")[0].startswith("![Title of qok]")
+
+
+def test_a_note_is_kept_while_the_chart_fails_and_replaced_once_it_renders(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "p", page_text(own("lead"), own("fresh")))
+    answers: dict[str, ChartData | tuple[Problem, ...]] = {
+        "lead": DATA_A,
+        "fresh": _sql_failed("fresh"),
+    }
+    go(root, source_of(answers))
+    noted = page_bytes(root, "p")
+    assert region_lines(noted, "fresh")[0].startswith("*Not rendered:")
+
+    age(root)
+    before = snapshot_of(root)
+    still = go(root, source_of(answers))
+    assert_untouched(before, snapshot_of(root))
+    assert still.pages[0].written is False
+    assert [each.outcome for each in still.pages[0].charts] == [
+        Outcome.UNCHANGED,
+        Outcome.FAILED,
+    ]
+
+    lead_region = region_lines(noted, "lead")
+    unavailable = run_dashboards(
+        request(root, action=Action.REFRESH), unavailable_opener(UNAVAILABLE)
+    )
+    different = page_bytes(root, "p")
+    assert region_lines(different, "fresh")[0].startswith(
+        "*Not rendered: The chart was not queried: the index is not built."
+    ), "a note is rewritten when the first problem changes"
+    assert region_lines(different, "fresh") != region_lines(noted, "fresh")
+    assert region_lines(different, "lead") == lead_region
+    assert [each.outcome for each in unavailable.pages[0].charts] == [
+        Outcome.FAILED
+    ] * 2
+
+    answers["fresh"] = DATA_B
+    healed = go(root, source_of(answers))
+    now = page_bytes(root, "p")
+    assert region_lines(now, "fresh")[0] == "![Title of fresh](assets/p/fresh.svg)"
+    assert "Not rendered" not in now
+    assert asset_path(root, "p", "fresh").exists()
+    assert [each.outcome for each in healed.pages[0].charts] == [
+        Outcome.UNCHANGED,
+        Outcome.RENDERED,
+    ]
+
+
+def test_show_rows_adds_the_kit_table_to_that_chart_only(tmp_path: Path) -> None:
+    root = make_data_root(tmp_path)
+    write_page(
+        root,
+        "p",
+        page_text(own("plain"), own("rows", extra=[("show_rows", "true")])),
+    )
+    report = go(root, source_of({"plain": DATA_B, "rows": DATA_A}))
+    assert not report.failed
+    text = page_bytes(root, "p")
+    plain = region_lines(text, "plain")
+    rows = region_lines(text, "rows")
+    assert not any(each.startswith("|") for each in plain)
+    table = [each for each in rows if each.startswith("|")]
+    assert table == [
+        "| label | value |",
+        "| --- | ---: |",
+        "| beta | 2 |",
+        "| alpha | 7 |",
+        "| gamma | 4 |",
+    ]
+    assert rows[0] == "![Title of rows](assets/p/rows.svg)"
+
+
+def test_a_table_over_its_bound_fails_the_chart_with_the_show_rows_option(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    wide = category_number_data([(f"c{n:03d}", float(n)) for n in range(101)])
+    write_page(
+        root,
+        "p",
+        page_text(
+            own("plain"),
+            own("rows", extra=[("show_rows", "true")]),
+        ),
+    )
+    report = go(root, source_of({"plain": wide, "rows": wide}))
+    plain, rows = report.pages[0].charts
+    assert plain.outcome is Outcome.RENDERED, "the bar chart alone takes 101 rows"
+    assert rows.outcome is Outcome.FAILED
+    assert codes(rows.problems) == ["over_bound"]
+    (problem,) = rows.problems
+    assert problem.source is Source.CHART
+    assert problem.option == "show_rows"
+    assert problem.rows == 101
+    assert problem.chart == "rows" and problem.page == "p"
+    assert not asset_path(root, "p", "rows").exists()
+    assert region_lines(page_bytes(root, "p"), "rows")[0].startswith("*Not rendered:")
+
+
+def test_an_unregistered_kind_reports_the_registered_kinds(tmp_path: Path) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "p", page_text(own("good"), own("odd", kind="nosuchkind")))
+    report = go(root, source_of({"good": DATA_A, "odd": DATA_B}))
+    good, odd = report.pages[0].charts
+    assert good.outcome is Outcome.RENDERED
+    assert codes(odd.problems) == ["unknown_kind"]
+    (problem,) = odd.problems
+    assert problem.source is Source.CHART
+    assert problem.accepted == tuple(kind_names())
+    assert problem.accepted, "the registry lists its kinds"
+    assert "nosuchkind" in problem.message
+
+
+def test_kit_problems_keep_the_kits_order_after_earlier_charts_problems(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    write_page(
+        root,
+        "p",
+        page_text(
+            own("early"),
+            own(
+                "late",
+                channels="\n  x: nope\n  y: value\n  z: label",
+                extra=[("options", "\n  zz: 1")],
+            ),
+        ),
+    )
+    report = go(root, source_of({"early": _sql_failed("early"), "late": DATA_A}))
+    early, late = report.pages[0].charts
+    kit_order = [each.code for each in late.problems]
+    assert kit_order == ["unknown_column", "unknown_channel", "unknown_option"]
+    assert kit_order != sorted(kit_order), "the kit's order is not code order"
+    assert [each.channel for each in late.problems] == ["x", "z", None]
+    assert [each.option for each in late.problems] == [None, None, "zz"]
+    flat = [each.code for c in report.pages[0].charts for each in c.problems]
+    assert flat == ["sql_failed", *kit_order]
+    assert early.line < late.line
+    for each in late.problems:
+        assert (each.page, each.chart, each.line) == ("p", "late", late.line)
+        assert each.source is Source.CHART
+    note = region_lines(page_bytes(root, "p"), "late")[0]
+    assert "bound to column" in note, "the note states the kit's first problem"
+    assert "not declared" not in note
+
+
+# -- the source: opened once, closed when a chart raises, unavailable ---------
+
+
+def test_the_source_opens_once_for_charts_on_two_pages(tmp_path: Path) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "a", page_text(own("a1"), own("a2")))
+    write_page(root, "b", page_text(own("b1"), own("b2")))
+    source = source_of({"a1": DATA_A, "a2": DATA_B, "b1": DATA_A, "b2": DATA_B})
+    report = go(root, source)
+    assert (source.opened, source.closed) == (1, 1)
+    assert [each.chart for each in source.calls] == ["a1", "a2", "b1", "b2"]
+    assert report.index == "ready" and report.index_problem is None
+
+
+def test_the_source_is_not_opened_for_a_page_whose_only_chart_has_a_planning_problem(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "bad", page_text(chart("typo", mode="relatve")))
+    write_page(root, "empty", page_text("just prose"))
+    guard = MustNotOpen()
+    report = run_dashboards(request(root, action=Action.REFRESH), guard)
+    assert guard.attempts == 0
+    assert report.index == "not_needed" and report.index_problem is None
+    assert codes(page_of(report, "bad").charts[0].problems) == ["mode_value"]
+    write_page(root, "good", page_text(own("fine")))
+    source = source_of({"fine": DATA_A})
+    reached = go(root, source)
+    assert (source.opened, source.closed) == (1, 1)
+    assert [each.chart for each in source.calls] == ["fine"]
+    assert reached.index == "ready"
+
+
+@dataclass
+class ExplodingSource:
+    closed: int = 0
+
+    def fetch(
+        self, sql: str, *, today: date, page: str, chart: str, line: int
+    ) -> object:
+        raise RuntimeError("fitdocs defect")
+
+    def close(self) -> None:
+        self.closed += 1
+
+
+def test_a_defect_in_the_source_propagates_and_the_source_is_still_closed(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "p", page_text(own("lead"), own("next")))
+    age(root)
+    before = snapshot_of(root)
+    exploding = ExplodingSource()
+
+    def opener() -> ChartSource | SourceUnavailable:
+        return exploding  # type: ignore[return-value]
+
+    with pytest.raises(RuntimeError, match="fitdocs defect"):
+        run_dashboards(request(root, action=Action.REFRESH), opener)
+    assert exploding.closed == 1
+    assert_untouched(before, snapshot_of(root))
+
+
+UNAVAILABLE = SourceUnavailable(
+    "not_built", "the index is not built.", "Run `fitdocs index` to build it."
+)
+
+
+def test_an_unavailable_index_fails_each_relative_chart_and_the_page_is_still_handled(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    done = region_block("done", OLD_BODY.replace("kept", "done"))
+    text = page_text(
+        own("fresh"),
+        own("done"),
+        done,
+        chart("typo", mode="relatve"),
+        own("later"),
+    )
+    write_page(root, "p", text)
+    write_page(root, "q", page_text(own("qfresh")))
+    report = run_dashboards(
+        request(root, action=Action.REFRESH), unavailable_opener(UNAVAILABLE)
+    )
+    assert report.index == "not_built"
+    assert report.index_problem is not None
+    assert report.index_problem.code == "index_unavailable"
+    assert (report.index_problem.page, report.index_problem.chart) == (None, None)
+    assert report.failed
+    page = page_of(report, "p")
+    by_id = {each.chart: each for each in page.charts}
+    for name in ("fresh", "done", "later"):
+        (problem,) = by_id[name].problems
+        assert (
+            problem.code == "index_unavailable" and problem.source is Source.DASHBOARD
+        )
+        assert "the index is not built." in problem.message
+        assert problem.fix == UNAVAILABLE.fix
+        assert (problem.page, problem.chart) == ("p", name)
+        assert problem.line == by_id[name].line
+        assert by_id[name].outcome is Outcome.FAILED
+    assert codes(by_id["typo"].problems) == ["mode_value"], "a planning problem stays"
+    assert codes(page_of(report, "q").charts[0].problems) == ["index_unavailable"]
+    now = page_bytes(root, "p")
+    assert done in now, "a chart rendered before keeps its region"
+    for noted in ("fresh", "later"):
+        assert region_lines(now, noted)[0].startswith(
+            "*Not rendered: The chart was not"
+        )
+    assert f"{BEGIN_PREFIX}typo" not in now
+    assert not (root / "dashboards" / "assets").exists()
+
+
+def test_a_run_over_charts_that_need_no_query_reports_the_index_as_not_needed(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "p", page_text(chart("typo", mode="relatve"), "prose"))
+    report = run_dashboards(
+        request(root, action=Action.REFRESH), unavailable_opener(UNAVAILABLE)
+    )
+    assert report.index == "not_needed" and report.index_problem is None
+
+
+# -- check, writes that go wrong, foreign images -------------------------------
+
+
+def _check_root(tmp_path: Path, name: str) -> Path:
+    root = make_data_root(tmp_path, name)
+    stale = region_block("good", "![Stale](assets/p/good.svg)\n\n*stale*\n")
+    write_page(
+        root,
+        "p",
+        page_text(
+            own("good"),
+            stale,
+            own("bad", channels="\n  x: nope\n  y: value"),
+            own("fresh"),
+        ),
+    )
+    return root
+
+
+def test_check_renders_in_memory_and_creates_or_changes_no_file(tmp_path: Path) -> None:
+    answers: dict[str, ChartData | tuple[Problem, ...]] = {
+        "good": DATA_A,
+        "bad": DATA_B,
+        "fresh": DATA_B,
+    }
+    refreshed = _check_root(tmp_path, "refresh")
+    go(refreshed, source_of(answers))
+    assert asset_path(refreshed, "p", "good").exists(), "a refresh does write here"
+    assert asset_path(refreshed, "p", "fresh").exists()
+
+    root = _check_root(tmp_path, "check")
+    age(root)
+    before = snapshot_of(root)
+    report = go(root, source_of(answers), action=Action.CHECK)
+    assert_untouched(before, snapshot_of(root))
+    assert not (root / "dashboards" / "assets").exists()
+    page = report.pages[0]
+    assert page.written is False
+    assert [(each.chart, each.outcome) for each in page.charts] == [
+        ("good", Outcome.CHECKED),
+        ("bad", Outcome.FAILED),
+        ("fresh", Outcome.CHECKED),
+    ]
+    assert codes(page.charts[1].problems) == ["unknown_column"]
+    assert report.failed
+
+
+def _two_pages(tmp_path: Path) -> Path:
+    root = make_data_root(tmp_path)
+    write_page(root, "a", page_text(own("a1"), own("a2")))
+    write_page(root, "b", page_text(own("b1")))
+    return root
+
+
+A_B_ANSWERS: dict[str, ChartData | tuple[Problem, ...]] = {
+    "a1": DATA_A,
+    "a2": DATA_B,
+    "b1": DATA_A,
+}
+
+
+def test_a_page_changed_between_read_and_replace_fails_only_its_edited_charts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "a", page_text(own("a1")))
+    write_page(root, "b", page_text(own("b1")))
+    go(root, source_of({"a1": DATA_A, "b1": DATA_A}))
+    write_page(root, "a", page_bytes(root, "a") + own("a2"))
+    write_page(root, "b", "changed\n" + page_bytes(root, "b") + own("b2"))
+    real = storage.replace_page
+    intruder = b"someone else edited this page\n"
+
+    def racing(page: PageFile, text: str) -> str:
+        if page.name == "a":
+            page.path.write_bytes(intruder)
+        return real(page, text)
+
+    monkeypatch.setattr(engine, "replace_page", racing)
+    report = go(
+        root, source_of({"a1": DATA_A, "a2": DATA_B, "b1": DATA_A, "b2": DATA_B})
+    )
+    assert (root / "dashboards" / "a.md").read_bytes() == intruder
+    a = page_of(report, "a")
+    assert a.written is False
+    first, second = a.charts
+    assert (first.chart, first.outcome, first.problems) == (
+        "a1",
+        Outcome.UNCHANGED,
+        (),
+    ), "a chart with no edit is not blamed"
+    assert second.outcome is Outcome.FAILED
+    assert codes(second.problems) == ["page_changed"]
+    assert (second.problems[0].page, second.problems[0].chart) == ("a", "a2")
+    assert second.problems[0].line == second.line
+    b = page_of(report, "b")
+    assert b.written is True
+    assert [each.outcome for each in b.charts] == [Outcome.UNCHANGED, Outcome.RENDERED]
+
+
+@pytest.mark.parametrize("vanished", [False, True])
+def test_a_page_that_cannot_be_replaced_is_write_failed_not_page_changed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, vanished: bool
+) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "a", page_text(own("a1")))
+    write_page(root, "b", page_text(own("b1")))
+    go(root, source_of({"a1": DATA_A, "b1": DATA_A}))
+    write_page(root, "a", page_bytes(root, "a") + own("a2"))
+    write_page(root, "b", page_bytes(root, "b") + own("b2"))
+    real = storage.replace_page
+
+    def failing(page: PageFile, text: str) -> str:
+        if page.name == "a":
+            if vanished:
+                page.path.unlink()
+            else:
+                raise OSError("disk full")
+        return real(page, text)
+
+    monkeypatch.setattr(engine, "replace_page", failing)
+    report = go(root, source_of({**A_B_ANSWERS, "b2": DATA_B}))
+    a = page_of(report, "a")
+    assert a.written is False
+    first, second = a.charts
+    assert (first.chart, first.outcome, first.problems) == (
+        "a1",
+        Outcome.UNCHANGED,
+        (),
+    ), "a chart with no edit is not blamed"
+    assert codes(second.problems) == ["write_failed"]
+    assert second.outcome is Outcome.FAILED
+    (problem,) = second.problems
+    assert problem.message.endswith(".")
+    assert (problem.page, problem.chart, problem.line) == ("a", "a2", second.line)
+    assert (root / "dashboards" / "a.md").exists() is not vanished
+    assert page_of(report, "b").written is True
+    assert report.failed
+
+
+@pytest.mark.parametrize("action", list(Action))
+def test_the_report_names_the_requested_action(tmp_path: Path, action: Action) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "p", page_text(chart("typo", mode="relatve")))
+    age(root)
+    before = snapshot_of(root)
+    report = run_dashboards(request(root, action=action), MustNotOpen())
+    assert report.action is action
+    assert_untouched(before, snapshot_of(root))
+
+
+def test_each_kit_request_is_named_page_colon_chart(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    refs: list[tuple[str, str]] = []
+    real = render_chart
+
+    def spy(chart_request: ChartRequest, data: ChartData) -> RenderedChart:
+        refs.append((chart_request.ref, chart_request.kind))
+        return real(chart_request, data)
+
+    monkeypatch.setattr(engine, "render_chart", spy)
+    root = make_data_root(tmp_path)
+    write_page(
+        root, "p", page_text(own("lead"), own("rows", extra=[("show_rows", "true")]))
+    )
+    go(root, source_of({"lead": DATA_A, "rows": DATA_B}))
+    assert refs == [("p:lead", "bar"), ("p:rows", "bar"), ("p:rows", "table")]
+
+
+@pytest.mark.parametrize(
+    "error", [OSError("no space left"), FileNotFoundError("dashboards/ is gone")]
+)
+def test_an_image_that_cannot_be_written_fails_that_chart_and_drops_its_region(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error: OSError
+) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "p", page_text(own("ok1"), own("broken"), own("ok2")))
+    real = storage.write_asset
+
+    def failing(data_root: Path, page: str, chart_id: str, svg: str) -> str:
+        if chart_id == "broken":
+            raise error
+        return real(data_root, page, chart_id, svg)
+
+    monkeypatch.setattr(engine, "write_asset", failing)
+    report = go(root, source_of({"ok1": DATA_A, "broken": DATA_B, "ok2": DATA_B}))
+    ok1, broken, ok2 = report.pages[0].charts
+    assert codes(broken.problems) == ["write_failed"]
+    assert broken.outcome is Outcome.FAILED
+    assert (broken.problems[0].page, broken.problems[0].chart) == ("p", "broken")
+    assert broken.problems[0].line == broken.line
+    assert (ok1.outcome, ok2.outcome) == (Outcome.RENDERED, Outcome.RENDERED)
+    text = page_bytes(root, "p")
+    assert f"{BEGIN_PREFIX}broken" not in text
+    assert f"{BEGIN_PREFIX}ok1 -->" in text and f"{BEGIN_PREFIX}ok2 -->" in text
+    assert report.pages[0].written is True
+
+
+def test_a_foreign_image_fails_its_chart_and_edits_no_region(tmp_path: Path) -> None:
+    root = make_data_root(tmp_path)
+    held = region_block("held")
+    write_page(
+        root, "p", page_text(own("ok1"), own("mine"), own("held"), held, own("ok2"))
+    )
+    folder = root / "dashboards" / "assets" / "p"
+    folder.mkdir(parents=True)
+    (folder / "mine.svg").write_bytes(b"not ours\n")
+    (folder / "held.svg").write_bytes(b"also not ours\n")
+    report = go(
+        root,
+        source_of({"ok1": DATA_A, "mine": DATA_B, "held": DATA_A, "ok2": DATA_B}),
+    )
+    ok1, mine, held_result, ok2 = report.pages[0].charts
+    for foreign in (mine, held_result):
+        assert codes(foreign.problems) == ["asset_foreign"]
+        assert foreign.outcome is Outcome.FAILED
+        assert f"dashboards/assets/p/{foreign.chart}.svg" in foreign.problems[0].message
+    assert (ok1.outcome, ok2.outcome) == (Outcome.RENDERED, Outcome.RENDERED)
+    assert (folder / "mine.svg").read_bytes() == b"not ours\n"
+    assert (folder / "held.svg").read_bytes() == b"also not ours\n"
+    text = page_bytes(root, "p")
+    assert f"{BEGIN_PREFIX}mine" not in text
+    assert region_lines(text, "held") == [], "an empty region is not turned into a note"
+    assert report.pages[0].written is True
+
+
+def test_an_asset_directory_that_is_a_link_is_foreign_and_nothing_goes_through_it(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "p", page_text(own("lead"), own("linked")))
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (root / "dashboards" / "assets").mkdir()
+    (root / "dashboards" / "assets" / "p").symlink_to(outside)
+    report = go(root, source_of({"lead": DATA_A, "linked": DATA_B}))
+    assert report.location_problems == ()
+    assert [codes(each.problems) for each in report.pages[0].charts] == [
+        ["asset_foreign"],
+        ["asset_foreign"],
+    ]
+    assert list(outside.iterdir()) == []
+    assert BEGIN_PREFIX not in page_bytes(root, "p")
+
+
+# -- endings, registry kinds, defects --------------------------------------------------
+
+
+def test_inserted_and_replaced_lines_take_the_directive_closers_ending(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    crlf = "\r\n"
+    text = (
+        directive_block(keys("fresh", sql="select fresh"), ending=crlf)
+        + directive_block(keys("stale", sql="select stale"), ending=crlf)
+        + region_block("stale", "old", ending="\n")
+    )
+    write_page(root, "p", text)
+    assert "old\n" in text and "old\r\n" not in text
+    go(root, source_of({"fresh": DATA_A, "stale": DATA_B}))
+    lines = page_bytes(root, "p").splitlines(keepends=True)
+
+    def region(chart_id: str) -> list[str]:
+        start = next(
+            n
+            for n, each in enumerate(lines)
+            if each.startswith(f"{BEGIN_PREFIX}{chart_id} ")
+        )
+        end = next(
+            n
+            for n, each in enumerate(lines)
+            if each.startswith(f"{END_PREFIX}{chart_id} ")
+        )
+        return lines[start : end + 1]
+
+    inserted = region("fresh")
+    assert len(inserted) >= 4 and all(each.endswith("\r\n") for each in inserted)
+    replaced = region("stale")
+    assert replaced[0].endswith("\n") and not replaced[0].endswith("\r\n")
+    assert replaced[-1].endswith("\n") and not replaced[-1].endswith("\r\n")
+    assert len(replaced) > 2
+    assert all(each.endswith("\r\n") for each in replaced[1:-1])
+    assert "old" not in "".join(replaced)
+
+
+def test_a_kind_registered_later_is_drawn_without_any_change_to_the_engine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stub = KindSpec(
+        name="stubkind",
+        description="A kind registered after the dashboards feature landed.",
+        output=Output.MARKDOWN,
+        channels=(),
+        options=(),
+        bound=MarkBound(10, "rows", OverBound.REFUSE, "at most ten rows"),
+        max_series=None,
+        draw=lambda _bound: "STUB LINE ONE\nSTUB LINE TWO",
+    )
+    monkeypatch.setattr(registry, "KINDS", (*registry.KINDS, stub))
+    root = make_data_root(tmp_path)
+    write_page(
+        root, "p", page_text(own("lead"), own("odd", kind="stubkind", channels=None))
+    )
+    report = go(root, source_of({"lead": DATA_A, "odd": DATA_B}))
+    assert not report.failed
+    assert region_lines(page_bytes(root, "p"), "odd") == [
+        "STUB LINE ONE",
+        "STUB LINE TWO",
+        "",
+    ]
+    assert not asset_path(root, "p", "odd").exists(), "markdown output has no image"
+    assert asset_path(root, "p", "lead").exists()
+
+
+def test_a_kit_line_that_would_open_a_fitdocs_comment_is_a_defect_not_a_chart_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    hostile = RenderedChart("bar", Output.MARKDOWN, "<!-- fitdocs:begin:chart:x -->")
+    monkeypatch.setattr(engine, "render_chart", lambda _request, _data: hostile)
+    root = make_data_root(tmp_path)
+    write_page(root, "p", page_text(own("lead"), own("next")))
+    age(root)
+    before = snapshot_of(root)
+    source = source_of({"lead": DATA_A, "next": DATA_B})
+    with pytest.raises(ValueError, match="comment marker"):
+        go(root, source)
+    assert source.closed == 1
+    assert_untouched(before, snapshot_of(root))
+
+
+def test_a_chart_target_fetches_and_writes_only_that_chart(tmp_path: Path) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "p", page_text(own("one"), own("two")))
+    source = source_of({"two": DATA_B})
+    report = go(root, source, Target("p", "two"))
+    assert [each.chart for each in source.calls] == ["two"]
+    text = page_bytes(root, "p")
+    assert f"{BEGIN_PREFIX}two -->" in text and f"{BEGIN_PREFIX}one" not in text
+    assert not asset_path(root, "p", "one").exists()
+    assert [each.chart for each in report.pages[0].charts] == ["two"]
+
+
+def test_a_frozen_chart_is_left_to_the_freeze_task(tmp_path: Path) -> None:
+    root = make_data_root(tmp_path)
+    write_page(root, "p", page_text(own("lead"), own("fro", mode="frozen")))
+    source = source_of({"lead": DATA_A})
+    report = go(root, source)
+    assert [each.chart for each in source.calls] == ["lead"], "only lead is queried"
+    text = page_bytes(root, "p")
+    assert f"{BEGIN_PREFIX}lead -->" in text and f"{BEGIN_PREFIX}fro" not in text
+    assert not asset_path(root, "p", "fro").exists()
+    assert report.pages[0].charts[1].chart == "fro"
+
+
+def test_a_chart_and_its_rows_table_both_refused_report_the_chart_first(
+    tmp_path: Path,
+) -> None:
+    root = make_data_root(tmp_path)
+    wide = category_number_data([(f"c{n:03d}", float(n)) for n in range(101)])
+    write_page(
+        root,
+        "p",
+        page_text(
+            own("lead"),
+            own(
+                "both",
+                channels="\n  x: nope\n  y: value",
+                extra=[("show_rows", "true")],
+            ),
+        ),
+    )
+    report = go(root, source_of({"lead": DATA_A, "both": wide}))
+    both = report.pages[0].charts[1]
+    assert [(each.code, each.option) for each in both.problems] == [
+        ("unknown_column", None),
+        ("over_bound", "show_rows"),
+    ]
+
+
+def test_an_opener_that_raises_ends_the_run_before_any_write(tmp_path: Path) -> None:
+    root = _two_pages(tmp_path)
+    age(root)
+    before = snapshot_of(root)
+
+    def broken() -> ChartSource | SourceUnavailable:
+        raise RuntimeError("index location is misconfigured")
+
+    with pytest.raises(RuntimeError, match="misconfigured"):
+        run_dashboards(request(root, action=Action.REFRESH), broken)
+    assert_untouched(before, snapshot_of(root))
+    assert not (root / "dashboards" / "assets").exists()
