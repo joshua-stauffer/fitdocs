@@ -135,6 +135,40 @@ class IndexResult:
         except self._errors.error_type as error:
             self._errors.raise_statement_error(error)
 
+    @classmethod
+    def from_cursor(
+        cls, cursor: duckdb.DuckDBPyConnection, errors: _DuckDBErrorTypes
+    ) -> IndexResult:
+        """Build a result that streams from an executed DuckDB cursor."""
+        return _CursorResult(cursor, errors)
+
+
+class _CursorResult(IndexResult):
+    def __init__(
+        self, cursor: duckdb.DuckDBPyConnection, errors: _DuckDBErrorTypes
+    ) -> None:
+        super().__init__(None, errors)
+        self._cursor = cursor
+
+    @property
+    def columns(self) -> tuple[ResultColumn, ...]:
+        description = self._cursor.description
+        if description is None:
+            return ()
+        return tuple(ResultColumn(str(item[0]), str(item[1])) for item in description)
+
+    def fetchmany(self, size: int) -> list[tuple[object, ...]]:
+        try:
+            return cast("list[tuple[object, ...]]", self._cursor.fetchmany(size))
+        except self._errors.error_type as error:
+            self._errors.raise_statement_error(error)
+
+    def fetchall(self) -> list[tuple[object, ...]]:
+        try:
+            return cast("list[tuple[object, ...]]", self._cursor.fetchall())
+        except self._errors.error_type as error:
+            self._errors.raise_statement_error(error)
+
 
 class IndexConnection:
     def __init__(
@@ -149,6 +183,23 @@ class IndexConnection:
         except self._errors.error_type as error:
             self._errors.raise_statement_error(error)
         return IndexResult(relation, self._errors)
+
+    def execute_named(self, sql: str, params: Mapping[str, object]) -> IndexResult:
+        try:
+            if params:
+                cursor = self._connection.execute(sql, dict(params))
+            else:
+                cursor = self._connection.execute(sql)
+        except self._errors.error_type as error:
+            self._errors.raise_statement_error(error)
+        return IndexResult.from_cursor(cursor, self._errors)
+
+    def statement_parameters(self, sql: str) -> tuple[frozenset[str], ...]:
+        try:
+            statements = self._connection.extract_statements(sql)
+        except self._errors.error_type as error:
+            raise IndexStatementError(str(error)) from error
+        return tuple(frozenset(statement.named_parameters) for statement in statements)
 
     def interrupt(self) -> None:
         self._connection.interrupt()
