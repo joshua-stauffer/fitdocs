@@ -48,6 +48,7 @@ _MODULES: Final[tuple[str, ...]] = (
     "",
     "api",
     "cartesian",
+    "cells",
     "data",
     "format",
     "frame",
@@ -62,19 +63,28 @@ _MODULES: Final[tuple[str, ...]] = (
     "validate",
     "kinds",
     "kinds.area",
+    "kinds.band",
     "kinds.bar",
+    "kinds.box",
+    "kinds.calendar_heatmap",
+    "kinds.dual_axis",
     "kinds.hbar",
+    "kinds.heatmap",
     "kinds.histogram",
     "kinds.line",
+    "kinds.mean_max",
     "kinds.scatter",
+    "kinds.small_multiples",
+    "kinds.stacked_100",
     "kinds.stat",
     "kinds.table",
 )
 
 #: Layer rank per design § Architecture: `units` (rank 0, outside the kit),
 #: `data`, `problems`, `schema`, `format`, `ticks`, `theme`, `layout`,
-#: `scales`, `frame`, `marks`, `cartesian`, `validate`, the kinds (one shared
-#: rank, `kinds/__init__` included), `registry`, `api`, the package marker.
+#: `scales`, `cells` (chart-catalog), `frame`, `marks`, `cartesian`,
+#: `validate`, the kinds (one shared rank, `kinds/__init__` included),
+#: `registry`, `api`, the package marker.
 _RANK: Final[dict[str, int]] = {
     "data": 1,
     "problems": 2,
@@ -84,22 +94,31 @@ _RANK: Final[dict[str, int]] = {
     "theme": 6,
     "layout": 7,
     "scales": 8,
-    "frame": 9,
-    "marks": 10,
-    "cartesian": 11,
-    "validate": 12,
-    "kinds": 13,
-    "kinds.area": 13,
-    "kinds.bar": 13,
-    "kinds.hbar": 13,
-    "kinds.histogram": 13,
-    "kinds.line": 13,
-    "kinds.scatter": 13,
-    "kinds.stat": 13,
-    "kinds.table": 13,
-    "registry": 14,
-    "api": 15,
-    "": 16,
+    "cells": 9,
+    "frame": 10,
+    "marks": 11,
+    "cartesian": 12,
+    "validate": 13,
+    "kinds": 14,
+    "kinds.area": 14,
+    "kinds.band": 14,
+    "kinds.bar": 14,
+    "kinds.box": 14,
+    "kinds.calendar_heatmap": 14,
+    "kinds.dual_axis": 14,
+    "kinds.hbar": 14,
+    "kinds.heatmap": 14,
+    "kinds.histogram": 14,
+    "kinds.line": 14,
+    "kinds.mean_max": 14,
+    "kinds.scatter": 14,
+    "kinds.small_multiples": 14,
+    "kinds.stacked_100": 14,
+    "kinds.stat": 14,
+    "kinds.table": 14,
+    "registry": 15,
+    "api": 16,
+    "": 17,
 }
 
 #: Non-stdlib targets any kit module may import, by equality or descent. The
@@ -335,18 +354,18 @@ class TestModuleTuple:
         assert set(files) == set(_MODULES), sorted(set(files) ^ set(_MODULES))
         assert len(_MODULES) == len(set(_MODULES))
 
-    def test_the_tuple_is_at_least_twenty_four_modules(self) -> None:
-        assert len(_MODULES) >= 24
+    def test_the_tuple_is_at_least_thirty_three_modules(self) -> None:
+        assert len(_MODULES) >= 33
 
     def test_the_rank_table_names_the_same_modules(self) -> None:
         assert set(_RANK) == set(_MODULES), sorted(set(_RANK) ^ set(_MODULES))
 
     def test_the_kinds_and_the_kinds_marker_share_one_rank(self) -> None:
         kind_ranks = {r for name, r in _RANK.items() if name.startswith("kinds")}
-        assert kind_ranks == {13}
-        assert len([n for n in _RANK if n.startswith("kinds")]) == 9
+        assert kind_ranks == {14}
+        assert len([n for n in _RANK if n.startswith("kinds")]) == 17
         assert {r for name, r in _RANK.items() if not name.startswith("kinds")} == (
-            set(range(1, 13)) | {14, 15, 16}
+            set(range(1, 14)) | {15, 16, 17}
         )
 
 
@@ -516,6 +535,8 @@ class TestPositiveControls:
             ("from .. import frame\n", "kinds.line", []),
             ("from . import data\n", "problems", []),
             ("from . import problems\n", "data", [f"{_KIT}.problems"]),
+            ("from . import frame\n", "cells", [f"{_KIT}.frame"]),
+            ("from . import scales\n", "cells", []),
         ):
             assert _rank_violations(ast.parse(source), relative) == expected, source
 

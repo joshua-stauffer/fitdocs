@@ -35,6 +35,11 @@ class ProblemCode(StrEnum):
     STACK_ABSENT = "stack_absent"
     STACK_NEGATIVE = "stack_negative"
     STACK_INCOMPLETE = "stack_incomplete"
+    # chart-catalog (appended after chart-kit's 23)
+    NEGATIVE_VALUE = "negative_value"
+    VALUE_ORDER = "value_order"
+    SHARED_UNIT = "shared_unit"
+    CHANNEL_UNIT = "channel_unit"
 
 
 class ProblemDict(TypedDict):

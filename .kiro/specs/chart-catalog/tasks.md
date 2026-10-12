@@ -221,7 +221,7 @@ sequential, never two `(P)` tasks at once.
 
 - [ ] 1. Foundation: verified seams, appended codes, the ramp, shared helpers and the cell layer
 
-- [ ] 1.1 Verify chart-kit's seams, scaffold the catalog modules, append the problem codes and re-pin the boundary guard
+- [x] 1.1 Verify chart-kit's seams, scaffold the catalog modules, append the problem codes and re-pin the boundary guard
   - **Upstream verification**: check items 1–9 of Upstream Prerequisites
     against the landed code. Items 3–5 and 7 by rendering throwaway requests
     through `render_spec` with a stub `KindSpec` in a scratch script; items
@@ -868,3 +868,18 @@ sequential, never two `(P)` tasks at once.
     zero, absent and smallest-bin cells read as different, and where text was
     and was not readable.
   - _Requirements: 2.1, 3.4_
+
+## Implementation Notes
+
+- **1.1 upstream verification** (landed chart-kit on this branch; paths under `src/fitdocs/render/charts/kit/` and `tests/render/charts/kit/`; items 3–5 and 7 by rendering a stub `KindSpec` through `render_spec`, scratch script outside the repo):
+  1. PASS: `_helpers.py:19` `Case`, `:59` `render_case`, `:66` `problems_of`; `goldens.py:20` `assert_golden`; kind test modules expose `CASES` and `main()` (`test_line.py:190`, `:939`) with goldens in `golden/<name>/`.
+  2. PASS: `test_boundary.py:47` `_MODULES` (checked against `rglob` both ways, `:217`) and `:88` `_RANK` (strictly-lower-rank matrix); `test_theme_coverage.py:34-35` whitelist built from `INK_ROLES` and `CATEGORICAL_RAMP`.
+  3. **FAIL, known, routed upstream by the controller (queue `2026-10-12-chart-kit-dual-axis-title-overlap`); not a stop.** `frame.py:208` `axis(scale, plot, Side.RIGHT, title=, plan=)` draws right tick labels start-anchored (x = plot.right + 8, 682 at width 720) and the right title on the `y_title_y` row, end-anchored at `plot.right` (x = 674; `frame.py:305-314`: `title_room = plot.right - PAD`, `anchor="end"`). Note the title ends at the plot's right edge, not at `width - PAD` (712). With two short titles it does not overlap (`Left` 46.0–74.2, `Right` 638.8–674.0). With two long titles at width 720 it does: left title 46.0–538.8, right title 174.2–674.0, an overlap of about 365 px (each side is fitted independently, left to `width - PAD - plot.left`). Only task 2.3 depends on this.
+  4. PASS: `frame.axis(..., title="")` on `Side.RIGHT` emits no title `<text>` at all (0 empty text elements; only the tick labels `0`, `5`, `10`); `frame.py:305-314` guards on `shown`.
+  5. PASS: `marks.py:88` `band_path(xs, lower, upper)` returns bare path data (`M1 3L2 4L3 3.5L3 1.5L2 2L1 1Z` for xs (1,2,3), lower (1,2,1.5), upper (3,4,3.5)); the caller wraps its own `<path d=...>`.
+  6. PASS: with the eight kind placeholders and `cells.py` (docstring only, no `KIND`) present, `uv run pytest tests/render/charts/kit` is 1325 passed and `tests/render` is 1826 passed; `test_registry.py:151-155` imports only `CORE_KIND_NAMES` modules.
+  7. PASS: `scales.py:96` `BandScale(categories, start_px, end_px, labelled)` is a plain frozen dataclass; a direct `BandScale(cats, left, right, (0, 5, 9))` drew exactly the labels `c0`, `c5`, `c9` through `frame.axis(..., Side.BOTTOM, title="cats")`.
+  8. A3, decision **consume** `format.axis_title(column, *, clock_date=None, hours=True) -> str` (`format.py:63`). Vectors: NUMBER `duration_s`/`s` gives `duration (h:mm:ss)` (hours=True) and `duration (m:ss)` (hours=False); DURATION `moving_time` hours=True gives `moving time (h:mm:ss)`; `distance_km` gives `distance (km)` for either form, equal to `axis_title(column)`. All five exact.
+  9. A1, decision **append** `format_durations(values)` in 1.3. No public function takes a sequence (`format_duration` at `format.py:167` is the only duration function). `format_duration(v)` per value fails the vector `(5, 3600)` (gives `('0:05', '1:00:00')`, expected `('0:00:05', '1:00:00')`); `format_duration(v, hours=h)` passes all five vectors only when the caller computes `h = any(abs(round(v)) >= 3600)` itself, which is the helper's job, so no existing function is an exact match. A2, decision **consume** `frame.not_drawn_note(counts: Sequence[tuple[str, int]]) -> str | None` (`frame.py:96`). All three vectors exact (`Not drawn: 1 row without y.`; `Not drawn: 2 rows without y, 3 rows without x.` in given order; `None`); the `Not drawn:` text of `golden/scatter/typical.svg` (`2 rows without x, 1 row without y`) is the builder's output for counts `(("x", 2), ("y", 1))`. So 1.3 appends only A1 (`format_durations`) and its tests; A2 and A3 are Implementation Notes records only.
+- **1.1 scaffold**: layer ranks in `test_boundary.py` shifted by one from `frame` up (cells 9, frame 10, marks 11, cartesian 12, validate 13, kinds 14, registry 15, api 16, package 17); the module-count floor is now 33 and the kinds count 17.
+- 1.1 review (controller): how the core kinds title a `numeric_scale` axis: `frame.axis(..., title=None)` derives `axis_title(scale.column, clock_date=scale.clock_date, hours=scale.hours)` (`frame.py:226-229`); kinds that pass a title explicitly use the same arguments (`kinds/area.py:102`, `kinds/scatter.py:259`). The consumed A3 `axis_title` defaults `hours=True` where the design's `duration_axis_title` made it required: every catalog duration-title call (cells legend lead, mean-max, any kind) MUST pass `hours=` explicitly so the title form matches its labels; reviewers check this.
