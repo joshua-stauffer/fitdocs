@@ -1,10 +1,15 @@
-"""The engine: discover dashboard pages, resolve targets and plan every chart.
+"""The engine: plan a run, then draw and write the relative charts.
 
-This is the planning half of a run. It lists the pages, reads them, scans and
-parses each directive, associates regions with directives, and decides for each
-chart what data it needs (a fetch, the snapshot its region records, or the
-latest stored generation). It opens no source, renders nothing and writes
-nothing; the rendering and writing half extends ``run_dashboards``.
+Planning lists the pages, reads them, scans and parses each directive,
+associates regions with directives, and decides for each chart what data it
+needs (a fetch, the snapshot its region records, or the latest stored
+generation). Planning opens no source and writes nothing.
+
+The rendering half opens the source once, after planning, for the relative
+charts; draws each through the chart kit; composes each chart's region body (or
+keeps a rendered region, or writes a note); and writes per page the images and
+then one page replacement. A ``CHECK`` run does everything but write. Frozen
+charts are reported as planned: drawing and freezing them is a later task.
 
 The engine reads no clock: the run date arrives in the request. It imports no
 ``binding`` module; the source is reached only through the opener it is given.
@@ -29,19 +34,52 @@ from fitdocs.dashboards.grammar import (
     following_region,
     scan_page,
 )
-from fitdocs.dashboards.problems import DashboardCode, Problem, dashboard_problem
-from fitdocs.dashboards.region import recorded_snapshot
-from fitdocs.dashboards.source import SourceOpener
+from fitdocs.dashboards.problems import (
+    DashboardCode,
+    Problem,
+    dashboard_problem,
+    from_chart_problem,
+)
+from fitdocs.dashboards.region import (
+    BodyState,
+    ChartBody,
+    RegionEdit,
+    apply_edits,
+    caption,
+    chart_body,
+    classify_body,
+    note_body,
+    recorded_snapshot,
+)
+from fitdocs.dashboards.source import (
+    ChartSource,
+    Fetched,
+    SourceOpener,
+    SourceUnavailable,
+)
 from fitdocs.dashboards.storage import (
     PageFile,
     Refusal,
+    asset_rel_path,
     latest_snapshot,
     list_markdown,
     location_refusal,
     read_page,
+    replace_page,
+    write_asset,
+)
+from fitdocs.render.charts.kit import (
+    ChartData,
+    ChartError,
+    ChartRequest,
+    Output,
+    RenderedChart,
+    render_chart,
 )
 
 _PAGE_SUFFIX = ".md"
+_TABLE_KIND = "table"  # the kit kind that draws the rows of ``show_rows``
+_SHOW_ROWS = "show_rows"
 
 
 class Action(StrEnum):
@@ -605,24 +643,359 @@ def _chart_result(planned: PlannedChart) -> ChartResult:
     )
 
 
-def run_dashboards(request: RunRequest, open_source: SourceOpener) -> RunReport:
-    """Plan the run and report it; the source is not opened by the planning half."""
-    del open_source  # the rendering half opens it, once, after planning
-    plan = plan_run(request)
-    pages = tuple(
-        PageResult(
-            page=each.name,
-            written=False,
-            problems=each.problems,
-            notices=each.notices,
-            charts=tuple(_chart_result(chart) for chart in each.charts),
-        )
-        for each in plan.pages
+def _is_relative_fetch(planned: PlannedChart) -> bool:
+    """True for a relative chart the plan sends to the source.
+
+    ``need`` is ``None`` for a chart with a planning problem, so those are never
+    queried.
+    """
+    directive = planned.directive
+    return (
+        directive is not None
+        and directive.mode is Mode.RELATIVE
+        and planned.need is DataNeed.FETCH
     )
+
+
+def _unavailable_problem(
+    unavailable: SourceUnavailable,
+    *,
+    page: str | None,
+    chart: str | None,
+    line: int | None,
+) -> Problem:
+    return dashboard_problem(
+        DashboardCode.INDEX_UNAVAILABLE,
+        f"The chart was not queried: {unavailable.message}",
+        unavailable.fix,
+        page=page,
+        chart=chart,
+        line=line,
+    )
+
+
+def _write_failed(
+    page: str, chart: str, line: int, what: str, error: OSError
+) -> Problem:
+    reason = " ".join(str(error).split()).rstrip(".")
+    return dashboard_problem(
+        DashboardCode.WRITE_FAILED,
+        f"The {what} could not be written: {reason}.",
+        "Check that dashboards/ is writable and run the command again.",
+        page=page,
+        chart=chart,
+        line=line,
+    )
+
+
+def _asset_foreign(page: str, chart: str, line: int) -> Problem:
+    path = asset_rel_path(page, chart)
+    return dashboard_problem(
+        DashboardCode.ASSET_FOREIGN,
+        f"The image path dashboards/{path} is occupied by something fitdocs did "
+        "not write, or sits below a link.",
+        f"Move or delete whatever is at dashboards/{path}, then run the command again.",
+        page=page,
+        chart=chart,
+        line=line,
+    )
+
+
+def _page_changed(page: str, chart: str, line: int) -> Problem:
+    return dashboard_problem(
+        DashboardCode.PAGE_CHANGED,
+        f"The page {page} changed while fitdocs was working, so it was left unchanged.",
+        "Run the command again.",
+        page=page,
+        chart=chart,
+        line=line,
+    )
+
+
+@dataclass(frozen=True)
+class _Drawn:
+    chart: RenderedChart
+    rows_table: RenderedChart | None
+
+
+def _kit_problems(
+    error: ChartError, page: str, planned: PlannedChart, option: str | None
+) -> list[Problem]:
+    assert planned.chart is not None
+    return [
+        from_chart_problem(
+            each, page=page, chart=planned.chart, line=planned.line, option=option
+        )
+        for each in error.problems
+    ]
+
+
+def _draw(
+    page: str, planned: PlannedChart, directive: Directive, data: ChartData
+) -> _Drawn | list[Problem]:
+    """The chart and, for ``show_rows``, its rows table; or every kit problem.
+
+    The chart and the table are both attempted, so a directive whose chart and
+    table are both refused reports both, the chart's problems first.
+    """
+    ref = f"{page}:{directive.chart_id}"
+    problems: list[Problem] = []
+    chart: RenderedChart | None = None
+    try:
+        chart = render_chart(
+            ChartRequest(
+                ref,
+                directive.kind,
+                directive.title,
+                directive.channels,
+                directive.options,
+            ),
+            data,
+        )
+    except ChartError as error:
+        problems.extend(_kit_problems(error, page, planned, None))
+    table: RenderedChart | None = None
+    if directive.show_rows:
+        try:
+            table = render_chart(ChartRequest(ref, _TABLE_KIND, directive.title), data)
+        except ChartError as error:
+            problems.extend(_kit_problems(error, page, planned, _SHOW_ROWS))
+    if problems or chart is None:
+        return problems
+    return _Drawn(chart, table)
+
+
+@dataclass
+class _Pending:
+    """One planned chart while its page is being handled."""
+
+    planned: PlannedChart
+    problems: list[Problem]
+    drawn: _Drawn | None = None
+    body: ChartBody | None = None
+    edit: RegionEdit | None = None
+    asset: str = "none"  # "none" | "written" | "unchanged"
+
+
+def _failure_body(
+    planned: PlannedChart, problems: Sequence[Problem]
+) -> ChartBody | None:
+    """The note a never-rendered chart gets; ``None`` keeps a rendered region (12.2)."""
+    assert problems, "a chart that is not drawn has a problem to state"
+    region = planned.region
+    if region is not None and classify_body(region.body) is BodyState.RENDERED:
+        return None
+    return note_body(problems[0].message)
+
+
+def _edit_for(planned: PlannedChart, body: ChartBody) -> RegionEdit | None:
+    """The edit that makes the chart's region hold ``body``; ``None`` if it does."""
+    assert planned.chart is not None and planned.close_line is not None
+    region = planned.region
+    if region is not None and tuple(each.text for each in region.body) == body.lines:
+        return None
+    return RegionEdit(planned.chart, body, region, planned.close_line)
+
+
+def _settle(
+    request: RunRequest,
+    page: PlannedPage,
+    planned: PlannedChart,
+    source: ChartSource | None,
+    unavailable: SourceUnavailable | None,
+) -> _Pending:
+    """Fetch, draw and compose one relative chart in memory; nothing is written."""
+    directive = planned.directive
+    assert directive is not None and planned.chart is not None
+    pending = _Pending(planned, [])
+    data: ChartData | None = None
+    if source is None:
+        assert unavailable is not None
+        pending.problems.append(
+            _unavailable_problem(
+                unavailable, page=page.name, chart=planned.chart, line=planned.line
+            )
+        )
+    else:
+        fetched = source.fetch(
+            directive.sql,
+            today=request.today,
+            page=page.name,
+            chart=planned.chart,
+            line=planned.line,
+        )
+        if isinstance(fetched, Fetched):
+            data = fetched.data
+        else:
+            pending.problems.extend(fetched)
+    if data is not None:
+        drawn = _draw(page.name, planned, directive, data)
+        if isinstance(drawn, _Drawn):
+            pending.drawn = drawn
+            pending.body = chart_body(
+                page=page.name,
+                chart_id=planned.chart,
+                title=directive.title,
+                rendered=drawn.chart,
+                caption=caption(data, window=directive.window, snapshot_date=None),
+                rows_table=drawn.rows_table,
+                snapshot_path=None,
+            )
+        else:
+            pending.problems.extend(drawn)
+    if pending.body is None:
+        pending.body = _failure_body(planned, pending.problems)
+    if pending.body is not None:
+        pending.edit = _edit_for(planned, pending.body)
+    return pending
+
+
+def _write_assets(
+    request: RunRequest, page: PlannedPage, pending: Sequence[_Pending]
+) -> None:
+    for each in pending:
+        if each.drawn is None or each.drawn.chart.output is not Output.SVG:
+            continue
+        planned = each.planned
+        assert planned.chart is not None
+        try:
+            state = write_asset(
+                request.data_root, page.name, planned.chart, each.drawn.chart.text
+            )
+        except OSError as error:
+            each.problems.append(
+                _write_failed(page.name, planned.chart, planned.line, "image", error)
+            )
+            each.edit = None
+            continue
+        if state == "foreign":
+            each.problems.append(_asset_foreign(page.name, planned.chart, planned.line))
+            each.edit = None
+        else:
+            each.asset = state
+
+
+def _replace_page(page: PlannedPage, pending: Sequence[_Pending]) -> bool:
+    """Apply the surviving edits in one replacement; True when the page was written."""
+    edited = [each for each in pending if each.edit is not None]
+    if not edited or page.file is None or page.scan is None:
+        return False
+    edits = [each.edit for each in edited if each.edit is not None]
+    text = apply_edits(page.scan.lines, edits)
+    try:
+        state = replace_page(page.file, text)
+    except OSError as error:
+        for each in edited:
+            assert each.planned.chart is not None
+            each.problems.append(
+                _write_failed(
+                    page.name, each.planned.chart, each.planned.line, "page", error
+                )
+            )
+        return False
+    if state == "changed":
+        for each in edited:
+            assert each.planned.chart is not None
+            each.problems.append(
+                _page_changed(page.name, each.planned.chart, each.planned.line)
+            )
+        return False
+    return True
+
+
+def _outcome(each: _Pending, action: Action, page_written: bool) -> Outcome:
+    if each.problems:
+        return Outcome.FAILED
+    if action is Action.CHECK:
+        return Outcome.CHECKED
+    if each.asset == "written" or (each.edit is not None and page_written):
+        return Outcome.RENDERED
+    return Outcome.UNCHANGED
+
+
+def _run_page(
+    request: RunRequest,
+    page: PlannedPage,
+    source: ChartSource | None,
+    unavailable: SourceUnavailable | None,
+) -> PageResult:
+    slots: list[_Pending | PlannedChart] = [
+        _settle(request, page, each, source, unavailable)
+        if _is_relative_fetch(each)
+        else each
+        for each in page.charts
+    ]
+    pending = [each for each in slots if isinstance(each, _Pending)]
+    written = False
+    if request.action is not Action.CHECK:
+        _write_assets(request, page, pending)
+        written = _replace_page(page, pending)
+    charts: list[ChartResult] = []
+    for each in slots:
+        if not isinstance(each, _Pending):
+            charts.append(_chart_result(each))
+            continue
+        planned = each.planned
+        directive = planned.directive
+        assert directive is not None
+        charts.append(
+            ChartResult(
+                chart=planned.chart,
+                line=planned.line,
+                kind=directive.kind,
+                mode=directive.mode.value,
+                outcome=_outcome(each, request.action, written),
+                snapshot=planned.snapshot,
+                problems=tuple(each.problems),
+                notices=(),
+            )
+        )
+    return PageResult(
+        page=page.name,
+        written=written,
+        problems=page.problems,
+        notices=page.notices,
+        charts=tuple(charts),
+    )
+
+
+def run_dashboards(request: RunRequest, open_source: SourceOpener) -> RunReport:
+    """Plan, then render and write every targeted relative chart.
+
+    The source is opened once, after every page is planned and before anything
+    is rendered or written, and only when some chart needs a query; it is closed
+    in ``finally``. Frozen charts are reported as planned until 5.3 draws them.
+    """
+    plan = plan_run(request)
+    needs_query = any(
+        _is_relative_fetch(chart) for page in plan.pages for chart in page.charts
+    )
+    index = "not_needed"
+    index_problem: Problem | None = None
+    source: ChartSource | None = None
+    unavailable: SourceUnavailable | None = None
+    try:
+        if needs_query:
+            opened = open_source()
+            if isinstance(opened, SourceUnavailable):
+                unavailable = opened
+                index = opened.state
+                index_problem = _unavailable_problem(
+                    opened, page=None, chart=None, line=None
+                )
+            else:
+                source = opened
+                index = "ready"
+        pages = tuple(
+            _run_page(request, each, source, unavailable) for each in plan.pages
+        )
+    finally:
+        if source is not None:
+            source.close()
     return RunReport(
         action=request.action,
-        index="not_needed",
-        index_problem=None,
+        index=index,
+        index_problem=index_problem,
         location_problems=plan.location_problems,
         pages=pages,
         removed=(),
