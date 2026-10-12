@@ -493,7 +493,7 @@ sequential, never two `(P)` tasks at once.
   - _Boundary: dual-axis kind_
   - _Depends: 1.1, 1.3_
 
-- [ ] 2.4 (P) Implement the band kind with its goldens
+- [x] 2.4 (P) Implement the band kind with its goldens
   - **`kinds/band.py`**: `KIND` per design § Band (channels `x`, `low`,
     `high`, `mid`; option `y_zero`; bound 1000 rows; `_validate`:
     `channel_kind`/`unit_mismatch` across low, high and mid; `_check`:
@@ -529,7 +529,7 @@ sequential, never two `(P)` tasks at once.
   - _Boundary: band kind_
   - _Depends: 1.1, 1.3_
 
-- [ ] 2.5 (P) Implement the box kind with its goldens
+- [x] 2.5 (P) Implement the box kind with its goldens
   - **`kinds/box.py`**: `KIND` per design § Box (channels `x`, `low`, `q1`,
     `median`, `q3`, `high`; option `y_zero`; bound 60 rows; `_validate`:
     kind and unit across the five; `_check`: bound, duplicate x,
@@ -889,3 +889,4 @@ sequential, never two `(P)` tasks at once.
 - 2.3 (dual-axis, reviewer-ratified): when one series has no present value the other still draws; that side gets a tickless axis (a directly built `NumericScale(ticks=())`) keeping its title and legend entry, its rows count under its channel, and the description gives no range for it. A row with an x but neither value breaks both lines (series points come from every row with an x). Same-unitless-column `shared_unit` message uses `display_label`.
 - 2.8 (stacked-100, reviewer-ratified): a zero part in a bar with shares draws nothing (height 0); the internal-boundary inset is `min(0.5, rise/4)` per side, so the gap is under 1 px only beside a segment whose share is under 2 px (design's literal 0.5 px would flip a sub-pixel share); the description names the bound y column as `axis_title(y, hours=<A1 rule over present parts>)` (controller ruling, Req 2.10) while the y range is named `share (%)`; undrawn is always empty (absent y refused, absent x/colour drawn as `—`). 3.3: a 52×5 chart measured 22,819 bytes vs the design's 22,000 budget.
 - 1.4 (cells, for 2.1/2.2 — consume as is): `classify` clamps a present value above the last edge into bin `n` (design amended); `legend(plan, scale, entries)` derives each entry's class from `entries` + `scale` (lead; zero entry iff `entries[1].label == scale.zero_label`; `scale.bins` bins; absent if one entry remains) and raises `ValueError` when the entries are not `legend_entries(scale, …)`'s — so always pass the same scale you built the entries from; the legend lead's duration form is read from the formatted edge labels (`zero_label`), never recomputed; the absent entry's `style.color` is `ink(STROKE)`'s stroke. Legend offsets are copied from `frame.legend` (rank forbids importing it) and pinned by a parity test. 1.4's last review round asked only for a test of that refusal; the controller added it and showed the deletion mutation red (2 cases) instead of a third review round (downgrade, stated).
+- 2.4/2.5 (band, box; design § Band/§ Box amended): undrawn counts per value channel (design common rule; box never counts x — an absent category is its own `—` band); `value_order` keeps the design's exact template with a 10-significant-digit fallback when rounding hides the difference (the fallback writes the unit's name, e.g. `w`, where the rounded form writes its symbol `W` — both kinds alike); band's y scale covers drawn marks only (lone edges excluded) and band names low/high/mid in the description by their own column titles with the y scale's `hours`; box's y scale and `No whisker:` note cover drawn boxes only. 2.4's last review round asked only for a reachable lone-edge test and a comment fix; the controller applied them and showed both survivors (O9, O17) red instead of a third review round (downgrade, stated). 3.3: box 12 boxes measured 11,352–11,595 bytes vs the design's 6,000.

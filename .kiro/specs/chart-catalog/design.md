@@ -738,9 +738,12 @@ def legend(plan: FramePlan, scale: BinnedScale, entries: Sequence[LegendEntry]) 
 - `_check`: `bound_problem` (1000 rows); `duplicate_position` on `("x",)`;
   `value_order` where a present low exceeds its present high (message
   `"Row <r> has low <low> above high <high>."`, fix `"Swap the low and high
-  bindings, or correct the query so that low is at most high."`).
+  bindings, or correct the query so that low is at most high."`). When rounding makes the two written values equal, both are written to 10 significant digits (a duration in seconds with ` s`) so the message still shows the difference (amended 2026-10-12: tasks 2.4, 2.5).
 - Draw, rows sorted by x:
-  - y: `numeric_scale` over present low, high and mid, `include_zero=y_zero`,
+  - y: `numeric_scale` over the present values of drawn marks — low and high
+    of rows that place a band position, and every drawn mid; a lone low or
+    high (no band position) does not stretch the axis (amended 2026-10-12:
+    task 2.4) — `include_zero=y_zero`,
     `nice=True`; x as `dual-axis`;
   - the band: split where low or high is absent (`series.gap_segments` on
     the paired edges); each run of ≥ 2 points is one `<path>` whose data is
@@ -771,10 +774,12 @@ def legend(plan: FramePlan, scale: BinnedScale, entries: Sequence[LegendEntry]) 
   `value_order` on the first adjacent pair of present values out of order
   in `low, q1, median, q3, high` (message `"Row <r> has <a> <va> above <b>
   <vb>."`, fix `"Bind each channel to its own column, or correct the query
-  so that low ≤ q1 ≤ median ≤ q3 ≤ high."`).
+  so that low ≤ q1 ≤ median ≤ q3 ≤ high."`). When rounding makes the two written values equal, both are written to 10 significant digits (a duration in seconds with ` s`) so the message still shows the difference (amended 2026-10-12: tasks 2.4, 2.5).
 - Draw:
   - x: `band_scale` over `category_order(bound, "x")`; y: `numeric_scale`
-    over all present values, `include_zero=y_zero`, `nice=True`;
+    over the present values of the rows that draw a box (amended 2026-10-12:
+    task 2.5 — a boxless row's whisker values would stretch the axis to
+    nothing drawn), `include_zero=y_zero`, `nice=True`;
   - per row with q1, median and q3 present: box width `min(0.6 × band, 40)`;
     a `<rect>` from q1 to q3 with `fill` = `series_style(0).color`,
     `fill-opacity="0.2"`, `stroke` the same colour, `stroke-width="1"`; a
@@ -783,8 +788,10 @@ def legend(plan: FramePlan, scale: BinnedScale, entries: Sequence[LegendEntry]) 
     `stroke-width="1"`; a row missing q1, median or q3 draws nothing at its
     labelled band;
   - notes: A2 over `q1`, `median`, `q3`, then a whisker line `No whisker:
-    1 row without low, 2 rows without high.` (same plural rule) when any
-    whisker end is absent;
+    1 row without low, 2 rows without high.` (same plural rule) when a drawn
+    box lacks a whisker end (amended 2026-10-12: task 2.5 — a boxless row
+    is already counted by A2); an absent x is drawn as the `—` band, so box
+    counts no row under x;
   - y axis title: `axis_title(median)`.
 
 #### MeanMax — `kinds/mean_max.py`
