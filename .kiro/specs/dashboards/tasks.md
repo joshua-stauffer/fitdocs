@@ -664,7 +664,7 @@ sequential, never two `(P)` tasks at once.
 
 - [ ] 5. The engine and the report
 
-- [ ] 5.1 Discover pages, resolve targets and plan charts
+- [x] 5.1 Discover pages, resolve targets and plan charts
   - **`src/fitdocs/dashboards/engine.py`** (created here) per design §
     Engine: `Action`, `Outcome`, `Target`, `TargetError`, `RunRequest`,
     `ChartResult`, `PageResult`, `RunReport` (with `failed`),
@@ -1439,3 +1439,25 @@ sequential, never two `(P)` tasks at once.
   (`BaseException`, so storage's OSError catches cannot absorb it).
   Case-insensitive macOS folds case-only decoys; pair case rejections with
   real paths (`.`, `..`, `Bad_Dir`).
+- **5.1 (4 review rounds; final F2 assertion added and mutation-verified by
+  the controller — a downgrade from a 5th reviewer round):** extra planning
+  API (design amended at validation): `plan_run(request) -> RunPlan(
+  location_problems, pages)`, `PlannedPage(name, file, scan, problems,
+  notices, charts)`, `PlannedChart(chart, line, close_line, directive,
+  region, need, snapshot, problems)`, `DataNeed` {FETCH, RECORDED, LATEST};
+  `run_dashboards` ignores `open_source` until 5.2; `RunReport.index` is
+  `"not_needed"` until 5.2. **Trusted-id rule:** a chart's identity is the
+  parsed `chart_id`, else the first non-None `chart` among its parse
+  problems; targeting, the chart filter, `resolve_targets` listings,
+  duplicate detection and region association all use it. Directives with no
+  trusted id (yaml_syntax, yaml_shape, duplicate_key, id_grammar, unclosed)
+  are untargetable, outside duplicate detection, keep `chart` None, and claim
+  the region directly below them (no orphan). `duplicate_id` is added to
+  every directive sharing a trusted id, incl. ones with parse problems; a
+  chart with problems is targetable. A recorded reference is honoured as
+  written whatever page/chart it names (controller ruling revised to follow
+  the design). `region_contents` → `Problem.line` = intruder line, message
+  names the begin line; `region_unclosed` → begin line. `has_dashboards` is
+  true for any unusable location or any listed markdown. `page_name` is
+  reported on whole runs only. Chart problems are stable-sorted by line;
+  pages in name order. A terminator directive is still parsed.
