@@ -175,12 +175,13 @@ Terms used below:
 
 #### Acceptance Criteria
 1. If the wellness series cannot be read, then the morning-of pass shall leave every page untouched, report that the blocks were not refreshed with the reason, and shall not change the run's exit status.
-2. If a page records a page-format version newer than the installed fitdocs writes, then the morning-of pass shall leave that page untouched.
+2. If a page records a page-format version newer than the installed fitdocs writes, then the morning-of pass shall leave that page untouched; a page that records no page-format version, or an unusable one, shall never be treated as newer.
 3. If a page has no block location (a page written by an older fitdocs, or one whose block markers were removed), then the morning-of pass shall leave it untouched; and when the wellness series holds any value, the report shall state how many such pages there are and that `fitdocs regen` adds the block.
 4. If a page's region markers are damaged, then the morning-of pass shall leave that page untouched, report it as failed with the reason, and the run shall exit with the failure status.
 5. If writing a page fails, then the morning-of pass shall report that page as failed with the reason, continue with the other pages, and the run shall exit with the failure status.
 6. The morning-of pass shall never follow a symlinked workout page and shall never treat a page that is not a fitdocs workout document as one.
 7. When the morning-of pass rewrites or fails any page, the run report shall state how many pages it updated, how many blocks it removed, and each failed page with its reason; when it has nothing to report, the run report shall print nothing for it.
+8. If the morning-of pass stops on an unexpected error, then fitdocs shall report that the blocks were not refreshed, naming the error, shall still run the rest of the command, and shall exit with the failure status.
 
 ### Requirement 9: Regeneration and the Page Format
 **Objective:** As an athlete upgrading fitdocs, I want my existing pages to gain the block through the usual regeneration, and every page to stay re-derivable, so that the upgrade is one command.

@@ -273,35 +273,45 @@ tests/morning/
 
 ### Modified Files
 - `src/fitdocs/contract.py` — `MORNING_REGION`, `REFRESHED_REGIONS`,
-  `MORNING_PLACEHOLDER`, `__all__`, the module docstring's region sections;
-  `DOC_VERSION` and `CONTRACT_VERSION` advances with history paragraphs.
+  `MORNING_PLACEHOLDER`, `__all__`, every docstring sentence the third class
+  makes false (§ ContractRegion); `DOC_VERSION` and `CONTRACT_VERSION`
+  advances with history paragraphs.
 - `src/fitdocs/render/sections.py` — `morning_region()`.
 - `src/fitdocs/render/views.py` — the region block before Training Load in
   the three views; module and view docstrings (order; the morning region
   holds its own heading).
 - `src/fitdocs/index/fingerprint.py` — blank `REFRESHED_REGIONS` too
   (analytics-index amendment).
-- `src/fitdocs/declaration.py` — `_REDERIVABILITY_DOCS` and its CLAIM ANCHOR.
+- `src/fitdocs/declaration.py` — `_REDERIVABILITY_DOCS`, `_NEVER_ADD_MARKER`
+  and their CLAIM ANCHORs (both appear only in the workouts declaration).
 - `src/fitdocs/cli.py` — `_run_morning_pass`, `_report_morning`, the three
   flows, their exit rules, the module docstring.
 - `src/fitdocs/skills/fitdocs-workouts/SKILL.md` — one paragraph under
   "Reading the report".
 - `docs/ownership-contract.md`, `docs/wellness.md` (created by
-  wellness-store), `CHANGELOG.md`, `.kiro/steering/structure.md`.
+  wellness-store), `docs/upgrading.md`, `CHANGELOG.md`,
+  `.kiro/steering/structure.md`.
 - Spec amendments: `.kiro/specs/{workout-docs,wiki-contract,analytics-index}/
   {requirements.md,spec.json}`.
 - Re-pinned tests (append or move with the change, grep decides the full
   set): `tests/test_contract.py` (region tuples, disjointness),
   `tests/test_public_api.py` (`_CONTRACT_SURFACE`),
   `tests/test_contract_consumers.py` (region-literal scan over
-  `PRESERVED_REGIONS + REFRESHED_REGIONS`, and over `fitdocs/morning`),
+  `PRESERVED_REGIONS + REFRESHED_REGIONS`, and over `fitdocs/morning`;
+  `CONVERTED_MODULES` and `CONTRACT_BINDINGS` gain `fitdocs.morning.docedit`
+  and `fitdocs.morning.engine`, and the `fitdocs.render.sections` entry gains
+  `MORNING_REGION` and `MORNING_PLACEHOLDER`), `tests/test_portability.py`
+  (the HTML-comment allowlist gains the stamp),
   `tests/test_ownership_contract.py`, `tests/identity/test_contract_docs.py`
   (`:177-187` head paragraph, history), `tests/index/test_contract_docs.py`
   (`:140` contract, `:178` doc version), `tests/index/derived/test_preserved.py`
-  (`:245`), `tests/render/test_frontmatter.py` (`:106`),
+  (`:245` doc version, `:246` contract), every peer "What changed at this
+  version" head-paragraph pin present at landing, `tests/render/test_frontmatter.py`
+  (`:45`, `:106`),
   `tests/load/test_render.py` (`:188`), `tests/metrics/test_sources.py`
   (`CONSTANT_REGISTRY_ASOF_DOC_VERSION`, `:2270`), `tests/index/test_fingerprint.py`
-  (`:209-220`, the region parameter list), every test asserting a page's
+  (`:209-220`, the region parameter list; `_replace_region`'s assertion at
+  `:60` widened to `PRESERVED_REGIONS + REFRESHED_REGIONS`), every test asserting a page's
   exact region set or section order (`tests/render/test_views.py`,
   `tests/test_docmerge.py` and others the grep finds),
   `tests/test_declaration.py`, `tests/test_confinement.py`,
@@ -393,6 +403,7 @@ flowchart TD
 | 8.4, 8.5 | Damaged markers, write failure | MorningPass, CliMorning | `PageOutcome.FAILED` | One page |
 | 8.6 | Symlinks and non-workouts skipped | MorningPass | `docio.read_document`, `is_workout_document` | One page |
 | 8.7 | Report lines | CliMorning | `_report_morning` | — |
+| 8.8 | A pass that raises: reported, later passes run, exit 1 | CliMorning | `_run_morning_pass` | Where the pass runs |
 | 9.1 | Page-format version advance | ContractRegion | `DOC_VERSION` | — |
 | 9.2 | Regen leaves current blocks | CliMorning, MorningPass | regen flow | Where the pass runs |
 | 9.3, 9.4 | Re-derivable; deterministic | MorningBlock, MorningPass, Declarations | no clock | — |
@@ -414,7 +425,7 @@ flowchart TD
 | MorningPass | morning I/O | Whole-root pass, atomic writes, report | 1.3, 1.4, 6.4, 7.2-7.7, 8, 9.2, 12.3 | block, docedit, docio (P0) | Batch |
 | ContractRegion | contract | Region constants, version advances | 1.1, 9.1, 9.5, 11.3 | — | State |
 | RegionPlacement | render | Empty region before Training Load | 1.1 | contract (P0) | — |
-| CliMorning | cli | Call sites, report, exit | 7.1, 7.9, 8.1, 8.3, 8.7, 9.2 | engine (P0) | Service |
+| CliMorning | cli | Call sites, report, exit | 7.1, 7.9, 8.1, 8.3, 8.7, 8.8, 9.2 | engine (P0) | Service |
 | IndexFingerprint | index | Blank refreshed regions | 10.1 | contract (P0) | — |
 | Declarations | declaration | Re-derivability fragment | 9.3, 11.1 | contract, layout (P1) | — |
 | Docs | docs, skill, changelog, steering | Published text | 11 | — | — |
@@ -472,11 +483,15 @@ flowchart TD
 - **Facts and fingerprint**: `facts()` is
   `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)`
   of `{"day": D.isoformat(), "windows": [r, B], "signals": [[metric, source,
-  origins, unattributed, day_value, rolling_mean, normal_range, position],
-  …], "sleep": [[metric, source, origins, unattributed, night_value,
-  rolling_mean, baseline_mean], …], "attribution": attribution}` with `None`
-  as JSON `null` and lists in row order; `fingerprint()` is the SHA-256 hex
-  of its UTF-8 bytes (6.1-6.3).
+  origins, day_value, rolling_mean, normal_range, position], …], "sleep":
+  [[metric, source, origins, night_value, rolling_mean, baseline_mean], …],
+  "attribution": attribution}` with `None` as JSON `null` and lists in row
+  order; `fingerprint()` is the SHA-256 hex of its UTF-8 bytes (6.1-6.3).
+  Only what the block prints is a fact: a row's `unattributed` flag is not
+  printed (it reaches the page only through `attribution`), so it is not in
+  the facts, and an origin turning from unrecorded to one already listed,
+  with no change to the attribution line, leaves the region byte-identical
+  (6.4).
 - **Region text (normative)**: see [The Region Content](#the-region-content).
   `render_region(None)` is `""` (`MORNING_PLACEHOLDER`).
 - Nothing in the module computes a mean, SD, range or position, or chooses a
@@ -584,13 +599,19 @@ def replace_morning(markdown: str, content: str) -> str: ...
 - **Input**: `read_series(data_root)`. `SeriesReadError` → a report with
   `unavailable` set to its message and nothing read or written further (8.1).
   An empty series is a valid input: every block is empty, so a page whose
-  region holds a block is cleared.
+  region holds a block is cleared. Two optimizations are allowed and change
+  no output: with an empty series `fresh` is `""` for every page without any
+  block computation; and `render_region` may be memoized per date within one
+  pass.
 - **Per page** (`sorted((data_root / WORKOUTS_DIR).glob("*.md"))`, each read
   once with `docio.read_document`):
   1. `None` (symlink, unreadable, not UTF-8) or not
      `contract.is_workout_document(frontmatter)` → skipped silently (8.6).
-  2. `document_version(frontmatter) > DOC_VERSION` → `newer += 1`, untouched
-     (8.2).
+  2. `version = document_version(frontmatter)`; `version is not None and
+     version > DOC_VERSION` → `newer += 1`, untouched (8.2). A missing or
+     unusable version (`None`, for example `doc_version: true`) is out of
+     date, never newer (`contract.py:1021-1039`, the load pass's guard at
+     `load/engine.py:354-355`): the page goes on to step 3 like any other.
   3. `read_morning(text)`: `RegionError` → `FAILED` with the error's message
      (8.4); `None` → `without_region += 1`, untouched (8.3).
   4. `day = document_date(frontmatter)`; `fresh =
@@ -661,8 +682,19 @@ MORNING_PLACEHOLDER: Final[str] = ""
   the merge carries it like every region, and the pass that owns it replaces
   it after every page-writing run; it is never user-owned and never
   preserved for the user.
-- The module docstring's "Region ownership" and "Fresh-region content"
-  sections gain the third class and the empty placeholder.
+- Every docstring sentence the new class makes false is rewritten in the
+  same change: the module docstring's "Policy versus mechanism" paragraph
+  (`contract.py:18-19`, "the three region ids", "one algorithm, not
+  three"), its "Region ownership" section (`:69`, "Three regions survive
+  regeneration verbatim"; it gains the refreshed class) and its
+  "Fresh-region content" section (the empty placeholder); the
+  `TOOL_REGIONS` docstring (`:841`, "the regions fitdocs itself fills after
+  the document is first written", which also describes `morning`: it
+  becomes "the regions fitdocs fills and regeneration preserves"); and the
+  `PRESERVED_REGIONS` docstring (`:844`, "every region carried over verbatim
+  on regeneration": the merge also carries `morning`, which the pass then
+  replaces; it becomes "every region whose content regeneration preserves
+  for its owner").
 - `DOC_VERSION` = main + 1, paragraph: "Raised from ``N`` to ``N+1`` by
   workout-wellness. Every page gains an empty ``morning`` region, immediately
   before its Training Load section, which the morning-of pass fills from the
@@ -710,30 +742,37 @@ MORNING_PLACEHOLDER: Final[str] = ""
 | Field | Detail |
 |-------|--------|
 | Intent | Run the pass in the three flows, print its report, fold failures into the exit |
-| Requirements | 7.1, 7.9, 8.1, 8.3, 8.7, 9.2 |
+| Requirements | 7.1, 7.9, 8.1, 8.3, 8.7, 8.8, 9.2 |
 
-- `_run_morning_pass(data_root: Path) -> MorningReport` imports
-  `fitdocs.morning.engine` lazily, runs it, calls `_report_morning`, returns
-  the report.
+- `_run_morning_pass(data_root: Path) -> bool` imports
+  `fitdocs.morning.engine` lazily, runs it, calls `_report_morning`, and
+  returns whether the pass failed (`report.failed`). It catches `Exception`
+  around the whole pass (controller ruling R3): it prints
+  `Morning of: not refreshed; <ExceptionType>: <message>.`, returns `True`
+  (the run exits 1), and the flow goes on to the load, plan, index and
+  dashboard passes. `KeyboardInterrupt` and other `BaseException`s
+  propagate.
 - Call sites (keep both sides on rebase; dashboards' `_run_dashboard_pass`
   stays after the index pass):
   - explicit `sync`: after `_report(report, command="sync")`, before the
-    load pass; `_finish(failed=… or morning.failed)`.
+    load pass; `_finish(failed=… or morning_failed)`.
   - `_run_drain_passes`: after `_report_drain(...)`, before the load pass;
-    the returned failure includes `morning.failed` (so `fitdocs sync` and
+    the returned failure includes `morning_failed` (so `fitdocs sync` and
     `fitdocs pull --sync` both carry it).
   - `regen`: after the regen report and wellness-store's series summary,
-    before the load pass; `_finish(failed=… or morning.failed)`.
+    before the load pass; `_finish(failed=… or morning_failed)`.
 - `_report_morning` prints, on stdout, markup off, soft wrap, only these
-  lines and only when they apply (8.7); `page(s)` and `block(s)` read
-  singular for a count of one and plural otherwise:
+  lines and only when they apply (8.7); `page(s)`, `block(s)` and
+  `has/have` agree with the count (singular for one, plural otherwise):
   - `Morning of: not refreshed; the wellness series could not be read: <reason>.`
     when `unavailable` (8.1);
   - `Morning of: <n> page(s) updated, <m> block(s) removed.` when `n + m > 0`
     (each clause only when its count is non-zero);
   - `Morning of: could not update <doc>: <detail>` per failed page (8.4, 8.5);
-  - `Morning of: <k> page(s) have no morning-of block yet (written by an older fitdocs); run 'fitdocs regen' to add it.`
-    when `without_region > 0` and `series_has_values` (8.3).
+  - `Morning of: <k> page(s) has/have no morning-of region (written by an older fitdocs, or its markers were removed); run 'fitdocs regen' to add it.`
+    when `without_region > 0` and `series_has_values` (8.3);
+  - `Morning of: not refreshed; <ExceptionType>: <message>.` when the pass
+    raised (R3).
 - The module docstring's `sync` and `regen` paragraphs name the pass and its
   position. No command is added; the command count is unchanged.
 
@@ -760,13 +799,28 @@ MORNING_PLACEHOLDER: Final[str] = ""
   the document itself, so regenerating a deleted document brings back only
   the generated content, not what those regions held." The directory names
   are formatted from `layout`; the CLAIM ANCHOR names `morning.engine` and
-  the three CLI call sites. The workouts golden moves; the others move only
-  by the contract version.
+  the three CLI call sites.
+- `_NEVER_ADD_MARKER` (`declaration.py:264-268`) says an added marker "makes
+  the next regeneration refuse to write that document", which is false for a
+  `morning` marker added to a page that lacks it (the fresh render carries
+  that region, so the merge accepts it). It becomes: "Never add a region
+  marker to a document that does not already have one: a marker naming a
+  region the regenerated document does not carry makes the next
+  regeneration refuse to write that document until the added marker is
+  removed by hand." Its CLAIM ANCHOR records why the qualifier is there.
+- The workouts golden moves by both fragments and the version; the other
+  declaration goldens move by `_NEVER_ADD_MARKER` where they carry it and by
+  the version.
 
 #### Docs
 - `docs/ownership-contract.md`: version line; the "What changed at this
   version" paragraph (the region, the pass, re-derivability, "run `fitdocs
-  regen` once"); a new section `## The Morning-Of Region` after "User-Owned
+  regen` once"); the head paragraph's list of enumerations held equal to
+  code (`:25-28`, "owned paths, preserved regions, managed keys, and the
+  contract version") gains "refreshed regions"; the newer-version paragraph
+  of "Document-Format Versions and Migration" (`:1016-1020`, which names only
+  the training-load pass) adds that the morning-of pass also leaves such a
+  document untouched; a new section `## The Morning-Of Region` after "User-Owned
   and Tool-Filled Regions" holding one backticked list item `` `morning` ``
   and the rules (filled from the series, replaced when it differs, never
   user-owned, edits replaced, left as it was while the series cannot be
@@ -792,9 +846,14 @@ MORNING_PLACEHOLDER: Final[str] = ""
   "have no morning-of block yet" → `fitdocs regen` only when `fitdocs check`
   or the release notes call for it (the routine never runs it); "not
   refreshed" → nothing to do, the next run retries.
+- `docs/upgrading.md:83-87`: `regen` reads the archived `.fit` bytes, the
+  athlete profile and the settings file, and now also the archived wellness
+  files (through the wellness series it rebuilds first) for the morning-of
+  block.
 - `CHANGELOG.md` `[Unreleased]`: Added (the block, its refresh), Changed
   (`doc_version` N → N+1 with the action `fitdocs regen`, the ownership
-  contract version, a block-only change no longer recomputes index values).
+  contract version, and that a change confined to the block does not make
+  the analytics index recompute a page's computed values).
 - `.kiro/steering/structure.md`: "`morning` (the morning-of block and its
   pass) imports the `wellness` and `recovery` facades, `contract`, `docmerge`,
   `docio`, `layout`, the render layer's absence marker and attribution
@@ -864,11 +923,13 @@ non-blank lines):
 | Series empty | pass | blocks emptied where present; nothing else | unchanged |
 | Page is a symlink, unreadable, not UTF-8, not a workout | pass | skipped silently (sync and check report symlinks) | unchanged |
 | Page records a newer `doc_version` | pass | untouched, counted | unchanged |
+| Page records no or an unusable `doc_version` | pass | out of date, never newer: refreshed when it has the region, counted otherwise | unchanged |
 | Page has no `morning` region | pass | untouched, counted; line when the series has values | unchanged |
 | Damaged region markers | pass | `FAILED`, untouched | 1 |
 | Write fails (`OSError`) | pass | `FAILED`, temp removed, page unchanged | 1 |
 | Unexpected exception for one page | pass | `FAILED` with type and message; pass continues | 1 |
 | `KeyboardInterrupt` during a write | pass | temp removed; interrupt propagates | — |
+| Unexpected exception escaping the pass | `cli._run_morning_pass` | `not refreshed; <Type>: <message>.`; load, plan, index and dashboard passes still run (R3) | 1 |
 | `METHODS` windows not one pair | `MorningInputs.of` | `ValueError` (a defect, caught by tests) | crash |
 
 ## Testing Strategy
@@ -907,7 +968,9 @@ sync SOURCE`, which neither archives wellness nor rebuilds the series.
   the day value is `apple` → `CONTRIBUTING` (mutation: read only
   `BaselineDay.origin`); all values `garmin` → `SOLE`; one value with no
   origin among `garmin` values → `CONTRIBUTING` (mutation: ignore `None`
-  origins); no `garmin` → no line.
+  origins); no `garmin` → no line; a `garmin` value exactly one day outside a
+  window (D−(B+1) for the 60-day window, D−r for a rolling-only row) does not
+  count (mutation: widen the window by one day).
 - Windows: the sentence and headers read `METHODS` (a patched method table
   with `rolling_days=5` changes them; mutation: literal 7); mismatched
   windows raise `ValueError`.
@@ -918,7 +981,9 @@ sync SOURCE`, which neither archives wellness nor rebuilds the series.
   printed precision gives byte-identical region text (mutation: fingerprint
   `baseline_key` instead of printed facts); a change in a printed figure, a
   steps value on D (no change: the block shows no steps), a different origin
-  each move or keep the fingerprint as stated.
+  each move or keep the fingerprint as stated; an origin turning from
+  unrecorded to one already listed, with no Garmin anywhere, leaves the
+  region byte-identical (mutation: `unattributed` in the facts).
 - Region text: a byte golden per shape (signals only, sleep only, both,
   Garmin sole, Garmin contributing, carried source) under
   `tests/morning/golden/`; the stamp matches `STAMP_PATTERN` and
@@ -933,23 +998,38 @@ sync SOURCE`, which neither archives wellness nor rebuilds the series.
   the empty region, series through `write_series`): the pass fills each page;
   a second pass writes nothing (mtimes unchanged, `unchanged` count equals
   the page count).
-- Days bound (7.4): a value changed on day X rewrites pages dated in
-  `[X, X+60]` whose figures move and leaves pages dated `X-1` and `X+61`
-  byte-identical, with pages on both sides present (mutation: the pass
-  ignores the page date and uses the series' last day).
+- Days bound (7.4): an origin changed on day X (it shows at X+60 through the
+  60-day window's source cell and attribution line, where a value change
+  could round away) rewrites the pages dated X and X+60, asserted changed
+  first, and leaves pages dated `X-1` and `X+61` byte-identical (mutation:
+  the pass ignores the page date and uses the series' last day). The pure
+  block test of the same bound uses a value change large enough to move the
+  printed normal range at X+60.
 - Byte locality (7.3, 7.8): for every updated page, the bytes outside the
   region are identical before and after (mutation: re-render the page).
 - Removal: an emptied series empties filled regions (`REMOVED`) (mutation:
   skip empty content).
-- No date, older page without the region, newer `doc_version`, damaged
+- No date, older page without the region, newer `doc_version`, a missing
+  `doc_version` and `doc_version: true` (refreshed when the region exists,
+  `without_region` otherwise, never `newer`, never `FAILED`), damaged
   markers, symlinked page, a non-workout `.md`: each outcome and count
-  (mutation per branch).
-- Write failure: a read-only page file fails that page, the next page is
-  still updated, no temp file remains.
+  (mutation per branch; for the unusable version, treat `None` as newer).
+- Write failure: a read-only `workouts/` directory fails every page and
+  leaves no temp file (skipped when running as root; the temp-then-replace
+  write needs directory write permission, so a read-only page file would be
+  replaced); per-page isolation: `os.replace` patched to raise `OSError` for
+  one chosen page fails that page while the next page is updated; a patched
+  `os.replace` raising `KeyboardInterrupt` leaves no temp file and the
+  interrupt propagates.
 - Unreadable series (a manifest naming a missing year file): every page
   byte-identical, `unavailable` set.
-- Cost (7.5): `parse_fit` and every archive read patched to raise, the pass
-  still succeeds; `docio.read_document` called once per page.
+- Cost (7.5): `docio.read_document` called once per page (mutation: a
+  discovery read before the processing read); no morning module imports a
+  `.fit` reader (boundary guard).
+- Measurement (controller ruling R4): 2,500 synthetic pages and a 3-year,
+  two-source series through `run_morning_pass`, first pass and second
+  (no-write) pass timed and recorded in Implementation Notes; above 10 s for
+  either pass on the development machine is a stop-and-report.
 
 ### End-to-End Tests (`tests/morning/test_e2e.py`, `test_cli_morning.py`)
 - `fitdocs sync SOURCE` over synthetic FIT files with a staged series: the
@@ -981,6 +1061,12 @@ sync SOURCE`, which neither archives wellness nor rebuilds the series.
   SOURCE`; `non_vacuous`: a page's `morning` region is non-empty).
 - Commands that must not run the pass: `fitdocs load`, `history`, `check`
   leave a stale block untouched.
+- Pass-level failure (R3): an engine patched to raise `RuntimeError` makes
+  `fitdocs sync` print the `not refreshed` line, still run the load pass and
+  exit 1; patched to raise `KeyboardInterrupt`, the interrupt propagates.
+- Portability: `tests/test_portability.py`'s document invariants hold for a
+  page with a filled block, its HTML-comment allowlist gaining
+  `STAMP_PATTERN` (`:84-87`, `:142-145`).
 
 ### Boundary (`tests/morning/test_boundary.py`)
 - Per-module import sets by equality (allowed lists above), the forbidden
@@ -997,10 +1083,12 @@ sync SOURCE`, which neither archives wellness nor rebuilds the series.
 
 ## Performance & Scalability
 - One read of every workout page per run (measured 0.45 ms per page for the
-  scan, research.md), one `Baselines.of` per run, at most nine baseline
-  lookups and nine origin scans per page; no `.fit` decode, no full
+  scan alone, research.md; the reviewer estimates two to three times that
+  with the block computation), one `Baselines.of` per run, at most nine
+  baseline lookups and nine origin scans per page; no `.fit` decode, no full
   re-render, no index recomputation for block-only changes. A 2,500-page
-  backfill is one pass and 2,500 region splices.
+  backfill is one pass and 2,500 region splices. The end-to-end figure is
+  measured during implementation (R4, 10 s stop threshold).
 
 ## Versions
 - `DOC_VERSION`: main + 1 at landing (this spec's bump).
@@ -1017,10 +1105,14 @@ and the brief; each is revisable at review (research.md has the trade-offs).
    tool region): no `.fit` decode, banner unchanged, index cost avoided.
 2. **The fingerprint is of the printed facts**, and the pass compares bytes;
    `WellnessSeries.day_digest` and `recovery.baseline_key` are not used,
-   because both move for changes the block does not print.
+   because both move for changes the block does not print. Controller
+   ruling R1 (Step 3.5, round 1) accepted this, with the correction that a
+   row's `unattributed` flag is not a fact (it is never printed).
 3. **The pass visits every page**; `SeriesReport.days` is not an input. The
    X..X+60 bound is a test oracle. Self-healing after an interrupted run,
-   correct after `sync SOURCE`, `regen` and upgrades.
+   correct after `sync SOURCE`, `regen` and upgrades. Accepted by R1; what
+   this leaves unused upstream (`day_digest`, `SeriesReport.days`) is
+   settled at the cross-spec review.
 4. **Placement immediately before Training Load.**
 5. **Signals**: the baselined signals and the sleep signals only; weight,
    SpO2, respiration, steps, stress, body battery and ratings stay on the
@@ -1040,3 +1132,9 @@ and the brief; each is revisable at review (research.md has the trade-offs).
     so a later pass's configuration exit cannot leave a new page without its
     block.
 12. **`CONTRACT_VERSION` advances** (see Versions).
+13. **A pass that raises is reported, fails the run and does not stop the
+    later passes** (controller ruling R3): `_run_morning_pass` catches
+    `Exception`; interrupts propagate.
+14. **Cost is measured end to end during implementation** (controller
+    ruling R4): 2,500 pages, a 3-year two-source series, a 10 s stop
+    threshold per pass.
