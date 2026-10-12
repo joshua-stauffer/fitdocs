@@ -147,9 +147,11 @@ renumbered).
     fitdocs fills it from the wellness series and replaces its content
     whenever it differs, that hand edits there are replaced, and describes
     the morning-of pass among the overwriting operations.
-  - 2.18: the ownership contract states that workout documents are
-    re-derivable from the archived `.fit` files, the wellness series (rebuilt
-    from the archived wellness files), the athlete profile and the settings.
+  - 2.18: the ownership contract states that a workout document's
+    generated content, its `morning` region included, is re-derivable from
+    the wellness series (rebuilt from the archived wellness files and the
+    `[wellness]` settings) as well as from the archived sources, the athlete
+    profile, the configured timezone and the tile source.
   - `CONTRACT_VERSION` main + 1, its history paragraph and the "What changed"
     paragraph.
 - **analytics-index — a block-only change is a document-only change**
@@ -671,8 +673,9 @@ MORNING_PLACEHOLDER: Final[str] = ""
   region class whose content fitdocs alone writes from the wellness series
   and replaces whenever it differs; the morning-of pass that ``fitdocs
   sync``, ``fitdocs pull --sync`` and ``fitdocs regen`` run rewrites only
-  that region; and workout documents are re-derivable from the archived
-  ``.fit`` files, the wellness series, the athlete profile and the settings."
+  that region; and a workout document's generated content is re-derivable
+  from the wellness series as well as from the archived sources, the
+  athlete profile, the configured timezone and the tile source."
 - `DOC_BANNER` is unchanged: the region is outside the notes, workout and
   load regions, and its content is replaced, so the banner's sentence stays
   true; the history, block, planned and recovery pages do not change.
@@ -968,8 +971,11 @@ sync SOURCE`, which neither archives wellness nor rebuilds the series.
   out of date → `fitdocs regen` → block present and current → `fitdocs check`
   clean.
 - Exit status: a damaged-marker page makes `fitdocs sync` exit 1 and is named.
-- Determinism (9.4): the same root under `TZ=UTC` and `TZ=Pacific/Kiritimati`
-  writes byte-identical pages.
+- Determinism (9.4): pages written once under a pinned `TZ`; their regions
+  emptied in a copy of the root; a second `fitdocs sync SOURCE` (nothing new
+  to archive, so only the pass writes) under `TZ=Pacific/Kiritimati` and a
+  faked system date refills byte-identical blocks. Page dates themselves
+  follow the configured timezone, as they always have; the pass reads none.
 - Confinement: `tests/test_confinement.py` entry point `sync-morning`
   (`prepare`: a staged series and a source directory; `run`: `fitdocs sync
   SOURCE`; `non_vacuous`: a page's `morning` region is non-empty).

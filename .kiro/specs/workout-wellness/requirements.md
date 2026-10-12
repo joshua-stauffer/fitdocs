@@ -188,8 +188,8 @@ Terms used below:
 #### Acceptance Criteria
 1. fitdocs shall advance the workout page-format version by one from its value at landing, so that `fitdocs check` reports every page written before this feature as out of date with `fitdocs regen` as the remedy.
 2. When `fitdocs regen` completes with a readable wellness series, every workout page it wrote shall carry the block the current series gives for its date.
-3. fitdocs shall be able to rebuild every workout page, block included, from the data root's archived `.fit` files, its archived wellness files, the athlete profile and the settings alone.
-4. Given the same archived files, athlete profile and settings, fitdocs shall write byte-identical pages, blocks included, on any machine, in any timezone and on any date.
+3. fitdocs shall be able to rebuild every workout page's block by regeneration from the data root's archived wellness files and settings, in addition to the inputs regeneration already uses for the rest of the page.
+4. Given the same workout pages and the same wellness series, the morning-of pass shall write byte-identical blocks on any machine, in any timezone and on any date.
 5. fitdocs shall replace any content in the block location that differs from the block the current series gives the next time the morning-of pass runs, and shall never treat the block location as user-owned.
 
 ### Requirement 10: The Analytics Index
@@ -204,7 +204,7 @@ Terms used below:
 
 #### Acceptance Criteria
 1. The published ownership contract shall describe the block location: that fitdocs owns it, fills it from the wellness series, replaces its content whenever it differs from what the series gives, carries no user content in it, and that hand edits there are replaced.
-2. The published ownership contract shall describe the morning-of pass among the operations that overwrite existing content, and shall state that workout pages are re-derivable from the archived `.fit` files, the archived wellness files, the athlete profile and the settings.
+2. The published ownership contract shall describe the morning-of pass among the operations that overwrite existing content, and shall state that a workout page's block is re-derivable from the archived wellness files and the settings, alongside the inputs that already re-derive the rest of the page.
 3. The published ownership contract's version shall advance by one from its value at landing, with a statement of what changed.
 4. The wellness documentation shall describe the block: what it shows, which day it shows, the windows of its figures, sources and Garmin attribution, the absence marker, when pages are refreshed, and that it states no verdict.
 5. The packaged workouts skill shall describe the morning-of pass's report lines and state which of them need the athlete.
