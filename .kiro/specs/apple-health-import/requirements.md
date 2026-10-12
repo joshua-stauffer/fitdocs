@@ -180,7 +180,7 @@ should not.
 5. If a record of a type this feature reads states a unit fitdocs does not convert for that type, then fitdocs shall fail the import with a reason naming the record type and the unit.
 6. fitdocs shall never import an Apple Health value as `hrv_rmssd_ms` or into any metric other than the one this requirement names for its type.
 7. fitdocs shall import no other Apple Health record type, including heart rate, walking heart rate, wrist temperature, workouts, nutrition and the rMSSD type introduced with iOS and watchOS 27.
-8. If a record of a type this feature reads has a value or a timestamp fitdocs cannot read, or a sleep record states a sleep state fitdocs does not know, then fitdocs shall fail the import with a reason naming the record type and the record's line in the extract.
+8. If a record of a type this feature reads has a value or a timestamp fitdocs cannot read, ends before it starts, or is a sleep record stating a sleep state fitdocs does not know, then fitdocs shall fail the import with a reason naming the record type, the problem and the record's start time as the export states it.
 
 ### Requirement 8: Source De-duplication
 **Objective:** As an athlete whose iPhone, Apple Watch and other apps all write
