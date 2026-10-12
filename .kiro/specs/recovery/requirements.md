@@ -192,7 +192,7 @@ Terms used below:
 #### Acceptance Criteria
 1. The recovery page shall state how every value it shows was computed: the transform, each window length, each minimum number of days, the range multiple, the definition of the standard deviation, the per-source rule and the shown-source rule.
 2. fitdocs shall carry every methodologically significant constant of the baseline computation as a record naming either a published work, with its locator and verification status, or fitdocs's own choice, with its justification, and shall hold no such value anywhere else.
-3. If a published work's locator for a constant has not been verified against the work itself, then fitdocs shall not present the constant as taken from that work, and shall record and state it as fitdocs's own choice naming the work it follows.
+3. If a published work's locator for a constant has not been verified against the work itself, then fitdocs shall not present the constant as taken from that work, and shall record and state the constant as fitdocs's own choice with its justification.
 4. Where fitdocs applies a cited method to a signal the cited work did not study, the recovery page shall state that departure.
 5. The recovery page shall list every work it cites.
 
