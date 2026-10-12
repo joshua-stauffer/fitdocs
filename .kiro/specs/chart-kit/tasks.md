@@ -402,7 +402,7 @@ every registered kind and find its cases by the test-module convention
   - _Requirements: 6.2_
   - _Boundary: Ticks_
 
-- [ ] 2.4 (P) Build the theme and the categorical palette
+- [x] 2.4 (P) Build the theme and the categorical palette
   - **`palette.py`** (append only): `CATEGORICAL_COLORS` (`name -> (hex,
     oklch source)`) and `CATEGORICAL_RAMP` for the eight design entries, with
     the oklch source in each constant's comment. No existing constant moves.

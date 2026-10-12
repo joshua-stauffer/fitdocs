@@ -26,6 +26,8 @@ import math
 import re
 
 from fitdocs.render.charts.palette import (
+    CATEGORICAL_COLORS,
+    CATEGORICAL_RAMP,
     DYNAMICS_PRIMARY_COLOR,
     DYNAMICS_SECONDARY_COLOR,
     ROUTE_BIKE_TINT,
@@ -102,6 +104,8 @@ def _all_documented() -> list[tuple[str, str, str]]:
         rows.append((f"zone:{name}", hex_value, source))
     for name, (hex_value, source) in ROUTE_COLORS.items():
         rows.append((f"route:{name}", hex_value, source))
+    for name, (hex_value, source) in CATEGORICAL_COLORS.items():
+        rows.append((f"categorical:{name}", hex_value, source))
     return rows
 
 
@@ -241,3 +245,24 @@ def test_zone_colors_extends_beyond_five_deterministically() -> None:
 def test_zone_colors_length_matches_request() -> None:
     for n in range(0, 9):
         assert len(zone_colors(n)) == n
+
+
+# --- the categorical palette: ordered prefix pin ----------------------------
+
+
+def test_categorical_prefix_is_pinned_in_order() -> None:
+    """The first eight categorical entries keep their names, oklch sources and
+    order; later appended entries are not pinned (Req 8.7)."""
+    entries = list(CATEGORICAL_COLORS.items())[:8]
+    assert [(name, source) for name, (_, source) in entries] == [
+        ("blue", "oklch(0.6 0.14 250)"),
+        ("orange", "oklch(0.66 0.18 45)"),
+        ("magenta", "oklch(0.56 0.14 345)"),
+        ("green", "oklch(0.64 0.1 135)"),
+        ("red", "oklch(0.56 0.16 30)"),
+        ("pink", "oklch(0.66 0.1 355)"),
+        ("teal", "oklch(0.54 0.12 160)"),
+        ("violet", "oklch(0.56 0.18 285)"),
+    ]
+    assert len(entries) == 8
+    assert tuple(hex_value for _, (hex_value, _) in entries) == CATEGORICAL_RAMP[:8]

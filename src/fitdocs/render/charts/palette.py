@@ -196,3 +196,42 @@ def zone_colors(n: int) -> tuple[str, ...]:
         )
         extensions.append(_oklch_to_hex(light, _EXT_CHROMA, _EXT_HUE))
     return ZONE_RAMP + tuple(extensions)
+
+
+# --- categorical palette (chart-kit) ----------------------------------------
+# Eight colours for distinguishing series in chart-kit charts. Append-only: the
+# first eight entries are pinned in order. Each hex is the sRGB conversion of the
+# oklch source in its comment.
+
+CATEGORICAL_BLUE: Final = "#3284d0"  # oklch(0.6 0.14 250)
+CATEGORICAL_ORANGE: Final = "#e86518"  # oklch(0.66 0.18 45)
+CATEGORICAL_MAGENTA: Final = "#ac4e87"  # oklch(0.56 0.14 345)
+CATEGORICAL_GREEN: Final = "#719a5b"  # oklch(0.64 0.1 135)
+CATEGORICAL_RED: Final = "#c04637"  # oklch(0.56 0.16 30)
+CATEGORICAL_PINK: Final = "#c27895"  # oklch(0.66 0.1 355)
+CATEGORICAL_TEAL: Final = "#098356"  # oklch(0.54 0.12 160)
+CATEGORICAL_VIOLET: Final = "#6e5dd8"  # oklch(0.56 0.18 285)
+
+#: Runtime-inspectable provenance: colour name -> (sRGB hex, oklch source).
+CATEGORICAL_COLORS: Final[dict[str, tuple[str, str]]] = {
+    "blue": (CATEGORICAL_BLUE, "oklch(0.6 0.14 250)"),
+    "orange": (CATEGORICAL_ORANGE, "oklch(0.66 0.18 45)"),
+    "magenta": (CATEGORICAL_MAGENTA, "oklch(0.56 0.14 345)"),
+    "green": (CATEGORICAL_GREEN, "oklch(0.64 0.1 135)"),
+    "red": (CATEGORICAL_RED, "oklch(0.56 0.16 30)"),
+    "pink": (CATEGORICAL_PINK, "oklch(0.66 0.1 355)"),
+    "teal": (CATEGORICAL_TEAL, "oklch(0.54 0.12 160)"),
+    "violet": (CATEGORICAL_VIOLET, "oklch(0.56 0.18 285)"),
+}
+
+#: The categorical colours in series order (series ``i`` takes entry ``i``).
+CATEGORICAL_RAMP: Final[tuple[str, ...]] = (
+    CATEGORICAL_BLUE,
+    CATEGORICAL_ORANGE,
+    CATEGORICAL_MAGENTA,
+    CATEGORICAL_GREEN,
+    CATEGORICAL_RED,
+    CATEGORICAL_PINK,
+    CATEGORICAL_TEAL,
+    CATEGORICAL_VIOLET,
+)
