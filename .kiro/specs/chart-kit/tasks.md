@@ -1005,7 +1005,7 @@ every registered kind and find its cases by the test-module convention
     is green; each mutation reds it.
   - _Requirements: 16.1, 16.2_
 
-- [ ] 6.5 Guard the kit's imports and purity
+- [x] 6.5 Guard the kit's imports and purity
   - **`test_boundary.py`** following `tests/connectors/test_boundary.py` and
     `tests/compose/test_boundary.py`:
     - a hand-kept tuple of every kit module, checked equal to an `rglob` of
