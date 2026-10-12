@@ -769,7 +769,7 @@ MORNING_PLACEHOLDER: Final[str] = ""
   - `Morning of: <n> page(s) updated, <m> block(s) removed.` when `n + m > 0`
     (each clause only when its count is non-zero);
   - `Morning of: could not update <doc>: <detail>` per failed page (8.4, 8.5);
-  - `Morning of: <k> page(s) has/have no morning-of region (written by an older fitdocs, or its markers were removed); run 'fitdocs regen' to add it.`
+  - `Morning of: <k> page(s) has/have no morning-of region (written by an older fitdocs, or the region markers were removed); run 'fitdocs regen' to add it.`
     when `without_region > 0` and `series_has_values` (8.3);
   - `Morning of: not refreshed; <ExceptionType>: <message>.` when the pass
     raised (R3).
@@ -809,8 +809,9 @@ MORNING_PLACEHOLDER: Final[str] = ""
   regeneration refuse to write that document until the added marker is
   removed by hand." Its CLAIM ANCHOR records why the qualifier is there.
 - The workouts golden moves by both fragments and the version; the other
-  declaration goldens move by `_NEVER_ADD_MARKER` where they carry it and by
-  the version.
+  declaration goldens move by the version only (only the workouts branch
+  selects these two fragments, `declaration.py:448-452`). A
+  `tests/test_declaration.py` pin holds the new qualifier.
 
 #### Docs
 - `docs/ownership-contract.md`: version line; the "What changed at this
@@ -843,7 +844,7 @@ MORNING_PLACEHOLDER: Final[str] = ""
 - Workouts skill: after the drain table, a paragraph: `Morning of:` lines
   follow the drain report; "updated"/"removed" need nothing; "could not
   update" → read the reason and tell the user (damaged markers need a human);
-  "have no morning-of block yet" → `fitdocs regen` only when `fitdocs check`
+  "has/have no morning-of region" → `fitdocs regen` only when `fitdocs check`
   or the release notes call for it (the routine never runs it); "not
   refreshed" → nothing to do, the next run retries.
 - `docs/upgrading.md:83-87`: `regen` reads the archived `.fit` bytes, the
@@ -1062,8 +1063,12 @@ sync SOURCE`, which neither archives wellness nor rebuilds the series.
 - Commands that must not run the pass: `fitdocs load`, `history`, `check`
   leave a stale block untouched.
 - Pass-level failure (R3): an engine patched to raise `RuntimeError` makes
-  `fitdocs sync` print the `not refreshed` line, still run the load pass and
-  exit 1; patched to raise `KeyboardInterrupt`, the interrupt propagates.
+  `fitdocs sync SOURCE`, the drain and `fitdocs regen` each print the `not
+  refreshed` line, still run the load pass and exit 1 (the exit fold is
+  tested at all three call sites); patched to raise `KeyboardInterrupt`,
+  `cli._run_morning_pass` called directly re-raises the same instance, and
+  through `CliRunner`, which turns an interrupt into exit 130, the command
+  exits 130 with no `not refreshed` line and no load table.
 - Portability: `tests/test_portability.py`'s document invariants hold for a
   page with a filled block, its HTML-comment allowlist gaining
   `STAMP_PATTERN` (`:84-87`, `:142-145`).
