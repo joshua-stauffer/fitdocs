@@ -1715,3 +1715,220 @@ def test_bookkeeping_round_trips_and_missing_or_ambiguous_meta_is_none(
             "(1, '2.4', '1.5.6', '/other/root', 'other-sha')"
         )
         assert read_bookkeeping(connection) is None
+
+
+# analytics-index Amendment 1 (facade): execute_named and statement_parameters.
+
+
+def test_execute_named_returns_typed_columns_and_rows(tmp_path: Path) -> None:
+    with create_index(tmp_path / "named.duckdb") as connection:
+        # duckdb 1.2.0 reports DB-API type classes here, newer versions SQL names.
+        probe = connection._connection.execute("SELECT 1::BIGINT").description
+        expected_types = (
+            ("BIGINT", "VARCHAR", "BIGINT")
+            if str(probe[0][1]) == "BIGINT"
+            else ("NUMBER", "STRING", "NUMBER")
+        )
+        result = connection.execute_named(
+            "SELECT range AS n, 'x' || range AS label, $step * range AS scaled "
+            "FROM range(5) WHERE range >= $lo ORDER BY n DESC",
+            {"lo": 2, "step": 10},
+        )
+        assert result.columns == tuple(
+            ResultColumn(name, type_name)
+            for name, type_name in zip(
+                ("n", "label", "scaled"), expected_types, strict=True
+            )
+        )
+        assert result.fetchmany(2) == [(4, "x4", 40), (3, "x3", 30)]
+        assert result.fetchall() == [(2, "x2", 20)]
+
+
+def test_execute_named_rejects_extra_key_and_missing_value(tmp_path: Path) -> None:
+    with create_index(tmp_path / "named-bad.duckdb") as connection:
+        with pytest.raises(IndexStatementError):
+            connection.execute_named("SELECT $a AS a", {"a": 1, "b": 2})
+        with pytest.raises(IndexStatementError):
+            connection.execute_named("SELECT $a AS a, $b AS b", {"a": 1})
+        assert connection.execute_named("SELECT $a AS a", {"a": 1}).fetchall() == [(1,)]
+
+
+class _RecordingDuckDB:
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+        self.execute_calls: list[tuple[object, ...]] = []
+
+    def execute(self, *args: object) -> Any:
+        self.execute_calls.append(args)
+        return self._inner.execute(*args)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
+def test_execute_named_binds_nothing_for_an_empty_mapping(tmp_path: Path) -> None:
+    with create_index(tmp_path / "named-shape.duckdb") as connection:
+        recorder = _RecordingDuckDB(connection._connection)
+        connection._connection = cast(Any, recorder)
+        assert connection.execute_named("SELECT 7 AS n", {}).fetchall() == [(7,)]
+        assert recorder.execute_calls == [("SELECT 7 AS n",)]
+        sql = "SELECT $lo AS lo"
+        assert connection.execute_named(sql, {"lo": 0}).fetchall() == [(0,)]
+        assert recorder.execute_calls[1:] == [(sql, {"lo": 0})]
+
+
+@pytest.mark.parametrize(
+    ("sql", "expected"),
+    [
+        ("SELECT $today", (frozenset({"today"}),)),
+        ("SELECT ?", (frozenset({"1"}),)),
+        ("SELECT $1", (frozenset({"1"}),)),
+        ("SELECT '$today'", (frozenset(),)),
+        ("SELECT 1 -- $today", (frozenset(),)),
+        (
+            "SELECT $a, $b; SELECT 1; SELECT $c",
+            (frozenset({"a", "b"}), frozenset(), frozenset({"c"})),
+        ),
+    ],
+)
+def test_statement_parameters_names_each_statements_parameters(
+    tmp_path: Path, sql: str, expected: tuple[frozenset[str], ...]
+) -> None:
+    with create_index(tmp_path / "params.duckdb") as connection:
+        assert connection.statement_parameters(sql) == expected
+
+
+def test_statement_parameters_wraps_parse_errors(tmp_path: Path) -> None:
+    with create_index(tmp_path / "params-bad.duckdb") as connection:
+        with pytest.raises(IndexStatementError) as raised:
+            connection.statement_parameters("SELEC 1")
+        assert raised.value.__cause__ is not None
+
+
+def test_execute_named_interrupt_surfaces_as_index_interrupted(
+    tmp_path: Path,
+) -> None:
+    import threading
+
+    with create_index(tmp_path / "named-interrupt.duckdb") as connection:
+        timer = threading.Timer(0.5, connection.interrupt)
+        timer.start()
+        try:
+            with pytest.raises(IndexInterrupted) as raised:
+                connection.execute_named(
+                    "SELECT count(*) FROM range(1000000000000) WHERE range >= $lo",
+                    {"lo": 0},
+                ).fetchmany(1)
+        finally:
+            timer.cancel()
+        assert raised.value.__cause__ is not None
+
+
+class _RaisingCursor:
+    description = (("v", "BIGINT"),)
+
+    def __init__(self, error: BaseException) -> None:
+        self._error = error
+
+    def fetchmany(self, size: int) -> list[tuple[object, ...]]:
+        raise self._error
+
+    def fetchall(self) -> list[tuple[object, ...]]:
+        raise self._error
+
+
+@pytest.mark.parametrize("method", ["fetchmany", "fetchall"])
+def test_cursor_result_wraps_fetch_errors_by_exception_class(method: str) -> None:
+    import duckdb
+
+    from fitdocs.index.store import IndexResult, _DuckDBErrorTypes
+
+    errors = _DuckDBErrorTypes(duckdb.Error, duckdb.InterruptException)
+
+    def fetch(error: BaseException) -> None:
+        result = IndexResult.from_cursor(cast(Any, _RaisingCursor(error)), errors)
+        getattr(result, method)(*((1,) if method == "fetchmany" else ()))
+
+    interrupt = duckdb.InterruptException("synthetic interrupt")
+    with pytest.raises(IndexInterrupted) as interrupted:
+        fetch(interrupt)
+    assert interrupted.value.__cause__ is interrupt
+    assert str(interrupted.value) == "synthetic interrupt"
+
+    failure = duckdb.InvalidInputException("synthetic failure")
+    with pytest.raises(IndexStatementError) as failed:
+        fetch(failure)
+    assert not isinstance(failed.value, IndexInterrupted)
+    assert failed.value.__cause__ is failure
+    assert str(failed.value) == "synthetic failure"
+
+
+# Smoke tests against real DuckDB. DuckDB races with its own background
+# threads here, so the exact class is not stable: an interrupt that lands while
+# the stream buffer fills can surface on the next fetchmany as
+# InvalidInputException ("unsuccessful or closed pending query result", which
+# the facade wraps as IndexStatementError), and error('boom') can surface as an
+# InterruptException from another thread's cancellation (IndexInterrupted).
+# The exact wrapping is pinned by the fake-cursor test above; these assert only
+# that a raw DuckDB exception never escapes the facade.
+
+_FETCH_ERROR_SQL = (
+    "SELECT CASE WHEN range < 5000000 THEN range ELSE error('boom') END AS v "
+    "FROM range(1000000000) WHERE range >= $lo"
+)
+
+
+def test_execute_named_fetch_interrupt_is_wrapped_in_bounded_subprocess(
+    tmp_path: Path,
+) -> None:
+    import os
+
+    script = """
+import sys, threading
+
+import duckdb
+from pathlib import Path
+from fitdocs.index.store import IndexInterrupted, IndexStatementError, create_index
+
+with create_index(Path(sys.argv[1])) as connection:
+    result = connection.execute_named(
+        "SELECT range FROM range(1000000000000) "
+        "WHERE range < 5000000 OR range > $hi",
+        {"hi": 10**12},
+    )
+    timer = threading.Timer(0.5, connection.interrupt)
+    timer.start()
+    try:
+        while result.fetchmany(100000):
+            pass
+    except (IndexInterrupted, IndexStatementError) as error:
+        print("WRAPPED", isinstance(error.__cause__, duckdb.Error))
+    finally:
+        timer.cancel()
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script, str(tmp_path / "fetch-interrupt.duckdb")],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env={**os.environ},
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.split() == ["WRAPPED", "True"]
+
+
+@pytest.mark.parametrize("method", ["fetchmany", "fetchall"])
+def test_execute_named_fetch_error_is_wrapped(tmp_path: Path, method: str) -> None:
+    import duckdb
+
+    with create_index(tmp_path / f"named-{method}-error.duckdb") as connection:
+        result = connection.execute_named(_FETCH_ERROR_SQL, {"lo": 0})
+        assert result.fetchmany(2) == [(0,), (1,)]
+        with pytest.raises((IndexStatementError, IndexInterrupted)) as raised:
+            if method == "fetchall":
+                result.fetchall()
+            else:
+                while result.fetchmany(100000):
+                    pass
+        assert isinstance(raised.value.__cause__, duckdb.Error)

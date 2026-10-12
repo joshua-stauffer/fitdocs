@@ -283,3 +283,69 @@ def test_statement_types_never_calls_execute(
         assert execute_calls == []
         assert backend_calls == []
     home_dir.assert_untouched()
+
+
+# analytics-index Amendment 1 (facade): execute_named streams from the cursor.
+
+_STREAM_SQL = "SELECT range AS n FROM range(5000000) WHERE range >= $lo"
+_STREAM_GROWTH_BOUND = 100 * 1024 * 1024
+
+_STREAM_SCRIPT = textwrap.dedent(
+    """
+    import resource
+    import sys
+    import time
+    from pathlib import Path
+    from fitdocs.index.store import create_index
+
+    def maxrss_bytes():
+        raw = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        return raw if sys.platform == "darwin" else raw * 1024
+
+    with create_index(Path(sys.argv[1])) as connection:
+        baseline = maxrss_bytes()
+        started = time.perf_counter()
+        result = connection.execute_named(sys.argv[2], {"lo": 0})
+        first = result.fetchmany(10)
+        peak = maxrss_bytes()
+        elapsed = time.perf_counter() - started
+    print(f"{baseline} {peak} {elapsed:.3f} {len(first)} {first[-1][0]}")
+    """
+)
+
+
+def test_execute_named_streams_instead_of_materialising(
+    tmp_path: Path, record_property: Any
+) -> None:
+    import os
+
+    repository_root = Path(__file__).resolve().parents[2]
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            _STREAM_SCRIPT,
+            str(tmp_path / "stream.duckdb"),
+            _STREAM_SQL,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=repository_root,
+        env={**os.environ},
+    )
+    assert completed.returncode == 0, completed.stderr
+    baseline_text, peak_text, elapsed_text, count_text, last_text = (
+        completed.stdout.split()
+    )
+    baseline, peak = int(baseline_text), int(peak_text)
+    assert (int(count_text), int(last_text)) == (10, 9)
+    assert baseline > 0
+    record_property("baseline_bytes", baseline)
+    record_property("peak_bytes", peak)
+    record_property("elapsed_s", elapsed_text)
+    growth = peak - baseline
+    assert growth < _STREAM_GROWTH_BOUND, (
+        f"baseline={baseline} peak={peak} growth={growth}"
+    )
