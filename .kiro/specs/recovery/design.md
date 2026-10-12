@@ -20,7 +20,9 @@ library so the block and the page agree.
 
 **Impact**: a new package `fitdocs.recovery`, one CLI command, one owned
 location (`CONTRACT_VERSION` main + 1), one appended chart kind
-(`reference-band`, chart-catalog Amendment 1), and `recovery` in the
+(`reference-band`, chart-catalog Amendment 1), four appended wellness
+attribution names in `fitdocs.render.attribution` (settled at the Phase 12
+cross-spec review; `workout-wellness` consumes them), and `recovery` in the
 no-network command lists. It consumes `MetricInfo.label`, which
 wellness-store provides (controller ruling R1, 2026-10-12: the field is
 folded into wellness-store's own spec at cross-spec review). No workout, history, block or wellness file changes; no index schema
@@ -56,6 +58,11 @@ change; no `DOC_VERSION` change.
   amendment).
 - **The `reference-band` chart kind** (chart-catalog Amendment 1): its
   module, registration, tests, goldens and budget.
+- **The wellness attribution names** in `src/fitdocs/render/attribution.py`,
+  appended after the existing workout-page names (append-only; settled at
+  the Phase 12 cross-spec review, consumed by `workout-wellness`):
+  `GARMIN_ORIGIN`, `WellnessAttribution`, `wellness_attribution`,
+  `wellness_attribution_line` ([AttributionNames](#attributionnames-renderattributionpy-append-only)).
 - **`recovery` in the no-network lists** (connectors amendment).
 - `docs/recovery.md`, the recovery parts of `docs/index.md`,
   `docs/ownership-contract.md`, `README.md`, the workouts skill, the
@@ -86,12 +93,22 @@ change; no `DOC_VERSION` change.
   `fitdocs.recovery.baselines` and `fitdocs.citation`; in particular never
   `fitdocs.render`, `fitdocs.history` or `fitdocs.recovery.engine`.
 - `fitdocs.recovery.view` adds `fitdocs.history` (`HistoryComputation`,
-  `DayRow`, `day_rows`) and nothing from the chart kit: the panel limit it
-  needs is passed in by the engine (controller ruling R2).
+  `DayRow`, `day_rows`) and nothing from `fitdocs.render`: the panel limit
+  it needs is passed in by the engine (controller ruling R2), and it only
+  collects the origins the attribution is decided from; `page` decides the
+  attribution (cross-spec review I-1, choice recorded in Decisions).
 - `fitdocs.recovery.charts` adds `fitdocs.render.charts.kit` (facade) and
   `fitdocs.units`.
-- `fitdocs.recovery.page` adds `fitdocs.contract`, `fitdocs.layout` and
-  `fitdocs.render.charts.kit.format` (`format_value`, `escape_markdown`).
+- `fitdocs.recovery.page` adds `fitdocs.contract`, `fitdocs.layout`,
+  `fitdocs.render.charts.kit.format` (`format_value`, `escape_markdown`) and
+  `fitdocs.render.attribution` (`wellness_attribution`,
+  `wellness_attribution_line`). `render.attribution` itself imports
+  `fitdocs.model` for its workout-page rule; that is a transitive load only —
+  no recovery module imports `fitdocs.model` (the forbidden-name scan checks
+  each module's direct imports).
+- The appended attribution names import only the standard library
+  (`collections.abc.Iterable`, `enum.StrEnum`); `render/attribution.py`'s
+  existing imports are unchanged.
 - `fitdocs.recovery.engine` adds `fitdocs.history` (`read_history_inputs`,
   `compute_history`), `fitdocs.declaration` (`ensure_declarations`),
   `fitdocs.layout`, `fitdocs.contract`, and the chart kit facade's
@@ -114,7 +131,12 @@ change; no `DOC_VERSION` change.
 - Any change to a `BaselineMethod`, a constant's value, the shown-source rule
   or the as-of semantics (`workout-wellness` blocks move; `BASELINES_VERSION`
   is bumped).
-- Any change to `BaselineDay`'s fields or `baseline_key`'s text.
+- Any change to `BaselineDay`'s fields.
+- Any change to `fitdocs.recovery.page._FORBIDDEN_PHRASE_PATTERN`, which
+  `workout-wellness`'s tests consume to keep the morning-of block
+  descriptive.
+- Any change to the wellness attribution names, their rule or the line text
+  (`workout-wellness` consumes them).
 - A change to wellness-store's `WellnessSeries` API, canonical rule or
   day-boundary rule.
 - A change to `compute_history`/`day_rows` or the methodology rule.
@@ -135,12 +157,20 @@ at landing.
   `requirements.md` `## Amendment N`, `design.md` dated paragraph,
   `spec.json` entry.
 - **connectors — `recovery` makes no connector request**: Req 14.1 lists
-  `recovery`; `tech.md`'s list gains `recovery` before `check` (after
-  `dashboard` when present), keeping the pinned tail phrase
-  (`tests/connectors/test_network_statements.py:667-670`) green; a new pin
-  covers `recovery`; `tests/connectors/test_e2e.py:320-332` gains
-  `("recovery", [])` over a root whose series holds values (staged through
-  the drain), so the command really renders under the socket guard;
+  `recovery`; `tech.md`'s list becomes, in its final order with dashboards,
+  "`sync`, `regen`, `load`, `dashboard`, `recovery`, `check`, `query`,
+  `history`, `plan`, `derive-benchmarks`, `index`" (inserted before `check`,
+  so the tail pins `tests/connectors/test_network_statements.py:667-670` and
+  `tests/query/test_changelog_entry.py:143-146` stay green unedited); when
+  dashboards is on `main`, its pin of "`load`, `dashboard`, `check`" is
+  re-pinned to "`load`, `dashboard`, `recovery`, `check`, `query`,
+  `history`"; a new pin covers `recovery`; `tests/connectors/test_e2e.py`'s
+  parametrization ends `…, ("query", …), ("dashboard", ["refresh"]),
+  ("recovery", [])`, over a root whose series holds values (staged through
+  the drain), so the command really renders under the socket guard, and the
+  module docstring's command list names `recovery`; if recovery lands before
+  dashboards, the landing task logs a TOUCHING line telling impl-dashboards
+  to insert `dashboard` before `recovery`;
   `requirements.md` `## Amendment N`, `spec.json` entry. Disjoint from
   `wellness-pull`'s connectors amendment (which changes Req 1.x and the
   pull, not Req 14.1's command list).
@@ -237,7 +267,7 @@ src/fitdocs/recovery/
 ├── __init__.py      # Facade: re-exports the baseline library only (no page, no engine)
 ├── constants.py     # Transform, BaselineMethod, MethodRule, the CitedConstants and their source records,
 │                    #   METHODS, BASELINED_METRICS, SLEEP_METRICS, lookback_days, LOOKBACK_DAYS, BASELINES_VERSION, RULES
-├── baselines.py     # RangePosition, BaselineDay, Baselines (of/on/shown_source/shown), baseline_key
+├── baselines.py     # RangePosition, BaselineDay, Baselines (of/on/shown_source/shown)
 ├── view.py          # The page model: Window, ShownDay, MarkedRun, SourceChange, SourceNote, SignalView,
 │                    #   SleepView, Panel, OtherView, LoadView, CoverageRow, RecoveryView, OTHER_SIGNALS,
 │                    #   WINDOW_DAYS, build_view (pure)
@@ -266,6 +296,9 @@ tests/declaration_golden/recovery.AGENTS.md
 - `src/fitdocs/cli.py` — `recovery_command`, `_report_recovery`, the module
   docstring's command list and exit codes.
 - `src/fitdocs/render/charts/kit/registry.py` — append `reference_band.KIND`.
+- `src/fitdocs/render/attribution.py` — append `GARMIN_ORIGIN`,
+  `WellnessAttribution`, `wellness_attribution`,
+  `wellness_attribution_line` (append-only; nothing existing changes).
 - `src/fitdocs/skills/fitdocs-workouts/SKILL.md` — the recovery paragraph
   and fence.
 - `.kiro/steering/tech.md` — `recovery` in the no-network list;
@@ -288,7 +321,12 @@ tests/declaration_golden/recovery.AGENTS.md
   `tests/test_public_api.py` (`_RECOVERY_SURFACE`),
   `tests/render/charts/kit/test_boundary.py` (module tuple and kind rank),
   `tests/render/charts/kit/test_catalog_budgets.py` (one budget appended),
-  wellness's model tests (the `MetricInfo` field list).
+  `tests/render/test_attribution.py` (the appended names' tests).
+- `tests/identity/test_contract_docs.py`: a literal history-paragraph pin,
+  appended to `test_the_version_history_records_the_amendment` (:189), and
+  the head-paragraph pin (:177-187) re-pinned to recovery's "What changed"
+  paragraph, together with every peer head-paragraph pin on `main` at
+  landing (found by grepping the outgoing paragraph's phrases).
 
 ## System Flows
 
@@ -379,12 +417,13 @@ converted back with `exp`; positions are decided in the transformed scale.
 | 12.4 | Unit symbols and precision as charts | Page | `kit.format.format_value` | — |
 | 12.5 | Days with a value per metric and source | View, Page | `CoverageRow` | — |
 | 12.6 | Light and dark | Charts | kit theme | — |
+| 12.7, 12.8 | Garmin attribution beneath the title, or none | View, Page, AttributionNames | `RecoveryView.origins`, `wellness_attribution`, `wellness_attribution_line` | — |
 | 13.1, 13.2, 13.3 | Owned, declared, contract bump | OwnedLocation, ConfinementEntry | `OWNED_PATHS`, `DECLARED_DIRS`, `CONTRACT_VERSION` | — |
 | 13.4 | Confined writes | Engine, ConfinementEntry | write set | Command |
 | 13.5 | Foreign occupants refused | Engine | `FileOutcome.FOREIGN` | Command |
 | 13.6 | Atomic, unchanged untouched, stale removed | Engine | `_write_if_changed`, stale removal | Command |
 | 14.1, 14.2, 14.3 | Determinism and churn | all pure modules, Engine | no clock; byte compare | — |
-| 15.1, 15.2 | One computation for every consumer | Baselines, Facade | `Baselines`, `baseline_key` | — |
+| 15.1, 15.2 | One computation for every consumer | Baselines, Facade | `Baselines.shown`, `Baselines.on` | — |
 | 16.1 | Charts through the kit | Charts | `render_chart` | — |
 | 16.2, 16.3, 16.4 | The new kind | ReferenceBandKind | `reference-band` `KindSpec` | — |
 | 17.1, 17.2 | No network; lists name recovery | NoNetworkLists, Boundary guard | connectors amendment | — |
@@ -400,13 +439,14 @@ converted back with `exp`; positions are decided in the transformed scale.
 | Constants | recovery core | Methods, cited constants, rules | 3.3-3.7, 11.1-11.5 | citation, wellness facade (P0) | State |
 | Baselines | recovery core | Per-source baselines, shown source | 3, 4.1, 4.4, 5.1-5.3, 15 | Constants, wellness facade (P0) | Service |
 | Facade | recovery API | What other features import | 15.1 | Baselines (P0) | Service |
-| View | recovery core | What the page shows, as data | 2, 4.2, 4.3, 5.5, 5.6, 6-9, 12.5 | Baselines, history (P0) | Service |
+| View | recovery core | What the page shows, as data | 2, 4.2, 4.3, 5.5, 5.6, 6-9, 12.5, 12.7 | Baselines, history (P0) | Service |
 | Charts | recovery render | Chart requests and SVGs | 4.1, 5.4, 6.2, 7.1, 8.1, 9.1, 12.6, 16.1 | kit facade (P0) | Service |
-| Page | recovery render | Markdown and frontmatter | 2.3, 6.3, 7.2, 10, 11, 12 | contract, layout, kit.format (P0) | Service |
+| Page | recovery render | Markdown and frontmatter | 2.3, 6.3, 7.2, 10, 11, 12 | contract, layout, kit.format, render.attribution (P0) | Service |
 | Engine | recovery I/O | Read, compute, write, report | 1, 9.2-9.5, 13.4-13.6, 14 | all of the above, declaration (P0) | Batch |
 | CliRecovery | cli | Command, report, exit | 1.2, 1.6-1.8 | Engine (P0) | Service |
 | OwnedLocation | layout/contract/declaration/docs | Location, declaration, version | 12.1, 13.1-13.3, 18.2 | — | State |
 | ReferenceBandKind | chart kit | The new kind | 4.1, 5.4, 16.2-16.4 | kit shared layers (P0) | Service |
+| AttributionNames | render | Wellness Garmin attribution rule and line | 12.7, 12.8 | — | Service |
 | NoNetworkLists | steering/tests/connectors | `recovery` named offline | 17.1, 17.2 | — | — |
 | ConfinementEntry | tests | `recovery` writing entry point | 13.2, 13.4 | — | — |
 | Docs | docs/skill/changelog | User-facing text | 18 | — | — |
@@ -539,10 +579,6 @@ names, units, ranges and labels stay in wellness-store's `METRICS`.
   additionally on the canonical flags of `D−6 … D`. The baseline and range of
   D never include D; the rolling mean does. A value arriving for day X can
   change results for days X … X + `LOOKBACK_DAYS` only (3.9).
-- `baseline_key(bd)` is the canonical text of a `BaselineDay`:
-  `"v{BASELINES_VERSION}|metric|source|day|value|origin|rolling_mean|rolling_count|baseline_mean|baseline_sd|baseline_count|range_low|range_high|position"`,
-  floats as `repr`, `None` as the empty string; equal keys ⇔ equal shown
-  numbers (workout-wellness fingerprints with it).
 
 ```python
 class RangePosition(StrEnum):
@@ -572,8 +608,6 @@ class Baselines:
     def on(self, metric: Metric, source: str, day: date) -> BaselineDay: ...
     def shown_source(self, metric: Metric, day: date) -> str | None: ...
     def shown(self, metric: Metric, day: date) -> BaselineDay | None: ...
-
-def baseline_key(day: BaselineDay) -> str: ...
 ```
 
 - Cost: `of` is O(n) over `series.values`; `on` is O(`LOOKBACK_DAYS`) map
@@ -583,7 +617,9 @@ def baseline_key(day: BaselineDay) -> str: ...
 
 Re-exports exactly: `Baselines`, `BaselineDay`, `RangePosition`,
 `BaselineMethod`, `Transform`, `METHODS`, `BASELINED_METRICS`,
-`SLEEP_METRICS`, `LOOKBACK_DAYS`, `BASELINES_VERSION`, `baseline_key`.
+`SLEEP_METRICS`, `LOOKBACK_DAYS`, `BASELINES_VERSION`. (`baseline_key`,
+drafted for workout-wellness's fingerprint, was dropped at the Phase 12
+cross-spec review: no consumer uses it.)
 Imports nothing but `baselines` and `constants`; pinned by
 `tests/test_public_api.py` (`_RECOVERY_SURFACE`, a literal set, with
 `_RECOVERY_SURFACE_OWNERS` naming the submodule that defines each name) and
@@ -598,7 +634,7 @@ fitdocs.recovery.baselines, fitdocs.citation}`, and none of them is
 | Field | Detail |
 |-------|--------|
 | Intent | Everything the page shows, as typed data, from the series, the baselines and the history computation |
-| Requirements | 2.1, 2.2, 4.2, 4.3, 5.5, 5.6, 6.1, 6.3, 7.2, 7.3, 8.1, 8.2, 8.3, 9.1, 9.5, 9.6, 12.5 |
+| Requirements | 2.1, 2.2, 4.2, 4.3, 5.5, 5.6, 6.1, 6.3, 7.2, 7.3, 8.1, 8.2, 8.3, 9.1, 9.5, 9.6, 12.5, 12.7, 12.8 |
 
 - `WINDOW_DAYS: Final = 90` (a display choice, not a method constant).
 - `build_view(series, baselines, load, *, panel_limit) -> RecoveryView | None`: `None` when
@@ -636,6 +672,17 @@ fitdocs.recovery.baselines, fitdocs.citation}`, and none of them is
 - **Coverage**: one `CoverageRow` per (page metric, source) with at least one
   value in the window, counting window days with a value (12.5); `absent` =
   the baselined metrics and `sleep_s` with no value in the window (6.1).
+- **Origins** (12.7, 12.8): `origins` is the set of origins, `None` included
+  for a value whose origin is unrecorded, of every series value a printed or
+  charted figure uses: for each `SignalView` (the baselined metrics and
+  `sleep_s`) and each window day D with a shown source s, the values of s
+  for that metric on D − `LOOKBACK_DAYS` … D (the days its value, rolling
+  mean and range read); for each `SleepView.rows` entry (metric m, source s,
+  night N), the values of s for m on N − `LOOKBACK_DAYS` … N; and every
+  present value of every charted other-signal panel (overflow pairs are only
+  named, so they contribute none). The fitness, fatigue and form section
+  uses no series value. `view` does not decide the attribution; `page` does
+  (no `fitdocs.render` import in `view`).
 
 ```python
 @dataclass(frozen=True)
@@ -717,6 +764,7 @@ class RecoveryView:
     other: OtherView | None
     coverage: tuple[CoverageRow, ...]
     absent: tuple[Metric, ...]
+    origins: frozenset[str | None]     # see Origins above
 
 OTHER_SIGNALS: Final[tuple[Metric, ...]]
 WINDOW_DAYS: Final[int]
@@ -757,7 +805,7 @@ def build_view(series: WellnessSeries, baselines: Baselines,
 | Field | Detail |
 |-------|--------|
 | Intent | The recovery page's markdown, pure |
-| Requirements | 2.3, 4.2, 4.3, 5.5, 5.6, 6.1, 6.3, 7.2, 8.3, 9.5, 9.6, 9.7, 10.1-10.3, 11.1-11.5, 12.1-12.5 |
+| Requirements | 2.3, 4.2, 4.3, 5.5, 5.6, 6.1, 6.3, 7.2, 8.3, 9.5, 9.6, 9.7, 10.1-10.3, 11.1-11.5, 12.1-12.5, 12.7, 12.8 |
 
 - `RECOVERY_TYPE = "recovery"` (≠ `contract.WORKOUT_TYPE`, ≠
   `history.HISTORY_TYPE`), `RECOVERY_TITLE = "Recovery"`,
@@ -767,7 +815,10 @@ def build_view(series: WellnessSeries, baselines: Baselines,
   ordered plain lines like history's (`methodology` omitted when no load is
   shown; dates quoted ISO strings).
 - Body, fixed order: frontmatter; `contract.DOC_BANNER`; `# Recovery`; the
-  opening paragraph (as-of, window, "Each signal is shown against the
+  attribution line `wellness_attribution_line(wellness_attribution(view.origins))`
+  directly beneath the title when it is not `None` ("Data source: Garmin" or
+  "Data sources: Garmin and other sources"; no line at all otherwise, 12.7,
+  12.8); the opening paragraph (as-of, window, "Each signal is shown against the
   athlete's own baseline, computed separately for every source. This page
   describes the data and draws no conclusion from it."); `## Fitness,
   Fatigue and Form`; one `## <label>` section per `SignalView`
@@ -938,6 +989,15 @@ def run_recovery(data_root: Path, *, methodology: str | None = None) -> Recovery
   the two owned-path bullets, the declared-directory count, a "Recovery
   Page" section (what is written, when, what is never written, foreign
   files kept).
+- **Version pins** (cross-spec review I-2/M-2): a LITERAL history-paragraph
+  pin, appended to `tests/identity/test_contract_docs.py`'s
+  `test_the_version_history_records_the_amendment`: `"Raised from ``N`` to
+  ``N+1`` by recovery"` with the landed numbers written as literals at
+  landing (never derived from the live `CONTRACT_VERSION`); and the
+  head-paragraph pin (`test_the_changed_at_this_version_paragraph_names_the_amendment`,
+  `:177-187`) re-pinned to recovery's "What changed" phrases, with every
+  peer head-paragraph pin on `main` at landing found by grepping the
+  outgoing paragraph's phrases and re-pinned in the same change.
 
 #### ReferenceBandKind (chart-catalog Amendment 1)
 
@@ -1039,6 +1099,39 @@ with chart-catalog Requirement 2 and Requirement 12 applying to it):
   (rating), Mood (rating), Motivation (rating), Soreness (rating), Stress
   (rating), Injury (rating), Hydration (rating).
 
+#### AttributionNames (`render/attribution.py`, append-only)
+
+| Field | Detail |
+|-------|--------|
+| Intent | The wellness Garmin attribution rule and its line, shared by recovery and workout-wellness |
+| Requirements | 12.7, 12.8 |
+
+Settled at the Phase 12 cross-spec review (binding names). Appended after
+the existing workout-page names; nothing existing changes, and the
+appended code imports only the standard library.
+
+```python
+GARMIN_ORIGIN: Final[str] = "garmin"          # the wellness origin token
+
+class WellnessAttribution(StrEnum):
+    NONE = "none"
+    SOLE = "sole"
+    CONTRIBUTING = "contributing"
+
+def wellness_attribution(origins: Iterable[str | None]) -> WellnessAttribution:
+    """NONE when "garmin" is absent; SOLE when the recorded origins are exactly
+    {"garmin"} and none is None (unrecorded); otherwise CONTRIBUTING."""
+
+def wellness_attribution_line(attribution: WellnessAttribution) -> str | None:
+    """SOLE → SOLE_SOURCE_PREFIX + "Garmin"; CONTRIBUTING → SOURCES_PREFIX +
+    "Garmin and other sources"; NONE → None."""
+```
+
+- The line reuses the module's existing `SOLE_SOURCE_PREFIX` ("Data
+  source: ") and `SOURCES_PREFIX` ("Data sources: "), so a workout page's
+  device line and a wellness line read alike.
+- Recovery lands before `workout-wellness`, which consumes these names.
+
 #### NoNetworkLists and ConfinementEntry
 - Connectors amendment as listed above; `structure.md` gains the
   `recovery` dependency sentence ("`recovery` imports `wellness`,
@@ -1055,8 +1148,9 @@ with chart-catalog Requirement 2 and Requirement 12 applying to it):
   section; the method with its constants and citations (generated text is
   not duplicated: the page's Method section is the reference, the doc
   explains it); per-source baselines and the shown-source rule; absent
-  values and "not shown" lines; what the page never does; the
-  `reference-band` kind for dashboard authors.
+  values and "not shown" lines; the Garmin attribution line beneath the
+  title (when it appears, and that chart images carry none); what the page
+  never does; the `reference-band` kind for dashboard authors.
 - `docs/index.md` row; `[project.urls] Recovery`; README ownership summary
   and one sentence under "Show training history".
 - Workouts skill: after the `fitdocs regen` block in "Commands to run", a
@@ -1111,7 +1205,7 @@ Normative for `workout-wellness` (and any later consumer of baselines).
   renderer may import it.
 - **Public names**: `Baselines`, `BaselineDay`, `RangePosition`,
   `BaselineMethod`, `Transform`, `METHODS`, `BASELINED_METRICS`,
-  `SLEEP_METRICS`, `LOOKBACK_DAYS`, `BASELINES_VERSION`, `baseline_key`.
+  `SLEEP_METRICS`, `LOOKBACK_DAYS`, `BASELINES_VERSION`.
 - **Input**: `fitdocs.wellness.read_series(data_root) -> WellnessSeries`;
   build once per run with `Baselines.of(series)`.
 - **Output**: `Baselines.shown(metric, day) -> BaselineDay | None` (the
@@ -1127,8 +1221,14 @@ Normative for `workout-wellness` (and any later consumer of baselines).
   source's values on D−60 … D and, for `shown`, on the canonical flags of
   D−6 … D. A value arriving for day X changes results for days X … X +
   `LOOKBACK_DAYS` (60) only — the bound for a targeted re-render.
-- **Fingerprint**: `baseline_key(bd)` (includes `BASELINES_VERSION`); equal
-  keys mean equal shown numbers.
+- **Attribution**: `fitdocs.render.attribution.GARMIN_ORIGIN`,
+  `WellnessAttribution`, `wellness_attribution(origins)` and
+  `wellness_attribution_line(attribution)`, appended by recovery (which
+  lands first); a consumer passes the origins (`None` for unrecorded) of
+  every value its figures use and prints the returned line.
+- **Descriptive guard**: `fitdocs.recovery.page._FORBIDDEN_PHRASE_PATTERN`
+  is the pattern a consumer's tests apply to its own text (a private name
+  consumed by tests only; a Revalidation Trigger).
 - **Labels and units**: `fitdocs.wellness.METRICS[metric].label` and
   `.unit`; numbers formatted like the page through
   `fitdocs.render.charts.kit.format.format_value` with a `Column` of that
@@ -1185,7 +1285,16 @@ carries 17 metrics and no sleep stages or body battery.
   only); absent days never zero (a day of 0-like gap leaves the mean of the
   others); the shown-source carry at 6 and 7 days (mutation: 7); X + 60
   bound (a value at X changes X + 60 and not X + 61).
-- `baseline_key`: changes when any field changes; equal for equal days.
+- Attribution names (`tests/render/test_attribution.py`): `{"garmin"}` →
+  SOLE; `{"garmin", "apple"}` and `{"garmin", None}` → CONTRIBUTING; `{"apple"}`,
+  `{None}` and `{}` → NONE; the exact lines "Data source: Garmin" and "Data
+  sources: Garmin and other sources" built from the existing prefixes, and
+  `None` for NONE (mutations: ignore `None` origins; SOLE on any garmin;
+  spell the brand twice).
+- View origins: a Garmin value read only by a range (D − 60) is included and
+  one at D − 61 is not; an overflow panel's origins are not included; the
+  page prints the line beneath the title for SOLE and CONTRIBUTING and none
+  for NONE.
 - View: as-of from the series (equal views under two faked system dates,
   using the history precedent's `time.time` fake, `tests/test_history_e2e.py:213`;
   `date.today` itself cannot be monkeypatched); window length 90; runs grouping with a
@@ -1235,6 +1344,13 @@ carries 17 metrics and no sleep stages or body battery.
   half (only `fitdocs.cli` imports `fitdocs.recovery.engine`), each with a
   positive control.
 
+## Open Questions / Risks
+- **Chart images** (maintainer decision, the same question intervals-connector
+  `design.md:1190-1194` leaves open): Garmin's "Visual and social media"
+  section asks for the attribution "in every image" of exported visual
+  assets. This design places the line beneath the page title, above every
+  embedded chart, and does not stamp the chart SVGs.
+
 ## Security Considerations
 - Paths are composed only from fixed names (`recovery`, `CHART_NAMES`); no
   series content reaches a path. Symlinks are never written through.
@@ -1279,3 +1395,7 @@ at discovery" and the brief; each is revisable at review.
     (controller ruling R1) instead of a label table in recovery.
 15. **Unverified citations** ship as `FitdocsChoice`; values are fixed by
     this design and change only by a maintainer decision.
+16. **Attribution split** (cross-spec review I-1): `view` collects the
+    origins and `page` calls `wellness_attribution`, so `view` keeps no
+    `fitdocs.render` dependency; the line goes on the page only, not into the
+    chart images (an Open Question for the maintainer).

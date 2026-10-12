@@ -63,7 +63,8 @@ Terms used below:
   shown-source rule, as one computation every fitdocs feature uses; the
   recovery page (sections, charts, method statement, citations, coverage);
   the recovery command and its report; the page's owned location and its
-  ownership-contract entry; one new chart kind the page needs, added to the
+  ownership-contract entry; the Garmin attribution line for wellness values,
+  and the shared rule that decides it; one new chart kind the page needs, added to the
   chart catalog for every chart consumer; the no-network command list, the
   write-confinement guard, the documentation, the packaged skill and the
   release notes.
@@ -206,6 +207,8 @@ Terms used below:
 4. The recovery page shall show every value with the unit vocabulary's symbol and precision, as its charts label the same value.
 5. The recovery page shall state, for each metric and source it shows, how many days of the window hold a value.
 6. The recovery page shall be legible in light and dark viewers, through the chart kit's theme.
+7. When any wellness value used by a figure the recovery page prints or charts records Garmin as its origin, the recovery page shall show a Garmin attribution line directly beneath its title, naming Garmin as the sole data source when every such value records Garmin as its origin and as one of several sources otherwise.
+8. If no wellness value used by a figure on the recovery page records Garmin as its origin, then the recovery page shall show no attribution line.
 
 ### Requirement 13: A New Owned Location
 **Objective:** As someone whose wiki fitdocs installs into, I want the recovery page's location declared and guarded like every other place fitdocs writes, so that the ownership promise stays complete and checkable.

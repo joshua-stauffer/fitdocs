@@ -114,7 +114,9 @@
   chart-kit or catalog shared layer (`schema`, `data`, `validate`, `frame`,
   `layout`, `scales`, `marks`, `cartesian`, `cells`, `theme`, `format`) or to
   another kind; an edit to `fitdocs.history`, `fitdocs.wellness`, `sync`,
-  `index` or `dashboards`; a write outside `recovery/` from a recovery path;
+  `index` or `dashboards`; any edit to `src/fitdocs/render/attribution.py`
+  other than 3.3's append of the four settled wellness names; a write
+  outside `recovery/` from a recovery path;
   changing a constant's value (1.1 changes records, never values).
 
 ## Shared source files
@@ -138,6 +140,10 @@ Each file below has more than one writer; its writers are sequential.
   (`[project.urls] Recovery`).
 - `tests/test_confinement.py`: 1.6 (docstrings only, if any), then 6.1 (the
   `recovery` entry point and its registration tests).
+- `tests/identity/test_contract_docs.py`: 1.6 (the literal history pin,
+  numbers written as literals as `main` stands, and the head-paragraph
+  re-pin), then 6.2 (the landed literals and every peer head-paragraph pin on `main`
+  at landing).
 - `CHANGELOG.md`: 5.2 only.
 
 ## Cross-spec shared files (append-only, keep both sides on rebase)
@@ -152,7 +158,12 @@ docstring), the no-network command lists (`tech.md`, connectors Req 14.1,
 `[tool.mypy].files`, `CHANGELOG.md` Unreleased, `docs/index.md` rows and
 `_REQUIRED_ENTRY_POINT_LINKS` (`tests/test_docs_guarantees.py:1111`),
 `.kiro/steering/structure.md`, `tests/test_public_api.py`, the workouts skill
-and `tests/test_agent_skill.py`.
+and `tests/test_agent_skill.py`, `src/fitdocs/render/attribution.py` and
+`tests/render/test_attribution.py` (the four appended wellness names, 3.3;
+`workout-wellness` consumes them and lands after recovery),
+`tests/identity/test_contract_docs.py`'s version-history test (append-only
+literal pins, one per lander) and every head-paragraph pin of
+`docs/ownership-contract.md`.
 
 ## Test File Ownership
 
@@ -162,6 +173,8 @@ and `tests/test_agent_skill.py`.
   `test_boundary.py` and the `_RECOVERY_SURFACE` / `_RECOVERY_SURFACE_OWNERS`
   pins in `tests/test_public_api.py`: **1.5** (4.3 closes the boundary
   guard).
+- The literal history pin and the head-paragraph re-pins in
+  `tests/identity/test_contract_docs.py`: **1.6**, finished by **6.2**.
 - Golden `tests/declaration_golden/recovery.AGENTS.md` and the re-pins in
   `tests/test_layout.py`, `tests/test_declaration*.py`,
   `tests/test_ownership_contract.py`, `tests/identity/test_contract_docs.py`,
@@ -172,8 +185,9 @@ and `tests/test_agent_skill.py`.
   `test_boundary.py` re-pin, the registry line: **2.1**. Budget, listing and
   order pins: **2.2**.
 - `tests/recovery/test_view.py`: **3.1**; `test_charts.py`: **3.2**;
-  `test_page.py` and `golden/`: **3.3** (sections) and **3.4** (method,
-  references, coverage, descriptive guard).
+  `test_page.py` and `golden/`: **3.3** (sections, the attribution line) and
+  **3.4** (method, references, coverage, descriptive guard);
+  `tests/render/test_attribution.py` (the appended wellness tests): **3.3**.
 - `tests/recovery/test_engine.py`: **4.1**; `test_cli_recovery.py` and the
   command-count re-pins: **4.2**; the boundary guard's closing pins: **4.3**.
 - `tests/recovery/test_docs_recovery.py`, the `_REQUIRED_ENTRY_POINT_LINKS`
@@ -255,8 +269,8 @@ and `tests/test_agent_skill.py`.
 - [ ] 1.3 Compute one source's rolling mean, baseline, range and position, and publish the facade
   - `baselines.py` per design § Baselines: `RangePosition`, `BaselineDay`,
     `Baselines.of` and `Baselines.on`; `math.fsum` and `math.sqrt` only.
-    The facade re-exports every design name except `baseline_key`, which
-    1.4 adds (`shown_source` and `shown` also arrive in 1.4, as methods).
+    The facade re-exports every design name (`shown_source` and `shown`
+    arrive in 1.4, as methods of `Baselines`).
   - `tests/recovery/builders.py`: synthetic `SeriesValue` sets per
     (metric, source, day), each stating its canonical flag explicitly
     (exactly one canonical value per metric-day that has values); the
@@ -285,19 +299,18 @@ and `tests/test_agent_skill.py`.
     with every mutation recorded red.
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.8, 3.10, 4.4, 5.3, 15.1_
 
-- [ ] 1.4 Choose the shown source, fingerprint a day and bound what a late value can change
-  - `baselines.py`: `Baselines.shown_source`, `Baselines.shown`,
-    `baseline_key` per design § Baselines; the facade's re-exports complete.
+- [ ] 1.4 Choose the shown source and bound what a late value can change
+  - `baselines.py`: `Baselines.shown_source` and `Baselines.shown` per
+    design § Baselines.
   - **Tests** (`tests/recovery/test_shown.py`): the shown source is the
     day's canonical source; it is carried across a 6-day gap and not a 7-day
     one; `shown` equals `on` for the shown source; a value at day X changes
-    the result of day X + 60 and not X + 61; `baseline_key` differs when any
-    one field changes and is equal for equal days, and starts with the
-    version; results are equal under two `TZ` values and two faked system
-    dates (the history precedent's `time.time` fake, in-process).
+    the result of day X + 60 and not X + 61; results are equal under two
+    `TZ` values and two faked system dates (the history precedent's
+    `time.time` fake, in-process).
   - **Mutations:** carry 7 days; pick the first rather than the latest
-    canonical day in the carry window; drop `origin` from the key; drop the
-    version prefix.
+    canonical day in the carry window; shorten the dependency window so a
+    value at X stops reaching X + 60.
   - **Observable:** `uv run pytest tests/recovery/test_shown.py` green; the
     facade lists every name of design § Facade.
   - _Requirements: 3.9, 3.10, 5.1, 5.2, 15.1, 15.2_
@@ -343,6 +356,14 @@ and `tests/test_agent_skill.py`.
   - `contract.py`: `CONTRACT_VERSION` main + 1 with the design's history
     paragraph. `docs/ownership-contract.md`: version, "What changed", owned
     bullets, declared-directory count, the "Recovery Page" section.
+  - `tests/identity/test_contract_docs.py`: append to
+    `test_the_version_history_records_the_amendment` a LITERAL pin
+    `"Raised from ``N`` to ``N+1`` by recovery"` with the numbers written as
+    literals (never derived from the live `CONTRACT_VERSION`; 6.2 rewrites
+    them to the landed values); re-pin the head-paragraph test (`:177-187`)
+    to recovery's "What changed" phrases, and re-pin every other
+    head-paragraph pin on `main` (found by grepping the outgoing paragraph's
+    phrases across `tests/`).
   - Re-pins named in Test File Ownership (append-only where a list); every
     existing declaration golden regenerated for the version line only;
     `tests/test_confinement.py` and `tests/test_declaration_refresh.py`
@@ -356,7 +377,9 @@ and `tests/test_agent_skill.py`.
   - **Mutations:** drop `recovery/assets/` from `OWNED_PATHS`
     (`test_ownership_contract` reds); misspell the heading (golden reds);
     leave `CONTRACT_VERSION` unchanged (the preserved pin and the doc's
-    version line red).
+    version line red); change "by recovery" in the history paragraph (the
+    literal history pin reds); keep the outgoing "What changed" paragraph
+    (the head-paragraph pin reds).
   - **Observable:** `uv run pytest tests/test_layout.py tests/test_declaration*.py
     tests/test_ownership_contract.py tests/test_confinement.py
     tests/test_declaration_refresh.py tests/index tests/identity` green with
@@ -426,7 +449,9 @@ and `tests/test_agent_skill.py`.
 - [ ] 3.1 Build the page model from the series, the baselines and the history computation
   - `view.py` per design § View: `WINDOW_DAYS`, `OTHER_SIGNALS`, the view
     types and `build_view(series, baselines, load, *, panel_limit)`;
-    nothing from the chart kit (controller ruling R2).
+    nothing from `fitdocs.render` (controller ruling R2); `RecoveryView.origins`
+    collected per design § View "Origins" (the page, not the view, decides
+    the attribution).
   - `tests/recovery/builders.py` (append, then frozen): synthetic workout
     pages with date, load and methodology frontmatter under a data root, so a
     test obtains a real `HistoryComputation` through `read_history_inputs`
@@ -442,15 +467,19 @@ and `tests/test_agent_skill.py`.
     `panel_limit=3` the fourth is (the argument, not a literal, cuts);
     coverage counts; load rows mapped onto the window with days past the
     series end `None`, a suppressed week counted in `unavailable_days`, and
-    `note` set when no page records a load.
-  - **Mutations:** as-of from the first day; runs ignoring the source;
+    `note` set when no page records a load; `origins` includes a `garmin`
+    value read only by a range (day D − 60 of a shown day D) and excludes
+    one at D − 61, includes `None` for an unrecorded origin, includes a
+    charted panel's origins and excludes an overflow pair's.
+  - **Mutations:** as-of from the first day; origins over D − 59 … D only;
+    origins dropping `None`; origins including overflow pairs; runs ignoring the source;
     panels holding the canonical value instead of the source's own; the cut
     at `panel_limit + 1`; load rows not offset by the window start; add a
     `fitdocs.render.charts.kit` import to `view.py` (1.5's rank row for
     `view` reds).
   - **Observable:** `uv run pytest tests/recovery/test_view.py` green.
   - _Depends: 1.4_
-  - _Requirements: 2.1, 2.2, 4.2, 4.3, 5.5, 5.6, 6.1, 6.3, 7.2, 7.3, 8.1, 8.2, 8.3, 8.4, 9.1, 9.5, 9.6, 12.5_
+  - _Requirements: 2.1, 2.2, 4.2, 4.3, 5.5, 5.6, 6.1, 6.3, 7.2, 7.3, 8.1, 8.2, 8.3, 8.4, 9.1, 9.5, 9.6, 12.5, 12.7, 12.8_
 
 - [ ] 3.2 Draw every section's chart through the kit
   - `charts.py` per design § Charts: `CHART_NAMES`, one request and one row
@@ -470,26 +499,48 @@ and `tests/test_agent_skill.py`.
   - _Depends: 2.1_
   - _Requirements: 2.2, 4.1, 5.4, 6.2, 6.4, 7.1, 8.1, 9.1, 12.6, 16.1_
 
-- [ ] 3.3 Write the page's frontmatter and its signal, sleep, other-signal and load sections
+- [ ] 3.3 Write the page's frontmatter, its attribution line and its signal, sleep, other-signal and load sections
+  - `src/fitdocs/render/attribution.py` (append-only, after the existing
+    workout-page names; nothing existing changes): `GARMIN_ORIGIN`,
+    `WellnessAttribution`, `wellness_attribution`,
+    `wellness_attribution_line` exactly as design § AttributionNames (the
+    names settled at the Phase 12 cross-spec review), importing only the
+    standard library. Tests appended to `tests/render/test_attribution.py`:
+    `{"garmin"}` → SOLE; `{"garmin", "apple"}` and `{"garmin", None}` →
+    CONTRIBUTING; `{"apple"}`, `{None}` and an empty iterable → NONE; the
+    exact lines "Data source: Garmin" and "Data sources: Garmin and other
+    sources", and `None` for NONE; the existing workout-page tests
+    unchanged.
   - `page.py` per design § Page: `RECOVERY_TYPE`, `RECOVERY_TITLE`,
     `RECOVERY_VERSION`, `RECOVERY_FRONTMATTER_KEYS`, the plain-line
     frontmatter, `DOC_BANNER`, the title, the opening paragraph and the
     load, signal, sleep and other-signal sections with their fixed sentences;
     every number through `kit.format.format_value` on the chart's column;
     headings and rows from `METRICS[metric].label`; chart links through
-    `layout.recovery_asset_rel_path`.
+    `layout.recovery_asset_rel_path`; the attribution line
+    `wellness_attribution_line(wellness_attribution(view.origins))` directly
+    beneath `# Recovery` when not `None`; no stamp in any chart image (an
+    Open Question for the maintainer, design § Open Questions).
   - **Tests** (`tests/recovery/test_page.py`, part 1): section order; each
     fixed sentence and each "not shown" form with its counts; runs and
     source changes worded as designed; frontmatter keys in order,
     `methodology` omitted without load; `RECOVERY_TYPE` differs from the
     workout and history types; each number equals `format_value` of the
-    chart column; relative chart links; a byte golden for one synthetic view
-    (written only by the module's `main()`).
+    chart column; relative chart links; the attribution line is the line
+    right after `# Recovery` for SOLE and CONTRIBUTING views and absent for a
+    NONE view (asserted false on that fixture first); a byte golden for one
+    synthetic view with a Garmin origin (written only by the module's
+    `main()`).
   - **Mutations:** print the arithmetic HRV mean; drop the "not shown"
-    branch; swap `above` and `below`; emit `methodology` when no load.
+    branch; swap `above` and `below`; emit `methodology` when no load; in
+    `wellness_attribution`, ignore `None` origins (the `{"garmin", None}`
+    case reds), return SOLE whenever `garmin` is present (the CONTRIBUTING
+    case reds), return CONTRIBUTING for an origin set without `garmin` (the
+    NONE case reds); change the CONTRIBUTING text (the exact-line pin reds);
+    print the line after the opening paragraph (the position pin reds).
   - **Observable:** `uv run pytest tests/recovery/test_page.py` green.
   - _Depends: 1.6, 3.2_
-  - _Requirements: 2.3, 4.2, 4.3, 5.5, 5.6, 6.1, 6.3, 7.2, 8.3, 8.4, 9.5, 9.6, 9.7, 12.1, 12.2, 12.3, 12.4_
+  - _Requirements: 2.3, 4.2, 4.3, 5.5, 5.6, 6.1, 6.3, 7.2, 8.3, 8.4, 9.5, 9.6, 9.7, 12.1, 12.2, 12.3, 12.4, 12.7, 12.8_
 
 - [ ] 3.4 Write the coverage, method and references sections and keep the page descriptive
   - `page.py`: the coverage table and the "No value in this window" line;
@@ -599,14 +650,15 @@ and `tests/test_agent_skill.py`.
     "Show training history".
   - **Tests** (`tests/recovery/test_docs_recovery.py`): the guide names the
     command, each page section, each constant with the value `METHODS`
-    holds (read live), the shown-source rule and the `reference-band` kind;
-    the index row and the URL resolve to the file.
+    holds (read live), the shown-source rule, the Garmin attribution line
+    beneath the title (and that chart images carry none) and the
+    `reference-band` kind; the index row and the URL resolve to the file.
   - **Mutations:** change a constant's value in the guide (the live pin
     reds); drop the index row (the entry-point pin reds).
   - **Observable:** the docs tests, `tests/test_docs_guarantees.py` and
     `tests/test_packaging.py` green.
   - _Depends: 4.2_
-  - _Requirements: 18.1_
+  - _Requirements: 12.7, 18.1_
   - _Boundary: Docs_
 
 - [ ] 5.2 Teach the workouts skill when to run recovery and record the release
@@ -629,11 +681,19 @@ and `tests/test_agent_skill.py`.
   - _Requirements: 18.3, 18.4_
 
 - [ ] 5.3 (P) Name `recovery` among the commands that make no connector request (connectors amendment)
-  - `.kiro/steering/tech.md`: `recovery` before `check` (after `dashboard`
-    when present), keeping the pinned tail phrase; a new pin in
-    `tests/connectors/test_network_statements.py` covering `recovery`.
-  - `tests/connectors/test_e2e.py`: `("recovery", [])` joins the
-    parametrization. Only this case stages wellness: the shared staging
+  - `.kiro/steering/tech.md`: `recovery` before `check`, giving the final
+    order with dashboards "`sync`, `regen`, `load`, `dashboard`, `recovery`,
+    `check`, `query`, `history`, `plan`, `derive-benchmarks`, `index`" (the
+    tail pins `tests/connectors/test_network_statements.py:667-670` and
+    `tests/query/test_changelog_entry.py:143-146` stay green unedited);
+    `tests/connectors/test_network_statements.py`: a new pin covering
+    `recovery`, and, when dashboards is on `main`, its pin of "`load`,
+    `dashboard`, `check`" re-pinned to "`load`, `dashboard`, `recovery`,
+    `check`, `query`, `history`".
+  - `tests/connectors/test_e2e.py`: the parametrization ends `…,
+    ("query", …), ("dashboard", ["refresh"]), ("recovery", [])` (without
+    the dashboard row while dashboards is not on `main`), and the module
+    docstring's command list names `recovery`. Only this case stages wellness: the shared staging
     helper `_fresh_synced_root` (`:288-316`, which runs `sync <source>` and
     so never drains the inbox, `cli.py:682-685`) gains a keyword, off by
     default, that afterwards writes a synthetic intervals.icu delivery
@@ -641,11 +701,15 @@ and `tests/test_agent_skill.py`.
     `tests/wellness/builders_intervals.py`; the format is registered by
     wellness-store 3.1) into `<root>/inbox/` and runs `fitdocs sync --out
     <root>` with no source, for both roots (with and without connectors), so
-    the existing comparison still holds and the other nine cases are
+    the existing comparison still holds and the other cases are
     unchanged; the case asserts `read_series(root).values` is non-empty
     before the run and that the page was written under the socket guard.
   - Append `## Amendment N` (Req 14.1 adds `recovery`) to
     `.kiro/specs/connectors/requirements.md` and a `spec.json` entry.
+  - If recovery lands BEFORE dashboards, the landing session logs a
+    `TOUCHING` line in the agent log telling impl-dashboards to insert
+    `dashboard` before `recovery` (in `tech.md` and in its own pin) and to
+    keep the `("recovery", [])` row last.
   - **Mutations:** drop `recovery` from `tech.md` (the new pin reds); stage
     an empty series for the recovery case (the non-empty precondition reds).
   - **Observable:** `uv run pytest tests/connectors/test_network_statements.py
@@ -686,7 +750,12 @@ and `tests/test_agent_skill.py`.
   - Rebase onto `main`; re-derive `CONTRACT_VERSION` (main + 1), the command
     count and its spelled form, and every appended list, keeping both sides;
     regenerate the declaration goldens and, when `dashboards` is on `main`,
-    the kinds block.
+    the kinds block; write the landed numbers as literals into the history
+    pin ("Raised from ``N`` to ``N+1`` by recovery"), keeping every peer's
+    literal pin, and re-pin every head-paragraph pin on `main` to
+    recovery's "What changed" paragraph (grep the outgoing paragraph's
+    phrases across `tests/`); re-check the no-network order and the
+    `test_e2e.py` rows against dashboards' landing state.
   - Run `uv run pytest`, `uv run ruff check .`, `uv run ruff format --check .`
     and `uv run mypy`; check branch CI before merging.
   - **Observable:** the full validation green after the rebase; Implementation
@@ -712,5 +781,14 @@ and `tests/test_agent_skill.py`.
   only through wellness-store's `tests/wellness/builders_series.py::write_series`,
   plus four minor fixes. Those were applied without a further review, as
   the controller directed.
+- Cross-spec review round 1 (2026-10-13, controller fix plan): I-1, Garmin
+  attribution for wellness values. recovery appends the settled names to
+  `render/attribution.py` in 3.3, `view` collects `origins`, and `page`
+  prints the line beneath the title. Chart images carry no stamp; that is a
+  maintainer Open Question. I-3, the final no-network order with dashboards.
+  M-1, `baseline_key` dropped. I-2/M-2, the literal history pin and the
+  peer head-paragraph re-pins (1.6, 6.2). M-8, the forbidden-phrase pattern
+  is named as consumed by workout-wellness. M-12, a stale `MetricInfo`
+  re-pin line removed from the design. Requirements gained 12.7 and 12.8.
 - Outcomes of 1.1 (the citation verification) and of 1.2's upstream checks
   are recorded below when those tasks run.
