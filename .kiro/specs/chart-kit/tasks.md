@@ -305,7 +305,7 @@ every registered kind and find its cases by the test-module convention
 
 - [ ] 2. Core contract and shared primitives
 
-- [ ] 2.1 (P) Validate requests and data, parse options and bind
+- [x] 2.1 (P) Validate requests and data, parse options and bind
   - **`kit/validate.py`** per design § Validator and the stage table in §
     System Flows: `validate_request`, `bind_request`, `check_data`,
     `bind_chart`, `parse_option` (typed values and the canonical text forms).
