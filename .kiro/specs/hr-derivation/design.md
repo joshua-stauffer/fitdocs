@@ -285,7 +285,7 @@ tests/hr_benchmarks/
 - `pyproject.toml` — `[tool.mypy].files` gains the new package and tests
   (append only).
 - Tests extended: `tests/test_benchmarks.py`, `tests/load/test_profile.py`
-  (the fifteen `with_derived_benchmarks(...)` call sites gain `kinds`; the
+  (the fourteen `with_derived_benchmarks(...)` calls gain `kinds`; the
   union-of-partitions cases at :2808 and :2698-2775 are re-pinned, see task
   1.2), `tests/performance/test_engine.py` (the `DeriveReport` field-order pin
   at :513-520), `tests/test_cli_derive.py`
@@ -526,8 +526,8 @@ class Takeover:
 class BackReach:
     kind: BenchmarkKind
     entry: Benchmark         # a hand-recorded entry with applies_from
-    starts_on: date
-    ends_before: date        # == starts_on when it covers no day
+    starts_on: date          # always the entry's applies_from
+    ends_before: date        # == applies_from when it covers no day
 
 @dataclass(frozen=True)
 class BackReachChange:
@@ -613,7 +613,7 @@ no maintainer value):
 | `MAX_PEAK_WINDOW_S` | 30 | `max_hr_sustained_peak_choice` | 2,371 sessions with a peak; single-sample max exceeds it by 2.54 bpm mean, >10 bpm in 2.5 % |
 | `MAX_WINDOW_DAYS` | 365 | `max_hr_recency_choice` | lets the value fall with age; 730 days changed the count by one |
 | `MAX_TOP_SESSIONS` | 3 | `max_hr_recency_choice` | median of three: one artefact session cannot set the value |
-| `MAX_STEP_BPM` | 2 | `max_hr_timeline_choice` | 19 entries over 2017-2026 without a hand entry, 4 with the maintainer's |
+| `MAX_STEP_BPM` | 2 | `max_hr_timeline_choice` | under the write-time rule: 18 entries over 2017-2026 with the maintainer's hand entry (2 takeovers, 14 dated before its measurement date), 19 without it |
 | `ROUNDING_HALF_OFFSET` | 0.5 | `hr_rounding_choice` | halfway values round up |
 
 - `RESTING_RULE` and `MAX_RULE` (`KindRule`) are assembled from these.
@@ -809,7 +809,10 @@ def inconsistencies(benchmarks: BenchmarkSet) -> tuple[Inconsistency, ...]: ...
   `applies_from`, so entries dated after `D` cannot change the selection on
   `D`'s date.
 - `current_takeovers`: the takeovers whose derived entry has the greatest
-  `measured_on` of all entries of its kind (6.3, 6.4).
+  `measured_on` of all entries of its kind (6.3, 6.4). A back-reach takeover
+  is never among them: the hand entry it took over is measured after it, so
+  a later entry of the kind always exists (controller ruling R4); the run's
+  report and the entry's note announce it instead.
 - `back_reach_cover`: for each recorded entry of a kind in `HR_KINDS` with an
   `applies_from`, the days before its `measured_on` on which the unchanged
   selection returns it, as one interval `[starts_on, ends_before)` (the
@@ -817,7 +820,9 @@ def inconsistencies(benchmarks: BenchmarkSet) -> tuple[Inconsistency, ...]: ...
   1 takes over at the first measured entry, so the cover is a single
   interval or empty); computed by sampling `applicable` at every
   `measured_on` and `applies_from` of the kind, as `in_force_periods` does.
-  Entries with an empty cover are listed with `ends_before == starts_on`.
+  A non-empty cover always starts at `applies_from`; an empty cover is
+  `(applies_from, applies_from)`, so comparing covers between two profiles
+  never reports a change between two empty covers.
 - `inconsistencies`: breakpoints are every `measured_on` and `applies_from`
   of `max_hr_bpm`, `resting_hr_bpm` and every `lthr_bpm` entry. On each
   period, with `mx`, `rs` in force (athlete scope) and, per discipline that
@@ -996,10 +1001,11 @@ def with_derived_benchmarks(
   direct callers keep today's behaviour. The CLI passes the preflight's
   settings, so `tests/load/test_settings.py:2478-2483` (exactly one `[load]`
   read per `derive-benchmarks` run) stays at one.
-- Test fallout of the required `kinds` argument: the fifteen
+- Test fallout of the required `kinds` argument: the fourteen
   `with_derived_benchmarks(...)` calls in `tests/load/test_profile.py`
-  (2723, 2808, 2823, 2855, 2860, 2873, 2876, 2902, 2928, 2956, 2999, 3070,
-  3126, 3171, 3194). Re-pin rule: store-level tests that mix kinds pass the
+  (2723, 2808, 2855, 2860, 2873, 2876, 2902, 2928, 2956, 2999, 3070, 3126,
+  3171, 3194; line 2823 is docstring wording that names the call, updated if
+  it quotes the old signature). Re-pin rule: store-level tests that mix kinds pass the
   union of both partitions as `kinds`, which keeps their original meaning
   (the call at 2808 passes max, resting, pace, FTP and LTHR entries, and the
   empty write at 2698-2775 removes derived entries of both partitions); one

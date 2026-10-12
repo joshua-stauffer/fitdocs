@@ -166,7 +166,11 @@ settled a third in a second round the same day; all three are binding here.
    on the first run, historic heart-rate load before a hand entry's date
    moves to the derived values where derived evidence exists, once load is
    recomputed. The run states it once (Requirement 5.7), and so do the
-   release notes (Requirement 11.5).
+   release notes (Requirement 11.5). A takeover of a back-reach value is
+   announced by the run and the timeline only, never listed by `fitdocs
+   check`: the hand entry it took over is a later entry of the same kind by
+   construction (controller ruling R4, reported to the maintainer as a
+   refinement of decision 1; Requirement 6.4).
 
 ## Requirements
 
@@ -270,7 +274,7 @@ I can answer it with a value of my own or leave it.
 1. When the heart-rate stage writes, or in preview mode would write, a takeover that the profile did not already hold, the fitdocs CLI shall report it, naming the kind, the derived value and its date, the superseded hand-recorded value and its measurement date, whether that value applied by measurement or by its applies-from date, and the evidence: the source and window for resting heart rate, or the session page and window for maximum heart rate.
 2. The heart-rate stage shall record on every takeover entry, in the timeline itself, the superseded hand-recorded value and its measurement date.
 3. While a takeover entry is the latest entry of its kind, `fitdocs check` shall list it with the facts criterion 1 names and the remedy: record your own value to override it, or leave it to accept it.
-4. When a later entry of the same kind exists, whether recorded by hand or derived, `fitdocs check` shall no longer list that takeover; the takeover shall remain visible in the timeline.
+4. When a later entry of the same kind exists, whether recorded by hand or derived, `fitdocs check` shall no longer list that takeover; the takeover shall remain visible in the timeline. A takeover of a value that applied through its applies-from date is therefore never listed by `fitdocs check`, because the hand-recorded entry it took over is measured after it; the run's report (criterion 1) and the timeline (criterion 2) announce it.
 5. When the athlete records a hand value dated after a takeover, that value shall apply from its own date by the ordinary selection rule, and the heart-rate stage shall treat it under Requirement 5.
 
 ### Requirement 7: Provenance and Citations
