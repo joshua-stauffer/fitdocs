@@ -700,7 +700,7 @@ sequential, never two `(P)` tasks at once.
   - _Requirements: 1.3, 1.4, 1.5, 4.5, 4.10, 5.7, 5.8, 12.5, 14.6, 15.5, 17.3_
   - _Depends: 3.2, 4.1, 4.2_
 
-- [ ] 5.2 Render relative charts and write pages, with isolation and idempotence
+- [x] 5.2 Render relative charts and write pages, with isolation and idempotence
   - **`engine.py`**: the rendering and writing half per design § Engine —
     the single source open after planning and its close in `finally`,
     relative fetches, `ChartRequest` construction, the `show_rows` table
@@ -1479,3 +1479,32 @@ sequential, never two `(P)` tasks at once.
   ` Accepted: a, b, c.` when `accepted` is non-empty. Chained text is `""`
   unless a chart is RENDERED or FAILED, any problem/notice exists, a page was
   written, or images were removed (extends the design's wording).
+- **5.2 (2 review rounds):** only relative charts with `need FETCH` are
+  queried/drawn/written; the source opens once after planning, only if such a
+  chart exists, and closes in `finally`. An opener exception propagates
+  before any write; a `RuntimeError` from the source propagates (source still
+  closed). `SourceUnavailable` → `RunReport.index` = its state,
+  `index_problem` a page-less `index_unavailable`, and each relative chart
+  gets `index_unavailable` ("The chart was not queried: …"). **Ruling:** a
+  `ValueError` from `chart_body`/`apply_edits` is a fitdocs defect and
+  propagates (nothing written). Show-rows: `ChartRequest(ref, "table",
+  title)` attempted even when the chart is refused; chart problems first,
+  table problems with `option="show_rows"`, kit order, no re-sort.
+  `ChartRequest.ref` = `<page>:<id>`. Failure bodies: a RENDERED region is
+  kept byte-identical; otherwise the note states `problems[0].message` and is
+  rewritten when that message changes; a planning-problem chart is never
+  edited. Edits use `after_line = close_line` for insert and replace. Write
+  order per page: assets, then one `replace_page`; `"foreign"` →
+  `asset_foreign`, OSError → `write_failed` (both drop that chart's edit);
+  page OSError (incl. vanished) → `write_failed` on edited charts only;
+  `"changed"` → `page_changed` on edited charts only. A written asset stays
+  when the page then fails (design order; Req 12.2 wording conflict
+  recorded for validation). Outcomes: RENDERED = an asset written or an edit
+  applied to a written page; `PageResult.written` only on "written".
+  **Interim until 5.3:** frozen charts pass through as planned (CHECKED or
+  FAILED); FREEZE renders relative charts; `ChartResult.notices` is `()`;
+  no cleanup. **5.3 carry-forwards:** pin 14.7's "still render charts that
+  need no query" (frozen chart with a snapshot renders while the opener
+  returns `SourceUnavailable`); replace the interim FREEZE/CHECKED
+  behaviour; cleanup removes a new image left unreferenced by
+  `page_changed`/`write_failed` in the same run.
