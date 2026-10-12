@@ -18,12 +18,13 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Final
 
+from fitdocs.dashboards.grammar import SLUG
 from fitdocs.render.charts.kit import ChartData, Column, Value, ValueKind
 
 SNAPSHOT_FORMAT: Final = "fitdocs-dashboard-snapshot"
 SNAPSHOT_VERSION: Final = 1
 
-_SLUG: Final = r"[a-z0-9]+(?:-[a-z0-9]+)*"
+_SLUG: Final = SLUG
 SNAPSHOT_NAME_RE: Final[re.Pattern[str]] = re.compile(
     rf"(?P<id>{_SLUG})\.snapshot-(?P<generation>[1-9][0-9]*)\.json"
 )

@@ -4,7 +4,7 @@ Every scalar is the text exactly as written: the loader has no implicit
 resolvers, so ``no``, ``2026-10-11`` and ``012`` stay strings. Anchors,
 aliases, explicit tags and repeated keys are refused, and ``sql`` must be a
 literal block scalar. The parser takes the body text and the opener's page
-line; it imports only ``problems`` and ``yaml``.
+line; it imports only ``problems``, ``grammar`` (for ``SLUG``) and ``yaml``.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from typing import Final
 
 import yaml
 
+from fitdocs.dashboards.grammar import SLUG
 from fitdocs.dashboards.problems import DashboardCode, Problem, dashboard_problem
 
 
@@ -31,9 +32,8 @@ REQUIRED_KEYS: Final = ("id", "kind", "mode", "title", "sql")
 OPTIONAL_KEYS: Final = ("channels", "options", "window", "show_rows")
 MAX_ID_LENGTH: Final = 64
 
-# The chart-id grammar; the same rule the page grammar names, held here
-# because directive ranks after grammar and does not import it.
-_ID_RE: Final = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+# The chart-id grammar is the page grammar's slug rule.
+_ID_RE: Final = re.compile(SLUG)
 _ACCEPTED: Final = (*REQUIRED_KEYS, *OPTIONAL_KEYS)
 _PLAIN_TAGS: Final = frozenset(
     {"tag:yaml.org,2002:str", "tag:yaml.org,2002:map", "tag:yaml.org,2002:seq"}
