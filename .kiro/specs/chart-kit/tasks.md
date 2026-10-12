@@ -507,7 +507,7 @@ every registered kind and find its cases by the test-module convention
   - _Boundary: Api, Registry_
   - _Depends: 2.1_
 
-- [ ] 3.2 (P) Measure, fit and lay out text and the plot rectangle
+- [x] 3.2 (P) Measure, fit and lay out text and the plot rectangle
   - **`kit/layout.py`** per design § Layout: the font and spacing
     constants, `Rect`, `LegendEntry`, `FramePlan`, `text_width`, `fit_text`,
     `plan_frame` (vertical stack, legend wrapping at 30% label width,
@@ -1107,3 +1107,4 @@ every registered kind and find its cases by the test-module convention
 - 2.3 → 4.1: `linear_ticks` returns 3 ticks for `max_count=2` on a range with lo<0<hi (two ticks cannot enclose it). `numeric_scale`'s label-fit loop must measure the ticks it gets back, not trust `max_count`. Degenerate input (lo ≥ hi, non-finite) raises `ValueError`: Scales widens first.
 - 2.2: `axis_title(column, *, hours=True)` gained the `hours` keyword (design signature lacked a way to choose `(m:ss)` vs `(h:mm:ss)`); Scales passes the axis's label form.
 - 3.3 (controller ruling): `marks.bar(x, y, width, height, color)` — `y` is the zero-line pixel, `height` signed (positive = upward); `width` signed the same way (negative extends left from `x`), so hbar calls `bar` with `x` = zero-line pixel and a signed width. Emitted width/height are non-negative. Bar and hbar kinds (5.3, 5.4) must call it this way.
+- 3.2 → 4.2: `FramePlan.y_title_y`/`x_title_y` are `float | None` (None when there is no such title; design § Layout typed them `float`). Frame must handle None. The title→legend and y-title→plot `PAD` gaps are this task's choices (Req 7.3). With a legend and no y title the plot top abuts the last legend row: frame must keep the top y tick label clear of it.
