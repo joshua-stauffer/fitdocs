@@ -1,15 +1,19 @@
-"""The engine: plan a run, then draw and write the relative charts.
+"""The engine: plan a run, then draw and write the charts.
 
 Planning lists the pages, reads them, scans and parses each directive,
 associates regions with directives, and decides for each chart what data it
 needs (a fetch, the snapshot its region records, or the latest stored
 generation). Planning opens no source and writes nothing.
 
-The rendering half opens the source once, after planning, for the relative
-charts; draws each through the chart kit; composes each chart's region body (or
-keeps a rendered region, or writes a note); and writes per page the images and
-then one page replacement. A ``CHECK`` run does everything but write. Frozen
-charts are reported as planned: drawing and freezing them is a later task.
+The rendering half opens the source once, after planning, for the charts that
+need a fetch; takes every other frozen chart's rows from its stored snapshot;
+draws each chart through the chart kit; composes each chart's region body (or
+keeps a rendered region, or writes a note); and writes per page the new
+snapshots, the images and then one page replacement. A frozen chart that is
+fetched is encoded and decoded first, and drawn from the decoded rows, so the
+stored and the drawn values are the same. A ``CHECK`` run does everything but
+write. After the pages, ``REFRESH`` and ``FREEZE`` runs remove the marked
+images no page links.
 
 The engine reads no clock: the run date arrives in the request. It imports no
 ``binding`` module; the source is reached only through the opener it is given.
@@ -18,9 +22,10 @@ The engine reads no clock: the run date arrives in the request. It imports no
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import date
 from enum import StrEnum
+from functools import partial
 from pathlib import Path
 
 from fitdocs.dashboards.directive import Directive, Mode, parse_directive
@@ -51,6 +56,12 @@ from fitdocs.dashboards.region import (
     note_body,
     recorded_snapshot,
 )
+from fitdocs.dashboards.snapshot import (
+    Snapshot,
+    SnapshotFormatError,
+    decode,
+    encode,
+)
 from fitdocs.dashboards.source import (
     ChartSource,
     Fetched,
@@ -61,10 +72,13 @@ from fitdocs.dashboards.storage import (
     PageFile,
     Refusal,
     asset_rel_path,
+    create_snapshot,
     latest_snapshot,
     list_markdown,
     location_refusal,
     read_page,
+    read_snapshot,
+    remove_stale_images,
     replace_page,
     write_asset,
 )
@@ -72,10 +86,12 @@ from fitdocs.render.charts.kit import (
     ChartData,
     ChartError,
     ChartRequest,
+    Column,
     Output,
     RenderedChart,
     render_chart,
 )
+from fitdocs.units import unit_for_column
 
 _PAGE_SUFFIX = ".md"
 _TABLE_KIND = "table"  # the kit kind that draws the rows of ``show_rows``
@@ -332,6 +348,19 @@ def _orphan(page: str, region: RegionBlock) -> Problem:
     )
 
 
+def _freeze_relative(page: str, planned: PlannedChart) -> Problem:
+    assert planned.chart is not None
+    return dashboard_problem(
+        DashboardCode.FREEZE_RELATIVE,
+        f"The chart `{planned.chart}` is in mode relative, so it has no snapshot "
+        "to take.",
+        "Set `mode: frozen` on the chart if it should keep a snapshot.",
+        page=page,
+        chart=planned.chart,
+        line=planned.line,
+    )
+
+
 # -- pages ---------------------------------------------------------------------
 
 
@@ -569,11 +598,22 @@ def _recorded_for(region: RegionBlock | None) -> str | None:
     return recorded_snapshot(region.body)
 
 
-def _plan_data(request: RunRequest, page: str, planned: PlannedChart) -> PlannedChart:
+def _plan_data(
+    request: RunRequest, page: str, planned: PlannedChart, *, explicit: bool
+) -> PlannedChart:
+    """Decide what data the chart needs; ``explicit``: a chart target names it.
+
+    Under ``FREEZE`` a relative chart reached only through a page target is not
+    a freeze target: it is left alone, with no data need and no problem.
+    """
     directive = planned.directive
     if planned.problems or directive is None:
         return planned
     if directive.mode is Mode.RELATIVE:
+        if request.action is Action.FREEZE:
+            if explicit:
+                return replace(planned, problems=(_freeze_relative(page, planned),))
+            return planned
         return replace(planned, need=DataNeed.FETCH)
     if request.action is Action.FREEZE:
         return replace(planned, need=DataNeed.FETCH)
@@ -609,7 +649,7 @@ def plan_run(request: RunRequest) -> RunPlan:
         want = wanted.get(name) if wanted else None
         _check_charts(name, analysis, want)
         charts = tuple(
-            _plan_data(request, name, each)
+            _plan_data(request, name, each, explicit=want is not None)
             for each in analysis.charts
             if want is None or each.chart in want
         )
@@ -643,18 +683,13 @@ def _chart_result(planned: PlannedChart) -> ChartResult:
     )
 
 
-def _is_relative_fetch(planned: PlannedChart) -> bool:
-    """True for a relative chart the plan sends to the source.
+def _needs_fetch(planned: PlannedChart) -> bool:
+    """True for a chart the plan sends to the source.
 
     ``need`` is ``None`` for a chart with a planning problem, so those are never
     queried.
     """
-    directive = planned.directive
-    return (
-        directive is not None
-        and directive.mode is Mode.RELATIVE
-        and planned.need is DataNeed.FETCH
-    )
+    return planned.directive is not None and planned.need is DataNeed.FETCH
 
 
 def _unavailable_problem(
@@ -709,6 +744,70 @@ def _page_changed(page: str, chart: str, line: int) -> Problem:
         page=page,
         chart=chart,
         line=line,
+    )
+
+
+def _freeze_command(page: str, chart: str) -> str:
+    return f"`fitdocs dashboard freeze {page}:{chart}`"
+
+
+def _snapshot_missing(page: str, planned: PlannedChart, path: str) -> Problem:
+    assert planned.chart is not None
+    return dashboard_problem(
+        DashboardCode.SNAPSHOT_MISSING,
+        f"The snapshot dashboards/{path} is missing or cannot be read.",
+        "Restore that file, or run "
+        f"{_freeze_command(page, planned.chart)} to take a new snapshot.",
+        page=page,
+        chart=planned.chart,
+        line=planned.line,
+    )
+
+
+def _snapshot_unreadable(
+    page: str, planned: PlannedChart, path: str, error: SnapshotFormatError
+) -> Problem:
+    assert planned.chart is not None
+    detail = " ".join(str(error).split()).rstrip(".")
+    return dashboard_problem(
+        DashboardCode.SNAPSHOT_UNREADABLE,
+        f"The snapshot dashboards/{path} cannot be used: {detail}.",
+        "Restore that file from a backup, or run "
+        f"{_freeze_command(page, planned.chart)} to take a new snapshot.",
+        page=page,
+        chart=planned.chart,
+        line=planned.line,
+    )
+
+
+def _sql_changed(page: str, planned: PlannedChart, path: str) -> Problem:
+    assert planned.chart is not None
+    return dashboard_problem(
+        DashboardCode.SQL_CHANGED,
+        f"The SQL changed after the snapshot dashboards/{path} was taken, so the "
+        "chart is still drawn from that snapshot.",
+        f"Run {_freeze_command(page, planned.chart)} to take a new snapshot with "
+        "the current SQL.",
+        page=page,
+        chart=planned.chart,
+        line=planned.line,
+    )
+
+
+def _unstorable(
+    page: str, planned: PlannedChart, column: Column, error: ValueError
+) -> Problem:
+    assert planned.chart is not None
+    detail = " ".join(str(error).split()).rstrip(".")
+    return dashboard_problem(
+        DashboardCode.WRITE_FAILED,
+        f"The result was not stored as a snapshot because the {column.kind.value} "
+        f"column `{column.name}` holds a value that cannot be stored ({detail}).",
+        "Exclude or cast the non-finite values in the SQL.",
+        page=page,
+        chart=planned.chart,
+        line=planned.line,
+        column=column.name,
     )
 
 
@@ -771,6 +870,11 @@ class _Pending:
 
     planned: PlannedChart
     problems: list[Problem]
+    notices: list[Problem] = field(default_factory=list)
+    data: ChartData | None = None  # the rows the chart is drawn from
+    stamp: date | None = None  # the snapshot date a frozen chart's caption states
+    fresh: Snapshot | None = None  # a snapshot to create when the run writes
+    snapshot: str | None = None  # the snapshot path the report names
     drawn: _Drawn | None = None
     body: ChartBody | None = None
     edit: RegionEdit | None = None
@@ -797,18 +901,78 @@ def _edit_for(planned: PlannedChart, body: ChartBody) -> RegionEdit | None:
     return RegionEdit(planned.chart, body, region, planned.close_line)
 
 
-def _settle(
+def _with_units(data: ChartData) -> ChartData:
+    """The columns with the unit their names carry: stored columns hold no unit."""
+    columns = tuple(
+        Column(
+            each.name,
+            each.kind,
+            unit.token if (unit := unit_for_column(each.name)) else None,
+        )
+        for each in data.columns
+    )
+    return ChartData(columns, data.rows)
+
+
+def _storable(page: str, planned: PlannedChart, snapshot: Snapshot) -> bytes | Problem:
+    """The snapshot's bytes, or the problem naming the column that cannot be stored."""
+    try:
+        return encode(snapshot)
+    except ValueError:
+        columns = snapshot.data.columns
+        for index, column in enumerate(columns):
+            alone = replace(
+                snapshot,
+                data=ChartData(
+                    (column,), tuple((row[index],) for row in snapshot.data.rows)
+                ),
+            )
+            try:
+                encode(alone)
+            except ValueError as found:
+                return _unstorable(page, planned, column, found)
+        raise  # no single column explains it: a defect, not a chart failure
+
+
+def _freeze(
     request: RunRequest,
     page: PlannedPage,
     planned: PlannedChart,
+    directive: Directive,
+    data: ChartData,
+    pending: _Pending,
+) -> None:
+    """Encode the fetched rows and draw from what decodes: the stored rows (10.9)."""
+    assert planned.chart is not None
+    snapshot = Snapshot(
+        page=page.name,
+        chart=planned.chart,
+        generation=1,
+        today=request.today,
+        sql=directive.sql,
+        sql_sha256=directive.sql_sha256,
+        data=data,
+    )
+    raw = _storable(page.name, planned, snapshot)
+    if isinstance(raw, Problem):
+        pending.problems.append(raw)
+        return
+    stored = decode(raw)
+    pending.fresh = snapshot
+    pending.data = _with_units(stored.data)
+    pending.stamp = stored.today
+
+
+def _fetch(
+    request: RunRequest,
+    page: PlannedPage,
+    planned: PlannedChart,
+    directive: Directive,
     source: ChartSource | None,
     unavailable: SourceUnavailable | None,
-) -> _Pending:
-    """Fetch, draw and compose one relative chart in memory; nothing is written."""
-    directive = planned.directive
-    assert directive is not None and planned.chart is not None
-    pending = _Pending(planned, [])
-    data: ChartData | None = None
+    pending: _Pending,
+) -> None:
+    assert planned.chart is not None
     if source is None:
         assert unavailable is not None
         pending.problems.append(
@@ -816,45 +980,144 @@ def _settle(
                 unavailable, page=page.name, chart=planned.chart, line=planned.line
             )
         )
+        return
+    fetched = source.fetch(
+        directive.sql,
+        today=request.today,
+        page=page.name,
+        chart=planned.chart,
+        line=planned.line,
+    )
+    if not isinstance(fetched, Fetched):
+        pending.problems.extend(fetched)
+    elif directive.mode is Mode.FROZEN:
+        _freeze(request, page, planned, directive, fetched.data, pending)
     else:
-        fetched = source.fetch(
-            directive.sql,
-            today=request.today,
-            page=page.name,
-            chart=planned.chart,
-            line=planned.line,
-        )
-        if isinstance(fetched, Fetched):
-            data = fetched.data
-        else:
-            pending.problems.extend(fetched)
-    if data is not None:
-        drawn = _draw(page.name, planned, directive, data)
+        pending.data = fetched.data
+
+
+def _load(
+    request: RunRequest,
+    page: PlannedPage,
+    planned: PlannedChart,
+    directive: Directive,
+    pending: _Pending,
+) -> None:
+    """Take a frozen chart's rows from the snapshot the plan chose."""
+    path = planned.snapshot
+    assert path is not None
+    raw = read_snapshot(request.data_root, path)
+    if raw is None:
+        pending.problems.append(_snapshot_missing(page.name, planned, path))
+        return
+    try:
+        stored = decode(raw)
+    except SnapshotFormatError as error:
+        pending.problems.append(_snapshot_unreadable(page.name, planned, path, error))
+        return
+    if stored.sql_sha256 != directive.sql_sha256:
+        pending.notices.append(_sql_changed(page.name, planned, path))
+    pending.data = _with_units(stored.data)
+    pending.stamp = stored.today
+
+
+def _compose(
+    page: str, pending: _Pending, directive: Directive, snapshot_path: str | None
+) -> ChartBody:
+    drawn, data = pending.drawn, pending.data
+    assert drawn is not None and data is not None and pending.planned.chart is not None
+    return chart_body(
+        page=page,
+        chart_id=pending.planned.chart,
+        title=directive.title,
+        rendered=drawn.chart,
+        caption=caption(data, window=directive.window, snapshot_date=pending.stamp),
+        rows_table=drawn.rows_table,
+        snapshot_path=snapshot_path,
+    )
+
+
+def _settle(
+    request: RunRequest,
+    page: PlannedPage,
+    planned: PlannedChart,
+    source: ChartSource | None,
+    unavailable: SourceUnavailable | None,
+) -> _Pending:
+    """Fetch or load, draw and compose one chart in memory; nothing is written.
+
+    A chart that is freshly frozen has no body yet: its region records the
+    snapshot, whose path is known only once the snapshot is created.
+    """
+    directive = planned.directive
+    assert directive is not None and planned.chart is not None
+    pending = _Pending(planned, [], snapshot=planned.snapshot)
+    if planned.need is DataNeed.FETCH:
+        _fetch(request, page, planned, directive, source, unavailable, pending)
+    else:
+        _load(request, page, planned, directive, pending)
+    if pending.data is not None:
+        drawn = _draw(page.name, planned, directive, pending.data)
         if isinstance(drawn, _Drawn):
             pending.drawn = drawn
-            pending.body = chart_body(
-                page=page.name,
-                chart_id=planned.chart,
-                title=directive.title,
-                rendered=drawn.chart,
-                caption=caption(data, window=directive.window, snapshot_date=None),
-                rows_table=drawn.rows_table,
-                snapshot_path=None,
-            )
+            if pending.fresh is None:
+                pending.body = _compose(page.name, pending, directive, planned.snapshot)
         else:
             pending.problems.extend(drawn)
-    if pending.body is None:
+            pending.fresh = None
+    # An explicit freeze that fails changes nothing, not even a note (11.3).
+    if (
+        pending.body is None
+        and pending.problems
+        and request.action is not Action.FREEZE
+    ):
         pending.body = _failure_body(planned, pending.problems)
     if pending.body is not None:
         pending.edit = _edit_for(planned, pending.body)
     return pending
 
 
+def _encode_generation(snapshot: Snapshot, generation: int) -> bytes:
+    return encode(replace(snapshot, generation=generation))
+
+
+def _write_snapshots(
+    request: RunRequest, page: PlannedPage, pending: Sequence[_Pending]
+) -> None:
+    """Create each fresh snapshot, then compose the body that records it."""
+    for each in pending:
+        fresh = each.fresh
+        if fresh is None:
+            continue
+        planned = each.planned
+        directive = planned.directive
+        assert planned.chart is not None and directive is not None
+        try:
+            path = create_snapshot(
+                request.data_root,
+                page.name,
+                planned.chart,
+                partial(_encode_generation, fresh),
+            )
+        except OSError as error:
+            each.problems.append(
+                _write_failed(page.name, planned.chart, planned.line, "snapshot", error)
+            )
+            continue
+        each.snapshot = path
+        each.body = _compose(page.name, each, directive, path)
+        each.edit = _edit_for(planned, each.body)
+
+
 def _write_assets(
     request: RunRequest, page: PlannedPage, pending: Sequence[_Pending]
 ) -> None:
     for each in pending:
-        if each.drawn is None or each.drawn.chart.output is not Output.SVG:
+        if (
+            each.drawn is None
+            or each.problems
+            or each.drawn.chart.output is not Output.SVG
+        ):
             continue
         planned = each.planned
         assert planned.chart is not None
@@ -921,13 +1184,14 @@ def _run_page(
 ) -> PageResult:
     slots: list[_Pending | PlannedChart] = [
         _settle(request, page, each, source, unavailable)
-        if _is_relative_fetch(each)
+        if each.directive is not None and each.need is not None
         else each
         for each in page.charts
     ]
     pending = [each for each in slots if isinstance(each, _Pending)]
     written = False
     if request.action is not Action.CHECK:
+        _write_snapshots(request, page, pending)
         _write_assets(request, page, pending)
         written = _replace_page(page, pending)
     charts: list[ChartResult] = []
@@ -945,9 +1209,9 @@ def _run_page(
                 kind=directive.kind,
                 mode=directive.mode.value,
                 outcome=_outcome(each, request.action, written),
-                snapshot=planned.snapshot,
+                snapshot=each.snapshot,
                 problems=tuple(each.problems),
-                notices=(),
+                notices=tuple(each.notices),
             )
         )
     return PageResult(
@@ -960,15 +1224,16 @@ def _run_page(
 
 
 def run_dashboards(request: RunRequest, open_source: SourceOpener) -> RunReport:
-    """Plan, then render and write every targeted relative chart.
+    """Plan, then draw and write every targeted chart, and clean up the images.
 
     The source is opened once, after every page is planned and before anything
     is rendered or written, and only when some chart needs a query; it is closed
-    in ``finally``. Frozen charts are reported as planned until 5.3 draws them.
+    in ``finally``. After the pages, a ``REFRESH`` or ``FREEZE`` run removes the
+    marked images no page links; a ``CHECK`` run writes and removes nothing.
     """
     plan = plan_run(request)
     needs_query = any(
-        _is_relative_fetch(chart) for page in plan.pages for chart in page.charts
+        _needs_fetch(chart) for page in plan.pages for chart in page.charts
     )
     index = "not_needed"
     index_problem: Problem | None = None
@@ -992,11 +1257,14 @@ def run_dashboards(request: RunRequest, open_source: SourceOpener) -> RunReport:
     finally:
         if source is not None:
             source.close()
+    removed: tuple[str, ...] = ()
+    if request.action is not Action.CHECK:
+        removed = remove_stale_images(request.data_root) or ()
     return RunReport(
         action=request.action,
         index=index,
         index_problem=index_problem,
         location_problems=plan.location_problems,
         pages=pages,
-        removed=(),
+        removed=removed,
     )
