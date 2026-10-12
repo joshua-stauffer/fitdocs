@@ -66,6 +66,7 @@ from fitdocs.layout import (
     BLOCKS_DIR,
     CACHE_DIR,
     CONNECTOR_STATE_DIR,
+    DASHBOARDS_DIR,
     DECLARED_DIRS,
     DEFAULT_INBOX_DIR,
     DEFAULT_PLANS_DIR,
@@ -655,6 +656,8 @@ def test_owned_paths_name_every_fitdocs_owned_location() -> None:
         "fit-archive/",
         ".cache/",
         ".fitdocs/",
+        "dashboards/",
+        "dashboards/assets/",
     )
     # Composed from the directory constants, never respelled -- renaming a
     # directory constant moves its owned prefix with it.
@@ -665,10 +668,12 @@ def test_owned_paths_name_every_fitdocs_owned_location() -> None:
         ARCHIVE_DIR,
         CACHE_DIR,
         TOOL_STATE_DIR,
+        DASHBOARDS_DIR,
     )
     for directory in all_dirs:
         assert f"{directory}/" in OWNED_PATHS
     assert f"{WORKOUTS_DIR}/{ASSETS_SUBDIR}/" in OWNED_PATHS
+    assert f"{DASHBOARDS_DIR}/{ASSETS_SUBDIR}/" in OWNED_PATHS
     # Named mutation (design.md HistoryLocation): dropping "history/assets/" from
     # OWNED_PATHS leaves the round-trip and subset pins green, so it is pinned
     # here explicitly, by value, independent of the exact-tuple pin above.
@@ -869,8 +874,10 @@ def test_connector_state_dir_does_not_widen_owned_paths() -> None:
         "fit-archive/",
         ".cache/",
         ".fitdocs/",
+        "dashboards/",
+        "dashboards/assets/",
     )
-    assert len(OWNED_PATHS) == 8
+    assert len(OWNED_PATHS) == 10
 
 
 def test_declared_dirs_are_the_top_level_owned_directories() -> None:
@@ -882,7 +889,14 @@ def test_declared_dirs_are_the_top_level_owned_directories() -> None:
     directory is drawn from ``OWNED_PATHS`` -- a declaration can never be placed
     somewhere fitdocs does not own.
     """
-    assert DECLARED_DIRS == ("workouts/", "history/", "blocks/", "fit-archive/")
+    assert DECLARED_DIRS == (
+        "workouts/",
+        "history/",
+        "blocks/",
+        "fit-archive/",
+        "dashboards/",
+    )
+    assert f"{DASHBOARDS_DIR}/" in DECLARED_DIRS
     assert f"{WORKOUTS_DIR}/" in DECLARED_DIRS
     assert f"{HISTORY_DIR}/" in DECLARED_DIRS
     assert f"{BLOCKS_DIR}/" in DECLARED_DIRS
@@ -894,19 +908,21 @@ def test_declared_dirs_are_the_top_level_owned_directories() -> None:
     assert set(DECLARED_DIRS) <= set(OWNED_PATHS)
     assert f"{WORKOUTS_DIR}/{ASSETS_SUBDIR}/" not in DECLARED_DIRS
     assert f"{HISTORY_DIR}/{HISTORY_ASSETS_SUBDIR}/" not in DECLARED_DIRS
+    assert f"{DASHBOARDS_DIR}/{ASSETS_SUBDIR}/" not in DECLARED_DIRS
     assert f"{CACHE_DIR}/" not in DECLARED_DIRS
 
 
-def test_no_owned_prefix_is_a_prefix_of_another_except_the_two_assets_pairs() -> None:
-    """No owned entry sits inside another, except the two documented assets pairs.
+def test_no_owned_prefix_is_a_prefix_of_another_except_the_three_assets_pairs() -> None:
+    """No owned entry sits inside another, except the three documented assets pairs.
 
     Guards the invariant design.md states directly: ``history/`` is not a prefix
-    of, and is not prefixed by, any other owned entry, with exactly the two
+    of, and is not prefixed by, any other owned entry, with exactly the three
     assets-under-parent relationships as the sanctioned exceptions.
     """
     allowed_nestings = {
         (f"{WORKOUTS_DIR}/", f"{WORKOUTS_DIR}/{ASSETS_SUBDIR}/"),
         (f"{HISTORY_DIR}/", f"{HISTORY_DIR}/{HISTORY_ASSETS_SUBDIR}/"),
+        (f"{DASHBOARDS_DIR}/", f"{DASHBOARDS_DIR}/{ASSETS_SUBDIR}/"),
     }
     for outer in OWNED_PATHS:
         for inner in OWNED_PATHS:

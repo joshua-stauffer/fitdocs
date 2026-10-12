@@ -147,7 +147,7 @@ under your data root and nothing in the tree you run fitdocs from.
 ## What remains on disk after uninstalling
 
 fitdocs writes only into its data root's owned paths (`workouts/`,
-`history/`, `blocks/`, `fit-archive/`, `.cache/`, and `.fitdocs/`), the
+`history/`, `blocks/`, `fit-archive/`, `dashboards/`, `.cache/`, and `.fitdocs/`), the
 athlete profile, and whatever write location your settings configure — the
 inbox's `path` and, when `disposition = "move"` is set, its
 `processed_dir`, either of which may be an absolute path outside the data

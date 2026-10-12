@@ -5,7 +5,8 @@ This leaf module is the single home for the fitdocs output-location contract
 training-blocks Req 4.1, 4.6, 4.10, 5.1, 7.1, 7.2). It defines the data-root
 layout constants
 (``workouts/``, ``workouts/assets/``, ``history/``, ``history/assets/``,
-``blocks/``, ``fit-archive/``, ``.cache/``, ``.fitdocs/``) and the pure
+``blocks/``, ``fit-archive/``, ``.cache/``, ``.fitdocs/``, ``dashboards/``,
+``dashboards/assets/``) and the pure
 helpers the sync engine uses to place documents, name assets, archive
 sources, and derive a stable activity identity. Because it names
 every location fitdocs writes into, it is also where the *ownership* boundary is
@@ -130,6 +131,16 @@ subdirectory constant names that pages directory: it is named by the block's
 own identity at write time, so the ``blocks/`` prefix in :data:`OWNED_PATHS`
 already covers everything beneath it without a second entry."""
 
+DASHBOARDS_DIR: Final[str] = "dashboards"
+"""Dashboard page location: ``<data-root>/dashboards/`` (dashboards Req 1.1).
+
+The one **co-owned** location: the pages in it belong to the athlete, while
+fitdocs owns the chart regions inside them and the files under
+``dashboards/assets/`` (chart images and snapshot files). It is in
+:data:`OWNED_PATHS` so the confinement guard permits those writes; the
+ownership contract states the inverse ownership shape that this prefix does
+not by itself convey."""
+
 OWNED_PATHS: Final[tuple[str, ...]] = (
     f"{WORKOUTS_DIR}/",
     f"{WORKOUTS_DIR}/{ASSETS_SUBDIR}/",
@@ -139,8 +150,14 @@ OWNED_PATHS: Final[tuple[str, ...]] = (
     f"{ARCHIVE_DIR}/",
     f"{CACHE_DIR}/",
     f"{TOOL_STATE_DIR}/",
+    f"{DASHBOARDS_DIR}/",
+    f"{DASHBOARDS_DIR}/{ASSETS_SUBDIR}/",
 )
 """Every path under the data root the ownership contract calls fitdocs-owned.
+
+``dashboards/`` is owned only in the co-owned shape described at
+:data:`DASHBOARDS_DIR`: its pages are the athlete's, and fitdocs writes only the
+chart regions inside them and the files under ``dashboards/assets/``.
 
 Data-root-relative POSIX **directory prefixes** (each ends in ``/``), which is
 what makes the set complete without enumerating files: everything beneath an
@@ -163,8 +180,12 @@ DECLARED_DIRS: Final[tuple[str, ...]] = (
     f"{HISTORY_DIR}/",
     f"{BLOCKS_DIR}/",
     f"{ARCHIVE_DIR}/",
+    f"{DASHBOARDS_DIR}/",
 )
 """The owned top-level directories that receive an ownership declaration (Req 3.1).
+
+``dashboards/`` is the co-owned one (see :data:`DASHBOARDS_DIR`): its declaration
+says the pages belong to the athlete, unlike the other four.
 
 A subset of :data:`OWNED_PATHS` -- a declaration can never be placed anywhere
 fitdocs does not own. These are the directories a human or an LLM agent

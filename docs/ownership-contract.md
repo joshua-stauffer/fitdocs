@@ -1,21 +1,21 @@
 # fitdocs Ownership Contract
 
-**Contract version:** `9`
+**Contract version:** `10`
 
-**What changed at this version:** fitdocs keeps a disposable analytics index
-outside the data root and refreshes it after every writing command. Document
-values follow every change of a page; computed values follow the page's
-rendering. `fitdocs regen` brings documents and the index forward together
-after the athlete inputs change, and a build computes every page under the
-athlete inputs current at that build. The index is never read back into a
-document. Run `fitdocs index` once to build it; nothing is needed for existing
-documents.
+**What changed at this version:** fitdocs adds a `dashboards/` location
+whose pages belong to you: fitdocs owns their chart regions and
+`dashboards/assets/`, and nothing else in the pages. Dashboard chart regions
+and assets are the only document content produced from the analytics index;
+workout, history and block documents never read it. Run `fitdocs sync` or
+`fitdocs regen` once to place `dashboards/AGENTS.md`; nothing is needed for
+existing documents.
 
 This document is the authoritative, published statement of what fitdocs owns
 in your data root, what you own, and the exact limits of every operation that
-writes there. It is restated, in shorter form, inside the four owned
+writes there. It is restated, in shorter form, inside the five owned
 directories a human or agent browses (`workouts/AGENTS.md`,
-`fit-archive/AGENTS.md`, `history/AGENTS.md`, and `blocks/AGENTS.md` — each
+`fit-archive/AGENTS.md`, `history/AGENTS.md`, `blocks/AGENTS.md`, and
+`dashboards/AGENTS.md` — each
 generated on the first `sync` or `regen` run, the first `fitdocs history` run
 that has a page to write, or the first `fitdocs plan` run that has a block to
 render, because each of the four refreshes every declared directory's file
@@ -56,6 +56,12 @@ named in the next section.
   planned-workout pages in a subdirectory named after that block (see
   [Two Further Document Types: Training Blocks and Planned Workouts](#two-further-document-types-training-blocks-and-planned-workouts)
   below).
+- `dashboards/` — dashboard pages, which belong to you: fitdocs writes only
+  the chart regions inside them (between the `fitdocs:begin:chart:<id>` and
+  `fitdocs:end:chart:<id>` markers) and never creates, rewrites or deletes a
+  page as a whole.
+- `dashboards/assets/` — chart images (SVG) and snapshot files referenced by
+  dashboard pages; fitdocs never modifies or deletes a snapshot file.
 - `fit-archive/` — the immutable archive of every `.fit` source fitdocs has
   processed, named by content hash.
 - `.cache/` — re-fetchable, re-derivable cache state (today: basemap tiles).
