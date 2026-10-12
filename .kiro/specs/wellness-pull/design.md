@@ -279,7 +279,9 @@ tests/connectors/
   `wellness` together with the report field; then the wellness binding),
   `tests/index/test_contract_docs.py:140` and
   `tests/index/derived/test_preserved.py:246` (the literal
-  `CONTRACT_VERSION`), `tests/test_confinement.py` (`WRITING_ENTRY_POINTS`
+  `CONTRACT_VERSION`), `tests/identity/test_contract_docs.py:177-187` (the
+  "What changed at this version" phrases, plus any peer's head-paragraph pin
+  on `main` at landing), `tests/test_confinement.py` (`WRITING_ENTRY_POINTS`
   gains `pull-wellness`), `tests/connectors/test_boundary.py` only if a
   module's import set changes (none planned).
 - `pyproject.toml` — unchanged: `[tool.mypy].files` already lists the
@@ -1038,9 +1040,18 @@ _WELLNESS_REPORT_ROWS: Final[tuple[tuple[str, str], ...]] = (
   doc's version line and "What changed at this version" paragraph state the
   same; the declaration goldens are regenerated; the literal pins
   `tests/index/test_contract_docs.py:140` and
-  `tests/index/derived/test_preserved.py:246` move; the adjacency and head
-  pins (`tests/identity/test_contract_docs.py:144-179`) bind the paragraph
-  and the doc line to the constant.
+  `tests/index/derived/test_preserved.py:246` move; the head-paragraph
+  phrase pin `tests/identity/test_contract_docs.py:177-187` (asserting the
+  outgoing lander's "What changed" phrases), and any head-paragraph pin a
+  peer has added on `main` by then, is re-pinned to wellness-pull's
+  paragraph, its outgoing phrases moving into an assertion on the history
+  docstring; `tests/connectors/test_wellness_records.py` asserts the history
+  docstring contains "Raised from ``{v-1}`` to ``{v}`` by wellness-pull"
+  (`v = int(CONTRACT_VERSION)`) and one sentence of the paragraph above. The
+  version-following pins (`tests/test_ownership_contract.py:82-85`,
+  `tests/test_declaration.py:98`) and the history pins
+  (`tests/identity/test_contract_docs.py:189-209`,
+  `tests/compose/test_contract_docs.py:144-158`) stay green unchanged.
 - `CHANGELOG.md` `[Unreleased]`: Added (the wellness pull, the `wellness`
   key, attribution, the wellness report table); Changed (ledger format 2 when
   wellness is enabled; an older fitdocs refuses such a ledger; to enable,

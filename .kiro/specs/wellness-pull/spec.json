@@ -1,9 +1,9 @@
 {
   "feature_name": "wellness-pull",
   "created_at": "2026-10-12T20:50:28Z",
-  "updated_at": "2026-10-12T21:40:00Z",
+  "updated_at": "2026-10-12T22:45:00Z",
   "language": "en",
-  "phase": "design-generated",
+  "phase": "tasks-generated",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -11,12 +11,13 @@
     },
     "design": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "tasks": {
-      "generated": false,
-      "approved": false
+      "generated": true,
+      "approved": true
     }
   },
-  "ready_for_implementation": false
+  "ready_for_implementation": true,
+  "phase_note": "Generated 2026-10-12 by the Phase 12 spec batch (wave 2) in auto-approve mode from base cd77157 (wellness-store spec merged in). 13 requirements / 91 acceptance criteria; 6 major / 19 leaf tasks, (P) 2.1, 2.2, 2.3, 2.5. Discovery codebase-first with no network; intervals.icu field names, the updated form and the wellness-keys attribution are TBC items for task 1.1's live check, run by the controller session with the maintainer's key (completion gate 6.3). Step 3.5 independent review: round 1 NEEDS_FIXES (10 findings applied) plus controller rulings R1 (CONTRACT_VERSION main + 1, design Decision 13 reversed), R2 (group 5 sequential), R3 (roadmap ticks in 6.3); round 2 three items applied. Version constants are main + 1 at landing."
 }
