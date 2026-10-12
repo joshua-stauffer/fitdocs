@@ -484,7 +484,7 @@ sequential, never two `(P)` tasks at once.
   - _Requirements: 1.3, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 5.1, 5.7, 16.5_
   - _Boundary: Grammar_
 
-- [ ] 3.2 (P) Parse directives strictly
+- [x] 3.2 (P) Parse directives strictly
   - **`src/fitdocs/dashboards/directive.py`** per design § Directive:
     `Mode`, `REQUIRED_KEYS`, `OPTIONAL_KEYS`, `MAX_ID_LENGTH`, `Directive`
     (with `sql_sha256`), `parse_directive(body, *, open_line, page)`; the
@@ -1307,3 +1307,18 @@ sequential, never two `(P)` tasks at once.
   a NaN in an UNUSED number column renders fine (kit validates used columns
   only) but cannot be stored. The local `_SLUG` copy is reconciled with
   `grammar.SLUG` at the group-3 merge.
+- **3.2 (2 review rounds):** folded plain / `>-` titles and windows are
+  accepted as one line (`"a b"`), per design's "no `\n`" (pinned;
+  requirement wording queued). `Problem.option` carries the directive key on
+  `missing_key`, `unknown_key`, `field_value`, `mode_value`, `sql_style`,
+  `id_grammar` — report (5.4) and skill/docs (7.1/7.2) must say so.
+  `Problem.chart` is the valid id on key/field problems, `None` on
+  `id_grammar`, `yaml_syntax`, `yaml_shape`, `duplicate_key` — 5.x engine
+  decides attribution (15.1). Order: structural problems return alone;
+  otherwise missing (REQUIRED_KEYS order), unknown (code-point sorted),
+  `id_grammar`, then fields `kind, mode, title, sql, channels, options,
+  window, show_rows`; the report must still sort by page line (15.5).
+  Page lines = `open_line + 1 + body[:index].count("\n")` (`mark.index` and
+  `ReaderError.position` are character offsets into the body), so U+2028 /
+  U+0085 / lone `\r` do not shift lines. `directive._ID_RE` duplicates
+  `grammar.SLUG` until the group-3 reconciliation.
