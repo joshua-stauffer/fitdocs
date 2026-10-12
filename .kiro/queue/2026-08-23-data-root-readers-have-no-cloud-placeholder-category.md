@@ -143,3 +143,24 @@ not a live defect.
   storage: supported, with what caveat), or stay silent? `README.md:154`
   already advertises "HealthFit → iCloud" for the *inbox* without saying
   anything about the data root.
+
+## Update 2026-10-13 (Phase 12 spec batch: wellness-store)
+
+Not closed, and not answered for workouts. For the new wellness locations,
+`wellness-store` (written, not implemented) does give an unreadable file a
+timing category rather than a verdict, which is a precedent for the question
+in Open questions:
+
+- An unreadable wellness archive entry, manifest or year file makes the series
+  `DEFERRED` with nothing written (`.kiro/specs/wellness-store/design.md:1066-1079`,
+  `:1723`; apple-health-import `design.md:943` names an evicted extract), and
+  `check` reports an unreadable series file as a stale series naming the file
+  (`wellness-store/design.md:1142`), with a rebuild remedy rather than a
+  delete one.
+- One hole in that precedent is queued separately: an `OSError` inside a format
+  recognizer is currently swallowed as "no claim", so an unreadable inbox
+  candidate is reported unrecognized instead of deferred
+  (`.kiro/queue/2026-10-13-wellness-recognizer-oserror-reported-unrecognized-not-deferred.md`).
+- `check`'s workout-document remedy (`_REMEDY_RESTORE_ACCESS`,
+  `src/fitdocs/audit.py`) and `read_frontmatter`'s silent skip are untouched by
+  any Phase 12 spec.

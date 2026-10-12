@@ -112,3 +112,27 @@ does not enforce.
 ## Open questions
 
 None. The gap is measured and the fix is mechanical.
+
+## Update 2026-10-13 (Phase 12 spec batch: hr-derivation task 1.3)
+
+Not closed. The `hr-derivation` spec (written, not implemented) claims this
+item and says it closes it when the task lands.
+
+- `.kiro/specs/hr-derivation/tasks.md:272-296`, task 1.3 ("Report the dated
+  resting and maximum entries the heart-rate channel used (load-channels
+  amendment)"): "Pin the `impulse` and `reference` values with
+  pairwise-distinct expectations computed independently of the channel, and
+  make true or delete the `# Req 1.3` comment beside them (closes
+  `.kiro/queue/2026-08-25-heart-rate-inputs-used-values-unpinned.md`; move it
+  to `closed/` with `status: done`)." Its mutations include this item's swap
+  (`tasks.md:288-290`), and its tests assert the impulse and reference values
+  (`tasks.md:285-287`). Design: `.kiro/specs/hr-derivation/design.md:1042-1044`
+  ("closes" this item); requirement: Req 10.3 (`requirements.md:329`).
+- The item's evidence still holds at `86cdf14`, with the production lines moved
+  by one: `src/fitdocs/load/channels/heart_rate.py:262-263` (`impulse`,
+  `reference`) and the presence-only assertions at
+  `tests/load/channels/test_heart_rate.py:1052-1053`.
+- Whoever implements hr-derivation 1.3 moves this file to `closed/` with
+  `status: done` in the same change, after re-running the swap mutation from
+  the Evidence section. Until then it stays open; `blocked_by` is left
+  empty so it can still be picked up directly.

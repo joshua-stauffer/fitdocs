@@ -54,3 +54,30 @@ renderer and golden, which is cheaper to decide before implementation.
 
 ## Open questions
 - All three are maintainer decisions; no picking-up session can make them.
+
+## Update 2026-10-13 (Phase 12 spec batch: wellness surfaces)
+
+Not closed. The Phase 12 specs reach the same three questions on new surfaces,
+and none of them is decided for the maintainer.
+
+- **(a) chart images.** `recovery` takes the same position as the workout
+  pages and records it as an open maintainer decision: the line sits beneath
+  the page title, above every embedded chart, and the chart SVGs are not
+  stamped (`.kiro/specs/recovery/design.md:1360-1365`, "Open Questions /
+  Risks"). So the answer to (a) now also governs the recovery page's charts.
+- **(b) aggregate and derived pages.** The recovery page is itself derived from
+  many days of wellness values, and the spec attributes it with the
+  "contributing-source" wording this item cites: Garmin as the sole source
+  when every value used records Garmin as its origin, as one of several
+  otherwise, and no line when no Garmin-origin value is used
+  (`.kiro/specs/recovery/requirements.md:210-211`, Req 12.7-12.8;
+  `.kiro/specs/workout-wellness/requirements.md:131-140`, Req 4, for the
+  morning block). The shared rule is `wellness_attribution` and
+  `wellness_attribution_line`, appended to `src/fitdocs/render/attribution.py`
+  by recovery task 3.3 (`.kiro/specs/recovery/design.md:1111-1140`). That is a
+  precedent a decision on the training-history and block pages can follow;
+  no Phase 12 spec attributes those pages, and the intervals-connector design
+  covers workout pages only.
+- **A surface nobody covers.** Dashboards over `wellness_daily` owe the same
+  attribution and the dashboards spec has no mechanism for it. Queued
+  separately: `.kiro/queue/2026-10-13-dashboards-over-wellness-daily-owe-garmin-attribution.md`.

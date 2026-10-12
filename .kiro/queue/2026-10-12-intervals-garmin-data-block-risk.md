@@ -87,3 +87,24 @@ Thread: <https://forum.intervals.icu/t/api-access-to-intervals-icu/609>.
 
 - Whether to act before the block is final. Detection costs little and
   helps either way; the fallback is the maintainer's call.
+
+## Update 2026-10-13 (Phase 12 spec batch: wellness-pull covers the wellness half)
+
+Not closed. This item stays about activities; the `wellness-pull` spec (written,
+not implemented) takes the wellness half that the Why section hands to it.
+
+- `.kiro/specs/wellness-pull/research.md:142-151` -- the block risk and its
+  four implications: a withheld field arrives as `null` or missing and is
+  delivered verbatim (absent, never zero); a whole-endpoint 403 on wellness
+  becomes a wellness-specific error naming the restriction and the remedies
+  (`wellness = false`, the Garmin export route); nothing re-delivers a day
+  because the drain could not use a delivery; a vanished attribution list
+  produces a notice.
+- `.kiro/specs/wellness-pull/design.md:926-936` and `:1128` (the 403 mapping and
+  the error-strategy row), `:1381` (decision 11), and `:1404-1407` (a block that
+  nulls re-delivered days removes the intervals.icu Garmin values from the
+  series by the latest-record rule; the Garmin export route is the fallback).
+  Requirement: `.kiro/specs/wellness-pull/requirements.md:239` (the docs name
+  the possible Garmin restriction and the export route).
+- Not covered by that spec, so still this item's: detecting a blocked
+  activity listing or download, and the fallback route for Garmin rides.

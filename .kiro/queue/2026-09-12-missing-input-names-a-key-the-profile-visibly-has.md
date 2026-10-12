@@ -112,3 +112,34 @@ HR benchmarks for this athlete:
   because run FTP is `not_on_file`, while the HR channel's own reason (max /
   resting not applicable on that date) never reached the summary.
 
+## Update 2026-10-13 (Phase 12 spec batch: hr-derivation)
+
+Not closed. The `hr-derivation` spec (written, not implemented) addresses the
+structural half of this item and leaves the wording half open.
+
+- **Entry point without the prompt (the structural half, option (b) in the
+  resume command).** `fitdocs derive-benchmarks` gains a heart-rate stage that
+  writes dated `[[benchmarks.athlete.resting_hr_bpm]]` and
+  `[[benchmarks.athlete.max_hr_bpm]]` entries from evidence fitdocs already
+  holds (the wellness series' daily resting heart rate; every workout's heart
+  rate): `.kiro/specs/hr-derivation/design.md:1107-1132` (the entries, with
+  synthetic values), `requirements.md:24-34`. The load pass then selects them
+  as ordinary entries, "with no change to the calculator's arithmetic, its
+  channel selection or its prompts" (`requirements.md:327`, Req 10.1), and the
+  stage "shall prompt for nothing" (`requirements.md:189`). So an athlete whose
+  runs and rides select pace or power, and for whom the prompt never fires
+  (the 2026-09-12 update above), gets the two athlete-wide HR benchmarks once
+  evidence exists and `derive-benchmarks` has run. Tasks: 3.1-3.3, 3.5
+  (`tasks.md:495-546`, `:603`).
+- **Still open (the wording half).** The hr-derivation spec records this item
+  as the known confusion and does not touch the messages: `brief.md:29-34` and
+  `research.md:310` cite it, and nothing in the spec rewords "missing: a
+  maximum heart rate (max_hr_bpm)" or the README's `athlete.toml` section. The
+  flat `max_hr_bpm` / `resting_hr_bpm` keys remain TRIMP-only
+  (`brief.md` "Flat keys", `:29-34`). An athlete with too little
+  evidence for a derived entry (a declined derivation) still sees the old
+  message beside a file that visibly carries the flat keys.
+- **Pick-up effect.** Resume option (a) (wording and README only) is now
+  smaller after hr-derivation task 4.3 (`tasks.md:697`) documents the stage:
+  the paragraph naming which keys feed what can point at `derive-benchmarks`
+  as the way to get the dated entries without typing them.

@@ -121,3 +121,35 @@ importing a leaf; a leaf helper satisfies both.
 - Both copies above are now on the same line of history: the live count is
   eight (the six at f500dc1, `identity/holds.py`, `connectors/_atomic.py`);
   title and resume command advanced to eight.
+
+## Update 2026-10-13 (Phase 12 spec batch)
+
+- Phase 12 specifies more private temp-then-`os.replace` copies, none landed
+  yet (verified in the specs at `86cdf14`; the live count stays eight, and
+  title, frontmatter and resume command are deliberately left as written):
+  - recovery: `.kiro/specs/recovery/design.md` § Engine (`:885`, the write at
+    `:911-912`, `.recovery-*.tmp` in the target's directory, row 13.6 at
+    `:424`); recovery `tasks.md` task 4.1 (`:575-583`, "a module-local atomic
+    write").
+  - workout-wellness's morning pass: `.kiro/specs/workout-wellness/design.md`
+    § MorningPass (`:597`, step 6 at `:631-632`: `.morning-*.tmp` in
+    `workouts/`, `newline=""`, then `os.replace`, temp removed on any failure
+    including `KeyboardInterrupt`; traceability row 7.7 at `:408`);
+    workout-wellness `tasks.md` task 3.1 (`:434-440`).
+  - wellness-store: the series engine ("year files and the manifest
+    atomically (temp + `os.replace`, manifest last)", `tasks.md:652-656`, task
+    3.2; design § Engine `:1053`) and the archive commit (`.incoming-*.tmp`
+    under `wellness-archive/<format id>/`, design § Archive `:926-932`, task
+    2.6 at `tasks.md:563`). The archive commit is a stream copy with a re-hash,
+    not a `write_text` shape, so it may stay outside a shared text helper.
+  - Not new copies: wellness-pull reuses `connectors/_atomic.py::write_atomic`
+    (`.kiro/specs/wellness-pull/design.md:683-684`), hr-derivation reuses
+    `save_profile` (`.kiro/specs/hr-derivation/design.md:207`, `:220`), and
+    apple-health-import writes through wellness-store's commit.
+- When all of the above land the live count is twelve with the archive commit
+  counted, eleven without it. A shared helper must therefore take a
+  `newline` choice (the morning copy writes with `newline=""` to keep page
+  bytes) and fsync or not (only the connectors copy fsyncs), besides the
+  per-caller prefix noted earlier. Timing advice from 2026-09-29 stands:
+  consolidate once, after these have landed, rather than while implementers
+  are adding copies against a moving helper.
