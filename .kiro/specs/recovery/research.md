@@ -25,7 +25,9 @@
   - wellness-store's reader already exposes everything the baselines need:
     `WellnessSeries.by_source`, `.canonical`, `.values` (design.md § Seams 6).
     Only display labels for metrics are missing; one additive field
-    (`MetricInfo.label`) avoids a second metric table in recovery.
+    (`MetricInfo.label`) avoids a second metric table in recovery. The
+    controller folded that field into wellness-store's own spec (ruling R1,
+    Step 3.5 round 1); recovery consumes it.
 
 ## Research Log
 
@@ -200,8 +202,9 @@
   names live only in the registry, which the facade does not export.
 - **Implications**: no re-parse, no re-merge, no precedence of its own;
   sources are named by id (`garmin-export`, `apple-health`,
-  `intervals-icu`) and origin token; one additive amendment,
-  `MetricInfo.label`, gives every consumer the same short labels.
+  `intervals-icu`) and origin token; one additive field,
+  `MetricInfo.label`, owned by wellness-store, gives every consumer the
+  same short labels.
 
 ## Architecture Pattern Evaluation
 
@@ -249,9 +252,13 @@
   without data does; no value is ever carried, only which source's own
   rolling mean and range are drawn.
 
-### Decision: a wellness-store amendment for metric labels
+### Decision: metric labels live in wellness-store
 - **Selected Approach**: `MetricInfo.label`, one short label per metric,
-  used by the recovery page and by workout-wellness.
+  used by the recovery page and by workout-wellness. First drafted as a
+  recovery-carried amendment; the controller ruled (R1, Step 3.5 round 1)
+  that wellness-store's own spec carries it, because wellness-store 1.1
+  pins `METRICS` against a literal of its table and a later field would
+  break pins that cannot be listed in advance.
 - **Rationale**: a label table in recovery would be the "second metric
   list" the batch rules forbid.
 

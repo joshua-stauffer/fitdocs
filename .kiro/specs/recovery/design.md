@@ -20,9 +20,10 @@ library so the block and the page agree.
 
 **Impact**: a new package `fitdocs.recovery`, one CLI command, one owned
 location (`CONTRACT_VERSION` main + 1), one appended chart kind
-(`reference-band`, chart-catalog Amendment 1), one additive field on
-wellness-store's `MetricInfo`, and `recovery` in the no-network command
-lists. No workout, history, block or wellness file changes; no index schema
+(`reference-band`, chart-catalog Amendment 1), and `recovery` in the
+no-network command lists. It consumes `MetricInfo.label`, which
+wellness-store provides (controller ruling R1, 2026-10-12: the field is
+folded into wellness-store's own spec at cross-spec review). No workout, history, block or wellness file changes; no index schema
 change; no `DOC_VERSION` change.
 
 ### Goals
@@ -55,8 +56,6 @@ change; no `DOC_VERSION` change.
   amendment).
 - **The `reference-band` chart kind** (chart-catalog Amendment 1): its
   module, registration, tests, goldens and budget.
-- **`MetricInfo.label`** (wellness-store amendment): the short label of each
-  of the 28 metrics.
 - **`recovery` in the no-network lists** (connectors amendment).
 - `docs/recovery.md`, the recovery parts of `docs/index.md`,
   `docs/ownership-contract.md`, `README.md`, the workouts skill, the
@@ -81,17 +80,23 @@ change; no `DOC_VERSION` change.
 - `fitdocs.recovery.constants`, `fitdocs.recovery.baselines` and the package
   facade `fitdocs/recovery/__init__.py` import only the standard library,
   `fitdocs.citation` and the `fitdocs.wellness` facade. Importing
-  `fitdocs.recovery` therefore never imports rendering, history, layout or
-  the engine.
+  `fitdocs.recovery` therefore loads, beyond what `import fitdocs.wellness`
+  itself loads (which includes `fitdocs.settings` and `fitdocs.layout`),
+  only `fitdocs.recovery`, `fitdocs.recovery.constants`,
+  `fitdocs.recovery.baselines` and `fitdocs.citation`; in particular never
+  `fitdocs.render`, `fitdocs.history` or `fitdocs.recovery.engine`.
 - `fitdocs.recovery.view` adds `fitdocs.history` (`HistoryComputation`,
-  `DayRow`, `day_rows`).
+  `DayRow`, `day_rows`) and nothing from the chart kit: the panel limit it
+  needs is passed in by the engine (controller ruling R2).
 - `fitdocs.recovery.charts` adds `fitdocs.render.charts.kit` (facade) and
   `fitdocs.units`.
 - `fitdocs.recovery.page` adds `fitdocs.contract`, `fitdocs.layout` and
   `fitdocs.render.charts.kit.format` (`format_value`, `escape_markdown`).
 - `fitdocs.recovery.engine` adds `fitdocs.history` (`read_history_inputs`,
   `compute_history`), `fitdocs.declaration` (`ensure_declarations`),
-  `fitdocs.layout`, `fitdocs.contract`.
+  `fitdocs.layout`, `fitdocs.contract`, and the chart kit facade's
+  `describe_kinds` (to read the `small-multiples` kind's panel limit, which
+  it passes to `build_view`).
 - Never: `duckdb`, `fitdocs.index`, `fitdocs.query`, `fitdocs.dashboards`,
   `fitdocs.sync`, `fitdocs.inbox`, `fitdocs.ingest`, `fitdocs.model`,
   `fitdocs.connectors`, `fitdocs.tiles`, `fitdocs.load`, `fitdocs.benchmarks`,
@@ -141,10 +146,6 @@ at landing.
   pull, not Req 14.1's command list).
 - **chart-catalog — Amendment 1, the `reference-band` kind**: normative text
   in [ReferenceBandKind](#referencebandkind-chart-catalog-amendment-1).
-- **wellness-store — `MetricInfo.label`**: one short display label per
-  metric ([MetricLabels](#metriclabels-wellness-store-amendment)). If
-  wellness-store's implementation already carries it, the task only checks
-  the labels.
 
 ## Architecture
 
@@ -265,7 +266,6 @@ tests/declaration_golden/recovery.AGENTS.md
 - `src/fitdocs/cli.py` — `recovery_command`, `_report_recovery`, the module
   docstring's command list and exit codes.
 - `src/fitdocs/render/charts/kit/registry.py` — append `reference_band.KIND`.
-- `src/fitdocs/wellness/model.py` — `MetricInfo.label` and the 28 labels.
 - `src/fitdocs/skills/fitdocs-workouts/SKILL.md` — the recovery paragraph
   and fence.
 - `.kiro/steering/tech.md` — `recovery` in the no-network list;
@@ -275,7 +275,7 @@ tests/declaration_golden/recovery.AGENTS.md
   summary and one capability sentence), `CHANGELOG.md`, `pyproject.toml`
   (`[project.urls] Recovery`; mypy test-module entry).
 - Spec amendments appended to `.kiro/specs/{wiki-contract,connectors,
-  chart-catalog,wellness-store}/requirements.md` with `spec.json` entries.
+  chart-catalog}/requirements.md` with `spec.json` entries.
 - Tests re-pinned (append-only where the pin is a list): `tests/test_layout.py`
   (`:649`, `:863`, `:885`), `tests/test_declaration.py`,
   `tests/test_declaration_goldens.py` and every existing declaration golden
@@ -407,7 +407,6 @@ converted back with `exp`; positions are decided in the transformed scale.
 | CliRecovery | cli | Command, report, exit | 1.2, 1.6-1.8 | Engine (P0) | Service |
 | OwnedLocation | layout/contract/declaration/docs | Location, declaration, version | 12.1, 13.1-13.3, 18.2 | — | State |
 | ReferenceBandKind | chart kit | The new kind | 4.1, 5.4, 16.2-16.4 | kit shared layers (P0) | Service |
-| MetricLabels | wellness model | Short metric labels | 6, 7, 8 (labels), 12.2 | — | State |
 | NoNetworkLists | steering/tests/connectors | `recovery` named offline | 17.1, 17.2 | — | — |
 | ConfinementEntry | tests | `recovery` writing entry point | 13.2, 13.4 | — | — |
 | Docs | docs/skill/changelog | User-facing text | 18 | — | — |
@@ -490,7 +489,9 @@ BASELINED_METRICS: Final[tuple[Metric, ...]] = (HRV_SDNN_MS, HRV_RMSSD_MS, RESTI
 SLEEP_METRICS: Final[tuple[Metric, ...]] = (SLEEP_S, SLEEP_DEEP_S, SLEEP_LIGHT_S, SLEEP_REM_S, SLEEP_AWAKE_S, SLEEP_HR_BPM)
 METHODS: Final[Mapping[Metric, BaselineMethod]]   # BASELINED_METRICS (LOG for HRV, LINEAR for resting HR,
                                                   #   with range) then SLEEP_METRICS (LINEAR, no range)
-LOOKBACK_DAYS: Final[int]       # max over METHODS of max(baseline_days, rolling_days - 1) == 60
+def lookback_days(methods: Mapping[Metric, BaselineMethod]) -> int: ...
+                                # max over methods of max(baseline_days, rolling_days - 1)
+LOOKBACK_DAYS: Final[int]       # lookback_days(METHODS) == 60
 BASELINES_VERSION: Final[int] = 1   # bumped whenever a method, constant or rule changes the numbers
 ```
 
@@ -584,10 +585,13 @@ Re-exports exactly: `Baselines`, `BaselineDay`, `RangePosition`,
 `BaselineMethod`, `Transform`, `METHODS`, `BASELINED_METRICS`,
 `SLEEP_METRICS`, `LOOKBACK_DAYS`, `BASELINES_VERSION`, `baseline_key`.
 Imports nothing but `baselines` and `constants`; pinned by
-`tests/test_public_api.py` (`_RECOVERY_SURFACE`) and by the boundary guard
-(importing `fitdocs.recovery` in a fresh interpreter loads no
-`fitdocs.render`, `fitdocs.history`, `fitdocs.layout` or
-`fitdocs.recovery.engine` module).
+`tests/test_public_api.py` (`_RECOVERY_SURFACE`, a literal set, with
+`_RECOVERY_SURFACE_OWNERS` naming the submodule that defines each name) and
+by the boundary guard: in a fresh interpreter, the modules `import
+fitdocs.recovery` loads minus the modules `import fitdocs.wellness` loads
+are a subset of `{fitdocs.recovery, fitdocs.recovery.constants,
+fitdocs.recovery.baselines, fitdocs.citation}`, and none of them is
+`fitdocs.render…`, `fitdocs.history…` or `fitdocs.recovery.engine`.
 
 #### View (`src/fitdocs/recovery/view.py`)
 
@@ -597,7 +601,7 @@ Imports nothing but `baselines` and `constants`; pinned by
 | Requirements | 2.1, 2.2, 4.2, 4.3, 5.5, 5.6, 6.1, 6.3, 7.2, 7.3, 8.1, 8.2, 8.3, 9.1, 9.5, 9.6, 12.5 |
 
 - `WINDOW_DAYS: Final = 90` (a display choice, not a method constant).
-- `build_view(series, baselines, load) -> RecoveryView | None`: `None` when
+- `build_view(series, baselines, load, *, panel_limit) -> RecoveryView | None`: `None` when
   `series.is_empty()`. As-of = `series.days()[-1]`; window = as-of − 89 …
   as-of (2.1, 2.2).
 - **Signals** (`BASELINED_METRICS` order): a `SignalView` for each metric
@@ -620,9 +624,10 @@ Imports nothing but `baselines` and `constants`; pinned by
   motivation_rating, stress_rating, injury_rating, hydration_rating)`; one
   candidate `Panel` per (metric in that order, source in id order) with a
   value in the window, holding that source's own value per window day (8.2);
-  the first `PANEL_LIMIT` (the `small-multiples` kind's 12, read from the
-  kit's kind listing, never re-spelled) are charted, the rest are
-  `overflow` (8.3).
+  the first `panel_limit` are charted, the rest are `overflow` (8.3);
+  `panel_limit` is an argument the engine reads from the `small-multiples`
+  kind's listing (`describe_kinds()`, its `bound["limit"]`, 12 today) and
+  never re-spells (controller ruling R2).
 - **Load**: from `HistoryComputation | None`: `rows` = `day_rows(...)`
   mapped onto the window (a window day outside the series span → `None`);
   `unavailable_days` = window days whose row is `None` or suppressed (9.6);
@@ -716,7 +721,7 @@ class RecoveryView:
 OTHER_SIGNALS: Final[tuple[Metric, ...]]
 WINDOW_DAYS: Final[int]
 def build_view(series: WellnessSeries, baselines: Baselines,
-               load: HistoryComputation | None) -> RecoveryView | None: ...
+               load: HistoryComputation | None, *, panel_limit: int) -> RecoveryView | None: ...
 ```
 
 ### Recovery Rendering
@@ -833,7 +838,8 @@ def render_page(view: RecoveryView, charts: Sequence[tuple[str, str]]) -> Render
   written, no settings read (1.4). Then `read_history_inputs(data_root)` and
   `compute_history(inputs, methodology=…)`; any `SettingsError` (malformed
   `[history]`/`[load]`, `MethodologyConfigurationError`) propagates to the
-  CLI before any write (9.4).
+  CLI before any write (9.4). The panel limit is the `small-multiples`
+  entry of `describe_kinds()`'s `bound["limit"]`, passed to `build_view`.
 - **Location check**: `recovery/` or `recovery/assets/` existing as a
   symlink or a non-directory → `FOREIGN` for that path, nothing written, no
   declaration refresh (13.5).
@@ -1018,18 +1024,20 @@ with chart-catalog Requirement 2 and Requirement 12 applying to it):
   to measured + 25 %. Appended after the last registered kind; prefix pins
   stay green.
 
-#### MetricLabels (wellness-store amendment)
+#### Metric labels (consumed from wellness-store)
 
-- `MetricInfo` gains `label: str` (short display label, required). Labels:
-  Resting HR, Lowest HR, Highest HR, HRV (SDNN), HRV (rMSSD), Sleep, Deep
-  sleep, Light sleep, REM sleep, Awake in sleep, Sleeping HR, Respiration,
-  SpO2, Weight, VO2max, VO2max (running), VO2max (cycling), Steps, Stress
-  level, Body battery (highest), Body battery (lowest), Fatigue (rating),
-  Mood (rating), Motivation (rating), Soreness (rating), Stress (rating),
-  Injury (rating), Hydration (rating) — in `Metric` order. Labels are
-  distinct (pinned). wellness-store `requirements.md` gains an amendment
-  (Req 5.5 extended: each metric has a short label) and `spec.json` an
-  entry.
+- Every metric's short display label is `fitdocs.wellness.METRICS[metric].label`
+  (`MetricInfo.label`), owned by wellness-store (controller ruling R1,
+  2026-10-12: the controller folds the field, its Label column and its pins
+  into wellness-store's spec at cross-spec review). recovery uses it for
+  section headings, chart column labels, panel titles and table rows, and
+  holds no label table of its own. The labels this design was written
+  against: Resting HR, Lowest HR, Highest HR, HRV (SDNN), HRV (rMSSD), Sleep,
+  Deep sleep, Light sleep, REM sleep, Awake in sleep, Sleeping HR,
+  Respiration, SpO2, Weight, VO2max, VO2max (running), VO2max (cycling),
+  Steps, Stress level, Body battery (highest), Body battery (lowest), Fatigue
+  (rating), Mood (rating), Motivation (rating), Soreness (rating), Stress
+  (rating), Injury (rating), Hydration (rating).
 
 #### NoNetworkLists and ConfinementEntry
 - Connectors amendment as listed above; `structure.md` gains the
@@ -1097,8 +1105,10 @@ Normative for `workout-wellness` (and any later consumer of baselines).
 
 - **Module**: `fitdocs.recovery` (`src/fitdocs/recovery/__init__.py`),
   re-exporting `fitdocs.recovery.baselines` and `fitdocs.recovery.constants`
-  names only. Importing it loads no rendering, history, layout or engine
-  code, so a renderer may import it.
+  names only. Importing it loads, beyond what `import fitdocs.wellness`
+  loads, only `fitdocs.recovery`, its `constants` and `baselines` modules
+  and `fitdocs.citation` — never rendering, history or engine code — so a
+  renderer may import it.
 - **Public names**: `Baselines`, `BaselineDay`, `RangePosition`,
   `BaselineMethod`, `Transform`, `METHODS`, `BASELINED_METRICS`,
   `SLEEP_METRICS`, `LOOKBACK_DAYS`, `BASELINES_VERSION`, `baseline_key`.
@@ -1148,28 +1158,36 @@ history Req 8.8).
 Every new assertion names the production mutation it dies on
 (`change-protocol.md` § Fixture Discrimination). Fixtures are synthetic
 series built by `tests/recovery/builders.py` through wellness-store's own
-series writer (or its codec) and synthetic workout pages; no maintainer value.
+series codec (`fitdocs.wellness.series.encode_year` and its manifest
+encoder — test-only use of an unpublished seam, verified before building on
+it and checked at cross-spec review) and synthetic workout pages; no
+maintainer value. End-to-end staging goes through the drain with a
+synthetic intervals.icu delivery (wellness-store design § Seams 2), which
+carries 17 metrics and no sleep stages or body battery.
 
 ### Unit Tests
 - Constants: `METHODS` reads only `CitedConstant.value`s (literal scan,
   history precedent); every `Citation` governing a constant has
-  `PRIMARY_TEXT` and a locator; `LOOKBACK_DAYS == 60` derived (mutation:
-  drop `rolling_days − 1` from the max and set rolling to 70 in a test
-  method).
+  `PRIMARY_TEXT` and a locator (a synthetic `Citation` without a locator
+  must fail the check); `LOOKBACK_DAYS == lookback_days(METHODS) == 60`,
+  and `lookback_days` of a synthetic table with `rolling_days=70` is 69
+  (mutation: drop `rolling_days − 1` from the max).
 - Baselines: rolling window includes D (value on D changes the mean;
   mutation: window `D−7…D−1`); baseline excludes D (a value on D leaves the
   range unchanged; mutation: `D−59…D`); minimum counts at 2/3 and 29/30
   (mutation: `>` for `>=`); ln for HRV with values whose arithmetic and
   geometric means differ (mutation: LINEAR for HRV); sample vs population
   SD with n = 30 (mutation: `n` for `n−1`); position bounds inclusive with a
-  rolling mean exactly on the bound in the ln scale; per-source isolation
+  resting-HR rolling mean exactly on a bound (linear scale, an exact float
+  tie); per-source isolation
   with two sources of pairwise-distinct values (mutation: index by metric
   only); absent days never zero (a day of 0-like gap leaves the mean of the
   others); the shown-source carry at 6 and 7 days (mutation: 7); X + 60
   bound (a value at X changes X + 60 and not X + 61).
 - `baseline_key`: changes when any field changes; equal for equal days.
-- View: as-of from the series (two runs on different `date.today()`
-  monkeypatches give equal views); window length 90; runs grouping with a
+- View: as-of from the series (equal views under two faked system dates,
+  using the history precedent's `time.time` fake, `tests/test_history_e2e.py:213`;
+  `date.today` itself cannot be monkeypatched); window length 90; runs grouping with a
   direction change and a source change inside a run (both split); source
   change list; latest; sleep rows only for recorded stages; other-signal
   ordering and overflow at 13 panels; coverage counts; load mapping with a
@@ -1256,7 +1274,7 @@ at discovery" and the brief; each is revisable at review.
 12. **Stale charts** of the fixed set are removed; nothing else in
     `recovery/assets/` is touched.
 13. **Sources named by id and origin**; no display-name amendment.
-14. **`MetricInfo.label`** added to wellness-store instead of a label table
-    in recovery.
+14. **Metric labels** are consumed from wellness-store's `MetricInfo.label`
+    (controller ruling R1) instead of a label table in recovery.
 15. **Unverified citations** ship as `FitdocsChoice`; values are fixed by
     this design and change only by a maintainer decision.
