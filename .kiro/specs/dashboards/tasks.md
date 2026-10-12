@@ -397,7 +397,7 @@ sequential, never two `(P)` tasks at once.
     8.2.
   - _Requirements: 7.3, 7.5_
 
-- [ ] 2.2 Keep column types, add the named-parameter path and a sandboxed session to the query layer (analytics-query Amendment 1)
+- [x] 2.2 Keep column types, add the named-parameter path and a sandboxed session to the query layer (analytics-query Amendment 1)
   - **`src/fitdocs/query/format.py`**: `ResultSet.column_types: tuple[str, ...] = ()`
     (a defaulted trailing field; every positional construction keeps working).
   - **`src/fitdocs/query/statement.py`**: `execute_statement` and
@@ -1355,3 +1355,23 @@ sequential, never two `(P)` tasks at once.
   always has `end_line` None, so **5.1 tells `region_contents`
   (`intruder_line` set) from `region_unclosed` (both None) by
   `intruder_line`.** Orphan end-marker message contains "no open region".
+- **2.2 (2 review rounds; implements the 2.1 R-timeout ruling):**
+  `ResultSet.column_types` is `field(default=(), compare=False)` so the
+  unedited `test_result_is_a_direct_read_oracle_and_emits_nothing` passes —
+  `==` ignores types, so **4.3 and 8.3 assert `column_types` explicitly**,
+  and binding treats `len(column_types) != len(columns)` as a defect.
+  `_column_types()` returns `()` for name-only fake columns (existing test
+  fake). duckdb 1.2.0 cursor type names are `Date`/`NUMBER`/`STRING`/
+  `DATETIME` (1.5.6: SQL names) — 4.3 looks them up case-sensitively per
+  design `TYPE_KINDS`. R-timeout applies on the named path only
+  (`params is not None`): any `IndexInterrupted`/`IndexStatementError` after
+  the timer fired is `StatementTimedOut`; a no-timer `IndexInterrupted` is
+  `StatementFailed(str, None)`; the positional path is unchanged (pinned).
+  `QuerySession(connection, timer)`; `screen_statement` returns the kind
+  str; query-level `statement_parameters` unions all statements' names
+  (binding screens single-statement first). `execute_statement` materialises
+  a tuple `ResultSet`, so no cursor result outlives its statement. A SIGINT
+  during a streaming non-aggregating statement is not honoured for ≥20 s
+  (both duckdb versions) — **6.3 uses an aggregating statement**
+  (`_JOIN_STATEMENT` in `tests/query/test_interrupt.py`); the `fitdocs query`
+  hazard is queued.
