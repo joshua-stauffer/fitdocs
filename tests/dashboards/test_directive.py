@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Sequence
 
 import pytest
@@ -507,6 +508,39 @@ def test_sql_sha256_is_over_the_utf8_bytes() -> None:
     assert directive.sql_sha256 == (
         "d3294563d51ee68e13015d1c86c1829e4b28d91642986e3ddfddd12f1a4b6d34"
     )
+
+
+def parse_scanned(keys: Sequence[tuple[str, str]]) -> Directive:
+    """Parse a body as the scanner hands it over: no newline after the last line."""
+    body = body_of(keys)
+    assert body.endswith("\n")
+    result = parse_directive(body[:-1], open_line=OPEN_LINE, page=PAGE)
+    assert isinstance(result, Directive), result
+    return result
+
+
+def test_sql_sha256_ignores_the_final_newline_a_following_key_gives_the_block() -> None:
+    others = [(k, v) for k, v in BASE if k != "sql"]
+    last = parse_scanned([*others, ("sql", "|\n  select 1")])
+    first = parse_scanned([("sql", "|\n  select 1"), *others])
+    assert (last.sql, first.sql) == ("select 1", "select 1\n")
+    assert last.sql_sha256 == first.sql_sha256
+
+
+def test_sql_sha256_strips_only_trailing_line_breaks() -> None:
+    inner = parse_scanned(keys_with(sql="|\n  select 1\n\n  from t"))
+    assert inner.sql == "select 1\n\nfrom t"
+    mid = parse_ok(keys_with(sql="|\n  select 1\n\n  from t"))
+    assert mid.sql_sha256 == inner.sql_sha256
+    assert inner.sql_sha256 == hashlib.sha256(b"select 1\n\nfrom t").hexdigest()
+    blanks = parse_ok(keys_with(sql="|+\n  select 1\n\n"))
+    assert blanks.sql.endswith("\n\n"), "the keep indicator holds blank lines"
+    assert blanks.sql_sha256 == hashlib.sha256(b"select 1").hexdigest()
+    led = parse_scanned(keys_with(sql="|\n\n  select 1"))
+    assert led.sql == "\nselect 1", "a leading blank line is part of the SQL"
+    assert led.sql_sha256 == hashlib.sha256(b"\nselect 1").hexdigest()
+    spaced = parse_ok(keys_with(sql="|\n  select 1   "))
+    assert spaced.sql_sha256 == hashlib.sha256(b"select 1   ").hexdigest()
 
 
 # -- key problems and field problems together ----------------------------------

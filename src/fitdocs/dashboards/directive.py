@@ -61,7 +61,13 @@ class Directive:
 
     @property
     def sql_sha256(self) -> str:
-        return hashlib.sha256(self.sql.encode("utf-8")).hexdigest()
+        """The digest of the SQL without its trailing line breaks.
+
+        A ``sql: |`` block keeps its final newline only when another key
+        follows, so the same query would otherwise digest differently after a
+        key moves below it.
+        """
+        return hashlib.sha256(self.sql.rstrip("\r\n").encode("utf-8")).hexdigest()
 
 
 def _single_line(text: str) -> bool:
