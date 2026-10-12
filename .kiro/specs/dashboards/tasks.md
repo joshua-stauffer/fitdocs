@@ -212,7 +212,7 @@ sequential, never two `(P)` tasks at once.
 
 - [ ] 1. Foundation: the package, the problem record, and the dashboards location
 
-- [ ] 1.1 Create the dashboards package, its problem record, the shared test helpers and fixture, and confirm the upstream seams
+- [x] 1.1 Create the dashboards package, its problem record, the shared test helpers and fixture, and confirm the upstream seams
   - **Confirm upstream** (record in Implementation Notes): each chart-kit
     name listed in Upstream Prerequisites exists with the design's signature
     (`git grep` plus an import in a scratch test); `describe_kinds()` returns
@@ -1239,3 +1239,36 @@ sequential, never two `(P)` tasks at once.
     clean; Implementation Notes record the final contract version, amendment
     numbers and the 7.3 branch taken.
   - _Requirements: 14.1, 17.1, 17.2, 19.2, 19.6, 20.1_
+
+## Implementation Notes
+
+- **1.1 (upstream confirmed on main 5231337):** every chart-kit name in
+  Upstream Prerequisites imports with the design's shape
+  (`validate_chart(request, columns) -> tuple[ChartProblem, ...]`,
+  `render_chart(request, data) -> RenderedChart(kind, output, text)`,
+  `ChartProblem` carries a `ref` that `from_chart_problem` drops,
+  `Column(name, kind, unit=None, label=None)`); `table` registered; every
+  `kind_names()` entry has `tests/render/charts/kit/test_<name>.py` with
+  `CASES`; `escape_markdown` / `clean_text` behave as stated. Queue item
+  `2026-10-08-store-facade-user-interrupt-unwrapped` still **open**.
+  `CONTRACT_VERSION` on main `"9"` (1.2 sets `"10"`). Next free amendment
+  numbers: analytics-index 1, analytics-query 1, wiki-contract 5,
+  connectors 3. structure.md `index`-bullet pin green (47 passed).
+- **1.1 deviation:** `dashboard_problem(..., **fields: Any)` instead of
+  design's `object` — `object` does not type-check when forwarded into
+  `Problem(...)` under mypy strict; callers pass only real `Problem` fields.
+  `Problem.code` is a plain `str` (`from_chart_problem` stores `.value`).
+- **1.1 shared helpers (later tasks consume, (P) tasks never edit):**
+  `_helpers.py`: `directive_block(keys, ending=)` (ending applied inside
+  multi-line values too), `region_block`, `page_text`, column/data builders,
+  `FakeSource` (`queue`, `.calls` with `today`, `.opened`, `.misused`,
+  `.closed`, `.opener()`), `MustNotOpen` (`attempts`), `must_not_open`,
+  `unavailable_opener`, `make_data_root`, `write_page`, `snapshot_of`,
+  `assert_untouched`, `query_environment`. `conftest.py`:
+  module-scoped `indexed_dashboard_root` (frozen `IndexedDashboardRoot(root,
+  index_dir, home, environ, today)`; two synthetic .fit files, no plans,
+  races or derived inputs) and `copy_dashboard_root(fixture, tmp_path)` —
+  use the copy for any test that writes pages or rebuilds/removes the index,
+  and apply its `environ` via monkeypatch (the module fixture leaves the
+  shared `FITDOCS_INDEX_DIR` in `os.environ`). Teardown HOME-purity names
+  fitdocs paths only.

@@ -264,6 +264,8 @@ files = [
     "tests/query/test_store_facade.py",
     # chart-kit task 1.2: the kit test directory.
     "tests/render/charts/kit",
+    # dashboards task 1.1: the dashboards test directory.
+    "tests/dashboards",
 ]
 
 [tool.pytest.ini_options]
