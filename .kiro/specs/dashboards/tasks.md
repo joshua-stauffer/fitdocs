@@ -809,7 +809,7 @@ sequential, never two `(P)` tasks at once.
 
 - [ ] 6. Command, pass and integration wiring
 
-- [ ] 6.1 Add the `fitdocs dashboard` command
+- [x] 6.1 Add the `fitdocs dashboard` command
   - **`src/fitdocs/cli.py`** per design § CliCommand: `_DashboardForm`,
     `_DashboardFormat`, option singletons at module scope (B008),
     `dashboard_command`, `_query_environment()` extracted from
@@ -1532,3 +1532,24 @@ sequential, never two `(P)` tasks at once.
   generation; a failed first freeze's snapshot is adopted next run (10.4).
   Equivalent mutants: F8 (draw from fetched vs decoded rows — round-trip is
   the identity, probed), O26 (CR half of the digest strip unreachable).
+- **6.1 (1 review round):** `fitdocs dashboard {check|refresh|freeze|kinds}`
+  — kinds resolves no data root, refuses targets (exit 2), reads
+  `describe_kinds()` at call time (pinned; closes the 3.4 "registry read at
+  call time" gap), text via `kinds_text` with `nl=False`, JSON
+  `indent=2, ensure_ascii=False` + newline (controller decision, same style
+  as the run report). freeze without targets exits 2 before the data root is
+  resolved. check/refresh/freeze: `_resolved_data_root` → `resolve_targets`
+  → `run_dashboards(RunRequest(Action(form), root, targets, _today()),
+  source_opener(root, _query_environment()))`; `TargetError` and
+  `IndexLocationError` exit 2 (before any write); `KeyboardInterrupt` →
+  stderr `Dashboard run interrupted.`, exit 130; exit 1 iff `report.failed`;
+  output = `render_json` or `render_text(chained=False)` + one newline.
+  `_query_environment()` is a module function (tests monkeypatch it) with a
+  stderr wait line; `query_command` behaviour unchanged.
+  `_config_error` now prints with `emoji=False` (Rich turned `p:a:b` into an
+  emoji; strictly a fix for all 45 callers). **Task text correction:** the
+  task-named "import binding at module top" mutation does not red
+  `tests/index/test_boundary.py` (binding loads no duckdb); the pin is the
+  new subprocess test `test_importing_the_cli_loads_no_dashboards_module`.
+  `kinds` JSON `ensure_ascii=False` is an equivalent mutant today (ASCII
+  registry).
