@@ -714,7 +714,7 @@ every registered kind and find its cases by the test-module convention
   - _Boundary: area kind_
   - _Depends: 3.1, 3.3, 3.4, 4.2_
 
-- [ ] 5.3 (P) Implement the bar kind with its goldens
+- [x] 5.3 (P) Implement the bar kind with its goldens
   - **`kit/kinds/bar.py`**: `KIND` per the kind table (`stack`, bound 200
     rows) and rules (band x in category order, dates ascending, absent `—`
     last; y includes zero; grouped bars 80% of the band, ≤48 px; absent y no
