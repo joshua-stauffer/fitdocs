@@ -235,3 +235,35 @@ CATEGORICAL_RAMP: Final[tuple[str, ...]] = (
     CATEGORICAL_TEAL,
     CATEGORICAL_VIOLET,
 )
+
+
+# --- sequential ramp (chart-catalog) ----------------------------------------
+# Five steps of one hue (280, blue-indigo), light/grey end first: lightness
+# falls and chroma rises along the ramp. Every step clears 3:1 on the four
+# reference backgrounds; adjacent steps stay apart under normal vision and the
+# three dichromacies (pinned by tests/render/charts/kit/test_sequential_ramp.py).
+# Append-only. Each hex is the sRGB conversion of the oklch source in its comment.
+
+SEQUENTIAL_1: Final = "#9193a0"  # oklch(0.665 0.02 280)
+SEQUENTIAL_2: Final = "#8387af"  # oklch(0.635 0.06 280)
+SEQUENTIAL_3: Final = "#767abd"  # oklch(0.605 0.1 280)
+SEQUENTIAL_4: Final = "#6a6cc9"  # oklch(0.575 0.14 280)
+SEQUENTIAL_5: Final = "#605cd5"  # oklch(0.545 0.18 280)
+
+#: The sequential colours, light/grey end first (low magnitude -> high).
+SEQUENTIAL_RAMP: Final[tuple[str, ...]] = (
+    SEQUENTIAL_1,
+    SEQUENTIAL_2,
+    SEQUENTIAL_3,
+    SEQUENTIAL_4,
+    SEQUENTIAL_5,
+)
+
+#: Runtime-inspectable provenance: step name -> (sRGB hex, oklch source).
+SEQUENTIAL_COLORS: Final[dict[str, tuple[str, str]]] = {
+    "s1": (SEQUENTIAL_1, "oklch(0.665 0.02 280)"),
+    "s2": (SEQUENTIAL_2, "oklch(0.635 0.06 280)"),
+    "s3": (SEQUENTIAL_3, "oklch(0.605 0.1 280)"),
+    "s4": (SEQUENTIAL_4, "oklch(0.575 0.14 280)"),
+    "s5": (SEQUENTIAL_5, "oklch(0.545 0.18 280)"),
+}

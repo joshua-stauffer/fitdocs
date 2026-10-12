@@ -33,6 +33,8 @@ from fitdocs.render.charts.palette import (
     ROUTE_BIKE_TINT,
     ROUTE_COLORS,
     ROUTE_RUN_TINT,
+    SEQUENTIAL_COLORS,
+    SEQUENTIAL_RAMP,
     SERIES_COLORS,
     ZONE_COLORS,
     ZONE_RAMP,
@@ -106,6 +108,8 @@ def _all_documented() -> list[tuple[str, str, str]]:
         rows.append((f"route:{name}", hex_value, source))
     for name, (hex_value, source) in CATEGORICAL_COLORS.items():
         rows.append((f"categorical:{name}", hex_value, source))
+    for name, (hex_value, source) in SEQUENTIAL_COLORS.items():
+        rows.append((f"sequential:{name}", hex_value, source))
     return rows
 
 
@@ -266,3 +270,22 @@ def test_categorical_prefix_is_pinned_in_order() -> None:
     ]
     assert len(entries) == 8
     assert tuple(hex_value for _, (hex_value, _) in entries) == CATEGORICAL_RAMP[:8]
+
+
+# --- the sequential ramp: sources in order -----------------------------------
+
+
+def test_sequential_sources_are_pinned_in_order() -> None:
+    """The five ramp entries keep their names and oklch sources, light/grey end
+    first (chart-catalog Req 3.9). The conversion test above, which walks them
+    through ``_all_documented``, ties each hex to its source."""
+    assert [(name, source) for name, (_, source) in SEQUENTIAL_COLORS.items()] == [
+        ("s1", "oklch(0.665 0.02 280)"),
+        ("s2", "oklch(0.635 0.06 280)"),
+        ("s3", "oklch(0.605 0.1 280)"),
+        ("s4", "oklch(0.575 0.14 280)"),
+        ("s5", "oklch(0.545 0.18 280)"),
+    ]
+    assert tuple(hex_value for hex_value, _ in SEQUENTIAL_COLORS.values()) == (
+        SEQUENTIAL_RAMP
+    )

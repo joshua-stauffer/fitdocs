@@ -255,7 +255,7 @@ sequential, never two `(P)` tasks at once.
     verification outcomes and the A1, A2 and A3 decisions.
   - _Requirements: 1.5, 2.12, 12.6_
 
-- [ ] 1.2 (P) Append the sequential ramp to the palette and pin its arithmetic
+- [x] 1.2 (P) Append the sequential ramp to the palette and pin its arithmetic
   - **`palette.py`** (append only): `SEQUENTIAL_1` … `SEQUENTIAL_5`,
     `SEQUENTIAL_RAMP` and `SEQUENTIAL_COLORS` with the design's five oklch
     sources and hex values, each source in the constant's comment.
