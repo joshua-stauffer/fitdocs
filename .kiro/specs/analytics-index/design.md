@@ -1919,6 +1919,10 @@ comments, word for word, extended only to name a unit's word.
 | `_utc` | UTC |
 | `_local` | local |
 
+> Note (2026-10-12, chart-kit): this table's single source is now
+> `fitdocs.units.UNITS`; `UNIT_SUFFIXES` is a projection of it. The values and
+> their order are unchanged.
+
 Columns without a unit name the quantity as dimensionless, or as a key or
 label.
 

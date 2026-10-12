@@ -25,8 +25,10 @@ Determinism guarantees (identical inputs -> byte-identical output, Req 4.1):
   references -- only the portable presentation-attribute subset (``svg``, ``g``,
   ``path``, ``polyline``, ``rect``, ``circle``, ``line``, ``text``, and
   ``image`` -- the last carrying its bitmap inline as a base64 ``data:`` payload
-  via the SVG2 ``href`` attribute, never ``xlink:href``), which restriction is a
-  caller discipline; :func:`el` itself is generic.
+  via the SVG2 ``href`` attribute, never ``xlink:href``; plus ``title``,
+  ``desc`` and ``style``, with the relaxation that a chart-kit SVG carries
+  exactly one ``<style>`` element, the theme's media queries), which restriction
+  is a caller discipline; :func:`el` itself is generic.
 
 Attribute values (and :func:`text` content) are XML-escaped so recorded data can
 never break out of the markup. This module imports the standard library only.
