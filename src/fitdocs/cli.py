@@ -536,7 +536,10 @@ def _new_index_handoff() -> HandoffCollector:
     return HandoffCollector()
 
 
-def _run_index_pass(data_root: Path, *, handoff: HandoffCollector | None) -> None:
+def _run_index_pass(
+    data_root: Path, *, handoff: HandoffCollector | None
+) -> IndexReport | None:
+    """Refresh the index after a writing command; the report, or ``None`` on a raise."""
     try:
         from fitdocs.index.refresh import refresh_after_command
 
@@ -552,6 +555,68 @@ def _run_index_pass(data_root: Path, *, handoff: HandoffCollector | None) -> Non
     except Exception as exc:
         Console(markup=False, highlight=False, soft_wrap=True).print(
             f"Index: not refreshed; {type(exc).__name__}: {exc}."
+        )
+        return None
+    return report
+
+
+_DASHBOARD_NOT_REFRESHED_REASONS: Final[dict[str, str]] = {
+    "not_built": "the index is not built",
+    "needs_rebuild": "the index needs a rebuild",
+    "busy": "the index is busy",
+    "staged": "an index replacement is staged",
+    "failed": "the index refresh failed",
+}
+"""Why a refused outcome (``Outcome.value``) leaves the dashboards alone."""
+
+_DASHBOARD_RAISED_REASON: Final = "the index refresh raised an error"
+
+
+def _run_dashboard_pass(data_root: Path, index_report: IndexReport | None) -> None:
+    """Redraw the relative charts after a successful index refresh (dashboards Req 13).
+
+    Runs only for REFRESHED, UNCHANGED and BUILT, and only when a dashboard page
+    exists. Any ``Exception`` becomes one line and never reaches the command's
+    exit code; an interrupt (``BaseException``) is not caught.
+    """
+    try:
+        from fitdocs.dashboards.engine import has_dashboards
+
+        if not has_dashboards(data_root):
+            return
+        from fitdocs.index.refresh import Outcome
+
+        if index_report is None or index_report.outcome not in {
+            Outcome.REFRESHED,
+            Outcome.UNCHANGED,
+            Outcome.BUILT,
+        }:
+            reason = (
+                _DASHBOARD_RAISED_REASON
+                if index_report is None
+                else _DASHBOARD_NOT_REFRESHED_REASONS[index_report.outcome.value]
+            )
+            Console(markup=False, emoji=False, highlight=False, soft_wrap=True).print(
+                f"Dashboards: not refreshed; {reason}."
+            )
+            return
+        from fitdocs.dashboards.binding import source_opener
+        from fitdocs.dashboards.engine import Action, RunRequest, run_dashboards
+        from fitdocs.dashboards.report import render_text
+
+        report = run_dashboards(
+            RunRequest(Action.REFRESH, data_root, (), _today()),
+            source_opener(data_root, _query_environment()),
+        )
+        text = render_text(report, chained=True)
+        if text:
+            Console(markup=False, emoji=False, highlight=False, soft_wrap=True).print(
+                text
+            )
+    except Exception as exc:
+        Console(markup=False, emoji=False, highlight=False, soft_wrap=True).print(
+            f"Dashboards: not refreshed; {type(exc).__name__}: "
+            f"{' '.join(str(exc).split())}."
         )
 
 
@@ -758,7 +823,8 @@ def sync_command(
         # The plan reconciling pass runs after the load pass, chained
         # (plan-resolution Req 8.1, 8.2, 8.5).
         plan_report = _run_plan_pass(data_root, today=_today(), chained=True)
-        _run_index_pass(data_root, handoff=handoff)
+        index_report = _run_index_pass(data_root, handoff=handoff)
+        _run_dashboard_pass(data_root, index_report)
         _report_plugin_errors(plugin_report)
         # A per-file OR a per-document (load) OR a reconciling-pass failure
         # makes the run exit 1 (8.5, plan-resolution Req 8.7).
@@ -844,7 +910,8 @@ def _run_drain_passes(
     # The plan reconciling pass runs after the load pass, chained
     # (plan-resolution Req 8.1, 8.2, 8.5), same as the explicit-source path.
     plan_report = _run_plan_pass(data_root, today=_today(), chained=True)
-    _run_index_pass(data_root, handoff=handoff)
+    index_report = _run_index_pass(data_root, handoff=handoff)
+    _run_dashboard_pass(data_root, index_report)
     _report_plugin_errors(plugin_report)
     # Per-file failures, load failures and a reconciling-pass failure drive
     # the failure outcome -- deferrals, known-quarantined files, and failed
@@ -942,7 +1009,8 @@ def regen_command(
     # The plan reconciling pass runs after the load pass, chained
     # (plan-resolution Req 8.1, 8.2, 8.5).
     plan_report = _run_plan_pass(data_root, today=_today(), chained=True)
-    _run_index_pass(data_root, handoff=handoff)
+    index_report = _run_index_pass(data_root, handoff=handoff)
+    _run_dashboard_pass(data_root, index_report)
     _report_plugin_errors(plugin_report)
     _finish(
         failed=bool(report.failures) or bool(load_report.failures) or plan_report.failed
@@ -977,7 +1045,8 @@ def load_command(
     load_report = _run_load_pass(
         data_root, session=session, calculator_id=calculator, recompute=recompute
     )
-    _run_index_pass(data_root, handoff=None)
+    index_report = _run_index_pass(data_root, handoff=None)
+    _run_dashboard_pass(data_root, index_report)
     _report_plugin_errors(plugin_report)
     # Any per-document failure exits 1; all-skipped/all-restored is success (8.6).
     _finish(failed=bool(load_report.failures))

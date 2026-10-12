@@ -535,11 +535,15 @@ def test_index_wrapper_contract_progress_callback_and_keyboard_interrupt(
     assert signature.parameters["handoff"].kind is inspect.Parameter.KEYWORD_ONLY
     assert get_type_hints(
         cli_module._run_index_pass,
-        globalns={"Path": Path, "HandoffCollector": HandoffCollector},
+        globalns={
+            "Path": Path,
+            "HandoffCollector": HandoffCollector,
+            "IndexReport": IndexReport,
+        },
     ) == {
         "data_root": Path,
         "handoff": HandoffCollector | None,
-        "return": type(None),
+        "return": IndexReport | None,
     }
 
     progress_calls: list[tuple[int, int]] = []
@@ -566,7 +570,9 @@ def test_index_wrapper_contract_progress_callback_and_keyboard_interrupt(
         observed.append(progress)
         assert progress is not None
         progress(100, 101)
-        return IndexReport(Outcome.UNCHANGED, None, None, None, None)
+        return healthy_report
+
+    healthy_report = IndexReport(Outcome.UNCHANGED, None, None, None, None)
 
     with monkeypatch.context() as owned:
         owned.setattr(cli_module, "_index_progress", lambda: progress)
@@ -576,7 +582,7 @@ def test_index_wrapper_contract_progress_callback_and_keyboard_interrupt(
     assert cli_module._index_progress is original_progress
     assert refresh_module.refresh_after_command is original_refresh
     assert observed == [progress]
-    assert returned is None
+    assert returned is healthy_report
     assert progress_calls == [(100, 101)]
     assert capsys.readouterr().err.strip() == "Indexing: 100/101 pages"
 
