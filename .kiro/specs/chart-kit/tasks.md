@@ -223,7 +223,7 @@ every registered kind and find its cases by the test-module convention
     empty).
   - _Requirements: 2.1, 2.2, 2.3, 2.5, 16.4, 18.5_
 
-- [ ] 1.2 Create the kit package with its data contract and problem types
+- [x] 1.2 Create the kit package with its data contract and problem types
   - **Package markers**: `src/fitdocs/render/charts/kit/__init__.py` (a
     docstring stating the kit's purpose and allowed imports; no re-exports
     yet), `kit/kinds/__init__.py` (marker, no imports) and
