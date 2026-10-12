@@ -2529,3 +2529,476 @@ def test_schema_read_interrupt_interrupts_then_closes_and_raises_keyboard_interr
 
     assert type(raised.value.__cause__) is RuntimeError
     assert events == [failing_read, "interrupt", "close"]
+
+
+# --- dashboards 2.2: the query session ---------------------------------------
+
+
+def _unavailable_fields(
+    value: command.SessionUnavailable | command.QuerySession,
+) -> tuple[object, object, object]:
+    assert isinstance(value, command.SessionUnavailable)
+    return (value.kind, value.message, value.holder_pid)
+
+
+def _outcome_fields(outcome: command.QueryOutcome) -> tuple[object, object, object]:
+    return (outcome.kind, outcome.message, outcome.holder_pid)
+
+
+def test_session_public_shapes() -> None:
+    assert [f.name for f in fields(command.ScreenedStatement)] == ["kind", "parameters"]
+    assert [f.name for f in fields(command.SessionUnavailable)] == [
+        "kind",
+        "message",
+        "holder_pid",
+    ]
+    screened = command.ScreenedStatement("SELECT", frozenset({"today"}))
+    with pytest.raises(FrozenInstanceError):
+        screened.kind = "EXPLAIN"
+    unavailable = command.SessionUnavailable(command.OutcomeKind.BUSY, None, 7)
+    with pytest.raises(FrozenInstanceError):
+        unavailable.holder_pid = 8
+
+
+def test_session_not_built_when_there_is_no_index_file(
+    tmp_path: Path, home_dir: HomeDirectory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "data"
+    root.mkdir()
+    env = _env(home_dir.path, tmp_path / "cache")
+    monkeypatch.setattr(
+        command, "open_sandboxed", lambda *_a, **_kw: pytest.fail("opened absent index")
+    )
+    session = command.open_session(root, env)
+    assert _unavailable_fields(session) == (command.OutcomeKind.NOT_BUILT, None, None)
+    assert _outcome_fields(command.run_query(_request(root), env)) == (
+        command.OutcomeKind.NOT_BUILT,
+        None,
+        None,
+    )
+
+
+def test_session_needs_rebuild_on_a_wrong_schema_version_and_closes(
+    indexed_root: tuple[Path, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, index_dir, home = _copy(indexed_root, tmp_path)
+    with open_index(index_dir / "index.duckdb", read_only=False) as conn:
+        conn.execute("UPDATE index_meta SET schema_version = 99")
+    close_events = _watch_close(monkeypatch)
+    env = _env(home, index_dir.parent)
+    session = command.open_session(root, env)
+    assert close_events == ["close"]
+    expected = "index schema version 99 differs from readable schema version 2"
+    assert _unavailable_fields(session) == (
+        command.OutcomeKind.NEEDS_REBUILD,
+        expected,
+        None,
+    )
+    assert _outcome_fields(command.run_query(_request(root), env)) == (
+        command.OutcomeKind.NEEDS_REBUILD,
+        expected,
+        None,
+    )
+
+
+def test_session_busy_after_the_bounded_fake_clock(
+    indexed_root: tuple[Path, Path], tmp_path: Path
+) -> None:
+    root, index_dir, home = _copy(indexed_root, tmp_path)
+    now = [0.0]
+
+    def sleep(delay: float) -> None:
+        now[0] += delay
+
+    env = command.QueryEnvironment(
+        environ={"FITDOCS_INDEX_DIR": str(index_dir.parent)},
+        home=home,
+        pid=74123,
+        monotonic=lambda: now[0],
+        sleep=sleep,
+        on_wait=lambda _pid: None,
+        is_running=lambda _pid: False,
+        timer=Timer,
+    )
+    with hold_index(index_dir / "index.duckdb", read_only=False) as holder:
+        session = command.open_session(root, env)
+    assert _unavailable_fields(session) == (command.OutcomeKind.BUSY, None, holder)
+    assert now[0] == pytest.approx(10.0)
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        IndexOpenError(IndexFault(FaultKind.MISSING, "gone", None)),
+        IndexOpenError(IndexFault(FaultKind.CORRUPT, "corrupt text", None)),
+        SandboxUnverified("threads", "2", None),
+        SandboxUnverified("threads", "2", "1"),
+        IndexBusy(7721),
+    ],
+    ids=["missing", "corrupt", "unverified-null", "unverified-value", "busy"],
+)
+def test_session_classifies_open_failures_exactly_as_run_query_does(
+    indexed_root: tuple[Path, Path],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: Exception,
+) -> None:
+    root, index_dir, home = _copy(indexed_root, tmp_path)
+    monkeypatch.setattr(
+        command,
+        "open_sandboxed",
+        lambda *_a, **_kw: (_ for _ in ()).throw(failure),
+    )
+    env = _env(home, index_dir.parent)
+    session_fields = _unavailable_fields(command.open_session(root, env))
+    query_fields = _outcome_fields(command.run_query(_request(root), env))
+    assert session_fields == query_fields
+    assert session_fields[0] in {
+        command.OutcomeKind.NOT_BUILT,
+        command.OutcomeKind.NEEDS_REBUILD,
+        command.OutcomeKind.UNVERIFIED,
+        command.OutcomeKind.BUSY,
+    }
+
+
+def test_session_runs_two_statements_on_one_connection(
+    indexed_root: tuple[Path, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, index_dir, home = _copy(indexed_root, tmp_path)
+    actual_open = command.open_sandboxed
+    opened: list[object] = []
+
+    def counting_open(*args: Any, **kwargs: Any) -> Any:
+        connection = actual_open(*args, **kwargs)
+        opened.append(connection)
+        return connection
+
+    monkeypatch.setattr(command, "open_sandboxed", counting_open)
+    env = _env(home, index_dir.parent)
+    with command.open_session(root, env) as session:
+        assert isinstance(session, command.QuerySession)
+        first = session.run(
+            "SELECT $a::INTEGER AS a", params={"a": 3}, max_rows=5, timeout_s=5.0
+        )
+        second = session.run("SELECT 'two' AS b", params={}, max_rows=5, timeout_s=5.0)
+    assert len(opened) == 1
+    assert first.rows == ((3,),)
+    assert second.rows == (("two",),)
+    assert first.columns == ("a",) and second.columns == ("b",)
+    assert len(first.column_types) == 1 and len(second.column_types) == 1
+
+
+def test_session_result_is_consumed_before_the_next_statement_runs(
+    indexed_root: tuple[Path, Path], tmp_path: Path
+) -> None:
+    # A cursor-backed result is the connection itself; a truncated stream must
+    # leave the earlier ResultSet whole and the next statement correct.
+    root, index_dir, home = _copy(indexed_root, tmp_path)
+    with command.open_session(root, _env(home, index_dir.parent)) as session:
+        assert isinstance(session, command.QuerySession)
+        big = session.run(
+            "SELECT i FROM range(100000) t(i)",
+            params={},
+            max_rows=3,
+            timeout_s=5.0,
+        )
+        after = session.run("SELECT 'next' AS n", params={}, max_rows=3, timeout_s=5.0)
+        failing = None
+        try:
+            session.run(
+                "SELECT CAST('x' AS INTEGER)", params={}, max_rows=3, timeout_s=5.0
+            )
+        except statement_module.StatementFailed as error:
+            failing = error
+        last = session.run("SELECT 'last' AS n", params={}, max_rows=3, timeout_s=5.0)
+    assert big.rows == ((0,), (1,), (2,))
+    assert big.truncated is True
+    assert type(big.rows) is tuple
+    assert after.rows == (("next",),)
+    assert failing is not None
+    assert last.rows == (("last",),)
+
+
+def test_session_screen_and_run_convert_and_refuse(
+    indexed_root: tuple[Path, Path], tmp_path: Path
+) -> None:
+    root, index_dir, home = _copy(indexed_root, tmp_path)
+    with command.open_session(root, _env(home, index_dir.parent)) as session:
+        assert isinstance(session, command.QuerySession)
+        assert session.screen("SELECT $today::DATE AS d, $n AS n") == (
+            command.ScreenedStatement("SELECT", frozenset({"today", "n"}))
+        )
+        assert session.screen("EXPLAIN SELECT 1") == command.ScreenedStatement(
+            "EXPLAIN", frozenset()
+        )
+        with pytest.raises(statement_module.StatementFailed):
+            session.screen("SELEC 1")
+        with pytest.raises(statement_module.StatementFailed):
+            session.run("SELEC 1", params={}, max_rows=3, timeout_s=5.0)
+        for refused_sql in ("CREATE TABLE t AS SELECT 1", "SELECT 1; SELECT 2"):
+            with pytest.raises(statement_module.StatementRefused):
+                session.screen(refused_sql)
+            with pytest.raises(statement_module.StatementRefused):
+                session.run(refused_sql, params={}, max_rows=3, timeout_s=5.0)
+
+
+class _SessionFakeResult:
+    columns = ()
+
+    def __init__(self, error: BaseException | None) -> None:
+        self.error = error
+
+    def fetchmany(self, size: int) -> list[tuple[object, ...]]:
+        if self.error is not None:
+            raise self.error
+        return []
+
+
+class _SessionFakeConnection:
+    def __init__(self, error: BaseException | None = None) -> None:
+        self.events: list[str] = []
+        self.named: list[tuple[str, object]] = []
+        self.error = error
+
+    def statement_types(self, sql: str) -> tuple[str, ...]:
+        return ("SELECT",)
+
+    def execute(self, sql: str) -> _SessionFakeResult:
+        self.events.append("execute")
+        return _SessionFakeResult(self.error)
+
+    def execute_named(self, sql: str, params: object) -> _SessionFakeResult:
+        self.events.append("execute_named")
+        self.named.append((sql, params))
+        return _SessionFakeResult(self.error)
+
+    def interrupt(self) -> None:
+        self.events.append("interrupt")
+
+    def close(self) -> None:
+        self.events.append("close")
+
+
+def _fake_session(conn: _SessionFakeConnection) -> command.QuerySession:
+    return command.QuerySession(cast(Any, conn), Timer)
+
+
+def test_session_run_never_turns_an_empty_mapping_into_none() -> None:
+    conn = _SessionFakeConnection()
+    empty: dict[str, object] = {}
+    _fake_session(conn).run("SELECT 1", params=empty, max_rows=2, timeout_s=1.0)
+    assert conn.events == ["execute_named"]
+    assert conn.named == [("SELECT 1", {})]
+    assert conn.named[0][1] is empty
+
+
+def test_close_after_an_interrupted_statement_interrupts_first_and_is_idempotent() -> (
+    None
+):
+    conn = _SessionFakeConnection(error=KeyboardInterrupt())
+    session = _fake_session(conn)
+    with pytest.raises(KeyboardInterrupt):
+        session.run("SELECT 1", params={}, max_rows=2, timeout_s=1.0)
+    before = len(conn.events)
+    session.close()
+    assert conn.events[before:] == ["interrupt", "close"]
+    session.close()
+    assert conn.events[before:] == ["interrupt", "close"]
+
+
+def test_session_context_manager_closes_once_on_exit() -> None:
+    conn = _SessionFakeConnection()
+    with _fake_session(conn) as session:
+        assert isinstance(session, command.QuerySession)
+        assert conn.events == []
+    assert conn.events == ["interrupt", "close"]
+
+
+def test_session_run_interrupts_then_converts_a_wrapped_user_interrupt() -> None:
+    wrapped = RuntimeError("Query interrupted")
+    wrapped.__cause__ = KeyboardInterrupt()
+    conn = _SessionFakeConnection(error=wrapped)
+    with pytest.raises(KeyboardInterrupt):
+        _fake_session(conn).run("SELECT 1", params={}, max_rows=2, timeout_s=1.0)
+    assert conn.events[-1] == "interrupt"
+
+
+def test_session_run_converts_a_parse_failure_and_screen_converts_too() -> None:
+    class ParseFailing(_SessionFakeConnection):
+        def statement_types(self, sql: str) -> tuple[str, ...]:
+            raise IndexStatementError("Parser Error: near SELEC")
+
+    session = _fake_session(ParseFailing())
+    with pytest.raises(statement_module.StatementFailed) as run_failure:
+        session.run("SELEC", params={}, max_rows=2, timeout_s=1.0)
+    assert run_failure.value.message == "Parser Error: near SELEC"
+    assert run_failure.value.hint is None
+    with pytest.raises(statement_module.StatementFailed) as screen_failure:
+        session.screen("SELEC")
+    assert screen_failure.value.message == "Parser Error: near SELEC"
+
+
+def test_session_run_reports_a_timeout_through_the_environment_timer() -> None:
+    class FiringTimer(Timer):
+        def start(self) -> None:
+            self.function()
+
+        def cancel(self) -> None:
+            return None
+
+    class FiringResult:
+        columns = ()
+
+        def fetchmany(self, size: int) -> list[tuple[object, ...]]:
+            raise IndexStatementError("INTERRUPT Error")
+
+    class Firing(_SessionFakeConnection):
+        def execute_named(self, sql: str, params: object) -> Any:
+            return FiringResult()
+
+    session = command.QuerySession(cast(Any, Firing()), FiringTimer)
+    with pytest.raises(statement_module.StatementTimedOut) as timed_out:
+        session.run("SELECT 1", params={}, max_rows=2, timeout_s=0.25)
+    assert timed_out.value.timeout_s == 0.25
+
+
+@pytest.mark.parametrize("wrapped", [False, True], ids=["bare", "wrapped"])
+def test_session_run_interrupts_when_screening_itself_is_interrupted(
+    wrapped: bool,
+) -> None:
+    # Screening runs before the timed executor, so the executor's own interrupt
+    # never happens; only the session's handler can stop the connection.
+    escaping: BaseException = KeyboardInterrupt()
+    if wrapped:
+        escaping = RuntimeError("Query interrupted")
+        escaping.__cause__ = KeyboardInterrupt()
+
+    class Interrupted(_SessionFakeConnection):
+        def statement_types(self, sql: str) -> tuple[str, ...]:
+            raise escaping
+
+    conn = Interrupted()
+    with pytest.raises(KeyboardInterrupt):
+        _fake_session(conn).run("SELECT 1", params={}, max_rows=2, timeout_s=1.0)
+    assert conn.events == ["interrupt"]
+
+
+def test_session_run_interrupts_and_reraises_an_unrelated_defect() -> None:
+    defect = RuntimeError("defect")
+
+    class Broken(_SessionFakeConnection):
+        def statement_types(self, sql: str) -> tuple[str, ...]:
+            raise defect
+
+    conn = Broken()
+    with pytest.raises(RuntimeError) as raised:
+        _fake_session(conn).run("SELECT 1", params={}, max_rows=2, timeout_s=1.0)
+    assert raised.value is defect
+    assert conn.events == ["interrupt"]
+
+
+def test_open_session_prunes_dead_spill_and_keeps_live_and_unrelated(
+    indexed_root: tuple[Path, Path], tmp_path: Path
+) -> None:
+    root, index_dir, home = _copy(indexed_root, tmp_path)
+    dead = index_dir / "query-spill-991001"
+    live = index_dir / "query-spill-991002"
+    unrelated = index_dir / "keep-this-entry"
+    for directory in (dead, live, unrelated):
+        directory.mkdir()
+    (dead / "spill.bin").write_bytes(b"dead")
+    (live / "spill.bin").write_bytes(b"live")
+    (unrelated / "sentinel").write_bytes(b"keep")
+    env = command.QueryEnvironment(
+        environ={"FITDOCS_INDEX_DIR": str(index_dir.parent)},
+        home=home,
+        pid=74123,
+        monotonic=lambda: 0.0,
+        sleep=lambda _delay: None,
+        on_wait=lambda _pid: None,
+        is_running=lambda pid: pid == 991002,
+        timer=Timer,
+    )
+    assert dead.exists()
+    session = command.open_session(root, env)
+    try:
+        assert isinstance(session, command.QuerySession)
+        assert not dead.exists()
+        assert (live / "spill.bin").read_bytes() == b"live"
+        assert (unrelated / "sentinel").read_bytes() == b"keep"
+    finally:
+        if isinstance(session, command.QuerySession):
+            session.close()
+
+
+def test_open_session_hands_the_environment_timer_to_the_session(
+    indexed_root: tuple[Path, Path], tmp_path: Path
+) -> None:
+    root, index_dir, home = _copy(indexed_root, tmp_path)
+    made: list[float] = []
+
+    class RecordingTimer(Timer):
+        def __init__(self, interval: float, function: Callable[[], None]) -> None:
+            made.append(interval)
+            super().__init__(interval, function)
+
+    env = command.QueryEnvironment(
+        environ={"FITDOCS_INDEX_DIR": str(index_dir.parent)},
+        home=home,
+        pid=74123,
+        monotonic=lambda: 0.0,
+        sleep=lambda _delay: None,
+        on_wait=lambda _pid: None,
+        is_running=lambda _pid: False,
+        timer=RecordingTimer,
+    )
+    with command.open_session(root, env) as session:
+        assert isinstance(session, command.QuerySession)
+        assert made == []
+        session.run("SELECT 1 AS one", params={}, max_rows=2, timeout_s=3.5)
+    assert made == [3.5]
+
+
+@pytest.mark.parametrize("wrapped", [False, True], ids=["bare", "wrapped"])
+def test_open_session_bookkeeping_interrupt_interrupts_then_closes(
+    indexed_root: tuple[Path, Path],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    wrapped: bool,
+) -> None:
+    root, index_dir, home = _copy(indexed_root, tmp_path)
+    events: list[str] = []
+    actual_open = command.open_sandboxed
+
+    class ConnectionSpy:
+        def __init__(self, conn: Any) -> None:
+            self.conn = conn
+
+        def interrupt(self) -> None:
+            events.append("interrupt")
+            self.conn.interrupt()
+
+        def close(self) -> None:
+            events.append("close")
+            self.conn.close()
+
+        def __getattr__(self, name: Any) -> Any:
+            return getattr(self.conn, name)
+
+    def interrupted(*args: Any, **kwargs: Any) -> Any:
+        if not wrapped:
+            raise KeyboardInterrupt
+        error = RuntimeError("Query interrupted")
+        error.__cause__ = KeyboardInterrupt()
+        raise error
+
+    monkeypatch.setattr(
+        command,
+        "open_sandboxed",
+        lambda *args, **kwargs: ConnectionSpy(actual_open(*args, **kwargs)),
+    )
+    monkeypatch.setattr(command, "read_bookkeeping", interrupted)
+    with pytest.raises(KeyboardInterrupt) as raised:
+        command.open_session(root, _env(home, index_dir.parent))
+    assert (type(raised.value.__cause__) is RuntimeError) is wrapped
+    assert events == ["interrupt", "close"]

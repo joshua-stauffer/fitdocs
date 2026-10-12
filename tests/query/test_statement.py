@@ -1449,3 +1449,354 @@ def test_failing_interrupt_does_not_mask_the_escaping_error() -> None:
 
     assert type(raised) is KeyboardInterrupt
     assert events == ["interrupt"]
+
+
+# --- dashboards 2.2: typed columns, named parameters, timeout race -----------
+
+
+class _Column:
+    def __init__(self, name: str, type_name: str) -> None:
+        self.name = name
+        self.type_name = type_name
+
+
+class _FakeResult:
+    def __init__(
+        self,
+        columns: tuple[_Column, ...] = (),
+        rows: list[tuple[object, ...]] | None = None,
+        fetch_error: BaseException | None = None,
+        before_fetch: Callable[[], None] | None = None,
+    ) -> None:
+        self.columns = columns
+        self._rows = rows if rows is not None else []
+        self._fetch_error = fetch_error
+        self._before_fetch = before_fetch
+
+    def fetchmany(self, size: int) -> list[tuple[object, ...]]:
+        if self._before_fetch is not None:
+            self._before_fetch()
+        if self._fetch_error is not None:
+            raise self._fetch_error
+        return self._rows[:size]
+
+
+class _RecordingConnection:
+    """Records which execution entry point was used and with what."""
+
+    def __init__(self, result: _FakeResult | None = None) -> None:
+        self.calls: list[tuple[str, str, object]] = []
+        self.interrupts = 0
+        self.result = result if result is not None else _FakeResult()
+        self.execute_error: BaseException | None = None
+        self.before_execute: Callable[[], None] | None = None
+
+    def statement_types(self, sql: str) -> tuple[str, ...]:
+        return ("SELECT",)
+
+    def _run(self, entry: str, sql: str, params: object) -> _FakeResult:
+        self.calls.append((entry, sql, params))
+        if self.before_execute is not None:
+            self.before_execute()
+        if self.execute_error is not None:
+            raise self.execute_error
+        return self.result
+
+    def execute(self, sql: str) -> _FakeResult:
+        return self._run("execute", sql, None)
+
+    def execute_named(self, sql: str, params: object) -> _FakeResult:
+        return self._run("execute_named", sql, params)
+
+    def interrupt(self) -> None:
+        self.interrupts += 1
+
+
+class _CapturedTimer(threading.Timer):
+    """Never starts a thread; ``function`` is the callback the runner armed."""
+
+    def start(self) -> None:
+        return None
+
+    def cancel(self) -> None:
+        return None
+
+
+def _capture_timer() -> tuple[
+    Callable[[float, Callable[[], None]], threading.Timer], list[_CapturedTimer]
+]:
+    made: list[_CapturedTimer] = []
+
+    def factory(timeout_s: float, callback: Callable[[], None]) -> _CapturedTimer:
+        timer = _CapturedTimer(timeout_s, callback)
+        made.append(timer)
+        return timer
+
+    return factory, made
+
+
+def test_column_types_are_filled_on_the_positional_path(
+    sandbox_connection: IndexConnection,
+) -> None:
+    result = statement.run_statement(
+        sandbox_connection,
+        "SELECT DATE '2021-10-01' AS d, 1.5::DOUBLE AS x, 'a' AS s",
+        max_rows=5,
+        timeout_s=5.0,
+    )
+    assert result.columns == ("d", "x", "s")
+    assert result.column_types == ("DATE", "DOUBLE", "VARCHAR")
+
+
+def test_column_types_are_filled_on_the_named_path_with_a_parameter(
+    sandbox_connection: IndexConnection,
+) -> None:
+    import datetime as dt
+
+    result = statement.run_statement(
+        sandbox_connection,
+        "SELECT $today::DATE AS d, 1.5::DOUBLE AS x, 'a' AS s",
+        max_rows=5,
+        timeout_s=5.0,
+        params={"today": dt.date(2021, 10, 1)},
+    )
+    assert result.columns == ("d", "x", "s")
+    # DuckDB 1.2 reports DB-API names ('Date', 'NUMBER', 'STRING') on a cursor,
+    # 1.5 reports SQL names.
+    accepted = ({"DATE"}, {"DOUBLE", "NUMBER"}, {"VARCHAR", "STRING"})
+    assert len(result.column_types) == 3
+    for observed, allowed in zip(result.column_types, accepted, strict=True):
+        assert observed.upper() in allowed
+    assert len(set(result.column_types)) == 3
+    assert result.rows == ((dt.date(2021, 10, 1), 1.5, "a"),)
+
+
+def test_named_path_binds_parameters(sandbox_connection: IndexConnection) -> None:
+    result = statement.run_statement(
+        sandbox_connection,
+        "SELECT $n::INTEGER AS n, $label::VARCHAR AS label",
+        max_rows=5,
+        timeout_s=5.0,
+        params={"n": 41, "label": "bound"},
+    )
+    assert result.rows == ((41, "bound"),)
+
+
+def test_column_types_follow_the_cursor_description_in_order() -> None:
+    conn = _RecordingConnection(
+        _FakeResult(
+            columns=(_Column("a", "T1"), _Column("b", "T2"), _Column("c", "T3"))
+        )
+    )
+    all_params: tuple[dict[str, object] | None, ...] = (None, {})
+    for params in all_params:
+        result = statement.run_statement(
+            cast(IndexConnection, conn),
+            "SELECT 1",
+            max_rows=2,
+            timeout_s=1.0,
+            params=params,
+        )
+        assert result.columns == ("a", "b", "c")
+        assert result.column_types == ("T1", "T2", "T3")
+
+
+def test_params_none_calls_execute_and_a_mapping_calls_execute_named() -> None:
+    conn = _RecordingConnection()
+    cast_conn = cast(IndexConnection, conn)
+    statement.run_statement(cast_conn, "SELECT 1", max_rows=2, timeout_s=1.0)
+    statement.run_statement(
+        cast_conn, "SELECT 2", max_rows=2, timeout_s=1.0, params=None
+    )
+    empty: dict[str, object] = {}
+    statement.run_statement(
+        cast_conn, "SELECT 3", max_rows=2, timeout_s=1.0, params=empty
+    )
+    given = {"k": 7}
+    statement.run_statement(
+        cast_conn, "SELECT 4", max_rows=2, timeout_s=1.0, params=given
+    )
+    assert conn.calls == [
+        ("execute", "SELECT 1", None),
+        ("execute", "SELECT 2", None),
+        ("execute_named", "SELECT 3", {}),
+        ("execute_named", "SELECT 4", {"k": 7}),
+    ]
+    assert conn.calls[2][2] is empty
+    assert conn.calls[3][2] is given
+
+
+def test_execute_statement_takes_the_same_params_split() -> None:
+    conn = _RecordingConnection()
+    cast_conn = cast(IndexConnection, conn)
+    statement.execute_statement(cast_conn, "SELECT 1", max_rows=2, timeout_s=1.0)
+    statement.execute_statement(
+        cast_conn, "SELECT 2", max_rows=2, timeout_s=1.0, params={}
+    )
+    assert [call[0] for call in conn.calls] == ["execute", "execute_named"]
+
+
+def test_statement_parameters_returns_the_names_of_the_one_statement(
+    sandbox_connection: IndexConnection,
+) -> None:
+    assert statement.statement_parameters(
+        sandbox_connection, "SELECT $a, $b, $a"
+    ) == frozenset({"a", "b"})
+    assert statement.statement_parameters(sandbox_connection, "SELECT 1") == frozenset()
+
+
+def test_screen_statement_returns_the_statement_kind() -> None:
+    class Typed:
+        def __init__(self, kind: str) -> None:
+            self.kind = kind
+
+        def statement_types(self, sql: str) -> tuple[str, ...]:
+            return (self.kind,)
+
+    for kind in ("SELECT", "EXPLAIN"):
+        conn = cast(IndexConnection, Typed(kind))
+        assert statement.screen_statement(conn, "x") == kind
+
+
+# The DuckDB streaming race: after the deadline fires, the interrupt can surface
+# as IndexStatementError from the fetch, a mid-stream error as IndexInterrupted.
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        IndexStatementError("INTERRUPT Error: Interrupted!"),
+        IndexInterrupted("Interrupted!"),
+    ],
+    ids=["statement-error", "interrupted"],
+)
+@pytest.mark.parametrize("phase", ["execute", "fetch"])
+def test_named_path_any_failure_after_the_timer_fired_is_a_timeout(
+    error: BaseException, phase: str
+) -> None:
+    factory, made = _capture_timer()
+    conn = _RecordingConnection()
+    fire = lambda: made[0].function()  # noqa: E731
+    if phase == "execute":
+        conn.before_execute = fire
+        conn.execute_error = error
+    else:
+        conn.result = _FakeResult(fetch_error=error, before_fetch=fire)
+    with pytest.raises(statement.StatementTimedOut) as raised:
+        statement.execute_statement(
+            cast(IndexConnection, conn),
+            "SELECT 1",
+            max_rows=2,
+            timeout_s=0.5,
+            timer=factory,
+            params={},
+        )
+    assert raised.value.timeout_s == 0.5
+    assert raised.value.__cause__ is error
+    assert conn.interrupts == 1
+
+
+def test_named_path_a_refusal_shaped_failure_after_the_timer_fired_is_a_timeout() -> (
+    None
+):
+    factory, made = _capture_timer()
+    error = IndexStatementError("opaque")
+    error.__cause__ = type("PermissionException", (Exception,), {})("opaque")
+    conn = _RecordingConnection(
+        _FakeResult(fetch_error=error, before_fetch=lambda: made[0].function())
+    )
+    with pytest.raises(statement.StatementTimedOut):
+        statement.execute_statement(
+            cast(IndexConnection, conn),
+            "SELECT 1",
+            max_rows=2,
+            timeout_s=0.5,
+            timer=factory,
+            params={},
+        )
+
+
+def test_named_path_statement_error_without_a_fired_timer_is_unchanged() -> None:
+    factory, _ = _capture_timer()
+    plain = IndexStatementError("Binder Error: nope")
+    conn = _RecordingConnection(_FakeResult(fetch_error=plain))
+    with pytest.raises(statement.StatementFailed) as failed:
+        statement.execute_statement(
+            cast(IndexConnection, conn),
+            "SELECT 1",
+            max_rows=2,
+            timeout_s=0.5,
+            timer=factory,
+            params={},
+        )
+    assert failed.value.message == "Binder Error: nope"
+    assert failed.value.hint is None
+    assert conn.interrupts == 0
+    refusal = IndexStatementError("opaque")
+    refusal.__cause__ = type("PermissionException", (Exception,), {})("opaque")
+    conn2 = _RecordingConnection(_FakeResult(fetch_error=refusal))
+    with pytest.raises(statement.StatementRefused) as refused:
+        statement.execute_statement(
+            cast(IndexConnection, conn2),
+            "SELECT 1",
+            max_rows=2,
+            timeout_s=0.5,
+            timer=factory,
+            params={},
+        )
+    assert refused.value.restriction is statement.Restriction.OUTSIDE_INDEX
+
+
+def test_named_path_interrupted_without_a_fired_timer_is_a_statement_failure() -> None:
+    # A user Ctrl-C arrives as KeyboardInterrupt, so an IndexInterrupted with no
+    # deadline fired is the DuckDB race misreporting a statement error.
+    factory, _ = _capture_timer()
+    original = IndexInterrupted("INTERRUPT Error mid-stream")
+    for phase in ("execute", "fetch"):
+        conn = _RecordingConnection()
+        if phase == "execute":
+            conn.execute_error = original
+        else:
+            conn.result = _FakeResult(fetch_error=original)
+        with pytest.raises(statement.StatementFailed) as failed:
+            statement.execute_statement(
+                cast(IndexConnection, conn),
+                "SELECT 1",
+                max_rows=2,
+                timeout_s=0.5,
+                timer=factory,
+                params={},
+            )
+        assert failed.value.message == "INTERRUPT Error mid-stream"
+        assert failed.value.hint is None
+        assert failed.value.__cause__ is original
+        assert conn.interrupts == 0
+
+
+def test_positional_path_keeps_its_classification_after_a_fired_timer() -> None:
+    # params=None is the pre-amendment behaviour, byte for byte: a statement
+    # error stays a statement failure even when the deadline fired first.
+    factory, made = _capture_timer()
+    error = IndexStatementError("INTERRUPT Error: Interrupted!")
+    conn = _RecordingConnection(
+        _FakeResult(fetch_error=error, before_fetch=lambda: made[0].function())
+    )
+    with pytest.raises(statement.StatementFailed):
+        statement.execute_statement(
+            cast(IndexConnection, conn),
+            "SELECT 1",
+            max_rows=2,
+            timeout_s=0.5,
+            timer=factory,
+        )
+    original = IndexInterrupted("bare")
+    conn2 = _RecordingConnection(_FakeResult(fetch_error=original))
+    with pytest.raises(IndexInterrupted) as bare:
+        statement.execute_statement(
+            cast(IndexConnection, conn2),
+            "SELECT 1",
+            max_rows=2,
+            timeout_s=0.5,
+            timer=factory,
+        )
+    assert bare.value is original

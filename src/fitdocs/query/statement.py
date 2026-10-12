@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import contextlib
 import threading
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from enum import StrEnum
 from typing import Final
 
-from fitdocs.index.store import IndexConnection, IndexInterrupted, IndexStatementError
+from fitdocs.index.store import (
+    IndexConnection,
+    IndexInterrupted,
+    IndexStatementError,
+    ResultColumn,
+)
 from fitdocs.query.format import ResultSet
 
 
@@ -144,6 +149,17 @@ def interrupt_quietly(conn: IndexConnection) -> None:
         conn.interrupt()
 
 
+def _column_types(columns: Sequence[ResultColumn]) -> tuple[str, ...]:
+    """Type names of ``columns``; empty when a column carries none.
+
+    The one pre-existing test double with name-only columns
+    (``test_result_max_rows_remains_an_integer``) must keep passing unedited.
+    """
+    if not all(hasattr(column, "type_name") for column in columns):
+        return ()
+    return tuple(column.type_name for column in columns)
+
+
 def execute_statement(
     conn: IndexConnection,
     sql: str,
@@ -151,8 +167,18 @@ def execute_statement(
     max_rows: int,
     timeout_s: float,
     timer: TimerFactory = threading.Timer,
+    params: Mapping[str, object] | None = None,
 ) -> ResultSet:
-    """Execute one already-screened SQL statement and cap its in-memory rows."""
+    """Execute one already-screened SQL statement and cap its in-memory rows.
+
+    ``params=None`` is the relation path (``conn.execute(sql)``). A mapping, even
+    an empty one, takes the streaming named-parameter path
+    (``conn.execute_named``), where DuckDB can report a deadline interrupt as a
+    statement error and a statement error as an interrupt; there every failure
+    after the deadline fired is a timeout and an interrupt that no deadline
+    caused is a statement failure (a user Ctrl-C arrives as KeyboardInterrupt).
+    """
+    streaming = params is not None
     fired = threading.Event()
     callback_lock = threading.Lock()
     stopping = False
@@ -168,13 +194,21 @@ def execute_statement(
     try:
         deadline.start()
         try:
-            result = conn.execute(sql)
+            result = (
+                conn.execute_named(sql, params)
+                if params is not None
+                else conn.execute(sql)
+            )
             rows = result.fetchmany(max_rows + 1)
         except IndexInterrupted as exc:
             if fired.is_set():
                 raise StatementTimedOut(timeout_s) from exc
+            if streaming:
+                raise StatementFailed(str(exc), None) from exc
             raise
         except IndexStatementError as exc:
+            if streaming and fired.is_set():
+                raise StatementTimedOut(timeout_s) from exc
             restriction = classify_statement_error(exc)
             if restriction is not None:
                 raise StatementRefused(restriction, str(exc)) from exc
@@ -202,20 +236,27 @@ def execute_statement(
         rows=tuple(rows[:max_rows]),
         truncated=len(rows) > max_rows,
         max_rows=max_rows,
+        column_types=_column_types(result.columns),
     )
 
 
 ALLOWED_STATEMENT_TYPES: Final[frozenset[str]] = frozenset({"SELECT", "EXPLAIN"})
 
 
-def screen_statement(conn: IndexConnection, sql: str) -> None:
-    """Refuse empty, multiple, or non-query statements before execution."""
+def screen_statement(conn: IndexConnection, sql: str) -> str:
+    """Refuse empty, multiple, or non-query statements; return the kind."""
     types = conn.statement_types(sql)
     if len(types) != 1:
         raise StatementRefused(Restriction.ONE_STATEMENT, ", ".join(types))
     statement_type = types[0]
     if statement_type not in ALLOWED_STATEMENT_TYPES:
         raise StatementRefused(Restriction.STATEMENT_KIND, statement_type)
+    return statement_type
+
+
+def statement_parameters(conn: IndexConnection, sql: str) -> frozenset[str]:
+    """The named parameters of ``sql`` (one already-screened statement)."""
+    return frozenset().union(*conn.statement_parameters(sql))
 
 
 def run_statement(
@@ -225,9 +266,14 @@ def run_statement(
     max_rows: int,
     timeout_s: float,
     timer: TimerFactory = threading.Timer,
+    params: Mapping[str, object] | None = None,
 ) -> ResultSet:
     """Screen a statement before passing it to the timed executor."""
     screen_statement(conn, sql)
+    if params is None:
+        return execute_statement(
+            conn, sql, max_rows=max_rows, timeout_s=timeout_s, timer=timer
+        )
     return execute_statement(
-        conn, sql, max_rows=max_rows, timeout_s=timeout_s, timer=timer
+        conn, sql, max_rows=max_rows, timeout_s=timeout_s, timer=timer, params=params
     )

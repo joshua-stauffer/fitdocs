@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
 from pathlib import Path
+from types import TracebackType
 from typing import Final
 
 from fitdocs.athlete import AthleteFileError
@@ -17,6 +18,7 @@ from fitdocs.index.location import IndexLocation, resolve_index_location
 from fitdocs.index.schema import SCHEMA_VERSION
 from fitdocs.index.store import (
     FaultKind,
+    IndexConnection,
     IndexOpenError,
     IndexStatementError,
     read_bookkeeping,
@@ -48,6 +50,8 @@ from fitdocs.query.statement import (
     interrupt_quietly,
     is_user_interrupt,
     run_statement,
+    screen_statement,
+    statement_parameters,
 )
 
 DEFAULT_MAX_ROWS: Final[int] = 1000
@@ -148,19 +152,32 @@ def _state(
     )
 
 
-def run_query(request: QueryRequest, env: QueryEnvironment) -> QueryOutcome:
-    """Run one read-only query or schema request and return its typed outcome."""
-    location = resolve_index_location(request.data_root, env.environ, env.home)
-    remove_stale_spill(location, own_pid=env.pid, is_running=env.is_running)
-    if not location.database.is_file():
-        return QueryOutcome(OutcomeKind.NOT_BUILT, location)
+@dataclass(frozen=True)
+class ScreenedStatement:
+    kind: str
+    parameters: frozenset[str]
 
-    scan = scan_workout_pages(request.data_root)
-    athlete_fingerprint = (
-        current_athlete_fingerprint(request.data_root) if request.schema else None
-    )
+
+@dataclass(frozen=True)
+class SessionUnavailable:
+    kind: OutcomeKind
+    message: str | None
+    holder_pid: int | None
+
+
+def _locate(data_root: Path, env: QueryEnvironment) -> IndexLocation:
+    """Resolve the index location and prune stale spill (before any open)."""
+    location = resolve_index_location(data_root, env.environ, env.home)
+    remove_stale_spill(location, own_pid=env.pid, is_running=env.is_running)
+    return location
+
+
+def _open(
+    location: IndexLocation, env: QueryEnvironment
+) -> IndexConnection | SessionUnavailable:
+    """Open the sandboxed connection, or say why the index is unavailable."""
     try:
-        connection = open_sandboxed(
+        return open_sandboxed(
             location,
             pid=env.pid,
             monotonic=env.monotonic,
@@ -168,22 +185,58 @@ def run_query(request: QueryRequest, env: QueryEnvironment) -> QueryOutcome:
             on_wait=env.on_wait,
         )
     except IndexBusy as error:
-        return QueryOutcome(OutcomeKind.BUSY, location, holder_pid=error.holder_pid)
+        return SessionUnavailable(OutcomeKind.BUSY, None, error.holder_pid)
     except IndexOpenError as error:
         if error.fault.kind is FaultKind.MISSING:
-            return QueryOutcome(OutcomeKind.NOT_BUILT, location)
-        return QueryOutcome(
-            OutcomeKind.NEEDS_REBUILD, location, message=error.fault.message
-        )
+            return SessionUnavailable(OutcomeKind.NOT_BUILT, None, None)
+        return SessionUnavailable(OutcomeKind.NEEDS_REBUILD, error.fault.message, None)
     except SandboxUnverified as error:
         actual = error.actual if error.actual is not None else "NULL"
-        return QueryOutcome(
+        return SessionUnavailable(
             OutcomeKind.UNVERIFIED,
-            location,
-            message=(
-                f"the sandbox setting {error.setting} is {actual}, not {error.expected}"
-            ),
+            f"the sandbox setting {error.setting} is {actual}, not {error.expected}",
+            None,
         )
+
+
+def _read_bookkeeping(
+    connection: IndexConnection,
+) -> tuple[
+    Bookkeeping | None, IndexStatementError | ValueError | TypeError | None, str | None
+]:
+    """Read bookkeeping; return it with the load error and the rebuild reason."""
+    try:
+        bookkeeping = read_bookkeeping(connection)
+    except (IndexStatementError, ValueError, TypeError) as error:
+        return None, error, f"not a complete fitdocs index: {error}"
+    if bookkeeping is None:
+        return None, None, "not a complete fitdocs index"
+    if bookkeeping.meta.schema_version != SCHEMA_VERSION:
+        return (
+            bookkeeping,
+            None,
+            f"index schema version {bookkeeping.meta.schema_version} differs "
+            f"from readable schema version {SCHEMA_VERSION}",
+        )
+    return bookkeeping, None, None
+
+
+def run_query(request: QueryRequest, env: QueryEnvironment) -> QueryOutcome:
+    """Run one read-only query or schema request and return its typed outcome."""
+    location = _locate(request.data_root, env)
+    if not location.database.is_file():
+        return QueryOutcome(OutcomeKind.NOT_BUILT, location)
+
+    scan = scan_workout_pages(request.data_root)
+    athlete_fingerprint = (
+        current_athlete_fingerprint(request.data_root) if request.schema else None
+    )
+    opened = _open(location, env)
+    if isinstance(opened, SessionUnavailable):
+        return QueryOutcome(
+            opened.kind, location, message=opened.message, holder_pid=opened.holder_pid
+        )
+    connection = opened
 
     bookkeeping: Bookkeeping | None = None
     bookkeeping_error: IndexStatementError | ValueError | TypeError | None = None
@@ -198,43 +251,33 @@ def run_query(request: QueryRequest, env: QueryEnvironment) -> QueryOutcome:
     athlete: AthleteDrift | None = None
 
     try:
-        try:
-            bookkeeping = read_bookkeeping(connection)
-        except (IndexStatementError, ValueError, TypeError) as error:
-            bookkeeping_error = error
+        bookkeeping, bookkeeping_error, rebuild_reason = _read_bookkeeping(connection)
 
-        if bookkeeping_error is not None:
-            rebuild_reason = f"not a complete fitdocs index: {bookkeeping_error}"
-        elif bookkeeping is None:
-            rebuild_reason = "not a complete fitdocs index"
-        elif bookkeeping.meta.schema_version != SCHEMA_VERSION:
-            rebuild_reason = (
-                f"index schema version {bookkeeping.meta.schema_version} differs "
-                f"from readable schema version {SCHEMA_VERSION}"
-            )
-        elif request.schema:
-            assert athlete_fingerprint is not None
-            tables = read_catalog(connection)
-            counts = row_counts(connection, tables)
-            athlete = athlete_drift(connection, athlete_fingerprint)
-        else:
-            assert request.sql is not None
-            try:
-                result = run_statement(
-                    connection,
-                    request.sql,
-                    max_rows=request.max_rows,
-                    timeout_s=request.timeout_s,
-                    timer=env.timer,
-                )
-            except StatementRefused as error:
-                refusal = error
-            except StatementFailed as error:
-                statement_failure = error
-            except StatementTimedOut as error:
-                timeout = error
-            except IndexStatementError as error:
-                parse_failure = error
+        if rebuild_reason is None:
+            assert bookkeeping is not None
+            if request.schema:
+                assert athlete_fingerprint is not None
+                tables = read_catalog(connection)
+                counts = row_counts(connection, tables)
+                athlete = athlete_drift(connection, athlete_fingerprint)
+            else:
+                assert request.sql is not None
+                try:
+                    result = run_statement(
+                        connection,
+                        request.sql,
+                        max_rows=request.max_rows,
+                        timeout_s=request.timeout_s,
+                        timer=env.timer,
+                    )
+                except StatementRefused as error:
+                    refusal = error
+                except StatementFailed as error:
+                    statement_failure = error
+                except StatementTimedOut as error:
+                    timeout = error
+                except IndexStatementError as error:
+                    parse_failure = error
     except BaseException as exc:
         # The statement path has already interrupted and converted; the
         # bookkeeping and schema reads have not. Stop whatever is running so
@@ -350,3 +393,97 @@ def run_query(request: QueryRequest, env: QueryEnvironment) -> QueryOutcome:
         )
     assert result is not None
     return QueryOutcome(OutcomeKind.RESULT, location, result=result, drift=drift)
+
+
+class QuerySession:
+    """One sandboxed connection that runs many read-only statements.
+
+    Every ``run`` consumes its statement into a ``ResultSet`` before returning,
+    so the connection never holds an unfinished cursor-backed result when the
+    next statement starts.
+    """
+
+    def __init__(self, connection: IndexConnection, timer: TimerFactory) -> None:
+        self._connection = connection
+        self._timer = timer
+        self._closed = False
+
+    def screen(self, sql: str) -> ScreenedStatement:
+        """Classify ``sql`` without executing it."""
+        try:
+            kind = screen_statement(self._connection, sql)
+            parameters = statement_parameters(self._connection, sql)
+        except IndexStatementError as error:
+            raise StatementFailed(str(error), None) from error
+        return ScreenedStatement(kind, parameters)
+
+    def run(
+        self,
+        sql: str,
+        *,
+        params: Mapping[str, object],
+        max_rows: int,
+        timeout_s: float,
+    ) -> ResultSet:
+        """Run one statement with ``params`` (possibly empty) and cap its rows."""
+        try:
+            return run_statement(
+                self._connection,
+                sql,
+                max_rows=max_rows,
+                timeout_s=timeout_s,
+                timer=self._timer,
+                params=params,
+            )
+        except (StatementRefused, StatementFailed, StatementTimedOut):
+            raise
+        except IndexStatementError as error:
+            raise StatementFailed(str(error), None) from error
+        except BaseException as exc:
+            interrupt_quietly(self._connection)
+            if not isinstance(exc, KeyboardInterrupt) and is_user_interrupt(exc):
+                raise KeyboardInterrupt from exc
+            raise
+
+    def close(self) -> None:
+        """Interrupt anything still running, then close; safe to repeat."""
+        if self._closed:
+            return
+        self._closed = True
+        interrupt_quietly(self._connection)
+        self._connection.close()
+
+    def __enter__(self) -> QuerySession:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.close()
+
+
+def open_session(
+    data_root: Path, env: QueryEnvironment
+) -> QuerySession | SessionUnavailable:
+    """Open a sandboxed session, or say why the index cannot be queried."""
+    location = _locate(data_root, env)
+    if not location.database.is_file():
+        return SessionUnavailable(OutcomeKind.NOT_BUILT, None, None)
+    opened = _open(location, env)
+    if isinstance(opened, SessionUnavailable):
+        return opened
+    try:
+        _, _, rebuild_reason = _read_bookkeeping(opened)
+    except BaseException as exc:
+        interrupt_quietly(opened)
+        opened.close()
+        if not isinstance(exc, KeyboardInterrupt) and is_user_interrupt(exc):
+            raise KeyboardInterrupt from exc
+        raise
+    if rebuild_reason is not None:
+        opened.close()
+        return SessionUnavailable(OutcomeKind.NEEDS_REBUILD, rebuild_reason, None)
+    return QuerySession(opened, env.timer)
