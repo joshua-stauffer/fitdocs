@@ -2,7 +2,7 @@
 
 A thin typer shell (design: CliApp, ``src/fitdocs/cli.py``): it parses flags,
 resolves configuration, calls the engine, and reports -- it contains no
-rendering or file-pipeline logic of its own. Thirteen commands are registered
+rendering or file-pipeline logic of its own. Fourteen commands are registered
 on top of the baseline ``--version`` / ``--help`` shell. The tree-processing
 commands documented here are:
 
@@ -36,6 +36,10 @@ statement against the analytics index in a sandbox, or describe its schema.
 * ``fitdocs index [--out PATH] [--rebuild]`` -- build or refresh the disposable
   analytics index from the data root's workout pages (analytics-index Req
   10.1).
+* ``fitdocs dashboard {check|refresh|freeze|kinds} [TARGET...]
+[--format text|json] [--out PATH]``
+  -- check, redraw or freeze the charts declared on the data root's dashboard
+  pages, or list the chart kinds (dashboards Req 14.1).
 
 Two further commands describe the installed tool rather than a tree and sit
 outside the list above: ``fitdocs plugins`` and ``fitdocs skill [NAME]`` --
@@ -169,6 +173,7 @@ Requirements 1.3, 1.4, 1.5, 2.1, 3.5, 8.1, 8.2, 8.3, 8.4, 8.6, 14.1, 14.2, 14.4.
 from __future__ import annotations
 
 import getpass
+import json
 import math
 import os
 import re
@@ -176,6 +181,7 @@ import sys
 import threading
 import time
 from datetime import UTC, date, datetime, tzinfo
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, NoReturn
 
@@ -366,6 +372,36 @@ _QUERY_MAX_ROWS_OPTION = typer.Option(
 )
 _QUERY_TIMEOUT_OPTION = typer.Option(
     DEFAULT_TIMEOUT_S, "--timeout", help="Query time limit in seconds."
+)
+
+
+class _DashboardForm(StrEnum):
+    CHECK = "check"
+    REFRESH = "refresh"
+    FREEZE = "freeze"
+    KINDS = "kinds"
+
+
+class _DashboardFormat(StrEnum):
+    TEXT = "text"
+    JSON = "json"
+
+
+_DASHBOARD_FORM_ARGUMENT = typer.Argument(
+    help="What to do: check, refresh, freeze or kinds.",
+)
+_DASHBOARD_TARGETS_ARGUMENT = typer.Argument(
+    None,
+    help=(
+        "Pages or charts to act on: a page name, or PAGE:CHART. Omit to act on "
+        "every page; freeze requires at least one."
+    ),
+)
+_DASHBOARD_FORMAT_OPTION = typer.Option(
+    _DashboardFormat.TEXT,
+    "--format",
+    case_sensitive=False,
+    help="Report format: text or json.",
 )
 _FORCE_OPTION = typer.Option(
     False,
@@ -1899,12 +1935,6 @@ def query_command(
 
     data_root = _resolved_data_root(out)
 
-    def on_wait(holder_pid: int | None) -> None:
-        process = f" (process {holder_pid})" if holder_pid is not None else ""
-        console.print(
-            f"Index: waiting for another process{process} to finish writing the index…"
-        )
-
     request = QueryRequest(
         data_root=data_root,
         sql=statement,
@@ -1913,16 +1943,7 @@ def query_command(
         timeout_s=timeout,
         today=_today(),
     )
-    environment = QueryEnvironment(
-        environ=os.environ,
-        home=Path.home(),
-        pid=os.getpid(),
-        monotonic=time.monotonic,
-        sleep=time.sleep,
-        on_wait=on_wait,
-        is_running=process_is_running,
-        timer=threading.Timer,
-    )
+    environment = _query_environment()
     try:
         outcome = run_query(request, environment)
     except IndexLocationError as error:
@@ -2041,6 +2062,67 @@ def _stdout_is_terminal() -> bool:
     return sys.stdout.isatty()
 
 
+@app.command("dashboard")
+def dashboard_command(
+    form: _DashboardForm = _DASHBOARD_FORM_ARGUMENT,
+    targets: list[str] | None = _DASHBOARD_TARGETS_ARGUMENT,
+    output_format: _DashboardFormat = _DASHBOARD_FORMAT_OPTION,
+    out: Path | None = _OUT_OPTION,
+) -> None:
+    """Check, refresh or freeze the charts on the dashboard pages, or list the kinds."""
+    # Imported here, not at module top: importing fitdocs.cli loads no dashboards
+    # module (pinned by tests/dashboards/test_cli_dashboard.py).
+    if form is _DashboardForm.KINDS:
+        if targets:
+            _config_error("fitdocs dashboard kinds takes no target.")
+        from fitdocs.dashboards.kinds import kinds_text
+        from fitdocs.render.charts.kit import describe_kinds
+
+        listings = describe_kinds()
+        if output_format is _DashboardFormat.JSON:
+            typer.echo(json.dumps(listings, indent=2, ensure_ascii=False))
+        else:
+            typer.echo(kinds_text(listings), nl=False)
+        return
+
+    from fitdocs.dashboards.binding import source_opener
+    from fitdocs.dashboards.engine import (
+        Action,
+        RunRequest,
+        TargetError,
+        resolve_targets,
+        run_dashboards,
+    )
+    from fitdocs.dashboards.report import render_json, render_text
+
+    if form is _DashboardForm.FREEZE and not targets:
+        _config_error(
+            "fitdocs dashboard freeze needs at least one target (a page or PAGE:CHART)."
+        )
+    data_root = _resolved_data_root(out)
+    console = Console(stderr=True, markup=False, highlight=False, soft_wrap=True)
+    try:
+        resolved = resolve_targets(data_root, targets or [])
+        report = run_dashboards(
+            RunRequest(Action(form.value), data_root, resolved, _today()),
+            source_opener(data_root, _query_environment()),
+        )
+    except TargetError as error:
+        _config_error(str(error))
+    except IndexLocationError as error:
+        _config_error(str(error))
+    except KeyboardInterrupt:
+        console.print("Dashboard run interrupted.")
+        raise typer.Exit(code=_EXIT_INTERRUPTED) from None
+
+    if output_format is _DashboardFormat.JSON:
+        typer.echo(render_json(report))
+    else:
+        typer.echo(render_text(report, chained=False))
+    if report.failed:
+        raise typer.Exit(code=_EXIT_FILE_FAILURES)
+
+
 def _read_statement(sql: str | None, file: Path | None) -> str:
     """Read the already-selected query source as strict UTF-8 text."""
     statement: str | None
@@ -2058,6 +2140,32 @@ def _read_statement(sql: str | None, file: Path | None) -> str:
     if statement is None or not statement.strip():
         _config_error("SQL statement cannot be empty or whitespace-only.")
     return statement
+
+
+def _query_environment() -> QueryEnvironment:
+    """The process's query environment, shared by ``query`` and ``dashboard``.
+
+    The wait callback reports on standard error, so standard output stays the
+    command's result.
+    """
+    console = Console(stderr=True, markup=False, highlight=False, soft_wrap=True)
+
+    def on_wait(holder_pid: int | None) -> None:
+        process = f" (process {holder_pid})" if holder_pid is not None else ""
+        console.print(
+            f"Index: waiting for another process{process} to finish writing the index…"
+        )
+
+    return QueryEnvironment(
+        environ=os.environ,
+        home=Path.home(),
+        pid=os.getpid(),
+        monotonic=time.monotonic,
+        sleep=time.sleep,
+        on_wait=on_wait,
+        is_running=process_is_running,
+        timer=threading.Timer,
+    )
 
 
 def _today() -> date:
@@ -2201,9 +2309,12 @@ def _config_error(message: str) -> NoReturn:
     loading, and the source-directory check all precede every engine call), so a
     configuration error leaves the data root untouched. Printed with
     ``soft_wrap=True`` so a long path embedded in the message is never split
-    across a line break.
+    across a line break. Emoji shortcodes are off so text the user typed (a
+    ``PAGE:a:CHART`` target) is shown as typed.
     """
-    Console(stderr=True).print(message, markup=False, highlight=False, soft_wrap=True)
+    Console(stderr=True).print(
+        message, markup=False, highlight=False, emoji=False, soft_wrap=True
+    )
     raise typer.Exit(code=_EXIT_CONFIG_ERROR)
 
 
