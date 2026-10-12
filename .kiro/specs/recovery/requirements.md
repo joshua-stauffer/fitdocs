@@ -207,7 +207,7 @@ Terms used below:
 4. The recovery page shall show every value with the unit vocabulary's symbol and precision, as its charts label the same value.
 5. The recovery page shall state, for each metric and source it shows, how many days of the window hold a value.
 6. The recovery page shall be legible in light and dark viewers, through the chart kit's theme.
-7. When any wellness value used by a figure the recovery page prints or charts records Garmin as its origin, the recovery page shall show a Garmin attribution line directly beneath its title, naming Garmin as the sole data source when every such value records Garmin as its origin and as one of several sources otherwise.
+7. When any wellness value used by a figure the recovery page prints or charts (a rolling mean, baseline or normal range that is not shown uses no value) records Garmin as its origin, the recovery page shall show a Garmin attribution line directly beneath its title, naming Garmin as the sole data source when every such value records Garmin as its origin and as one of several sources otherwise.
 8. If no wellness value used by a figure on the recovery page records Garmin as its origin, then the recovery page shall show no attribution line.
 
 ### Requirement 13: A New Owned Location

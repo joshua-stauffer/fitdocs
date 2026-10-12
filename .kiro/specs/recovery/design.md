@@ -674,13 +674,22 @@ fitdocs.recovery.baselines, fitdocs.citation}`, and none of them is
   the baselined metrics and `sleep_s` with no value in the window (6.1).
 - **Origins** (12.7, 12.8): `origins` is the set of origins, `None` included
   for a value whose origin is unrecorded, of every series value a printed or
-  charted figure uses: for each `SignalView` (the baselined metrics and
-  `sleep_s`) and each window day D with a shown source s, the values of s
-  for that metric on D − `LOOKBACK_DAYS` … D (the days its value, rolling
-  mean and range read); for each `SleepView.rows` entry (metric m, source s,
-  night N), the values of s for m on N − `LOOKBACK_DAYS` … N; and every
-  present value of every charted other-signal panel (overflow pairs are only
-  named, so they contribute none). The fitness, fatigue and form section
+  charted figure uses — a rolling mean, baseline or range that did not form
+  (too few days) is not shown and uses none (cross-spec round 2, N-1; the
+  same rule as workout-wellness's "Row sources"). With `m = METHODS[metric]`
+  and the shown `BaselineDay` `bd` of source s on day D:
+  - for each baselined `SignalView` and each window day D with a shown
+    source: D's own value when `bd.value` is present; s's values on
+    D − (`m.rolling_days` − 1) … D when `bd.rolling_mean` is present; s's
+    values on D − `m.baseline_days` … D − 1 when `bd.baseline_mean` is
+    present (the range drawn that day is built from them);
+  - for the `sleep_s` `SignalView`: the same, without the baseline window
+    (its chart draws the value and the 7-day mean only);
+  - for each `SleepView.rows` entry (metric, source s, night N): N's value,
+    N − 6 … N when its rolling mean is present, and N − 60 … N − 1 when its
+    baseline mean is present (both windows from `METHODS`);
+  - every present value of every charted other-signal panel (overflow pairs
+    are only named, so they contribute none). The fitness, fatigue and form section
   uses no series value. `view` does not decide the attribution; `page` does
   (no `fitdocs.render` import in `view`).
 
@@ -1135,9 +1144,10 @@ def wellness_attribution_line(attribution: WellnessAttribution) -> str | None:
 #### NoNetworkLists and ConfinementEntry
 - Connectors amendment as listed above; `structure.md` gains the
   `recovery` dependency sentence ("`recovery` imports `wellness`,
-  `history`, `citation`, `contract`, `layout`, `declaration`, `units` and
-  the chart kit facade; only `cli` imports `recovery.engine`; its facade
-  imports only `wellness` and `citation`").
+  `history`, `citation`, `contract`, `layout`, `declaration`, `units`, the
+  chart kit facade and the render layer's attribution helpers; only `cli`
+  imports `recovery.engine`; its facade imports only `wellness` and
+  `citation`").
 - `tests/test_confinement.py`: `EntryPoint(id="recovery", prepare=<stage a
   series and two workout pages with load>, run=<invoke the CLI>,
   non_vacuous=<the recovery page exists>)`.
@@ -1291,8 +1301,11 @@ carries 17 metrics and no sleep stages or body battery.
   sources: Garmin and other sources" built from the existing prefixes, and
   `None` for NONE (mutations: ignore `None` origins; SOLE on any garmin;
   spell the brand twice).
-- View origins: a Garmin value read only by a range (D − 60) is included and
-  one at D − 61 is not; an overflow panel's origins are not included; the
+- View origins: with a formed baseline, a Garmin value read only by the
+  range (D − 60) is included and one at D − 61 is not; with an unformed
+  baseline (29 of 60 days) the same D − 60 value is not included, and with
+  an unformed rolling mean (2 of 7 days) a value at D − 3 is not; an
+  overflow panel's origins are not included; the
   page prints the line beneath the title for SOLE and CONTRIBUTING and none
   for NONE.
 - View: as-of from the series (equal views under two faked system dates,

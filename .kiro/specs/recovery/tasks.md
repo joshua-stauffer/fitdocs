@@ -467,12 +467,19 @@ literal pins, one per lander) and every head-paragraph pin of
     `panel_limit=3` the fourth is (the argument, not a literal, cuts);
     coverage counts; load rows mapped onto the window with days past the
     series end `None`, a suppressed week counted in `unavailable_days`, and
-    `note` set when no page records a load; `origins` includes a `garmin`
-    value read only by a range (day D − 60 of a shown day D) and excludes
-    one at D − 61, includes `None` for an unrecorded origin, includes a
-    charted panel's origins and excludes an overflow pair's.
+    `note` set when no page records a load; `origins` (design § View
+    "Origins", only windows whose figure formed) includes a `garmin` value
+    read only by the range (day D − 60 of a shown day D whose baseline
+    formed) and excludes one at D − 61; with an unformed baseline (29 of 60
+    days) the same D − 60 value is excluded, and with an unformed rolling
+    mean (2 of 7 days) a value at D − 3 is excluded while D's own shown value
+    is still included; `None` is included for an unrecorded origin; a
+    charted panel's origins are included and an overflow pair's are not.
   - **Mutations:** as-of from the first day; origins over D − 59 … D only;
-    origins dropping `None`; origins including overflow pairs; runs ignoring the source;
+    count the baseline window when the baseline did not form (the
+    unformed-baseline case reds); count the rolling window when the rolling
+    mean did not form (the unformed-rolling case reds); origins dropping
+    `None`; origins including overflow pairs; runs ignoring the source;
     panels holding the canonical value instead of the source's own; the cut
     at `panel_limit + 1`; load rows not offset by the window start; add a
     `fitdocs.render.charts.kit` import to `view.py` (1.5's rank row for
@@ -668,7 +675,10 @@ literal pins, one per lander) and every head-paragraph pin of
     (5.1 declared it in `[project.urls]`); `tests/test_agent_skill.py` pins
     re-derived (the routine fence unchanged, the new fence's command bound
     to the CLI).
-  - `.kiro/steering/structure.md`: the `recovery` dependency sentence.
+  - `.kiro/steering/structure.md`: the `recovery` dependency sentence of
+    design § NoNetworkLists and ConfinementEntry (it names `wellness`,
+    `history`, `citation`, `contract`, `layout`, `declaration`, `units`, the
+    chart kit facade and the render layer's attribution helpers).
   - `CHANGELOG.md` `[Unreleased]`: Added (the command and page; the
     `reference-band` kind), Changed (the ownership contract version and the
     new owned location, with the action).
