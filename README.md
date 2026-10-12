@@ -206,8 +206,8 @@ page carries no user-owned content. You own every workout document's
 `effort_distance_m`, `effort_time_s`, `effort_event`) — see the published
 contract for the full detail. And `athlete.toml`'s hand-added keys survive
 every fitdocs write. Every generated document carries a provenance stamp,
-and the four owned directories a human or agent browses — `workouts/`,
-`history/`, `blocks/`, and `fit-archive/` — each carry an `AGENTS.md`
+and the five owned directories a human or agent browses — `workouts/`,
+`history/`, `blocks/`, `fit-archive/`, and `dashboards/` — each carry an `AGENTS.md`
 restating the same contract for LLM agents maintaining the wiki.
 
 ## Development workflow

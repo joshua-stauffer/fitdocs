@@ -178,10 +178,13 @@ def test_the_changed_at_this_version_paragraph_names_the_amendment() -> None:
     head = _flat(_DOC.read_text(encoding="utf-8").split("\n## ", 1)[0])
     assert f"**Contract version:** `{contract.CONTRACT_VERSION}`" in head
     for phrase in (
-        "fitdocs keeps a disposable analytics index outside the data root",
-        "refreshes it after every writing command",
-        "The index is never read back into a document",
-        "Run `fitdocs index` once to build it",
+        "fitdocs adds a `dashboards/` location whose pages belong to you",
+        "fitdocs owns their chart regions and `dashboards/assets/`",
+        "Dashboard chart regions and assets are the only document content "
+        "produced from the analytics index",
+        "workout, history and block documents never read it",
+        "Run `fitdocs sync` or `fitdocs regen` once to place `dashboards/AGENTS.md`",
+        "nothing is needed for existing documents",
     ):
         assert phrase in head, phrase
 

@@ -1,8 +1,8 @@
-"""Byte-golden pin for the four emitted ``AGENTS.md`` declaration texts.
+"""Byte-golden pin for the five emitted ``AGENTS.md`` declaration texts.
 
 Task 4.1 originally; extended by ``load-history`` task 1.2 to a third,
 ``history/``, directory, and by ``training-blocks`` task 1.2 to a fourth,
-``blocks/``.
+``blocks/``, and by ``dashboards`` task 1.2 to a fifth, ``dashboards/``.
 
 Three review rounds each cleared a named false sentence in
 ``fitdocs.declaration.declaration_text``'s hand-written prose and each left a
@@ -29,10 +29,11 @@ from pathlib import Path
 
 import pytest
 
-from fitdocs.declaration import declaration_text
+from fitdocs.declaration import declaration_text, ensure_declarations
 from fitdocs.layout import (
     ARCHIVE_DIR,
     BLOCKS_DIR,
+    DASHBOARDS_DIR,
     DECLARED_DIRS,
     HISTORY_DIR,
     WORKOUTS_DIR,
@@ -50,6 +51,7 @@ _GOLDEN_NAMES: dict[str, str] = {
     f"{HISTORY_DIR}/": "history",
     f"{ARCHIVE_DIR}/": "fit-archive",
     f"{BLOCKS_DIR}/": "blocks",
+    f"{DASHBOARDS_DIR}/": "dashboards",
 }
 
 
@@ -85,6 +87,16 @@ def test_declaration_text_matches_committed_golden(directory: str) -> None:
         "`uv run python -m tests.test_declaration_goldens` to author it"
     )
     assert declaration_text(directory) == golden.read_text(encoding="utf-8")
+
+
+def test_ensure_declarations_places_the_dashboards_golden(tmp_path: Path) -> None:
+    """Placement writes ``dashboards/AGENTS.md`` byte-equal to its golden."""
+    target = tmp_path / DASHBOARDS_DIR / "AGENTS.md"
+    assert not target.exists()
+    ensure_declarations(tmp_path)
+    golden = _golden_path(f"{DASHBOARDS_DIR}/").read_text(encoding="utf-8")
+    assert golden
+    assert target.read_text(encoding="utf-8") == golden
 
 
 if __name__ == "__main__":

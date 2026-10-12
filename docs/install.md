@@ -108,9 +108,9 @@ Each activity becomes one markdown document under
 `<data-root>/workouts/`, named from the activity's local start time —
 `YYYY-MM-DD-<slug>-HHMM.md` (an activity with no recorded start time gets an
 `undated-<slug>-<uid>` stem instead of a fabricated date). Every `sync` and
-`regen` run also writes or refreshes an `AGENTS.md` in each of the four
-declared directories — `workouts/`, `fit-archive/`, `history/`, and
-`blocks/` — unconditionally, not only the one this run's own output lands
+`regen` run also writes or refreshes an `AGENTS.md` in each of the five
+declared directories — `workouts/`, `fit-archive/`, `history/`,
+`blocks/`, and `dashboards/` — unconditionally, not only the one this run's own output lands
 in: a restatement, for a human or an LLM agent browsing the tree, of the
 same [ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md)
 that governs what fitdocs owns and what you own in every generated document.

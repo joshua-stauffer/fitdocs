@@ -37,6 +37,7 @@ from fitdocs.layout import (
     ARCHIVE_DIR,
     BLOCKS_DIR,
     CACHE_DIR,
+    DASHBOARDS_DIR,
     DECLARED_DIRS,
     HISTORY_DIR,
     OWNED_PATHS,
@@ -48,6 +49,7 @@ _WORKOUTS = f"{WORKOUTS_DIR}/"
 _HISTORY = f"{HISTORY_DIR}/"
 _ARCHIVE = f"{ARCHIVE_DIR}/"
 _BLOCKS = f"{BLOCKS_DIR}/"
+_DASHBOARDS = f"{DASHBOARDS_DIR}/"
 
 
 def _snapshot(root: Path) -> dict[str, tuple[bytes, int]]:
@@ -175,8 +177,32 @@ def test_blocks_declaration_names_no_user_owned_key() -> None:
         assert f"`{key}`" not in text
 
 
+def test_dashboards_declaration_never_claims_the_pages_are_tool_owned() -> None:
+    # The pages belong to the athlete; the `_WRITTEN_AND_OWNED` sentence is the
+    # one every other directory's text opens with and would be false here.
+    text = declaration_text(_DASHBOARDS)
+    assert "written and tool-owned" not in text
+    assert "The pages in `dashboards/` belong to the athlete" in text
+    assert "fitdocs dashboard check" in text
+    # The other directories do carry that sentence, so the absence above is a
+    # property of the dashboards branch, not of the phrase being unused.
+    for directory in DECLARED_DIRS:
+        if directory != _DASHBOARDS:
+            assert "written and tool-owned" in declaration_text(directory)
+
+
+def test_dashboards_declaration_owner_line_names_both_owners() -> None:
+    text = declaration_text(_DASHBOARDS)
+    assert (
+        "Owner: the athlete (pages); fitdocs (chart regions and dashboards/assets/).\n"
+    ) in text
+    assert f"Owner: `{contract.GENERATOR}`." not in text
+    assert f"Ownership contract version: `{contract.CONTRACT_VERSION}`." in text
+
+
 # Every `OWNED_PATHS` member that is NOT in `DECLARED_DIRS` (e.g.
-# `workouts/assets/`, `history/assets/`, `.cache/`, `.fitdocs/`) plus four
+# `workouts/assets/`, `history/assets/`, `dashboards/assets/`, `.cache/`,
+# `.fitdocs/`) plus six
 # directories chosen specifically to share a prefix with a declared one
 # without being it: "history" has no trailing slash, and "history-old/" is a
 # sibling directory whose name merely starts with "history"; "blocks" (no
@@ -190,13 +216,16 @@ def test_blocks_declaration_names_no_user_owned_key() -> None:
 # wrongly accept "workouts/assets/"; and the remaining members (".cache/",
 # ".fitdocs/", "not-a-declared-dir/") share no prefix with any declared
 # directory, so they pin that the final branch raises rather than falling
-# through to another directory's prose.
+# through to another directory's prose. "dashboards" (no slash) and
+# "dashboards-old/" defeat a `directory.startswith(DASHBOARDS_DIR)` dispatch.
 _OUTSIDE_DECLARED_SET = sorted(set(OWNED_PATHS) - set(DECLARED_DIRS)) + [
     "history",
     "history-old/",
     "not-a-declared-dir/",
     "blocks",
     "blocks-old/",
+    "dashboards",
+    "dashboards-old/",
 ]
 
 
