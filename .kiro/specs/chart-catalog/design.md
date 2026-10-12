@@ -919,6 +919,42 @@ KINDS: Final[tuple[KindSpec, ...]] = (
 `CORE_KIND_NAMES` is unchanged; `CATALOG_KIND_NAMES` lives in the catalog's
 test module, not in `src/`.
 
+#### Implementation amendments (2026-10-12)
+
+Rulings ratified during `/kiro-impl chart-catalog` that refine the component
+sections above; tasks.md Implementation Notes hold each one's evidence.
+
+- **Kinds, common**: undrawn counts — a row whose positioning channel is
+  absent counts under that channel; among the remaining rows each value
+  channel counts its own absent values. Every duration title passes `hours=`
+  explicitly, taking the form of the labels it heads.
+- **Cells**: `legend(plan, scale, entries)` derives each entry's class from
+  `entries` and `scale` and raises `ValueError` when they are not
+  `legend_entries(scale, …)`'s; the lead's duration form is read from the
+  formatted edge labels; the legend's offsets copy `frame.legend`'s (rank
+  forbids importing it) and a parity test pins them.
+- **Heatmap**: the x/y limits count distinct present values (the `—` band
+  is not a value); y label room is capped at 40% of the width; a
+  duration-family NUMBER axis labels its bands with A1 and titles them in
+  that form.
+- **DualAxis**: a series with no present value keeps a tickless axis, its
+  title and legend entry, and gets no description range; a row with an x but
+  neither value breaks both lines.
+- **MeanMax**: `cartesian.log_problem`'s fix and option are replaced (fix
+  "Remove the rows with a duration at or below zero.", no option) because the
+  x axis is always log; a domain holding no landmark duration keeps
+  `numeric_scale`'s own ticks.
+- **SmallMultiples**: outer axis titles are drawn kind-locally (no
+  baseline); every panel draws gridlines from the full scale; with
+  `independent` y and a duration column all panels take `h:mm:ss` when any
+  needs it; an explicit `columns` is honoured literally.
+- **Stacked100**: a zero part in a bar with shares draws nothing; the
+  internal-boundary inset is `min(0.5, rise / 4)` per side (so a sub-pixel
+  share keeps positive height); the description names the bound y column,
+  titled in the A1 form of its present parts, while the y range is named
+  `share (%)`.
+- **Box**: an absent x is the `—` band, so box counts no row under x.
+
 ## Data Models
 
 ### Domain Model
