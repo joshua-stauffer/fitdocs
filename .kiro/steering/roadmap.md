@@ -2885,6 +2885,13 @@ Rejected:
   (`benchmarks.py:189-243`), so `hr-derivation`'s requirements must make the
   rule precise. The maintainer is asked at requirements approval. Historic HR
   load moves when the derivation moves, and the maintainer accepted that.
+  - _Made precise at spec time (maintainer, 2026-10-12)._ Selection
+    (`BenchmarkSet.applicable`) stays unchanged for every kind. "Hand-recorded
+    wins" is a write-time rule of the HR pass: a derived entry is written
+    only when evidence dated after the value in force disagrees with it by
+    more than the hysteresis step, and every takeover of a hand value is
+    announced. A hand entry's `applies_from` keeps filling only gaps. See
+    hr-derivation `requirements.md`, Maintainer Decisions.
 - **Archive plus series** (maintainer, 2026-10-12), over archive-only and
   index-backed storage.
 - **Apple Health archives a canonical extract, not the export** (maintainer,
@@ -3096,12 +3103,16 @@ Rejected:
     `wellness-store`. Every consumer reads them and none redefines them.
   - **The baselines library** from `recovery`, which `workout-wellness`
     consumes. One computation, so the page and the block never disagree.
-  - **`CONTRACT_VERSION`.** Three specs add owned locations or page types:
-    `wellness-store`, `recovery` and `workout-wellness` if a key is added.
-    `dashboards` (Phase 11) is taking "10" now. Each lander re-derives
-    main + 1 at landing. The same goes for `DOC_VERSION`
-    (`workout-wellness`) and the index `SCHEMA_VERSION` (`wellness-store`,
-    plus `recovery` if it adds a table).
+  - **`CONTRACT_VERSION`.** Five Phase 12 specs bump it (settled at spec
+    time, 2026-10-13): `wellness-store`, `wellness-pull`, `hr-derivation`,
+    `recovery` and `workout-wellness`. `dashboards` (Phase 11) takes "10"
+    first. Each lander does three things:
+    - re-derives main + 1 at landing;
+    - appends a literal "Raised from N to N+1 by <spec>" history pin;
+    - re-pins every peer "What changed at this version" pin on main.
+
+    `DOC_VERSION` moves only in `workout-wellness`, and the index
+    `SCHEMA_VERSION` only in `wellness-store`. `recovery` adds no table.
   - **Append-only lists. Keep both sides on rebase**:
     - `OWNED_PATHS` / `DECLARED_DIRS`;
     - the `cli.py` command count;
@@ -3109,6 +3120,10 @@ Rejected:
     - `WRITING_ENTRY_POINTS`;
     - `PACKAGED_SKILLS`;
     - the connectors surface pin (`tests/connectors/test_surface.py`).
+
+    The no-network order settled at spec time is: `sync, regen, load,
+    dashboard, recovery, check, query, history, plan, derive-benchmarks,
+    index`.
   - **The derived-benchmark write.** `with_derived_benchmarks` replaces the
     whole derived subset today (`load/profile.py:342-447`). `hr-derivation`
     partitions it, so the performance pass and the HR pass never erase each
@@ -3122,18 +3137,29 @@ numbers are the next free number at landing.
 - [ ] inbox — non-FIT recognition through the wellness format registry, a
   reported "unrecognized" channel, and streamed reads for large candidates.
   The folder connector's reuse of `select_candidates` must not silently
-  widen. Dependencies: wellness-store
+  widen. Carried by wellness-store. Dependencies: wellness-store
 - [ ] fit-ingest — the non-activity-FIT guard (`file_id.type` and the
-  absence of a session), if the design places it in ingest.
+  absence of a session), if the design places it in ingest. The design does:
+  wellness-store carries `FileIdentity.file_type` and `is_activity_file`.
   Dependencies: wellness-store
-- [ ] wiki-contract — owned locations and declared directories for
-  `wellness-archive/`, the series location and the recovery page and its
-  assets; `CONTRACT_VERSION` main + 1 per lander. Dependencies:
-  wellness-store, recovery
-- [ ] analytics-derived / analytics-index — the `wellness_daily` corpus
-  producer (and an optional baselines table), `SCHEMA_VERSION` + 1, and the
-  regenerated `docs/analytics.md` block. Dependencies: wellness-store,
-  recovery
+- [ ] wiki-contract — owned locations, declared directories and stated
+  guarantees, with `CONTRACT_VERSION` main + 1 per lander. Five specs carry
+  a half each (settled at spec time, 2026-10-13):
+  - wellness-store: `wellness-archive/` and `wellness/`;
+  - recovery: `recovery/` and `recovery/assets/`;
+  - wellness-pull: the `pull` guarantees;
+  - hr-derivation: what `derive-benchmarks` reads and writes;
+  - workout-wellness: the refreshed-region class.
+
+  Dependencies: wellness-store, wellness-pull, hr-derivation, recovery,
+  workout-wellness
+- [ ] analytics-derived / analytics-index:
+  - wellness-store carries the `wellness_daily` corpus producer,
+    `SCHEMA_VERSION` + 1 and the regenerated `docs/analytics.md` block;
+  - workout-wellness makes the render fingerprint ignore refreshed regions;
+  - recovery adds no baselines table.
+
+  Dependencies: wellness-store, workout-wellness
 - [ ] connectors — `pull-wellness` becomes driven:
   - a new optional operation and capability dispatch;
   - format-keyed delivery instead of FIT-only;
@@ -3147,13 +3173,22 @@ numbers are the next free number at landing.
   enable setting, and the Garmin attribution derived from
   `*_wellness_keys`. Dependencies: wellness-pull
 - [ ] athlete-benchmarks — provenance for a series-derived entry (`document`
-  relaxed or a series reference) and the precise hand-wins rule.
-  Dependencies: hr-derivation
+  relaxed or a series reference) and the precise hand-wins rule. At spec
+  time, the hand-wins rule became write-time in hr-derivation, so
+  selection is not amended. The amendment is provenance only: a `series`
+  reference. Dependencies: hr-derivation
 - [ ] performance-benchmarks — Req 10.4 ("shall derive no maximum heart rate
   and no resting heart rate") lifted, and the derived write partitioned.
   Dependencies: hr-derivation
 - [ ] workout-docs — the morning-of section and any frontmatter key, plus
   the `DOC_VERSION` bump. Dependencies: workout-wellness
+- [ ] load-channels _(found at spec time, 2026-10-13)_ — the heart-rate
+  channel reports which dated resting and max entries it used.
+  Dependencies: hr-derivation
+- [ ] chart-catalog _(found at spec time)_ — Amendment 1, the
+  `reference-band` kind. Dependencies: recovery
+- [ ] chart-kit _(found at spec time)_ — the units `ml_per_kg_min` and
+  `brpm`, appended to `fitdocs.units`. Dependencies: wellness-store
 
 #### Direct Implementation Candidates
 
@@ -3207,7 +3242,14 @@ numbers are the next free number at landing.
 
 #### Specs (dependency order)
 
-- [ ] wellness-store — **brief written 2026-10-12**. The foundation:
+- [ ] wellness-store — **brief written 2026-10-12; spec written 2026-10-13**
+  (Phase 12 batch, wave 1, `tasks-generated`, all approvals set; 20
+  requirements / 125 criteria, 6 majors / 27 executable tasks plus the
+  optional maintainer-only smoke 6.3*; independent Step 3.5 review, two
+  rounds; amended in place for the wave-2 seams: `MetricInfo.label`,
+  winner-only `LATEST_ENTRY` rebuilds, extractor edge cases, the zip read
+  rule, and the sanctioned `write_series` test builder; cross-spec reviewed,
+  two rounds, PASS). The foundation:
   - the wellness format registry and non-FIT inbox recognition;
   - `wellness-archive/` (originals for JSON formats, a canonical extract
     where a format declares one);
@@ -3223,7 +3265,12 @@ numbers are the next free number at landing.
     updates.
 
   Implement first. Dependencies: none
-- [ ] wellness-pull — **brief written 2026-10-12**. The connector side:
+- [ ] wellness-pull — **brief written 2026-10-12; spec written 2026-10-13**
+  (Phase 12 batch, wave 2, `tasks-generated`, all approvals set; 13
+  requirements / 91 criteria, 6 majors / 19 executable tasks; task 1.1 is a
+  live API check run by the controller session; independent Step 3.5
+  review, two rounds; cross-spec reviewed, two rounds, PASS; bumps
+  `CONTRACT_VERSION`). The connector side:
   - `pull-wellness` driven through a new optional operation and a capability
     dispatch;
   - format-keyed delivery of non-FIT bytes, and a ledger keyspace and
@@ -3234,7 +3281,13 @@ numbers are the next free number at landing.
 
   Parallel with apple-health-import, hr-derivation and recovery.
   Dependencies: wellness-store
-- [ ] apple-health-import — **brief written 2026-10-12**:
+- [ ] apple-health-import — **brief written 2026-10-12; spec written
+  2026-10-13** (Phase 12 batch, wave 2, `tasks-generated`, all approvals
+  set; 14 requirements / 84 criteria, 6 majors / 12 executable tasks plus
+  the optional maintainer-only smoke 6.2*; independent Step 3.5 review, two
+  rounds; cross-spec reviewed, two rounds, PASS). Registering `apple-health`
+  changes the default source order to garmin-export, apple-health,
+  intervals-icu, so existing series rebuild once:
   - streaming stdlib parsing of `export.zip`/`export.xml`, with the three
     defect rewrites and all-or-nothing imports;
   - the canonical extract as the archived form;
@@ -3243,17 +3296,30 @@ numbers are the next free number at landing.
   - source de-duplication, and supersession by a later export.
 
   Dependencies: wellness-store
-- [ ] hr-derivation — **brief written 2026-10-12**:
+- [ ] hr-derivation — **brief written 2026-10-12; spec written 2026-10-13**
+  (Phase 12 batch, wave 2, `tasks-generated`, all approvals set; 11
+  requirements / 87 criteria, 5 majors / 21 executable tasks plus the
+  optional 2.8* (citations) and 5.3* (maintainer dry run); three maintainer
+  decisions recorded; independent Step 3.5 review, two rounds; cross-spec
+  reviewed, two rounds, PASS; bumps `CONTRACT_VERSION`):
   - derived resting HR from the series (per-source baselines, hysteresis);
   - derived max HR from workout HR (sustained maxima, artifact and
     cadence-lock rejection, recency window);
   - both as dated derived benchmark entries that apply automatically, with
-    hand-recorded entries winning;
+    hand-recorded entries winning. Per the 2026-10-12 maintainer decision,
+    this is a write-time rule and selection is unchanged;
   - athlete-benchmarks and performance-benchmarks amendments, with the
     derived write partitioned.
 
   Dependencies: wellness-store
-- [ ] recovery — **brief written 2026-10-12**:
+- [ ] recovery — **brief written 2026-10-12; spec written 2026-10-13**
+  (Phase 12 batch, wave 2, `tasks-generated`, all approvals set; 18
+  requirements / 90 criteria, 6 majors / 20 executable tasks plus the
+  optional maintainer-only page look 6.3*; independent Step 3.5 review, two
+  rounds; cross-spec reviewed, two rounds, PASS). It adds the standalone
+  `fitdocs recovery` command and the Garmin attribution helpers in
+  `render/attribution.py`, carries chart-catalog Amendment 1
+  (`reference-band`), and bumps `CONTRACT_VERSION`:
   - per-source, per-metric baselines (HRV 7-day ln mean against a 60-day
     range, resting HR, sleep);
   - a descriptive, cited recovery page with fitness, fatigue and form
@@ -3264,7 +3330,13 @@ numbers are the next free number at landing.
   - wiki-contract and connectors amendments.
 
   Dependencies: wellness-store, chart-catalog
-- [ ] workout-wellness — **brief written 2026-10-12**:
+- [ ] workout-wellness — **brief written 2026-10-12; spec written
+  2026-10-13** (Phase 12 batch, wave 3, `tasks-generated`, all approvals
+  set; 12 requirements / 66 criteria, 5 majors / 15 executable tasks;
+  independent Step 3.5 review, two rounds; cross-spec reviewed, two rounds,
+  PASS). It adds the refreshed-region class `REFRESHED_REGIONS`, the
+  `morning` region and a morning-of pass that visits every page and
+  compares bytes. It bumps `DOC_VERSION` and `CONTRACT_VERSION`:
   - the morning-of block on workout pages (that morning's resting HR and HRV
     against baseline, and the previous night's sleep);
   - a per-page wellness fingerprint and a targeted re-render pass when a
