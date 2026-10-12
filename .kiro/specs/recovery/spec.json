@@ -1,0 +1,23 @@
+{
+  "feature_name": "recovery",
+  "created_at": "2026-10-12T20:46:40Z",
+  "updated_at": "2026-10-12T23:10:00Z",
+  "language": "en",
+  "phase": "tasks-generated",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  },
+  "ready_for_implementation": true,
+  "phase_note": "Generated 2026-10-12 by the Phase 12 spec batch (wave 2) in auto-approve mode from base cd77157 (wellness-store spec merged, not implemented). 18 requirements / 88 acceptance criteria; 6 major / 20 leaf tasks plus optional maintainer-only 6.3*. Design: standalone `fitdocs recovery` command (mirrors history, load-history Req 8.7); pure per-source baselines library `fitdocs.recovery` consumed by workout-wellness (rolling 7 days incl. D, baseline D-60..D-1, range mean +/- 0.5 sample SD, ln for HRV, 7-day mean marked; sleep rolling+baseline mean only); shown source = canonical, carried <= 6 days; fitness/fatigue/form via read_history_inputs/compute_history/day_rows; new chart kind reference-band (chart-catalog Amendment 1); wiki-contract and connectors amendments; metric labels consumed from wellness-store MetricInfo.label (controller ruling R1). No network in this run: all six candidate citations unverified; task 1.1 (controller or maintainer) verifies them, unverified ones ship as FitdocsChoice. Step 3.5: independent reviewer via the controller, round 1 NEEDS_FIXES (16 findings + rulings R1-R3, applied), round 2 resolved + write_series ruling and minors B-E applied without further review. Version constants (CONTRACT_VERSION, command count) are main + 1 at landing."
+}
