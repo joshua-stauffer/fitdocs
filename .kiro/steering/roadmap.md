@@ -3031,7 +3031,8 @@ Rejected:
   - derived resting and max HR as dated benchmark entries;
   - per-source baselines;
   - the recovery page and its owned location;
-  - the morning-of block on workout pages, with targeted re-render;
+  - the morning-of block on workout pages, refreshed only when its bytes
+    change;
   - the `wellness_daily` index table (and a baselines table if the design
     needs one);
   - the non-activity-FIT guard;
@@ -3147,7 +3148,7 @@ numbers are the next free number at landing.
   Dependencies: wellness-store
 - [ ] wiki-contract — owned locations, declared directories and stated
   guarantees, with `CONTRACT_VERSION` main + 1 per lander. Five specs carry
-  a half each (settled at spec time, 2026-10-13):
+  a part each (settled at spec time, 2026-10-13):
   - wellness-store: `wellness-archive/` and `wellness/`;
   - recovery: `recovery/` and `recovery/assets/`;
   - wellness-pull: the `pull` guarantees;
@@ -3264,8 +3265,7 @@ numbers are the next free number at landing.
   - the intervals.icu wellness JSON and Garmin export JSON parsers;
   - the non-activity-FIT guard and `check` findings;
   - the `wellness_daily` index table;
-  - the inbox, wiki-contract, analytics-index and (optional) fit-ingest
-    updates.
+  - the inbox, wiki-contract, analytics-index and fit-ingest updates.
 
   Implement first. Dependencies: none
 - [ ] wellness-pull — **brief written 2026-10-12; spec written 2026-10-13**
@@ -3329,7 +3329,7 @@ numbers are the next free number at landing.
     computed through load-history's functions, and the page's owned
     location;
   - charts from chart-kit and chart-catalog kinds;
-  - an optional baselines index table;
+  - no baselines index table (decided at spec time);
   - wiki-contract and connectors amendments.
 
   Dependencies: wellness-store, chart-catalog
@@ -3342,8 +3342,9 @@ numbers are the next free number at landing.
   compares bytes. It bumps `DOC_VERSION` and `CONTRACT_VERSION`:
   - the morning-of block on workout pages (that morning's resting HR and HRV
     against baseline, and the previous night's sleep);
-  - a per-page wellness fingerprint and a targeted re-render pass when a
-    day's wellness arrives;
+  - a fingerprint of the printed facts, and a pass that visits every page
+    and rewrites a block only when its bytes change. This replaced the
+    targeted re-render at spec time;
   - the `DOC_VERSION` bump and the workout-docs amendment.
 
   Implement last. Dependencies: recovery

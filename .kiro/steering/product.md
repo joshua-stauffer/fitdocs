@@ -61,7 +61,8 @@ inside a vendor platform.
      form. Each workout page shows the morning's numbers. The view is
      descriptive, never a verdict.
    - **What load gains.** Resting and max HR are derived automatically into
-     the benchmark timeline, and a hand-recorded value always wins.
+     the benchmark timeline. A hand-recorded value stays in force until
+     newer evidence disagrees with it, and any takeover is announced.
 
 ## Target Use Cases
 
