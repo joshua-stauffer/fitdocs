@@ -9,8 +9,10 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
+from fitdocs.render.charts.kit.api import RenderedChart, render_spec
 from fitdocs.render.charts.kit.data import ChartData, Column, Value, ValueKind
-from fitdocs.render.charts.kit.schema import ChartRequest, OptionValue
+from fitdocs.render.charts.kit.problems import ChartError, ChartProblem
+from fitdocs.render.charts.kit.schema import ChartRequest, KindSpec, OptionValue
 
 
 @dataclass(frozen=True)
@@ -52,3 +54,21 @@ def chart_request(
         dict(channels) if channels is not None else {},
         dict(options) if options is not None else {},
     )
+
+
+def render_case(
+    spec: KindSpec, request: ChartRequest, data: ChartData
+) -> RenderedChart:
+    """Render ``request`` over ``data`` with ``spec``, bypassing the registry."""
+    return render_spec(spec, request, data)
+
+
+def problems_of(
+    spec: KindSpec, request: ChartRequest, data: ChartData
+) -> tuple[ChartProblem, ...]:
+    """The problems ``render_spec`` refuses with; fails if the chart renders."""
+    try:
+        rendered = render_spec(spec, request, data)
+    except ChartError as error:
+        return error.problems
+    raise AssertionError(f"expected a refusal, rendered {rendered!r}")

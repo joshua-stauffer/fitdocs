@@ -462,7 +462,7 @@ every registered kind and find its cases by the test-module convention
 
 - [ ] 3. Shared layer and the entry points
 
-- [ ] 3.1 (P) Create the entry points, the registry skeleton and the facade
+- [x] 3.1 (P) Create the entry points, the registry skeleton and the facade
   - **`kit/registry.py`** with `KINDS: Final[tuple[KindSpec, ...]] = ()`,
     `CORE_KIND_NAMES`, `kind_named`, `kind_names`, `describe_kinds` and the
     `KindListing` family of `TypedDict`s (design § Registry).
@@ -1109,3 +1109,4 @@ every registered kind and find its cases by the test-module convention
 - 3.3 (controller ruling): `marks.bar(x, y, width, height, color)` — `y` is the zero-line pixel, `height` signed (positive = upward); `width` signed the same way (negative extends left from `x`), so hbar calls `bar` with `x` = zero-line pixel and a signed width. Emitted width/height are non-negative. Bar and hbar kinds (5.3, 5.4) must call it this way.
 - 3.2 → 4.2: `FramePlan.y_title_y`/`x_title_y` are `float | None` (None when there is no such title; design § Layout typed them `float`). Frame must handle None. The title→legend and y-title→plot `PAD` gaps are this task's choices (Req 7.3). With a legend and no y title the plot top abuts the last legend row: frame must keep the top y tick label clear of it.
 - 3.4 (controller ruling): `cartesian.duplicate_problem(bound, keys, *, skip_absent=())` — rows absent on any bound channel named in `skip_absent` are exempt; unbound key channels are skipped (an unbound colour is one series). Line and area pass `skip_absent=("x",)`, hbar `("y",)`, bar nothing (an absent x is the `—` category). `stack_problems` never builds styles, so it is safe before `series_problem` refuses >8 series; `series_groups` (draw only) raises beyond 8.
+- 3.1 (controller ruling): `render_spec(spec, request, data)` takes `RenderedChart.kind` from `spec.name` (a request kind mismatch is not checked). `render_chart` on an unknown kind raises `ChartError` with all of stage 1 (`unknown_kind`, `empty_title`, `duplicate_column`). Nested listing TypedDicts are `ChannelListing`, `OptionListing`, `BoundListing` (not re-exported).
