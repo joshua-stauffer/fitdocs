@@ -877,7 +877,9 @@ Rules (all locale-free: no `locale`, no `strftime`, no `n` format; Python
   appends `, YYYY-MM-DD` inside the parentheses for a clock-ladder axis whose
   ticks fall on one date. (Amended 2026-10-12: tasks 2.2, 4.1: the `hours`
   keyword chooses the duration form: `True` (the default) writes `(h:mm:ss)`,
-  `False` writes `(m:ss)`; Scales passes the axis's label form.)
+  `False` writes `(m:ss)`; Scales passes the axis's label form. The landed
+  `axis_title(column, hours=...)` meets chart-catalog's A3 duration-title
+  vectors, so A3 needs no separate append.)
 - `format_value`: absent → `ABSENT`. NUMBER: `int` → no decimals; `float` or
   `Decimal` → the unit's `decimals` for QUANTITY/PERCENT, at most 2 decimals
   with trailing zeros trimmed when unitless; `-0` normalised; no digit
@@ -964,7 +966,10 @@ def clock_ticks(lo_s: float, hi_s: float, max_count: int) -> tuple[int, tuple[fl
   enclose it), so a caller measures the ticks it gets back, not `max_count`.
   Degenerate input (`lo >= hi` or non-finite for `linear_ticks`/`log_ticks`,
   `first > last` or `lo_s > hi_s` for the calendar/clock ladders) raises
-  `ValueError`; Scales widens a degenerate domain first.
+  `ValueError`; Scales widens a degenerate domain first. The full precondition
+  set: `linear_ticks` needs `lo < hi`, finite input and `max_count >= 2`;
+  `log_ticks` needs `0 < lo < hi` (so `lo <= 0` raises) and `max_count >= 2`;
+  `calendar_ticks` and `clock_ticks` need `max_count >= 1`.
 
 #### Scales — `kit/scales.py`
 
@@ -1210,7 +1215,6 @@ def legend(plan: FramePlan) -> str: ...
 def notes(plan: FramePlan, lines: Sequence[str]) -> str: ...
 def no_data(bound: BoundChart, *, height: int) -> str: ...
 def describe(kind: str, title: str, channels: Sequence[tuple[str, Column | str]], *, rows: int,  # str: drawn axis title (amended 2026-10-12: step X)
-            
              series: int | None, undrawn: Sequence[tuple[str, int]],
              ranges: Sequence[tuple[str, str, str]]) -> str: ...
 ```
@@ -1228,7 +1232,7 @@ def describe(kind: str, title: str, channels: Sequence[tuple[str, Column | str]]
   the axis title from `axis_title`. Bottom labels centred on ticks; left labels
   end-anchored; right labels start-anchored. (Amended 2026-10-12: task 4.2:
   `title=None` derives `axis_title(column, clock_date, hours)` for a
-  `NumericScale`; a string is used verbatim; `""` draws no title; a
+  `NumericScale`; a string is used as given after `clean_text`; `""` draws no title; a
   `BandScale` needs a string. Every axis title and every bottom band label is
   fitted to the room at its own anchor and stays inside `[PAD, width − PAD]`;
   bottom band labels are cleaned (`clean_text`) and fitted to
@@ -1388,10 +1392,14 @@ def parse_option(spec: OptionSpec, raw: OptionValue) -> OptionValue | None: ... 
 #### Kinds — `kit/kinds/*.py`
 
 (Amended 2026-10-12: tasks 4.2, 5.1-5.6 cross-kind controller rulings. Every
-text stays inside `[PAD, width − 4]`: each cartesian kind reserves the first x
-tick label's left overhang (widening the left margin) and the last one's right
-overhang, measured on a provisional plot, and pins it with a test over its
-`CASES`. Kinds call `frame.axis`, `frame.describe`, `frame.not_drawn_note` and
+text stays inside `[PAD, width − 4]`. Kinds with a numeric x axis (line, area,
+scatter, histogram) and hbar's bottom value axis reserve the first x tick
+label's left overhang (widening the left margin) and the last one's right
+overhang, measured on a provisional plot. Bar's band x axis instead relies on
+`frame.axis`'s band-label clamp (`x_label_overhang=0`). The every-text-inside-
+the-canvas test over `CASES` exists for line, area, bar, hbar and histogram;
+scatter pins it with `test_wide_end_tick_labels_stay_inside_the_canvas` plus
+the theme-coverage walk over every golden. Kinds call `frame.axis`, `frame.describe`, `frame.not_drawn_note` and
 `frame.no_trend_note` as amended in § Frame. Describe ranges are named by the
 drawn axis title; duration-family bounds use
 `format_duration(v, hours=scale.hours)`; ranges are the drawn values'
@@ -1476,8 +1484,9 @@ Per-kind rules beyond the table:
   `numeric_scale(..., integer=True)`; absent
   values counted in the note; x labelled in the column's unit. (Amended
   2026-10-12: task 5.6: `_validate` reports `option_conflict` (both `bins` and
-  `bin_width`) and `option_value` (`bin_width` ≤ 0) together. The x axis
-  spans the first to the last bin edge and each bar is drawn between its two
+  `bin_width`) and `option_value` (`bin_width` ≤ 0) together. The x
+  scale is built over the first and last bin edges with `nice=True`, so it
+  spans the enclosing nice ticks, and each bar is drawn between its two
   edges; edges are rounded to 15 significant digits. The describe ranges are
   the x column's value extremes (named by the drawn x title) and `Count`,
   `min..max` of the bin counts.)
@@ -1562,7 +1571,9 @@ def render_spec(spec: KindSpec, request: ChartRequest, data: ChartData) -> Rende
 - (Amended 2026-10-12: task 3.1 controller ruling: `render_spec` takes
   `RenderedChart.kind` from `spec.name`; a mismatch with `request.kind` is not
   checked. `render_chart` on an unknown kind raises `ChartError` carrying all
-  of stage 1: `unknown_kind`, `empty_title`, `duplicate_column`.)
+  of stage 1: `unknown_kind`, `empty_title`, `duplicate_column`. The nested
+  listing TypedDicts of `describe_kinds()` are `ChannelListing`,
+  `OptionListing` and `BoundListing`, not re-exported.)
 - `render_spec` is public so that a kind's own tests (core and
   `chart-catalog`) exercise the full pipeline for a `KindSpec` before, and
   independently of, its registry entry. It is not re-exported from the
@@ -1678,7 +1689,7 @@ Fixture Discrimination); task notes name them. Mutations are run through
   dated points with one gap ≤ 24,000; area stacked 3×52 ≤ 14,000; bar 52
   dated bars ≤ 12,000; bar stacked 52×3 ≤ 22,000; hbar 20 bars ≤ 13,400
   (amended 2026-10-12: task 6.3 controller ruling: raised from the initial
-  8,000; measured 9,310 to 10,689, dominated by per-row y tick and label
+  8,000; measured 10,689 (fixture variations 9,310–10,689), dominated by per-row y tick and label
   elements);
   scatter 500 points in 3 series with trend ≤ 18,000; histogram of 1,000
   values ≤ 8,000; no-data state ≤ 3,000; table 20×5 ≤ 3,000; stat ≤ 200.

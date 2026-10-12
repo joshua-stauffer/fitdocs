@@ -171,7 +171,8 @@ def _stat() -> tuple[str, int]:
 #: name -> (builder, byte budget). hbar 20 bars was RAISED from the design's
 #: 8,000 to 13,400 by controller ruling (measured 10,689). The others are the
 #: design's budgets, or were lowered to measured + 25% where the measured
-#: headroom exceeded 40% (bar 12,000, histogram 8,000, table 3,000, stat 200).
+#: headroom exceeded 40% (lowered from bar 12,000, histogram 8,000, table
+#: 3,000, stat 200).
 TYPICAL: dict[str, tuple[Callable[[], tuple[str, int]], int]] = {
     "line 3x365 with a gap": (_line, 24_000),
     "area stacked 3x52": (_area_stacked, 14_000),
@@ -197,6 +198,7 @@ def test_typical_chart_fits_its_budget(name: str) -> None:
 
 # --- the no-data state and the at-bound ceiling ---------------------------------
 
+# Lowered from the design's 3,000 to 739 (worst measured 591, plus 25%).
 NO_DATA_BUDGET = 739
 AT_BOUND_CEILING = 80_000
 
