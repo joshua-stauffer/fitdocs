@@ -773,7 +773,7 @@ every registered kind and find its cases by the test-module convention
   - _Boundary: hbar kind_
   - _Depends: 3.1, 3.3, 3.4, 4.2_
 
-- [ ] 5.5 (P) Implement the scatter kind with its goldens
+- [x] 5.5 (P) Implement the scatter kind with its goldens
   - **`kit/kinds/scatter.py`**: `KIND` per the kind table (`x_scale`,
     `y_scale`, `trend`, bound 2000) and rules (`_validate`: trend with log,
     log on time; `_check`: bound, series, log domain; `_draw`: niced axes,
