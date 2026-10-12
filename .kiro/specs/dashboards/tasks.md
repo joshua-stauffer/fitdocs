@@ -555,7 +555,7 @@ sequential, never two `(P)` tasks at once.
 
 - [ ] 4. Regions, files and query binding
 
-- [ ] 4.1 (P) Compose, classify and splice chart regions
+- [x] 4.1 (P) Compose, classify and splice chart regions
   - **`src/fitdocs/dashboards/region.py`** per design § Region:
     `BodyState`, `ChartBody`, `chart_body`, `caption`, `note_body`,
     `classify_body`, `recorded_snapshot`, `RegionEdit`, `apply_edits`;
@@ -1375,3 +1375,20 @@ sequential, never two `(P)` tasks at once.
   (both duckdb versions) — **6.3 uses an aggregating statement**
   (`_JOIN_STATEMENT` in `tests/query/test_interrupt.py`); the `fitdocs query`
   hazard is queued.
+- **4.1 (2 review rounds):** body layout per design — every part (incl. the
+  frozen reference line) is followed by exactly one blank line.
+  `recorded_snapshot` returns the first full `REFERENCE_RE` line anywhere in
+  the body, as path text (5.3 resolves it via `SNAPSHOT_NAME_RE` /
+  `read_snapshot`; whether a reference naming another page/chart is honoured
+  is the engine's call). A window that is `None`, empty or whitespace-only
+  states nothing (controller ruling); `caption()` returns None when no part
+  applies and `chart_body` omits it. `ValueError` guards (programmer errors;
+  5.2 decides whether a hostile kit line is a chart failure under 12.1):
+  `chart_body` refuses a snapshot path `REFERENCE_RE` would not read back, a
+  non-markdown rows table, a kit line starting `<!-- fitdocs:` at column 0;
+  `apply_edits` refuses an off-page `after_line`, replacing an unclosed
+  region, a chart-id mismatch, overlapping/duplicate edits. Inserted and
+  replaced lines take the ending of the line at `after_line` (the directive
+  closer), adding `\n` when it has none — **5.x passes `after_line` for
+  replace edits too**. Edits are position-sorted internally. `NOTE_RE` is
+  used with `fullmatch` (5.1 too).
