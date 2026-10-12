@@ -590,6 +590,7 @@ def _query_forbidden_target(target: str) -> bool:
         "fitdocs.sync",
         "fitdocs.render",
         "fitdocs.connectors",
+        "fitdocs.dashboards",
         "fitdocs.tiles",
         "fitdocs.plugins",
         "fitdocs.index.refresh",
@@ -609,6 +610,7 @@ def test_query_forbidden_roots_and_dotted_boundaries_fixed_oracle() -> None:
         "fitdocs.sync",
         "fitdocs.render",
         "fitdocs.connectors",
+        "fitdocs.dashboards",
         "fitdocs.tiles",
         "fitdocs.plugins",
         "fitdocs.index.refresh",
@@ -621,6 +623,7 @@ def test_query_forbidden_roots_and_dotted_boundaries_fixed_oracle() -> None:
         assert _query_forbidden_target(root)
         assert _query_forbidden_target(f"{root}.child")
     assert not _query_forbidden_target("fitdocs.sync_extra")
+    assert not _query_forbidden_target("fitdocs.dashboards_extra")
     assert not _query_forbidden_target("fitdocs.index.refresh_extra")
     assert not _query_forbidden_target("fitdocs.index.schema")
     assert not _query_forbidden_target("fitdocs.query")

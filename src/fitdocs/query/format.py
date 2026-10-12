@@ -6,7 +6,7 @@ import datetime as dt
 import json
 import math
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import StrEnum
 
@@ -27,6 +27,9 @@ class ResultSet:
     rows: tuple[tuple[object, ...], ...]
     truncated: bool
     max_rows: int
+    # Excluded from equality: ``fitdocs query`` results are compared by their
+    # rows and column names, and the type names differ across DuckDB versions.
+    column_types: tuple[str, ...] = field(default=(), compare=False)
 
 
 FreshnessFields = Mapping[str, int | bool]
