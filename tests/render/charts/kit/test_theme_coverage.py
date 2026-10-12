@@ -20,7 +20,7 @@ from fitdocs.render.charts.kit.layout import PAD, text_width
 from fitdocs.render.charts.kit.registry import KINDS
 from fitdocs.render.charts.kit.schema import Output
 from fitdocs.render.charts.kit.theme import INK_ROLES, style_element
-from fitdocs.render.charts.palette import CATEGORICAL_RAMP
+from fitdocs.render.charts.palette import CATEGORICAL_RAMP, SEQUENTIAL_RAMP
 from tests.render.charts.kit._helpers import Case
 from tests.render.charts.kit.goldens import GOLDEN_ROOT
 
@@ -33,6 +33,7 @@ ALLOWED_COLOURS = frozenset(
     for colour in (
         *(c for role in INK_ROLES for c in (role.base, role.light, role.dark)),
         *CATEGORICAL_RAMP,
+        *SEQUENTIAL_RAMP,
     )
 )
 FORBIDDEN_TOKENS = (

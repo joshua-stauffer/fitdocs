@@ -12,11 +12,19 @@ from typing import Final, TypedDict
 
 from fitdocs.render.charts.kit.kinds import (
     area,
+    band,
     bar,
+    box,
+    calendar_heatmap,
+    dual_axis,
     hbar,
+    heatmap,
     histogram,
     line,
+    mean_max,
     scatter,
+    small_multiples,
+    stacked_100,
     stat,
     table,
 )
@@ -31,6 +39,14 @@ KINDS: Final[tuple[KindSpec, ...]] = (
     histogram.KIND,
     stat.KIND,
     table.KIND,
+    calendar_heatmap.KIND,
+    heatmap.KIND,
+    dual_axis.KIND,
+    band.KIND,
+    box.KIND,
+    mean_max.KIND,
+    small_multiples.KIND,
+    stacked_100.KIND,
 )
 
 CORE_KIND_NAMES: Final = (
