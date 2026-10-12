@@ -833,7 +833,7 @@ every registered kind and find its cases by the test-module convention
   - _Boundary: histogram kind_
   - _Depends: 3.1, 3.3, 3.4, 4.1, 4.2_
 
-- [ ] 5.7 (P) Implement the stat kind with its goldens
+- [x] 5.7 (P) Implement the stat kind with its goldens
   - **`kit/kinds/stat.py`**: `KIND` per the kind table (`value`, `compare`,
     `delta` absolute|percent|both, bound 1 row) and rules (`_validate`:
     compare kind and unit match; `_check`: more than one row; output format,

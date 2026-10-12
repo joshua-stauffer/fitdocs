@@ -1,0 +1,1 @@
+**Weekly distance:** 39.2 km (+3.1 km, +8.6% vs 36.1 km)
