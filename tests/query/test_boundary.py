@@ -12,7 +12,7 @@ from tests.index.test_boundary import _INDEX_IMPORTERS
 
 _REPO_ROOT = Path(__file__).parents[2]
 _SOURCE_ROOT = _REPO_ROOT / "src" / "fitdocs"
-_QUERY_IMPORTERS = frozenset({"fitdocs.cli"})
+_QUERY_IMPORTERS = frozenset({"fitdocs.cli", "fitdocs.dashboards.binding"})
 
 
 def _source_module(path: Path) -> str:
