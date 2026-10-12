@@ -257,7 +257,7 @@ every registered kind and find its cases by the test-module convention
     `uv run mypy` covers the new test directory.
   - _Requirements: 1.1, 1.2, 4.1, 4.5_
 
-- [ ] 1.3 Define the kind schema and the bound inputs a kind receives
+- [x] 1.3 Define the kind schema and the bound inputs a kind receives
   - **`kit/schema.py`** per design § KindSchema and § Settled Seams:
     `Output`, `OptionType`, `OverBound`, `OptionValue`, `ChannelSpec`,
     `OptionSpec`, `MarkBound`, `KindSpec` (field order and defaults as
