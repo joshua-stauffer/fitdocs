@@ -332,7 +332,7 @@ sequential, never two `(P)` tasks at once.
 
 - [ ] 2. Upstream amendments: parameters, typed columns and a multi-statement session
 
-- [ ] 2.1 Add a streaming named-parameter read and parameter screening to the index facade (analytics-index Amendment 1, facade)
+- [x] 2.1 Add a streaming named-parameter read and parameter screening to the index facade (analytics-index Amendment 1, facade)
   - **`src/fitdocs/index/store.py`** per design § Upstream amendments, two
     new methods and nothing else changed:
     - `execute_named(sql, params: Mapping[str, object]) -> IndexResult`:
@@ -1322,3 +1322,20 @@ sequential, never two `(P)` tasks at once.
   `ReaderError.position` are character offsets into the body), so U+2028 /
   U+0085 / lone `\r` do not shift lines. `directive._ID_RE` duplicates
   `grammar.SLUG` until the group-3 reconciliation.
+- **2.1 (4 review rounds):** `store.py` additions only:
+  `IndexResult.from_cursor` (returns private `_CursorResult`),
+  `IndexConnection.execute_named`, `statement_parameters`. On duckdb 1.2.0
+  `cursor.description` types are DB-API names (`NUMBER`, `STRING`,
+  `DATETIME`), on 1.5.6 SQL names (`BIGINT`, `VARCHAR`, …) — 4.3's
+  two-vocabulary `TYPE_KINDS` must map both. Streaming verified on both
+  (growth ~2.8 MB; `.sql(params=)` mutant ~270 MB). **DuckDB race (controller
+  ruling):** under CPU load, streamed results misreport an interrupt during
+  fetch as `InvalidInputException("…INTERRUPT Error…")` → `IndexStatementError`,
+  and a mid-stream SQL error as `InterruptException` → `IndexInterrupted`
+  (plain duckdb, both versions, ~3–7%). The facade wraps by class unchanged;
+  **2.2 must classify any failure after the statement timer fired as
+  `StatementTimedOut`** and decide a no-timer `IndexInterrupted`. Tests: exact
+  wrapping pinned with fake cursors; real-DuckDB tests are tuple-accepting
+  smoke tests (interrupt one in a bounded subprocess). A cursor-backed result
+  is the connection: the next statement on that connection replaces an
+  unfinished result (2.2's session must finish one result before the next).
