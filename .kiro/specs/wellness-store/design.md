@@ -87,9 +87,10 @@ vocabulary gains two units.
 - `fitdocs.inbox` stays independent of `fitdocs.wellness` (the drain passes it
   the suffix set).
 - Inside the package the import order is one-way: `model` and `probe` (leaves)
-  → `spec` → `formats/*` → `registry` → `settings` and `merge` → `archive` →
-  `series` → `intake`, `engine` → `inspect`; the facade re-exports from
-  `model`, `series` and `settings`. No module imports one to its right.
+  → `spec` → `formats/*` → `registry` → `settings`, `merge` and `archive`
+  (mutually independent) → `series` → `intake`, `engine` → `inspect`; the
+  facade re-exports from `model`, `series` and `settings`. No module imports
+  one to its right.
 - `fitdocs.connectors` never imports `fitdocs.wellness`; it reaches the
   archive only through `fitdocs.layout.wellness_archive_path`.
 
@@ -197,7 +198,7 @@ src/fitdocs/wellness/
 ├── model.py           # Metric, MetricInfo, METRICS, accept_value, DaySnapshot, SeriesValue, is_origin,
 │                      #   wellness_day_of_sleep_end (pure value types and rules)
 ├── spec.py            # SourceKind, SourceSpec, ArchiveForm, Supersession, FormatSpec, ExtractContext,
-│                      #   WellnessFormatError (the declaration types formats import)
+│                      #   WellnessFormatError, ParsedEntry (declaration and exchange types)
 ├── registry.py        # SOURCES, FORMATS (append-only), recognize, lookups, candidate_suffixes,
 │                      #   default_source_order, validate_registry
 ├── probe.py           # CandidateProbe (bounded head, capped JSON, zip member list), hash_file
@@ -209,7 +210,7 @@ src/fitdocs/wellness/
 │                      #   commit_original, commit_extract, parse_entry
 ├── intake.py          # identify / archive_identified: per-candidate outcomes for the drain
 ├── settings.py        # WellnessSettings, load_wellness_settings, effective_order
-├── merge.py           # ParsedEntry, Conflict, MergeResult, merge (pure)
+├── merge.py           # Conflict, MergeResult, merge (pure)
 ├── series.py          # WellnessSeries, read_series, series_files, CSV and manifest codec,
 │                      #   inputs_digest, SERIES_VERSION, SERIES_HEADER
 ├── engine.py          # SeriesStatus, SeriesReport, assess_series, rebuild_series (the only series writer)
@@ -689,6 +690,7 @@ def effective_order(settings: WellnessSettings, metric: Metric) -> tuple[str, ..
    `(day, metric, source)`.
 
 ```python
+# ParsedEntry (spec.py), produced by archive.parse_entry and consumed here:
 @dataclass(frozen=True)
 class ParsedEntry:
     entry_ref: str
