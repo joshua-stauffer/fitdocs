@@ -236,7 +236,7 @@ graph TB
 src/fitdocs/recovery/
 ├── __init__.py      # Facade: re-exports the baseline library only (no page, no engine)
 ├── constants.py     # Transform, BaselineMethod, MethodRule, the CitedConstants and their source records,
-│                    #   METHODS, BASELINED_METRICS, SLEEP_METRICS, LOOKBACK_DAYS, BASELINES_VERSION, RULES
+│                    #   METHODS, BASELINED_METRICS, SLEEP_METRICS, lookback_days, LOOKBACK_DAYS, BASELINES_VERSION, RULES
 ├── baselines.py     # RangePosition, BaselineDay, Baselines (of/on/shown_source/shown), baseline_key
 ├── view.py          # The page model: Window, ShownDay, MarkedRun, SourceChange, SourceNote, SignalView,
 │                    #   SleepView, Panel, OtherView, LoadView, CoverageRow, RecoveryView, OTHER_SIGNALS,
@@ -247,7 +247,7 @@ src/fitdocs/recovery/
 
 src/fitdocs/render/charts/kit/kinds/reference_band.py   # chart-catalog Amendment 1: the reference-band kind
 docs/recovery.md                                       # the recovery guide
-tests/recovery/      # builders.py (synthetic series and pages), test_constants.py, test_baselines.py,
+tests/recovery/      # builders.py (synthetic series and pages), test_constants.py, test_baselines.py, test_shown.py,
                      #   test_view.py, test_charts.py, test_page.py, test_engine.py, test_cli_recovery.py,
                      #   test_boundary.py, test_constant_guard.py, test_docs_recovery.py, golden/
 tests/render/charts/kit/test_reference_band.py         # the kind's CASES and tests
