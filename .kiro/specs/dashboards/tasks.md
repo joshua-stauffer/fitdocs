@@ -268,7 +268,7 @@ sequential, never two `(P)` tasks at once.
     the structure.md pin check.
   - _Requirements: 4.8, 15.1, 15.2, 15.3, 15.6_
 
-- [ ] 1.2 Declare the dashboards location, its AGENTS.md and the next contract version (wiki-contract Amendment 5, part 1)
+- [x] 1.2 Declare the dashboards location, its AGENTS.md and the next contract version (wiki-contract Amendment 5, part 1)
   - **`src/fitdocs/layout.py`**: `DASHBOARDS_DIR = "dashboards"`;
     `OWNED_PATHS` appends `f"{DASHBOARDS_DIR}/"` and
     `f"{DASHBOARDS_DIR}/{ASSETS_SUBDIR}/"`; `DECLARED_DIRS` appends
@@ -1282,3 +1282,14 @@ sequential, never two `(P)` tasks at once.
   line (no output line can start `<!-- fitdocs:`). Design § Testing's
   monkeypatched-`KINDS` test realised as dict stubs per task text; a CLI-level
   "registry read at call time" test is not carried by any task (queued).
+- **1.2:** `CONTRACT_VERSION` "9" → "10". Declaration wording deviates from
+  design § Declaration item 2: "declares a chart" / "after a successful index
+  refresh" (design: "each") because `test_no_declaration_quantifies_over_documents`
+  bans "each"; `...` for `…` (goldens are ASCII). 8.1 amends the design text.
+  `_OWNER_BLOCK` format key renamed `{generator}` → `{owner}`. `DECLARED_DIRS`
+  order: workouts, history, blocks, fit-archive, dashboards. Carried forward:
+  5.1 discovery and `has_dashboards` must skip the generated
+  `dashboards/AGENTS.md` (it contains literal directive/marker text); 8.1 owns
+  the contract's narrative sections (index "never read back", the "those four
+  files" example, unpinned "five owned"); 6.4 refreshes stale counts in
+  `tests/test_confinement.py` and `tests/test_declaration_refresh.py` prose.
