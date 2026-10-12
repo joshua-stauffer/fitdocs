@@ -14,13 +14,16 @@ training-load pass then picks them up by date like any other entry.
 takeover), the athlete's agent (runs `fitdocs check`, relays takeovers and
 inconsistencies), and the load pass (consumes the entries unchanged).
 
-**Impact**: benchmark selection gains one rule (a derived entry never applies
-inside a hand-recorded entry's back-reach span); the derived write becomes
+**Impact**: benchmark selection is unchanged for every kind; the
+hand-recorded-wins rule is a rule of what the heart-rate stage writes
+(maintainer, 2026-10-12, second round). The derived write becomes
 partitioned by kind so the two stages never erase each other; a provenance
 record may name a series; the heart-rate channel reports which dated resting
 and maximum entries it used; `fitdocs check` reads `athlete.toml` and gains
-three findings. No owned path, document format, index schema or
-configuration key changes.
+three findings; `derive-benchmarks` reads `[load]` once per run, shared by
+both stages; the ownership contract's description of `derive-benchmarks`
+changes, so `CONTRACT_VERSION` is raised to main + 1. No owned path,
+document format, index schema or configuration key changes.
 
 ### Goals
 - Derived resting and maximum heart rate as sparse, dated, reproducible
@@ -54,17 +57,23 @@ configuration key changes.
 - Three `check` findings: `hr_benchmark_takeover`,
   `hr_benchmarks_inconsistent`, `athlete_profile_unreadable`.
 - These amendments, carried out by this spec's implementation:
-  - **athlete-benchmarks** (Amendment N, expected 3): the selection rule for
-    hand back-reach spans (all kinds); the optional `series` provenance key.
+  - **athlete-benchmarks** (Amendment N, expected 3): provenance only — the
+    optional `series` key; the Boundary Context names the heart-rate stage
+    and records its hand-wins rule as a description of what that pass
+    writes. Selection is not amended.
   - **performance-benchmarks** (Amendment N, expected 3): Req 10.4 lifted to
     the tagged-effort stage only; Req 1.3, 10.5 and 10.7 scoped to that
     stage; the partitioned derived write and change test;
-    `DeriveReport.accepted`.
+    `DeriveReport.accepted`; the stage accepts the already-read `[load]`
+    settings.
+  - **wiki-contract** (Amendment N): `CONTRACT_VERSION` main + 1, the history
+    paragraph, the "What changed" paragraph and the `derive-benchmarks`
+    operation text.
   - **load-channels** (Amendment N, expected 1): the heart-rate channel
     reports the measurement dates of the resting and maximum entries it used.
 - Documentation: README, `docs/configuration.md`,
-  `docs/ownership-contract.md`, `docs/plugins.md`, the workouts skill,
-  CHANGELOG, and the `structure.md` dependency bullet for the new package.
+  `docs/ownership-contract.md`, the workouts skill, CHANGELOG, and the
+  `structure.md` dependency bullet for the new package.
 
 ### Out of Boundary
 - The wellness series, its precedence, its day boundary and its reader
@@ -73,21 +82,25 @@ configuration key changes.
 - Descriptive baselines and normal ranges (`recovery`). `fitdocs.hr_benchmarks`
   exposes no general-purpose baseline function; its resting level is private
   to the stage (see [Not recovery's baseline](#not-recoverys-baseline)).
+- Benchmark selection (`BenchmarkSet.applicable`), for every kind: this
+  spec relies on it unchanged and amends neither athlete-benchmarks
+  Amendment 1 nor training-load Amendment 4.
 - The threshold calculator, channel arithmetic, channel selection and
   prompts (threshold-load Req 11.6 holds: the estimate is made outside the
   calculator).
 - The analytics index: its benchmark tables pick up the new entries through
   the existing producer (`index/derived/benchmarks.py:199-239`) with no
   schema change.
-- Document rendering and `DOC_VERSION`; owned paths and `CONTRACT_VERSION`;
-  `ATHLETE_SCHEMA_VERSION`; the index `SCHEMA_VERSION`.
+- Document rendering and `DOC_VERSION`; owned paths;
+  `ATHLETE_SCHEMA_VERSION`; the index `SCHEMA_VERSION`. (`CONTRACT_VERSION`
+  is raised, see the wiki-contract amendment above.)
 
 ### Allowed Dependencies
 - Pure modules of `fitdocs.hr_benchmarks` (`types`, `sources`, `peaks`,
   `maximum`, `resting`, `timeline`, `inspect`) import only the standard
   library, `fitdocs.benchmarks`, `fitdocs.citation`, `fitdocs.model`
   (`Samples`, `Modality`, `Sport`), `fitdocs.load.qa.types` (`FlagSettings`,
-  in `types` and `peaks`), `fitdocs.load.qa.cadence` (`peaks` only), and
+  `peaks` only), `fitdocs.load.qa.cadence` (`peaks` only), and
   each other in the order
   `types` → `sources` → `peaks`, `maximum`, `resting` → `timeline` →
   `inspect`. No clock, no I/O, no network.
@@ -107,8 +120,8 @@ configuration key changes.
   hr_benchmarks pure} → benchmarks → model`; `audit → hr_benchmarks.inspect`.
 
 ### Revalidation Triggers
-- The selection rule in `BenchmarkSet.applicable` (load pass, index
-  periods, plugins, recovery if it plots in-force values).
+- Any change to `BenchmarkSet.applicable`: the walk's value in force and
+  the takeover definition both assume today's rule.
 - The `series` provenance key or the derived-provenance field set.
 - The `kinds` partition of `with_derived_benchmarks` (every derivation pass).
 - The method vocabulary `HrMethod` or any constant in
@@ -187,8 +200,9 @@ graph TB
   only I/O).
 - Boundaries: evidence is computed without the profile; the profile is read
   once, after all evidence exists, and written once per stage; selection
-  stays in `fitdocs.benchmarks`, so the load pass, the index and the stage
-  share one rule.
+  stays in `fitdocs.benchmarks`, unchanged, so the load pass, the index, the
+  stage's walk and `check` share one rule. The hand-recorded-wins rule lives
+  only in what the walk writes.
 - Existing patterns preserved: sorted discovery and the same archive
   resolution and composition rule as the load pass; atomic `save_profile`
   with re-parse; change-only writes; single settings readers; citation
@@ -213,16 +227,17 @@ graph TB
 src/fitdocs/hr_benchmarks/
 ├── __init__.py   # Facade: derive_hr_benchmarks, load_hr_stage_settings, report and settings types
 ├── types.py      # HR_KINDS, HrMethod, Evidence, SessionPeak, NoEvidenceReason, KindRule,
-│                 #   Takeover, Violation, Inconsistency, SkippedDocument, HrFailure,
-│                 #   KindOutcome, HrStageSettings, HrStageReport (values only)
+│                 #   Takeover, BackReach, BackReachChange, Violation, Inconsistency,
+│                 #   SkippedDocument, HrFailure, KindOutcome, HrStageReport (values only)
 ├── sources.py    # FitdocsChoice records, CitedConstants, corroborators, BLOCKED_CITATIONS,
 │                 #   CONSTANT_SOURCES, the two KindRules (no arithmetic)
 ├── peaks.py      # session_peak: sample rejection, cadence-lock exclusion, 30-s sustained peak
 ├── maximum.py    # max_evidence: 365-day window, median of the three highest, evidence days
 ├── resting.py    # resting_evidence: per-source 28-day median, source choice by precedence
 ├── timeline.py   # derive_timeline: hand-aware step and confirmation walk, provenance, notes
-├── inspect.py    # takeovers, current_takeovers, inconsistencies (read-only, over a BenchmarkSet)
-└── engine.py     # the only I/O: discovery, archive and series reads, profile load, partitioned write
+├── inspect.py    # takeovers, current_takeovers, back_reach_cover, inconsistencies (read-only)
+└── engine.py     # the only I/O: HrStageSettings and its loader, discovery, archive and
+                  #   series reads, profile load, partitioned write
 
 tests/hr_benchmarks/
 ├── builders.py            # synthetic samples, sessions, series values, profiles (invented values)
@@ -234,35 +249,53 @@ tests/hr_benchmarks/
 ├── test_timeline.py
 ├── test_inspect.py
 ├── test_engine.py         # integration over a tmp data root with synthetic FIT and series files
+├── test_constant_guard.py # constants reached through their records, no bare literals
 ├── test_purity.py         # imports, clock, I/O, network of the pure modules
-└── test_boundary.py       # reachability, single writer, no index/query/duckdb, facade-only wellness
+├── test_boundary.py       # reachability, single writer, no index/query/duckdb, facade-only wellness
+├── test_e2e.py            # CLI end to end over a staged data root
+└── test_determinism.py    # discovery order, time zone, locale
 ```
 
 ### Modified Files
 - `src/fitdocs/benchmarks.py` — `BenchmarkSource.series` (trailing, default
   `None`); parser validates it (non-empty string when present); serializer
-  emits it after `document`; `BenchmarkSet.applicable` gains the hand
-  back-reach rule.
+  emits it after `document`. `BenchmarkSet.applicable` is not touched; a new
+  test pins its behaviour with derived and hand entries together.
 - `src/fitdocs/load/profile.py` — `with_derived_benchmarks(entries, *, kinds)`
   with `kinds` required and partition-scoped retention, collision and
   group-removal; `_SOURCE_RECOGNIZED_KEYS` gains `series` after `document`.
 - `src/fitdocs/performance/types.py` — `TAGGED_EFFORT_KINDS` (the three kinds
   the stage derives).
-- `src/fitdocs/performance/engine.py` — `_ROUTED_KINDS` becomes
-  `TAGGED_EFFORT_KINDS`; change test and write restricted to that partition;
-  `DeriveReport.accepted` (trailing, default `()`).
+- `src/fitdocs/performance/engine.py` — change test and write restricted to
+  `TAGGED_EFFORT_KINDS`; `DeriveReport.accepted` (trailing, default `()`);
+  `derive_benchmarks(..., load_settings: LoadSettings | None = None)` uses
+  settings already read instead of reading `[load]` again (today
+  `performance/engine.py:328-329` reads it unconditionally).
+- `src/fitdocs/contract.py` — `CONTRACT_VERSION` main + 1 and its history
+  paragraph; the in-tree declarations regenerate with the new version line
+  (`tests/declaration_golden/*`).
 - `src/fitdocs/load/channels/heart_rate.py` — two reported inputs
   `resting_hr_measured_on`, `max_hr_measured_on`.
 - `src/fitdocs/audit.py` — three `FindingKind` members and
   `_benchmark_findings(data_root)`.
-- `src/fitdocs/cli.py` — `derive_benchmarks_command` preflight, HR stage,
-  `_report_hr_stage`, progress printer; `check_command` docstring.
+- `src/fitdocs/cli.py` — `derive_benchmarks_command` preflight (reads
+  `[wellness]` and `[load]` once and passes the load settings to the
+  tagged-effort stage), HR stage, `_report_hr_stage`, progress printer;
+  `check_command` docstring.
 - `pyproject.toml` — `[tool.mypy].files` gains the new package and tests
   (append only).
-- Tests extended: `tests/test_benchmarks.py`, `tests/load/test_profile.py`,
-  `tests/performance/test_engine.py`, `tests/test_cli_derive.py`
+- Tests extended: `tests/test_benchmarks.py`, `tests/load/test_profile.py`
+  (the fifteen `with_derived_benchmarks(...)` call sites gain `kinds`; the
+  union-of-partitions cases at :2808 and :2698-2775 are re-pinned, see task
+  1.2), `tests/performance/test_engine.py` (the `DeriveReport` field-order pin
+  at :513-520), `tests/test_cli_derive.py`
   (`test_mixed_run_derives_declines_fails_and_never_opens_the_untagged_archive`
-  re-scoped to the tagged-effort stage), `tests/load/channels/test_heart_rate.py`
+  re-scoped to the tagged-effort stage; `perturbed_calls == [1]` at :1388
+  becomes `[1, 1]` because the heart-rate stage also globs `workouts/`),
+  `tests/load/test_settings.py:2478-2483` (still exactly one `[load]` read per
+  `derive-benchmarks` run), the contract-version pins
+  (`tests/identity/test_contract_docs.py:177-209` and every peer head- or
+  history-paragraph pin present at landing), `tests/load/channels/test_heart_rate.py`
   (queue item 2026-08-25), `tests/test_audit.py`, `tests/test_cli_check.py`,
   `tests/load/test_settings.py` (licensed callers + `hr_benchmarks/engine.py`),
   `tests/test_contract_consumers.py` (register the engine),
@@ -272,14 +305,15 @@ tests/hr_benchmarks/
   (calculator and channels never import `hr_benchmarks`).
 - Docs: `README.md` (Benchmarks), `docs/configuration.md` (athlete profile,
   a "Derived heart-rate benchmarks" subsection), `docs/ownership-contract.md`
-  (`derive-benchmarks` operation, `athlete.toml` paragraph),
-  `docs/plugins.md` (selection sentence),
+  (version line, "What changed" paragraph, `derive-benchmarks` operation,
+  `athlete.toml` paragraph),
   `src/fitdocs/skills/fitdocs-workouts/SKILL.md` (reading the new
   findings), `CHANGELOG.md`, `.kiro/steering/structure.md` (dependency
   bullet).
 - Spec amendment records: `.kiro/specs/athlete-benchmarks/requirements.md`,
   `.kiro/specs/performance-benchmarks/requirements.md` and `design.md`,
-  `.kiro/specs/load-channels/requirements.md` (appended amendment sections;
+  `.kiro/specs/load-channels/requirements.md`,
+  `.kiro/specs/wiki-contract/requirements.md` (appended amendment sections;
   numbers re-derived at landing).
 
 ## System Flows
@@ -292,8 +326,8 @@ sequenceDiagram
     participant Tagged as tagged stage
     participant Hr as hr engine
     participant Profile as athlete toml
-    Cli->>Hr: load hr stage settings
-    Cli->>Tagged: derive benchmarks
+    Cli->>Hr: load hr stage settings including load settings
+    Cli->>Tagged: derive benchmarks with the load settings
     Tagged->>Profile: write tagged partition if changed
     Tagged-->>Cli: report with accepted entries
     Cli->>Hr: derive hr benchmarks with accepted entries
@@ -306,10 +340,11 @@ sequenceDiagram
     Cli->>Cli: print both reports and exit
 ```
 
-- Settings (`[wellness]`, `[load]`) are validated before the tagged-effort
-  stage runs, so a configuration fault writes nothing (1.11). A malformed
-  profile is caught by the tagged-effort stage before its write
-  (`performance/engine.py:415`).
+- Settings (`[wellness]`, `[load]`) are read and validated once, before the
+  tagged-effort stage runs, so a configuration fault writes nothing (1.11)
+  and `[load]` is read exactly once per run (1.8; training-load 14.1,
+  `tests/load/test_settings.py:2478-2483`). A malformed profile is caught by
+  the tagged-effort stage before its write (`performance/engine.py:415`).
 - The accepted tagged entries are passed so the heart-rate stage evaluates
   inconsistencies against the timeline both stages leave, in preview mode
   too (1.4, 9.3).
@@ -318,9 +353,9 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    Start[evidence day] --> Excluded{hand measurement day or inside a hand span}
+    Start[evidence day] --> Excluded{measurement day of a hand entry}
     Excluded -- yes --> Reset[end the run and skip]
-    Excluded -- no --> InForce[value in force by selection]
+    Excluded -- no --> InForce[value in force by unchanged selection]
     InForce --> None{no value in force}
     None -- yes --> Emit[start entry on this day]
     None -- no --> Differ{differs by more than the step}
@@ -333,6 +368,11 @@ flowchart TD
 - Maximum heart rate uses a confirmation of one day, so a disagreeing day
   starts an entry at once. Resting heart rate uses 14 consecutive calendar
   days; a missing day, an agreeing day or a change of source ends the run.
+- The value in force is today's selection over the hand-recorded entries
+  and the derived entries already decided for earlier days; it may be a
+  hand entry measured on or before the day or one reaching back to it by its
+  applies-from date. A decision never depends on a later entry, so the walk
+  is deterministic and never circular (4.11).
 - When the value in force on the start day is hand-recorded, the entry is a
   takeover and its note says so.
 
@@ -346,7 +386,7 @@ flowchart TD
 | 1.4 | Preview | HrStageEngine | `derive_hr_benchmarks(dry_run, other_derived)` | The command |
 | 1.6 | Only this command derives | Guards | single-writer test | — |
 | 1.7 | No prompt, no network | HrStageEngine, Guards | purity test | — |
-| 1.8 | No new configuration | HrStageEngine | `load_hr_stage_settings` | — |
+| 1.8 | No new configuration; `[load]` read once | HrStageEngine, DeriveCommand, TaggedEffortStage | `load_hr_stage_settings`, `derive_benchmarks(load_settings=)` | The command |
 | 1.9 | No index, no wellness archive | Guards | boundary test | — |
 | 1.10 | Writes only the profile | HrStageEngine, Guards | confinement entry point | — |
 | 2.1, 2.3 | Series only, per source | RestingEvidence, HrStageEngine | `resting_evidence` | — |
@@ -367,15 +407,18 @@ flowchart TD
 | 4.7, 4.8 | Determinism, no clock | all pure modules, Guards | — | — |
 | 4.9 | Idempotent | HrStageEngine | change test | — |
 | 4.10 | Absent, no default | Timeline, MaxEvidence, RestingEvidence | — | Walk |
+| 4.11 | Value in force from earlier decisions only | Timeline | `derive_timeline` | Walk |
 | 5.1 | Never touch hand entries | Timeline, ProfileDerivedWrite | backstop `ValueError` | Walk |
-| 5.2, 5.3, 5.4 | Evidence must disagree; spans | Timeline | `derive_timeline` | Walk |
-| 5.5, 5.6 | Selection rule | BenchmarkSelection | `BenchmarkSet.applicable` | — |
-| 5.7 | New hand value | Timeline, HrStageEngine | recompute per run | Walk |
-| 5.8 | No switch, no floor, no expiry | HrSources, Guards | — | — |
+| 5.2, 5.3, 5.4 | Hand date ignored; evidence must disagree | Timeline | `derive_timeline` | Walk |
+| 5.5 | Back-reach compared like any value in force | Timeline | `derive_timeline` | Walk |
+| 5.6 | Selection unchanged | BenchmarkSelection (pin) | `BenchmarkSet.applicable` (untouched) | — |
+| 5.7 | Back-reach change reported once | Inspect, HrStageEngine, DeriveCommand | `back_reach_cover`, `HrStageReport.back_reach_changes` | — |
+| 5.8 | New hand value | Timeline, HrStageEngine | recompute per run | Walk |
+| 5.9 | No switch, no floor, no expiry | HrSources, Guards | — | — |
 | 6.1 | Report takeovers | HrStageEngine, DeriveCommand | `HrStageReport.takeovers` | — |
 | 6.2 | Note on the entry | Timeline | `Benchmark.note` | Walk |
 | 6.3, 6.4 | `check` listing | Inspect, AuditHeartRate | `current_takeovers` | — |
-| 6.5 | Answer by hand | BenchmarkSelection, Timeline | — | Walk |
+| 6.5 | Answer by hand | Timeline (selection unchanged) | — | Walk |
 | 7.1, 7.2, 7.3 | Provenance fields | Timeline, MaxEvidence, RestingEvidence | `Evidence` | — |
 | 7.4, 7.5 | `series` key, compatibility | BenchmarkProvenance | `BenchmarkSource.series` | — |
 | 7.6, 7.7 | Citation discipline | HrSources | `CONSTANT_SOURCES`, `BLOCKED_CITATIONS` | — |
@@ -392,9 +435,9 @@ flowchart TD
 | 10.3 | Impulse and reference pinned | HeartRateChannelInputs (tests) | — | — |
 | 10.4 | Recompute hint | HrStageEngine, DeriveCommand | `HrStageReport.changed` | — |
 | 10.6 | No flat keys | HrStageEngine, Guards | — | — |
-| 10.7 | Index tables | BenchmarkSelection (existing producer) | `in_force_periods` | — |
+| 10.7 | Index tables | existing producer (selection unchanged) | `in_force_periods` | — |
 | 11.1 | README and configuration guide | Docs | — | — |
-| 11.2 | Ownership contract operation | Docs | — | — |
+| 11.2 | Ownership contract operation and version | OwnershipContractVersion, Docs | `CONTRACT_VERSION` | — |
 | 11.3 | Takeover announcement and check listing documented | Docs | — | — |
 | 11.4 | Workouts skill | Docs | — | — |
 | 11.5 | Release notes | Docs | — | — |
@@ -405,21 +448,22 @@ flowchart TD
 | Component | Domain/Layer | Intent | Req Coverage | Key Dependencies | Contracts |
 |-----------|--------------|--------|--------------|------------------|-----------|
 | HrTypes | hr_benchmarks (pure) | Vocabulary and value types | 1.2, 1.3 | benchmarks (P0) | State |
-| HrSources | hr_benchmarks (pure) | Every constant and its record | 2.2, 2.6, 4.1, 5.8, 7.6, 7.7 | citation (P0) | State |
+| HrSources | hr_benchmarks (pure) | Every constant and its record | 2.2, 2.6, 4.1, 5.9, 7.6, 7.7 | citation (P0) | State |
 | SessionPeaks | hr_benchmarks (pure) | One session's sustained peak | 3.2-3.5, 3.8 | qa.cadence (P0), model (P0) | Service |
 | MaxEvidence | hr_benchmarks (pure) | Windowed maximum evidence | 3.6, 3.7, 7.2 | HrSources (P0) | Service |
 | RestingEvidence | hr_benchmarks (pure) | Per-source baseline and source choice | 2.1-2.7, 7.3 | HrSources (P0) | Service |
-| Timeline | hr_benchmarks (pure) | Hand-aware step and confirmation walk | 2.7, 2.8, 4.2-4.5, 4.10, 5.1-5.4, 5.7, 6.2, 7.1, 9.6 | benchmarks selection (P0) | Service |
-| Inspect | hr_benchmarks (pure) | Structural takeovers and inconsistencies | 6.3, 6.4, 9.1, 9.2 | benchmarks selection (P0) | Service |
-| HrStageEngine | hr_benchmarks (I/O) | The stage | 1.2-1.4, 1.7-1.10, 2.9, 3.1, 3.9, 3.10, 4.6, 4.9, 8.2, 8.3, 9.3, 10.4, 10.6 | compose, wellness, profile (P0) | Batch |
-| BenchmarkSelection | benchmarks (amendment) | Hand back-reach beats derived | 5.5, 5.6, 6.5, 10.7 | — | Service |
+| Timeline | hr_benchmarks (pure) | Hand-aware step and confirmation walk | 2.7, 2.8, 4.2, 4.3, 4.4, 4.5, 4.10, 4.11, 5.1, 5.2, 5.3, 5.4, 5.5, 5.8, 6.2, 7.1, 9.6 | benchmarks selection (P0) | Service |
+| Inspect | hr_benchmarks (pure) | Structural takeovers, back-reach cover, inconsistencies | 5.7, 6.3, 6.4, 9.1, 9.2 | benchmarks selection (P0) | Service |
+| HrStageEngine | hr_benchmarks (I/O) | The stage | 1.2, 1.3, 1.4, 1.7, 1.8, 1.9, 1.10, 2.9, 3.1, 3.9, 3.10, 4.6, 4.9, 5.7, 8.2, 8.3, 9.3, 10.4, 10.6 | compose, wellness, profile (P0) | Batch |
+| BenchmarkSelection | benchmarks (unchanged, pinned) | Selection stays exactly as today | 5.6, 6.5, 10.7 | — | — |
 | BenchmarkProvenance | benchmarks/profile (amendment) | `series` key | 7.4, 7.5 | — | State |
 | ProfileDerivedWrite | load.profile (amendment) | Partitioned derived write | 4.6, 5.1, 8.1-8.5 | — | Service |
-| TaggedEffortStage | performance (amendment) | Partition, change test, accepted | 8.1, 8.3, 8.6 | ProfileDerivedWrite (P0) | Batch |
+| TaggedEffortStage | performance (amendment) | Partition, change test, accepted, shared `[load]` | 1.8, 8.1, 8.3, 8.6 | ProfileDerivedWrite (P0) | Batch |
+| OwnershipContractVersion | contract/declaration/docs (wiki-contract amendment) | `CONTRACT_VERSION` main + 1 | 11.2 | — | State |
 | HeartRateChannelInputs | load.channels (amendment) | Dated inputs | 10.2, 10.3 | — | Service |
 | AuditHeartRate | audit | Three findings | 6.3, 6.4, 9.1, 9.2, 9.4, 9.5 | Inspect (P0), profile (P0) | Service |
-| DeriveCommand | cli | Preflight, stages, report, exit | 1.1, 1.3-1.5, 1.11, 6.1, 10.4 | HrStageEngine (P0) | Service |
-| Guards | tests | Purity, boundary, single writer, confinement | 1.6, 1.7, 1.9, 1.10, 3.8, 4.8, 5.8, 10.1, 10.5, 10.6 | — | — |
+| DeriveCommand | cli | Preflight, stages, report, exit | 1.1, 1.3, 1.4, 1.5, 1.8, 1.11, 5.7, 6.1, 10.4 | HrStageEngine (P0) | Service |
+| Guards | tests | Purity, boundary, single writer, confinement | 1.6, 1.7, 1.9, 1.10, 3.8, 4.8, 5.9, 10.1, 10.5, 10.6 | — | — |
 | Docs | docs/skill/changelog/steering | User-facing text | 11.1, 11.2, 11.3, 11.4, 11.5, 11.6 | — | — |
 
 ### hr_benchmarks (pure)
@@ -475,7 +519,22 @@ class KindRule:
 class Takeover:
     kind: BenchmarkKind
     derived: Benchmark
-    superseded: Benchmark    # the hand-recorded entry in force the day before
+    superseded: Benchmark    # the hand-recorded entry in force on the derived entry's
+                             # date, that entry set aside (measured later = back-reach)
+
+@dataclass(frozen=True)
+class BackReach:
+    kind: BenchmarkKind
+    entry: Benchmark         # a hand-recorded entry with applies_from
+    starts_on: date
+    ends_before: date        # == starts_on when it covers no day
+
+@dataclass(frozen=True)
+class BackReachChange:
+    kind: BenchmarkKind
+    entry: Benchmark
+    before: tuple[date, date]   # (starts_on, ends_before) on file before the run
+    after: tuple[date, date]    # after the run
 
 class Violation(StrEnum):
     MAX_NOT_ABOVE_REST = "max_not_above_rest"
@@ -512,11 +571,6 @@ class KindOutcome:
     kept_on_failure: bool
 
 @dataclass(frozen=True)
-class HrStageSettings:
-    resting_order: tuple[str, ...]     # effective_order(settings, RESTING_HR_BPM)
-    flags: FlagSettings                # LoadSettings.flags
-
-@dataclass(frozen=True)
 class HrStageReport:
     considered: int
     with_evidence: int
@@ -525,6 +579,7 @@ class HrStageReport:
     resting_sources: tuple[str, ...]
     kinds: tuple[KindOutcome, ...]                           # resting, then maximum
     takeovers: tuple[Takeover, ...]                          # not held before this run
+    back_reach_changes: tuple[BackReachChange, ...]          # covers this run changed
     inconsistencies: tuple[Inconsistency, ...]
     failures: tuple[HrFailure, ...]
     written: bool
@@ -563,8 +618,10 @@ no maintainer value):
 
 - `RESTING_RULE` and `MAX_RULE` (`KindRule`) are assembled from these.
 - Corroborators (`Corroboration` tuples on the relevant constants) are added
-  by task 2.2 only for works the implementing session reads or can attest
-  honestly; candidates: the two works the brief names (Ausland, Kelemen &
+  only by the optional, controller- or maintainer-run task 2.8 (it needs the
+  network), and only for works that session reads or can attest honestly;
+  when 2.8 is not run, none is recorded and Req 7.6 is met by the
+  fitdocs-choice records alone. Candidates: the two works the brief names (Ausland, Kelemen &
   Seiler 2026 on age-formula error; a 2002 field-versus-laboratory peak
   heart-rate study recommending a median of several maximal efforts), and
   standard references on heart-rate reserve, resting-heart-rate day-to-day
@@ -674,7 +731,7 @@ def resting_evidence(
 | Field | Detail |
 |-------|--------|
 | Intent | Turn one kind's evidence and hand-recorded entries into derived entries and takeovers |
-| Requirements | 2.7, 2.8, 4.2, 4.3, 4.4, 4.5, 4.10, 5.1, 5.2, 5.3, 5.4, 5.7, 6.2, 7.1, 9.6 |
+| Requirements | 2.7, 2.8, 4.2, 4.3, 4.4, 4.5, 4.10, 4.11, 5.1, 5.2, 5.3, 5.4, 5.5, 5.8, 6.2, 7.1, 9.6 |
 
 ```python
 @dataclass(frozen=True)
@@ -689,15 +746,19 @@ def derive_timeline(
 - **Preconditions**: `evidence` sorted by day with unique days;
   `recorded` holds only hand-recorded entries of `rule.kind`.
 - **Walk** (normative; the flowchart above):
-  1. A day that is a recorded entry's `measured_on`, or lies in a recorded
-     entry's span `[applies_from, measured_on)`, supplies no evidence and
-     ends any run (5.1, 5.4).
+  1. A day that is a recorded entry's `measured_on` supplies no evidence and
+     ends any run (5.1, 5.2): a hand value is challenged only by evidence
+     dated after it, and no derived entry can share its key.
   2. The value in force is
      `BenchmarkSet((*recorded, *derived_so_far)).applicable(rule.kind,
-     discipline=None, on=day)` — the amended selection rule.
+     discipline=None, on=day)`, where `derived_so_far` holds only entries
+     already decided for earlier days — today's unchanged selection, so it
+     may be a recorded entry measured on or before the day, a recorded entry
+     reaching back to the day by its `applies_from` (only where no
+     earlier-measured entry covers the day), or a derived entry (4.11, 5.5).
   3. None in force → an entry starts on this day (4.2).
   4. `|evidence.value - in_force.value| <= rule.step_bpm` → nothing; the run
-     ends (5.3).
+     ends (5.3, 5.4).
   5. Otherwise the day joins the run when the run is empty or the day is
      the calendar day after the run's last day with the same `key` and the
      same entry in force; else the run restarts at this day. When the run
@@ -710,34 +771,53 @@ def derive_timeline(
   value in force by more than 3 bpm on each day from <first> to <last>"`.
 - **Notes**: a takeover (the entry in force on the start day is
   hand-recorded) gets `"Takes over from your hand-recorded <v> bpm of
-  <date>: the evidence differed by more than <step> bpm."`; every other
-  entry gets `"Derived by fitdocs from <summary>."` (6.2).
+  <date>: the evidence differed by more than <step> bpm."`, with `" (it
+  applied here through its applies-from date)"` inserted before the colon
+  when that entry is measured after the start day; every other entry gets
+  `"Derived by fitdocs from <summary>."` (6.2).
+- A derived entry dated before a recorded entry's `measured_on` is written
+  like any other and applies on its own date; the recorded entry's
+  back-reach then covers only the days before the first entry measured on
+  or before them (5.5; maintainer decision 3).
+- A new recorded entry changes the value in force from its date, so the
+  next run's walk decides every later day against it (5.8).
 - Never clamps or drops a value to avoid an inconsistency (9.6); with no
   evidence returns no entry (4.10, 2.8).
-- **Postconditions**: entries sorted by date, none on a recorded date or
-  inside a recorded span, each with derived provenance; `takeovers` lists
-  each entry whose start-day value in force was hand-recorded, paired with
-  that entry.
+- **Postconditions**: entries sorted by date, none on a recorded date,
+  each with derived provenance and no `applies_from`; `takeovers` lists each
+  entry whose start-day value in force was hand-recorded, paired with that
+  recorded entry.
 
 #### Inspect (`inspect.py`)
 
 | Field | Detail |
 |-------|--------|
 | Intent | Read-only structural findings over a benchmark set, shared by the stage report and `check` |
-| Requirements | 6.3, 6.4, 9.1, 9.2 |
+| Requirements | 5.7, 6.3, 6.4, 9.1, 9.2 |
 
 ```python
 def takeovers(benchmarks: BenchmarkSet) -> tuple[Takeover, ...]: ...
 def current_takeovers(benchmarks: BenchmarkSet) -> tuple[Takeover, ...]: ...
+def back_reach_cover(benchmarks: BenchmarkSet) -> tuple[BackReach, ...]: ...
 def inconsistencies(benchmarks: BenchmarkSet) -> tuple[Inconsistency, ...]: ...
 ```
 - `takeovers`: for each derived entry `D` of a kind in `HR_KINDS`, the entry
-  `applicable(kind, discipline=None, on=D.measured_on - 1 day)`; when it is
-  hand-recorded, `Takeover(kind, D, it)`. Sorted by kind value, then date.
-  This is the same set the walk reports, because no derived entry is ever
-  written on a hand date or inside a hand span.
+  `BenchmarkSet(every entry but D).applicable(kind, discipline=None,
+  on=D.measured_on)`; when it is hand-recorded, `Takeover(kind, D, it)`.
+  Sorted by kind value, then date. This equals the walk's takeovers: no
+  derived entry is written on a recorded date, derived entries carry no
+  `applies_from`, so entries dated after `D` cannot change the selection on
+  `D`'s date.
 - `current_takeovers`: the takeovers whose derived entry has the greatest
   `measured_on` of all entries of its kind (6.3, 6.4).
+- `back_reach_cover`: for each recorded entry of a kind in `HR_KINDS` with an
+  `applies_from`, the days before its `measured_on` on which the unchanged
+  selection returns it, as one interval `[starts_on, ends_before)` (the
+  qualifying set of back-reaching entries only grows with the date, and tier
+  1 takes over at the first measured entry, so the cover is a single
+  interval or empty); computed by sampling `applicable` at every
+  `measured_on` and `applies_from` of the kind, as `in_force_periods` does.
+  Entries with an empty cover are listed with `ends_before == starts_on`.
 - `inconsistencies`: breakpoints are every `measured_on` and `applies_from`
   of `max_hr_bpm`, `resting_hr_bpm` and every `lthr_bpm` entry. On each
   period, with `mx`, `rs` in force (athlete scope) and, per discipline that
@@ -758,9 +838,14 @@ def inconsistencies(benchmarks: BenchmarkSet) -> tuple[Inconsistency, ...]: ...
 | Field | Detail |
 |-------|--------|
 | Intent | The heart-rate stage: read evidence, read the profile once, write the HR partition once |
-| Requirements | 1.2, 1.3, 1.4, 1.7, 1.8, 1.9, 1.10, 2.1, 2.9, 3.1, 3.5, 3.9, 3.10, 4.6, 4.7, 4.9, 8.2, 8.3, 9.3, 10.4, 10.6 |
+| Requirements | 1.2, 1.3, 1.4, 1.7, 1.8, 1.9, 1.10, 2.1, 2.9, 3.1, 3.5, 3.9, 3.10, 4.6, 4.7, 4.9, 5.7, 8.2, 8.3, 9.3, 10.4, 10.6 |
 
 ```python
+@dataclass(frozen=True)
+class HrStageSettings:
+    load: LoadSettings                 # the one [load] read of the run
+    resting_order: tuple[str, ...]     # effective_order(settings, RESTING_HR_BPM)
+
 def load_hr_stage_settings(
     document: Mapping[str, object], *, data_root: Path
 ) -> HrStageSettings: ...          # raises WellnessSettingsError / LoadSettingsError
@@ -776,8 +861,10 @@ def derive_hr_benchmarks(
 ```
 - **Settings**: `load_wellness_settings(document, data_root=data_root)` and
   `effective_order(..., Metric.RESTING_HR_BPM)` (wellness facade);
-  `load_load_settings(document, settings_path(data_root)).flags`. This
-  module joins the licensed callers of `load_load_settings`.
+  `load_load_settings(document, settings_path(data_root))`, kept whole so the
+  CLI hands the same `LoadSettings` to the tagged-effort stage and `[load]`
+  is read once per run; the peaks use `settings.load.flags`. This module
+  joins the licensed callers of `load_load_settings`.
 - **Sessions**: every `workouts/*.md` in sorted order, frontmatter read once
   through `docio.read_frontmatter`, filtered by `contract.is_workout_document`
   (`considered`); `contract.document_date` (`None` → `UNDATED`); the last
@@ -809,7 +896,10 @@ def derive_hr_benchmarks(
   (6.1); `inconsistencies` = `inspect.inconsistencies(view)` where `view` is
   `new`, with every derived entry outside `HR_KINDS` replaced by
   `other_derived` when it is given (9.3, 1.4); `resting_sources` = the keys
-  of the resting evidence in order of first use.
+  of the resting evidence in order of first use; `back_reach_changes` = the
+  recorded entries whose `back_reach_cover` differs between `old` and `new`,
+  each with both intervals (5.7), so the notice appears in the run that
+  changes the cover and in no later run with unchanged inputs.
 - **Errors**: `ProfileError`/`AthleteFileError` and `SettingsError`
   propagate (the CLI maps them to exit 2); every per-document and series
   problem is a skip or an `HrFailure`.
@@ -825,28 +915,27 @@ def derive_hr_benchmarks(
 
 ### Amendments
 
-#### BenchmarkSelection (`benchmarks.py`, athlete-benchmarks Amendment N)
+#### BenchmarkSelection (`benchmarks.py`, unchanged)
 
 | Field | Detail |
 |-------|--------|
-| Intent | A derived entry never applies inside a hand-recorded entry's back-reach span |
-| Requirements | 5.5, 5.6, 6.5, 10.7 |
+| Intent | Selection stays exactly as today for every kind; a test pins it with derived and hand entries together |
+| Requirements | 5.6, 6.5, 10.7 |
 
-- `applicable(kind, *, discipline, on)`:
-  1. Tier 1 as today; when the tier-1 winner is derived and at least one
-     hand-recorded entry of the same `(kind, discipline)` has
-     `applies_from <= on < measured_on`, return the one of those with the
-     smallest `measured_on`.
-  2. Otherwise tier 1's winner, else tier 2, exactly as today.
-- Every kind, not only heart rate. Only dates where a derived entry lies
-  under a hand span change; hand-only and derived-only timelines select
-  exactly as before (5.6). The maintainer's current profile has no such
-  pair (research.md).
-- `in_force_periods` needs no change: the new rule changes selection only
-  at existing `measured_on`/`applies_from` breakpoints (10.7).
-- athlete-benchmarks requirements gain 3.12 (this rule) and a qualifier on
-  3.10 ("except as 3.12 provides"); `docs/plugins.md` and the
-  `ProfileView.benchmark` docstring (`load/types.py:295-309`) restate it.
+- `BenchmarkSet.applicable` (`benchmarks.py:189-243`) is not modified:
+  tier 1 is the latest entry measured on or before the date, whoever wrote
+  it; tier 2 (an `applies_from` reaching back) fills only days tier 1 cannot
+  (athlete-benchmarks 3.10, Amendment 1; training-load Amendment 4).
+- No existing test combines a derived entry with a hand back-reach (every
+  `applies_from` fixture is hand-only: `tests/test_benchmarks.py:1722-3129`,
+  `tests/index/derived/conftest.py:126-128`,
+  `tests/index/derived/test_refresh.py:123-127`). Task 1.1 adds one: a
+  derived `max_hr_bpm` measured before a hand entry with an earlier
+  `applies_from` wins on and after its own date, and the hand entry fills
+  only the days before it. Mutation that reds it: let tier 2 win over a
+  derived tier-1 winner (the rule this spec's first draft proposed).
+- `in_force_periods` and the load anchors therefore see the derived entries
+  with no change (10.7).
 
 #### BenchmarkProvenance (`benchmarks.py`, `load/profile.py`)
 
@@ -890,8 +979,8 @@ def with_derived_benchmarks(
 
 | Field | Detail |
 |-------|--------|
-| Intent | The tagged-effort stage writes and compares only its own partition |
-| Requirements | 8.1, 8.3, 8.6 |
+| Intent | The tagged-effort stage writes and compares only its own partition, and reuses the run's `[load]` read |
+| Requirements | 1.8, 8.1, 8.3, 8.6 |
 
 - `TAGGED_EFFORT_KINDS = frozenset({THRESHOLD_PACE_S_PER_KM, LTHR_BPM,
   FTP_WATTS})` in `performance/types.py`; the engine's `_ROUTED_KINDS`
@@ -899,7 +988,22 @@ def with_derived_benchmarks(
 - `previous_derived` is filtered to `TAGGED_EFFORT_KINDS`; the write passes
   `kinds=TAGGED_EFFORT_KINDS`.
 - `DeriveReport.accepted: tuple[Benchmark, ...] = ()` (trailing) carries the
-  accepted set (written, or would be written under `--dry-run`).
+  accepted set (written, or would be written under `--dry-run`); the
+  field-order pin at `tests/performance/test_engine.py:513-520` gains it.
+- `derive_benchmarks(data_root, *, dry_run=False, load_settings=None)`: when
+  `load_settings` is given it neither reads the settings document nor calls
+  `load_load_settings` (today `performance/engine.py:328-329` always does);
+  direct callers keep today's behaviour. The CLI passes the preflight's
+  settings, so `tests/load/test_settings.py:2478-2483` (exactly one `[load]`
+  read per `derive-benchmarks` run) stays at one.
+- Test fallout of the required `kinds` argument: the fifteen
+  `with_derived_benchmarks(...)` calls in `tests/load/test_profile.py`
+  (2723, 2808, 2823, 2855, 2860, 2873, 2876, 2902, 2928, 2956, 2999, 3070,
+  3126, 3171, 3194). Re-pin rule: store-level tests that mix kinds pass the
+  union of both partitions as `kinds`, which keeps their original meaning
+  (the call at 2808 passes max, resting, pace, FTP and LTHR entries, and the
+  empty write at 2698-2775 removes derived entries of both partitions); one
+  new test per partition proves the other partition survives.
 - performance-benchmarks requirements: 10.4 reworded to the tagged-effort
   stage ("derives no maximum and no resting heart rate; the heart-rate
   stage of the same command does, hr-derivation"); 1.3, 10.5 and 10.7 scoped
@@ -948,12 +1052,12 @@ def with_derived_benchmarks(
 | Field | Detail |
 |-------|--------|
 | Intent | Run both stages in order, print both reports, set the exit status |
-| Requirements | 1.1, 1.3, 1.4, 1.5, 1.11, 6.1, 10.4 |
+| Requirements | 1.1, 1.3, 1.4, 1.5, 1.8, 1.11, 5.7, 6.1, 10.4 |
 
 - Order: resolve the data root; `load_settings_document` +
-  `load_hr_stage_settings`; `derive_benchmarks(data_root, dry_run)`;
-  `derive_hr_benchmarks(data_root, settings, dry_run,
-  other_derived=report.accepted, progress=...)`. `ProfileError` and
+  `load_hr_stage_settings`; `derive_benchmarks(data_root, dry_run,
+  load_settings=settings.load)`; `derive_hr_benchmarks(data_root, settings,
+  dry_run, other_derived=report.accepted, progress=...)`. `ProfileError` and
   `SettingsError` (including `WellnessSettingsError`) → exit 2.
 - `_report_hr_stage(report, dry_run)`: a table titled
   `fitdocs derive-benchmarks: heart rate` (documents considered, sessions
@@ -961,6 +1065,9 @@ def with_derived_benchmarks(
   and `+added/-removed` per kind, failures); the line
   `Heart-rate benchmarks written: yes|no` (distinct from the tagged stage's
   `Profile written:` line, which existing tests pin); then takeovers,
+  back-reach changes (one line per changed hand entry: "your `<v>` bpm of
+  `<date>` (applies from `<af>`) now covers `<start>` to `<end>`; derived
+  values apply from `<end>`; recompute load to rescore those days"),
   inconsistencies, skipped documents, failures; and, when `changed`, the
   line "The heart-rate timeline changed: run `fitdocs load --recompute` to
   rescore documents whose load was already computed." All `markup=False`.
@@ -974,10 +1081,10 @@ def with_derived_benchmarks(
 - **Entry** (existing `Benchmark`): natural key `(discipline, kind,
   measured_on)`; derived entries of `HR_KINDS` are owned by the heart-rate
   stage and rebuilt as a whole each run.
-- **Invariants**: no derived HR entry on a hand-recorded entry's date or
-  inside its back-reach span; derived HR entries never carry
-  `applies_from`; consecutive derived entries of a kind differ by more than
-  the step from the value in force when each started.
+- **Invariants**: no derived HR entry on a hand-recorded entry's date;
+  derived HR entries never carry `applies_from`; every derived entry differed
+  by more than the step from the value in force on its date when it started
+  (hand-recorded or derived), or started where no value was in force.
 
 ### Physical Data Model (`athlete.toml`, synthetic values)
 ```toml
@@ -1009,7 +1116,7 @@ citation = "max_hr_sustained_peak_choice"
 
 ### Data Contracts & Integration
 - **Index**: `benchmarks.source_page` carries `document` (a series year file
-  for resting entries); `benchmark_periods` follows the amended selection.
+  for resting entries); `benchmark_periods` follows the unchanged selection.
   No column or table changes.
 
 ## Error Handling
@@ -1058,37 +1165,47 @@ built by `tests/hr_benchmarks/builders.py`; no maintainer value appears.
   `order` ranks after it; values never mixed across sources (a fixture
   where a mixed median differs).
 - `derive_timeline`: first entry immediate; agreeing evidence within step
-  never starts an entry (mutation: `<=` → `<`); takeover only after the
-  hand date; evidence on the hand date and inside the span ignored
-  (mutations: drop each exclusion); 13 vs 14 confirmation days; a gap day,
-  an agreeing day and a source change each end the run; entry dated on the
-  run's first day with that day's value (mutation: last day); note text for
-  takeover vs ordinary; `applies_from` always `None`.
-- `applicable` amendment: derived inside a hand span yields to the hand
-  entry; earliest-measured of two covering spans; hand-only and
-  derived-only timelines unchanged (property over generated timelines
-  compared with the old rule); a derived entry measured inside the span is
-  also overridden.
+  never starts an entry (mutation: `<=` → `<`); after a hand date, evidence
+  is compared with the hand value; evidence on the hand date ignored
+  (mutation: drop the exclusion; a derived entry would collide with the hand
+  key); evidence before a hand date with an `applies_from` is compared with
+  the back-reach value where no earlier entry covers the day, and with the
+  earlier derived entry once one exists (mutation: compare with the hand
+  value always); a takeover of a back-reach carries the back-reach note;
+  13 vs 14 confirmation days; a gap day, an agreeing day and a source change
+  each end the run; entry dated on the run's first day with that day's value
+  (mutation: last day); `applies_from` always `None`; a decision never
+  changes when evidence is appended after it (mutation: compute the value in
+  force over all entries, later ones included).
+- Selection unchanged: a derived `max_hr_bpm` measured before a hand entry
+  with an earlier `applies_from` wins on its own date and after, and the
+  hand entry fills only the days before it (mutation: let tier 2 beat a
+  derived tier-1 winner).
 - Provenance: `series` round trip, empty string rejected, serializer order,
   overlay keeps unknown source keys.
 - `with_derived_benchmarks(kinds=)`: other partition kept byte-equivalent;
   kind outside the partition rejected; group removal scoped.
 - `inspect`: takeover structural detection equals the walk's takeovers on
-  generated timelines; `current_takeovers` drops a takeover once a later
-  entry exists; inconsistency periods merge and end correctly; only
-  periods involving a derived value.
+  generated timelines, back-reach takeovers included; `current_takeovers`
+  drops a takeover once a later entry exists; `back_reach_cover` shrinks to
+  the days before the first derived entry and is empty when a derived entry
+  precedes the `applies_from`; inconsistency periods merge and end
+  correctly; only periods involving a derived value.
 - Heart-rate channel: both new dated inputs, and `impulse`/`reference`
   values pinned with distinct fixtures (swap mutation from the queue item).
 
 ### Integration Tests
 - Engine over a tmp data root: synthetic FIT files built with
   `tests/fixtures/builder.py` (`encode`, `small_sport_fit_bytes`) and a
-  synthetic series (wellness-store's `tests/wellness/builders.py`); report
-  counts per reason; second run writes nothing (mtime unchanged); `dry_run`
-  writes nothing and reports identically; an unreadable archive keeps the
-  max partition and fails; an unreadable series keeps the resting partition
-  and fails; a hand entry with a back-reach span over the corpus yields
-  only post-date entries and one takeover.
+  synthetic series written only through wellness-store's sanctioned
+  builder `tests/wellness/builders_series.py::write_series`; report counts
+  per reason; second run writes nothing (mtime unchanged); `dry_run` writes
+  nothing and reports identically; an unreadable archive keeps the max
+  partition and fails; an unreadable series keeps the resting partition and
+  fails; a hand entry whose back-reach covers the corpus yields derived
+  entries before its date (applying on their own dates), a back-reach
+  takeover, one back-reach change reported once, and no second report on a
+  rerun.
 - The tagged-effort stage and the heart-rate stage each leave the other's
   derived entries byte-equivalent across runs (both orders).
 - `check`: takeover listed while latest, gone after a later hand entry and
@@ -1123,10 +1240,13 @@ built by `tests/hr_benchmarks/builders.py`; no maintainer value appears.
   keyed by the page's listed archive hashes and the peak rules is a
   follow-up, not part of this spec.
 - Resting evidence is linear in days × sources × 28.
-- Expected entries on the maintainer's data: maximum heart rate 4 (one a
-  takeover of the hand-recorded maximum; 19 without that entry); resting
-  heart rate about 20 over the Garmin years, plus entries from the Apple and
-  intervals.icu years that could not be measured here.
+- Expected entries on the maintainer's data (recomputed under the
+  write-time rule): maximum heart rate 18 with the hand-recorded maximum on
+  file, 14 of them dated before its measurement date and 2 takeovers (the
+  first derived maximum, which takes over the hand entry's back-reach, and
+  one after its date); 19 without that entry. Resting heart rate about 20
+  over the Garmin years, plus entries from the Apple and intervals.icu years
+  that could not be measured here.
 
 ## Not recovery's baseline
 
@@ -1143,21 +1263,30 @@ compute a similar median; they stay separate on purpose, and
 ## Existing Spec Amendments
 Carried out by this spec's implementation; numbers are the next free at
 landing.
-- **athlete-benchmarks** (expected Amendment 3): Req 3.12 and the 3.10
-  qualifier (selection); Req 1.13, 2.13 and 2.14 extended with the optional
-  series reference; the Boundary Context names the heart-rate stage as a
-  second pass that hands the store ordinary dated entries.
+- **athlete-benchmarks** (expected Amendment 3): provenance only — Req
+  1.13, 2.13 and 2.14 extended with the optional series reference; the
+  Boundary Context names the heart-rate stage as a second pass that hands
+  the store ordinary dated entries and records that its hand-recorded-wins
+  rule governs what that pass writes, not which entry is selected. Req 3
+  and Amendment 1 are not amended.
 - **performance-benchmarks** (expected Amendment 3): Req 10.4 reworded to
   the tagged-effort stage; Req 1.3, 10.5 and 10.7 scoped to that stage;
   Req 6.3 scoped to its quantities; design § ProfileDerivedWrite gains the
-  `kinds` partition; `DeriveReport.accepted`.
+  `kinds` partition; `DeriveReport.accepted`; `derive_benchmarks` accepts the
+  already-read `[load]` settings.
 - **load-channels** (expected Amendment 1): Req 5.10 (new) — the
   heart-rate channel reports the measurement dates of the resting and
   maximum entries it used.
-- **threshold-load**: none; Req 11.6 holds.
+- **wiki-contract** (Amendment N): `CONTRACT_VERSION` main + 1 because the
+  published `derive-benchmarks` guarantee changes (what it reads, and "at
+  most once per run" becomes "at most once per stage"); history paragraph
+  "Raised from ``N`` to ``N+1`` by hr-derivation …", the "What changed at
+  this version" paragraph, regenerated declarations.
+- **threshold-load**, **training-load**: none; threshold-load Req 11.6
+  holds, and training-load Amendment 4's selection is untouched.
 - **wellness-store**: none.
-- **wiki-contract**, **analytics-index**, **analytics-derived**: none
-  (findings are additive; ownership narrative only; no schema change).
+- **analytics-index**, **analytics-derived**: none (findings are additive;
+  no schema change).
 
 ## Decisions Taken Without Asking
 Taken in auto-approve mode, consistent with the roadmap's "Decisions taken at
@@ -1175,7 +1304,12 @@ revisable at review.
    changing faster than 10 bpm/s dropped, cadence-locked sessions and spans
    excluded, every sport, 365-day window, median of the three highest,
    2 bpm step, no confirmation.
-5. The hand back-reach rule applies to every kind, in `BenchmarkSet.applicable`.
+5. Superseded by maintainer decision 3 (2026-10-12, second round):
+   selection is unchanged for every kind, and "evidence must disagree" is a
+   write-time rule of the walk. Taken without asking within that decision:
+   a takeover includes a derived entry that replaces a hand value applying
+   by its `applies_from`; the run reports a back-reach change once, in the
+   run that changes it.
 6. Evidence on a hand entry's own measurement date is not "dated after it"
    and is ignored.
 7. `check` lists a takeover while its derived entry is the latest entry of
@@ -1183,7 +1317,10 @@ revisable at review.
 8. Provenance keeps `document` (the series year file for resting entries)
    and adds an optional `series` key; no `ATHLETE_SCHEMA_VERSION` change.
 9. The derived write is partitioned by kind with a required `kinds`
-   argument; at most one write per stage; no `CONTRACT_VERSION` change.
+   argument; at most one write per stage. `CONTRACT_VERSION` is raised to
+   main + 1 (controller ruling R2, reversing this spec's first draft): the
+   ownership contract's `derive-benchmarks` text is a stated guarantee
+   (`contract.py:331-335`, `docs/ownership-contract.md:820-826`).
 10. A missing or undecodable archive is a reported skip; an unreadable
     archive or series is a failure that keeps that kind's entries unchanged.
 11. No per-session peak cache; progress on a terminal instead.
@@ -1201,3 +1338,5 @@ revisable at review.
 19. No index schema change; `source_page` shows the series file for resting
     entries.
 20. Derived heart-rate entries never carry `applies_from`.
+21. `[load]` is read once per `derive-benchmarks` run, by the heart-rate
+    preflight, and handed to the tagged-effort stage (controller ruling R3).

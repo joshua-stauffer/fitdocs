@@ -10,11 +10,13 @@
 - **Key Findings**:
   - Benchmark selection is date-only (`benchmarks.py:189-243`). A hand entry's
     back-reach (`applies_from`) only fills dates no earlier-measured entry
-    covers, so any derived entry dated before it would shadow it. The
+    covers, so derived entries dated before it apply on their own dates. The
     maintainer's own profile has exactly this shape: one hand-recorded
-    `max_hr_bpm` entry whose back-reach covers the whole workout corpus.
-    "Hand always wins" therefore needs a selection amendment, not only an
-    emission rule.
+    `max_hr_bpm` entry whose back-reach covers the whole workout corpus. The
+    first draft proposed a selection amendment; the maintainer chose
+    (2026-10-12, second round) to keep selection unchanged for every kind and
+    to make "evidence must disagree" a write-time rule, accepting that
+    historic heart-rate load before the hand date moves to derived values.
   - The derived write replaces every derived entry
     (`load/profile.py:342-445`), and the tagged-effort stage's change test
     compares against every derived entry (`performance/engine.py:438-446`).
@@ -25,8 +27,9 @@
     14-day confirmation gives 20 resting-HR entries over Garmin's 937 daily
     values; a 30-second sustained peak, a 365-day window, the median of the
     three highest sessions and a 2 bpm step give 19 maximum-HR entries over
-    the whole 2017-2026 corpus, and 4 (one takeover) under the maintainer's
-    hand-recorded maximum. Parsing and composing every workout costs about
+    the whole 2017-2026 corpus, and 18 (two takeovers, 14 dated before the
+    hand entry's measurement date) with the maintainer's hand-recorded
+    maximum under the write-time rule. Parsing and composing every workout costs about
     84 ms per document (216 s for 2,564 documents).
 
 ## Research Log
@@ -58,12 +61,13 @@
     derived; `run.threshold_pace_s_per_km` 13 derived + 1 hand;
     `run.ftp_watts` 1 and `ride.ftp_watts` 2 hand entries, none with
     `applies_from`.
-- **Implications**: without an amendment, derived maxima dated 2017-2025
-  would replace the athlete's declared value on every date of its span —
-  the silent historic change the maintainer rejected. The amendment
-  (a derived entry never applies inside a hand back-reach span) changes
-  nothing for the maintainer's current entries: no derived entry today lies
-  where a hand span would shadow it.
+- **Implications**: with selection unchanged, derived maxima dated
+  2017-2025 replace the athlete's declared back-reach value on their own
+  dates. The maintainer accepted this (decision 3, 2026-10-12): the run
+  reports the change of back-reach once, and the release notes state it.
+  The first draft's alternative (a derived entry never applies inside a hand
+  back-reach) contradicted training-load Amendment 4 and athlete-benchmarks
+  Amendment 1 and was withdrawn.
 
 ### The derived-write seam
 - **Sources consulted**: `src/fitdocs/load/profile.py:319-445`,
@@ -131,8 +135,9 @@
     by modality (30 s) run 1,558, strength 286, bike 273, other 252, swim 2.
   - A session's single-sample maximum exceeds its 30-second sustained peak
     by 2.54 bpm on average and by more than 10 bpm in 2.5 % of sessions.
-  - Entry counts (no hand entry / with the maintainer's hand entry, and
-    takeovers), 365-day window, median of the three highest:
+  - Entry counts under the first draft's span rule (no hand entry / with
+    the maintainer's hand entry), 365-day window, median of the three
+    highest:
 
     | Peak window | Step 1 | Step 2 | Step 3 |
     |---|---|---|---|
@@ -140,9 +145,15 @@
     | 30 s | 30 / 11 | 19 / 4 | 12 / 4 |
     | 60 s | 28 / 10 | 16 / 7 | 16 / 4 |
 
-    Every variant produces exactly one takeover of the hand entry. A 730-day
-    window gave 18 / 5 at 30 s, step 2; the single highest session instead
-    of the median of three gave 13 / 4.
+    A 730-day window gave 18 / 5 at 30 s, step 2; the single highest session
+    instead of the median of three gave 13 / 4.
+  - Recomputed under the write-time rule with selection unchanged (the rule
+    adopted), median of three, 365-day window: 15 s step 2 → 18 entries, 2
+    takeovers, 13 before the hand date; 30 s step 1/2/3 → 30/18/13 entries,
+    2 takeovers each, 19/14/9 before the hand date; 60 s step 2 → 19
+    entries, 2 takeovers, 12 before the hand date. One takeover is the first
+    derived maximum replacing the hand entry's back-reach value; the other
+    falls after the hand entry's measurement date.
   - On 12 evidence days the median-of-three maximum fell below the run
     threshold heart rate in force (no hand entry considered).
   - Runtime: 305 s total, of which parse and compose 216 s (84 ms per
@@ -194,25 +205,27 @@
 
 ## Design Decisions
 
-### Decision: the hand back-reach beats a derived entry in selection
-- **Context**: Requirements 5.4-5.6; maintainer decision 2026-10-12.
+### Decision: selection unchanged; "evidence must disagree" is a write rule
+- **Context**: Requirements 5.2-5.7; maintainer decisions 2026-10-12 (first
+  and second round).
 - **Alternatives Considered**:
-  1. Keep selection date-only; a back-reach fills only uncovered dates —
-     derived history before the span would override the athlete's
-     declaration on the whole span.
-  2. Inside a back-reach span, resolve among hand entries only — would
-     resurrect a hand value an earlier takeover superseded.
+  1. Keep selection date-only and put the rule in what the pass writes.
+  2. Inside a back-reach, resolve among hand entries only — would resurrect
+     a hand value an earlier takeover superseded.
   3. Where date-only selection picks a derived entry inside a hand span,
-     pick the hand entry whose span covers the date.
-- **Selected Approach**: 3, for every kind (not only heart rate).
-- **Rationale**: it is the smallest rule under which "a hand-recorded value
-  always wins" holds; it changes selection only where a derived entry lies
-  under a hand span, so every hand-only history and every derived-only
-  history selects exactly as before; it matches performance-benchmarks
-  Requirement 6's objective (a derived value never shadows a recorded one).
-- **Trade-offs**: a plugin-visible selection change (`ProfileView.benchmark`),
-  recorded in the release notes; no effect on the maintainer's current
-  entries.
+     pick the hand entry (the first draft's choice, for every kind).
+- **Selected Approach**: 1, by maintainer decision (second round). Option 3
+  contradicted training-load Amendment 4 ("which no earlier-measured entry
+  covers"), athlete-benchmarks Amendment 1 (an entry measured on or before
+  the activity always wins over a retroactive one) and 1.13 (provenance
+  never changes selection).
+- **Rationale**: one selection rule for every kind; the walk compares each
+  evidence day with the value in force by that same rule, so agreeing
+  evidence never replaces a hand value and a takeover happens only where
+  the evidence disagrees.
+- **Trade-offs**: historic load before a hand entry's date moves to derived
+  values where evidence exists (accepted); the run reports the narrowed
+  back-reach once and the release notes say it.
 
 ### Decision: provenance keeps `document` and adds a `series` reference
 - **Context**: Requirement 7; a series-derived value has no page.
@@ -238,8 +251,16 @@
 - **Selected Approach**: one write per stage, each atomic and only on change.
   performance-benchmarks 1.7 already speaks of its own stage; the ownership
   contract's "at most once per run" sentence becomes "at most once per
-  stage". No guarantee about ownership, overwrite or keys changes, so
-  `CONTRACT_VERSION` is not raised.
+  stage". That sentence and the description of what `derive-benchmarks`
+  reads are a versioned guarantee (`docs/ownership-contract.md:820-826`,
+  published under a bump; `contract.py:331-335`), so `CONTRACT_VERSION` is
+  raised to main + 1 (controller ruling R2, reversing the first draft).
+
+### Decision: `[load]` read once per run
+- training-load 14.1 and `tests/load/test_settings.py:2478-2483` hold
+  `derive-benchmarks` to exactly one `[load]` read. The heart-rate preflight
+  reads it and hands the `LoadSettings` to the tagged-effort stage, which no
+  longer reads it when given (controller ruling R3).
 
 ### Decision: evidence source per day = first source with a formed baseline
 - **Context**: Requirement 2.4; maintainer decision "precedence picks".
