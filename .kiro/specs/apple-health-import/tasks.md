@@ -38,7 +38,8 @@
   `FORMATS`, the rank table and module list of
   `tests/wellness/test_boundary.py`, every pin of `candidate_suffixes()` /
   `default_source_order()`, `docs/wellness.md` sections, `docs/inbox.md`,
-  and `CHANGELOG.md` Unreleased.
+  `docs/configuration.md`, `src/fitdocs/skills/fitdocs-workouts/SKILL.md`,
+  `tests/test_agent_skill.py`, and `CHANGELOG.md` Unreleased.
 
 **Hard rules for every task**
 
@@ -500,10 +501,13 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - Grep `docs/`, `src/fitdocs/skills/` and `src/fitdocs/` docstrings for
     text naming `.json` as the only wellness suffix or `garmin-export,
     intervals-icu` as the whole default order, and update each (candidates:
-    `docs/configuration.md` `[wellness]`, the `unrecognized` row of
-    `src/fitdocs/skills/fitdocs-workouts/SKILL.md`, the
-    `DEFAULT_IGNORE_PATTERNS` docstring in `src/fitdocs/inbox.py`); record
-    the grep and its hits in Implementation Notes.
+    `docs/configuration.md` `[wellness]`, the Meaning cell of the
+    `unrecognized` row of `src/fitdocs/skills/fitdocs-workouts/SKILL.md`,
+    the `DEFAULT_IGNORE_PATTERNS` docstring in `src/fitdocs/inbox.py`);
+    record the grep and its hits in Implementation Notes. In the skill, edit
+    the Meaning cell only: the row's Do cell is pinned row-scoped by
+    `wellness-store` 5.2 in `tests/test_agent_skill.py` and is never
+    touched, and the set of packaged skills does not change.
   - The day rules in the Apple section refer to the page's one statement of
     the day-boundary rule and never restate it.
   - **Tests** (`test_docs_apple.py`): the doc's type table equals `POLICIES`

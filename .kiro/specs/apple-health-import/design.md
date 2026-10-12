@@ -247,8 +247,10 @@ tests/wellness/apple/
   the long import; `CHANGELOG.md` — Unreleased entries; any other text that
   names `.json` as the only wellness suffix or `garmin-export, intervals-icu`
   as the default order (candidates: `docs/configuration.md` `[wellness]`,
-  the `unrecognized` row of `src/fitdocs/skills/fitdocs-workouts/SKILL.md`,
-  the `DEFAULT_IGNORE_PATTERNS` docstring in `src/fitdocs/inbox.py`).
+  the Meaning cell only of the `unrecognized` row of
+  `src/fitdocs/skills/fitdocs-workouts/SKILL.md` (its Do cell is pinned
+  row-scoped by `wellness-store` 5.2 and never touched), the
+  `DEFAULT_IGNORE_PATTERNS` docstring in `src/fitdocs/inbox.py`).
 
 ## System Flows
 
@@ -1142,8 +1144,12 @@ at discovery" and the brief; each is revisable at review.
     the header line alone, and `wellness-store`'s rebuild parses only the
     winner. The controller folded the rebuild half into `wellness-store`.
 19. No owned location, page or key: `CONTRACT_VERSION`, `DOC_VERSION` and
-    `SCHEMA_VERSION` unchanged; no packaged-skill change (the drain's report
-    channels are unchanged).
+    `SCHEMA_VERSION` unchanged. The set of packaged skills is unchanged and
+    the drain's report channels are unchanged; the only skill edit allowed is
+    a wording update to the Meaning cell of the `unrecognized` row of
+    `src/fitdocs/skills/fitdocs-workouts/SKILL.md` (where it names `.json`
+    as the only wellness suffix). Its Do cell is never touched, because
+    `wellness-store` 5.2 pins it row-scoped in `tests/test_agent_skill.py`.
 
 ## Settled Seams for Downstream Specs
 - **Source** `apple-health` (kind HUB, default rank between `garmin-export`
