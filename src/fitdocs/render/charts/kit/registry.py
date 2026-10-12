@@ -10,9 +10,28 @@ from __future__ import annotations
 
 from typing import Final, TypedDict
 
+from fitdocs.render.charts.kit.kinds import (
+    area,
+    bar,
+    hbar,
+    histogram,
+    line,
+    scatter,
+    stat,
+    table,
+)
 from fitdocs.render.charts.kit.schema import KindSpec
 
-KINDS: Final[tuple[KindSpec, ...]] = ()
+KINDS: Final[tuple[KindSpec, ...]] = (
+    line.KIND,
+    area.KIND,
+    bar.KIND,
+    hbar.KIND,
+    scatter.KIND,
+    histogram.KIND,
+    stat.KIND,
+    table.KIND,
+)
 
 CORE_KIND_NAMES: Final = (
     "line",

@@ -893,7 +893,7 @@ every registered kind and find its cases by the test-module convention
 
 - [ ] 6. Integration and cross-cutting validation
 
-- [ ] 6.1 Register the core kinds and pin the registry
+- [x] 6.1 Register the core kinds and pin the registry
   - **`kit/registry.py`**: `KINDS` becomes the eight core kinds in the
     design's order; nothing else changes.
   - **Tests** (`test_registry.py`):
