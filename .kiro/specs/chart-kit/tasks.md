@@ -747,7 +747,7 @@ every registered kind and find its cases by the test-module convention
   - _Boundary: bar kind_
   - _Depends: 3.1, 3.3, 3.4, 4.2_
 
-- [ ] 5.4 (P) Implement the hbar kind with its goldens
+- [x] 5.4 (P) Implement the hbar kind with its goldens
   - **`kit/kinds/hbar.py`**: `KIND` per the kind table (`sort` value|rows,
     bound 50, auto height) and rules (16 px bars on 26 px rows; value
     descending, ties in row order, absent values last, absent y rows after
