@@ -645,7 +645,7 @@ sequential, never two `(P)` tasks at once.
   - _Boundary: small-multiples kind_
   - _Depends: 1.1, 1.3_
 
-- [ ] 2.8 (P) Implement the stacked-100 kind with its goldens
+- [x] 2.8 (P) Implement the stacked-100 kind with its goldens
   - **`kinds/stacked_100.py`**: `KIND` per design § Stacked100 (channels
     `x`, `y`, `color`; bound 400 rows, 8 series; `_check`: bound, series,
     duplicate (x, colour), `stack_problems(complete=False)`; shares of each
@@ -887,3 +887,4 @@ sequential, never two `(P)` tasks at once.
 - Controller ruling (item 3): the dual-axis title overlap 1.1 recorded was fixed upstream on main at 431a5a7 — `frame.axis(..., title_room: float | None = None)` caps the title's fitted width. Task 2.3 passes `title_room=(plot.right - plot.left - PAD) / 2` on BOTH the left and right axes (design § DualAxis amended); its tests must show two long titles do not overlap at width 720 and at 320. Item 3 is now met under that call.
 - Controller rulings (group 2, parallel kinds): (a) `test_size_budget.py::test_every_at_bound_golden_is_under_the_ceiling` is red from the first catalog `at_bound` golden until 3.1 registers the kinds (it compares the glob with registered KINDS) — expected, not worked around. (b) Undrawn counts follow design § Kinds "Undrawn counting" (per value channel; a row absent on two value channels counts under both), not `cartesian.undrawn`'s first-absent rule. (c) Stage-1 tests of unregistered kinds call `validate.validate_request(request, columns, KIND, registry.kind_names())`; 3.1 adds `api.validate_chart` pins for dual-axis `shared_unit` and mean-max's no-rows case once registered.
 - 2.3 (dual-axis, reviewer-ratified): when one series has no present value the other still draws; that side gets a tickless axis (a directly built `NumericScale(ticks=())`) keeping its title and legend entry, its rows count under its channel, and the description gives no range for it. A row with an x but neither value breaks both lines (series points come from every row with an x). Same-unitless-column `shared_unit` message uses `display_label`.
+- 2.8 (stacked-100, reviewer-ratified): a zero part in a bar with shares draws nothing (height 0); the internal-boundary inset is `min(0.5, rise/4)` per side, so the gap is under 1 px only beside a segment whose share is under 2 px (design's literal 0.5 px would flip a sub-pixel share); the description names the bound y column as `axis_title(y, hours=<A1 rule over present parts>)` (controller ruling, Req 2.10) while the y range is named `share (%)`; undrawn is always empty (absent y refused, absent x/colour drawn as `—`). 3.3: a 52×5 chart measured 22,819 bytes vs the design's 22,000 budget.
