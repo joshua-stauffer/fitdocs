@@ -980,7 +980,7 @@ every registered kind and find its cases by the test-module convention
   - **Observable:** both test modules are green and each mutation reds them.
   - _Requirements: 8.5, 8.6, 10.1, 10.2, 11.4, 11.5, 16.3_
 
-- [ ] 6.4 Prove byte determinism across processes
+- [x] 6.4 Prove byte determinism across processes
   - **`test_determinism.py`**: render every case of every registered kind
     (test modules found by the naming convention; the test asserts it saw
     `len(KINDS)` modules) twice in-process and assert equality; then run two
@@ -1125,3 +1125,4 @@ every registered kind and find its cases by the test-module convention
 - 6.2 record: every mutated module (`frame.py`, `layout.py`, `scales.py`, `cartesian.py`, `kinds/area.py`) was restored from a cp and `cmp`-verified identical; baseline and final `uv run pytest tests/render/charts/kit -q -p no:randomly` is 1202 passed.
 - 6.3 measured sizes (bytes of `text.encode()`, fixtures in `test_size_budget.py`; design budget -> test budget): line 3x365 with one 10-day gap 17,961 (24,000 kept; 33.6% headroom); area stacked 3x52 10,123 (14,000 kept; 38.3%); bar 52 dated 7,539 (12,000 -> 9,424, measured+25%); bar stacked 52x3 15,799 (22,000 kept; 39.2%); scatter 500 points in 3 series with trend 15,617 (18,000 kept; 15.3%); histogram of 1,000 values 4,619 (8,000 -> 5,774); no-data state 591 worst of the six SVG kinds' `empty` goldens' fixtures (3,000 -> 739); table 20x5 1,112 (3,000 -> 1,390); stat 49 (200 -> 62). Headroom is read as budget/measured - 1. **hbar 20 bars measured 9,310 to 10,689 (design 8,000): EXCEEDS; budget 13,400 per the controller ruling below.** At-bound goldens: largest is scatter 42,902 (ceiling 80,000). The SVG golden count is 52 (derived), not the 51 the task text says.
 - 6.3 (controller ruling): hbar 20-bar budget raised from the design's initial 8,000 to 13,400 (measured 9,310–10,689; dominated by per-row y tick + label elements) — design § Testing Strategy to be amended.
+- 6.4: the task-listed "iterate request.options order when building the frame" has no anchor — options are only read by name; the bind_request option loop is equivalent for render bytes (dict order pinned in test_validate.py). The determinism test pins option-order independence via the reversed-mapping case (a real dependence, e.g. joining request.options into output, reds it).
