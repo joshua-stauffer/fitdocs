@@ -113,7 +113,7 @@ Terms used below:
 
 #### Acceptance Criteria
 1. Where an instance's connector declares the pull-wellness capability, the fitdocs CLI shall accept an optional `wellness` key in the instance's table, true or false, defaulting to false.
-2. While wellness is not enabled for an instance, `fitdocs pull` shall make no wellness request for that instance, print no wellness report for it, and write its ledger exactly as it did before this feature.
+2. While wellness is not enabled for an instance, `fitdocs pull` shall make no wellness request for that instance, print no wellness report for it, and change no wellness record in its ledger except as Requirement 6 resolves the instance's pending wellness deliveries.
 3. If an instance's `wellness` key is not a boolean, or is true while the instance's connector does not declare the pull-wellness capability, the fitdocs CLI shall stop with a configuration error naming the settings file, the instance and the key, before any network request and before any write.
 4. The fitdocs CLI shall treat `wellness` as one of the framework's own instance keys, as it treats `lookback_days`, and shall not hand it to the connector's own settings validation.
 5. The folder connector shall not declare the pull-wellness capability, and shall continue to list only `.fit` files.
@@ -144,7 +144,7 @@ Terms used below:
 4. If a package fails the check for its declared extension (a `.json` package that is not one well-formed JSON document, or is larger than the largest wellness file the drain recognizes; a package declaring an extension fitdocs has no wellness check for, `.fit` among them, or a format name that is not a lowercase slug), the fitdocs CLI shall deliver nothing for its days, report a failure naming their date span, and leave them unrecorded.
 5. The fitdocs CLI shall keep the FIT check on fetched activity files exactly as it is, so that an activity file without a FIT header is still skipped and never delivered.
 6. When a package's bytes are identical to an entry the wellness archive holds for its declared format, or to a still-pending wellness delivery of the same instance, the fitdocs CLI shall record its days as held and deliver no second copy.
-7. If packaging or delivering one year's days fails for a reason other than authentication, the fitdocs CLI shall report a failure naming that year's date span, leave its days unrecorded, and continue with the remaining years.
+7. If one year's days cannot be packaged or delivered, and the failure is not one that ends the wellness pull (Requirement 9), the fitdocs CLI shall report a failure naming that year's date span, leave its days unrecorded, and continue with the remaining years.
 
 ### Requirement 5: The Ledger's Wellness Records
 **Objective:** As an athlete, I want the instance's ledger to remember which wellness days it delivered and at which revision, so that unchanged days are never fetched again and a lost delivery is caught up.
@@ -200,7 +200,7 @@ Terms used below:
 1. If intervals.icu answers a wellness request as unauthorized, the fitdocs CLI shall end the instance's pull, report a rejected key with the step to reconnect, and not repeat the request.
 2. If intervals.icu answers a wellness request as forbidden, the fitdocs CLI shall end the instance's wellness pull, quote the service's message with every secret removed, and name the next steps: that intervals.icu may be withholding data it received from Garmin, that setting `wellness = false` stops the request, and that Garmin's own data export is the route for Garmin wellness.
 3. If a wellness request is still rate-limited, or still meets a server error, after the transport's bounded retries, the fitdocs CLI shall end the instance's wellness pull, stating which, and that the next pull resumes where this one stopped.
-4. If a wellness listing request is answered with any other status that is not success, the fitdocs CLI shall end the instance's wellness pull, naming the status.
+4. If a wellness listing request or an athlete-settings request is answered with any other status that is not success, the fitdocs CLI shall end the instance's wellness pull, naming the status.
 5. If an instance's wellness pull ends early, the fitdocs CLI shall keep every wellness delivery already made and recorded, leave the wellness mark where it was, and continue with the remaining instances.
 6. If an instance's activity pull ends for a reason other than an authentication failure, the fitdocs CLI shall still run that instance's wellness pull; if it ends with an authentication failure, the fitdocs CLI shall not.
 7. The fitdocs CLI shall not deliver a wellness day again because the drain could not use the delivery that carried it; that delivery stays pending in the inbox, and the drain's report names it.
