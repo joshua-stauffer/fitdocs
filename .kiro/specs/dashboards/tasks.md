@@ -581,7 +581,7 @@ sequential, never two `(P)` tasks at once.
   - _Boundary: Region_
   - _Depends: 3.1_
 
-- [ ] 4.2 (P) Read and write dashboard files safely
+- [x] 4.2 (P) Read and write dashboard files safely
   - **`src/fitdocs/dashboards/storage.py`** per design § Storage:
     `ASSET_MARK`, `asset_rel_path`, `PageFile`, `Refusal`,
     `dashboards_root`, `location_refusal`, `list_markdown`, `read_page`,
@@ -1412,3 +1412,30 @@ sequential, never two `(P)` tasks at once.
   `source_opener` memoises its first result incl. `SourceUnavailable`.
   `__all__` re-exports `DEFAULT_TIMEOUT_S` (monkeypatched by tests).
   duckdb 1.2.0: test_binding 133 passed.
+- **4.2 (2 review rounds, test-side only):** `list_markdown` returns page
+  stems for every direct `*.md` entry (incl. misnamed, directories, links)
+  and skips `AGENTS.md` by exact name; `()` for a missing/linked/non-dir
+  `dashboards/` — 5.1 adds `page_name` for stems failing `PAGE_NAME_RE` and
+  `has_dashboards` must still use `location_refusal` for a linked
+  `dashboards/`. `read_page` refusals: link → `SYMLINK`, dir/fifo →
+  `NOT_REGULAR`, missing/OSError → `UNREADABLE`, non-UTF-8 → `NOT_UTF8`
+  (BOM stays in `text`); engine maps the first three to `page_unreadable`,
+  the last to `page_encoding`. Non-slug page/chart raise `ValueError`;
+  `read_snapshot` returns None for any rel path that is not exactly
+  `assets/<slug>/<SNAPSHOT_NAME_RE>`. `write_asset`/`create_snapshot` raise
+  `FileNotFoundError` when `dashboards/` is absent (never created);
+  `replace_page` raises `FileNotFoundError` on a vanished page (5.2 reports
+  `write_failed`) and `OSError` on a link/dir — 5.3 catches `OSError` from
+  `replace_page`, `write_asset`, `create_snapshot`. `latest_snapshot` skips
+  non-regular entries; `create_snapshot` counts every occupant for `1+max`,
+  retries on `FileExistsError`, and may call `encode_for` more than once.
+  `remove_stale_images` returns None (skipped) on a linked/non-dir location
+  or any unreadable/non-UTF-8 markdown, `()` when nothing exists; scans
+  every regular `.md` under `dashboards/` except top-level `assets/`,
+  never follows links, removes only marked (UTF-8, `is_generated`)
+  unreferenced `.svg` and directories it emptied. Old-format marked assets
+  are rewritten (`written`). No fsync (repo convention). `test_storage.py`
+  has a module-local autouse 10 s SIGALRM guard raising `StorageHung`
+  (`BaseException`, so storage's OSError catches cannot absorb it).
+  Case-insensitive macOS folds case-only decoys; pair case rejections with
+  real paths (`.`, `..`, `Bad_Dir`).
