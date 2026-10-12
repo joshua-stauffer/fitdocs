@@ -2961,6 +2961,9 @@ Rejected:
   - wellness is real only from 2018-11 to 2023-02;
   - `UDSFile` daily summaries give resting HR on 937 days, min/max HR,
     stress, body battery (2022), respiration, SpO2 and steps;
+    - the daily value is `currentDayRestingHeartRate`;
+    - `restingHeartRate` is a trailing 7-day mean (measured at spec time,
+      2026-10-13; wellness-store `research.md`);
   - `sleepData` has 1,065 nights, 604 with stages;
   - `MetricsMaxMetData` gives VO2max, and `userBioMetrics` 23 weights;
   - there is no HRV JSON. Garmin keeps HRV in FIT files inside the upload
