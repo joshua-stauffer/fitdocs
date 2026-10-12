@@ -118,7 +118,9 @@ Each file below has more than one writer; its writers are sequential.
 `CORPUS_PRODUCERS`, `WRITING_ENTRY_POINTS`, `UNITS` and its test table,
 `[project.urls]`, `[tool.mypy].files`, `CHANGELOG.md` Unreleased,
 `docs/index.md` rows, `.kiro/steering/structure.md`, the `fitdocs-workouts`
-skill's channel table and `tests/test_agent_skill.py`'s channel literal, and
+skill's channel table and `tests/test_agent_skill.py`'s channel literal,
+`_REQUIRED_ENTRY_POINT_LINKS` in `tests/test_docs_guarantees.py` (5.1 appends
+`wellness.md`), `audit.FindingKind` (4.3 appends four members), and
 the drain-pass block of `cli.py` (`_run_drain_passes`: dashboards' design
 adds its index-pass/dashboard-pass calls there; 4.5 adds the `[wellness]`
 preflight and keeps every call dashboards placed).
@@ -348,10 +350,23 @@ preflight and keeps every call dashboards placed).
     `wellness/` is not a prefix of `wellness-archive/`); the hard-coded
     contract-version literals in `tests/index/test_contract_docs.py` and
     `tests/index/derived/test_preserved.py`; the head-paragraph phrases in
-    `tests/identity/test_contract_docs.py`; the AGENTS.md sets in the history
-    and plan negative halves of `tests/test_confinement.py` and in
-    `tests/test_declaration_refresh.py`. Pins a grep cannot find surface in
-    the full suite; fix them in this task.
+    `tests/identity/test_contract_docs.py` **and every peer head-paragraph
+    pin on main** — find them by grepping `tests/` for the phrases of the
+    outgoing "What changed at this version" paragraph (dashboards' or any
+    later lander's) and move each to wellness-store's paragraph (the peer's
+    own statement stays pinned by its literal history-paragraph pin); the
+    AGENTS.md sets in the history and plan negative halves of
+    `tests/test_confinement.py` and in `tests/test_declaration_refresh.py`.
+    Pins a grep cannot find surface in the full suite; fix them in this task.
+  - **Contract history pin** (append-only into
+    `test_the_version_history_records_the_amendment` in
+    `tests/identity/test_contract_docs.py`): assert the literal sentence
+    "Raised from ``N`` to ``N+1`` by wellness-store" with N and N+1 written
+    as **literals** (main's value and main + 1 at this task), plus one
+    phrase of the paragraph's body ("``wellness-archive/`` keeps every
+    wellness file fitdocs handled"). Never compute the pin from the live
+    `CONTRACT_VERSION` (a relative pin moves with the next bump and stops
+    pinning this one); 6.2 rewrites the literals if main moved.
   - **Tests**: the two new goldens; a `tests/test_declaration.py` case that
     the archive text says fitdocs never modifies the files and the series
     text says edits are overwritten; `wellness_archive_path` and
@@ -359,7 +374,8 @@ preflight and keeps every call dashboards placed).
     filesystem.
   - **Mutations:** drop `"wellness-archive/"` from `OWNED_PATHS`; select
     `_IMMUTABILITY` (the FIT archive's fragment) for `wellness-archive/`;
-    leave `CONTRACT_VERSION` at main's value.
+    leave `CONTRACT_VERSION` at main's value; replace "by wellness-store" in
+    the history paragraph (the literal history pin reds).
   - **Observable:** full `uv run pytest` green; a sync in a scratch data
     root (an existing harness) creates both AGENTS.md files equal to their
     goldens; wiki-contract amendment recorded.
@@ -402,11 +418,18 @@ preflight and keeps every call dashboards placed).
     `DELIVERY_FORMAT`, `DELIVERY_VERSION`, `FIELD_METRICS`, recognizer,
     parser (17 mapped fields, `updated` normalization, envelope origins,
     strict type errors as `WellnessFormatError`). Not yet registered (3.1).
-  - **Builders** (`tests/wellness/builders_intervals.py`): records carrying
-    the fields research.md names (the 17 mapped fields, `id`, `updated` and
-    the computed fields) plus invented unmapped keys, with synthetic values;
-    the bare list; the envelope serialized by the canonical `json.dumps` of
-    design § Seams 2.
+  - **Builders** (`tests/wellness/builders_intervals.py`, a published test
+    seam, design § Seams 6; its entry points keep these names and
+    signatures): `intervals_record(day, *, updated=..., **fields) ->
+    dict[str, object]` (one API-shaped day record: `id`, `updated`, then the
+    given intervals.icu field names verbatim — the 17 mapped fields, the
+    computed fields or invented unmapped keys, with synthetic values);
+    `intervals_list_bytes(records) -> bytes` (the bare API list);
+    `intervals_delivery_bytes(records, *, origins=None) -> bytes` (the
+    fitdocs delivery envelope, records sorted by `id`, serialized by the
+    canonical `json.dumps` of design § Seams 2). A positive control: the
+    envelope bytes are recognized by `FORMAT` and parse to the given
+    values.
   - **Tests**: recognition of the list and of the envelope; a list of
     objects without date `id` and a Garmin-shaped list not claimed; envelope
     with version 2 not claimed; each of the 17 fields lands on its metric
@@ -428,11 +451,21 @@ preflight and keeps every call dashboards placed).
   - `formats/garmin.py` per design § GarminFormats: `SOURCE` and the four
     `FormatSpec`s with recognizers (content signature, name pattern for an
     empty list) and parsers. Not yet registered (3.1).
-  - **Builders** (`tests/wellness/builders_garmin.py`): UDS, sleep, MaxMet
-    and bio files from the measured key sets (research.md) with invented
-    values and invented, non-personal names (`UDSFile_2000-01-01_2000-04-10.json`,
-    `2000-01-01_2000-04-10_1_sleepData.json`, …); a `HydrationLogFile`-shaped
-    decoy.
+  - **Builders** (`tests/wellness/builders_garmin.py`, a published test
+    seam, design § Seams 6; its entry points keep these names and
+    signatures), from the measured key sets (research.md) with invented
+    values: `garmin_uds_record(day, **fields)`, `garmin_sleep_record(day, *,
+    deep_s=None, light_s=None, rem_s=None, awake_s=None, respiration=None)`,
+    `garmin_maxmet_record(day, *, sport, vo2max, updated)`,
+    `garmin_biometrics_record(day, *, weight_g, measured_at)` (each returns
+    one record dict); `garmin_file_bytes(records) -> bytes` (a Garmin JSON
+    list of any kind); `garmin_file_name(kind, first, last) -> str` for
+    `kind` in `"uds"`, `"sleep"`, `"maxmet"`, `"biometrics"` (invented,
+    non-personal names such as `UDSFile_2000-01-01_2000-04-10.json` and
+    `2000-01-01_2000-04-10_1_sleepData.json` that match each kind's pattern);
+    `hydration_decoy_bytes() -> bytes`. A positive control: a sleep file
+    built from these functions is recognized by `SLEEP_FORMAT` and parses to
+    the given stage values with origin `garmin`.
   - **Tests**: each kind recognized by content and, empty, by name; an empty
     list with an unrelated name not claimed; the decoy not claimed;
     `currentDayRestingHeartRate` used and `restingHeartRate` ignored with
@@ -498,7 +531,6 @@ preflight and keeps every call dashboards placed).
     listing a missing file → `SeriesReadError`, ignoring an unlisted year
     file; `canonical`/`value`/`by_source`/`sources`/`for_day`/
     `canonical_series` on a fixture with two sources and a canonical switch;
-    `day_digest` stable across reads and different when one value changes;
     builder positive control: `write_series` over values spanning two years,
     two sources and a canonical switch, given in shuffled order, then
     `read_series(data_root).values` equals the sorted input exactly, and the
@@ -507,8 +539,7 @@ preflight and keeps every call dashboards placed).
     or two canonical values each raise `ValueError` and write nothing.
   - **Mutations:** emit `\r\n`; sort by enum order; `format_value` always
     `repr`; `read_series` reads every `*.csv` instead of the listed files;
-    `day_digest` hashing only values; drop the builder's canonical check (the
-    two-canonical refusal reds).
+    drop the builder's canonical check (the two-canonical refusal reds).
   - **Observable:** `uv run pytest tests/wellness/test_series.py` green.
   - _Requirements: 6.1, 11.2, 11.3, 11.4, 11.8_
   - _Boundary: Series_
@@ -640,8 +671,11 @@ preflight and keeps every call dashboards placed).
     or with a newer `series_version`, every series byte untouched;
     `DEFERRED` for a `chmod 000` entry and for an unreadable year file;
     `FAILED` for an entry made invalid after archiving; zero entries → no
-    year files and no manifest; an emptied year removed; report counts and
-    `days` for added, changed, removed and canonical-only changes.
+    year files and no manifest; an emptied year removed; report counts
+    (`values_added`, `values_changed`, `values_removed`,
+    `canonical_days_changed`) for added, changed, removed and canonical-only
+    changes, with a canonical-only change (precedence edited, no value
+    changed) moving `canonical_days_changed` and no value count.
     **LATEST_ENTRY**: three entries of the test-only EXTRACT format whose
     order and ref disagree; the series holds only the greatest-order entry's
     values, the manifest records it `contributed` and the other two
@@ -650,7 +684,8 @@ preflight and keeps every call dashboards placed).
     `FAILED` naming it; a `chmod 000` entry of that format → `DEFERRED`.
   - **Mutations:** write the manifest first; skip the occupancy check for
     the manifest; leave `rules_version` out of the digest; rewrite unchanged
-    files; drop `days` for canonical-only changes; parse every
+    files; drop canonical-only changes from `canonical_days_changed` (the
+    canonical-only case reds); parse every
     `LATEST_ENTRY` entry (the corrupt superseded body makes the rebuild
     `FAILED` and the `REBUILT` assertion reds); pick the winner by ref only
     (the contributed-entry assertion reds).
@@ -850,7 +885,12 @@ preflight and keeps every call dashboards placed).
     per-source definitions (Garmin resting HR as the day's lowest 30-minute
     average, Apple's sedentary estimate, intervals.icu passing on its
     upstream's definition), the one statement of the day-boundary rule, the
-    delivery envelope for wellness-pull, and which Garmin files to drop;
+    delivery envelope for wellness-pull, and which Garmin files to drop; in
+    the `wellness_daily` section, one sentence on the attribution duty: the
+    table's `origin` column records the platform that measured each value,
+    and any surface that charts or prints values whose `origin` is `garmin`
+    (a dashboard over `wellness_daily`, for example) owes Garmin attribution,
+    as the recovery page and the morning-of block give it;
     `docs/index.md` row; `[project.urls] Wellness`.
   - **Tests** (`tests/wellness/test_docs_wellness.py`): the metric table
     equals `METRICS` (names, units, ranges); the envelope constants in the
@@ -858,9 +898,12 @@ preflight and keeps every call dashboards placed).
     statement appears exactly once across `docs/`; every documented
     `fitdocs` command and option is registered; the page is in
     `docs/index.md` before Contributing and in `[project.urls]`; required
-    links in `tests/test_docs_guarantees.py`.
+    links in `tests/test_docs_guarantees.py` (`_REQUIRED_ENTRY_POINT_LINKS`
+    gains `wellness.md`, append-only); the `wellness_daily` section contains
+    the attribution sentence (names `origin`, `garmin` and attribution).
   - **Mutations:** rename a metric in `METRICS` (doc table pin reds); bump
-    `DELIVERY_VERSION` (doc pin reds).
+    `DELIVERY_VERSION` (doc pin reds); move the attribution sentence out of
+    the `wellness_daily` section (the section-scoped pin reds).
   - **Observable:** `uv run pytest tests/wellness/test_docs_wellness.py
     tests/test_docs_guarantees.py` green.
   - _Requirements: 5.5, 7.4, 7.6, 15.7, 19.2_
@@ -929,7 +972,11 @@ preflight and keeps every call dashboards placed).
 - [ ] 6.2 Rebase, re-derive the version constants and validate the whole
   - Rebase onto `main`; re-derive `CONTRACT_VERSION` and `SCHEMA_VERSION` as
     main + 1 (update the history paragraph, the contract doc, the goldens,
-    the schema digest map and every literal pin); keep both sides of every
+    the schema digest map and every literal pin, including writing the landed
+    N and N+1 as literals into 1.5's history pin "Raised from ``N`` to
+    ``N+1`` by wellness-store"); re-pin every peer head-paragraph pin on
+    main at landing (grep `tests/` for the outgoing "What changed at this
+    version" paragraph's phrases, as in 1.5); keep both sides of every
     append-only list and of the `cli.py` drain-pass block; re-run `uv run pytest && uv run ruff check . && uv run
     ruff format --check . && uv run mypy`; check branch CI with
     `gh run list --branch`; `/kiro-spec-status wellness-store` clean.

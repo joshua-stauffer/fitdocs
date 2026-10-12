@@ -112,7 +112,10 @@ vocabulary gains two units.
 - Any change to the intervals.icu delivery envelope (wellness-pull).
 - Any change to the day-boundary rule or the default precedence
   (recovery, workout-wellness, hr-derivation).
-- Any change to the `WellnessSeries` reader API or `SeriesReport.days`.
+- Any change to the `WellnessSeries` reader API or the `SeriesReport` counts.
+- Any change to the published test seams `tests/wellness/builders_series.py`
+  (`write_series`), `builders_intervals.py` or `builders_garmin.py`
+  (recovery, workout-wellness).
 - The `wellness_daily` columns (dashboards over wellness, recovery's optional
   table).
 
@@ -226,6 +229,8 @@ src/fitdocs/wellness/
 src/fitdocs/index/derived/wellness.py   # WELLNESS_DAILY_TABLE, WellnessProducer, WELLNESS_PRODUCER
 docs/wellness.md                         # the wellness guide
 tests/wellness/builders_series.py        # write_series: the one sanctioned way to stage a series without the drain
+tests/wellness/builders_intervals.py     # published test seam: intervals.icu records, API list, delivery envelope
+tests/wellness/builders_garmin.py        # published test seam: the four Garmin export kinds, names, decoy
 tests/wellness/                          # synthetic file builders + one test module per wellness module,
                                          #   test_boundary.py, test_drain_wellness.py, test_cli_wellness.py,
                                          #   test_docs_wellness.py
@@ -796,7 +801,6 @@ class WellnessSeries:
     def sources(self, metric: Metric) -> tuple[str, ...]: ...
     def by_source(self, metric: Metric, source: str) -> tuple[SeriesValue, ...]: ...
     def canonical_series(self, metric: Metric) -> tuple[SeriesValue, ...]: ...
-    def day_digest(self, day: date) -> str: ...   # SHA-256 of the day's encoded lines
 
 def read_series(data_root: Path) -> WellnessSeries: ...
 def series_files(data_root: Path) -> tuple[Path, ...]: ...
@@ -1109,7 +1113,6 @@ class SeriesReport:
     values_changed: int
     values_removed: int
     canonical_days_changed: int
-    days: frozenset[date]                 # every day whose lines changed
     conflicts: int
     notes: tuple[SeriesNote, ...]         # unreadable entries (DEFERRED), occupied paths (BLOCKED), invalid entries (FAILED)
 
@@ -1361,7 +1364,11 @@ suffix (checked by the schema digest staying equal apart from the new table).
   day-boundary rule (the one published statement, 7.6); absent values;
   precedence and `[wellness]`; the series files and how to read them in a
   spreadsheet, DuckDB `read_csv` or Python `csv`; the archive and removing an
-  entry; `check` findings; `wellness_daily` with example queries; the
+  entry; `check` findings; `wellness_daily` with example queries and one
+  sentence on the attribution duty (the `origin` column records the platform
+  that measured each value; any surface that charts or prints `garmin`-origin
+  values, a dashboard over `wellness_daily` for example, owes Garmin
+  attribution, as the recovery page and the morning-of block give it); the
   non-activity guard.
 - `docs/inbox.md`: wellness candidates, the unrecognized channel, silencing a
   file with `[inbox] ignore`, the non-activity guard.
@@ -1634,16 +1641,32 @@ re-parse the archive or re-implement the merge.
 - **Location**: `wellness/<YYYY>.csv` per year with values, plus
   `wellness/manifest.toml`; schema in [Series Files](#series-files-physical).
 - **Read it only through** `fitdocs.wellness.read_series(data_root) ->
-  WellnessSeries` (canonical lookups, per-source series, per-day digest).
+  WellnessSeries` (canonical lookups, per-source series).
   `SeriesReadError` means unreadable; an absent series is an empty one.
 - `WellnessSeries.by_source(metric, source)` is the input for per-source
   baselines (recovery) and derived resting HR (hr-derivation);
-  `canonical(metric, day)` and `for_day(day)` serve the morning-of block;
-  `day_digest(day)` is the stable fingerprint of a day's lines
-  (workout-wellness's per-page wellness fingerprint input).
-- `SeriesReport.days` (from `rebuild_series`, carried on
-  `DrainReport.wellness_series`) names every day whose lines changed in that
-  run — workout-wellness's targeted re-render input.
+  `canonical(metric, day)` and `for_day(day)` serve the morning-of block.
+- `SeriesReport` (from `rebuild_series`, carried on
+  `DrainReport.wellness_series`) reports counts only (`values_added`,
+  `values_changed`, `values_removed`, `canonical_days_changed`,
+  `conflicts`); it names no days.
+- **Staging wellness through the drain in a test** (when the test then
+  drains or regenerates, since a series staged by `write_series` is rebuilt
+  away): write delivery files built by these published test seams into
+  `<root>/inbox/` and run the drain.
+  - `tests/wellness/builders_intervals.py`: `intervals_record(day, *,
+    updated=..., **fields)`, `intervals_list_bytes(records)`,
+    `intervals_delivery_bytes(records, *, origins=None)` (the § Seams 2
+    envelope; carries no sleep stages or body battery).
+  - `tests/wellness/builders_garmin.py`: `garmin_uds_record(day, **fields)`,
+    `garmin_sleep_record(day, *, deep_s=None, light_s=None, rem_s=None,
+    awake_s=None, respiration=None)`, `garmin_maxmet_record(day, *, sport,
+    vo2max, updated)`, `garmin_biometrics_record(day, *, weight_g,
+    measured_at)`, `garmin_file_bytes(records)`, `garmin_file_name(kind,
+    first, last)`, `hydration_decoy_bytes()` (Garmin values carry origin
+    `garmin`; sleep files carry stages).
+  - recovery and workout-wellness consume these; their names and
+    signatures are revalidation triggers.
 - **Staging a series in a test**: `tests/wellness/builders_series.py`
   `write_series(data_root, values: Iterable[SeriesValue]) -> tuple[Path, ...]`
   is the **only sanctioned way** to stage a series without the drain. It
@@ -1764,7 +1787,7 @@ invented values; no maintainer value, file name or id.
   header-less file; DEFERRED for an unreadable entry (chmod 000) with the
   series bytes unchanged; FAILED for an invalid entry; removal of an emptied
   year; byte-identical second rebuild writes nothing (mtime unchanged);
-  `SeriesReport.days` and counts.
+  the report's counts.
 - Drain: a mixed inbox (FIT, intervals list, intervals envelope, Garmin four
   kinds, an unknown `.json`, a `.gpx`, a monitoring FIT) → every channel
   populated exactly; one settle call (injected `sleep` called once); move
