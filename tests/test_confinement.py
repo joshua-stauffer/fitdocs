@@ -62,7 +62,7 @@ from typing import Final, NoReturn
 from unittest.mock import patch
 
 import pytest
-from typer.testing import CliRunner
+from typer.testing import CliRunner, Result
 
 from fitdocs.athlete import ATHLETE_FILE, load_athlete_inputs
 from fitdocs.cli import app
@@ -83,8 +83,10 @@ from fitdocs.inbox import (
 )
 from fitdocs.layout import (
     ARCHIVE_DIR,
+    ASSETS_SUBDIR,
     BLOCKS_DIR,
     CONNECTOR_STATE_DIR,
+    DASHBOARDS_DIR,
     DEFAULT_PLANS_DIR,
     HISTORY_DIR,
     HISTORY_DOC_STEM,
@@ -108,6 +110,7 @@ from tests.connectors.conftest import (
     ScriptedPersonalKeyConnector,
     isolate_connector_environment,
 )
+from tests.dashboards._helpers import directive_block, page_text, write_page
 from tests.fixtures import builder
 from tests.fixtures import identity as identity_fixtures
 from tests.load.conftest import ComputingCalculator
@@ -1205,6 +1208,178 @@ def _derived_tables_populated(touched: Sequence[str]) -> bool:
     return True
 
 
+# --- the dashboard writers (dashboards task 6.4; Req 2.1, 16.6) ----------------
+#
+# One page, two charts, the frozen one second: ``load`` is relative (redrawn on
+# every refresh) and ``peak`` is frozen (its first refresh is its first freeze,
+# which writes snapshot generation 1). The page is staged *after* the index is
+# built, so the measured run is the first to draw anything.
+
+_DASHBOARD_PAGE = "board"
+_DASHBOARD_RELATIVE = "load"
+_DASHBOARD_FROZEN = "peak"
+_DASHBOARD_TODAY = date(2026, 10, 12)
+_DASHBOARD_RELATIVE_SQL = (
+    "SELECT CAST(row_number() OVER (ORDER BY start_utc) AS VARCHAR) AS label, "
+    "1.0 AS value FROM activities"
+)
+# Two different shapes, so a re-freeze under the second one redraws the image.
+_DASHBOARD_FROZEN_SQL_FIRST = (
+    "SELECT 'a' AS label, 3.0 AS value UNION ALL SELECT 'b', 1.0 UNION ALL "
+    "SELECT 'c', 2.0"
+)
+_DASHBOARD_FROZEN_SQL_SECOND = (
+    "SELECT 'a' AS label, 1.0 AS value UNION ALL SELECT 'b', 3.0 UNION ALL "
+    "SELECT 'c', 2.0"
+)
+
+_DASHBOARD_ASSETS = f"data/{DASHBOARDS_DIR}/{ASSETS_SUBDIR}/{_DASHBOARD_PAGE}"
+_DASHBOARD_PAGE_FILE = f"data/{DASHBOARDS_DIR}/{_DASHBOARD_PAGE}.md"
+
+
+def _dashboard_directive(chart_id: str, mode: str, sql: str) -> str:
+    return directive_block(
+        [
+            ("id", chart_id),
+            ("kind", "bar"),
+            ("mode", mode),
+            ("title", f"Title of {chart_id}"),
+            ("sql", f"|\n  {sql}"),
+            ("channels", "\n  x: label\n  y: value"),
+        ]
+    )
+
+
+def _dashboard_page_text(frozen_sql: str = _DASHBOARD_FROZEN_SQL_FIRST) -> str:
+    return page_text(
+        "# Board",
+        _dashboard_directive(_DASHBOARD_RELATIVE, "relative", _DASHBOARD_RELATIVE_SQL),
+        _dashboard_directive(_DASHBOARD_FROZEN, "frozen", frozen_sql),
+    )
+
+
+def _invalid_dashboard_page_text() -> str:
+    """A page whose only directive is invalid: required keys are missing."""
+    return page_text(
+        "# Board", directive_block([("id", "broken"), ("kind", "nosuchkind")])
+    )
+
+
+def _stage_dashboard_page(data_root: Path, text: str) -> None:
+    write_page(data_root, _DASHBOARD_PAGE, text)
+
+
+def _prepare_dashboard_refresh(data_root: Path, source_dir: Path) -> None:
+    _prepare_index_build(data_root, source_dir)
+    _run_cli_index(data_root, source_dir)
+    _stage_dashboard_page(data_root, _dashboard_page_text())
+
+
+def _invoke_dashboard(data_root: Path, source_dir: Path, *args: str) -> Result:
+    """``fitdocs dashboard <args>`` over the external index the entries build."""
+    index_dir = source_dir.parent / "index-cache"
+    with (
+        patch.dict(os.environ, {"FITDOCS_INDEX_DIR": str(index_dir)}),
+        patch("fitdocs.cli._today", lambda: _DASHBOARD_TODAY),
+    ):
+        return _CLI_RUNNER.invoke(
+            app, ["dashboard", *args, "--out", str(data_root)], catch_exceptions=False
+        )
+
+
+def _run_dashboard_refresh(data_root: Path, source_dir: Path) -> None:
+    result = _invoke_dashboard(data_root, source_dir, "refresh")
+    assert result.exit_code == 0, result.output
+
+
+def _prepare_dashboard_freeze(data_root: Path, source_dir: Path) -> None:
+    """The first freeze happens here, unmeasured; then the frozen chart's SQL
+    changes, so the measured freeze takes a new generation and draws a new image."""
+    _prepare_dashboard_refresh(data_root, source_dir)
+    _run_dashboard_refresh(data_root, source_dir)
+    page = data_root / DASHBOARDS_DIR / f"{_DASHBOARD_PAGE}.md"
+    text = page.read_text(encoding="utf-8")
+    assert text.count(_DASHBOARD_FROZEN_SQL_FIRST) == 1
+    page.write_text(
+        text.replace(_DASHBOARD_FROZEN_SQL_FIRST, _DASHBOARD_FROZEN_SQL_SECOND),
+        encoding="utf-8",
+    )
+
+
+def _run_dashboard_freeze(data_root: Path, source_dir: Path) -> None:
+    result = _invoke_dashboard(
+        data_root, source_dir, "freeze", f"{_DASHBOARD_PAGE}:{_DASHBOARD_FROZEN}"
+    )
+    assert result.exit_code == 0, result.output
+
+
+def _prepare_sync_with_dashboards(data_root: Path, source_dir: Path) -> None:
+    _prepare_sync_with_index(data_root, source_dir)
+    _stage_dashboard_page(data_root, _dashboard_page_text())
+
+
+def _invoke_sync_with_dashboards(data_root: Path, source_dir: Path) -> Result:
+    index_dir = source_dir.parent / "index-cache"
+    with (
+        patch.dict(os.environ, {"FITDOCS_INDEX_DIR": str(index_dir)}),
+        patch("fitdocs.tiles._default_fetch", lambda _url: _TILE_PNG),
+        patch("fitdocs.cli._today", lambda: _DASHBOARD_TODAY),
+    ):
+        return _CLI_RUNNER.invoke(
+            app, ["sync", str(source_dir), "--out", str(data_root)]
+        )
+
+
+def _run_sync_with_dashboards(data_root: Path, source_dir: Path) -> None:
+    result = _invoke_sync_with_dashboards(data_root, source_dir)
+    assert result.exit_code == 0, result.output
+
+
+def _dashboard_files(touched: Sequence[str]) -> tuple[bool, set[str], set[str]]:
+    """Is the page among ``touched``, and which images and snapshots are?"""
+    images = {
+        key.removeprefix(f"{_DASHBOARD_ASSETS}/")
+        for key in touched
+        if key.startswith(f"{_DASHBOARD_ASSETS}/") and key.endswith(".svg")
+    }
+    snapshots = {
+        key.removeprefix(f"{_DASHBOARD_ASSETS}/")
+        for key in touched
+        if key.startswith(f"{_DASHBOARD_ASSETS}/") and key.endswith(".json")
+    }
+    return _DASHBOARD_PAGE_FILE in touched, images, snapshots
+
+
+def _wrote_a_first_freeze_and_a_drawn_page(touched: Sequence[str]) -> bool:
+    """``dashboard``: the page's regions were rewritten, both charts were drawn,
+    and the frozen chart's first snapshot (generation 1) was written."""
+    page, images, snapshots = _dashboard_files(touched)
+    return (
+        page
+        and images == {f"{_DASHBOARD_RELATIVE}.svg", f"{_DASHBOARD_FROZEN}.svg"}
+        and snapshots == {f"{_DASHBOARD_FROZEN}.snapshot-1.json"}
+    )
+
+
+def _wrote_a_second_snapshot_and_its_image(touched: Sequence[str]) -> bool:
+    """``dashboard-freeze``: the page's reference was rewritten, the frozen
+    chart was redrawn, and it took generation 2 -- and nothing else was drawn."""
+    page, images, snapshots = _dashboard_files(touched)
+    return (
+        page
+        and images == {f"{_DASHBOARD_FROZEN}.svg"}
+        and snapshots == {f"{_DASHBOARD_FROZEN}.snapshot-2.json"}
+    )
+
+
+def _wrote_documents_an_index_and_a_drawn_page(touched: Sequence[str]) -> bool:
+    """``sync-with-dashboards``: the sync wrote a document and the index, and the
+    chained pass then did what the ``dashboard`` entry does."""
+    return _wrote_document_and_index(
+        touched
+    ) and _wrote_a_first_freeze_and_a_drawn_page(touched)
+
+
 #: Every fitdocs entry point that writes into the data root (Req 7.6).
 WRITING_ENTRY_POINTS: Final[tuple[EntryPoint, ...]] = (
     EntryPoint(id="sync", prepare=_nothing, run=_run_sync),
@@ -1295,10 +1470,92 @@ WRITING_ENTRY_POINTS: Final[tuple[EntryPoint, ...]] = (
         run=_run_cli_derived_index,
         non_vacuous=_derived_tables_populated,
     ),
+    # dashboards task 6.4: the three writers of ``dashboards/`` -- the command's
+    # refresh (a first freeze among the charts), the command's freeze of that
+    # chart, and the sync whose chained pass draws a staged page.
+    EntryPoint(
+        id="dashboard",
+        prepare=_prepare_dashboard_refresh,
+        run=_run_dashboard_refresh,
+        non_vacuous=_wrote_a_first_freeze_and_a_drawn_page,
+    ),
+    EntryPoint(
+        id="dashboard-freeze",
+        prepare=_prepare_dashboard_freeze,
+        run=_run_dashboard_freeze,
+        non_vacuous=_wrote_a_second_snapshot_and_its_image,
+    ),
+    EntryPoint(
+        id="sync-with-dashboards",
+        prepare=_prepare_sync_with_dashboards,
+        run=_run_sync_with_dashboards,
+        non_vacuous=_wrote_documents_an_index_and_a_drawn_page,
+    ),
 )
 
 
 # --- the guard ---------------------------------------------------------------
+
+#: The dashboard commands only query the index, so nothing in its directory may
+#: change except a DuckDB spill directory.
+_READ_ONLY_INDEX_ENTRY_IDS: Final[frozenset[str]] = frozenset(
+    {"dashboard", "dashboard-freeze"}
+)
+
+
+def _assert_index_directory_unchanged_but_for_spill(
+    sandbox: Path,
+    index_directory: Path,
+    before: dict[str, str],
+    after: dict[str, str],
+) -> None:
+    """Every entry under the index directory is identical (bytes and mtime)
+    before and after, and none appeared or went, except the exempt spill paths.
+
+    Exempt are the keys equal to or beneath a real directory (not a symlink)
+    named ``query-spill-<digits>`` directly in the index directory, as
+    :func:`_query_spill_exemptions` finds them on disk after the run, plus
+    one that existed before the run and is gone after it (found from the
+    before snapshot). A file or a link with such a name, or any other name
+    that merely starts ``query-spill-``, is not exempt.
+    """
+    prefix = index_directory.resolve().relative_to(sandbox.resolve()).as_posix()
+    exempt = set(_query_spill_exemptions(sandbox, index_directory))
+    exempt |= {
+        key
+        for key, state in before.items()
+        if state == _DIRECTORY
+        and key.startswith(f"{prefix}/")
+        and re.fullmatch(r"query-spill-\d+", key.removeprefix(f"{prefix}/"))
+        and key not in after
+    }
+    changed = [
+        key
+        for key in _touched(before, after)
+        if key.startswith(f"{prefix}/")
+        and not any(key == path or key.startswith(f"{path}/") for path in exempt)
+    ]
+    assert before.get(prefix) == _DIRECTORY, "the index directory was not there"
+    assert any(key.startswith(f"{prefix}/") for key in before), (
+        "the index directory held nothing before the run"
+    )
+    assert changed == [], f"a dashboard run changed the index directory: {changed}"
+
+
+#: The entry points whose run uses the external index directory, so the permitted
+#: set names it. Dashboard runs read the index and may spill under it (the query
+#: sandbox's ``query-spill-<pid>``); sync writes it. The dashboard entries are
+#: held tighter by :func:`_assert_index_directory_unchanged_but_for_spill`.
+_EXTERNAL_INDEX_ENTRY_IDS: Final[frozenset[str]] = frozenset(
+    {
+        "index",
+        "sync-with-index",
+        "index-derived",
+        "dashboard",
+        "dashboard-freeze",
+        "sync-with-dashboards",
+    }
+)
 
 
 @pytest.mark.parametrize(
@@ -1320,12 +1577,13 @@ def test_entry_point_writes_only_inside_the_permitted_locations(
     ``sync``/``regen``/``load``/``history``, whose fixtures write no
     ``[inbox]`` table, and the configured inbox and processed-files
     directories for ``drain``, plus an explicit external index cache for the
-    two index entry points. The run is also asserted to have produced its
-    own observable, non-vacuous write (``entry_point.non_vacuous`` -- a
-    workout document under ``workouts/`` for every entry point but
-    ``history``, the history document itself for ``history``, since that
-    pass writes no workout document at all), so a pipeline that silently
-    stopped writing could not pass this guard by doing nothing.
+    entry points in :data:`_EXTERNAL_INDEX_ENTRY_IDS`. The run is also asserted
+    to have produced its own observable, non-vacuous write
+    (``entry_point.non_vacuous`` -- a workout document under ``workouts/``
+    for every entry point but ``history``, the history document itself for
+    ``history``, since that pass writes no workout document at all), so a
+    pipeline that silently stopped writing could not pass this guard by doing
+    nothing.
 
     Mutation caught: any write outside the owned tree -- a stray file at the data
     root, a report dropped beside the source directory, a temp file left in the
@@ -1341,7 +1599,7 @@ def test_entry_point_writes_only_inside_the_permitted_locations(
     index_base = source_dir.parent / (
         "derived-index-cache" if entry_point.id == "index-derived" else "index-cache"
     )
-    if entry_point.id in {"index", "sync-with-index", "index-derived"}:
+    if entry_point.id in _EXTERNAL_INDEX_ENTRY_IDS:
         index_base.mkdir(parents=True, exist_ok=True)
 
     derived_before: dict[str, tuple[object, ...]] | None = None
@@ -1368,7 +1626,7 @@ def test_entry_point_writes_only_inside_the_permitted_locations(
         "write; the guard would pass vacuously over a pipeline that wrote nothing"
     )
     configured = configured_locations(data_root)
-    if entry_point.id in {"index", "sync-with-index", "index-derived"}:
+    if entry_point.id in _EXTERNAL_INDEX_ENTRY_IDS:
         from fitdocs.index.location import resolve_index_location
 
         resolved_index = resolve_index_location(
@@ -1377,6 +1635,10 @@ def test_entry_point_writes_only_inside_the_permitted_locations(
             sandbox,
         )
         configured += (resolved_index.directory,)
+        if entry_point.id in _READ_ONLY_INDEX_ENTRY_IDS:
+            _assert_index_directory_unchanged_but_for_spill(
+                sandbox, resolved_index.directory, before, after
+            )
     if entry_point.id == "index-derived":
         assert derived_before is not None
         assert derived_index_directory is not None
@@ -1876,12 +2138,14 @@ def test_history_entry_point_writes_no_workout_doc_asset_source_profile_or_setti
     ``workouts/assets/``, and **no** ``fit-archive/*.fit`` archived source,
     and it writes neither ``athlete.toml`` nor ``fitdocs.toml`` itself.
 
-    Deliberately **excluded** from this claim: the two in-tree ownership
-    declarations (``workouts/AGENTS.md``, ``fit-archive/AGENTS.md``) --
+    Deliberately **excluded** from this claim: the in-tree ownership
+    declarations (``AGENTS.md`` in each of the five
+    :data:`~fitdocs.layout.DECLARED_DIRS`, of which this test's own
+    document check names ``workouts/AGENTS.md``) --
     ``fitdocs.declaration.ensure_declarations`` may legitimately create or
-    rewrite either on a data root that has never been synced
+    rewrite any of them on a data root that has never been synced
     (``fitdocs.history.engine``'s own module docstring, "Ownership
-    declarations"), so asserting those two files untouched would itself be a
+    declarations"), so asserting those files untouched would itself be a
     false negative claim -- exactly the kind the module docstring above
     warns a blanket "touches nothing under ``workouts/``" assertion would be.
 
@@ -1960,9 +2224,10 @@ def test_plan_entry_point_touches_only_the_plan_directory_and_writes_no_other_do
     run wrote no ``workouts/*.md`` document, no ``history/*.md`` page, and
     neither ``athlete.toml`` nor ``fitdocs.toml`` itself.
 
-    Deliberately **excluded** from this claim: the other three in-tree
+    Deliberately **excluded** from this claim: the other four in-tree
     ownership declarations (``workouts/AGENTS.md``, ``history/AGENTS.md``,
-    ``fit-archive/AGENTS.md``) -- ``fitdocs.declaration.ensure_declarations``
+    ``fit-archive/AGENTS.md``, ``dashboards/AGENTS.md``) --
+    ``fitdocs.declaration.ensure_declarations``
     legitimately creates every entry of :data:`~fitdocs.layout.DECLARED_DIRS`
     that is still absent on a data root that has never been synced, exactly
     the same exclusion the history entry point's own precise test states for
@@ -2085,8 +2350,9 @@ def test_reconcile_touches_only_the_plan_directory_and_writes_no_other_document(
     no history page; neither the athlete profile nor the settings file.
 
     Deliberately **excluded** from this claim, mirroring ``plan``'s own
-    test: the other two in-tree ownership declarations
-    (``history/AGENTS.md``, ``fit-archive/AGENTS.md``) that
+    test: the other three in-tree ownership declarations
+    (``history/AGENTS.md``, ``fit-archive/AGENTS.md``,
+    ``dashboards/AGENTS.md``) that
     ``ensure_declarations`` may legitimately create or rewrite, and
     ``blocks/AGENTS.md`` itself, which lies inside this pass's own owned
     prefix.
@@ -2242,6 +2508,158 @@ def test_pull_non_vacuous_predicate_needs_a_ledger_and_a_delivery() -> None:
         )
         is False
     )
+
+
+def test_dashboard_writers_are_registered_writing_entry_points() -> None:
+    """``dashboard``, ``dashboard-freeze`` and ``sync-with-dashboards`` are
+    registered with their own callables (dashboards task 6.4; Req 2.1, 16.6),
+    the discipline :func:`test_plan_is_a_registered_writing_entry_point` states:
+    an id-only check is satisfied by a stand-in with a vacuous predicate."""
+    registered = {entry_point.id: entry_point for entry_point in WRITING_ENTRY_POINTS}
+    expected = {
+        "dashboard": (
+            _prepare_dashboard_refresh,
+            _run_dashboard_refresh,
+            _wrote_a_first_freeze_and_a_drawn_page,
+        ),
+        "dashboard-freeze": (
+            _prepare_dashboard_freeze,
+            _run_dashboard_freeze,
+            _wrote_a_second_snapshot_and_its_image,
+        ),
+        "sync-with-dashboards": (
+            _prepare_sync_with_dashboards,
+            _run_sync_with_dashboards,
+            _wrote_documents_an_index_and_a_drawn_page,
+        ),
+    }
+    for entry_id, (prepare, run, non_vacuous) in expected.items():
+        assert entry_id in registered
+        entry = registered[entry_id]
+        assert entry.prepare is prepare
+        assert entry.run is run
+        assert entry.non_vacuous is non_vacuous
+        assert entry_id in _EXTERNAL_INDEX_ENTRY_IDS
+
+
+def test_dashboard_predicates_each_need_the_page_the_images_and_the_snapshot() -> None:
+    """Each dashboard predicate is false when its page rewrite, its images or its
+    snapshot is missing or differs."""
+    page = _DASHBOARD_PAGE_FILE
+    relative = f"{_DASHBOARD_ASSETS}/{_DASHBOARD_RELATIVE}.svg"
+    frozen = f"{_DASHBOARD_ASSETS}/{_DASHBOARD_FROZEN}.svg"
+    first = f"{_DASHBOARD_ASSETS}/{_DASHBOARD_FROZEN}.snapshot-1.json"
+    second = f"{_DASHBOARD_ASSETS}/{_DASHBOARD_FROZEN}.snapshot-2.json"
+
+    refreshed = (page, relative, frozen, first)
+    assert _wrote_a_first_freeze_and_a_drawn_page(refreshed) is True
+    assert _wrote_a_first_freeze_and_a_drawn_page((relative, frozen, first)) is False
+    assert _wrote_a_first_freeze_and_a_drawn_page((page, frozen, first)) is False
+    assert _wrote_a_first_freeze_and_a_drawn_page((page, relative, first)) is False
+    assert _wrote_a_first_freeze_and_a_drawn_page((page, relative, frozen)) is False
+    assert (
+        _wrote_a_first_freeze_and_a_drawn_page((page, relative, frozen, second))
+        is False
+    )
+
+    refrozen = (page, frozen, second)
+    assert _wrote_a_second_snapshot_and_its_image(refrozen) is True
+    assert _wrote_a_second_snapshot_and_its_image((frozen, second)) is False
+    assert _wrote_a_second_snapshot_and_its_image((page, second)) is False
+    assert _wrote_a_second_snapshot_and_its_image((page, frozen)) is False
+    assert _wrote_a_second_snapshot_and_its_image((page, frozen, first)) is False
+    assert (
+        _wrote_a_second_snapshot_and_its_image((page, relative, frozen, second))
+        is False
+    )
+
+    document = "data/workouts/2026-01-01-hike.md"
+    index = "index-cache/abc/index.duckdb"
+    synced = (*refreshed, document, index)
+    assert _wrote_documents_an_index_and_a_drawn_page(synced) is True
+    assert _wrote_documents_an_index_and_a_drawn_page((*refreshed, index)) is False
+    assert _wrote_documents_an_index_and_a_drawn_page((*refreshed, document)) is False
+    assert _wrote_documents_an_index_and_a_drawn_page((document, index)) is False
+    assert (
+        _wrote_documents_an_index_and_a_drawn_page(
+            (document, index, page, relative, frozen)
+        )
+        is False
+    )
+    assert (
+        _wrote_documents_an_index_and_a_drawn_page(
+            (document, index, relative, frozen, first)
+        )
+        is False
+    )
+
+
+def _tolerant_dashboard_run(
+    entry_id: str, outputs: list[str]
+) -> Callable[[Path, Path], None]:
+    """The entry's own command, recording its output and not judging its exit."""
+
+    def run(data_root: Path, source_dir: Path) -> None:
+        if entry_id == "dashboard":
+            result = _invoke_dashboard(data_root, source_dir, "refresh")
+        elif entry_id == "dashboard-freeze":
+            result = _invoke_dashboard(data_root, source_dir, "freeze", "board")
+        else:
+            result = _invoke_sync_with_dashboards(data_root, source_dir)
+        outputs.append(result.output)
+
+    return run
+
+
+def _prepare_over_an_invalid_dashboard_page(
+    entry_id: str,
+) -> Callable[[Path, Path], None]:
+    def prepare(data_root: Path, source_dir: Path) -> None:
+        if entry_id == "sync-with-dashboards":
+            _prepare_sync_with_index(data_root, source_dir)
+        else:
+            _prepare_index_build(data_root, source_dir)
+            _run_cli_index(data_root, source_dir)
+        _stage_dashboard_page(data_root, _invalid_dashboard_page_text())
+
+    return prepare
+
+
+@pytest.mark.parametrize(
+    "entry_id", ["dashboard", "dashboard-freeze", "sync-with-dashboards"]
+)
+def test_dashboard_predicates_are_false_over_a_page_whose_only_directive_is_invalid(
+    entry_id: str, tmp_path: Path
+) -> None:
+    """Precondition (Req 16.6): the same entry, over a page whose only directive
+    is invalid, writes no region, image or snapshot, so its predicate is false
+    there and cannot be satisfied by a run that drew nothing. The run reaches the
+    invalid directive (its output names the problem), and the page's bytes are
+    unchanged."""
+    entry = next(each for each in WRITING_ENTRY_POINTS if each.id == entry_id)
+    outputs: list[str] = []
+    sandbox = tmp_path
+    data_root = sandbox / "data"
+    data_root.mkdir()
+    source_dir = sandbox / "src"
+    _stage_sources(source_dir)
+    _prepare_over_an_invalid_dashboard_page(entry_id)(data_root, source_dir)
+    page = data_root / DASHBOARDS_DIR / f"{_DASHBOARD_PAGE}.md"
+    page_before = page.read_bytes()
+
+    before = _snapshot(sandbox)
+    _tolerant_dashboard_run(entry_id, outputs)(data_root, source_dir)
+    touched = _touched(before, _snapshot(sandbox))
+
+    (output,) = outputs
+    assert "missing_key" in output, output
+    assert page.read_bytes() == page_before
+    assert not [
+        key
+        for key in touched
+        if key.startswith(f"data/{DASHBOARDS_DIR}/{ASSETS_SUBDIR}")
+    ], touched
+    assert entry.non_vacuous(touched) is False
 
 
 def test_connect_writes_only_the_credentials_file(tmp_path: Path) -> None:
