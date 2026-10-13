@@ -1108,7 +1108,7 @@ sequential, never two `(P)` tasks at once.
     "tool-owned", "four owned").
   - _Requirements: 2.4, 19.1, 19.2, 19.6_
 
-- [ ] 8.2 Record the steering, the CHANGELOG and the analytics-index amendment
+- [x] 8.2 Record the steering, the CHANGELOG and the analytics-index amendment
   - **`.kiro/steering/tech.md`**: the Architecture paragraph states the
     named exception ("…never read back into a document, except the chart
     regions and assets of dashboard pages under `dashboards/`; workout,
@@ -1710,3 +1710,18 @@ sequential, never two `(P)` tasks at once.
   (UTC offset, hash) really differ, then compares SHA-256 of every file.
   Task-text corrections: the second sync prints nothing; the JSON chart key
   is `id`.
+- **8.2 (2 review rounds; the reviewer's non-blocking wording nit — "run the
+  dashboard pass" for "run the same pass" — applied by the controller in a
+  resumed session, pins re-run green):** tech.md states the dashboards
+  exception to "the index is never read back into a document" and the shared
+  query sandbox; structure.md gains the dashboards package bullet with the
+  design's `layout`/`contract` rule (in `dashboards.storage` and
+  `dashboards.engine`) and the query bullet's new importer; the CHANGELOG
+  Unreleased Added bullet names the four forms truthfully (`check`/`refresh`/
+  `freeze` run SQL, `kinds` lists kinds), the exact pass callers (`sync` with
+  or without a source, `pull --sync`, `regen`, `load`), CONTRACT_VERSION 10
+  with its action, and the `[plans] path` refusal (exit 2); analytics-index
+  Req 5.6 carries Amendment 1. Controller ruling (a): 8.2 adds `Dashboards` to
+  `[project.urls]` after `Analytics` (test_packaging requires a URL for every
+  linked docs page); 7.3 adds only the skill link. Pins:
+  `tests/dashboards/test_published.py`.
