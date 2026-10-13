@@ -265,7 +265,7 @@ def test_dashboard_section_states_the_asset_snapshot_and_cleanup_rules() -> None
 
 def test_head_and_definitions_agree_with_the_dashboards_section() -> None:
     text = _flat(_read_doc())
-    assert "inside the five owned directories" in text
+    assert "inside the seven owned directories" in text
     assert "each of those four commands refreshes every declared directory's" in text
     owned = _flat_section("Owned Paths")
     assert (
@@ -295,7 +295,8 @@ def test_regions_and_overwrite_sections_carry_the_dashboards_rules() -> None:
     history = overwrite[overwrite.index("**`history`**") :]
     history = history[: history.index(" - **")]
     assert (
-        "`fit-archive/AGENTS.md`, and `dashboards/AGENTS.md` — through the same "
+        "`fit-archive/AGENTS.md`, `dashboards/AGENTS.md`, `wellness/AGENTS.md`, and "
+        "`wellness-archive/AGENTS.md` — through the same "
         "function"
     ) in history
     for command in ("**`sync`**", "**`regen`**", "**`load`**", "**`pull`**"):
@@ -304,14 +305,14 @@ def test_regions_and_overwrite_sections_carry_the_dashboards_rules() -> None:
         assert "dashboard pass" in bullet, command
 
 
-def test_root_instructions_example_names_all_five_declarations() -> None:
+def test_root_instructions_example_names_all_seven_declarations() -> None:
     text = _read_doc()
     example = _section(
         text, "Referencing `workouts/AGENTS.md` from Your Wiki's Root Instructions"
     )
     flat = _flat(example)
     assert "`dashboards/AGENTS.md`" in flat
-    assert "those five files are generated" in flat
+    assert "those seven files are generated" in flat
     assert "those four files" not in text
     assert "each of the five refreshes" not in flat
     assert "each of those four commands refreshes every declared directory's" in flat
@@ -388,3 +389,18 @@ def test_safety_relevant_dashboard_sentences_are_pinned() -> None:
         "besides its `AGENTS.md`"
     ) in dashboard
     assert "when at least one page exists" not in dashboard
+
+
+def test_wellness_locations_have_scoped_contract_guarantees() -> None:
+    section = _flat_section("Wellness Archive and Series")
+    for phrase in (
+        "`wellness-archive/`",
+        "fitdocs never modifies an archive entry",
+        "one directory per format",
+        "SHA-256 of the original",
+        "`wellness/` holds one CSV file per calendar year",
+        "`manifest.toml`",
+        "`[wellness]` settings",
+        "overwrites hand edits to the series",
+    ):
+        assert phrase in section, phrase

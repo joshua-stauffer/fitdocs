@@ -226,6 +226,10 @@ _OUTSIDE_DECLARED_SET = sorted(set(OWNED_PATHS) - set(DECLARED_DIRS)) + [
     "blocks-old/",
     "dashboards",
     "dashboards-old/",
+    "wellness",
+    "wellness-old/",
+    "wellness-archive",
+    "wellness-archive-old/",
 ]
 
 
@@ -318,7 +322,21 @@ def test_no_declaration_quantifies_over_documents(directory: str) -> None:
         f"{directory!r} declaration text is empty -- the guard is not "
         "looking at real content"
     )
-    hits = _quantifier_hits(text)
+    allowed_wellness_lines = {
+        "wellness-archive/": (
+            "Each file here is a wellness file fitdocs handled, kept as its original "
+            "bytes or as the canonical extract its format keeps instead, in one "
+            "directory per format and named by the SHA-256 of the original."
+        ),
+        "wellness/": (
+            "One CSV file per calendar year holds every wellness value, one line "
+            "per day, metric and source; `manifest.toml` records what they were "
+            "built from."
+        ),
+    }
+    allowed = allowed_wellness_lines.get(directory)
+    checked_text = "\n".join(line for line in lines if line != allowed)
+    hits = _quantifier_hits(checked_text)
     assert not hits, f"{directory!r} declaration quantifies over documents: {hits}"
 
 
@@ -499,15 +517,14 @@ def test_inspect_declarations_writes_nothing(tmp_path: Path) -> None:
         (_ARCHIVE, _HISTORY),
         (_HISTORY, _BLOCKS),
         (_BLOCKS, _WORKOUTS),
+        ("wellness/", "wellness-archive/"),
+        ("wellness-archive/", "wellness/"),
     ],
 )
 def test_inspect_declarations_reports_current_stale_and_foreign(
     tmp_path: Path, stale_dir: str, foreign_dir: str
 ) -> None:
-    # Rotated across all four parametrizations so each of `workouts/`,
-    # `fit-archive/`, `history/`, and `blocks/` takes the STALE role once and
-    # the FOREIGN role once -- a single fixed pair (e.g. always
-    # workouts/archive) would never exercise `history/` or `blocks/` at all.
+    # Each listed directory takes both the STALE and FOREIGN roles.
     ensure_declarations(tmp_path)
 
     stale_path = declaration_path(tmp_path, stale_dir)
@@ -691,3 +708,23 @@ def test_inspect_declarations_treats_non_utf8_bytes_as_foreign(tmp_path: Path) -
     outcome = next(o for o in outcomes if o.directory == _WORKOUTS)
     assert outcome.state == DeclarationState.FOREIGN
     assert workouts_path.read_bytes() == b"\xff\xfe\x00 not utf-8 at all"
+
+
+def test_wellness_declarations_scope_immutability_and_overwrites() -> None:
+    archive = declaration_text("wellness-archive/")
+    series = declaration_text("wellness/")
+    assert "# AGENTS.md -- Wellness Archive\n" in archive
+    assert "fitdocs never modifies these files." in archive
+    assert "Removing one withdraws its values from `wellness/`" in archive
+    assert "overwrites edits made here" not in archive
+    assert "# AGENTS.md -- Wellness Series\n" in series
+    assert "One CSV file per calendar year" in series
+    assert "`manifest.toml` records what they were built from." in series
+    assert "overwrites edits made here" in series
+    assert "never modifies these files" not in series
+    for directory, text in (("wellness-archive/", archive), ("wellness/", series)):
+        assert (
+            f"The contents of `{directory}` are written and tool-owned by fitdocs."
+            in text
+        )
+        assert "Owner: `fitdocs`." in text

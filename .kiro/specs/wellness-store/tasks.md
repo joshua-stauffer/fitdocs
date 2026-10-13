@@ -335,7 +335,7 @@ preflight and keeps every call dashboards placed).
     every synthetic violator caught.
   - _Requirements: 20.1, 20.2_
 
-- [ ] 1.5 (P) Declare `wellness/` and `wellness-archive/`, their AGENTS.md and the next contract version (wiki-contract amendment)
+- [x] 1.5 (P) Declare `wellness/` and `wellness-archive/`, their AGENTS.md and the next contract version (wiki-contract amendment)
   - **`layout.py`**: `WELLNESS_ARCHIVE_DIR`, `WELLNESS_DIR`,
     `WELLNESS_MANIFEST_NAME`; append `"wellness/"` and
     `"wellness-archive/"` to `OWNED_PATHS` and `DECLARED_DIRS` (after any
@@ -1026,3 +1026,5 @@ preflight and keeps every call dashboards placed).
 - 1.3: independently APPROVED; full13668/44, wellness159, mypy518/ruff clean; 159 mutations independently replayed plus two own. Shared _helpers.py is now frozen: ORIGINAL_SOURCE/FORMAT, EXTRACT_SOURCE/FORMAT, build_extract(order, *, corrupt_body=False), use_formats, tree_snapshot and assert_untouched. Registry tuples remain empty until3.1, all lookups read patched tuples at call time; OSError propagates immediately. Later tasks define additional helpers locally.
 
 - 1.4: independently APPROVED after adding independent ssl/ftplib/smtplib controls; all six network roots now discriminate by individual removal. Fresh wellness206/boundary47, mypy520/ruff clean. Guard covers explicit AST syntax with aliases/nested imports; application offline liveness remains6.1. Preserve gapped ranks and nonempty/independent filesystem traversal controls; literal existing-module list added only by3.4.
+
+- 1.5: independently APPROVED; full13741/44, focused284, mypy520/ruff clean; 69 mutations plus three reviewer mutations. CONTRACT_VERSION11 literal history10->11, dashboards historical changelog pin literal10 preserved. Quantifier exemptions are two exact required wellness sentences; keep section-scoped head/series assertions and independent owned/declared count tests. Both declarations match scratch-sync goldens. Existing declaration-directory symlink defect is upstream and already queued.

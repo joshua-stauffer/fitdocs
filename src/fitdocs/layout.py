@@ -6,7 +6,7 @@ training-blocks Req 4.1, 4.6, 4.10, 5.1, 7.1, 7.2). It defines the data-root
 layout constants
 (``workouts/``, ``workouts/assets/``, ``history/``, ``history/assets/``,
 ``blocks/``, ``fit-archive/``, ``.cache/``, ``.fitdocs/``, ``dashboards/``,
-``dashboards/assets/``) and the pure
+``dashboards/assets/``, ``wellness/``, ``wellness-archive/``) and the pure
 helpers the sync engine uses to place documents, name assets, archive
 sources, and derive a stable activity identity. Because it names
 every location fitdocs writes into, it is also where the *ownership* boundary is
@@ -141,6 +141,15 @@ fitdocs owns the chart regions inside them and the files under
 ownership contract states the inverse ownership shape that this prefix does
 not by itself convey."""
 
+WELLNESS_ARCHIVE_DIR: Final[str] = "wellness-archive"
+"""Handled wellness inputs under ``<data-root>/wellness-archive/``."""
+
+WELLNESS_DIR: Final[str] = "wellness"
+"""Normalized yearly CSV series under ``<data-root>/wellness/``."""
+
+WELLNESS_MANIFEST_NAME: Final[str] = "manifest.toml"
+"""The record of inputs used to build the wellness series."""
+
 OWNED_PATHS: Final[tuple[str, ...]] = (
     f"{WORKOUTS_DIR}/",
     f"{WORKOUTS_DIR}/{ASSETS_SUBDIR}/",
@@ -152,6 +161,8 @@ OWNED_PATHS: Final[tuple[str, ...]] = (
     f"{TOOL_STATE_DIR}/",
     f"{DASHBOARDS_DIR}/",
     f"{DASHBOARDS_DIR}/{ASSETS_SUBDIR}/",
+    f"{WELLNESS_DIR}/",
+    f"{WELLNESS_ARCHIVE_DIR}/",
 )
 """Every path under the data root the ownership contract calls fitdocs-owned.
 
@@ -181,11 +192,13 @@ DECLARED_DIRS: Final[tuple[str, ...]] = (
     f"{BLOCKS_DIR}/",
     f"{ARCHIVE_DIR}/",
     f"{DASHBOARDS_DIR}/",
+    f"{WELLNESS_DIR}/",
+    f"{WELLNESS_ARCHIVE_DIR}/",
 )
 """The owned top-level directories that receive an ownership declaration (Req 3.1).
 
 ``dashboards/`` is the co-owned one (see :data:`DASHBOARDS_DIR`): its declaration
-says the pages belong to the athlete, unlike the other four.
+says the pages belong to the athlete, unlike the other six.
 
 A subset of :data:`OWNED_PATHS` -- a declaration can never be placed anywhere
 fitdocs does not own. These are the directories a human or an LLM agent
@@ -503,3 +516,20 @@ def logged_rel_link_from_planned(stem: str) -> str:
     and descends into :data:`WORKOUTS_DIR`.
     """
     return f"../../{WORKOUTS_DIR}/{stem}.md"
+
+
+def wellness_archive_path(
+    data_root: Path, format_id: str, sha256: str, suffix: str
+) -> Path:
+    """Compose a kept input under ``wellness-archive/`` without filesystem I/O."""
+    return data_root / WELLNESS_ARCHIVE_DIR / format_id / f"{sha256}{suffix}"
+
+
+def wellness_series_path(data_root: Path, year: int) -> Path:
+    """Compose the four-digit calendar-year CSV path under ``wellness/``."""
+    return data_root / WELLNESS_DIR / f"{year:04d}.csv"
+
+
+def wellness_manifest_path(data_root: Path) -> Path:
+    """Compose the wellness series input-record path without filesystem I/O."""
+    return data_root / WELLNESS_DIR / WELLNESS_MANIFEST_NAME

@@ -374,11 +374,13 @@ def test_sync_regen_load_report_unchanged_document_counts_with_declarations_pres
     _put(source, "run.fit", builder.run_fit_bytes())
     _put(source, "ride.fit", builder.ride_fit_bytes())
 
+    for directory in ("wellness", "wellness-archive"):
+        assert not (data_root / directory / DECLARATION_FILENAME).exists()
     first = _sync(source, data_root)
     assert len(first.written) == 2
     count_after_sync = _workout_doc_count(data_root)
     assert count_after_sync == 2
-    # All five declarations really are present alongside the two documents,
+    # All seven declarations really are present alongside the two documents,
     # each ending in ``.md`` -- the exact shape that would inflate a naive
     # ``glob("*.md")`` count if the scans did not filter on frontmatter.
     assert (data_root / WORKOUTS_DIR / DECLARATION_FILENAME).is_file()
@@ -386,6 +388,10 @@ def test_sync_regen_load_report_unchanged_document_counts_with_declarations_pres
     assert (data_root / HISTORY_DIR / DECLARATION_FILENAME).is_file()
     assert (data_root / BLOCKS_DIR / DECLARATION_FILENAME).is_file()
     assert (data_root / DASHBOARDS_DIR / DECLARATION_FILENAME).is_file()
+    for directory in ("wellness", "wellness-archive"):
+        target = data_root / directory / DECLARATION_FILENAME
+        golden = Path(__file__).parent / "declaration_golden" / f"{directory}.AGENTS.md"
+        assert target.read_bytes() == golden.read_bytes()
     assert len(list((data_root / WORKOUTS_DIR).glob("*.md"))) == 3
 
     second_sync = _sync(source, data_root)

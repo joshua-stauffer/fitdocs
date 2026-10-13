@@ -658,6 +658,8 @@ def test_owned_paths_name_every_fitdocs_owned_location() -> None:
         ".fitdocs/",
         "dashboards/",
         "dashboards/assets/",
+        "wellness/",
+        "wellness-archive/",
     )
     # Composed from the directory constants, never respelled -- renaming a
     # directory constant moves its owned prefix with it.
@@ -876,8 +878,9 @@ def test_connector_state_dir_does_not_widen_owned_paths() -> None:
         ".fitdocs/",
         "dashboards/",
         "dashboards/assets/",
+        "wellness/",
+        "wellness-archive/",
     )
-    assert len(OWNED_PATHS) == 10
 
 
 def test_declared_dirs_are_the_top_level_owned_directories() -> None:
@@ -895,6 +898,8 @@ def test_declared_dirs_are_the_top_level_owned_directories() -> None:
         "blocks/",
         "fit-archive/",
         "dashboards/",
+        "wellness/",
+        "wellness-archive/",
     )
     assert f"{DASHBOARDS_DIR}/" in DECLARED_DIRS
     assert f"{WORKOUTS_DIR}/" in DECLARED_DIRS
@@ -1069,3 +1074,32 @@ def test_relative_helpers_use_plain_string_joins_never_os_path() -> None:
     assert "PurePath(" not in planned_link_source
     assert "os." not in planned_link_source
     assert 'f"../../{WORKOUTS_DIR}/' in planned_link_source
+
+
+def test_wellness_location_constants() -> None:
+    assert layout.WELLNESS_ARCHIVE_DIR == "wellness-archive"
+    assert layout.WELLNESS_DIR == "wellness"
+    assert layout.WELLNESS_MANIFEST_NAME == "manifest.toml"
+
+
+def test_wellness_paths_are_pure_and_exact(tmp_path: Path) -> None:
+    root = tmp_path / "absent-data-root"
+    assert not root.exists()
+    assert layout.wellness_archive_path(root, "intervals-json", "a" * 64, ".json") == (
+        root / "wellness-archive" / "intervals-json" / ("a" * 64 + ".json")
+    )
+    assert layout.wellness_archive_path(root, "garmin-zip", "b" * 64, ".zip") == (
+        root / "wellness-archive" / "garmin-zip" / ("b" * 64 + ".zip")
+    )
+    assert layout.wellness_series_path(root, 2026) == root / "wellness" / "2026.csv"
+    assert layout.wellness_series_path(root, 7) == root / "wellness" / "0007.csv"
+    assert layout.wellness_manifest_path(root) == root / "wellness" / "manifest.toml"
+    assert not root.exists()
+
+
+def test_owned_location_count() -> None:
+    assert len(OWNED_PATHS) == 12
+
+
+def test_declared_location_count() -> None:
+    assert len(DECLARED_DIRS) == 7

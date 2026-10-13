@@ -175,22 +175,25 @@ def test_the_absent_value_sentence_states_the_device_only_case() -> None:
 
 
 def test_the_changed_at_this_version_paragraph_names_the_amendment() -> None:
-    head = _flat(_DOC.read_text(encoding="utf-8").split("\n## ", 1)[0])
+    head = _flat(_DOC.read_text(encoding="utf-8").split("\n\nThis document", 1)[0])
     assert f"**Contract version:** `{contract.CONTRACT_VERSION}`" in head
     for phrase in (
-        "fitdocs adds a `dashboards/` location whose pages belong to you",
-        "fitdocs owns their chart regions and `dashboards/assets/`",
-        "Dashboard chart regions and assets are the only document content "
-        "produced from the analytics index",
-        "workout, history and block documents never read it",
-        "Run `fitdocs sync` or `fitdocs regen` once to place `dashboards/AGENTS.md`",
-        "nothing is needed for existing documents",
+        "fitdocs adds two owned locations",
+        "`wellness-archive/` keeps every wellness file fitdocs handled",
+        "`wellness/` holds the normalized daily series",
+        "one CSV file per year and `manifest.toml`",
+        "Run `fitdocs sync` or `fitdocs regen` once to place `wellness/AGENTS.md`",
+        "`wellness-archive/AGENTS.md`",
     ):
         assert phrase in head, phrase
 
 
 def test_the_version_history_records_the_amendment() -> None:
     history = _contract_version_history()
+    assert "Raised from ``9`` to ``10`` by dashboards" in history
+    assert "Dashboard chart regions and assets are the only document content" in history
+    assert "Raised from ``10`` to ``11`` by wellness-store" in history
+    assert "``wellness-archive/`` keeps every wellness file fitdocs handled" in history
     assert "Raised from ``7`` to ``8`` by activity-identity Amendment 1" in history
     assert "Elapsed time is compared only when a distance is missing." in history
     assert "Raised from ``8`` to ``9`` by analytics-index" in history

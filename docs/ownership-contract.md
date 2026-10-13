@@ -1,21 +1,26 @@
 # fitdocs Ownership Contract
 
-**Contract version:** `10`
+**Contract version:** `11`
 
-**What changed at this version:** fitdocs adds a `dashboards/` location
-whose pages belong to you: fitdocs owns their chart regions and
-`dashboards/assets/`, and nothing else in the pages. Dashboard chart regions
-and assets are the only document content produced from the analytics index;
-workout, history and block documents never read it. Run `fitdocs sync` or
-`fitdocs regen` once to place `dashboards/AGENTS.md`; nothing is needed for
-existing documents.
+**What changed at this version:** fitdocs adds two owned locations.
+`wellness-archive/` keeps every wellness file fitdocs handled, as its original
+bytes or its format's canonical extract, named by the SHA-256 of the original
+and never modified. `wellness/` holds the normalized daily series, one CSV
+file per year and `manifest.toml`, rebuilt from the archive and the
+`[wellness]` settings by the drain and by `fitdocs regen`. The inbox drain
+now archives recognized wellness files and reports files it cannot use as
+unrecognized, leaving them in place. A `.fit` file whose header declares a
+type other than an activity no longer gets a workout page; a page that
+already lists one is kept and rebuilt by `fitdocs regen`. Run `fitdocs sync`
+or `fitdocs regen` once to place `wellness/AGENTS.md` and
+`wellness-archive/AGENTS.md`.
 
 This document is the authoritative, published statement of what fitdocs owns
 in your data root, what you own, and the exact limits of every operation that
-writes there. It is restated, in shorter form, inside the five owned
+writes there. It is restated, in shorter form, inside the seven owned
 directories a human or agent browses (`workouts/AGENTS.md`,
-`fit-archive/AGENTS.md`, `history/AGENTS.md`, `blocks/AGENTS.md`, and
-`dashboards/AGENTS.md` — each
+`fit-archive/AGENTS.md`, `history/AGENTS.md`, `blocks/AGENTS.md`,
+`dashboards/AGENTS.md`, `wellness/AGENTS.md`, and `wellness-archive/AGENTS.md` — each
 generated on the first `sync` or `regen` run, the first `fitdocs history` run
 that has a page to write, or the first `fitdocs plan` run that has a block to
 render, because each of those four commands refreshes every declared
@@ -76,6 +81,12 @@ named in the next section.
   delivered). Dot-prefixed because nobody browses it; it carries no
   ownership declaration of its own.
 
+- `wellness/` — normalized daily wellness series, one CSV file per year,
+  and `manifest.toml` recording their inputs.
+- `wellness-archive/` — handled wellness files, kept as original bytes or
+  their format's canonical extract, grouped by format and named by the
+  SHA-256 of the original; fitdocs never modifies an entry.
+
 Two files at the top of the data root are explicitly **not** owned by
 fitdocs even though fitdocs reads and, in one case, writes into them —
 `fitdocs.toml` and `athlete.toml`. A third top-level entry (by default), the
@@ -94,6 +105,22 @@ full -- but only key-wise, at your request, preserving every key it does
 not manage; it is never deleted. See
 [Shared and User-Owned Files](#shared-and-user-owned-files) for the exact
 guarantee, including what re-serialization does not preserve.
+
+## Wellness Archive and Series
+
+`wellness-archive/` holds every wellness file fitdocs handled, as its original
+bytes or the canonical extract its format keeps instead, in one directory per
+format and named by the SHA-256 of the original. fitdocs never modifies an
+archive entry. Removing one withdraws its values from `wellness/` at the next
+`fitdocs sync` or `fitdocs regen`; remove the original from the inbox too,
+or the next drain archives it again.
+
+`wellness/` holds one CSV file per calendar year, with one line per day,
+metric and source; `manifest.toml` records what they were built from. fitdocs
+rebuilds these files from the archive and the `[wellness]` settings whenever
+either changes, and overwrites hand edits to the series. `fitdocs check`
+reports whether they are current. Both locations carry a generated `AGENTS.md`
+stating their ownership and these rules.
 
 ## A Second Document Type: Training History
 
@@ -983,7 +1010,8 @@ and each has a distinct contract:
   does not fail. On a run that reaches the point of writing its outputs, it
   first refreshes the ownership declaration in every declared directory —
   `workouts/AGENTS.md`, `history/AGENTS.md`, `blocks/AGENTS.md`,
-  `fit-archive/AGENTS.md`, and `dashboards/AGENTS.md` — through the same function `sync` and `regen`
+  `fit-archive/AGENTS.md`, `dashboards/AGENTS.md`, `wellness/AGENTS.md`, and
+  `wellness-archive/AGENTS.md` — through the same function `sync` and `regen`
   run at the start of every run, and `plan` runs once, after every source
   is parsed and before its first write (see the `plan` bullet below). If no
   workout document in the data root records a usable load,
@@ -1219,7 +1247,8 @@ fitdocs manages or enforces.
 If your wiki already has its own root-level agent-instructions file (for
 example, a root `AGENTS.md` or `CLAUDE.md` that you author and own), it is
 enough to point at `workouts/AGENTS.md`, `fit-archive/AGENTS.md`,
-`history/AGENTS.md`, `blocks/AGENTS.md`, and `dashboards/AGENTS.md` from there rather than
+`history/AGENTS.md`, `blocks/AGENTS.md`, `dashboards/AGENTS.md`,
+`wellness/AGENTS.md`, and `wellness-archive/AGENTS.md` from there rather than
 duplicating their contents. A short pointer such as:
 
 ```markdown
@@ -1227,10 +1256,12 @@ See `workouts/AGENTS.md` for what fitdocs owns under `workouts/`,
 `fit-archive/AGENTS.md` for the source archive's immutability rule,
 `history/AGENTS.md` for the training-history page, `blocks/AGENTS.md`
 for the training-block and planned-workout pages, and `dashboards/AGENTS.md`
-for the pages that are yours and the chart regions in them that are fitdocs's.
+for the pages that are yours and the chart regions in them that are fitdocs's,
+`wellness/AGENTS.md` for the rebuilt daily series, and
+`wellness-archive/AGENTS.md` for the immutable wellness inputs.
 ```
 
-is sufficient: those five files are generated and kept current by fitdocs
+is sufficient: those seven files are generated and kept current by fitdocs
 on every `sync` and `regen` run, on every `fitdocs history` run that
 writes its page, and on every `fitdocs plan` run that has a block to
 render — each of those four commands refreshes every declared directory's

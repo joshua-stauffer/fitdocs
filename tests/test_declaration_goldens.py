@@ -1,8 +1,9 @@
-"""Byte-golden pin for the five emitted ``AGENTS.md`` declaration texts.
+"""Byte-golden pin for the seven emitted ``AGENTS.md`` declaration texts.
 
 Task 4.1 originally; extended by ``load-history`` task 1.2 to a third,
 ``history/``, directory, and by ``training-blocks`` task 1.2 to a fourth,
 ``blocks/``, and by ``dashboards`` task 1.2 to a fifth, ``dashboards/``.
+Wellness-store task 1.5 adds ``wellness/`` and ``wellness-archive/``.
 
 Three review rounds each cleared a named false sentence in
 ``fitdocs.declaration.declaration_text``'s hand-written prose and each left a
@@ -52,6 +53,8 @@ _GOLDEN_NAMES: dict[str, str] = {
     f"{ARCHIVE_DIR}/": "fit-archive",
     f"{BLOCKS_DIR}/": "blocks",
     f"{DASHBOARDS_DIR}/": "dashboards",
+    "wellness/": "wellness",
+    "wellness-archive/": "wellness-archive",
 }
 
 

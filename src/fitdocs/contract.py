@@ -325,7 +325,7 @@ highest-ranked extra that records it. A page without extras renders as before
 and changes only this line (Req 8.2).
 """
 
-CONTRACT_VERSION: Final[str] = "10"
+CONTRACT_VERSION: Final[str] = "11"
 """The published ownership contract's version identifier (Req 2.8).
 
 A *string*, and deliberately not comparable with :data:`DOC_VERSION`: it
@@ -408,6 +408,19 @@ and assets are the only document content produced from the analytics index;
 workout, history and block documents never read it. Run ``fitdocs sync`` or
 ``fitdocs regen`` once to place ``dashboards/AGENTS.md``; nothing is needed for
 existing documents.
+
+Raised from ``10`` to ``11`` by wellness-store because the data root gains two owned
+locations. ``wellness-archive/`` keeps every wellness file fitdocs handled,
+as its original bytes or its format's canonical extract, named by the
+SHA-256 of the original and never modified. ``wellness/`` holds the
+normalized daily series, one CSV file per year and ``manifest.toml``,
+rebuilt from the archive and the ``[wellness]`` settings by the drain and by
+``fitdocs regen``. The inbox drain now archives recognized wellness files
+and reports files it cannot use as unrecognized, leaving them in place. A
+``.fit`` file whose header declares a type other than an activity no longer
+gets a workout page; a page that already lists one is kept and rebuilt by
+``fitdocs regen``. Run ``fitdocs sync`` or ``fitdocs regen`` once
+to place ``wellness/AGENTS.md`` and ``wellness-archive/AGENTS.md``.
 """
 
 # --- document vocabulary -----------------------------------------------------

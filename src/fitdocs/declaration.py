@@ -59,6 +59,8 @@ from fitdocs.layout import (
     DASHBOARDS_DIR,
     DECLARED_DIRS,
     HISTORY_DIR,
+    WELLNESS_ARCHIVE_DIR,
+    WELLNESS_DIR,
     WORKOUTS_DIR,
 )
 
@@ -384,6 +386,36 @@ _DASHBOARDS_OWNER: Final[str] = (
 )
 # CLAIM ANCHOR: the same split as `_DASHBOARDS_PAGES`.
 
+_WELLNESS_ARCHIVE_CONTENT: Final[str] = (
+    "Each file here is a wellness file fitdocs handled, kept as its original "
+    "bytes or as the canonical extract its format keeps instead, in one "
+    "directory per format and named by the SHA-256 of the original."
+)
+# CLAIM ANCHOR: wellness.archive's planned commit protocol and format kept form.
+
+_WELLNESS_ARCHIVE_IMMUTABLE: Final[str] = (
+    "fitdocs never modifies these files. Removing one withdraws its values "
+    "from `wellness/` at the next `fitdocs sync` or `fitdocs regen`; remove "
+    "the original from the inbox too, or the next drain archives it again."
+)
+# CLAIM ANCHOR: wellness.archive's planned write-once commit protocol and
+# wellness.engine's rebuild from the archive; the inbox drain archives inputs.
+
+_WELLNESS_SERIES_CONTENT: Final[str] = (
+    "One CSV file per calendar year holds every wellness value, one line per "
+    "day, metric and source; `manifest.toml` records what they were built from."
+)
+# CLAIM ANCHOR: wellness.engine's planned yearly series writer and the
+# wellness.series manifest codec.
+
+_WELLNESS_SERIES_REBUILT: Final[str] = (
+    "fitdocs rebuilds these files from `wellness-archive/` and the `[wellness]` "
+    "settings whenever either changes, and overwrites edits made here; "
+    "`fitdocs check` reports whether they are current."
+)
+# CLAIM ANCHOR: wellness.engine's planned archive/settings rebuild and
+# wellness.inspect's manifest comparison, reached by fitdocs check.
+
 _OWNER_BLOCK: Final[str] = (
     "## Ownership\n\n"
     "Owner: {owner}.\n"
@@ -430,9 +462,10 @@ def declaration_text(directory: str) -> str:
     is deferred to the published ownership contract (task 7.1), reached by
     ``CONTRACT_DOCUMENTATION_URL``.
 
-    Dispatches explicitly on ``directory`` over exactly the five members of
+    Dispatches explicitly on ``directory`` over exactly the seven members of
     `layout.DECLARED_DIRS` -- ``workouts/``, ``history/``, ``fit-archive/``,
-    ``blocks/``, ``dashboards/`` -- with **no fall-through branch**: a
+    ``blocks/``, ``dashboards/``, ``wellness/``, ``wellness-archive/`` -- with
+    **no fall-through branch**: a
     ``directory`` this function does not recognize raises :class:`ValueError`
     rather than silently inheriting another directory's prose.
 
@@ -529,6 +562,20 @@ def declaration_text(directory: str) -> str:
             f"{_DASHBOARDS_DIRECTIVE}\n\n"
             f"{_DASHBOARDS_ASSETS}\n\n"
             f"{_DASHBOARDS_CHECK}\n\n"
+        )
+    elif directory == WELLNESS_ARCHIVE_DIR + "/":
+        heading = "Wellness Archive"
+        body = (
+            f"{_WRITTEN_AND_OWNED.format(directory=directory)}\n\n"
+            f"{_WELLNESS_ARCHIVE_CONTENT}\n\n"
+            f"{_WELLNESS_ARCHIVE_IMMUTABLE}\n\n"
+        )
+    elif directory == WELLNESS_DIR + "/":
+        heading = "Wellness Series"
+        body = (
+            f"{_WRITTEN_AND_OWNED.format(directory=directory)}\n\n"
+            f"{_WELLNESS_SERIES_CONTENT}\n\n"
+            f"{_WELLNESS_SERIES_REBUILT}\n\n"
         )
     else:
         raise ValueError(

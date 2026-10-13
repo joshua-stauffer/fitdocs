@@ -262,6 +262,23 @@ and version bump are landed by `dashboards` task 1.2 and the narrative
 sections of the published contract by its task 8.1. Nothing existing is
 renumbered.
 
+## Amendment 6 (2026-10-13): two wellness locations and declarations, landed by wellness-store
+
+The wellness-store spec adds `wellness/` and `wellness-archive/` to the owned
+and declared locations, keeping the existing entries including dashboards.
+`wellness-archive/` keeps handled wellness files, as original bytes or a
+format's canonical extract, named by the SHA-256 of the original and never
+modified by fitdocs. `wellness/` holds one daily-series CSV per calendar year
+and `manifest.toml`, rebuilt from the archive and `[wellness]` settings;
+hand edits to the series are overwritten. Both locations receive generated
+`AGENTS.md` declarations stating those rules and the owner (Requirement 3
+criterion 3.12). The published
+ownership contract describes both locations and advances `CONTRACT_VERSION`
+from `"10"` to `"11"`, recording what changed (Requirement 2 criterion 2.18).
+These additions are landed by wellness-store task 1.5, fulfilling wellness-store 2.1, 11.1, 11.7,
+14.6 and 19.1; the wellness writers remain owned by that spec. No existing
+criterion or amendment is renumbered.
+
 ## Requirements
 
 ### Requirement 1: Consistent Document Interpretation Across Operations
@@ -302,6 +319,8 @@ that I can rely on the boundary instead of inferring it from behavior.
 16. _(added by Amendment 4)_ The ownership contract shall state that a workout document takes each of its channels from exactly one of its archived source files -- the base when the base records the channel, otherwise the highest-ranked extra that records it -- that the document's identity, laps and session values are the base's, that its Channel Sources section names the file each channel came from, and that the training-load and benchmark-derivation passes read the same composed activity.
 17. _(added by Amendment 5)_ The ownership contract shall name `dashboards/` and `dashboards/assets/` as fitdocs-owned locations and shall describe a dashboard page as a category of its own, a page owned by the athlete that holds regions owned by fitdocs, distinct from the generated documents that hold user-owned regions; and shall state the page rule, that fitdocs never creates, renames, rewrites as a whole or deletes a page and never writes a generated-file banner into one, the chart region and chart image policy, that a snapshot is never modified or deleted, that a chart image is removed only when no dashboard page references it, that a link from outside `dashboards/` does not protect an image, and what the dashboard pass and `fitdocs dashboard` overwrite. Every statement in the contract that the analytics index is never read back into a document shall carry one named exception: dashboard chart regions and their assets are the only document content produced from the index, and workout, history and block documents never read it.
 
+18. _(added by Amendment 6)_ The ownership contract shall name `wellness-archive/` and `wellness/` as fitdocs-owned locations, state that handled wellness files are kept as original bytes or their format's canonical extract, grouped by format and named by the original SHA-256 and never modified, and that the daily series and its manifest are rebuilt from the archive and `[wellness]` settings, overwriting hand edits. Its version shall advance by one and record what changed.
+
 ### Requirement 3: In-Tree Ownership Declaration
 **Objective:** As an LLM agent maintaining a markdown wiki, I want the ownership
 boundary declared inside the directories fitdocs owns, so that I read it where I
@@ -320,6 +339,8 @@ work and do not "improve" generated files.
 9. _(added by Amendment 2)_ The ownership declaration placed in the history location shall state that the location holds one generated document and its chart image, both rewritten in full on every history run and carrying no user-owned region, and that the document is re-derivable from the workout documents alone; the user-owned-region element of 3.2 does not apply to it. The declaration shall not restate that document's type or schema, which the published contract (2.11) locates.
 10. _(added by Amendment 3)_ The ownership declaration placed in the rendered blocks location shall state what the directory holds, that the block page's notes region is the athlete's and carried over, that the planned pages carry no user-owned content, that the pages are re-derivable from the plan sources alone, and that the plan sources are never written by fitdocs. The declaration shall not restate either document's type or schema, which the published contract (2.13) locates.
 11. _(added by Amendment 5)_ The ownership declaration placed in the dashboards location shall state that the pages belong to the athlete and that fitdocs writes only the chart regions inside them and the files in `dashboards/assets/`, that a chart region is rewritten in full between its markers and must not be edited, and that snapshot files are never modified or deleted. The location is the inverse of the other declared directories: the elements of 3.2 that state the directory's contents are tool-owned, and re-derivable from other files, do not apply to it, as 3.2a carves them out for the archive. The declaration shall not restate the directive grammar, which the published contract and the dashboards documentation locate.
+
+12. _(added by Amendment 6)_ Both wellness locations shall receive generated ownership declarations naming fitdocs as owner, stating the archive's immutability and the series' rebuild from archive and settings, and stating that series edits are overwritten. Missing, stale or foreign declarations shall be reported as for the existing declared locations.
 
 ### Requirement 4: Generated-Document Provenance
 **Objective:** As a human or agent opening a workout document, I want the file

@@ -7,8 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from fitdocs.contract import CONTRACT_VERSION
-
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CHANGELOG = _REPO_ROOT / "CHANGELOG.md"
 _STEERING = _REPO_ROOT / ".kiro" / "steering"
@@ -82,7 +80,7 @@ def test_unreleased_added_has_exactly_one_dashboard_entry_naming_everything() ->
     assert "`kinds` lists the chart kinds" in entry
     assert "`fitdocs-dashboards` skill" in entry
     assert f"]({_GUIDE_URL})" in entry
-    assert f"advances to version {CONTRACT_VERSION}" in entry
+    assert "advances to version 10" in entry
     assert "run `fitdocs sync` or `fitdocs regen` once" in entry
     assert "`dashboards/AGENTS.md`" in entry
     assert (
