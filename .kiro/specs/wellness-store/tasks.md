@@ -425,7 +425,7 @@ preflight and keeps every call dashboards placed).
 
 - [ ] 2. Core: formats, merge, codec, settings, archive, inbox selector
 
-- [ ] 2.1 (P) Parse intervals.icu wellness: the API list and the fitdocs delivery envelope
+- [x] 2.1 (P) Parse intervals.icu wellness: the API list and the fitdocs delivery envelope
   - `formats/intervals.py` per design § IntervalsFormat: `SOURCE`, `FORMAT`,
     `DELIVERY_FORMAT`, `DELIVERY_VERSION`, `FIELD_METRICS`, recognizer,
     parser (17 mapped fields, `updated` normalization, envelope origins,
@@ -1030,3 +1030,5 @@ preflight and keeps every call dashboards placed).
 - 1.5: independently APPROVED; full13741/44, focused284, mypy520/ruff clean; 69 mutations plus three reviewer mutations. CONTRACT_VERSION11 literal history10->11, dashboards historical changelog pin literal10 preserved. Quantifier exemptions are two exact required wellness sentences; keep section-scoped head/series assertions and independent owned/declared count tests. Both declarations match scratch-sync goldens. Existing declaration-directory symlink defect is upstream and already queued.
 
 - 1.6: independently APPROVED; full13759/44, focused59, mypy520/ruff clean, 32 claimed plus2 reviewer mutations. FileIdentity.file_type is last/default None, unknown numeric types stringify and bool/float reject; classifier accepts only None/activity. Goldens add only file_type. Historical analytics-derived Amendment6 pins now section-scoped, allow approved Amendment7, which uses required landed-by attribution. Planner guard remains4.1. Foundation1.1–1.6 complete.
+
+- 2.1: independently APPROVED; full13825/44, wellness272, mypy523/ruff clean; 87 replayed plus2 reviewer mutations. Intervals parser maps17 fields, complete covers, UTC revisions and envelope origins; canonical published builders in builders_intervals.py. No registration until3.1. Documentation7.4, intake15.3 reason, archival15.6 bytes remain respective5.1/3.3/2.6.
