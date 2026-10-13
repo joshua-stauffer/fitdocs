@@ -229,7 +229,9 @@ preflight and keeps every call dashboards placed).
     `size − (1 << 16) − zipfile.sizeEndCentDir` (65,558 bytes before EOF), or
     the central-directory read (`_RealGetContents`) of exactly the size the
     end record declares, which may exceed `CHUNK_BYTES`. Any other unsized or
-    larger read is a violation. Also create `tests/wellness/conftest.py`
+    larger read is a violation. The opener can also be told to raise
+    `OSError` on any read past `HEAD_BYTES` (a file evicted or only partly
+    present after its head). Also create `tests/wellness/conftest.py`
     exposing the data-root fixture. 1.3 appends the registry helpers; the
     files are frozen after 1.3.
   - **Tests** (`test_probe.py`): `json()` returns `None` above the (patched)
@@ -245,13 +247,17 @@ preflight and keeps every call dashboards placed).
     with synthetic read logs: an unsized read 65,559 bytes before EOF, a
     second central-directory-sized read, and a 2 × `CHUNK_BYTES` read at
     offset 0 are each violations; `hash_file` equals `hashlib.sha256` of the
-    bytes and reads only in `CHUNK_BYTES` pieces with no unsized read.
+    bytes and reads only in `CHUNK_BYTES` pieces with no unsized read;
+    `CandidateProbe.open` succeeds on a file whose reads past the head fail,
+    and then `json()` (on a JSON file under the limit) and `zip_members()`
+    (on a zip), each file larger than `HEAD_BYTES`, each raise `OSError` rather than returning `None`.
   - **Mutations:** read the whole file in `json()` regardless of size;
     `hash_file` with one unsized `read()`; drop the `json()` cache;
     widen the checker's end-record window by one byte (the 65,559 case
-    reds).
+    reds); catch `OSError` in `json()` or `zip_members()` and return `None`
+    (the failing-read cases red).
   - **Observable:** `uv run pytest tests/wellness/test_probe.py` green.
-  - _Requirements: 3.1, 3.2_
+  - _Requirements: 1.2, 3.1, 3.2_
 
 - [ ] 1.3 Define the format declaration types, the registry rules and the test-only formats
   - **`spec.py`** per design § Registry: `SourceKind`, `SourceSpec`,
@@ -281,15 +287,21 @@ preflight and keeps every call dashboards placed).
     extractor, EXTRACT without one, LATEST_ENTRY without `entry_order`,
     `rules_version` 0, overlapping metrics within one source); `recognize`
     with zero, one and two claiming formats (the reason names both
-    claimants), a raising recognizer counted as no claim, a suffix no format
-    declares; `default_source_order` with sources whose id order disagrees
+    claimants), a recognizer raising `ValueError` counted as no claim (a
+    second format still claims the file), a recognizer whose `probe.json()`
+    read raises `OSError` (failing opener from 1.2, file larger than
+    `HEAD_BYTES`) makes `recognize` raise
+    `OSError` even when another format would claim the file, a suffix no
+    format declares; `default_source_order` with sources whose id order disagrees
     with kind order; `candidate_suffixes` reflects a patched `FORMATS` on a
     second call after a first call with other formats (no cache).
   - **Mutations:** drop the `.fit` rule from `validate_registry`; return the
     first claimant instead of refusing two; sort `default_source_order` by id
-    only; memoize `candidate_suffixes` (the no-cache test reds).
+    only; memoize `candidate_suffixes` (the no-cache test reds); catch
+    `OSError` with the other recognizer exceptions in `recognize` (the
+    `OSError` case reds).
   - **Observable:** `uv run pytest tests/wellness` green.
-  - _Requirements: 1.3, 1.4, 1.5, 10.2, 17.1, 17.3, 17.4_
+  - _Requirements: 1.2, 1.3, 1.4, 1.5, 10.2, 17.1, 17.3, 17.4_
 
 - [ ] 1.4 Guard the wellness package's imports, clock and network
   - Create `src/fitdocs/wellness/formats/__init__.py` (docstring only), so the
@@ -641,13 +653,15 @@ preflight and keeps every call dashboards placed).
     file (intervals list, envelope, four Garmin kinds, each empty Garmin
     file) — recognized by exactly its format; decoys (hydration file,
     `{"a": 1}`, a non-JSON `.json`, an oversize JSON with the limit patched)
-    unrecognized with a reason.
+    unrecognized with a reason; one unreadable row: an intervals list larger than
+    `HEAD_BYTES` whose reads past the head fail (failing opener) makes `recognize` raise
+    `OSError`, never an unrecognized verdict.
   - **Mutations:** register `garmin.UDS_FORMAT` twice (validation reds);
     loosen the UDS signature to `calendarDate` (the hydration decoy is
     claimed and the matrix reds).
   - **Observable:** full `uv run pytest` green (group-2 integration point).
   - _Depends: 2.1, 2.2_
-  - _Requirements: 1.3, 1.4, 1.5, 15.1, 16.1, 17.1_
+  - _Requirements: 1.2, 1.3, 1.4, 1.5, 15.1, 16.1, 17.1_
 
 - [ ] 3.2 Assess and rebuild the series
   - `series.inputs_digest` and `engine.py` per design § Engine
@@ -698,16 +712,20 @@ preflight and keeps every call dashboards placed).
   - `intake.py` per design § Intake (`identify`, `archive_identified` and the
     outcome types).
   - **Tests**: unrecognized and ambiguous reasons; `OSError` in the probe and
-    in hashing → deferred; an already-archived sha → `AlreadyArchived` with
+    in hashing → deferred; `OSError` from a recognizer's lazy probe read (a
+    real registered `.json` larger than `HEAD_BYTES` whose reads past the
+    head fail) → deferred with
+    the "could not be read" reason, not unrecognized; an already-archived sha → `AlreadyArchived` with
     no copy attempted (counting opener); a fresh file → `Archived`; invalid
     content → `Failed` naming the parse error; a file changed during the
     commit → deferred with the "changed during the run" reason; the envelope
     with version 2 → unrecognized "written by a newer fitdocs".
   - **Mutations:** skip the existence check; map `Changed` to `Failed`;
-    map a probe `OSError` to unrecognized.
+    map a probe `OSError` to unrecognized; swallow `OSError` inside
+    `recognize` as no claim (the recognizer-read case reds).
   - **Observable:** `uv run pytest tests/wellness/test_intake.py` green.
   - _Depends: 3.1_
-  - _Requirements: 1.4, 2.5, 2.6, 2.8, 15.3_
+  - _Requirements: 1.2, 1.4, 2.5, 2.6, 2.8, 15.3_
   - _Boundary: Intake_
 
 - [ ] 3.4 Inspect the wellness tree read-only and publish the facade

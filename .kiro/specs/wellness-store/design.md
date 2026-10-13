@@ -348,7 +348,7 @@ assessment reports as stale and the next drain repairs.
 | Requirement | Summary | Components | Interfaces | Flows |
 |-------------|---------|------------|------------|-------|
 | 1.1, 1.6, 1.8 | Wellness candidates by registered suffix; others ignored; folder connector unchanged | InboxSelector, Registry | `select_wellness_candidates`, `candidate_suffixes` | Drain |
-| 1.2 | One settle interval for all | DrainWellnessStep | `inbox.settle` | Drain |
+| 1.2 | One settle interval for all; an unreadable candidate deferred, including a failed probe read inside a recognizer | DrainWellnessStep, Registry, Intake | `inbox.settle`, `recognize`, `identify` | Drain |
 | 1.3, 1.4, 1.5 | Recognition by content (and name pattern); unrecognized and ambiguous reported | Registry, Probe, Intake | `recognize`, `CandidateProbe`, `identify` | Drain |
 | 1.7 | One channel per candidate | DrainWellnessStep, DrainReport | `DrainReport` fields | Drain |
 | 1.9 | Explicit-source sync stays FIT-only | DrainWellnessStep | `sync.sync` unchanged | — |
@@ -527,7 +527,7 @@ def wellness_day_of_sleep_end(end: datetime) -> date: ...
 | Field | Detail |
 |-------|--------|
 | Intent | Declares sources and formats; recognizes a candidate; validates the declarations |
-| Requirements | 1.3, 1.4, 1.5, 1.6, 9.3, 10.2, 17.1, 17.3, 17.4 |
+| Requirements | 1.2, 1.3, 1.4, 1.5, 1.6, 9.3, 10.2, 17.1, 17.3, 17.4 |
 
 **Responsibilities & Constraints**
 - The declaration types live in `spec.py`, which format modules import; the
@@ -541,7 +541,12 @@ def wellness_day_of_sleep_end(end: datetime) -> date: ...
 - `recognize(probe)` asks every format whose `suffixes` contain the probe's
   suffix; exactly one claim → that format; none → `Unrecognized` with reason
   "no supported wellness format reads this file"; several → `Unrecognized`
-  naming every claimant. A recognizer that raises counts as no claim.
+  naming every claimant. A recognizer that raises anything other than
+  `OSError` counts as no claim. An `OSError` (a failed probe read, typically
+  `probe.json()` or `probe.zip_members()` on an evicted, partly downloaded or
+  failing file) is never a verdict on the content: `recognize` re-raises it at
+  once, without asking the remaining formats, and `identify` maps it to
+  `Deferred` (Req 1.2).
 - No registry function caches: each reads `SOURCES`/`FORMATS` at call time,
   so a test that patches the tuples sees its own formats everywhere.
 - `validate_registry()` (called by tests on the real registry and on test
@@ -647,8 +652,10 @@ def validate_registry() -> None: ...   # raises ValueError naming the offending 
   bound**: recognizing or extracting a zip holds at most its central
   directory (about 100 bytes per member) plus 65,558 bytes plus one
   `CHUNK_BYTES` buffer at a time, independent of the size of its member data.
-  Every read error propagates as `OSError` (the intake maps it to
-  deferral).
+  Every read error propagates as `OSError`, including one raised by a lazy
+  `json()` or `zip_members()` read inside a recognizer (`recognize` re-raises
+  it, § Registry); the intake maps it to deferral. A decode error or a
+  non-zip (`zipfile.BadZipFile`) is not a read error: it yields `None`.
 - `hash_file(path)` streams `CHUNK_BYTES` at a time and returns
   `(sha256 hex, size)`.
 
@@ -1010,7 +1017,8 @@ def read_entry_order(entry: ArchiveEntry) -> str: ...      # header only; raises
 | Requirements | 1.3, 1.4, 1.5, 2.5, 2.6, 2.8 |
 
 - `identify(path)`: `CandidateProbe.open` → `recognize` → `hash_file`.
-  `OSError` → `Deferred("could not be read (...); left in place and retried
+  `OSError` from any of the three, including a recognizer's lazy probe read
+  that `recognize` re-raises, → `Deferred("could not be read (...); left in place and retried
   on a later drain")`.
 - `archive_identified(data_root, identified, progress)`: entry exists →
   `AlreadyArchived`; else `commit_original` / `commit_extract`; `Committed` →
@@ -1511,7 +1519,9 @@ re-parse the archive or re-implement the merge.
   `probe.head` (first 64 KiB), `probe.json()` (whole JSON when the file is at
   most 64 MiB, else `None`) and `probe.zip_members()` (central directory
   only). It must be deterministic, must not read beyond these, and returns
-  `False` rather than raising for a file it does not want.
+  `False` rather than raising for a file it does not want. It does not catch
+  the `OSError` a probe read raises: that propagates and defers the
+  candidate.
 - **Parse contract**: `parse(stream)` yields `DaySnapshot`s from the
   *archived form* (the original bytes, or the extract). It raises
   `WellnessFormatError` for invalid content (the drain quarantines the
