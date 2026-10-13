@@ -9,13 +9,15 @@ silently fall out of the wheel while a scan-based listing still looks
 "correct". The CLI's ``skill`` command and every test that needs a skill's
 installed location resolve it here.
 
-Three skills are registered today: :data:`BLOCK_SKILL_NAME`
+Four skills are registered today: :data:`BLOCK_SKILL_NAME`
 (``build-training-block``, an athlete-facing plan-authoring workflow) and
 :data:`INBOX_SKILL_NAME` (``fitdocs-workouts``, the turnkey inbox-drain
 workflow for an LLM-managed wiki, distribution task 4.2), followed by
 :data:`ANALYTICS_SKILL_NAME` (``fitdocs-analytics``, the read-only analytics
-querying guide). All live under :data:`PACKAGED_SKILLS` in registration order;
-nothing about resolution distinguishes one registered name from another.
+querying guide), and :data:`DASHBOARDS_SKILL_NAME` (``fitdocs-dashboards``,
+the guide to charts on dashboard pages). All live under
+:data:`PACKAGED_SKILLS` in registration order; nothing about resolution
+distinguishes one registered name from another.
 
 Resolution goes through :func:`importlib.resources.files`, bound at module
 level (rather than imported and called inline) so a test has exactly one
@@ -46,10 +48,12 @@ SKILL_FILENAME: Final[str] = "SKILL.md"
 BLOCK_SKILL_NAME: Final[str] = "build-training-block"
 INBOX_SKILL_NAME: Final[str] = "fitdocs-workouts"
 ANALYTICS_SKILL_NAME: Final[str] = "fitdocs-analytics"
+DASHBOARDS_SKILL_NAME: Final[str] = "fitdocs-dashboards"
 PACKAGED_SKILLS: Final[tuple[str, ...]] = (
     BLOCK_SKILL_NAME,
     INBOX_SKILL_NAME,
     ANALYTICS_SKILL_NAME,
+    DASHBOARDS_SKILL_NAME,
 )
 
 

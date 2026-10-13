@@ -79,6 +79,7 @@ from scripts.check_artifacts import (
 )
 
 from fitdocs import Sport
+from fitdocs.agentskill import PACKAGED_SKILLS
 from fitdocs.benchmarks import BenchmarkKind
 from fitdocs.load.profile import AthleteProfile, save_profile
 from tests._content_fingerprints import SALT as REAL_SALT
@@ -149,8 +150,16 @@ def test_wheel_required_has_the_six_design_members_including_packaged_skills() -
         "fitdocs/skills/build-training-block/example-block.toml",
         "fitdocs/skills/fitdocs-workouts/SKILL.md",
         "fitdocs/skills/fitdocs-analytics/SKILL.md",
+        "fitdocs/skills/fitdocs-dashboards/SKILL.md",
     ):
         assert member in policy.wheel_required
+
+
+def test_every_packaged_skill_file_is_a_wheel_required_member() -> None:
+    policy = load_policy(REAL_POLICY_PATH)
+    assert PACKAGED_SKILLS, "the skill registry is empty"
+    for name in PACKAGED_SKILLS:
+        assert f"fitdocs/skills/{name}/SKILL.md" in policy.wheel_required, name
 
 
 def test_sdist_required_has_the_six_named_members() -> None:
@@ -982,6 +991,7 @@ _CLEAN_WHEEL_MEMBERS = {
     "fitdocs/skills/build-training-block/example-block.toml": b"",
     "fitdocs/skills/fitdocs-workouts/SKILL.md": b"# skill",
     "fitdocs/skills/fitdocs-analytics/SKILL.md": b"# skill",
+    "fitdocs/skills/fitdocs-dashboards/SKILL.md": b"# skill",
 }
 
 _CLEAN_SDIST_MEMBERS = {

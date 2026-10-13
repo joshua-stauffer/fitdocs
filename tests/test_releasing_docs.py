@@ -37,8 +37,8 @@ pins:
     the other four causes, and the hard-error bullet must name all four.
 (k) step 5's fenced command starts with the `FITDOCS_FORBIDDEN_STRINGS=`
     assignment.
-(l) step 2 names the four tracked locations the release literal must be
-    bumped in (the manifest and all three packaged skills' `SKILL.md`), runs all
+(l) step 2 names the five tracked locations the release literal must be
+    bumped in (the manifest and all four packaged skills' `SKILL.md`), runs all
     three keeping tests (`test_changelog.py`, `test_version_identity.py`,
     `test_agent_skill.py`), states the change is committed and step 1 is
     re-run against it, and names the two pre-release test pins plus the
@@ -566,11 +566,12 @@ def _step2_section() -> str:
     return _section(_text(), "2. Cut the changelog entry")
 
 
-def test_step2_names_the_four_version_locations() -> None:
+def test_step2_names_the_five_version_locations() -> None:
     section = _step2_section()
     assert (
-        "four tracked places" in section
+        "five tracked places" in section
         and "src/fitdocs/skills/fitdocs-analytics/SKILL.md" in section
+        and "src/fitdocs/skills/fitdocs-dashboards/SKILL.md" in section
     )
     assert "[project].version" in section
     assert "src/fitdocs/skills/fitdocs-workouts/SKILL.md" in section

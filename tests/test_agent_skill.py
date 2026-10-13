@@ -42,6 +42,7 @@ import yaml
 from fitdocs.agentskill import (
     ANALYTICS_SKILL_NAME,
     BLOCK_SKILL_NAME,
+    DASHBOARDS_SKILL_NAME,
     INBOX_SKILL_NAME,
     PACKAGED_SKILLS,
     skill_file,
@@ -95,6 +96,19 @@ _ANALYTICS_HEADINGS: tuple[str, ...] = (
     "Worked examples",
     "Reporting an answer",
     "What the sandbox refuses",
+    "Ownership",
+    "Further reading",
+)
+
+_DASHBOARDS_HEADINGS: tuple[str, ...] = (
+    "When this applies",
+    "Write a chart directive",
+    "Relative and frozen charts",
+    "Windows with $today",
+    "Columns, units and pace",
+    "Running cadence",
+    "The check loop",
+    "Traps",
     "Ownership",
     "Further reading",
 )
@@ -210,6 +224,7 @@ _SKILL_PROFILES: dict[str, _SkillProfile] = {
         pull_channels=_PULL_CHANNELS_LITERAL,
     ),
     ANALYTICS_SKILL_NAME: _SkillProfile(headings=_ANALYTICS_HEADINGS),
+    DASHBOARDS_SKILL_NAME: _SkillProfile(headings=_DASHBOARDS_HEADINGS),
 }
 
 
@@ -1582,3 +1597,175 @@ def test_inbox_ownership_names_declaration_contract_and_never_hand_edits() -> No
     assert "AGENTS.md" in ownership_text
     assert CONTRACT_DOCUMENTATION_URL in ownership_text
     assert "never hand-edits" in ownership_text
+
+
+# --- the dashboards skill (dashboards Req 18) --------------------------------
+
+
+def _dashboards_sections() -> dict[str, str]:
+    _frontmatter, body = _split_frontmatter(_skill_text(DASHBOARDS_SKILL_NAME))
+    return _sections(body)
+
+
+def _flat(text: str) -> str:
+    return " ".join(text.split())
+
+
+def test_dashboards_skill_is_the_fourth_registered_skill() -> None:
+    assert DASHBOARDS_SKILL_NAME == "fitdocs-dashboards"
+    assert PACKAGED_SKILLS[3:] == (DASHBOARDS_SKILL_NAME,)
+    assert len(PACKAGED_SKILLS) == 4
+
+
+def test_dashboards_owned_path_guard_is_live_for_this_skill() -> None:
+    """The substring guard over OWNED_PATHS only bites if the skill talks about
+    the location and the owned spelling really is banned."""
+    assert "dashboards/" in OWNED_PATHS
+    assert "dashboards/assets/" in OWNED_PATHS
+    _frontmatter, body = _split_frontmatter(_skill_text(DASHBOARDS_SKILL_NAME))
+    assert "dashboards directory" in body
+    assert "its assets directory" in body
+
+
+def test_dashboards_cadence_warning_is_in_its_section() -> None:
+    section = _flat(_dashboards_sections()["Running cadence"])
+    assert "_cadence_rpm" in section
+    assert "strides per minute" in section
+    assert "not steps per minute" in section
+    assert not re.search(r"hold steps", section), "the cadence sentence is inverted"
+    assert "one foot" in section
+    assert "FIT convention" in section
+    assert "suffix" in section
+
+
+def test_dashboards_window_section_shows_the_cast_around_the_interval() -> None:
+    section = _flat(_dashboards_sections()["Windows with $today"])
+    assert "CAST($today - INTERVAL 12 WEEK AS DATE)" in section
+
+
+def test_dashboards_traps_state_when_a_chart_gets_no_region() -> None:
+    section = _flat(_dashboards_sections()["Traps"])
+    assert "never edited" in section
+    assert "could not be written" in section
+    assert "could not be written gets no region" in section
+    assert "and then fails gets" not in section
+
+
+def test_dashboards_check_loop_says_findings_fields_may_be_null() -> None:
+    section = _flat(_dashboards_sections()["The check loop"])
+    assert "null where they do not apply" in section
+    assert "chart whose `id` is null" in section
+    assert "an unclosed directive)" not in section
+
+
+def test_dashboards_columns_section_carries_pace_and_non_finite() -> None:
+    section = _flat(_dashboards_sections()["Columns, units and pace"])
+    assert "1000.0 / NULLIF(speed_mps, 0) AS pace_s_per_km" in section
+    assert "non-finite" in section
+    assert "AS distance_km" in section
+
+
+def test_dashboards_columns_section_carries_the_missing_row_note() -> None:
+    sections = _dashboards_sections()
+    section = _flat(sections["Columns, units and pace"])
+    assert "missing row" in section
+    assert "NULL" in section
+    assert "COALESCE" in section
+    for heading, text in sections.items():
+        if heading != "Columns, units and pace":
+            assert "COALESCE" not in text, f"decoy: {heading!r} also says COALESCE"
+            assert "missing row" not in text, f"decoy: {heading!r} says missing row"
+
+
+def test_dashboards_window_section_teaches_date_arithmetic() -> None:
+    section = _flat(_dashboards_sections()["Windows with $today"])
+    assert "$today - 84" in section
+    assert "INTERVAL" in section
+    assert "timestamp" in section
+
+
+def test_dashboards_relative_and_frozen_section_names_the_freeze_form() -> None:
+    section = _flat(_dashboards_sections()["Relative and frozen charts"])
+    assert "relative" in section
+    assert "frozen" in section
+    assert "fitdocs dashboard freeze" in section
+
+
+def test_dashboards_check_loop_and_kinds_are_pointed_at() -> None:
+    sections = _dashboards_sections()
+    loop = _flat(sections["The check loop"])
+    assert "fitdocs dashboard check --format json" in loop
+    _frontmatter, body = _split_frontmatter(_skill_text(DASHBOARDS_SKILL_NAME))
+    assert "fitdocs dashboard kinds" in body
+
+
+def test_dashboards_traps_section_states_the_four_traps() -> None:
+    section = _flat(_dashboards_sections()["Traps"])
+    assert "column 0" in section
+    assert "indent" in section
+    assert "-->" in section
+    assert "--!>" in section
+    assert "sql: |" in section
+    assert "Live Preview" in section
+
+
+def _dashboards_fenced_directives() -> list[str]:
+    _frontmatter, body = _split_frontmatter(_skill_text(DASHBOARDS_SKILL_NAME))
+    _stripped, fences = _strip_fences(body)
+    return [content for _lang, content in fences if "<!-- fitdocs:chart" in content]
+
+
+def test_dashboards_example_directives_parse_and_name_registered_kinds() -> None:
+    from fitdocs.dashboards.directive import Directive, parse_directive
+    from fitdocs.render.charts.kit import kind_names
+
+    examples = _dashboards_fenced_directives()
+    assert examples, "the skill carries no complete directive example"
+    registered = kind_names()
+    assert registered, "the registry is empty"
+    for example in examples:
+        lines = example.splitlines()
+        assert lines[0] == "<!-- fitdocs:chart", lines[0]
+        closer = lines.index("-->")
+        directive = parse_directive(
+            "\n".join(lines[1:closer]) + "\n", open_line=1, page="example"
+        )
+        assert isinstance(directive, Directive), directive
+        assert directive.kind in registered, directive.kind
+
+
+def test_dashboards_skill_lists_no_kinds_channels_or_options() -> None:
+    from fitdocs.render.charts.kit import kind_names
+
+    _frontmatter, body = _split_frontmatter(_skill_text(DASHBOARDS_SKILL_NAME))
+    stripped, _fences = _strip_fences(body)
+    assert not re.search(r"(?m)^\s*\|", body), "the skill holds a table"
+    registered = kind_names()
+    assert registered, "the registry is empty"
+    named = {span for span in _code_spans_in(stripped) if span in registered}
+    assert len(named) < 3, f"the skill lists kinds: {sorted(named)}"
+    for line in stripped.splitlines():
+        spans = set(_code_spans_in(line))
+        kinds_here = spans & set(registered)
+        if kinds_here:
+            assert len(_code_spans_in(line)) < 3, (
+                f"a kind is listed with its channel or option names: {line!r}"
+            )
+            for kind in kinds_here:
+                after = line.split(f"`{kind}`", 1)[1]
+                assert after.count(",") < 2, (
+                    f"a kind is followed by a list of names: {line!r}"
+                )
+            lowered = line.lower()
+            assert "channel" not in lowered and "option" not in lowered, (
+                f"a kind's channels or options are listed: {line!r}"
+            )
+    for fragment in ("choices=", "default=", "range=", "x* "):
+        assert fragment not in body, f"kinds listing fragment {fragment!r} in the skill"
+
+
+def test_analytics_skill_points_at_the_dashboards_skill() -> None:
+    _frontmatter, body = _split_frontmatter(_skill_text(ANALYTICS_SKILL_NAME))
+    further = _flat(_sections(body)["Further reading"])
+    assert "`fitdocs-dashboards`" in further
+    assert "dashboards/" not in body
