@@ -1009,7 +1009,7 @@ sequential, never two `(P)` tasks at once.
   - _Boundary: AgentSkill_
   - _Depends: 1.2, 6.1_
 
-- [ ] 7.2 (P) Publish `docs/dashboards.md` with its live kinds block
+- [x] 7.2 (P) Publish `docs/dashboards.md` with its live kinds block
   - **`docs/dashboards.md`** per design § Skill and Docs: the H2s; the
     directive reference; regions and assets; relative vs frozen and the
     snapshot files (`*.snapshot-<n>.json`, never deleted; do not
@@ -1597,3 +1597,18 @@ sequential, never two `(P)` tasks at once.
   post_pass harness is inline (not importable), so `test_pass.py` duplicates
   its five arg lists. "Untouched" checks exclude `dashboards/AGENTS.md`
   (sync, drain, pull --sync, regen write it themselves; load does not).
+- **7.2 (2 review rounds):** `docs/dashboards.md` with the live
+  `<!-- dashboard-kinds:start/end -->` block = start marker, newline,
+  `kinds_markdown(describe_kinds())`, end marker (byte-exact; regenerate with
+  `uv run python -m tests.dashboards.test_docs_dashboards`). Registered via a
+  `docs/index.md` row + `_REQUIRED_ENTRY_POINT_LINKS`; no `[project.urls]`
+  entry yet (7.3 adds it with the skill link). The whole page is scanned with
+  `scan_page` and must yield no directive/region/problem — never quote the
+  opener inline, even in backticks. Corrected in review to the landed
+  behaviour: Not-rendered note only when a valid chart's query/draw/write
+  fails under refresh or the pass (directive/region problems → untouched;
+  failing freeze → nothing); TIMESTAMPTZ → `sql_failed` with a cast hint
+  (other unsupported types → `column_type` naming column and type); problem
+  fields conditional (page/chart/line may be null); `option` names the
+  directive key, `accepted` (when non-empty) → text ` Accepted: …`;
+  `, <n> checked` whenever charts were only checked.
