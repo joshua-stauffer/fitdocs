@@ -1045,7 +1045,7 @@ sequential, never two `(P)` tasks at once.
   - _Boundary: Docs_
   - _Depends: 3.1, 3.4, 6.1_
 
-- [ ] 7.3 Reconcile the kinds listing with `chart-catalog`, whichever lands second
+- [x] 7.3 Reconcile the kinds listing with `chart-catalog`, whichever lands second
   - **The rule** (roadmap Phase 11 › Boundary Strategy, stated identically
     in `chart-catalog`'s brief "Second-lander duty"): whichever of
     `dashboards` and `chart-catalog` lands second regenerates the kinds block
@@ -1725,3 +1725,17 @@ sequential, never two `(P)` tasks at once.
   `[project.urls]` after `Analytics` (test_packaging requires a URL for every
   linked docs page); 7.3 adds only the skill link. Pins:
   `tests/dashboards/test_published.py`.
+- **7.3 (2 review rounds; branch taken: chart-catalog already on main with 16
+  kinds, the kinds block regenerated with no diff):** no dashboards test pins
+  a kind count (grep clean; 7.1's live example-kind check green); the
+  stale-block mutation reds the 7.2 pin alone. Carried fixes: the skill's
+  Further reading links docs/dashboards.md (pinned with test_packaging); the
+  docs' and skill's failure rule now reads: a never-rendered chart whose query
+  or drawing fails, or whose first frozen result holds an unstorable value
+  (e.g. NaN), gets `Not rendered:`; when a chart's image, snapshot or page
+  cannot be written its region is left as it was (no region stays none, an
+  earlier note stays) and the failure is reported (round 1's "gets no region"
+  was false; reviewer probed image/snapshot/page cases; matches
+  ownership-contract). "Row bound" became "size bound (rows, bins, weeks,
+  cells or panels)"; both unit lists pinned as set-equal to live
+  `describe_kinds()` bound counts. 8.5 re-runs this decision at the rebase.
