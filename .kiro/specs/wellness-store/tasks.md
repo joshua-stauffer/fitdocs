@@ -214,7 +214,7 @@ preflight and keeps every call dashboards placed).
     `uv run mypy` covers `tests/wellness`.
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 6.3, 6.4, 6.5, 7.1, 7.2, 7.3, 7.5_
 
-- [ ] 1.2 Read candidates in bounded pieces: the probe, streamed hashing, and the shared test helpers
+- [x] 1.2 Read candidates in bounded pieces: the probe, streamed hashing, and the shared test helpers
   - **`probe.py`** per design § Probe: `HEAD_BYTES`, `JSON_PROBE_LIMIT`,
     `CHUNK_BYTES`, `CandidateProbe` (stat, head, cached capped `json()`,
     `zip_members()`), `hash_file`.
@@ -1018,3 +1018,7 @@ preflight and keeps every call dashboards placed).
 ## Implementation Notes
 
 - 1.1: independently APPROVED; full suite 12,285 passed/44 skipped; targeted 315, ruff/mypy clean. Required HRV unit/range swap is a no-op (identical rows), and deleting isfinite is redundant with inclusive bounds; both explicitly UNPINNED mutations, equivalent behavior pinned by distinct mutations. Model-only portions of parser/docs/writer requirements defer to their planned tasks. Preserve append-only UNITS and suffix projection (original 19 rows length-ordered, two new rows appended). Use installed pyenv Python 3.11.15 for worktrees: Homebrew framework Python breaks the fake-interpreter sitebuild fixture.
+
+- 1.2 debug round 1: Python 3.11 zipfile emits two unsized EOF reads for commented/nonzip and converts read OSError to BadZipFile. Scratch proof passed all 17 unchanged tests using an in-probe bounded EOF reader adapter (sized tail reads <=65,558, explicit central-directory read preserved) that records/re-raises underlying OSError. No spec/checker relaxation required; RETRY_TASK.
+
+- 1.2: independently APPROVED after literal-pin remediation; 84 wellness tests, mypy480/ruff clean, independent full12306/44. Preserve test_probe_constants literal values and isolated checker early_end fixture (offset65559, returned65558). CountingOpener records actual sized reads; downstream zip extractors must preserve the EOF adapter/error classification or bound their own stream reads. 39 mutations independently confirmed; future drain/copy/parser clauses remain in planned tasks.
