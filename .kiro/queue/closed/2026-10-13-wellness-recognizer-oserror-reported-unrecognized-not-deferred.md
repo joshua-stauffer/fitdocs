@@ -1,7 +1,7 @@
 ---
 id: 2026-10-13-wellness-recognizer-oserror-reported-unrecognized-not-deferred
 title: "wellness-store design: an OSError raised inside a recognizer is swallowed as 'no claim', so an unreadable candidate is reported unrecognized instead of deferred, contradicting its own probe section and Req 1.2"
-status: open
+status: done
 importance: high
 importance_why: The maintainer's data root and inbox sit on iCloud Drive, where a file can be evicted or only partly present and a read fails with OSError; the design as written gives such a file a false 'no supported wellness format reads this file' verdict. The file is not lost (it stays in place and is probed again), but the contradiction is cheap to fix now and expensive once tasks 1.2, 1.3 and 3.3 have encoded both halves in tests.
 effort: S
@@ -113,3 +113,21 @@ Read at `86cdf14` (design text only; the package is not implemented yet).
   The design's current wording (§ Seams, "returns `False` rather than raising
   for a file it does not want", `design.md:1513-1514`) already points that
   way.
+
+## Resolution
+Done 2026-10-13 at 0e2cd09 (before any wellness-store task started): took the
+smaller rule. `recognize` re-raises `OSError` at once (without asking the
+remaining formats) and `identify` maps it to `Deferred`; any other
+recognizer exception still counts as no claim, as a defensive backstop to the
+§ Seams rule that recognizers return `False` rather than raise (open question
+answered: keep the backstop, do not widen it to `OSError`). `json()` /
+`zip_members()` still return `None` for a decode error or a non-zip, which
+are not read errors. Tasks: 1.2 adds a failing-read opener mode plus
+`json()`/`zip_members()` cases on files larger than `HEAD_BYTES` (the size
+matters: a file inside the head never reads past it); 1.3 splits the
+raising-recognizer case into `ValueError` (no claim) and `OSError`
+(propagates), with a mutation that catches `OSError` in `recognize`; 3.1
+gains one unreadable matrix row; 3.3 a recognizer-read `OSError` → deferred
+case with the swallow mutation. Unverified item left as is: whether macOS
+fails the head read first for an evicted file is irrelevant now, since both
+paths defer.
