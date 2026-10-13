@@ -178,7 +178,7 @@ preflight and keeps every call dashboards placed).
 
 - [ ] 1. Foundation: vocabulary, declarations, owned locations, file type
 
-- [ ] 1.1 Create the wellness package with its metric vocabulary, absent-value rule and day-boundary rule, and add the two units
+- [x] 1.1 Create the wellness package with its metric vocabulary, absent-value rule and day-boundary rule, and add the two units
   - **`fitdocs.units`**: append `ml_per_kg_min` ("millilitres per kilogram
     per minute", `mL/kg/min`, QUANTITY, 1) and `brpm` ("breaths per minute",
     `br/min`, QUANTITY, 1); update the design-table literal, the row count
@@ -1016,3 +1016,5 @@ preflight and keeps every call dashboards placed).
   - _Requirements: 16.1, 16.2, 15.1_
 
 ## Implementation Notes
+
+- 1.1: independently APPROVED; full suite 12,285 passed/44 skipped; targeted 315, ruff/mypy clean. Required HRV unit/range swap is a no-op (identical rows), and deleting isfinite is redundant with inclusive bounds; both explicitly UNPINNED mutations, equivalent behavior pinned by distinct mutations. Model-only portions of parser/docs/writer requirements defer to their planned tasks. Preserve append-only UNITS and suffix projection (original 19 rows length-ordered, two new rows appended). Use installed pyenv Python 3.11.15 for worktrees: Homebrew framework Python breaks the fake-interpreter sitebuild fixture.

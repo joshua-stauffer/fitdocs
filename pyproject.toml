@@ -267,6 +267,7 @@ files = [
     "tests/render/charts/kit",
     # dashboards task 1.1: the dashboards test directory.
     "tests/dashboards",
+    "tests/wellness",
 ]
 
 [tool.pytest.ini_options]

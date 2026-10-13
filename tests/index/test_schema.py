@@ -178,6 +178,10 @@ def test_schema_public_types_and_constants_match_the_contract() -> None:
         == PAGE_KEY_COLUMN
     )
     assert RESERVED_PREFIX == "index_"
+    assert len(UNIT_SUFFIXES) == 21
+    assert [len(suffix) for suffix, _ in UNIT_SUFFIXES[:19]] == sorted(
+        (len(suffix) for suffix, _ in UNIT_SUFFIXES[:19]), reverse=True
+    )
     assert UNIT_SUFFIXES == (
         ("_s_per_km", "seconds per kilometre"),
         ("_local", "local"),
@@ -198,10 +202,8 @@ def test_schema_public_types_and_constants_match_the_contract() -> None:
         ("_s", "seconds"),
         ("_w", "watts"),
         ("_c", "degrees Celsius"),
-    )
-    assert len(UNIT_SUFFIXES) == 19
-    assert [len(suffix) for suffix, _ in UNIT_SUFFIXES] == sorted(
-        (len(suffix) for suffix, _ in UNIT_SUFFIXES), reverse=True
+        ("_ml_per_kg_min", "millilitres per kilogram per minute"),
+        ("_brpm", "breaths per minute"),
     )
 
 

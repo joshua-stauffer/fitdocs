@@ -317,3 +317,11 @@ corrupt charts.
 3. The fitdocs test suite shall fail when any golden differs from the rendered output by a single byte, and each golden shall be shown able to fail by a named mutation of the kit's code.
 4. The fitdocs test suite shall compute the contrast of every ink and the distances between palette colours from the shipped values independently of the kit's own code, and shall fail if any falls below its stated minimum.
 5. The fitdocs test suite shall fail if a kit module imports outside the standard library and the shared chart primitives, imports any of the analytics index, query layer, dashboards, activity model or FIT ingest, or reads a clock; and each such guard shall carry a positive control showing it detects a violation.
+
+## Amendment 1 (2026-10-13): Wellness units, landed by wellness-store
+
+The shared `fitdocs.units.UNITS` vocabulary appends two QUANTITY rows:
+`ml_per_kg_min` (millilitres per kilogram per minute, `mL/kg/min`, one decimal)
+and `brpm` (breaths per minute, `br/min`, one decimal). The preceding 19 rows
+retain their values and order. The chart kit and analytics-index suffix
+projection continue to consume this single vocabulary.

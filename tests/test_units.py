@@ -24,7 +24,7 @@ from fitdocs.units import UNITS, Unit, UnitFamily, unit_for_column, unit_named
 
 Q = UnitFamily.QUANTITY
 
-# The one deliberate literal copy of the pre-change `UNIT_SUFFIXES`.
+# The original `UNIT_SUFFIXES` literal with append-only unit amendments.
 PRE_CHANGE_UNIT_SUFFIXES: tuple[tuple[str, str], ...] = (
     ("_s_per_km", "seconds per kilometre"),
     ("_local", "local"),
@@ -45,6 +45,8 @@ PRE_CHANGE_UNIT_SUFFIXES: tuple[tuple[str, str], ...] = (
     ("_s", "seconds"),
     ("_w", "watts"),
     ("_c", "degrees Celsius"),
+    ("_ml_per_kg_min", "millilitres per kilogram per minute"),
+    ("_brpm", "breaths per minute"),
 )
 
 # token, phrase, symbol, family, decimals, spaced (design § UnitVocabulary).
@@ -70,12 +72,13 @@ DESIGN_TABLE: tuple[tuple[str, str, str, UnitFamily, int, bool], ...] = (
     ("s", "seconds", "h:mm:ss", UnitFamily.DURATION, 0, True),
     ("w", "watts", "W", Q, 0, True),
     ("c", "degrees Celsius", "°C", Q, 1, True),
+    ("ml_per_kg_min", "millilitres per kilogram per minute", "mL/kg/min", Q, 1, True),
+    ("brpm", "breaths per minute", "br/min", Q, 1, True),
 )
 
 
 def test_projection_equals_pre_change_literal_in_order() -> None:
-    assert len(PRE_CHANGE_UNIT_SUFFIXES) == 19
-    assert len(UNIT_SUFFIXES) == len(PRE_CHANGE_UNIT_SUFFIXES)
+    assert len(UNIT_SUFFIXES) == len(PRE_CHANGE_UNIT_SUFFIXES) == 21
     for index, (expected, actual) in enumerate(
         zip(PRE_CHANGE_UNIT_SUFFIXES, UNIT_SUFFIXES, strict=True)
     ):
@@ -83,8 +86,8 @@ def test_projection_equals_pre_change_literal_in_order() -> None:
     assert UNIT_SUFFIXES == PRE_CHANGE_UNIT_SUFFIXES
 
 
-def test_table_has_nineteen_rows() -> None:
-    assert len(UNITS) == len(DESIGN_TABLE) == 19
+def test_table_has_twenty_one_rows() -> None:
+    assert len(UNITS) == len(DESIGN_TABLE) == 21
 
 
 @pytest.mark.parametrize("index", range(len(DESIGN_TABLE)))
@@ -101,7 +104,7 @@ def test_row_matches_design_table(index: int) -> None:
 
 def test_tokens_are_unique() -> None:
     tokens = [u.token for u in UNITS]
-    assert len(set(tokens)) == len(tokens) == 19
+    assert len(set(tokens)) == len(tokens) == 21
 
 
 def test_suffix_is_underscore_plus_token() -> None:

@@ -37,8 +37,9 @@ class Unit:
         return "_" + self.token
 
 
-# Order is load-bearing: longest suffix first, so the first match is the most
-# specific (`_s_per_km` before `_km`, `_kn_m` before `_m`).
+# Order is load-bearing for overlapping suffixes: the most specific comes
+# first (`_s_per_km` before `_km`, `_kn_m` before `_m`). Non-overlapping
+# additions append without changing the preceding rows.
 UNITS: Final[tuple[Unit, ...]] = (
     Unit("s_per_km", "seconds per kilometre", "min/km", UnitFamily.PACE, 0),
     Unit("local", "local", "local time", UnitFamily.CLOCK, 0),
@@ -59,6 +60,14 @@ UNITS: Final[tuple[Unit, ...]] = (
     Unit("s", "seconds", "h:mm:ss", UnitFamily.DURATION, 0),
     Unit("w", "watts", "W", UnitFamily.QUANTITY, 0),
     Unit("c", "degrees Celsius", "°C", UnitFamily.QUANTITY, 1),
+    Unit(
+        "ml_per_kg_min",
+        "millilitres per kilogram per minute",
+        "mL/kg/min",
+        UnitFamily.QUANTITY,
+        1,
+    ),
+    Unit("brpm", "breaths per minute", "br/min", UnitFamily.QUANTITY, 1),
 )
 
 
