@@ -17,6 +17,7 @@ $ fitdocs skill
 build-training-block  /path/to/site-packages/fitdocs/skills/build-training-block
 fitdocs-workouts  /path/to/site-packages/fitdocs/skills/fitdocs-workouts
 fitdocs-analytics  /path/to/site-packages/fitdocs/skills/fitdocs-analytics
+fitdocs-dashboards  /path/to/site-packages/fitdocs/skills/fitdocs-dashboards
 ```
 
 - **`build-training-block`** walks an agent through building a training
@@ -29,6 +30,10 @@ fitdocs-analytics  /path/to/site-packages/fitdocs/skills/fitdocs-analytics
 - **`fitdocs-analytics`** reads the local analytics index and teaches an
   agent to check freshness, write read-only SQL, and report the query with
   each answer.
+- **`fitdocs-dashboards`** teaches an agent to put a query's answer on a
+  wiki dashboard page as a chart: write the chart directive, check it with
+  `fitdocs dashboard check`, and keep the page's prose and fitdocs's chart
+  regions apart.
 
 ## Installing a skill
 
