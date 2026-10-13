@@ -1163,7 +1163,7 @@ sequential, never two `(P)` tasks at once.
     greps find no contradicted statement.
   - _Requirements: 19.1, 19.4, 19.5, 19.6_
 
-- [ ] 8.3 Prove the whole feature end to end, deterministically
+- [x] 8.3 Prove the whole feature end to end, deterministically
   - **Tests** (`test_e2e.py`, real index fixture): a staged page with a
     relative bar of weekly distance (`$today - 84` window) and a frozen
     scatter: `fitdocs sync` renders both; a second `sync` changes no byte
@@ -1691,3 +1691,22 @@ sequential, never two `(P)` tasks at once.
   corrected sentence. The skill does not link `docs/dashboards.md` yet: a
   packaged-skill docs link needs a `[project.urls]` entry (8.2 adds it; 7.3
   adds the link).
+- **8.3 (3 review rounds; the final one-sentence prose fix — the reviewer's
+  verified wording — applied by the controller):** `tests/dashboards/test_e2e.py`
+  runs the real CLI on `copy_dashboard_root` copies: `sync` renders the
+  relative bar and the frozen scatter; a second `sync` prints no `Dashboards:`
+  line and changes no byte or mtime under `dashboards/`; `regen` and
+  `index --rebuild` leave the snapshot byte-identical; with the index dir
+  renamed aside, `dashboard refresh` exits 1 (`index.state == "not_built"`),
+  the relative chart gets `index_unavailable` and stays byte-identical, the
+  frozen chart re-renders. Req 1.7 is pinned by comparing a root holding a
+  dated `type: workout` dashboard page against a copy without `dashboards/`
+  (history and plan stdout plus the whole tree outside `dashboards/`).
+  Goldens (`relative`, `frozen`, `stat`, `rows`, `note`) and images are
+  compared as raw bytes; regenerate only via
+  `uv run python -m tests.dashboards.test_e2e`. `test_determinism.py` runs
+  three children (UTC/C/seed 0, America/Los_Angeles/C.UTF-8/seed 1,
+  Pacific/Auckland/C/seed 1) with `cwd` = repo root, asserts the probes
+  (UTC offset, hash) really differ, then compares SHA-256 of every file.
+  Task-text corrections: the second sync prints nothing; the JSON chart key
+  is `id`.
