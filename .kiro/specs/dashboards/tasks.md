@@ -894,7 +894,7 @@ sequential, never two `(P)` tasks at once.
     twice in a row with both mutations recorded red.
   - _Requirements: 7.10, 13.7, 14.8_
 
-- [ ] 6.4 Register the dashboard writers with the confinement guard
+- [x] 6.4 Register the dashboard writers with the confinement guard
   - **`tests/test_confinement.py`**: `WRITING_ENTRY_POINTS` appends
     `dashboard` (refresh of a page with one relative and one frozen chart:
     a first freeze), `dashboard-freeze` (freeze of that frozen chart) and
@@ -1612,3 +1612,22 @@ sequential, never two `(P)` tasks at once.
   fields conditional (page/chart/line may be null); `option` names the
   directive key, `accepted` (when non-empty) → text ` Accepted: …`;
   `, <n> checked` whenever charts were only checked.
+- **6.4 (3 review rounds; the round-3 close-out was verified by the
+  controller's own mutation run — a downgrade from a 4th review):**
+  `WRITING_ENTRY_POINTS` gains `dashboard` (refresh = first freeze: page,
+  `load.svg`, `peak.svg`, `peak.snapshot-1.json`), `dashboard-freeze`
+  (`freeze board:peak` after a refresh whose frozen SQL was swapped so the
+  re-freeze rewrites the image; page, `peak.svg`, `peak.snapshot-2.json`) and
+  `sync-with-dashboards`. Preconditions: each predicate is False over a page
+  whose only directive is invalid (`dashboard-freeze` uses the page target
+  `freeze board`, since `board:peak` would stop at target resolution).
+  **Task-text correction:** task-named mutation 2 (drop the image check) is
+  killed by the synthetic predicate test, not the precondition case (`pull`
+  precedent). **Controller ruling R2:** `dashboard`/`dashboard-freeze` stay in
+  `_EXTERNAL_INDEX_ENTRY_IDS` because the query sandbox legitimately creates
+  `query-spill-<pid>` under the index location; they are held tighter by
+  `_assert_index_directory_unchanged_but_for_spill`, which exempts only real
+  `query-spill-\d+` directories (reusing `_query_spill_exemptions`) — a stray
+  file, `query-spill-evil.tmp` or a `query-spill-1` file all go red. Stale
+  counts fixed in `tests/test_confinement.py` and
+  `tests/test_declaration_refresh.py` (five declarations, three assets dirs).
