@@ -940,7 +940,7 @@ sequential, never two `(P)` tasks at once.
 
 - [ ] 7. The agent surface
 
-- [ ] 7.1 (P) Ship the `fitdocs-dashboards` skill and point the analytics skill at it
+- [x] 7.1 (P) Ship the `fitdocs-dashboards` skill and point the analytics skill at it
   - **`src/fitdocs/skills/fitdocs-dashboards/SKILL.md`** per design § Skill
     and Docs: frontmatter like `fitdocs-analytics`; the ten headings; the
     directive and its keys with one complete example in a fenced block;
@@ -1671,3 +1671,23 @@ sequential, never two `(P)` tasks at once.
   silent only when `dashboards/` holds no markdown file besides `AGENTS.md`.
   Safety-relevant sentences are phrase-pinned (bullet-scoped) in
   `test_safety_relevant_dashboard_sentences_are_pinned`.
+- **7.1 (4 review rounds; the reviewer's closed final list of three test
+  pins was applied and mutation-verified by the controller, a downgrade from
+  a 5th review):** packaged skill `fitdocs-dashboards` (fourth in
+  `PACKAGED_SKILLS`, wheel policy, analytics-skill pointer, README /
+  wiki-integration / releasing "five tracked places"). Every sentence was
+  probed against the code: Not-rendered note only when a never-rendered
+  chart's query or drawing fails or its first frozen result cannot be stored,
+  under a refresh (command or the pass after sync, pull --sync, regen, load);
+  directive/region problems never edited; image/page write failure → no
+  region; failing freeze → no note. JSON report shape: `location_problems`,
+  `index{state,problem}`, `pages[].problems/notices/charts[]`; page/chart/line
+  null where they do not apply; an unclosed or id-less directive is a chart
+  entry with `id` null. `CAST($today - INTERVAL 12 WEEK AS DATE)`. Each kind
+  has its own size limit (rows, bins, panels, cells or weeks). Guards on skill
+  prose: no kinds/channels/options listing (table check over fences too; a
+  kind code span with "channel"/"option", ≥3 code spans, or ≥2 commas after
+  it), cadence "not steps per minute", section-scoped phrase pins for each
+  corrected sentence. The skill does not link `docs/dashboards.md` yet: a
+  packaged-skill docs link needs a `[project.urls]` entry (8.2 adds it; 7.3
+  adds the link).
