@@ -37,6 +37,7 @@ from fitdocs.declaration import DECLARATION_FILENAME, declaration_path
 from fitdocs.layout import (
     ARCHIVE_DIR,
     BLOCKS_DIR,
+    DASHBOARDS_DIR,
     DECLARED_DIRS,
     HISTORY_DIR,
     WORKOUTS_DIR,
@@ -228,7 +229,7 @@ def test_sync_preserves_a_foreign_declaration_and_reports_only_a_warning(
     # unenforced. Parametrized over every declared directory -- including
     # `history/` -- so a foreign file in any declared directory is proved to
     # warn rather than fail, not only the two directories a fixed pair
-    # exercises. (Owned paths that receive no declaration, such as the two
+    # exercises. (Owned paths that receive no declaration, such as the three
     # assets subdirectories, are not what `refresh_declarations` looks at.)
     _put(source, "run.fit", builder.run_fit_bytes())
     _put(source, "ride.fit", builder.ride_fit_bytes())
@@ -377,13 +378,14 @@ def test_sync_regen_load_report_unchanged_document_counts_with_declarations_pres
     assert len(first.written) == 2
     count_after_sync = _workout_doc_count(data_root)
     assert count_after_sync == 2
-    # All four declarations really are present alongside the two documents,
+    # All five declarations really are present alongside the two documents,
     # each ending in ``.md`` -- the exact shape that would inflate a naive
     # ``glob("*.md")`` count if the scans did not filter on frontmatter.
     assert (data_root / WORKOUTS_DIR / DECLARATION_FILENAME).is_file()
     assert (data_root / ARCHIVE_DIR / DECLARATION_FILENAME).is_file()
     assert (data_root / HISTORY_DIR / DECLARATION_FILENAME).is_file()
     assert (data_root / BLOCKS_DIR / DECLARATION_FILENAME).is_file()
+    assert (data_root / DASHBOARDS_DIR / DECLARATION_FILENAME).is_file()
     assert len(list((data_root / WORKOUTS_DIR).glob("*.md"))) == 3
 
     second_sync = _sync(source, data_root)
