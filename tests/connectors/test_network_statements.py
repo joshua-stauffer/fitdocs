@@ -640,7 +640,9 @@ def test_analytics_index_is_published_in_steering_without_changing_network_scope
     assert (
         "No server, no background jobs. One database: a derived, disposable "
         "analytics index outside the data root, rebuilt from the documents "
-        "and archived `.fit` files, never read back into a document."
+        "and archived `.fit` files, never read back into a document, except the "
+        "chart regions and chart assets of dashboard pages under `dashboards/`; "
+        "workout, history and block documents never read it."
     ) in flat_architecture
     assert (
         "Everything is re-derivable from the `.fit` + profile" not in flat_architecture

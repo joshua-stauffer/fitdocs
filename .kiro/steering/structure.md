@@ -80,7 +80,14 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   `render.provenance` with the alignment constants) import it.
 - `query` (the read side) imports `index` (location, store, schema, bookkeeping,
   corpus, fingerprint, producer types, registry) and `athlete`; only `cli`
-  imports it; it never imports `duckdb` or an index writer.
+  and `dashboards` import it; it never imports `duckdb` or an index writer.
+- `dashboards` (the chart pages under `dashboards/`) imports `query` (in
+  `dashboards.binding` only), the chart kit facade (`render.charts.kit`, and
+  `kit.format` in `dashboards.region` only), `units` (in `dashboards.binding`
+  and `dashboards.engine`), `layout` and `contract` (in `dashboards.storage`
+  and `dashboards.engine`) and `yaml` (in `dashboards.directive` only); only
+  `cli` imports it, and only lazily; it never imports `duckdb`, `index` or a
+  clock.
 - `LoadCalculator` implementations declare their required inputs so the CLI
   can prompt for missing data generically — no calculator-specific prompting
   code in the CLI.

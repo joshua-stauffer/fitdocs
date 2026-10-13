@@ -80,6 +80,21 @@ recorded as one.
   ready for dashboard charts. On the grid kinds (`calendar-heatmap` and
   `heatmap`) a row with no value shows a cross, a zero an outlined square
   and a missing row nothing, and a negative value is refused.
+- `fitdocs dashboard` keeps the charts on your dashboard pages (markdown files
+  under `dashboards/`) current: `check`, `refresh` and `freeze` run each
+  chart's SQL against the analytics index and draw the result, and `kinds`
+  lists the chart kinds. `fitdocs sync` (with or without a source),
+  `fitdocs pull --sync`, `fitdocs regen` and `fitdocs load` run the
+  dashboard pass right after the index refresh. The packaged `fitdocs-dashboards` skill
+  teaches the page format; see
+  [the dashboards guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/dashboards.md).
+  The ownership contract advances to version 10: it describes the
+  `dashboards/` location, where only the chart regions and the chart images
+  and snapshots under `dashboards/assets/` are fitdocs's. Action: run
+  `fitdocs sync` or `fitdocs regen` once to place `dashboards/AGENTS.md`.
+  `fitdocs.toml` settings schema: `[plans] path` is now refused when it is
+  `dashboards` or inside it (exit status `2`). Action: if your plan sources
+  live there, move them and set `[plans] path` to the new directory.
 
 ### Changed
 

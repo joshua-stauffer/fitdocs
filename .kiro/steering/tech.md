@@ -11,7 +11,9 @@ Installable Python CLI with a one-way pipeline:
 
 No server, no background jobs. One database: a derived, disposable analytics
 index outside the data root, rebuilt from the documents and archived `.fit`
-files, never read back into a document. Workout documents and their derived
+files, never read back into a document, except the chart regions and chart
+assets of dashboard pages under `dashboards/`; workout, history and block
+documents never read it. Workout documents and their derived
 values remain re-derivable from archived `.fit` sources and the athlete
 profile; the index itself is a cache, not state, and deleting it costs only
 rebuild time.
@@ -52,7 +54,8 @@ through the standard library's `urllib` only, sending the one composed
 fitdocs User-Agent; connectors add no runtime dependency (beyond the
 standard library they use only the already-required `tomli_w`). `fitdocs
 query` runs agent SQL read-only under a locked DuckDB configuration with
-external access and extension loading off. Every DuckDB connection fitdocs
+external access and extension loading off. `fitdocs dashboard` and the
+dashboard pass run chart SQL through the same sandbox. Every DuckDB connection fitdocs
 opens has extension auto-install, extension auto-load and external file
 access disabled; the allow-list binds fitdocs's own connections, not an
 outside client that opens the index file. Connector credentials and

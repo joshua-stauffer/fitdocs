@@ -46,6 +46,7 @@ Compatibility = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/compa
 "Wiki Integration" = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/wiki-integration.md"
 Connectors = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md"
 Analytics = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/analytics.md"
+Dashboards = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/dashboards.md"
 
 [project.scripts]
 fitdocs = "fitdocs.cli:app"
