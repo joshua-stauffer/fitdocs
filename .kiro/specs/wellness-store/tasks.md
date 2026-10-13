@@ -259,7 +259,7 @@ preflight and keeps every call dashboards placed).
   - **Observable:** `uv run pytest tests/wellness/test_probe.py` green.
   - _Requirements: 1.2, 3.1, 3.2_
 
-- [ ] 1.3 Define the format declaration types, the registry rules and the test-only formats
+- [x] 1.3 Define the format declaration types, the registry rules and the test-only formats
   - **`spec.py`** per design § Registry: `SourceKind`, `SourceSpec`,
     `ArchiveForm`, `Supersession`, `ExtractContext`, `WellnessFormatError`,
     `FormatSpec`, `ParsedEntry`.
@@ -1022,3 +1022,5 @@ preflight and keeps every call dashboards placed).
 - 1.2 debug round 1: Python 3.11 zipfile emits two unsized EOF reads for commented/nonzip and converts read OSError to BadZipFile. Scratch proof passed all 17 unchanged tests using an in-probe bounded EOF reader adapter (sized tail reads <=65,558, explicit central-directory read preserved) that records/re-raises underlying OSError. No spec/checker relaxation required; RETRY_TASK.
 
 - 1.2: independently APPROVED after literal-pin remediation; 84 wellness tests, mypy480/ruff clean, independent full12306/44. Preserve test_probe_constants literal values and isolated checker early_end fixture (offset65559, returned65558). CountingOpener records actual sized reads; downstream zip extractors must preserve the EOF adapter/error classification or bound their own stream reads. 39 mutations independently confirmed; future drain/copy/parser clauses remain in planned tasks.
+
+- 1.3: independently APPROVED; full13668/44, wellness159, mypy518/ruff clean; 159 mutations independently replayed plus two own. Shared _helpers.py is now frozen: ORIGINAL_SOURCE/FORMAT, EXTRACT_SOURCE/FORMAT, build_extract(order, *, corrupt_body=False), use_formats, tree_snapshot and assert_untouched. Registry tuples remain empty until3.1, all lookups read patched tuples at call time; OSError propagates immediately. Later tasks define additional helpers locally.
