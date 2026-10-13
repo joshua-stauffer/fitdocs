@@ -210,7 +210,7 @@ sequential, never two `(P)` tasks at once.
 
 ---
 
-- [ ] 1. Foundation: the package, the problem record, and the dashboards location
+- [x] 1. Foundation: the package, the problem record, and the dashboards location
 
 - [x] 1.1 Create the dashboards package, its problem record, the shared test helpers and fixture, and confirm the upstream seams
   - **Confirm upstream** (record in Implementation Notes): each chart-kit
@@ -330,7 +330,7 @@ sequential, never two `(P)` tasks at once.
     `dashboards/AGENTS.md` equal to the golden.
   - _Requirements: 1.1, 1.2, 19.2_
 
-- [ ] 2. Upstream amendments: parameters, typed columns and a multi-statement session
+- [x] 2. Upstream amendments: parameters, typed columns and a multi-statement session
 
 - [x] 2.1 Add a streaming named-parameter read and parameter screening to the index facade (analytics-index Amendment 1, facade)
   - **`src/fitdocs/index/store.py`** per design § Upstream amendments, two
@@ -451,7 +451,7 @@ sequential, never two `(P)` tasks at once.
     committed.
   - _Requirements: 7.1, 7.2, 7.6, 7.8, 7.10, 19.6_
 
-- [ ] 3. The pure core
+- [x] 3. The pure core
 
 - [x] 3.1 (P) Scan pages: lines, fences, directives, regions and near misses
   - **`src/fitdocs/dashboards/grammar.py`** per design § Grammar: `SLUG`,
@@ -553,7 +553,7 @@ sequential, never two `(P)` tasks at once.
   - _Requirements: 14.5, 18.7, 20.1_
   - _Boundary: Kinds_
 
-- [ ] 4. Regions, files and query binding
+- [x] 4. Regions, files and query binding
 
 - [x] 4.1 (P) Compose, classify and splice chart regions
   - **`src/fitdocs/dashboards/region.py`** per design § Region:
@@ -662,7 +662,7 @@ sequential, never two `(P)` tasks at once.
   - _Boundary: Binding_
   - _Depends: 2.2_
 
-- [ ] 5. The engine and the report
+- [x] 5. The engine and the report
 
 - [x] 5.1 Discover pages, resolve targets and plan charts
   - **`src/fitdocs/dashboards/engine.py`** (created here) per design §
@@ -807,7 +807,7 @@ sequential, never two `(P)` tasks at once.
     with every mutation recorded red.
   - _Requirements: 12.4, 13.6, 14.8, 14.9, 15.4, 15.5, 15.6_
 
-- [ ] 6. Command, pass and integration wiring
+- [x] 6. Command, pass and integration wiring
 
 - [x] 6.1 Add the `fitdocs dashboard` command
   - **`src/fitdocs/cli.py`** per design § CliCommand: `_DashboardForm`,
@@ -938,7 +938,7 @@ sequential, never two `(P)` tasks at once.
     green.
   - _Requirements: 14.10, 19.3, 19.6_
 
-- [ ] 7. The agent surface
+- [x] 7. The agent surface
 
 - [x] 7.1 (P) Ship the `fitdocs-dashboards` skill and point the analytics skill at it
   - **`src/fitdocs/skills/fitdocs-dashboards/SKILL.md`** per design § Skill
@@ -1077,7 +1077,7 @@ sequential, never two `(P)` tasks at once.
     entry names chart-catalog's task.
   - _Requirements: 18.7, 20.1_
 
-- [ ] 8. Records, steering and validation
+- [x] 8. Records, steering and validation
 
 - [x] 8.1 Publish the dashboards category in the ownership contract (wiki-contract Amendment 5, part 2; analytics-index Amendment 1, contract copies)
   - **`docs/ownership-contract.md`**: a new section "Dashboard Pages:
@@ -1221,7 +1221,7 @@ sequential, never two `(P)` tasks at once.
     with every mutation recorded red.
   - _Requirements: 14.10, 20.2, 20.3, 20.4_
 
-- [ ] 8.5 Validate the feature after the final rebase
+- [x] 8.5 Validate the feature after the final rebase
   - Rebase onto current `main`; re-derive `CONTRACT_VERSION` as main + 1 and
     the four amendment numbers if `main` moved them; re-run task 7.3's
     decision; keep both sides of every append-only seam (command count, the
