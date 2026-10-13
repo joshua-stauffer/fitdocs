@@ -127,14 +127,17 @@ chart's snapshot was taken, your `window` text, and the latest date in the
 result's date or date-time columns (or that the result had no rows).
 
 A chart that fails is isolated: every other chart and page still renders. A
-chart that has rendered before keeps its region and image exactly as they were.
-When `refresh` or the pass finds that a chart that has never rendered fails in
-its query or its drawing, or holds a value in its first frozen result that
-cannot be stored (such as a non-finite number), that chart gets a region with a
-short note that starts `Not rendered:` and states the first problem, and no
-image link. When a chart's image, snapshot or page cannot be written, its
-region is left as it was (a chart with no region still has none, and an earlier
-`Not rendered:` note stays) and the failure is reported. A chart whose directive or region has a
+chart that has rendered before keeps its region exactly as it was, and its
+image too, unless the page changed during the run or could not be written after
+the chart's new image was written: then the image already shows the new
+drawing, and the next successful run brings the region in line. When `refresh`
+or the pass finds that a chart that has never rendered fails in its query or
+its drawing, or holds a value in its first frozen result that cannot be stored
+(such as a non-finite number), that chart gets a region with a short note that
+starts `Not rendered:` and states the first problem, and no image link. When a
+chart's image, snapshot or page cannot be written, its region is left as it was
+(a chart with no region still has none, and an earlier `Not rendered:` note
+stays) and the failure is reported. A chart whose directive or region has a
 problem is not written at all: no region is inserted or changed, and `check`
 reports the problem. A failing `freeze` writes no note.
 

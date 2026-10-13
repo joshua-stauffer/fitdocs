@@ -78,17 +78,20 @@ history or block document, no index schema and no chart-kit code.
 
 ### Allowed Dependencies
 - Standard library; `yaml` (PyYAML, already a dependency) in `directive` only.
-- `fitdocs.render.charts.kit` facade (`validate_chart`, `render_chart`,
-  `describe_kinds`, `kind_names`, `ChartRequest`, `ChartData`, `Column`,
-  `ValueKind`, `ChartProblem`, `ProblemCode`, `ChartError`, `RenderedChart`);
-  `RenderedChart.output` is compared by its string value (`"svg"`), and a kind
-  listing is read as a `Mapping[str, object]`, so neither `Output` nor
-  `KindListing` needs to be a facade export; `fitdocs.render.charts.kit.format` for `escape_markdown` and
+- `fitdocs.render.charts.kit` facade (`render_chart`, `ChartRequest`,
+  `ChartData`, `Column`, `Value`, `ValueKind`, `Output`, `ChartProblem`,
+  `ChartError`, `RenderedChart`); `RenderedChart.output` is compared with
+  `Output.SVG` / `Output.MARKDOWN` (in `region` and `engine`); a kind listing
+  is read as a `Mapping[str, object]`, so `KindListing` is not imported, and
+  `describe_kinds()` is called by the CLI, which passes its entries to
+  `kinds`; `fitdocs.render.charts.kit.format` for `escape_markdown` and
   `clean_text` only, in `region` only (research.md, gap G1).
-- `fitdocs.units` (`unit_for_column`), in `binding` only.
+- `fitdocs.units` (`unit_for_column`), in `binding` and `engine` (ruling
+  R11: the engine re-derives units by column name for rows decoded from a
+  snapshot, which stores none).
 - `fitdocs.query.command` (`open_session`, `QuerySession`,
   `SessionUnavailable`, `QueryEnvironment`, `OutcomeKind`, `DEFAULT_TIMEOUT_S`),
-  `fitdocs.query.statement` (exceptions, `RESTRICTION_TEXT`),
+  `fitdocs.query.statement` (exceptions, `Restriction`),
   `fitdocs.query.format` (`ResultSet`) — in `binding` only.
 - `fitdocs.layout` (`DASHBOARDS_DIR`, `ASSETS_SUBDIR`) and `fitdocs.contract`
   (`GENERATED_PREFIX`, `is_generated`), in `storage` and `engine`.
@@ -240,7 +243,9 @@ graph TB
     Region --> KitFormat[kit format escapes]
     Storage --> Layout
     Storage --> Contract
-    Kinds --> Kit
+    Cli --> Kinds
+    Cli --> Kit
+    Engine --> Units
     QueryLayer --> IndexFacade[index store facade]
 ```
 
@@ -288,6 +293,7 @@ docs/dashboards.md                               # User and agent documentation 
 tests/dashboards/
 ├── __init__.py
 ├── _helpers.py            # Page text builders, FakeSource, typed rows, data-root factory
+├── test_helpers.py        # Pins the shared helpers
 ├── conftest.py            # indexed_dashboard_root: a real index built like tests/query's
 ├── test_problems.py  test_grammar.py  test_directive.py  test_snapshot.py
 ├── test_region.py    test_storage.py  test_kinds.py      test_report.py
@@ -315,15 +321,19 @@ tests/declaration_golden/dashboards.AGENTS.md
   `statement_parameters`; nothing existing changes.
 - `src/fitdocs/query/{format,statement,command}.py` — Amendment 1.
 - `src/fitdocs/cli.py` — `dashboard` command; `_query_environment()` shared
-  with `query`; `_run_index_pass` return value; `_run_dashboard_pass` at five
-  call sites (sync, drain, regen, load; `pull --sync` through drain);
+  with `query`; `_run_index_pass` return value; `_run_dashboard_pass` at four
+  call sites serving five entry points (sync SOURCE, `_run_drain_passes` =
+  drain and `pull --sync`, regen, load); `_config_error` with
+  `emoji=False`;
   docstring "Fourteen" and a command-list bullet.
 - `src/fitdocs/agentskill.py` — `DASHBOARDS_SKILL_NAME`, `PACKAGED_SKILLS` +1.
 - `src/fitdocs/skills/fitdocs-analytics/SKILL.md` — pointer (Further reading).
 - `release/artifact-policy.toml` — the new SKILL.md in `wheel_required`.
 - `docs/ownership-contract.md`, `docs/index.md`, `.kiro/steering/tech.md`,
   `.kiro/steering/structure.md`, `CHANGELOG.md`, `pyproject.toml`
-  (`[tool.mypy].files` + `tests/dashboards`).
+  (`[tool.mypy].files` + `tests/dashboards`; `[project.urls]` `Dashboards`).
+- `README.md`, `docs/install.md`, `docs/releasing.md`, `docs/upgrading.md`,
+  `docs/wiki-integration.md` — the fourth packaged skill and the guide.
 - `.kiro/specs/{analytics-index,analytics-query,wiki-contract,connectors}/{requirements.md,spec.json}`
   (and wiki-contract `design.md`) — amendment records.
 - Tests whose pins move (named per task): `tests/index/test_cli_post_pass.py`,
@@ -335,7 +345,8 @@ tests/declaration_golden/dashboards.AGENTS.md
   `tests/test_declaration*.py`, `tests/test_confinement.py`,
   `tests/test_skill_locator.py`, `tests/test_agent_skill.py`,
   `tests/test_release_artifacts.py`, `tests/test_docs_guarantees.py`,
-  `tests/index/test_store.py`, `tests/query/test_store_facade.py`.
+  `tests/index/test_store.py`, `tests/query/test_store_facade.py`,
+  `tests/test_ownership_contract.py`, `tests/test_releasing_docs.py`.
 
 ## System Flows
 
@@ -358,9 +369,9 @@ sequenceDiagram
         Engine->>Kit: render chart and rows table
         Engine->>Engine: compose region body or keep or note
     end
-    Engine->>Storage: create snapshots, write changed assets, replace changed pages
-    Engine->>Storage: remove unreferenced marked images
+    Engine->>Storage: per page: create snapshots, write changed assets, replace the page
     Engine->>Source: close
+    Engine->>Storage: remove unreferenced marked images (once; not in check)
     Engine-->>Cli: run report
 ```
 
@@ -372,7 +383,12 @@ Key decisions:
   snapshot.
 - Writes per page are ordered snapshot → asset → page: an interrupted run
   leaves at worst a new snapshot or image whose page still links the old
-  state, which the next run reconciles (10.4 fallback, 6.6).
+  state, which the next run reconciles (10.4 fallback, 6.6). On
+  `page_changed` or a page write failure after an image was written, the
+  image already holds the new rendering while the region keeps its old
+  text; the next successful run reconciles them (a recorded departure from
+  Req 12.2's "asset exactly as it was" on those two paths; Req 12.2 is
+  amended to match, maintainer ruling 2026-10-13).
 
 ### Chart decision
 
@@ -394,8 +410,9 @@ stateDiagram-v2
     Render --> Failed: kit problem
     Render --> Written: bytes differ
     Render --> Unchanged: bytes equal
+    Failed --> Untouched: planning problem, write failure, or any failure under freeze
     Failed --> Kept: region was rendered
-    Failed --> Noted: region empty, missing or a note
+    Failed --> Noted: region empty, missing or a note (refresh and the pass)
 ```
 
 A frozen chart reaching `Query` encodes the result as a snapshot, decodes it
@@ -489,7 +506,7 @@ values (10.9); the snapshot is written only when that render succeeds (10.1).
 | 13.2 | Otherwise nothing changes | CliPass | One line when pages exist |
 | 13.3 | Never builds the index | CliPass, Binding | Session opens read-only only |
 | 13.4 | Never fails the command | CliPass | Catch `Exception`, no exit effect |
-| 13.5 | Other commands do not run it | CliPass | Five call sites only |
+| 13.5 | Other commands do not run it | CliPass | Four call sites (five entry points) only |
 | 13.6 | Output rules | Report | Silent when nothing to say |
 | 13.7 | Interrupt as index pass | CliPass | `KeyboardInterrupt` not caught |
 | 14.1 | One command, four forms | CliCommand | |
@@ -547,8 +564,8 @@ values (10.9); the snapshot is written only when that render succeeds (10.1).
 | Region (`region.py`) | Core | Region body and splice | 1.6, 2.1, 2.2, 5.2–5.6, 9.3, 9.4, 10.3, 12.3 | kit facade, kit format (P0) | Service |
 | Source (`source.py`) | Core | Data-source protocol | 7.8 | kit facade (P0) | Service |
 | Storage (`storage.py`) | Shell | Files: read, write, create, remove | 2.3, 6.1–6.6, 10.8, 16.1–16.4, 16.6 | layout, contract (P0) | Service |
-| Kinds (`kinds.py`) | Core | Kinds listing | 14.5, 18.7, 20.1 | kit facade (P0) | Service |
-| Engine (`engine.py`) | Orchestration | Runs | 4.5, 5.7, 5.8, 7.8, 9.1, 9.2, 10.x, 11.x, 12.x, 14.2–14.7, 15.5, 17.x | all core, storage, source (P0) | Service |
+| Kinds (`kinds.py`) | Core | Kinds listing | 14.5, 18.7, 20.1 | none (the CLI passes describe_kinds() entries) (P0) | Service |
+| Engine (`engine.py`) | Orchestration | Runs | 4.5, 5.7, 5.8, 7.8, 9.1, 9.2, 10.x, 11.x, 12.x, 14.2–14.7, 15.5, 17.x | all core, storage, source (P0); units (P1) | Service |
 | Report (`report.py`) | Presentation | Text and JSON | 12.4, 13.6, 14.8, 14.9, 15.4–15.6 | engine (P0) | Service |
 | Binding (`binding.py`) | Shell | Query-backed source | 7.1–7.10, 8.1–8.6, 13.3 | query session, units (P0) | Service |
 | QuerySession (query Amendment 1) | Upstream amend | Multi-statement sandbox session | 7.1, 7.2, 7.5, 7.6, 7.8, 7.10 | index facade (P0) | Service |
@@ -651,14 +668,14 @@ class Line:
 @dataclass(frozen=True)
 class DirectiveBlock:
     open_line: int; close_line: int | None
-    body: str                       # body lines joined with "\n"
+    body: str | None                # body lines joined with "\n"; None when unclosed (ruling R2)
     terminator_line: int | None     # first body line containing "-->" or "--!>"
 
 @dataclass(frozen=True)
 class RegionBlock:
     chart_id: str; begin_line: int; end_line: int | None
     body: tuple[Line, ...]          # lines strictly between the markers
-    intruder_line: int | None       # first column-0 "<!-- fitdocs:" line inside that is not the end marker or a reference line
+    intruder_line: int | None       # the column-0 "<!-- fitdocs:" line, outside a fence opened in the body, that cut the region short (not the end marker, not a reference line); None when closed or run to the end of the page
 
 @dataclass(frozen=True)
 class PageScan:
@@ -679,14 +696,22 @@ Rules:
   the end of the page. Nothing inside a fence is recognised (3.6).
 - **Directive**: a NORMAL line whose text equals `OPENER` enters DIRECTIVE;
   the next line whose text equals `CLOSER` closes it. Body lines containing
-  `-->` or `--!>` set `terminator_line` (3.3); no closer → `close_line =
-  None` and the rest of the page is scanned as NORMAL from the line after the
-  opener (3.4). Fences are not tracked inside a directive.
+  `-->` or `--!>` set `terminator_line` (3.3); no closer → `close_line`,
+  `body` and `terminator_line` are None (ruling R2) and the rest of the page
+  is scanned as NORMAL from the line after the opener (3.4). Fences are not
+  tracked inside a directive body.
 - **Region**: a NORMAL line equal to `begin_marker(id)` (id matching `SLUG`)
-  enters REGION; it ends at the first later column-0 line starting
-  `<!-- fitdocs:` that is not a reference line: if that line is
-  `end_marker(id)` the region is closed; otherwise `end_line = None` and the
-  scan resumes in NORMAL at that line (5.7).
+  enters REGION. Fences are tracked inside the region body as in NORMAL
+  (ruling R1): a fence-opening body line opens a fence, and inside it a
+  column-0 `<!-- fitdocs:` line neither closes nor cuts the region. The
+  region ends at the first later column-0 line outside such a fence that
+  starts `<!-- fitdocs:` and is not a reference line. If that line is
+  `end_marker(id)`, the region is closed. Otherwise `end_line = None`,
+  `intruder_line` is that line, and the scan resumes in NORMAL at that line
+  (5.7). A fence still open at the end of the page runs the region to the
+  end, unclosed, with `end_line` and `intruder_line` both None. The engine
+  tells `region_contents` (`intruder_line` set) from `region_unclosed` (both
+  None) by `intruder_line`.
 - **Near misses** (NORMAL lines only): a line containing `<!-- fitdocs:chart`
   that is not exactly `OPENER` → `opener_malformed`; a line containing
   `fitdocs:begin:chart:` or `fitdocs:end:chart:` that is not an exact marker
@@ -694,10 +719,13 @@ Rules:
   (3.5).
 - `following_region`: after the directive's closing line, skip lines whose
   text is empty or whitespace; return the region whose `begin_line` is the
-  next line, else None (5.1).
+  next line, else None (5.1). It returns the region even when unclosed, and
+  None after an unclosed directive.
 - `split_lines` keeps each line's ending, so joining `text + ending` over all
   lines reproduces the input byte for byte, including a leading U+FEFF
-  (16.5).
+  (16.5). It splits on `\n` only; a lone `\r` is text. A leading U+FEFF
+  stays in line 1's `text` and is ignored only when line 1 is compared as an
+  opener, fence or marker.
 
 #### Directive — `directive.py`
 
@@ -722,10 +750,10 @@ class Directive:
     window: str | None; show_rows: bool
     line: int                       # the opener's page line
     @property
-    def sql_sha256(self) -> str: ...   # sha256 of sql.encode("utf-8"), hex
+    def sql_sha256(self) -> str: ...   # sha256 of sql.rstrip("\r\n").encode("utf-8"), hex (ruling R8: a "|" block keeps its final newline only when another key follows)
 
 def parse_directive(body: str, *, open_line: int, page: str) -> Directive | tuple[Problem, ...]: ...
-# takes the block's body text and opener line, not grammar types: directive imports only problems and yaml
+# takes the block's body text and opener line, not grammar types: directive imports only problems, grammar.SLUG and yaml
 ```
 - **Loader**: a `yaml.SafeLoader` subclass with `yaml_implicit_resolvers = {}`;
   every plain scalar is `str` (4.1). The body is first walked with
@@ -747,6 +775,10 @@ def parse_directive(body: str, *, open_line: int, page: str) -> Directive | tupl
   the registered kinds (4.8). The parser reads no other key and never
   defaults a channel or option (4.10).
 - All problems of one directive are returned together, in key order.
+- `Problem.option` carries the directive key on `missing_key`,
+  `unknown_key`, `field_value`, `mode_value`, `sql_style` and `id_grammar`.
+  `Problem.chart` is the valid id on key and field problems, and None on
+  `id_grammar`, `yaml_syntax`, `yaml_shape` and `duplicate_key`.
 
 #### SnapshotCodec — `snapshot.py`
 
@@ -785,6 +817,11 @@ class SnapshotFormatError(ValueError): ...
   `version` other than 1, a kind outside `ValueKind`, a row of the wrong
   width, or a value of the wrong JSON type for its kind →
   `SnapshotFormatError`. A string in a NUMBER column decodes to `Decimal`.
+  `encode` raises `ValueError` on a cell it cannot store: a non-finite
+  number, an aware datetime, a value of another kind, or a row of the wrong
+  width. Decoding also refuses a non-slug page or chart, a NUMBER string
+  outside `-?[0-9]+(\.[0-9]+)?`, and a datetime with other than 0 or 6
+  fraction digits. `sql_sha256` is not checked against `sql`.
 - **Units** are not stored: columns decode with `unit=None`; the engine
   re-derives units from names exactly as for fresh rows, so units are applied
   identically on both paths (10.9).
@@ -885,9 +922,10 @@ def kinds_markdown(listings: Sequence[Mapping[str, object]]) -> str: ...
   `options:` (`name type default=… choices|range`) and `bound:` (`limit
   counts, over — rule`).
 - Markdown: per kind an H3 `` ### `<name>` ``, the description and output,
-  a channels table (Channel | Required | Accepts | Description), an options
-  table (Option | Type | Default | Values | Description) when the kind has
-  options, and a `Bound:` line. Cells pass through a local escaper of `|`
+  a channels table (Channel | Required | Accepts | Description) when the
+  kind has channels, an options table (Option | Type | Default | Values |
+  Description) when it has options, and a `Bound:` line. Every free-text
+  value is collapsed to one line. Cells pass through a local escaper of `|`
   and newlines (descriptions are kit-authored text). No line starts with
   `<!-- fitdocs:`.
 - The local escaper is deliberate, not a duplicate to fold into the kit's
@@ -975,17 +1013,29 @@ class QueryChartSource:                        # implements ChartSource
 ```
 - **Screening** (7.2, 7.4, 7.5): `session.screen(sql)` → one statement's
   `kind` and `parameters` (query raises `StatementRefused` for zero or
-  several statements, `StatementFailed` for a parse error). `kind !=
+  several statements or a kind other than SELECT/EXPLAIN, and
+  `StatementFailed` for a parse error). `kind !=
   "SELECT"` → `sql_refused`. Any parameter other than `today` → `sql_parameter`
   naming it; an all-digit name is reported as a positional parameter.
 - **Binding** (7.3): `params = {"today": today}` iff `"today"` is among the
   parameters, else `{}`.
 - **Execution** (7.6, 7.7, 7.9): `session.run(sql, params=params,
   max_rows=ROW_CAP, timeout_s=DEFAULT_TIMEOUT_S)`; `ResultSet.truncated` →
-  `row_cap`; `StatementRefused` → `sql_refused` with `RESTRICTION_TEXT`;
-  `StatementFailed(message, hint)` → `sql_failed`, fix = hint or "Fix the SQL
-  and run `fitdocs dashboard check` again."; `StatementTimedOut` →
-  `sql_timeout`. `KeyboardInterrupt` propagates (7.10).
+  `row_cap`, checked before any type check, with no `rows` field.
+  `StatementRefused` → `sql_refused` (ruling R4). A one-statement or
+  statement-kind refusal, at screening or at run, states binding's own chart
+  message ("a chart runs exactly one SELECT statement[; this is a/an <KIND>
+  statement]"), because the query layer's `RESTRICTION_TEXT` speaks of
+  `fitdocs query`. Every other restriction states the query layer's message
+  (`str(error)`, built from `RESTRICTION_TEXT`). The fix is per restriction:
+  give one SELECT, read only the index's tables, remove the setting, remove
+  the write, or remove the extension. `StatementFailed(message, hint)` →
+  `sql_failed`, with fix = `_sentence(hint)` (the hint with a final full
+  stop, not capitalised; ruling R3) or "Fix the SQL and run `fitdocs
+  dashboard check` again.". `StatementTimedOut` → `sql_timeout`.
+  `KeyboardInterrupt` propagates (7.10). A `column_types`/`columns` length
+  mismatch raises `RuntimeError` (a fitdocs defect, which the engine lets
+  propagate).
 - **Types** (8.1, 8.2): `column_kind` strips a parenthesised suffix
   (`DECIMAL(18,3)` → `DECIMAL`) and looks the name up case-sensitively:
 
@@ -1002,11 +1052,14 @@ class QueryChartSource:                        # implements ChartSource
   BLOB, UUID, `Time`, `list`, `dict`, `BINARY`, `UUID`, JSON, …) →
   `column_type` naming the column and type with the fix "Cast it in SQL (for
   example `CAST(x AS TIMESTAMP)`) or leave it out of the SELECT.", one
-  problem per such column. Where the database cannot convert a value while
-  fetching (a `TIMESTAMP WITH TIME ZONE` value without `pytz`, which fitdocs
-  does not install), the fetch fails first and the chart gets `sql_failed`
-  carrying the query layer's hint to cast to TIMESTAMP; either way the chart
-  is refused with a cast fix. UUID is refused by its type name only: no
+  problem per such column. `TIMESTAMP WITH TIME ZONE` is refused with a
+  cast fix by whichever stage meets it first. Without `pytz`, which fitdocs
+  does not install, the fetch fails on both supported duckdb versions, and
+  the chart gets `sql_failed` with the query layer's hint "cast TIMESTAMP
+  WITH TIME ZONE values to TIMESTAMP.". With `pytz` importable, duckdb ≥1.3
+  reports the type name → `column_type`; duckdb 1.2.x reports `DATETIME` and
+  returns aware datetimes → `value_kind` (DATETIME accepts only naive
+  values), whose fix is also a cast. UUID is refused by its type name only: no
   dashboards module imports `uuid` or binds a name `uuid`
   (`tests/test_contract_consumers.py:597-624` forbids both outside
   `contract.py`).
@@ -1023,6 +1076,7 @@ class QueryChartSource:                        # implements ChartSource
   the command again once the other fitdocs command finishes."; unverified →
   "This is a fitdocs defect; please report it."). `IndexLocationError`
   propagates (a configuration error). It never builds the index (13.3).
+  The opener memoises its first result, including a `SourceUnavailable`.
 
 ### Orchestration
 
@@ -1077,6 +1131,27 @@ class RunReport:
     @property
     def failed(self) -> bool: ...    # any problem anywhere (notices excluded)
 
+class DataNeed(StrEnum):
+    FETCH = "fetch"; RECORDED = "recorded"; LATEST = "latest"
+@dataclass(frozen=True)
+class PlannedChart:
+    chart: str | None              # the trusted id, if any
+    line: int; close_line: int | None
+    directive: Directive | None    # None: the directive did not parse
+    region: RegionBlock | None     # the region directly below, when it is this chart's
+    need: DataNeed | None          # None: a planning problem, or a relative chart under a page-target FREEZE
+    snapshot: str | None           # the planned path (RECORDED or LATEST)
+    problems: tuple[Problem, ...]
+@dataclass(frozen=True)
+class PlannedPage:
+    name: str; file: PageFile | None; scan: PageScan | None
+    problems: tuple[Problem, ...]; notices: tuple[Problem, ...]
+    charts: tuple[PlannedChart, ...]   # the targeted charts, page order
+@dataclass(frozen=True)
+class RunPlan:
+    location_problems: tuple[Problem, ...]; pages: tuple[PlannedPage, ...]
+def plan_run(request: RunRequest) -> RunPlan: ...   # discovery and planning; opens no source, writes nothing
+
 def has_dashboards(data_root: Path) -> bool: ...
 def resolve_targets(data_root: Path, raw: Sequence[str]) -> tuple[Target, ...]: ...
 def run_dashboards(request: RunRequest, open_source: SourceOpener) -> RunReport: ...
@@ -1086,34 +1161,62 @@ Behaviour:
   `location_foreign` problem and no pages. Markdown names directly in
   `dashboards/` other than `AGENTS.md`: page names (sorted) become pages; the
   rest are `page_name` problems. `has_dashboards` is true when
-  `dashboards/` is a symlink or holds at least one page or misnamed `.md`.
+  `location_refusal` reports anything (`dashboards/` or `dashboards/assets/`
+  is a link or not a directory), or `list_markdown` lists any entry (every
+  direct `*.md` entry but `AGENTS.md`, including misnamed files, directories
+  and links). `page_name` problems are reported on whole runs only, never
+  when targets are given.
 - **Targets** (14.6): `page` or `page:chart`; an unknown page →
   `TargetError` listing page names; an unknown chart id (among the page's
-  parseable directives) → `TargetError` listing that page's chart ids.
+  trusted ids) → `TargetError` listing them. A target with an empty part or
+  more than one colon → `TargetError`. A page target subsumes chart targets
+  on that page. A chart target on a page that cannot be read is accepted
+  (the run reports the page). With an unusable location, targets are not
+  checked (the run reports the location).
   Duplicate targets collapse. With a chart target, only that chart is
   fetched, rendered, written and reported; the page's other charts and
   regions are left as they are (page-level problems are still reported).
+- **Trusted id**: a chart's identity is the parsed `chart_id`, else the
+  first non-None `chart` among its parse problems. Targeting, the chart
+  filter, `resolve_targets` listings, duplicate detection and region
+  association all use it. A directive with no trusted id (`yaml_syntax`,
+  `yaml_shape`, `duplicate_key`, `id_grammar`, or unclosed) is untargetable,
+  outside duplicate detection, and reported with `chart` None. It claims the
+  region directly below it, so that region gets no orphan notice and no
+  edit. A chart with parse problems but a trusted id is targetable and takes
+  part in `duplicate_id`. A terminator directive is still parsed.
 - **Planning** per page: `read_page` refusals → page problems
   (`page_unreadable`, `page_encoding`) (12.5); `scan_page`;
   `parse_directive` per block; ids shared by two parsed directives →
   `duplicate_id` on each (4.5); per directive: unclosed/terminator problems;
   `following_region` with another id → `region_mismatch`; a region with this
   id elsewhere → `region_misplaced`; the following region unclosed or with
-  an intruder → `region_unclosed` / `region_contents` (5.7); regions not
-  directly below any directive → `region_orphaned` notice (5.8). A chart
+  an intruder → `region_unclosed` (line = begin line) / `region_contents`
+  (line = the intruder line; the message names the begin line) (5.7). A
+  region that no directive claims, and whose id is no trusted id on the
+  page, gets a `region_orphaned` notice (5.8); a region whose id is a
+  trusted id elsewhere is that chart's `region_misplaced`. A chart
   with any planning problem is FAILED and its region is never touched.
 - **Data**: relative → fetch (9.1). Frozen (10.4): the following region's
-  `recorded_snapshot` → `read_snapshot` + `decode` (missing →
-  `snapshot_missing`, decode error → `snapshot_unreadable`; both FAILED,
-  region kept; 10.5); else `latest_snapshot` → decode; else fetch and
-  freeze. `Action.FREEZE` on a targeted frozen chart always fetches (11.1);
-  on a relative chart → `freeze_relative` (11.2). A snapshot's `sql_sha256`
-  differing from the directive's → `sql_changed` notice (10.6).
+  `recorded_snapshot`, honoured as written whatever page or chart it names
+  (a renamed page keeps its snapshot) → `read_snapshot` + `decode`.
+  `read_snapshot` returning None (missing, a link, unreadable, or not a
+  snapshot path) → `snapshot_missing`; a decode error →
+  `snapshot_unreadable`. Both are FAILED (10.5). Otherwise `latest_snapshot`
+  → decode; otherwise fetch and freeze. `Action.FREEZE` fetches every
+  targeted frozen chart (11.1). A relative chart named by an explicit
+  `page:chart` target → `freeze_relative` (11.2). A relative chart reached
+  only through a page target is left untouched and reported CHECKED with no
+  problem (ruling R9). A snapshot's `sql_sha256` differing from the
+  directive's → `sql_changed` notice, on both the recorded and the
+  adopted-latest path (10.6).
 - **Source** (7.8): opened once, after every targeted page has been
   planned and before any chart is rendered or anything written, and only if
   some planned chart needs a fetch (a configuration error therefore ends the
   run before any write); `SourceUnavailable` → `index_unavailable` on every
-  chart that needed a fetch (11.4, 14.7), and `RunReport.index` is its state;
+  chart that needed a fetch (11.4, 14.7), and `RunReport.index` is its state
+  and `RunReport.index_problem` one page-less `index_unavailable` (`index` is
+  `"ready"` when opened, `"not_needed"` when no chart needed a fetch);
   closed in `finally`.
 - **Render**: `ChartRequest(ref=f"{page}:{id}", kind, title, channels,
   options)` with the data; `ChartError` → kit problems via
@@ -1122,10 +1225,22 @@ Behaviour:
 - **First freeze** (10.1): build `Snapshot(today=request.today, …)`,
   `encode`, `decode`, render the decoded data; on success the snapshot is
   created (not in CHECK) and the region records it; on failure nothing is
-  created.
-- **Bodies**: success → `chart_body`; failure → keep when
-  `classify_body` is RENDERED (12.2), else `note_body(first problem's
-  message)` (12.3). A body equal to the existing one produces no edit.
+  created. If `encode` refuses a cell (possible in a column the kit does not
+  draw, e.g. a NaN), the chart fails with `write_failed` naming the column
+  (fix "Exclude or cast the non-finite values in the SQL."), and no snapshot
+  is created (ruling R7). The region of a freshly frozen chart is composed
+  only after `create_snapshot` returns its path.
+- **Bodies**: success → `chart_body`. A chart whose fetch, snapshot load
+  or drawing failed, or whose first frozen result cannot be stored (R7),
+  keeps its region when `classify_body` is RENDERED (12.2), else gets
+  `note_body(first problem's message)` (12.3). The exception is
+  `Action.FREEZE`, where a failing chart writes nothing, not even a note
+  (ruling R10, 11.3). A chart with a planning problem is never edited. A
+  write failure (`asset_foreign`, `write_failed` for an image, snapshot or
+  page, or `page_changed`) leaves its region as it was. A body equal to the
+  existing one produces no edit. RENDERED means an asset was written or an
+  edit applied to a page that was written; `PageResult.written` is true
+  only when `replace_page` wrote.
 - **Writes** (not CHECK), per page in order: snapshots, then assets
   (`foreign` → `asset_foreign`, chart FAILED, its region edit dropped), then
   one `replace_page` with all edits (`changed` → `page_changed` and every
@@ -1133,8 +1248,12 @@ Behaviour:
   writing an asset fails that chart (`write_failed`, its region edit
   dropped); one replacing the page fails its edited charts. Nothing is written
   for a page whose edits and assets are all unchanged (17.1).
-- **Cleanup**: after every page, for REFRESH and FREEZE (and the pass,
-  which is a REFRESH), `remove_stale_images` (6.4).
+- **Cleanup**: once, after all pages and after the source is closed, for
+  REFRESH and FREEZE (and the pass, which is a REFRESH), never CHECK:
+  `remove_stale_images` (6.4). A skipped scan (`None`) reports nothing
+  removed. Cleanup also removes a new image left unreferenced by
+  `page_changed`/`write_failed` in the same run. An `OSError` during
+  cleanup is not caught (ruling R12; queued).
 - Pages in name order, charts in line order, problems in line order with
   kit problems in kit order (15.5, 17.3). The engine reads no clock;
   `today` is in the request.
@@ -1156,13 +1275,27 @@ def render_text(report: RunReport, *, chained: bool) -> str: ...   # "" when not
   "mode", "outcome", "snapshot", "problems", "notices"}]}]`), `removed`,
   `summary` (`{"charts", "rendered", "unchanged", "failed"}`). Problems use
   `Problem.as_dict()` (15.4).
-- **Text**: for each chart with an outcome other than UNCHANGED/CHECKED or
-  with a problem or notice: `<page>:<line> <id> <outcome>`, then each
-  problem as `  <code>: <message> <fix>` and each notice as `  notice
-  <code>: <message> <fix>`; page and location problems likewise; then one
-  summary line `Dashboards: <n> rendered, <n> unchanged, <n> failed[, <k>
-  images removed].` Chained form prefixes nothing else and returns `""` when
-  no chart was rendered or failed and nothing is reported (13.6).
+- **Order**: both forms sort on their own, stably. Location problems sort
+  by page (None first), pages by name, charts by line, problems and notices
+  by line (no line first; same-line kit problems keep kit order), and
+  `removed` by code point. JSON uses `indent=2`, `ensure_ascii=False` and no
+  trailing newline (the CLI adds one); the `summary` keys are exactly
+  `charts, rendered, unchanged, failed`.
+- **Text**: location problems, then the index problem, at column 0
+  (`<code>: <message> <fix>`). For a page with page-level problems or
+  notices, a bare `<page>` header line, then each finding indented two
+  spaces. Then, for each chart with an outcome other than UNCHANGED/CHECKED
+  or with a problem or notice, `<page>:<line> <id> <outcome>` (`-` for a
+  chart with no trusted id), then each problem as `  <code>: <message>
+  <fix>` and each notice as `  notice <code>: <message> <fix>`, problems
+  before notices. When `accepted` is non-empty the line ends ` Accepted: a,
+  b.` (ruling R6); `option` is not shown. Every whitespace run in a message,
+  fix or accepted value collapses to one space. Then one summary line:
+  `Dashboards: <r> rendered, <u> unchanged, <f> failed[, <n> checked][, <k>
+  images removed].`, with `checked` only when n > 0 (ruling R5). The chained
+  form prefixes nothing else and returns `""` unless a chart is RENDERED or
+  FAILED, any location, index, page or chart problem or notice exists, a
+  page was written, or images were removed (13.6).
 
 ### Entry points
 
@@ -1184,10 +1317,11 @@ def _run_index_pass(data_root: Path, *, handoff: HandoffCollector | None) -> Ind
 def _run_dashboard_pass(data_root: Path, index_report: IndexReport | None) -> None: ...
 ```
 - `kinds`: no data-root resolution; targets → exit 2; text from
-  `kinds_text(describe_kinds())`, JSON `json.dumps(describe_kinds())`.
+  `kinds_text(describe_kinds())`, JSON `json.dumps(describe_kinds())`
+  (`indent=2`, `ensure_ascii=False`, plus a newline).
 - `check`/`refresh`/`freeze`: `_resolved_data_root(out)`;
   `resolve_targets` (`TargetError` → exit 2); `freeze` without targets →
-  exit 2; `run_dashboards(…, source_opener(data_root, _query_environment()))`
+  exit 2, checked before the data root is resolved; `run_dashboards(…, source_opener(data_root, _query_environment()))`
   with `today=_today()`; `IndexLocationError` → exit 2; output on stdout;
   exit 1 iff `report.failed`, else 0; `KeyboardInterrupt` → stderr
   `Dashboard run interrupted.`, exit 130 (14.8).
@@ -1200,7 +1334,13 @@ def _run_dashboard_pass(data_root: Path, index_report: IndexReport | None) -> No
   `render_text(..., chained=True)` if non-empty. `Exception` → `Dashboards:
   not refreshed; <Type>: <message>.`; `KeyboardInterrupt` is not caught.
   Called right after `_run_index_pass` in sync SOURCE, `_run_drain_passes`
-  (drain and `pull --sync`), regen and load; never elsewhere. Returns
+  (drain and `pull --sync`), regen and load; never elsewhere. That is four
+  call sites for five entry points. The not-refreshed reason is a fixed
+  phrase per `Outcome` value (`report.detail` is not repeated), with `the
+  index refresh raised an error` when the report is None. Every dashboards
+  import in `cli.py` is function-level, so importing `fitdocs.cli` loads no
+  dashboards module. `_config_error` prints with `emoji=False`, so a
+  `PAGE:a:CHART` target is shown as typed (this affects every caller). Returns
   `None`; exit codes are computed before it, as for the index pass.
 - Docstring: "Fourteen commands are registered", and the command-list bullet
   `* ``fitdocs dashboard {check|refresh|freeze|kinds} [TARGET...] [--format text|json] [--out PATH]```
@@ -1217,7 +1357,8 @@ def statement_parameters(self, sql: str) -> tuple[frozenset[str], ...]: ...
 - `execute_named`: `self._connection.execute(sql, dict(params))` when
   `params` is non-empty, `self._connection.execute(sql)` when it is empty
   (binds nothing); the result comes from a new classmethod
-  `IndexResult.from_cursor(cursor, errors)`: `columns` from `description`
+  `IndexResult.from_cursor(cursor, errors)` (returning a private
+  `_CursorResult` subclass): `columns` from `description`
   (`str(name)`, `str(type)`), `fetchmany`/`fetchall` streamed from the
   cursor, errors wrapped exactly as the relation form wraps them
   (`IndexStatementError`, `IndexInterrupted`). The positional constructor
@@ -1235,7 +1376,7 @@ def statement_parameters(self, sql: str) -> tuple[frozenset[str], ...]: ...
 **QuerySession (analytics-query Amendment 1)** — `query/{format,statement,command}.py`:
 ```python
 @dataclass(frozen=True)
-class ResultSet: columns; rows; truncated; max_rows; column_types: tuple[str, ...] = ()
+class ResultSet: columns; rows; truncated; max_rows; column_types: tuple[str, ...] = field(default=(), compare=False)
 def statement_parameters(conn: IndexConnection, sql: str) -> frozenset[str]: ...   # one statement assumed
 def execute_statement(conn, sql, *, max_rows, timeout_s, timer=threading.Timer,
                       params: Mapping[str, object] | None = None) -> ResultSet: ...  # None: conn.execute(sql)
@@ -1260,7 +1401,9 @@ def open_session(data_root: Path, env: QueryEnvironment) -> QuerySession | Sessi
 ```
 - `open_session` performs `run_query`'s sequence (location, stale spill,
   missing file, `open_sandboxed` and its exceptions, bookkeeping and schema
-  version) through one private helper that `run_query` also uses; every
+  version) through the private helpers `_locate`, `_open` and `_read_bookkeeping`, which
+  `run_query` also uses (`open_session` omits `run_query`'s page scan and
+  athlete fingerprint); every
   existing query test passes unedited.
 - `QuerySession.run` always passes a mapping (possibly empty), so every
   dashboards statement takes the streaming `execute_named` path and reports
@@ -1270,6 +1413,12 @@ def open_session(data_root: Path, env: QueryEnvironment) -> QuerySession | Sessi
   `StatementTimedOut` and `KeyboardInterrupt`; on any `BaseException` it
   calls `interrupt_quietly` first (the existing workaround for the open
   queue item).
+- `QuerySession(connection, timer)`. `screen_statement` now returns the
+  statement kind (it returned None). On the named path (`params is not
+  None`), any `IndexInterrupted`/`IndexStatementError` after the deadline
+  fired is `StatementTimedOut`, and an `IndexInterrupted` with no deadline is
+  `StatementFailed(str, None)`, because DuckDB misreports streamed
+  interrupts and errors (task 2.1 ruling). The positional path is unchanged.
 
 #### Declaration — `declaration.py` (wiki-contract Amendment 5)
 
@@ -1439,8 +1588,8 @@ subprocess while relying on `src/__pycache__` being absent (conftest sets
   `classify_body`; `apply_edits` insert and replace with CRLF, no trailing
   newline, multiple edits, bytes outside regions identical. Mutations:
   `max` → `min` on dates; drop escaping; insert before the directive.
-- **Kinds**: listing over a monkeypatched `KINDS` of two stub kinds (proves
-  no kind list is held; the registry reads `KINDS` at call time); markdown
+- **Kinds**: listing over two dict stub listings (the CLI reads
+  `describe_kinds()` at call time, pinned in `test_cli_dashboard.py`); markdown
   escapes `|`.
 - **Problems**: prefix pin of `DashboardCode`; `as_dict` key order;
   `from_chart_problem` field copy with distinct values in every field;
@@ -1506,7 +1655,7 @@ subprocess while relying on `src/__pycache__` being absent (conftest sets
 - **Boundary** (`test_boundary.py`): module list equals `rglob` both ways
   with a positive control; rank matrix; allowed imports per module (yaml
   only in `directive`, `fitdocs.query` only in `binding`, `kit.format` only
-  in `region`, `units` only in `binding`); forbidden roots by dotted descent;
+  in `region`, `units` only in `binding` and `engine`); forbidden roots by dotted descent;
   clock spellings (as `tests/compose/test_boundary.py`); network modules;
   only `fitdocs.cli` imports `fitdocs.dashboards`; each rule with a synthetic
   violating control.

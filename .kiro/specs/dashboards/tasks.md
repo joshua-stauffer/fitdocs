@@ -1739,3 +1739,44 @@ sequential, never two `(P)` tasks at once.
   ownership-contract). "Row bound" became "size bound (rows, bins, weeks,
   cells or panels)"; both unit lists pinned as set-equal to live
   `describe_kinds()` bound counts. 8.5 re-runs this decision at the rebase.
+- **8.5 (final rebase and validation, controller-run in a resumed session):**
+  `impl/dashboards` rebased onto `main` 8ecc0f9 with no conflicts (main had
+  moved only specs, queue, roadmap and product steering; no code, no
+  `CONTRACT_VERSION` change); full suite 13499 passed / 44 skipped; `ruff
+  check`, `ruff format --check` and `mypy` (506 files) clean; branch CI green
+  on 0a98d5c. 7.3's decision re-run: chart-catalog on main, kinds block
+  current (regeneration leaves no diff). Smoke in a scratch data root
+  (synthetic run + ride, `fitdocs index`, the skill's example directive plus
+  a frozen chart): `fitdocs dashboard kinds` printed 168 lines; `check
+  --format json` exit 0, both charts `checked`; `refresh` rendered 2; a
+  second `refresh` changed no byte under `dashboards/`; `freeze smoke`
+  re-froze the frozen chart to `snapshot-2` and left `snapshot-1` in place
+  (Req 6.5: snapshots are never deleted).
+- **Validation (2026-10-13, validate-impl GO):** two independent reviewers
+  (requirements coverage and cross-task integration; design alignment and
+  boundary audit) both returned GO with no code defect: 20/20 requirement
+  sections implemented and tested, no dependency-direction violation, every
+  upstream amendment additions-only and recorded. Applied at validation:
+  design.md amendments A1–A15 (graph and components table, allowed
+  dependencies incl. R11 `units` in engine and `Output`/`Value` imports,
+  grammar R1/R2 and BOM rules, binding R3/R4 and the TIMESTAMPTZ three-way
+  outcome, directive R8 digest and `option`/`chart` fields, snapshot encode
+  refusals, kinds listing, the `plan_run`/`RunPlan` API, trusted id,
+  `has_dashboards`, targets, R7/R9/R10, bodies and cleanup, report order and
+  text R5/R6, system-flow write order with the 12.2 departure, CLI pass call
+  sites, modified-file list, query session helpers); requirements 4.1, 4.9,
+  8.2, 12.2, 12.3, 13.2, 13.6, 15.1, 15.2 and 16.6 amended in place with a
+  dated `## Amendments` record. **Maintainer ruling on 12.2 (Josh,
+  2026-10-13): amend the requirement, no code change** — a page's images are
+  written before the page, so on `page_changed` or a page write failure the
+  image already shows the new drawing while the region keeps its old text
+  until the next successful run; docs/dashboards.md and the skill now say so
+  (pinned, old wording asserted absent). Records: analytics-query spec.json
+  "still to land" sentence replaced (4.3 and 7.1 landed; `screen_statement`
+  now returns the kind); structure.md `units` importers and the
+  `layout`/`contract` allowance (only storage imports them today); stale
+  comments in engine.py (`need`) and declaration.py (claim anchor names
+  `cli._run_dashboard_pass`). Final `CONTRACT_VERSION` "10"; amendment
+  numbers analytics-index 1, analytics-query 1, wiki-contract 5, connectors
+  3; 7.3 took the second-lander branch (chart-catalog landed first, block
+  already current). Upstream and low items went to `.kiro/queue/`.

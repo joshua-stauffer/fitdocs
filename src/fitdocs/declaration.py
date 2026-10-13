@@ -360,7 +360,7 @@ _DASHBOARDS_DIRECTIVE: Final[str] = (
 )
 # CLAIM ANCHOR: dashboards `grammar`/`directive` (the directive comment),
 # `region` (the begin/end markers and the in-place rewrite), `engine` and
-# `cli._run_index_pass` (the refresh after a successful index pass) and
+# `cli._run_dashboard_pass` (the refresh after a successful index pass) and
 # `fitdocs dashboard refresh`.
 
 _DASHBOARDS_ASSETS: Final[str] = (

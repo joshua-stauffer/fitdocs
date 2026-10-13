@@ -25,7 +25,7 @@
       "date": "2026-10-12",
       "requirement": "Out-of-scope lines (saved queries; charting query results) superseded; query layer extended",
       "reason": "Phase 11 dashboards task 2.2 adds ResultSet.column_types, the params path on execute_statement/run_statement, statement_parameters, and QuerySession/open_session/SessionUnavailable/ScreenedStatement; fitdocs query behaviour is unchanged.",
-      "also": "requirements.md gains Amendment 1 (2026-10-12). Tests: tests/query/test_statement.py, tests/query/test_command.py, tests/query/test_format.py, tests/query/test_boundary.py (fitdocs.dashboards forbidden target). Still to land: dashboards task 4.3 (importer allow-list entry fitdocs.dashboards.binding) and task 7.1 (fitdocs-dashboards pointer in the fitdocs-analytics skill)."
+      "also": "requirements.md gains Amendment 1 (2026-10-12). Tests: tests/query/test_statement.py, tests/query/test_command.py, tests/query/test_format.py, tests/query/test_boundary.py (fitdocs.dashboards forbidden target). dashboards task 4.3 added the importer allow-list entry fitdocs.dashboards.binding and task 7.1 the fitdocs-dashboards pointer in the fitdocs-analytics skill. screen_statement now returns the statement kind (it returned None); fitdocs query behaviour is unchanged."
     }
   ]
 }

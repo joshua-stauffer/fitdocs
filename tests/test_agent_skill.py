@@ -1658,6 +1658,12 @@ def test_dashboards_traps_name_the_snapshot_among_the_failed_writes() -> None:
         "`Not rendered:` note stays) and the failure is reported"
     ) in section
     assert "holds a value that cannot be stored" in section
+    assert (
+        "keeps its last good region; its image is kept too, unless the page "
+        "changed during the run or could not be written after the new image was "
+        "written"
+    ) in section
+    assert "keeps its last good region and image" not in section
 
 
 def test_dashboards_size_limit_units_are_the_registered_bound_units() -> None:

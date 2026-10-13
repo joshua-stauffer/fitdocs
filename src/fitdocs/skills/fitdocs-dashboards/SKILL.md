@@ -216,7 +216,10 @@ a chart runs under the same read-only sandbox and time limit.
   chart's image, snapshot or page could not be written, its region is left as
   it was (a chart with no region still has none, and an earlier `Not rendered:`
   note stays) and the failure is reported. A failing `freeze` writes no note. A
-  chart that rendered before keeps its last good region and image.
+  chart that rendered before keeps its last good region; its image is kept too,
+  unless the page changed during the run or could not be written after the new
+  image was written, when the image already shows the new drawing until the
+  next successful run.
 
 ## Ownership
 

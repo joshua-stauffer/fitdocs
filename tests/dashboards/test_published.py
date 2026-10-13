@@ -186,7 +186,8 @@ def test_structure_states_the_dashboards_imports_and_the_query_importers() -> No
     ) in dashboards
     assert "`units` (in `dashboards.binding` and `dashboards.engine`)" in dashboards
     assert (
-        "`layout` and `contract` (in `dashboards.storage` and `dashboards.engine`)"
+        "`layout` and `contract` (allowed in `dashboards.storage` and "
+        "`dashboards.engine`; today only `dashboards.storage` imports them)"
     ) in dashboards
     assert "`yaml` (in `dashboards.directive` only)" in dashboards
     assert "only `cli` imports it, and only lazily;" in dashboards

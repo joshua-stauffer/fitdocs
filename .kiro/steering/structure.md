@@ -84,8 +84,9 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
 - `dashboards` (the chart pages under `dashboards/`) imports `query` (in
   `dashboards.binding` only), the chart kit facade (`render.charts.kit`, and
   `kit.format` in `dashboards.region` only), `units` (in `dashboards.binding`
-  and `dashboards.engine`), `layout` and `contract` (in `dashboards.storage`
-  and `dashboards.engine`) and `yaml` (in `dashboards.directive` only); only
+  and `dashboards.engine`), `layout` and `contract` (allowed in
+  `dashboards.storage` and `dashboards.engine`; today only `dashboards.storage`
+  imports them) and `yaml` (in `dashboards.directive` only); only
   `cli` imports it, and only lazily; it never imports `duckdb`, `index` or a
   clock.
 - `LoadCalculator` implementations declare their required inputs so the CLI
@@ -100,8 +101,8 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   `index.derived`.
 - `units` (the one unit vocabulary: token, index phrase, display symbol,
   family) imports only the standard library and is a leaf module any layer may
-  import; today `index.schema` and the chart kit
-  (`render.charts.kit`) do. The kit imports only the standard library,
+  import; today `index.schema`, the chart kit
+  (`render.charts.kit`) and `dashboards` (`binding`, `engine`) do. The kit imports only the standard library,
   `units` and `render.charts.{svg,series,palette}`: never `model`, `ingest`,
   `index`, `query` or `dashboards`.
 - Output documents must be valid, readable markdown in any renderer

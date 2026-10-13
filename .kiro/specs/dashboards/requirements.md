@@ -137,7 +137,7 @@ exactly as I wrote it, with every mistake named, so that a value is never
 silently changed into something else.
 
 #### Acceptance Criteria
-1. fitdocs shall read the directive body as a YAML mapping in which every scalar is the text exactly as written, with no conversion of any value to a boolean, number, date or null.
+1. fitdocs shall read the directive body as a YAML mapping in which every scalar is the text YAML yields for the scalar's style, with no conversion of any value to a boolean, number, date or null.
 2. If the directive body does not parse, is not a mapping, repeats a key, or uses an explicit type tag, an anchor or an alias, then fitdocs shall refuse the chart with a problem naming the page line.
 3. fitdocs shall require the keys `id`, `kind`, `mode`, `title` and `sql`, and shall accept the optional keys `channels`, `options`, `window` and `show_rows`; if a required key is missing or any other key appears, then fitdocs shall refuse the chart, naming the key and listing the accepted keys.
 4. If `id` is not a chart id (one or more groups of lowercase ASCII letters and digits joined by single hyphens, at most 64 characters long), then fitdocs shall refuse the chart, stating the rule.
@@ -145,7 +145,7 @@ silently changed into something else.
 6. If `mode` is neither `relative` nor `frozen`, then fitdocs shall refuse the chart, listing both values.
 7. If `sql` is not written as a literal block scalar (`sql: |`), then fitdocs shall refuse the chart with a problem stating that other scalar styles can fold or cut SQL text.
 8. fitdocs shall pass `kind`, `title`, the `channels` mapping (channel name to result column name) and the `options` mapping (option name to value) to the chart kit unchanged, and shall report the chart kit's problems for any of them, including an unregistered kind with the list of registered kinds.
-9. If `channels` or `options` is not a mapping of names to single-line scalar values, if `title` or `window` is not single-line text, or if `show_rows` is neither `true` nor `false`, then fitdocs shall refuse the chart, naming the key.
+9. If `channels` or `options` is not a mapping of names to single-line scalar values, if `title` or `window` does not read as text without a line break (YAML folding is applied first), or if `show_rows` is neither `true` nor `false`, then fitdocs shall refuse the chart, naming the key.
 10. fitdocs shall never infer a kind, a channel binding or an option value from the SQL, the result or the page.
 
 ### Requirement 5: Chart Regions
@@ -200,7 +200,7 @@ chart with their real value kinds and units, so that dates plot as dates and a
 
 #### Acceptance Criteria
 1. fitdocs shall give each result column a value kind from its database type, whichever spelling the supported database engine version reports: integer, floating-point and decimal numbers as number; DATE as date; TIMESTAMP as date-time; INTERVAL as duration; text and enumerations as category; BOOLEAN as boolean.
-2. If a result column has a type with no chart value kind (time of day, timestamp with time zone, list, structure, map, binary, UUID, or a type fitdocs does not recognise), then fitdocs shall refuse the chart with a problem naming the column and its type and suggesting a cast or removing the column.
+2. If a result column has a type with no chart value kind (time of day, list, structure, map, binary, UUID, or a type fitdocs does not recognise), then fitdocs shall refuse the chart with a problem naming the column and its type and suggesting a cast or removing the column. A timestamp-with-time-zone column is never drawn: where the database cannot return its values, fitdocs refuses the chart as a failed statement with the database's message and a fix to cast the values to TIMESTAMP; otherwise it refuses it as above.
 3. fitdocs shall give each result column the unit token of the most specific unit suffix its name ends with, taken from the single unit vocabulary the analytics index documents, and no unit when no suffix matches.
 4. fitdocs shall pass each result value to the chart kit as the value the database returned, with SQL NULL as absent, and shall never substitute zero, an empty string or any default for an absent value.
 5. fitdocs shall not convert any value from one unit to another.
@@ -248,8 +248,8 @@ so that a typo in one directive never blanks my other charts.
 
 #### Acceptance Criteria
 1. If a chart fails (a directive or region problem, refused or failed SQL, a timeout, the row cap, an unsupported column, a chart-kit refusal, a missing snapshot, or an unwritable asset), then fitdocs shall continue with every other chart on the page and every other page.
-2. If a chart that has been rendered before fails, then fitdocs shall leave its region and asset exactly as they were.
-3. If a chart that has never been rendered fails, then fitdocs shall write its region with a short visible note that begins `Not rendered:` and states the first problem's message, and with no image link.
+2. If a chart that has been rendered before fails, then fitdocs shall leave its region exactly as it was, and its asset exactly as it was unless the page could not be replaced after the chart's new image had been written (the page changed during the run, or the page write failed); then the asset holds the new drawing until the next successful run brings the region in line.
+3. If, under `fitdocs dashboard refresh` or the pass, a chart that has never been rendered and has no directive or region problem fails before anything is written for it (its index cannot be opened, its SQL is refused, fails or times out, its result is refused, its snapshot cannot be used, its first frozen result cannot be stored, or the chart kit refuses it), then fitdocs shall write its region with a short visible note that begins `Not rendered:` and states the first problem's message, and with no image link. A chart with a directive or region problem, a chart whose image, snapshot or page cannot be written, and every chart of a failing `freeze` shall have its region left as it was.
 4. fitdocs shall report every failed chart with its page name, chart id, the page line of its directive and every problem found for it.
 5. If a page cannot be read or written safely (Requirement 16), then fitdocs shall leave it unchanged, report it and continue with the other pages.
 
@@ -260,11 +260,11 @@ chart.
 
 #### Acceptance Criteria
 1. When `fitdocs sync` (with or without a source), `fitdocs pull --sync`, `fitdocs regen` or `fitdocs load` has refreshed the analytics index successfully, fitdocs shall then run the dashboard pass over every dashboard page.
-2. If that command's index refresh did not succeed (the index is not built, is busy, needs a rebuild, or the refresh failed or raised an error), then fitdocs shall change no dashboard page, asset or snapshot and, when at least one dashboard page exists, shall print one line stating that the dashboards were not refreshed and why.
+2. If that command's index refresh did not succeed (the index is not built, is busy, needs a rebuild, or the refresh failed or raised an error), then fitdocs shall change no dashboard page, asset or snapshot and, under the same condition as criterion 6, shall print one line stating that the dashboards were not refreshed and why.
 3. The dashboard pass shall never build or rebuild the analytics index.
 4. The dashboard pass shall never cause its command to fail and shall never change its command's exit code; an unexpected error in the pass shall be reported in one line.
 5. Commands that do not refresh the analytics index after writing, and `fitdocs index` itself, shall not run the dashboard pass.
-6. When no dashboard page exists, the dashboard pass shall print nothing; otherwise it shall print the number of charts it wrote and every problem and notice, and nothing when it wrote nothing and found nothing to report.
+6. When `dashboards/` is absent, or is a usable directory holding no markdown file other than the generated `AGENTS.md`, the dashboard pass shall print nothing; otherwise it shall print the number of charts it wrote and every problem and notice (a misnamed markdown file and an unusable dashboards location included), and nothing when it wrote nothing and found nothing to report.
 7. If the user interrupts the dashboard pass, then fitdocs shall let the interrupt end the command exactly as an interrupt during the index refresh does.
 
 ### Requirement 14: The `fitdocs dashboard` Command
@@ -290,8 +290,8 @@ data with a stable code and a fix, so that I can correct a directive without
 guessing.
 
 #### Acceptance Criteria
-1. Every problem shall carry the page name, the chart id when it concerns a chart, the 1-based page line it concerns, a stable code, a one-sentence message and a one-sentence fix.
-2. A problem raised by the chart kit shall carry the chart kit's code, message, fix, channel, column, option, row, row count and accepted values unchanged, and shall state that it came from the chart kit.
+1. Every problem shall carry a stable code, a one-sentence message and a one-sentence fix; the page name when it concerns a page (the file name, for a misnamed markdown file); the chart id when it concerns a chart whose id is known; and the 1-based page line when it concerns a line of a page. A problem about the dashboards location or the index carries no page, and a problem about a whole page carries no line.
+2. A problem raised by the chart kit shall carry the chart kit's code, message, fix, channel, column, option, row, row count and accepted values unchanged, except that a problem raised while drawing the `show_rows` table names `show_rows` in its option field, and shall state that it came from the chart kit.
 3. fitdocs shall keep its own problem codes stable and append-only, distinct by source from the chart kit's codes.
 4. The JSON report shall list, for each page in scope, its page-level problems and, for each chart, its id, kind, mode, outcome, problems and notices, together with the index's state and the paths of any assets removed.
 5. fitdocs shall order the report by page name, then by page line, keeping the chart kit's own order among one chart's chart-kit problems, so that the same inputs give the same report.
@@ -308,7 +308,7 @@ concurrent edit never costs me content.
 3. If a page's bytes change between fitdocs reading the page and replacing it, then fitdocs shall not replace it and shall report that the page changed during the run.
 4. If a page is not valid UTF-8, then fitdocs shall leave it unchanged and report it.
 5. fitdocs shall keep a page's line endings and any leading byte-order mark, and lines it inserts shall end with the line ending of the directive's closing line.
-6. A dashboard run shall write only chart regions inside existing dashboard pages and files inside `dashboards/assets/`, and shall delete only marked chart images inside `dashboards/assets/`.
+6. A dashboard run shall write only chart regions inside existing dashboard pages and files inside `dashboards/assets/` (creating `dashboards/assets/` and its page folders as needed, through a short-lived temporary file beside each file it replaces), and shall delete only marked chart images inside `dashboards/assets/` and the page folders that removal left empty.
 
 ### Requirement 17: Idempotence and Determinism
 **Objective:** As an athlete whose wiki is synced through iCloud and git, I
@@ -357,3 +357,26 @@ are owned today.
 2. The dashboards feature shall reach the database only through the analytics query layer, shall read no clock (the run date comes from the CLI's one clock read), shall make no network request, and shall add no runtime dependency.
 3. Only the CLI shall use the dashboards feature.
 4. The fitdocs test suite shall fail if dashboards code imports outside its allowed dependencies, reads a clock or imports a network module, and each such guard shall carry a positive control showing that it detects a violation.
+
+## Amendments
+
+### 2026-10-13 validation amendments (maintainer ruling on 12.2: amend, no code change)
+
+`/kiro-validate-impl dashboards` found eleven criteria whose wording the landed,
+reviewed behaviour contradicts; each was amended in place to describe the code.
+On 12.2 the maintainer chose to amend the requirement rather than change the
+engine: a page's images are written before the page, so when the page changed
+during the run or could not be written, the image already holds the new drawing
+while the region keeps its old text, and the next successful run reconciles
+them. The previous wording of each amended criterion:
+
+- **4.1** (previous wording, excerpt): fitdocs shall read the directive body as a YAML mapping in which every scalar is the text exactly as written, with no conversion
+- **4.9** (previous wording, excerpt): if `title` or `window` is not single-line text,
+- **8.2** (previous wording, excerpt): If a result column has a type with no chart value kind (time of day, timestamp with time zone, list, structure, map, binary, UUID, or a type fitdocs does not recognise), then fitdocs shall refuse the chart with a problem naming the column and its type and suggesting a cast or removing the column.
+- **12.2** (previous wording, excerpt): If a chart that has been rendered before fails, then fitdocs shall leave its region and asset exactly as they were.
+- **12.3** (previous wording, excerpt): If a chart that has never been rendered fails, then fitdocs shall write its region with a short visible note that begins `Not rendered:` and states the first problem's message, and with no image link.
+- **13.2** (previous wording, excerpt): and, when at least one dashboard page exists, shall print one line
+- **13.6** (previous wording, excerpt): When no dashboard page exists, the dashboard pass shall print nothing; otherwise it shall print the number of charts it wrote and every problem and notice, and nothing when it wrote nothing and found nothing to report.
+- **15.1** (previous wording, excerpt): Every problem shall carry the page name, the chart id when it concerns a chart, the 1-based page line it concerns, a stable code, a one-sentence message and a one-sentence fix.
+- **15.2** (previous wording, excerpt): row, row count and accepted values unchanged, and shall state that it came from the chart kit.
+- **16.6** (previous wording, excerpt): A dashboard run shall write only chart regions inside existing dashboard pages and files inside `dashboards/assets/`, and shall delete only marked chart images inside `dashboards/assets/`.

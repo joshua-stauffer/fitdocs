@@ -273,6 +273,12 @@ def test_the_regions_section_names_the_failures_that_leave_a_note_and_none() -> 
     ) in regions
     assert "cannot be written gets no region" not in regions
     assert "its drawing or its writing" not in regions
+    assert (
+        "keeps its region exactly as it was, and its image too, unless the page "
+        "changed during the run or could not be written after the chart's new "
+        "image was written"
+    ) in regions
+    assert "keeps its region and image exactly as they were" not in regions
 
 
 def test_the_sql_section_calls_a_kinds_bound_a_size_bound_not_a_row_bound() -> None:

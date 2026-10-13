@@ -185,7 +185,7 @@ class PlannedChart:
     close_line: int | None  # None: the directive is unclosed
     directive: Directive | None  # None: the directive did not parse
     region: RegionBlock | None  # the region directly below, when it is this chart's
-    need: DataNeed | None  # None: the chart has a planning problem
+    need: DataNeed | None  # None: a planning problem, or relative under a page FREEZE
     snapshot: str | None  # the planned snapshot path (RECORDED or LATEST)
     problems: tuple[Problem, ...]  # in page line order
 
