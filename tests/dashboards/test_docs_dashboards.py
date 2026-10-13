@@ -10,7 +10,9 @@ import re
 import shlex
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
+from typing import cast
 
 import pytest
 from typer.core import TyperOption
@@ -257,6 +259,34 @@ def test_the_frozen_and_ownership_sections_state_the_snapshot_rules() -> None:
 
     versioning = _section(page, "Version control")
     assert "do not git-ignore" in versioning and "snapshot" in versioning
+
+
+def test_the_regions_section_names_the_failures_that_leave_a_note_and_none() -> None:
+    page = _page_path().read_text(encoding="utf-8")
+    regions = _section(page, "Chart regions and assets")
+    assert "fails in its query or its drawing" in regions
+    assert "holds a value in its first frozen result that cannot be stored" in regions
+    assert (
+        "When a chart's image, snapshot or page cannot be written, its region is "
+        "left as it was (a chart with no region still has none, and an earlier "
+        "`Not rendered:` note stays) and the failure is reported"
+    ) in regions
+    assert "cannot be written gets no region" not in regions
+    assert "its drawing or its writing" not in regions
+
+
+def test_the_sql_section_calls_a_kinds_bound_a_size_bound_not_a_row_bound() -> None:
+    counted = {
+        cast("Mapping[str, object]", each["bound"])["counts"]
+        for each in describe_kinds()
+    }
+    assert counted - {"rows"}, "a non-row bound is registered"
+    page = _page_path().read_text(encoding="utf-8")
+    sql = _section(page, "Writing the SQL")
+    listed = re.search(r"has its own size bound \(([^)]*)\)", sql)
+    assert listed is not None
+    assert set(re.split(r", | or ", listed.group(1))) == counted
+    assert "its own row bound" not in sql
 
 
 def test_the_command_section_states_forms_targets_formats_and_exit_codes() -> None:

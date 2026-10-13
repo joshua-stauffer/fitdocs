@@ -210,11 +210,13 @@ a chart runs under the same read-only sandbox and time limit.
   shows the directive as dimmed source text; that is expected, not a bug.
 - Under a refresh (the command, or the pass after sync, pull --sync, regen or
   load), a chart that has never rendered and whose query or drawing fails, or
-  whose first frozen result cannot be stored, gets a region starting
-  `Not rendered:` with the first problem. A chart with a directive or region
-  problem is never edited, and one whose image or page could not be written
-  gets no region; a failing `freeze` writes no note. A chart that rendered
-  before keeps its last good region and image.
+  whose first frozen result holds a value that cannot be stored (such as a
+  non-finite number), gets a region starting `Not rendered:` with the first
+  problem. A chart with a directive or region problem is never edited. When a
+  chart's image, snapshot or page could not be written, its region is left as
+  it was (a chart with no region still has none, and an earlier `Not rendered:`
+  note stays) and the failure is reported. A failing `freeze` writes no note. A
+  chart that rendered before keeps its last good region and image.
 
 ## Ownership
 
@@ -233,4 +235,5 @@ for the boundary around generated data.
 
 - `fitdocs dashboard kinds` — the live list of chart kinds with their channels and options.
 - [Querying the analytics index](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/analytics.md) — the schema and the SQL a chart runs.
+- [Dashboards guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/dashboards.md) — the directive, the chart kinds and the commands in full.
 - [Ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md) — the published boundary for generated data.

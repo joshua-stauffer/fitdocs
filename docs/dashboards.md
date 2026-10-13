@@ -129,11 +129,14 @@ result's date or date-time columns (or that the result had no rows).
 A chart that fails is isolated: every other chart and page still renders. A
 chart that has rendered before keeps its region and image exactly as they were.
 When `refresh` or the pass finds that a chart that has never rendered fails in
-its query, its drawing or its writing, that chart gets a region with a short
-note that starts `Not rendered:` and states the first problem, and no image
-link. A chart whose directive or region has a problem is not written at all:
-no region is inserted or changed, and `check` reports the problem. A failing
-`freeze` writes no note.
+its query or its drawing, or holds a value in its first frozen result that
+cannot be stored (such as a non-finite number), that chart gets a region with a
+short note that starts `Not rendered:` and states the first problem, and no
+image link. When a chart's image, snapshot or page cannot be written, its
+region is left as it was (a chart with no region still has none, and an earlier
+`Not rendered:` note stays) and the failure is reported. A chart whose directive or region has a
+problem is not written at all: no region is inserted or changed, and `check`
+reports the problem. A failing `freeze` writes no note.
 
 A region that sits anywhere but directly below its directive, a region with no
 end marker, and a region that contains a directive opening line or another
@@ -185,8 +188,8 @@ does not run the SQL, and reports how to take a new one.
 A chart runs exactly one SELECT statement, read only, under the same sandbox
 and time limit as `fitdocs query`. A statement that writes, attaches, or loads
 anything is refused, and so is a result of more than 10,000 rows; aggregate in
-SQL instead. Each chart kind also has its own row bound, listed with the kind under
-[Chart kinds](#chart-kinds).
+SQL instead. Each chart kind also has its own size bound (rows, bins, weeks,
+cells or panels), listed with the kind under [Chart kinds](#chart-kinds).
 
 - **`$today`** is the only parameter, bound to the run date as a date. Write a
   window as date arithmetic, `$today - 84`, or with an explicit cast, such as
