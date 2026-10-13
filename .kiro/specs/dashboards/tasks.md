@@ -1198,7 +1198,7 @@ sequential, never two `(P)` tasks at once.
     red.
   - _Requirements: 1.6, 1.7, 2.1, 9.2, 9.3, 10.2, 10.8, 17.1, 17.2_
 
-- [ ] 8.4 Guard the dashboards boundary
+- [x] 8.4 Guard the dashboards boundary
   - **Tests** (`test_boundary.py`, after `tests/query/test_boundary.py` and
     `tests/compose/test_boundary.py`): the package's module tuple equals
     `rglob` both ways with a positive control (the walk saw ≥ 11 modules);
@@ -1631,3 +1631,21 @@ sequential, never two `(P)` tasks at once.
   file, `query-spill-evil.tmp` or a `query-spill-1` file all go red. Stale
   counts fixed in `tests/test_confinement.py` and
   `tests/test_declaration_refresh.py` (five declarations, three assets dirs).
+- **8.4 (4 review rounds; the final prose-only edit — the reviewer's exact
+  "known limits" text — applied by the controller):**
+  `tests/dashboards/test_boundary.py` encodes the LANDED graph: strict
+  lower-rank intra-package imports (`problems → grammar → directive →
+  snapshot → region → source → storage → kinds → engine → report →
+  binding`), `engine` never imports `binding`, the `__init__` marker imports
+  nothing and is imported by nothing; per-module allowlists — `yaml` only in
+  directive, `fitdocs.query` only in binding, `kit.format` only in region,
+  `fitdocs.units` in binding AND engine (R11), `layout`/`contract` allowed in
+  storage and engine per design (only storage uses them today); forbidden
+  roots (duckdb, index, time, network, other render, …) pinned literally;
+  dynamic imports forbidden outright (`importlib`, `builtins`, `pkgutil`,
+  `runpy`, `zipimport`, `__import__`, `import_module`, `__builtins__`, bare
+  `exec`/`eval`/`compile`); `.today` legal only on `request`/`stored`/
+  `snapshot` and an import alias may not borrow those names; only
+  `fitdocs.cli` imports the package (function-level imports scanned). Known
+  static-scan limits are documented as illustrative (`code` and similar
+  source-running modules, `operator.attrgetter("today")`, local rebinding).
