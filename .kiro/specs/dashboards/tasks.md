@@ -1079,7 +1079,7 @@ sequential, never two `(P)` tasks at once.
 
 - [ ] 8. Records, steering and validation
 
-- [ ] 8.1 Publish the dashboards category in the ownership contract (wiki-contract Amendment 5, part 2; analytics-index Amendment 1, contract copies)
+- [x] 8.1 Publish the dashboards category in the ownership contract (wiki-contract Amendment 5, part 2; analytics-index Amendment 1, contract copies)
   - **`docs/ownership-contract.md`**: a new section "Dashboard Pages:
     Athlete Pages with fitdocs Regions" (page rule; `type: dashboard`
     documented, never required or written; directive is the athlete's;
@@ -1649,3 +1649,25 @@ sequential, never two `(P)` tasks at once.
   `fitdocs.cli` imports the package (function-level imports scanned). Known
   static-scan limits are documented as illustrative (`code` and similar
   source-running modules, `operator.attrgetter("today")`, local rebinding).
+- **8.1 (3 review rounds; the round-3 one-sentence close-out — the
+  reviewer's code-verified text — was confirmed by the controller's own
+  pin mutation rather than a 4th review):** the wiki-contract Amendment 5
+  record did not exist, so 8.1 wrote it whole (criteria 2.17, 3.11, design
+  paragraph, spec.json entry, 2026-10-13); dashboards design § Declaration
+  amended to the shipped wording ("a", "after a successful index refresh",
+  `...`). New contract section "Dashboard Pages: Athlete Pages with fitdocs
+  Regions"; index sentence carries the named exception ("…except the chart
+  regions and chart assets of dashboard pages under `dashboards/`; workout,
+  history and block documents never read it"), guarded sentence-by-sentence
+  by `test_every_never_read_back_sentence_carries_the_named_exception`.
+  Corrected to the code in review: pages hold "at most a few" user regions
+  (none on history/planned pages); the Not-rendered note only when a valid
+  chart's query or drawing fails or its first frozen result cannot be
+  stored (write failures leave the region as it was; a failing freeze writes
+  nothing); a frozen chart with no snapshot runs its SQL once; deletions are
+  marked images and the `assets/<page>/` folders cleanup emptied; snapshots
+  are created atomically and never replace a file; `load` and the
+  `dashboard` command do not write `dashboards/AGENTS.md`; the pass is
+  silent only when `dashboards/` holds no markdown file besides `AGENTS.md`.
+  Safety-relevant sentences are phrase-pinned (bullet-scoped) in
+  `test_safety_relevant_dashboard_sentences_are_pinned`.
