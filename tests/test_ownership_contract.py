@@ -211,3 +211,180 @@ def test_readme_points_at_contract_by_project_documentation_url() -> None:
     assert "docs/ownership-contract.md" not in ownership_section.replace(
         CONTRACT_DOCUMENTATION_URL, ""
     )
+
+
+# --- the dashboards category (wiki-contract Amendment 5; dashboards 8.1) ----
+
+_DASHBOARD_HEADING = "Dashboard Pages: Athlete Pages with fitdocs Regions"
+
+
+def _flat(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _flat_section(heading: str) -> str:
+    return _flat(_section(_read_doc(), heading))
+
+
+def test_dashboard_section_states_the_page_rule_and_the_inverse_ownership() -> None:
+    section = _flat_section(_DASHBOARD_HEADING)
+    for phrase in (
+        "The page is yours.",
+        "named `<page name>.md`",
+        "never creates, renames or deletes a page",
+        "never changes a byte of it outside its chart regions",
+        "`type: dashboard`",
+        "never requires it, never writes it",
+        "The directive is yours.",
+        "Chart regions are fitdocs's.",
+        "`<!-- fitdocs:begin:chart:<id> -->`",
+        "`<!-- fitdocs:end:chart:<id> -->`",
+        "Do not edit inside a chart region",
+        "A page is never a generated document.",
+        "never writes a generated-file banner or provenance line into a page",
+    ):
+        assert phrase in section, phrase
+
+
+def test_dashboard_section_states_the_asset_snapshot_and_cleanup_rules() -> None:
+    section = _flat_section(_DASHBOARD_HEADING)
+    for phrase in (
+        "`dashboards/assets/<page name>/<chart id>.svg`",
+        "never overwrites or deletes a file in `dashboards/assets/` that does "
+        "not carry the mark",
+        "fitdocs never modifies or deletes a snapshot",
+        "new file that never replaces an existing one",
+        "`fitdocs regen`, `fitdocs index --rebuild`, a chart-kit upgrade and "
+        "image cleanup leave every snapshot unchanged",
+        "deletes a marked chart image only if no dashboard page's text contains "
+        "that image's path relative to `dashboards/`",
+        "A link from outside `dashboards/` does not protect an image",
+    ):
+        assert phrase in section, phrase
+
+
+def test_head_and_definitions_agree_with_the_dashboards_section() -> None:
+    text = _flat(_read_doc())
+    assert "inside the five owned directories" in text
+    assert "each of those four commands refreshes every declared directory's" in text
+    owned = _flat_section("Owned Paths")
+    assert (
+        '"owned" in this contract means "fitdocs may create, rewrite, or delete '
+        'wholesale, on its own initiative" for everything it generates; under '
+        "`dashboards/` the pages are the one exception"
+    ) in owned
+
+
+def test_regions_and_overwrite_sections_carry_the_dashboards_rules() -> None:
+    regions = _flat_section("User-Owned and Tool-Filled Regions")
+    assert (
+        "A chart region in a dashboard page is the inverse case: it is "
+        "tool-owned inside a page that is yours"
+    ) in regions
+    overwrite = _flat_section("Overwrite Semantics of Every Writing Operation")
+    for phrase in (
+        "**`dashboard`** — `fitdocs dashboard check` writes and deletes nothing",
+        "never builds or rebuilds the analytics index",
+        "never changes its command's exit code",
+        "`dashboards/AGENTS.md`",
+        "`sync` (with or without a source; without one it is the inbox drain), "
+        "`regen`, `load` and `pull --sync`",
+        "changes no dashboard page, asset or snapshot",
+    ):
+        assert phrase in overwrite, phrase
+    history = overwrite[overwrite.index("**`history`**") :]
+    history = history[: history.index(" - **")]
+    assert (
+        "`fit-archive/AGENTS.md`, and `dashboards/AGENTS.md` — through the same "
+        "function"
+    ) in history
+    for command in ("**`sync`**", "**`regen`**", "**`load`**", "**`pull`**"):
+        bullet = overwrite[overwrite.index(command) :]
+        bullet = bullet[: bullet.index(" - **") if " - **" in bullet else None]
+        assert "dashboard pass" in bullet, command
+
+
+def test_root_instructions_example_names_all_five_declarations() -> None:
+    text = _read_doc()
+    example = _section(
+        text, "Referencing `workouts/AGENTS.md` from Your Wiki's Root Instructions"
+    )
+    flat = _flat(example)
+    assert "`dashboards/AGENTS.md`" in flat
+    assert "those five files are generated" in flat
+    assert "those four files" not in text
+    assert "each of the five refreshes" not in flat
+    assert "each of those four commands refreshes every declared directory's" in flat
+
+
+def test_every_never_read_back_sentence_carries_the_named_exception() -> None:
+    text = _flat(_read_doc())
+    phrases = ("back into a document", "back into documents")
+    sentences = re.split(r"(?<=[.;:])\s+", text)
+    hits = [sentence for sentence in sentences if any(p in sentence for p in phrases)]
+    assert hits, "no sentence states the index is never read back into a document"
+    for sentence in hits:
+        assert "except the chart regions" in sentence, sentence
+
+
+def _bullet(section: str, name: str) -> str:
+    start = section.index(name)
+    end = section.find(" - **", start + 1)
+    return section[start : end if end != -1 else None]
+
+
+def test_safety_relevant_dashboard_sentences_are_pinned() -> None:
+    page = _flat_section(_DASHBOARD_HEADING)
+    overwrite = _flat_section("Overwrite Semantics of Every Writing Operation")
+    ordering = _flat_section("Commit Ordering and Re-Derivability")
+    dashboard = _bullet(overwrite, "**`dashboard`**")
+    load = _bullet(overwrite, "**`load`**")
+    history = _bullet(overwrite, "**`history`**")
+    assert (
+        "a run writes in the order new snapshots, then chart images, then the "
+        "page itself"
+    ) in ordering
+    assert "Per page the order is the new snapshots, then the chart images, then" in (
+        dashboard
+    )
+    assert "A run that cannot read every page completely deletes nothing." in page
+    assert "runs over every dashboard page only when that refresh succeeded" in (
+        dashboard
+    )
+    assert "so it does not write `dashboards/AGENTS.md`" in load
+    assert "does not write `dashboards/AGENTS.md`" not in history
+    assert "an `assets/<page name>/` folder that removal emptied" in dashboard
+    assert (
+        "A chart with a directive or region problem is left untouched and only reported"
+    ) in dashboard
+    assert "a failing `freeze` writes nothing, not even a note" in dashboard
+    assert "a frozen chart with none runs its SQL once and stores its first" in (
+        dashboard
+    )
+    assert (
+        "the chart images under `dashboards/assets/` carry the generated-file mark"
+        in (page)
+    )
+    assert "a snapshot is created atomically as a new file" in page
+    assert (
+        "at most a few of its regions are yours (none on a history or "
+        "planned-workout page)"
+    ) in page
+    assert "(a misnamed markdown file there is reported)" in dashboard
+    assert (
+        "When a chart's image, snapshot or page cannot be written, its region is "
+        "left as it was and the failure is only reported"
+    ) in dashboard
+    assert "or whose first frozen result cannot be stored" in dashboard
+    assert (
+        "fitdocs creates each snapshot as a new file that never replaces an "
+        "existing one"
+    ) in page
+    assert (
+        "`dashboard` command itself does not write `dashboards/AGENTS.md`"
+    ) in dashboard
+    assert (
+        "were not refreshed and why when `dashboards/` holds a markdown file "
+        "besides its `AGENTS.md`"
+    ) in dashboard
+    assert "when at least one page exists" not in dashboard

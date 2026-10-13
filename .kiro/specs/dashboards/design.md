@@ -1278,11 +1278,11 @@ New fragments and an `elif directory == "dashboards/"` branch; heading
 comment in source):
 1. "The pages in `dashboards/` belong to the athlete; fitdocs writes only the
    chart regions inside them and the files in `dashboards/assets/`."
-2. "A page declares each chart in a hidden `<!-- fitdocs:chart … -->`
+2. "A page declares a chart in a hidden `<!-- fitdocs:chart ... -->`
    directive written by the athlete or their assistant; directly below it,
    fitdocs maintains a region between `<!-- fitdocs:begin:chart:<id> -->` and
    `<!-- fitdocs:end:chart:<id> -->` and rewrites only the bytes between those
-   markers, after each successful index refresh and when `fitdocs dashboard
+   markers, after a successful index refresh and when `fitdocs dashboard
    refresh` runs. Edit the prose, frontmatter and directives freely; do not
    edit inside a chart region."
 3. "Frozen charts are drawn from snapshot files in `dashboards/assets/`,
@@ -1294,6 +1294,11 @@ comment in source):
 Ownership block: `Owner: the athlete (pages); fitdocs (chart regions and
 dashboards/assets/).` followed by the standard contract version and URL
 lines.
+
+Wording amended at task 8.1 to the implemented declaration: "a chart" and
+"after a successful index refresh" replace "each", because
+`test_no_declaration_quantifies_over_documents` bans "each" in a declaration,
+and `...` replaces `…` because the goldens are ASCII.
 
 #### Skill and Docs
 
