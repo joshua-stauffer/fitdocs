@@ -2682,7 +2682,7 @@ Rejected:
 
 #### Existing Spec Updates
 
-- [ ] analytics-index — Req 5.6 gains the named dashboards exception, and
+- [x] analytics-index — Req 5.6 gains the named dashboards exception, and
   the copies of the rule move in the same change (see Decisions).
   `cli._run_index_pass` returns its `IndexReport` outcome instead of
   discarding it (`cli.py:503-519`). The facade gains
@@ -2699,19 +2699,19 @@ Rejected:
   analytics-index's `design.md`. `units` joins the `index` bullet in
   `structure.md`, and its text pin moves. Carried out inside `chart-kit`.
   Dependencies: chart-kit
-- [ ] analytics-query — result columns keep their type names (dropped at
+- [x] analytics-query — result columns keep their type names (dropped at
   `statement.py:200-205`). `fitdocs.dashboards` joins the importer
   allow-list (`tests/query/test_boundary.py:15`). The out-of-scope line on
   saved queries and charting (`requirements.md:85-88`) is marked superseded.
   This is analytics-query Amendment 1, carried out inside `dashboards`.
   Dependencies: dashboards
-- [ ] wiki-contract — a new owned location and declared directory
+- [x] wiki-contract — a new owned location and declared directory
   (`dashboards/`, `dashboards/assets/`), the inverse ownership shape
   (fitdocs-owned chart regions inside an athlete-owned page) as a new
   category in `docs/ownership-contract.md`, the page type, and
   `CONTRACT_VERSION` `"9"` → `"10"`. This is wiki-contract Amendment 5,
   carried out inside `dashboards`. Dependencies: dashboards
-- [ ] connectors — `dashboard` joins the no-network command list (`tech.md`,
+- [x] connectors — `dashboard` joins the no-network command list (`tech.md`,
   `tests/connectors/test_e2e.py:205`). This is connectors Amendment 3,
   carried out inside `dashboards`. Dependencies: dashboards
 
@@ -2765,7 +2765,7 @@ Rejected:
     `histogram`, plus the markdown kinds `stat` and `table`.
 
   Implement first. Dependencies: none
-- [ ] dashboards — **brief written 2026-10-11; spec written 2026-10-12**
+- [x] dashboards — **implemented and verified 2026-10-13** (28/28 leaf tasks accepted; landed second of the Phase 11 pair, 7.3 found the kinds block already current; CONTRACT_VERSION "10"; carried analytics-index Amendment 1, analytics-query Amendment 1, wiki-contract Amendment 5, connectors Amendment 3; validate-impl GO, design.md amended to the landed engine and requirements 12.2 + ten more amended to match the code (maintainer ruling on 12.2: image written before the page, no code change); full suite 13499 passed/44 skipped, CI green; 28 follow-ups queued 2026-10-13). **Brief written 2026-10-11; spec written 2026-10-12**
   (Phase 11 batch, wave 2, `tasks-generated`, all approvals set; 20
   requirements / 129 criteria, 8 majors / 28 executable tasks; independent
   Step 3.5 review: RETURN_TO_DESIGN on the params path, which became
