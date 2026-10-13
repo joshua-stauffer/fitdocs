@@ -153,3 +153,23 @@ importing a leaf; a leaf helper satisfies both.
   per-caller prefix noted earlier. Timing advice from 2026-09-29 stands:
   consolidate once, after these have landed, rather than while implementers
   are adding copies against a moving helper.
+
+## Update 2026-10-13 (dashboards task 4.2, on branch impl/dashboards, not yet on main)
+
+- The dashboards package adds another private temp-then-replace copy:
+  `src/fitdocs/dashboards/storage.py:165-186` (`_write_temp` and
+  `_atomic_replace`, temp prefix `.dashboards-` via `_TEMP_PREFIX`), plus an
+  `os.link(temp, final)` create-only variant for snapshots
+  (`create_snapshot`, `storage.py:317-343`). Landed on the dashboards branch
+  at 0a98d5c; `grep -rn "os.replace(" src/fitdocs` there also lists
+  `index/build.py` (two sites) and `sync.py`, which are different idioms
+  (index database swap, page rename) and are not counted.
+- It is not identical to the eight: it opens the temp with
+  `os.open(..., O_WRONLY | O_CREAT | O_EXCL, 0o666)` (not `mkstemp`, so the
+  mode follows the umask), takes `bytes`, optionally `chmod`s the temp to keep
+  an existing page's mode (the `mode` parameter), does not `fsync`, and removes
+  the temp on `BaseException`. A shared helper has to cover the optional mode
+  and a create-only link variant as well as the prefix, `newline` and `fsync`
+  choices already listed.
+- When dashboards lands the live count is nine; title, frontmatter and resume
+  command are left as written, per the earlier updates' convention.

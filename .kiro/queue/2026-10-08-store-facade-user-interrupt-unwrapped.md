@@ -62,3 +62,22 @@ validation. It is being handled locally on `impl/analytics-query`
    `src/fitdocs/query/` and keep the real-process SIGINT test there green.
    Done means: a facade-level test with a real interrupted statement shows
    the named error and a non-hanging close.
+
+## Update 2026-10-13 (dashboards run)
+
+- A related but separate defect is queued as
+  `2026-10-13-sigint-ignored-during-streaming-query-statements`: even with the
+  local interrupt-then-close handling in `fitdocs query`, a Ctrl-C during a
+  streaming (non-aggregating) statement does not reach that handling on duckdb
+  1.5.6 (real CLI, SIGINT after 3 s: 1 of 3 trials exited 130, 2 of 3 gave no
+  exit in 20 s; the process sits in `IndexResult.fetchmany`,
+  `src/fitdocs/index/store.py:126`). An aggregating statement exits 130 in
+  0.0 s (3 of 3). The raw-DuckDB probe there also shows the shape this item
+  describes: the `RuntimeError('Query interrupted')` with a `KeyboardInterrupt`
+  cause is raised and the process still fails to exit while the connection is
+  torn down. Decide the two together: if the facade takes ownership of
+  interrupt handling, it is the natural place for the worker-thread wait that
+  the other item proposes.
+- `fitdocs dashboard` shares this machinery through `QuerySession`;
+  `tests/dashboards/test_interrupt.py` works around it by using an aggregating
+  statement.
