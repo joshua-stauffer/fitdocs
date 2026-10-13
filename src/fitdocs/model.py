@@ -295,6 +295,8 @@ class FileIdentity:
     """The recorded device serial number."""
     time_created: datetime | None
     """When the file was created, as a timezone-aware UTC instant."""
+    file_type: str | None = None
+    """The profile file type name, or its unnamed number as text."""
 
 
 def _absent_file_identity() -> FileIdentity:

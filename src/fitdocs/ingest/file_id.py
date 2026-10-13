@@ -22,6 +22,11 @@ from fitdocs.ingest._fields import str_or_none
 from fitdocs.model import FileIdentity, fit_datetime
 
 
+def is_activity_file(identity: FileIdentity) -> bool:
+    """Whether the declared type permits activity processing."""
+    return identity.file_type in (None, "activity")
+
+
 def _genuine_int(value: object) -> int | None:
     """``value`` when it is an ``int`` that is not a ``bool``, else ``None``."""
     if isinstance(value, int) and not isinstance(value, bool):
@@ -37,11 +42,18 @@ def extract_file_identity(file_id_mesgs: list[dict[str, object]]) -> FileIdentit
         )
     first = file_id_mesgs[0]
     raw_created = _genuine_int(first.get("time_created"))
+    raw_type = first.get("type")
+    file_type = (
+        str(raw_type)
+        if isinstance(raw_type, str) or _genuine_int(raw_type) is not None
+        else None
+    )
     return FileIdentity(
         manufacturer=str_or_none(first.get("manufacturer")),
         product=_genuine_int(first.get("product")),
         serial_number=_genuine_int(first.get("serial_number")),
         time_created=None if raw_created is None else fit_datetime(raw_created),
+        file_type=file_type,
     )
 
 

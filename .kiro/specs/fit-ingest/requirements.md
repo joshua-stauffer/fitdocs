@@ -637,3 +637,17 @@ features can use the same rule over an activity model.
    own methodological choices under criterion 15.8, outside the enumeration
    in criterion 15.6; each record shall include its justification and search
    basis.
+
+
+## Amendment 7 (2026-10-13): declared FIT file type, landed by wellness-store
+
+`FileIdentity` gains `file_type: str | None = None` as its last field, keeping
+existing constructions valid and the schema version unchanged. The first
+`file_id` message supplies its `type`: the profile name is preserved, an
+unnamed integer is recorded as text, and an absent or wrong-typed value
+(including a bool or float) is `None`. No `file_id` means `None`.
+
+`fitdocs.ingest.file_id.is_activity_file(identity)` returns `True` for an
+absent type or `"activity"`, and `False` for other declared types. This is the
+ingest support for wellness-store 4.1 and 4.4; the sync, drain and regeneration
+guard belongs to wellness-store and is implemented separately.

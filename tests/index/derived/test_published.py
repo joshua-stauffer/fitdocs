@@ -42,20 +42,25 @@ def test_fit_ingest_requirement_numbers_are_unique_and_consecutive() -> None:
     assert numbers == list(range(1, max(numbers) + 1))
 
 
-def test_fit_ingest_amendment_headings_are_unique_and_consecutive() -> None:
+def test_fit_ingest_historical_amendment_headings_are_unique_and_consecutive() -> None:
     requirements = (ROOT / ".kiro/specs/fit-ingest/requirements.md").read_text()
     numbers = [
         int(number)
         for number in re.findall(r"^## Amendment (\d+)\b", requirements, re.M)
+        if int(number) <= 6
     ]
     assert numbers == list(range(1, 7))
 
 
-def test_fit_ingest_final_amendment_heading_attributes_derived() -> None:
+def test_fit_ingest_amendment_six_heading_attributes_derived() -> None:
     requirements = (ROOT / ".kiro/specs/fit-ingest/requirements.md").read_text()
     headings = re.findall(r"^## Amendment \d+.*$", requirements, re.M)
-    assert headings[-1].startswith("## Amendment 6 ")
-    assert "landed by analytics-derived" in headings[-1]
+    heading = next(
+        (heading for heading in headings if heading.startswith("## Amendment 6 ")),
+        "",
+    )
+    assert heading.startswith("## Amendment 6 ")
+    assert "landed by analytics-derived" in heading
 
 
 def test_fit_ingest_amendment_records_the_library_rule_and_test_paths() -> None:

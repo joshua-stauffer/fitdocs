@@ -176,7 +176,7 @@ preflight and keeps every call dashboards placed).
 
 ---
 
-- [ ] 1. Foundation: vocabulary, declarations, owned locations, file type
+- [x] 1. Foundation: vocabulary, declarations, owned locations, file type
 
 - [x] 1.1 Create the wellness package with its metric vocabulary, absent-value rule and day-boundary rule, and add the two units
   - **`fitdocs.units`**: append `ml_per_kg_min` ("millilitres per kilogram
@@ -394,7 +394,7 @@ preflight and keeps every call dashboards placed).
   - _Requirements: 2.1, 11.1, 11.7, 14.6, 19.1_
   - _Boundary: OwnedLocations_
 
-- [ ] 1.6 (P) Read the FIT file type into the file identity (fit-ingest amendment)
+- [x] 1.6 (P) Read the FIT file type into the file identity (fit-ingest amendment)
   - `FileIdentity.file_type: str | None = None` as the last field;
     `extract_file_identity` maps `type` like `manufacturer` (profile name,
     else the number as text, else `None` for absent or wrong-typed);
@@ -1028,3 +1028,5 @@ preflight and keeps every call dashboards placed).
 - 1.4: independently APPROVED after adding independent ssl/ftplib/smtplib controls; all six network roots now discriminate by individual removal. Fresh wellness206/boundary47, mypy520/ruff clean. Guard covers explicit AST syntax with aliases/nested imports; application offline liveness remains6.1. Preserve gapped ranks and nonempty/independent filesystem traversal controls; literal existing-module list added only by3.4.
 
 - 1.5: independently APPROVED; full13741/44, focused284, mypy520/ruff clean; 69 mutations plus three reviewer mutations. CONTRACT_VERSION11 literal history10->11, dashboards historical changelog pin literal10 preserved. Quantifier exemptions are two exact required wellness sentences; keep section-scoped head/series assertions and independent owned/declared count tests. Both declarations match scratch-sync goldens. Existing declaration-directory symlink defect is upstream and already queued.
+
+- 1.6: independently APPROVED; full13759/44, focused59, mypy520/ruff clean, 32 claimed plus2 reviewer mutations. FileIdentity.file_type is last/default None, unknown numeric types stringify and bool/float reject; classifier accepts only None/activity. Goldens add only file_type. Historical analytics-derived Amendment6 pins now section-scoped, allow approved Amendment7, which uses required landed-by attribution. Planner guard remains4.1. Foundation1.1–1.6 complete.

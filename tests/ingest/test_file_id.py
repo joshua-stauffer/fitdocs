@@ -24,9 +24,15 @@ from __future__ import annotations
 from dataclasses import fields
 from datetime import timedelta
 
+import pytest
+
 from fitdocs.ingest import parse_fit
 from fitdocs.ingest.decode import decode_fit
-from fitdocs.ingest.file_id import count_undocumented_messages, extract_file_identity
+from fitdocs.ingest.file_id import (
+    count_undocumented_messages,
+    extract_file_identity,
+    is_activity_file,
+)
 from fitdocs.model import (
     SCHEMA_VERSION,
     Activity,
@@ -187,6 +193,7 @@ def test_missing_product_is_none_and_the_other_values_stay() -> None:
         product=None,
         serial_number=4_200_000_044,
         time_created=fit_datetime(created),
+        file_type="activity",
     )
 
 
@@ -205,6 +212,7 @@ def test_missing_creation_time_is_none_and_the_other_values_stay() -> None:
         product=13,
         serial_number=4_200_000_055,
         time_created=None,
+        file_type="activity",
     )
 
 
@@ -258,6 +266,7 @@ def test_two_file_id_messages_use_the_first_in_every_field() -> None:
         product=3843,
         serial_number=4_200_000_011,
         time_created=fit_datetime(first_created),
+        file_type="activity",
     )
 
 
@@ -304,3 +313,52 @@ def test_new_fields_default_to_absent_and_the_schema_version_holds() -> None:
     assert provenance.undocumented_messages is None
     assert by_name["file_identity"].default_factory() == _ALL_ABSENT  # type: ignore[misc]
     assert SCHEMA_VERSION == "1.0"
+
+
+@pytest.mark.parametrize("file_type", ["activity", "monitoring_b", 49])
+def test_encoded_file_type(file_type: str | int) -> None:
+    mesg = builder._file_id(4200000071, manufacturer="stryd")
+    mesg["type"] = file_type
+    assert _parse(mesg).file_identity.file_type == str(file_type)
+
+
+def test_first_file_type_wins() -> None:
+    first = builder._file_id(4200000072, manufacturer="stryd")
+    first["type"] = "monitoring_b"
+    second = builder._file_id(4200000073, manufacturer="development")
+    assert _parse(first, second).file_identity.file_type == "monitoring_b"
+
+
+def test_encoded_missing_file_type() -> None:
+    mesg = builder._file_id(4200000076, manufacturer="stryd")
+    del mesg["type"]
+    assert _parse(mesg).file_identity.file_type is None
+
+
+@pytest.mark.parametrize("messages", [[], [{"manufacturer": "stryd"}]])
+def test_absent_file_type(messages: list[dict[str, object]]) -> None:
+    assert extract_file_identity(messages).file_type is None
+
+
+@pytest.mark.parametrize("value", [True, False, 4.0, [], {}, None])
+def test_wrong_typed_file_type(value: object) -> None:
+    assert extract_file_identity([{"type": value}]).file_type is None
+
+
+@pytest.mark.parametrize(
+    "file_type, expected",
+    [
+        (None, True),
+        ("activity", True),
+        ("monitoring_b", False),
+        ("49", False),
+    ],
+)
+def test_activity_file_predicate(file_type: str | None, expected: bool) -> None:
+    identity = FileIdentity("stryd", 7, 4200000074, None, file_type=file_type)
+    assert is_activity_file(identity) is expected
+
+
+def test_file_type_default_is_last_and_absent() -> None:
+    assert fields(FileIdentity)[-1].name == "file_type"
+    assert FileIdentity("stryd", 7, 4200000075, None).file_type is None
