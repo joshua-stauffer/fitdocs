@@ -1646,9 +1646,47 @@ def test_dashboards_window_section_shows_the_cast_around_the_interval() -> None:
 def test_dashboards_traps_state_when_a_chart_gets_no_region() -> None:
     section = _flat(_dashboards_sections()["Traps"])
     assert "never edited" in section
-    assert "could not be written" in section
-    assert "could not be written gets no region" in section
     assert "and then fails gets" not in section
+    assert "could not be written gets no region" not in section
+
+
+def test_dashboards_traps_name_the_snapshot_among_the_failed_writes() -> None:
+    section = _flat(_dashboards_sections()["Traps"])
+    assert (
+        "When a chart's image, snapshot or page could not be written, its region "
+        "is left as it was (a chart with no region still has none, and an earlier "
+        "`Not rendered:` note stays) and the failure is reported"
+    ) in section
+    assert "holds a value that cannot be stored" in section
+
+
+def test_dashboards_size_limit_units_are_the_registered_bound_units() -> None:
+    from fitdocs.render.charts.kit import describe_kinds
+
+    section = _flat(_dashboards_sections()["Columns, units and pace"])
+    listed = re.search(r"own size limit \(([^)]*)\)", section)
+    assert listed is not None
+    counted = {
+        cast("dict[str, object]", each["bound"])["counts"] for each in describe_kinds()
+    }
+    assert counted - {"rows"}, "a non-row bound is registered"
+    assert set(re.split(r", | or ", listed.group(1))) == counted
+
+
+_DASHBOARDS_DOC_URL = (
+    "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/dashboards.md"
+)
+
+
+def test_dashboards_further_reading_links_the_dashboards_guide() -> None:
+    further, _fences = _strip_fences(_dashboards_sections()["Further reading"])
+    matching = [
+        line
+        for line in further.splitlines()
+        if re.match(r"^[ \t]*-[ \t]+", line)
+        and _DASHBOARDS_DOC_URL in _LINK_TARGET_RE.findall(line)
+    ]
+    assert len(matching) == 1, "Further reading needs one bullet linking the guide"
 
 
 def test_dashboards_check_loop_says_findings_fields_may_be_null() -> None:
