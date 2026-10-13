@@ -183,7 +183,7 @@ that I know what an answer from the index means.
 3. When a refresh computes values for a page that the same command wrote, fitdocs shall take them from the composed activity, derived metrics and athlete inputs the command rendered that page from.
 4. When a refresh computes values for a page that the same command did not write, fitdocs shall compose the page's activity from its listed archived files by the rule the training-load pass applies, and compute its metrics under the athlete inputs current when the refresh runs.
 5. fitdocs shall change no row of the index for a change to the athlete inputs alone, and shall record the fingerprint of the athlete inputs current at the last refresh in the index's metadata, so that every activity row computed under other inputs can be found by comparing the two fingerprints.
-6. fitdocs shall never read the index to produce a document, a document value, or the output of any command other than `fitdocs index` and the analytics commands built on it.
+6. fitdocs shall never read the index to produce a document, a document value, or the output of any command other than `fitdocs index` and the analytics commands built on it, except the chart regions and chart assets of dashboard pages under `dashboards/`, which are the only document content produced from the index. _(amended by Amendment 1)_
 7. The published ownership contract shall state this agreement rule: document values follow every change of a page; computed values follow the page's rendering; `fitdocs regen` brings documents and index forward together after the athlete inputs change; and a build computes every page under the athlete inputs current at that build.
 
 ### Requirement 6: Page Keys and Page-Level Consistency
@@ -306,3 +306,40 @@ true.
 6. The fitdocs test suite shall never read or write the real user's cache, configuration or home directory while exercising the index.
 7. If any writing command or `fitdocs index` writes outside the data root's permitted locations and the resolved index directory, or if any module other than the one connection module imports the DuckDB library, then the fitdocs test suite shall fail.
 8. The amendment records of `plugin-api` (its dependency baseline), `distribution` (its exact dependency list, its pre-feature dependency snapshot and the install footprint), `docs-site` (its requirement that the runtime dependency list stay as it was), `workout-docs` (the hand-over out of the sync engine) and `connectors` (the no-network command list) shall name this feature's change.
+
+## Amendment 1 (2026-10-13): the dashboards exception, a named-parameter read and the post-pass outcome, landed by dashboards
+
+Phase 11 `dashboards` (tasks 2.1, 6.2, 8.1 and 8.2) changes three things this
+spec states.
+
+**The named exception (Requirement 5.6).** The index is read to produce one
+kind of document content: the chart regions, and the chart images and
+snapshots under `dashboards/assets/`, of dashboard pages under `dashboards/`.
+Workout, history and block documents still never read the index. Every
+published copy of the rule carries the exception: `tech.md`'s Architecture
+paragraph, the ownership contract's analytics-index section, and the pins in
+`tests/connectors/test_network_statements.py`,
+`tests/index/test_contract_docs.py` and `tests/identity/test_contract_docs.py`.
+`tech.md`'s Network paragraph also states that `fitdocs dashboard` and the
+dashboard pass run chart SQL through the same sandbox as `fitdocs query`.
+
+**A named-parameter read (dashboards task 2.1).** `IndexConnection` gains
+`execute_named(sql, params)`, which binds a mapping of named parameters and
+streams the result from the cursor, and `statement_parameters(sql)`, which
+returns the named parameters of each statement. `IndexConnection.execute` and
+its positional callers are unchanged. Positional `execute` with params still
+goes through `.sql(params=)` and so materialises its whole result before the
+row cap applies. That is a known hazard for any future large positional read,
+and it is outside this amendment's scope.
+
+**The post-pass outcome (dashboards task 6.2).** `cli._run_index_pass` returns
+the `IndexReport`, or `None` when the pass caught an exception, so that the
+dashboard pass that follows it can tell a refreshed, unchanged or built index
+from one that was not refreshed. The refresh itself, its output lines and its
+exit codes are unchanged.
+
+Pinned by `tests/query/test_store_facade.py` and `tests/index/test_store.py`
+(the facade methods), `tests/index/test_cli_post_pass.py` (the return type),
+`tests/dashboards/test_pass.py` (the pass), `tests/connectors/test_network_statements.py`,
+`tests/index/test_contract_docs.py` and `tests/dashboards/test_published.py`
+(the published statements).
