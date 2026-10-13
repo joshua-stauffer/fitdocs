@@ -1120,6 +1120,7 @@ _REQUIRED_ENTRY_POINT_LINKS = [
     "compatibility.md",
     "releasing.md",
     "analytics.md",
+    "dashboards.md",
     "../CONTRIBUTING.md",
 ]
 
