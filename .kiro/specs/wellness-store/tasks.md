@@ -303,7 +303,7 @@ preflight and keeps every call dashboards placed).
   - **Observable:** `uv run pytest tests/wellness` green.
   - _Requirements: 1.2, 1.3, 1.4, 1.5, 10.2, 17.1, 17.3, 17.4_
 
-- [ ] 1.4 Guard the wellness package's imports, clock and network
+- [x] 1.4 Guard the wellness package's imports, clock and network
   - Create `src/fitdocs/wellness/formats/__init__.py` (docstring only), so the
     group-2 format streams add modules without an add/add conflict.
   - **Boundary guard** (`tests/wellness/test_boundary.py`, AST walk): a rank
@@ -1024,3 +1024,5 @@ preflight and keeps every call dashboards placed).
 - 1.2: independently APPROVED after literal-pin remediation; 84 wellness tests, mypy480/ruff clean, independent full12306/44. Preserve test_probe_constants literal values and isolated checker early_end fixture (offset65559, returned65558). CountingOpener records actual sized reads; downstream zip extractors must preserve the EOF adapter/error classification or bound their own stream reads. 39 mutations independently confirmed; future drain/copy/parser clauses remain in planned tasks.
 
 - 1.3: independently APPROVED; full13668/44, wellness159, mypy518/ruff clean; 159 mutations independently replayed plus two own. Shared _helpers.py is now frozen: ORIGINAL_SOURCE/FORMAT, EXTRACT_SOURCE/FORMAT, build_extract(order, *, corrupt_body=False), use_formats, tree_snapshot and assert_untouched. Registry tuples remain empty until3.1, all lookups read patched tuples at call time; OSError propagates immediately. Later tasks define additional helpers locally.
+
+- 1.4: independently APPROVED after adding independent ssl/ftplib/smtplib controls; all six network roots now discriminate by individual removal. Fresh wellness206/boundary47, mypy520/ruff clean. Guard covers explicit AST syntax with aliases/nested imports; application offline liveness remains6.1. Preserve gapped ranks and nonempty/independent filesystem traversal controls; literal existing-module list added only by3.4.
