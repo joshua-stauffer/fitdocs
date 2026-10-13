@@ -18,9 +18,9 @@ directories a human or agent browses (`workouts/AGENTS.md`,
 `dashboards/AGENTS.md` — each
 generated on the first `sync` or `regen` run, the first `fitdocs history` run
 that has a page to write, or the first `fitdocs plan` run that has a block to
-render, because each of the four refreshes every declared directory's file
-when it writes, not only the one its own output lands in) and stamped
-onto every generated document as a provenance banner —
+render, because each of those four commands refreshes every declared
+directory's file when it writes, not only the one its own output lands in)
+and stamped onto every generated document as a provenance banner —
 the `AGENTS.md` texts and the provenance banner are generated from the same
 code-level constants. This document's own enumerated lists (owned paths,
 preserved regions, managed keys, and the contract version above) are held
@@ -84,7 +84,11 @@ and unlike `athlete.toml`, fitdocs never writes there at all. All three are
 covered under
 [Shared and User-Owned Files](#shared-and-user-owned-files) below, not here,
 because "owned" in this contract means "fitdocs may create, rewrite, or
-delete wholesale, on its own initiative." `fitdocs.toml` is never written
+delete wholesale, on its own initiative" for everything it generates; under
+`dashboards/` the pages are the one exception, because they are yours and only
+their chart regions are fitdocs's (see
+[Dashboard Pages: Athlete Pages with fitdocs Regions](#dashboard-pages-athlete-pages-with-fitdocs-regions)
+below). `fitdocs.toml` is never written
 at all. `athlete.toml` fitdocs does create when absent and does rewrite in
 full -- but only key-wise, at your request, preserving every key it does
 not manage; it is never deleted. See
@@ -162,6 +166,74 @@ under `workouts/` and nothing into a plan source: the resolution shown on a
 block or planned page is re-derived from the current logged pages on the
 run that renders it, not stored or carried forward from a prior run.
 
+## Dashboard Pages: Athlete Pages with fitdocs Regions
+
+`dashboards/` holds a third shape of ownership, the inverse of the one above.
+A workout, history, block or planned-workout page is fitdocs's, and at most a
+few of its regions are yours (none on a history or planned-workout page). A **dashboard page** is yours, and a few of its regions
+are fitdocs's. A file is a dashboard page by location and name alone: a
+regular file directly in `dashboards/` named `<page name>.md`, where a page
+name is one or more groups of lowercase ASCII letters and digits joined by
+single hyphens. A file in a subdirectory is not a page, and a markdown file
+directly in `dashboards/` with any other name (the generated `AGENTS.md`
+aside) is left unchanged and reported with the page-name rule.
+
+- **The page is yours.** fitdocs never creates, renames or deletes a page, and
+  never changes a byte of it outside its chart regions, apart from inserting a
+  missing chart region directly below a chart directive. Your prose,
+  headings, frontmatter and directives are never rewritten.
+- **`type: dashboard`.** `dashboard` is the page type your wiki may record in
+  a page's frontmatter, so that your tools and your assistant can recognise
+  the pages. fitdocs never requires it, never writes it, and recognises a page
+  without it. The workout, history and block commands ignore dashboard pages
+  whatever frontmatter they carry.
+- **The directive is yours.** A chart is declared by a hidden HTML comment
+  that you or your assistant write, opening with `<!-- fitdocs:chart` on a
+  line of its own at column 0 and closing with `-->` on a line of its own at
+  column 0. fitdocs reads a directive and never writes one.
+- **Chart regions are fitdocs's.** Directly below a directive, fitdocs
+  maintains a region between `<!-- fitdocs:begin:chart:<id> -->` and
+  `<!-- fitdocs:end:chart:<id> -->`. It rewrites the bytes between those two
+  markers in full and nothing outside them. Do not edit inside a chart
+  region: the next pass replaces what you wrote there. A region is
+  tool-owned, not user-owned, so no preserved-region guarantee applies to it.
+- **Chart images are fitdocs's.** An image chart is written to
+  `dashboards/assets/<page name>/<chart id>.svg`, a path derived from the page
+  name and the chart id only, with a mark written into the image. fitdocs
+  never overwrites or deletes a file in `dashboards/assets/` that does not
+  carry the mark, and does not rewrite an image whose bytes would not change.
+- **Snapshots are never modified or deleted.** A frozen chart is drawn from a
+  snapshot, a file under `dashboards/assets/` that holds the result rows taken
+  at one moment. fitdocs creates each snapshot as a new file that never
+  replaces an existing one, and fitdocs never modifies or deletes a snapshot:
+  `fitdocs regen`, `fitdocs index --rebuild`, a chart-kit upgrade and image
+  cleanup leave every snapshot unchanged. Retaking a snapshot with
+  `fitdocs dashboard freeze` adds a new file and points the chart's region at
+  it; the earlier files stay. Only you remove one.
+- **Image cleanup is by reference scan.** When a pass, or a `refresh` or
+  `freeze` run, has finished its pages, fitdocs deletes a marked chart image
+  only if no dashboard page's text contains that image's path relative to
+  `dashboards/`, whichever pages the run targeted. It removes a directory only
+  when its own cleanup emptied it. A run that cannot read every page
+  completely deletes nothing.
+- **A link from outside `dashboards/` does not protect an image.** The scan
+  reads the pages under `dashboards/` only. A page elsewhere in your wiki that
+  links a chart image does not keep it: embed the chart on a dashboard page,
+  or copy the image.
+- **A page is never a generated document.** fitdocs never writes a
+  generated-file banner or provenance line into a page, and a page carries no
+  `doc_version`. The one generated file directly in `dashboards/` is its
+  `AGENTS.md` declaration; the chart images under `dashboards/assets/` carry
+  the generated-file mark.
+
+A page or an image written by fitdocs is replaced atomically, and a snapshot is
+created atomically as a new file that never replaces an existing one, so a
+reader never sees a partly written file. Which operations write there, and
+what each overwrites, is stated under
+[Overwrite Semantics](#overwrite-semantics-of-every-writing-operation) in the
+`dashboard` entry and in the entries of the commands that chain the dashboard
+pass.
+
 ## Configured Locations fitdocs May Create
 
 A location your `fitdocs.toml` settings file names as a place fitdocs should
@@ -196,9 +268,12 @@ specified below.
 
 The analytics index is a disposable cache, not user data. It can be deleted
 at any time; rebuilding it with `fitdocs index` costs only time. Fitdocs never
-reads the index back into a document or uses it to produce a document value.
-It writes index files only inside the resolved per-data-root index directory,
-which is outside the data root.
+reads the index back into a document or uses it to produce a document value,
+except the chart regions and chart assets of dashboard pages under
+`dashboards/`, which are the only document content produced from the index;
+workout, history and block documents never read it. Fitdocs writes index
+files only inside the resolved per-data-root index directory, which is outside
+the data root.
 
 The index base directory is resolved in this order: a non-empty
 `FITDOCS_INDEX_DIR`; otherwise `fitdocs/index` under an absolute
@@ -256,6 +331,13 @@ verbatim rather than replacing:
 - `load` — tool-filled. The training-load pass writes into this region, but
   regeneration still carries its existing content over rather than
   overwriting it, on the same footing as the user-owned regions.
+
+A chart region in a dashboard page is the inverse case: it is tool-owned inside
+a page that is yours. fitdocs rewrites the bytes between a chart region's
+markers in full, and everything outside the markers of that page is yours (see
+[Dashboard Pages: Athlete Pages with fitdocs Regions](#dashboard-pages-athlete-pages-with-fitdocs-regions)).
+It is not one of the regions listed above, and no preserved-region guarantee
+applies to it.
 
 Not every document reserves every region — only a strength document's
 `workout` region is emitted, for example. The region markers actually
@@ -771,7 +853,9 @@ and each has a distinct contract:
   wrote under a collision-suffixed name `<name>-<8 characters>.md` is moved to
   `<name>.md` once that name is free (with a rename warning). A file that
   cannot be placed on one page is archived and held rather than added to a
-  page.
+  page. Once its analytics index refresh has succeeded, `sync` (with or
+  without a source) then runs the dashboard pass, described under the
+  `dashboard` entry below.
 - **`sync --force`** — re-processes every discovered file even when its
   source is already archived, but forced re-processing does **not** bypass
   the preserved-region or user-owned-key guarantee: `notes`, `workout`, and
@@ -801,7 +885,8 @@ and each has a distinct contract:
   already holds a computed result keeps that result. It evaluates
   the held files, and the archived files that no page lists, again against the
   regenerated pages and keeps `.fitdocs/held.toml` equal to the files that
-  remain held.
+  remain held. Once its analytics index refresh has succeeded, `regen` then
+  runs the dashboard pass, described under the `dashboard` entry below.
 - **`load`** — the training-load pass touches only two things in an
   existing document: the `load` region's inner content, and the three
   `load_value` / `load_methodology` / `load_basis` frontmatter keys. Every
@@ -821,7 +906,59 @@ and each has a distinct contract:
   not from the base alone; a computed result is kept until `load --recompute`
   rescores the page, so a page whose composition changed after its load was
   computed needs `fitdocs load --recompute` to be scored from the new
-  composition.
+  composition. Once its analytics index refresh has succeeded, `load` then
+  runs the dashboard pass, described under the `dashboard` entry below. `load`
+  refreshes no ownership declaration, so it does not write
+  `dashboards/AGENTS.md`.
+
+- **`dashboard`** — `fitdocs dashboard check` writes and deletes nothing: it
+  checks the targeted pages, or every page, and renders them in memory.
+  `fitdocs dashboard refresh` renders the targeted pages or charts, or every
+  page, and `fitdocs dashboard freeze` takes a new snapshot of the targeted
+  frozen charts. `kinds` lists the chart kinds and needs no data root. What
+  `refresh` and `freeze` write, and what the **dashboard pass** writes, is the
+  same short list, all inside `dashboards/` and none of it outside the places
+  [Dashboard Pages: Athlete Pages with fitdocs Regions](#dashboard-pages-athlete-pages-with-fitdocs-regions)
+  names: the bytes between the markers of a chart region, or a missing region
+  inserted directly below its directive; chart images; and new snapshot files.
+  A page and an image are each replaced atomically and are not rewritten when
+  their bytes would not change; each snapshot is a new file. Per page the order is the new snapshots, then the chart images, then
+  the page, so an interruption leaves a page pointing only at files that
+  exist. The only things any of them deletes are a marked chart image that no
+  dashboard page references and an `assets/<page name>/` folder that removal
+  emptied, after the pages of a `refresh`, `freeze` or pass run are finished,
+  never after `check`. None of them touches a page's prose,
+  frontmatter or directives, renames or deletes a page, modifies or deletes a
+  snapshot, or writes a workout, history or block document, a declaration, the
+  athlete profile or the settings file. One chart that fails does not stop the
+  others. A chart with a directive or region problem is left untouched and
+  only reported. For a valid chart whose query or drawing fails, or whose
+  first frozen result cannot be stored, a chart rendered before keeps its
+  region and image unchanged, and under `refresh` or the pass a chart never
+  rendered gets a region with a short visible `Not rendered:` note and no
+  image link. When a chart's image, snapshot or page cannot be written, its
+  region is left as it was and the failure is only reported; a failing
+  `freeze` writes nothing, not even a note.
+
+  The **dashboard pass** is chained after the analytics index refresh of
+  `sync` (with or without a source; without one it is the inbox drain),
+  `regen`, `load` and `pull --sync`, and runs over every dashboard page only
+  when that refresh succeeded. When the index is not
+  built, is busy, needs a rebuild, or the refresh failed, the pass changes no
+  dashboard page, asset or snapshot, and prints one line saying the dashboards
+  were not refreshed and why when `dashboards/` holds a markdown file besides
+  its `AGENTS.md`. The pass never
+  builds or rebuilds the analytics index, never changes its command's exit
+  code, prints nothing when `dashboards/` holds no markdown file besides its
+  `AGENTS.md` (a misnamed markdown file there is reported), and lets an
+  interrupt end its command exactly as an interrupt during the index refresh
+  does. A frozen chart that has a snapshot is drawn from it and does not run
+  SQL; a frozen chart with none runs its SQL once and stores its first
+  snapshot. `fitdocs index`,
+  `fitdocs history`, `fitdocs plan` and the other commands do not run the
+  pass. The `dashboard` command itself does not write `dashboards/AGENTS.md`;
+  `sync`, `regen`, `history` and `plan` refresh that declaration with the
+  others.
 
 - **`derive-benchmarks`** — reads every workout document and, for each one
   carrying an effort tag, derives from the activity composed of the files the
@@ -845,8 +982,8 @@ and each has a distinct contract:
   left untouched, the outcome is recorded in the run report, and the run
   does not fail. On a run that reaches the point of writing its outputs, it
   first refreshes the ownership declaration in every declared directory —
-  `workouts/AGENTS.md`, `history/AGENTS.md`, `blocks/AGENTS.md`, and
-  `fit-archive/AGENTS.md` — through the same function `sync` and `regen`
+  `workouts/AGENTS.md`, `history/AGENTS.md`, `blocks/AGENTS.md`,
+  `fit-archive/AGENTS.md`, and `dashboards/AGENTS.md` — through the same function `sync` and `regen`
   run at the start of every run, and `plan` runs once, after every source
   is parsed and before its first write (see the `plan` bullet below). If no
   workout document in the data root records a usable load,
@@ -902,8 +1039,9 @@ and each has a distinct contract:
   file, and never writes to or deletes from a folder a connector reads. Run
   as `fitdocs pull --sync`, it then drains the inbox and runs the
   training-load and plan passes exactly as `fitdocs sync` with no source
-  argument does; those writes are `sync`'s, stated in the `sync` bullet
-  above.
+  argument does, and then the dashboard pass; those writes are `sync`'s,
+  stated in the `sync` bullet above, and the pass's, stated in the
+  `dashboard` entry below.
   A connector that renews an expired token updates only that instance's
   credentials file (see
   [Shared and User-Owned Files](#shared-and-user-owned-files) below).
@@ -962,6 +1100,12 @@ directory, so an interruption leaves the page at exactly one path), then the
 document's new content, and the archived copy of the file **last**. An
 interruption before the archive write leaves the file unarchived, so the next
 run over the same inputs completes the rename and the asset cleanup.
+
+For a dashboard page, a run writes in the order new snapshots, then chart
+images, then the page itself, each as one atomic replace or create, so a page
+never points at a snapshot or an image that has not been written; an
+interruption leaves each page and file either as it was or complete, and the
+next run over the same inputs finishes the work.
 
 Every workout document's **generated** content — everything outside its
 preserved regions — is re-derivable: fitdocs can rebuild it from the
@@ -1075,20 +1219,21 @@ fitdocs manages or enforces.
 If your wiki already has its own root-level agent-instructions file (for
 example, a root `AGENTS.md` or `CLAUDE.md` that you author and own), it is
 enough to point at `workouts/AGENTS.md`, `fit-archive/AGENTS.md`,
-`history/AGENTS.md`, and `blocks/AGENTS.md` from there rather than
+`history/AGENTS.md`, `blocks/AGENTS.md`, and `dashboards/AGENTS.md` from there rather than
 duplicating their contents. A short pointer such as:
 
 ```markdown
 See `workouts/AGENTS.md` for what fitdocs owns under `workouts/`,
 `fit-archive/AGENTS.md` for the source archive's immutability rule,
-`history/AGENTS.md` for the training-history page, and `blocks/AGENTS.md`
-for the training-block and planned-workout pages.
+`history/AGENTS.md` for the training-history page, `blocks/AGENTS.md`
+for the training-block and planned-workout pages, and `dashboards/AGENTS.md`
+for the pages that are yours and the chart regions in them that are fitdocs's.
 ```
 
-is sufficient: those four files are generated and kept current by fitdocs
+is sufficient: those five files are generated and kept current by fitdocs
 on every `sync` and `regen` run, on every `fitdocs history` run that
 writes its page, and on every `fitdocs plan` run that has a block to
-render — each of the four refreshes every declared directory's
+render — each of those four commands refreshes every declared directory's
 file, not only the one its own output lands in — so a pointer from your own
 root file stays accurate without you
 having to maintain it. Your root instructions file itself is never written

@@ -54,6 +54,9 @@ def test_index_contract_publishes_location_order_key_refusal_and_permissions() -
         "readable, writable and searchable only by the current user",
         "disposable cache",
         "never reads the index back into a document",
+        "except the chart regions and chart assets of dashboard pages under "
+        "`dashboards/`",
+        "workout, history and block documents never read it",
     ):
         assert phrase in section, phrase
 
