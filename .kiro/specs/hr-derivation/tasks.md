@@ -295,7 +295,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
 
 - [ ] 2. The pure core of `fitdocs.hr_benchmarks`
 
-- [ ] 2.1 Create the package with its vocabulary, its constants and their records, and the shared test builders
+- [x] 2.1 Create the package with its vocabulary, its constants and their records, and the shared test builders
   - Create `fitdocs.hr_benchmarks` with a docstring-only facade and the types
     of design § HrTypes (the two-kind partition, the method vocabulary,
     evidence, session peak, no-evidence reasons, kind rule, takeover,
@@ -813,3 +813,5 @@ pins (`tests/test_public_api.py`), the workouts skill and
 - 1.2: Required `kinds` partitions the derived writer; tagged-effort uses `TAGGED_EFFORT_KINDS` and exposes trailing `accepted`, with optional pre-read `load_settings`. Other-partition retention fixtures need a hand entry in the same raw group so passthrough cannot mask missing derived retention. The cleanup filter alone is behavior preserving because retained groups stay covered; tests pin actual removal and raw empty-group preservation, not helper counts. Independent review: 51 faulty mutations red, one declared redundant mutation green, three own faults red/restored; full 14,818 passed / 44 skipped; controller 1,798 passed. Existing collision-test mechanism prose follow-up queued as 2026-10-14-collision-test-overwrite-explanation.
 
 - 1.3: Channel provenance appends resting and maximum measurement dates after the threshold date; calculation is unchanged. Independent scalar expectations and three distinct dates pin all values and ordering. Load-channels Amendment 1 uses the next free criterion 5.12 (5.10/5.11 already exist). Eight claimed and two reviewer mutations red/restored; relevant canonical regression 1,605 passed; controller fresh six provenance cases passed. The missing-value queue item is closed; pre-existing duration-test attribution follow-up queued as 2026-10-14-heart-rate-duration-test-prose-attribution.
+
+- 2.1: HR vocabulary and thirteen constants/seven governing choices are published; facade stays docstring-only until 3.3. Shared `builders.py` and `conftest.py` are frozen: use their samples/session_peak/source_days/hand_benchmark/derived_benchmark/make_data_root helpers, or define additional helpers in the owning test module. Evidence types have required arguments and no defaults/factories; independent expected annotations avoid module-alias self-comparison. Independent review reproduced 206 claimed and three own mutations red/restored; task subset and controller fresh verification 140 passed, statics clean (743 formatted/558 mypy). Aggregate measurement prose is manually checked against design and explicitly unpinned by numeric tests; optional 2.8 was not run, no corroborators recorded. Runtime arithmetic/CLI requirements remain assigned to later tasks.
