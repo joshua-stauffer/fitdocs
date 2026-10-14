@@ -214,7 +214,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.6_
   - _Boundary: DefectFilter_
 
-- [ ] 2.2 (P) Count a night's sleep once per instant under the most specific stage
+- [x] 2.2 (P) Count a night's sleep once per instant under the most specific stage
   - `sleep.py` per design § Sleep: `Stage`, `Segment`, `NightTotals`,
     `night_totals`, `asleep_intervals`.
   - **Tests** (`test_sleep.py`, pairwise-distinct stage durations): two
@@ -563,6 +563,18 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - _Requirements: 1.1, 2.5, 7.4_
 
 ## Implementation Notes
+
+- **2.2:** Independently APPROVED and completion VERIFIED: 328 component
+  tests, mypy, Ruff, formatting and diff checks pass. Pure integer-second
+  Stage/Segment/NightTotals, boundary sweep and sorted merged half-open asleep
+  union implemented. All ten priority pairs retain both nested and partial
+  overlap geometries with the winner second; distinct stage counts and union
+  lengths, zero/empty, generator/shuffle, touching/gaps and carrier contracts
+  pinned. Reviewer replayed 152 claims plus two own mutations, each
+  assertion-red and exactly restored to 328-green. Preserve contrasting
+  geometries together: replacing one with its opposite can exchange one
+  duration/start-time blind spot for another. Raw Apple state-to-metric mapping
+  and in-bed dropping remain assigned to 3.2. No new follow-ups.
 
 - **2.1:** Independently APPROVED after one additive test remediation and
   completion VERIFIED: 253 component tests, mypy, Ruff, formatting and diff
