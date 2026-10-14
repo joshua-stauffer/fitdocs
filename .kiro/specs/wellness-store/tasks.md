@@ -708,7 +708,7 @@ preflight and keeps every call dashboards placed).
   - _Depends: 2.3, 2.4, 2.5, 2.6, 3.1_
   - _Requirements: 9.3, 10.6, 11.1, 11.5, 11.6, 12.1, 12.4, 12.5, 12.6, 12.7, 17.3, 17.4_
 
-- [ ] 3.3 (P) Decide a wellness candidate's intake outcome
+- [x] 3.3 (P) Decide a wellness candidate's intake outcome
   - `intake.py` per design § Intake (`identify`, `archive_identified` and the
     outcome types).
   - **Tests**: unrecognized and ambiguous reasons; `OSError` in the probe and
@@ -1054,3 +1054,5 @@ preflight and keeps every call dashboards placed).
 - 3.1: independently APPROVED; group-2 integration full14,286 passed/44 skipped, targeted79/wellness713, ruff/mypy536 clean.24 claimed plus3 own mutations killed. Registry now ships two sources and five formats; candidate_suffixes is .json and default order garmin-export, intervals-icu. Empty-registry test explicitly patches empty tuples; generic registry behavior unchanged. Future source/format additions re-pin registration literals and default-order expectations append-only.
 
 - 3.2: independently APPROVED round2; full14,328 passed/44 skipped, engine+series94/wellness755, ruff/mypy538 clean.113 claimed plus2 fresh mutations killed with green restorations. Engine assess reads archive metadata only; rebuild selects max(order,ref) before parsing LATEST_ENTRY bodies and writes changed bytes atomically, manifest last. Counts identify values by (day,metric,source), changes by (value,origin), canonical changes by distinct day with changed (source,value,origin). Origin-only transitions and multiple unreadable latest-entry headers now independently pinned; preserve these orthogonal fixtures. inputs_digest is available in series.py; intake and inspect consume existing archive/engine APIs.
+
+- 3.3: independently APPROVED round2; full14,361 passed/44 skipped, intake33/wellness788, ruff/mypy540 clean.70 claimed plus2 fresh mutations killed with green restorations. Intake publishes identify/archive_identified and the specified typed outcomes; duplicate short circuit checks regular non-symlink entries without another candidate read or commit. Local duplicate fixtures separate format.id from source.id and include source-directory decoys; frozen toy IDs coincide, so do not rely on them alone to pin grouping. Lazy recognizer OSError propagation is pinned by the immediate open count (fallback JSON would still defer after extra reads). Stability, quarantine, disposition and reporting remain task4.2 composition.
