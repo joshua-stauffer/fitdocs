@@ -14,7 +14,7 @@ rather than to fill a single dataclass's fields (Req 3.1).
 
 Order of checks, per instance, matching design.md's own order exactly (design.md
 "State layer": "table shape; name pattern; connector ...; lookback_days ...;
-any remaining key ...; connector.parse_settings(...)"):
+wellness ...; any remaining key ...; connector.parse_settings(...)"):
 
 1. the sub-table's shape (must be a TOML table);
 2. the instance name against :data:`INSTANCE_NAME_PATTERN`;
@@ -24,16 +24,18 @@ any remaining key ...; connector.parse_settings(...)"):
 4. ``lookback_days`` -- an ``int`` that is not a ``bool``, within
    ``0..MAX_LOOKBACK_DAYS``, defaulting to :data:`DEFAULT_LOOKBACK_DAYS`
    (Req 3.3);
-5. every remaining key against the connector's declared credential field
+5. ``wellness`` -- a ``bool``, defaulting to ``False``; ``True`` requires
+   the connector to declare ``PULL_WELLNESS`` (wellness-pull 2.1, 2.3);
+6. every remaining key against the connector's declared credential field
    names -- a match is refused with the Req 3.5 message, before the
    connector ever sees the key;
-6. the remaining table (``connector``/``lookback_days`` removed) handed to
+7. the remaining table (``connector``/``lookback_days``/``wellness`` removed) handed to
    ``connector.parse_settings`` with the caller's :class:`~fitdocs.connectors.
    protocol.SettingsContext`; a :class:`~fitdocs.connectors.errors.
    ConnectorSettingsError` it raises is wrapped naming the key, any other
    exception is wrapped naming the connector (Req 3.4).
 
-After every instance passes those six checks, one more pass runs across all of
+After every instance passes those seven checks, one more pass runs across all of
 them: two instances whose (instance, credential field) pairs resolve to the
 same environment-variable name via :func:`fitdocs.connectors.credentials.
 env_var_name` are refused together, naming both instances (Req 3.6) -- this
@@ -59,7 +61,7 @@ from typing import Final
 from fitdocs.connectors import registry
 from fitdocs.connectors.credentials import env_var_name
 from fitdocs.connectors.errors import ConnectorSettingsError
-from fitdocs.connectors.protocol import Connector, SettingsContext
+from fitdocs.connectors.protocol import Capability, Connector, SettingsContext
 from fitdocs.settings import SettingsError
 
 CONNECTORS_TABLE: Final[str] = "connectors"
@@ -71,7 +73,10 @@ _NAME_RE = re.compile(INSTANCE_NAME_PATTERN)
 
 _CONNECTOR_KEY: Final[str] = "connector"
 _LOOKBACK_KEY: Final[str] = "lookback_days"
-_RESERVED_KEYS: Final[frozenset[str]] = frozenset({_CONNECTOR_KEY, _LOOKBACK_KEY})
+_WELLNESS_KEY: Final[str] = "wellness"
+_RESERVED_KEYS: Final[frozenset[str]] = frozenset(
+    {_CONNECTOR_KEY, _LOOKBACK_KEY, _WELLNESS_KEY}
+)
 
 
 @dataclass(frozen=True)
@@ -82,6 +87,7 @@ class ConnectorInstance:
     connector: Connector
     lookback_days: int
     settings: object
+    wellness: bool = False
 
 
 class ConnectorsSettingsError(SettingsError):
@@ -147,6 +153,31 @@ def _resolve_lookback_days(
             name,
             _LOOKBACK_KEY,
             f"must be between 0 and {MAX_LOOKBACK_DAYS}, got {value!r}",
+        )
+    return value
+
+
+def _resolve_wellness(
+    table: Mapping[str, object],
+    *,
+    name: str,
+    connector: Connector,
+    settings_file: Path,
+) -> bool:
+    value = table.get(_WELLNESS_KEY, False)
+    if not isinstance(value, bool):
+        raise _fail(
+            settings_file,
+            name,
+            _WELLNESS_KEY,
+            f"must be true or false, got {value!r} ({type(value).__name__})",
+        )
+    if value and Capability.PULL_WELLNESS not in connector.capabilities:
+        raise _fail(
+            settings_file,
+            name,
+            _WELLNESS_KEY,
+            f"the {connector.connector_id} connector does not pull wellness",
         )
     return value
 
@@ -254,6 +285,9 @@ def load_connectors_settings(
         lookback_days = _resolve_lookback_days(
             raw_table, name=name, settings_file=settings_file
         )
+        wellness = _resolve_wellness(
+            raw_table, name=name, connector=connector, settings_file=settings_file
+        )
         rest = {
             key: value for key, value in raw_table.items() if key not in _RESERVED_KEYS
         }
@@ -274,6 +308,7 @@ def load_connectors_settings(
                 connector=connector,
                 lookback_days=lookback_days,
                 settings=settings,
+                wellness=wellness,
             )
         )
 

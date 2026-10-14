@@ -195,7 +195,7 @@ requirements' amendment list.
 
 - [ ] 2. Core: settings, ledger, delivery and the intervals.icu operations
 
-- [ ] 2.1 (P) Accept the `wellness` key on an instance whose connector pulls wellness
+- [x] 2.1 (P) Accept the `wellness` key on an instance whose connector pulls wellness
   - Per design § WellnessSettingsKey: a framework key beside
     `lookback_days`, default `false`, checked after `lookback_days`, never
     handed to the connector's own settings; `ConnectorInstance.wellness`;
@@ -678,3 +678,5 @@ requirements' amendment list.
 - **1.1 (2026-10-14).** Controller read-only live check independently APPROVED; TBC-W1/W2/W3/W4/W6/W7/W8 confirmed with stated observation limits. TBC-W5 contradicts generic upstream attribution (private namespace), recorded for 6.3 numbered repair; key and payload never persisted.
 
 - **1.2 (2026-10-14).** READY_FOR_REVIEW → independently APPROVED round 2 → VERIFIED. Full suite 14,768 passed / 44 skipped; mypy 551 files, Ruff lint/format clean; final parent CLI+protocol 135 passed. Reviewer reproduced 35 original + 51 helper claims and five own mutations, all red and restored green. The initial surviving fixture-recording mutation is now caught. Shared `ScriptedWellnessPuller` is frozen: `capabilities=` defaults to wellness-only; override both capabilities for activity/wellness order or raised-activity tests (empty override is respected). Use `wellness_listing_script`, `wellness_package_script`, `wellness_list_calls`, `wellness_package_calls`, `calls`, `parse_settings_tables` and `parse_settings_calls`, plus inherited activity scripts/call arguments. Exact opaque-record identity and default/default_factory absence are pinned. No follow-ups.
+
+- **2.1 (2026-10-14).** READY_FOR_REVIEW → independently APPROVED round 3 → VERIFIED. Full suite 14,827 passed / 44 skipped, mypy 552 and Ruff clean; fresh parent focused 106 passed. Reviewer replayed 51 claimed + four own mutations, zero survivors. Validation order is lookback → wellness → credential key, with strict-bool explanation before capability failure; explicit False/True keys are stripped. A 42-row value/capability matrix pins projection, parser residual table and precise errors across seven registry-valid capability representatives, including both driven capabilities. Registry requires nonempty capabilities; helper empty override is outside registered settings input domain. Runtime source was correct throughout two test-only remediations; no follow-ups.

@@ -852,7 +852,7 @@ def test_connectors_settings_error_subclasses_settings_error() -> None:
 
 def test_connector_instance_field_names_and_order() -> None:
     names = [f.name for f in dataclasses.fields(ConnectorInstance)]
-    assert names == ["name", "connector", "lookback_days", "settings"]
+    assert names == ["name", "connector", "lookback_days", "settings", "wellness"]
 
 
 def test_connector_instance_is_frozen(tmp_path: Path) -> None:
