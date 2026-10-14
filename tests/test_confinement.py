@@ -1380,6 +1380,67 @@ def _wrote_documents_an_index_and_a_drawn_page(touched: Sequence[str]) -> bool:
     ) and _wrote_a_first_freeze_and_a_drawn_page(touched)
 
 
+def _prepare_wellness_inbox(data_root: Path, source_dir: Path) -> None:
+    from tests.wellness.builders_intervals import intervals_list_bytes, intervals_record
+
+    settings_path(data_root).write_text("[inbox]\nsettle_seconds = 0\n")
+    inbox = data_root / "inbox"
+    inbox.mkdir()
+    (inbox / "wellness.json").write_bytes(
+        intervals_list_bytes([intervals_record("2028-03-09", restingHR=47)])
+    )
+
+
+def _assert_wellness_products(data_root: Path) -> None:
+    from fitdocs.wellness import read_series
+
+    assert len(list((data_root / "wellness-archive").glob("*/*.json"))) == 1
+    assert (data_root / "wellness" / "2028.csv").is_file()
+    assert [value.value for value in read_series(data_root).values] == [47]
+
+
+def _run_wellness_drain(data_root: Path, source_dir: Path) -> None:
+    settings = load_inbox_settings(
+        load_settings_document(data_root), data_root=data_root
+    )
+    prepared = prepare_inbox(data_root, settings)
+    drain(
+        prepared.inbox,
+        data_root,
+        settings=settings,
+        processed_dir=prepared.processed,
+        quarantine=load_quarantine(data_root),
+        athlete=None,
+        tz=_TZ,
+        tiles=_tiles(data_root),
+    )
+    _assert_wellness_products(data_root)
+
+
+def _prepare_wellness_regen(data_root: Path, source_dir: Path) -> None:
+    from fitdocs.wellness.intake import Identified, archive_identified, identify
+
+    _prepare_wellness_inbox(data_root, source_dir)
+    candidate = data_root / "inbox" / "wellness.json"
+    identified = identify(candidate)
+    if not isinstance(identified, Identified):
+        raise AssertionError(identified)
+    archive_identified(data_root, candidate, identified, None)
+
+
+def _run_wellness_regen(data_root: Path, source_dir: Path) -> None:
+    from fitdocs.wellness.engine import rebuild_series
+    from fitdocs.wellness.settings import DEFAULT_WELLNESS_SETTINGS
+
+    rebuild_series(data_root, settings=DEFAULT_WELLNESS_SETTINGS, force=True)
+    _run_regen(data_root, source_dir)
+    _assert_wellness_products(data_root)
+
+
+def _wrote_wellness_year(touched: Sequence[str]) -> bool:
+    return "data/wellness/2028.csv" in touched
+
+
 #: Every fitdocs entry point that writes into the data root (Req 7.6).
 WRITING_ENTRY_POINTS: Final[tuple[EntryPoint, ...]] = (
     EntryPoint(id="sync", prepare=_nothing, run=_run_sync),
@@ -1490,6 +1551,18 @@ WRITING_ENTRY_POINTS: Final[tuple[EntryPoint, ...]] = (
         prepare=_prepare_sync_with_dashboards,
         run=_run_sync_with_dashboards,
         non_vacuous=_wrote_documents_an_index_and_a_drawn_page,
+    ),
+    EntryPoint(
+        id="drain-wellness",
+        prepare=_prepare_wellness_inbox,
+        run=_run_wellness_drain,
+        non_vacuous=_wrote_wellness_year,
+    ),
+    EntryPoint(
+        id="regen-wellness",
+        prepare=_prepare_wellness_regen,
+        run=_run_wellness_regen,
+        non_vacuous=_wrote_wellness_year,
     ),
 )
 
@@ -2732,6 +2805,24 @@ def test_connect_writes_only_the_credentials_file(tmp_path: Path) -> None:
 
 def test_index_derived_is_a_registered_writing_entry_point() -> None:
     assert "index-derived" in {entry_point.id for entry_point in WRITING_ENTRY_POINTS}
+
+
+@pytest.mark.parametrize(
+    ("entry_id", "prepare", "run"),
+    [
+        ("drain-wellness", _prepare_wellness_inbox, _run_wellness_drain),
+        ("regen-wellness", _prepare_wellness_regen, _run_wellness_regen),
+    ],
+)
+def test_wellness_writers_are_registered(
+    entry_id: str,
+    prepare: Callable[[Path, Path], None],
+    run: Callable[[Path, Path], None],
+) -> None:
+    entries = {entry.id: entry for entry in WRITING_ENTRY_POINTS}
+    assert entries.get(entry_id) == EntryPoint(
+        entry_id, prepare, run, _wrote_wellness_year
+    )
 
 
 # Query-local inventory preparation is intentionally independent of the generic
