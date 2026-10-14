@@ -339,8 +339,14 @@ class AthleteProfile:
             for entry in self.benchmarks.entries
         )
 
-    def with_derived_benchmarks(self, entries: Sequence[Benchmark]) -> AthleteProfile:
-        """Return a new profile whose whole derived subset is replaced by ``entries``.
+    def with_derived_benchmarks(
+        self, entries: Sequence[Benchmark], *, kinds: frozenset[BenchmarkKind]
+    ) -> AthleteProfile:
+        """Return a new profile whose derived entries of ``kinds`` are replaced.
+
+        Derived entries of other kinds are retained, including raw metadata.
+        The required keyword-only partition names exactly which kinds this
+        caller manages; an incoming entry outside it is a caller error.
 
         Every entry already on file whose ``source`` is absent or not
         derived is *retained* untouched, and appears in ``retained`` below
@@ -359,10 +365,11 @@ class AthleteProfile:
         ProfileDerivedWrite).
 
         Before anything is stored, every element of ``entries`` is checked
-        against two conditions and, on either violation, :class:`ValueError`
+        against three conditions and, on any violation, :class:`ValueError`
         is raised and nothing is stored -- a backstop behind the pass's own
-        filter, which is expected to have already excluded both cases:
+        filter, which is expected to have already excluded these cases:
 
+        * ``entry.kind`` must belong to ``kinds``.
         * ``entry.source`` must be present and ``entry.source.is_derived``
           must be ``True`` -- a caller-supplied entry without derived
           provenance is a programming error, not a value this method will
@@ -385,7 +392,7 @@ class AthleteProfile:
         in the rebuilt entry set, so the merge leaves the stale raw group in
         the document untouched. This method closes that explicitly: it
         records which ``(scope, kind)`` groups held at least one derived
-        entry *before* the call and, after the merge, removes outright any
+        entry of ``kinds`` *before* the call and, after the merge, removes any
         such group the rebuilt set no longer covers -- and drops a scope
         table left with no groups afterward, so the file never carries an
         empty table no caller asked for (Req 6.4). When that leaves the
@@ -396,6 +403,12 @@ class AthleteProfile:
         profile (Req 6.4, 6.6).
         """
         for entry in entries:
+            if entry.kind not in kinds:
+                raise ValueError(
+                    f"with_derived_benchmarks: {entry.kind.value} at "
+                    f"{entry.measured_on.isoformat()} is outside the "
+                    "requested partition"
+                )
             if entry.source is None or not entry.source.is_derived:
                 raise ValueError(
                     f"with_derived_benchmarks: {entry.kind.value} at "
@@ -405,7 +418,9 @@ class AthleteProfile:
         retained = [
             entry
             for entry in self.benchmarks.entries
-            if entry.source is None or not entry.source.is_derived
+            if entry.source is None
+            or not entry.source.is_derived
+            or entry.kind not in kinds
         ]
         retained_keys = {
             (entry.discipline, entry.kind, entry.measured_on) for entry in retained
@@ -422,7 +437,9 @@ class AthleteProfile:
         derived_groups_before = {
             _benchmark_group_key(entry)
             for entry in self.benchmarks.entries
-            if entry.source is not None and entry.source.is_derived
+            if entry.source is not None
+            and entry.source.is_derived
+            and entry.kind in kinds
         }
 
         fresh_entries = [*retained, *entries]

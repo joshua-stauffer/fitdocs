@@ -1361,3 +1361,53 @@ wiki is a manual check only and never enters the repository.
 5. **The archive-resolution rule is stated in two passes.** Mitigated by a
    shared behavioural test rather than a shared private import; see PassEngine's
    Implementation Notes.
+
+
+## Amendment 3 (2026-10-14): tagged-effort partition and shared load settings, landed by hr-derivation
+
+This amendment supersedes the whole-derived-subset write and command-wide
+exclusions above with the tagged-effort scope recorded in requirements
+Amendment 3. The heart-rate stage belongs to hr-derivation.
+
+### ProfileDerivedWrite
+
+```python
+def with_derived_benchmarks(
+    self, entries: Sequence[Benchmark], *, kinds: frozenset[BenchmarkKind]
+) -> AthleteProfile: ...
+```
+
+The required keyword-only `kinds` partition has no default. Retain every entry
+except derived entries whose kind is in that partition, preserving other
+partitions and their raw unknown metadata. Remove an uncovered derived group
+only within that partition. Raise caller `ValueError` before storing anything
+for an entry outside the partition, lacking derived provenance, or colliding
+with a hand-recorded key. Existing overlays and atomic, validated saves remain
+in use. The source overlay recognizes six keys including the optional `series`
+added by athlete-benchmarks Amendment 3; absent series keeps legacy records
+compatible.
+
+### TaggedEffortStage / PassEngine
+
+`performance.types.TAGGED_EFFORT_KINDS` is the frozenset of threshold pace,
+LTHR and FTP. Keep `_ROUTED_KINDS` in its existing summary order (pace, LTHR,
+FTP), with a test pinning set equality. Compare previous derived entries only
+in this partition and pass `kinds=TAGGED_EFFORT_KINDS` to the write.
+
+`DeriveReport.accepted: tuple[Benchmark, ...] = ()` follows `summaries` as a
+trailing defaulted field, preserving existing constructions. It contains
+accepted store entries after collision filtering in both preview and writing
+runs, even when an unchanged partition requires no write.
+
+```python
+def derive_benchmarks(
+    data_root: Path, *, dry_run: bool = False,
+    load_settings: LoadSettings | None = None,
+) -> DeriveReport: ...
+```
+
+When supplied, use `load_settings.sufficiency` and call neither
+`load_settings_document` nor `load_load_settings`. When omitted, retain the
+existing single settings read. The command's future settings preflight can
+therefore share one load read across both stages. No performance or load module
+imports the heart-rate package.

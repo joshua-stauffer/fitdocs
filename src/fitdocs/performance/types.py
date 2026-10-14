@@ -26,6 +26,14 @@ from fitdocs import Sport
 from fitdocs.benchmarks import BenchmarkKind
 from fitdocs.load.channels.types import InsufficiencyReason
 
+TAGGED_EFFORT_KINDS: frozenset[BenchmarkKind] = frozenset(
+    {
+        BenchmarkKind.THRESHOLD_PACE_S_PER_KM,
+        BenchmarkKind.LTHR_BPM,
+        BenchmarkKind.FTP_WATTS,
+    }
+)
+
 
 class DerivationMethod(StrEnum):
     """The closed method-name vocabulary this feature writes. Deliberately

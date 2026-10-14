@@ -48,17 +48,18 @@ and the candidate is dropped from `entries[i].derived` -- it can never
 shadow a recorded entry (Req 6.2). The whole accepted set is converted to
 `Benchmark` values carrying derived `BenchmarkSource` provenance and handed
 to `AthleteProfile.with_derived_benchmarks` in one call, persisted through
-one `save_profile` call -- but only when the derived subset actually
+one `save_profile` call -- but only when the tagged-effort partition actually
 *changes*: the accepted set is compared against the profile's own
-already-recorded derived subset, and the write (and `written=True`) happens
+already-recorded derived entries of `TAGGED_EFFORT_KINDS`, and the write
+(and `written=True`) happens
 only on a difference, which is what makes a re-run over an unchanged tag set
 leave the file's bytes (and mtime) untouched rather than merely
 byte-identical after a redundant rewrite (Req 6.5), and what makes removing
 a tag actually remove the entry it produced on the next run (Req 6.4) --
 including the sole remaining tagged page, where the accepted set becomes
 empty: the profile is still untouched only when nothing was previously
-derived either, never merely because the fresh accepted set itself is
-empty, so a run that empties a previously non-empty derived subset still
+derived in this partition either, never merely because the fresh accepted set is
+empty, so a run that empties a previously non-empty tagged-effort partition still
 writes (Req 6.4).
 `dry_run=True` computes the identical reconciliation and report but never
 calls `with_derived_benchmarks` or `save_profile` at all, so `written` is
@@ -72,10 +73,11 @@ the reason's position in `DeclineReason`'s own declared member order --
 never by which reason was merely seen first while counting.
 
 The stream-sufficiency settings (`LoadSettings.sufficiency`, Req 9.7) are
-now read exactly once per invocation, here, through
+read exactly once here when `load_settings` is omitted, through
 :func:`fitdocs.settings.load_settings_document` and
 :func:`fitdocs.load.settings.load_load_settings` -- the same single reader
-the training-load pass uses. `tests/load/test_settings.py`'s
+the training-load pass uses. Supplied `load_settings` bypasses both reads
+and its sufficiency settings are used directly. `tests/load/test_settings.py`'s
 `test_load_load_settings_is_called_from_exactly_the_licensed_modules`
 (originally `..._from_exactly_one_module`) pinned `load/engine.py` as
 training-load's *only* caller (training-load Req 14.1); that assertion's
@@ -127,9 +129,10 @@ from fitdocs.contract import (
 from fitdocs.docio import read_frontmatter
 from fitdocs.layout import WORKOUTS_DIR, archive_path, settings_path
 from fitdocs.load.profile import AthleteProfile, load_profile, save_profile
-from fitdocs.load.settings import load_load_settings
+from fitdocs.load.settings import LoadSettings, load_load_settings
 from fitdocs.performance.derive import derive
 from fitdocs.performance.types import (
+    TAGGED_EFFORT_KINDS,
     DeclineReason,
     DerivationDeclined,
     DerivedBenchmark,
@@ -144,12 +147,7 @@ __all__ = [
     "derive_benchmarks",
 ]
 
-# The three quantities `fitdocs.performance.derive.derive`'s routing table
-# ever attempts (its own docstring's "Routing table" section: `Sport.RUN`
-# attempts pace then LTHR, `Sport.RIDE` attempts FTP then LTHR). Restated
-# here, not imported, because the router expresses this as control flow, not
-# as a published constant -- the summary needs the closed *set*, which is a
-# property of this feature's whole scope, not of one routing decision.
+# Summary order for the three quantities in TAGGED_EFFORT_KINDS.
 _ROUTED_KINDS: tuple[BenchmarkKind, ...] = (
     BenchmarkKind.THRESHOLD_PACE_S_PER_KM,
     BenchmarkKind.LTHR_BPM,
@@ -209,10 +207,9 @@ class DeriveReport:
     """The pass's whole output (design: PassEngine Service Interface, Req
     7.1).
 
-    ``summaries`` is task 4.3's addition, appended last with a default so
-    every existing positional and keyword construction (including task
-    4.1's own shape-pinning test) is unchanged unless it explicitly opts
-    in."""
+    ``accepted`` is the trailing, defaulted set of store entries accepted
+    after collision filtering, identical for writing and preview runs.
+    Existing constructions may omit it."""
 
     considered: int
     tagged: int
@@ -220,6 +217,7 @@ class DeriveReport:
     failures: tuple[DeriveFailure, ...]
     written: bool
     summaries: tuple[QuantitySummary, ...] = ()
+    accepted: tuple[Benchmark, ...] = ()
 
     @property
     def derived(self) -> tuple[DerivedBenchmark, ...]:
@@ -297,7 +295,9 @@ def _resolve_pass_archive(
     return archive if archive.is_file() else None
 
 
-def derive_benchmarks(data_root: Path, *, dry_run: bool = False) -> DeriveReport:
+def derive_benchmarks(
+    data_root: Path, *, dry_run: bool = False, load_settings: LoadSettings | None = None
+) -> DeriveReport:
     """Run the benchmark-derivation pass over `data_root` (design: PassEngine
     Service Interface; Req 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 7.1, 9.1, 9.3, 9.7,
     10.3).
@@ -312,9 +312,9 @@ def derive_benchmarks(data_root: Path, *, dry_run: bool = False) -> DeriveReport
     :func:`_resolve_pass_archive`). Task 4.3 (this task) adds the
     collision filter, the single reconciling write and the per-quantity
     summary (module docstring's "Task 4.3" paragraph). The
-    stream-sufficiency settings (Req 9.7) are read exactly once here, before
-    the document loop, through the same single reader the training-load pass
-    uses (module docstring) -- never once per document. The profile,
+    stream-sufficiency settings (Req 9.7) are read once before the document
+    loop when ``load_settings`` is omitted. Supplied settings bypass both
+    the settings-document read and the load reader (module docstring). The profile,
     conversely, is read exactly once *after* the document loop -- see the
     module docstring's ordering ruling.
 
@@ -325,8 +325,11 @@ def derive_benchmarks(data_root: Path, *, dry_run: bool = False) -> DeriveReport
     `False` and nothing under `data_root` is created, modified or deleted
     (Req 1.8, 9.4, 9.5).
     """
-    settings_document = load_settings_document(data_root)
-    settings = load_load_settings(settings_document, settings_path(data_root))
+    if load_settings is None:
+        settings_document = load_settings_document(data_root)
+        settings = load_load_settings(settings_document, settings_path(data_root))
+    else:
+        settings = load_settings
 
     considered = 0
     tagged = 0
@@ -438,11 +441,16 @@ def derive_benchmarks(data_root: Path, *, dry_run: bool = False) -> DeriveReport
     previous_derived = frozenset(
         candidate
         for candidate in profile.benchmarks.entries
-        if candidate.source is not None and candidate.source.is_derived
+        if candidate.source is not None
+        and candidate.source.is_derived
+        and candidate.kind in TAGGED_EFFORT_KINDS
     )
     written = False
     if frozenset(accepted) != previous_derived and not dry_run:
-        save_profile(data_root, profile.with_derived_benchmarks(accepted))
+        save_profile(
+            data_root,
+            profile.with_derived_benchmarks(accepted, kinds=TAGGED_EFFORT_KINDS),
+        )
         written = True
 
     return DeriveReport(
@@ -452,6 +460,7 @@ def derive_benchmarks(data_root: Path, *, dry_run: bool = False) -> DeriveReport
         failures=tuple(failures),
         written=written,
         summaries=_quantity_summaries(entries),
+        accepted=tuple(accepted),
     )
 
 

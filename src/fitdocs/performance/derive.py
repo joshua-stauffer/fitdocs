@@ -744,8 +744,8 @@ def derive(
       disciplines (`Sport.RUN` and `Sport.RIDE`), rather than a quantity
       (pace or FTP) tied to one covered sport specifically. `method=None`
       records that no derivation method was attempted at all (10.4, 10.5:
-      this feature derives no max/resting heart rate and detects no effort
-      of its own, so an uncovered sport is refused outright, never
+      this tagged-effort stage derives no max/resting heart rate and detects
+      no effort of its own, so an uncovered sport is refused outright, never
       estimated).
 
     Never raises, never returns an empty tuple, and returns every outcome

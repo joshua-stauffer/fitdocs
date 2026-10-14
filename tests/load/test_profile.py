@@ -18,6 +18,7 @@ expects an int. So the raw written text is asserted, not just the round-trip.
 from __future__ import annotations
 
 import copy
+import inspect
 import tomllib
 from datetime import date
 from pathlib import Path
@@ -29,6 +30,8 @@ from fitdocs import Sport
 from fitdocs.athlete import ATHLETE_SCHEMA_VERSION
 from fitdocs.benchmarks import (
     ATHLETE_SCOPE,
+    ATHLETE_SCOPED,
+    DISCIPLINE_SCOPED,
     Benchmark,
     BenchmarkKind,
     BenchmarkSet,
@@ -45,6 +48,8 @@ from fitdocs.load.profile import (
     save_profile,
 )
 from fitdocs.load.types import AthleteField
+
+_ALL_DERIVED_KINDS = ATHLETE_SCOPED | DISCIPLINE_SCOPED
 
 # --- field declarations used to drive validated writes ---------------------
 MAX_HR = AthleteField(
@@ -2721,7 +2726,7 @@ def test_with_derived_benchmarks_empty_set_removes_derived_preserves_rest(
     assert "swim" in pre["benchmarks"]
 
     profile = load_profile(tmp_path)
-    updated = profile.with_derived_benchmarks(())
+    updated = profile.with_derived_benchmarks((), kinds=_ALL_DERIVED_KINDS)
     save_profile(tmp_path, updated)
 
     raw = tomllib.loads(path.read_text())
@@ -2806,7 +2811,9 @@ def test_with_derived_benchmarks_replaces_prior_derived_value_dropping_old(
     )
     other_derived = _seed_derived_entries()[1:]  # unchanged resting/pace/ftp
 
-    updated = profile.with_derived_benchmarks((refreshed_max_hr, *other_derived))
+    updated = profile.with_derived_benchmarks(
+        (refreshed_max_hr, *other_derived), kinds=_ALL_DERIVED_KINDS
+    )
     save_profile(tmp_path, updated)
 
     raw = tomllib.loads(path.read_text())
@@ -2821,7 +2828,7 @@ def test_with_derived_benchmarks_empty_write_from_all_derived_drops_benchmarks_t
     tmp_path: Path,
 ) -> None:
     """A profile whose *only* benchmark content is one derived entry,
-    written through ``with_derived_benchmarks(())``, leaves the document
+    written through ``with_derived_benchmarks((), kinds=...)``, leaves the document
     with no ``benchmarks`` table at all -- not a bare, empty one -- mirroring
     the rule ``save_profile`` already applies to a benchmark-free profile.
     A second empty write from the resulting file is byte-identical (Req 6.4,
@@ -2853,12 +2860,18 @@ def test_with_derived_benchmarks_empty_write_from_all_derived_drops_benchmarks_t
     pre = tomllib.loads(path.read_text())
     assert pre["benchmarks"]["ride"]["ftp_watts"][0]["value"] == 250
 
-    save_profile(tmp_path, load_profile(tmp_path).with_derived_benchmarks(()))
+    save_profile(
+        tmp_path,
+        load_profile(tmp_path).with_derived_benchmarks((), kinds=_ALL_DERIVED_KINDS),
+    )
     first_bytes = path.read_bytes()
     raw = tomllib.loads(path.read_text())
     assert "benchmarks" not in raw
 
-    save_profile(tmp_path, load_profile(tmp_path).with_derived_benchmarks(()))
+    save_profile(
+        tmp_path,
+        load_profile(tmp_path).with_derived_benchmarks((), kinds=_ALL_DERIVED_KINDS),
+    )
     second_bytes = path.read_bytes()
     assert first_bytes == second_bytes
 
@@ -2871,10 +2884,20 @@ def test_with_derived_benchmarks_twice_produces_byte_identical_files(
     path = _seed_derived_subset_profile(tmp_path)
     derived = _seed_derived_entries()
 
-    save_profile(tmp_path, load_profile(tmp_path).with_derived_benchmarks(derived))
+    save_profile(
+        tmp_path,
+        load_profile(tmp_path).with_derived_benchmarks(
+            derived, kinds=_ALL_DERIVED_KINDS
+        ),
+    )
     first_bytes = path.read_bytes()
 
-    save_profile(tmp_path, load_profile(tmp_path).with_derived_benchmarks(derived))
+    save_profile(
+        tmp_path,
+        load_profile(tmp_path).with_derived_benchmarks(
+            derived, kinds=_ALL_DERIVED_KINDS
+        ),
+    )
     second_bytes = path.read_bytes()
 
     assert first_bytes == second_bytes
@@ -2900,7 +2923,7 @@ def test_with_derived_benchmarks_rejects_entry_without_derived_provenance(
     )
 
     with pytest.raises(ValueError, match="derived provenance"):
-        profile.with_derived_benchmarks((bad_entry,))
+        profile.with_derived_benchmarks((bad_entry,), kinds=_ALL_DERIVED_KINDS)
 
 
 def test_with_derived_benchmarks_rejects_entry_colliding_with_retained_entry(
@@ -2926,7 +2949,7 @@ def test_with_derived_benchmarks_rejects_entry_colliding_with_retained_entry(
     )
 
     with pytest.raises(ValueError, match="collides"):
-        profile.with_derived_benchmarks((colliding,))
+        profile.with_derived_benchmarks((colliding,), kinds=_ALL_DERIVED_KINDS)
 
 
 def test_with_derived_benchmarks_accepts_entry_at_retained_date_under_other_discipline(
@@ -2954,7 +2977,9 @@ def test_with_derived_benchmarks_accepts_entry_at_retained_date_under_other_disc
         ),
     )
 
-    updated = profile.with_derived_benchmarks((same_date_other_discipline,))
+    updated = profile.with_derived_benchmarks(
+        (same_date_other_discipline,), kinds=_ALL_DERIVED_KINDS
+    )
     save_profile(tmp_path, updated)
 
     raw = tomllib.loads((tmp_path / PROFILE_FILENAME).read_text())
@@ -2997,7 +3022,7 @@ def test_with_derived_benchmarks_allows_refreshing_a_derived_entry_at_the_same_k
         ),
     )
 
-    updated = profile.with_derived_benchmarks((refreshed,))
+    updated = profile.with_derived_benchmarks((refreshed,), kinds=_ALL_DERIVED_KINDS)
     save_profile(tmp_path, updated)
 
     raw = tomllib.loads(path.read_text())
@@ -3068,7 +3093,7 @@ def test_with_derived_benchmarks_overlays_stale_derived_entry_field_by_field(
         ),
     )
 
-    updated = profile.with_derived_benchmarks((fresh,))
+    updated = profile.with_derived_benchmarks((fresh,), kinds=_ALL_DERIVED_KINDS)
     save_profile(tmp_path, updated)
 
     raw = tomllib.loads(path.read_text())
@@ -3124,7 +3149,7 @@ def test_with_derived_benchmarks_refuses_unreadable_document_at_construction(
     )
 
     with pytest.raises(ProfileError):
-        profile.with_derived_benchmarks((incomplete,))
+        profile.with_derived_benchmarks((incomplete,), kinds=_ALL_DERIVED_KINDS)
 
 
 def test_with_derived_benchmarks_returns_new_object_without_mutating_original(
@@ -3169,7 +3194,7 @@ def test_with_derived_benchmarks_returns_new_object_without_mutating_original(
     data_before = copy.deepcopy(dict(base.data))
     assert "ride" not in base.data["benchmarks"]  # type: ignore[operator]
 
-    updated = base.with_derived_benchmarks((fresh,))
+    updated = base.with_derived_benchmarks((fresh,), kinds=_ALL_DERIVED_KINDS)
 
     assert updated is not base
     assert updated.has_benchmark(BenchmarkKind.FTP_WATTS, discipline=Sport.RIDE)
@@ -3192,7 +3217,7 @@ def test_save_profile_after_with_derived_benchmarks_write_leaves_no_temp_files(
     _seed_derived_subset_profile(tmp_path)
     profile = load_profile(tmp_path)
 
-    updated = profile.with_derived_benchmarks(())
+    updated = profile.with_derived_benchmarks((), kinds=_ALL_DERIVED_KINDS)
     save_profile(tmp_path, updated)
 
     leftovers = [p for p in tmp_path.iterdir() if p.name != PROFILE_FILENAME]
@@ -3319,3 +3344,148 @@ def test_hr_series_profile_refuses_invalid_reference(
                 series=series,  # type: ignore[arg-type]
             ),
         )
+
+
+# --- hr-derivation 1.2: partitioned derived writes ------------------------
+@pytest.mark.parametrize("write_hr", [False, True], ids=["tagged", "heart-rate"])
+def test_partitioned_write_preserves_other_partition_raw_metadata(
+    tmp_path: Path, write_hr: bool
+) -> None:
+    from fitdocs.benchmarks import ATHLETE_SCOPED, DISCIPLINE_SCOPED
+
+    path = _seed_derived_subset_profile(tmp_path)
+    raw = tomllib.loads(path.read_text())
+    raw["benchmarks"]["athlete"]["resting_hr_bpm"][0]["opaque"] = "hr-only"
+    raw["benchmarks"]["ride"]["ftp_watts"][0]["source"]["opaque"] = "tagged-only"
+    with path.open("wb") as handle:
+        tomli_w.dump(raw, handle)
+    profile = load_profile(tmp_path)
+    kinds = ATHLETE_SCOPED if write_hr else DISCIPLINE_SCOPED
+    other = DISCIPLINE_SCOPED if write_hr else ATHLETE_SCOPED
+    before = {
+        (scope, kind): tomli_w.dumps({"entries": entries})
+        for scope, table in raw["benchmarks"].items()
+        for kind, entries in table.items()
+        if kind in {item.value for item in other}
+    }
+    assert {
+        entry.kind
+        for entry in profile.benchmarks.entries
+        if entry.source is not None and entry.source.is_derived
+    } == frozenset(BenchmarkKind)
+    save_profile(tmp_path, profile.with_derived_benchmarks((), kinds=kinds))
+    after = tomllib.loads(path.read_text())
+    preserved = {
+        key: tomli_w.dumps({"entries": after["benchmarks"][key[0]][key[1]]})
+        for key in before
+    }
+    assert preserved == before
+    assert not any(
+        entry.kind in kinds and entry.source is not None and entry.source.is_derived
+        for entry in load_profile(tmp_path).benchmarks.entries
+    )
+    assert {key: after[key] for key in ("max_hr_bpm", "mycalc")} == {
+        key: raw[key] for key in ("max_hr_bpm", "mycalc")
+    }
+
+
+def test_partitioned_write_requires_keyword_only_kinds() -> None:
+    parameter = inspect.signature(AthleteProfile.with_derived_benchmarks).parameters[
+        "kinds"
+    ]
+    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameter.default is inspect.Parameter.empty
+    assert parameter.annotation == "frozenset[BenchmarkKind]"
+
+
+@pytest.mark.parametrize("violation", ["outside", "absent", "measured", "collision"])
+def test_partitioned_write_refuses_caller_errors_before_store(
+    tmp_path: Path, violation: str
+) -> None:
+    from dataclasses import replace
+
+    from fitdocs.benchmarks import ATHLETE_SCOPED, DISCIPLINE_SCOPED
+
+    path = _seed_derived_subset_profile(tmp_path)
+    before = path.read_bytes()
+    candidate = _seed_derived_entries()[0]
+    kinds = ATHLETE_SCOPED
+    match = "collides" if violation == "collision" else "derived provenance"
+    if violation == "outside":
+        kinds = DISCIPLINE_SCOPED
+        match = "outside.*partition"
+    elif violation == "absent":
+        candidate = replace(candidate, source=None)
+    elif violation == "measured":
+        candidate = replace(
+            candidate, source=BenchmarkSource(BenchmarkSourceKind.MEASURED)
+        )
+    else:
+        candidate = replace(candidate, measured_on=date(2024, 1, 1))
+    with pytest.raises(ValueError, match=match):
+        save_profile(
+            tmp_path,
+            load_profile(tmp_path).with_derived_benchmarks((candidate,), kinds=kinds),
+        )
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("write_hr", [False, True], ids=["tagged", "heart-rate"])
+def test_partitioned_write_preserves_other_partition_empty_raw_groups(
+    tmp_path: Path, write_hr: bool
+) -> None:
+    from fitdocs.benchmarks import ATHLETE_SCOPED, DISCIPLINE_SCOPED
+
+    raw = {
+        "benchmarks": {
+            "athlete": {
+                "max_hr_bpm": [
+                    {
+                        "value": 197,
+                        "measured_on": date(2023, 8, 9),
+                        "source": _derived_source(
+                            "peak",
+                            document="workouts/hr.md",
+                            inputs="synthetic hr",
+                            citation="peak-choice",
+                        ),
+                    }
+                ],
+                "resting_hr_bpm": [],
+            },
+            "ride": {
+                "ftp_watts": [
+                    {
+                        "value": 267,
+                        "measured_on": date(2024, 6, 7),
+                        "source": _derived_source(
+                            "power",
+                            document="workouts/power.md",
+                            inputs="synthetic power",
+                            citation="power-choice",
+                        ),
+                    }
+                ],
+            },
+            "run": {
+                "lthr_bpm": [],
+                "future_metric": [{"opaque": "keep-empty-neighbour"}],
+            },
+        },
+    }
+    path = tmp_path / PROFILE_FILENAME
+    with path.open("wb") as handle:
+        tomli_w.dump(raw, handle)
+    kinds = ATHLETE_SCOPED if write_hr else DISCIPLINE_SCOPED
+    profile = load_profile(tmp_path)
+    assert any(entry.kind in kinds for entry in profile.benchmarks.entries)
+    save_profile(tmp_path, profile.with_derived_benchmarks((), kinds=kinds))
+    emitted = tomllib.loads(path.read_text())
+    scope, kind = ("run", "lthr_bpm") if write_hr else ("athlete", "resting_hr_bpm")
+    assert emitted["benchmarks"][scope][kind] == []
+    assert emitted["benchmarks"]["run"]["future_metric"] == [
+        {"opaque": "keep-empty-neighbour"}
+    ]
+    assert not any(
+        entry.kind in kinds for entry in load_profile(tmp_path).benchmarks.entries
+    )

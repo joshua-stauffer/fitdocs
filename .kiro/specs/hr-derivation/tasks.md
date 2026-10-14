@@ -219,7 +219,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
     `BenchmarkSet.applicable`.
   - _Requirements: 5.6, 6.5, 7.4, 7.5, 10.7_
 
-- [ ] 1.2 Partition the derived write by kind, move the tagged-effort stage onto its partition, and let it reuse the run's `[load]` read (performance-benchmarks amendment)
+- [x] 1.2 Partition the derived write by kind, move the tagged-effort stage onto its partition, and let it reuse the run's `[load]` read (performance-benchmarks amendment)
   - This is an explicit integration task across the profile store and the
     tagged-effort stage: the new `kinds` argument is required, so both
     callers change in one commit.
@@ -809,3 +809,5 @@ pins (`tests/test_public_api.py`), the workouts skill and
 ## Implementation Notes
 
 - 1.1: Optional provenance `series` is trailing in `BenchmarkSource` but emitted after `document`; construct sources with keyword arguments. Independent review approved after closing the distinct truthy wrong-type setter guard (numeric and bool fixtures keep the empty-string boundary). All 28 claimed mutations, two new reviewer mutations and 32 historical prose checks red/restored green; full suite 14,798 passed / 44 skipped; controller fresh 65 provenance cases passed. Selection and athlete schema unchanged.
+
+- 1.2: Required `kinds` partitions the derived writer; tagged-effort uses `TAGGED_EFFORT_KINDS` and exposes trailing `accepted`, with optional pre-read `load_settings`. Other-partition retention fixtures need a hand entry in the same raw group so passthrough cannot mask missing derived retention. The cleanup filter alone is behavior preserving because retained groups stay covered; tests pin actual removal and raw empty-group preservation, not helper counts. Independent review: 51 faulty mutations red, one declared redundant mutation green, three own faults red/restored; full 14,818 passed / 44 skipped; controller 1,798 passed. Existing collision-test mechanism prose follow-up queued as 2026-10-14-collision-test-overwrite-explanation.

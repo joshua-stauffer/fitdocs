@@ -266,3 +266,32 @@ entry's provenance, so a later reader knows which one it was.
 7. The fitdocs CLI shall aggregate nothing over time, shall fit no model constant, and shall render nothing into any document.
 8. The fitdocs CLI shall claim no owned path and shall add no document type, leaving the data-root layout and its ownership declarations unchanged.
 9. The fitdocs CLI shall keep the published boundary of the benchmark store consistent with this feature's existence, so that the store's stated exclusion of estimation names the pass that performs it rather than contradicting it.
+
+
+## Amendment 3 (2026-10-14): tagged-effort partition and shared load settings, landed by hr-derivation
+
+The command now has a tagged-effort stage owned by this spec and a heart-rate
+stage owned by hr-derivation. The following criteria replace their earlier
+wording for the tagged-effort stage; all other criteria remain in force.
+
+- **1.3:** While a document carries no effort tag, the tagged-effort stage
+  shall not open, re-parse or otherwise read that document's archived source.
+  The heart-rate stage may read it independently.
+- **6.3:** When the tagged-effort stage writes, it shall replace only derived
+  entries of the quantities this stage derives (threshold pace, threshold
+  heart rate and threshold power), preserving every other entry, table, key
+  and unknown metadata in the profile.
+- **10.4:** The tagged-effort stage shall derive no maximum or resting heart
+  rate; the heart-rate stage of the same command derives those quantities
+  under hr-derivation.
+- **10.5:** The tagged-effort stage shall detect, suggest or infer no effort:
+  it acts only on athlete-written tags and searches no recording for a best
+  effort or an effort inside a longer file.
+- **10.7:** The tagged-effort stage shall aggregate nothing over time, fit no
+  model constant and render nothing into any document.
+
+The shared profile write requires the caller's kind partition. A tagged-effort
+run compares and writes only its partition, reports its accepted store entries
+under preview and writing, and may receive already-read training-load settings.
+Supplied settings bypass both the settings-document read and the load reader;
+direct callers omitting them keep the existing read behavior.

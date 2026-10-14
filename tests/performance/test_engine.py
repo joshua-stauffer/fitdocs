@@ -515,6 +515,7 @@ def test_report_type_shapes_are_frozen_dataclasses() -> None:
         "failures",
         "written",
         "summaries",
+        "accepted",
     ]
 
 
@@ -2307,3 +2308,217 @@ def test_load_profile_is_called_exactly_once_after_every_document_is_processed(
         "read:b.md",
         "load_profile",
     ]
+
+
+# --- hr-derivation 1.2: tagged-effort partition and shared settings --------
+def test_tagged_partition_vocabulary_and_summary_order() -> None:
+    import fitdocs.performance.engine as engine
+    from fitdocs.benchmarks import BenchmarkKind
+    from fitdocs.performance.types import TAGGED_EFFORT_KINDS
+
+    assert isinstance(TAGGED_EFFORT_KINDS, frozenset)
+    assert (
+        frozenset(
+            {
+                BenchmarkKind.THRESHOLD_PACE_S_PER_KM,
+                BenchmarkKind.LTHR_BPM,
+                BenchmarkKind.FTP_WATTS,
+            }
+        )
+        == TAGGED_EFFORT_KINDS
+    )
+    assert engine._ROUTED_KINDS == (
+        BenchmarkKind.THRESHOLD_PACE_S_PER_KM,
+        BenchmarkKind.LTHR_BPM,
+        BenchmarkKind.FTP_WATTS,
+    )
+
+
+def test_tagged_partition_matches_summary_kinds() -> None:
+    import fitdocs.performance.engine as engine
+    from fitdocs.performance.types import TAGGED_EFFORT_KINDS
+
+    assert frozenset(engine._ROUTED_KINDS) == TAGGED_EFFORT_KINDS
+
+
+@pytest.mark.parametrize("attribute", ["name", "default", "default_factory", "type"])
+def test_report_accepted_field_contract(attribute: str) -> None:
+    from dataclasses import MISSING, fields
+
+    expected = {
+        "name": "accepted",
+        "default": (),
+        "default_factory": MISSING,
+        "type": "tuple[Benchmark, ...]",
+    }
+    assert getattr(fields(DeriveReport)[-1], attribute) == expected[attribute]
+
+
+def test_report_accepted_default_and_existing_constructors() -> None:
+    positional = DeriveReport(3, 1, (), (), False, ())
+    keyword = DeriveReport(
+        considered=3, tagged=1, entries=(), failures=(), written=False
+    )
+    assert positional.accepted == keyword.accepted == ()
+    assert positional == keyword
+
+    from fitdocs.benchmarks import Benchmark, BenchmarkKind
+
+    entry = Benchmark(BenchmarkKind.MAX_HR_BPM, None, 191, date(2023, 3, 8))
+    explicit = DeriveReport(3, 1, (), (), False, (), (entry,))
+    explicit_keyword = DeriveReport(
+        considered=3,
+        tagged=1,
+        entries=(),
+        failures=(),
+        written=False,
+        accepted=(entry,),
+    )
+    assert explicit.accepted == explicit_keyword.accepted == (entry,)
+
+
+def test_tagged_run_preserves_hr_and_second_run_bytes_and_mtime(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import tomllib
+
+    from fitdocs.benchmarks import BenchmarkKind, BenchmarkSource, BenchmarkSourceKind
+    from fitdocs.load.profile import AthleteProfile, load_profile, save_profile
+    from fitdocs.performance.types import TAGGED_EFFORT_KINDS
+
+    source = BenchmarkSource(
+        kind=BenchmarkSourceKind.DERIVED,
+        method="sustained_peak",
+        document="workouts/hr.md",
+        inputs="synthetic peak",
+        citation="peak-choice",
+    )
+    hand_hr = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.MAX_HR_BPM,
+        discipline=None,
+        value=181,
+        measured_on=date(2022, 4, 5),
+    )
+    hr = hand_hr.with_benchmark(
+        BenchmarkKind.MAX_HR_BPM,
+        discipline=None,
+        value=193,
+        measured_on=date(2023, 7, 6),
+        source=source,
+    )
+    save_profile(tmp_path, hr)
+    path = tmp_path / "athlete.toml"
+    hr_before = tomllib.loads(path.read_text())["benchmarks"]["athlete"]
+    assert (
+        next(
+            entry.source
+            for entry in load_profile(tmp_path).benchmarks.entries
+            if entry.measured_on == date(2023, 7, 6)
+        )
+        == source
+    )
+    ref = _write_archive(tmp_path, builder.run_fit_bytes())
+    _write_workout(
+        tmp_path, "race.md", kind="race", distance=10000, time=2400, sources=[ref]
+    )
+    calls: list[frozenset[BenchmarkKind]] = []
+    real_write = AthleteProfile.with_derived_benchmarks
+
+    def capture(
+        self: AthleteProfile,
+        entries: Sequence[object],
+        *,
+        kinds: frozenset[BenchmarkKind],
+    ) -> AthleteProfile:
+        calls.append(kinds)
+        return real_write(self, entries, kinds=kinds)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(AthleteProfile, "with_derived_benchmarks", capture)
+    first = derive_benchmarks(tmp_path)
+    assert first.written is True
+    assert calls == [TAGGED_EFFORT_KINDS]
+    assert tomllib.loads(path.read_text())["benchmarks"]["athlete"] == hr_before
+    assert len(first.accepted) == 1
+    before = path.read_bytes(), path.stat().st_mtime_ns
+    second = derive_benchmarks(tmp_path)
+    assert second.written is False
+    assert (path.read_bytes(), path.stat().st_mtime_ns) == before
+    assert calls == [TAGGED_EFFORT_KINDS]
+    assert second.accepted == first.accepted
+
+
+def test_accepted_equals_written_and_preview_after_collision_filter(
+    tmp_path: Path,
+) -> None:
+    from fitdocs import Sport
+    from fitdocs.benchmarks import BenchmarkKind
+    from fitdocs.load.profile import load_profile, save_profile
+
+    ref = _write_archive(tmp_path, builder.run_fit_bytes())
+    _write_workout(
+        tmp_path,
+        "blocked.md",
+        on="2024-02-03",
+        kind="race",
+        distance=10000,
+        time=2400,
+        sources=[ref],
+    )
+    _write_workout(
+        tmp_path,
+        "accepted.md",
+        on="2024-09-04",
+        kind="race",
+        distance=15000,
+        time=3900,
+        sources=[ref],
+    )
+    hand = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.THRESHOLD_PACE_S_PER_KM,
+        discipline=Sport.RUN,
+        value=317,
+        measured_on=date(2024, 2, 3),
+    )
+    save_profile(tmp_path, hand)
+    preview = derive_benchmarks(tmp_path, dry_run=True)
+    assert len(preview.accepted) == 1
+    assert preview.accepted[0].measured_on == date(2024, 9, 4)
+    assert preview.accepted[0].value != 317
+    written = derive_benchmarks(tmp_path)
+    stored = tuple(
+        entry
+        for entry in load_profile(tmp_path).benchmarks.entries
+        if entry.source is not None and entry.source.is_derived
+    )
+    assert written.accepted == stored == preview.accepted
+    assert written.written is True
+    assert preview.written is False
+
+
+@pytest.mark.parametrize(
+    "forbidden_reader", ["load_settings_document", "load_load_settings"]
+)
+def test_supplied_load_settings_skip_readers_and_change_real_decline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, forbidden_reader: str
+) -> None:
+    import fitdocs.performance.engine as engine
+    from fitdocs.benchmarks import BenchmarkKind
+    from fitdocs.load.settings import LoadSettings
+    from fitdocs.performance.types import DeclineReason
+
+    ref = _write_archive(tmp_path, builder.ride_fit_bytes())
+    _write_workout(tmp_path, "test.md", kind="test", sources=[ref])
+    default = derive_benchmarks(tmp_path, dry_run=True)
+    default_ftp = next(
+        item for item in default.declined if item.kind is BenchmarkKind.FTP_WATTS
+    )
+
+    def forbid(*args: object, **kwargs: object) -> object:
+        raise AssertionError("supplied settings must bypass " + forbidden_reader)
+
+    monkeypatch.setattr(engine, forbidden_reader, forbid)
+    supplied = LoadSettings(sufficiency=SufficiencySettings(min_duration_s=1))
+    result = derive_benchmarks(tmp_path, dry_run=True, load_settings=supplied)
+    ftp = next(item for item in result.declined if item.kind is BenchmarkKind.FTP_WATTS)
+    assert default_ftp.reason is DeclineReason.TOO_SHORT
+    assert ftp.reason is DeclineReason.OUTSIDE_VALIDITY_WINDOW
