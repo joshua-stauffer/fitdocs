@@ -183,6 +183,23 @@ def test_wellness_boundary() -> None:
         ".".join(path.relative_to(_ROOT).with_suffix("").parts)
         for path in _ROOT.glob("**/*.py")
     }
+    assert visited == {
+        "model",
+        "probe",
+        "spec",
+        "formats.__init__",
+        "formats.intervals",
+        "formats.garmin",
+        "registry",
+        "settings",
+        "merge",
+        "archive",
+        "series",
+        "intake",
+        "engine",
+        "inspect",
+        "__init__",
+    }, "wellness modules differ from the published rank table"
     assert visited, "wellness walk found no modules"
     assert visited == expected, "wellness walk skipped modules"
     assert not violations, sorted(violations)

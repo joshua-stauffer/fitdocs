@@ -642,7 +642,7 @@ preflight and keeps every call dashboards placed).
   - _Requirements: 1.1, 1.6, 1.8_
   - _Boundary: InboxSelector_
 
-- [ ] 3. Wellness integration: registration, rebuild, intake, inspection
+- [x] 3. Wellness integration: registration, rebuild, intake, inspection
 
 - [x] 3.1 Register the shipped sources and formats and prove recognition over the real registry
   - Append `intervals.SOURCE`, `garmin.SOURCE` to `SOURCES` and the five
@@ -728,7 +728,7 @@ preflight and keeps every call dashboards placed).
   - _Requirements: 1.2, 1.4, 2.5, 2.6, 2.8, 15.3_
   - _Boundary: Intake_
 
-- [ ] 3.4 Inspect the wellness tree read-only and publish the facade
+- [x] 3.4 Inspect the wellness tree read-only and publish the facade
   - `inspect.py` per design § Inspect; `__init__.py` re-exports exactly the
     facade list of design § Facade.
   - **Tests** (`test_inspect.py`, `test_facade.py`): one problem per orphan;
@@ -1056,3 +1056,5 @@ preflight and keeps every call dashboards placed).
 - 3.2: independently APPROVED round2; full14,328 passed/44 skipped, engine+series94/wellness755, ruff/mypy538 clean.113 claimed plus2 fresh mutations killed with green restorations. Engine assess reads archive metadata only; rebuild selects max(order,ref) before parsing LATEST_ENTRY bodies and writes changed bytes atomically, manifest last. Counts identify values by (day,metric,source), changes by (value,origin), canonical changes by distinct day with changed (source,value,origin). Origin-only transitions and multiple unreadable latest-entry headers now independently pinned; preserve these orthogonal fixtures. inputs_digest is available in series.py; intake and inspect consume existing archive/engine APIs.
 
 - 3.3: independently APPROVED round2; full14,361 passed/44 skipped, intake33/wellness788, ruff/mypy540 clean.70 claimed plus2 fresh mutations killed with green restorations. Intake publishes identify/archive_identified and the specified typed outcomes; duplicate short circuit checks regular non-symlink entries without another candidate read or commit. Local duplicate fixtures separate format.id from source.id and include source-directory decoys; frozen toy IDs coincide, so do not rely on them alone to pin grouping. Lazy recognizer OSError propagation is pinned by the immediate open count (fallback JSON would still defer after extra reads). Stability, quarantine, disposition and reporting remain task4.2 composition.
+
+- 3.4: independently APPROVED round2; full14,400 passed/44 skipped, targeted86/wellness827, ruff/mypy543 clean.76 claimed plus2 fresh mutations killed with green restorations. Read-only inspect reports metadata/series problems and last-manifest conflicts without archive-entry opens; root-directory symlink regression has a reachable external manifest and passive read recorder, with bytes/mtime/link metadata guards. Facade exports exactly16 canonical bindings (SourceKind remains owned by wellness.spec). Literal visited-module pin covers all15 existing ranked modules; frozen rank/guards unchanged. Group3 complete; audit remedies and CLI/drain consumers remain group4.
