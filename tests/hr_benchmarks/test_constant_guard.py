@@ -186,6 +186,22 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
         ExemptionCategory.INDEX,
         "Second ranked session is the median of the top three",
     ),
+    LiteralExemption(
+        "resting",
+        28,
+        73,
+        1,
+        ExemptionCategory.INDEX,
+        "Last zero-based day offset in an inclusive calendar window",
+    ),
+    LiteralExemption(
+        "resting",
+        56,
+        30,
+        1,
+        ExemptionCategory.INDEX,
+        "Advance to the next calendar day",
+    ),
 )
 
 

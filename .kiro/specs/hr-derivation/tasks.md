@@ -387,7 +387,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 3.6, 3.7, 4.10, 7.2_
   - _Boundary: MaxEvidence_
 
-- [ ] 2.5 (P) Work out resting-heart-rate evidence, one baseline per source
+- [x] 2.5 (P) Work out resting-heart-rate evidence, one baseline per source
   - Implement design § RestingEvidence over plain per-source day values (no
     wellness import): the 28-day median formed with at least 14 values; the
     first source in the given precedence whose baseline is formed, then any
@@ -821,3 +821,5 @@ pins (`tests/test_public_api.py`), the workouts skill and
 - 2.3: Sustained-peak search uses a forward-held prefix integral and both sample-start/sample-end families with monotone pointers (O(n)); Samples time order is non-decreasing by contract, duplicates rejected. Real cadence fixtures discriminate half-open span boundaries and supplied flags. Synthetic arithmetic fixtures now isolate `_EXEMPTIONS` to empty with pytest monkeypatch; live disk checks retain all exact-site entries, preventing unused-exemption failures as later modules arrive. Independent review reproduced 61 claimed/two own faults; controller fresh 820 HR/QA cases passed, statics clean (748/563). Document-date eligibility remains 3.2. Upstream cadence per-span full rescans are separately queued as 2026-10-14-cadence-span-full-rescans, with independently rerun synthetic operation counts; no upstream edit here.
 
 - 2.4: Maximum evidence ranks raw peaks over inclusive 365-day windows, rounds the raw median once, and records the median page; do not rank or calculate from display-rounded peaks. Close distinct and adjacent-float fixtures keep whole/display values equal but oppose raw/date ordering, so literal page expectations discriminate quantization. Original eleven cases retained, six precision cases added. Independent second review reproduced 36 claimed/four own faults red/restored; controller fresh 610 HR cases passed, statics clean (750/565). No leaf clause unpinned; full integration remains later tasks.
+
+- 2.5: Resting evidence uses each source's inclusive 28-day median with at least 14 values, over the bounded daily calendar. Configured formed sources precede formed unlisted sources; test that boundary separately from lexical unknown ordering. Document callback receives the evidence day's year even if the chosen source's latest value is in the prior year. Independent review reproduced 35 claimed/three own faults plus two exemption deletion controls red/restored; controller fresh 630 HR cases passed, statics clean (752/567). Confirmation wording and entry creation remain Timeline 2.6; series reads and retained partitions remain 3.1/3.3.
