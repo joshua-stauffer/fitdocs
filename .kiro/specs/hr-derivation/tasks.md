@@ -588,6 +588,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Depends: 1.2, 2.6, 2.7, 3.1, 3.2_
 
 - [ ] 3.4 (P) Report heart-rate benchmark findings in `fitdocs check`
+  - _Blocked: SPEC_CONFLICT — requirement 9.2 requires a threshold finding even when maximum <= resting, while approved Inspect design, final decision 14 and task 2.7 suppress it. Fresh kiro-debug returned STOP_FOR_HUMAN on 2026-10-15; choose the diagnostic set and reconcile the spec before implementation._
   - Implement design § AuditHeartRate: `check` reads `athlete.toml`; an
     unreadable profile is one finding and the other checks still run;
     current takeovers and inconsistency periods become findings with the
@@ -817,6 +818,8 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 4.1, 4.7_
 
 ## Implementation Notes
+
+- 3.4 blocker (2026-10-15): No implementation changes were made. A real parsed synthetic profile with derived maximum 50, hand resting 60 and Run threshold 55, all measured 2026-01-01, satisfies both requirements 9.1 and 9.2 as written; Inspect returns only MAX_NOT_ABOVE_REST, following its approved otherwise branch. Task 2.7 and design final decision 14 explicitly require this suppression. Fresh root-cause investigation found no recorded ruling that reconciles the diagnostic sets and returned SPEC_CONFLICT / STOP_FOR_HUMAN. Preserve existing behavior until the maintainer chooses: qualify requirement 9.2 with maximum > resting, or broaden Inspect and reconcile its design/task/tests plus stage-report integration. Independent parsed-profile requirement probe fails at its sole literal AssertionError, identical design control passes, and 180 Inspect/audit/CLI regressions pass. Controller independently reproduced both diagnostic expectations and confirmed the worktree clean before this bookkeeping edit. Task 3.3 remains accepted; feature integration/GO/merge is pending.
 
 - 3.3: Public `derive_hr_benchmarks` composes both evidence reads before one profile load, reconciles complete REST/MAX partitions, opts into parsed date replacement, compares the returned HR set and saves once only when changed outside preview. The facade exports the four operational names. Preview `written` is false; compare computed reports after normalizing that actual-persistence field. Retained entries keep explicit applies dates; raw unformed resting evidence and empty successful maximum evidence clear their partitions. Report full entry-associated back-reach changes, including removal expansions; neither kind alone, numeric value nor applies date identifies a hand entry. Valid collisions and absent/MEASURED origins need separate fixtures while canonical (kind, measurement date) remains a valid equivalent key. All prior fixtures are preserved. Independent round3 review replayed 246 claimed observations (90 distinct substitutions across 48 assertion lines), caught two new reviewer faults, and verified the bounded identity/cardinality/state inventory; fresh controller 2,083 scoped tests passed. Reviewer statics clean (758/573). Locale/TZ, audit/CLI, central guards and feature build/integration remain their scheduled tasks.
 
