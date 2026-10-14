@@ -557,7 +557,7 @@ preflight and keeps every call dashboards placed).
   - _Boundary: Series_
   - _Depends: 1.5_
 
-- [ ] 2.5 (P) Read the `[wellness]` settings
+- [x] 2.5 (P) Read the `[wellness]` settings
   - `settings.py` per design § Settings.
   - **Tests** (test-only sources via `use_formats`): absent table/keys →
     default; `precedence` partial list completed in default order; metric
@@ -1044,3 +1044,5 @@ preflight and keeps every call dashboards placed).
 - 2.3: independently APPROVED; full suite14,069 passed/44 skipped, focused17/wellness516, ruff/mypy528 clean.37 claimed plus2 independent mutations killed with green restorations. Conflict.others records all other present winning-revision candidates (excluding selected snapshot), sorted, when distinct values conflict; pure merge does not select latest-entry exports (engine3.2).
 
 - 2.4: independently APPROVED round2; full14,121 passed/44 skipped, focused52/wellness568, ruff/mypy531 clean.83 claimed +2 own mutations confirmed after closing metric-filter and no-write fixture gaps. Each lookup predicate needs independent decoys; reader no-write needs bytes AND st_mtime_ns snapshots (write-method interception misses touch). series.py defines Manifest(inputs, default_order=(), metric_orders={}, files=(), entries=(), conflicts=()), ManifestFile(path, sha256, values), ManifestEntry(path, format, rules_version, state), NewerSeries(series_version), encode_manifest/decode_manifest(path,data), encode_year/decode_year(path,data), format_value; engine3.2 consumes these and adds inputs_digest. Downstream tests stage only through published builders_series.write_series; no downstream direct codec imports.
+
+- 2.5: independently APPROVED; full14,153 passed/44 skipped, focused32/wellness600, ruff/mypy533 clean.47 claimed plus2 own mutations confirmed. Settings retain configured partial lists; effective_order resolves live registry defaults. Empty metric override resets to default order rather than global configured precedence. No settings file read; caller supplies parsed mapping. Drain/regen fail-before-write validation remains4.5.
