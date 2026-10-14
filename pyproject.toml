@@ -48,6 +48,8 @@ Connectors = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connecto
 Analytics = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/analytics.md"
 Dashboards = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/dashboards.md"
 
+Wellness = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/wellness.md"
+
 [project.scripts]
 fitdocs = "fitdocs.cli:app"
 

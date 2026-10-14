@@ -20,6 +20,7 @@ if you have not run fitdocs yet; otherwise jump straight to the page you need.
 | [The website](website.md) | The repository's website: its content contract, how to build and preview it, and the maintainer runbook for DNS, Pages settings and the generator pin. It is not a contract governed by the compatibility policy. |
 | [Analytics](analytics.md) | Query the local workout index safely with `fitdocs query`, inspect its schema, and connect another DuckDB client. |
 | [Dashboards](dashboards.md) | Put an index query's answer on a wiki page as a chart: the chart directive, relative and frozen charts, `fitdocs dashboard`, and the registered chart kinds. |
+| [Wellness](wellness.md) | Import daily wellness files, understand source definitions and precedence, and read the CSV series or analytics table. |
 | [Contributing](../CONTRIBUTING.md) | The contributor path: environment setup, what must pass before a change is accepted, and the rule for third-party material. |
 
 ## Where things live

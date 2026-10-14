@@ -925,7 +925,7 @@ preflight and keeps every call dashboards placed).
 
 - [ ] 5. Documentation, skill, records
 
-- [ ] 5.1 Write the wellness guide and link it
+- [x] 5.1 Write the wellness guide and link it
   - `docs/wellness.md` per design § Docs, with the metric table, the
     per-source definitions (Garmin resting HR as the day's lowest 30-minute
     average, Apple's sedentary estimate, intervals.icu passing on its
@@ -1046,6 +1046,8 @@ preflight and keeps every call dashboards placed).
   - _Requirements: 16.1, 16.2, 15.1_
 
 ## Implementation Notes
+
+- 5.1: independently APPROVED; full14,718/44, targeted1059, ruff/mypy548 clean.194 claimed cases independently replayed (190 sole failures, four declared survivors), four reviewer production mutants killed, all restored GREEN. Guide publishes metrics/definitions, one complete day rule, delivery contract, precedence/readers/archive/check/SQL and scoped origin=garmin attribution; index and project URL links added. Equivalent HRV numeric bounds and three explanatory prose removals are explicitly not claimed as regression-pinned; shipped prose was reviewed against code/design. Garmin/Apple definitions independently checked against primary sources. Metadata mutations use --no-sync, then one warm-cache editable rebuild after restoration before normal regression.
 
 - 4.5: independently APPROVED; full14,571/44, targeted1209, ruff/mypy547 clean.102 claimed plus2 reviewer sole-failure mutations, all restored GREEN. Drain/regen validate wellness before writes, regen force-rebuilds before pages, twelve channel rows/details and all changed series summaries render, failure predicates remain independent, real EXTRACT progress uses terminal stderr only. Existing total settings-reader pin3->4 includes the standalone wellness projection while preserving the shared inbox/tile read. Late-preflight tests require an actual archive entry; an empty archive masks late rebuild writes. Progress uses52%/100% to distinguish ratio errors. Explicit source/index/check and dashboard post-index behavior preserved. No new follow-ups.
 
