@@ -29,6 +29,18 @@ _EXEMPTIONS: dict[str, Counter[_Site]] = {
             (None, None, 1): 1,  # rolling window excludes the judged day for lookback
         }
     ),
+    "baselines.py": Counter(
+        {
+            ("xs", None, 1): 3,  # inclusive range start and reverse iteration
+            ("xs", None, 0): 1,  # tuple value slot
+            ("ys", None, 0): 2,  # exclusive range stop and tuple value slot
+            ("ys", None, 1): 1,  # reverse iteration
+            ("sd", None, 1): 1,  # sample denominator
+            ("sd", None, 2): 1,  # squared deviations
+            (None, "value", 0): 1,  # daily tuple value slot
+            (None, "origin", 1): 1,  # daily tuple origin slot
+        }
+    ),
 }
 
 

@@ -266,7 +266,7 @@ literal pins, one per lander) and every head-paragraph pin of
   - _Depends: 1.1 (records only; values never wait)_
   - _Requirements: 3.3, 3.4, 3.5, 3.6, 3.7, 11.1, 11.2, 11.3, 11.4_
 
-- [ ] 1.3 Compute one source's rolling mean, baseline, range and position, and publish the facade
+- [x] 1.3 Compute one source's rolling mean, baseline, range and position, and publish the facade
   - `baselines.py` per design § Baselines: `RangePosition`, `BaselineDay`,
     `Baselines.of` and `Baselines.on`; `math.fsum` and `math.sqrt` only.
     The facade re-exports every design name (`shown_source` and `shown`
@@ -908,3 +908,16 @@ introspection artifact also names its MetricInfo value type at line 48).
   isolated build/install fixtures. Restricted DNS/cold-cache failures and
   socket EPERM are environment failures; no source patch or skipped test was
   used. Focused tests/mutations use the writable temporary uv cache.
+- Task 1.3 review lesson: constant observations on identical dates pin means
+  but leave source-specific SD, counts, ranges and positions indistinguishable.
+  Use distinct variability, coverage and origins, and check all exposed fields.
+  Sleep arithmetic needs varied positive observations for every metric; a
+  no-range assertion alone does not protect rolling or baseline calculations.
+- Task 1.3: APPROVED round 2 and VERIFIED. Per-source/date indexes,
+  transformed sample statistics, explicit missingness and the exact ten-name
+  facade are available. 116 claimed and four independent mutations were red
+  and restored green; 329 assertion cases discriminate. Fresh full suite:
+  15,145 passed / 44 expected skips; controller scoped 523 passed; Ruff and
+  mypy clean. Baseline and deviation fsum each have an exact valid-domain
+  precision pin. Runtime TZ/clock probes U01/U02 are explicitly allocated to
+  1.4/1.5; shown-source and future consumer integration are not claimed here.
