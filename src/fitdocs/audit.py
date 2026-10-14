@@ -15,14 +15,17 @@ no readable page lists and no hold names) and
 Read-only, and offline
 -----------------------
 This module opens files only to read them (workout documents, declarations and
-the hold record) and lists the archive directory. It never writes a byte,
+the hold record, wellness settings and series files) and lists the activity
+and wellness archive directories. It never writes a byte,
 never creates a directory (including ``workouts/`` itself when absent), never
 opens a ``.fit`` source, and never touches the network (Req 8.1, 8.8). Every
 reader it composes -- :mod:`fitdocs.contract`'s pure frontmatter/version/key
 readers, :func:`fitdocs.docmerge.extract_regions`,
 :func:`fitdocs.declaration.inspect_declarations`,
 :func:`fitdocs.identity.holds.load_holds` (an absent record reads as empty and
-creates nothing), and the pure identity readers
+creates nothing), :func:`fitdocs.wellness.inspect.inspect_wellness` (archive
+metadata, settings and series only, without opening wellness archive entries),
+and the pure identity readers
 :func:`fitdocs.identity.pages.page_record` and
 :func:`fitdocs.identity.planning.duplicate_sets` -- already holds that
 guarantee; this module is what walks the tree and turns their answers into
@@ -94,6 +97,7 @@ from fitdocs.identity.holds import HeldSource, HoldRecordError, load_holds
 from fitdocs.identity.pages import page_record
 from fitdocs.identity.planning import PageIndex, PageRecord, duplicate_sets
 from fitdocs.layout import ARCHIVE_DIR, WORKOUTS_DIR, held_path, source_ref
+from fitdocs.wellness.inspect import WellnessProblemKind, inspect_wellness
 
 __all__ = [
     "AuditReport",
@@ -151,6 +155,18 @@ class FindingKind(StrEnum):
     DUPLICATE_SESSION = "duplicate_session"
     """A workout page that is one session with at least one other page
     (activity-identity Req 8.3)."""
+
+    WELLNESS_ORPHANED_ENTRY = "wellness_orphaned_entry"
+    """An archive path no supported wellness format reads (wellness-store 14.1)."""
+
+    WELLNESS_SERIES_STALE = "wellness_series_stale"
+    """The wellness series needs rebuilding or cannot be judged (14.2)."""
+
+    WELLNESS_SERIES_OCCUPIED = "wellness_series_occupied"
+    """A wellness series path contains something fitdocs did not write (14.4)."""
+
+    WELLNESS_CONFLICT = "wellness_conflict"
+    """A conflicting duplicate recorded by the last wellness rebuild (14.3)."""
 
 
 @dataclass(frozen=True)
@@ -539,6 +555,51 @@ def _duplicate_findings(records: list[PageRecord]) -> tuple[Finding, ...]:
     return tuple(findings)
 
 
+_WELLNESS_FINDING: dict[WellnessProblemKind, tuple[FindingKind, str]] = {
+    WellnessProblemKind.ORPHANED_ENTRY: (
+        FindingKind.WELLNESS_ORPHANED_ENTRY,
+        "move it out of `wellness-archive/`: fitdocs never reads it; "
+        "if it is a wellness file, drop it into the inbox instead",
+    ),
+    WellnessProblemKind.SERIES_STALE: (
+        FindingKind.WELLNESS_SERIES_STALE,
+        "run `fitdocs sync` or `fitdocs regen` to rebuild the wellness series",
+    ),
+    WellnessProblemKind.SERIES_OCCUPIED: (
+        FindingKind.WELLNESS_SERIES_OCCUPIED,
+        "move or remove it: fitdocs never overwrites a file it did not write, "
+        "and rebuilds the series once the path is free",
+    ),
+    WellnessProblemKind.CONFLICT: (
+        FindingKind.WELLNESS_CONFLICT,
+        "if one of the entries is wrong, delete it from `wellness-archive/` "
+        "and from the inbox, then run `fitdocs regen`; otherwise fitdocs "
+        "keeps the value named here",
+    ),
+}
+
+
+def _wellness_findings(data_root: Path) -> tuple[Finding, ...]:
+    """Map read-only inspector problems to check's paths and remedies (14)."""
+    findings: list[Finding] = []
+    for problem in inspect_wellness(data_root):
+        kind, remedy = _WELLNESS_FINDING[problem.kind]
+        subject, detail = problem.subject, problem.detail
+        if problem.kind is WellnessProblemKind.SERIES_STALE:
+            subject = "wellness/manifest.toml"
+            if problem.detail.startswith("series cannot be judged:"):
+                remedy = (
+                    "fix `fitdocs.toml`; sync and regen refuse to run until it is valid"
+                )
+        elif problem.kind is WellnessProblemKind.CONFLICT:
+            subject = f"wellness/{problem.subject[:4]}.csv"
+            detail = f"{problem.subject}: {problem.detail}"
+        findings.append(
+            Finding(kind=kind, subject=subject, detail=detail, remedy=remedy)
+        )
+    return tuple(findings)
+
+
 def audit(data_root: Path) -> AuditReport:
     """Scan ``data_root`` against the current contract without writing anything.
 
@@ -567,12 +628,14 @@ def audit(data_root: Path) -> AuditReport:
     Findings are sorted by :attr:`Finding.subject` then :attr:`Finding.kind`
     for a deterministic report; a clean tree yields ``findings == ()``. Opens
     no ``.fit`` file and performs no network access (Req 8.8): only the
-    documents' own text, the declaration files and the hold record are read,
-    and ``fit-archive/`` is listed, never opened. After the document scan it
+    documents' own text, declarations, the hold record, wellness settings and
+    series files are read, and ``fit-archive/`` is listed, never opened. After
+    the document scan it
     adds the identity findings: one per hold-record entry (or one naming an
     unreadable record, after which the scan continues), one per archived source
     no readable page lists and no hold names, and one per page of each
-    duplicate set built from the pages already parsed here.
+    duplicate set built from the pages already parsed here. Wellness problems
+    come from the read-only inspector; wellness archive entries are never opened.
     """
     documents = 0
     findings: list[Finding] = []
@@ -617,6 +680,7 @@ def audit(data_root: Path) -> AuditReport:
     findings.extend(held_findings)
     findings.extend(_orphan_findings(data_root, records, held))
     findings.extend(_duplicate_findings(records))
+    findings.extend(_wellness_findings(data_root))
 
     findings.sort(key=lambda finding: (finding.subject, finding.kind))
     return AuditReport(findings=tuple(findings), documents=documents)

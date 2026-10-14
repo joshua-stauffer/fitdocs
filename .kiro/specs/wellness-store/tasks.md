@@ -844,7 +844,7 @@ preflight and keeps every call dashboards placed).
   - _Depends: 2.7, 3.2, 3.3, 4.1_
   - _Requirements: 1.2, 1.7, 1.9, 2.6, 2.7, 2.9, 2.10, 12.2, 12.8, 13.6_
 
-- [ ] 4.3 (P) Report wellness findings in `fitdocs check`
+- [x] 4.3 (P) Report wellness findings in `fitdocs check`
   - Four `FindingKind` members, the mapping of `inspect_wellness` problems
     with the remedies of design § AuditWellness, and the module docstring's
     read list.
@@ -1085,3 +1085,5 @@ preflight and keeps every call dashboards placed).
 - 4.2 context clarification: quarantine keys content SHA, exactly as FIT. Repairing file bytes creates a new identity, so it must not prune an old bad SHA by filename (another copy may still exist). Task wording now distinguishes a repaired-byte new candidate from a same-SHA successful retry after an extractor repair; only the successful retried identity is cleared. No runtime name-pruning policy is added.
 
 - 4.2: independently APPROVED round2; full14,441 passed/44 skipped, focused1089, ruff/mypy544 clean.113 active claimed plus3 fresh mutations killed with sole failures and green restorations (one obsolete retry-only mutant explicitly replaced). Drain uses one combined settle, wellness intake/quarantine/disposition then force=False rebuild before FIT planning; five defaulted report fields and12 skill channel bindings published. Inbox Amendment3 appended. Quiet quarantine needs no-attempt counters; new-SHA admission must be tested retry=False; archive MOVE gates need post-real-commit missing/directory/symlink states for both successful outcomes. All4.1 behavior and explicit sync AST preserved. CLI rows/exit/preflight remain4.5, final skill Do wording5.2.
+
+- 4.3: independently APPROVED; full14,507 passed/44 skipped, audit+check116/wellness848, ruff/mypy544 clean.77 claimed plus3 fresh mutations killed with sole failures and green restorations. Audit appends four wellness FindingKind members and composes the inspector, retaining day/metric/source detail when projecting conflicts to yearly CSV subjects. Distinct 2028/2031 source/metric conflicts pin projection; isolated occupied and stale fixtures prevent old findings from masking exit codes. Normal stale/settings remedies, both declarations, sort keys and read-only byte/mtime/no-directory guards independently pinned.

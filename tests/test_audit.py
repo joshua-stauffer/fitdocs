@@ -15,6 +15,7 @@ import os
 import subprocess
 import sys
 import time
+from hashlib import sha256
 from pathlib import Path
 from unittest import mock
 
@@ -1048,3 +1049,227 @@ def test_check_cli_prints_the_three_kinds_and_exits_one(tmp_path: Path) -> None:
         _REMEDY_ONE_WORKOUT,
     ):
         assert fragment in result.stdout, fragment
+
+
+# --- wellness-store 4.3 -------------------------------------------------------
+
+_WELLNESS_CASES = (
+    "orphan",
+    "stale",
+    "occupied",
+    "conflict",
+    "conflict-other",
+    "settings",
+)
+_WELLNESS_ENUMS = (
+    ("WELLNESS_ORPHANED_ENTRY", "wellness_orphaned_entry"),
+    ("WELLNESS_SERIES_STALE", "wellness_series_stale"),
+    ("WELLNESS_SERIES_OCCUPIED", "wellness_series_occupied"),
+    ("WELLNESS_CONFLICT", "wellness_conflict"),
+)
+_WELLNESS_REMEDIES = {
+    "orphan": (
+        "move it out of `wellness-archive/`: fitdocs never reads it; "
+        "if it is a wellness file, drop it into the inbox instead"
+    ),
+    "stale": "run `fitdocs sync` or `fitdocs regen` to rebuild the wellness series",
+    "occupied": (
+        "move or remove it: fitdocs never overwrites a file it did not write, "
+        "and rebuilds the series once the path is free"
+    ),
+    "conflict": (
+        "if one of the entries is wrong, delete it from `wellness-archive/` "
+        "and from the inbox, then run `fitdocs regen`; otherwise fitdocs "
+        "keeps the value named here"
+    ),
+    "settings": "fix `fitdocs.toml`; sync and regen refuse to run until it is valid",
+}
+
+
+def _wellness_archive(
+    root: Path, value: int, day: str = "2028-03-17", *, garmin: bool = False
+) -> str:
+    from fitdocs.wellness.archive import Committed, commit_original
+    from fitdocs.wellness.registry import format_named
+    from tests.wellness.builders_intervals import intervals_list_bytes, intervals_record
+
+    if garmin:
+        from tests.wellness.builders_garmin import garmin_file_bytes, garmin_uds_record
+
+        payload = garmin_file_bytes([garmin_uds_record(day, totalSteps=value)])
+    else:
+        payload = intervals_list_bytes([intervals_record(day, restingHR=value)])
+    candidate = root / f"synthetic-{value}.json"
+    candidate.write_bytes(payload)
+    format = format_named("garmin-uds" if garmin else "intervals-icu")
+    if format is None:
+        raise AssertionError("missing published wellness format")
+    result = commit_original(root, format, candidate, sha256(payload).hexdigest())
+    if not isinstance(result, Committed):
+        raise AssertionError(result)
+    return result.entry.ref
+
+
+def _wellness_build(root: Path) -> None:
+    from fitdocs.wellness import DEFAULT_WELLNESS_SETTINGS
+    from fitdocs.wellness.engine import SeriesStatus, rebuild_series
+
+    result = rebuild_series(root, settings=DEFAULT_WELLNESS_SETTINGS, force=False)
+    if result.status not in (SeriesStatus.REBUILT, SeriesStatus.UNCHANGED):
+        raise AssertionError(result)
+
+
+def _stage_wellness(root: Path, case: str) -> dict[str, str]:
+    ensure_declarations(root)
+    subject = "wellness/manifest.toml"
+    detail = "series manifest is missing"
+    kind = "wellness_series_stale"
+    if case == "orphan":
+        subject = "wellness-archive/intervals-icu/stray.json"
+        _write(root, subject, "synthetic orphan")
+        detail = (
+            "not a regular entry with the format's sha256 name and suffix; "
+            "fitdocs never reads it"
+        )
+        kind = "wellness_orphaned_entry"
+    elif case == "occupied":
+        subject = "wellness/2024.csv"
+        _wellness_archive(root, 48)
+        _wellness_build(root)
+        (root / subject).mkdir()
+        detail = "occupied series path"
+        kind = "wellness_series_occupied"
+    elif case == "settings":
+        _write(root, "fitdocs.toml", '[wellness]\nprecedence="invalid"\n')
+        detail = (
+            f"series cannot be judged: {root / 'fitdocs.toml'}: "
+            "[wellness] precedence must be a list of source identifiers"
+        )
+    elif case in ("conflict", "conflict-other"):
+        other = case == "conflict-other"
+        day = "2031-09-06" if other else "2028-03-17"
+        metric = "steps" if other else "resting_hr_bpm"
+        source = "garmin-export" if other else "intervals-icu"
+        low, high = (8310, 9201) if other else (61, 78)
+        first = _wellness_archive(root, low, day, garmin=other)
+        second = _wellness_archive(root, high, day, garmin=other)
+        _wellness_build(root)
+        kept = max(first, second)
+        value = low if kept == first else high
+        subject = f"wellness/{day[:4]}.csv"
+        detail = (
+            f"{day} {metric} {source}: "
+            f"kept {value} from {kept}; conflicting entries: "
+            + ", ".join(sorted((first, second)))
+        )
+        kind = "wellness_conflict"
+    elif case == "stale":
+        _wellness_archive(root, 56)
+    elif case == "clean":
+        _wellness_archive(root, 53)
+        _wellness_build(root)
+        return {}
+    else:
+        raise ValueError(case)
+    return {
+        "kind": kind,
+        "subject": subject,
+        "detail": detail,
+        "remedy": _WELLNESS_REMEDIES["conflict" if case == "conflict-other" else case],
+    }
+
+
+@pytest.mark.parametrize("name,value", _WELLNESS_ENUMS)
+def test_wellness_enum(name: str, value: str) -> None:
+    assert FindingKind.__members__[name].value == value
+
+
+@pytest.mark.parametrize("case", _WELLNESS_CASES)
+@pytest.mark.parametrize("field", ("kind", "subject", "detail", "remedy"))
+def test_wellness_finding_field(tmp_path: Path, case: str, field: str) -> None:
+    expected = _stage_wellness(tmp_path, case)
+    finding = audit(tmp_path).findings[0]
+    assert getattr(finding, field) == expected[field]
+
+
+@pytest.mark.parametrize("case", _WELLNESS_CASES)
+def test_wellness_cardinality(tmp_path: Path, case: str) -> None:
+    _stage_wellness(tmp_path, case)
+    assert len(audit(tmp_path).findings) == 1
+
+
+@pytest.mark.parametrize("directory", ("wellness", "wellness-archive"))
+def test_wellness_missing_declaration(tmp_path: Path, directory: str) -> None:
+    ensure_declarations(tmp_path)
+    (tmp_path / directory / "AGENTS.md").unlink()
+    assert [(f.subject, f.kind.value) for f in audit(tmp_path).findings] == [
+        (f"{directory}/AGENTS.md", "declaration_missing")
+    ]
+
+
+def test_wellness_sorted_with_existing_findings(tmp_path: Path) -> None:
+    _stage_wellness(tmp_path, "conflict")
+    _write(tmp_path, "wellness/2028.csv", "foreign")
+    _write(tmp_path, "wellness-archive/intervals-icu/z.txt", "orphan")
+    _write(tmp_path, "wellness-archive/intervals-icu/a.txt", "orphan")
+    _write(tmp_path, "workouts/z.md", _doc_text(doc_version=1))
+    _write(tmp_path, "workouts/a.md", _doc_text(doc_version=1))
+    (tmp_path / "fit-archive/AGENTS.md").unlink()
+    assert [(f.subject, f.kind.value) for f in audit(tmp_path).findings] == [
+        ("fit-archive/AGENTS.md", "declaration_missing"),
+        ("wellness-archive/intervals-icu/a.txt", "wellness_orphaned_entry"),
+        ("wellness-archive/intervals-icu/z.txt", "wellness_orphaned_entry"),
+        ("wellness/2028.csv", "wellness_conflict"),
+        ("wellness/2028.csv", "wellness_series_occupied"),
+        ("wellness/manifest.toml", "wellness_series_stale"),
+        ("workouts/a.md", "outdated_version"),
+        ("workouts/z.md", "outdated_version"),
+    ]
+
+
+def test_wellness_audit_opens_no_archive_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _stage_wellness(tmp_path, "clean")
+    opened: list[Path] = []
+    real_open = Path.open
+
+    def record(path: Path, *args: object, **kwargs: object) -> object:
+        if (
+            path.is_relative_to(tmp_path / "wellness-archive")
+            and path.name != "AGENTS.md"
+        ):
+            opened.append(path)
+        return real_open(path, *args, **kwargs)  # type: ignore[call-overload]
+
+    monkeypatch.setattr(Path, "open", record)
+    audit(tmp_path)
+    assert opened == []
+
+
+def test_wellness_audit_preserves_files(tmp_path: Path) -> None:
+    _stage_wellness(tmp_path, "clean")
+    before = _snapshot(tmp_path)
+    audit(tmp_path)
+    assert _snapshot(tmp_path) == before
+
+
+def test_wellness_audit_creates_no_directories(tmp_path: Path) -> None:
+    ensure_declarations(tmp_path)
+    (tmp_path / "wellness/AGENTS.md").unlink()
+    (tmp_path / "wellness").rmdir()
+    (tmp_path / "wellness-archive/AGENTS.md").unlink()
+    (tmp_path / "wellness-archive").rmdir()
+    before = {p.relative_to(tmp_path) for p in tmp_path.rglob("*") if p.is_dir()}
+    audit(tmp_path)
+    assert {
+        p.relative_to(tmp_path) for p in tmp_path.rglob("*") if p.is_dir()
+    } == before
+
+
+def test_wellness_reports_each_conflict(tmp_path: Path) -> None:
+    _stage_wellness(tmp_path, "conflict")
+    _stage_wellness(tmp_path, "conflict-other")
+    assert (
+        len([f for f in audit(tmp_path).findings if f.kind == "wellness_conflict"]) == 2
+    )

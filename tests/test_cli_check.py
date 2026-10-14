@@ -307,3 +307,27 @@ def test_check_unresolvable_data_root_exits_two_and_scans_nothing(
     assert "--out" in result.output
     assert "FITDOCS_DATA" in result.output
     assert ".fitdocs/data-root" in result.output
+
+
+@pytest.mark.parametrize(
+    "case",
+    ("orphan", "stale", "occupied", "conflict", "conflict-other", "settings", "clean"),
+)
+def test_check_wellness_exit(tmp_path: Path, case: str) -> None:
+    from tests.test_audit import _stage_wellness
+
+    _stage_wellness(tmp_path, case)
+    result = runner.invoke(app, ["check", "--out", str(tmp_path)])
+    assert result.exit_code == (0 if case == "clean" else 1)
+
+
+@pytest.mark.parametrize(
+    "case", ("orphan", "stale", "occupied", "conflict", "conflict-other", "settings")
+)
+@pytest.mark.parametrize("field", ("subject", "detail", "remedy"))
+def test_check_wellness_output(tmp_path: Path, case: str, field: str) -> None:
+    from tests.test_audit import _stage_wellness
+
+    expected = _stage_wellness(tmp_path, case)
+    result = runner.invoke(app, ["check", "--out", str(tmp_path)])
+    assert result.output.count("  " + expected[field] + "\n") == 1
