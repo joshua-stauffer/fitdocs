@@ -1002,7 +1002,7 @@ preflight and keeps every call dashboards placed).
     with the wellness scope and existing map-tile network exception.
   - _Requirements: 20.1, 20.2_
 
-- [ ] 6. Validation
+- [x] 6. Validation
 
 - [x] 6.1 End-to-end, determinism, offline and confinement
   - **E2E** (`tests/wellness/test_e2e.py`, CLI through `CliRunner` with
@@ -1028,7 +1028,7 @@ preflight and keeps every call dashboards placed).
     green.
   - _Requirements: 4.2, 4.3, 12.2, 13.5, 13.6, 18.2, 20.1, 20.3, 20.4, 20.5_
 
-- [ ] 6.2 Rebase, re-derive the version constants and validate the whole
+- [x] 6.2 Rebase, re-derive the version constants and validate the whole
   - Correct the unchanged confinement guard docstring's outdated claim
     that every entry but history witnesses a workout document; describe the
     per-entry registered output predicates. Prose only, no assertion changes
@@ -1061,6 +1061,8 @@ preflight and keeps every call dashboards placed).
   - _Requirements: 16.1, 16.2, 15.1_
 
 ## Implementation Notes
+
+- 6.2: independently APPROVED after fresh fetch/rebase (up-to-date on main2d12514); full14,733/44 in375s, targeted1808, ruff/mypy550 clean. Contract11=main10+1 and schema3=main2+1; seven declaration goldens, literal10->11 wellness/9->10 dashboards histories, old digests/peer pins, append-only tuples and all four index->dashboard postpass pairs verified. Only source-file change is the neutral confinement guard docstring; AST unchanged. Reviewed HEAD CI38534697552 succeeded. Canonical wheel/sdist build and isolated installed-wheel CLI lifecycle/quiet byte+mtime regen passed; installed wheel also rejects present invalid Garmin weight, quarantines same SHA, and omits missing/null weights. All27 required tasks now accepted; optional6.3 remains maintainer-only. Feature GO, final metadata CI and merge-back are recorded by the controller after this task commit.
 
 - 6.1: independently APPROVED; full14,733/44 in775s (continuous progress), targeted1347, ruff/mypy550 clean.48 claimed plus4 independent production mutants killed at intended assertions, all restored GREEN;42 new assertions covered. Real CLI mixed lifecycle yields9 distinct rows, clean check, unchanged byte/mtime repeat drain/regen, query refresh, invalid/quarantine and monitoring cases. Independent child timezone/hashseed axes compare whole series trees; seed11/4 exposes wrong hash ordering. Required machine-timezone and manifest timestamp mutants fail byte comparison. Offline and both confined writers have real archive/year witnesses. Legacy ordering coverage preserved; synthetic fixture provenance inspected without claiming a global runtime provenance proof. One older confinement guard docstring explicitly assigned6.2; no queue duplication.
 

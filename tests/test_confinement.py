@@ -1652,9 +1652,8 @@ def test_entry_point_writes_only_inside_the_permitted_locations(
     directories for ``drain``, plus an explicit external index cache for the
     entry points in :data:`_EXTERNAL_INDEX_ENTRY_IDS`. The run is also asserted
     to have produced its own observable, non-vacuous write
-    (``entry_point.non_vacuous`` -- a workout document under ``workouts/``
-    for every entry point but ``history``, the history document itself for
-    ``history``, since that pass writes no workout document at all), so a
+    (selected by ``entry_point.non_vacuous``, the output predicate
+    registered for that entry point), so a
     pipeline that silently stopped writing could not pass this guard by doing
     nothing.
 
