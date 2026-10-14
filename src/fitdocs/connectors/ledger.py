@@ -1,7 +1,7 @@
 """The per-instance ledger: what a connector has already fetched (Req 7).
 
 Authoritative for ``<data_root>/.fitdocs/connectors/<instance>.toml`` -- the
-record of every remote activity an instance's pulls have decided about. A
+record of remote activities and optional wellness state for the instance. A
 pull decides whether a remote id is new from this record alone: an activity
 missing from one listing (a lazily populated cloud folder) is fetched again
 by whichever later pull lists it (Req 7.7).
@@ -54,11 +54,12 @@ from __future__ import annotations
 
 import re
 import tomllib
-from dataclasses import dataclass
-from datetime import datetime
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, replace
+from datetime import date, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
-from typing import Final
+from typing import Final, cast
 
 import tomli_w
 
@@ -67,6 +68,11 @@ from fitdocs.layout import connector_ledger_path
 
 __all__ = [
     "LEDGER_VERSION",
+    "ACTIVITY_LEDGER_VERSION",
+    "WELLNESS_LEDGER_VERSION",
+    "WellnessDayEntry",
+    "WellnessPending",
+    "WellnessLedger",
     "Outcome",
     "LedgerEntry",
     "Ledger",
@@ -75,10 +81,10 @@ __all__ = [
     "save_ledger",
 ]
 
-LEDGER_VERSION: Final[int] = 1
-"""Stamped into ``ledger_version`` on every save so format changes are
-detectable; :func:`load_ledger` refuses a file recording a newer value
-(Req 7.6)."""
+LEDGER_VERSION: Final[int] = 2
+ACTIVITY_LEDGER_VERSION: Final[int] = 1
+WELLNESS_LEDGER_VERSION: Final[int] = 2
+"""Newest readable ledger format; activity-only saves retain version 1."""
 
 _SHA256_RE: Final[re.Pattern[str]] = re.compile(r"[0-9a-f]{64}")
 """The archive's own content-hash form: 64 lowercase hex characters (Req 7.8)."""
@@ -121,8 +127,80 @@ class LedgerEntry:
 
 
 @dataclass(frozen=True)
+class WellnessDayEntry:
+    """A day's latest recorded revision and the hash of its delivery."""
+
+    day: date
+    revision: str | None
+    sha256: str
+
+
+@dataclass(frozen=True)
+class WellnessPending:
+    """An inbox delivery awaiting archiving by its declared wellness format."""
+
+    path: str
+    sha256: str
+    format: str
+    suffix: str
+
+
+@dataclass(frozen=True)
+class WellnessLedger:
+    """Immutable wellness state, validated when loaded or saved."""
+
+    through: date | None = None
+    origins: tuple[str, ...] = ()
+    days: tuple[WellnessDayEntry, ...] = ()
+    pending: tuple[WellnessPending, ...] = ()
+
+    def entry(self, day: date) -> WellnessDayEntry | None:
+        for entry in self.days:
+            if entry.day == day:
+                return entry
+        return None
+
+    def with_days(
+        self, days: Sequence[tuple[date, str | None]], sha256: str
+    ) -> WellnessLedger:
+        by_day = {entry.day: entry for entry in self.days}
+        for day, revision in days:
+            by_day[day] = WellnessDayEntry(day, revision, sha256)
+        return replace(self, days=tuple(by_day[day] for day in sorted(by_day)))
+
+    def with_pending(self, pending: WellnessPending) -> WellnessLedger:
+        by_path = {entry.path: entry for entry in self.pending}
+        by_path[pending.path] = pending
+        return replace(self, pending=tuple(by_path[path] for path in sorted(by_path)))
+
+    def without_pending(self, path: str) -> WellnessLedger:
+        return replace(self, pending=tuple(p for p in self.pending if p.path != path))
+
+    def forget(self, path: str) -> WellnessLedger:
+        pending = next((p for p in self.pending if p.path == path), None)
+        if pending is None:
+            return self
+        dropped = [entry.day for entry in self.days if entry.sha256 == pending.sha256]
+        days = tuple(entry for entry in self.days if entry.sha256 != pending.sha256)
+        through = self.through
+        if dropped and through is not None:
+            through = min(through, min(dropped) - timedelta(days=1))
+        return replace(self.without_pending(path), days=days, through=through)
+
+    def with_coverage(self, oldest: date, newest: date) -> WellnessLedger:
+        if self.through is None:
+            return replace(self, through=newest)
+        if oldest <= self.through + timedelta(days=1):
+            return replace(self, through=max(self.through, newest))
+        return self
+
+    def with_origins(self, origins: Iterable[str]) -> WellnessLedger:
+        return replace(self, origins=tuple(sorted(set(origins))))
+
+
+@dataclass(frozen=True)
 class Ledger:
-    """An instance's whole fetched-activity record.
+    """An instance's activity record and optional wellness keyspace.
 
     ``entries`` is kept sorted and unique by ``remote_id`` by every method
     below; the constructor itself performs no validation, so a caller
@@ -135,6 +213,7 @@ class Ledger:
     connector_id: str
     watermark: datetime | None
     entries: tuple[LedgerEntry, ...]
+    wellness: WellnessLedger | None = None
 
     def get(self, remote_id: str) -> LedgerEntry | None:
         """Return the entry for ``remote_id``, or ``None`` if there is none."""
@@ -162,11 +241,7 @@ class Ledger:
         remaining = [e for e in self.entries if e.remote_id != entry.remote_id]
         remaining.append(entry)
         remaining.sort(key=lambda e: e.remote_id)
-        return Ledger(
-            connector_id=self.connector_id,
-            watermark=self.watermark,
-            entries=tuple(remaining),
-        )
+        return replace(self, entries=tuple(remaining))
 
     def without(self, remote_id: str) -> Ledger:
         """Return a copy with the entry for ``remote_id`` removed.
@@ -175,9 +250,7 @@ class Ledger:
         (still a fresh copy). This instance is never mutated.
         """
         remaining = tuple(e for e in self.entries if e.remote_id != remote_id)
-        return Ledger(
-            connector_id=self.connector_id, watermark=self.watermark, entries=remaining
-        )
+        return replace(self, entries=remaining)
 
     def with_watermark(self, watermark: datetime) -> Ledger:
         """Return a copy with the watermark advanced to ``watermark``.
@@ -191,9 +264,11 @@ class Ledger:
                 f"watermark cannot move backward: {watermark!r} is earlier than "
                 f"the current watermark {self.watermark!r}"
             )
-        return Ledger(
-            connector_id=self.connector_id, watermark=watermark, entries=self.entries
-        )
+        return replace(self, watermark=watermark)
+
+    def with_wellness(self, wellness: WellnessLedger) -> Ledger:
+        """Replace the wellness keyspace while keeping activity state."""
+        return replace(self, wellness=wellness)
 
     def pending_entries(self) -> tuple[LedgerEntry, ...]:
         """The entries still awaiting the sweep -- those with a ``pending`` location."""
@@ -228,9 +303,12 @@ def _is_safe_relative_path(value: str) -> bool:
 
 
 def _invariant_violation(
-    watermark: datetime | None, entries: tuple[LedgerEntry, ...]
+    watermark: datetime | None,
+    entries: tuple[LedgerEntry, ...],
+    wellness: WellnessLedger | None = None,
+    version: int = ACTIVITY_LEDGER_VERSION,
 ) -> str | None:
-    """Return the first invariant violation in ``watermark``/``entries``, or ``None``.
+    """Return the first activity or wellness invariant violation, or ``None``.
 
     The single check shared by :func:`load_ledger` (which raises
     :class:`LedgerError` naming the file) and :func:`save_ledger` (which
@@ -242,7 +320,9 @@ def _invariant_violation(
     is 64 lowercase hex whenever present at all; ``detail`` is present when
     ``outcome`` is ``skipped``; ``pending`` is present only when ``outcome``
     is ``delivered``, and is a safe relative path (see
-    :func:`_is_safe_relative_path`).
+    :func:`_is_safe_relative_path`). Wellness additionally requires its
+    supported format version, exact local dates, valid revisions and hashes,
+    sorted unique days, pending paths and origins, and safe delivery metadata.
     """
     if watermark is not None and watermark.tzinfo is None:
         return "'watermark' must be timezone-aware"
@@ -276,7 +356,112 @@ def _invariant_violation(
                     f"entry {entry.remote_id!r} has an unsafe 'pending' path "
                     f"{entry.pending!r}"
                 )
+    if wellness is not None:
+        if version < WELLNESS_LEDGER_VERSION:
+            return "'wellness' requires ledger version 2"
+        return _wellness_violation(wellness)
     return None
+
+
+_SLUG_RE: Final[re.Pattern[str]] = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+_SUFFIX_RE: Final[re.Pattern[str]] = re.compile(r"\.[a-z0-9]+")
+
+
+def _wellness_violation(wellness: WellnessLedger) -> str | None:
+    if wellness.through is not None and type(wellness.through) is not date:
+        return "wellness 'through' must be a local date"
+    for origin in wellness.origins:
+        if not isinstance(origin, str) or not _SLUG_RE.fullmatch(origin):
+            return "wellness 'origins' must be slug strings"
+    if list(wellness.origins) != sorted(wellness.origins):
+        return "wellness 'origins' must be sorted"
+    if len(set(wellness.origins)) != len(wellness.origins):
+        return "wellness 'origins' must be unique"
+    for entry in wellness.days:
+        if type(entry.day) is not date:
+            return "wellness 'day' must be a local date"
+        if entry.revision is not None:
+            if not isinstance(entry.revision, str):
+                return "wellness 'revision' must be a string or absent"
+            if not entry.revision or len(entry.revision) > 512:
+                return "wellness 'revision' must contain 1 to 512 characters"
+            if any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in entry.revision):
+                return "wellness 'revision' must not contain control characters"
+        if not isinstance(entry.sha256, str) or not _SHA256_RE.fullmatch(entry.sha256):
+            return "wellness day has an invalid 'sha256'"
+    days = [entry.day for entry in wellness.days]
+    if days != sorted(days):
+        return "wellness 'days' must be sorted"
+    if len(set(days)) != len(days):
+        return "wellness 'days' must be unique"
+    for pending in wellness.pending:
+        if not isinstance(pending.path, str) or not _is_safe_relative_path(
+            pending.path
+        ):
+            return "wellness pending has an unsafe 'path'"
+        if not isinstance(pending.sha256, str) or not _SHA256_RE.fullmatch(
+            pending.sha256
+        ):
+            return "wellness pending has an invalid 'sha256'"
+        if not isinstance(pending.format, str) or not _SLUG_RE.fullmatch(
+            pending.format
+        ):
+            return "wellness pending 'format' must be a slug"
+        if not isinstance(pending.suffix, str) or not _SUFFIX_RE.fullmatch(
+            pending.suffix
+        ):
+            return "wellness pending has an invalid 'suffix'"
+        if pending.suffix == ".fit":
+            return "wellness pending 'suffix' must not be .fit"
+    paths = [pending.path for pending in wellness.pending]
+    if paths != sorted(paths):
+        return "wellness 'pending' must be sorted by path"
+    if len(set(paths)) != len(paths):
+        return "wellness 'pending' paths must be unique"
+    return None
+
+
+def _parse_wellness(path: Path, raw: object) -> WellnessLedger:
+    if not isinstance(raw, dict):
+        raise LedgerError(f"{path}: 'wellness' must be a table")
+    origins = raw.get("origins", [])
+    if not isinstance(origins, list):
+        raise LedgerError(f"{path}: wellness 'origins' must be a list")
+
+    def tables(key: str) -> list[dict[str, object]]:
+        values = raw.get(key, [])
+        if not isinstance(values, list):
+            raise LedgerError(f"{path}: wellness {key!r} must be a list")
+        result: list[dict[str, object]] = []
+        for value in values:
+            if not isinstance(value, dict):
+                raise LedgerError(
+                    f"{path}: each wellness {key!r} record must be a table"
+                )
+            result.append(value)
+        return result
+
+    return WellnessLedger(
+        through=cast(date | None, raw.get("through")),
+        origins=tuple(cast(str, origin) for origin in origins),
+        days=tuple(
+            WellnessDayEntry(
+                cast(date, row.get("day")),
+                cast(str | None, row.get("revision")),
+                cast(str, row.get("sha256")),
+            )
+            for row in tables("days")
+        ),
+        pending=tuple(
+            WellnessPending(
+                cast(str, row.get("path")),
+                cast(str, row.get("sha256")),
+                cast(str, row.get("format")),
+                cast(str, row.get("suffix")),
+            )
+            for row in tables("pending")
+        ),
+    )
 
 
 def load_ledger(data_root: Path, instance: str, *, connector_id: str) -> Ledger:
@@ -341,12 +526,16 @@ def load_ledger(data_root: Path, instance: str, *, connector_id: str) -> Ledger:
     if remote_ids != sorted(remote_ids):
         raise LedgerError(f"{path}: entries are not sorted by remote_id")
 
-    violation = _invariant_violation(watermark, tuple(entries))
+    wellness = _parse_wellness(path, data["wellness"]) if "wellness" in data else None
+    violation = _invariant_violation(watermark, tuple(entries), wellness, version)
     if violation is not None:
         raise LedgerError(f"{path}: {violation}")
 
     return Ledger(
-        connector_id=found_connector, watermark=watermark, entries=tuple(entries)
+        connector_id=found_connector,
+        watermark=watermark,
+        entries=tuple(entries),
+        wellness=wellness,
     )
 
 
@@ -411,7 +600,7 @@ def save_ledger(data_root: Path, instance: str, ledger: Ledger) -> bool:
 
     Otherwise creates ``.fitdocs/connectors/`` on demand if it does not
     already exist -- unlike :func:`load_ledger`, which never creates it.
-    ``ledger_version`` is stamped to :data:`LEDGER_VERSION`. Entries are
+    ``ledger_version`` is 1 for activity-only state and 2 with wellness. Entries are
     serialized sorted by ``remote_id`` regardless of ``ledger.entries``' own
     order, and no clock-derived value is written, so an unchanged ledger
     serializes to identical bytes on every save.
@@ -421,13 +610,20 @@ def save_ledger(data_root: Path, instance: str, ledger: Ledger) -> bool:
     written through :func:`fitdocs.connectors._atomic.write_atomic` and
     ``True`` is returned (Req 7.3).
     """
-    violation = _invariant_violation(ledger.watermark, ledger.entries)
+    version = (
+        WELLNESS_LEDGER_VERSION
+        if ledger.wellness is not None
+        else ACTIVITY_LEDGER_VERSION
+    )
+    violation = _invariant_violation(
+        ledger.watermark, ledger.entries, ledger.wellness, version
+    )
     if violation is not None:
         raise ValueError(violation)
 
     target = connector_ledger_path(data_root, instance)
     document: dict[str, object] = {
-        "ledger_version": LEDGER_VERSION,
+        "ledger_version": version,
         "connector": ledger.connector_id,
     }
     if ledger.watermark is not None:
@@ -447,6 +643,27 @@ def save_ledger(data_root: Path, instance: str, ledger: Ledger) -> bool:
             table["pending"] = entry.pending
         entry_tables.append(table)
     document["entries"] = entry_tables
+
+    if ledger.wellness is not None:
+        wellness = ledger.wellness
+        wellness_table: dict[str, object] = {}
+        if wellness.through is not None:
+            wellness_table["through"] = wellness.through
+        if wellness.origins:
+            wellness_table["origins"] = sorted(wellness.origins)
+        day_tables: list[dict[str, object]] = []
+        for day_entry in sorted(wellness.days, key=lambda e: e.day):
+            day_table: dict[str, object] = {"day": day_entry.day}
+            if day_entry.revision is not None:
+                day_table["revision"] = day_entry.revision
+            day_table["sha256"] = day_entry.sha256
+            day_tables.append(day_table)
+        wellness_table["days"] = day_tables
+        wellness_table["pending"] = [
+            {"path": p.path, "sha256": p.sha256, "format": p.format, "suffix": p.suffix}
+            for p in sorted(wellness.pending, key=lambda p: p.path)
+        ]
+        document["wellness"] = wellness_table
 
     payload = tomli_w.dumps(document).encode("utf-8")
 

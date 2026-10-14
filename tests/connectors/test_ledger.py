@@ -27,6 +27,7 @@ import pytest
 import tomli_w
 
 from fitdocs.connectors.ledger import (
+    ACTIVITY_LEDGER_VERSION,
     LEDGER_VERSION,
     Ledger,
     LedgerEntry,
@@ -47,7 +48,7 @@ def _write_raw(data_root: Path, instance: str, document: dict[str, object]) -> P
 
 def _valid_document(**overrides: object) -> dict[str, object]:
     document: dict[str, object] = {
-        "ledger_version": LEDGER_VERSION,
+        "ledger_version": ACTIVITY_LEDGER_VERSION,
         "connector": "folder",
         "entries": [],
     }
@@ -442,9 +443,6 @@ def test_load_ledger_matching_connector_does_not_raise(tmp_path: Path) -> None:
 
 
 def test_load_ledger_current_format_does_not_raise(tmp_path: Path) -> None:
-    # LEDGER_VERSION == 1 is the format's first version, so there is no
-    # genuinely older version to fixture; this pins only "the current,
-    # matching version is accepted", not "an older version is accepted".
     _write_raw(tmp_path, "healthfit", _valid_document(ledger_version=LEDGER_VERSION))
     load_ledger(tmp_path, "healthfit", connector_id="folder")
 
@@ -644,7 +642,7 @@ def _missing_ledger_version_document() -> dict[str, object]:
 
 
 def _ledger_version_wrong_type_document() -> dict[str, object]:
-    return _valid_document(ledger_version="1")
+    return _valid_document(ledger_version="2")
 
 
 def _newer_format_document() -> dict[str, object]:
