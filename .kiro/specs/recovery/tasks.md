@@ -201,7 +201,7 @@ literal pins, one per lander) and every head-paragraph pin of
 
 - [ ] 1. Foundation: citations, constants, baselines, boundary, location
 
-- [ ] 1.1 Verify the candidate citations against the works themselves (controller or maintainer)
+- [x] 1.1 Verify the candidate citations against the works themselves (controller or maintainer)
   - For each of the six works in design § Constants and research.md
     (Plews et al. 2013 *Sports Med*; Plews et al. 2013 *IJSPP*; Plews et al.
     2014 *IJSPP*; Buchheit 2014 *Front Physiol*; Vesterinen et al. 2016
@@ -802,3 +802,62 @@ literal pins, one per lander) and every head-paragraph pin of
   re-pin line removed from the design. Requirements gained 12.7 and 12.8.
 - Outcomes of 1.1 (the citation verification) and of 1.2's upstream checks
   are recorded below when those tasks run.
+
+### Task 1.1 — primary-text verification (2026-10-14)
+
+All approved values remain unchanged. The table records paraphrases, not
+verbatim extracts. Primary texts were opened through the browser research tool;
+a publisher or repository URL alone does not establish verification.
+
+| Key / full reference | State and primary-text locator | What the opened work states / scope |
+|---|---|---|
+| `PLEWS_2013_SPORTS_MED` — Plews DJ, Laursen PB, Stanley J, Kilding AE, Buchheit M. Training adaptation and heart rate variability in elite endurance athletes: opening the door to effective monitoring. Sports Med. 2013;43(9):773–781. doi:10.1007/s40279-013-0071-8. [Author full text](https://www.researchgate.net/publication/249321195_Training_Adaptation_and_Heart_Rate_Variability_in_Elite_Endurance_Athletes_Opening_the_Door_to_Effective_Monitoring) | **verified / PRIMARY_TEXT**; §3, pp.774–775; §5, pp.779–780; Fig.4, p.779 | Weekly and seven-day rolling ln rMSSD reduce daily noise. Individual worthwhile-change regions illustrate comparison of averaged HRV. This does not establish a 60-day baseline or the exact 0.5 multiplier. |
+| `PLEWS_2013_IJSPP` — Plews DJ, Laursen PB, Kilding AE, Buchheit M. Evaluating training adaptation with heart-rate measures: a methodological comparison. Int J Sports Physiol Perform. 2013;8(6):688–691. doi:10.1123/ijspp.8.6.688. [Author full text](https://www.researchgate.net/publication/235906316_Evaluating_Training_Adaptation_With_Heart-Rate_Measures_A_Methodological_Comparison) | **verified / PRIMARY_TEXT**; Experimental Protocol, p.689; Discussion and Fig.1, p.690 | Weekly ln rMSSD and resting-HR averages are compared with isolated readings. Fig.1 instead uses 0.2 times a within-group SD; that is a different threshold population and cannot govern the individual 0.5 multiplier. |
+| `PLEWS_2014_IJSPP` — Plews DJ, Laursen PB, Le Meur Y, Hausswirth C, Kilding AE, Buchheit M. Monitoring training with heart-rate variability: how much compliance is needed for valid assessment? Int J Sports Physiol Perform. 2014;9(5):783–790. doi:10.1123/IJSPP.2013-0455. [Primary PDF](https://padletuploads.blob.core.windows.net/prod/232663277/a484fe91e8f7d906336f166bfc592e5d/plews2014.pdf) | **verified / PRIMARY_TEXT**; abstract, p.783; Discussion, p.785; Practical Applications and Conclusions, p.789 | Three randomly selected valid weekly ln rMSSD recordings suffice in trained triathletes; recreational athletes may need approximately five. Generalizing three to every recovery metric/population is an explicit fitdocs departure. |
+| `BUCHHEIT_2014` — Buchheit M. Monitoring training status with HR measures: do all roads lead to Rome? Front Physiol. 2014;5:73. doi:10.3389/fphys.2014.00073. [Primary text](https://www.frontiersin.org/journals/physiology/articles/10.3389/fphys.2014.00073/full) | **verified / PRIMARY_TEXT**; “Acknowledging the uncertainty of the measures”; “Determining the smallest worthwhile change” | Repeated HR/HRV measurements reduce noise. Describes 0.5 or 1 times within-athlete CV and warns that practical meaning of such cutoffs is unestablished. This is supporting context, not the governing 0.5 SD record. |
+| `VESTERINEN_2016` — Vesterinen V, Nummela A, Heikura I, Laine T, Hynynen E, Botella J, Häkkinen K. Individual endurance training prescription with heart rate variability. Med Sci Sports Exerc. 2016;48(7):1347–1354. doi:10.1249/MSS.0000000000000910. [Accepted primary manuscript](https://jyx.jyu.fi/bitstream/handle/123456789/50625/vesterinenetalindividualendurancemsse.pdf) | **verified / PRIMARY_TEXT**; Methods, “HRV guided training”, paragraphs 1–3; Discussion, “Methodological issues to use HRV in training prescription” | Compares a seven-day RMSSD average with mean ±0.5 SD from four preparation weeks, updating after four intensive weeks. Uses untransformed RMSSD and guides training. Fitdocs uses log-HRV, preceding 60 days and descriptive marking only. |
+| `ALTINI_PLEWS_2021` — Altini M, Plews DJ. What Is behind Changes in Resting Heart Rate and Heart Rate Variability? A Large-Scale Analysis of Longitudinal Measurements Acquired in Free-Living. Sensors. 2021;21(23):7932. doi:10.3390/s21237932. [Bibliographic record](https://pubmed.ncbi.nlm.nih.gov/34883936/) | **attested only / SECONDARY_ATTESTATION**, locator: PubMed bibliographic record PMID 34883936; no primary-text locator | Metadata confirmed. MDPI article, HTML and PDF failed to open; PMC returned a verification interstitial; Europe PMC failed. No claim about 60-day normal values was verified. Does not govern a constant. |
+
+Governing records for transcription in task 1.2 (every `Citation` below has
+`verification=PRIMARY_TEXT`, the authors/year/work above and the stated locator):
+
+| Constant / rule | Governing source and required fields | Corroboration / departure |
+|---|---|---|
+| `ROLLING_DAYS = 7` | `Citation PLEWS_2013_SPORTS_MED`, locator: §3, pp.774–775; §5, pp.779–780 | `PLEWS_2013_IJSPP`, Statistical Analysis p.689, `AGREES`; rolling seven-day application to sleep/other metrics is fitdocs's method choice. |
+| `MIN_ROLLING_VALUES = 3` | `Citation PLEWS_2014_IJSPP`, locator: abstract p.783; Practical Applications and Conclusions p.789 | `Departure`: source studies weekly ln rMSSD in trained triathletes, approximately five samples for recreational athletes; fitdocs applies a fixed three-value minimum to all nine methods for one explicit missingness rule. |
+| `BASELINE_DAYS = 60` | `FitdocsChoice`, key `BASELINE_DAYS`; justification: maintainer's 2026-10-12 decision for a longer personal baseline; search_basis: six candidates above, Altini primary unavailable and no opened work specifies this 60-day method | `Departure`: Vesterinen Methods uses four weeks, periodically updated; fitdocs uses preceding 60 days, excluding D, to implement the approved as-of baseline. No Altini corroborator claims agreement with 60. |
+| `MIN_BASELINE_VALUES = 30` | `FitdocsChoice`, key `MIN_BASELINE_VALUES`; justification: at least half the 60-day window before estimating variation; search_basis: no minimum of 30 found in the five opened works | No corroborator or departure. |
+| `RANGE_SD_MULTIPLE = 0.5` | `Citation VESTERINEN_2016`, locator: Methods, “HRV guided training”, paragraph 2; Discussion, “Methodological issues to use HRV in training prescription” | `Departure`: source uses raw RMSSD and four weeks plus training decisions; fitdocs uses log HRV, 60 preceding days, descriptive marking and also resting HR. Plews 2013 IJSPP Fig.1 uses 0.2 between-athlete SD and does not corroborate this individual threshold. |
+| `LOG_TRANSFORM` | `Citation PLEWS_2013_SPORTS_MED`, locator: §3, pp.774–775; §5, pp.779–780 | `PLEWS_2013_IJSPP`, Experimental Protocol p.689, `AGREES`; studies ln rMSSD; exponentiating for display preserves metric units. |
+| `SDNN_APPLICATION` | `FitdocsChoice`, key `SDNN_APPLICATION`; justification: display each HRV definition separately with one transparent method; search_basis: opened works study rMSSD, no SDNN counterpart verified | `Departure`: source evidence concerns rMSSD; fitdocs applies log averaging and range to SDNN independently, without conversion or mixing. |
+| `RESTING_HR_APPLICATION` | `FitdocsChoice`, key `RESTING_HR_APPLICATION`; justification: one descriptive rolling/baseline comparison on resting HR's own linear values; search_basis: Plews 2013 IJSPP and Buchheit discuss averaged HR, but no identical 60-day/0.5-SD resting-HR method verified | `PLEWS_2013_IJSPP`, Discussion p.690, `OMITS` with note: supports weekly HR averaging but not fitdocs's full range method; `Departure`: transfer of the HRV range to linear resting HR. |
+| `COMPARED_QUANTITY` | `Citation PLEWS_2013_SPORTS_MED`, locator: Fig.4 p.779; §5 pp.779–780 | `VESTERINEN_2016`, Methods “HRV guided training”, paragraphs 1–3, `AGREES` with note: supports comparison of seven-day averages, not fitdocs's log/60-day descriptive method; `Departure`: descriptive marking uses the two bounds without training advice or confidence-interval inference. |
+| `SAMPLE_SD` | `FitdocsChoice`, key `SAMPLE_SD`; justification: n−1 sample estimate of baseline-day variation; search_basis: no explicit denominator verified in the opened candidates | No corroborator or departure. |
+| `SLEEP_METHOD` | `FitdocsChoice`, key `SLEEP_METHOD`; justification: descriptive recent and longer sleep averages, no unsupported normal range; search_basis: no matching sleep-range method verified in the opened HRV works | No corroborator or departure. |
+| `PER_SOURCE` | `FitdocsChoice`, key `PER_SOURCE`; justification: maintainer's 2026-10-12 decision because platform definitions differ; search_basis: opened works do not establish comparability of export-source definitions | No corroborator or departure. |
+| `SHOWN_SOURCE` | `FitdocsChoice`, key `SHOWN_SOURCE`; justification: use canonical source and bridge only gaps within the seven-day rolling window, carrying the source identifier, never the value; search_basis: no source-carry policy in the opened works | No corroborator or departure. |
+
+Scope differences were reported to the maintainer during this run. They do
+not alter a value or turn descriptive marking into an inference about health,
+performance or training. Task 1.2 must transcribe departures rather than
+present all choices as a single published method.
+
+Departure field mappings (literal transcription brief; sources/locators are
+the verified records above):
+
+| subject | source_specifies | fitdocs_does | reason |
+|---|---|---|---|
+| `MIN_ROLLING_VALUES` | Plews 2014, Practical Applications and Conclusions p.789: three in trained triathletes, approximately five in recreational athletes | Require three present days for each of nine methods | One explicit missingness rule across metrics; no claim that three establishes validity for every population/signal |
+| `BASELINE_DAYS` | Vesterinen 2016, Methods “HRV guided training”, paragraphs 2–3: four-week reference periodically updated | Use D−60 through D−1 | Approved personal as-of baseline excludes the judged day and implements the maintainer's longer-window decision |
+| `RANGE_SD_MULTIPLE` | Vesterinen 2016, Methods “HRV guided training”, paragraphs 1–3: raw RMSSD, four weeks, training prescription | Use 0.5 SD for log HRV and linear resting HR over preceding 60 days; descriptive marking only | Preserve approved transparent windows and separate metrics while avoiding training advice or inferred readiness |
+| `SDNN_APPLICATION` | Plews 2013 Sports Med, §3 pp.774–775: preferred index is ln rMSSD | Apply log averaging/range independently to SDNN | Show each platform's HRV definition separately without unsupported SDNN/rMSSD conversion |
+| `RESTING_HR_APPLICATION` | Vesterinen 2016, Methods “HRV guided training”: range applied to RMSSD; Plews 2013 IJSPP Discussion p.690 supports weekly HR averaging | Apply the approved windows/range to linear resting HR values | A single explicit descriptive comparison rule; no published claim of this exact resting-HR range |
+| `COMPARED_QUANTITY` | Plews 2013 Sports Med, Fig.4 p.779: weekly ln rMSSD comparison with individual SWC and confidence intervals | Mark a seven-day mean outside either bound, without confidence intervals or advice | Describe the athlete's own figures rather than infer performance, health or training decisions |
+
+Task 1.1 review remediation: corrected the weekly-averaging and Vesterinen
+Discussion locators and supplied explicit four-field departure mappings.
+
+- 1.1: READY_FOR_REVIEW → independently APPROVED round 2; fresh completion
+  checklist VERIFIED. Baseline `uv run pytest`: 14733 passed, 44 skipped;
+  ruff check/format and mypy clean (550 files); CLI help smoke exit 0.
+  Only citation notes changed; all approved values preserved.
