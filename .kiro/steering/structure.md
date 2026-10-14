@@ -78,6 +78,22 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   `layout` and `ingest`; `sync`, the load and benchmark passes and
   `render` (its types only: `DocContext`'s provenance field, and
   `render.provenance` with the alignment constants) import it.
+- `wellness` (the offline daily wellness store) imports only the standard
+  library, `tomli_w`, `layout`, `settings` and `units` outside its own package;
+  `sync` (drain), `audit` (check), `cli` and `index.derived.wellness` import it.
+  Its internal imports follow the gapped ranks in
+  `tests/wellness/test_boundary.py`: `model`/`probe` → `spec` → `formats.*` →
+  `registry` → `settings`/`merge`/`archive` → `series` → `intake`/`engine` →
+  `inspect` → facade; imports go only to lower ranks. It imports no activity
+  model, ingestion, rendering, index, query, connector or orchestration module
+  and calls no clock. Every consumer reads normalized wellness through the
+  public `wellness.read_series` reader, rather than parsing archive entries or
+  series files itself. Drain's `wellness.intake` archives candidates and
+  `wellness.engine` alone rebuilds the series; those writer paths are distinct
+  from the normalized-series reader. Later consumers import the `wellness`
+  facade (and `wellness.engine` for `SeriesReport`). `inbox` stays independent
+  of `wellness`; the drain supplies its candidate suffixes. `connectors` reaches
+  the archive only through `layout.wellness_archive_path`.
 - `query` (the read side) imports `index` (location, store, schema, bookkeeping,
   corpus, fingerprint, producer types, registry) and `athlete`; only `cli`
   and `dashboards` import it; it never imports `duckdb` or an index writer.
@@ -96,7 +112,7 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   `ingest`, `contract`, `docio`, `docmerge`, `layout`, `athlete`, `settings`,
   `version`, `units` and the load payload readers; only `cli` and `query`
   import it; only `index.store` imports `duckdb`. Its derived producers (`index.derived`)
-  also import `history`, `plans`, `benchmarks` and `load.profile`, and
+  also import `history`, `plans`, `benchmarks`, `load.profile` and `wellness`, and
   `metrics.mean_max` computes best efforts; only `index.registry` imports
   `index.derived`.
 - `units` (the one unit vocabulary: token, index phrase, display symbol,

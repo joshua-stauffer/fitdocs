@@ -686,64 +686,77 @@ def sync(
 
 @dataclass(frozen=True)
 class DrainReport:
-    """An inbox drain outcome: the standard sync report plus inbox channels
-    (design: DrainOrchestration, inbox Req 2.3, 4.2, 7.1).
+    """An inbox drain outcome: admitted FIT results, inbox and wellness channels,
+    and separate series metadata (design: DrainOrchestration; inbox Req 2.3,
+    4.2, 7.1).
 
-    ``sync`` carries the exact same :class:`SyncReport` contract an
-    explicit-source :func:`sync` call would produce over the same admitted
-    files -- every admitted candidate lands in exactly one of its
-    ``written``/``skipped``/``failures`` tuples, except that identical
-    undecodable content under a second name, whose first copy was just
-    quarantined in this drain, is reported in ``quarantined`` instead of as a
-    second failure -- and only its ``failures``
-    (plus the load pass, outside this module) drives the failure exit code
-    (inbox Req 4.6, 7.1). ``inbox`` names the drained inbox path (inbox Req
-    2.3). ``deferred`` is the inbox-only channel for candidates that were not
-    admitted this run because they were not observed stable across the
-    settle interval, or because a stable candidate could not be read (inbox
-    Req 4.2) -- never a failure and never a quarantine entry.
+    ``sync`` carries the :class:`SyncReport` contract over admitted FIT files
+    only: each lands in ``written``, ``skipped`` or ``failures``, except that
+    identical undecodable content under a second name, whose first copy was
+    just quarantined in this drain, is demoted to ``quarantined``. Wellness
+    candidates instead use ``unrecognized``, ``wellness_archived``,
+    ``wellness_skipped`` and ``wellness_failures``; ``wellness_series`` reports
+    the separate series rebuild. The CLI decides the failure exit status from
+    FIT failures, wellness failures, a
+    :attr:`~fitdocs.wellness.engine.SeriesStatus.FAILED` series, and subsequent
+    load or plan failures. This module returns the
+    reports rather than deciding the command's exit status.
+
+    ``inbox`` names the drained inbox path. ``deferred`` is shared by FIT and
+    wellness candidates not observed stable across the settle interval or
+    unreadable during intake, including wellness archive operations that
+    could not complete. Deferrals remain in the inbox for a later drain and
+    are neither failures nor quarantine entries (inbox Req 4.2).
 
     ``moved`` and ``move_failures`` are the disposition channels (inbox Req
-    6.2, 6.4, 6.5): populated only under :attr:`~fitdocs.inbox.Disposition.MOVE`,
-    for candidates whose content hash :func:`drain` confirmed present in
-    ``fit-archive/`` once their processing finished. Under the default
-    :attr:`~fitdocs.inbox.Disposition.LEAVE` disposition, or when
-    ``processed_dir`` is not supplied, both stay empty and nothing in the
-    inbox is touched.
+    6.2, 6.4, 6.5), populated only under
+    :attr:`~fitdocs.inbox.Disposition.MOVE` with ``processed_dir`` supplied.
+    Wellness candidates qualify after archival or an already-archived outcome
+    only while their wellness archive entry is a regular, non-symlink file.
+    FIT candidates qualify only if they did not fail this drain, their hash
+    is present under ``fit-archive/``, and no non-activity FIT type was
+    detected; held activity files retain eligibility. The ``skipped`` label
+    alone does not establish eligibility. The default
+    :attr:`~fitdocs.inbox.Disposition.LEAVE`, or a missing ``processed_dir``,
+    leaves both channels empty. Disposition relocates eligible candidates to
+    the processed-files destination; it never deletes inbox files.
     """
 
     inbox: str
     """The path drained, as given to :func:`drain` (inbox Req 2.3)."""
 
     sync: SyncReport
-    """The sync report over the admitted candidates (see the class docstring
-    for the one demotion to ``quarantined``)."""
+    """The sync report over admitted FIT candidates only (see the class
+    docstring for the demotion to ``quarantined``). Wellness channel outcomes
+    and series metadata are reported separately."""
 
     deferred: tuple[InboxNote, ...]
-    """Candidates left untouched this run: unstable across the settle
-    interval, or stable but unreadable (inbox Req 4.2). Retried, unchanged,
-    on a later drain."""
+    """FIT and wellness candidates left in the inbox for a later drain:
+    unstable across the settle interval, unreadable during intake, or deferred
+    by wellness archival (inbox Req 4.2). Neither failures nor quarantine
+    entries."""
 
     quarantined: tuple[InboxNote, ...]
     """Stable, readable candidates whose content hash is already present in
     the quarantine record, and *not* being retried this drain (inbox Req 5.2);
-    these never reach the planner. Also a second candidate with the same
-    undecodable bytes as one that failed and was recorded earlier in this
-    drain (unless retrying): it does reach the planner and fails there, then
-    is demoted from ``sync.failures`` to here after the run, carrying the
-    recorded reason.
+    these never reach FIT planning or wellness archival. Also a second FIT
+    candidate with the same undecodable bytes as one that failed and was
+    recorded earlier in this drain (unless retrying): it does reach the planner
+    and fails there, then is demoted from ``sync.failures`` to here after the
+    run, carrying the recorded reason.
     Otherwise each entry's ``detail`` is the reason recorded when the file was
     first quarantined. Entries are in candidate order. They are excluded from
     ``sync.written``/``skipped``/``failures`` and never drive the failure exit
     code by themselves (inbox Req 5.3)."""
 
     moved: tuple[str, ...]
-    """Destinations (as strings) of every admitted candidate relocated out of
-    the inbox this drain, under :attr:`~fitdocs.inbox.Disposition.MOVE`
-    (inbox Req 6.2). Always ``()`` under the leave-in-place default."""
+    """Destinations (as strings) of eligible FIT and wellness candidates
+    relocated out of the inbox this drain, under
+    :attr:`~fitdocs.inbox.Disposition.MOVE` (inbox Req 6.2). Always ``()`` under
+    the leave-in-place default."""
 
     move_failures: tuple[InboxNote, ...]
-    """A candidate that finished processing -- its content is archived -- but
+    """An eligible FIT or wellness candidate whose processing finished and
     whose move out of the inbox failed (inbox Req 6.5). The already-completed
     processing stands; the file stays in the inbox and is retried next drain.
     Never folded into ``failures`` or ``moved``; never changes the run's exit

@@ -3066,8 +3066,12 @@ Rejected:
   - a derived benchmark with no qualifying evidence: no entry at all.
 - **No new runtime dependency.** JSON, XML, zipfile and CSV come from the
   stdlib.
-- **The network is used only by `fitdocs pull`.** The drain, `regen`, the
-  recovery command and every renderer stay offline.
+- **Wellness handling stays offline.** Wellness connector requests belong to
+  `fitdocs pull`; recognizing, archiving, parsing, merging, rebuilding,
+  checking and indexing wellness make no network request. The existing
+  network owners remain `fitdocs.tiles` (map-tile fetches during rendering)
+  and `fitdocs.connectors.http` (explicit `fitdocs connect` and `fitdocs pull`
+  requests), as defined in `tech.md`.
 - **Determinism.** Same archive, series and profile give the same bytes. The
   run date never enters a page (Phase 11's rule against daily churn).
 - **Churn.** Two things land in the maintainer's iCloud and git wiki, and

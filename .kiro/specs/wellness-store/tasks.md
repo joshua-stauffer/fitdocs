@@ -923,7 +923,7 @@ preflight and keeps every call dashboards placed).
   - _Depends: 4.2, 3.2_
   - _Requirements: 3.4, 10.5, 12.3, 13.1, 13.2, 13.3, 13.4, 13.5_
 
-- [ ] 5. Documentation, skill, records
+- [x] 5. Documentation, skill, records
 
 - [x] 5.1 Write the wellness guide and link it
   - `docs/wellness.md` per design § Docs, with the metric table, the
@@ -982,7 +982,7 @@ preflight and keeps every call dashboards placed).
     tests/test_ownership_contract.py tests/test_changelog.py` green.
   - _Requirements: 19.1, 19.3, 19.4, 19.5, 19.6_
 
-- [ ] 5.3 Record the package's place in steering
+- [x] 5.3 Record the package's place in steering
   - Finish the source-report documentation follow-up from 5.2 review:
     align `sync.py`'s `DrainReport` class and `sync` field docstrings with
     admitted FIT candidates, wellness/series/plan failure gates, shared
@@ -998,6 +998,8 @@ preflight and keeps every call dashboards placed).
   - **Observable:** a grep of `.kiro/steering/` and `CLAUDE.md` finds no
     statement contradicting the new package rule; the network-statements
     test is green.
+    Synchronize the Phase 12 network constraint in steering `roadmap.md`
+    with the wellness scope and existing map-tile network exception.
   - _Requirements: 20.1, 20.2_
 
 - [ ] 6. Validation
@@ -1055,6 +1057,8 @@ preflight and keeps every call dashboards placed).
   - _Requirements: 16.1, 16.2, 15.1_
 
 ## Implementation Notes
+
+- 5.3: independently APPROVED; full14,723/44, targeted1142 plus47 final network checks, ruff/mypy548 clean. Structure/tech document wellness dependencies, ranked internals, reader/writer separation and pipeline. Required contradiction sweep corrected Phase12 roadmap network scope while preserving existing tiles/connectors.http owners. Deferred DrainReport class/field documentation now describes FIT-only sync outcomes, shared wellness/deferred channels, series metadata, CLI failure gates and both archive disposition paths. Executable AST identical after stripping62 docstrings; no tests/assertions changed, existing boundary tests are preserved coverage. No follow-ups; group5 complete.
 
 - 5.2: independently APPROVED round2; full14,723/44, targeted1492/1 optional actionlint skip, ruff/mypy548 clean.11 sole-failure mutants plus4 declared prose survivors and2 reviewer mutations reproduced with GREEN restorations. Inbox/configuration/plugin/ownership/skill/changelog and compatibility settings count9 now reflect wellness; config keys derive from reader AST, skill user/never-delete instructions pinned per Do cell. Module/drain/regen source docstrings aligned, executable AST unchanged, historical contract text preserved and changelog insertions only. Review corrected an overbroad detail promise: only four wellness channels promise details, workout Skipped is count-only. Older DrainReport class/sync-field docstrings assigned pending5.3 explicitly; no duplicate queue item. Narrative mutation limits remain declared and content reviewed.
 

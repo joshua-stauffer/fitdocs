@@ -2,11 +2,15 @@
 
 ## Architecture
 
-Installable Python CLI with a one-way pipeline:
+Installable Python CLI with one-way pipelines:
 
 ```
 .fit file → ingest (garmin-fit-sdk) → activity model → derived metrics
          → load calculators (pluggable) → markdown + SVG render → data root
+
+wellness inbox file → wellness.intake → wellness-archive/
+                   → wellness.engine → normalized daily series in wellness/
+                   → wellness.read_series → consumers, including wellness_daily
 ```
 
 No server, no background jobs. One database: a derived, disposable analytics
@@ -16,7 +20,12 @@ assets of dashboard pages under `dashboards/`; workout, history and block
 documents never read it. Workout documents and their derived
 values remain re-derivable from archived `.fit` sources and the athlete
 profile; the index itself is a cache, not state, and deleting it costs only
-rebuild time.
+rebuild time. The index's `wellness_daily` rows additionally come from the
+normalized wellness series through the public reader. Wellness recognition,
+archiving, parsing, merging, rebuilding, checking and indexing stay offline and
+add no runtime dependency; the store uses the standard library and existing
+`tomli_w`, with its package dependencies limited to `layout`, `settings` and
+`units`.
 
 ## Core Technologies
 
