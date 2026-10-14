@@ -644,7 +644,7 @@ preflight and keeps every call dashboards placed).
 
 - [ ] 3. Wellness integration: registration, rebuild, intake, inspection
 
-- [ ] 3.1 Register the shipped sources and formats and prove recognition over the real registry
+- [x] 3.1 Register the shipped sources and formats and prove recognition over the real registry
   - Append `intervals.SOURCE`, `garmin.SOURCE` to `SOURCES` and the five
     formats to `FORMATS`; `validate_registry()` passes on the real
     registry; `candidate_suffixes() == {".json"}`;
@@ -1050,3 +1050,5 @@ preflight and keeps every call dashboards placed).
 - 2.6: independently APPROVED round2; full14,234 passed/44 skipped, focused81/wellness681, ruff/mypy535 clean.158 claimed kills + declared retained-memory survivor independently replayed;2 own kills, all161 restorations green. Exists means regular non-symlink archive file; initial or post-parse leaf directories/symlinks are Unreadable and untouched, never AlreadyArchived. Null/non-numeric snapshot values and non-string origins raise WellnessFormatError. Hash-before-classification and interrupt cleanup pinned. Read-size streaming is pinned; requirement3.3 literal retained-memory ceiling regression sensitivity remains declared UNPINNED (source bounded), tracked in queue item 2026-10-14-wellness-archive-retained-memory-guard. Case-insensitive macOS fixtures must not place uppercase SHA variant beside its lowercase twin.
 
 - 2.7: independently APPROVED; full14,254 passed/44 skipped, targeted155, combined836, ruff/mypy535 clean.24 claimed plus2 own mutations killed. FIT and wellness selectors share one walk; folder remains FIT-only; default ignore reachability independently exercised using registered .tmp/.part test suffixes. Inbox Amendment2 records selector support; reporting/drain integration remains4.2. Group2 complete. Inherited uppercase nested-basename helper coverage gap tracked in queue item 2026-10-14-inbox-nested-basename-case-guard.
+
+- 3.1: independently APPROVED; group-2 integration full14,286 passed/44 skipped, targeted79/wellness713, ruff/mypy536 clean.24 claimed plus3 own mutations killed. Registry now ships two sources and five formats; candidate_suffixes is .json and default order garmin-export, intervals-icu. Empty-registry test explicitly patches empty tuples; generic registry behavior unchanged. Future source/format additions re-pin registration literals and default-order expectations append-only.

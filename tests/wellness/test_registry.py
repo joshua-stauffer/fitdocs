@@ -27,7 +27,8 @@ from tests.wellness._helpers import (
 )
 
 
-def test_empty_registry() -> None:
+def test_empty_registry(monkeypatch: pytest.MonkeyPatch) -> None:
+    use_formats(monkeypatch, (), ())
     assert registry.SOURCES == ()
     assert registry.FORMATS == ()
     registry.validate_registry()
