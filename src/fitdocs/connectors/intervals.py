@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import base64
 import gzip
+import hashlib
 import io
 import json
 import re
@@ -51,6 +52,8 @@ from fitdocs.connectors.protocol import (
     Listing,
     RemoteActivity,
     SettingsContext,
+    WellnessDay,
+    WellnessListing,
 )
 from fitdocs.connectors.secrets import Secret
 
@@ -128,6 +131,34 @@ class IntervalsSettings:
 class IntervalsDownloadError(Exception):
     """One activity's download failed; the framework reports it and retries
     it next pull."""
+
+
+WELLNESS_HISTORY_START: Final[date] = date(2010, 1, 1)
+WELLNESS_WINDOW_DAYS: Final[int] = 365
+WELLNESS_FORMAT: Final[str] = "intervals-icu"
+WELLNESS_SUFFIX: Final[str] = ".json"
+WELLNESS_DELIVERY_FORMAT: Final[str] = "fitdocs.intervals-icu-wellness"
+WELLNESS_DELIVERY_VERSION: Final[int] = 1
+WELLNESS_ID_PATTERN: Final[str] = r"^\d{4}-\d{2}-\d{2}$"
+WELLNESS_KEYS_PATTERN: Final[str] = r"^(?:icu_)?([a-z0-9_]+?)_wellness_keys$"
+CONTENT_REVISION_PREFIX: Final[str] = "sha256:"
+WELLNESS_LISTING_FORM_MESSAGE: Final[str] = (
+    "intervals.icu's wellness listing is not in its documented form: {problem}"
+)
+ATHLETE_FORM_MESSAGE: Final[str] = (
+    "intervals.icu's athlete settings are not in their documented form: {problem}"
+)
+WELLNESS_STATUS_MESSAGE: Final[str] = (
+    "intervals.icu answered the {request} with HTTP {status}: {message}"
+)
+WELLNESS_REFUSED_MESSAGE: Final[str] = (
+    "intervals.icu refused the {request} (HTTP 403): {message}. "
+    "intervals.icu may be withholding data it received from Garmin. "
+    "Set wellness = false in this instance's table to stop requesting wellness; "
+    "Garmin's own data export is the route for Garmin wellness "
+    "(see the wellness guide)."
+)
+_WELLNESS_ID_RE = re.compile(WELLNESS_ID_PATTERN)
 
 
 class IntervalsConnector:
@@ -223,6 +254,81 @@ class IntervalsConnector:
                 taken.add(activity.remote_id)
                 activities.append(activity)
         return Listing(activities=tuple(activities))
+
+    def list_wellness(
+        self, session: ConnectorSession, oldest: date | None
+    ) -> WellnessListing:
+        """List dated opaque wellness records over overlapping year windows."""
+        start = oldest or WELLNESS_HISTORY_START
+        end = session.now().astimezone(UTC).date() + timedelta(days=1)
+        start = min(start, end)
+        headers = _auth_headers(session, session.credentials.value("api_key"))
+        days: list[WellnessDay] = []
+        seen: set[date] = set()
+        for window_start, window_end in _wellness_windows(start, end):
+            query = {
+                "oldest": window_start.isoformat(),
+                "newest": window_end.isoformat(),
+            }
+            response = session.http.get(
+                f"{API_BASE}/athlete/{SELF_ATHLETE}/wellness?{urlencode(query)}",
+                secret_headers=headers,
+            )
+            if response.status != 200:
+                _raise_for_wellness_status(
+                    session, response, request="wellness listing"
+                )
+            try:
+                payload = json.loads(response.body.decode("utf-8"))
+            except ValueError:
+                raise ConnectorError(
+                    WELLNESS_LISTING_FORM_MESSAGE.format(
+                        problem="the body is not valid JSON"
+                    )
+                ) from None
+            if not isinstance(payload, list):
+                raise ConnectorError(
+                    WELLNESS_LISTING_FORM_MESSAGE.format(
+                        problem="the body is not a JSON array"
+                    )
+                )
+            for index, record in enumerate(payload):
+                if not isinstance(record, dict):
+                    raise ConnectorError(
+                        WELLNESS_LISTING_FORM_MESSAGE.format(
+                            problem=f"entry {index} is not an object"
+                        )
+                    )
+                remote_id = record.get("id")
+                if not isinstance(remote_id, str) or not _WELLNESS_ID_RE.fullmatch(
+                    remote_id
+                ):
+                    raise ConnectorError(
+                        WELLNESS_LISTING_FORM_MESSAGE.format(
+                            problem=f"entry {index} has no YYYY-MM-DD id"
+                        )
+                    )
+                try:
+                    day = date.fromisoformat(remote_id)
+                except ValueError:
+                    raise ConnectorError(
+                        WELLNESS_LISTING_FORM_MESSAGE.format(
+                            problem=f"entry {index} has invalid calendar date"
+                        )
+                    ) from None
+                if day in seen:
+                    continue
+                seen.add(day)
+                updated = record.get("updated")
+                revision = (
+                    updated
+                    if isinstance(updated, str) and updated
+                    else _content_revision(record)
+                )
+                days.append(WellnessDay(day=day, revision=revision, record=record))
+        return WellnessListing(
+            oldest=start, newest=end, days=tuple(sorted(days, key=lambda d: d.day))
+        )
 
     def fetch_activity(
         self, session: ConnectorSession, activity: RemoteActivity
@@ -446,3 +552,49 @@ def _service_text(session: ConnectorSession, response: HttpResponse) -> str:
 def _service_message(session: ConnectorSession, response: HttpResponse) -> str:
     """:func:`_service_text`, or ``HTTP <status>`` when it is empty."""
     return _service_text(session, response) or f"HTTP {response.status}"
+
+
+def _wellness_windows(start: date, end: date) -> list[tuple[date, date]]:
+    """Widen the first bound and overlap year windows by one day."""
+    starts = [start - timedelta(days=1)]
+    while starts[-1] + timedelta(days=WELLNESS_WINDOW_DAYS) < end:
+        starts.append(starts[-1] + timedelta(days=WELLNESS_WINDOW_DAYS))
+    return [
+        (
+            window_start,
+            starts[index + 1] + timedelta(days=1) if index + 1 < len(starts) else end,
+        )
+        for index, window_start in enumerate(starts)
+    ]
+
+
+def _content_revision(record: dict[str, object]) -> str:
+    canonical = json.dumps(
+        record, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
+    return (
+        CONTENT_REVISION_PREFIX + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    )
+
+
+def _raise_for_wellness_status(
+    session: ConnectorSession, response: HttpResponse, *, request: str
+) -> NoReturn:
+    message = _service_message(session, response)
+    if response.status == 401:
+        failure = auth_failure_from(response, service_message=message)
+        if failure is not None:
+            raise failure
+    if response.status == 403:
+        raise ConnectorError(
+            WELLNESS_REFUSED_MESSAGE.format(request=request, message=message)
+        )
+    if response.status == 429:
+        raise ConnectorError(RATE_LIMITED_MESSAGE)
+    if 500 <= response.status < 600:
+        raise ConnectorError(UNAVAILABLE_MESSAGE.format(status=response.status))
+    raise ConnectorError(
+        WELLNESS_STATUS_MESSAGE.format(
+            request=request, status=response.status, message=message
+        )
+    )
