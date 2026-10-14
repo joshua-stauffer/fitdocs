@@ -293,7 +293,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 10.2, 10.3_
   - _Boundary: HeartRateChannelInputs_
 
-- [ ] 2. The pure core of `fitdocs.hr_benchmarks`
+- [x] 2. The pure core of `fitdocs.hr_benchmarks`
 
 - [x] 2.1 Create the package with its vocabulary, its constants and their records, and the shared test builders
   - Create `fitdocs.hr_benchmarks` with a docstring-only facade and the types
@@ -445,7 +445,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 2.7, 2.8, 4.2, 4.3, 4.4, 4.5, 4.10, 4.11, 5.1, 5.2, 5.3, 5.4, 5.5, 5.8, 6.2, 6.5, 7.1, 9.6_
   - _Boundary: Timeline_
 
-- [ ] 2.7 Detect takeovers, back-reach cover and inconsistencies over any benchmark set
+- [x] 2.7 Detect takeovers, back-reach cover and inconsistencies over any benchmark set
   - Implement design § Inspect: structural takeovers of the two heart-rate
     kinds (with the derived entry set aside, the entry selected on its date
     is hand-recorded, back-reach included), the current ones (derived entry
@@ -824,4 +824,6 @@ pins (`tests/test_public_api.py`), the workouts skill and
 
 - 2.5: Resting evidence uses each source's inclusive 28-day median with at least 14 values, over the bounded daily calendar. Configured formed sources precede formed unlisted sources; test that boundary separately from lexical unknown ordering. Document callback receives the evidence day's year even if the chosen source's latest value is in the prior year. Independent review reproduced 35 claimed/three own faults plus two exemption deletion controls red/restored; controller fresh 630 HR cases passed, statics clean (752/567). Confirmation wording and entry creation remain Timeline 2.6; series reads and retained partitions remain 3.1/3.3.
 
-- 2.6: Timeline uses unchanged selection over hand entries and previously decided derived entries, excludes hand measurement days, and binds confirmed entries to the first evidence day. A multi-hand full-result fixture is needed in addition to entry-point assertions: overwrite/order/association faults otherwise lose takeover pairs silently. Expected superseded hands are independent literals, constructed before the call. Independent second review reproduced all 46 original/12 repair scenarios plus two own faults; controller fresh 671 HR cases passed, statics clean (754/569). Three normative gate deletions are independently behavior preserving (hand/agree run clear and same-force join) and remain openly unpinned, with gates retained. Series retention belongs to 3.1/3.3; cross-kind inspection to 2.7.
+- 2.6: Timeline uses unchanged selection over hand entries and previously decided derived entries, excludes hand measurement days, and binds confirmed entries to the first evidence day. A multi-hand full-result fixture is needed in addition to entry-point assertions: overwrite/order/association faults otherwise lose takeover pairs silently. Expected superseded hands are independent literals, constructed before the call. Independent second review reproduced all 46 original/12 repair scenarios plus two own faults; controller fresh 671 HR cases passed, statics clean (754/569). The hand/agree run-clear deletions remain declared green observations with gates retained. Correction from 2.7: the same-force join is necessary, despite its earlier isolated green result. Future hand entries can switch selection at applies_from before measurement; confirmation must reset even when their numeric values agree. Generated Inspect cases now pin force deletion and value-only comparison. Series retention belongs to 3.1/3.3; cross-kind inspection to 2.7.
+
+- 2.7: Inspect reports complete structural/current takeovers, normalized back-reach covers and entry-sensitive per-discipline inconsistency periods without changing selection. Equal-entry violations can recur after a valid gap under future hand back-reaches; merge only adjacent periods. Include applies_from equal to measurement, absent/MEASURED hand origins and single-breakpoint open periods in the finite inventory. All earlier fixtures preserved. Independent third review reproduced 95 claimed scenarios (two accurately declared green controls), two retained reviewer faults and three fresh faults; controller fresh 735 HR tests passed, statics clean (756/571). Reporting and profile comparison remain 3.3/3.4/3.5. Optional 2.8 was not run; no external corroborators recorded.
