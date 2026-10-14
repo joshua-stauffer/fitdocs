@@ -934,6 +934,11 @@ an orphan). The listing never opens a file.
 **Commit protocol** (both forms write into
 `wellness-archive/<format id>/.incoming-*.tmp` and remove the temp file on any
 outcome but success):
+An existing destination is `Exists` only when it is a regular, non-symlink
+archive entry. A destination occupied by another object produces `Unreadable`
+and is left untouched. Check this before temporary creation and again before
+publishing the validated temporary file.
+
 - `commit_original`: copy the candidate in `CHUNK_BYTES` chunks while hashing;
   hash ≠ expected → `Changed`; parse the temp file with `format.parse`
   (validating every snapshot) → `WellnessFormatError` → `Invalid(reason)`;

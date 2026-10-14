@@ -572,7 +572,7 @@ preflight and keeps every call dashboards placed).
   - _Requirements: 10.2, 10.3, 10.4, 10.5_
   - _Boundary: Settings_
 
-- [ ] 2.6 (P) Archive layout, listing and the write-once commit protocol
+- [x] 2.6 (P) Archive layout, listing and the write-once commit protocol
   - `archive.py` per design § Archive: `ArchiveEntry`, `Orphan`,
     `ArchiveListing`, `entry_ref`, `list_archive`, `commit_original`,
     `commit_extract` (re-hash before classifying, design § Archive),
@@ -1046,3 +1046,5 @@ preflight and keeps every call dashboards placed).
 - 2.4: independently APPROVED round2; full14,121 passed/44 skipped, focused52/wellness568, ruff/mypy531 clean.83 claimed +2 own mutations confirmed after closing metric-filter and no-write fixture gaps. Each lookup predicate needs independent decoys; reader no-write needs bytes AND st_mtime_ns snapshots (write-method interception misses touch). series.py defines Manifest(inputs, default_order=(), metric_orders={}, files=(), entries=(), conflicts=()), ManifestFile(path, sha256, values), ManifestEntry(path, format, rules_version, state), NewerSeries(series_version), encode_manifest/decode_manifest(path,data), encode_year/decode_year(path,data), format_value; engine3.2 consumes these and adds inputs_digest. Downstream tests stage only through published builders_series.write_series; no downstream direct codec imports.
 
 - 2.5: independently APPROVED; full14,153 passed/44 skipped, focused32/wellness600, ruff/mypy533 clean.47 claimed plus2 own mutations confirmed. Settings retain configured partial lists; effective_order resolves live registry defaults. Empty metric override resets to default order rather than global configured precedence. No settings file read; caller supplies parsed mapping. Drain/regen fail-before-write validation remains4.5.
+
+- 2.6: independently APPROVED round2; full14,234 passed/44 skipped, focused81/wellness681, ruff/mypy535 clean.158 claimed kills + declared retained-memory survivor independently replayed;2 own kills, all161 restorations green. Exists means regular non-symlink archive file; initial or post-parse leaf directories/symlinks are Unreadable and untouched, never AlreadyArchived. Null/non-numeric snapshot values and non-string origins raise WellnessFormatError. Hash-before-classification and interrupt cleanup pinned. Read-size streaming is pinned; requirement3.3 literal retained-memory ceiling regression sensitivity remains declared UNPINNED (source bounded), queued separately. Case-insensitive macOS fixtures must not place uppercase SHA variant beside its lowercase twin.
