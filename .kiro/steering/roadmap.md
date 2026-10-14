@@ -3142,18 +3142,18 @@ Rejected:
 All carried out inside the new specs, as in Phases 10 and 11. Amendment
 numbers are the next free number at landing.
 
-- [ ] inbox — non-FIT recognition through the wellness format registry, a
+- [x] inbox — non-FIT recognition through the wellness format registry, a
   reported "unrecognized" channel, and streamed reads for large candidates.
   The folder connector's reuse of `select_candidates` must not silently
   widen. Carried by wellness-store. Dependencies: wellness-store
-- [ ] fit-ingest — the non-activity-FIT guard (`file_id.type` and the
+- [x] fit-ingest — the non-activity-FIT guard (`file_id.type` and the
   absence of a session), if the design places it in ingest. The design does:
   wellness-store carries `FileIdentity.file_type` and `is_activity_file`.
   Dependencies: wellness-store
 - [ ] wiki-contract — owned locations, declared directories and stated
   guarantees, with `CONTRACT_VERSION` main + 1 per lander. Five specs carry
   a part each (settled at spec time, 2026-10-13):
-  - wellness-store: `wellness-archive/` and `wellness/`;
+  - wellness-store: `wellness-archive/` and `wellness/` (complete 2026-10-14);
   - recovery: `recovery/` and `recovery/assets/`;
   - wellness-pull: the `pull` guarantees;
   - hr-derivation: what `derive-benchmarks` reads and writes;
@@ -3163,7 +3163,8 @@ numbers are the next free number at landing.
   workout-wellness
 - [ ] analytics-derived / analytics-index:
   - wellness-store carries the `wellness_daily` corpus producer,
-    `SCHEMA_VERSION` + 1 and the regenerated `docs/analytics.md` block;
+    `SCHEMA_VERSION` + 1 and the regenerated `docs/analytics.md` block
+    (complete 2026-10-14, schema 3);
   - workout-wellness makes the render fingerprint ignore refreshed regions;
   - recovery adds no baselines table.
 
@@ -3195,7 +3196,7 @@ numbers are the next free number at landing.
   Dependencies: hr-derivation
 - [ ] chart-catalog _(found at spec time)_ — Amendment 1, the
   `reference-band` kind. Dependencies: recovery
-- [ ] chart-kit _(found at spec time)_ — the units `ml_per_kg_min` and
+- [x] chart-kit _(found at spec time)_ — the units `ml_per_kg_min` and
   `brpm`, appended to `fitdocs.units`. Dependencies: wellness-store
 
 #### Direct Implementation Candidates
@@ -3250,8 +3251,14 @@ numbers are the next free number at landing.
 
 #### Specs (dependency order)
 
-- [ ] wellness-store — **brief written 2026-10-12; spec written 2026-10-13**
-  (Phase 12 batch, wave 1, `tasks-generated`, all approvals set; 20
+- [x] wellness-store — **implemented 2026-10-14; validation GO**
+  (27/27 mandatory tasks independently approved; all 20 requirements / 125
+  criteria assessed; contract 11, schema 3; full suite 14,733 passed / 44
+  skipped, lint/types/build and installed-wheel smoke passed; optional
+  maintainer-only smoke 6.3* not run; see
+  `.kiro/specs/wellness-store/implementation-validation.md`).
+  **Brief written 2026-10-12; spec written 2026-10-13**
+  (Phase 12 batch, wave 1, initially `tasks-generated`, all approvals set; 20
   requirements / 125 criteria, 6 majors / 27 executable tasks plus the
   optional maintainer-only smoke 6.3*; independent Step 3.5 review, two
   rounds; amended in place for the wave-2 seams: `MetricInfo.label`,
