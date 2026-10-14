@@ -54,6 +54,7 @@ import fitdocs.declaration
 import fitdocs.docio
 import fitdocs.history.documents
 import fitdocs.history.page
+import fitdocs.hr_benchmarks.engine
 import fitdocs.identity.kinds
 import fitdocs.identity.pages
 import fitdocs.layout
@@ -141,6 +142,7 @@ CONVERTED_MODULES: Final[tuple[ModuleType, ...]] = (
     # channel-merge (task 3.1): the one compose module that reads archive
     # refs, binding the archive-ref reader by identity.
     fitdocs.compose.archive,
+    fitdocs.hr_benchmarks.engine,
 )
 
 #: The one converted module allowed to name ``yaml`` at all. The frontmatter
@@ -312,6 +314,12 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
         "source_refs",
     ),
     "fitdocs.compose.archive": ("sha_of_ref",),
+    "fitdocs.hr_benchmarks.engine": (
+        "document_date",
+        "is_workout_document",
+        "sha_of_ref",
+        "source_refs",
+    ),
 }
 
 #: Document vocabulary no converted module may spell for itself: the frontmatter

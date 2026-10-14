@@ -1185,57 +1185,50 @@ def test_this_pass_and_the_load_pass_discover_the_same_document_set(
     assert derive_benchmarks(tmp_path).considered == len(load_docs)
 
 
-def test_this_pass_and_the_load_pass_resolve_the_same_archive(tmp_path: Path) -> None:
-    """One fixture document is resolved by this pass's `_resolve_pass_archive`
-    and by the training-load pass's own `_resolve_archive`, with the two
-    results asserted equal -- for a genuinely resolvable ref and, separately,
-    for a traversal ref where both must refuse (design: PassEngine Risks
-    mitigation).
+@pytest.mark.parametrize(
+    "state",
+    [
+        "present",
+        "last-source",
+        "missing",
+        "empty",
+        "malformed",
+        "traversal",
+        "directory",
+    ],
+)
+def test_this_pass_and_the_load_pass_resolve_the_same_archive(
+    state: str,
+    tmp_path: Path,
+) -> None:
+    from fitdocs.hr_benchmarks.engine import _resolve_workout_archive
+    from fitdocs.performance.engine import _resolve_pass_archive
 
-    The traversal fixture also writes a real, decodable `secrets.fit` one
-    directory above `fit-archive/` (which `_write_archive` above already
-    created for the resolvable ref) so the traversal path is genuinely
-    OS-resolvable to a real file rather than failing to stat regardless of
-    whether the ref is validated -- see
-    `test_traversal_sources_ref_is_refused_by_both_passes_resolvers` for why
-    an absent `fit-archive/` directory would make this assertion pass under a
-    resolver that skips validation entirely.
-    """
     ref = _write_archive(tmp_path, builder.run_fit_bytes())
-    (tmp_path / "secrets.fit").write_bytes(builder.run_fit_bytes())
-    resolvable = _write_workout(
-        tmp_path, "resolvable.md", kind="race", distance=10000, time=2400, sources=[ref]
+    (tmp_path / "secrets.fit").write_bytes(builder.ride_fit_bytes())
+    missing = "fit-archive/ab123c.fit"
+    directory = "fit-archive/abcd.fit"
+    (tmp_path / directory).mkdir()
+    refs = {
+        "present": [ref],
+        "last-source": [missing, ref],
+        "missing": [ref, missing],
+        "empty": [],
+        "malformed": [ref, "not-an-archive"],
+        "traversal": ["fit-archive/../secrets.fit"],
+        "directory": [directory],
+    }[state]
+    page = _write_workout(
+        tmp_path, "resolver.md", kind="race", distance=10000, time=2400, sources=refs
     )
-    traversal = _write_workout(
-        tmp_path,
-        "traversal.md",
-        kind="race",
-        distance=10000,
-        time=2400,
-        sources=["fit-archive/../secrets.fit"],
-    )
-
-    import fitdocs.performance.engine as engine_module
-
-    resolvable_frontmatter = docio.read_frontmatter(resolvable)
-    assert resolvable_frontmatter is not None
-    performance_answer = engine_module._resolve_pass_archive(
-        tmp_path, resolvable_frontmatter
-    )
-    load_answer = load_engine._resolve_archive(
-        tmp_path, resolvable.read_text(encoding="utf-8")
-    )
-    assert performance_answer is not None
-    assert performance_answer == load_answer
-
+    frontmatter = docio.read_frontmatter(page) or {}
+    expected = tmp_path / ref if state in {"present", "last-source"} else None
+    assert _resolve_pass_archive(tmp_path, frontmatter) == expected
     assert (
-        engine_module._resolve_pass_archive(
-            tmp_path, docio.read_frontmatter(traversal) or {}
-        )
-        is None
+        load_engine._resolve_archive(tmp_path, page.read_text(encoding="utf-8"))
+        == expected
     )
-    traversal_text = traversal.read_text(encoding="utf-8")
-    assert load_engine._resolve_archive(tmp_path, traversal_text) is None
+    assert _resolve_workout_archive(tmp_path, frontmatter) == expected
 
 
 def test_report_entries_hold_the_typed_outcome_union_members(tmp_path: Path) -> None:
