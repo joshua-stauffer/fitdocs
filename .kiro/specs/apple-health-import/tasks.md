@@ -135,7 +135,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
 
 - [ ] 1. Foundation: package scaffold, record types, synthetic exports
 
-- [ ] 1.1 Scaffold the Apple Health format package and its record types
+- [x] 1.1 Scaffold the Apple Health format package and its record types
   - Create `fitdocs.wellness.formats.apple` with all seven modules of design §
     File Structure Plan; every module but `records` is docstring-only for
     now.
@@ -563,3 +563,20 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - _Requirements: 1.1, 2.5, 7.4_
 
 ## Implementation Notes
+
+- **1.1:** Independently APPROVED and completion VERIFIED: 99 component tests,
+  mypy, Ruff, formatting and diff checks pass. Seven modules added at ranks
+  21–25 without changing existing ranks or guard logic. Mutation groups cover
+  enum identifiers/aliases, record attributes, dataclass field order/types,
+  defaults and factories, required arguments, frozen instances, verbatim
+  storage/nullable fields, correction counts, device normalization and boundary
+  violations. Reviewer replayed 157 claims (134 distinct groups) plus four own
+  mutations, each assertion-red and exactly restored before 99-green.
+- **1.1 learnings:** Check both dataclass default mechanisms and required
+  constructor arguments; construct omission/frozen fixtures during tests rather
+  than collection. Use distinct stored values and independently nullable fields.
+  Device payloads preserve whitespace/newlines and may be empty; test minimal,
+  full ASCII hex, invalid-address and trailing-junk partitions. DOTALL fixes
+  multiline payload normalization. Use case-safe mutation evidence filenames.
+  Broad Apple dependency allowance and relative sibling import resolution are
+  shared guard follow-ups; actual Apple imports comply with the narrow boundary.
