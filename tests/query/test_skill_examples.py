@@ -27,8 +27,10 @@ from fitdocs.index.schema import (
     TableSpec,
 )
 from fitdocs.index.store import open_index
+from fitdocs.wellness import Metric, SeriesValue
 from tests.query._helpers import copy_indexed_root as copy_indexed_root_helper
 from tests.query.conftest import HomeDirectory
+from tests.wellness.builders_series import write_series
 
 
 @dataclass(frozen=True)
@@ -55,6 +57,38 @@ class _CliPayload(TypedDict):
     row_count: int
 
 
+@pytest.fixture
+def wellness_indexed_root(
+    use_indexed_root: tuple[Path, Path],
+) -> tuple[Path, Path]:
+    root, index_dir = use_indexed_root
+    write_series(
+        root,
+        (
+            SeriesValue(
+                date(2021, 9, 8),
+                Metric.RESTING_HR_BPM,
+                "intervals-icu",
+                "polar",
+                61.25,
+                True,
+            ),
+            SeriesValue(
+                date(2021, 9, 8),
+                Metric.RESTING_HR_BPM,
+                "garmin-export",
+                "garmin",
+                58.5,
+                False,
+            ),
+        ),
+    )
+    response = CliRunner().invoke(app, ["index", "--out", str(root)])
+    if response.exit_code:
+        pytest.fail(response.output)
+    return root, index_dir
+
+
 def test_producer_matcher_requires_whole_case_sensitive_table_names() -> None:
     producers = (_Producer("derived.alpha", ("daily_load",)),)
     assert _producer_table_matches("SELECT * FROM daily_load", producers)
@@ -64,10 +98,10 @@ def test_producer_matcher_requires_whole_case_sensitive_table_names() -> None:
 
 
 def test_every_skill_sql_fence_runs_and_returns_topic_rows(
-    use_indexed_root: tuple[Path, Path],
+    wellness_indexed_root: tuple[Path, Path],
     home_dir: HomeDirectory,
 ) -> None:
-    root, _index_dir = use_indexed_root
+    root, _index_dir = wellness_indexed_root
     fences = _skill_fences()
     expected_headings = {
         "Weekly running volume",
@@ -292,12 +326,12 @@ def test_best_efforts_example_selects_the_highest_record_per_duration() -> None:
 )
 def test_every_non_core_producer_has_a_live_row_selecting_example(
     home_dir: HomeDirectory,
-    use_indexed_root: tuple[Path, Path],
+    wellness_indexed_root: tuple[Path, Path],
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     comment_witness: bool,
 ) -> None:
-    source_root, source_index = use_indexed_root
+    source_root, source_index = wellness_indexed_root
     producer_tables = _producer_tables(registered_tables())
     fences = _skill_fences()
     if comment_witness:

@@ -10,6 +10,7 @@ from fitdocs.index.derived.benchmarks import BENCHMARK_PRODUCER
 from fitdocs.index.derived.blocks import BLOCK_PRODUCER
 from fitdocs.index.derived.load_series import LOAD_SERIES_PRODUCER
 from fitdocs.index.derived.mean_max import MEAN_MAX_PRODUCER
+from fitdocs.index.derived.wellness import WELLNESS_PRODUCER
 from fitdocs.index.registry import (
     COMPUTED_PRODUCERS,
     CORPUS_PRODUCERS,
@@ -26,6 +27,7 @@ def test_derived_producers_are_registered_after_core_in_corpus_order() -> None:
         LOAD_SERIES_PRODUCER,
         BENCHMARK_PRODUCER,
         BLOCK_PRODUCER,
+        WELLNESS_PRODUCER,
     )
 
 
@@ -55,8 +57,12 @@ def test_registered_schema_has_the_exact_core_and_derived_table_order() -> None:
         "planned_workouts",
         "planned_workout_pages",
         "unplanned_pages",
+        "wellness_daily",
     )
-    assert len(registered_tables()) == 24
+
+
+def test_registered_table_count_includes_wellness() -> None:
+    assert len(registered_tables()) == 25
 
 
 def test_derived_descriptions_and_units_are_complete() -> None:
@@ -72,12 +78,14 @@ def test_derived_descriptions_and_units_are_complete() -> None:
         "planned_workouts",
         "planned_workout_pages",
         "unplanned_pages",
+        "wellness_daily",
     }
     producers = (
         MEAN_MAX_PRODUCER,
         LOAD_SERIES_PRODUCER,
         BENCHMARK_PRODUCER,
         BLOCK_PRODUCER,
+        WELLNESS_PRODUCER,
     )
     derived_tables = tuple(table for item in producers for table in item.tables)
     assert {table.name for table in derived_tables} == derived_names
@@ -147,5 +155,5 @@ def test_each_corpus_table_states_its_engine_agreement_and_refresh_boundary() ->
             assert description.count(producer_phrase[producer]) == 1
 
 
-def test_registered_schema_version_advances_to_two() -> None:
-    assert SCHEMA_VERSION == 2
+def test_registered_schema_version_advances_to_three() -> None:
+    assert SCHEMA_VERSION == 3

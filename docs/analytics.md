@@ -483,6 +483,19 @@ One row per ISO week of each methodology's series. Equals fitdocs history --meth
 | form | DOUBLE |  | Form on the daily-average load scale at the week's last day; NULL when suppressed. |
 | suppressed | BOOLEAN |  | TRUE when the week is suppressed for low coverage. |
 
+### `wellness_daily`
+One row per value of the normalized wellness series (wellness/<year>.csv): one wellness day, metric and source. Equals the series files as of the last refresh. Every source's value is kept; exactly one row per day and metric is canonical.
+
+| Column | Type | Unit | Description |
+| --- | --- | --- | --- |
+| day | DATE |  | Wellness day: a local calendar date; nights belong to the wake date. |
+| metric | VARCHAR |  | Metric name; its unit token ends the name when the metric has a unit. |
+| source | VARCHAR |  | Source the value came from (for example garmin-export, intervals-icu). |
+| origin | VARCHAR |  | Platform that measured the value; NULL when the source does not say. |
+| value | DOUBLE |  | The value in the metric's unit; never converted between sources. |
+| unit | VARCHAR |  | Unit token of the metric; NULL for a unitless metric. |
+| canonical | BOOLEAN |  | TRUE for the one value per day and metric chosen by source precedence. |
+
 ### `zone_times`
 one row per channel and zone with computed times.
 

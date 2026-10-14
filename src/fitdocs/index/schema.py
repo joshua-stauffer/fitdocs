@@ -12,7 +12,7 @@ from typing import Final, Protocol
 
 from fitdocs.units import UNITS
 
-SCHEMA_VERSION: Final[int] = 2
+SCHEMA_VERSION: Final[int] = 3
 RESERVED_PREFIX: Final[str] = "index_"
 
 

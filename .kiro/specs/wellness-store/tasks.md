@@ -861,7 +861,7 @@ preflight and keeps every call dashboards placed).
   - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.6_
   - _Boundary: AuditWellness_
 
-- [ ] 4.4 (P) Add the `wellness_daily` table to the analytics index (analytics-index and analytics-derived amendments)
+- [x] 4.4 (P) Add the `wellness_daily` table to the analytics index (analytics-index and analytics-derived amendments)
   - `index/derived/wellness.py` per design § IndexProducer; append to
     `CORPUS_PRODUCERS`; `SCHEMA_VERSION` = main + 1 with the new digest in
     `tests/index/test_schema_version.py`; append `fitdocs.wellness` to the
@@ -870,6 +870,14 @@ preflight and keeps every call dashboards placed).
     + 1); regenerate `docs/analytics.md` with
     `uv run python -m tests.query.test_docs_analytics`; append the producer
     test module to `[tool.mypy].files`.
+  - **Integration clarification (18.3):** explicit `fitdocs index` treats
+    `derived.wellness` producer errors as reported, nonfatal errors; page
+    errors and other producer errors retain their existing failure status.
+    This narrow `cli.py` index-status gate and its regression tests belong
+    here; drain/regen CLI wiring remains 4.5. Preserve the existing executable
+    example invariant by adding a minimal wellness SQL example to the
+    packaged analytics skill and staging synthetic wellness rows locally in
+    `tests/query/test_skill_examples.py`; final documentation remains 5.2.
   - **Tests** (`tests/index/derived/test_wellness_producer.py`): rows equal
     `read_series` values with the unit column from `METRICS` (a unitless
     metric → NULL); fingerprint changes when a year file or the manifest
@@ -1035,6 +1043,8 @@ preflight and keeps every call dashboards placed).
   - _Requirements: 16.1, 16.2, 15.1_
 
 ## Implementation Notes
+
+- 4.4: independently APPROVED; full14,535/44, index/query/wellness2267, ruff/mypy546 clean.68 claimed sole-failure mutations plus one allowed-import control independently replayed, two reviewer mutants killed, all restored GREEN. WellnessProducer reads the public facade, fingerprints ordered relative series paths and bytes, and registers wellness_daily with SCHEMA_VERSION3/digest appended. Explicit index reports derived.wellness errors nonfatally while retaining prior rows; page/other-producer errors and failed outcomes remain failures (18.3 integration clarification). Minimal executable wellness SQL and local example staging preserve the existing every-producer invariant; analytics-index Amendment2/analytics-derived Amendment1 recorded. Final version derivation remains6.2.
 
 - 1.1: independently APPROVED; full suite 12,285 passed/44 skipped; targeted 315, ruff/mypy clean. Required HRV unit/range swap is a no-op (identical rows), and deleting isfinite is redundant with inclusive bounds; both explicitly UNPINNED mutations, equivalent behavior pinned by distinct mutations. Model-only portions of parser/docs/writer requirements defer to their planned tasks. Preserve append-only UNITS and suffix projection (original 19 rows length-ordered, two new rows appended). Use installed pyenv Python 3.11.15 for worktrees: Homebrew framework Python breaks the fake-interpreter sitebuild fixture.
 

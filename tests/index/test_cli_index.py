@@ -727,3 +727,61 @@ def test_index_passes_the_profile_read_from_athlete_toml(
     athlete = captured["athlete"]
     assert isinstance(athlete, AthleteInputs)
     assert athlete == expected
+
+
+@pytest.mark.parametrize(
+    ("outcome", "companion"),
+    [(outcome, None) for outcome in Outcome]
+    + [
+        (Outcome.REFRESHED, kind)
+        for kind in ("page", "producer-first", "producer-last")
+    ],
+)
+def test_wellness_errors_are_nonfatal_only_for_successful_index_outcomes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: Outcome,
+    companion: str | None,
+) -> None:
+    root = tmp_path / "data"
+    root.mkdir()
+    index_base = tmp_path / "index"
+    _set_roots(monkeypatch, root, index_base)
+    location = resolve_index_location(
+        root, {"FITDOCS_INDEX_DIR": str(index_base)}, tmp_path / "home"
+    )
+    wellness = ("derived.wellness", "synthetic wellness problem")
+    other = ("derived.benchmarks", "synthetic profile problem")
+    producer_errors = (
+        (other, wellness)
+        if companion == "producer-first"
+        else (wellness, other)
+        if companion == "producer-last"
+        else (wellness,)
+    )
+    result = RefreshResult(
+        (),
+        (),
+        (),
+        (),
+        (("workouts/synthetic.md", "synthetic page problem"),)
+        if companion == "page"
+        else (),
+        producer_errors,
+        (),
+        (),
+        0,
+    )
+    monkeypatch.setattr(
+        build,
+        "run_index_command",
+        _fixed_report(_fake_report(location, outcome, result=result)),
+    )
+    response = runner.invoke(app, ["index", "--out", str(root)])
+    expected_exit = (
+        0
+        if companion is None
+        and outcome in {Outcome.BUILT, Outcome.REFRESHED, Outcome.UNCHANGED}
+        else 1
+    )
+    assert response.exit_code == expected_exit, response.output

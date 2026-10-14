@@ -343,3 +343,27 @@ Pinned by `tests/query/test_store_facade.py` and `tests/index/test_store.py`
 `tests/dashboards/test_pass.py` (the pass), `tests/connectors/test_network_statements.py`,
 `tests/index/test_contract_docs.py` and `tests/dashboards/test_published.py`
 (the published statements).
+
+
+## Amendment 2 (2026-10-14): the wellness series table, landed by wellness-store
+
+Wellness-store task 4.4 appends the corpus producer `derived.wellness` and
+its `wellness_daily` table. Each normalized series value supplies the day,
+metric, source, origin, value and canonical flag; the metric vocabulary
+supplies its unit token, or NULL for a unitless metric. The producer reads
+only the public `fitdocs.wellness` series reader and fingerprints the ordered
+relative filenames and byte digests returned by `series_files`, including
+the manifest. A series read error retains previous rows and is reported by
+the existing refresh error boundary (wellness-store Requirement 18.3).
+
+This is the schema change under Requirement 13.6: `SCHEMA_VERSION` advances
+from 2 to 3, with its digest appended to the historical version map and the
+published reference regenerated in `docs/analytics.md`. Workout, history
+and block documents continue never to read the index; the dashboards
+exception in Amendment 1 is unchanged.
+
+The explicit `fitdocs index` exit gate treats errors attributed to
+`derived.wellness` as reported, nonfatal errors for successful outcomes
+(BUILT, REFRESHED or UNCHANGED). Page errors, errors from every other
+producer, and unsuccessful outcomes retain their existing failure status.
+The gate uses producer identity, without inspecting exception messages.

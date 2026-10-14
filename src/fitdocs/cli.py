@@ -512,7 +512,8 @@ def index_command(
         Outcome.UNCHANGED,
     }
     has_errors = result is not None and bool(
-        result.page_errors or result.producer_errors
+        result.page_errors
+        or any(name != "derived.wellness" for name, _error in result.producer_errors)
     )
     if successful_outcome and not has_errors:
         raise typer.Exit(code=_EXIT_SUCCESS)

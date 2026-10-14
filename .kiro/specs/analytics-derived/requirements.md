@@ -220,3 +220,22 @@ than silently missing tables.
 6. The `fit-ingest` amendment record shall name the best-effort computation and its recorded choices.
 7. fitdocs shall add no write location, network request, clock read or runtime dependency, and shall leave the document-format version, the managed frontmatter keys and the ownership contract version unchanged.
 8. If building the index over a data root that carries loads, benchmarks and plan sources writes anywhere outside the index directory, or leaves any derived table empty, then the fitdocs test suite shall fail.
+
+
+## Amendment 1 (2026-10-14): wellness corpus projection, landed by wellness-store
+
+Wellness-store task 4.4 appends `derived.wellness` to `CORPUS_PRODUCERS` and
+adds the long-format `wellness_daily` table. Its columns are day, metric,
+source, origin, value, unit and canonical. This extends Requirement 9.2 for
+this table: the metric names carry units where applicable, and the common
+`value` column uses the unit token in the `unit` column. Unitless metrics
+have NULL units. Adding a metric needs no table or column change.
+
+`index.derived` may import the public `fitdocs.wellness` facade to project
+`read_series(data_root).values` and fingerprint `series_files(data_root)`;
+it does not parse wellness archives or repeat the series merge. The table
+states its agreement with the series files as of the last refresh. A
+`SeriesReadError` reaches the existing refresh boundary, retaining prior
+rows and reporting the producer error (wellness-store Requirement 18.3).
+The schema version advances from 2 to 3 under Requirement 10.1; the digest
+is appended and the published analytics reference lists the new table.

@@ -648,7 +648,7 @@ def test_schema_rebuild_failure_keeps_only_obtainable_partial_state(
         state=IndexState(
             database=database,
             recorded_schema_version=None,
-            reads_schema_version=2,
+            reads_schema_version=3,
             fitdocs_version=None,
             drift=None,
             left_out=(),
@@ -690,7 +690,7 @@ def test_real_schema_version_99_has_independent_literal_mismatch_reason(
     outcome = command.run_query(
         _request(root, sql=None, schema=True), _env(home, index_dir.parent)
     )
-    expected_reason = "index schema version 99 differs from readable schema version 2"
+    expected_reason = "index schema version 99 differs from readable schema version 3"
     assert outcome == command.QueryOutcome(
         command.OutcomeKind.NEEDS_REBUILD,
         resolve_index_location(
@@ -700,7 +700,7 @@ def test_real_schema_version_99_has_independent_literal_mismatch_reason(
         state=IndexState(
             database=database,
             recorded_schema_version=99,
-            reads_schema_version=2,
+            reads_schema_version=3,
             fitdocs_version="writer-version-99",
             drift=PageDrift(2, 2, 0, 0, 0),
             left_out=(),
@@ -2146,6 +2146,7 @@ def test_schema_uses_live_catalog_and_reports_complete_typed_state(
         "strength_sets",
         "unplanned_pages",
         "weekly_load",
+        "wellness_daily",
         "zone_times",
         "index_meta",
         "index_pages",
@@ -2154,7 +2155,7 @@ def test_schema_uses_live_catalog_and_reports_complete_typed_state(
     assert direct_counts["pages"] == 2
     assert direct_counts["index_meta"] == 1
     assert direct_counts["index_pages"] == 2
-    assert direct_counts["index_producers"] == 6
+    assert direct_counts["index_producers"] == 7
     assert (
         pages_comment == "one row per workout page; the page's frontmatter as recorded."
     )
@@ -2192,8 +2193,8 @@ def test_schema_uses_live_catalog_and_reports_complete_typed_state(
         outcome.schema.counts,
     ) == (
         index_dir / "index.duckdb",
-        2,
-        2,
+        3,
+        3,
         "fixture-writer-9.9",
         direct_names,
         direct_counts,
@@ -2250,7 +2251,7 @@ def test_schema_uses_live_catalog_and_reports_complete_typed_state(
     ]
     assert _filesystem_inventory(root, index_dir) == inventory_before
     assert outcome.result is None and outcome.drift is None and outcome.state is None
-    assert oracle_bookkeeping.meta.schema_version == 2
+    assert oracle_bookkeeping.meta.schema_version == 3
 
 
 def _page_copy_with_key(root: Path, source: Path, target_name: str, key: str) -> Path:
@@ -2403,7 +2404,7 @@ def test_schema_pins_all_noncomputed_state_counts_and_duplicate_base(
         _request(root, sql=None, schema=True), _env(home, index_dir.parent)
     )
     assert rejected.state is not None
-    mismatch_reason = "index schema version 99 differs from readable schema version 2"
+    mismatch_reason = "index schema version 99 differs from readable schema version 3"
     assert (
         rejected.kind,
         rejected.message,
@@ -2432,7 +2433,7 @@ def test_schema_pins_all_noncomputed_state_counts_and_duplicate_base(
         None,
         database,
         99,
-        2,
+        3,
         (
             (
                 source.relative_to(root).as_posix(),
@@ -2588,7 +2589,7 @@ def test_session_needs_rebuild_on_a_wrong_schema_version_and_closes(
     env = _env(home, index_dir.parent)
     session = command.open_session(root, env)
     assert close_events == ["close"]
-    expected = "index schema version 99 differs from readable schema version 2"
+    expected = "index schema version 99 differs from readable schema version 3"
     assert _unavailable_fields(session) == (
         command.OutcomeKind.NEEDS_REBUILD,
         expected,

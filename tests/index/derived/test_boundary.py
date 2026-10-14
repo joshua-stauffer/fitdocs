@@ -121,6 +121,7 @@ def _allowed_module(module: str, *, source_kind: str) -> bool:
         "fitdocs.metrics.mean_max",
         "fitdocs.plans",
         "fitdocs.settings",
+        "fitdocs.wellness",
     }
     if module in allowed_exact:
         return True
@@ -152,6 +153,7 @@ def _allowed_from_base(module: str, *, source_kind: str) -> bool:
         "fitdocs.metrics.mean_max",
         "fitdocs.plans",
         "fitdocs.settings",
+        "fitdocs.wellness",
     } or module.startswith("fitdocs.index.derived.")
 
 
@@ -193,6 +195,7 @@ def _allowed_from_name(module: str, name: str, *, source_kind: str) -> bool:
         "fitdocs.metrics.mean_max",
         "fitdocs.plans",
         "fitdocs.settings",
+        "fitdocs.wellness",
     }
 
 
@@ -370,7 +373,7 @@ def test_derived_modules_obey_import_clock_and_write_boundaries() -> None:
     assert files, "the walk is looking at the wrong directory"
     derived_files = sorted(_DERIVED_ROOT.rglob("*.py"))
     assert derived_files, "the derived source set is empty"
-    assert len(derived_files) == 6
+    assert len(derived_files) == 7
     assert {path.name for path in derived_files} == {
         "__init__.py",
         "benchmarks.py",
@@ -378,6 +381,7 @@ def test_derived_modules_obey_import_clock_and_write_boundaries() -> None:
         "inputs.py",
         "load_series.py",
         "mean_max.py",
+        "wellness.py",
     }
     assert len(files) == len(derived_files) + 2
     assert set(files) == set(derived_files) | set(_METRICS_FILES)

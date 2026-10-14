@@ -242,3 +242,16 @@ for the boundary around generated data.
 - [Querying the analytics index](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/analytics.md) — command details, schema, and opening the index from another DuckDB client.
 - [Ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md) — the published boundary for generated data.
 - To chart an answer on a wiki page, use the `fitdocs-dashboards` skill (`fitdocs skill fitdocs-dashboards`); its charts run the same read-only SQL.
+
+
+### Daily wellness
+
+Read source-attributed daily values and their units. Use `canonical` to
+select the value chosen by source precedence for each day and metric.
+
+```sql
+SELECT day, metric, source, origin, value, unit
+FROM wellness_daily
+WHERE canonical IS TRUE
+ORDER BY day, metric;
+```

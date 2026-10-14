@@ -11,6 +11,7 @@ from fitdocs.index.derived.benchmarks import BENCHMARK_PRODUCER
 from fitdocs.index.derived.blocks import BLOCK_PRODUCER
 from fitdocs.index.derived.load_series import LOAD_SERIES_PRODUCER
 from fitdocs.index.derived.mean_max import MEAN_MAX_PRODUCER
+from fitdocs.index.derived.wellness import WELLNESS_PRODUCER
 from fitdocs.index.producer import ComputedProducer, CorpusProducer, DocumentProducer
 from fitdocs.index.schema import ResolvedTable, resolve_tables
 
@@ -23,6 +24,7 @@ CORPUS_PRODUCERS: Final[tuple[CorpusProducer, ...]] = (
     LOAD_SERIES_PRODUCER,
     BENCHMARK_PRODUCER,
     BLOCK_PRODUCER,
+    WELLNESS_PRODUCER,
 )
 
 

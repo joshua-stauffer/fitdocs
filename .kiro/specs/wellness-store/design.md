@@ -1377,6 +1377,9 @@ The declaration findings for the two new directories come from the existing
 - `rows(corpus)` = one row per `read_series(data_root).values` element with
   `unit = METRICS[metric].unit`. A `SeriesReadError` propagates; the refresh
   loop records it and keeps the previous rows (18.3).
+- The explicit index command reports `derived.wellness` producer errors
+  without making them fatal. Page errors and other producer errors retain
+  their existing exit status; failed or staged index outcomes remain failures.
 - Appended to `CORPUS_PRODUCERS`; `SCHEMA_VERSION` = main + 1;
   `tests/index/test_schema_version.py` gains the new digest;
   `docs/analytics.md` block regenerated with

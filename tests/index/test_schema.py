@@ -95,7 +95,7 @@ def resolve_single_table(scope: str, spec: TableSpec) -> tuple[ResolvedTable, ..
 
 
 def test_schema_public_types_and_constants_match_the_contract() -> None:
-    assert SCHEMA_VERSION == 2
+    assert SCHEMA_VERSION == 3
     assert all(isinstance(member, str) for member in ColumnType)
     assert all(isinstance(member, str) for member in TableScope)
     assert [member.value for member in ColumnType] == [
@@ -1487,6 +1487,7 @@ def test_registered_tables_pin_schema_and_model_fields() -> None:
         resolution_error = error
     assert resolution_error is None, "registered table descriptions must validate"
     by_name = {item.name: item for item in resolved}
+    assert len(by_name) == 25
     assert tuple(item.name for item in resolved) == (
         "index_meta",
         "index_pages",
@@ -1512,8 +1513,8 @@ def test_registered_tables_pin_schema_and_model_fields() -> None:
         "planned_workouts",
         "planned_workout_pages",
         "unplanned_pages",
+        "wellness_daily",
     )
-    assert len(by_name) == 24
     assert tuple(item.scope for item in resolved[:3]) == (
         TableScope.BOOKKEEPING,
         TableScope.BOOKKEEPING,
@@ -1597,6 +1598,7 @@ def test_registry_forwards_all_producer_tuples_and_bookkeeping_at_call_time(
     from fitdocs.index.derived.blocks import BLOCK_PRODUCER
     from fitdocs.index.derived.load_series import LOAD_SERIES_PRODUCER
     from fitdocs.index.derived.mean_max import MEAN_MAX_PRODUCER
+    from fitdocs.index.derived.wellness import WELLNESS_PRODUCER
 
     assert registry.DOCUMENT_PRODUCERS == (CORE_DOCUMENTS,)
     assert registry.COMPUTED_PRODUCERS == (CORE_COMPUTED, MEAN_MAX_PRODUCER)
@@ -1604,6 +1606,7 @@ def test_registry_forwards_all_producer_tuples_and_bookkeeping_at_call_time(
         LOAD_SERIES_PRODUCER,
         BENCHMARK_PRODUCER,
         BLOCK_PRODUCER,
+        WELLNESS_PRODUCER,
     )
     assert tuple(item.name for item in registry.registered_tables()) == (
         "index_meta",
@@ -1630,6 +1633,7 @@ def test_registry_forwards_all_producer_tuples_and_bookkeeping_at_call_time(
         "planned_workouts",
         "planned_workout_pages",
         "unplanned_pages",
+        "wellness_daily",
     )
 
     document_first = producer(
