@@ -286,3 +286,9 @@ document output remain reviewable as separate decisions.
 6. The fitdocs load-channel layer shall not implement a strength-training load, a modelled running-power estimate, or a build-time power-calibrated heart-rate regression.
 7. The fitdocs load-channel layer shall not register a calculator, consult the calculator registry, or participate in calculator arbitration.
 8. The fitdocs load-channel layer shall not change the shipped derived-metric definitions it consumes, so that no already-rendered metric value changes as a result of this feature.
+
+## Amendment 1 (2026-10-14): Dated heart-rate inputs, landed by hr-derivation
+
+Adds criterion 5.12 to Requirement 5; the existing criteria remain unchanged.
+
+12. When the fitdocs heart-rate load channel computes a load, its reported inputs shall include `resting_hr_measured_on` and `max_hr_measured_on`, in that order after `lthr_measured_on`, as ISO dates from the supplied resting and maximum heart-rate benchmark entries alongside the values it used.

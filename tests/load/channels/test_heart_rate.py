@@ -13,6 +13,7 @@ import inspect
 import math
 from dataclasses import dataclass, replace
 from datetime import date
+from typing import cast
 
 import pytest
 
@@ -1033,11 +1034,16 @@ def test_load_unchanged_when_shipped_coefficient_is_rescaled(
 
 
 # ---------------------------------------------------------------------------
-# inputs_used -- impulse, reference, all three HR inputs, anchor's date
+# inputs_used -- impulse, reference, all three HR inputs and their dates
 # ---------------------------------------------------------------------------
 
 
-def test_inputs_used_carries_impulse_reference_and_all_three_hr_inputs() -> None:
+@pytest.mark.parametrize(
+    ("input_name", "expected_hr"), [("impulse", 150), ("reference", 165)]
+)
+def test_inputs_used_carries_impulse_reference_and_all_three_hr_inputs(
+    input_name: str, expected_hr: int
+) -> None:
     measured = date(2026, 3, 14)
     result = heart_rate.compute(
         _dense_activity(150),
@@ -1049,12 +1055,45 @@ def test_inputs_used_carries_impulse_reference_and_all_three_hr_inputs() -> None
     )
     assert isinstance(result, ChannelLoad)
     inputs = dict(result.inputs_used)
-    assert "impulse" in inputs
-    assert "reference" in inputs
+    # Constant-HR closed form: 60 minutes * reserve fraction * weighting.
+    weighting = metrics_sources.weighting_for(None)
+    reserve_fraction = (expected_hr - 48) / (190 - 48)
+    expected = (
+        60
+        * reserve_fraction
+        * weighting.coefficient.value
+        * math.exp(weighting.exponent.value * reserve_fraction)
+    )
+    assert inputs[input_name] == f"{expected:g}"
     assert inputs["lthr_bpm"] == "165"
     assert inputs["resting_hr_bpm"] == "48"
     assert inputs["max_hr_bpm"] == "190"
     assert inputs["lthr_measured_on"] == measured.isoformat()
+
+
+@pytest.mark.parametrize(
+    ("offset", "input_name", "expected_date"),
+    [
+        (0, "lthr_measured_on", "2026-03-14"),
+        (1, "resting_hr_measured_on", "2026-02-08"),
+        (2, "max_hr_measured_on", "2026-01-23"),
+    ],
+)
+def test_inputs_used_reports_each_benchmarks_date_after_the_hr_values(
+    offset: int, input_name: str, expected_date: str
+) -> None:
+    result = cast(
+        ChannelLoad,
+        heart_rate.compute(
+            _dense_activity(150),
+            _METRICS,
+            lthr=_lthr(165, measured_on=date(2026, 3, 14)),
+            resting_hr=_resting_hr(48, measured_on=date(2026, 2, 8)),
+            max_hr=_max_hr(190, measured_on=date(2026, 1, 23)),
+            settings=_SETTINGS,
+        ),
+    )
+    assert result.inputs_used[5 + offset] == (input_name, expected_date)
 
 
 def test_benchmark_values_are_truncated_not_rounded_and_inputs_used_matches() -> None:

@@ -1,7 +1,7 @@
 ---
 id: 2026-08-25-heart-rate-inputs-used-values-unpinned
 title: The heart-rate channel's inputs_used impulse and reference values are unpinned — swapping them leaves the whole suite green
-status: open
+status: done
 importance: medium
 importance_why: Req 1.3 requires inputs_used to name the values that produced the result; the two values it exists to report can be swapped with 2684 tests still passing, and a docstring beside them claims the opposite.
 effort: S
@@ -136,3 +136,26 @@ item and says it closes it when the task lands.
   `status: done` in the same change, after re-running the swap mutation from
   the Evidence section. Until then it stays open; `blocked_by` is left
   empty so it can still be picked up directly.
+
+## Completion 2026-10-14 (hr-derivation task 1.3)
+
+`test_inputs_used_carries_impulse_reference_and_all_three_hr_inputs` now
+asserts each reported impulse/reference value against the constant-HR
+closed form, independently of `heart_rate.compute` and the impulse model's
+methods. The activity is held at 150 bpm and the reference at 165 bpm, with
+resting 48 and maximum 190, so their expected values differ.
+
+The original full swap mutation from Evidence was applied again through
+`UV_CACHE_DIR=/private/tmp/fitdocs-hr-uv-cache UV_OFFLINE=true uv run --no-sync
+pytest tests/load/channels/test_heart_rate.py -k
+test_inputs_used_carries_impulse_reference_and_all_three_hr_inputs -q`:
+both parameterized value assertions failed (2 failed, 44 deselected).
+Restoring the copied production source and repeating that command passed
+(2 passed, 44 deselected). Logs:
+`/private/tmp/hr-task1.3-swap-impulse-reference-red.log` and
+`/private/tmp/hr-task1.3-swap-impulse-reference-restored-green.log`.
+
+The old `# Req 1.3` prose beside the values was removed. With the temporary
+feature flag removed, `pytest tests/load/channels -q` passed all 371 tests.
+The dated resting/maximum input rows and their distinct supplied dates are
+covered by `test_inputs_used_reports_each_benchmarks_date_after_the_hr_values`.

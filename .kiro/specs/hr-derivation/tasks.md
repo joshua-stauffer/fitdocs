@@ -181,7 +181,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
 
 ---
 
-- [ ] 1. Shared seams: provenance, the partitioned write and the channel's inputs
+- [x] 1. Shared seams: provenance, the partitioned write and the channel's inputs
 
 - [x] 1.1 Accept a series reference in a benchmark's provenance record, and pin that selection is unchanged (athlete-benchmarks amendment, provenance only)
   - Add the optional series reference to the provenance value (trailing,
@@ -271,7 +271,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
     tests/test_cli_derive.py` green.
   - _Requirements: 1.8, 4.6, 5.1, 8.1, 8.3, 8.4, 8.5, 8.6_
 
-- [ ] 1.3 (P) Report the dated resting and maximum entries the heart-rate channel used (load-channels amendment)
+- [x] 1.3 (P) Report the dated resting and maximum entries the heart-rate channel used (load-channels amendment)
   - Append the measurement dates of the resting and maximum heart-rate
     entries to the channel's reported inputs, after the threshold's date;
     nothing else in the channel changes.
@@ -811,3 +811,5 @@ pins (`tests/test_public_api.py`), the workouts skill and
 - 1.1: Optional provenance `series` is trailing in `BenchmarkSource` but emitted after `document`; construct sources with keyword arguments. Independent review approved after closing the distinct truthy wrong-type setter guard (numeric and bool fixtures keep the empty-string boundary). All 28 claimed mutations, two new reviewer mutations and 32 historical prose checks red/restored green; full suite 14,798 passed / 44 skipped; controller fresh 65 provenance cases passed. Selection and athlete schema unchanged.
 
 - 1.2: Required `kinds` partitions the derived writer; tagged-effort uses `TAGGED_EFFORT_KINDS` and exposes trailing `accepted`, with optional pre-read `load_settings`. Other-partition retention fixtures need a hand entry in the same raw group so passthrough cannot mask missing derived retention. The cleanup filter alone is behavior preserving because retained groups stay covered; tests pin actual removal and raw empty-group preservation, not helper counts. Independent review: 51 faulty mutations red, one declared redundant mutation green, three own faults red/restored; full 14,818 passed / 44 skipped; controller 1,798 passed. Existing collision-test mechanism prose follow-up queued as 2026-10-14-collision-test-overwrite-explanation.
+
+- 1.3: Channel provenance appends resting and maximum measurement dates after the threshold date; calculation is unchanged. Independent scalar expectations and three distinct dates pin all values and ordering. Load-channels Amendment 1 uses the next free criterion 5.12 (5.10/5.11 already exist). Eight claimed and two reviewer mutations red/restored; relevant canonical regression 1,605 passed; controller fresh six provenance cases passed. The missing-value queue item is closed; pre-existing duration-test attribution follow-up queued as 2026-10-14-heart-rate-duration-test-prose-attribution.

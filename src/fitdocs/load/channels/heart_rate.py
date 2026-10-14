@@ -261,24 +261,12 @@ def compute(
     inputs_used = (
         ("impulse", f"{activity_impulse:g}"),
         ("reference", f"{reference:g}"),
-        # Req 1.3: the values reported here are the ones the computation
-        # actually used -- the truncated integers handed to ``model``
-        # (``lthr_int``/``resting_int``/``max_int``), not the raw
-        # ``Benchmark.value`` fields. In practice ``benchmarks.py``'s own
-        # parser already forecloses a fractional value ever reaching this
-        # module: all three of ``lthr``/``resting_hr``/``max_hr`` are
-        # ``INTEGRAL_KINDS`` and ``_validate_value`` REJECTS a fractional
-        # entry outright (stated policy: "rejected rather than rounded or
-        # truncated") rather than truncating it on the way in. ``Benchmark``
-        # itself is still an unvalidated, directly-constructible frozen
-        # dataclass, so this module's own tests pin the unit-level
-        # int()-not-round() behavior for a fractional value regardless --
-        # documenting what this function does with an input the domain
-        # forecloses, not a real ingestion-path hazard.
         ("lthr_bpm", str(lthr_int)),
         ("resting_hr_bpm", str(resting_int)),
         ("max_hr_bpm", str(max_int)),
         ("lthr_measured_on", lthr.measured_on.isoformat()),
+        ("resting_hr_measured_on", resting_hr.measured_on.isoformat()),
+        ("max_hr_measured_on", max_hr.measured_on.isoformat()),
     )
 
     return ChannelLoad(
