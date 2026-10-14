@@ -728,3 +728,19 @@ def test_wellness_declarations_scope_immutability_and_overwrites() -> None:
             in text
         )
         assert "Owner: `fitdocs`." in text
+
+
+def test_check_reports_a_missing_recovery_declaration(tmp_path: Path) -> None:
+    from typer.testing import CliRunner
+
+    from fitdocs.cli import app
+
+    ensure_declarations(tmp_path)
+    target = tmp_path / "recovery/AGENTS.md"
+    assert target.is_file()
+    target.unlink()
+    assert not target.exists()
+    result = CliRunner().invoke(app, ["check", "--out", str(tmp_path)])
+    assert result.exit_code == 1
+    assert "recovery/AGENTS.md" in result.output
+    assert "no AGENTS.md ownership declaration is present" in result.output

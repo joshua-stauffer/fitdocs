@@ -352,6 +352,8 @@ that I can rely on the boundary instead of inferring it from behavior.
 
 18. _(added by Amendment 6)_ The ownership contract shall name `wellness-archive/` and `wellness/` as fitdocs-owned locations, state that handled wellness files are kept as original bytes or their format's canonical extract, grouped by format and named by the original SHA-256 and never modified, and that the daily series and its manifest are rebuilt from the archive and `[wellness]` settings, overwriting hand edits. Its version shall advance by one and record what changed.
 
+19. _(added by Amendment 8)_ The ownership contract shall name `recovery/` and `recovery/assets/` as fitdocs-owned, holding one recovery page and its charts, shall describe what recovery writes and never writes and its foreign-file preservation, and shall advance its version by one with a statement of what changed. Recovery owns the page type, format and write path.
+
 ### Requirement 3: In-Tree Ownership Declaration
 **Objective:** As an LLM agent maintaining a markdown wiki, I want the ownership
 boundary declared inside the directories fitdocs owns, so that I read it where I
@@ -372,6 +374,8 @@ work and do not "improve" generated files.
 11. _(added by Amendment 5)_ The ownership declaration placed in the dashboards location shall state that the pages belong to the athlete and that fitdocs writes only the chart regions inside them and the files in `dashboards/assets/`, that a chart region is rewritten in full between its markers and must not be edited, and that snapshot files are never modified or deleted. The location is the inverse of the other declared directories: the elements of 3.2 that state the directory's contents are tool-owned, and re-derivable from other files, do not apply to it, as 3.2a carves them out for the archive. The declaration shall not restate the directive grammar, which the published contract and the dashboards documentation locate.
 
 12. _(added by Amendment 6)_ Both wellness locations shall receive generated ownership declarations naming fitdocs as owner, stating the archive's immutability and the series' rebuild from archive and settings, and stating that series edits are overwritten. Missing, stale or foreign declarations shall be reported as for the existing declared locations.
+
+13. _(added by Amendment 8)_ The ownership declaration in `recovery/` shall name fitdocs as owner, state that the directory holds one generated recovery page and its chart images, rewritten when what they show changes, with no user-owned regions, and that the page is re-derivable from `wellness/` and the workout documents alone. Missing, stale and foreign declarations shall be reported as for the existing declared locations.
 
 ### Requirement 4: Generated-Document Provenance
 **Objective:** As a human or agent opening a workout document, I want the file
@@ -445,3 +449,20 @@ anything.
 6. The inspection shall name, for each finding, the affected path and the action that resolves it.
 7. When the inspection finds nothing to report, the fitdocs CLI shall exit with the success status; when it reports findings, it shall exit with the existing per-document failure status; when the data root cannot be resolved, it shall exit with the existing configuration-error status.
 8. The inspection shall complete without network access and without reading any `.fit` source file.
+
+
+## Amendment 8 (2026-10-15): the recovery location, landed by recovery
+
+Recovery task 1.6 adds `recovery/` and `recovery/assets/` to the owned paths
+and appends `recovery/` to the declared directories, retaining every prior
+entry. `recovery/recovery.md` is one generated page with relative chart links;
+its type and schema remain recovery's own. The published contract describes
+what recovery writes and never writes, keeps foreign files untouched, and
+advances `CONTRACT_VERSION` from `"12"` to `"13"` with its history paragraph.
+The recovery declaration says that the page and chart images carry no
+user-owned regions, are rewritten when what they show changes, and are
+re-derivable from `wellness/` and the workout documents alone. Missing,
+stale and foreign declarations are reported as for existing locations.
+These additions fulfill recovery 12.1, 12.3, 13.1, 13.2, 13.3 and 18.2;
+the write path and recovery page schema remain recovery's own. Existing
+criteria and amendment metadata are preserved.

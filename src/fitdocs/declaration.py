@@ -20,7 +20,7 @@ Two things happen here and nowhere else:
   can make lives in a module-level fragment table, each written exactly once
   and reused across directories -- `declaration_text` only selects and orders
   fragments, so a claim can never be fixed in one directory's text while an
-  unpinned copy stands in another's. The five emitted texts are pinned as
+  unpinned copy stands in another's. The eight emitted texts are pinned as
   committed byte-goldens under ``tests/declaration_golden/`` rather than
   substring assertions.
 - **Placement** (:func:`ensure_declarations`) writes only when a directory's
@@ -59,6 +59,7 @@ from fitdocs.layout import (
     DASHBOARDS_DIR,
     DECLARED_DIRS,
     HISTORY_DIR,
+    RECOVERY_DIR,
     WELLNESS_ARCHIVE_DIR,
     WELLNESS_DIR,
     WORKOUTS_DIR,
@@ -312,6 +313,21 @@ _HISTORY_RERUNNABLE: Final[str] = (
 # depends on is itself only re-derivable from the page, so regenerating it
 # loses no information the workout documents did not already carry.
 
+_RECOVERY_CONTENT: Final[str] = (
+    "This directory holds one generated recovery page and its chart images, "
+    "rewritten by `fitdocs recovery` whenever what they show changes. None "
+    "carries a user-owned region of any kind."
+)
+# CLAIM ANCHOR: `recovery/engine.py` writes changed outputs without regions;
+# `layout.recovery_*` names the single page and its chart-image paths.
+
+_RECOVERY_RERUNNABLE: Final[str] = (
+    "The page is re-derivable from `wellness/` and the workout documents alone: "
+    "deleting it costs only a re-run of `fitdocs recovery`."
+)
+# CLAIM ANCHOR: `recovery/engine.py` reads wellness and workout documents;
+# `layout.recovery_*` places their derived page and charts under `recovery/`.
+
 _BLOCKS_CONTENT: Final[str] = (
     "This directory holds generated training-block pages and, in a "
     "subdirectory named after its block, the planned-workout pages that "
@@ -462,9 +478,10 @@ def declaration_text(directory: str) -> str:
     is deferred to the published ownership contract (task 7.1), reached by
     ``CONTRACT_DOCUMENTATION_URL``.
 
-    Dispatches explicitly on ``directory`` over exactly the seven members of
+    Dispatches explicitly on ``directory`` over exactly the eight members of
     `layout.DECLARED_DIRS` -- ``workouts/``, ``history/``, ``fit-archive/``,
-    ``blocks/``, ``dashboards/``, ``wellness/``, ``wellness-archive/`` -- with
+    ``blocks/``, ``dashboards/``, ``wellness/``, ``wellness-archive/``,
+    ``recovery/`` -- with
     **no fall-through branch**: a
     ``directory`` this function does not recognize raises :class:`ValueError`
     rather than silently inheriting another directory's prose.
@@ -541,6 +558,13 @@ def declaration_text(directory: str) -> str:
             f"{_WRITTEN_AND_OWNED.format(directory=directory)}\n\n"
             f"{_HISTORY_CONTENT}\n\n"
             f"{_HISTORY_RERUNNABLE}\n\n"
+        )
+    elif directory == RECOVERY_DIR + "/":
+        heading = "Generated Recovery Page"
+        body = (
+            f"{_WRITTEN_AND_OWNED.format(directory=directory)}\n\n"
+            f"{_RECOVERY_CONTENT}\n\n"
+            f"{_RECOVERY_RERUNNABLE}\n\n"
         )
     elif directory == ARCHIVE_DIR + "/":
         heading = "Source Archive"

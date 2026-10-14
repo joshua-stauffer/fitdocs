@@ -435,6 +435,14 @@ instance to pull wellness.
 Raised from ``12`` to ``13`` by hr-derivation because ``derive-benchmarks``
 now also reads every workout's listed files and the normalized wellness
 series and may write ``athlete.toml`` at most once per stage.
+
+Raised from ``12`` to ``13`` by recovery because the data root gains an owned location.
+``recovery/`` holds the recovery page ``recovery/recovery.md`` and its
+charts under ``recovery/assets/``, written by ``fitdocs recovery`` from the
+wellness series and the workout documents and rewritten only when their
+content changes; a chart the page no longer shows is removed. Run
+``fitdocs sync``, ``fitdocs regen``, ``fitdocs history`` or ``fitdocs recovery``
+once to place ``recovery/AGENTS.md``.
 """
 
 # --- document vocabulary -----------------------------------------------------

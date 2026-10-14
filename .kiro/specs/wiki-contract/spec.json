@@ -1,7 +1,7 @@
 {
   "feature_name": "wiki-contract",
   "created_at": "2026-07-21T07:56:54Z",
-  "updated_at": "2026-10-15T15:20:00Z",
+  "updated_at": "2026-10-15T20:53:01Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -73,6 +73,12 @@
       "requirement": "2.17, 3.11 (new) -- implemented by the dashboards spec, not by this one",
       "reason": "dashboards spec tasks 1.2 and 8.1, its part of the roadmap's Phase 11 Existing Spec Update for wiki-contract (Amendment 5). dashboards adds an owned location, dashboards/ and dashboards/assets/, whose pages belong to the athlete: fitdocs owns only the chart regions inside a page and the chart images and snapshot files in dashboards/assets/, never creates, rewrites as a whole or deletes a page, never modifies or deletes a snapshot, and removes a chart image only when no dashboard page references it. This is the inverse of every document type this spec named before. This spec's published-ownership-contract guarantee is extended to name the location, the dashboard page category, the chart region and asset policy, snapshots, what the dashboard pass and fitdocs dashboard overwrite, and the named exception to the index never being read back into a document (2.17); its in-tree-declaration guarantee to state what the dashboards declaration says (3.11). The page rule, the grammar, the assets and the pass remain dashboards' own.",
       "also": "requirements.md gains Amendment 5 (2026-10-13), Requirement 2 criterion 2.17 and Requirement 3 criterion 3.11; design.md's DocumentContract component gains a matching amendment note, which also records the declaration wording deviation (\"a\" and \"after a successful index refresh\" where dashboards design said \"each\"). CONTRACT_VERSION advances \"9\" to \"10\" in code by dashboards task 1.2, not restated here; the tests are tests/test_layout.py, tests/test_declaration*.py, tests/test_ownership_contract.py, tests/identity/test_contract_docs.py and tests/index/test_contract_docs.py (task 1.2) and the dashboards phrase pins in tests/test_ownership_contract.py and tests/index/test_contract_docs.py (task 8.1). No managed key added. Nothing renumbered."
+    },
+    {
+      "date": "2026-10-15",
+      "requirement": "Amendment 8 \u2014 recovery 12.1, 12.3, 13.1, 13.2, 13.3, 18.2; implemented by recovery task 1.6",
+      "reason": "Recovery adds owned recovery/ and recovery/assets/ locations, one generated recovery page and its chart images, and a recovery/AGENTS.md declaration. The published contract describes its write and preservation rules and advances from 12 to 13. The recovery writer and page schema remain recovery-owned.",
+      "also": "requirements.md gains Amendment 8 and design.md a dated location paragraph. Prior criteria, amendment entries and schema versions remain unchanged; predecessor metadata reconciliation remains separate."
     }
   ]
 }

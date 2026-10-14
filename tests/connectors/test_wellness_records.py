@@ -105,16 +105,18 @@ def test_pull_bullet_states_wellness_guarantees(passage: str) -> None:
 @pytest.mark.parametrize(
     "passage",
     [
-        "hr-derivation changes the stated guarantees for `derive-benchmarks`.",
-        "The command now also reads every workout's listed files and the "
-        "normalized wellness series",
-        "may write `athlete.toml` at most once per stage.",
-        "Run `fitdocs load --recompute` to apply a changed heart-rate timeline.",
-        "Run `fitdocs sync` or `fitdocs regen` to refresh the ownership declarations.",
+        "fitdocs adds an owned location.",
+        "`recovery/` holds the recovery page `recovery/recovery.md` and its "
+        "charts under `recovery/assets/`",
+        "written by `fitdocs recovery` from the wellness series and the "
+        "workout documents and rewritten only when their content changes",
+        "a chart the page no longer shows is removed.",
+        "Run `fitdocs sync`, `fitdocs regen`, `fitdocs history` or "
+        "`fitdocs recovery` once to place `recovery/AGENTS.md`.",
     ],
-    ids=["reason", "reads", "write-limit", "recompute", "action"],
+    ids=["reason", "owned-content", "source-and-rewrites", "removal", "action"],
 )
-def test_current_change_paragraph_states_current_guarantees(passage: str) -> None:
+def test_current_change_paragraph_states_recovery(passage: str) -> None:
     assert passage in _head()
 
 

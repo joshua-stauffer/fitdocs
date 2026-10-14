@@ -265,7 +265,7 @@ def test_dashboard_section_states_the_asset_snapshot_and_cleanup_rules() -> None
 
 def test_head_and_definitions_agree_with_the_dashboards_section() -> None:
     text = _flat(_read_doc())
-    assert "inside the seven owned directories" in text
+    assert "inside the eight owned directories" in text
     assert "each of those four commands refreshes every declared directory's" in text
     owned = _flat_section("Owned Paths")
     assert (
@@ -295,8 +295,8 @@ def test_regions_and_overwrite_sections_carry_the_dashboards_rules() -> None:
     history = overwrite[overwrite.index("**`history`**") :]
     history = history[: history.index(" - **")]
     assert (
-        "`fit-archive/AGENTS.md`, `dashboards/AGENTS.md`, `wellness/AGENTS.md`, and "
-        "`wellness-archive/AGENTS.md` — through the same "
+        "`fit-archive/AGENTS.md`, `dashboards/AGENTS.md`, `wellness/AGENTS.md`, "
+        "`wellness-archive/AGENTS.md`, and `recovery/AGENTS.md` — through the same "
         "function"
     ) in history
     for command in ("**`sync`**", "**`regen`**", "**`load`**", "**`pull`**"):
@@ -305,14 +305,14 @@ def test_regions_and_overwrite_sections_carry_the_dashboards_rules() -> None:
         assert "dashboard pass" in bullet, command
 
 
-def test_root_instructions_example_names_all_seven_declarations() -> None:
+def test_root_instructions_example_names_all_eight_declarations() -> None:
     text = _read_doc()
     example = _section(
         text, "Referencing `workouts/AGENTS.md` from Your Wiki's Root Instructions"
     )
     flat = _flat(example)
     assert "`dashboards/AGENTS.md`" in flat
-    assert "those seven files are generated" in flat
+    assert "those eight files are generated" in flat
     assert "those four files" not in text
     assert "each of the five refreshes" not in flat
     assert "each of those four commands refreshes every declared directory's" in flat
@@ -404,3 +404,21 @@ def test_wellness_locations_have_scoped_contract_guarantees() -> None:
         "overwrites hand edits to the series",
     ):
         assert phrase in section, phrase
+
+
+def test_recovery_section_states_the_location_and_write_rules() -> None:
+    assert _flat_section("Recovery Page") == (
+        "`recovery/recovery.md` is one generated recovery page per data root. "
+        "Its chart images live under `recovery/assets/` and are linked relative "
+        "to the page's directory. `fitdocs recovery` derives the page and charts "
+        "from the normalized wellness series and the workout documents, writes "
+        "each file atomically, and rewrites it only when its content changes. "
+        "It removes a chart image it wrote earlier when the new page no longer "
+        "references it. The page and charts carry no user-owned region. "
+        "fitdocs never writes a workout, history, block or wellness file, "
+        "settings file or athlete profile during a recovery run. It leaves "
+        "foreign files, symlinks and directories occupying output-file paths "
+        "untouched and reports them. `recovery/AGENTS.md` names fitdocs as owner "
+        "and states that the page is re-derivable from `wellness/` and the "
+        "workout documents alone."
+    )

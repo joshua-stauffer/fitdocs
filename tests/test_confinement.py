@@ -2331,7 +2331,7 @@ def test_history_entry_point_writes_no_workout_doc_asset_source_profile_or_setti
     and it writes neither ``athlete.toml`` nor ``fitdocs.toml`` itself.
 
     Deliberately **excluded** from this claim: the in-tree ownership
-    declarations (``AGENTS.md`` in each of the seven
+    declarations (``AGENTS.md`` in each of the eight
     :data:`~fitdocs.layout.DECLARED_DIRS`, of which this test's own
     document check names ``workouts/AGENTS.md``) --
     ``fitdocs.declaration.ensure_declarations`` may legitimately create or
@@ -2416,10 +2416,11 @@ def test_plan_entry_point_touches_only_the_plan_directory_and_writes_no_other_do
     run wrote no ``workouts/*.md`` document, no ``history/*.md`` page, and
     neither ``athlete.toml`` nor ``fitdocs.toml`` itself.
 
-    Deliberately **excluded** from this claim: the other six in-tree
+    Deliberately **excluded** from this claim: the other seven in-tree
     ownership declarations (``workouts/AGENTS.md``, ``history/AGENTS.md``,
     ``fit-archive/AGENTS.md``, ``dashboards/AGENTS.md``,
-    ``wellness/AGENTS.md``, ``wellness-archive/AGENTS.md``) --
+    ``wellness/AGENTS.md``, ``wellness-archive/AGENTS.md``,
+    ``recovery/AGENTS.md``) --
     ``fitdocs.declaration.ensure_declarations``
     legitimately creates every entry of :data:`~fitdocs.layout.DECLARED_DIRS`
     that is still absent on a data root that has never been synced, exactly
@@ -2543,10 +2544,10 @@ def test_reconcile_touches_only_the_plan_directory_and_writes_no_other_document(
     no history page; neither the athlete profile nor the settings file.
 
     Deliberately **excluded** from this claim, mirroring ``plan``'s own
-    test: the other five in-tree ownership declarations
+    test: the other six in-tree ownership declarations
     (``history/AGENTS.md``, ``fit-archive/AGENTS.md``,
     ``dashboards/AGENTS.md``, ``wellness/AGENTS.md``,
-    ``wellness-archive/AGENTS.md``) that
+    ``wellness-archive/AGENTS.md``, ``recovery/AGENTS.md``) that
     ``ensure_declarations`` may legitimately create or rewrite, and
     ``blocks/AGENTS.md`` itself, which lies inside this pass's own owned
     prefix.

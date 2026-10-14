@@ -660,6 +660,8 @@ def test_owned_paths_name_every_fitdocs_owned_location() -> None:
         "dashboards/assets/",
         "wellness/",
         "wellness-archive/",
+        "recovery/",
+        "recovery/assets/",
     )
     # Composed from the directory constants, never respelled -- renaming a
     # directory constant moves its owned prefix with it.
@@ -880,6 +882,8 @@ def test_connector_state_dir_does_not_widen_owned_paths() -> None:
         "dashboards/assets/",
         "wellness/",
         "wellness-archive/",
+        "recovery/",
+        "recovery/assets/",
     )
 
 
@@ -900,6 +904,7 @@ def test_declared_dirs_are_the_top_level_owned_directories() -> None:
         "dashboards/",
         "wellness/",
         "wellness-archive/",
+        "recovery/",
     )
     assert f"{DASHBOARDS_DIR}/" in DECLARED_DIRS
     assert f"{WORKOUTS_DIR}/" in DECLARED_DIRS
@@ -917,14 +922,15 @@ def test_declared_dirs_are_the_top_level_owned_directories() -> None:
     assert f"{CACHE_DIR}/" not in DECLARED_DIRS
 
 
-def test_no_owned_prefix_is_a_prefix_of_another_except_the_three_assets_pairs() -> None:
-    """No owned entry sits inside another, except the three documented assets pairs.
+def test_no_owned_prefix_is_a_prefix_of_another_except_the_four_assets_pairs() -> None:
+    """No owned entry sits inside another, except the four documented assets pairs.
 
     Guards the invariant design.md states directly: ``history/`` is not a prefix
-    of, and is not prefixed by, any other owned entry, with exactly the three
+    of, and is not prefixed by, any other owned entry, with exactly the four
     assets-under-parent relationships as the sanctioned exceptions.
     """
     allowed_nestings = {
+        ("recovery/", "recovery/assets/"),
         (f"{WORKOUTS_DIR}/", f"{WORKOUTS_DIR}/{ASSETS_SUBDIR}/"),
         (f"{HISTORY_DIR}/", f"{HISTORY_DIR}/{HISTORY_ASSETS_SUBDIR}/"),
         (f"{DASHBOARDS_DIR}/", f"{DASHBOARDS_DIR}/{ASSETS_SUBDIR}/"),
@@ -1098,8 +1104,88 @@ def test_wellness_paths_are_pure_and_exact(tmp_path: Path) -> None:
 
 
 def test_owned_location_count() -> None:
-    assert len(OWNED_PATHS) == 12
+    assert len(OWNED_PATHS) == 14
 
 
 def test_declared_location_count() -> None:
-    assert len(DECLARED_DIRS) == 7
+    assert len(DECLARED_DIRS) == 8
+
+
+def test_recovery_location_constants() -> None:
+    from fitdocs import layout
+
+    assert layout.RECOVERY_DIR == "recovery"
+    assert layout.RECOVERY_DOC_STEM == "recovery"
+    assert layout.RECOVERY_ASSETS_SUBDIR == "assets"
+
+
+def test_recovery_document_path(tmp_path: Path) -> None:
+    from fitdocs import layout
+
+    assert layout.recovery_doc_path(tmp_path) == tmp_path / "recovery/recovery.md"
+    for root, expected in (
+        (
+            tmp_path / "first-parent/Doc-Alpha",
+            tmp_path / "first-parent/Doc-Alpha/recovery/recovery.md",
+        ),
+        (
+            tmp_path / "second-parent/Doc-Beta",
+            tmp_path / "second-parent/Doc-Beta/recovery/recovery.md",
+        ),
+        (
+            Path("relative-parent/DocGamma"),
+            Path("relative-parent/DocGamma/recovery/recovery.md"),
+        ),
+    ):
+        assert layout.recovery_doc_path(root) == expected
+
+
+def test_recovery_asset_path(tmp_path: Path) -> None:
+    from fitdocs import layout
+
+    assert layout.recovery_asset_path(tmp_path, "hrv-source-two") == (
+        tmp_path / "recovery/assets/recovery-hrv-source-two.svg"
+    )
+    for root in (
+        tmp_path / "first-parent/Asset-Alpha",
+        tmp_path / "second-parent/Asset-Beta",
+        Path("relative-parent/AssetGamma"),
+    ):
+        for chart, filename in (
+            ("hrv-source-two", "recovery-hrv-source-two.svg"),
+            ("RHR-Device-A7", "recovery-RHR-Device-A7.svg"),
+            ("sleep-long_93", "recovery-sleep-long_93.svg"),
+        ):
+            assert layout.recovery_asset_path(root, chart) == (
+                root / "recovery/assets" / filename
+            )
+
+
+def test_recovery_asset_relative_path() -> None:
+    from fitdocs import layout
+
+    assert layout.recovery_asset_rel_path("sleep-source-three") == (
+        "assets/recovery-sleep-source-three.svg"
+    )
+    for chart, expected in (
+        ("hrv-Other-B4", "assets/recovery-hrv-Other-B4.svg"),
+        ("RestingHR-unit_29", "assets/recovery-RestingHR-unit_29.svg"),
+        ("SleepNight-NodeZ", "assets/recovery-SleepNight-NodeZ.svg"),
+    ):
+        assert layout.recovery_asset_rel_path(chart) == expected
+
+
+def test_recovery_assets_subdirectory_reuses_the_shared_constant() -> None:
+    import ast
+
+    from fitdocs import layout
+
+    tree = ast.parse(inspect.getsource(layout))
+    value = next(
+        node.value
+        for node in tree.body
+        if isinstance(node, ast.AnnAssign)
+        and isinstance(node.target, ast.Name)
+        and node.target.id == "RECOVERY_ASSETS_SUBDIR"
+    )
+    assert ast.dump(value) == "Name(id='ASSETS_SUBDIR', ctx=Load())"

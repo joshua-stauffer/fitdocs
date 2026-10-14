@@ -206,7 +206,7 @@ literal pins, one per lander) and every head-paragraph pin of
 
 ---
 
-- [ ] 1. Foundation: citations, constants, baselines, boundary, location
+- [x] 1. Foundation: citations, constants, baselines, boundary, location
 
 - [x] 1.1 Verify the candidate citations against the works themselves (controller or maintainer)
   - For each of the six works in design § Constants and research.md
@@ -351,7 +351,7 @@ literal pins, one per lander) and every head-paragraph pin of
     positive control that fails on synthetic input.
   - _Requirements: 1.3, 15.1, 17.3, 17.4_
 
-- [ ] 1.6 (P) Declare `recovery/`, its AGENTS.md and the next contract version (wiki-contract amendment)
+- [x] 1.6 (P) Declare `recovery/`, its AGENTS.md and the next contract version (wiki-contract amendment)
   - `layout.py`: `RECOVERY_DIR`, `RECOVERY_ASSETS_SUBDIR`,
     `RECOVERY_DOC_STEM`, `recovery_doc_path`, `recovery_asset_path`,
     `recovery_asset_rel_path`; `OWNED_PATHS` += `recovery/`,
@@ -975,3 +975,5 @@ introspection artifact also names its MetricInfo value type at line 48).
   `tests/test_packaging.py::test_dependencies_declaration_is_unchanged`.
 
 - **1.5 verified:** independent round-2 review replayed all78 claimed and12 own mutations RED/restoredGREEN, mapped all48 assertion sites, and passed155 additional finite-family/coexistence controls. Full15700passed/44expectedskips; controller fresh1079/statics clean. Exact current import rows, all-seven planned rows and reverse-import subset are guarded;4.3 closes module-set/reverse equality. Shared finite literal-target resolution covers imported/simple assigned aliases, known argument dictionaries/fromlists and relative anchors; actual tz slots reject missing/resolvedNone, with explicitUTC and lexical-scope positive controls. Arbitrary computed targets/call results/control flow remain explicit static-analysis limits, not a general IO gate. Runtime dependency declaration uses the existing packaging literal pin.
+
+- **1.6 verified:** owned14/declared8 append-only recovery locations, exact path helpers/declaration and new golden, seven predecessor golden version lines only, contract11→12 with literal history/head/published rules, wiki-contract Amendment7/2.19/3.13. Independent round2 review replayed72claimed+11own RED/restoredGREEN, bounded all four root/chart argument slots with lexical/nested/mixed-case inputs and independent3×3 expectations; source helpers unchanged. Full15717passed/44expectedskips, scoped1531 and controller fresh210/statics clean. Declaration dispatch docstring counts/enumerates8. Final6.2 rederives main+1 version/amendment/peer head pins at landing; later Page/Engine/confinement tasks implement the published runtime behavior.

@@ -2,19 +2,21 @@
 
 **Contract version:** `13`
 
-**What changed at this version:** hr-derivation changes the stated guarantees
-for `derive-benchmarks`. The command now also reads every workout's listed
-files and the normalized wellness series and may write `athlete.toml` at
-most once per stage. Run `fitdocs load --recompute` to apply a changed
-heart-rate timeline. Run `fitdocs sync` or `fitdocs regen` to refresh the
-ownership declarations.
+**What changed at this version:** fitdocs adds an owned location.
+`recovery/` holds the recovery page `recovery/recovery.md` and its
+charts under `recovery/assets/`, written by `fitdocs recovery` from the
+wellness series and the workout documents and rewritten only when their
+content changes; a chart the page no longer shows is removed. Run
+`fitdocs sync`, `fitdocs regen`, `fitdocs history` or `fitdocs recovery`
+once to place `recovery/AGENTS.md`.
 
 This document is the authoritative, published statement of what fitdocs owns
 in your data root, what you own, and the exact limits of every operation that
-writes there. It is restated, in shorter form, inside the seven owned
+writes there. It is restated, in shorter form, inside the eight owned
 directories a human or agent browses (`workouts/AGENTS.md`,
 `fit-archive/AGENTS.md`, `history/AGENTS.md`, `blocks/AGENTS.md`,
-`dashboards/AGENTS.md`, `wellness/AGENTS.md`, and `wellness-archive/AGENTS.md` — each
+`dashboards/AGENTS.md`, `wellness/AGENTS.md`, `wellness-archive/AGENTS.md`,
+and `recovery/AGENTS.md` — each
 generated on the first `sync` or `regen` run, the first `fitdocs history` run
 that has a page to write, or the first `fitdocs plan` run that has a block to
 render, because each of those four commands refreshes every declared
@@ -72,7 +74,8 @@ named in the next section.
   inbox's quarantine record `quarantine.toml`, and each configured
   connector's own ledger, one TOML file per instance under
   `.fitdocs/connectors/`, recording what `fitdocs pull` has already
-  delivered). Dot-prefixed because nobody browses it; it carries no
+  delivered). A connector's ledger that holds wellness records is ledger
+  format 2. Dot-prefixed because nobody browses it; it carries no
   ownership declaration of its own.
 
 - `wellness/` — normalized daily wellness series, one CSV file per year,
@@ -80,6 +83,9 @@ named in the next section.
 - `wellness-archive/` — handled wellness files, kept as original bytes or
   their format's canonical extract, grouped by format and named by the
   SHA-256 of the original; fitdocs never modifies an entry.
+
+- `recovery/` — one generated recovery page at `recovery/recovery.md`.
+- `recovery/assets/` — chart images (SVG) referenced by the recovery page.
 
 Two files at the top of the data root are explicitly **not** owned by
 fitdocs even though fitdocs reads and, in one case, writes into them —
@@ -99,6 +105,22 @@ full -- but only key-wise, at your request, preserving every key it does
 not manage; it is never deleted. See
 [Shared and User-Owned Files](#shared-and-user-owned-files) for the exact
 guarantee, including what re-serialization does not preserve.
+
+## Recovery Page
+
+`recovery/recovery.md` is one generated recovery page per data root. Its chart
+images live under `recovery/assets/` and are linked relative to the page's
+directory. `fitdocs recovery` derives the page and charts from the normalized
+wellness series and the workout documents, writes each file atomically, and
+rewrites it only when its content changes. It removes a chart image it wrote
+earlier when the new page no longer references it. The page and charts carry
+no user-owned region.
+
+fitdocs never writes a workout, history, block or wellness file, settings file
+or athlete profile during a recovery run. It leaves foreign files, symlinks
+and directories occupying output-file paths untouched and reports them.
+`recovery/AGENTS.md` names fitdocs as owner and states that the page is
+re-derivable from `wellness/` and the workout documents alone.
 
 ## Wellness Archive and Series
 
@@ -1015,8 +1037,8 @@ and each has a distinct contract:
   does not fail. On a run that reaches the point of writing its outputs, it
   first refreshes the ownership declaration in every declared directory —
   `workouts/AGENTS.md`, `history/AGENTS.md`, `blocks/AGENTS.md`,
-  `fit-archive/AGENTS.md`, `dashboards/AGENTS.md`, `wellness/AGENTS.md`, and
-  `wellness-archive/AGENTS.md` — through the same function `sync` and `regen`
+  `fit-archive/AGENTS.md`, `dashboards/AGENTS.md`, `wellness/AGENTS.md`,
+  `wellness-archive/AGENTS.md`, and `recovery/AGENTS.md` — through the same function `sync` and `regen`
   run at the start of every run, and `plan` runs once, after every source
   is parsed and before its first write (see the `plan` bullet below). If no
   workout document in the data root records a usable load,
@@ -1257,7 +1279,7 @@ If your wiki already has its own root-level agent-instructions file (for
 example, a root `AGENTS.md` or `CLAUDE.md` that you author and own), it is
 enough to point at `workouts/AGENTS.md`, `fit-archive/AGENTS.md`,
 `history/AGENTS.md`, `blocks/AGENTS.md`, `dashboards/AGENTS.md`,
-`wellness/AGENTS.md`, and `wellness-archive/AGENTS.md` from there rather than
+`wellness/AGENTS.md`, `wellness-archive/AGENTS.md`, and `recovery/AGENTS.md` from there rather than
 duplicating their contents. A short pointer such as:
 
 ```markdown
@@ -1267,10 +1289,11 @@ See `workouts/AGENTS.md` for what fitdocs owns under `workouts/`,
 for the training-block and planned-workout pages, and `dashboards/AGENTS.md`
 for the pages that are yours and the chart regions in them that are fitdocs's,
 `wellness/AGENTS.md` for the rebuilt daily series, and
-`wellness-archive/AGENTS.md` for the immutable wellness inputs.
+`wellness-archive/AGENTS.md` for the immutable wellness inputs, and
+`recovery/AGENTS.md` for the generated recovery page.
 ```
 
-is sufficient: those seven files are generated and kept current by fitdocs
+is sufficient: those eight files are generated and kept current by fitdocs
 on every `sync` and `regen` run, on every `fitdocs history` run that
 writes its page, and on every `fitdocs plan` run that has a block to
 render — each of those four commands refreshes every declared directory's

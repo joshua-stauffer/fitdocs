@@ -178,18 +178,22 @@ def test_the_changed_at_this_version_paragraph_names_the_amendment() -> None:
     head = _flat(_DOC.read_text(encoding="utf-8").split("\n\nThis document", 1)[0])
     assert f"**Contract version:** `{contract.CONTRACT_VERSION}`" in head
     for phrase in (
-        "hr-derivation changes the stated guarantees for `derive-benchmarks`.",
-        "The command now also reads every workout's listed files and the "
-        "normalized wellness series and may write `athlete.toml` at most once "
-        "per stage.",
-        "Run `fitdocs load --recompute` to apply a changed heart-rate timeline.",
-        "Run `fitdocs sync` or `fitdocs regen` to refresh the ownership declarations.",
+        "fitdocs adds an owned location",
+        "`recovery/` holds the recovery page `recovery/recovery.md`",
+        "charts under `recovery/assets/`",
+        "written by `fitdocs recovery` from the wellness series and the "
+        "workout documents",
+        "rewritten only when their content changes",
+        "a chart the page no longer shows is removed",
+        "Run `fitdocs sync`, `fitdocs regen`, `fitdocs history` or `fitdocs recovery`",
+        "once to place `recovery/AGENTS.md`",
     ):
         assert phrase in head, phrase
 
 
 def test_the_version_history_records_the_amendment() -> None:
     history = _contract_version_history()
+    assert "Raised from ``12`` to ``13`` by recovery" in history
     assert "Raised from ``9`` to ``10`` by dashboards" in history
     assert "Dashboard chart regions and assets are the only document content" in history
     assert "Raised from ``10`` to ``11`` by wellness-store" in history

@@ -1,4 +1,4 @@
-"""Byte-golden pin for the seven emitted ``AGENTS.md`` declaration texts.
+"""Byte-golden pin for the eight emitted ``AGENTS.md`` declaration texts.
 
 Task 4.1 originally; extended by ``load-history`` task 1.2 to a third,
 ``history/``, directory, and by ``training-blocks`` task 1.2 to a fourth,
@@ -55,6 +55,7 @@ _GOLDEN_NAMES: dict[str, str] = {
     f"{DASHBOARDS_DIR}/": "dashboards",
     "wellness/": "wellness",
     "wellness-archive/": "wellness-archive",
+    "recovery/": "recovery",
 }
 
 
@@ -104,3 +105,16 @@ def test_ensure_declarations_places_the_dashboards_golden(tmp_path: Path) -> Non
 
 if __name__ == "__main__":
     _write_goldens()
+
+
+def test_recovery_text_matches_committed_golden() -> None:
+    assert declaration_text("recovery/") == (
+        _GOLDEN_DIR / "recovery.AGENTS.md"
+    ).read_text(encoding="utf-8")
+
+
+def test_ensure_declarations_places_the_recovery_golden(tmp_path: Path) -> None:
+    target = tmp_path / "recovery/AGENTS.md"
+    assert not target.exists()
+    ensure_declarations(tmp_path)
+    assert target.read_bytes() == (_GOLDEN_DIR / "recovery.AGENTS.md").read_bytes()

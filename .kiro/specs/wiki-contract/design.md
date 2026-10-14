@@ -766,3 +766,20 @@ flowchart LR
 - **Rollback trigger**: any golden diff during Phases 1–3 is a refactor bug, not expected churn — revert rather than regenerate.
 - **Validation checkpoint**: Phase 3 runs the full suite with the *unmodified* golden files. Only Phase 5 regenerates them, and its diff must contain exactly the two added lines per document.
 - **User-facing migration**: existing data roots hold `doc_version: 1` documents. `fitdocs check` reports them as out of date; `fitdocs regen` upgrades every one of them from the archive, preserving `notes`, `workout`, and `load` regions. No in-place transformation is written, and no user action is required beyond running `regen`.
+
+
+### Recovery location amendment (2026-10-15; recovery task 1.6)
+
+Wiki-contract Amendment 8 names `recovery/` and `recovery/assets/` as owned,
+with a generated declaration at `recovery/AGENTS.md`. `layout` defines
+`RECOVERY_DIR`, `RECOVERY_ASSETS_SUBDIR = ASSETS_SUBDIR`, `RECOVERY_DOC_STEM`
+and the three `recovery_*` helpers; the owned and declared tuples append the
+new entries after every predecessor. `declaration` selects the recovery
+content and rerunnable fragments after the written-and-owned fragment and
+before the owner block, under “Generated Recovery Page”; both fragments
+carry anchors to `recovery/engine.py` and `layout.recovery_*`. The contract
+advances from 12 to 13 and preserves its previous history. The published
+contract states the location, changed-content rewrites, chart removal,
+foreign-file preservation and files recovery never writes. Recovery owns
+the page schema and runtime writer; this amendment adds no schema to the
+workout contract leaf.

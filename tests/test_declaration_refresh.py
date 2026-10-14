@@ -380,7 +380,7 @@ def test_sync_regen_load_report_unchanged_document_counts_with_declarations_pres
     assert len(first.written) == 2
     count_after_sync = _workout_doc_count(data_root)
     assert count_after_sync == 2
-    # All seven declarations really are present alongside the two documents,
+    # The declarations are present alongside the two documents,
     # each ending in ``.md`` -- the exact shape that would inflate a naive
     # ``glob("*.md")`` count if the scans did not filter on frontmatter.
     assert (data_root / WORKOUTS_DIR / DECLARATION_FILENAME).is_file()
