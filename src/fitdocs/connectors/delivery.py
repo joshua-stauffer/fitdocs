@@ -1,7 +1,7 @@
 """Deliver fetched bytes into the inbox, and sweep archived deliveries away
 (design: "Delivery layer", Req 6.7, 6.8, 8.1-8.8).
 
-Two entry points. :func:`deliver` writes one fetched activity's bytes into
+Two entry points. :func:`deliver` writes fetched activity or wellness bytes into
 ``<inbox>/<instance>/`` through the atomic writer, choosing a name that never
 overwrites a different file already there (Req 8.1, 8.2, 8.3, 8.4).
 :func:`sweep` walks an instance's ledger for deliveries still waiting
@@ -35,11 +35,14 @@ delivery escalates to the next candidate.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, replace
+from datetime import date
 from pathlib import Path
 from types import MappingProxyType
+from typing import Final
 
 from fitdocs import layout
 from fitdocs.connectors._atomic import write_atomic
@@ -47,6 +50,12 @@ from fitdocs.connectors.ledger import Ledger
 from fitdocs.connectors.protocol import RemoteActivity
 
 __all__ = [
+    "MAX_WELLNESS_JSON_BYTES",
+    "FORMAT_NAME_PATTERN",
+    "WELLNESS_CHECKS",
+    "wellness_package_problem",
+    "wellness_delivery_name",
+    "wellness_archived",
     "is_fit",
     "delivery_name",
     "DeliveryResult",
@@ -58,6 +67,50 @@ __all__ = [
 _SANITIZE_RE = re.compile(r"[^A-Za-z0-9._-]")
 _STEM_CAP = 100
 _FIT_SUFFIX = ".fit"
+MAX_WELLNESS_JSON_BYTES: Final[int] = 64 * 1024 * 1024
+FORMAT_NAME_PATTERN: Final[str] = r"^[a-z0-9]+(-[a-z0-9]+)*$"
+
+
+def _json_problem(data: bytes) -> str | None:
+    """Check a bounded, strict UTF-8 JSON document."""
+    if len(data) > MAX_WELLNESS_JSON_BYTES:
+        return f"Wellness JSON package exceeds {MAX_WELLNESS_JSON_BYTES} bytes."
+    try:
+        json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return "Wellness package is not one well-formed UTF-8 JSON document."
+    return None
+
+
+WELLNESS_CHECKS: Final[Mapping[str, Callable[[bytes], str | None]]] = MappingProxyType(
+    {".json": _json_problem}
+)
+
+
+def wellness_package_problem(
+    data: bytes, suffix: str, format: str, origins: frozenset[str]
+) -> str | None:
+    """Return the first package problem in the WellnessDelivery check order."""
+    if re.fullmatch(FORMAT_NAME_PATTERN, format) is None:
+        return f"Wellness format {format!r} is not a lowercase slug."
+    if suffix not in WELLNESS_CHECKS:
+        return f"No wellness check is available for extension {suffix!r}."
+    for origin in origins:
+        if re.fullmatch(FORMAT_NAME_PATTERN, origin) is None:
+            return f"Wellness origin {origin!r} is not a lowercase slug."
+    if not data:
+        return "Wellness package is empty."
+    return WELLNESS_CHECKS[suffix](data)
+
+
+def wellness_delivery_name(first: date, last: date, suffix: str) -> str:
+    """The literal filename for the packaged first-to-last date span."""
+    return f"wellness-{first.isoformat()}_{last.isoformat()}{suffix}"
+
+
+def wellness_archived(data_root: Path, format: str, sha256: str, suffix: str) -> bool:
+    """Whether the declared format's wellness archive holds this file."""
+    return layout.wellness_archive_path(data_root, format, sha256, suffix).is_file()
 
 
 def is_fit(data: bytes) -> bool:
@@ -124,13 +177,14 @@ def deliver(
     sha256: str,
     *,
     owned: Mapping[str, str] = MappingProxyType({}),
+    suffix: str = ".fit",
 ) -> DeliveryResult:
     """Write ``data`` into ``<inbox>/<instance>/`` under ``name`` (Req 8.1-8.4,
     15.4; R2 controller ruling).
 
     The instance's subdirectory is created on demand. Candidates are tried
-    in order -- ``<dir>/<name>``, then ``<stem>-<sha256[:8]>.fit``, then
-    ``<stem>-<sha256[:8]>-2.fit``, ... (the same scheme
+    in order -- ``<dir>/<name>``, then ``<stem>-<sha256[:8]><suffix>``, then
+    ``<stem>-<sha256[:8]>-2<suffix>``, ... (the same scheme
     :func:`fitdocs.inbox._first_free_destination` uses, reimplemented here
     because that function is private and this package may not import
     :mod:`fitdocs.inbox`'s move-side internals). At each candidate: if
@@ -158,7 +212,7 @@ def deliver(
     directory.mkdir(parents=True, exist_ok=True)
     primary = directory / name
 
-    for candidate in _candidates(primary, sha256):
+    for candidate in _candidates(primary, sha256, suffix):
         rel = candidate.relative_to(inbox).as_posix()
         if candidate.is_file():
             if (
@@ -176,33 +230,28 @@ def deliver(
     raise AssertionError("unreachable: _candidates never stops yielding free names")
 
 
-def _candidates(primary: Path, sha256: str) -> Iterator[Path]:
+def _candidates(primary: Path, sha256: str, suffix: str) -> Iterator[Path]:
     """The ordered, unbounded sequence of names :func:`deliver` tries.
 
-    ``primary`` first, then ``<stem>-<sha256[:8]>.fit``, then
-    ``<stem>-<sha256[:8]>-2.fit``, ``-3``, ... without end -- the caller
-    (:func:`deliver`) stops at the first candidate it can use. Mirrors
-    :func:`fitdocs.inbox._first_free_destination`'s escalation scheme, with
-    one deliberate difference: :func:`fitdocs.inbox._first_free_destination`
-    keeps ``primary.suffix`` verbatim (any extension a processed file may
-    carry), while every delivery this package makes is a FIT file, so this
-    generator always appends the literal ``.fit`` to each escalated
-    candidate regardless of ``primary``'s own suffix or its case. A pure
-    function of ``primary`` and ``sha256`` -- it reads no filesystem state
-    itself.
+    ``primary`` first, then ``<stem>-<sha256[:8]><suffix>``, then
+    ``<stem>-<sha256[:8]>-2<suffix>``, ``-3``, ... without end. A matching
+    suffix is stripped from the primary name case-insensitively; escalated
+    names append the declared suffix verbatim. The default ``.fit`` keeps
+    activity delivery's existing naming scheme. This generator reads no
+    filesystem state.
     """
     yield primary
 
     name = primary.name
-    stem = name[: -len(_FIT_SUFFIX)] if name.lower().endswith(_FIT_SUFFIX) else name
+    stem = name[: -len(suffix)] if name.lower().endswith(suffix.lower()) else name
     parent = primary.parent
     short_hash = sha256[:8]
 
-    yield parent / f"{stem}-{short_hash}{_FIT_SUFFIX}"
+    yield parent / f"{stem}-{short_hash}{suffix}"
 
     attempt = 2
     while True:
-        yield parent / f"{stem}-{short_hash}-{attempt}{_FIT_SUFFIX}"
+        yield parent / f"{stem}-{short_hash}-{attempt}{suffix}"
         attempt += 1
 
 
