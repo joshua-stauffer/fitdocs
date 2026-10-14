@@ -479,3 +479,69 @@ def test_reader_readonly(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
         series.read_series(tmp_path)
         assert tuple(reads) == (paths[-1], *paths[:-1])
     assert snapshot() == before
+
+
+def test_inputs_digest_canonical(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import hashlib
+    import json
+    from dataclasses import replace
+
+    from fitdocs.wellness import registry
+    from fitdocs.wellness.archive import ArchiveEntry, ArchiveListing, Orphan
+    from fitdocs.wellness.settings import (
+        DEFAULT_WELLNESS_SETTINGS,
+        WellnessSettings,
+        effective_order,
+    )
+
+    forms = registry.FORMATS
+    entries = tuple(
+        ArchiveEntry(forms[0], token * 64, tmp_path / token, token)
+        for token in ("z", "a")
+    )
+    listing = ArchiveListing(entries, ())
+    expected = {
+        "series_version": 1,
+        "formats": sorted([[f.id, f.rules_version] for f in forms]),
+        "entries": ["a", "z"],
+        "precedence": {
+            m.value: list(effective_order(DEFAULT_WELLNESS_SETTINGS, m)) for m in Metric
+        },
+    }
+    digest = series.inputs_digest(listing, DEFAULT_WELLNESS_SETTINGS)
+    assert (
+        digest
+        == hashlib.sha256(
+            json.dumps(expected, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+    )
+    assert (
+        series.inputs_digest(
+            ArchiveListing(tuple(reversed(entries)), (Orphan("x", "unknown"),)),
+            DEFAULT_WELLNESS_SETTINGS,
+        )
+        == digest
+    )
+    monkeypatch.setattr(registry, "FORMATS", tuple(reversed(forms)))
+    assert series.inputs_digest(listing, DEFAULT_WELLNESS_SETTINGS) == digest
+    monkeypatch.setattr(
+        registry, "FORMATS", (*forms[:-1], replace(forms[-1], rules_version=7))
+    )
+    assert series.inputs_digest(listing, DEFAULT_WELLNESS_SETTINGS) != digest
+    monkeypatch.setattr(registry, "FORMATS", forms)
+    assert (
+        series.inputs_digest(ArchiveListing(entries[:1], ()), DEFAULT_WELLNESS_SETTINGS)
+        != digest
+    )
+    assert (
+        series.inputs_digest(listing, WellnessSettings(("intervals-icu",), {}))
+        != digest
+    )
+    assert (
+        series.inputs_digest(
+            listing, WellnessSettings((), {Metric.WEIGHT_KG: ("intervals-icu",)})
+        )
+        != digest
+    )

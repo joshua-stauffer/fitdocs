@@ -663,7 +663,7 @@ preflight and keeps every call dashboards placed).
   - _Depends: 2.1, 2.2_
   - _Requirements: 1.2, 1.3, 1.4, 1.5, 15.1, 16.1, 17.1_
 
-- [ ] 3.2 Assess and rebuild the series
+- [x] 3.2 Assess and rebuild the series
   - `series.inputs_digest` and `engine.py` per design § Engine
     (`SeriesStatus`, `SeriesNote`, `SeriesReport`, `SeriesAssessment`,
     `assess_series`, `rebuild_series`), writing year files and the manifest
@@ -1052,3 +1052,5 @@ preflight and keeps every call dashboards placed).
 - 2.7: independently APPROVED; full14,254 passed/44 skipped, targeted155, combined836, ruff/mypy535 clean.24 claimed plus2 own mutations killed. FIT and wellness selectors share one walk; folder remains FIT-only; default ignore reachability independently exercised using registered .tmp/.part test suffixes. Inbox Amendment2 records selector support; reporting/drain integration remains4.2. Group2 complete. Inherited uppercase nested-basename helper coverage gap tracked in queue item 2026-10-14-inbox-nested-basename-case-guard.
 
 - 3.1: independently APPROVED; group-2 integration full14,286 passed/44 skipped, targeted79/wellness713, ruff/mypy536 clean.24 claimed plus3 own mutations killed. Registry now ships two sources and five formats; candidate_suffixes is .json and default order garmin-export, intervals-icu. Empty-registry test explicitly patches empty tuples; generic registry behavior unchanged. Future source/format additions re-pin registration literals and default-order expectations append-only.
+
+- 3.2: independently APPROVED round2; full14,328 passed/44 skipped, engine+series94/wellness755, ruff/mypy538 clean.113 claimed plus2 fresh mutations killed with green restorations. Engine assess reads archive metadata only; rebuild selects max(order,ref) before parsing LATEST_ENTRY bodies and writes changed bytes atomically, manifest last. Counts identify values by (day,metric,source), changes by (value,origin), canonical changes by distinct day with changed (source,value,origin). Origin-only transitions and multiple unreadable latest-entry headers now independently pinned; preserve these orthogonal fixtures. inputs_digest is available in series.py; intake and inspect consume existing archive/engine APIs.

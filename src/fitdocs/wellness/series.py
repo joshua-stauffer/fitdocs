@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import re
 import tomllib
@@ -13,8 +15,11 @@ from typing import Any, Final
 
 import tomli_w
 
+from fitdocs.wellness import registry
+from fitdocs.wellness.archive import ArchiveListing
 from fitdocs.wellness.merge import Conflict
 from fitdocs.wellness.model import Metric, SeriesValue, is_origin
+from fitdocs.wellness.settings import WellnessSettings, effective_order
 
 SERIES_VERSION: Final = 1
 SERIES_HEADER: Final = "day,metric,source,origin,value,canonical"
@@ -358,3 +363,17 @@ def series_files(data_root: Path) -> tuple[Path, ...]:
             if (data_root / item.path).exists()
         ),
     )
+
+
+def inputs_digest(listing: ArchiveListing, settings: WellnessSettings) -> str:
+    document = {
+        "series_version": SERIES_VERSION,
+        "formats": sorted([[form.id, form.rules_version] for form in registry.FORMATS]),
+        "entries": sorted(entry.ref for entry in listing.entries),
+        "precedence": {
+            metric.value: list(effective_order(settings, metric)) for metric in Metric
+        },
+    }
+    return hashlib.sha256(
+        json.dumps(document, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
