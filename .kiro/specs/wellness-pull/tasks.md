@@ -193,7 +193,7 @@ requirements' amendment list.
     `get("intervals")` and `get("folder")` still register.
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7_
 
-- [ ] 2. Core: settings, ledger, delivery and the intervals.icu operations
+- [x] 2. Core: settings, ledger, delivery and the intervals.icu operations
 
 - [x] 2.1 (P) Accept the `wellness` key on an instance whose connector pulls wellness
   - Per design § WellnessSettingsKey: a framework key beside
@@ -328,7 +328,7 @@ requirements' amendment list.
   - _Requirements: 3.2, 7.2, 7.3, 7.4, 7.5, 7.6, 7.8, 9.1, 9.2, 9.3, 9.4, 9.8_
   - _Boundary: IntervalsWellness_
 
-- [ ] 2.6 Package intervals.icu wellness with Garmin attribution and declare the capability
+- [x] 2.6 Package intervals.icu wellness with Garmin attribution and declare the capability
   - Per design § IntervalsWellness "Packaging": the athlete-settings
     request, `_wellness_origins`, the envelope bytes, `package_wellness`;
     `capabilities = {PULL_ACTIVITIES, PULL_WELLNESS}`; re-pin
@@ -688,3 +688,5 @@ requirements' amendment list.
 - **2.4 (2026-10-14).** READY_FOR_REVIEW → independently APPROVED round 2 → VERIFIED. Full suite 15,152 passed / 44 skipped; configured mypy 554 and Ruff lint/format 739 clean; fresh parent 183 passed and exact reviewed hashes matched. Reviewer replayed all 69 mutation claims and four fresh defects RED/restored GREEN, all six scoped requirements PINNED. Five sweep outcomes accumulate against current ledger while iterating original path order; read/unlink failures retain pending and continue. Real JSON payloads with unequal full SHA256 but shared prefix 684793b8 now pin full-digest comparison; independent input snapshots and safe file observations preserve existing distinctions. Original activity loop and prior test bytes unchanged. No follow-ups.
 
 - **2.5 (2026-10-14).** READY_FOR_REVIEW → independently APPROVED round 3 → VERIFIED. Full suite 15,299 passed / 44 skipped; configured mypy 555 and Ruff lint/format 740 clean; fresh parent focused 251 passed and exact reviewed hashes matched. Reviewer reproduced 66 variants / 117 intended RED applications, six fresh variants RED/restored GREEN, and 1,254 independent valid-domain probes; all twelve scoped contributions PINNED. Two test-only repairs closed a field-insensitive credential double and numeric/falsey plus body/entry/ID JSON type families. Real API-key-only credentials, all fifty appended observations and retained earlier tests discriminate their intended faults. Existing connector class/settings/activity/verify/fetch/capabilities remain unchanged; source stayed byte-identical after first implementation. Six unused packaging/attribution declarations remain explicitly deferred to 2.6, and the optional 401 None guard is behavior-equivalent for the real helper. No follow-ups.
+
+- **2.6 (2026-10-15).** READY_FOR_REVIEW → independently APPROVED round 3 → VERIFIED. Full suite 15,879 passed / 44 skipped; configured mypy 555 and Ruff lint/format 740 clean; fresh parent focused 831 passed with exact reviewed hashes. Reviewer reproduced 163 claim/history applications (162 behavioral RED plus one declared canonical-ID reconstruction equivalence GREEN), three fresh faults RED/restored GREEN and an independent 880-observation actual-listing sweep; all eleven scoped contributions PINNED. Settings-only envelope and carrier metadata are observed independently for absent fields and empty selections. Immutable canonical snapshots distinguish native JSON values, numeric aliases and signed zero through output and caller-owned input, including the complete updated field family. Two test-only remediations preserve the original source and all earlier cases; current 727 wellness observations plus 104 activity cases pass. Packaging makes one athlete-settings GET, preserves listed records verbatim and emits the format-consumer canonical envelope. TBC-W5 original private-namespace attribution semantics remain assigned to 6.3 numbered repair; no new follow-ups.

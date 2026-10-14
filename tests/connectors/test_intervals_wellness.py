@@ -19,11 +19,18 @@ from fitdocs.connectors.errors import AuthFailure, AuthFailureKind, ConnectorErr
 from fitdocs.connectors.http import CallMode, HttpClient, HttpResponse
 from fitdocs.connectors.protocol import (
     AuthStyle,
+    Capability,
     ConnectorSession,
     TokenSet,
+    WellnessDay,
     WellnessListing,
+    WellnessPackage,
 )
 from fitdocs.connectors.secrets import REDACTED, Redactor, Secret
+from fitdocs.wellness.formats import intervals as wellness_intervals
+from fitdocs.wellness.model import DaySnapshot, Metric
+from fitdocs.wellness.probe import CandidateProbe
+from fitdocs.wellness.registry import Recognized, recognize
 from tests.connectors.conftest import FakeTransport
 from tests.fixtures import builder
 
@@ -694,3 +701,818 @@ def test_json_id_type_errors_are_exact(tmp_path: Path, id_value: object) -> None
         == "intervals.icu's wellness listing is not in its documented form: "
         "entry 0 has no YYYY-MM-DD id"
     )
+
+
+# Packaging and the real wellness-store delivery contract.
+_JSON_NON_OBJECTS = [
+    None,
+    True,
+    False,
+    194,
+    0,
+    -1,
+    0.5,
+    0.0,
+    -1.25,
+    "",
+    "text",
+    [],
+    [71],
+]
+_JSON_VALUES = [
+    None,
+    True,
+    False,
+    194,
+    0,
+    -1,
+    0.5,
+    0.0,
+    -1.25,
+    "",
+    "text",
+    [],
+    [71],
+    {},
+    {"x": 73},
+]
+
+
+def _chosen(records: list[dict[str, object]]) -> tuple[WellnessDay, ...]:
+    return tuple(
+        WellnessDay(
+            date.fromisoformat(str(record["id"])), str(record.get("updated")), record
+        )
+        for record in records
+    )
+
+
+def _package(
+    tmp_path: Path, athlete: object, records: list[dict[str, object]] | None = None
+) -> tuple[WellnessPackage, FakeTransport]:
+    transport = FakeTransport([_ok(athlete)])
+    chosen = [] if records is None else records
+    return intervals.IntervalsConnector().package_wellness(
+        _session(tmp_path, transport), _chosen(chosen)
+    ), transport
+
+
+def _package_outcome(
+    session: ConnectorSession, days: tuple[WellnessDay, ...] = ()
+) -> object:
+    try:
+        return intervals.IntervalsConnector().package_wellness(session, days)
+    except Exception as failure:
+        return failure
+
+
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("WELLNESS_FORMAT", wellness_intervals.FORMAT.id),
+        ("WELLNESS_SUFFIX", wellness_intervals.FORMAT.archived_suffix),
+        ("WELLNESS_DELIVERY_FORMAT", wellness_intervals.DELIVERY_FORMAT),
+        ("WELLNESS_DELIVERY_VERSION", wellness_intervals.DELIVERY_VERSION),
+        ("WELLNESS_KEYS_PATTERN", r"^(?:icu_)?([a-z0-9_]+?)_wellness_keys$"),
+        (
+            "ATHLETE_FORM_MESSAGE",
+            "intervals.icu's athlete settings are not in their documented form: "
+            "{problem}",
+        ),
+    ],
+)
+def test_packaging_public_constant_values(name: str, expected: object) -> None:
+    value = getattr(intervals, name)
+    assert (type(value), value) == (type(expected), expected)
+
+
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        (name, "Final[str]")
+        for name in (
+            "WELLNESS_FORMAT",
+            "WELLNESS_SUFFIX",
+            "WELLNESS_DELIVERY_FORMAT",
+            "WELLNESS_KEYS_PATTERN",
+            "ATHLETE_FORM_MESSAGE",
+        )
+    ]
+    + [("WELLNESS_DELIVERY_VERSION", "Final[int]")],
+)
+def test_packaging_public_constant_annotations(name: str, expected: str) -> None:
+    assert intervals.__annotations__.get(name) == expected
+
+
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("session", "ConnectorSession"),
+        ("days", "tuple[WellnessDay, ...]"),
+        ("return", "WellnessPackage"),
+    ],
+)
+def test_package_signature_annotations(name: str, expected: str) -> None:
+    assert (
+        intervals.IntervalsConnector.package_wellness.__annotations__.get(name)
+        == expected
+    )
+
+
+def test_packaging_capabilities_are_exact() -> None:
+    assert intervals.IntervalsConnector.capabilities == frozenset(
+        {Capability.PULL_ACTIVITIES, Capability.PULL_WELLNESS}
+    )
+
+
+@pytest.mark.parametrize("facet", ["data", "suffix", "format", "origins"])
+def test_package_golden_and_metadata(tmp_path: Path, facet: str) -> None:
+    records: list[dict[str, object]] = [
+        {
+            "updated": "a-revision",
+            "id": "2021-09-08",
+            "weight": 37,
+            "sportInfo": {"z": "é", "a": [False, None]},
+            "ctl": 19,
+        },
+        {
+            "updated": "z-revision",
+            "id": "2021-09-06",
+            "weight": 91,
+            "atl": 23,
+            "rampRate": None,
+            "ctlLoad": {"z": 7, "a": 3},
+            "atlLoad": False,
+            "unknown": [],
+        },
+        {"updated": "m-revision", "id": "2021-09-07", "weight": 12, "restingHR": None},
+    ]
+    package, _ = _package(
+        tmp_path,
+        {"garmin_wellness_keys": ["weight"], "oura_wellness_keys": ["restingHR"]},
+        records,
+    )
+    golden = (
+        '{"format":"fitdocs.intervals-icu-wellness","origins":{"restingHR":"oura","weight":"garmin"},'
+        '"records":[{"atl":23,"atlLoad":false,"ctlLoad":{"a":3,"z":7},"id":"2021-09-06","rampRate":null,"unknown":[],"updated":"z-revision","weight":91},'
+        '{"id":"2021-09-07","restingHR":null,"updated":"m-revision","weight":12},'
+        '{"ctl":19,"id":"2021-09-08","sportInfo":{"a":[false,null],"z":"é"},"updated":"a-revision","weight":37}],"version":1}\n'
+    ).encode()
+    expected = {
+        "data": golden,
+        "suffix": ".json",
+        "format": "intervals-icu",
+        "origins": frozenset({"garmin", "oura"}),
+    }
+    assert getattr(package, facet) == expected[facet]
+
+
+@pytest.mark.parametrize("records", [[], [{"id": "2021-09-08", "weight": 71}]])
+def test_package_omits_empty_origins(
+    tmp_path: Path, records: list[dict[str, object]]
+) -> None:
+    package, _ = _package(tmp_path, {}, records)
+    assert json.loads(package.data) == {
+        "format": "fitdocs.intervals-icu-wellness",
+        "version": 1,
+        "records": records,
+    }
+
+
+@pytest.mark.parametrize("value", _JSON_VALUES)
+def test_package_retains_every_record_value(tmp_path: Path, value: object) -> None:
+    records: list[dict[str, object]] = [
+        {
+            "id": _DAY.isoformat(),
+            "ctl": value,
+            "atl": value,
+            "rampRate": value,
+            "ctlLoad": value,
+            "atlLoad": value,
+            "sportInfo": value,
+            "weight": value,
+            "unknown": value,
+            "nested": {"dict": {"leaf": value}, "list": [value, {"deep": value}]},
+        }
+    ]
+    expected = _canonical_json(records)
+    package, _ = _package(
+        tmp_path, {"garmin_wellness_keys": ["weight", "absent"]}, records
+    )
+    assert _canonical_json(json.loads(package.data)["records"]) == expected
+
+
+def test_package_keeps_input_objects_unmodified(tmp_path: Path) -> None:
+    records: list[dict[str, object]] = [
+        {
+            "id": "2021-09-08",
+            "unknown": {
+                "z": [73, None, False, True, 0, 1, 0.0, -0.0, 1.0],
+                "a": "é",
+            },
+        }
+    ]
+    athlete = {"garmin_wellness_keys": ["weight", "weight"], "unrelated": {"z": 97}}
+    expected = _canonical_json([records, athlete])
+    _package(tmp_path, athlete, records)
+    assert _canonical_json([records, athlete]) == expected
+
+
+def test_package_does_not_read_metric_values(tmp_path: Path) -> None:
+    class Record(dict[str, object]):
+        def __getitem__(self, key: str) -> object:
+            if key != "id":
+                raise AssertionError(f"read metric {key}")
+            return super().__getitem__(key)
+
+        def get(self, key: str, default: object = None) -> object:
+            if key not in ("id", "updated"):
+                raise AssertionError(f"read metric {key}")
+            return super().get(key, default)
+
+    record = Record(id=_DAY.isoformat(), weight=None, ctl={"opaque": [73]})
+    transport = FakeTransport([_ok({"garmin_wellness_keys": ["weight"]})])
+    outcome = _package_outcome(
+        _session(tmp_path, transport), (WellnessDay(_DAY, "rev", record),)
+    )
+    assert isinstance(outcome, WellnessPackage), repr(outcome)
+
+
+@pytest.mark.parametrize("record", _JSON_NON_OBJECTS)
+def test_package_rejects_nondict_records(tmp_path: Path, record: object) -> None:
+    outcome = _package_outcome(
+        _session(tmp_path, FakeTransport([_ok({})])), (WellnessDay(_DAY, None, record),)
+    )
+    assert (
+        isinstance(outcome, ConnectorError)
+        and str(outcome) == "intervals.icu's wellness package record 0 is not an object"
+    )
+
+
+@pytest.mark.parametrize(
+    "body,problem",
+    [(b"{", "the body is not valid JSON"), (b"\xff", "the body is not valid JSON")]
+    + [
+        (json.dumps(value).encode(), "the body is not a JSON object")
+        for value in _JSON_NON_OBJECTS
+    ],
+)
+def test_athlete_body_requires_json_object(
+    tmp_path: Path, body: bytes, problem: str
+) -> None:
+    outcome = _package_outcome(
+        _session(tmp_path, FakeTransport([HttpResponse(200, {}, body)]))
+    )
+    assert (
+        isinstance(outcome, ConnectorError)
+        and str(outcome)
+        == "intervals.icu's athlete settings are not in their documented form: "
+        + problem
+    )
+
+
+@pytest.mark.parametrize("athlete", [{}, {"unrelated": 71}])
+def test_athlete_object_without_claims_is_valid(
+    tmp_path: Path, athlete: dict[str, object]
+) -> None:
+    outcome = _package_outcome(_session(tmp_path, FakeTransport([_ok(athlete)])))
+    assert isinstance(outcome, WellnessPackage), repr(outcome)
+
+
+def _origins_outcome(
+    tmp_path: Path, athlete: object, records: list[dict[str, object]] | None = None
+) -> object:
+    try:
+        package, _ = _package(tmp_path, athlete, records)
+        return json.loads(package.data).get("origins", {})
+    except Exception as failure:
+        return failure
+
+
+@pytest.mark.parametrize(
+    "athlete,expected",
+    [
+        (
+            {"garmin_wellness_keys": ["weight", "restingHR"]},
+            {"weight": "garmin", "restingHR": "garmin"},
+        ),
+        (
+            {
+                "garmin_wellness_keys": ["weight", "restingHR"],
+                "oura_wellness_keys": ["weight", "hrv"],
+            },
+            {"restingHR": "garmin", "hrv": "oura"},
+        ),
+        (
+            {
+                "garmin_wellness_keys": ["weight", "weight"],
+                "icu_garmin_wellness_keys": ["weight", "steps"],
+            },
+            {"weight": "garmin", "steps": "garmin"},
+        ),
+        (
+            {
+                "garmin_wellness_keys": ["weight"],
+                "oura_wellness_keys": ["weight"],
+                "fitbit_wellness_keys": ["weight", "steps"],
+            },
+            {"steps": "fitbit"},
+        ),
+        ({"icu_wellness_keys": ["weight"], "icu_icu_wellness_keys": ["hrv"]}, {}),
+        (
+            {
+                "google_fit_wellness_keys": ["weight"],
+                "icu_google_fit_wellness_keys": ["hrv"],
+            },
+            {"weight": "google-fit", "hrv": "google-fit"},
+        ),
+        ({"123_wellness_keys": ["steps"]}, {"steps": "123"}),
+        ({"private_wellness_keys": ["weight"]}, {"weight": "private"}),
+    ],
+)
+def test_settings_claim_cardinality_and_platform_names(
+    tmp_path: Path, athlete: dict[str, object], expected: dict[str, str]
+) -> None:
+    origins = _origins_outcome(tmp_path, athlete)
+    assert origins == expected
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "GARMIN",
+        "Garmin",
+        "",
+        "_garmin",
+        "garmin_",
+        "google__fit",
+        "google-fit",
+        "garmin!",
+        "garminé",
+        "garmin wellness",
+        "garmin/fit",
+    ],
+)
+def test_invalid_platform_names_make_no_claim(tmp_path: Path, name: str) -> None:
+    origins = _origins_outcome(tmp_path, {name + "_wellness_keys": ["weight"]})
+    assert origins == {}
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "garmin_wellness_key",
+        "garmin_wellness_keys_extra",
+        "garmin_wellness_keys\n",
+        "pre.garmin_wellness_keys",
+        "garmin_activity_keys",
+        "wellness_keys",
+    ],
+)
+def test_unmatched_setting_names_make_no_claim(tmp_path: Path, key: str) -> None:
+    origins = _origins_outcome(tmp_path, {key: ["weight"]})
+    assert origins == {}
+
+
+@pytest.mark.parametrize("value", _JSON_VALUES)
+def test_only_list_setting_values_create_claims(tmp_path: Path, value: object) -> None:
+    origins = _origins_outcome(tmp_path, {"garmin_wellness_keys": value})
+    assert origins == {}
+
+
+@pytest.mark.parametrize("element", _JSON_VALUES)
+def test_only_nonempty_string_list_elements_create_claims(
+    tmp_path: Path, element: object
+) -> None:
+    expected = {"text": "garmin"} if isinstance(element, str) and element else {}
+    origins = _origins_outcome(tmp_path, {"garmin_wellness_keys": [element]})
+    assert origins == expected
+
+
+@pytest.mark.parametrize("value", _JSON_VALUES)
+def test_attribution_uses_settings_without_metric_value_filter(
+    tmp_path: Path, value: object
+) -> None:
+    origins = _origins_outcome(
+        tmp_path,
+        {"garmin_wellness_keys": ["weight", "missing"]},
+        [{"id": _DAY.isoformat(), "weight": value}],
+    )
+    assert origins == {
+        "missing": "garmin",
+        "weight": "garmin",
+    }
+
+
+def test_attribution_retains_valid_fields_beside_invalid_elements(
+    tmp_path: Path,
+) -> None:
+    origins = _origins_outcome(
+        tmp_path, {"garmin_wellness_keys": [None, 73, False, [], {}, "", "weight", " "]}
+    )
+    assert origins == {" ": "garmin", "weight": "garmin"}
+
+
+@pytest.mark.parametrize(
+    "facet", ["count", "method_url", "secret", "public", "credential"]
+)
+def test_athlete_request_contract(tmp_path: Path, facet: str) -> None:
+    transport = FakeTransport([_ok({}), _ok({})])
+    session = _session(tmp_path, transport)
+
+    class Credentials(_Credentials):
+        def value(self, field: str) -> Secret:
+            self.fields.append(field)
+            return self.secret
+
+    credentials = Credentials(session.secret(_KEY))
+    session = replace(session, credentials=credentials)
+    for _ in range(2):
+        _package_outcome(session)
+    observed = {
+        "count": len(transport.requests),
+        "method_url": [(r.method, r.url) for r in transport.requests],
+        "secret": [
+            r.secret_headers.get("Authorization", Secret("absent")).reveal()
+            for r in transport.requests
+        ],
+        "public": ["Authorization" in r.headers for r in transport.requests],
+        "credential": credentials.fields,
+    }
+    expected = {
+        "count": 2,
+        "method_url": [("GET", f"{intervals.API_BASE}/athlete/0")] * 2,
+        "secret": [_BASIC] * 2,
+        "public": [False, False],
+        "credential": ["api_key", "api_key"],
+    }
+    assert observed[facet] == expected[facet]
+
+
+def test_package_accepts_actual_api_key_only_credentials(tmp_path: Path) -> None:
+    transport = FakeTransport([_ok({})])
+    credentials = ResolvedCredentials(
+        connector_id="intervals",
+        auth_style=AuthStyle.API_KEY,
+        values={"api_key": Secret(_KEY)},
+        expires_at=None,
+        scopes=None,
+        store=None,
+        instance_name="intervals",
+    )
+    outcome = _package_outcome(
+        replace(_session(tmp_path, transport), credentials=credentials)
+    )
+    assert isinstance(outcome, WellnessPackage), repr(outcome)
+
+
+@pytest.mark.parametrize(
+    "status", [401, 403, 429, 500, 503, 599, 204, 302, 404, 499, 600]
+)
+def test_athlete_status_mapping(tmp_path: Path, status: int) -> None:
+    transport = FakeTransport([HttpResponse(status, {}, b"service-sentinel")] * 8)
+    outcome = _package_outcome(_session(tmp_path, transport))
+    expected: tuple[type[Exception], object]
+    if status == 401:
+        observed = (type(outcome), getattr(outcome, "kind", None))
+        expected = (AuthFailure, AuthFailureKind.REJECTED)
+    else:
+        observed = (type(outcome), str(outcome))
+        expected_message = (
+            "intervals.icu refused the athlete settings request (HTTP 403): "
+            "service-sentinel. intervals.icu may be withholding data it received "
+            "from Garmin. Set wellness = false in this instance's table to stop "
+            "requesting wellness; Garmin's own data export is the route for Garmin "
+            "wellness (see the wellness guide)."
+            if status == 403
+            else "intervals.icu is limiting requests (HTTP 429) and still was after "
+            "fitdocs's retries; this pull stopped, and the next pull resumes "
+            "where it stopped"
+            if status == 429
+            else f"intervals.icu is unavailable (HTTP {status}) after fitdocs's "
+            "retries; this pull stopped, and the next pull resumes where it stopped"
+            if 500 <= status < 600
+            else "intervals.icu answered the athlete settings request "
+            f"with HTTP {status}: "
+            "service-sentinel"
+        )
+        expected = (ConnectorError, expected_message)
+    assert observed == expected
+
+
+@pytest.mark.parametrize(
+    "status,count",
+    [(401, 1), (403, 1), (429, 3), (500, 3), (503, 3), (599, 1), (404, 1), (600, 1)],
+)
+def test_athlete_request_retry_count(tmp_path: Path, status: int, count: int) -> None:
+    transport = FakeTransport([HttpResponse(status, {}, b"retry-control")] * 8)
+    _package_outcome(_session(tmp_path, transport))
+    assert len(transport.requests) == count
+
+
+@pytest.mark.parametrize("status", [401, 403, 404])
+@pytest.mark.parametrize(
+    "secret", [_KEY, _TOKEN, _BASIC], ids=["key", "token", "basic"]
+)
+def test_athlete_status_redacts_every_credential_form(
+    tmp_path: Path, status: int, secret: str
+) -> None:
+    transport = FakeTransport(
+        [HttpResponse(status, {}, f"echo {secret} tail".encode())]
+    )
+    outcome = _package_outcome(_session(tmp_path, transport))
+    message = f"echo {REDACTED} tail"
+    expected = (
+        (AuthFailure, message)
+        if status == 401
+        else (
+            ConnectorError,
+            "intervals.icu refused the athlete settings request (HTTP 403): "
+            + message
+            + ". intervals.icu may be withholding data it received from Garmin. "
+            "Set wellness = false in this instance's table to stop requesting "
+            "wellness; Garmin's own data export is the route for Garmin wellness "
+            "(see the wellness guide).",
+        )
+        if status == 403
+        else (
+            ConnectorError,
+            "intervals.icu answered the athlete settings request with HTTP 404: "
+            + message,
+        )
+    )
+    assert (type(outcome), str(outcome)) == expected
+
+
+@pytest.mark.parametrize(
+    "facet", ["recognized", "dates", "value", "origin", "computed"]
+)
+def test_real_wellness_parser_reads_package(tmp_path: Path, facet: str) -> None:
+    package, _ = _package(
+        tmp_path,
+        {"garmin_wellness_keys": ["weight"]},
+        [
+            {"id": "2021-09-08", "weight": 37, "ctl": 19},
+            {"id": "2021-09-06", "weight": 91, "atl": 23},
+        ],
+    )
+    path = tmp_path / "contract.json"
+    path.write_bytes(package.data)
+    recognition = recognize(CandidateProbe.open(path))
+    snapshots: tuple[DaySnapshot, ...] = ()
+    if facet != "recognized":
+        with path.open("rb") as stream:
+            snapshots = tuple(wellness_intervals.FORMAT.parse(stream))
+    observed = {
+        "recognized": recognition.format.id
+        if isinstance(recognition, Recognized)
+        else recognition,
+        "dates": [s.day for s in snapshots],
+        "value": [s.values.get(Metric.WEIGHT_KG) for s in snapshots],
+        "origin": [dict(s.origins) for s in snapshots],
+        "computed": [set(s.values) for s in snapshots],
+    }
+    expected = {
+        "recognized": "intervals-icu",
+        "dates": [date(2021, 9, 6), date(2021, 9, 8)],
+        "value": [91.0, 37.0],
+        "origin": [{Metric.WEIGHT_KG: "garmin"}] * 2,
+        "computed": [{Metric.WEIGHT_KG}] * 2,
+    }
+    assert observed[facet] == expected[facet]
+
+
+def test_package_bytes_do_not_depend_on_clock_or_machine(tmp_path: Path) -> None:
+    transport = FakeTransport([_ok({}), _ok({})])
+    session = _session(tmp_path, transport)
+    days = _chosen([{"id": _DAY.isoformat(), "unknown": {"z": 71, "a": "ñ"}}])
+    expected = intervals.IntervalsConnector().package_wellness(session, days).data
+    second = replace(
+        session,
+        data_root=tmp_path / "other-machine",
+        now=lambda: _CLOCK + timedelta(days=17),
+    )
+    assert (
+        intervals.IntervalsConnector().package_wellness(second, days).data == expected
+    )
+
+
+def _canonical_json(value: object) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def _package_listed_records(
+    tmp_path: Path, athlete: dict[str, object], records: list[dict[str, object]]
+) -> tuple[WellnessPackage, list[object]]:
+    transport = FakeTransport([_ok(records), _ok(athlete)])
+    session = _session(tmp_path, transport)
+    connector = intervals.IntervalsConnector()
+    listing = connector.list_wellness(session, _DAY)
+    package = connector.package_wellness(session, listing.days)
+    return package, [day.record for day in listing.days]
+
+
+@pytest.mark.parametrize("facet", ["envelope", "metadata"])
+@pytest.mark.parametrize(
+    "athlete,records,expected_map,expected_platforms",
+    [
+        pytest.param(
+            {"oura_wellness_keys": ["missing"]},
+            [{"id": _DAY.isoformat(), "weight": None}],
+            {"missing": "oura"},
+            frozenset({"oura"}),
+            id="absent-only",
+        ),
+        pytest.param(
+            {
+                "garmin_wellness_keys": ["weight", "steps"],
+                "oura_wellness_keys": ["missing"],
+                "fitbit_wellness_keys": ["steps"],
+            },
+            [{"id": _DAY.isoformat(), "weight": None, "steps": 97}],
+            {"weight": "garmin", "missing": "oura"},
+            frozenset({"garmin", "oura"}),
+            id="mixed-present-absent-ambiguous",
+        ),
+        pytest.param(
+            {"garmin_wellness_keys": ["weight"], "oura_wellness_keys": ["missing"]},
+            [],
+            {"weight": "garmin", "missing": "oura"},
+            frozenset({"garmin", "oura"}),
+            id="empty-selected-records",
+        ),
+        pytest.param(
+            {"garmin_wellness_keys": ["weight"], "oura_wellness_keys": ["weight"]},
+            [{"id": _DAY.isoformat(), "weight": None}],
+            {},
+            frozenset(),
+            id="ambiguous-only",
+        ),
+        pytest.param(
+            {},
+            [{"id": _DAY.isoformat(), "weight": None}],
+            {},
+            frozenset(),
+            id="no-claims",
+        ),
+    ],
+)
+def test_listed_package_attribution_has_independent_envelope_and_metadata(
+    tmp_path: Path,
+    facet: str,
+    athlete: dict[str, object],
+    records: list[dict[str, object]],
+    expected_map: dict[str, str],
+    expected_platforms: frozenset[str],
+) -> None:
+    expected: tuple[type[object], object] = (
+        (dict, copy.deepcopy(expected_map))
+        if facet == "envelope"
+        else (frozenset, expected_platforms)
+    )
+    package, _ = _package_listed_records(tmp_path, athlete, records)
+    observed = (
+        json.loads(package.data).get("origins", {})
+        if facet == "envelope"
+        else package.origins
+    )
+    assert (type(observed), observed) == expected
+
+
+_OPAQUE_FIELDS = (
+    "ctl",
+    "atl",
+    "rampRate",
+    "ctlLoad",
+    "atlLoad",
+    "sportInfo",
+    "weight",
+    "unknown",
+)
+_TYPE_ALIASES = [
+    pytest.param(False, id="false"),
+    pytest.param(True, id="true"),
+    pytest.param(0, id="zero-int"),
+    pytest.param(1, id="positive-int"),
+    pytest.param(-1, id="negative-int"),
+    pytest.param(0.0, id="zero-float"),
+    pytest.param(-0.0, id="negative-zero"),
+    pytest.param(1.0, id="positive-float"),
+    pytest.param(-1.0, id="negative-float"),
+]
+
+
+@pytest.mark.parametrize("field", _OPAQUE_FIELDS)
+@pytest.mark.parametrize("nested", [False, True], ids=["flat", "nested"])
+@pytest.mark.parametrize("value", _TYPE_ALIASES)
+@pytest.mark.parametrize("facet", ["records", "input"])
+def test_listed_package_preserves_json_types_by_field_and_role(
+    tmp_path: Path, field: str, nested: bool, value: object, facet: str
+) -> None:
+    record: dict[str, object] = {"id": _DAY.isoformat()}
+    record.update({name: "control-" + name for name in _OPAQUE_FIELDS})
+    record[field] = (
+        {"z": ["é-control", {"leaf": value}], "a": "ñ-control"} if nested else value
+    )
+    records = [record]
+    expected = _canonical_json(records)
+    package, listed_records = _package_listed_records(
+        tmp_path, {"garmin_wellness_keys": ["weight"]}, records
+    )
+    observed = (
+        json.loads(package.data)["records"] if facet == "records" else listed_records
+    )
+    assert _canonical_json(observed) == expected
+
+
+_UPDATED_PACKAGE_VALUES = [
+    pytest.param(None, id="null"),
+    pytest.param(False, id="false"),
+    pytest.param(True, id="true"),
+    pytest.param(0, id="zero-int"),
+    pytest.param(1, id="positive-int"),
+    pytest.param(-1, id="negative-int"),
+    pytest.param(2**64, id="large-int"),
+    pytest.param(0.0, id="zero-float"),
+    pytest.param(-0.0, id="negative-zero"),
+    pytest.param(1.0, id="positive-float"),
+    pytest.param(-1.0, id="negative-float"),
+    pytest.param(0.5, id="positive-fraction"),
+    pytest.param(-1.25, id="negative-fraction"),
+    pytest.param(1e100, id="positive-exponent"),
+    pytest.param(-1e100, id="negative-exponent"),
+    pytest.param("", id="empty-string"),
+    pytest.param("opaque", id="ordinary-string"),
+    pytest.param("ñ", id="unicode-string"),
+    pytest.param(" ", id="whitespace-string"),
+    pytest.param(" opaque revision ", id="untrimmed-string"),
+    pytest.param([], id="empty-list"),
+    pytest.param([False, True, 0, 1, 0.0, -0.0, 1.0, None, "é"], id="nonempty-list"),
+    pytest.param({}, id="empty-object"),
+    pytest.param({"z": [False, -0.0], "a": {"leaf": None}}, id="nonempty-object"),
+]
+
+
+def _updated_package_records(value: object, nested: bool) -> list[dict[str, object]]:
+    record: dict[str, object] = {"id": _DAY.isoformat()}
+    record.update({name: "updated-control-" + name for name in _OPAQUE_FIELDS})
+    record["weight"] = 37
+    record["updated"] = (
+        {"z": ["é-control", {"leaf": value}], "a": "ñ-control"} if nested else value
+    )
+    return [record]
+
+
+@pytest.mark.parametrize("nested", [False, True], ids=["flat", "nested"])
+@pytest.mark.parametrize("value", _UPDATED_PACKAGE_VALUES)
+@pytest.mark.parametrize("facet", ["records", "input"])
+def test_listed_package_preserves_updated_value_and_role(
+    tmp_path: Path, nested: bool, value: object, facet: str
+) -> None:
+    records = _updated_package_records(value, nested)
+    expected = _canonical_json(records)
+    package, caller_records = _package_listed_records(
+        tmp_path, {"garmin_wellness_keys": ["weight"]}, records
+    )
+    observed = (
+        json.loads(package.data)["records"] if facet == "records" else caller_records
+    )
+    assert _canonical_json(observed) == expected
+
+
+@pytest.mark.parametrize("facet", ["records", "input"])
+def test_listed_package_preserves_missing_updated(tmp_path: Path, facet: str) -> None:
+    records = _updated_package_records(None, False)
+    records[0].pop("updated")
+    expected = _canonical_json(records)
+    package, caller_records = _package_listed_records(
+        tmp_path, {"garmin_wellness_keys": ["weight"]}, records
+    )
+    observed = (
+        json.loads(package.data)["records"] if facet == "records" else caller_records
+    )
+    assert _canonical_json(observed) == expected
+
+
+@pytest.mark.parametrize("nested", [False, True], ids=["flat", "nested"])
+@pytest.mark.parametrize("facet", ["records", "input"])
+def test_updated_packaging_keeps_other_field_controls(
+    tmp_path: Path, nested: bool, facet: str
+) -> None:
+    from typing import cast
+
+    records = _updated_package_records(False, nested)
+    expected = _canonical_json(
+        [{key: value for key, value in records[0].items() if key != "updated"}]
+    )
+    package, caller_records = _package_listed_records(
+        tmp_path, {"garmin_wellness_keys": ["weight"]}, records
+    )
+    observed = (
+        json.loads(package.data)["records"] if facet == "records" else caller_records
+    )
+    controls = [
+        {key: value for key, value in record.items() if key != "updated"}
+        for record in cast(list[dict[str, object]], observed)
+    ]
+    assert _canonical_json(controls) == expected

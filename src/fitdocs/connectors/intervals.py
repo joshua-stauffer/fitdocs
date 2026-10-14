@@ -54,6 +54,7 @@ from fitdocs.connectors.protocol import (
     SettingsContext,
     WellnessDay,
     WellnessListing,
+    WellnessPackage,
 )
 from fitdocs.connectors.secrets import Secret
 
@@ -167,7 +168,7 @@ class IntervalsConnector:
     connector_id = INTERVALS_CONNECTOR_ID
     display_name = "intervals.icu"
     auth_style = AuthStyle.API_KEY
-    capabilities = frozenset({Capability.PULL_ACTIVITIES})
+    capabilities = frozenset({Capability.PULL_ACTIVITIES, Capability.PULL_WELLNESS})
     credential_fields = (
         CredentialField(
             "api_key", "intervals.icu API key (Settings, Developer Settings)", True
@@ -328,6 +329,40 @@ class IntervalsConnector:
                 days.append(WellnessDay(day=day, revision=revision, record=record))
         return WellnessListing(
             oldest=start, newest=end, days=tuple(sorted(days, key=lambda d: d.day))
+        )
+
+    def package_wellness(
+        self, session: ConnectorSession, days: tuple[WellnessDay, ...]
+    ) -> WellnessPackage:
+        response = session.http.get(
+            f"{API_BASE}/athlete/{SELF_ATHLETE}",
+            secret_headers=_auth_headers(session, session.credentials.value("api_key")),
+        )
+        if response.status != 200:
+            _raise_for_wellness_status(
+                session, response, request="athlete settings request"
+            )
+        try:
+            athlete = json.loads(response.body.decode("utf-8"))
+        except (ValueError, UnicodeError):
+            raise ConnectorError(
+                ATHLETE_FORM_MESSAGE.format(problem="the body is not valid JSON")
+            ) from None
+        if not isinstance(athlete, dict):
+            raise ConnectorError(
+                ATHLETE_FORM_MESSAGE.format(problem="the body is not a JSON object")
+            )
+        origins = _wellness_origins(athlete)
+        records: list[dict[str, object]] = []
+        for index, day in enumerate(days):
+            if not isinstance(day.record, dict):
+                raise ConnectorError(
+                    f"intervals.icu's wellness package record {index} is not an object"
+                )
+            records.append(day.record)
+        data = _envelope_bytes(records, origins)
+        return WellnessPackage(
+            data, WELLNESS_SUFFIX, WELLNESS_FORMAT, frozenset(origins.values())
         )
 
     def fetch_activity(
@@ -597,4 +632,44 @@ def _raise_for_wellness_status(
         WELLNESS_STATUS_MESSAGE.format(
             request=request, status=response.status, message=message
         )
+    )
+
+
+def _wellness_origins(athlete: dict[str, object]) -> dict[str, str]:
+    claims: dict[str, set[str]] = {}
+    for key, fields in athlete.items():
+        match = re.fullmatch(WELLNESS_KEYS_PATTERN, key)
+        if match is None:
+            continue
+        platform = match.group(1).replace("_", "-")
+        if (
+            platform == "icu"
+            or re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", platform) is None
+        ):
+            continue
+        if not isinstance(fields, list):
+            continue
+        for field in fields:
+            if isinstance(field, str) and field:
+                claims.setdefault(field, set()).add(platform)
+    return {
+        field: next(iter(platforms))
+        for field, platforms in claims.items()
+        if len(platforms) == 1
+    }
+
+
+def _envelope_bytes(records: list[dict[str, object]], origins: dict[str, str]) -> bytes:
+    envelope: dict[str, object] = {
+        "format": WELLNESS_DELIVERY_FORMAT,
+        "version": WELLNESS_DELIVERY_VERSION,
+        "records": sorted(records, key=lambda record: str(record["id"])),
+    }
+    if origins:
+        envelope["origins"] = origins
+    return (
+        json.dumps(
+            envelope, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+        + b"\n"
     )

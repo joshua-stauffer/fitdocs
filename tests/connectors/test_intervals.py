@@ -115,7 +115,9 @@ def test_the_declaration_is_a_personal_key_pull_only_connector() -> None:
     assert connector.connector_id == "intervals"
     assert connector.display_name == "intervals.icu"
     assert connector.auth_style is AuthStyle.API_KEY
-    assert connector.capabilities == frozenset({Capability.PULL_ACTIVITIES})
+    assert connector.capabilities == frozenset(
+        {Capability.PULL_ACTIVITIES, Capability.PULL_WELLNESS}
+    )
     assert connector.credential_fields == (
         CredentialField(
             "api_key", "intervals.icu API key (Settings, Developer Settings)", True
