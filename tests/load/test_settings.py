@@ -1977,7 +1977,7 @@ def _modules_calling_load_load_settings() -> set[Path]:
 
 
 def test_load_load_settings_is_called_from_exactly_the_licensed_modules() -> None:
-    """Req 14.1: the reader itself stays singular even though four *passes*
+    """Req 14.1: the reader itself stays singular even though five *passes*
     now consume it. Training-load's own pass (``load/engine.py``), the
     load-history engine (``history/engine.py``, which reads ``[load]``'s
     ``default_calculator`` as the configured methodology -- load-history
@@ -1988,7 +1988,10 @@ def test_load_load_settings_is_called_from_exactly_the_licensed_modules() -> Non
     ``plan-resolution``'s reconciling pass (``plans/reconcile.py``, landed
     by that spec's task 3.1, which composes the configured methodology the
     way the history engine does -- plan-resolution design, "Allowed
-    Dependencies") are the exactly-four sanctioned callers -- Req 14.1's
+    Dependencies") and the heart-rate derivation stage
+    (``hr_benchmarks/engine.py``, which retains the whole configuration,
+    including its cadence-lock flags) are the
+    exactly-five sanctioned callers -- Req 14.1's
     guarantee is "the ``[load]`` table is parsed from exactly one place",
     not "called from exactly one call site"; a further *pass* reading it
     through the same single reader is the sanctioned resolution recorded in
@@ -1997,12 +2000,10 @@ def test_load_load_settings_is_called_from_exactly_the_licensed_modules() -> Non
     editor, the profile store, or any other module tempted to read
     ``[load]`` directly -- may call it.
 
-    Mutation caught: adding a *fifth*, real call site (e.g. a guarded
+    Adding a *sixth*, real call site (e.g. a guarded
     ``load_load_settings(...)`` invocation added to ``fitdocs/load/docedit.py``,
     reached only behind an always-false condition so it changes no
-    behavior) reddens this test by naming all five callers, while leaving
-    the rest of the suite green -- the same shape task 4.2's reviewer proved
-    against the CLI-specific version of this guard.
+    behavior) is rejected by this licensed-module assertion.
     """
     callers = _modules_calling_load_load_settings()
     assert callers == {
@@ -2010,9 +2011,11 @@ def test_load_load_settings_is_called_from_exactly_the_licensed_modules() -> Non
         Path("history/engine.py"),
         Path("performance/engine.py"),
         Path("plans/reconcile.py"),
+        Path("hr_benchmarks/engine.py"),
     }, (
         f"load_load_settings is called from {sorted(str(p) for p in callers)}, "
-        "expected exactly ['history/engine.py', 'load/engine.py', "
+        "expected exactly ['history/engine.py', 'hr_benchmarks/engine.py', "
+        "'load/engine.py', "
         "'performance/engine.py', 'plans/reconcile.py']"
     )
 
