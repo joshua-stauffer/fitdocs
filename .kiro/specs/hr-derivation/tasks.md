@@ -183,7 +183,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
 
 - [ ] 1. Shared seams: provenance, the partitioned write and the channel's inputs
 
-- [ ] 1.1 Accept a series reference in a benchmark's provenance record, and pin that selection is unchanged (athlete-benchmarks amendment, provenance only)
+- [x] 1.1 Accept a series reference in a benchmark's provenance record, and pin that selection is unchanged (athlete-benchmarks amendment, provenance only)
   - Add the optional series reference to the provenance value (trailing,
     absent by default); the parser accepts it absent or as a non-empty string
     and rejects any other value naming the entry; derived origins still
@@ -807,3 +807,5 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 4.1, 4.7_
 
 ## Implementation Notes
+
+- 1.1: Optional provenance `series` is trailing in `BenchmarkSource` but emitted after `document`; construct sources with keyword arguments. Independent review approved after closing the distinct truthy wrong-type setter guard (numeric and bool fixtures keep the empty-string boundary). All 28 claimed mutations, two new reviewer mutations and 32 historical prose checks red/restored green; full suite 14,798 passed / 44 skipped; controller fresh 65 provenance cases passed. Selection and athlete schema unchanged.

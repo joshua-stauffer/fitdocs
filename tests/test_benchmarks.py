@@ -457,7 +457,7 @@ def test_parser_accepts_a_derived_origin_on_an_athlete_scoped_entry() -> None:
 
 def test_parser_ignores_unrecognized_key_inside_source_table() -> None:
     """Task 2.1 (5.6): an extra key inside a ``source`` table is ignored by
-    the parser -- the typed value carries only the five recognised fields.
+    the parser -- the typed value carries only the six recognised fields.
     Its *preservation on rewrite* is a merge property proved by task 2.2,
     not here.
     """
@@ -3281,3 +3281,148 @@ def test_rejection_matrix_athlete_scoped_applies_from_names_index_and_dates() ->
     assert "[0]" in message
     assert "2026-06-02" in message
     assert "2026-06-01" in message
+
+
+# --- hr-derivation 1.1: provenance and unchanged selection -----------------
+def test_hr_series_field_is_trailing_and_absent_by_default() -> None:
+    assert [field.name for field in dataclasses.fields(BenchmarkSource)] == [
+        "kind",
+        "method",
+        "document",
+        "inputs",
+        "citation",
+        "series",
+    ]
+    assert (
+        BenchmarkSource(BenchmarkSourceKind.DERIVED, "m", "d", "i", "c").series is None
+    )
+
+
+@pytest.mark.parametrize("origin", ["derived", "measured"])
+@pytest.mark.parametrize("series", [None, "sensor:resting_hr_bpm"])
+def test_hr_series_parser_and_serializer_round_trip(
+    origin: str, series: str | None
+) -> None:
+    source = {
+        "kind": origin,
+        "method": "median",
+        "document": "wellness/2022.csv",
+        "inputs": "seventeen synthetic daily values",
+        "citation": "median_choice",
+    }
+    if series is not None:
+        source["series"] = series
+    parsed = parse_benchmarks(
+        _entry(
+            "athlete",
+            "resting_hr_bpm",
+            value=57,
+            measured_on=date(2022, 5, 19),
+            source=source,
+        )
+    )
+    assert parsed.entries[0].source is not None
+    assert parsed.entries[0].source.series == series
+    emitted = benchmarks_to_document(parsed.entries)
+    emitted_source = emitted["benchmarks"]["athlete"]["resting_hr_bpm"][0]["source"]  # type: ignore[index]
+    assert emitted_source == source
+    assert list(emitted_source) == [
+        "kind",
+        "method",
+        "document",
+        *(["series"] if series is not None else []),
+        "inputs",
+        "citation",
+    ]
+
+
+@pytest.mark.parametrize("origin", ["derived", "measured"])
+@pytest.mark.parametrize("series", ["", 17, True, None, [], {}])
+def test_hr_series_parser_rejects_invalid_reference_naming_entry(
+    origin: str, series: object
+) -> None:
+    with pytest.raises(
+        BenchmarkError,
+        match=r"benchmarks\.athlete\.resting_hr_bpm\[0\]\.source\.series",
+    ):
+        parse_benchmarks(
+            _entry(
+                "athlete",
+                "resting_hr_bpm",
+                value=57,
+                measured_on=date(2022, 5, 19),
+                source={
+                    "kind": origin,
+                    "method": "median",
+                    "document": "wellness/2022.csv",
+                    "series": series,
+                    "inputs": "seventeen synthetic daily values",
+                    "citation": "median_choice",
+                },
+            )
+        )
+
+
+@pytest.mark.parametrize("missing", ["method", "document", "inputs", "citation"])
+def test_hr_series_does_not_replace_required_derived_details(missing: str) -> None:
+    source = {
+        "kind": "derived",
+        "method": "median",
+        "document": "wellness/2022.csv",
+        "series": "sensor:resting_hr_bpm",
+        "inputs": "daily median",
+        "citation": "median_choice",
+    }
+    source.pop(missing)
+    with pytest.raises(
+        BenchmarkError,
+        match=rf"benchmarks\.athlete\.resting_hr_bpm\[0\]\.source\.{missing}",
+    ):
+        parse_benchmarks(
+            _entry(
+                "athlete",
+                "resting_hr_bpm",
+                value=57,
+                measured_on=date(2022, 5, 19),
+                source=source,
+            )
+        )
+
+
+@pytest.mark.parametrize("kind", list(BenchmarkKind))
+@pytest.mark.parametrize(
+    "on, expected",
+    [
+        (date(2022, 3, 1), None),
+        (date(2022, 3, 2), "hand"),
+        (date(2022, 4, 8), "hand"),
+        (date(2022, 4, 9), "derived"),
+        (date(2022, 5, 18), "derived"),
+        (date(2022, 5, 19), "hand"),
+        (date(2022, 5, 20), "hand"),
+    ],
+)
+def test_hr_series_selection_derived_entry_beats_hand_back_reach(
+    kind: BenchmarkKind, on: date, expected: str | None
+) -> None:
+    discipline = None if kind in ATHLETE_SCOPED else Sport.RUN
+    hand = Benchmark(
+        kind, discipline, 183, date(2022, 5, 19), applies_from=date(2022, 3, 2)
+    )
+    derived = Benchmark(
+        kind,
+        discipline,
+        191,
+        date(2022, 4, 9),
+        source=BenchmarkSource(
+            BenchmarkSourceKind.DERIVED,
+            "peak",
+            "workouts/session.md",
+            "three peaks",
+            "peak_choice",
+        ),
+    )
+    selected = BenchmarkSet((hand, derived)).applicable(
+        kind, discipline=discipline, on=on
+    )
+    assert selected == {None: None, "hand": hand, "derived": derived}[expected]

@@ -107,6 +107,9 @@ class BenchmarkSource:
     :attr:`BenchmarkSourceKind.MEASURED`. ``method`` is validated as a
     non-empty string only -- never against a vocabulary -- so an entry naming
     a derivation method a future release adds stays readable (5.10).
+    ``series`` optionally identifies the source and metric of a wellness
+    series; when present it is a non-empty string. It is trailing to preserve
+    existing positional construction.
     """
 
     kind: BenchmarkSourceKind
@@ -114,6 +117,7 @@ class BenchmarkSource:
     document: str | None = None
     inputs: str | None = None
     citation: str | None = None
+    series: str | None = None
 
     @property
     def is_derived(self) -> bool:
@@ -443,7 +447,8 @@ def _validate_benchmark_source(raw: object, *, path: str) -> BenchmarkSource | N
     naming the entry path (5.5) -- the vocabulary is closed and published
     (:class:`BenchmarkSourceKind`). A ``derived`` origin requires ``method``,
     ``document``, ``inputs`` and ``citation`` each as a non-empty string,
-    else error (5.2, 5.5); a ``measured`` origin requires none of them. Any
+    else error (5.2, 5.5); a ``measured`` origin requires none of them.
+    ``series`` is optional but must be a non-empty string when present. Any
     other key inside the table is ignored by the parser (1.10, 5.6) -- it is
     carried through unchanged only by the merge layer (task 2.2), which is
     the only layer that ever sees the raw table.
@@ -469,6 +474,11 @@ def _validate_benchmark_source(raw: object, *, path: str) -> BenchmarkSource | N
     document = _validate_source_detail(raw.get("document"), "document", path=path)
     inputs = _validate_source_detail(raw.get("inputs"), "inputs", path=path)
     citation = _validate_source_detail(raw.get("citation"), "citation", path=path)
+    series = raw.get("series")
+    if "series" in raw and (not isinstance(series, str) or not series):
+        raise BenchmarkError(
+            f"{path}.source.series must be a non-empty string, got {series!r}"
+        )
 
     if kind is BenchmarkSourceKind.DERIVED:
         for field_name, value in (
@@ -484,7 +494,12 @@ def _validate_benchmark_source(raw: object, *, path: str) -> BenchmarkSource | N
                 )
 
     return BenchmarkSource(
-        kind=kind, method=method, document=document, inputs=inputs, citation=citation
+        kind=kind,
+        method=method,
+        document=document,
+        inputs=inputs,
+        citation=citation,
+        series=series if isinstance(series, str) else None,
     )
 
 
@@ -655,7 +670,7 @@ def benchmarks_to_document(entries: Sequence[Benchmark]) -> dict[str, object]:
     ``source`` is emitted **last**, after ``applies_from`` and ``note`` (the
     file's emitted order, which is not :class:`Benchmark`'s field order), only
     when present, with its own keys in the fixed order ``kind, method,
-    document, inputs, citation`` and every absent field omitted (design:
+    document, series, inputs, citation`` and every absent field omitted (design:
     BenchmarkProvenance). The group sort key stays ``measured_on`` alone --
     ``source``'s presence or absence never becomes a tie-breaker.
     """
@@ -682,6 +697,8 @@ def benchmarks_to_document(entries: Sequence[Benchmark]) -> dict[str, object]:
                 source_record["method"] = entry.source.method
             if entry.source.document is not None:
                 source_record["document"] = entry.source.document
+            if entry.source.series is not None:
+                source_record["series"] = entry.source.series
             if entry.source.inputs is not None:
                 source_record["inputs"] = entry.source.inputs
             if entry.source.citation is not None:

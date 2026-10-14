@@ -369,3 +369,38 @@ data I did not ask it to touch.
 3. The `athlete.toml` file shall remain valid, human-readable plain text whose benchmark entries are understandable without fitdocs installed.
 4. The fitdocs athlete store shall keep `athlete.toml` in the user's configured data root and shall never read or write a benchmark file inside a code repository.
 5. When benchmark data is absent, the fitdocs athlete store shall yield nothing rather than a zero, a default, or a placeholder value, at every point where a benchmark is read.
+
+
+## Amendment 3 (2026-10-14): optional series provenance, landed by hr-derivation
+
+This is a provenance-only extension of Amendment 2, implemented by
+`hr-derivation` task 1.1 (design § BenchmarkProvenance and Existing Spec
+Amendments). Requirement 3 and Amendment 1 remain unchanged.
+
+- **Requirement 1.13 extended**: a provenance record may additionally carry
+  an optional `series` reference identifying a source and metric. It is
+  absent by default and requires a non-empty string when present, for either
+  origin. Derived origins still require method, document, inputs and
+  citation; a series reference never substitutes for the document.
+- **Requirement 2.13 extended**: an invalid series reference fails with a
+  configuration error naming the file and offending entry. The four
+  required derived details and their validation remain unchanged.
+- **Requirement 2.14 extended**: `series` is recognized within the same
+  schema version. All other unrecognized source keys remain ignored by the
+  reader and preserved on rewrite. Earlier releases ignore `series` and
+  still receive a complete, valid derived record including `document`.
+  The serializer and recognized-source overlay order is `kind`, `method`,
+  `document`, `series`, `inputs`, `citation`; an absent reference is omitted,
+  and rewriting provenance without one removes an inherited reference while
+  preserving unknown source keys. `BenchmarkSource.series` is trailing and
+  defaulted to `None`, preserving existing construction.
+- **Boundary Context extended**: `hr-derivation` is a second stage of
+  `derive-benchmarks`, alongside `performance-benchmarks`, and hands this
+  store ordinary dated resting- and maximum-heart-rate entries. The
+  heart-rate stage's hand-recorded-wins rule governs the entries that stage
+  writes; selection in this store continues to use the latest measurement
+  on or before the activity, whoever recorded it, with an athlete-declared
+  applies-from filling only dates no such measurement covers. This store
+  performs no heart-rate estimation or inference.
+
+No athlete schema, document or load payload version changes here.

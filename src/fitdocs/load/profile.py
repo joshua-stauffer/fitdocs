@@ -353,7 +353,7 @@ class AthleteProfile:
         refreshed derived entry at a previously-derived date inherits that
         stale entry's ``note``, its ``applies_from`` date and any
         unrecognized entry-level or inner-``source`` key exactly as
-        :meth:`with_benchmark` would (5.6, 5.7), while the five recognized
+        :meth:`with_benchmark` would (5.6, 5.7), while the six recognized
         ``source`` fields are overlaid with the fresh derivation's values.
         This is the one write path for the derived subset (design:
         ProfileDerivedWrite).
@@ -751,11 +751,11 @@ def _merge_benchmarks_document(
        it -- replacing the whole inherited ``source`` table the way it
        replaces a scalar field would drop any key inside it that a future
        release wrote and this one does not recognize. Instead, each of the
-       five recognized keys (``kind``, ``method``, ``document``, ``inputs``,
+       six recognized keys (``kind``, ``method``, ``document``, ``series``, ``inputs``,
        ``citation``) is written onto the *inherited raw* ``source`` table --
        present in the fresh record, it overwrites; absent from the fresh
-       record, it is removed, so a full, self-consistent five-key record is
-       always the result -- while any key the fresh record's five names do
+       record, it is removed, so a full, self-consistent recognized record is
+       always the result -- while any key the fresh record's six names do
        not include is left exactly as it was on the inherited table.
     """
     merged: dict[str, object] = _canonicalize_benchmarks_region(existing)
@@ -803,10 +803,11 @@ _SOURCE_RECOGNIZED_KEYS: Final[tuple[str, ...]] = (
     "kind",
     "method",
     "document",
+    "series",
     "inputs",
     "citation",
 )
-"""The five recognized ``source`` keys, in the emitted order (design:
+"""The six recognized ``source`` keys, in the emitted order (design:
 BenchmarkProvenance). Only these are overlaid by
 :func:`_overlay_benchmark_source`; any other key on an inherited raw
 ``source`` table survives untouched."""
@@ -826,12 +827,12 @@ def _overlay_benchmark_source(
     ``None`` result correctly leaves no ``source`` key on the merged entry).
     Otherwise ``fresh`` is the fully-validated source record
     :func:`fitdocs.benchmarks.benchmarks_to_document` emitted -- carrying
-    only the recognized keys it has a value for -- and each of the five
+    only the recognized keys it has a value for -- and each of the six
     recognized keys is written onto a copy of ``inherited`` (or a fresh table
     if ``inherited`` was not a table): present in ``fresh``, it overwrites;
-    absent from ``fresh``, it is removed, so the five recognized keys always
+    absent from ``fresh``, it is removed, so the six recognized keys always
     end up a complete, self-consistent reflection of the fresh record. Any
-    key on ``inherited`` outside the five recognized names is left exactly as
+    key on ``inherited`` outside the six recognized names is left exactly as
     it was -- the forward-compatibility guarantee this overlay exists for.
     """
     if fresh is None:
@@ -900,7 +901,8 @@ def _check_benchmark_source(source: BenchmarkSource | None) -> None:
     :func:`fitdocs.benchmarks._validate_benchmark_source` enforces on a
     parsed file entry -- a derived origin requires ``method``, ``document``,
     ``inputs`` and ``citation`` each as a non-empty string; a measured origin
-    requires none of them -- but a violation here is the *caller's* error,
+    requires none of them. An optional series reference must also be a
+    non-empty string when supplied -- but a violation here is the *caller's* error,
     not malformed data on disk. Raises the plain :class:`ValueError` this
     module's caller-error convention uses (:func:`_check_benchmark_scope`,
     :func:`_check_benchmark_applies_from`, :func:`_validate_benchmark_value`),
@@ -909,6 +911,12 @@ def _check_benchmark_source(source: BenchmarkSource | None) -> None:
     """
     if source is None:
         return
+    if source.series is not None and (
+        not isinstance(source.series, str) or not source.series
+    ):
+        raise ValueError(
+            f"a source series must be a non-empty string, got {source.series!r}"
+        )
     if source.is_derived:
         for name in ("method", "document", "inputs", "citation"):
             detail = getattr(source, name)

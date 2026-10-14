@@ -1762,8 +1762,8 @@ def test_with_benchmark_accepts_derived_source_and_writes_full_record(
     tmp_path: Path,
 ) -> None:
     """A discipline-scoped ``with_benchmark`` call carrying a full derived
-    ``source`` writes all five recognized keys, in the fixed emitted order,
-    onto the written entry (Req 5.2, 5.6)."""
+    ``source`` writes the five populated legacy keys, in the fixed emitted
+    order, onto the written entry; its optional series is absent (Req 5.2, 5.6)."""
     profile = load_profile(tmp_path).with_benchmark(
         BenchmarkKind.FTP_WATTS,
         discipline=Sport.RUN,
@@ -2016,7 +2016,7 @@ def test_with_benchmark_rewrite_with_source_overlays_keys_preserving_unrecognize
 ) -> None:
     """Refreshing a derived entry at a date whose raw ``source`` table
     carries an unrecognized inner key leaves that key in the written file,
-    while the five recognized keys take the new values -- a whole-table
+    while the five populated legacy keys take the new values -- a whole-table
     replace would drop the unrecognized key (Req 5.6, 5.7)."""
     seed = (
         "[[benchmarks.run.ftp_watts]]\n"
@@ -2105,8 +2105,9 @@ def test_with_benchmark_rewrite_with_measured_source_clears_stale_recognized_key
     """A fresh ``source`` that is present but carries fewer recognized
     fields than the inherited raw table (a measured origin overlaying a
     derived one's detail fields) removes the now-stale recognized keys --
-    the overlay is key-by-key against the *fresh* record's own five names,
-    not a mere ``dict.update`` that would leave ``old_method`` etc. behind
+    the overlay is key-by-key against six recognized source names; the fresh
+    measured record contains only ``kind``. A mere ``dict.update`` would leave
+    ``old_method`` etc. behind
     alongside a now-contradictory ``kind = "measured"``. The unrecognized
     ``confidence`` key still survives."""
     seed = (
@@ -3017,8 +3018,8 @@ def test_with_derived_benchmarks_overlays_stale_derived_entry_field_by_field(
     :func:`_merge_benchmarks_document` :meth:`with_benchmark` uses. The
     stale entry's ``note``, its ``applies_from`` date, its unrecognized
     entry-level key and its unrecognized inner ``source`` key all survive;
-    only the five recognized ``source`` fields are refreshed to the new
-    derivation's values (design: ProfileDerivedWrite)."""
+    the five populated legacy ``source`` fields are refreshed to the new
+    derivation's values; its optional series is absent (design: ProfileDerivedWrite)."""
     seed: dict[str, object] = {
         "benchmarks": {
             "ride": {
@@ -3075,7 +3076,7 @@ def test_with_derived_benchmarks_overlays_stale_derived_entry_field_by_field(
     assert len(entries) == 1, "the same-date refresh must not duplicate the entry"
     entry = entries[0]
 
-    # The value and the five recognized source fields are refreshed.
+    # The value and the five populated legacy source keys are refreshed.
     assert entry["value"] == 260
     assert entry["source"]["method"] == "ftp_v1"
     assert entry["source"]["document"] == "workouts/2024-04-01-new.md"
@@ -3196,3 +3197,125 @@ def test_save_profile_after_with_derived_benchmarks_write_leaves_no_temp_files(
 
     leftovers = [p for p in tmp_path.iterdir() if p.name != PROFILE_FILENAME]
     assert leftovers == []
+
+
+# --- hr-derivation 1.1: managed series provenance --------------------------
+def test_hr_series_profile_emits_reference_after_document(tmp_path: Path) -> None:
+    source = BenchmarkSource(
+        BenchmarkSourceKind.DERIVED,
+        "median",
+        "wellness/2022.csv",
+        "daily median",
+        "median_choice",
+        series="sensor:resting_hr_bpm",
+    )
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.RESTING_HR_BPM,
+        discipline=None,
+        value=57,
+        measured_on=date(2022, 5, 19),
+        source=source,
+    )
+    save_profile(tmp_path, profile)
+    emitted = tomllib.loads((tmp_path / PROFILE_FILENAME).read_text())["benchmarks"][
+        "athlete"
+    ]["resting_hr_bpm"][0]["source"]
+    assert list(emitted) == [
+        "kind",
+        "method",
+        "document",
+        "series",
+        "inputs",
+        "citation",
+    ]
+    assert emitted["series"] == "sensor:resting_hr_bpm"
+    assert load_profile(tmp_path).benchmarks.entries[0].source == source
+
+
+@pytest.mark.parametrize("series", [None, "new_sensor:resting_hr_bpm"])
+def test_hr_series_profile_overlay_replaces_or_removes_reference_preserving_unknown(
+    tmp_path: Path, series: str | None
+) -> None:
+    seed = {
+        "kind": "derived",
+        "method": "old_method",
+        "document": "wellness/2021.csv",
+        "series": "old_sensor:resting_hr_bpm",
+        "inputs": "old inputs",
+        "citation": "old_choice",
+        "confidence": "synthetic",
+        "extension": {"unit": "bpm"},
+    }
+    path = tmp_path / PROFILE_FILENAME
+    path.write_text(
+        tomli_w.dumps(
+            {
+                "benchmarks": {
+                    "athlete": {
+                        "resting_hr_bpm": [
+                            {
+                                "value": 63,
+                                "measured_on": date(2022, 5, 19),
+                                "source": seed,
+                            }
+                        ]
+                    }
+                }
+            }
+        )
+    )
+    replacement = BenchmarkSource(
+        BenchmarkSourceKind.DERIVED,
+        "median",
+        "wellness/2022.csv",
+        "daily median",
+        "median_choice",
+        series=series,
+    )
+    profile = load_profile(tmp_path).with_benchmark(
+        BenchmarkKind.RESTING_HR_BPM,
+        discipline=None,
+        value=57,
+        measured_on=date(2022, 5, 19),
+        source=replacement,
+    )
+    save_profile(tmp_path, profile)
+    actual = tomllib.loads(path.read_text())["benchmarks"]["athlete"]["resting_hr_bpm"][
+        0
+    ]["source"]
+    expected = {
+        "kind": "derived",
+        "method": "median",
+        "document": "wellness/2022.csv",
+        "inputs": "daily median",
+        "citation": "median_choice",
+        "confidence": "synthetic",
+        "extension": {"unit": "bpm"},
+    }
+    if series is not None:
+        expected["series"] = series
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "origin", [BenchmarkSourceKind.DERIVED, BenchmarkSourceKind.MEASURED]
+)
+@pytest.mark.parametrize("series", ["", 17, True])
+def test_hr_series_profile_refuses_invalid_reference(
+    tmp_path: Path, origin: BenchmarkSourceKind, series: object
+) -> None:
+    with pytest.raises(ValueError, match="series"):
+        load_profile(tmp_path).with_benchmark(
+            BenchmarkKind.RESTING_HR_BPM,
+            discipline=None,
+            value=57,
+            measured_on=date(2022, 5, 19),
+            source=BenchmarkSource(
+                origin,
+                "median",
+                "wellness/2022.csv",
+                "daily median",
+                "median_choice",
+                series=series,  # type: ignore[arg-type]
+            ),
+        )
