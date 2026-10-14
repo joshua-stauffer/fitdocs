@@ -553,7 +553,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 1.7, 3.1, 3.5, 3.9, 3.10_
   - _Depends: 2.3, 2.4_
 
-- [ ] 3.3 Reconcile, write the heart-rate partition once, and report
+- [x] 3.3 Reconcile, write the heart-rate partition once, and report
   - Complete design § HrStageEngine: load the profile once after the
     evidence; hand-recorded entries per kind; the timeline per kind, or the
     kind's entries on file when its evidence failed or, for resting heart
@@ -817,6 +817,8 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 4.1, 4.7_
 
 ## Implementation Notes
+
+- 3.3: Public `derive_hr_benchmarks` composes both evidence reads before one profile load, reconciles complete REST/MAX partitions, opts into parsed date replacement, compares the returned HR set and saves once only when changed outside preview. The facade exports the four operational names. Preview `written` is false; compare computed reports after normalizing that actual-persistence field. Retained entries keep explicit applies dates; raw unformed resting evidence and empty successful maximum evidence clear their partitions. Report full entry-associated back-reach changes, including removal expansions; neither kind alone, numeric value nor applies date identifies a hand entry. Valid collisions and absent/MEASURED origins need separate fixtures while canonical (kind, measurement date) remains a valid equivalent key. All prior fixtures are preserved. Independent round3 review replayed 246 claimed observations (90 distinct substitutions across 48 assertion lines), caught two new reviewer faults, and verified the bounded identity/cardinality/state inventory; fresh controller 2,083 scoped tests passed. Reviewer statics clean (758/573). Locale/TZ, audit/CLI, central guards and feature build/integration remain their scheduled tasks.
 
 - 1.2 seam repair before 3.3: Debug identified an own-writer integration gap: the existing overlay intentionally inherits a stale same-key applies-from date. The compatible `replace_applies_from=False` option preserves that default; HR must pass `True` once, supply kept entries with their explicit dates, and compare the returned parsed HR set. Central merging clears absent dates only on validated incoming canonical keys, retaining notes and unknown metadata. Independent review reproduced 93 claimed assertion faults, four accurately bounded green observations and two new reviewer faults; all 99 restored runs passed, plus an independent 81-case policy matrix. The green observations do not establish global redundancy. Controller fresh 1,233 profile/performance/HR tests passed; reviewer statics clean (758/573). Task 3.3 owns date-only changed/save/preview/mtime behavior; no selection or default TAGGED change.
 

@@ -1,14 +1,16 @@
-"""Settings and normalized wellness evidence for the heart-rate stage."""
+"""Collect evidence and reconcile the heart-rate benchmark partition."""
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 from fitdocs import FitDecodeError, docio, parse_fit
-from fitdocs.benchmarks import BenchmarkKind
+from fitdocs.benchmarks import Benchmark, BenchmarkKind, BenchmarkSet
 from fitdocs.compose.archive import compose_listed
 from fitdocs.contract import document_date, is_workout_document, sha_of_ref, source_refs
 from fitdocs.layout import archive_path, settings_path, wellness_series_path
+from fitdocs.load.profile import load_profile, save_profile
 from fitdocs.load.settings import LoadSettings, load_load_settings
 from fitdocs.wellness import (
     Metric,
@@ -18,10 +20,24 @@ from fitdocs.wellness import (
     read_series,
 )
 
+from .inspect import back_reach_cover, inconsistencies, takeovers
 from .maximum import max_evidence
 from .peaks import session_peak
 from .resting import resting_evidence
-from .types import Evidence, HrFailure, NoEvidenceReason, SessionPeak, SkippedDocument
+from .sources import MAX_RULE, RESTING_RULE
+from .timeline import derive_timeline
+from .types import (
+    HR_KINDS,
+    BackReachChange,
+    Evidence,
+    HrFailure,
+    HrStageReport,
+    KindOutcome,
+    NoEvidenceReason,
+    SessionPeak,
+    SkippedDocument,
+    Takeover,
+)
 
 
 @dataclass(frozen=True)
@@ -174,3 +190,128 @@ def _resolve_workout_archive(
         return None
     archive = archive_path(data_root, sha)
     return archive if archive.is_file() else None
+
+
+def derive_hr_benchmarks(
+    data_root: Path,
+    *,
+    settings: HrStageSettings,
+    dry_run: bool = False,
+    other_derived: Sequence[Benchmark] | None = None,
+    progress: Callable[[int, int], None] | None = None,
+) -> HrStageReport:
+    resting = _read_resting_series(data_root, settings)
+    workouts = _read_workout_sessions(data_root, settings, progress=progress)
+    profile = load_profile(data_root)
+    old = profile.benchmarks
+    hr_entries: list[Benchmark] = []
+    for rule, evidence, kept in (
+        (RESTING_RULE, resting.evidence, resting.kept),
+        (MAX_RULE, workouts.evidence, workouts.kept),
+    ):
+        previous = _derived_kind(old, rule.kind)
+        recorded = tuple(
+            entry
+            for entry in old.entries
+            if entry.kind is rule.kind and not _is_derived(entry)
+        )
+        hr_entries.extend(
+            previous if kept else derive_timeline(rule, evidence, recorded).entries
+        )
+    new = profile.with_derived_benchmarks(
+        hr_entries, kinds=HR_KINDS, replace_applies_from=True
+    )
+    changed = frozenset(
+        entry
+        for entry in new.benchmarks.entries
+        if entry.kind in HR_KINDS and _is_derived(entry)
+    ) != frozenset(
+        entry for entry in old.entries if entry.kind in HR_KINDS and _is_derived(entry)
+    )
+    written = changed and not dry_run
+    if written:
+        save_profile(data_root, new)
+    outcomes = []
+    for kind, kept in (
+        (BenchmarkKind.RESTING_HR_BPM, resting.kept),
+        (BenchmarkKind.MAX_HR_BPM, workouts.kept),
+    ):
+        before = _derived_kind(old, kind)
+        after = _derived_kind(new.benchmarks, kind)
+        outcomes.append(
+            KindOutcome(
+                kind,
+                after,
+                tuple(entry for entry in after if entry not in before),
+                tuple(entry for entry in before if entry not in after),
+                kept,
+            )
+        )
+    previous_takeovers = {_takeover_key(takeover) for takeover in takeovers(old)}
+    new_takeovers = tuple(
+        takeover
+        for takeover in takeovers(new.benchmarks)
+        if _takeover_key(takeover) not in previous_takeovers
+    )
+    before_cover = {
+        cover.entry: (cover.starts_on, cover.ends_before)
+        for cover in back_reach_cover(old)
+    }
+    changes = tuple(
+        BackReachChange(
+            cover.kind,
+            cover.entry,
+            before_cover[cover.entry],
+            (cover.starts_on, cover.ends_before),
+        )
+        for cover in back_reach_cover(new.benchmarks)
+        if before_cover[cover.entry] != (cover.starts_on, cover.ends_before)
+    )
+    view = new.benchmarks
+    if other_derived is not None:
+        view = BenchmarkSet(
+            tuple(
+                entry
+                for entry in view.entries
+                if entry.kind in HR_KINDS or not _is_derived(entry)
+            )
+            + tuple(other_derived)
+        )
+    return HrStageReport(
+        workouts.considered,
+        workouts.with_evidence,
+        workouts.no_evidence,
+        workouts.skipped,
+        tuple(dict.fromkeys(item.key for item in resting.evidence)),
+        tuple(outcomes),
+        new_takeovers,
+        changes,
+        inconsistencies(view),
+        resting.failures + workouts.failures,
+        resting.notes,
+        written,
+        changed,
+    )
+
+
+def _is_derived(entry: Benchmark) -> bool:
+    return entry.source is not None and entry.source.is_derived
+
+
+def _derived_kind(
+    benchmarks: BenchmarkSet, kind: BenchmarkKind
+) -> tuple[Benchmark, ...]:
+    return tuple(
+        entry
+        for entry in benchmarks.entries
+        if entry.kind is kind and _is_derived(entry)
+    )
+
+
+def _takeover_key(takeover: Takeover) -> tuple[BenchmarkKind, date, float, date]:
+    return (
+        takeover.kind,
+        takeover.derived.measured_on,
+        takeover.derived.value,
+        takeover.superseded.measured_on,
+    )
