@@ -227,7 +227,7 @@ literal pins, one per lander) and every head-paragraph pin of
     governing record and its fields), ready for 1.2 (or 6.2) to transcribe.
   - _Requirements: 11.2, 11.3, 11.4_
 
-- [ ] 1.2 Create the recovery package's constants and methods
+- [x] 1.2 Create the recovery package's constants and methods
   - Verify the Upstream Prerequisites list and record each outcome with file
     and line in Implementation Notes (stop and report on drift).
   - `src/fitdocs/recovery/__init__.py` (docstring only) and `constants.py`
@@ -849,10 +849,10 @@ the verified records above):
 |---|---|---|---|
 | `MIN_ROLLING_VALUES` | Plews 2014, Practical Applications and Conclusions p.789: three in trained triathletes, approximately five in recreational athletes | Require three present days for each of nine methods | One explicit missingness rule across metrics; no claim that three establishes validity for every population/signal |
 | `BASELINE_DAYS` | Vesterinen 2016, Methods “HRV guided training”, paragraphs 2–3: four-week reference periodically updated | Use D−60 through D−1 | Approved personal as-of baseline excludes the judged day and implements the maintainer's longer-window decision |
-| `RANGE_SD_MULTIPLE` | Vesterinen 2016, Methods “HRV guided training”, paragraphs 1–3: raw RMSSD, four weeks, training prescription | Use 0.5 SD for log HRV and linear resting HR over preceding 60 days; descriptive marking only | Preserve approved transparent windows and separate metrics while avoiding training advice or inferred readiness |
+| `RANGE_SD_MULTIPLE` | Vesterinen 2016, Methods “HRV guided training”, paragraphs 1–3: raw RMSSD, four weeks, training prescription | Use 0.5 SD for log HRV and linear resting HR over preceding 60 days; descriptive marking only | Preserve approved transparent windows and separate metrics while keeping the display descriptive |
 | `SDNN_APPLICATION` | Plews 2013 Sports Med, §3 pp.774–775: preferred index is ln rMSSD | Apply log averaging/range independently to SDNN | Show each platform's HRV definition separately without unsupported SDNN/rMSSD conversion |
 | `RESTING_HR_APPLICATION` | Vesterinen 2016, Methods “HRV guided training”: range applied to RMSSD; Plews 2013 IJSPP Discussion p.690 supports weekly HR averaging | Apply the approved windows/range to linear resting HR values | A single explicit descriptive comparison rule; no published claim of this exact resting-HR range |
-| `COMPARED_QUANTITY` | Plews 2013 Sports Med, Fig.4 p.779: weekly ln rMSSD comparison with individual SWC and confidence intervals | Mark a seven-day mean outside either bound, without confidence intervals or advice | Describe the athlete's own figures rather than infer performance, health or training decisions |
+| `COMPARED_QUANTITY` | Plews 2013 Sports Med, Fig.4 p.779: weekly ln rMSSD comparison with individual SWC and confidence intervals | Mark a seven-day mean outside either bound, without confidence intervals or training instructions | Describe the athlete's own figures rather than infer performance, health or training decisions |
 
 Task 1.1 review remediation: corrected the weekly-averaging and Vesterinen
 Discussion locators and supplied explicit four-field departure mappings.
@@ -861,3 +861,50 @@ Discussion locators and supplied explicit four-field departure mappings.
   checklist VERIFIED. Baseline `uv run pytest`: 14733 passed, 44 skipped;
   ruff check/format and mypy clean (550 files); CLI help smoke exit 0.
   Only citation notes changed; all approved values preserved.
+
+- 1.2 review remediation: controller reworded two 1.1 departure fields
+  (range reason and compared-quantity behavior) to stay compatible with the
+  approved page phrase pattern. Meaning, provenance and values unchanged.
+
+
+### Task 1.2 — upstream outcomes and implementation notes (2026-10-14)
+
+All upstream checks passed through executable introspection. Definition paths
+below are relative to the repository; METRICS's binding is model.py:61 (the
+introspection artifact also names its MetricInfo value type at line 48).
+
+| Prerequisite | Verified file/line and public signature / outcome |
+|---|---|
+| Wellness facade | `src/fitdocs/wellness/__init__.py:26` exports Metric, METRICS, MetricInfo, SeriesValue, WellnessSeries, read_series and SeriesReadError |
+| Metric labels | `src/fitdocs/wellness/model.py:48` MetricInfo includes label; `:61` METRICS is the shared vocabulary; no recovery-side labels or units added |
+| Values and series | `src/fitdocs/wellness/model.py:285` SeriesValue(day, metric, source, origin, value, canonical); `src/fitdocs/wellness/series.py:267` WellnessSeries(values=()) exposes values, is_empty(), days(), by_source(metric, source), canonical(metric, day) |
+| Series reader | `src/fitdocs/wellness/series.py:340` read_series(data_root: Path) -> WellnessSeries; `:28` SeriesReadError available |
+| Sanctioned staging builder | `tests/wellness/builders_series.py:12` write_series(data_root: Path, values: Iterable[SeriesValue]) -> tuple[Path, ...]; writes through real year/manifest codec; recovery must consume this helper |
+| Intervals delivery | `tests/wellness/builders_intervals.py:18` intervals_delivery_bytes(records: Sequence[Mapping[str, object]], *, origins: Mapping[str, str] | None = None) -> bytes; `src/fitdocs/wellness/formats/intervals.py:22–23` delivery format/version; `src/fitdocs/wellness/registry.py:20` registered intervals-icu format |
+| History facade | `src/fitdocs/history/__init__.py:53` exports all required names; `history/engine.py:203` read_history_inputs(data_root: Path) -> HistoryInputs; `:229` compute_history(inputs, *, methodology: str | None) -> HistoryComputation | None |
+| History rows/errors | `src/fitdocs/history/page.py:390` day_rows(series, model, weeks) -> tuple[DayRow, ...]; DayRow at `:376`; HistoryComputation at `history/engine.py:189`; MethodologyConfigurationError at `:168` |
+| Kit facade | `src/fitdocs/render/charts/kit/__init__.py:31` exports ChartRequest, ChartData, Column, ValueKind, render_chart and describe_kinds; `kit/registry.py:147` describe_kinds() lists 16 kinds, with small-multiples bound["limit"] == 12 |
+| Unit formatter | `src/fitdocs/render/charts/kit/format.py:116` format_value(value, column, *, with_unit) -> str |
+| Ownership prerequisite | `src/fitdocs/layout.py:153` OWNED_PATHS includes wellness/; current main CONTRACT_VERSION is 11; recovery's bump remains main + 1 at landing |
+
+- 1.2: READY_FOR_REVIEW → independently APPROVED round 2 → fresh completion
+  gate VERIFIED. Five constants, eight rules, nine methods; all approved
+  values and provenance preserved. Tests-first RED and helper OFF/ON/removal
+  evidence; 128 independent replayed mutations plus five reviewer probes,
+  each RED/restored GREEN. Focused 83 passed; full 14816 passed / 44 existing
+  skips; ruff check/format and mypy clean (555 files).
+- Numeric guards count exact semantic sites; 1.3 may append only exact-site
+  structural identity exemptions actually introduced in baselines.py, under
+  the existing exempted-identities clause. Preserve guard logic and previous
+  exemptions; no broad exemption or unknown-site preallocation.
+- Review lessons: a duplicate-site fixture pins counting; both scanned files
+  must coexist to pin the complete walk; bibliography checks need every
+  corroborator Citation field; printed metadata must avoid the page pattern's
+  forbidden tokens even in negated explanations.
+- Mutation targeting: before snippets must occur exactly once in the restored
+  snapshot, or be scoped to a verified named AST call/assignment; repeated
+  digits/year lines cannot establish which field changed.
+- Full pytest needs authorized execution for existing AF_UNIX socket and
+  isolated build/install fixtures. Restricted DNS/cold-cache failures and
+  socket EPERM are environment failures; no source patch or skipped test was
+  used. Focused tests/mutations use the writable temporary uv cache.

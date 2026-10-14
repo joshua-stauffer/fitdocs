@@ -272,6 +272,7 @@ files = [
     "tests/wellness",
     "tests/index/derived/test_wellness_producer.py",
     "tests/hr_benchmarks",
+    "tests/recovery",
 ]
 
 [tool.pytest.ini_options]
