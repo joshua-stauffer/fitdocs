@@ -370,8 +370,9 @@ was persisted. The temporary request directory was removed.
 - **TBC-W7 — confirmed.** A 366-day window returned HTTP 200, 366 records
   and approximately 330 KB (rounded to 10 KB).
 - **TBC-W8 — confirmed.** All four check requests returned HTTP 200 with
-  the fitdocs User-Agent. The shapes-only check was repeated once to retain
-  the permitted report; both runs agreed on all reported shapes and flags.
+  the fitdocs User-Agent. The shapes-only check was repeated to retain
+  the permitted report and verify execution in the temporary working directory;
+  every run agreed on all reported shapes and flags.
 
 Task 1.1 records the contradiction; task 6.3 owns its design amendment and
 numbered implementation repair. No upstream intervals-format field, date
