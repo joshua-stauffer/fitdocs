@@ -340,6 +340,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - _Requirements: 1.1, 1.2, 1.5, 2.1, 2.2, 2.3, 2.4, 3.5, 5.6_
   - _Boundary: Reader_
   - _Depends: 2.1_
+  - _Blocked: debug attempted twice, still failing — tests do not discriminate ZIP-specific progress suppression or depth-three nested Record admission. Production source is correct; review evidence is retained for explicit next-action handling._
 
 - [ ] 3.2 (P) Assign sleep to nights and take HRV, respiration and SpO2 from the readings taken asleep
   - Complete `reduce.py` with the `SLEEP_NIGHT` and `ASLEEP_MEAN` rules
@@ -563,6 +564,22 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - _Requirements: 1.1, 2.5, 7.4_
 
 ## Implementation Notes
+
+- **3.1 (blocked):** Final review after both allowed debug cycles is REJECTED.
+  Correct Reader source and 175-case/57-site test work remain preserved in the
+  worktree; no task completion or independent replay acceptance is claimed.
+  Two reviewer-designed faults survive all 1122 component tests: suppressing
+  progress only for a ZIP member and admitting wanted Records at depth three.
+  Separate cache-proof probes fail at the intended assertions; exact source
+  and test copies are restored, with final component/static checks green.
+  All nine clauses, public schemas, ownership, error/depth cases, literal/AST
+  prefixes and factual prose were audited. Historical 188 groups/182 edits/
+  246 observations remain uncredited by this last independent review, which
+  short-circuited on the two concrete survivors. Preserve existing ZIP bounds,
+  memory, privacy, constants, required arguments and native-error fixtures.
+  Task 3.2 depends only on accepted 2.2 and 2.4 and remains actionable; 4.1,
+  4.2 and 5.1 cannot proceed until 3.1 is approved. Final feature validation
+  cannot claim GO while this blocker remains.
 
 - **2.4:** Independently APPROVED and completion VERIFIED: 947 component
   tests, mypy, Ruff, formatting and diff checks pass. All eight policy rows,
