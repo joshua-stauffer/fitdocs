@@ -11,7 +11,8 @@ lifecycle" names: removed, released, settled, unchanged, forgotten, and a
 failed removal that stays pending (Req 8.5, 8.6, 8.7, 8.8).
 
 :func:`sweep` never touches a file the ledger does not already know about:
-it only ever acts on ``ledger.pending_entries()`` -- every other entry
+it only ever acts on ``ledger.pending_entries()`` and the wellness keyspace's
+``pending`` records -- every other activity entry
 (``skipped``, ``already-held``, or a ``delivered`` entry whose delivery was
 already resolved) passes through unchanged -- and never removes a file whose
 current bytes differ from the recorded hash (Req 8.6), so a hand-dropped
@@ -283,9 +284,10 @@ def sweep(inbox: Path, data_root: Path, ledger: Ledger) -> SweepResult:
     """Resolve every pending delivery in ``ledger`` against the archive and
     the inbox's current state (design.md "Delivery lifecycle", Req 8.5-8.8).
 
-    Only ``ledger.pending_entries()`` is ever considered -- a file the
-    ledger does not record as pending is never touched (Req 8.6). For each
-    pending entry, resolved by whether its archive copy
+    Only the activity and wellness keyspaces' pending deliveries are
+    considered -- a file the ledger does not record as pending is never
+    touched (Req 8.6, wellness Req 6.2). For each activity pending entry,
+    resolved by whether its archive copy
     (``fitdocs.layout.archive_path(data_root, entry.sha256)``) exists and
     whether the inbox file at ``entry.pending`` exists:
 
@@ -308,6 +310,13 @@ def sweep(inbox: Path, data_root: Path, ledger: Ledger) -> SweepResult:
     with the next pending entry rather than aborting, and the next sweep will
     retry the failed one. ``pull.py`` (4.3) maps every ``failures`` pair to a
     deferred note keyed by the pending path.
+
+    Wellness pending records are handled afterwards in path order, using
+    their declared format and extension in the wellness archive. Resolved
+    records are removed from pending; a lost, unarchived delivery is forgotten
+    with its latest recorded days and its coverage mark adjusted. I/O failures
+    keep the record pending and use the same failure channel (wellness
+    Req 6.1-6.5, 9.7).
     """
     result = ledger
     removed: list[str] = []
@@ -347,5 +356,30 @@ def sweep(inbox: Path, data_root: Path, ledger: Ledger) -> SweepResult:
                 pass
             else:
                 result = result.without(entry.remote_id)
+
+    if ledger.wellness is not None:
+        for pending in ledger.wellness.pending:
+            wellness = result.wellness
+            assert wellness is not None
+            pending_path = inbox / pending.path
+            archived = wellness_archived(
+                data_root, pending.format, pending.sha256, pending.suffix
+            )
+            present = pending_path.is_file()
+            if archived:
+                if present:
+                    try:
+                        current_hash = hashlib.sha256(
+                            pending_path.read_bytes()
+                        ).hexdigest()
+                        if current_hash == pending.sha256:
+                            _remove(pending_path)
+                            removed.append(pending.path)
+                    except OSError as exc:
+                        failures.append((pending.path, f"{type(exc).__name__}: {exc}"))
+                        continue
+                result = result.with_wellness(wellness.without_pending(pending.path))
+            elif not present:
+                result = result.with_wellness(wellness.forget(pending.path))
 
     return SweepResult(ledger=result, removed=tuple(removed), failures=tuple(failures))
