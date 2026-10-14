@@ -231,7 +231,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - _Requirements: 10.1, 10.2, 10.3_
   - _Boundary: Sleep_
 
-- [ ] 2.3 (P) Write and read the canonical extract
+- [x] 2.3 (P) Write and read the canonical extract
   - `extract.py` per design § ExtractCodec: `EXTRACT_FORMAT`,
     `EXTRACT_VERSION`, `READABLE_VERSIONS`, `ExtractHeader`,
     `export_date_utc`, `write_extract`, `read_header`, `read_records`.
@@ -563,6 +563,25 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - _Requirements: 1.1, 2.5, 7.4_
 
 ## Implementation Notes
+
+- **2.3:** Independently APPROVED and completion VERIFIED: 723 component
+  tests, mypy, Ruff, formatting and diff checks pass. Canonical level-9 gzip
+  JSONL has zero mtime/no filename, sorted compact UTF-8 keys, supplied
+  provenance plus fixed UTC export date, ordered raw records/metadata and
+  checked trailer counts. Header-only reading parses the first logical line;
+  archive entry streams supply compressed bytes, so the codec owns gzip.
+  Preserve caller streams and do not import Reader at the same boundary rank;
+  task 4.1 orchestrates them. Newer-version checks precede current-layout keys.
+  Reviewer replayed 182 claims (180 distinct source edits, two aliases) plus
+  four own mutations, each intended assertion-red and exactly restored to
+  723-green. All 395 cases/78 sites covered; existing fixtures remain literal
+  prefixes with unchanged ASTs. Debug isolated casing-invariant fixtures:
+  preserve contrasting inputs, None/empty/zero, padding/interior whitespace,
+  metadata member/container distinctions, duplicate/order cases, Unicode
+  decomposition and case. Use ISO `T`, mixed units/software versions and actual
+  sleep-state text; isolate negative case aliases with empty valid trailers so
+  another body guard cannot shadow the header comparison. Source unchanged
+  during test repairs; no new follow-ups.
 
 - **2.2:** Independently APPROVED and completion VERIFIED: 328 component
   tests, mypy, Ruff, formatting and diff checks pass. Pure integer-second
