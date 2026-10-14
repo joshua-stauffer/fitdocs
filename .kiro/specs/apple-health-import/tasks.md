@@ -133,7 +133,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
 
 ---
 
-- [ ] 1. Foundation: package scaffold, record types, synthetic exports
+- [x] 1. Foundation: package scaffold, record types, synthetic exports
 
 - [x] 1.1 Scaffold the Apple Health format package and its record types
   - Create `fitdocs.wellness.formats.apple` with all seven modules of design §
@@ -162,7 +162,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
     tests/wellness/apple` green with the seven modules visited.
   - _Requirements: 5.1, 7.1, 10.6, 14.1, 14.2_
 
-- [ ] 1.2 Build synthetic Apple Health exports for every later test
+- [x] 1.2 Build synthetic Apple Health exports for every later test
   - `tests/wellness/apple/builders.py`: an export-document builder (XML
     declaration, a DTD shaped like Apple's, `HealthData` with `ExportDate`, a
     `Me` carrying an invented date of birth, records of the eight read types
@@ -563,6 +563,21 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - _Requirements: 1.1, 2.5, 7.4_
 
 ## Implementation Notes
+
+- **1.2:** Independently APPROVED and completion VERIFIED: 135 component
+  tests, mypy, Ruff, formatting and diff checks pass. Builders are frozen.
+  `record_xml` accepts writer/times/value/unit/metadata/raw children and
+  attribute overrides (`None` omits a field); `export_document` accepts record
+  iterables, optional export date/Me/scaffold/DTD and raw extra elements.
+  Use `include_doctype=False` for byte-identical clean-filter fixtures.
+  `bulk_records(N)` yields unread HR records; `export_zip` provides English,
+  translated, MACOSX-only, Garmin-like and ambiguous layouts; `zip_members`
+  accepts arbitrary contents. ZIP helpers support forced ZIP64 and deflate.
+  Later tasks define any additional helper locally. Mutation groups pin
+  writer/record literals, XML inventory/options/escaping, each real expat
+  defect, bulk iteration/counts, ZIP names/content/order/compression/metadata
+  and ZIP64 sentinel sizes/extra field. Reviewer replayed all 72 cases and
+  13 own mutations, each assertion-red and exactly restored to 135-green.
 
 - **1.1:** Independently APPROVED and completion VERIFIED: 99 component tests,
   mypy, Ruff, formatting and diff checks pass. Seven modules added at ranks
