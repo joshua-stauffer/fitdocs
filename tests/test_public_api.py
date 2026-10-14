@@ -1509,3 +1509,50 @@ def test_hr_direct_import_identity(name: str) -> None:
 @pytest.mark.parametrize("name", _HR_PUBLIC)
 def test_hr_surface_is_not_reexported_at_package_root(name: str) -> None:
     assert name not in vars(fitdocs)
+
+
+_RECOVERY_SURFACE = {
+    "Baselines",
+    "BaselineDay",
+    "RangePosition",
+    "BaselineMethod",
+    "Transform",
+    "METHODS",
+    "BASELINED_METRICS",
+    "SLEEP_METRICS",
+    "LOOKBACK_DAYS",
+    "BASELINES_VERSION",
+}
+_RECOVERY_SURFACE_OWNERS = {
+    "Baselines": "fitdocs.recovery.baselines",
+    "BaselineDay": "fitdocs.recovery.baselines",
+    "RangePosition": "fitdocs.recovery.baselines",
+    "BaselineMethod": "fitdocs.recovery.constants",
+    "Transform": "fitdocs.recovery.constants",
+    "METHODS": "fitdocs.recovery.constants",
+    "BASELINED_METRICS": "fitdocs.recovery.constants",
+    "SLEEP_METRICS": "fitdocs.recovery.constants",
+    "LOOKBACK_DAYS": "fitdocs.recovery.constants",
+    "BASELINES_VERSION": "fitdocs.recovery.constants",
+}
+
+
+def test_recovery_all_lists_exactly_its_published_surface() -> None:
+    from importlib import import_module
+
+    recovery = import_module("fitdocs.recovery")
+    assert set(recovery.__all__) == _RECOVERY_SURFACE
+    assert len(recovery.__all__) == len(_RECOVERY_SURFACE)
+
+
+def test_recovery_surface_owners_cover_exactly_the_published_surface() -> None:
+    assert set(_RECOVERY_SURFACE_OWNERS) == _RECOVERY_SURFACE
+
+
+def test_every_recovery_name_is_its_defining_modules_object() -> None:
+    from importlib import import_module
+
+    recovery = import_module("fitdocs.recovery")
+    for name, owner_name in _RECOVERY_SURFACE_OWNERS.items():
+        owner = import_module(owner_name)
+        assert getattr(recovery, name) is getattr(owner, name), name
