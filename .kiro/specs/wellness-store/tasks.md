@@ -459,8 +459,7 @@ preflight and keeps every call dashboards placed).
   - _Requirements: 5.6, 6.2, 7.4, 8.3, 15.1, 15.2, 15.3, 15.4, 15.5, 15.6_
   - _Boundary: IntervalsFormat_
 
-- [ ] 2.2 (P) Parse the four Garmin export kinds
-  - _Blocked: approved Garmin body-weight rules conflict for present nonnumeric/null input; kiro-debug STOP_FOR_HUMAN requires strict malformed-value rejection versus tolerant omission ruling._
+- [x] 2.2 (P) Parse the four Garmin export kinds
   - `formats/garmin.py` per design § GarminFormats: `SOURCE` and the four
     `FormatSpec`s with recognizers (content signature, name pattern for an
     empty list) and parsers. Not yet registered (3.1).
@@ -1037,3 +1036,7 @@ preflight and keeps every call dashboards placed).
 - 2.2 debug round1: STOP_FOR_HUMAN, SPEC_CONFLICT. Design GarminFormats body-weight bullet says nonnumeric weight contributes nothing, final mapped-field bullet requires error. No requirements/research authority settles null/string/bool. Proposed explicit partitions: missing/null skip + present invalid types error (recommended), or all nonnumeric weights skip; both retain date validation and numeric grams/1000. OFF-scaffold garmin.py and synthetic builders draft preserved; no RED/tests or completion claimed.
 
 - Blocker checkpoint: unreviewed OFF-scaffold garmin.py and synthetic builders_garmin.py moved, without edits, to /private/tmp/wellness-store-blocked-drafts/; restore them into their original paths after the design ruling. Reviewed branch code remains unchanged through ad85a50.
+
+- 2.2 resumed 2026-10-14: maintainer ruled reject present invalid Garmin weights (strings/booleans included), omit missing/null, preserve date validation. GarminFormats design clarified; earlier STOP_FOR_HUMAN resolved. Recovery baseline: 272 wellness tests passed.
+
+- 2.2: independently APPROVED; full suite 14,052 passed/44 skipped, Garmin227/wellness499, ruff/mypy526 clean. All109 claimed mutations replayed plus2 reviewer mutations killed, every restoration green. Maintainer strict-weight ruling implemented; published builders_garmin seam available. Garmin naive revisions normalize as wall-clock ISO strings; aware revisions normalize UTC; neither consults machine timezone. Canonical full tests require sandbox escalation for Unix socket and inherited UV_CACHE_DIR=/Users/josh/.cache/uv for nested packaging uv commands (outer --cache-dir is not inherited). Registry registration3.1, latest-record merge2.3, actual original archival2.6 and docs5.1 remain open.

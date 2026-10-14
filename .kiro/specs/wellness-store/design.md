@@ -904,8 +904,10 @@ FORMAT: Final[FormatSpec]
 - **VO2max**: records of other sports, or with no sport, contribute nothing
   (16.4); several records of one day and sport resolve by revision in the
   merge.
-- **Body metrics**: `weight.weight` grams ÷ 1000 → `weight_kg`; records
-  without a numeric weight contribute nothing.
+- **Body metrics**: `weight.weight` grams ÷ 1000 → `weight_kg`. Missing
+  or null weights contribute nothing; a present nonnumeric value (including
+  a string or boolean) raises `WellnessFormatError`. The record date is
+  validated even when the weight is absent. Maintainer ruling, 2026-10-14.
 - A record whose date key is missing or not `YYYY-MM-DD`, or whose mapped
   field holds a non-number, raises `WellnessFormatError`.
 
