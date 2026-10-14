@@ -120,7 +120,10 @@ metric and source; `manifest.toml` records what they were built from. fitdocs
 rebuilds these files from the archive and the `[wellness]` settings whenever
 either changes, and overwrites hand edits to the series. `fitdocs check`
 reports whether they are current. Both locations carry a generated `AGENTS.md`
-stating their ownership and these rules.
+stating their ownership and these rules. See the [wellness guide](wellness.md)
+for formats, source precedence, the [wellness-day rule](wellness.md#wellness-day)
+and series readers. These are daily data files; recovery pages and morning-of
+workout blocks remain future work.
 
 ## A Second Document Type: Training History
 

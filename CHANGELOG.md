@@ -17,6 +17,21 @@ recorded as one.
 
 ### Added
 
+- A local wellness store imports intervals.icu wellness JSON and four Garmin
+  export JSON formats from the inbox. `wellness-archive/` keeps immutable
+  source bytes; `wellness/` holds the rebuildable daily series and manifest.
+  Drop supported exports into the inbox and run `fitdocs sync`; see
+  [the wellness guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/wellness.md).
+- `fitdocs.toml` settings schema (additive; no action needed): `[wellness]`
+  configures general and per-metric source precedence; defaults apply when
+  absent. `fitdocs check` adds `wellness_orphaned_entry`,
+  `wellness_series_stale`, `wellness_series_occupied` and `wellness_conflict`,
+  each with a remedy.
+- The analytics index gains `wellness_daily`, including source, canonical
+  selection and measurement origin. Index schema version advances from `2`
+  to `3`: run `fitdocs index` once after upgrading to rebuild the disposable
+  cache; existing documents need no migration.
+
 - `fitdocs index [--rebuild]` builds the disposable analytics index once;
   writing commands refresh it after their document and load writes. The
   per-data-root index lives outside the data root, resolved by
@@ -97,6 +112,25 @@ recorded as one.
   live there, move them and set `[plans] path` to the new directory.
 
 ### Changed
+
+- Inbox interface: bare `fitdocs sync` now handles wellness before workouts,
+  prints four additional report rows (Unrecognized, Wellness archived,
+  Wellness skipped and Wellness failed), and reports changed-series results.
+  Unrecognized files remain in place; recognized parse failures use the
+  content-keyed quarantine. Wellness failures and failed series rebuilds
+  make the command fail. No action is needed for existing workout inboxes;
+  use `[inbox] ignore` to silence an unwanted wellness candidate.
+- Workout intake skips FIT headers declaring a non-activity type, warns and
+  leaves those files in place even with move disposition and a legacy
+  archive copy. No action is needed: no new page is made; `fitdocs regen`
+  still rebuilds pages that already list such files.
+- Ownership contract version advances from `10` to `11`: `wellness-archive/`
+  and `wellness/` are now owned locations. Run `fitdocs sync` or `fitdocs
+  regen` once to place their ownership declarations. See
+  [the contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md).
+- Plugin API (additive; no action needed): `FileIdentity.file_type` is a
+  defaulted final field carrying the declared FIT file type, or `None`.
+  Existing constructors remain compatible.
 
 - The ownership contract version advances from 8 to 9 to describe the
   analytics index's external location, disposable-cache behavior and refresh

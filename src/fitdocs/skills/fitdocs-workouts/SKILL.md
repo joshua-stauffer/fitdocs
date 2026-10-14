@@ -76,29 +76,35 @@ in none.
 | Error | `error` | This instance's pull ended early -- either before fetching anything (no credentials, rejected credentials, a rate-limited sign-in, an unreadable ledger, a permissive credentials file, a failed listing, or a missing source) or partway through (an authentication failure on a fetch; anything already delivered stays delivered). Other instances still ran. | Read the printed next step and report it to the user -- never run `fitdocs connect` yourself (it needs an interactive terminal the agent cannot use), and never retry on your own judgment. |
 
 `fitdocs sync`'s own drain (chained here by `--sync`, or run directly by
-`fitdocs sync`) prints an inbox path followed by a counts table with eight
-rows, but they are not eight peers of one partition. Every admitted file
-lands in exactly one of written / skipped / failed; a file not yet admitted
-lands in exactly one of deferred / quarantined instead. Warnings annotate a
-file alongside whichever of those it landed in -- never a partition of
-their own. Moved and move-failures describe what happened *afterward* to a
-file already counted as written or skipped: whether its now-archived source
-was also relocated out of the inbox.
+`fitdocs sync`) prints an inbox path followed by twelve report rows. Workout
+FIT outcomes use written / skipped / failed; warnings annotate those
+outcomes. Wellness intake uses unrecognized / wellness archived / wellness
+skipped / wellness failed. Deferred and quarantined apply to both kinds of
+input. Moved and move-failures additionally describe eligible archived
+inputs relocated out of the inbox. A changed wellness series adds its own
+status and value-count summary after the table.
 
 | Channel | Field | Meaning | Do |
 |---------|-------|---------|----|
 | Written | `written` | A workout document was produced or updated from an admitted file. | Nothing needed. |
-| Skipped | `skipped` | Either the file's bytes were already archived (finished work), or the matched document already records a newer document-format version and was left untouched (nothing archived; it stays that way until the tool is upgraded to recognize that format). | Nothing needed for the already-archived case; for the newer-format case, nothing to do now -- it is retried automatically on a later run. |
+| Skipped | `skipped` | The workout bytes were already archived, a newer-format page was left untouched, the file was held for an ambiguous match, or a declared non-activity FIT type was skipped with a warning. | Nothing needed for the already-archived case; for the newer-format case, nothing to do now -- it is retried automatically on a later run. |
 | Failed | `failures` | The file could not be processed for a reason the report names. | Read the message; fix the source file if you can, or report the reason to the user. |
 | Warnings | `warnings` | A non-fatal condition annotated alongside an admitted file's written/skipped/failed outcome -- never its own outcome, and never changes which of the three the file landed in. | Read it; it usually needs nothing further. |
 | Deferred | `deferred` | The file was not yet observed stable across the settle interval, or a stable file could not be read -- left completely untouched either way. | No action -- it is reconsidered automatically on the next drain. |
 | Quarantined | `quarantined` | The file previously failed for a source-level reason and is remembered rather than retried. | This needs the user, not the agent -- never retry a quarantined file on your own judgment. |
-| Moved | `moved` | A written or skipped file's now-archived source was additionally relocated out of the inbox (only when the disposition is configured to move files). | Nothing needed. |
-| Move failures | `move_failures` | The file was processed successfully -- its content is already archived, counted as written or skipped -- but relocating it out of the inbox afterward failed. | Nothing to do: the file stays in the inbox and the move is retried automatically on the next drain. This is never a reason to reprocess the file. |
-| Unrecognized | `unrecognized` | No supported wellness format recognized the file; it stays in the inbox. | Read the reason and confirm the file is a supported wellness export. |
-| Wellness archived | `wellness_archived` | A wellness file was successfully parsed and archived. | Nothing needed. |
-| Wellness already archived | `wellness_skipped` | The wellness file's content is already archived. | Nothing needed. |
-| Wellness failed | `wellness_failures` | A wellness file could not be parsed and its content was quarantined. | Read the reason and ask the user to correct the export. |
+| Moved | `moved` | An eligible archived workout or wellness source was additionally relocated out of the inbox (only when disposition is configured to move files). | Nothing needed. |
+| Move failures | `move_failures` | The file was processed successfully -- its content is already archived, counted as written or skipped for FIT, or archived or skipped for wellness -- but relocating it out of the inbox afterward failed. | Nothing to do: the file stays in the inbox and the move is retried automatically on the next drain. This is never a reason to reprocess the file. |
+| Unrecognized | `unrecognized` | No supported wellness format recognized the file; it stays in the inbox. | Tell the user the reason; ask them to supply a supported export or add the unwanted file to `[inbox] ignore`. Never delete the file. |
+| Wellness archived | `wellness_archived` | A wellness file was successfully parsed and archived. | Nothing needed; the daily series is rebuilt after wellness intake. |
+| Wellness skipped | `wellness_skipped` | The wellness file's content is already archived. | Nothing needed; the archive already holds this content. |
+| Wellness failed | `wellness_failures` | A wellness file could not be parsed and its content was quarantined. | Tell the user the reason and ask them to correct the export; retry the same quarantined content only with their direction. Never delete the file. |
+
+**Wellness in `fitdocs check`.** For `wellness_series_stale`, run `fitdocs
+sync` to rebuild; if the remedy names invalid settings, tell the user to fix
+`fitdocs.toml` first. For `wellness_orphaned_entry`,
+`wellness_series_occupied` or `wellness_conflict`, tell the user the finding
+and remedy. Never delete archive entries, inbox files or occupied paths to
+resolve these findings yourself. The user decides which data to keep.
 
 ## Ownership boundary
 

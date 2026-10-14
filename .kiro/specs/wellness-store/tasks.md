@@ -953,10 +953,12 @@ preflight and keeps every call dashboards placed).
     tests/test_docs_guarantees.py` green.
   - _Requirements: 5.5, 7.4, 7.6, 15.7, 19.2_
 
-- [ ] 5.2 Update the inbox, configuration, plugin and ownership-contract docs, the workouts skill and the CHANGELOG
+- [x] 5.2 Update the inbox, configuration, plugin and ownership-contract docs, the workouts skill and the CHANGELOG
   - Correct `sync.py`'s drain disposition docstring to include the explicit
     non-activity veto, and its regen skip enumeration to include non-activity
     unlisted archive inputs (task4.1 review follow-ups, already verified).
+    Align associated module/drain docstrings with the implemented wellness
+    sequence, failure channels and disposition eligibility; no runtime edits.
   - `docs/inbox.md` (wellness candidates, unrecognized channel, `[inbox]
     ignore` for a file, the non-activity guard); `docs/configuration.md`
     `### [wellness]`; `docs/plugins.md` (`FileIdentity.file_type`,
@@ -966,6 +968,8 @@ preflight and keeps every call dashboards placed).
     Unreleased entries (Added: wellness store, formats, `wellness_daily`,
     `[wellness]`, findings; Changed: inbox, non-activity guard, drain rows,
     contract and schema versions with the actions; plugin API additive).
+    Synchronize `docs/compatibility.md`'s two table-count literals with the
+    added `[wellness]` settings table (eight to nine).
   - **Tests**: in `tests/test_agent_skill.py`, row-scoped pins (via the
     existing `_channel_rows_by_field`) that the Do cells for `unrecognized`
     and `wellness_failures` say to tell the user and never suggest deleting
@@ -979,6 +983,11 @@ preflight and keeps every call dashboards placed).
   - _Requirements: 19.1, 19.3, 19.4, 19.5, 19.6_
 
 - [ ] 5.3 Record the package's place in steering
+  - Finish the source-report documentation follow-up from 5.2 review:
+    align `sync.py`'s `DrainReport` class and `sync` field docstrings with
+    admitted FIT candidates, wellness/series/plan failure gates, shared
+    deferred outcomes, both archives and disposition eligibility guards.
+    Docstrings only; runtime code remains unchanged.
   - `.kiro/steering/structure.md`: a `wellness` bullet (imports only the
     standard library, `tomli_w`, `layout`, `settings`, `units`; imported by
     `sync`, `audit`, `cli` and `index.derived`; the reader is how every
@@ -1046,6 +1055,8 @@ preflight and keeps every call dashboards placed).
   - _Requirements: 16.1, 16.2, 15.1_
 
 ## Implementation Notes
+
+- 5.2: independently APPROVED round2; full14,723/44, targeted1492/1 optional actionlint skip, ruff/mypy548 clean.11 sole-failure mutants plus4 declared prose survivors and2 reviewer mutations reproduced with GREEN restorations. Inbox/configuration/plugin/ownership/skill/changelog and compatibility settings count9 now reflect wellness; config keys derive from reader AST, skill user/never-delete instructions pinned per Do cell. Module/drain/regen source docstrings aligned, executable AST unchanged, historical contract text preserved and changelog insertions only. Review corrected an overbroad detail promise: only four wellness channels promise details, workout Skipped is count-only. Older DrainReport class/sync-field docstrings assigned pending5.3 explicitly; no duplicate queue item. Narrative mutation limits remain declared and content reviewed.
 
 - 5.1: independently APPROVED; full14,718/44, targeted1059, ruff/mypy548 clean.194 claimed cases independently replayed (190 sole failures, four declared survivors), four reviewer production mutants killed, all restored GREEN. Guide publishes metrics/definitions, one complete day rule, delivery contract, precedence/readers/archive/check/SQL and scoped origin=garmin attribution; index and project URL links added. Equivalent HRV numeric bounds and three explanatory prose removals are explicitly not claimed as regression-pinned; shipped prose was reviewed against code/design. Garmin/Apple definitions independently checked against primary sources. Metadata mutations use --no-sync, then one warm-cache editable rebuild after restoration before normal regression.
 

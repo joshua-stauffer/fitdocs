@@ -248,3 +248,30 @@ def test_package_metadata_links_guide() -> None:
 
 def test_required_entry_point_links_include_guide() -> None:
     assert "wellness.md" in _REQUIRED_ENTRY_POINT_LINKS
+
+
+def test_configuration_wellness_keys_match_settings_reader() -> None:
+    import ast
+    import inspect
+
+    from fitdocs.wellness.settings import load_wellness_settings
+
+    document = (ROOT / "docs/configuration.md").read_text(encoding="utf-8")
+    section = document.split("### `[wellness]`:", 1)[1].split("\n### ", 1)[0]
+    documented = {
+        line.split("|", 2)[1].strip().strip("`")
+        for line in section.splitlines()
+        if line.startswith("| `")
+    }
+    reader = ast.parse(inspect.getsource(load_wellness_settings))
+    reader_keys = {
+        node.args[0].value
+        for node in ast.walk(reader)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "table"
+        and node.func.attr == "get"
+        and isinstance(node.args[0], ast.Constant)
+    }
+    assert documented == reader_keys

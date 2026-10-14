@@ -1,6 +1,7 @@
 # Inbox
 
-fitdocs defines a standing inbox: get `.fit` files there, however you like —
+fitdocs defines a standing inbox: get workout `.fit` files and supported
+wellness exports there, however you like —
 HealthFit → iCloud, watch sync, a manual drop, your own script — and
 `fitdocs sync`, run with no arguments, drains it. `fitdocs sync SOURCE` keeps
 working exactly as before and never reads the inbox or its settings.
@@ -29,25 +30,67 @@ table entirely to accept every default below.
 ## Drain semantics
 
 Bare `fitdocs sync` drains the resolved inbox exactly once: it selects
-eligible candidates, applies the stability check, processes each stable
-candidate through the same per-file pipeline an explicit-source `sync` uses,
-then applies the configured disposition and runs the usual training-load
-pass. The run's output names the inbox path being drained alongside the
-existing written/skipped/failed summary, extended with deferred, quarantined,
-moved, and failed-move counts. An inbox with no eligible files completes
-successfully, reporting nothing written. `--out`, `--force`, and
-`--no-prompt` all keep their explicit-source meanings on a drain.
+eligible workout and wellness candidates and applies one stability check to
+the combined batch. It recognizes and archives stable wellness exports,
+rebuilds the daily series when archive inputs or settings change, then
+processes workout FIT files through the explicit-source `sync` pipeline.
+Successful archives use the configured disposition; the usual training-load
+and later refresh passes follow.
+
+The run's output names the inbox path being drained. The report always
+prints twelve channels: Written, Skipped, Failed, Warnings, Deferred,
+Quarantined, Moved, Move failures, Unrecognized, Wellness archived, Wellness
+skipped and Wellness failed. The four wellness channels include details when
+nonempty. A changed wellness series adds a summary of its status, changed
+values and days,
+written or removed series paths, notes and conflict counts. A workout
+failure, wellness failure, failed series rebuild, load failure or plan
+failure makes the drain fail; unrecognized, deferred and already-quarantined
+files alone do not. An inbox with no eligible files reports no workout
+writes; series and later refresh passes can still run. `--out`, `--force`,
+and `--no-prompt` all keep their explicit-source meanings on a drain.
 
 ## Safeguards
 
-**Ignore rules.** Only regular files with a `.fit` extension (case-insensitive)
-are candidates. Any candidate whose inbox-relative path has a path component
-starting with a dot is ignored — this covers hidden files, AppleDouble `._*`
-companions, and everything inside a hidden sync-tool staging directory (for
-example `.stversions/`). A configured `ignore` pattern is checked in addition
+**Ignore rules.** Regular `.fit` files are workout candidates. Wellness
+candidates use the supported formats' extensions, currently `.json`, with
+case-insensitive matching. Both selectors exclude symlinks and share the
+same ignore rules. Any candidate whose inbox-relative path has a path
+component starting with a dot is ignored — this covers hidden files,
+AppleDouble `._*` companions, and everything inside a hidden sync-tool staging
+directory (for example `.stversions/`). A configured `ignore` pattern is checked in addition
 to that dot-component rule and does exclude matching candidates. Ignored
 files are excluded from processing entirely; they are never reported as
-failures.
+failures. To silence an unwanted file, add its basename or relative path to
+the user-owned settings, for example:
+
+```toml
+[inbox]
+ignore = ["unrelated.json", "old-exports/*"]
+```
+
+**Wellness intake.** A supported extension makes a file a candidate, not a
+recognized format. Structure (and, for empty Garmin lists, the filename)
+selects the format. An unrecognized file is reported with a reason, stays in
+the inbox, is not quarantined and is reconsidered on the next drain. Tell
+the user; never delete it to silence the report. Recognition or archive
+access problems that prevent a safe attempt defer the file. A recognized
+file that fails parsing is reported as Wellness failed and quarantined by
+content hash; a successful parse is Wellness archived, and content already
+present is Wellness skipped. Corrected bytes are new content and need no
+retry flag. See the [wellness guide](wellness.md) for the supported exports,
+source definitions, [wellness-day rule](wellness.md#wellness-day), precedence
+and series readers. Pulling wellness, direct Apple Health import, recovery
+pages and morning-of workout blocks remain future work.
+
+**Non-activity FIT files.** A FIT header declaring a type other than
+`activity` is skipped with a warning: fitdocs creates no workout page and
+leaves the file where it is, including under the move disposition when a
+legacy archive copy exists. Activity headers and files with no usable type
+keep the normal workout path. These skips are neither failures nor
+quarantine entries. `fitdocs regen` skips unlisted non-activity archive
+inputs, but keeps and rebuilds a page that already lists one. Under
+`sync --force`, such an existing page is left untouched.
 
 **Stability check.** Before a candidate is processed, fitdocs verifies it is
 stable: its size and modification time are observed twice, separated by the
@@ -58,20 +101,24 @@ and is simply re-considered, with no memory of the deferral, on the next
 drain. `settle_seconds = 0` disables the wait and admits every candidate that
 can be observed once.
 
-**Quarantine record.** A file that fails processing because of a
-source-level fault — the `.fit` bytes themselves cannot be decoded or
-parsed — is recorded by content hash, name, and failure reason in
-`<data-root>/.fitdocs/quarantine.toml`. A subsequent drain reports it once
-from that record, in its own `quarantined` channel, without re-processing it
-or failing the run on its account — so a known-bad file is surfaced once and
-then remembered rather than looping as a fresh failure on every scheduled
-run. The record is keyed on content, not name: a same-named file with
-different bytes is treated as new. A failure that is instead a property of
-an *existing document* — a damaged preserved region being the representative
-case — is reported as a failure but is **not** recorded in the quarantine, so
-simply repairing the document is enough to make the next drain succeed. Pass
-`--retry-quarantined` to re-attempt every currently quarantined inbox file: a
-renewed success clears its entry, and a renewed failure updates it.
+**Quarantine record.** A file that fails processing because of a source-
+level fault — the `.fit` bytes themselves cannot be decoded or parsed, or a
+recognized wellness export cannot be parsed — is recorded by content hash,
+name, and failure reason in `<data-root>/.fitdocs/quarantine.toml`. A
+subsequent drain reports it once from that record, in its own `quarantined`
+channel, without re-processing it or failing the run on its account — so a
+known-bad file is surfaced once and then remembered rather than looping as a
+fresh failure on every scheduled run. The record is keyed on content, not
+name: a same-named file with different bytes is treated as new without a
+retry flag; the old bad hash remains recorded. A failure that is instead a
+property of an *existing document* — a damaged preserved region being the
+representative case — is reported as a failure but is **not** recorded in
+the quarantine, so simply repairing the document is enough to make the next
+drain succeed. Pass `--retry-quarantined` to re-attempt every currently
+quarantined inbox file: a renewed success clears that content hash's entry,
+and a renewed failure updates it. For the same wellness bytes, retry after
+the cause of the parse failure has been fixed; replacing the export's bytes
+is already a new attempt.
 
 ## Disposition policy
 
@@ -81,8 +128,11 @@ archive's content dedupe makes subsequent drains skip them. **No configuration
 ever deletes an inbox file: deletion is not an option fitdocs offers, under
 any disposition.** The opt-in `"move"` disposition relocates a file out
 of the inbox to `processed_dir` only once its content is confirmed present in
-the archive, preserving both files on a name collision rather than ever
-overwriting. A file that failed, was deferred, was quarantined, or whose
+the appropriate archive (`fit-archive/` or `wellness-archive/`), preserving
+both files on a name collision rather than ever
+overwriting. A detected non-activity FIT file or an unrecognized wellness
+candidate is never moved, even when a legacy FIT archive entry exists. A file
+that failed, was deferred, was quarantined, or whose
 processing was skipped without an archived copy — including a document whose
 existing `doc_version` is newer than this fitdocs produces — is never moved:
 **it stays in the inbox and is retried on the next drain.** That includes a

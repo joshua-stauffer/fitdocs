@@ -13,19 +13,17 @@ root alone -- re-rendering each page from its base archived source through the
 per-page task (:func:`_process_isolated`), then planning every archived
 file no page lists against the rebuilt pages exactly as :func:`sync` plans its
 run (Req 4.3, 4.4; activity-identity Req 4.10, 7.2, 7.3). :func:`drain` is the
-inbox spec's third entry point
-(design: DrainOrchestration): it composes the standing-inbox policy
-(:mod:`fitdocs.inbox` selection and stability) around the same planned run --
-candidates are selected, settled and read once each (a read failure defers
-rather than fails or quarantines the candidate, inbox Req 4.2); a candidate
-whose content hash is already in the quarantine record, and retry is not
-requested, is reported in its own ``quarantined`` channel and never reaches the
-planner (inbox Req 5.2); every other candidate is prepared from the bytes of
-that probe read and planned together, with the candidate's inbox-relative path
-as its report label (inbox Req 2.3). The composed :class:`DrainReport` wraps an
-ordinary :class:`SyncReport` alongside the inbox-only ``deferred`` and
-``quarantined`` channels. Processed-file disposition moves every candidate
-whose content is archived, a held one included.
+inbox spec's third entry point (design: DrainOrchestration): it selects
+workout and wellness candidates and settles the combined batch once. Wellness
+recognition, quarantine handling, archival and eligible disposition run first,
+then the daily series is rebuilt before the admitted FIT files are planned.
+An unreadable candidate is deferred; known-bad content is reported in
+``quarantined`` unless retry was requested. The composed :class:`DrainReport`
+wraps :class:`SyncReport`, the inbox and wellness channels, and the series
+report. Move disposition requires a successful or already-complete archive
+operation with its archive entry still present; detected non-activity FIT
+files are excluded even when a legacy archive entry exists. Held activity
+files retain their ordinary archive and disposition eligibility.
 
 The *document lookup* (:func:`find_document`) is the read-only step that decides
 whether an incoming ``.fit`` file updates an existing document or seeds a fresh
@@ -776,8 +774,8 @@ def drain(
     wellness_settings: WellnessSettings = DEFAULT_WELLNESS_SETTINGS,
     wellness_progress: Callable[[str, int, int], None] | None = None,
 ) -> DrainReport:
-    r"""Drain the inbox: select, settle, quarantine-partition, then plan and
-    apply the admitted ``.fit`` files as one run (design: DrainOrchestration,
+    r"""Drain the inbox: settle, handle wellness, rebuild its series, then plan
+    and apply the admitted ``.fit`` files as one run (design: DrainOrchestration,
     inbox Req 2.1, 2.3, 2.4, 3.5, 4.2, 4.6, 5.1-5.5, 5.7, 7.1, 7.4, 7.6;
     activity-identity Req 4).
 
@@ -787,15 +785,25 @@ def drain(
     declarations are refreshed once, exactly where and how :func:`sync` does
     (inbox Req 7.6), and :func:`_scan_symlinked_documents` runs once (the
     once-per-run parity :func:`sync` and :func:`regen` share). Then candidates
-    are selected (:func:`fitdocs.inbox.select_candidates`) against *settings*,
-    so ignored files never reach any channel (inbox Req 3.5); settled as one
-    batch (:func:`fitdocs.inbox.settle`), through the injected *sleep* so a
-    test spends no wall-clock time; and read once each -- the read doubles as
-    a readability probe, so a candidate that observes as stable but cannot be
-    read (for example an unmaterialized cloud placeholder) is *deferred* with
-    its reason, never failed and never quarantined (inbox Req 4.2).
+    are selected against *settings* by the workout and wellness selectors,
+    so ignored files never reach any channel (inbox Req 3.5), and settled as
+    one combined batch (:func:`fitdocs.inbox.settle`) through the injected
+    *sleep*. An unreadable stable candidate is deferred with its reason,
+    never failed or quarantined merely for being unreadable (inbox Req 4.2).
 
-    **Quarantine partition (inbox Req 5.1-5.5, 5.7).** That same probe read's
+    **Wellness first.** Each stable wellness candidate is identified before
+    its content hash is checked against the quarantine record. Unrecognized
+    files stay in place and are reported separately; deferred identification
+    or archival attempts also leave the input in place. Recognized content
+    already quarantined is reported without another archive attempt unless
+    *retry_quarantined* is set. Archival returns archived, already archived,
+    deferred or failed: failures enter ``wellness_failures`` and quarantine;
+    success clears a retried entry. MOVE requires a regular, nonsymlink
+    archive entry still present after success. Then :func:`rebuild_series`
+    runs with ``force=False`` before FIT planning, even with no new export.
+
+    **FIT quarantine partition (inbox Req 5.1-5.5, 5.7).** Each stable FIT
+    candidate is read once as a readability probe; that same probe read's
     bytes are hashed (sha256, matching the archive's content identity). When
     that hash is already present in *quarantine* and *retry_quarantined* is
     not set, the candidate is *not* handed to the planner at all: it is
@@ -838,10 +846,11 @@ def drain(
     candidate paths follow the run's renames.
 
     The composed :class:`DrainReport` wraps the resulting :class:`SyncReport`
-    alongside the ``deferred`` and ``quarantined`` channels. Only
-    :class:`FileFailure`\ s inside that ``sync`` report drive the failure
-    outcome; a drain whose only exceptional entries are deferrals, holds and/or
-    already-quarantined files reports success (inbox Req 4.6, 5.3).
+    alongside inbox and wellness channels and ``wellness_series`` metadata.
+    FIT failures, wellness failures and a FAILED series are reported
+    independently; the CLI includes all three in its failure exit rule, plus
+    later load or plan failures. Unrecognized files, deferrals, holds and
+    already-quarantined files alone do not fail the drain (inbox Req 4.6, 5.3).
 
     The quarantine record is evolved in memory as the drain proceeds and
     persisted (:func:`~fitdocs.quarantine.save_quarantine`) exactly once, at
@@ -850,17 +859,20 @@ def drain(
     quarantined and not retried, or none at all) never touches the record
     file.
 
-    **Disposition (inbox Req 6.2, 6.4, 6.5).** Once a candidate's per-file
+    **FIT disposition (inbox Req 6.2, 6.4, 6.5).** Once a candidate's per-file
     processing finishes *without failing this drain*, it is disposed of iff
     its content hash -- the same sha256 the quarantine check above already
-    computed, not re-hashed or re-read -- is present under ``fit-archive/``:
-    this is the positive, filesystem-checked gate, never the ``skipped``
-    label. Written files pass it (the archive copy is the pipeline's last
-    write); already-archived dedupe-skips pass it (that is exactly why they
-    were skipped); a skip that deliberately archived nothing -- wiki-contract's
-    newer-``doc_version`` gate above all -- fails it, so that file stays in
-    the inbox and the next drain re-selects it as a candidate. Failed,
-    deferred, and quarantined candidates never reach this gate at all -- the
+    computed, not re-hashed or re-read -- is present under ``fit-archive/``
+    and no non-activity FIT type was detected. The explicit non-activity veto
+    applies even when a legacy archive entry is present. These are the
+    filesystem-checked presence gate and classification veto, never the
+    ``skipped`` label. Written activity files pass it (the archive copy is the
+    pipeline's last write); already-archived dedupe-skips pass it unless a
+    non-activity type was detected; a skip that deliberately archived nothing
+    -- wiki-contract's newer-``doc_version`` gate above all -- fails it, so
+    that file stays in the inbox and the next drain re-selects it as a
+    candidate. Failed, deferred, and quarantined candidates never reach this
+    gate at all -- the
     "did not fail this drain" condition matters in its own right, separately
     from archive presence: under ``force=True`` an already-archived candidate
     bypasses the planner's ordinary archived-file skip and is reprocessed from
@@ -1229,8 +1241,10 @@ def regen(
     ``force`` is implied for every item this discovery produces, so an
     already-archived source is never skipped on that basis alone; the
     remaining skips are the document-format version gate below, a file the
-    second part holds, and bytes repeated within the run. The immutable
-    archive is still never rewritten (Req 3.5). Region conflicts
+    second part holds, bytes repeated within the run, and a declared
+    non-activity file in the second part's unlisted archive inputs. Pages
+    already listing such a file are kept and rebuilt by the first part.
+    The immutable archive is still never rewritten (Req 3.5). Region conflicts
     (:class:`~fitdocs.docmerge.RegionError`), decode errors, and unexpected
     per-file exceptions become :class:`FileFailure`\ s without aborting the batch
     (Req 1.3). Given an identical archive, athlete file, and ``tz``, output is

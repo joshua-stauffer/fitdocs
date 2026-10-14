@@ -48,7 +48,7 @@ fails loudly instead of writing generated documents into that checkout.
 ## The settings file: `<data-root>/fitdocs.toml`
 
 A single user-owned file lives at `<data-root>/fitdocs.toml`. fitdocs only
-ever *reads* it — it never creates, prompts for, or writes it. It carries eight
+ever *reads* it — it never creates, prompts for, or writes it. It carries nine
 tables today, each documented in full where noted:
 
 | Table | Configures | Documented in |
@@ -59,6 +59,7 @@ tables today, each documented in full where noted:
 | `[load]` (and its sub-tables `[load.sufficiency]`, `[load.priority]`, `[load.flags]`) | The default calculator, benchmark staleness, and channel-sufficiency/priority/flagging behavior training-load computation reads | below |
 | `[plans]` | Where `fitdocs plan` looks for plan sources | the [README's Training blocks section](../README.md#training-blocks) |
 | `[history]` | The fitness/fatigue/form model constants and coverage threshold `fitdocs history` renders from | below |
+| `[wellness]` | Source precedence for the daily wellness series | below |
 | `[identity]` | The source precedence that chooses each page's base file | below |
 | `[connectors]` | Per-instance connector configuration for `fitdocs connect` and `fitdocs pull` | below |
 
@@ -241,6 +242,38 @@ precedence = ["original", "phone_copy", "unknown"]
 A change to `precedence` applies to every page on the next `fitdocs regen`,
 which re-ranks the files of every page and may rename a page whose base
 changes, and to the pages a `sync` adds files to; see the [ownership contract](ownership-contract.md#source-files-and-their-roles).
+
+### `[wellness]`: source precedence for wellness
+
+The daily wellness series retains every source's value. Precedence chooses
+which present value is canonical for each day and metric; it does not erase
+other sources or change their definitions.
+
+| Key | Meaning | Default |
+|-----|---------|---------|
+| `precedence` | Source identifiers, best first. Omitted sources follow in the built-in order. | `[]` (built-in order: `garmin-export`, then `intervals-icu`) |
+| `metric_precedence` | A table mapping metric identifiers to source lists. An entry replaces the general list for that metric; omitted sources still follow in built-in order. | `{}` (use the general list) |
+
+```toml
+[wellness]
+precedence = ["garmin-export", "intervals-icu"]
+
+[wellness.metric_precedence]
+hrv_rmssd_ms = ["intervals-icu", "garmin-export"]
+```
+
+Only registered source identifiers (`intervals-icu` and `garmin-export`
+today) and the [wellness metric identifiers](wellness.md#metrics) are accepted.
+A list must contain strings without duplicates. A non-table `[wellness]`, a
+non-table `metric_precedence`, an unknown metric, an unknown source or a
+malformed list is a settings error. Unknown top-level wellness keys are
+ignored. Bare `fitdocs sync` and `fitdocs regen` validate these settings
+before writing and exit `2` on an error; `fitdocs check` reports invalid
+settings as a stale-series finding. Explicit-source `fitdocs sync SOURCE`
+keeps its workout-only behavior. An absent file, table or key uses the
+defaults; changing the settings rebuilds the series on the next drain or
+`fitdocs regen`. See the [wellness guide](wellness.md) for canonical
+selection, reading the series and the [day rule](wellness.md#wellness-day).
 
 ### `[load]`: calculator selection and training-load computation
 

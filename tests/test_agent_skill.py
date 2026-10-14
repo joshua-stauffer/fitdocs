@@ -1817,3 +1817,16 @@ def test_analytics_skill_points_at_the_dashboards_skill() -> None:
     further = _flat(_sections(body)["Further reading"])
     assert "`fitdocs-dashboards`" in further
     assert "dashboards/" not in body
+
+
+@pytest.mark.parametrize("field", ("unrecognized", "wellness_failures"))
+def test_wellness_problem_row_tells_user(field: str) -> None:
+    do = _channel_rows_by_field(INBOX_SKILL_NAME)[field][3]
+    assert "Tell the user" in do
+
+
+@pytest.mark.parametrize("field", ("unrecognized", "wellness_failures"))
+def test_wellness_problem_row_prohibits_deletion(field: str) -> None:
+    do = _channel_rows_by_field(INBOX_SKILL_NAME)[field][3]
+    assert "Never delete the file." in do
+    assert do.lower().count("delet") == 1

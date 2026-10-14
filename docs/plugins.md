@@ -255,6 +255,14 @@ DerivedMetrics, TrimpWeighting, parse_fit, compute_metrics, FitDecodeError,
 NotFitFileError, FitIntegrityError, DeveloperChannel, FileIdentity
 ```
 
+`FileIdentity.file_type: str | None = None` is an additive final field,
+with a keyword default, describing the FIT `file_id.type`: a profile name
+such as `"activity"` or `"monitoring_b"`, or an unnamed numeric value as text
+(such as `"49"`). An absent or unusable type is `None`. Existing plugin
+constructors remain compatible; no action is needed. fitdocs skips declared
+non-activity inputs before workout-page planning; see the
+[inbox guide](inbox.md#safeguards).
+
 From `fitdocs.load`:
 
 ```
