@@ -189,7 +189,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
     green; builders frozen from here on.
   - _Requirements: 14.4_
 
-- [ ] 2. Core: defect filter, sleep sweep, extract codec, daily rules
+- [x] 2. Core: defect filter, sleep sweep, extract codec, daily rules
 
 - [x] 2.1 (P) Repair the three known export defects in the byte stream
   - `defects.py` per design § DefectFilter: `CONTROL_BYTES`,
@@ -255,7 +255,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - _Requirements: 3.4, 5.1, 5.2, 5.3, 5.4, 5.5, 5.7, 5.9_
   - _Boundary: ExtractCodec_
 
-- [ ] 2.4 (P) Validate records, classify writers and compute the day values other than sleep and readings
+- [x] 2.4 (P) Validate records, classify writers and compute the day values other than sleep and readings
   - `reduce.py` per design § Reduce, without the sleep nights and the
     asleep readings (3.2): `Writer`, `DayRule`, `DailyRule`, `TypePolicy`,
     `POLICIES` (all eight types, so 3.2 adds behaviour, not rows),
@@ -563,6 +563,27 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - _Requirements: 1.1, 2.5, 7.4_
 
 ## Implementation Notes
+
+- **2.4:** Independently APPROVED and completion VERIFIED: 947 component
+  tests, mypy, Ruff, formatting and diff checks pass. All eight policy rows,
+  sourceName-only writer evidence across software versions, four-type
+  validation/conversion, complete FINAL/LATEST keys, exact per-source step
+  totals, own-offset start days and accepted snapshots implemented. Source
+  evidence applies to deviceless records; Watch takes precedence over Phone.
+  Finite inputs can overflow integer acceptance or `math.fsum`: preserve exact
+  integer totals, use the normal fsum path with exact Fraction fallback on
+  overflow, then apply the absent-value rule without changing the model.
+  Reviewer confirmed 293 claims across 177 distinct source edits (292 selected
+  observations, one transparent exact alias) plus two own faults; every group
+  was assertion-red and exactly restored to 947-green. All 224 cases/32 sites,
+  21 task-local sections and twelve type/writer admission cells audited;
+  original 205 cases/27 sites and literal prefix/AST preserved. A writer that
+  loses an existing fixture does not prove its admission: retain the earlier
+  Phone/later Other weight case while adding winning Phone weight, and pin
+  VO2 Phone/Other exclusion independently of policy declarations and RHR.
+  Sleep nights, asleep readings, oxygen runtime conversion and sleep-state
+  mapping remain assigned to 3.2. Equal step-total source identity has no
+  distinct emitted scalar/origin and is not claimed as discriminated.
 
 - **2.3:** Independently APPROVED and completion VERIFIED: 723 component
   tests, mypy, Ruff, formatting and diff checks pass. Canonical level-9 gzip
