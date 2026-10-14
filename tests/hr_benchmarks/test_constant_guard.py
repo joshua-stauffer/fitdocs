@@ -170,6 +170,22 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
     LiteralExemption(
         "peaks", 94, 19, 1, ExemptionCategory.INDEX, "Append to the last kept stretch"
     ),
+    LiteralExemption(
+        "maximum",
+        24,
+        69,
+        1,
+        ExemptionCategory.INDEX,
+        "Last zero-based day offset in an inclusive calendar window",
+    ),
+    LiteralExemption(
+        "maximum",
+        32,
+        21,
+        1,
+        ExemptionCategory.INDEX,
+        "Second ranked session is the median of the top three",
+    ),
 )
 
 
