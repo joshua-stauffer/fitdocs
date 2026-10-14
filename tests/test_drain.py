@@ -1580,3 +1580,110 @@ def test_is_source_level_defaults_to_false_for_an_unrecognized_exception_type() 
         pass
 
     assert is_source_level(_SomeOtherFault("surprise")) is False
+
+
+# --- Non-activity FIT guard (wellness-store 4.2, 4.3, 4.6) -----------------
+
+
+@pytest.mark.parametrize(
+    "prearchived,force", [(False, False), (True, False), (True, True)]
+)
+@pytest.mark.parametrize("file_type", ["monitoring_b", 49])
+@pytest.mark.parametrize("move", [False, True])
+def test_non_activity_guard_leaves_inbox_unchanged(
+    tmp_path: Path, prearchived: bool, force: bool, file_type: str | int, move: bool
+) -> None:
+    from fitdocs.sync import DocWarning
+
+    file_id = builder._file_id(4200000091, manufacturer="stryd")
+    file_id["type"] = file_type
+    data = builder.encode([file_id])
+    inbox, data_root, processed = (
+        tmp_path / name for name in ("inbox", "data", "processed")
+    )
+    candidate = _put(inbox, "monitoring.fit", data)
+    archive = archive_path(data_root, hashlib.sha256(data).hexdigest())
+    if prearchived:
+        archive.parent.mkdir(parents=True)
+        archive.write_bytes(data)
+    before = (candidate.read_bytes(), candidate.stat().st_mtime_ns)
+    report = _drain(
+        inbox,
+        data_root,
+        settings=_MOVE_SETTINGS if move else DEFAULT_INBOX_SETTINGS,
+        processed_dir=processed,
+        force=force,
+    )
+    assert (
+        report.sync.written,
+        report.sync.skipped,
+        report.sync.failures,
+        report.sync.warnings,
+        report.moved,
+        report.quarantined,
+    ) == (
+        (),
+        ("monitoring.fit",),
+        (),
+        (
+            DocWarning(
+                doc="monitoring.fit",
+                detail=(
+                    "not an activity file: its FIT header declares the file type "
+                    f"'{file_type}'; fitdocs writes workout pages only for "
+                    "activity files, so it wrote no page from it and left "
+                    "the file where it is"
+                ),
+            ),
+        ),
+        (),
+        (),
+    )
+    assert (candidate.read_bytes(), candidate.stat().st_mtime_ns) == before
+    assert archive.exists() is prearchived
+    assert not quarantine_path(data_root).exists()
+
+
+@pytest.mark.parametrize("probe_error", [False, True])
+def test_non_activity_guard_cached_activity_preserves_skip_move(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, probe_error: bool
+) -> None:
+    import fitdocs.sync as sync_module
+
+    inbox, data_root, processed = (
+        tmp_path / name for name in ("inbox", "data", "processed")
+    )
+    data = builder.run_fit_bytes()
+    candidate = _put(inbox, "activity.fit", data)
+    sha = hashlib.sha256(data).hexdigest()
+    archive = archive_path(data_root, sha)
+    archive.parent.mkdir(parents=True)
+    archive.write_bytes(data)
+
+    parsed: list[object] = []
+
+    def forbidden(*args: object, **kwargs: object) -> object:
+        parsed.append(args)
+        raise AssertionError("cached activity reached Activity normalization")
+
+    monkeypatch.setattr(sync_module, "parse_fit", forbidden)
+    decoded: list[object] = []
+    decode = sync_module.decode_fit
+
+    def classify(data: bytes) -> object:
+        decoded.append(data)
+        if probe_error:
+            raise ValueError("cached classification unavailable")
+        return decode(data)
+
+    monkeypatch.setattr(sync_module, "decode_fit", classify)
+    report = _drain(inbox, data_root, settings=_MOVE_SETTINGS, processed_dir=processed)
+    assert decoded == [data]
+    assert (report.sync, report.quarantined) == (
+        SyncReport((), ("activity.fit",), ()),
+        (),
+    )
+    assert parsed == []
+    assert len(report.moved) == 1
+    assert not candidate.exists()
+    assert not quarantine_path(data_root).exists()

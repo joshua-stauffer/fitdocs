@@ -2559,3 +2559,141 @@ def test_sync_does_not_match_or_write_through_a_workouts_symlink(
     assert report.failures == ()
     assert doc.is_symlink()
     assert outside.read_text(encoding="utf-8") == outside_before
+
+
+# --- Non-activity FIT guard (wellness-store 4.2, 4.5, 4.6) -----------------
+
+
+def _guard_fit(file_type: str | int | None) -> bytes:
+    file_id = builder._file_id(4200000091, manufacturer="stryd")
+    if file_type is None:
+        del file_id["type"]
+    else:
+        file_id["type"] = file_type
+    return builder.encode([file_id])
+
+
+def _guard_warning(label: str, file_type: str | int) -> DocWarning:
+    return DocWarning(
+        doc=label,
+        detail=(
+            "not an activity file: its FIT header declares the file type "
+            f"'{file_type}'; fitdocs writes workout pages only for "
+            "activity files, so it wrote no page from it and left "
+            "the file where it is"
+        ),
+    )
+
+
+def test_non_activity_guard_sync_mixed_source(tmp_path: Path) -> None:
+    source, data_root = tmp_path / "source", tmp_path / "data"
+    _put(source, "activity.fit", builder.run_fit_bytes())
+    data = _guard_fit("monitoring_b")
+    candidate = _put(source, "monitoring.fit", data)
+    before = (candidate.read_bytes(), candidate.stat().st_mtime_ns)
+    report = sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
+    assert (len(report.written), report.skipped, report.failures, report.warnings) == (
+        1,
+        (str(candidate),),
+        (),
+        (_guard_warning(str(candidate), "monitoring_b"),),
+    )
+    assert not archive_path(data_root, _sha(data)).exists()
+    assert len(_md_names(data_root)) == 1
+    assert (candidate.read_bytes(), candidate.stat().st_mtime_ns) == before
+
+
+@pytest.mark.parametrize("file_type", ["activity", None])
+def test_non_activity_guard_allows_activity_and_untyped(
+    tmp_path: Path, file_type: str | None
+) -> None:
+    source, data_root = tmp_path / "source", tmp_path / "data"
+    data = _guard_fit(file_type)
+    _put(source, "allowed.fit", data)
+    report = sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
+    assert (len(report.written), report.skipped, report.failures, report.warnings) == (
+        1,
+        (),
+        (),
+        (),
+    )
+    archive = archive_path(data_root, _sha(data))
+    assert archive.exists() and archive.read_bytes() == data
+
+
+def _stage_guard_page(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, Path, Path, bytes]:
+    import fitdocs.sync as sync_module
+
+    source, data_root = tmp_path / "source", tmp_path / "data"
+    data = _guard_fit("monitoring_b")
+    _put(source, "monitoring.fit", data)
+    with monkeypatch.context() as staging:
+        staging.setattr(sync_module, "is_activity_file", lambda _identity: True)
+        staged = sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
+    assert len(staged.written) == 1
+    page = data_root / staged.written[0]
+    assert page.exists()
+    assert _frontmatter(page)["sources"] == [source_ref(_sha(data))]
+    return source, data_root, page, data
+
+
+def test_non_activity_guard_regen_listed_page_and_unlisted_archive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _source, data_root, page, listed = _stage_guard_page(tmp_path, monkeypatch)
+    unlisted = _guard_fit(49)
+    unlisted_archive = archive_path(data_root, _sha(unlisted))
+    unlisted_archive.write_bytes(unlisted)
+    archives = (archive_path(data_root, _sha(listed)), unlisted_archive)
+    before = [(path.read_bytes(), path.stat().st_mtime_ns) for path in archives]
+    page.write_text(page.read_text() + "\nSTALE GENERATED GUARD CONTENT\n")
+    page_ref, unlisted_ref = (
+        page.relative_to(data_root).as_posix(),
+        source_ref(_sha(unlisted)),
+    )
+    report = regen(data_root, athlete=None, tz=_TZ, tiles=_TILES)
+    assert report == SyncReport(
+        (page_ref,), (unlisted_ref,), (), (_guard_warning(unlisted_ref, 49),)
+    )
+    assert "STALE GENERATED GUARD CONTENT" not in page.read_text()
+    assert [(path.read_bytes(), path.stat().st_mtime_ns) for path in archives] == before
+
+
+def test_non_activity_guard_forced_source_keeps_legacy_page(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, data_root, page, _data = _stage_guard_page(tmp_path, monkeypatch)
+    before = (page.read_bytes(), page.stat().st_mtime_ns)
+    report = sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES, force=True)
+    label = str(source / "monitoring.fit")
+    assert report == SyncReport(
+        (), (label,), (), (_guard_warning(label, "monitoring_b"),)
+    )
+    assert (page.read_bytes(), page.stat().st_mtime_ns) == before
+
+
+def test_non_activity_guard_source_cache_keeps_no_decode_fast_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import fitdocs.sync as sync_module
+
+    source, data_root = tmp_path / "source", tmp_path / "data"
+    data = builder.run_fit_bytes()
+    _put(source, "activity.fit", data)
+    archive = archive_path(data_root, _sha(data))
+    archive.parent.mkdir(parents=True)
+    archive.write_bytes(data)
+
+    calls: list[object] = []
+
+    def forbidden(*args: object, **kwargs: object) -> object:
+        calls.append(args)
+        raise AssertionError("source cached skip decoded")
+
+    monkeypatch.setattr(sync_module, "parse_fit", forbidden)
+    monkeypatch.setattr(sync_module, "decode_fit", forbidden)
+    report = sync(source, data_root, athlete=None, tz=_TZ, tiles=_TILES)
+    assert report == SyncReport((), (str(source / "activity.fit"),), ())
+    assert calls == []

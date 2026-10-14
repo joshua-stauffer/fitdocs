@@ -750,10 +750,17 @@ preflight and keeps every call dashboards placed).
 
 - [ ] 4. Integration with the drain, check, the index and the CLI
 
-- [ ] 4.1 Keep non-activity FIT files off workout pages
+- [x] 4.1 Keep non-activity FIT files off workout pages
   - The guard in `_run_planned`'s preparation per design §
     NonActivityGuard; the `SyncReport` docstring's `skipped` causes and
     warning causes (the ninth) updated.
+  - Drain supplies the private optional non-activity exclusion set; its MOVE
+    gate explicitly vetoes detected labels even when their legacy archive
+    entries exist. The non-forced cached drain branch classifies existing
+    probe bytes through `decode_fit` and `extract_file_identity`, without
+    constructing an Activity. Probe exceptions preserve historical cached
+    skip/disposition semantics; source-directory cached fast paths and
+    new/forced parse-error handling stay as specified by the design.
   - **Warning text** (design § NonActivityGuard): "not an activity file: its
     FIT header declares the file type '<type>'; fitdocs writes workout pages
     only for activity files, so it wrote no page from it and left the file
@@ -771,6 +778,12 @@ preflight and keeps every call dashboards placed).
       `monitoring_b`; no archive entry for its sha.
     - The drain under the move disposition leaves it in the inbox, records no
       quarantine entry, and exits successfully; an untyped FIT still renders.
+    - Both `monitoring_b` and numeric type `49`, under LEAVE and MOVE, remain
+      byte- and mtime-identical for fresh, already-archived non-forced and
+      already-archived forced cases; no move, failure or quarantine occurs.
+      Existing activity duplicate MOVE and forced-failure protection remain
+      green. Cached activity skips do not construct an Activity; an injected
+      cached classification exception preserves the prior skip/MOVE outcome.
     - `regen` over the staged page **and**, in the same run, an archived
       monitoring file (type `49`) that no page lists: the staged page's ref
       is in `report.written`, not in `skipped`, and has no "not an activity
@@ -927,6 +940,9 @@ preflight and keeps every call dashboards placed).
   - _Requirements: 5.5, 7.4, 7.6, 15.7, 19.2_
 
 - [ ] 5.2 Update the inbox, configuration, plugin and ownership-contract docs, the workouts skill and the CHANGELOG
+  - Correct `sync.py`'s drain disposition docstring to include the explicit
+    non-activity veto, and its regen skip enumeration to include non-activity
+    unlisted archive inputs (task4.1 review follow-ups, already verified).
   - `docs/inbox.md` (wellness candidates, unrecognized channel, `[inbox]
     ignore` for a file, the non-activity guard); `docs/configuration.md`
     `### [wellness]`; `docs/plugins.md` (`FileIdentity.file_type`,
@@ -1058,3 +1074,7 @@ preflight and keeps every call dashboards placed).
 - 3.3: independently APPROVED round2; full14,361 passed/44 skipped, intake33/wellness788, ruff/mypy540 clean.70 claimed plus2 fresh mutations killed with green restorations. Intake publishes identify/archive_identified and the specified typed outcomes; duplicate short circuit checks regular non-symlink entries without another candidate read or commit. Local duplicate fixtures separate format.id from source.id and include source-directory decoys; frozen toy IDs coincide, so do not rely on them alone to pin grouping. Lazy recognizer OSError propagation is pinned by the immediate open count (fallback JSON would still defer after extra reads). Stability, quarantine, disposition and reporting remain task4.2 composition.
 
 - 3.4: independently APPROVED round2; full14,400 passed/44 skipped, targeted86/wellness827, ruff/mypy543 clean.76 claimed plus2 fresh mutations killed with green restorations. Read-only inspect reports metadata/series problems and last-manifest conflicts without archive-entry opens; root-directory symlink regression has a reachable external manifest and passive read recorder, with bytes/mtime/link metadata guards. Facade exports exactly16 canonical bindings (SourceKind remains owned by wellness.spec). Literal visited-module pin covers all15 existing ranked modules; frozen rank/guards unchanged. Group3 complete; audit remedies and CLI/drain consumers remain group4.
+
+- 4.1 debug round1: RETRY_TASK, LOGIC_ERROR. Prescribed post-parse guard alone moved legacy archived monitoring under MOVE both with and without force: cached SHA shortcut bypassed classification, while archive presence bypassed disposition protection. Fresh bounded prototype passed16 controls. Technical design/task clarification implements existing4.3 through an explicit drain-supplied non-activity veto plus canonical cached-byte classification; no Activity normalization or new decoder ownership. Cached probe exceptions preserve historical skip/MOVE; full SDK decode cost is disclosed, restricted to cached drain classification. Required sync/regen tests and independent review remain pending.
+
+- 4.1: independently APPROVED after debug retry; full14,420 passed/44 skipped, sync+drain151/wellness827, ruff/mypy543 clean.40 claimed plus6 fresh mutations killed with sole failures and green restorations. Preserve drain's explicit non_activity set/MOVE veto and best-effort cached canonical identity probe when composing4.2; original archived activity MOVE, cached probe-error fallback, source-cache fast path and listed-page regen remain intact. Two stale drain/regen docstring clauses are explicitly assigned to pending5.2 above; no duplicate queue items needed for already planned work.

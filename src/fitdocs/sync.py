@@ -252,6 +252,8 @@ from fitdocs.inbox import (
     select_candidates,
     settle,
 )
+from fitdocs.ingest.decode import decode_fit
+from fitdocs.ingest.file_id import extract_file_identity, is_activity_file
 from fitdocs.layout import (
     ARCHIVE_DIR,
     ASSETS_SUBDIR,
@@ -385,25 +387,26 @@ class SyncReport:
     ``failures`` (a :class:`FileFailure`). The tuples are in deterministic
     (sorted-discovery) order.
 
-    ``skipped`` is a **shared presentation bucket with three unrelated causes**:
+    ``skipped`` is a **shared presentation bucket with four unrelated causes**:
     the source's bytes were already archived and ``force`` is off, or its bytes
     appeared earlier in the run (Req 3.2, 3.3) -- finished work; the matched
     document records a *newer* document-format version and was left untouched
     (Req 5.5, 5.8), which wrote nothing and archived nothing and depends on the
     source staying where it is to be retried next run; or the file was *held*
     because its page is ambiguous (activity-identity Req 4.5-4.7, 7.5), which is
-    archived and recorded but written to no page. **It is not a completion
-    signal** (Req 5.9): a held file is archived (so a later run skips it) yet
-    belongs to no page, and is never a failure.
+    archived and recorded but written to no page; or a declared non-activity FIT
+    file, left where it is without producing a page (wellness-store Req 4.2).
+    **It is not a completion signal** (Req 5.9): a held file is archived (so a
+    later run skips it) yet belongs to no page, and is never a failure.
 
-    The authoritative discriminator for a fully-processed source is its presence
-    in ``fit-archive/`` -- never this label. A disposition, cleanup, or archival
-    policy that relocated a source because it appeared here would orphan a
-    version-gated source and permanently defeat that retry. See the module
+    Disposition requires presence in ``fit-archive/`` and no detected non-activity
+    type -- never this label. A disposition, cleanup, or archival policy that
+    relocated a source because it appeared here would orphan a version-gated
+    source and permanently defeat that retry. See the module
     docstring's version-gate section.
 
     ``warnings`` is a **separate, additive channel** for non-fatal, subject-scoped
-    conditions. Eight causes emit one today: a map that could not be rendered
+    conditions. Nine causes emit one today: a map that could not be rendered
     (Req 4.3, 4.4), a foreign ownership declaration that could not be placed
     (Req 3.6), a document left untouched because it records a newer
     document-format version (Req 5.5), a rewritten document that carried
@@ -414,10 +417,11 @@ class SyncReport:
     7.2 F2), a page renamed because its base changed or because a
     collision suffix was settled (activity-identity Req 6.5, 6.6), and a file
     held because the page it belongs to is ambiguous, naming the archived file,
-    every page it could belong to and the evidence (activity-identity Req 4.7).
+    every page it could belong to and the evidence (activity-identity Req 4.7),
+    and a non-activity FIT skip naming its declared type (wellness-store Req 4.2).
     This is the canonical enumeration every other module points at
     instead of repeating (:class:`DocWarning`, :func:`fitdocs.cli._report`) --
-    keep it, and only it, current when a ninth cause is added. A
+    keep it, and only it, current when a cause is added. A
     :class:`DocWarning` rides *alongside* the partition: it never enters
     ``failures``, never moves a file into or out of
     ``written``/``skipped``/``failures``, and never changes the exit code. A
@@ -913,6 +917,7 @@ def drain(
         admitted.append((candidate, data, sha, recorded_entry))
 
     # The admitted candidates are planned together, from the probe bytes.
+    non_activity: set[str] = set()
     task_renames = _run_planned(
         [_RunItem(c.rel, c.path, data) for c, data, _sha, _entry in admitted],
         data_root,
@@ -928,6 +933,7 @@ def drain(
         failures=failures,
         warnings=warnings,
         on_rendered=on_rendered,
+        non_activity=non_activity,
     )
     failed_reasons = {failure.source: failure.reason for failure in failures}
 
@@ -975,9 +981,10 @@ def drain(
             record_changed = True
 
         # Disposition (inbox Req 6.2, 6.4, 6.5): a candidate that did not
-        # fail is disposed of iff its content is now present in
-        # `fit-archive/` -- the positive, filesystem-checked gate, never the
-        # `skipped` label. A version-gated skip (wiki-contract's newer-
+        # fail and has no detected non-activity type is disposed of iff its
+        # content is now present in `fit-archive/` -- the positive,
+        # filesystem-checked gate, never the `skipped` label. A version-gated
+        # skip (wiki-contract's newer-
         # doc_version gate) deliberately archives nothing, so it fails this
         # check and stays in the inbox for the next drain to re-select. A
         # held candidate is archived, so it is moved like any other.
@@ -987,6 +994,7 @@ def drain(
         # missing its processed_dir) touches nothing here.
         if (
             not failed_this_candidate
+            and candidate.rel not in non_activity
             and settings.disposition is Disposition.MOVE
             and processed_dir is not None
             and archive_path(data_root, sha).exists()
@@ -1394,6 +1402,18 @@ class _HoldState:
     record: HoldRecord
 
 
+def _non_activity_warning(label: str, file_type: str | None) -> DocWarning:
+    return DocWarning(
+        doc=label,
+        detail=(
+            "not an activity file: its FIT header declares the file type "
+            f"'{file_type}'; fitdocs writes workout pages only for "
+            "activity files, so it wrote no page from it and left "
+            "the file where it is"
+        ),
+    )
+
+
 def _run_planned(
     items: Sequence[_RunItem],
     data_root: Path,
@@ -1411,13 +1431,17 @@ def _run_planned(
     warnings: list[DocWarning],
     on_rendered: Callable[[RenderedPage], None] | None,
     write_archive: bool = True,
+    non_activity: set[str] | None = None,
 ) -> dict[str, str]:
     """Plan and apply one run's files (activity-identity Req 4, 7.1, 7.5).
 
     Preparation reads (or takes the caller's bytes), hashes and parses each item
     in discovery order (a file
     already archived, or whose bytes appeared earlier in the run, is skipped
-    without a parse; a read or decode failure is that file's failure); the page
+    without Activity parsing; drain also probes cached bytes for a declared
+    non-activity type, excluding detected labels from disposition through
+    ``non_activity``. Probe exceptions keep the trusted-cache skip. A read or
+    ordinary parse failure is that file's failure); the page
     index is scanned once; :func:`~fitdocs.identity.planning.plan_run` assigns
     every file to a page, a new page or a hold as a function of the *set* of
     files; page tasks and hold tasks then run in first-member order. Report
@@ -1438,12 +1462,35 @@ def _run_planned(
             data = item.data if item.data is not None else item.path.read_bytes()
             sha = hashlib.sha256(data).hexdigest()
             if archive_path(data_root, sha).exists() and not force:
+                if non_activity is not None:
+                    try:
+                        identity = extract_file_identity(
+                            decode_fit(data).messages.get("file_id_mesgs", [])
+                        )
+                        activity_file = is_activity_file(identity)
+                    except Exception:
+                        # A cached skip is trusted; this probe does not revalidate it.
+                        pass
+                    else:
+                        if not activity_file:
+                            non_activity.add(item.label)
+                            warnings.append(
+                                _non_activity_warning(item.label, identity.file_type)
+                            )
                 outcomes[position] = _Outcome("skipped")
                 continue
             if sha in seen:
                 duplicate_of[position] = seen[sha]
                 continue
             activity = parse_fit(data)
+            if not is_activity_file(activity.file_identity):
+                outcomes[position] = _Outcome("skipped")
+                warnings.append(
+                    _non_activity_warning(item.label, activity.file_identity.file_type)
+                )
+                if non_activity is not None:
+                    non_activity.add(item.label)
+                continue
         except Exception as exc:
             outcomes[position] = _Outcome("failed", _reason(exc))
             continue

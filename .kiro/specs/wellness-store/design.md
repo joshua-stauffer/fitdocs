@@ -1302,9 +1302,26 @@ def select_wellness_candidates(inbox: Path, settings: InboxSettings,
   archived file no page lists (`regen`'s second part), and an archived,
   page-listed file re-processed under `sync --force`, whose page is then left
   untouched by that run. The warning text is true in all three (the file is
-  left in the source directory, the inbox or the archive). In the drain the
-  file's archive check fails, so the disposition never moves it, and it is
-  not a failure, so it is never quarantined. `regen`'s page part
+  left in the source directory, the inbox or the archive). Drain supplies a
+  run-local `non_activity: set[str]` to `_run_planned` through a private
+  optional output parameter. Every detected non-activity label is added to
+  it, and drain excludes those labels from disposition even when a legacy
+  archive entry already exists. The existing no-failure and archive-presence
+  gates still apply to every other candidate; a skipped label or warning
+  string is not a disposition decision.
+- The non-forced archived-SHA shortcut needs the same exclusion when called
+  by drain: classify its already-read bytes with the existing `decode_fit`
+  and `extract_file_identity`, then apply `is_activity_file`, without
+  constructing an `Activity`. A detected non-activity file is skipped with
+  the same warning and disposition exclusion. This probe decodes SDK
+  messages in full; it adds no source read, SDK import or decoder owner.
+  A probe exception preserves the historical trusted-cache skip and
+  disposition eligibility, without a new failure or quarantine record;
+  revalidation is outside this guard. New and forced files retain ordinary
+  parse-error handling. Explicit-source cached skips keep their original
+  fast path when no exclusion set was supplied.
+- A non-activity skip is not a failure, so it is never quarantined.
+  `regen`'s page part
   (`_process_isolated` → `_page_task`) never reaches this code, so `regen`
   keeps rebuilding a page that already lists such a file (4.5).
 
