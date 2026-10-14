@@ -406,7 +406,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 4.10, 7.3_
   - _Boundary: RestingEvidence_
 
-- [ ] 2.6 (P) Turn evidence and hand-recorded entries into derived entries and takeovers (the write-time rule)
+- [x] 2.6 (P) Turn evidence and hand-recorded entries into derived entries and takeovers (the write-time rule)
   - Implement design § Timeline: a hand entry's measurement date supplies no
     evidence and ends any run; the value in force on each evidence day is
     today's unchanged selection over the hand entries and the derived entries
@@ -823,3 +823,5 @@ pins (`tests/test_public_api.py`), the workouts skill and
 - 2.4: Maximum evidence ranks raw peaks over inclusive 365-day windows, rounds the raw median once, and records the median page; do not rank or calculate from display-rounded peaks. Close distinct and adjacent-float fixtures keep whole/display values equal but oppose raw/date ordering, so literal page expectations discriminate quantization. Original eleven cases retained, six precision cases added. Independent second review reproduced 36 claimed/four own faults red/restored; controller fresh 610 HR cases passed, statics clean (750/565). No leaf clause unpinned; full integration remains later tasks.
 
 - 2.5: Resting evidence uses each source's inclusive 28-day median with at least 14 values, over the bounded daily calendar. Configured formed sources precede formed unlisted sources; test that boundary separately from lexical unknown ordering. Document callback receives the evidence day's year even if the chosen source's latest value is in the prior year. Independent review reproduced 35 claimed/three own faults plus two exemption deletion controls red/restored; controller fresh 630 HR cases passed, statics clean (752/567). Confirmation wording and entry creation remain Timeline 2.6; series reads and retained partitions remain 3.1/3.3.
+
+- 2.6: Timeline uses unchanged selection over hand entries and previously decided derived entries, excludes hand measurement days, and binds confirmed entries to the first evidence day. A multi-hand full-result fixture is needed in addition to entry-point assertions: overwrite/order/association faults otherwise lose takeover pairs silently. Expected superseded hands are independent literals, constructed before the call. Independent second review reproduced all 46 original/12 repair scenarios plus two own faults; controller fresh 671 HR cases passed, statics clean (754/569). Three normative gate deletions are independently behavior preserving (hand/agree run clear and same-force join) and remain openly unpinned, with gates retained. Series retention belongs to 3.1/3.3; cross-kind inspection to 2.7.

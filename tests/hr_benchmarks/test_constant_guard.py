@@ -202,6 +202,30 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
         ExemptionCategory.INDEX,
         "Advance to the next calendar day",
     ),
+    LiteralExemption(
+        "timeline",
+        91,
+        34,
+        1,
+        ExemptionCategory.INDEX,
+        "Last evidence day in the confirmation run",
+    ),
+    LiteralExemption(
+        "timeline",
+        91,
+        58,
+        1,
+        ExemptionCategory.INDEX,
+        "Next day in the calendar sequence",
+    ),
+    LiteralExemption(
+        "timeline",
+        92,
+        37,
+        1,
+        ExemptionCategory.INDEX,
+        "Last source key in the confirmation run",
+    ),
 )
 
 
