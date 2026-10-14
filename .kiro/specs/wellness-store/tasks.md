@@ -520,7 +520,7 @@ preflight and keeps every call dashboards placed).
   - _Requirements: 8.1, 8.2, 9.1, 9.2, 9.3, 9.4, 9.5, 10.1_
   - _Boundary: Merge_
 
-- [ ] 2.4 (P) Encode, decode and read the series files
+- [x] 2.4 (P) Encode, decode and read the series files
   - `series.py` per design § Series without `inputs_digest` (3.2): header,
     `format_value`, `encode_year`, `decode_year`, manifest encode/decode
     (`generator`, `series_version`, newer-version detection), `WellnessSeries`
@@ -1042,3 +1042,5 @@ preflight and keeps every call dashboards placed).
 - 2.2: independently APPROVED; full suite 14,052 passed/44 skipped, Garmin227/wellness499, ruff/mypy526 clean. All109 claimed mutations replayed plus2 reviewer mutations killed, every restoration green. Maintainer strict-weight ruling implemented; published builders_garmin seam available. Garmin naive revisions normalize as wall-clock ISO strings; aware revisions normalize UTC; neither consults machine timezone. Canonical full tests require sandbox escalation for Unix socket and inherited UV_CACHE_DIR=/Users/josh/.cache/uv for nested packaging uv commands (outer --cache-dir is not inherited). Registry registration3.1, latest-record merge2.3, actual original archival2.6 and docs5.1 remain open.
 
 - 2.3: independently APPROVED; full suite14,069 passed/44 skipped, focused17/wellness516, ruff/mypy528 clean.37 claimed plus2 independent mutations killed with green restorations. Conflict.others records all other present winning-revision candidates (excluding selected snapshot), sorted, when distinct values conflict; pure merge does not select latest-entry exports (engine3.2).
+
+- 2.4: independently APPROVED round2; full14,121 passed/44 skipped, focused52/wellness568, ruff/mypy531 clean.83 claimed +2 own mutations confirmed after closing metric-filter and no-write fixture gaps. Each lookup predicate needs independent decoys; reader no-write needs bytes AND st_mtime_ns snapshots (write-method interception misses touch). series.py defines Manifest(inputs, default_order=(), metric_orders={}, files=(), entries=(), conflicts=()), ManifestFile(path, sha256, values), ManifestEntry(path, format, rules_version, state), NewerSeries(series_version), encode_manifest/decode_manifest(path,data), encode_year/decode_year(path,data), format_value; engine3.2 consumes these and adds inputs_digest. Downstream tests stage only through published builders_series.write_series; no downstream direct codec imports.
