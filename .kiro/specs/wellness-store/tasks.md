@@ -748,7 +748,7 @@ preflight and keeps every call dashboards placed).
   - _Depends: 3.2_
   - _Requirements: 11.8, 14.1, 14.2, 14.3, 14.4, 14.5_
 
-- [ ] 4. Integration with the drain, check, the index and the CLI
+- [x] 4. Integration with the drain, check, the index and the CLI
 
 - [x] 4.1 Keep non-activity FIT files off workout pages
   - The guard in `_run_planned`'s preparation per design §
@@ -895,7 +895,7 @@ preflight and keeps every call dashboards placed).
   - _Requirements: 17.5, 18.1, 18.2, 18.3, 18.4, 18.5_
   - _Boundary: IndexProducer_
 
-- [ ] 4.5 Wire the CLI: settings preflight, the regen rebuild, report rows, exit status and progress
+- [x] 4.5 Wire the CLI: settings preflight, the regen rebuild, report rows, exit status and progress
   - `cli.py` per design § CliWellness (the drain-pass block is a
     keep-both-sides region with dashboards: keep every call it places after
     the index pass): `_wellness_settings` in
@@ -913,6 +913,9 @@ preflight and keeps every call dashboards placed).
     rebuilds a stale series before regenerating pages; the progress printer
     writes nothing when stderr is not a terminal and a percentage line when
     it is (test-only EXTRACT format calling `progress`).
+    Re-pin the existing total settings-reader count in
+    `tests/test_cli_sync_inbox.py` from three to four for the standalone
+    wellness projection, preserving the single shared inbox/tile read.
   - **Mutations:** print the summary for `UNCHANGED`; omit
     `wellness_failures` from the exit rule; call `rebuild_series` after
     `regen`.
@@ -1043,6 +1046,8 @@ preflight and keeps every call dashboards placed).
   - _Requirements: 16.1, 16.2, 15.1_
 
 ## Implementation Notes
+
+- 4.5: independently APPROVED; full14,571/44, targeted1209, ruff/mypy547 clean.102 claimed plus2 reviewer sole-failure mutations, all restored GREEN. Drain/regen validate wellness before writes, regen force-rebuilds before pages, twelve channel rows/details and all changed series summaries render, failure predicates remain independent, real EXTRACT progress uses terminal stderr only. Existing total settings-reader pin3->4 includes the standalone wellness projection while preserving the shared inbox/tile read. Late-preflight tests require an actual archive entry; an empty archive masks late rebuild writes. Progress uses52%/100% to distinguish ratio errors. Explicit source/index/check and dashboard post-index behavior preserved. No new follow-ups.
 
 - 4.4: independently APPROVED; full14,535/44, index/query/wellness2267, ruff/mypy546 clean.68 claimed sole-failure mutations plus one allowed-import control independently replayed, two reviewer mutants killed, all restored GREEN. WellnessProducer reads the public facade, fingerprints ordered relative series paths and bytes, and registers wellness_daily with SCHEMA_VERSION3/digest appended. Explicit index reports derived.wellness errors nonfatally while retaining prior rows; page/other-producer errors and failed outcomes remain failures (18.3 integration clarification). Minimal executable wellness SQL and local example staging preserve the existing every-producer invariant; analytics-index Amendment2/analytics-derived Amendment1 recorded. Final version derivation remains6.2.
 

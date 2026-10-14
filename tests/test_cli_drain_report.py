@@ -1,21 +1,4 @@
-"""Unit tests for :func:`fitdocs.cli._report_drain` (inbox Req 2.3, 7.1, 7.3).
-
-These construct a :class:`~fitdocs.sync.DrainReport` directly -- no real
-drain is run -- and call ``_report_drain`` under ``pytest``'s ``capsys`` to
-assert on the printed console output. Coverage: the drained inbox path
-appears in the output; each of the eight channels (the four unchanged --
-written, skipped, failures, warnings -- plus the four inbox-only -- deferred,
-quarantined, moved, move failures) renders as exactly one row, under its own
-name, with its own count, inside the rendered *table region specifically*
-(never satisfied by a same-named detail heading printed below the table);
-all eight rows render even when every channel is empty, and no detail
-heading is printed for an empty channel; per-file detail with reasons is
-listed for deferred, quarantined, and move-failure entries *under their own
-heading and no other's*; a bracket-containing path/reason survives literally
-(``rich`` markup disabled) and a long path/reason is not truncated
-(``soft_wrap``); and the pre-existing ``_report`` function (explicit-source
-presentation) is provably untouched by this task's edit.
-"""
+"""Counts and per-channel detail in the CLI drain report."""
 
 from __future__ import annotations
 
@@ -66,6 +49,10 @@ def _drain_report(
     quarantined: tuple[InboxNote, ...] = (),
     moved: tuple[str, ...] = (),
     move_failures: tuple[InboxNote, ...] = (),
+    unrecognized: tuple[InboxNote, ...] = (),
+    wellness_archived: tuple[InboxNote, ...] = (),
+    wellness_skipped: tuple[InboxNote, ...] = (),
+    wellness_failures: tuple[InboxNote, ...] = (),
 ) -> DrainReport:
     return DrainReport(
         inbox=inbox,
@@ -74,6 +61,10 @@ def _drain_report(
         quarantined=quarantined,
         moved=moved,
         move_failures=move_failures,
+        unrecognized=unrecognized,
+        wellness_archived=wellness_archived,
+        wellness_skipped=wellness_skipped,
+        wellness_failures=wellness_failures,
     )
 
 
@@ -128,6 +119,10 @@ _ALL_LABELS = (
     "Quarantined",
     "Moved",
     "Move failures",
+    "Unrecognized",
+    "Wellness archived",
+    "Wellness skipped",
+    "Wellness failed",
 )
 
 
@@ -140,15 +135,9 @@ def test_names_the_inbox_path_being_drained(capsys: pytest.CaptureFixture[str]) 
     assert "/home/josh/fitdocs-inbox" in output
 
 
-def test_each_of_the_eight_channels_is_exactly_one_table_row_with_its_own_count(
+def test_each_of_the_twelve_channels_is_exactly_one_table_row_with_its_own_count(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Every one of the eight channels appears as exactly one row inside the
-    table region, and that row's count is that channel's own distinct
-    length -- never another channel's. Distinct per-channel counts (1..8)
-    make any cross-wiring (two channels sharing a row, a count copied from
-    the wrong channel) show up as a wrong number rather than being masked by
-    a coincidental match."""
     sync = SyncReport(
         written=tuple(f"workouts/w{i}.md" for i in range(5)),
         skipped=tuple(f"skip{i}.fit" for i in range(6)),
@@ -157,6 +146,10 @@ def test_each_of_the_eight_channels_is_exactly_one_table_row_with_its_own_count(
     )
     report = _drain_report(
         sync=sync,
+        unrecognized=tuple(InboxNote(f"u{i}.json", "u") for i in range(9)),
+        wellness_archived=tuple(InboxNote(f"a{i}.json", "a") for i in range(10)),
+        wellness_skipped=tuple(InboxNote(f"s{i}.json", "s") for i in range(11)),
+        wellness_failures=tuple(InboxNote(f"f{i}.json", "f") for i in range(12)),
         deferred=tuple(InboxNote(subject=f"d{i}.fit", detail="x") for i in range(1)),
         quarantined=tuple(InboxNote(subject=f"q{i}.fit", detail="x") for i in range(2)),
         moved=tuple(f"processed/m{i}.fit" for i in range(3)),
@@ -169,7 +162,7 @@ def test_each_of_the_eight_channels_is_exactly_one_table_row_with_its_own_count(
 
     output = capsys.readouterr().out
     table = _table_region(output)
-    assert _body_row_count(table) == 8
+    assert _body_row_count(table) == 12
     assert _row_count(table, "Written") == 5
     assert _row_count(table, "Skipped") == 6
     assert _row_count(table, "Failed") == 7
@@ -178,6 +171,10 @@ def test_each_of_the_eight_channels_is_exactly_one_table_row_with_its_own_count(
     assert _row_count(table, "Quarantined") == 2
     assert _row_count(table, "Moved") == 3
     assert _row_count(table, "Move failures") == 4
+    assert _row_count(table, "Unrecognized") == 9
+    assert _row_count(table, "Wellness archived") == 10
+    assert _row_count(table, "Wellness skipped") == 11
+    assert _row_count(table, "Wellness failed") == 12
 
 
 def test_move_failures_count_is_not_folded_into_the_failed_row(
@@ -227,20 +224,16 @@ def test_move_failures_count_is_not_folded_into_the_moved_row(
     assert _row_count(table, "Move failures") == 2
 
 
-def test_all_eight_rows_render_with_zero_count_and_no_detail_headings_when_empty(
+def test_all_twelve_rows_render_with_zero_count_and_no_detail_headings_when_empty(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """All eight rows render unconditionally, including when every channel is
-    empty -- so downstream consumers can always find each channel by name in
-    the table shape -- while none of the (conditional) detail headings print
-    for an empty channel."""
     report = _drain_report()
 
     _report_drain(report, command="sync")
 
     output = capsys.readouterr().out
     table = _table_region(output)
-    assert _body_row_count(table) == 8
+    assert _body_row_count(table) == 12
     for label in _ALL_LABELS:
         assert _row_count(table, label) == 0
     for heading in (
@@ -251,6 +244,10 @@ def test_all_eight_rows_render_with_zero_count_and_no_detail_headings_when_empty
         "Quarantined:",
         "Move failures:",
         "Moved:",
+        "Unrecognized:",
+        "Wellness archived:",
+        "Wellness skipped:",
+        "Wellness failed:",
     ):
         assert heading not in output
 

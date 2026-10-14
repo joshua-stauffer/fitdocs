@@ -128,6 +128,8 @@ Exit codes (Req 1.5, 2.2, 8.5, 8.7):
   including a configured plan-source directory that does not exist or is not
   a directory -- or (``query``) invalid query input or data-root/index
   location, or (``skill``) an unknown or absent packaged skill name.
+  Drain and ``regen`` also reject malformed ``[wellness]`` settings before
+  any write; ``check`` reports them through its read-only audit (exit 1).
   ``pull`` adds its own preflight configuration errors: an unknown connector
   instance name, an invalid ``--since`` date, ``--sync`` combined with
   ``--dry-run``, and a credentials directory that is the data root or lies
@@ -282,6 +284,8 @@ from fitdocs.settings import SettingsError, load_settings_document
 from fitdocs.sync import DrainReport, SyncReport, drain, regen, sync
 from fitdocs.tiles import TileStore, load_tile_settings, tile_settings_from_document
 from fitdocs.version import UNKNOWN_VERSION, version_display
+from fitdocs.wellness import WellnessSettings, load_wellness_settings
+from fitdocs.wellness.engine import SeriesReport, SeriesStatus, rebuild_series
 
 if TYPE_CHECKING:
     from fitdocs.index.handoff import HandoffCollector
@@ -881,6 +885,7 @@ def _run_drain_passes(
     # pre-flight, which creates the inbox (and processed) directory: a
     # malformed table or a damaged record writes nothing (identity Req 2.7).
     identity = _identity_settings(data_root)
+    wellness = _wellness_settings(data_root)
     try:
         load_holds(data_root)
     except HoldRecordError as exc:
@@ -901,6 +906,8 @@ def _run_drain_passes(
             retry_quarantined=retry_quarantined,
             precedence=identity.precedence,
             on_rendered=handoff.add,
+            wellness_settings=wellness,
+            wellness_progress=_wellness_progress,
         )
     except HoldRecordError as exc:
         _hold_record_error(exc)
@@ -919,6 +926,11 @@ def _run_drain_passes(
     # moves never do (inbox Req 4.6, 5.3, 6.5, 7.2; plan-resolution Req 8.7).
     return (
         bool(drain_report.sync.failures)
+        or bool(drain_report.wellness_failures)
+        or (
+            drain_report.wellness_series is not None
+            and drain_report.wellness_series.status == SeriesStatus.FAILED
+        )
         or bool(load_report.failures)
         or plan_report.failed
     )
@@ -994,6 +1006,8 @@ def regen_command(
     # write); pass it to the engine as the always-supplied basemap-tile source.
     tiles = _tile_store(data_root)
     identity = _identity_settings(data_root)
+    wellness = _wellness_settings(data_root)
+    series_report = rebuild_series(data_root, settings=wellness, force=True)
     handoff = _new_index_handoff()
     report = regen(
         data_root,
@@ -1004,6 +1018,7 @@ def regen_command(
         on_rendered=handoff.add,
     )
     _report(report, command="regen")
+    _report_wellness_series(series_report)
     # regen is always non-interactive, which makes its load pass restore-only:
     # computed load is re-derived from the preserved payload, no prompting (7.4).
     load_report = _run_load_pass(data_root, session=NonInteractiveSession())
@@ -1014,7 +1029,10 @@ def regen_command(
     _run_dashboard_pass(data_root, index_report)
     _report_plugin_errors(plugin_report)
     _finish(
-        failed=bool(report.failures) or bool(load_report.failures) or plan_report.failed
+        failed=bool(report.failures)
+        or bool(load_report.failures)
+        or plan_report.failed
+        or series_report.status == SeriesStatus.FAILED
     )
 
 
@@ -2437,28 +2455,7 @@ def _report(report: SyncReport, *, command: str) -> None:
 
 
 def _report_drain(report: DrainReport, *, command: str) -> None:
-    """Print the drain summary: the inbox path, an extended counts table, and
-    per-file detail, without disturbing :func:`_report` (inbox Req 2.3, 7.1, 7.3).
-
-    Prints the inbox path being drained, then the existing written / skipped /
-    failed / warnings counts table extended with four distinctly named rows --
-    Deferred, Quarantined, Moved, and Move failures -- so all eight channels a
-    drain can report (written, skipped, failures, warnings, deferred,
-    quarantined, moved, move_failures) are each individually nameable.
-    ``Move failures`` is never folded into ``Failed`` (a failed move does not
-    fail the run) or into ``Moved`` (the file never moved). All eight rows
-    render unconditionally, including when a channel is empty, so downstream
-    documentation and the packaged agent skill can always find each channel by
-    name in the table shape. Beneath the table: the existing Written/Failed/
-    Warnings detail listings (unchanged, printed only when non-empty, exactly
-    as :func:`_report` prints them), then per-file detail with reasons for
-    deferred entries, quarantined entries, and failed moves, and finally the
-    list of moved destinations. Detail lines use ``soft_wrap`` with markup
-    disabled, matching :func:`_report`, so long paths/reasons are never
-    truncated and bracketed text is never reinterpreted as markup. The
-    leading ``Inbox:`` line is likewise printed with ``soft_wrap=True`` so a
-    long configured inbox path is never split across a line break.
-    """
+    """Print twelve drain channels, their details, and any series change."""
     console = Console()
     console.print(
         f"Inbox: {report.inbox}", markup=False, highlight=False, soft_wrap=True
@@ -2476,6 +2473,10 @@ def _report_drain(report: DrainReport, *, command: str) -> None:
     table.add_row("Quarantined", str(len(report.quarantined)))
     table.add_row("Moved", str(len(report.moved)))
     table.add_row("Move failures", str(len(report.move_failures)))
+    table.add_row("Unrecognized", str(len(report.unrecognized)))
+    table.add_row("Wellness archived", str(len(report.wellness_archived)))
+    table.add_row("Wellness skipped", str(len(report.wellness_skipped)))
+    table.add_row("Wellness failed", str(len(report.wellness_failures)))
     console.print(table)
 
     if sync.written:
@@ -2516,6 +2517,10 @@ def _report_drain(report: DrainReport, *, command: str) -> None:
     _notes("Deferred", report.deferred)
     _notes("Quarantined", report.quarantined)
     _notes("Move failures", report.move_failures)
+    _notes("Unrecognized", report.unrecognized)
+    _notes("Wellness archived", report.wellness_archived)
+    _notes("Wellness skipped", report.wellness_skipped)
+    _notes("Wellness failed", report.wellness_failures)
 
     if report.moved:
         console.print("Moved:")
@@ -2523,6 +2528,51 @@ def _report_drain(report: DrainReport, *, command: str) -> None:
             console.print(
                 f"  {destination}", markup=False, highlight=False, soft_wrap=True
             )
+
+    if report.wellness_series is not None:
+        _report_wellness_series(report.wellness_series)
+
+
+def _report_wellness_series(report: SeriesReport) -> None:
+    """Print a changed series outcome, paths and value counts."""
+    if report.status == SeriesStatus.UNCHANGED:
+        return
+    console = Console(markup=False, highlight=False, soft_wrap=True)
+    console.print(f"Wellness series: {report.status.value}")
+    console.print(f"Values added: {report.values_added}")
+    console.print(f"Values changed: {report.values_changed}")
+    console.print(f"Values removed: {report.values_removed}")
+    console.print(f"Canonical days changed: {report.canonical_days_changed}")
+    console.print(f"Conflicts: {report.conflicts}")
+    for label, paths in (
+        ("Series written", report.written),
+        ("Series removed", report.removed),
+    ):
+        if paths:
+            console.print(f"{label}:")
+            for ref in paths:
+                console.print(f"  {ref}")
+    for note in report.notes:
+        console.print(f"  {note.subject}")
+        console.print(f"    {note.detail}")
+
+
+def _wellness_progress(rel: str, done: int, total: int) -> None:
+    """Show extraction progress on an interactive stderr stream."""
+    if sys.stderr.isatty():
+        percent = done * 100 // total if total else 100
+        Console(stderr=True, markup=False, highlight=False, soft_wrap=True).print(
+            f"{rel}: {percent}%"
+        )
+
+
+def _wellness_settings(data_root: Path) -> WellnessSettings:
+    """Validate wellness configuration before drain or regen writes."""
+    try:
+        document = load_settings_document(data_root)
+        return load_wellness_settings(document, data_root=data_root)
+    except SettingsError as exc:
+        _config_error(str(exc))
 
 
 def _report_load(report: LoadReport) -> None:
