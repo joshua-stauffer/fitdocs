@@ -31,7 +31,146 @@ class LiteralExemption:
     reason: str
 
 
-_EXEMPTIONS: tuple[LiteralExemption, ...] = ()
+_EXEMPTIONS: tuple[LiteralExemption, ...] = (
+    LiteralExemption(
+        "peaks",
+        17,
+        27,
+        1,
+        ExemptionCategory.INDEX,
+        "Last sample index for stretch duration",
+    ),
+    LiteralExemption(
+        "peaks",
+        17,
+        38,
+        0,
+        ExemptionCategory.INDEX,
+        "First sample index for stretch duration",
+    ),
+    LiteralExemption(
+        "peaks",
+        20,
+        13,
+        0.0,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "Additive identity of the prefix integral",
+    ),
+    LiteralExemption(
+        "peaks",
+        21,
+        32,
+        1,
+        ExemptionCategory.INDEX,
+        "Adjacent intervals count is sample count minus one",
+    ),
+    LiteralExemption(
+        "peaks", 22, 28, 1, ExemptionCategory.INDEX, "Last accumulated prefix integral"
+    ),
+    LiteralExemption(
+        "peaks",
+        22,
+        44,
+        1,
+        ExemptionCategory.INDEX,
+        "Next sample bounds the forward-held interval",
+    ),
+    LiteralExemption(
+        "peaks",
+        24,
+        11,
+        0.0,
+        ExemptionCategory.ARITHMETIC_IDENTITY,
+        "Initial maximum for nonnegative heart-rate means",
+    ),
+    LiteralExemption(
+        "peaks",
+        25,
+        12,
+        0,
+        ExemptionCategory.INDEX,
+        "First interval index for the right pointer",
+    ),
+    LiteralExemption(
+        "peaks",
+        28,
+        24,
+        1,
+        ExemptionCategory.INDEX,
+        "Last sample bounds the window endpoint",
+    ),
+    LiteralExemption(
+        "peaks",
+        30,
+        22,
+        1,
+        ExemptionCategory.INDEX,
+        "Next right interval index for bounds checking",
+    ),
+    LiteralExemption(
+        "peaks", 30, 55, 1, ExemptionCategory.INDEX, "Next right interval boundary"
+    ),
+    LiteralExemption(
+        "peaks",
+        31,
+        21,
+        1,
+        ExemptionCategory.INDEX,
+        "Advance right pointer by one interval",
+    ),
+    LiteralExemption(
+        "peaks",
+        35,
+        11,
+        0,
+        ExemptionCategory.INDEX,
+        "First interval index for the left pointer",
+    ),
+    LiteralExemption(
+        "peaks",
+        38,
+        25,
+        0,
+        ExemptionCategory.INDEX,
+        "First sample bounds the window start",
+    ),
+    LiteralExemption(
+        "peaks",
+        40,
+        21,
+        1,
+        ExemptionCategory.INDEX,
+        "Next left interval index for bounds checking",
+    ),
+    LiteralExemption(
+        "peaks", 40, 53, 1, ExemptionCategory.INDEX, "Next left interval boundary"
+    ),
+    LiteralExemption(
+        "peaks",
+        41,
+        20,
+        1,
+        ExemptionCategory.INDEX,
+        "Advance left pointer by one interval",
+    ),
+    LiteralExemption(
+        "peaks", 69, 17, 0, ExemptionCategory.INDEX, "First locked-span index"
+    ),
+    LiteralExemption(
+        "peaks", 77, 26, 1, ExemptionCategory.INDEX, "Advance to the next locked span"
+    ),
+    LiteralExemption(
+        "peaks",
+        92,
+        44,
+        0,
+        ExemptionCategory.INDEX,
+        "Time is the first previous-sample tuple member",
+    ),
+    LiteralExemption(
+        "peaks", 94, 19, 1, ExemptionCategory.INDEX, "Append to the last kept stretch"
+    ),
+)
 
 
 def _literal_violations(
@@ -113,8 +252,13 @@ def test_arithmetic_literals_on_disk() -> None:
     ids=("bare-literal", "bound-record"),
 )
 def test_arithmetic_walk_with_future_module(
-    tmp_path: Path, module: str, source: str, rejected: bool
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    module: str,
+    source: str,
+    rejected: bool,
 ) -> None:
+    monkeypatch.setitem(globals(), "_EXEMPTIONS", ())
     (tmp_path / f"{module}.py").write_text(source)
     (tmp_path / "sources.py").write_text("MAX_WINDOW_DAYS = 365")
     assert bool(_arithmetic_violations(_module_paths(tmp_path), tmp_path)) is rejected
