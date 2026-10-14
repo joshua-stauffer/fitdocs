@@ -29,7 +29,7 @@ from __future__ import annotations
 import os
 import socket
 from collections.abc import Iterator, Mapping
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import NoReturn, TypeVar
 
@@ -52,6 +52,10 @@ from fitdocs.connectors.protocol import (
     SettingsContext,
     TokenIssuer,
     TokenSet,
+    WellnessDay,
+    WellnessListing,
+    WellnessPackage,
+    WellnessPuller,
 )
 from fitdocs.connectors.secrets import Secret
 
@@ -356,7 +360,7 @@ class ScriptedLoginConnector(_ScriptedActivityPullerMixin):
         self.capabilities = (
             capabilities
             if capabilities is not None
-            else frozenset({Capability.PULL_WELLNESS})
+            else frozenset({Capability.PULL_PLANS})
         )
         self._init_activity_puller(data_url=data_url)
         self.login_script: list[TokenSet | BaseException] = []
@@ -416,6 +420,78 @@ class ScriptedPuller(_ScriptedActivityPullerMixin):
         return None
 
 
+class ScriptedWellnessPuller(_ScriptedActivityPullerMixin):
+    """Synthetic wellness puller with scripted outcomes and recorded calls."""
+
+    connector_id = "scripted-wellness-puller"
+    display_name = "Scripted Wellness Puller"
+    auth_style = AuthStyle.NONE
+    credential_fields: tuple[CredentialField, ...] = ()
+
+    def __init__(
+        self,
+        *,
+        capabilities: frozenset[Capability] | None = None,
+        data_url: str | None = None,
+    ) -> None:
+        self.capabilities = (
+            capabilities
+            if capabilities is not None
+            else frozenset({Capability.PULL_WELLNESS})
+        )
+        self._init_activity_puller(data_url=data_url)
+        self.wellness_listing_script: list[WellnessListing | BaseException] = []
+        self.wellness_package_script: list[WellnessPackage | BaseException] = []
+        self.wellness_list_calls: list[date | None] = []
+        self.wellness_package_calls: list[tuple[WellnessDay, ...]] = []
+        self.calls: list[str] = []
+        self.parse_settings_calls = 0
+        self.parse_settings_tables: list[Mapping[str, object]] = []
+
+    def parse_settings(
+        self, table: Mapping[str, object], context: SettingsContext
+    ) -> object:
+        self.parse_settings_calls += 1
+        self.parse_settings_tables.append(dict(table))
+        return None
+
+    def list_activities(
+        self, session: ConnectorSession, since: datetime | None
+    ) -> Listing:
+        self.calls.append("list_activities")
+        return super().list_activities(session, since)
+
+    def fetch_activity(
+        self, session: ConnectorSession, activity: RemoteActivity
+    ) -> FetchResult:
+        self.calls.append("fetch_activity")
+        return super().fetch_activity(session, activity)
+
+    def list_wellness(
+        self, session: ConnectorSession, oldest: date | None
+    ) -> WellnessListing:
+        self.calls.append("list_wellness")
+        self.wellness_list_calls.append(oldest)
+        return _consume_script(
+            self.wellness_listing_script,
+            description=(
+                "ScriptedWellnessPuller.list_wellness called with no scripted answer"
+            ),
+        )
+
+    def package_wellness(
+        self, session: ConnectorSession, days: tuple[WellnessDay, ...]
+    ) -> WellnessPackage:
+        self.calls.append("package_wellness")
+        self.wellness_package_calls.append(days)
+        return _consume_script(
+            self.wellness_package_script,
+            description=(
+                "ScriptedWellnessPuller.package_wellness called with no scripted answer"
+            ),
+        )
+
+
 # mypy structurally checks each synthetic connector against the protocols it
 # claims (task requirement); the names are not otherwise imported.
 _typed_personal_key_as_connector: Connector = ScriptedPersonalKeyConnector()
@@ -426,6 +502,8 @@ _typed_login_as_issuer: TokenIssuer = ScriptedLoginConnector()
 _typed_login_as_activity_puller: ActivityPuller = ScriptedLoginConnector()
 _typed_puller_as_connector: Connector = ScriptedPuller()
 _typed_puller_as_activity_puller: ActivityPuller = ScriptedPuller()
+_typed_wellness_as_connector: Connector = ScriptedWellnessPuller()
+_typed_wellness_as_puller: WellnessPuller = ScriptedWellnessPuller()
 
 
 @pytest.fixture

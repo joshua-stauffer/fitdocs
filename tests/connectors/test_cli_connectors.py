@@ -9,7 +9,7 @@ network/registry/environment isolation (socket guard, registry
 snapshot/restore, ``FITDOCS_CREDENTIALS_DIR``/``HOME`` pointed outside any
 sandbox a test builds). Synthetic connectors come from that conftest
 (:class:`ScriptedPersonalKeyConnector`, :class:`ScriptedLoginConnector`,
-:class:`ScriptedPuller`, the lone ``AuthStyle.NONE`` fixture there); the
+:class:`ScriptedPuller`, an ``AuthStyle.NONE`` fixture there); the
 reserved-style (``OAUTH_BROWSER``) connector and the two-field API_KEY
 connector this module needs have no counterpart there and are defined
 locally, per the plan's "keep helpers local to their own test module" rule.
@@ -103,7 +103,7 @@ class _ReservedConnector:
     display_name: str = "Reserved Style"
     auth_style: AuthStyle = AuthStyle.OAUTH_BROWSER
     capabilities: frozenset[Capability] = field(
-        default_factory=lambda: frozenset({Capability.PULL_WELLNESS})
+        default_factory=lambda: frozenset({Capability.PULL_PLANS})
     )
     credential_fields: tuple[CredentialField, ...] = (
         CredentialField("token", "Token", secret=True),

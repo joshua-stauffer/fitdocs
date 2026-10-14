@@ -8,8 +8,8 @@ only place a connector is registered).
 :data:`CAPABILITIES` is the fixed vocabulary of nine things a connector may
 offer, each carrying a user-facing summary and three flags: whether it
 changes state at the remote service, whether that change is irreversible,
-and whether this version of fitdocs actually drives it (only
-``PULL_ACTIVITIES`` is driven in this version -- a connector may declare any
+and whether this version of fitdocs actually drives it (two driven capabilities:
+``PULL_ACTIVITIES`` and ``PULL_WELLNESS`` -- a connector may declare any
 other capability, and the framework accepts the declaration without
 requiring an operation for it or ever invoking it, Req 1.4).
 
@@ -21,16 +21,16 @@ version (Req 1.7).
 :class:`Connector` is the shape every connector implements: an id, a display
 name, one auth style, its capabilities, and its credential fields, plus
 ``parse_settings`` for its own settings keys. :class:`KeyVerifier`,
-:class:`TokenIssuer`, and :class:`ActivityPuller` are the optional-operation
-protocols a connector implements when its auth style or a driven capability
-requires them (Req 1.1, 1.5, 1.6, 1.9).
+:class:`TokenIssuer`, :class:`ActivityPuller`, and :class:`WellnessPuller`
+are the optional-operation protocols a connector implements when its auth
+style or a driven capability requires them (Req 1.1, 1.5, 1.6, 1.9).
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import date, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Final, Protocol
@@ -61,8 +61,8 @@ class CapabilityInfo:
     ``irreversible`` equals ``changes_remote`` in this version -- kept as a
     separate field so a later capability with an undo path can be a
     reversible remote change without a shape change here. ``driven`` is
-    ``True`` only for :attr:`Capability.PULL_ACTIVITIES`: the only
-    capability this version of fitdocs actually invokes.
+    ``True`` for :attr:`Capability.PULL_ACTIVITIES` and
+    :attr:`Capability.PULL_WELLNESS`: the two driven capabilities.
     """
 
     capability: Capability
@@ -134,12 +134,12 @@ CAPABILITIES: Final[Mapping[Capability, CapabilityInfo]] = {
         summary="Read wellness data (e.g. sleep, HRV) from the service.",
         changes_remote=False,
         irreversible=False,
-        driven=False,
+        driven=True,
     ),
 }
 
 DRIVEN_CAPABILITIES: Final[frozenset[Capability]] = frozenset(
-    {Capability.PULL_ACTIVITIES}
+    {Capability.PULL_ACTIVITIES, Capability.PULL_WELLNESS}
 )
 
 
@@ -351,3 +351,46 @@ class ActivityPuller(Protocol):
     def fetch_activity(
         self, session: ConnectorSession, activity: RemoteActivity
     ) -> FetchResult: ...
+
+
+@dataclass(frozen=True)
+class WellnessDay:
+    """One listed wellness day; an unstated revision is absent (Req 1.2, 1.5).
+
+    The service's record is opaque and handed back to its connector unread.
+    """
+
+    day: date
+    revision: str | None
+    record: object = field(repr=False)
+
+
+@dataclass(frozen=True)
+class WellnessListing:
+    """The date coverage and days reported by a wellness listing (Req 1.2)."""
+
+    oldest: date
+    newest: date
+    days: tuple[WellnessDay, ...]
+
+
+@dataclass(frozen=True)
+class WellnessPackage:
+    """One wellness file's bytes, extension, archive format and origins (Req 1.2)."""
+
+    data: bytes
+    suffix: str
+    format: str
+    origins: frozenset[str]
+
+
+class WellnessPuller(Protocol):
+    """Required when :attr:`Capability.PULL_WELLNESS` is declared."""
+
+    def list_wellness(
+        self, session: ConnectorSession, oldest: date | None
+    ) -> WellnessListing: ...
+
+    def package_wellness(
+        self, session: ConnectorSession, days: tuple[WellnessDay, ...]
+    ) -> WellnessPackage: ...

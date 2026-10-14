@@ -18,10 +18,11 @@ A module inside this package may import only the standard library,
 module here reads the system clock directly; ``now`` and ``sleep`` are always
 passed in by the caller.
 
-The published surface (``__all__``) is the 46 names design.md's "PackageInit"
-section lists (pinned by ``tests/connectors/test_surface.py``): the protocol
-layer's types and vocabularies, the transport layer, the typed failures, the
-secret and its redactor, and the registration operations. The built-in
+The published surface (``__all__``) is the 50 names design.md's "PackageInit"
+section lists plus wellness-pull's "PackageSurface" (pinned by
+``tests/connectors/test_surface.py``): the protocol layer's types and
+vocabularies, the transport layer, the typed failures, the secret and its
+redactor, and the registration operations. The built-in
 connectors (``FolderConnector``, and ``IntervalsConnector`` for an
 intervals.icu account) are deliberately not published here -- internal, like
 ``fitdocs.load``'s ``ThresholdCalculator`` -- but each is registered under its
@@ -73,6 +74,10 @@ from fitdocs.connectors.protocol import (
     SettingsContext,
     TokenIssuer,
     TokenSet,
+    WellnessDay,
+    WellnessListing,
+    WellnessPackage,
+    WellnessPuller,
 )
 from fitdocs.connectors.registry import (
     DuplicateConnectorIdError,
@@ -133,6 +138,10 @@ __all__ = [
     "DuplicateConnectorIdError",
     "InvalidConnectorError",
     "UnknownConnectorError",
+    "WellnessPuller",
+    "WellnessDay",
+    "WellnessListing",
+    "WellnessPackage",
 ]
 
 # The built-in connectors: registered at import time so `get("folder")` and

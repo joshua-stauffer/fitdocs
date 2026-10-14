@@ -132,7 +132,7 @@ requirements' amendment list.
 
 ---
 
-- [ ] 1. Foundation: the live check and the protocol
+- [x] 1. Foundation: the live check and the protocol
 
 - [x] 1.1 Run the live check against the maintainer's intervals.icu account and record what it finds
   - Performed by the implementation's **controller session**, never by an
@@ -153,7 +153,7 @@ requirements' amendment list.
     intervals-format amendment carried by that repair task.
   - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 13.5_
 
-- [ ] 1.2 Drive pull-wellness in the protocol and the registry, and publish the four names
+- [x] 1.2 Drive pull-wellness in the protocol and the registry, and publish the four names
   - **Protocol** per design § WellnessProtocol: `WellnessDay` (its record
     left out of its representation), `WellnessListing`, `WellnessPackage`,
     `WellnessPuller`; `PULL_WELLNESS` driven; `DRIVEN_CAPABILITIES` holds
@@ -676,3 +676,5 @@ requirements' amendment list.
   (5.3) depends on 5.1; R3 the roadmap ticks belong to 6.3.
 
 - **1.1 (2026-10-14).** Controller read-only live check independently APPROVED; TBC-W1/W2/W3/W4/W6/W7/W8 confirmed with stated observation limits. TBC-W5 contradicts generic upstream attribution (private namespace), recorded for 6.3 numbered repair; key and payload never persisted.
+
+- **1.2 (2026-10-14).** READY_FOR_REVIEW → independently APPROVED round 2 → VERIFIED. Full suite 14,768 passed / 44 skipped; mypy 551 files, Ruff lint/format clean; final parent CLI+protocol 135 passed. Reviewer reproduced 35 original + 51 helper claims and five own mutations, all red and restored green. The initial surviving fixture-recording mutation is now caught. Shared `ScriptedWellnessPuller` is frozen: `capabilities=` defaults to wellness-only; override both capabilities for activity/wellness order or raised-activity tests (empty override is respected). Use `wellness_listing_script`, `wellness_package_script`, `wellness_list_calls`, `wellness_package_calls`, `calls`, `parse_settings_tables` and `parse_settings_calls`, plus inherited activity scripts/call arguments. Exact opaque-record identity and default/default_factory absence are pinned. No follow-ups.

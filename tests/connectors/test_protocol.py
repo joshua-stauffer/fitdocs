@@ -188,10 +188,10 @@ def test_every_other_capability_is_not_remote_changing_and_reversible() -> None:
         assert info.irreversible is False
 
 
-def test_exactly_pull_activities_is_driven() -> None:
+def test_exactly_activity_and_wellness_pulls_are_driven() -> None:
     driven = {c for c, info in CAPABILITIES.items() if info.driven}
-    assert driven == {Capability.PULL_ACTIVITIES}
-    assert {Capability.PULL_ACTIVITIES} == DRIVEN_CAPABILITIES
+    assert driven == {Capability.PULL_ACTIVITIES, Capability.PULL_WELLNESS}
+    assert {Capability.PULL_ACTIVITIES, Capability.PULL_WELLNESS} == DRIVEN_CAPABILITIES
 
 
 def test_capability_summaries_are_non_empty_and_pairwise_distinct() -> None:

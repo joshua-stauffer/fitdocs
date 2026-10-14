@@ -20,7 +20,8 @@ read and again before its check, names *which* member was being processed
 when the boundary catches something, so the reason says where in the
 declaration the problem was, not only what the underlying exception said.
 It never calls any operation a connector declares (``parse_settings``,
-``verify``, ``login``, ``refresh``, ``list_activities``, ``fetch_activity``).
+``verify``, ``login``, ``refresh``, ``list_activities``, ``fetch_activity``,
+``list_wellness``, ``package_wellness``).
 Registering (and therefore validating) a connector has no side effects
 (Req 2.2).
 """
@@ -122,14 +123,17 @@ def validate_connector(obj: object) -> str | None:
     ``auth_style`` is ``NONE``; ``parse_settings`` is callable; ``verify`` is
     callable when ``API_KEY`` is the auth style; ``login`` and ``refresh``
     are callable when ``LOGIN`` is the auth style; ``list_activities`` and
-    ``fetch_activity`` are callable when ``PULL_ACTIVITIES`` is declared.
+    ``fetch_activity`` are callable when ``PULL_ACTIVITIES`` is declared;
+    ``list_wellness`` and ``package_wellness`` are callable when
+    ``PULL_WELLNESS`` is declared.
 
     Every other capability and the reserved ``OAUTH_BROWSER`` auth style
     impose no operation: this version of fitdocs never invokes them (Req
     1.4, 1.7).
 
     Never calls ``parse_settings``, ``verify``, ``login``, ``refresh``,
-    ``list_activities``, or ``fetch_activity`` -- registration stays
+    ``list_activities``, ``fetch_activity``, ``list_wellness``, or
+    ``package_wellness`` -- registration stays
     side-effect free. Accepts any object without raising: a malformed shape
     (a missing attribute, a raising property, or a raising post-read check
     such as a non-string ``CredentialField.name`` breaking a regex match, or
@@ -204,6 +208,19 @@ def validate_connector(obj: object) -> str | None:
             if not callable(fetch_activity):
                 return (
                     "fetch_activity must be callable when PULL_ACTIVITIES is declared"
+                )
+        current = "capabilities"
+        if Capability.PULL_WELLNESS in capabilities:
+            current = "list_wellness"
+            list_wellness = getattr(obj, current, None)
+            if not callable(list_wellness):
+                return "list_wellness must be callable when PULL_WELLNESS is declared"
+
+            current = "package_wellness"
+            package_wellness = getattr(obj, current, None)
+            if not callable(package_wellness):
+                return (
+                    "package_wellness must be callable when PULL_WELLNESS is declared"
                 )
     except Exception as exc:  # noqa: BLE001 - a raising property/check is a reason
         return f"reading {current!r} raised {exc!r}"
