@@ -286,4 +286,93 @@
 - intervals.icu forum thread 609 (#752, #816), cited by the queue item.
 
 ## Live check findings
-_Empty until the controller session runs tasks.md 1.1._
+
+### Controller check — 2026-10-14 (task 1.1)
+
+Read-only GETs with the composed fitdocs User-Agent and the gitignored key
+read only in-process. Only shapes, names, booleans and counts were retained.
+The requests ran from a temporary directory outside the repository and data
+root; no response payload, account date, identifier, measurement or credential
+was persisted. The temporary request directory was removed.
+
+- **TBC-W1 — confirmed.** JSON array of 366 objects, 47 distinct keys;
+  zero `id` form mismatches (`YYYY-MM-DD`). Key names:
+  `abdomen`, `atl`, `atlLoad`, `avgSleepingHR`, `baevskySI`, `bloodGlucose`, `bodyFat`, `carbohydrates`, `comments`, `ctl`, `ctlLoad`, `diastolic`, `fatTotal`, `fatigue`, `floorsClimbed`, `hrv`, `hrvSDNN`, `hydration`, `hydrationVolume`, `id`, `injury`, `kcalConsumed`, `lactate`, `locked`, `menstrualPhase`, `menstrualPhasePredicted`, `mood`, `motivation`, `protein`, `rampRate`, `readiness`, `respiration`, `restingHR`, `sleepQuality`, `sleepScore`, `sleepSecs`, `soreness`, `spO2`, `sportInfo`, `steps`, `stress`, `systolic`, `tempRestingHR`, `tempWeight`, `updated`, `vo2max`, `weight`.
+- **TBC-W2 — confirmed.** Equal oldest/newest bounds returned exactly one
+  matching record. A newest bound after today returned HTTP 200 and an array.
+- **TBC-W3 — confirmed.** Every `updated` value was text in the shape
+  `YYYY-MM-DDTHH:MM:SS.fff+HH:MM`; zero lacked an offset.
+- **TBC-W4 — confirmed for key presence and observed types.** Every planned
+  field below was present. Fields with only null values have no observed
+  non-null type; that is a limit of this check, not a default measurement.
+
+| Field | Observed types | Non-null count |
+|-------|----------------|----------------|
+| `restingHR` | `NoneType`, `int` | 345 |
+| `hrv` | `NoneType` | 0 |
+| `hrvSDNN` | `NoneType`, `float` | 364 |
+| `sleepSecs` | `NoneType`, `int` | 359 |
+| `avgSleepingHR` | `NoneType` | 0 |
+| `respiration` | `NoneType` | 0 |
+| `spO2` | `NoneType`, `float` | 362 |
+| `steps` | `NoneType`, `int` | 364 |
+| `vo2max` | `NoneType`, `float` | 224 |
+| `weight` | `NoneType`, `float` | 11 |
+| `fatigue` | `NoneType`, `int` | 10 |
+| `mood` | `NoneType`, `int` | 10 |
+| `motivation` | `NoneType`, `int` | 10 |
+| `soreness` | `NoneType`, `int` | 10 |
+| `stress` | `NoneType`, `int` | 10 |
+| `injury` | `NoneType`, `int` | 10 |
+| `hydration` | `NoneType`, `int` | 10 |
+| `sleepQuality` | `NoneType`, `int` | 1 |
+
+- **TBC-W5 — contradicted (attribution namespace); switches observed.**
+  The athlete response was an object. `*_wellness_keys` does not mean
+  upstream-platform import keys in every case: `private_wellness_keys` is
+  a visibility setting, and `icu_wellness_keys` is also not an upstream
+  platform. The current broad pattern would attribute an ordinary record
+  field to `private`. Task 6.3 must amend the TBC-W5 marker and add a
+  numbered repair that excludes both non-platform namespaces. The download
+  switches below are independent booleans; attribution should honor a
+  known platform download switch when present, with its precise treatment
+  specified by that repair. A read-only account check cannot establish
+  causality by toggling settings; no setting was changed.
+
+| Key | Value type | Element types | Length | Matching record keys |
+|-----|------------|---------------|--------|----------------------|
+| `google_wellness_keys` | `NoneType` | absent | absent | absent |
+| `icu_garmin_wellness_keys` | `NoneType` | absent | absent | absent |
+| `icu_wellness_keys` | `list` | str | 8 | 8 |
+| `oura_wellness_keys` | `NoneType` | absent | absent | absent |
+| `polar_wellness_keys` | `NoneType` | absent | absent | absent |
+| `private_wellness_keys` | `list` | str | 1 | 1 |
+| `whoop_wellness_keys` | `NoneType` | absent | absent | absent |
+
+| Switch | Boolean |
+|--------|---------|
+| `icu_garmin_download_wellness` | `false` |
+| `icu_garmin_health` | `true` |
+| `polar_download_wellness` | `false` |
+
+  The [public API schema](https://intervals.icu/api/v1/docs) confirms
+  separate Garmin, Polar, Suunto, COROS, Zepp and Huawei wellness-download
+  booleans, and string-list key settings. It documents no wellness-download
+  boolean for Oura, WHOOP or Google. The schema lists `private_wellness_keys`
+  separately from platform keys. Its bare property types do not explain
+  visibility semantics; the observed non-platform namespace is the concrete
+  contradiction being routed to the completion repair.
+- **TBC-W6 — confirmed for the planned low-churn decision, with a limit.**
+  Of 305 records older than 60 days, 25 had an update date more than seven
+  days after their day. This small minority supplies no evidence of pervasive
+  recomputation churn, so keep the stated `updated` revision. One snapshot
+  cannot distinguish a genuine correction from recomputation.
+- **TBC-W7 — confirmed.** A 366-day window returned HTTP 200, 366 records
+  and approximately 330 KB (rounded to 10 KB).
+- **TBC-W8 — confirmed.** All four check requests returned HTTP 200 with
+  the fitdocs User-Agent. The shapes-only check was repeated once to retain
+  the permitted report; both runs agreed on all reported shapes and flags.
+
+Task 1.1 records the contradiction; task 6.3 owns its design amendment and
+numbered implementation repair. No upstream intervals-format field, date
+or timestamp amendment is required by TBC-W1, TBC-W3 or TBC-W4.

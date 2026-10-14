@@ -134,7 +134,7 @@ requirements' amendment list.
 
 - [ ] 1. Foundation: the live check and the protocol
 
-- [ ] 1.1 Run the live check against the maintainer's intervals.icu account and record what it finds
+- [x] 1.1 Run the live check against the maintainer's intervals.icu account and record what it finds
   - Performed by the implementation's **controller session**, never by an
     implementer subagent, following design.md "LiveCheckProcedure" TBC-W1 to
     TBC-W8, from a temporary directory outside the repository and the data
@@ -674,3 +674,5 @@ requirements' amendment list.
   reversed; owned by 5.2, re-derived by 6.2); R2 no task of group 5 is
   `(P)`, and the task carrying the `connectors.md#wellness` anchor link
   (5.3) depends on 5.1; R3 the roadmap ticks belong to 6.3.
+
+- **1.1 (2026-10-14).** Controller read-only live check independently APPROVED; TBC-W1/W2/W3/W4/W6/W7/W8 confirmed with stated observation limits. TBC-W5 contradicts generic upstream attribution (private namespace), recorded for 6.3 numbered repair; key and payload never persisted.
