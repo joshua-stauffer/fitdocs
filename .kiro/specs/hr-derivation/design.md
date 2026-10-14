@@ -904,8 +904,12 @@ def derive_hr_benchmarks(
 - **Per kind**: kept partition → the kind's derived entries on file,
   unchanged; else `derive_timeline(RULE, evidence, recorded)`.
 - **Write**: `new = profile.with_derived_benchmarks(hr_entries,
-  kinds=HR_KINDS)`; `changed = frozenset(new HR derived) != frozenset(old HR
-  derived)`; `save_profile(data_root, new)` only when `changed and not
+  kinds=HR_KINDS, replace_applies_from=True)` once; recomputed entries with
+  no `applies_from` clear a stale same-key date. Kept kinds supply their
+  existing entries unchanged, including explicit dates. Compare the returned
+  parsed entries: `changed = frozenset(new HR derived) != frozenset(old HR
+  derived)`; removing only a stale date therefore counts as a change.
+  `save_profile(data_root, new)` only when `changed and not
   dry_run` (4.9, 8.3). Writes no workout document, asset, archive, series,
   cache or flat key (1.10, 10.6).
 - **Report**: `takeovers` = `inspect.takeovers(new) - inspect.takeovers(old)`
@@ -981,7 +985,8 @@ def derive_hr_benchmarks(
 
 ```python
 def with_derived_benchmarks(
-    self, entries: Sequence[Benchmark], *, kinds: frozenset[BenchmarkKind]
+    self, entries: Sequence[Benchmark], *, kinds: frozenset[BenchmarkKind],
+    replace_applies_from: bool = False,
 ) -> AthleteProfile: ...
 ```
 - `ValueError` (nothing stored) when an entry lacks derived provenance, its
@@ -991,6 +996,13 @@ def with_derived_benchmarks(
   derived entries of other kinds are kept byte-equivalent.
 - The "group no longer covered" removal considers only groups of `kinds`.
 - `kinds` has no default: every caller names its partition.
+- The default preserves the existing overlay: omitted `applies_from` inherits
+  the old same-key date. With `replace_applies_from=True`, absence clears it
+  only for canonical `(scope, kind, measured_on)` keys of incoming entries,
+  computed after the caller-error checks. Explicit dates overlay normally;
+  retained entries, note inheritance and unknown entry/source metadata keep
+  their existing behavior. The central profile merge owns this policy; saving
+  the returned document uses the default merge over its already-clean data.
 
 #### TaggedEffortStage (`performance/engine.py`, `performance/types.py`)
 

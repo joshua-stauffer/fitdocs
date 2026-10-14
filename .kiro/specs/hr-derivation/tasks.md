@@ -228,6 +228,13 @@ pins (`tests/test_public_api.py`), the workouts skill and
     byte-equivalent, scopes the "group no longer covered" removal to those
     kinds, and refuses (nothing stored) an entry outside the set, an entry
     without derived provenance, or a collision with a hand-recorded key.
+  - The writer accepts `replace_applies_from: bool = False`. With the
+    option enabled, an absent applies-from on an incoming derived entry
+    clears the inherited same-key date; an explicit incoming date remains
+    explicit. Only incoming keys are affected. Default overlay behavior,
+    note inheritance, retained entries and unknown metadata stay unchanged.
+    This repairs the write seam for requirement 4.5 before 3.3 opts in;
+    the shared merge remains the only serializer.
   - Publish the tagged-effort stage's three kinds as its partition; its change
     test compares only that partition's derived entries; its write names the
     partition; its report carries the accepted set (written, or would be
@@ -264,12 +271,15 @@ pins (`tests/test_public_api.py`), the workouts skill and
     `load_settings` given, a monkeypatched `[load]` reader is never called
     and the given sufficiency settings are the ones applied (a value that
     changes a decline).
+    Cover authoritative missing/explicit applies-from, default inheritance,
+    recomputed and kept HR entries together, non-HR/hand/raw metadata
+    preservation, save/reload idempotency and rejection without mutation.
   - **Mutations:** compare `previous_derived` across all kinds (the
     idempotence case reds); retain no other-partition derived entries; drop
     the outside-partition check; read `[load]` even when settings are given.
   - **Observable:** `uv run pytest tests/load tests/performance
     tests/test_cli_derive.py` green.
-  - _Requirements: 1.8, 4.6, 5.1, 8.1, 8.3, 8.4, 8.5, 8.6_
+  - _Requirements: 1.8, 4.5, 4.6, 5.1, 8.1, 8.3, 8.4, 8.5, 8.6_
 
 - [x] 1.3 (P) Report the dated resting and maximum entries the heart-rate channel used (load-channels amendment)
   - Append the measurement dates of the resting and maximum heart-rate
@@ -548,7 +558,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
     evidence; hand-recorded entries per kind; the timeline per kind, or the
     kind's entries on file when its evidence failed or, for resting heart
     rate, when the series is absent or holds no resting value (with the
-    report's note); the partitioned write
+    report's note); the partitioned write with `replace_applies_from=True`
     only when the heart-rate partition changed and never under preview;
     takeovers new to this run; back-reach changes (hand entries whose cover
     differs between the profile before and after the run); inconsistencies
@@ -807,6 +817,8 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 4.1, 4.7_
 
 ## Implementation Notes
+
+- 1.2 seam repair before 3.3: Debug identified an own-writer integration gap: the existing overlay intentionally inherits a stale same-key applies-from date. The compatible `replace_applies_from=False` option preserves that default; HR must pass `True` once, supply kept entries with their explicit dates, and compare the returned parsed HR set. Central merging clears absent dates only on validated incoming canonical keys, retaining notes and unknown metadata. Independent review reproduced 93 claimed assertion faults, four accurately bounded green observations and two new reviewer faults; all 99 restored runs passed, plus an independent 81-case policy matrix. The green observations do not establish global redundancy. Controller fresh 1,233 profile/performance/HR tests passed; reviewer statics clean (758/573). Task 3.3 owns date-only changed/save/preview/mtime behavior; no selection or default TAGGED change.
 
 - 1.1: Optional provenance `series` is trailing in `BenchmarkSource` but emitted after `document`; construct sources with keyword arguments. Independent review approved after closing the distinct truthy wrong-type setter guard (numeric and bool fixtures keep the empty-string boundary). All 28 claimed mutations, two new reviewer mutations and 32 historical prose checks red/restored green; full suite 14,798 passed / 44 skipped; controller fresh 65 provenance cases passed. Selection and athlete schema unchanged.
 

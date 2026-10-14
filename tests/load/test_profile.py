@@ -3489,3 +3489,460 @@ def test_partitioned_write_preserves_other_partition_empty_raw_groups(
     assert not any(
         entry.kind in kinds for entry in load_profile(tmp_path).benchmarks.entries
     )
+
+
+# --- hr-derivation 1.2: authoritative incoming applies-from ---------------
+def _replacement_document() -> dict:
+    return {
+        "profile_version": ATHLETE_SCHEMA_VERSION,
+        "max_hr_bpm": 198,
+        "resting_hr_bpm": 49,
+        "custom": {"counter": 37, "label": "unmanaged"},
+        "benchmarks": {
+            "athlete": {
+                "max_hr_bpm": [
+                    {
+                        "value": 177,
+                        "measured_on": date(2024, 1, 11),
+                        "applies_from": date(2024, 1, 1),
+                        "note": "max hand",
+                        "opaque": {"code": 101},
+                    },
+                    {
+                        "value": 181,
+                        "measured_on": date(2024, 1, 12),
+                        "applies_from": date(2024, 1, 2),
+                        "source": {"kind": "measured", "instrument": "max measured"},
+                    },
+                    {
+                        "value": 189,
+                        "measured_on": date(2024, 2, 1),
+                        "applies_from": date(2024, 1, 3),
+                        "note": "max derived note",
+                        "opaque": {"code": 103},
+                        "source": {
+                            "kind": "derived",
+                            "method": "max-old",
+                            "document": "workouts/max-old.md",
+                            "inputs": "max inputs",
+                            "citation": "max citation",
+                            "series": "max series",
+                            "extension": {"code": 107},
+                        },
+                    },
+                ],
+                "resting_hr_bpm": [
+                    {
+                        "value": 51,
+                        "measured_on": date(2024, 1, 13),
+                        "applies_from": date(2024, 1, 4),
+                        "note": "rest hand",
+                        "opaque": {"code": 109},
+                    },
+                    {
+                        "value": 53,
+                        "measured_on": date(2024, 1, 14),
+                        "applies_from": date(2024, 1, 5),
+                        "source": {"kind": "measured", "instrument": "rest measured"},
+                    },
+                    {
+                        "value": 61,
+                        "measured_on": date(2024, 2, 1),
+                        "applies_from": date(2024, 1, 6),
+                        "note": "rest derived note",
+                        "opaque": {"code": 113},
+                        "source": {
+                            "kind": "derived",
+                            "method": "rest-old",
+                            "document": "wellness/2023.csv",
+                            "inputs": "rest inputs",
+                            "citation": "rest citation",
+                            "series": "rest series",
+                            "extension": {"code": 127},
+                        },
+                    },
+                ],
+                "future_hr": [{"opaque": "athlete future"}],
+            },
+            "ride": {
+                "ftp_watts": [
+                    {
+                        "value": 251,
+                        "measured_on": date(2024, 2, 1),
+                        "applies_from": date(2024, 1, 7),
+                        "note": "power note",
+                        "opaque": {"code": 131},
+                        "source": {
+                            "kind": "derived",
+                            "method": "power-old",
+                            "document": "workouts/power-old.md",
+                            "inputs": "power inputs",
+                            "citation": "power citation",
+                            "series": "power series",
+                            "extension": {"code": 137},
+                        },
+                    },
+                ],
+                "lthr_bpm": [],
+                "future_power": {"unit": "novel watts"},
+            },
+            "run": {
+                "ftp_watts": [
+                    {
+                        "value": 263,
+                        "measured_on": date(2024, 2, 1),
+                        "applies_from": date(2024, 1, 8),
+                        "source": {
+                            "kind": "derived",
+                            "method": "run-old",
+                            "document": "workouts/run.md",
+                            "inputs": "run inputs",
+                            "citation": "run citation",
+                            "extension": {"code": 139},
+                        },
+                    },
+                ],
+                "threshold_pace_s_per_km": [],
+                "future_pace": [{"opaque": "run future"}],
+            },
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [BenchmarkKind.MAX_HR_BPM, BenchmarkKind.RESTING_HR_BPM, BenchmarkKind.FTP_WATTS],
+)
+@pytest.mark.parametrize(
+    "mode", ["omitted", "false", "clear", "same", "different", "measurement"]
+)
+def test_derived_applies_replacement_is_explicit_and_generic(
+    tmp_path: Path, kind: BenchmarkKind, mode: str
+) -> None:
+    scope = "ride" if kind is BenchmarkKind.FTP_WATTS else "athlete"
+    expected = _replacement_document()
+    raw = _replacement_document()
+    raw["benchmarks"][scope.upper()] = raw["benchmarks"].pop(scope)
+    path = tmp_path / PROFILE_FILENAME
+    path.write_text(tomli_w.dumps(raw))
+    profile = load_profile(tmp_path)
+    before = copy.deepcopy((profile.data, profile.benchmarks.entries))
+    disk_before = path.read_bytes()
+    old_date = {
+        BenchmarkKind.MAX_HR_BPM: date(2024, 1, 3),
+        BenchmarkKind.RESTING_HR_BPM: date(2024, 1, 6),
+        BenchmarkKind.FTP_WATTS: date(2024, 1, 7),
+    }[kind]
+    incoming_date = (
+        old_date
+        if mode == "same"
+        else (
+            date(2024, 1, 9)
+            if mode == "different"
+            else date(2024, 2, 1)
+            if mode == "measurement"
+            else None
+        )
+    )
+    final_date = None if mode == "clear" else incoming_date or old_date
+    source = BenchmarkSource(
+        BenchmarkSourceKind.DERIVED,
+        "fresh-method",
+        "workouts/fresh.md",
+        "fresh-inputs",
+        "fresh-citation",
+    )
+    fresh = Benchmark(
+        kind,
+        Sport.RIDE if scope == "ride" else None,
+        197,
+        date(2024, 2, 1),
+        source=source,
+        applies_from=incoming_date,
+    )
+    entries = tuple(
+        fresh
+        if entry.kind is kind
+        and entry.discipline == fresh.discipline
+        and entry.source is not None
+        and entry.source.is_derived
+        else entry
+        for entry in profile.benchmarks.entries
+        if entry.source is not None and entry.source.is_derived and entry.kind is kind
+    )
+    entries_before = copy.deepcopy(entries)
+    target = expected["benchmarks"][scope][kind.value][-1]
+    target["value"] = 197
+    target["source"] = {
+        "kind": "derived",
+        "method": "fresh-method",
+        "document": "workouts/fresh.md",
+        "inputs": "fresh-inputs",
+        "citation": "fresh-citation",
+        "extension": {
+            "code": {
+                BenchmarkKind.MAX_HR_BPM: 107,
+                BenchmarkKind.RESTING_HR_BPM: 127,
+                BenchmarkKind.FTP_WATTS: 137,
+            }[kind]
+        },
+    }
+    if final_date is None:
+        target.pop("applies_from")
+    else:
+        target["applies_from"] = final_date
+    kwargs = {} if mode == "omitted" else {"replace_applies_from": mode != "false"}
+    updated = profile.with_derived_benchmarks(
+        entries, kinds=frozenset({kind}), **kwargs
+    )
+    assert updated.data == expected
+    actual = next(
+        entry
+        for entry in updated.benchmarks.entries
+        if entry.kind is kind
+        and entry.discipline == fresh.discipline
+        and entry.measured_on == date(2024, 2, 1)
+    )
+    assert actual.applies_from == final_date
+    assert ((profile.data, profile.benchmarks.entries), entries, path.read_bytes()) == (
+        before,
+        entries_before,
+        disk_before,
+    )
+    save_profile(tmp_path, updated)
+    assert tomllib.loads(path.read_text()) == expected
+    first = path.read_bytes()
+    reloaded = load_profile(tmp_path)
+    save_profile(
+        tmp_path,
+        reloaded.with_derived_benchmarks(entries, kinds=frozenset({kind}), **kwargs),
+    )
+    assert path.read_bytes() == first
+
+
+@pytest.mark.parametrize(
+    "recomputed", [BenchmarkKind.MAX_HR_BPM, BenchmarkKind.RESTING_HR_BPM]
+)
+def test_derived_applies_replacement_keeps_other_hr_kind_explicit_date(
+    tmp_path: Path, recomputed: BenchmarkKind
+) -> None:
+    expected = _replacement_document()
+    raw = _replacement_document()
+    profile = AthleteProfile(raw)
+    before = copy.deepcopy((profile.data, profile.benchmarks.entries))
+    fresh = Benchmark(
+        recomputed,
+        None,
+        193,
+        date(2024, 2, 1),
+        source=BenchmarkSource(
+            BenchmarkSourceKind.DERIVED,
+            "mixed-new",
+            "workouts/mixed.md",
+            "mixed inputs",
+            "mixed citation",
+            series="mixed series",
+        ),
+    )
+    incoming = tuple(
+        fresh if entry.kind is recomputed else entry
+        for entry in profile.benchmarks.entries
+        if entry.kind in ATHLETE_SCOPED
+        and entry.source is not None
+        and entry.source.is_derived
+    )
+    target = expected["benchmarks"]["athlete"][recomputed.value][-1]
+    target.pop("applies_from")
+    target["value"] = 193
+    target["source"] = {
+        "kind": "derived",
+        "method": "mixed-new",
+        "document": "workouts/mixed.md",
+        "inputs": "mixed inputs",
+        "citation": "mixed citation",
+        "series": "mixed series",
+        "extension": {"code": 107 if recomputed is BenchmarkKind.MAX_HR_BPM else 127},
+    }
+    updated = profile.with_derived_benchmarks(
+        incoming, kinds=ATHLETE_SCOPED, replace_applies_from=True
+    )
+    assert updated.data == expected
+    assert (profile.data, profile.benchmarks.entries) == before
+
+
+@pytest.mark.parametrize("keep_hands", [True, False])
+def test_derived_applies_replacement_empty_incoming_only_cleans_owned_groups(
+    keep_hands: bool,
+) -> None:
+    expected = _replacement_document()
+    raw = _replacement_document()
+    for kind in ("max_hr_bpm", "resting_hr_bpm"):
+        if keep_hands:
+            expected["benchmarks"]["athlete"][kind].pop()
+        else:
+            expected["benchmarks"]["athlete"].pop(kind)
+            raw["benchmarks"]["athlete"][kind] = raw["benchmarks"]["athlete"][kind][2:]
+    profile = AthleteProfile(raw)
+    updated = profile.with_derived_benchmarks(
+        (), kinds=ATHLETE_SCOPED, replace_applies_from=True
+    )
+    assert updated.data == expected
+
+
+@pytest.mark.parametrize("violation", ["outside", "absent", "measured", "collision"])
+def test_derived_applies_replacement_refuses_atomically(
+    tmp_path: Path, violation: str
+) -> None:
+    source = BenchmarkSource(
+        BenchmarkSourceKind.DERIVED,
+        "rejected",
+        "workouts/rejected.md",
+        "rejected inputs",
+        "rejected citation",
+    )
+    if violation == "absent":
+        source = None
+    elif violation == "measured":
+        source = BenchmarkSource(BenchmarkSourceKind.MEASURED)
+    candidate = Benchmark(
+        BenchmarkKind.MAX_HR_BPM,
+        None,
+        199,
+        date(2024, 1, 11) if violation == "collision" else date(2024, 2, 1),
+        source=source,
+    )
+    path = tmp_path / PROFILE_FILENAME
+    path.write_text(tomli_w.dumps(_replacement_document()))
+    profile = load_profile(tmp_path)
+    original = copy.deepcopy((profile.data, profile.benchmarks.entries))
+    candidate_before = copy.deepcopy(candidate)
+    disk_before = path.read_bytes()
+    result = "accepted"
+    error_type = None
+    try:
+        updated = profile.with_derived_benchmarks(
+            (candidate,),
+            kinds=DISCIPLINE_SCOPED if violation == "outside" else ATHLETE_SCOPED,
+            replace_applies_from=True,
+        )
+        save_profile(tmp_path, updated)
+    except (ValueError, ProfileError) as error:
+        error_type = type(error)
+        result = str(error)
+    expected = {
+        "outside": "outside the requested partition",
+        "absent": "lacks derived provenance",
+        "measured": "lacks derived provenance",
+        "collision": "collides with a retained non-derived entry",
+    }
+    assert (
+        error_type,
+        expected[violation] in result,
+        (profile.data, profile.benchmarks.entries),
+        candidate,
+        path.read_bytes(),
+    ) == (
+        ValueError,
+        True,
+        original,
+        candidate_before,
+        disk_before,
+    )
+
+
+def test_derived_applies_replacement_keyword_contract() -> None:
+    parameter = inspect.signature(AthleteProfile.with_derived_benchmarks).parameters[
+        "replace_applies_from"
+    ]
+    assert (parameter.kind, parameter.default, parameter.annotation) == (
+        inspect.Parameter.KEYWORD_ONLY,
+        False,
+        "bool",
+    )
+
+
+@pytest.mark.parametrize(
+    "target_key",
+    [
+        ("athlete", "max_hr_bpm", date(2024, 2, 1)),
+        ("athlete", "max_hr_bpm", date(2024, 2, 2)),
+        ("athlete", "resting_hr_bpm", date(2024, 2, 1)),
+        ("ride", "ftp_watts", date(2024, 2, 1)),
+        ("run", "ftp_watts", date(2024, 2, 1)),
+    ],
+)
+def test_derived_applies_replacement_central_merge_targets_exact_canonical_key(
+    target_key: tuple[str, str, date],
+) -> None:
+    from dataclasses import replace
+
+    expected = _replacement_document()["benchmarks"]
+    expected["athlete"]["max_hr_bpm"].append(
+        {
+            "value": 191,
+            "measured_on": date(2024, 2, 2),
+            "applies_from": date(2024, 1, 10),
+            "note": "second max date",
+            "source": {
+                "kind": "derived",
+                "method": "second-max",
+                "document": "workouts/second.md",
+                "inputs": "second inputs",
+                "citation": "second citation",
+            },
+        }
+    )
+    raw = copy.deepcopy(expected)
+    raw["ATHLETE"] = raw.pop("athlete")
+    raw["RIDE"] = raw.pop("ride")
+    entries = tuple(
+        replace(entry, applies_from=None)
+        for entry in AthleteProfile({"benchmarks": raw}).benchmarks.entries
+    )
+    scope, kind, measured_on = target_key
+    target = next(
+        record
+        for record in expected[scope][kind]
+        if record["measured_on"] == measured_on
+    )
+    target.pop("applies_from")
+    actual = profile_module._merge_benchmarks_document(
+        raw, entries, replace_applies_from_keys=frozenset({target_key})
+    )
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "kind", [BenchmarkKind.MAX_HR_BPM, BenchmarkKind.RESTING_HR_BPM]
+)
+def test_derived_applies_replacement_date_only_changes_returned_parsed_set(
+    kind: BenchmarkKind,
+) -> None:
+    from dataclasses import replace
+
+    expected = _replacement_document()
+    expected["benchmarks"]["athlete"][kind.value][-1].pop("applies_from")
+    profile = AthleteProfile(_replacement_document())
+    old_hr = frozenset(
+        entry
+        for entry in profile.benchmarks.entries
+        if entry.kind in ATHLETE_SCOPED
+        and entry.source is not None
+        and entry.source.is_derived
+    )
+    incoming = tuple(
+        replace(entry, applies_from=None) if entry.kind is kind else entry
+        for entry in old_hr
+    )
+    updated = profile.with_derived_benchmarks(
+        incoming, kinds=ATHLETE_SCOPED, replace_applies_from=True
+    )
+    assert updated.data == expected
+    new_hr = frozenset(
+        entry
+        for entry in updated.benchmarks.entries
+        if entry.kind in ATHLETE_SCOPED
+        and entry.source is not None
+        and entry.source.is_derived
+    )
+    assert new_hr != old_hr

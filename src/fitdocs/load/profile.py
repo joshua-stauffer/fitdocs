@@ -340,7 +340,11 @@ class AthleteProfile:
         )
 
     def with_derived_benchmarks(
-        self, entries: Sequence[Benchmark], *, kinds: frozenset[BenchmarkKind]
+        self,
+        entries: Sequence[Benchmark],
+        *,
+        kinds: frozenset[BenchmarkKind],
+        replace_applies_from: bool = False,
     ) -> AthleteProfile:
         """Return a new profile whose derived entries of ``kinds`` are replaced.
 
@@ -357,12 +361,18 @@ class AthleteProfile:
         uses, which overlays each fresh entry onto whatever raw entry already
         occupies that exact date, stale derived entries included. So a
         refreshed derived entry at a previously-derived date inherits that
-        stale entry's ``note``, its ``applies_from`` date and any
+        stale entry's ``note`` and any
         unrecognized entry-level or inner-``source`` key exactly as
         :meth:`with_benchmark` would (5.6, 5.7), while the six recognized
         ``source`` fields are overlaid with the fresh derivation's values.
         This is the one write path for the derived subset (design:
         ProfileDerivedWrite).
+
+        By default, an omitted ``applies_from`` also inherits the old date.
+        With ``replace_applies_from=True``, only incoming entries instead
+        treat absence as authoritative and clear the inherited date. An
+        explicit incoming date overlays normally, including on a kept entry
+        supplied unchanged by the caller. Retained entries are not targeted.
 
         Before anything is stored, every element of ``entries`` is checked
         against three conditions and, on any violation, :class:`ValueError`
@@ -443,8 +453,17 @@ class AthleteProfile:
         }
 
         fresh_entries = [*retained, *entries]
+        replace_applies_from_keys = (
+            frozenset(
+                (*_benchmark_group_key(entry), entry.measured_on) for entry in entries
+            )
+            if replace_applies_from
+            else frozenset()
+        )
         merged = _merge_benchmarks_document(
-            _existing_benchmarks_region(self.data), fresh_entries
+            _existing_benchmarks_region(self.data),
+            fresh_entries,
+            replace_applies_from_keys=replace_applies_from_keys,
         )
         covered_groups = {_benchmark_group_key(entry) for entry in fresh_entries}
         for scope_key, kind_key in derived_groups_before - covered_groups:
@@ -710,7 +729,10 @@ def _is_entry_list(value: object) -> bool:
 
 
 def _merge_benchmarks_document(
-    existing: Mapping[str, object], entries: Sequence[Benchmark]
+    existing: Mapping[str, object],
+    entries: Sequence[Benchmark],
+    *,
+    replace_applies_from_keys: frozenset[tuple[str, str, date]] = frozenset(),
 ) -> dict[str, object]:
     """Merge freshly emitted benchmark entries into ``existing`` verbatim (Req 6.4).
 
@@ -748,6 +770,13 @@ def _merge_benchmarks_document(
     below leaves an existing raw ``applies_from`` at that ``measured_on``
     untouched rather than overwriting it with an absence; a fresh entry that
     *does* carry one overlays it exactly as a fresh ``note`` would.
+
+    The derived writer can opt into authoritative absence for canonical
+    ``(scope, kind, measured_on)`` keys in ``replace_applies_from_keys``.
+    For those keys only, an omitted fresh ``applies_from`` removes the old
+    field before overlay; explicit dates and ``note`` keep their usual rules.
+    The default empty set preserves existing callers, including saves of
+    the derived writer's already-clean document.
 
     ``source`` (design: BenchmarkProvenance) does **not** follow that
     inherit-on-absent rule, and deliberately so -- this is the asymmetry the
@@ -801,6 +830,12 @@ def _merge_benchmarks_document(
                 combined: dict[str, object] = (
                     dict(original) if original is not None else {}
                 )
+                if (
+                    scope_key,
+                    kind_key,
+                    fresh_entry["measured_on"],
+                ) in replace_applies_from_keys and "applies_from" not in fresh_entry:
+                    combined.pop("applies_from", None)
                 inherited_source = combined.pop("source", None)
                 fresh_source = fresh_entry.get("source")
                 combined.update({k: v for k, v in fresh_entry.items() if k != "source"})

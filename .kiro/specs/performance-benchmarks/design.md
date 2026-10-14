@@ -1373,7 +1373,8 @@ Amendment 3. The heart-rate stage belongs to hr-derivation.
 
 ```python
 def with_derived_benchmarks(
-    self, entries: Sequence[Benchmark], *, kinds: frozenset[BenchmarkKind]
+    self, entries: Sequence[Benchmark], *, kinds: frozenset[BenchmarkKind],
+    replace_applies_from: bool = False,
 ) -> AthleteProfile: ...
 ```
 
@@ -1386,6 +1387,15 @@ with a hand-recorded key. Existing overlays and atomic, validated saves remain
 in use. The source overlay recognizes six keys including the optional `series`
 added by athlete-benchmarks Amendment 3; absent series keeps legacy records
 compatible.
+
+The optional `replace_applies_from` preserves the existing overlay by default,
+so the tagged-effort caller keeps its current omission behavior. When true,
+only incoming canonical `(scope, kind, measured_on)` keys treat an omitted
+`applies_from` as authoritative absence and clear the inherited field. The
+key set is built after the existing validation. Explicit dates overlay
+normally; retained entries, notes and unknown entry/source keys keep their
+existing behavior. The shared profile merge performs the removal, and saves
+merge from the returned profile's already-clean data.
 
 ### TaggedEffortStage / PassEngine
 
