@@ -299,7 +299,7 @@ literal pins, one per lander) and every head-paragraph pin of
     with every mutation recorded red.
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.8, 3.10, 4.4, 5.3, 15.1_
 
-- [ ] 1.4 Choose the shown source and bound what a late value can change
+- [x] 1.4 Choose the shown source and bound what a late value can change
   - `baselines.py`: `Baselines.shown_source` and `Baselines.shown` per
     design § Baselines.
   - **Tests** (`tests/recovery/test_shown.py`): the shown source is the
@@ -921,3 +921,21 @@ introspection artifact also names its MetricInfo value type at line 48).
   mypy clean. Baseline and deviation fsum each have an exact valid-domain
   precision pin. Runtime TZ/clock probes U01/U02 are explicitly allocated to
   1.4/1.5; shown-source and future consumer integration are not claimed here.
+- Task 1.4 review lesson: varying metrics and source names in selector tests
+  does not pin arguments forwarded by `shown()`. Exercise `shown()` itself
+  across all METHODS metrics and multiple genuinely selected sources, with
+  independent nontrivial expected observations; a constant selected name can
+  leave hardcoded delegation green.
+- Task 1.4's bounded forwarding audit includes both calls: arguments to
+  `shown_source(metric, day)` as well as `on(metric, source, day)`. Distinct
+  per-metric canonical source IDs and a real neighboring/future-day source
+  flip are needed to distinguish selector arguments.
+- Task 1.4: APPROVED round 3 and VERIFIED. `shown_source` selects the
+  requested metric's canonical source on the requested day, carrying at
+  most six days; `shown` delegates to the same source's `on`. All five
+  forwarded arguments discriminate, including different per-metric IDs and
+  an actual future canonical source. 51 claimed and two independent probes
+  red/restored green; 171 assertion cases. Fresh full suite: 15,316 passed /
+  44 expected skips; controller scoped 694 passed; Ruff/mypy clean. The
+  known U01 timezone probe is now caught; unused-clock structural prevention
+  and formal surface guards remain task 1.5, consumer integration later.

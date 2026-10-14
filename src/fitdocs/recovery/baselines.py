@@ -110,3 +110,14 @@ class Baselines:
             range_high=inverse(high) if high is not None else None,
             position=position,
         )
+
+    def shown_source(self, metric: Metric, day: date) -> str | None:
+        for offset in range(METHODS[metric].rolling_days):
+            source = self._canonical.get((metric, day - timedelta(days=offset)))
+            if source is not None:
+                return source
+        return None
+
+    def shown(self, metric: Metric, day: date) -> BaselineDay | None:
+        source = self.shown_source(metric, day)
+        return self.on(metric, source, day) if source is not None else None
