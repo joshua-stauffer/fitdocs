@@ -198,3 +198,26 @@ without reporting.
 `select_candidates` remains FIT-only, as does the folder connector that
 reuses it. This amendment records selector support only; wellness drain
 wiring, streamed reads and reporting are carried by wellness-store task 4.2.
+
+
+## Amendment 3 (2026-10-14): wellness drain composition and reporting, landed by wellness-store
+
+The drain now settles registered wellness and FIT candidates together within
+one interval (Requirement 4), streams wellness recognition, hashing and archival
+through the wellness intake, and reports each wellness candidate in exactly
+one of `wellness_archived`, `wellness_skipped`, `wellness_failures`, `deferred`,
+`quarantined` or `unrecognized`. Unrecognized files remain in the inbox with
+the reason reported. Unsupported suffixes remain ignored.
+
+Wellness parse failures share the content-addressed quarantine record and
+explicit retry policy (Requirement 5). A successful retry removes only the
+entry for its own SHA; replacing a file with corrected bytes does not remove
+the old content's record. Under the move disposition (Requirement 6), only
+successfully archived or already-archived wellness candidates with a regular
+archive entry move through the existing collision-safe move operation.
+Failures, deferrals, quarantined and unrecognized files stay in place; move
+failures use the existing reporting channel. The drain never deletes files.
+
+The wellness series is refreshed after wellness intake and before FIT page
+planning. Explicit-source sync and the folder connector remain FIT-only;
+explicit-source sync neither archives wellness nor rebuilds its series.

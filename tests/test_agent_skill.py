@@ -113,15 +113,15 @@ _DASHBOARDS_HEADINGS: tuple[str, ...] = (
     "Further reading",
 )
 
-#: The drain report's own channel fields, minus the two explicitly excluded
-#: names that are not channels at all (a nested report and a path). Computed
+#: The drain report's own channel fields, minus the three explicitly excluded
+#: names that are not channels at all (two nested reports and a path). Computed
 #: by introspecting the real dataclasses -- not hardcoded -- so a channel
 #: added, renamed, or dropped by :mod:`fitdocs.sync` changes this set without
 #: anyone editing this file. Compared below against the profile's own
 #: hardcoded literal (``_SkillProfile.channels``), which is what actually
 #: catches such a change: the literal stays fixed while this derived set
 #: moves.
-_CHANNEL_EXCLUSIONS = frozenset({"inbox", "sync"})
+_CHANNEL_EXCLUSIONS = frozenset({"inbox", "sync", "wellness_series"})
 _DRAIN_REPORT_CHANNELS = (
     frozenset(field.name for field in dataclasses.fields(DrainReport))
     - _CHANNEL_EXCLUSIONS
@@ -144,6 +144,10 @@ _INBOX_CHANNELS_LITERAL: frozenset[str] = frozenset(
         "quarantined",
         "moved",
         "move_failures",
+        "unrecognized",
+        "wellness_archived",
+        "wellness_skipped",
+        "wellness_failures",
     }
 )
 
@@ -244,8 +248,8 @@ def test_literal_channel_set_matches_the_derived_dataclass_union() -> None:
     rename/add/drop on either dataclass moves ``_EXPECTED_CHANNELS`` without
     moving ``_INBOX_CHANNELS_LITERAL``, so the two go out of sync and this
     test is what catches it."""
+    assert len(_EXPECTED_CHANNELS) == 12
     assert _INBOX_CHANNELS_LITERAL == _EXPECTED_CHANNELS
-    assert len(_EXPECTED_CHANNELS) == 8
 
 
 # --- registry <-> profile map, both ways ----------------------------------

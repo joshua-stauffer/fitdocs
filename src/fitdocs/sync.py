@@ -250,6 +250,7 @@ from fitdocs.inbox import (
     InboxSettings,
     move_processed,
     select_candidates,
+    select_wellness_candidates,
     settle,
 )
 from fitdocs.ingest.decode import decode_fit
@@ -268,6 +269,17 @@ from fitdocs.metrics.types import DerivedMetrics
 from fitdocs.quarantine import QuarantineEntry, QuarantineRecord, save_quarantine
 from fitdocs.render import Asset, DocContext, MapData, plan_map, render_document
 from fitdocs.tiles import TileSource, TileUnavailableError
+from fitdocs.wellness import DEFAULT_WELLNESS_SETTINGS, WellnessSettings
+from fitdocs.wellness.engine import SeriesReport, rebuild_series
+from fitdocs.wellness.intake import (
+    Archived,
+    Failed,
+    IntakeDeferred,
+    IntakeUnrecognized,
+    archive_identified,
+    identify,
+)
+from fitdocs.wellness.registry import candidate_suffixes
 
 __all__ = [
     "DocumentMatch",
@@ -739,6 +751,12 @@ class DrainReport:
     Never folded into ``failures`` or ``moved``; never changes the run's exit
     code."""
 
+    unrecognized: tuple[InboxNote, ...] = ()
+    wellness_archived: tuple[InboxNote, ...] = ()
+    wellness_skipped: tuple[InboxNote, ...] = ()
+    wellness_failures: tuple[InboxNote, ...] = ()
+    wellness_series: SeriesReport | None = None
+
 
 def drain(
     inbox: Path,
@@ -755,6 +773,8 @@ def drain(
     sleep: Callable[[float], None] = time.sleep,
     precedence: Precedence = DEFAULT_PRECEDENCE,
     on_rendered: Callable[[RenderedPage], None] | None = None,
+    wellness_settings: WellnessSettings = DEFAULT_WELLNESS_SETTINGS,
+    wellness_progress: Callable[[str, int, int], None] | None = None,
 ) -> DrainReport:
     r"""Drain the inbox: select, settle, quarantine-partition, then plan and
     apply the admitted ``.fit`` files as one run (design: DrainOrchestration,
@@ -871,6 +891,10 @@ def drain(
     quarantined: list[InboxNote] = []
     moved: list[str] = []
     move_failures: list[InboxNote] = []
+    unrecognized: list[InboxNote] = []
+    wellness_archived: list[InboxNote] = []
+    wellness_skipped: list[InboxNote] = []
+    wellness_failures: list[InboxNote] = []
     ledger = _RunLedger()
 
     # The hold record is read before anything is written, so a damaged one
@@ -880,6 +904,11 @@ def drain(
     warnings.extend(_scan_symlinked_documents(data_root))
 
     candidates = select_candidates(inbox, settings)
+    wellness_candidates = select_wellness_candidates(
+        inbox, settings, candidate_suffixes()
+    )
+    wellness_rels = {candidate.rel for candidate in wellness_candidates}
+    candidates = tuple(sorted((*candidates, *wellness_candidates), key=lambda c: c.rel))
     settle_result = settle(
         candidates, settle_seconds=settings.settle_seconds, sleep=sleep
     )
@@ -888,8 +917,68 @@ def drain(
     record = quarantine
     record_changed = False
 
+    for candidate in settle_result.stable:
+        if candidate.rel not in wellness_rels:
+            continue
+        identified = identify(candidate.path)
+        if isinstance(identified, IntakeUnrecognized):
+            unrecognized.append(InboxNote(candidate.rel, identified.reason))
+            continue
+        if isinstance(identified, IntakeDeferred):
+            deferred.append(InboxNote(candidate.rel, identified.reason))
+            continue
+        sha = identified.sha256
+        recorded_entry = record.get(sha)
+        if recorded_entry is not None and not retry_quarantined:
+            quarantined.append(InboxNote(candidate.rel, recorded_entry.reason))
+            continue
+
+        def progress(done: int, total: int, rel: str = candidate.rel) -> None:
+            if wellness_progress is not None:
+                wellness_progress(rel, done, total)
+
+        outcome = archive_identified(
+            data_root,
+            candidate.path,
+            identified,
+            progress if wellness_progress is not None else None,
+        )
+        if isinstance(outcome, IntakeDeferred):
+            deferred.append(InboxNote(candidate.rel, outcome.reason))
+            continue
+        if isinstance(outcome, Failed):
+            wellness_failures.append(InboxNote(candidate.rel, outcome.reason))
+            record = record.with_entry(
+                QuarantineEntry(sha, candidate.rel, outcome.reason)
+            )
+            record_changed = True
+            continue
+        note = InboxNote(candidate.rel, f"{outcome.entry.ref} ({identified.format.id})")
+        if isinstance(outcome, Archived):
+            wellness_archived.append(note)
+        else:
+            wellness_skipped.append(note)
+        if recorded_entry is not None:
+            record = record.without(sha)
+            record_changed = True
+        if (
+            settings.disposition is Disposition.MOVE
+            and processed_dir is not None
+            and outcome.entry.path.is_file()
+            and not outcome.entry.path.is_symlink()
+        ):
+            move_result = move_processed(candidate, processed_dir, sha)
+            if isinstance(move_result, InboxNote):
+                move_failures.append(move_result)
+            else:
+                moved.append(move_result)
+
+    wellness_series = rebuild_series(data_root, settings=wellness_settings, force=False)
+
     admitted: list[tuple[Candidate, bytes, str, QuarantineEntry | None]] = []
     for candidate in settle_result.stable:
+        if candidate.rel in wellness_rels:
+            continue
         try:
             data = candidate.path.read_bytes()
         except OSError as exc:
@@ -1038,6 +1127,11 @@ def drain(
         quarantined=tuple(quarantined),
         moved=tuple(moved),
         move_failures=tuple(move_failures),
+        unrecognized=tuple(unrecognized),
+        wellness_archived=tuple(wellness_archived),
+        wellness_skipped=tuple(wellness_skipped),
+        wellness_failures=tuple(wellness_failures),
+        wellness_series=wellness_series,
     )
 
 

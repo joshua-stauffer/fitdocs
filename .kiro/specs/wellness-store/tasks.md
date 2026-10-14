@@ -802,7 +802,7 @@ preflight and keeps every call dashboards placed).
   - _Depends: 1.6_
   - _Requirements: 4.2, 4.3, 4.5, 4.6_
 
-- [ ] 4.2 Compose wellness intake and the rebuild into the drain (inbox amendment, part 2)
+- [x] 4.2 Compose wellness intake and the rebuild into the drain (inbox amendment, part 2)
   - `drain(...)` per design § DrainWellnessStep: new keyword parameters, one
     settle over both candidate sets, the wellness loop (identify, quarantine
     check, archive, quarantine record updates, disposition), then
@@ -825,8 +825,11 @@ preflight and keeps every call dashboards placed).
     second drain → nothing archived, `wellness_skipped` for the leave
     disposition, `wellness_series.status == UNCHANGED`, every series byte
     and mtime untouched; the invalid file quarantined and reported
-    `quarantined` on the next drain, then archived with `retry_quarantined`
-    after it is fixed in place (entry removed from the record); move
+    `quarantined` on the next drain; fixing its bytes in place creates a new
+    SHA which archives normally while the old bad SHA remains quarantined.
+    Separately, a same-SHA retry after repairing a test extractor succeeds
+    with `retry_quarantined` and removes that SHA's record, matching FIT's
+    content-addressed retry semantics; move
     disposition moves archived and already-archived wellness files and
     leaves unrecognized, failed and deferred ones; an unreadable candidate
     deferred; with the test-only EXTRACT format registered, a candidate whose
@@ -1078,3 +1081,7 @@ preflight and keeps every call dashboards placed).
 - 4.1 debug round1: RETRY_TASK, LOGIC_ERROR. Prescribed post-parse guard alone moved legacy archived monitoring under MOVE both with and without force: cached SHA shortcut bypassed classification, while archive presence bypassed disposition protection. Fresh bounded prototype passed16 controls. Technical design/task clarification implements existing4.3 through an explicit drain-supplied non-activity veto plus canonical cached-byte classification; no Activity normalization or new decoder ownership. Cached probe exceptions preserve historical skip/MOVE; full SDK decode cost is disclosed, restricted to cached drain classification. Required sync/regen tests and independent review remain pending.
 
 - 4.1: independently APPROVED after debug retry; full14,420 passed/44 skipped, sync+drain151/wellness827, ruff/mypy543 clean.40 claimed plus6 fresh mutations killed with sole failures and green restorations. Preserve drain's explicit non_activity set/MOVE veto and best-effort cached canonical identity probe when composing4.2; original archived activity MOVE, cached probe-error fallback, source-cache fast path and listed-page regen remain intact. Two stale drain/regen docstring clauses are explicitly assigned to pending5.2 above; no duplicate queue items needed for already planned work.
+
+- 4.2 context clarification: quarantine keys content SHA, exactly as FIT. Repairing file bytes creates a new identity, so it must not prune an old bad SHA by filename (another copy may still exist). Task wording now distinguishes a repaired-byte new candidate from a same-SHA successful retry after an extractor repair; only the successful retried identity is cleared. No runtime name-pruning policy is added.
+
+- 4.2: independently APPROVED round2; full14,441 passed/44 skipped, focused1089, ruff/mypy544 clean.113 active claimed plus3 fresh mutations killed with sole failures and green restorations (one obsolete retry-only mutant explicitly replaced). Drain uses one combined settle, wellness intake/quarantine/disposition then force=False rebuild before FIT planning; five defaulted report fields and12 skill channel bindings published. Inbox Amendment3 appended. Quiet quarantine needs no-attempt counters; new-SHA admission must be tested retry=False; archive MOVE gates need post-real-commit missing/directory/symlink states for both successful outcomes. All4.1 behavior and explicit sync AST preserved. CLI rows/exit/preflight remain4.5, final skill Do wording5.2.

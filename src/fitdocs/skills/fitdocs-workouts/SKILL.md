@@ -95,6 +95,10 @@ was also relocated out of the inbox.
 | Quarantined | `quarantined` | The file previously failed for a source-level reason and is remembered rather than retried. | This needs the user, not the agent -- never retry a quarantined file on your own judgment. |
 | Moved | `moved` | A written or skipped file's now-archived source was additionally relocated out of the inbox (only when the disposition is configured to move files). | Nothing needed. |
 | Move failures | `move_failures` | The file was processed successfully -- its content is already archived, counted as written or skipped -- but relocating it out of the inbox afterward failed. | Nothing to do: the file stays in the inbox and the move is retried automatically on the next drain. This is never a reason to reprocess the file. |
+| Unrecognized | `unrecognized` | No supported wellness format recognized the file; it stays in the inbox. | Read the reason and confirm the file is a supported wellness export. |
+| Wellness archived | `wellness_archived` | A wellness file was successfully parsed and archived. | Nothing needed. |
+| Wellness already archived | `wellness_skipped` | The wellness file's content is already archived. | Nothing needed. |
+| Wellness failed | `wellness_failures` | A wellness file could not be parsed and its content was quarantined. | Read the reason and ask the user to correct the export. |
 
 ## Ownership boundary
 
