@@ -496,7 +496,7 @@ preflight and keeps every call dashboards placed).
   - _Requirements: 5.6, 6.2, 6.3, 7.4, 8.4, 16.1, 16.2, 16.3, 16.4, 16.5, 16.6, 16.7, 16.8_
   - _Boundary: GarminFormats_
 
-- [ ] 2.3 (P) Merge parsed entries into series values
+- [x] 2.3 (P) Merge parsed entries into series values
   - `merge.py` per design § Merge (the one-winner precondition for a
     `LATEST_ENTRY` format, revision resolution, absence by a later snapshot,
     conflict keep-rule, precedence, ordering); `Conflict`, `MergeResult`.
@@ -1040,3 +1040,5 @@ preflight and keeps every call dashboards placed).
 - 2.2 resumed 2026-10-14: maintainer ruled reject present invalid Garmin weights (strings/booleans included), omit missing/null, preserve date validation. GarminFormats design clarified; earlier STOP_FOR_HUMAN resolved. Recovery baseline: 272 wellness tests passed.
 
 - 2.2: independently APPROVED; full suite 14,052 passed/44 skipped, Garmin227/wellness499, ruff/mypy526 clean. All109 claimed mutations replayed plus2 reviewer mutations killed, every restoration green. Maintainer strict-weight ruling implemented; published builders_garmin seam available. Garmin naive revisions normalize as wall-clock ISO strings; aware revisions normalize UTC; neither consults machine timezone. Canonical full tests require sandbox escalation for Unix socket and inherited UV_CACHE_DIR=/Users/josh/.cache/uv for nested packaging uv commands (outer --cache-dir is not inherited). Registry registration3.1, latest-record merge2.3, actual original archival2.6 and docs5.1 remain open.
+
+- 2.3: independently APPROVED; full suite14,069 passed/44 skipped, focused17/wellness516, ruff/mypy528 clean.37 claimed plus2 independent mutations killed with green restorations. Conflict.others records all other present winning-revision candidates (excluding selected snapshot), sorted, when distinct values conflict; pure merge does not select latest-entry exports (engine3.2).
