@@ -380,6 +380,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - _Requirements: 7.8, 8.1, 8.2, 9.2, 9.3, 10.4, 10.5, 10.7, 10.8, 11.1, 11.2, 11.3, 11.5_
   - _Boundary: Reduce_
   - _Depends: 2.2, 2.4_
+  - _Blocked: debug attempted twice, still failing — tests do not discriminate equal weighting of Watch source means from weighting every individual reading when source cardinalities differ (requirement 9.2; 60,60,90 must yield 70, not 75). Final review REJECTED; frozen production passes the independent probes, but acceptance remains unverified._
 
 - [ ] 4. Integration: the format, its registration and imports through the drain
 
@@ -424,6 +425,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - **Observable:** full `uv run pytest` green (integration point).
   - _Requirements: 1.3, 1.4, 3.6, 5.8, 6.1, 6.2, 6.3, 6.5, 7.2_
   - _Depends: 2.3, 3.1, 3.2_
+  - _Blocked: waiting on blocked prerequisites 3.1 and 3.2; format registration has not started._
 
 - [ ] 4.2 Import exports through the drain end to end
   - No production change expected; a failing test here is a stop-and-report
@@ -478,6 +480,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
     green.
   - _Requirements: 1.4, 2.4, 2.6, 4.1, 4.2, 4.3, 4.4, 5.10, 6.1, 6.2, 6.3, 6.4, 6.5, 14.3_
   - _Depends: 4.1_
+  - _Blocked: waiting on blocked prerequisite 4.1; end-to-end drain import has not started._
 
 - [ ] 5. Documentation and release notes
 
@@ -526,6 +529,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
     tests/test_agent_skill.py` green; the stale-text grep finds no hit.
   - _Requirements: 1.6, 2.5, 6.6, 8.7, 9.8, 10.8, 13.1, 13.2, 13.3, 13.4_
   - _Depends: 4.1_
+  - _Blocked: waiting on blocked prerequisite 4.1; feature documentation and release notes have not started._
 
 - [ ] 6. Validation
 
@@ -547,6 +551,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - **Observable:** the full suite, lint and types green after the final
     rebase; the merge and follow-ups are in the shared log and the queue.
   - _Requirements: 5.3, 11.5, 14.1, 14.2_
+  - _Blocked: integrated format and drain prerequisites 4.1/4.2 are unavailable while 3.1/3.2 are blocked; final determinism, offline, rebase, full-suite and release validation have not run._
 
 - [ ]* 6.2 Maintainer-run smoke on the maintainer's own export (no data enters the repository)
   - In a scratch data root outside the repository, drop the real
@@ -682,3 +687,6 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   multiline payload normalization. Use case-safe mutation evidence filenames.
   Broad Apple dependency allowance and relative sibling import resolution are
   shared guard follow-ups; actual Apple imports comply with the narrow boundary.
+- Task 3.2 debug cycle 1: correct production passed fresh probes, but same-kind multi-night fixtures and whole-second reading ends leave global Watch-ASLEEP preference and rounded end-instant membership unpinned; fresh debug RETRY_TASK prescribes 12 mixed-device plus 24 fractional-boundary cases, preserving the existing 340/39 test prefix and frozen reducer source.
+- Task 3.2 debug cycle 2 (final allowed): correct production passed fresh probes, but raw-asleep/AWAKE overlap admission and individual zero samples before daily acceptance remain unpinned; fresh debug RETRY_TASK prescribes 24 overlap-union plus six zero-in-mean cases, preserving the 376/41 prefix and frozen reducer source.
+- Task 3.2 final review: BLOCKED after both allowed debug cycles; unequal Watch-source cardinalities expose an unpinned mean-of-readings rule (60,60 from one source and90 from another require70, not75). All 406 night cases/43 sites and all prior prefixes retained; final draft source6c8bd089…/test4fb1bb48… preserved uncommitted. Fresh controller component1528 plus mypy/Ruff/format/diff pass; final independent review remains REJECTED, so no checkbox or feature-success claim. Exact findings: /private/tmp/apple-review3.2-debug2-report.md; verification: /private/tmp/apple-task3.2-blocked-verification.md.
