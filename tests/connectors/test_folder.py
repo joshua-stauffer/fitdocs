@@ -617,6 +617,20 @@ def test_source_that_is_a_file_not_a_directory_is_a_connector_error(
 # ---------------------------------------------------------------------------
 
 
+def test_folder_mixed_source_lists_only_fit(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "daily.json").write_text("{}")
+    (source / "activity.fit").write_bytes(b"synthetic fit")
+    session = _session(
+        FolderSettings(source=source, settle_seconds=0.0), data_root=tmp_path
+    )
+    listing = FolderConnector().list_activities(session, None)
+    assert tuple(activity.remote_id for activity in listing.activities) == (
+        "activity.fit",
+    )
+
+
 def test_dot_prefixed_and_junk_files_are_not_listed(tmp_path: Path) -> None:
     data_root = tmp_path
     source = data_root / "src"

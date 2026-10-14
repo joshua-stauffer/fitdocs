@@ -182,3 +182,19 @@ only the clarification that 6.1 and 6.6 are drain guarantees, not a
 prohibition on a different feature's own distinct, narrower removal —
 recorded here as Requirement 6 criterion 6.8. Nothing existing is
 renumbered.
+
+
+## Amendment 2 (2026-10-14): registered wellness candidate selection, landed by wellness-store
+
+Requirement 3.1 now also admits regular files with a case-insensitively
+matched suffix registered by a supported wellness format, through
+`select_wellness_candidates(inbox, settings, suffixes)`. This selector shares
+the FIT selector's hidden-path, default-junk and configured ignore rules
+(3.2–3.4), and returns candidates sorted by inbox-relative POSIX path. FIT
+files remain excluded from wellness selection even if `.fit` is supplied
+among the registered suffixes. Other unregistered suffixes remain ignored
+without reporting.
+
+`select_candidates` remains FIT-only, as does the folder connector that
+reuses it. This amendment records selector support only; wellness drain
+wiring, streamed reads and reporting are carried by wellness-store task 4.2.

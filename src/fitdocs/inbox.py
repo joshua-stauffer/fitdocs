@@ -537,16 +537,12 @@ DEFAULT_IGNORE_PATTERNS: Final[tuple[str, ...]] = (
 )
 """Default junk-name patterns ignored on top of the dot-component rule (Req 3.3).
 
-All four are carried because Req 3.3 names them explicitly and because they
-document the intent for readers of the settings file. None of them can
-exclude a candidate that the ``.fit`` extension predicate and the
-dot-component rule (Req 3.2) have already admitted: a name ending in
-``.tmp`` or ``.part`` cannot also end in ``.fit``, and ``.syncthing.*`` /
-``.DS_Store`` are themselves dot-prefixed, so the dot-component rule already
-excludes them independently. The patterns exist to state the policy
-Req 3.3 requires and to protect a candidate that a future, currently
-unenumerated ``.fit``-suffixed junk name would otherwise slip through as --
-not because any of today's four fixed strings is currently reachable."""
+For FIT candidates, ``*.tmp`` and ``*.part`` cannot match the ``.fit``
+suffix, and the two dot-prefixed patterns are also excluded by the
+hidden-component rule. The shared wellness walk can receive other registered
+suffixes: if ``.tmp`` or ``.part`` is registered, these defaults exclude
+otherwise eligible files. Configured patterns are added to these defaults.
+"""
 
 
 @dataclass(frozen=True)
@@ -580,11 +576,30 @@ def select_candidates(inbox: Path, settings: InboxSettings) -> tuple[Candidate, 
     deletes anything, and an ignored file never appears in the result -- the
     only channel selection has.
     """
+    return _select_candidates(inbox, settings, frozenset({".fit"}))
+
+
+def select_wellness_candidates(
+    inbox: Path, settings: InboxSettings, suffixes: frozenset[str]
+) -> tuple[Candidate, ...]:
+    """Select registered wellness suffixes under the inbox's ignore rules.
+
+    ``suffixes`` contains the registered lowercased extensions, including the
+    leading dot. FIT files are excluded even if supplied in ``suffixes``.
+    Results use the same relative-path order as :func:`select_candidates`.
+    """
+    return _select_candidates(inbox, settings, suffixes - {".fit"})
+
+
+def _select_candidates(
+    inbox: Path, settings: InboxSettings, suffixes: frozenset[str]
+) -> tuple[Candidate, ...]:
+    """Walk once for either selector, applying the shared ignore policy."""
     lowered_patterns = tuple(pattern.lower() for pattern in _ignore_patterns(settings))
 
     candidates = []
     for path in inbox.rglob("*"):
-        if not path.is_file() or path.suffix.lower() != ".fit":
+        if not path.is_file() or path.suffix.lower() not in suffixes:
             continue
         rel = path.relative_to(inbox)
         if any(part.startswith(".") for part in rel.parts):

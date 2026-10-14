@@ -423,7 +423,7 @@ preflight and keeps every call dashboards placed).
   - _Requirements: 4.1, 4.4_
   - _Boundary: FitIngestFileType_
 
-- [ ] 2. Core: formats, merge, codec, settings, archive, inbox selector
+- [x] 2. Core: formats, merge, codec, settings, archive, inbox selector
 
 - [x] 2.1 (P) Parse intervals.icu wellness: the API list and the fitdocs delivery envelope
   - `formats/intervals.py` per design § IntervalsFormat: `SOURCE`, `FORMAT`,
@@ -621,7 +621,7 @@ preflight and keeps every call dashboards placed).
   - _Boundary: Archive_
   - _Depends: 1.5_
 
-- [ ] 2.7 (P) Select wellness candidates in the inbox without widening `.fit` selection (inbox amendment, part 1)
+- [x] 2.7 (P) Select wellness candidates in the inbox without widening `.fit` selection (inbox amendment, part 1)
   - `select_wellness_candidates(inbox, settings, suffixes)` per design §
     InboxSelector; `select_candidates` and the new function share one
     private walk; correct the `DEFAULT_IGNORE_PATTERNS` docstring's
@@ -1048,3 +1048,5 @@ preflight and keeps every call dashboards placed).
 - 2.5: independently APPROVED; full14,153 passed/44 skipped, focused32/wellness600, ruff/mypy533 clean.47 claimed plus2 own mutations confirmed. Settings retain configured partial lists; effective_order resolves live registry defaults. Empty metric override resets to default order rather than global configured precedence. No settings file read; caller supplies parsed mapping. Drain/regen fail-before-write validation remains4.5.
 
 - 2.6: independently APPROVED round2; full14,234 passed/44 skipped, focused81/wellness681, ruff/mypy535 clean.158 claimed kills + declared retained-memory survivor independently replayed;2 own kills, all161 restorations green. Exists means regular non-symlink archive file; initial or post-parse leaf directories/symlinks are Unreadable and untouched, never AlreadyArchived. Null/non-numeric snapshot values and non-string origins raise WellnessFormatError. Hash-before-classification and interrupt cleanup pinned. Read-size streaming is pinned; requirement3.3 literal retained-memory ceiling regression sensitivity remains declared UNPINNED (source bounded), tracked in queue item 2026-10-14-wellness-archive-retained-memory-guard. Case-insensitive macOS fixtures must not place uppercase SHA variant beside its lowercase twin.
+
+- 2.7: independently APPROVED; full14,254 passed/44 skipped, targeted155, combined836, ruff/mypy535 clean.24 claimed plus2 own mutations killed. FIT and wellness selectors share one walk; folder remains FIT-only; default ignore reachability independently exercised using registered .tmp/.part test suffixes. Inbox Amendment2 records selector support; reporting/drain integration remains4.2. Group2 complete. Inherited uppercase nested-basename helper coverage gap recorded as separate inbox follow-up.

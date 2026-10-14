@@ -54,6 +54,8 @@ import inspect
 import os
 import re
 import time
+from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -74,6 +76,7 @@ from fitdocs.inbox import (
     move_processed,
     prepare_inbox,
     select_candidates,
+    select_wellness_candidates,
     settle,
 )
 from fitdocs.settings import SettingsError, load_settings_document
@@ -876,6 +879,138 @@ def test_selection_reads_but_does_not_write_the_inbox(tmp_path: Path) -> None:
 
     after = {p: (p.stat().st_size, p.stat().st_mtime_ns) for p in inbox.rglob("*")}
     assert before == after
+
+
+# Wellness InboxSelector (wellness-store 1.1, 1.6, 1.8).
+
+
+@pytest.mark.parametrize("name", ["daily.json", "daily.JSON", "export.zip"])
+def test_wellness_selects_registered_suffixes(tmp_path: Path, name: str) -> None:
+    target = _write(tmp_path / name)
+    result = select_wellness_candidates(
+        tmp_path, DEFAULT_INBOX_SETTINGS, frozenset({".json", ".zip"})
+    )
+    assert result == (Candidate(path=target, rel=name),)
+
+
+@pytest.mark.parametrize("name", ["activity.fit", "activity.FIT"])
+def test_wellness_excludes_fit_even_if_registered(tmp_path: Path, name: str) -> None:
+    _write(tmp_path / name)
+    result = select_wellness_candidates(
+        tmp_path, DEFAULT_INBOX_SETTINGS, frozenset({".fit", ".json"})
+    )
+    assert result == ()
+
+
+@pytest.mark.parametrize("name", ["track.gpx"])
+def test_wellness_ignores_unregistered_suffixes(tmp_path: Path, name: str) -> None:
+    _write(tmp_path / name)
+    result = select_wellness_candidates(
+        tmp_path, DEFAULT_INBOX_SETTINGS, frozenset({".json"})
+    )
+    assert result == ()
+
+
+def test_wellness_empty_suffixes_select_nothing(tmp_path: Path) -> None:
+    _write(tmp_path / "daily.json")
+    assert (
+        select_wellness_candidates(tmp_path, DEFAULT_INBOX_SETTINGS, frozenset()) == ()
+    )
+
+
+def test_wellness_excludes_directory_with_registered_suffix(tmp_path: Path) -> None:
+    (tmp_path / "directory.json").mkdir()
+    assert (
+        select_wellness_candidates(
+            tmp_path, DEFAULT_INBOX_SETTINGS, frozenset({".json"})
+        )
+        == ()
+    )
+
+
+@pytest.mark.parametrize(
+    "name", [".hidden.json", ".cache/daily.json", "sub/.cache/daily.json"]
+)
+def test_wellness_excludes_dot_components(tmp_path: Path, name: str) -> None:
+    _write(tmp_path / name)
+    assert (
+        select_wellness_candidates(
+            tmp_path, DEFAULT_INBOX_SETTINGS, frozenset({".json"})
+        )
+        == ()
+    )
+
+
+@pytest.mark.parametrize("name,suffix", [("foo.tmp", ".tmp"), ("x.json.part", ".part")])
+def test_wellness_applies_default_junk_patterns(
+    tmp_path: Path, name: str, suffix: str
+) -> None:
+    _write(tmp_path / name)
+    settings = replace(DEFAULT_INBOX_SETTINGS, ignore=("unrelated*",))
+    assert select_wellness_candidates(tmp_path, settings, frozenset({suffix})) == ()
+
+
+@pytest.mark.parametrize(
+    "name,pattern",
+    [
+        ("sub/day_hydration_total.json", "*_hydration*.json"),
+        ("sub/day_hydration_total.json", "day_hydration_total.json"),
+        ("STAGING/daily.json", "StAgInG/*"),
+    ],
+)
+def test_wellness_applies_configured_patterns(
+    tmp_path: Path, name: str, pattern: str
+) -> None:
+    _write(tmp_path / name)
+    settings = replace(DEFAULT_INBOX_SETTINGS, ignore=(pattern,))
+    assert select_wellness_candidates(tmp_path, settings, frozenset({".json"})) == ()
+
+
+def test_wellness_sorts_relative_paths_from_unsorted_walk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = [_write(tmp_path / name) for name in ("z.json", "b/a.json", "a/z.JSON")]
+
+    def unsorted_walk(self: Path, pattern: str) -> Iterator[Path]:
+        return iter(paths)
+
+    monkeypatch.setattr(Path, "rglob", unsorted_walk)
+    result = select_wellness_candidates(
+        tmp_path, DEFAULT_INBOX_SETTINGS, frozenset({".json"})
+    )
+    assert result == (
+        Candidate(path=paths[2], rel="a/z.JSON"),
+        Candidate(path=paths[1], rel="b/a.json"),
+        Candidate(path=paths[0], rel="z.json"),
+    )
+
+
+@pytest.mark.parametrize("wellness", [False, True], ids=["fit", "wellness"])
+def test_mixed_inbox_keeps_fit_and_wellness_separate(
+    tmp_path: Path, wellness: bool
+) -> None:
+    for name in (
+        "z.fit",
+        "sub/a.FIT",
+        "b.JSON",
+        "sub/a.json",
+        "track.gpx",
+        ".cache/hidden.fit",
+        ".cache/hidden.json",
+        "x.json.part",
+        "foo.tmp",
+        "sub/day_hydration_total.json",
+        "sub/day_hydration_total.fit",
+    ):
+        _write(tmp_path / name)
+    settings = replace(DEFAULT_INBOX_SETTINGS, ignore=("*_hydration*",))
+    if wellness:
+        result = select_wellness_candidates(tmp_path, settings, frozenset({".json"}))
+        expected = ("b.JSON", "sub/a.json")
+    else:
+        result = select_candidates(tmp_path, settings)
+        expected = ("sub/a.FIT", "z.fit")
+    assert result == tuple(Candidate(path=tmp_path / rel, rel=rel) for rel in expected)
 
 
 # --- StabilityCheck: settle (Req 4.1-4.5) ------------------------------------
