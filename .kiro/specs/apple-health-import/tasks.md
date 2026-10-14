@@ -191,7 +191,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
 
 - [ ] 2. Core: defect filter, sleep sweep, extract codec, daily rules
 
-- [ ] 2.1 (P) Repair the three known export defects in the byte stream
+- [x] 2.1 (P) Repair the three known export defects in the byte stream
   - `defects.py` per design § DefectFilter: `CONTROL_BYTES`,
     `PROLOG_LIMIT`, `MAX_TAG_BYTES`, `CHUNK_BYTES`, `DefectFilter` with
     `read` and `corrections`.
@@ -563,6 +563,24 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - _Requirements: 1.1, 2.5, 7.4_
 
 ## Implementation Notes
+
+- **2.1:** Independently APPROVED after one additive test remediation and
+  completion VERIFIED: 253 component tests, mypy, Ruff, formatting and diff
+  checks pass. `DefectFilter` repairs/counts DOCTYPE, forbidden C0 bytes and
+  repeated WorkoutStatistics attributes while preserving CR/LF and first
+  values; bounded reads, raw prolog limits, quote-aware tag/name carries and
+  EOF behavior verified. Original file bytes, timestamps, seeks and caller
+  ownership are observed on a writable temporary file. Mutation groups cover
+  all 29 controls, counts, line positions, tag/prolog boundaries, chunks,
+  read-only behavior and the 32-case XML whitespace/position/quote matrix.
+  Reviewer replayed 235 claims plus three own mutations, each assertion-red
+  and exactly restored to 253-green. No new follow-ups.
+- **2.1 learnings:** Put a decoy in the same read chunk when testing a search
+  bound; place the legal delimiter exactly at the limit. Canonical XML
+  formatting does not exercise every valid whitespace form: cover space,
+  tab, LF and CR independently around names/equals under both quotes. Group
+  related observables without letting an earlier parse exception shadow the
+  intended assertion; retain byte-only and counter-only mutation evidence.
 
 - **1.2:** Independently APPROVED and completion VERIFIED: 135 component
   tests, mypy, Ruff, formatting and diff checks pass. Builders are frozen.
