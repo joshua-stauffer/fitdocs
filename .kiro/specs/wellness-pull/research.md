@@ -377,3 +377,22 @@ was persisted. The temporary request directory was removed.
 Task 1.1 records the contradiction; task 6.3 owns its design amendment and
 numbered implementation repair. No upstream intervals-format field, date
 or timestamp amendment is required by TBC-W1, TBC-W3 or TBC-W4.
+
+
+### Completion reconciliation — 2026-10-15 (task 6.3)
+
+TBC-W5 remains **contradicted** as recorded above. The design's TBC-W5
+marker, IntervalsWellness Packaging and Decision 9 now specify the repair,
+and numbered task 7.1 is independently approved, verified and complete.
+The repaired policy excludes the `icu` and `private` namespaces; each of
+the six exact known wellness-download switches, when present, must be
+boolean true. An absent known switch and other valid platform tokens keep
+list-based compatibility. The independent Garmin health switch cannot
+substitute, and admission precedes ambiguity counting. Records remain
+unchanged. This is fitdocs attribution policy: the read-only observations
+and public schema names/types establish no causal effect of toggling a
+setting. All original findings and their observation limits above remain
+unchanged. TBC-W1/W2/W3/W4/W6/W7/W8 were confirmed within those limits;
+no wellness-store format, metric mapping or rules-version amendment is
+required. The postrepair whole-feature gate and exact-commit CI must be
+complete before the controller ticks 6.3 and requests final integration GO.

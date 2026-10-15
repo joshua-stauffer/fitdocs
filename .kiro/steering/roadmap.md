@@ -3155,7 +3155,8 @@ numbers are the next free number at landing.
   a part each (settled at spec time, 2026-10-13):
   - wellness-store: `wellness-archive/` and `wellness/` (complete 2026-10-14);
   - recovery: `recovery/` and `recovery/assets/`;
-  - wellness-pull: the `pull` guarantees;
+  - wellness-pull: the `pull` guarantees (complete 2026-10-15 on the
+    implementation branch, Amendment 7; main landing pending);
   - hr-derivation: what `derive-benchmarks` reads and writes;
   - workout-wellness: the refreshed-region class.
 
@@ -3175,12 +3176,16 @@ numbers are the next free number at landing.
   - a ledger keyspace and watermark for wellness;
   - Req 1.2-1.4 and 1.9 amended.
 
+  Wellness-pull's half is complete 2026-10-15 on the implementation branch
+  (Amendment 4); main landing pending. Recovery's half is not yet on main,
+  so this shared update remains open.
   The recovery command joins the no-network list. Dependencies:
   wellness-pull, recovery
-- [ ] intervals-connector — the wellness endpoint, the trailing-window
+- [x] intervals-connector — the wellness endpoint, the trailing-window
   `updated` diff, the capability declaration and re-pinned mutation, the
   enable setting, and the Garmin attribution derived from
-  `*_wellness_keys`. Dependencies: wellness-pull
+  `*_wellness_keys` (complete 2026-10-15 on the implementation branch,
+  Amendment 1; main landing pending). Dependencies: wellness-pull
 - [ ] athlete-benchmarks — provenance for a series-derived entry (`document`
   relaxed or a series reference) and the precise hand-wins rule. At spec
   time, the hand-wins rule became write-time in hr-derivation, so
@@ -3279,12 +3284,17 @@ numbers are the next free number at landing.
   - the inbox, wiki-contract, analytics-index and fit-ingest updates.
 
   Implement first. Dependencies: none
-- [ ] wellness-pull — **brief written 2026-10-12; spec written 2026-10-13**
-  (Phase 12 batch, wave 2, `tasks-generated`, all approvals set; 13
-  requirements / 91 criteria, 6 majors / 19 executable tasks; task 1.1 is a
+- [x] wellness-pull — **brief written 2026-10-12; spec written 2026-10-13;
+  implementation completed 2026-10-15**
+  (Phase 12 batch generation record: wave 2, `tasks-generated`, all approvals
+  set; 13 requirements / 91 criteria, 6 majors / 19 executable tasks; task 1.1 is a
   live API check run by the controller session; independent Step 3.5
   review, two rounds; cross-spec reviewed, two rounds, PASS; bumps
-  `CONTRACT_VERSION`). The connector side:
+  `CONTRACT_VERSION`). Completion record: 7 major groups / 20 mandatory
+  executable tasks including TBC-W5 repair 7.1; the original 91 criteria
+  remain unchanged. Contract version 12, wellness ledger format 2; final
+  independent completion review, feature integration GO and main landing
+  remain controller gates. The connector side:
   - `pull-wellness` driven through a new optional operation and a capability
     dispatch;
   - format-keyed delivery of non-FIT bytes, and a ledger keyspace and
