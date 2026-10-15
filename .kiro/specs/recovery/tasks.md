@@ -396,7 +396,7 @@ literal pins, one per lander) and every head-paragraph pin of
 
 - [ ] 2. The `reference-band` chart kind (chart-catalog Amendment 1)
 
-- [ ] 2.1 (P) Draw values as points against a segmented reference band, with flagged rows marked, and register the kind
+- [x] 2.1 (P) Draw values as points against a segmented reference band, with flagged rows marked, and register the kind
   - `src/fitdocs/render/charts/kit/kinds/reference_band.py` per design §
     ReferenceBandKind and chart-catalog's Common rules: channels, options,
     bound (1000 rows), `max_series=8`, `_validate`, `_check`, `_draw`,
@@ -433,7 +433,6 @@ literal pins, one per lander) and every head-paragraph pin of
     golden reddened by at least one named mutation.
   - _Requirements: 4.1, 5.4, 16.2, 16.3, 16.4, 18.5_
   - _Boundary: ReferenceBandKind_
-  - _Blocked: debug attempted twice, still failing — received-domain limit refusal is unpinned when x is absent. Counting only positioned rows/segments incorrectly accepts 1001 received rows or nine received segments and survives the entire native suite (17169 passed / 44 skipped). Production counts correctly; append native public-pipeline refusal controls for both missing-x cases before acceptance._
 
 - [ ] 2.2 Pin the kind's listing, order and budget and record chart-catalog Amendment 1
   - `test_catalog_contract.py`: a literal listing pin for `reference-band`
@@ -1065,3 +1064,56 @@ introspection artifact also names its MetricInfo value type at line 48).
   and prior raw evidence are already tracked in task 2.1 above; no duplicate
   queue item was created. All reviewers reported no adjacent untracked
   follow-up work.
+
+
+### Task 2.1 additional retry authorization (2026-10-15)
+
+- User instruction: "take another 2 debug rounds to find a solution".
+  This grants two additional debug cycles for the sole root blocker 2.1;
+  the two previous cycles remain historical. Reclaimed the released spec
+  after reading the whole shared log: no recovery claimant or main merge.
+- Resume from pushed `2447864` and the exact sixteen-file chart draft.
+  Accepted tasks 1.1–1.6 and 3.1 remain frozen. A fresh debug investigator,
+  new implementer and independent reviewer handle each additional cycle.
+  The current finding concerns native received-domain refusal coverage;
+  production and goldens must remain unchanged unless new concrete
+  evidence proves an in-boundary source defect.
+
+
+### Task 2.1 accepted after additional debug round 1 (2026-10-15)
+
+- The user's two-round extension superseded the earlier bounded stop.
+  Additional round 1 returned RETRY_TASK, a new implementer returned
+  READY_FOR_REVIEW, a fresh reviewer APPROVED, and the controller's fresh
+  completion gate VERIFIED. The second additional round was not needed.
+  The prior parked/blocker entries above are historical; 2.2 and the
+  rendering dependency chain may now proceed after current-main rebase.
+- The original reference-band source, registry tail, sanctioned dashboard
+  block, boundary entry and eleven goldens are accepted. Test-only repair
+  appends exactly 24 public and eight direct cases over received row and
+  segment limits. Public outcomes distinguish normal return from an empty
+  ChartError; refusal diagnostics compare all eleven literal fields.
+- Independent replay: 708 source-plus-selection pairs, 703 direct and
+  five historical exception-only; all 4209 assertion-parameter targets
+  preserved/directly covered, including all 4177 old and 32 new targets.
+  Three additional reviewer faults were caught/restored. All 43 criteria
+  classified: 34 PINNED, nine PRESERVED-ONLY, zero UNPINNED. No unrelated
+  future catalog listing/budget/amendment coverage is claimed.
+- Stable-base full original: 17472 passed / 44 expected skips; final
+  chart/dashboard: 4863 passed; fresh controller task/boundary: 1498
+  passed. Ruff check/format (749 files), mypy (564 files), diff and scans
+  clean. Exact 104123-byte prefix, nineteen other frozen paths and eleven
+  golden mtimes preserved. Source SHA256 remains
+  `9ae718abe04710a869ea05a97ba80496fb60137d66d216dca92bc6d1442a824a`;
+  final test SHA256
+  `bce8d2218ba13a58e751ebf29f0a524ef6dbf4259b97a78ebf332e707593b5ef`.
+- Evidence: `/private/tmp/recovery-debug-2.1-extra1.md`, sealed implementer
+  `recovery-task-2.1-extra1-final/`, independent
+  `/private/tmp/recovery-review-2.1-extra1.md` and its raw package, and
+  `/private/tmp/recovery-task-2.1-extra1-verification.md`. No adjacent
+  follow-up was surfaced.
+- Main advanced to wellness-pull `693fd445` during review (contract 12,
+  wiki Amendment 7). This acceptance is on stable base `2447864`, not a
+  post-rebase or feature GO claim. Commit/push this reviewed leaf, then
+  rebase before the next leaf, preserve both histories, re-derive the
+  recovery landing numbers and validate the combined tree.

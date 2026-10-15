@@ -22,6 +22,7 @@ from fitdocs.render.charts.kit.kinds import (
     histogram,
     line,
     mean_max,
+    reference_band,
     scatter,
     small_multiples,
     stacked_100,
@@ -47,6 +48,7 @@ KINDS: Final[tuple[KindSpec, ...]] = (
     mean_max.KIND,
     small_multiples.KIND,
     stacked_100.KIND,
+    reference_band.KIND,
 )
 
 CORE_KIND_NAMES: Final = (

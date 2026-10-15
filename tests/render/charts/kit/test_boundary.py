@@ -73,6 +73,7 @@ _MODULES: Final[tuple[str, ...]] = (
     "kinds.histogram",
     "kinds.line",
     "kinds.mean_max",
+    "kinds.reference_band",
     "kinds.scatter",
     "kinds.small_multiples",
     "kinds.stacked_100",
@@ -111,6 +112,7 @@ _RANK: Final[dict[str, int]] = {
     "kinds.histogram": 14,
     "kinds.line": 14,
     "kinds.mean_max": 14,
+    "kinds.reference_band": 14,
     "kinds.scatter": 14,
     "kinds.small_multiples": 14,
     "kinds.stacked_100": 14,
@@ -363,7 +365,7 @@ class TestModuleTuple:
     def test_the_kinds_and_the_kinds_marker_share_one_rank(self) -> None:
         kind_ranks = {r for name, r in _RANK.items() if name.startswith("kinds")}
         assert kind_ranks == {14}
-        assert len([n for n in _RANK if n.startswith("kinds")]) == 17
+        assert len([n for n in _RANK if n.startswith("kinds")]) == 18
         assert {r for name, r in _RANK.items() if not name.startswith("kinds")} == (
             set(range(1, 14)) | {15, 16, 17}
         )

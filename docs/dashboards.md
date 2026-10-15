@@ -616,6 +616,30 @@ Output: svg
 | height | integer | 320 | 160 to 1200 | Chart height in pixels. |
 
 Bound: 400 rows, over refuse — A stacked-100 chart draws at most 400 rows; more are refused.
+
+### `reference-band`
+
+Values as points against a segmented reference band, with optional centre line and flags.
+
+Output: svg
+
+| Channel | Required | Accepts | Description |
+|---|---|---|---|
+| x | yes | number, duration, date, datetime | Horizontal position. |
+| y | yes | number, duration | Values as points. |
+| low | no | number, duration | Lower band edge. |
+| high | no | number, duration | Upper band edge. |
+| mid | no | number, duration | Centre line. |
+| segment | no | category | Separate source segments. |
+| flag | no | boolean | Rows marked along the bottom axis. |
+
+| Option | Type | Default | Values | Description |
+|---|---|---|---|---|
+| y_zero | boolean | false | - | Extend the y axis to include zero. |
+| width | integer | 720 | 320 to 1600 | Chart width in pixels. |
+| height | integer | 320 | 160 to 1200 | Chart height in pixels. |
+
+Bound: 1000 rows, over refuse — At most 1000 rows; more are refused.
 <!-- dashboard-kinds:end -->
 
 ## Who owns what
