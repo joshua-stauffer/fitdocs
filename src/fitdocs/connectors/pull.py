@@ -34,6 +34,10 @@ failed notes for individual activities and allow the activity loop to
 continue. An enabled wellness listing exception becomes that step's own
 error and leaves later instances eligible. A ``BaseException`` such as
 ``KeyboardInterrupt`` propagates after the current ledger holder is saved.
+Wellness packages changed days in calendar-year groups, checks their declared
+format and extension, and holds bytes already archived or pending. Successful
+deliveries update pending records and attribution; held groups update days
+only. The current ledger holder is updated after each recorded group.
 Every reported or recorded detail passes ``redactor.redact``. Renewed token
 values are registered with the redactor before persistence.
 
@@ -81,7 +85,15 @@ from fitdocs.connectors.credentials import (
     CredentialStoreError,
     resolve_credentials,
 )
-from fitdocs.connectors.delivery import deliver, delivery_name, is_fit, sweep
+from fitdocs.connectors.delivery import (
+    deliver,
+    delivery_name,
+    is_fit,
+    sweep,
+    wellness_archived,
+    wellness_delivery_name,
+    wellness_package_problem,
+)
 from fitdocs.connectors.errors import (
     AuthFailure,
     AuthFailureKind,
@@ -95,6 +107,7 @@ from fitdocs.connectors.ledger import (
     LedgerError,
     Outcome,
     WellnessLedger,
+    WellnessPending,
     load_ledger,
     save_ledger,
 )
@@ -125,6 +138,11 @@ __all__ = [
 
 _CONTROL_CHARS_RE: Final[re.Pattern[str]] = re.compile(r"[\x00-\x1f\x7f]")
 _MAX_REMOTE_ID_LEN: Final[int] = 512
+ATTRIBUTION_DROPPED: Final[str] = (
+    "the connector no longer attributes any wellness field to {platform}; "
+    "if {platform} data stopped reaching the service, import {platform}'s own "
+    "export instead (see the wellness guide)"
+)
 _MAX_REVISION_LEN: Final[int] = 512
 
 _TOKEN_RENEWAL_MARGIN: Final[timedelta] = timedelta(seconds=60)
@@ -493,18 +511,88 @@ def _pull_wellness(
     would_deliver = (
         tuple(sorted(day.day.isoformat() for day in changed)) if options.dry_run else ()
     )
-    if not options.dry_run and not failed and not changed:
+    delivered: list[WellnessDelivered] = []
+    held: list[str] = []
+    notices: list[PullNote] = []
+    error: PullNote | None = None
+    if not options.dry_run:
+        years = sorted({day.day.year for day in changed})
+        for year in years:
+            group = tuple(
+                sorted(
+                    (day for day in changed if day.day.year == year),
+                    key=lambda day: day.day,
+                )
+            )
+            first, last = group[0].day, group[-1].day
+            span = f"{first.isoformat()}..{last.isoformat()}"
+            try:
+                package = puller.package_wellness(session, group)
+            except (AuthFailure, ConnectorError) as exc:
+                error = _instance_error(exc, name=instance.name, redactor=redactor)
+                break
+            except Exception as exc:
+                failed.append(
+                    PullNote(span, redactor.redact(f"{type(exc).__name__}: {exc}"))
+                )
+                continue
+            problem = wellness_package_problem(
+                package.data, package.suffix, package.format, package.origins
+            )
+            if problem is not None:
+                failed.append(PullNote(span, redactor.redact(problem)))
+                continue
+            sha = hashlib.sha256(package.data).hexdigest()
+            pairs = tuple((day.day, day.revision) for day in group)
+            if wellness_archived(data_root, package.format, sha, package.suffix) or any(
+                p.sha256 == sha for p in wellness.pending
+            ):
+                wellness = wellness.with_days(pairs, sha)
+                held.append(span)
+            else:
+                try:
+                    result = deliver(
+                        inbox,
+                        instance.name,
+                        wellness_delivery_name(first, last, package.suffix),
+                        package.data,
+                        sha,
+                        owned={p.path: p.sha256 for p in wellness.pending},
+                        suffix=package.suffix,
+                    )
+                except OSError as exc:
+                    failed.append(
+                        PullNote(span, redactor.redact(f"{type(exc).__name__}: {exc}"))
+                    )
+                    continue
+                wellness = wellness.with_days(pairs, sha)
+                wellness = wellness.with_pending(
+                    WellnessPending(result.rel, sha, package.format, package.suffix)
+                )
+                delivered.append(WellnessDelivered(span, len(group), result.rel))
+                for platform in sorted(set(wellness.origins) - package.origins):
+                    notices.append(
+                        PullNote(
+                            platform,
+                            redactor.redact(
+                                ATTRIBUTION_DROPPED.format(platform=platform)
+                            ),
+                        )
+                    )
+                wellness = wellness.with_origins(package.origins)
+            holder.ledger = holder.ledger.with_wellness(wellness)
+    if not options.dry_run and error is None and not failed:
         wellness = wellness.with_coverage(listing.oldest, listing.newest)
         holder.ledger = holder.ledger.with_wellness(wellness)
     return WellnessPullReport(
         len(listing.days),
         unchanged,
-        (),
+        tuple(sorted(delivered, key=lambda item: item.span)),
         would_deliver,
-        (),
+        tuple(sorted(held)),
         tuple(sorted(failed, key=lambda note: note.subject)),
-        (),
-        None,
+        tuple(sorted(notices, key=lambda note: note.subject)),
+        error,
     )
 
 
