@@ -35,3 +35,22 @@ def wellness_series(values: Iterable[SeriesValue]) -> WellnessSeries:
 
 def stage_series(data_root: Path, series: WellnessSeries) -> tuple[Path, ...]:
     return write_series(data_root, series.values)
+
+
+def workout_page(
+    data_root: Path,
+    name: str,
+    day: date,
+    load: float | None,
+    *,
+    methodology: str = "threshold",
+) -> Path:
+    """Write a synthetic workout for the public history reader."""
+    path = data_root / "workouts" / f"{name}.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["---", "type: workout", "title: Synthetic workout", f'date: "{day}"']
+    if load is not None:
+        lines.extend((f"load_value: {load}", f'load_methodology: "{methodology}"'))
+    lines.extend(("---", "", "# Synthetic workout", ""))
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path

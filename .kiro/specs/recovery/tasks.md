@@ -454,7 +454,7 @@ literal pins, one per lander) and every head-paragraph pin of
 
 - [ ] 3. The page model and its rendering
 
-- [ ] 3.1 Build the page model from the series, the baselines and the history computation
+- [x] 3.1 Build the page model from the series, the baselines and the history computation
   - `view.py` per design § View: `WINDOW_DAYS`, `OTHER_SIGNALS`, the view
     types and `build_view(series, baselines, load, *, panel_limit)`;
     nothing from `fitdocs.render` (controller ruling R2); `RecoveryView.origins`
@@ -1009,3 +1009,33 @@ introspection artifact also names its MetricInfo value type at line 48).
   `recovery-review-2.1-debug2-evidence/` package; own public controls
   `/private/tmp/recovery_review_debug2_own_controls.py`. No adjacent work
   was surfaced outside this leaf; the blocker is already tracked here.
+
+
+### Task 3.1 accepted (2026-10-15)
+
+- READY_FOR_REVIEW → independent APPROVED round 3 → fresh controller
+  completion gate VERIFIED. `view.py` builds the typed 90-day model from
+  the public series, Baselines and real history computation. The workout
+  builder append is now frozen; only View's measured boundary import row
+  changed. All twenty task-local View contributions are pinned.
+- Two append-only test repairs preserve every earlier case. Complete daily
+  and latest records are checked separately for resting HR, both HRV
+  definitions and total sleep; sleep table rows are a separate observable.
+  Independent arithmetic, two actually selected sources, absent/carried
+  and unformed/formed records prevent the earlier forwarding collisions.
+- Fresh independent replay: 311 source-plus-selection pairs, 304 direct
+  and seven historical exception-only; all 272 parameter nodes and 37
+  assertion sites directly covered somewhere. Four additional reviewer
+  faults were caught and restored. Full restored original: 17440 passed,
+  44 expected skips; final reviewer and fresh controller recovery/history:
+  1537 passed, no skips. Ruff check/format (749 files), mypy (564 files),
+  diff and prose checks clean. Exact old prefixes, sixteen chart draft
+  hashes and eleven golden mtimes preserved.
+- Scope limit: the local full suite includes the uncommitted 2.1 draft.
+  This acceptance does not clear its blocker, establish feature GO, or
+  claim remote CI. Exact schema/frozen metadata mutation tests and later
+  chart/page/engine/attribution responsibilities remain separately scoped.
+- Evidence: `/private/tmp/recovery-review-3.1-round3.md`, independent raw
+  `recovery-review-round3-evidence/`, sealed 1577-entry implementer package
+  `recovery-task-3.1-round3-final-evidence/`, and fresh controller
+  `/private/tmp/recovery-task-3.1-verification.md`.

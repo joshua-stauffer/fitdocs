@@ -60,6 +60,7 @@ _ALLOWED_IMPORTS = {
         "__future__",
         "dataclasses",
         "datetime",
+        "typing",
         "fitdocs.wellness",
         "fitdocs.recovery.baselines",
         "fitdocs.recovery.constants",
