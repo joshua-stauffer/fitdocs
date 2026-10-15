@@ -627,7 +627,7 @@ requirements' amendment list.
     green.
   - _Requirements: 13.1, 13.2, 13.3, 13.4_
 
-- [ ] 6.2 Whole-suite gate, exhaustive sweep and rebase
+- [x] 6.2 Whole-suite gate, exhaustive sweep and rebase
   - Rebase onto `main`; keep both sides of every append-only list named
     above; re-derive `CONTRACT_VERSION` as main + 1 (the history paragraph's
     numbers, the doc's version line and "What changed" paragraph, every
@@ -714,3 +714,129 @@ requirements' amendment list.
 - **5.3 (2026-10-15).** READY_FOR_REVIEW → independently APPROVED round 3 → VERIFIED. Wellness intake links the actual connector guide and enabled pull command; Unreleased records pull/key/attribution/report, conditional ledger format 2, older-reader refusal, user action and contract 11→12. Connectors Amendment 4 and intervals-connector Amendment 1 preserve prior records; metadata changes only updated_at. Two bounded repairs close escaped literal-link false positives (actual href required in the matched visible paragraph) and migrate exactly one obsolete planned-pull topic literal in the existing wellness guide guard; all other parameter/helper/assertion AST and the 5.2 prefix preserved. Fresh reviewer replayed all 126 current claims plus seven new faults and two valid controls: 135 pairs/270 pytest runs, 233 intended owning AssertionErrors, sixteen valid GREEN controls and four declared manual-governance GREEN controls, every restoration GREEN. Parent raw XML/hash audit confirmed all twelve changed nodes/four sites and eight hashes. Finite audit: 23 PINNED, three PRESERVED-ONLY, four automatic UNPINNED mapping/timestamp units manually verified. Canonical 18,471 passed / 44 skipped; configured mypy 560, Ruff lint/format 745 and whitespace clean; fresh parent focused 245 passed. All 278 review processes exited. Landing-number re-derivation remains 6.2; TBC-W5 remains 6.3 numbered repair. No new follow-ups.
 
 - **6.1 (2026-10-15).** READY_FOR_REVIEW → independently APPROVED → VERIFIED. Real registered intervals CLI pull chains the actual drain, archives canonical synthetic wellness bytes, reads six distinct source/origin-attributed values, then removes its delivery on a second pull with no new delivery or series/archive byte or mtime change. Offline fixture adds wellness-src and its key while all ten command rows and the remaining shared body stay exact. New pull-wellness confinement entry requires both own ledger and direct own-instance wellness JSON; all eighteen previous entries and 115 old confinement definitions preserved. Reviewer reproduced all 56 credited sole-assertion faults and six fresh source faults, exact-restored GREEN; parent audited 65 pairs/130 raw executions, 62 intended assertion failures and three honest GREEN controls across 22 nodes, with exact applied-source hashes and identical Assert AST maps covering all fifteen new sites. All eight predicate and both snapshot-row incidences covered. Earlier activity-confounded offline probes are superseded; final wellness-only real-CLI faults and separate disabled-wellness/missing-key calibrations prove the new settings and key load-bearing. 13.1 PINNED; 13.2 PRESERVED-ONLY; 13.3/13.4 new workflow contributions PINNED and broader guarantees PRESERVED-ONLY. A refused-drain 9.7 scenario is explicitly UNPINNED by this new successful-drain test and covered by named pre-existing pending/held retry regressions. Broad 4,795 passed; final canonical 18,483 passed / 44 skipped, all twelve new nodes and six named preserved regressions passed; mypy 561, Ruff lint/format 746 and whitespace clean; fresh parent focused 84 passed. All 253 source/dependency/shared-fixture files unchanged; all 138 review PIDs exited. Parent also corrected the already-completed group-4 heading. No new follow-ups.
+
+- **6.2 (2026-10-15).** Nonbehavioral whole-feature audit, ready for independent review; no repository source/test/assertion changes and no new feature flag or mutation campaign. Parent completed the authorized final fetch/rebase onto main; current HEAD `7df73fe5ea60b8d75b8a07034f2bf62c0c0d6312`, main and origin/main `6cac16d8763348b132fa6f9450c2e014fbc5ae2b`. Main is an ancestor; no rewrite or numeric re-edit needed. Contract main11→branch12; DOC_VERSION9 and schema3 unchanged. Seven declaration goldens differ only in the literal contract-version line. Identity current-head phrases, outgoing wellness-store history, literal 11→12 assertion, both index literal pins, CHANGELOG numbers, records pins and wiki Amendment7 literal numbers agree. Connectors Amendment4, wiki7 and intervals1 are next free against current main; prior amendments/names/confinement entries/offline rows preserved. `numeric-audit.json` retains exact comparisons and current hashes.
+
+Fresh configured mypy passes (561 files); Ruff lint and format pass (746 files), whitespace clean; 144 focused version/history/declaration/records/dependency tests pass (`focused.xml`). Exact-head CI run [38781910921](https://github.com/joshua-stauffer/fitdocs/actions/runs/38781910921) completed SUCCESS; raw `ci.json` records SHA/workflow/status/conclusion. CI triggers every push/PR; no workflow write/retrigger used. No second implementer full suite: the fresh independent reviewer runs the one canonical post-audit suite. Prior actual canonical XML independently parses 18,527 cases:18,483 passed+44 optional-tooling skips, no failures/errors; 6.1 final reviewed hashes match current files. Prior canonical result is historical evidence, not the new review run.
+
+All 91 source acceptance criteria are classified below. Detailed exact node lists, transformations, scopes and receipt paths: [acceptance-matrix.json](/private/tmp/wellness-pull-task6.2-implement/acceptance-matrix.json), [acceptance-matrix.md](/private/tmp/wellness-pull-task6.2-implement/acceptance-matrix.md). 116 selected existing receipt records inspected; 61 actual XML and40 raw log artifacts independently reparsed, with SHA256s in [selected-raw-receipt-audit.json](/private/tmp/wellness-pull-task6.2-implement/selected-raw-receipt-audit.json). This audit did not apply or replay those historical faults. Some early records retain actual pytest exits/nodes in their raw receipt rather than an accessible separate XML; this provenance limitation is explicit. 80 cited historical test-function ASTs match exact task commits;50 whole test files match, with later append-only changes distinguished. `historical-test-provenance.json` and `provenance.json` preserve commits/hashes and limits; no earlier full-file hash is claimed unchanged after later additions. All named tests actually passed in the last canonical XML (`canonical-row-incidence.json`).
+
+Explicit limits: 8.1/TBC-W5 is pending the already-scheduled 6.3 reconciliation (private/nonplatform namespaces and known download switches); current tests deliberately pin the original private→private behavior and do not establish repaired semantics. 11.6/11.7 remain manual/pending final reconciliation, with a numbered7.x repair and rerun of6.2 required before6.3 ticks. 11.1–11.5 and13.5 use existing shapes-only controller research and manual task/provenance inspection; this subagent read no environment file/key and made no service request. This is task-level review readiness, not feature GO. Metadata phase/tasks/approvals stay untouched:17/19 feature leaves complete;6.2/6.3 pending. Upstream connectors27/27, intervals13/13, wiki17/17 preserve approvals. Allowed connector imports contain no wellness import/direct clock call; pyproject.toml/uv.lock unchanged from main. Downstream recovery/workout-wellness attribution needs revalidation after6.3; a later main change requires landing-number refresh.
+
+Declared unpinning is bounded in [declared-unpinned-controls.json](/private/tmp/wellness-pull-task6.2-implement/declared-unpinned-controls.json): three equivalent ledger serializer sorts; two redundant engine sorts; seven optional guide explanations (mandatory12.1/12.2 visible guards remain pinned); detailed amendment mappings/timestamps/wiki governance controls (manual current-state correctness verified in numeric/status audits); and refused-drain9.7 scenario surviving the new successful-drain E2E while named pending/retry/held regressions remain PRESERVED-ONLY. These are existing declared limits, not new blockers. No new assertion in6.2: assertion discrimination N/A; no unsupported new test prose.
+
+Receipt aliases below name actual applied-fault execution records; complete mutation text/selected node/RED/restored-GREEN details are in the linked receipt and selected raw audit. The compact table gives a representative existing test/fault; exhaustive per-clause scope and additional regressions remain in the detailed matrix.
+- R1: [wellness-pull-task1.2-round2-review-claimed.log](/private/tmp/wellness-pull-task1.2-round2-review-claimed.log)
+- R2: [mutation-results.json](/private/tmp/wellness-pull-task3.1-round3-review-replay/original-replay/mutation-results.json)
+- R3: [replay-results.json](/private/tmp/wellness-pull-task3.2-round2-review/replay-results.json)
+- R4: [wellness-pull-task2.1-round3-review-replay.log](/private/tmp/wellness-pull-task2.1-round3-review-replay.log)
+- R5: [mutation-results.json](/private/tmp/wellness-pull-task3.1-round3-review-replay/new-family-gate/mutation-results.json)
+- R6: [results.json](/private/tmp/wellness-pull-task2.5-review-replay/final-mutations/results.json)
+- R7: [wellness-pull-task2.3-round2-review-replay-mutations.json](/private/tmp/wellness-pull-task2.3-round2-review-replay-mutations.json)
+- R8: [wellness-pull-task2.2-round2-review-replay243.json](/private/tmp/wellness-pull-task2.2-round2-review-replay243.json)
+- R9: [wellness-pull-task2.4-round2-review-replay-mutations.json](/private/tmp/wellness-pull-task2.4-round2-review-replay-mutations.json)
+- R10: [inventories-results.json](/private/tmp/wellness-pull-task2.6-round3-review-replay/inventories-results.json)
+- R11: [mutation-summary.json](/private/tmp/wellness-pull-task4.1-round3-review/mutation-summary.json)
+- R12: [claimed474-independent-XML-audit.json](/private/tmp/wellness-pull-task5.1-round3-review/claimed474-independent-XML-audit.json)
+- R13: [replay-receipts.json](/private/tmp/wellness-pull-task5.3-round3-review/replay-receipts.json)
+- R14: [replay-results.json](/private/tmp/wellness-pull-task5.2-round1-review/replay-results.json)
+- R15: [results.json](/private/tmp/wellness-pull-task4.2-round1-review/results.json)
+- R16: [replay-results.json](/private/tmp/wellness-pull-task6.1-round1-review/replay-results.json)
+
+| Criterion | Classification | Existing test / actual historical fault receipt |
+|---|---|---|
+| 1.1 | PINNED | `test_only_activity_and_wellness_pulls_are_driven`; `test_other_seven_capabilities_remain_reserved_without_operations`; `test_runnable_matrix`; R1 `## 1. wellness descriptor remains undriven` |
+| 1.2 | PINNED | `test_wellness_value_fields`; `test_wellness_operations_receive_only_session_and_selection`; R1 `## 3. WellnessDay field annotation wrong` |
+| 1.3 | PINNED | `test_packaging_opaque_record_domain`; `test_packaging_years`; R3 `replace-record` |
+| 1.4 | PINNED | `test_registration_refuses_either_missing_wellness_operation`; `test_registration_accepts_both_wellness_operations_without_calling_them`; R1 `## 16. wellness registry block skipped` |
+| 1.5 | PINNED | `test_day_preserves_absent_revision_and_omits_record_from_repr`; `test_diff_sort_missing_and_none`; R1 `## 12. record exposed in repr` |
+| 1.6 | PINNED interface; boundary PRESERVED-ONLY | `test_wellness_operations_receive_only_session_and_selection`; `test_record_domain_is_opaque`; `test_packaging_opaque_record_domain`; `test_wellness_report_type_contract`; R1 `## 14. listing accepts wrong oldest type` |
+| 1.7 | PINNED | `test_import_fitdocs_connectors_exposes_exactly_50_names`; `test_every_published_name_is_identical_to_its_defining_modules_object`; R1 `## 28. published wellness name omitted` |
+| 2.1 | PINNED | `test_wellness_boolean_and_default`; `test_direct_instance_defaults_wellness_to_false`; `test_wellness_value_capability_matrix`; R4 `=== M01 absent default ===` |
+| 2.2 | PINNED | `test_disabled_activity_only_bytes`; `test_pending_sweep_even_when_disabled`; R2 `drop_enable_setting` |
+| 2.3 | PINNED | `test_pull_rejects_wellness_before_transport_or_writes`; `test_malformed_wellness_capability_matrix`; `test_non_boolean_wellness_is_rejected`; R4 `=== M19 early transport ===` |
+| 2.4 | PINNED | `test_framework_strips_wellness_before_connector_parser`; `test_wellness_value_capability_matrix`; R4 `=== M05 reserved key ===` |
+| 2.5 | PRESERVED-ONLY | `test_declaration_matches_design`; `test_folder_mixed_source_lists_only_fit` |
+| 2.6 | PINNED | `test_runnable_matrix`; `test_round2_all_registered_capability_roles`; R2 `disable_wellness_capability` |
+| 3.1 | PINNED | `test_oldest_precedence`; `test_round3_date_window_roles`; R2 `skip_since_override` |
+| 3.2 | PINNED | `test_oldest_precedence`; `test_default_first_request_widens_history_start`; R2 `skip_since_override` |
+| 3.3 | PINNED | `test_oldest_precedence`; `test_round3_date_window_roles`; R2 `skip_since_override` |
+| 3.4 | PINNED | `test_round2_exact_revision_identity`; `test_diff_sort_missing_and_none`; `test_packaging_revision_retry`; R2 `listed_wrong` |
+| 3.5 | PINNED | `test_diff_sort_missing_and_none`; `test_omitted_day_keeps_deliveries_and_archive`; `test_packaging_revision_retry`; R2 `listed_wrong` |
+| 3.6 | PINNED | `test_bad_revision_failure`; `test_bad_day_date`; `test_duplicate_keeps_first`; `test_invalid_first_duplicate_stays_unrecorded`; R2 `disable_wellness_capability` |
+| 3.7 | PINNED | `test_clean_coverage_and_identical_second_pull`; `test_empty_first_pull_persists_wellness_coverage`; `test_packaging_coverage`; R2 `unchanged_count_wrong` |
+| 3.8 | PINNED | `test_dry_run_preserves_pending_bytes_and_mtime`; `test_packaging_years`; R2 `dry_sweeps` |
+| 3.9 | PINNED | `test_packaging_revision_retry`; `test_clean_coverage_and_identical_second_pull`; R3 `alter-bytes` |
+| 3.10 | PINNED | `test_omitted_day_keeps_deliveries_and_archive`; R2 `coverage_drops_old_days` |
+| 4.1 | PINNED | `test_packaging_years`; R3 `one-year` |
+| 4.2 | PINNED | `test_json_atomic_write`; `test_packaging_years`; R7 `atomic-prefix-forwarding` |
+| 4.3 | PINNED | `test_json_collision`; `test_packaging_occupied_names`; R7 `candidates-literal-fit` |
+| 4.4 | PINNED | `test_json_refusal`; `test_json_size_bound`; `test_format_refusal`; `test_suffix_refusal`; `test_packaging_refusals`; R7 `skip-json-parse` |
+| 4.5 | PRESERVED-ONLY | `test_non_fit_bytes_are_skipped_and_not_delivered` |
+| 4.6 | PINNED | `test_packaging_held_roles`; R3 `alter-bytes` |
+| 4.7 | PINNED | `test_packaging_failures`; `test_packaging_delivery_oserror`; R3 `alter-bytes` |
+| 5.1 | PINNED | `test_save_mixed_wellness_has_literal_data`; `test_load_hand_authored_mixed_wellness`; `test_packaging_years`; R8 `writer_day_hash_from_first` |
+| 5.2 | PINNED observable order; equivalent sorts UNPINNED | `test_wellness_roundtrip_stable_order_and_omission`; `test_save_mixed_wellness_has_literal_data`; R8 `writer_always_1` |
+| 5.3 | PINNED | `test_activity_only_literal_golden`; R8 `activity_constant` |
+| 5.4 | PINNED | `test_version_constants_and_trailing_wellness_default`; `test_wellness_roundtrip_stable_order_and_omission`; `test_invalid_version_refused_naming_file_without_writes`; R8 `reader_constant` |
+| 5.5 | PINNED | `test_invalid_wellness_refused_on_load_and_save_without_writes`; `test_invalid_version_refused_naming_file_without_writes`; `test_wellness_container_shapes_refused`; R8 `invariant_through` |
+| 5.6 | PINNED | `test_packaging_interruption`; `test_packaging_failures`; `test_interruption_saves_current_holder`; `test_packaging_held_partial_exit`; R3 `alter-bytes` |
+| 5.7 | PINNED | `test_invalid_wellness_refused_on_load_and_save_without_writes`; `test_save_mixed_wellness_has_literal_data`; R8 `invariant_through` |
+| 6.1 | PINNED | `test_sweep_mixed_state`; `test_sweep_mixed_files`; `test_sweep_changed_file_with_matching_hash_prefix`; R9 `original-old-fit-archive` |
+| 6.2 | PINNED | `test_sweep_mixed_files`; `test_sweep_changed_file_with_matching_hash_prefix`; R9 `original-remove-hash-diff` |
+| 6.3 | PINNED | `test_sweep_forget_mark`; `test_sweep_mixed_state`; `test_forget_uses_latest_sha_and_lowers_before_earliest_dropped_day`; R9 `original-retain-mark` |
+| 6.4 | PINNED | `test_sweep_mixed_state`; `test_sweep_mixed_files`; R9 `original-old-fit-archive` |
+| 6.5 | PINNED | `test_sweep_failure_state`; `test_sweep_failure_files`; R9 `original-mutate-input` |
+| 6.6 | PINNED | `test_pending_sweep_even_when_disabled`; R2 `sweep_disabled_skipped` |
+| 7.1 | PINNED | `test_packaging_capabilities_are_exact`; R10 `inventories-010-replay-016-extra-capability` |
+| 7.2 | PINNED | `test_one_get_per_window_and_exact_path_query`; `test_no_window_exceeds_366_days`; `test_earlier_window_duplicate_wins`; `test_nonempty_text_updated_preserved_exactly`; `test_now_is_converted_to_utc`; R6 `one-window-only` |
+| 7.3 | PINNED | `test_default_logical_coverage`; `test_default_first_request_widens_history_start`; R6 `wrong-logical-default` |
+| 7.4 | PINNED | `test_nontext_or_empty_updated_uses_whole_content_hash`; `test_content_revision_changes_with_arbitrary_field`; `test_absent_updated_uses_content_hash`; R6 `updated-not-string` |
+| 7.5 | PINNED | `test_malformed_body_refused`; `test_malformed_entry_names_window_relative_index`; `test_json_id_type_errors_are_exact`; R6 `malformed-json-message` |
+| 7.6 | PINNED | `test_only_id_and_updated_are_read_and_object_is_retained`; `test_listed_package_preserves_json_types_by_field_and_role`; R6 `opaque-copied` |
+| 7.7 | PINNED | `test_package_golden_and_metadata`; `test_real_wellness_parser_reads_package`; `test_package_bytes_do_not_depend_on_clock_or_machine`; R10 `inventories-013-replay-019-keys-unsorted` |
+| 7.8 | PINNED | `test_one_get_per_window_and_exact_path_query`; `test_athlete_request_contract`; R6 `one-window-only` |
+| 8.1 | UNPINNED (pending 6.3); original algorithm partial PINNED | `test_settings_claim_cardinality_and_platform_names`; `test_only_list_setting_values_create_claims`; R10 `inventories-035-replay-042-accept-ambiguous-platform` |
+| 8.2 | PINNED | `test_settings_claim_cardinality_and_platform_names`; `test_package_omits_empty_origins`; R10 `inventories-035-replay-042-accept-ambiguous-platform` |
+| 8.3 | PINNED | `test_invalid_platform_names_make_no_claim`; `test_settings_claim_cardinality_and_platform_names`; R10 `inventories-042-replay-049-name-agnostic-matcher` |
+| 8.4 | PINNED | `test_attribution_uses_settings_without_metric_value_filter`; `test_listed_package_attribution_has_independent_envelope_and_metadata`; R10 `inventories-053-replay-060-filter-origins-by-record-presence` |
+| 8.5 | PINNED | `test_listed_package_preserves_json_types_by_field_and_role`; `test_package_retains_every_record_value`; R10 `inventories-110-prior-repair-exact-own04-at-existing-false-and-actual-listed-field` |
+| 8.6 | PINNED | `test_packaging_origins`; R3 `wrong-origins` |
+| 9.1 | PINNED | `test_401_is_rejected_auth_failure`; `test_rejections_are_not_retried`; `test_athlete_status_mapping`; R6 `unauthorized-blocked` |
+| 9.2 | PINNED | `test_403_is_connector_error_with_garmin_remedies`; `test_athlete_status_mapping`; `test_service_echo_cannot_expose_secrets`; R6 `forbidden-authfailure` |
+| 9.3 | PINNED | `test_retryable_status_messages`; `test_existing_client_retries_are_exhausted`; `test_athlete_request_retry_count`; R6 `rate-limit-wrong-message` |
+| 9.4 | PINNED | `test_other_status_names_status_and_request`; `test_athlete_status_mapping`; R6 `other-status-wrong-code` |
+| 9.5 | PINNED | `test_packaging_failures`; `test_packaging_interruption`; `test_packaging_held_partial_exit`; R3 `alter-bytes` |
+| 9.6 | PINNED | `test_round3_activity_authentication_roles`; `test_round3_ordinary_activity_continues`; R5 `only_rejected_auth_suppresses_wellness` |
+| 9.7 | PRESERVED-ONLY; refused-drain E2E UNPINNED | `test_packaging_revision_retry`; `test_packaging_held_roles`; R3 `alter-bytes` |
+| 9.8 | PINNED | `test_no_secret_in_request_addresses`; `test_service_echo_cannot_expose_secrets`; `test_athlete_status_redacts_every_credential_form`; R6 `secret-url-leak` |
+| 10.1 | PINNED | `test_registered_zero`; `test_renderer_distinct_counts_and_literal_details`; R11 `drop-listed` |
+| 10.2 | PINNED | `test_renderer_distinct_counts_and_literal_details`; R11 `drop-listed` |
+| 10.3 | PINNED | `test_registered_dry_dates`; `test_renderer_distinct_counts_and_literal_details`; R11 `drop-notices` |
+| 10.4 | PINNED | `test_renderer_distinct_counts_and_literal_details`; R11 `drop-listed` |
+| 10.5 | PINNED | `test_registered_error`; `test_failed_channels`; R11 `drop-notices` |
+| 10.6 | PINNED | `test_failure_notes_are_sorted`; `test_packaging_mixed_sorted_channels`; R2 `disable_wellness_capability` |
+| 10.7 | PINNED | `test_registered_absent`; `test_registered_absent`; R11 `render-None-table` |
+| 11.1 | UNPINNED | Manual current-state/research evidence; no mutation claim |
+| 11.2 | UNPINNED | Manual current-state/research evidence; no mutation claim |
+| 11.3 | UNPINNED | Manual current-state/research evidence; no mutation claim |
+| 11.4 | UNPINNED | Manual current-state/research evidence; no mutation claim |
+| 11.5 | UNPINNED | Manual current-state/research evidence; no mutation claim |
+| 11.6 | UNPINNED; pending6.3 repair | Manual current-state/research evidence; no mutation claim |
+| 11.7 | UNPINNED manual dependency/task-state; final reconciliation pending | Manual current-state/research evidence; no mutation claim |
+| 12.1 | PINNED mandatory; optional explanations UNPINNED | `test_guide_passage`; `test_report_rows_and_meanings`; `test_report_rows_match_cli`; R12 `prior-passage-intro` |
+| 12.2 | PINNED mandatory; optional explanations UNPINNED | `test_guide_passage`; `test_guide_passage`; `test_history_start_matches_connector`; R12 `prior-passage-intro` |
+| 12.3 | PINNED | `test_wellness_intake_names_enabled_pull_and_links_connector`; R13 `guide-source` |
+| 12.4 | PINNED | `test_pull_bullet_states_wellness_guarantees`; `test_current_change_paragraph_states_wellness_pull`; `test_the_version_history_records_the_amendment`; `test_contract_bump_and_release_notes_are_current`; R14 `delete-pull-wellness-clause` |
+| 12.5 | PINNED | `test_wellness_channel_binding_matches_report_fields`; `test_wellness_channel_athlete_instructions`; R15 `claimed-000-drop-row-unchanged` |
+| 12.6 | PINNED | `test_unreleased_wellness_records`; R13 `The inte-role-comment` |
+| 12.7 | PINNED headings/association; UNPINNED detailed governance (manual correct) | `test_upstream_amendment_records_wellness_pull`; R13 `connectors-heading-delete` |
+| 13.1 | PINNED | `test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded`; `test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded`; R16 `offline-sync` |
+| 13.2 | PRESERVED-ONLY | `test_no_new_third_party_runtime_dependency_was_added` |
+| 13.3 | PINNED | `test_package_bytes_do_not_depend_on_clock_or_machine`; `test_wellness_roundtrip_stable_order_and_omission`; `test_intervals_pull_sync_archives_series_and_second_pull_cleans_delivery`; R10 `inventories-073-replay-081-clock-machine-metadata` |
+| 13.4 | PINNED synthetic workflow; PRESERVED-ONLY shared network/environment guard | `test_an_ordinary_test_has_socket_guard_and_isolated_credentials_dir`; `test_autouse_isolation_fixture_removes_preexisting_stale_overrides`; `test_intervals_pull_sync_archives_series_and_second_pull_cleans_delivery`; R16 `e2e-canonical-bytes` |
+| 13.5 | UNPINNED | Manual current-state/research evidence; no mutation claim |
+
+All owned uv/pytest/audit subprocesses joined or independently observed absent; final process inspection showed only its own ps/rg commands. No task/spec metadata/log/commit changed by implementer. Final current tracked-feature hashes and evidence checksums: `final-manifest.json`. Fresh reviewer must run exactly one canonical full suite on the unchanged source/test bytes, then parent appends its result and owns final task state/push.
+
+- **6.2 review gate (2026-10-15).** Independently APPROVED → VERIFIED. Fresh canonical 18,483 passed / 44 skipped (18,527 collected); Ruff lint/format 746, configured mypy 561 and whitespace clean. All 137 cited symbols passed. Independent audit matched all 91 source criteria, 58 current feature hashes, 27 evidence hashes, 80 historical test ASTs and 50 whole-file matches; reparsed 116 historical records, 61 XML, 40 logs and 34 declared-control XML artifacts. Parent rechecked the final hash manifest and raw canonical XML and ran fresh focused 144 passed. All five validation PIDs joined and gone; exact-head CI 38781910921 SUCCESS. The preceding readiness record remains historical context; this gate is complete. Task 6.3 still owns TBC-W5 design amendment, numbered repair and another full 6.2 gate before completion; this is not feature GO. No new follow-ups.
