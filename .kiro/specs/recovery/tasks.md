@@ -520,6 +520,7 @@ literal pins, one per lander) and every head-paragraph pin of
     anticipated row, preserving design § Allowed Dependencies and all guard
     policies. This keeps every module on disk checked by exact equality.
   - _Requirements: 2.2, 4.1, 5.4, 6.2, 6.4, 7.1, 8.1, 9.1, 12.6, 16.1_
+  - _Blocked: fresh debug round 1 found a plan/scope conflict: all three required chart kinds discard missing-value endpoint dates from their x extent; approval is needed for the narrow prerequisite described in the 2026-10-16 Implementation Notes._
 
 - [ ] 3.3 Write the page's frontmatter, its attribution line and its signal, sleep, other-signal and load sections
   - `src/fitdocs/render/attribution.py` (append-only, after the existing
@@ -1176,3 +1177,39 @@ introspection artifact also names its MetricInfo value type at line 48).
   `recovery-task-2.2-evidence/` and archive, and
   `/private/tmp/recovery-task-2.2-verification.md`. Continue with 3.2;
   future chart construction/page/writer/CLI behavior remains unimplemented.
+
+
+### Task 3.2 paused for a chart-axis prerequisite (2026-10-16)
+
+- Task 2.2 is accepted and pushed at `a37d098`; nine of twenty mandatory
+  leaves remain accepted. Task 3.2 is not accepted. Its draft adapter
+  correctly forwards every window day with genuine missing values, through
+  the real public kit, but that does not satisfy Requirement 2.2's actual
+  90-day time-axis guarantee.
+- Fresh `kiro-debug` round 1 returned SPEC_CONFLICT / STOP_FOR_HUMAN.
+  Existing line, small-multiples and accepted reference-band kinds choose
+  the x domain and accessible x extrema from drawable rows, discarding
+  markless endpoint dates. No public domain option exists. A deterministic
+  six-chart probe forwards February 1–May 1 2025; load/other show only
+  March 16–17, the four reference charts March 16–20. The valid probe
+  writes only under tmp_path and copies evidence after pytest exits.
+- Proposed prerequisite: use every received present x for domain and x
+  description while retaining drawable-only y inputs, marks, counts, gaps
+  and no-data behavior. Reference-band's flags-only path must keep genuine
+  flags separate from domain-only dates. Exact unapplied three-kind patch
+  and test/golden/plan boundary are in
+  `/private/tmp/recovery-debug-3.2-round1-proposal.md` and
+  `/private/tmp/recovery-debug-3.2-round1-proposed.patch`; governing report
+  `/private/tmp/recovery-debug-3.2-round1.md`. No shared kind was edited.
+- Scope approval was requested. Dependent work remains paused until an
+  answer; elapsed time does not grant approval. Preserve all three draft
+  paths and evidence; do not mark 3.2 or feature GO. This concrete blocker
+  already belongs to this leaf and is not a separate queue item.
+- Implementer final exact BLOCKED/released: 159 task-local tests and
+  canonical recovery/charts 5091 passed; Ruff check/format (763 files),
+  mypy (578 files), diff clean. Only 149 of 343 planned fault replays
+  completed RED/restored GREEN; 194 are explicitly pending after the
+  controller hold. No independent acceptance review or full suite was run
+  for this draft. Existing 977 frozen source/test hashes remain unchanged.
+  Evidence: `/private/tmp/recovery-task-3.2-report.md` and its raw
+  `recovery-task-3.2-evidence/` package.
