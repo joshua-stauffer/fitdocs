@@ -340,9 +340,9 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - _Requirements: 1.1, 1.2, 1.5, 2.1, 2.2, 2.3, 2.4, 3.5, 5.6_
   - _Boundary: Reader_
   - _Depends: 2.1_
-  - _Blocked: debug attempted twice, still failing — tests do not discriminate ZIP-specific progress suppression or depth-three nested Record admission. Production source is correct; review evidence is retained for explicit next-action handling._
+  - _Blocked: both additional authorized debug rounds exhausted (four total); final review rejects missing STEP_COUNT metadata, SleepAnalysis source-version and lowercase DOCTYPE-only recognition discrimination. Source and 191-case draft preserved; both tasks have finished their authorized additional rounds and are parked for regrouping._
 
-- [ ] 3.2 (P) Assign sleep to nights and take HRV, respiration and SpO2 from the readings taken asleep
+- [x] 3.2 (P) Assign sleep to nights and take HRV, respiration and SpO2 from the readings taken asleep
   - Complete `reduce.py` with the `SLEEP_NIGHT` and `ASLEEP_MEAN` rules
     (design § Reduce): segments grouped by `wellness_day_of_sleep_end` of
     their end; the night's device kind (watch, else iPhone); `night_totals`
@@ -380,7 +380,6 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - _Requirements: 7.8, 8.1, 8.2, 9.2, 9.3, 10.4, 10.5, 10.7, 10.8, 11.1, 11.2, 11.3, 11.5_
   - _Boundary: Reduce_
   - _Depends: 2.2, 2.4_
-  - _Blocked: debug attempted twice, still failing — tests do not discriminate equal weighting of Watch source means from weighting every individual reading when source cardinalities differ (requirement 9.2; 60,60,90 must yield 70, not 75). Final review REJECTED; frozen production passes the independent probes, but acceptance remains unverified._
 
 - [ ] 4. Integration: the format, its registration and imports through the drain
 
@@ -425,7 +424,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - **Observable:** full `uv run pytest` green (integration point).
   - _Requirements: 1.3, 1.4, 3.6, 5.8, 6.1, 6.2, 6.3, 6.5, 7.2_
   - _Depends: 2.3, 3.1, 3.2_
-  - _Blocked: waiting on blocked prerequisites 3.1 and 3.2; format registration has not started._
+  - _Blocked: waiting on Reader prerequisite 3.1; 3.2 is approved and verified. Format registration has not started; maintainer requested regroup before integration._
 
 - [ ] 4.2 Import exports through the drain end to end
   - No production change expected; a failing test here is a stop-and-report
@@ -551,7 +550,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - **Observable:** the full suite, lint and types green after the final
     rebase; the merge and follow-ups are in the shared log and the queue.
   - _Requirements: 5.3, 11.5, 14.1, 14.2_
-  - _Blocked: integrated format and drain prerequisites 4.1/4.2 are unavailable while 3.1/3.2 are blocked; final determinism, offline, rebase, full-suite and release validation have not run._
+  - _Blocked: integrated format and drain prerequisites 4.1/4.2 are unavailable while 3.1 is blocked; final determinism, offline, rebase, full-suite and release validation have not run._
 
 - [ ]* 6.2 Maintainer-run smoke on the maintainer's own export (no data enters the repository)
   - In a scratch data root outside the repository, drop the real
@@ -690,3 +689,39 @@ All paths below are under `tests/wellness/apple/` unless written in full;
 - Task 3.2 debug cycle 1: correct production passed fresh probes, but same-kind multi-night fixtures and whole-second reading ends leave global Watch-ASLEEP preference and rounded end-instant membership unpinned; fresh debug RETRY_TASK prescribes 12 mixed-device plus 24 fractional-boundary cases, preserving the existing 340/39 test prefix and frozen reducer source.
 - Task 3.2 debug cycle 2 (final allowed): correct production passed fresh probes, but raw-asleep/AWAKE overlap admission and individual zero samples before daily acceptance remain unpinned; fresh debug RETRY_TASK prescribes 24 overlap-union plus six zero-in-mean cases, preserving the 376/41 prefix and frozen reducer source.
 - Task 3.2 final review: BLOCKED after both allowed debug cycles; unequal Watch-source cardinalities expose an unpinned mean-of-readings rule (60,60 from one source and90 from another require70, not75). All 406 night cases/43 sites and all prior prefixes retained; final draft source6c8bd089…/test4fb1bb48… preserved uncommitted. Fresh controller component1528 plus mypy/Ruff/format/diff pass; final independent review remains REJECTED, so no checkbox or feature-success claim. Exact findings: /private/tmp/apple-review3.2-debug2-report.md; verification: /private/tmp/apple-task3.2-blocked-verification.md.
+- **Additional-round authorization (2026-10-15):** The maintainer authorized
+  two more debug rounds each for 3.1 and 3.2, followed by regrouping before
+  integration. Both additional budgets are now exhausted.
+- **3.1, additional rounds:** The first repair pinned ZIP progress and
+  depth-three Record exclusion; review then found repaired-byte progress
+  and sleep-type device normalization gaps. The second repair added six
+  repair/container progress and eight per-type normalization cases.
+  Final review remains REJECTED for three proven coverage gaps: STEP_COUNT
+  metadata preservation, SleepAnalysis source-version preservation, and
+  lowercase DOCTYPE-only rejection. Correct source `e0ed732f…` and the
+  191-case/61-site test draft `cfbab2f…` remain uncommitted. The bounded next
+  repair is an eight-type raw-fields/ordered-metadata matrix and one
+  lowercase DOCTYPE-only negative; further work needs a new authorization.
+  Report: `/private/tmp/apple-review3.1-debug4-report.md`; verification:
+  `/private/tmp/apple-task3.1-extra-blocked-verification.md`.
+- **3.2, first additional round:** The unequal Watch-source cardinality
+  repair retained 418 cases/44 sites. Independent review then found valid
+  creationDate replacing measurement END and equal averaging by asleep
+  bout. Both faults survived 1,556 component tests and failed independent
+  sole assertions; exact restoration and statics passed. Report:
+  `/private/tmp/apple-review3.2-debug3-report.md`.
+- **3.2, approved after both additional rounds:** Sleep-night assignment and
+  asleep HRV, respiration and SpO2 reduction are independently APPROVED and
+  fresh controller completion VERIFIED. The final repair added 12 delayed
+  creation and 12 unequal-bout cases. All 442 cases/46 assertion-or-raises
+  sites and thirteen clauses were audited; the reviewer replayed all 108
+  groups/531 selected targets across 99 distinct edits/nine aliases at the
+  final test SHA, plus two independently derived faults caught. The whole
+  prior 418-case literal/AST/location/collection prefix is preserved.
+  Fresh component tests (1,580), mypy (567 files), Ruff, formatting (752
+  files), and diff checks pass. Preserve delayed-creation END membership,
+  unequal Watch-source and asleep-bout cardinalities together with the prior
+  mixed-night, raw-asleep-union, zero-sample and fractional-boundary cases.
+  Source `6c8bd089…`, night tests `03757c2c…`; the Reader draft remains
+  separately blocked. Evidence: `/private/tmp/apple-review3.2-debug4-report.md`
+  and `/private/tmp/apple-task3.2-extra-verification.md`. Regroup before 4.1.

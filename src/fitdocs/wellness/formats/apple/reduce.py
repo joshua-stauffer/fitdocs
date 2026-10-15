@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from bisect import bisect_right
 from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -12,7 +13,18 @@ from fractions import Fraction
 from typing import Final
 
 from fitdocs.wellness.formats.apple.records import AppleType, RawRecord, SleepState
-from fitdocs.wellness.model import DaySnapshot, Metric, accept_value
+from fitdocs.wellness.formats.apple.sleep import (
+    Segment,
+    Stage,
+    asleep_intervals,
+    night_totals,
+)
+from fitdocs.wellness.model import (
+    DaySnapshot,
+    Metric,
+    accept_value,
+    wellness_day_of_sleep_end,
+)
 from fitdocs.wellness.spec import WellnessFormatError
 
 
@@ -125,6 +137,15 @@ POLICIES: Final[Mapping[AppleType, TypePolicy]] = {
     ),
 }
 APPLE_ORIGIN: Final[str] = "apple"
+_STAGES: Final[Mapping[SleepState, Stage | None]] = {
+    SleepState.IN_BED: None,
+    SleepState.ASLEEP_UNSPECIFIED: Stage.UNSPECIFIED,
+    SleepState.ASLEEP: Stage.UNSPECIFIED,
+    SleepState.AWAKE: Stage.AWAKE,
+    SleepState.CORE: Stage.CORE,
+    SleepState.DEEP: Stage.DEEP,
+    SleepState.REM: Stage.REM,
+}
 _COVERS = frozenset(metric for policy in POLICIES.values() for metric in policy.metrics)
 
 
@@ -202,6 +223,10 @@ class DayReducer:
         self._evidence: dict[str, set[tuple[str, str]]] = {}
         self._best: dict[tuple[AppleType, str, date], _Sample] = {}
         self._steps: dict[tuple[str, date], tuple[int, list[float]]] = {}
+        self._sleep: dict[tuple[str, date], list[Segment]] = {}
+        self._readings: dict[
+            tuple[AppleType, str], list[tuple[float, float | int | Fraction]]
+        ] = {}
 
     def add(self, record: RawRecord) -> None:
         if record.type not in POLICIES:
@@ -231,7 +256,7 @@ class DayReducer:
             raise _error(record, "endDate before startDate")
         if kind == AppleType.SLEEP_ANALYSIS:
             try:
-                SleepState(record.value)
+                state = SleepState(record.value)
             except ValueError as exc:
                 raise _error(record, f"unknown sleep state {record.value!r}") from exc
             value: float | int = 0
@@ -255,6 +280,19 @@ class DayReducer:
             device = device_maker_model(record.device)
             if device is not None:
                 evidence.add(device)
+        if policy.daily_rule == DailyRule.SLEEP_NIGHT:
+            stage = _STAGES[state]
+            if stage is not None:
+                day = wellness_day_of_sleep_end(end)
+                segment = Segment(int(start.timestamp()), int(end.timestamp()), stage)
+                self._sleep.setdefault((record.source_name, day), []).append(segment)
+        elif policy.daily_rule == DailyRule.ASLEEP_MEAN:
+            reading: float | int | Fraction = value
+            if not math.isfinite(value):
+                reading = Fraction(quantity) * Fraction(policy.units[record.unit or ""])
+            self._readings.setdefault((kind, record.source_name), []).append(
+                (end.timestamp(), reading)
+            )
         if policy.day_rule != DayRule.START_DATE:
             return
         day = start.date()
@@ -274,6 +312,59 @@ class DayReducer:
                 policy.daily_rule
             ):
                 self._best[best_key] = sample
+
+    def _night_values(
+        self, writers: Mapping[str, Writer]
+    ) -> dict[tuple[date, Metric], float | int]:
+        nights: dict[date, dict[Writer, list[Segment]]] = {}
+        policy = POLICIES[AppleType.SLEEP_ANALYSIS]
+        for (source, day), segments in self._sleep.items():
+            writer = writers[source]
+            if writer in policy.writers:
+                nights.setdefault(day, {}).setdefault(writer, []).extend(segments)
+        raw: dict[tuple[date, Metric], float | int] = {}
+        watch_intervals: dict[date, tuple[tuple[int, int], ...]] = {}
+        for day, kinds in sorted(nights.items()):
+            watch = kinds.get(Writer.WATCH, [])
+            phone = kinds.get(Writer.PHONE, [])
+            if any(segment.stage != Stage.AWAKE for segment in watch):
+                selected = watch
+            elif any(segment.stage != Stage.AWAKE for segment in phone):
+                selected = phone
+            else:
+                continue
+            totals = night_totals(selected)
+            if totals.asleep > 0:
+                raw[day, Metric.SLEEP_S] = totals.asleep
+            if totals.staged:
+                raw[day, Metric.SLEEP_DEEP_S] = totals.deep
+                raw[day, Metric.SLEEP_LIGHT_S] = totals.core
+                raw[day, Metric.SLEEP_REM_S] = totals.rem
+                raw[day, Metric.SLEEP_AWAKE_S] = totals.awake
+            watch_intervals[day] = asleep_intervals(watch)
+        means: dict[tuple[date, Metric], list[float | int | Fraction]] = {}
+        for (kind, source), readings in self._readings.items():
+            policy = POLICIES[kind]
+            if writers[source] not in policy.writers:
+                continue
+            for instant, value in readings:
+                for day, intervals in watch_intervals.items():
+                    index = bisect_right(intervals, (instant, math.inf)) - 1
+                    if index >= 0 and instant < intervals[index][1]:
+                        means.setdefault((day, policy.metrics[0]), []).append(value)
+                        break
+        for key, samples in means.items():
+            try:
+                raw[key] = round(math.fsum(samples) / len(samples), 1)
+            except OverflowError:
+                exact_mean = sum(
+                    (Fraction(value) for value in samples), Fraction()
+                ) / len(samples)
+                try:
+                    raw[key] = round(float(exact_mean), 1)
+                except OverflowError:
+                    raw[key] = math.inf if exact_mean > 0 else -math.inf
+        return raw
 
     def snapshots(self) -> tuple[DaySnapshot, ...]:
         writers = {
@@ -300,6 +391,7 @@ class DayReducer:
                 totals[day] = candidate
         raw = {key: sample_key[-1] for key, sample_key in chosen.items()}
         raw.update({(day, Metric.STEPS): total for day, (total, _) in totals.items()})
+        raw.update(self._night_values(writers))
         days: dict[date, dict[Metric, float]] = {}
         for (day, metric), value in raw.items():
             if metric == Metric.WEIGHT_KG:
