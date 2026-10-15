@@ -3155,8 +3155,7 @@ numbers are the next free number at landing.
   a part each (settled at spec time, 2026-10-13):
   - wellness-store: `wellness-archive/` and `wellness/` (complete 2026-10-14);
   - recovery: `recovery/` and `recovery/assets/`;
-  - wellness-pull: the `pull` guarantees (complete 2026-10-15 on the
-    implementation branch, Amendment 7; main landing pending);
+  - wellness-pull: the `pull` guarantees (implemented 2026-10-15, Amendment 7);
   - hr-derivation: what `derive-benchmarks` reads and writes;
   - workout-wellness: the refreshed-region class.
 
@@ -3176,16 +3175,16 @@ numbers are the next free number at landing.
   - a ledger keyspace and watermark for wellness;
   - Req 1.2-1.4 and 1.9 amended.
 
-  Wellness-pull's half is complete 2026-10-15 on the implementation branch
-  (Amendment 4); main landing pending. Recovery's half is not yet on main,
+  Wellness-pull's half is implemented 2026-10-15 (Amendment 4).
+  Recovery's half is not yet on main,
   so this shared update remains open.
   The recovery command joins the no-network list. Dependencies:
   wellness-pull, recovery
 - [x] intervals-connector — the wellness endpoint, the trailing-window
   `updated` diff, the capability declaration and re-pinned mutation, the
   enable setting, and the Garmin attribution derived from
-  `*_wellness_keys` (complete 2026-10-15 on the implementation branch,
-  Amendment 1; main landing pending). Dependencies: wellness-pull
+  `*_wellness_keys` (implemented 2026-10-15, Amendment 1).
+  Dependencies: wellness-pull
 - [ ] athlete-benchmarks — provenance for a series-derived entry (`document`
   relaxed or a series reference) and the precise hand-wins rule. At spec
   time, the hand-wins rule became write-time in hr-derivation, so
@@ -3292,9 +3291,9 @@ numbers are the next free number at landing.
   review, two rounds; cross-spec reviewed, two rounds, PASS; bumps
   `CONTRACT_VERSION`). Completion record: 7 major groups / 20 mandatory
   executable tasks including TBC-W5 repair 7.1; the original 91 criteria
-  remain unchanged. Contract version 12, wellness ledger format 2; final
-  independent completion review, feature integration GO and main landing
-  remain controller gates. The connector side:
+  remain unchanged. Contract version 12, wellness ledger format 2;
+  independent completion review and feature integration validation passed
+  (GO: full suite, build and installed-wheel workflow smoke). The connector side:
   - `pull-wellness` driven through a new optional operation and a capability
     dispatch;
   - format-keyed delivery of non-FIT bytes, and a ledger keyspace and
