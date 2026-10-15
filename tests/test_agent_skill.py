@@ -156,7 +156,7 @@ _INBOX_CHANNELS_LITERAL: frozenset[str] = frozenset(
 #: at all: ``name``/``connector_id`` identify the instance (they head the
 #: table rather than appearing in it) and ``listed`` is a cross-cutting
 #: count, not its own outcome bucket.
-_PULL_EXCLUSIONS = frozenset({"name", "connector_id", "listed"})
+_PULL_EXCLUSIONS = frozenset({"name", "connector_id", "listed", "wellness"})
 
 #: Hardcoded literal (design.md SkillPins) -- the field names the inbox
 #: skill's own ``Pull channel`` table is expected to document, spelled out

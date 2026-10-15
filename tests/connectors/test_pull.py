@@ -2507,7 +2507,9 @@ def test_connector_without_pull_activities_is_the_instance_error(
     report = _run(data_root, inbox, [_instance(connector)])
     inst = report.instances[0]
 
-    assert inst.error == PullNote(subject="src", detail="does not pull activities")
+    assert inst.error == PullNote(
+        subject="src", detail="does not pull activities or wellness"
+    )
     assert inst.failed == ()
     assert report.failed is True
 

@@ -1735,7 +1735,7 @@ def test_pull_report_rows_are_the_design_literal_and_bind_every_channel() -> Non
     channels = [
         f.name
         for f in dataclasses.fields(InstancePullReport)
-        if f.name not in {"name", "connector_id"}
+        if f.name not in {"name", "connector_id", "wellness"}
     ]
     assert [field_name for _, field_name in cli_module._PULL_REPORT_ROWS] == channels
 

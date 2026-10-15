@@ -11,9 +11,9 @@ malformed stored credentials file -- a
 same way, with that instance's own message, e.g. ``chmod 600 <path>``),
 renews a login-style token expiring within the margin through an
 authentication-mode session and persists it before any data request -- also
-under dry run (Req 4.7, 6.9) -- refuses a connector that does not declare
-``PULL_ACTIVITIES``, computes the
-listing window start, lists and validates the connector's activities,
+under dry run (Req 4.7, 6.9) -- selects activities and enabled wellness,
+builds one data session, computes the activity listing window start, and
+lists and validates the connector's activities,
 classifies each one, advances the watermark -- never backward, see
 :func:`_compute_watermark` -- over the contiguous run of start-grouped
 entries that end up final, and saves the ledger in a ``finally`` so a save
@@ -21,26 +21,21 @@ happens on every exit -- success, an instance error, or an interruption
 (``KeyboardInterrupt`` is re-raised after the save completes, never
 swallowed).
 
-An ``AuthFailure`` or ``ConnectorError`` from credential resolution, token
-renewal, listing, or a fetch ends that instance with :func:`_instance_error`
--- the exception's type and redacted message, with an ``AuthFailure``'s
-kind-specific next step appended (Req 6.10, 6.11, 10.2). A
-``CredentialStoreError`` from credential resolution, and any exception
-(including a ``TransportError`` from the authentication-mode session, or a
-``CredentialStoreError``/``OSError`` raised while persisting a renewed
-token) from token renewal, likewise ends that instance -- a
-``TransportError`` also gets the ``AuthFailureKind.UNAVAILABLE`` next step
-appended, since it names no kind of its own. Any other listing exception
-also ends the instance (Req 6.10's "its source cannot be reached"); any
-other fetch exception, including a ``TransportError``, is instead a failed
-note for that one activity and the instance continues (Req 6.11). A
-``BaseException`` (e.g. ``KeyboardInterrupt``) is never caught by any of the
-above and always propagates. Every detail string this module reports or
-records -- a note, an instance error, a ``Declined`` reason, an
-``unavailable_reason`` -- passes ``redactor.redact`` before it leaves this
-module (Req 10.1, 10.5). Every value of a renewed ``TokenSet`` is
-registered with the redactor before it is persisted, so a later error
-quoting the new token is redacted too.
+An ``AuthFailure``, ``ConnectorError`` or ``CredentialStoreError`` from
+credential resolution ends the instance. Any ``Exception`` from token
+renewal does likewise. These errors use :func:`_instance_error`: the type
+and redacted message, with an ``AuthFailure``'s kind-specific next step or
+an unavailable-service next step for ``TransportError``.
+
+A terminal activity listing or fetch error uses the same renderer. An
+activity ``AuthFailure`` suppresses wellness; an ordinary terminal activity
+error leaves wellness eligible. Other activity fetch exceptions become
+failed notes for individual activities and allow the activity loop to
+continue. An enabled wellness listing exception becomes that step's own
+error and leaves later instances eligible. A ``BaseException`` such as
+``KeyboardInterrupt`` propagates after the current ledger holder is saved.
+Every reported or recorded detail passes ``redactor.redact``. Renewed token
+values are registered with the redactor before persistence.
 
 A sweep failure (an ``OSError`` reading or removing a pending file,
 ``connectors/delivery.py``'s ``SweepResult.failures``) is reported as a
@@ -63,8 +58,8 @@ instance continues with its remaining entries (controller ruling d).
 
 For an ``AuthStyle.NONE`` connector (the folder connector, the scripted
 puller), :func:`fitdocs.connectors.credentials.resolve_credentials` always
-answers with a credential access that has no values and never expires, so
-none of the above applies -- task 4.3's own pins are unaffected. A
+answers with a credential access that has no values and never expires,
+so token renewal is unnecessary. A
 ``KeyboardInterrupt``, or any exception this module does not itself catch,
 still propagates through this module's own ``finally``-save and out of
 :func:`run_pull` unmodified.
@@ -76,7 +71,7 @@ import hashlib
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Final, cast
 
@@ -99,6 +94,7 @@ from fitdocs.connectors.ledger import (
     LedgerEntry,
     LedgerError,
     Outcome,
+    WellnessLedger,
     load_ledger,
     save_ledger,
 )
@@ -112,6 +108,8 @@ from fitdocs.connectors.protocol import (
     Fetched,
     RemoteActivity,
     TokenIssuer,
+    WellnessDay,
+    WellnessPuller,
 )
 from fitdocs.connectors.secrets import Redactor
 from fitdocs.connectors.settings import ConnectorInstance
@@ -127,6 +125,8 @@ __all__ = [
 
 _CONTROL_CHARS_RE: Final[re.Pattern[str]] = re.compile(r"[\x00-\x1f\x7f]")
 _MAX_REMOTE_ID_LEN: Final[int] = 512
+_MAX_REVISION_LEN: Final[int] = 512
+
 _TOKEN_RENEWAL_MARGIN: Final[timedelta] = timedelta(seconds=60)
 
 
@@ -160,6 +160,29 @@ class Delivered:
 
 
 @dataclass(frozen=True)
+class WellnessDelivered:
+    """A wellness file delivered with its date span and day count."""
+
+    span: str
+    days: int
+    path: str
+
+
+@dataclass(frozen=True)
+class WellnessPullReport:
+    """One instance's wellness listing and delivery outcome."""
+
+    listed: int
+    unchanged: int
+    delivered: tuple[WellnessDelivered, ...]
+    would_deliver: tuple[str, ...]
+    held: tuple[str, ...]
+    failed: tuple[PullNote, ...]
+    notices: tuple[PullNote, ...]
+    error: PullNote | None
+
+
+@dataclass(frozen=True)
 class InstancePullReport:
     """One instance's whole pull outcome (design.md "PullEngine")."""
 
@@ -182,6 +205,8 @@ class InstancePullReport:
     error: PullNote | None
     """The instance could not pull at all; ``detail`` carries the next step."""
 
+    wellness: WellnessPullReport | None = None
+
 
 @dataclass(frozen=True)
 class PullReport:
@@ -195,7 +220,15 @@ class PullReport:
     def failed(self) -> bool:
         """Whether any instance errored, or any instance has a failed note."""
         return any(
-            instance.error is not None or len(instance.failed) > 0
+            instance.error is not None
+            or len(instance.failed) > 0
+            or (
+                instance.wellness is not None
+                and (
+                    instance.wellness.error is not None
+                    or len(instance.wellness.failed) > 0
+                )
+            )
             for instance in self.instances
         )
 
@@ -338,6 +371,143 @@ def _compute_watermark(
     return newest
 
 
+@dataclass
+class _LedgerHolder:
+    ledger: Ledger
+
+
+def _runnable(instance: ConnectorInstance) -> tuple[Capability, ...]:
+    return tuple(
+        capability
+        for capability in Capability
+        if capability in instance.connector.capabilities
+        and (
+            capability is Capability.PULL_ACTIVITIES
+            or (capability is Capability.PULL_WELLNESS and instance.wellness)
+        )
+    )
+
+
+def _nothing_to_pull_detail(instance: ConnectorInstance) -> str:
+    if Capability.PULL_WELLNESS in instance.connector.capabilities:
+        return (
+            "pulls only wellness, which is not enabled for this instance; "
+            f"set wellness = true in [connectors.{instance.name}]"
+        )
+    return "does not pull activities or wellness"
+
+
+def _wellness_oldest(
+    since: datetime | None, through: date | None, lookback_days: int
+) -> date | None:
+    if since is not None:
+        return since.astimezone(UTC).date()
+    if through is not None:
+        return through - timedelta(days=lookback_days)
+    return None
+
+
+def _day_problem(day: WellnessDay) -> str | None:
+    if type(getattr(day, "day", None)) is not date:
+        return "wellness day must be a date"
+    revision = getattr(day, "revision", False)
+    if revision is not None:
+        if not isinstance(revision, str):
+            return "wellness revision must be text or absent"
+        if not revision or len(revision) > _MAX_REVISION_LEN:
+            return "wellness revision must contain 1 to 512 characters"
+        if any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in revision):
+            return "wellness revision must not contain control characters"
+    return None
+
+
+def _pull_wellness(
+    holder: _LedgerHolder,
+    *,
+    instance: ConnectorInstance,
+    session: ConnectorSession,
+    options: PullOptions,
+    data_root: Path,
+    inbox: Path,
+    redactor: Redactor,
+) -> WellnessPullReport:
+    wellness = holder.ledger.wellness or WellnessLedger()
+    oldest = _wellness_oldest(options.since, wellness.through, instance.lookback_days)
+    puller = cast(WellnessPuller, instance.connector)
+    try:
+        listing = puller.list_wellness(session, oldest)
+    except Exception as exc:
+        return WellnessPullReport(
+            0,
+            0,
+            (),
+            (),
+            (),
+            (),
+            (),
+            _instance_error(exc, name=instance.name, redactor=redactor),
+        )
+    if (
+        type(getattr(listing, "oldest", None)) is not date
+        or type(getattr(listing, "newest", None)) is not date
+        or listing.oldest > listing.newest
+    ):
+        return WellnessPullReport(
+            0,
+            0,
+            (),
+            (),
+            (),
+            (),
+            (),
+            PullNote(
+                instance.name,
+                redactor.redact("the connector's wellness listing is malformed"),
+            ),
+        )
+    failed: list[PullNote] = []
+    seen: set[date] = set()
+    changed: list[WellnessDay] = []
+    unchanged = 0
+    for day in listing.days:
+        reason = _day_problem(day)
+        day_date = getattr(day, "day", None)
+        subject = day_date.isoformat() if type(day_date) is date else "listing"
+        if type(day_date) is date:
+            if day_date in seen:
+                failed.append(
+                    PullNote(
+                        subject, redactor.redact("wellness date listed more than once")
+                    )
+                )
+                continue
+            seen.add(day_date)
+        if reason is not None:
+            failed.append(PullNote(subject, redactor.redact(reason)))
+            continue
+        entry = wellness.entry(day.day)
+        if entry is None or entry.revision != day.revision:
+            changed.append(day)
+        else:
+            unchanged += 1
+    would_deliver = (
+        tuple(sorted(day.day.isoformat() for day in changed)) if options.dry_run else ()
+    )
+    if not options.dry_run and not failed and not changed:
+        wellness = wellness.with_coverage(listing.oldest, listing.newest)
+        holder.ledger = holder.ledger.with_wellness(wellness)
+    return WellnessPullReport(
+        len(listing.days),
+        unchanged,
+        (),
+        would_deliver,
+        (),
+        tuple(sorted(failed, key=lambda note: note.subject)),
+        (),
+        None,
+    )
+
+
 def _pull_one(
     instance: ConnectorInstance,
     *,
@@ -374,6 +544,9 @@ def _pull_one(
     failed: list[PullNote] = []
     listed = 0
     error: PullNote | None = None
+    wellness_report: WellnessPullReport | None = None
+    holder: _LedgerHolder | None = None
+    activity_auth_failed = False
 
     try:
         if not options.dry_run:
@@ -417,15 +590,13 @@ def _pull_one(
                     error = _instance_error(exc, name=name, redactor=redactor)
 
             if error is None:
-                if Capability.PULL_ACTIVITIES not in connector.capabilities:
+                runnable = _runnable(instance)
+                if not runnable:
                     error = PullNote(
                         subject=name,
-                        detail=redactor.redact("does not pull activities"),
+                        detail=redactor.redact(_nothing_to_pull_detail(instance)),
                     )
                 else:
-                    since = _window_start(
-                        options.since, ledger.watermark, instance.lookback_days
-                    )
                     http_client = HttpClient(
                         transport, mode=CallMode.DATA, redactor=redactor, sleep=sleep
                     )
@@ -439,261 +610,302 @@ def _pull_one(
                         sleep=sleep,
                         redactor=redactor,
                     )
-                    puller = cast(ActivityPuller, connector)
-
-                    try:
-                        listing = puller.list_activities(session, since)
-                    except Exception as exc:
-                        error = _instance_error(exc, name=name, redactor=redactor)
-                    else:
-                        listed = len(listing.activities)
-
-                        for note in listing.deferred:
-                            deferred.append(
-                                PullNote(
-                                    subject=note.subject,
-                                    detail=redactor.redact(note.reason),
-                                )
-                            )
-
-                        valid_entries: list[RemoteActivity] = []
-                        seen_ids: set[str] = set()
-                        for activity in listing.activities:
-                            reason = _validate_entry(activity)
-                            if reason is not None:
-                                failed.append(
-                                    PullNote(
-                                        subject=activity.remote_id,
-                                        detail=redactor.redact(reason),
-                                    )
-                                )
-                                continue
-                            if activity.remote_id in seen_ids:
-                                failed.append(
-                                    PullNote(
-                                        subject=activity.remote_id,
-                                        detail=redactor.redact(
-                                            f"remote id {activity.remote_id!r} "
-                                            "listed more than once"
-                                        ),
-                                    )
-                                )
-                                continue
-                            seen_ids.add(activity.remote_id)
-                            valid_entries.append(activity)
-
-                        ordered = sorted(
-                            valid_entries,
-                            key=lambda activity: (
-                                activity.start is None,
-                                activity.start,
-                                activity.remote_id,
-                            ),
+                    if Capability.PULL_ACTIVITIES in runnable:
+                        since = _window_start(
+                            options.since, ledger.watermark, instance.lookback_days
                         )
+                        puller = cast(ActivityPuller, connector)
 
-                        held_hashes: set[str] = {
-                            entry.sha256
-                            for entry in ledger.pending_entries()
-                            if entry.sha256 is not None
-                        }
-                        # `deliver`'s owned-only reuse rule (Req 15.4, R2
-                        # controller ruling): only an inbox-relative path
-                        # this instance itself already recorded -- a still-
-                        # pending delivery, or one made earlier in this same
-                        # run -- mapped to the exact sha256 it was recorded
-                        # with, may ever be reused. Never a file that merely
-                        # happens to have identical bytes, such as one the
-                        # athlete's own tool dropped in by hand. Built after
-                        # the sweep above, so an entry whose delivery was
-                        # just swept away from the inbox is not offered as
-                        # owned.
-                        owned_paths: dict[str, str] = {
-                            entry.pending: entry.sha256
-                            for entry in ledger.pending_entries()
-                            if entry.pending is not None and entry.sha256 is not None
-                        }
+                        try:
+                            listing = puller.list_activities(session, since)
+                        except Exception as exc:
+                            activity_auth_failed = isinstance(exc, AuthFailure)
+                            error = _instance_error(exc, name=name, redactor=redactor)
+                        else:
+                            listed = len(listing.activities)
 
-                        for activity in ordered:
-                            existing_entry = ledger.get(activity.remote_id)
-
-                            if ledger.is_final(activity.remote_id, activity.revision):
-                                held.append(activity.remote_id)
-                                continue
-
-                            if not activity.original_available:
-                                detail = redactor.redact(
-                                    activity.unavailable_reason or ""
-                                )
-                                ledger = ledger.with_entry(
-                                    LedgerEntry(
-                                        remote_id=activity.remote_id,
-                                        outcome=Outcome.SKIPPED,
-                                        revision=activity.revision,
-                                        detail=detail,
-                                    )
-                                )
-                                skipped.append(
-                                    PullNote(subject=activity.remote_id, detail=detail)
-                                )
-                                continue
-
-                            if options.dry_run:
-                                would_fetch.append(activity.remote_id)
-                                continue
-
-                            try:
-                                outcome = puller.fetch_activity(session, activity)
-                            except (AuthFailure, ConnectorError) as exc:
-                                error = _instance_error(
-                                    exc, name=name, redactor=redactor
-                                )
-                                break
-                            except Exception as exc:
-                                failed.append(
-                                    PullNote(
-                                        subject=activity.remote_id,
-                                        detail=redactor.redact(
-                                            f"{type(exc).__name__}: {exc}"
-                                        ),
-                                    )
-                                )
-                                continue
-
-                            if isinstance(outcome, Deferred):
+                            for note in listing.deferred:
                                 deferred.append(
                                     PullNote(
-                                        subject=activity.remote_id,
-                                        detail=redactor.redact(outcome.reason),
+                                        subject=note.subject,
+                                        detail=redactor.redact(note.reason),
                                     )
                                 )
-                                continue
 
-                            if isinstance(outcome, Declined):
-                                detail = redactor.redact(outcome.reason)
-                                ledger = ledger.with_entry(
-                                    LedgerEntry(
-                                        remote_id=activity.remote_id,
-                                        outcome=Outcome.SKIPPED,
-                                        revision=activity.revision,
-                                        detail=detail,
+                            valid_entries: list[RemoteActivity] = []
+                            seen_ids: set[str] = set()
+                            for activity in listing.activities:
+                                reason = _validate_entry(activity)
+                                if reason is not None:
+                                    failed.append(
+                                        PullNote(
+                                            subject=activity.remote_id,
+                                            detail=redactor.redact(reason),
+                                        )
                                     )
-                                )
-                                skipped.append(
-                                    PullNote(subject=activity.remote_id, detail=detail)
-                                )
-                                continue
-
-                            assert isinstance(outcome, Fetched)
-                            data = outcome.data
-                            sha = hashlib.sha256(data).hexdigest()
-
-                            if not is_fit(data):
-                                detail = "not a FIT file"
-                                ledger = ledger.with_entry(
-                                    LedgerEntry(
-                                        remote_id=activity.remote_id,
-                                        outcome=Outcome.SKIPPED,
-                                        revision=activity.revision,
-                                        sha256=sha,
-                                        detail=detail,
+                                    continue
+                                if activity.remote_id in seen_ids:
+                                    failed.append(
+                                        PullNote(
+                                            subject=activity.remote_id,
+                                            detail=redactor.redact(
+                                                f"remote id {activity.remote_id!r} "
+                                                "listed more than once"
+                                            ),
+                                        )
                                     )
-                                )
-                                skipped.append(
-                                    PullNote(subject=activity.remote_id, detail=detail)
-                                )
-                                continue
+                                    continue
+                                seen_ids.add(activity.remote_id)
+                                valid_entries.append(activity)
 
-                            if (
-                                existing_entry is not None
-                                and existing_entry.pending is not None
-                                and existing_entry.sha256 == sha
-                            ):
-                                # A new revision of an id already pending, with the
-                                # same bytes (a metadata-only change upstream): keep
-                                # the existing inbox copy and its pending location
-                                # exactly as it is, only the revision moves forward
-                                # (R2 controller ruling). Neither `deliver` nor the
-                                # archive/held-hash dedup check below run for this
-                                # id. Nothing was written this run, so it is
-                                # reported in `held` (Req 6.8, "already held"), not
-                                # `delivered`, even though the ledger entry's own
-                                # outcome stays `DELIVERED`.
+                            ordered = sorted(
+                                valid_entries,
+                                key=lambda activity: (
+                                    activity.start is None,
+                                    activity.start,
+                                    activity.remote_id,
+                                ),
+                            )
+
+                            held_hashes: set[str] = {
+                                entry.sha256
+                                for entry in ledger.pending_entries()
+                                if entry.sha256 is not None
+                            }
+                            # `deliver`'s owned-only reuse rule (Req 15.4, R2
+                            # controller ruling): only an inbox-relative path
+                            # this instance itself already recorded -- a still-
+                            # pending delivery, or one made earlier in this same
+                            # run -- mapped to the exact sha256 it was recorded
+                            # with, may ever be reused. Never a file that merely
+                            # happens to have identical bytes, such as one the
+                            # athlete's own tool dropped in by hand. Built after
+                            # the sweep above, so an entry whose delivery was
+                            # just swept away from the inbox is not offered as
+                            # owned.
+                            owned_paths: dict[str, str] = {
+                                entry.pending: entry.sha256
+                                for entry in ledger.pending_entries()
+                                if entry.pending is not None
+                                and entry.sha256 is not None
+                            }
+
+                            for activity in ordered:
+                                existing_entry = ledger.get(activity.remote_id)
+
+                                if ledger.is_final(
+                                    activity.remote_id, activity.revision
+                                ):
+                                    held.append(activity.remote_id)
+                                    continue
+
+                                if not activity.original_available:
+                                    detail = redactor.redact(
+                                        activity.unavailable_reason or ""
+                                    )
+                                    ledger = ledger.with_entry(
+                                        LedgerEntry(
+                                            remote_id=activity.remote_id,
+                                            outcome=Outcome.SKIPPED,
+                                            revision=activity.revision,
+                                            detail=detail,
+                                        )
+                                    )
+                                    skipped.append(
+                                        PullNote(
+                                            subject=activity.remote_id, detail=detail
+                                        )
+                                    )
+                                    continue
+
+                                if options.dry_run:
+                                    would_fetch.append(activity.remote_id)
+                                    continue
+
+                                try:
+                                    outcome = puller.fetch_activity(session, activity)
+                                except (AuthFailure, ConnectorError) as exc:
+                                    activity_auth_failed = isinstance(exc, AuthFailure)
+                                    error = _instance_error(
+                                        exc, name=name, redactor=redactor
+                                    )
+                                    break
+                                except Exception as exc:
+                                    failed.append(
+                                        PullNote(
+                                            subject=activity.remote_id,
+                                            detail=redactor.redact(
+                                                f"{type(exc).__name__}: {exc}"
+                                            ),
+                                        )
+                                    )
+                                    continue
+
+                                if isinstance(outcome, Deferred):
+                                    deferred.append(
+                                        PullNote(
+                                            subject=activity.remote_id,
+                                            detail=redactor.redact(outcome.reason),
+                                        )
+                                    )
+                                    continue
+
+                                if isinstance(outcome, Declined):
+                                    detail = redactor.redact(outcome.reason)
+                                    ledger = ledger.with_entry(
+                                        LedgerEntry(
+                                            remote_id=activity.remote_id,
+                                            outcome=Outcome.SKIPPED,
+                                            revision=activity.revision,
+                                            detail=detail,
+                                        )
+                                    )
+                                    skipped.append(
+                                        PullNote(
+                                            subject=activity.remote_id, detail=detail
+                                        )
+                                    )
+                                    continue
+
+                                assert isinstance(outcome, Fetched)
+                                data = outcome.data
+                                sha = hashlib.sha256(data).hexdigest()
+
+                                if not is_fit(data):
+                                    detail = "not a FIT file"
+                                    ledger = ledger.with_entry(
+                                        LedgerEntry(
+                                            remote_id=activity.remote_id,
+                                            outcome=Outcome.SKIPPED,
+                                            revision=activity.revision,
+                                            sha256=sha,
+                                            detail=detail,
+                                        )
+                                    )
+                                    skipped.append(
+                                        PullNote(
+                                            subject=activity.remote_id, detail=detail
+                                        )
+                                    )
+                                    continue
+
+                                if (
+                                    existing_entry is not None
+                                    and existing_entry.pending is not None
+                                    and existing_entry.sha256 == sha
+                                ):
+                                    # A new revision of an id already pending, with the
+                                    # same bytes (a metadata-only change upstream): keep
+                                    # the existing inbox copy and its pending location
+                                    # exactly as it is, only the revision moves forward
+                                    # (R2 controller ruling). Neither `deliver` nor the
+                                    # archive/held-hash dedup check below run for this
+                                    # id. Nothing was written this run, so it is
+                                    # reported in `held` (Req 6.8, "already held"), not
+                                    # `delivered`, even though the ledger entry's own
+                                    # outcome stays `DELIVERED`.
+                                    ledger = ledger.with_entry(
+                                        LedgerEntry(
+                                            remote_id=activity.remote_id,
+                                            outcome=Outcome.DELIVERED,
+                                            revision=activity.revision,
+                                            sha256=sha,
+                                            pending=existing_entry.pending,
+                                        )
+                                    )
+                                    held.append(activity.remote_id)
+                                    continue
+
+                                archived = layout.archive_path(data_root, sha).is_file()
+                                if archived or sha in held_hashes:
+                                    ledger = ledger.with_entry(
+                                        LedgerEntry(
+                                            remote_id=activity.remote_id,
+                                            outcome=Outcome.ALREADY_HELD,
+                                            revision=activity.revision,
+                                            sha256=sha,
+                                        )
+                                    )
+                                    held.append(activity.remote_id)
+                                    continue
+
+                                # A new revision of an id already pending, with
+                                # *different* bytes: the old inbox copy is left in
+                                # place, released from the ledger's tracking (this
+                                # `with_entry` below replaces its record entirely) --
+                                # the drain treats it as any other untracked inbox
+                                # file it discovers (R2 controller ruling).
+                                file_name = delivery_name(activity)
+                                try:
+                                    result = deliver(
+                                        inbox,
+                                        name,
+                                        file_name,
+                                        data,
+                                        sha,
+                                        owned=owned_paths,
+                                    )
+                                except OSError as exc:
+                                    failed.append(
+                                        PullNote(
+                                            subject=activity.remote_id,
+                                            detail=redactor.redact(
+                                                f"{type(exc).__name__}: {exc}"
+                                            ),
+                                        )
+                                    )
+                                    continue
                                 ledger = ledger.with_entry(
                                     LedgerEntry(
                                         remote_id=activity.remote_id,
                                         outcome=Outcome.DELIVERED,
                                         revision=activity.revision,
                                         sha256=sha,
-                                        pending=existing_entry.pending,
+                                        pending=result.rel,
                                     )
                                 )
-                                held.append(activity.remote_id)
-                                continue
-
-                            archived = layout.archive_path(data_root, sha).is_file()
-                            if archived or sha in held_hashes:
-                                ledger = ledger.with_entry(
-                                    LedgerEntry(
-                                        remote_id=activity.remote_id,
-                                        outcome=Outcome.ALREADY_HELD,
-                                        revision=activity.revision,
-                                        sha256=sha,
+                                delivered.append(
+                                    Delivered(
+                                        remote_id=activity.remote_id, path=result.rel
                                     )
                                 )
-                                held.append(activity.remote_id)
-                                continue
+                                held_hashes.add(sha)
+                                owned_paths[result.rel] = sha
 
-                            # A new revision of an id already pending, with
-                            # *different* bytes: the old inbox copy is left in
-                            # place, released from the ledger's tracking (this
-                            # `with_entry` below replaces its record entirely) --
-                            # the drain treats it as any other untracked inbox
-                            # file it discovers (R2 controller ruling).
-                            file_name = delivery_name(activity)
-                            try:
-                                result = deliver(
-                                    inbox,
-                                    name,
-                                    file_name,
-                                    data,
-                                    sha,
-                                    owned=owned_paths,
+                            if not options.dry_run:
+                                watermark = _compute_watermark(
+                                    listing.activities, ledger
                                 )
-                            except OSError as exc:
-                                failed.append(
-                                    PullNote(
-                                        subject=activity.remote_id,
-                                        detail=redactor.redact(
-                                            f"{type(exc).__name__}: {exc}"
-                                        ),
-                                    )
-                                )
-                                continue
-                            ledger = ledger.with_entry(
-                                LedgerEntry(
-                                    remote_id=activity.remote_id,
-                                    outcome=Outcome.DELIVERED,
-                                    revision=activity.revision,
-                                    sha256=sha,
-                                    pending=result.rel,
-                                )
-                            )
-                            delivered.append(
-                                Delivered(remote_id=activity.remote_id, path=result.rel)
-                            )
-                            held_hashes.add(sha)
-                            owned_paths[result.rel] = sha
+                                if watermark is not None and (
+                                    ledger.watermark is None
+                                    or watermark >= ledger.watermark
+                                ):
+                                    ledger = ledger.with_watermark(watermark)
 
-                        if not options.dry_run:
-                            watermark = _compute_watermark(listing.activities, ledger)
-                            if watermark is not None and (
-                                ledger.watermark is None
-                                or watermark >= ledger.watermark
-                            ):
-                                ledger = ledger.with_watermark(watermark)
+                    if (
+                        Capability.PULL_WELLNESS in runnable
+                        and not activity_auth_failed
+                    ):
+                        holder = _LedgerHolder(ledger)
+                        wellness_report = _pull_wellness(
+                            holder,
+                            instance=instance,
+                            session=session,
+                            options=options,
+                            data_root=data_root,
+                            inbox=inbox,
+                            redactor=redactor,
+                        )
+                        ledger = holder.ledger
     finally:
+        if holder is not None:
+            ledger = holder.ledger
         if not options.dry_run:
-            has_content = bool(ledger.entries) or ledger.watermark is not None
+            has_content = (
+                bool(ledger.entries)
+                or ledger.watermark is not None
+                or ledger.wellness is not None
+            )
             if ledger_existed or has_content:
                 save_ledger(data_root, name, ledger)
 
@@ -709,6 +921,7 @@ def _pull_one(
         failed=tuple(sorted(failed, key=lambda note: note.subject)),
         removed=tuple(sorted(removed)),
         error=error,
+        wellness=wellness_report,
     )
 
 
