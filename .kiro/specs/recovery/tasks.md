@@ -1039,3 +1039,29 @@ introspection artifact also names its MetricInfo value type at line 48).
   `recovery-review-round3-evidence/`, sealed 1577-entry implementer package
   `recovery-task-3.1-round3-final-evidence/`, and fresh controller
   `/private/tmp/recovery-task-3.1-verification.md`.
+
+
+### Autonomous run parked after task 3.1 (2026-10-15)
+
+- Accepted and pushed: 1.1–1.6 and 3.1 (7 of 20 mandatory leaves).
+  Task 3.1 commit: `2c6ca52`. Task 2.1 remains the sole primary blocker;
+  both allowed debug cycles were exhausted, as recorded above. No third
+  debug cycle or parent bypass was attempted.
+- No remaining mandatory leaf is actionable under the approved ordering:
+  2.2 and 3.2 require 2.1; 3.3 requires 3.2; 3.4 extends 3.3's page;
+  4.1 requires 3.4; 4.2 calls 4.1's engine; 4.3, 5.1 and 5.3 require
+  4.2; 5.2 requires 4.2 and 5.1; 6.1 exercises 4.2's command; 6.2 is
+  the final whole-feature integration and cannot run before those leaves.
+  These twelve leaves remain unchecked, awaiting 2.1 acceptance. No
+  placeholder prerequisites were fabricated. Optional 6.3 remains
+  maintainer-only and was not run.
+- Feature status: incomplete; feature-level GO, release build, installed
+  wheel smoke, branch CI and main merge were not attempted. The current
+  local full17440/44 result includes 2.1's preserved uncommitted draft and
+  does not accept that leaf or establish a remotely tested feature.
+- Preserve the worktree `/private/tmp/fitdocs-recovery`, `impl/recovery`
+  and all sixteen uncommitted chart draft files/eleven golden mtimes for
+  human review. The exact blocker, native public-pipeline controls needed
+  and prior raw evidence are already tracked in task 2.1 above; no duplicate
+  queue item was created. All reviewers reported no adjacent untracked
+  follow-up work.
