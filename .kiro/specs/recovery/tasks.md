@@ -433,6 +433,7 @@ literal pins, one per lander) and every head-paragraph pin of
     golden reddened by at least one named mutation.
   - _Requirements: 4.1, 5.4, 16.2, 16.3, 16.4, 18.5_
   - _Boundary: ReferenceBandKind_
+  - _Blocked: debug attempted twice, still failing — received-domain limit refusal is unpinned when x is absent. Counting only positioned rows/segments incorrectly accepts 1001 received rows or nine received segments and survives the entire native suite (17169 passed / 44 skipped). Production counts correctly; append native public-pipeline refusal controls for both missing-x cases before acceptance._
 
 - [ ] 2.2 Pin the kind's listing, order and budget and record chart-catalog Amendment 1
   - `test_catalog_contract.py`: a literal listing pin for `reference-band`
@@ -977,3 +978,34 @@ introspection artifact also names its MetricInfo value type at line 48).
 - **1.5 verified:** independent round-2 review replayed all78 claimed and12 own mutations RED/restoredGREEN, mapped all48 assertion sites, and passed155 additional finite-family/coexistence controls. Full15700passed/44expectedskips; controller fresh1079/statics clean. Exact current import rows, all-seven planned rows and reverse-import subset are guarded;4.3 closes module-set/reverse equality. Shared finite literal-target resolution covers imported/simple assigned aliases, known argument dictionaries/fromlists and relative anchors; actual tz slots reject missing/resolvedNone, with explicitUTC and lexical-scope positive controls. Arbitrary computed targets/call results/control flow remain explicit static-analysis limits, not a general IO gate. Runtime dependency declaration uses the existing packaging literal pin.
 
 - **1.6 verified:** owned14/declared8 append-only recovery locations, exact path helpers/declaration and new golden, seven predecessor golden version lines only, contract11→12 with literal history/head/published rules, wiki-contract Amendment7/2.19/3.13. Independent round2 review replayed72claimed+11own RED/restoredGREEN, bounded all four root/chart argument slots with lexical/nested/mixed-case inputs and independent3×3 expectations; source helpers unchanged. Full15717passed/44expectedskips, scoped1531 and controller fresh210/statics clean. Declaration dispatch docstring counts/enumerates8. Final6.2 rederives main+1 version/amendment/peer head pins at landing; later Page/Engine/confinement tasks implement the published runtime behavior.
+
+
+### Task 2.1 — blocked after two debug cycles (2026-10-15)
+
+- Final implementer READY_FOR_REVIEW; final independent review REJECTED.
+  All 675 claimed mutation pairs reproduced (670 direct and five explicitly
+  historical regression-only); all 4177 assertion-parameter instances have
+  direct evidence. The positioned-gap and eight-style repairs are correct.
+- Remaining defect is native test coverage, not production: the 1000-row
+  and eight-segment limits must count all received inputs, including a row
+  whose x is None. Substituting positioned-only populations for either
+  `_check` limit leaves 1466 task/boundary tests green; combining both
+  substitutions leaves the full 17169-test suite green (44 expected skips).
+  Independent public `render_chart` controls directly fail each faulty
+  substitution and pass after restoration. Retain the existing at-bound
+  and markless-present-x contrasts; add valid 1001-row and nine-segment
+  cases with a present-value final row whose x is None, asserting exact
+  `over_bound` / `too_many_series` metadata through the public pipeline.
+- Both allowed debug cycles are exhausted. No third cycle or direct
+  remediation was attempted. The 16 submitted draft files, eleven goldens
+  and prior tests are preserved uncommitted. Task 2.2 and chart-dependent
+  work await acceptance of 2.1; independent 3.1 remains actionable.
+- Fresh restored original: 17169 passed / 44 expected skips; chart/dashboard
+  4831 passed; inherited controls 1913 passed; Ruff check/format (747 files),
+  mypy (562 files) and diff checks clean. Production source SHA256
+  `9ae718abe04710a869ea05a97ba80496fb60137d66d216dca92bc6d1442a824a`;
+  test SHA256 `0731b0b5dac9612e8caba1828af87efa64b79690095ea4084effbee248141019`.
+- Evidence: `/private/tmp/recovery-review-2.1-debug2.md` and its linked
+  `recovery-review-2.1-debug2-evidence/` package; own public controls
+  `/private/tmp/recovery_review_debug2_own_controls.py`. No adjacent work
+  was surfaced outside this leaf; the blocker is already tracked here.
