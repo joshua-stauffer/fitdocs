@@ -10,5 +10,5 @@ fitdocs rebuilds these files from `wellness-archive/` and the `[wellness]` setti
 ## Ownership
 
 Owner: `fitdocs`.
-Ownership contract version: `11`.
+Ownership contract version: `12`.
 Published ownership contract: https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md

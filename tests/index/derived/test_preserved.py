@@ -243,6 +243,6 @@ def test_document_contract_and_runtime_dependencies_match_main_baseline() -> Non
     )
 
     assert contract.DOC_VERSION == 9
-    assert contract.CONTRACT_VERSION == "11"
+    assert contract.CONTRACT_VERSION == "12"
     assert sorted(contract.MANAGED_KEYS) == expected_managed_keys
     assert manifest["project"]["dependencies"] == expected_dependencies

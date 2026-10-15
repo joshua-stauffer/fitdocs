@@ -279,6 +279,21 @@ These additions are landed by wellness-store task 1.5, fulfilling wellness-store
 14.6 and 19.1; the wellness writers remain owned by that spec. No existing
 criterion or amendment is renumbered.
 
+## Amendment 7 (2026-10-15): wellness pull deliveries, landed by wellness-pull
+
+`wellness-pull` extends Requirement 2 criterion 2.15's published statement of
+what `fitdocs pull` writes and removes. For an instance with wellness enabled,
+wellness deliveries are written under `<inbox>/<name>/` and removed only once
+`wellness-archive/` holds identical bytes. The pull never writes
+`wellness-archive/` or `wellness/`. Every existing activity-delivery,
+credential and `connect` guarantee remains in force. The published ownership
+contract advances `CONTRACT_VERSION` from `"11"` to `"12"`, with a statement
+of what changed; wellness-pull task 5.2 owns this bump and its document
+(wellness-pull 12.4, 12.7), re-derived as main + 1 at landing by task 6.2.
+The connector protocol, transport and credential rules remain connectors'
+own; the wellness archive and series writers remain wellness-store's own.
+No existing criterion or amendment is renumbered.
+
 ## Requirements
 
 ### Requirement 1: Consistent Document Interpretation Across Operations
@@ -315,7 +330,7 @@ that I can rely on the boundary instead of inferring it from behavior.
 12. _(added by Amendment 3)_ The ownership contract shall state that the plan-source directory is user-owned and read-only to fitdocs, located by a settings key and defaulting to a named directory, that it must not lie inside an owned path, and that fitdocs never creates, writes or deletes anything there.
 13. _(added by Amendment 3)_ The ownership contract shall name the rendered blocks location as fitdocs-owned, and shall state that the documents it holds are two further document types, distinct from the workout document and the history page, whose type values and formats are published by the training-blocks package rather than by this contract, and shall state which region of the block page is user-owned and that the planned page has none.
 14. _(added by Amendment 4)_ The ownership contract shall state that a generated workout document lists every archived source file of the document in ascending rank with the base last, that the base is the file the document is rendered from and every other listed file is an extra, and that the document records the base's kind, elapsed time, distance and device digest in managed keys; that the document keeps the session UUID of a phone-side copy when a file without one becomes its base; that a document may be renamed when its base changes, with the chart assets its previous render linked removed and links to the previous filename not updated; and that a file that cannot be placed on one document is archived and held, recorded in `.fitdocs/held.toml`, rather than added to a document until regeneration can place it on one.
-15. _(added by Amendment 4)_ The ownership contract shall state that a connector's credentials are stored outside the data root, one file per configured instance, never read from or written to the data root; that each connector's own ledger is fitdocs-owned tool state inside the already-owned `.fitdocs/` directory; and what `fitdocs pull` writes and removes, and that `fitdocs connect` writes nothing under the data root.
+15. _(added by Amendment 4)_ The ownership contract shall state that a connector's credentials are stored outside the data root, one file per configured instance, never read from or written to the data root; that each connector's own ledger is fitdocs-owned tool state inside the already-owned `.fitdocs/` directory; and what `fitdocs pull` writes and removes, including wellness deliveries written under the instance's `<inbox>/<name>/` subdirectory and removed only once `wellness-archive/` holds identical bytes, that the pull never writes `wellness-archive/` or `wellness/`, and that `fitdocs connect` writes nothing under the data root. _(extended by Amendment 7)_
 16. _(added by Amendment 4)_ The ownership contract shall state that a workout document takes each of its channels from exactly one of its archived source files -- the base when the base records the channel, otherwise the highest-ranked extra that records it -- that the document's identity, laps and session values are the base's, that its Channel Sources section names the file each channel came from, and that the training-load and benchmark-derivation passes read the same composed activity.
 17. _(added by Amendment 5)_ The ownership contract shall name `dashboards/` and `dashboards/assets/` as fitdocs-owned locations and shall describe a dashboard page as a category of its own, a page owned by the athlete that holds regions owned by fitdocs, distinct from the generated documents that hold user-owned regions; and shall state the page rule, that fitdocs never creates, renames, rewrites as a whole or deletes a page and never writes a generated-file banner into one, the chart region and chart image policy, that a snapshot is never modified or deleted, that a chart image is removed only when no dashboard page references it, that a link from outside `dashboards/` does not protect an image, and what the dashboard pass and `fitdocs dashboard` overwrite. Every statement in the contract that the analytics index is never read back into a document shall carry one named exception: dashboard chart regions and their assets are the only document content produced from the index, and workout, history and block documents never read it.
 

@@ -10,5 +10,5 @@ fitdocs never modifies these files. Removing one withdraws its values from `well
 ## Ownership
 
 Owner: `fitdocs`.
-Ownership contract version: `11`.
+Ownership contract version: `12`.
 Published ownership contract: https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md

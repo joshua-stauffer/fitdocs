@@ -325,7 +325,7 @@ highest-ranked extra that records it. A page without extras renders as before
 and changes only this line (Req 8.2).
 """
 
-CONTRACT_VERSION: Final[str] = "11"
+CONTRACT_VERSION: Final[str] = "12"
 """The published ownership contract's version identifier (Req 2.8).
 
 A *string*, and deliberately not comparable with :data:`DOC_VERSION`: it
@@ -421,6 +421,16 @@ and reports files it cannot use as unrecognized, leaving them in place. A
 gets a workout page; a page that already lists one is kept and rebuilt by
 ``fitdocs regen``. Run ``fitdocs sync`` or ``fitdocs regen`` once
 to place ``wellness/AGENTS.md`` and ``wellness-archive/AGENTS.md``.
+
+Raised from ``11`` to ``12`` by wellness-pull because the stated guarantees
+about what ``fitdocs pull`` writes and removes changed. For an instance with
+``wellness = true`` the pull also writes wellness files,
+``wellness-<first>_<last>.json`` holding the records the service returned,
+under ``<inbox>/<name>/``, and removes each one once ``wellness-archive/``
+holds identical bytes; it never writes ``wellness-archive/`` or ``wellness/``.
+A connector's ledger that holds wellness records is ledger format 2.
+Nothing is needed for existing documents; set ``wellness = true`` on an
+instance to pull wellness.
 """
 
 # --- document vocabulary -----------------------------------------------------

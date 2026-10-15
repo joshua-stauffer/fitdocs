@@ -1,19 +1,16 @@
 # fitdocs Ownership Contract
 
-**Contract version:** `11`
+**Contract version:** `12`
 
-**What changed at this version:** fitdocs adds two owned locations.
-`wellness-archive/` keeps every wellness file fitdocs handled, as its original
-bytes or its format's canonical extract, named by the SHA-256 of the original
-and never modified. `wellness/` holds the normalized daily series, one CSV
-file per year and `manifest.toml`, rebuilt from the archive and the
-`[wellness]` settings by the drain and by `fitdocs regen`. The inbox drain
-now archives recognized wellness files and reports files it cannot use as
-unrecognized, leaving them in place. A `.fit` file whose header declares a
-type other than an activity no longer gets a workout page; a page that
-already lists one is kept and rebuilt by `fitdocs regen`. Run `fitdocs sync`
-or `fitdocs regen` once to place `wellness/AGENTS.md` and
-`wellness-archive/AGENTS.md`.
+**What changed at this version:** wellness-pull changes the stated guarantees
+about what `fitdocs pull` writes and removes. For an instance with
+`wellness = true` the pull also writes wellness files,
+`wellness-<first>_<last>.json` holding the records the service returned,
+under `<inbox>/<name>/`, and removes each one once `wellness-archive/`
+holds identical bytes; it never writes `wellness-archive/` or `wellness/`.
+A connector's ledger that holds wellness records is ledger format 2.
+Nothing is needed for existing documents; set `wellness = true` on an
+instance to pull wellness.
 
 This document is the authoritative, published statement of what fitdocs owns
 in your data root, what you own, and the exact limits of every operation that
@@ -1052,13 +1049,16 @@ and each has a distinct contract:
   by a standalone `fitdocs plan` run and one written at the end of `sync` or
   `regen` carry the same resolution, filled from whatever the logged workout
   pages record at the moment that chained run reaches it.
-- **`pull`** — fetches new activity files from each configured connector
-  instance and writes each one it accepts under `<inbox>/<name>/`, naming
+- **`pull`** — fetches new activity files and, for an instance with wellness
+  enabled, wellness files from each configured connector instance and writes
+  each one it accepts under `<inbox>/<name>/`, naming
   the configured instance; it also writes and updates that instance's own
   ledger under `.fitdocs/connectors/<name>.toml`, recording what it has
-  already delivered. On a later run, once a delivered file's identical
-  bytes have been archived (by a `sync`, or by an earlier `pull --sync`'s
-  drain), `pull` removes that one file from the inbox — never a file its
+  already delivered. A wellness delivery holds the records the service
+  returned, named `wellness-<first>_<last>.json`, and is removed by a later
+  pull only once `wellness-archive/` holds identical bytes. On a later run,
+  once a delivered activity file's identical bytes have been archived (by a
+  `sync`, or by an earlier `pull --sync`'s drain), `pull` removes that one file from the inbox — never a file its
   ledger does not record as that instance's delivery, and never before the
   archive holds the matching bytes. (A file already sitting at a
   delivery's name under `<inbox>/<name>/` that the pull did not itself
@@ -1066,7 +1066,8 @@ and each has a distinct contract:
   leaves it exactly as it is and is written under a name derived from its
   content instead.) The pull itself
   never writes, alters, or deletes a `workouts/*.md` document, a
-  `fit-archive/*` archived source, the athlete profile, or the settings
+  `fit-archive/*` archived source, a `wellness-archive/*` archived wellness
+  file, a `wellness/*` series file, the athlete profile, or the settings
   file, and never writes to or deletes from a folder a connector reads. Run
   as `fitdocs pull --sync`, it then drains the inbox and runs the
   training-load and plan passes exactly as `fitdocs sync` with no source

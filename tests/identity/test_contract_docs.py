@@ -178,12 +178,11 @@ def test_the_changed_at_this_version_paragraph_names_the_amendment() -> None:
     head = _flat(_DOC.read_text(encoding="utf-8").split("\n\nThis document", 1)[0])
     assert f"**Contract version:** `{contract.CONTRACT_VERSION}`" in head
     for phrase in (
-        "fitdocs adds two owned locations",
-        "`wellness-archive/` keeps every wellness file fitdocs handled",
-        "`wellness/` holds the normalized daily series",
-        "one CSV file per year and `manifest.toml`",
-        "Run `fitdocs sync` or `fitdocs regen` once to place `wellness/AGENTS.md`",
-        "`wellness-archive/AGENTS.md`",
+        "wellness-pull changes the stated guarantees about what `fitdocs pull` "
+        "writes and removes",
+        "A connector's ledger that holds wellness records is ledger format 2.",
+        "Nothing is needed for existing documents; set `wellness = true` "
+        "on an instance to pull wellness.",
     ):
         assert phrase in head, phrase
 
@@ -212,6 +211,20 @@ def test_the_version_history_records_the_amendment() -> None:
         "Run ``fitdocs check`` to see pages that the rule now recognizes as one "
         "workout."
     ) in history
+    for phrase in (
+        "the data root gains two owned locations",
+        "``wellness/`` holds the normalized daily series",
+        "one CSV file per year and ``manifest.toml``",
+        "Run ``fitdocs sync`` or ``fitdocs regen`` once to place "
+        "``wellness/AGENTS.md``",
+        "``wellness-archive/AGENTS.md``",
+    ):
+        assert phrase in history, phrase
+    assert "Raised from ``11`` to ``12`` by wellness-pull" in history
+    assert (
+        "A connector's ledger that holds wellness records is ledger format 2."
+        in history
+    )
 
 
 def test_the_unreleased_entry_states_the_rule_and_the_actions() -> None:
