@@ -583,6 +583,20 @@ def legend(plan: FramePlan, scale: BinnedScale, entries: Sequence[LegendEntry]) 
 
 ### Kinds
 
+**Amendment 1 (2026-10-15), carried by recovery:** `reference-band`
+(`kit/kinds/reference_band.py`) is appended after `stacked-100`, retaining
+all existing registry prefixes. The Common rules and Requirements 2 and 12
+apply to it. Its seven channels, in order, are `x`, `y`, `low`, `high`,
+`mid`, `segment` and `flag`; options are `y_zero=false` and
+`svg_options(height=320)`, its bound is 1000 rows (refused above the bound),
+and its maximum is eight segments. Recovery design's
+`ReferenceBandKind (chart-catalog Amendment 1)` specifies its validation,
+segment styles, band and centre-line gaps, points, flags and legends;
+the ten normative criteria are recorded in requirements.md Amendment 1.
+Its 90-row budget fixture includes a band, centre line, two segments and
+flags: 9,622 measured bytes plus 25%, rounded up to 100, sets a 12,100-byte
+budget; its at-bound chart retains the 80,000-byte ceiling.
+
 **Common rules** (every catalog kind):
 - Module `kit/kinds/<name with - as _>.py` exporting `KIND: Final[KindSpec]`
   and private `_validate`, `_check`, `_draw`; options through

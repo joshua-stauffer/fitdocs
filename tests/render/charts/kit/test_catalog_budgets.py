@@ -255,3 +255,56 @@ def test_every_catalog_at_bound_golden_is_under_the_ceiling() -> None:
         size = path.stat().st_size
         assert size > 1_000, path  # a bound-sized golden, not a stub
         assert size <= AT_BOUND_CEILING, f"{path}: {size} > {AT_BOUND_CEILING}"
+
+
+# --- reference-band (recovery task 2.2) ---------------------------------------
+
+
+def _reference_band() -> str:
+    day = column("day", ValueKind.DATE)
+    names = ("value_bpm", "low_bpm", "high_bpm", "mid_bpm")
+    segment = column("source", ValueKind.CATEGORY)
+    flag = column("outside", ValueKind.BOOLEAN)
+    rows: list[tuple[Value, ...]] = []
+    for i in range(90):
+        base = 52.0 + ((i * 37) % 41) / 7 + i / 90
+        rows.append(
+            (
+                START + timedelta(days=i),
+                base + ((i * 13) % 17) / 5,
+                base - 2.0,
+                base + 5.0,
+                base + 1.5,
+                "Watch A" if i < 45 else "Watch B",
+                i % 7 == 2,
+            )
+        )
+    request = chart_request(
+        "reference-band",
+        title="Recovery signal",
+        channels={
+            "x": "day",
+            "y": "value_bpm",
+            "low": "low_bpm",
+            "high": "high_bpm",
+            "mid": "mid_bpm",
+            "segment": "source",
+            "flag": "outside",
+        },
+    )
+    columns = (day, *(column(name, unit="bpm") for name in names), segment, flag)
+    return _render(request, chart_data(columns, rows))
+
+
+def test_reference_band_90_rows_fits_its_budget() -> None:
+    size = len(_reference_band().encode())
+    assert size <= 12_100, f"reference-band 90 rows: {size} > 12100"
+
+
+def test_reference_band_at_bound_fits_the_ceiling() -> None:
+    from tests.render.charts.kit.test_reference_band import CASES
+
+    (case,) = (case for case in CASES if case.name == "at_bound")
+    rendered_size = len(_render(case.request, case.data).encode())
+    golden_size = (GOLDEN_ROOT / "reference-band" / "at_bound.svg").stat().st_size
+    assert max(rendered_size, golden_size) <= AT_BOUND_CEILING

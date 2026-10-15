@@ -394,7 +394,7 @@ literal pins, one per lander) and every head-paragraph pin of
   - _Requirements: 12.1, 12.3, 13.1, 13.2, 13.3, 18.2_
   - _Boundary: OwnedLocation_
 
-- [ ] 2. The `reference-band` chart kind (chart-catalog Amendment 1)
+- [x] 2. The `reference-band` chart kind (chart-catalog Amendment 1)
 
 - [x] 2.1 (P) Draw values as points against a segmented reference band, with flagged rows marked, and register the kind
   - `src/fitdocs/render/charts/kit/kinds/reference_band.py` per design §
@@ -434,7 +434,7 @@ literal pins, one per lander) and every head-paragraph pin of
   - _Requirements: 4.1, 5.4, 16.2, 16.3, 16.4, 18.5_
   - _Boundary: ReferenceBandKind_
 
-- [ ] 2.2 Pin the kind's listing, order and budget and record chart-catalog Amendment 1
+- [x] 2.2 Pin the kind's listing, order and budget and record chart-catalog Amendment 1
   - `test_catalog_contract.py`: a literal listing pin for `reference-band`
     (as `dual-axis`'s) and the registered order's tail.
   - `test_catalog_budgets.py`: a 90-row fixture (band, mid, two segments,
@@ -1146,3 +1146,33 @@ introspection artifact also names its MetricInfo value type at line 48).
   plus `/private/tmp/recovery-post-rebase-verification.md`. This verifies
   compatibility, not feature GO or task 6.2 completion. Eight mandatory
   leaves are accepted; continue with 2.2, then the remaining approved plan.
+
+
+### Task 2.2 accepted (2026-10-15)
+
+- READY_FOR_REVIEW → independent APPROVED → current-evidence VERIFIED.
+  Five-file boundary: appended complete canonical-JSON listing/order pins,
+  90-row typical budget and live at-bound ceiling; chart-catalog Amendment 1
+  copies all ten normative clauses and explicitly applies Common rules and
+  Requirements 2/12. Prior tests, metadata approvals and phase notes remain
+  unchanged. The chart-kind group is complete; nine mandatory leaves are
+  now accepted.
+- Actual fixture: ninety rows, two forty-five-row segments, thirteen true
+  flags, two band paths and two mid polylines. Original 9622 bytes ×1.25,
+  rounded up to 100, yields budget 12100. Required circle expansion renders
+  13059 bytes and live at-bound 100851 (>80000). Frozen at-bound golden
+  remains 61014 bytes: observed/PRESERVED-ONLY, not claimed mutable through
+  production. Existing golden comparisons preserve its live relationship.
+- Independent 92/92 claimed pairs reproduced (93 intended failures), plus
+  four own faults (five intended failures); sixteen explicit metadata type
+  substitutions and all four new assertion sites directly sensitive, zero
+  survivors. Full restored original 21450 passed / 44 expected skips;
+  charts 3697, dashboard listing/docs 13; Ruff check/format (761 files),
+  mypy (576 files), diff/scans clean. Exact old prefixes and accepted
+  chart/View bytes preserved. Static-artifact limitation disclosed; no
+  adjacent follow-up.
+- Evidence: `/private/tmp/recovery-review-2.2.md`, independent raw
+  `recovery-review-2.2-evidence/`, implementer 319-file sealed
+  `recovery-task-2.2-evidence/` and archive, and
+  `/private/tmp/recovery-task-2.2-verification.md`. Continue with 3.2;
+  future chart construction/page/writer/CLI behavior remains unimplemented.

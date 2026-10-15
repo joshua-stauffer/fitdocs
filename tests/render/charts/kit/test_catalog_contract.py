@@ -265,3 +265,106 @@ def test_validate_chart_reports_mean_max_channel_unit_without_rows() -> None:
         "mean-max", ref="m1", channels={"x": "elapsed_s", "y": "power_w"}
     )
     assert validate_chart(ok, columns) == ()
+
+
+# --- reference-band (recovery task 2.2) ---------------------------------------
+
+
+def test_reference_band_follows_the_existing_registry_prefix() -> None:
+    assert kind_names()[15:17] == ("stacked-100", "reference-band")
+
+
+def test_the_reference_band_listing_is_this_literal_json() -> None:
+    import json
+
+    expected = {
+        "name": "reference-band",
+        "description": (
+            "Values as points against a segmented reference band, "
+            "with optional centre line and flags."
+        ),
+        "output": "svg",
+        "channels": [
+            {
+                "name": "x",
+                "required": True,
+                "accepts": ["number", "duration", "date", "datetime"],
+                "description": "Horizontal position.",
+            },
+            {
+                "name": "y",
+                "required": True,
+                "accepts": ["number", "duration"],
+                "description": "Values as points.",
+            },
+            {
+                "name": "low",
+                "required": False,
+                "accepts": ["number", "duration"],
+                "description": "Lower band edge.",
+            },
+            {
+                "name": "high",
+                "required": False,
+                "accepts": ["number", "duration"],
+                "description": "Upper band edge.",
+            },
+            {
+                "name": "mid",
+                "required": False,
+                "accepts": ["number", "duration"],
+                "description": "Centre line.",
+            },
+            {
+                "name": "segment",
+                "required": False,
+                "accepts": ["category"],
+                "description": "Separate source segments.",
+            },
+            {
+                "name": "flag",
+                "required": False,
+                "accepts": ["boolean"],
+                "description": "Rows marked along the bottom axis.",
+            },
+        ],
+        "options": [
+            {
+                "name": "y_zero",
+                "type": "boolean",
+                "default": False,
+                "choices": [],
+                "minimum": None,
+                "maximum": None,
+                "description": "Extend the y axis to include zero.",
+            },
+            {
+                "name": "width",
+                "type": "integer",
+                "default": 720,
+                "choices": [],
+                "minimum": 320,
+                "maximum": 1600,
+                "description": "Chart width in pixels.",
+            },
+            {
+                "name": "height",
+                "type": "integer",
+                "default": 320,
+                "choices": [],
+                "minimum": 160,
+                "maximum": 1200,
+                "description": "Chart height in pixels.",
+            },
+        ],
+        "bound": {
+            "limit": 1000,
+            "counts": "rows",
+            "over": "refuse",
+            "rule": "At most 1000 rows; more are refused.",
+        },
+        "max_series": 8,
+    }
+    assert json.dumps(describe_kinds()[16], sort_keys=True) == json.dumps(
+        expected, sort_keys=True
+    )

@@ -265,3 +265,45 @@ right after both have landed, so that no document or test is stale.
 1. When `chart-catalog` lands after `dashboards`, the chart catalog shall bring every published listing and every pinned count of registered kinds owned by `dashboards` up to date against the registry, so that the listing names all sixteen kinds in registration order.
 2. When `chart-catalog` lands before `dashboards`, the chart catalog shall change no file that `dashboards` owns.
 3. The chart catalog shall add a release-note entry naming the eight kinds as available to dashboard charts.
+
+
+## Amendment 1 (2026-10-15): the reference-band kind, carried by recovery
+
+Chart-catalog Requirements 2 and 12 apply to this kind. The following ten
+criteria are carried by recovery task 2.2 from its approved
+`ReferenceBandKind (chart-catalog Amendment 1)` design.
+
+1. The chart catalog shall draw a `reference-band` chart from an `x` channel
+   (number, duration, date or date-time) and a `y` channel (number or
+   duration) drawn as points, with optional `low` and `high` channels (a band
+   between them), an optional `mid` channel (a centre line), an optional
+   `segment` channel (category) and an optional `flag` channel (boolean), in
+   ascending x order.
+2. If the `y`, `low`, `high` and `mid` columns differ in value kind or unit,
+   then the chart catalog shall refuse the request with a problem naming the
+   columns and their units.
+3. If exactly one of `low` and `high` is bound, then the chart catalog shall
+   refuse the request with a problem naming the unbound one.
+4. If a row's present low value exceeds its present high value, then the
+   chart catalog shall refuse the chart with a problem naming the row, both
+   values and a fix.
+5. If two rows share an x value, then the chart catalog shall refuse the
+   chart with a problem naming the x value and the first duplicate row.
+6. Where `segment` is bound, the chart catalog shall draw each segment's
+   points, band and centre line in that segment's own style, shall never
+   join a band or centre line across a row of another segment in x order,
+   and shall name in the legend, with its own point shape, each segment that
+   draws a mark; rows whose segment is absent form the `—` segment, ordered
+   last.
+7. When a row's low or high value is absent, the chart catalog shall break
+   the band at that row and draw a band position with no present neighbour
+   as a vertical line; when a row's mid value is absent it shall break the
+   centre line alone and draw a centre point with no present neighbour as a
+   dot.
+8. Where `flag` is bound, the chart catalog shall mark each row whose flag is
+   true at its x along the bottom edge of the plot, shall treat an absent
+   flag as not flagged, and shall name the flag column in the legend.
+9. The chart catalog shall name the points, the band and the centre line in
+   the legend, each with a swatch of its own shape.
+10. The chart catalog shall refuse a `reference-band` chart with more than 8
+    segments or more than 1000 rows.
