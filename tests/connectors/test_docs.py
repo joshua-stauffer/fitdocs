@@ -14,8 +14,8 @@ Two independent things are pinned here:
   precedence order); the directory-to-``0700``/file-to-``0600`` mode
   *pairing*, observed on a real
   :class:`~fitdocs.connectors.credentials.CredentialStore` write; the
-  instance-table key column (``connector``, ``lookback_days``), parsed from
-  the page's own fenced example and compared against the real reader's
+  instance-table key column (``connector``, ``lookback_days``, ``wellness``),
+  parsed from the page's own table and compared against the real reader's
   reserved key literals, and the ``connector`` row's stated default,
   compared both as a literal and by exercising the real
   default-to-instance-name behavior through a connector registered under a
@@ -70,7 +70,7 @@ from fitdocs.connectors.protocol import (
 )
 from fitdocs.connectors.settings import (
     _CONNECTOR_KEY,
-    _LOOKBACK_KEY,
+    _RESERVED_KEYS,
     DEFAULT_LOOKBACK_DAYS,
     MAX_LOOKBACK_DAYS,
     load_connectors_settings,
@@ -107,11 +107,13 @@ _EXPECTED_HEADINGS = [
     "### Connecting",
     "### Configuring",
     "### What a pull fetches",
+    "### Wellness",
     "### Garmin attribution",
     "## Connecting",
     "## Credentials",
     "## Pulling",
     "### Reading the report",
+    "### Reading the wellness report",
     "## Delivery and removal",
     "## The ledger",
     "## What leaves your machine",
@@ -352,13 +354,11 @@ def _page_connector_key_name() -> str:
 
 def test_instance_table_keys_match_the_real_readers_reserved_keys() -> None:
     """The page's instance-table key column is exactly the set of keys the
-    real reader reserves (:data:`fitdocs.connectors.settings._CONNECTOR_KEY`,
-    :data:`~fitdocs.connectors.settings._LOOKBACK_KEY`) -- not a hand-typed
-    copy that could drift from the reader's own literal."""
+    real reader reserves (:data:`fitdocs.connectors.settings._RESERVED_KEYS`)."""
     rows = _instance_table_rows()
     page_keys = {key for key, _default in rows}
     assert page_keys, "docs/connectors.md's instance table has no key column"
-    assert page_keys == {_CONNECTOR_KEY, _LOOKBACK_KEY}
+    assert page_keys == _RESERVED_KEYS
 
 
 def test_instance_table_connector_default_cell_states_the_instance_name_rule() -> None:
@@ -372,9 +372,8 @@ def test_instance_table_connector_default_cell_states_the_instance_name_rule() -
 def test_documented_settings_keys_are_accepted_by_the_real_reader(
     tmp_path: Path,
 ) -> None:
-    """Every ``[connectors.<name>]`` key the page documents (``connector``,
-    ``lookback_days``) is exercised through the real
-    :func:`load_connectors_settings`, not merely asserted as prose.
+    """The documented ``connector`` and ``lookback_days`` keys are exercised
+    through the real :func:`load_connectors_settings`, not merely asserted as prose.
 
     Falsity in the starting state: the instance is given a *non-default*
     ``lookback_days`` (5, not 30) so the assertion cannot pass merely

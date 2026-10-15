@@ -54,7 +54,7 @@ def _toml_blocks(section: str) -> list[dict[str, object]]:
     return [tomllib.loads(block) for block in blocks]
 
 
-def test_the_section_is_not_empty_and_has_its_four_subsections() -> None:
+def test_the_section_is_not_empty_and_has_its_five_subsections() -> None:
     section = _section()
     assert len(section.split()) > 200
     found = re.findall(r"^(### .+)$", section, re.M)
@@ -62,6 +62,7 @@ def test_the_section_is_not_empty_and_has_its_four_subsections() -> None:
         "### Connecting",
         "### Configuring",
         "### What a pull fetches",
+        "### Wellness",
         "### Garmin attribution",
     ]
 

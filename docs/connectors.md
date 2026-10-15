@@ -1,7 +1,8 @@
 # Connectors
 
-A connector is a source fitdocs can pull `.fit` files from automatically. You
-configure named **instances** of a connector in `<data-root>/fitdocs.toml`,
+A connector is a source fitdocs can pull activity `.fit` files and, where
+enabled, wellness files from automatically. You configure named **instances**
+of a connector in `<data-root>/fitdocs.toml`,
 run `fitdocs connect` once for any instance that needs credentials, and run
 `fitdocs pull` — by hand, or on a schedule — to fetch what's new. Everything a
 pull delivers lands in the existing inbox, where the existing drain (`fitdocs
@@ -29,7 +30,8 @@ lookback_days = 30       # optional; whole days, 0-3650; defaults to 30
 | Key | Meaning | Default |
 | --- | --- | --- |
 | `connector` | Which connector implementation this instance uses. | the instance's own name |
-| `lookback_days` | For a connector that supports it, how many days before the *watermark* — the newest activity already recorded — its listing starts. An instance's first pull, with no ledger yet, has no watermark, so this key does not apply: each connector chooses where such a pull starts (`folder` considers everything under its source; `intervals` starts as its [section](#intervalsicu) says). The `folder` connector ignores it; it always considers everything under its source. | `30` |
+| `lookback_days` | For a connector that supports it, how many days before the *watermark* — the newest activity already recorded — its listing starts. An instance's first pull, with no ledger yet, has no watermark, so this key does not apply: each connector chooses where such a pull starts (`folder` considers everything under its source; `intervals` starts as its [section](#intervalsicu) says). Also the wellness re-check window before its own wellness watermark. The `folder` connector ignores it; it always considers everything under its source. | `30` |
+| `wellness` | Enable only for a connector that pulls wellness; `true` is refused otherwise. | `false` |
 
 Any other key in the table is passed to the connector itself; each connector
 documents its own keys (`folder`'s are below). A key that collides with one
@@ -62,8 +64,8 @@ renames, or deletes anything there.
 
 `intervals` is the connector for an [intervals.icu](https://intervals.icu)
 account. It pulls only: it lists the activities of the account the key
-belongs to and fetches each one's original `.fit` file. It never writes to the
-account.
+belongs to and fetches each one's original `.fit` file, with wellness available
+when enabled below. It never writes to the account.
 
 ### Connecting
 
@@ -121,7 +123,8 @@ list, so a source the service adds later needs no fitdocs release. A
 malformed `sources` value (not a list, an empty list, or a name that is not
 upper case) is a configuration error, reported before any request is made.
 The framework's `lookback_days` key applies as described under
-[Configuring an instance](#configuring-an-instance); no other key is read.
+[Configuring an instance](#configuring-an-instance), as does `wellness`; no
+other key is read.
 
 ### What a pull fetches
 
@@ -177,6 +180,35 @@ is its base. Before the first pull into a data root that already holds
 pages, run `fitdocs regen`, so that the pages written before cross-source
 identity are recognized when the same ride arrives; see
 [Regenerating before a first pull](#regenerating-before-a-first-pull).
+
+### Wellness
+
+Set `wellness = true` in `[connectors.intervals]` to enable wellness alongside
+activities. The first wellness pull reads from 2010-01-01, or from
+`--since YYYY-MM-DD` when given, rather than the activity pull's last 30 days.
+Later pulls re-check `lookback_days` before the wellness mark and compare each
+day's `updated` revision. A missing `updated` uses a content hash instead.
+The pull makes one wellness listing GET per window of up to a year, plus one
+athlete-settings GET per packaged file. Some platforms' wellness reaches
+intervals.icu only when you open intervals.icu; the look-back re-check picks
+up late arrivals.
+
+Attribution comes from the athlete's per-platform wellness import settings,
+not from guessing from values. These settings describe current imports, not
+per-value history: manually entered, corrected or historically imported
+values can be misattributed. A field claimed by multiple platforms has no
+platform attribution. Review your import settings when attribution changes;
+use an original export when you need reliable historical provenance.
+
+A 403 message may mean intervals.icu is withholding wellness received from
+Garmin. Set `wellness = false` to stop wellness requests while keeping activity
+pulls. Use Garmin's own data export through the [wellness guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/wellness.md)
+for Garmin wellness.
+
+Computed fields (`ctl`, `atl`, `rampRate`, `ctlLoad`, `atlLoad` and `sportInfo`)
+are delivered but never imported into the wellness series. The delivered file
+holds every field intervals.icu sent, including wellness comments and null
+values. A day deleted on intervals.icu is not removed from fitdocs.
 
 ### Garmin attribution
 
@@ -278,7 +310,8 @@ fitdocs pull [NAMES...] [--since YYYY-MM-DD] [--dry-run] [--sync] [--no-prompt]
 - `NAMES`: pull only the named instances; omit to pull every configured
   instance.
 - `--since`: list only activities from the start of that local day onward
-  (a connector that cannot filter by time lists everything regardless).
+  (a connector that cannot filter by time lists everything regardless). It
+  also starts the wellness listing on that date.
 - `--dry-run`: list and report what would be fetched; writes nothing under
   the data root or the inbox. The one exception: if a login-style instance's
   access token needs renewing first, fitdocs still saves the renewed token to
@@ -318,6 +351,22 @@ field's name; the right is the label the printed table shows for that row.
 | `removed` | Removed | An earlier delivery of this instance's own, now archived, cleaned out of the inbox. |
 | `error` | Error | The whole instance stopped early (for example, a rejected credential). Other configured instances still run. |
 
+### Reading the wellness report
+
+When wellness runs, a separate table follows the activity report, with all
+eight rows even at zero. Day counts and file counts are distinct:
+
+| Wellness channel | Printed as | Meaning |
+| --- | --- | --- |
+| `listed` | Days listed | Wellness days returned by the listing. |
+| `unchanged` | Days unchanged | Days whose revision matches the ledger; no delivery needed. |
+| `delivered` | Delivered | Calendar-year files written into the inbox this run. |
+| `would_deliver` | Would deliver | New or changed wellness days that a dry run would deliver, listed by date. |
+| `held` | Already held | Packaged files whose identical bytes are already archived or pending for this instance. |
+| `failed` | Failed | Wellness days or calendar-year groups that failed; the next pull retries them. |
+| `notices` | Notices | Attribution changes that may need the athlete to review import settings. |
+| `error` | Error | The wellness step stopped early; activity results remain in their own table. |
+
 ## Delivery and removal
 
 A fetched file is written atomically into `<inbox>/<name>/` under the
@@ -355,6 +404,18 @@ delivery's bytes, placed at that delivery's own path (after deleting or
 overwriting it), cannot be told apart from it and is removed the same way
 once the archive holds those bytes.
 
+Wellness uses the same instance inbox subdirectory: one file per calendar
+year of new or changed days, named
+`wellness-<first-day>_<last-day><extension>`. The connector declares the
+extension (`.json` for `intervals`); the package is checked by extension
+before delivery; an invalid package is reported as failed. Name collisions
+follow the same ownership and content-derived naming rules as activity files.
+The next pull removes its own wellness delivery only once the wellness archive
+holds identical bytes. If a wellness delivery disappears before archival,
+its days are forgotten and the wellness mark moves back so they can be fetched
+again. Pull writes neither the wellness archive nor the normalized series;
+the drain handles those through `sync` or `pull --sync`.
+
 ## The ledger
 
 Each instance keeps a small record at
@@ -369,6 +430,11 @@ still sitting in the inbox are left exactly where they are (fitdocs can no
 longer tell them from your own files, so no later pull removes them), and
 a re-fetched activity whose bytes are not yet archived is delivered again
 alongside them.
+
+The `[wellness]` records hold the wellness mark, per-day revisions,
+attribution and pending wellness deliveries. A ledger holding wellness
+records uses format 2; an older fitdocs refuses it. Activity-only ledgers
+keep their existing format until wellness records are first written.
 
 ## What leaves your machine
 
