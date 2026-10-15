@@ -1397,8 +1397,13 @@ def pull_command(
     sync_after: bool = _SYNC_OPTION,
     no_prompt: bool = _NO_PROMPT_OPTION,
 ) -> None:
-    """Fetch new activities from every configured connector instance, or the
-    named ones, and deliver them into the inbox.
+    """Fetch new activities and enabled wellness from configured connector
+    instances, or the named ones, and deliver them into the inbox.
+
+    Instances that run wellness also print its counts and delivery details;
+    ``--dry-run`` lists wellness dates instead of delivered files. Wellness
+    errors and failures contribute to the failure exit code (wellness-pull
+    Req 10.1-10.5, 10.7).
 
     (connectors design: CliCommands "``fitdocs pull``"; Req 3.9, 4.2, 6.1-6.3,
     6.9, 8.4, 11.1-11.5.)
@@ -1591,10 +1596,24 @@ one ordered source of truth both the table and (via
 be renamed or dropped in one place and not the other."""
 
 
+_WELLNESS_REPORT_ROWS: Final[tuple[tuple[str, str], ...]] = (
+    ("Days listed", "listed"),
+    ("Days unchanged", "unchanged"),
+    ("Delivered", "delivered"),
+    ("Would deliver", "would_deliver"),
+    ("Already held", "held"),
+    ("Failed", "failed"),
+    ("Notices", "notices"),
+    ("Error", "error"),
+)
+
+
 def _report_pull(report: PullReport) -> None:
     """Print the pull report exactly as design.md's ``_report_pull`` states
     (Req 11.1, 11.2, 11.3, 11.5): the inbox line or the dry-run line, then
-    per instance an always-complete counts table and its detail blocks.
+    per instance an always-complete activity counts table and its detail
+    blocks, followed by a wellness table and details when wellness ran
+    (wellness-pull Req 10.1-10.3, 10.7).
     """
     console = Console()
     if report.dry_run:
@@ -1673,6 +1692,79 @@ def _report_pull(report: PullReport) -> None:
                 highlight=False,
                 soft_wrap=True,
             )
+
+        if instance.wellness is not None:
+            wellness = instance.wellness
+            table = Table(title=f"fitdocs pull: {instance.name} wellness")
+            table.add_column("Result")
+            table.add_column("Count", justify="right")
+            for label, field_name in _WELLNESS_REPORT_ROWS:
+                value = getattr(wellness, field_name)
+                if field_name == "error":
+                    count = 1 if value is not None else 0
+                elif isinstance(value, int):
+                    count = value
+                else:
+                    count = len(value)
+                table.add_row(label, str(count))
+            console.print(table, markup=False, highlight=False, soft_wrap=True)
+
+            if wellness.delivered:
+                console.print(
+                    "Delivered:", markup=False, highlight=False, soft_wrap=True
+                )
+                for item in wellness.delivered:
+                    console.print(
+                        f"  {item.path} ({item.span}, {item.days} days)",
+                        markup=False,
+                        highlight=False,
+                        soft_wrap=True,
+                    )
+            if wellness.would_deliver:
+                console.print(
+                    "Would deliver:", markup=False, highlight=False, soft_wrap=True
+                )
+                for day in wellness.would_deliver:
+                    console.print(
+                        f"  {day}", markup=False, highlight=False, soft_wrap=True
+                    )
+            if wellness.held:
+                console.print(
+                    "Already held:", markup=False, highlight=False, soft_wrap=True
+                )
+                for span in wellness.held:
+                    console.print(
+                        f"  {span}", markup=False, highlight=False, soft_wrap=True
+                    )
+            for label, notes in (
+                ("Failed", wellness.failed),
+                ("Notices", wellness.notices),
+            ):
+                if notes:
+                    console.print(
+                        f"{label}:", markup=False, highlight=False, soft_wrap=True
+                    )
+                    for note in notes:
+                        console.print(
+                            f"  {note.subject}",
+                            markup=False,
+                            highlight=False,
+                            soft_wrap=True,
+                        )
+                        console.print(
+                            f"    {note.detail}",
+                            markup=False,
+                            highlight=False,
+                            soft_wrap=True,
+                        )
+            if wellness.error is not None:
+                console.print("Error:", markup=False, highlight=False, soft_wrap=True)
+                console.print(
+                    f"  {wellness.error.detail}",
+                    markup=False,
+                    highlight=False,
+                    soft_wrap=True,
+                )
 
 
 @app.command("plugins")
