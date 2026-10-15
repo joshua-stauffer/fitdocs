@@ -17,6 +17,11 @@ recorded as one.
 
 ### Added
 
+- The intervals.icu wellness pull: `fitdocs pull` delivers wellness files
+  into the inbox, with field attribution from intervals.icu's per-platform
+  wellness import settings and a separate wellness report table.
+  `fitdocs.toml` settings schema gains the optional `wellness` key
+  (default `false`); enable it per connector instance.
 - A local wellness store imports intervals.icu wellness JSON and four Garmin
   export JSON formats from the inbox. `wellness-archive/` keeps immutable
   source bytes; `wellness/` holds the rebuildable daily series and manifest.
@@ -113,6 +118,15 @@ recorded as one.
 
 ### Changed
 
+- Connector ledger format: a connector's ledger uses ledger format 2 when it
+  holds wellness records. An older fitdocs refuses such a ledger. To enable
+  wellness, set `wellness = true` on the instance and run `fitdocs pull --sync`.
+  Activity-only ledgers keep format 1; existing documents need no migration.
+- Ownership contract version advances from `11` to `12`: it now covers
+  wellness deliveries into the instance's inbox, their removal once
+  identical bytes are archived, and the pull never writing the wellness
+  archive or series. Existing documents need no action; enable wellness
+  with the setting and command above.
 - Inbox interface: bare `fitdocs sync` now handles wellness before workouts,
   prints four additional report rows (Unrecognized, Wellness archived,
   Wellness skipped and Wellness failed), and reports changed-series results.

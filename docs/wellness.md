@@ -3,7 +3,7 @@
 fitdocs keeps daily wellness as a local, source-attributed series alongside
 workouts. It imports files offline, archives the handled bytes, and rebuilds
 plain CSV files you can read without fitdocs. Recovery pages, workout morning
-blocks, Apple Health import and automatic wellness pulling are future work.
+blocks and Apple Health import are future work.
 
 ## Get files into the inbox
 
@@ -26,8 +26,12 @@ its content hash; correct its bytes or use `fitdocs sync --retry-quarantined`
 after fixing the cause. Deferred files are considered again on the next drain.
 
 You can save an intervals.icu wellness API response as a `.json` file and drop
-it into the inbox today. wellness-pull is planned; it does not yet provide a
-command here. Its future connector deliveries use the [envelope below](#delivery-envelope).
+it into the inbox. Connector deliveries use the [envelope below](#delivery-envelope).
+
+The intervals.icu pull delivers wellness files into the inbox: set
+`wellness = true` on your connector instance and run `fitdocs pull --sync`.
+See [wellness pulling](connectors.md#wellness) for setup and limits.
+
 Apple Health import is planned and is not a supported format yet.
 
 A Garmin monitoring, sleep or settings `.fit` file is not one of these JSON
@@ -146,7 +150,7 @@ computed over the whole day D.
 
 ## Delivery envelope
 
-This is the file contract for the future wellness-pull implementation. A manual
+This is the file contract for wellness-pull. A manual
 export may use the same envelope now. Write UTF-8 JSON followed by one LF newline,
 using `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)`
 plus `"\n"`. For example (synthetic data):
@@ -164,7 +168,7 @@ date. `updated` is the record's update timestamp and decides which revision wins
 A later record replaces all mapped fields, including values that became null.
 
 `origins` is optional: intervals.icu field name → lowercase platform token
-matching `[a-z0-9]+(-[a-z0-9]+)*`, such as `garmin` or `apple`. The future pull
+matching `[a-z0-9]+(-[a-z0-9]+)*`, such as `garmin` or `apple`. The pull
 obtains these from the athlete's `*_wellness_keys`; unnamed fields have no origin.
 No other envelope key and no pull timestamp are emitted. A newer unsupported
 envelope version is unrecognized with a reason naming the newer version.

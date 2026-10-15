@@ -204,3 +204,14 @@ real account before the connector is used on a real data root.
 2. The connectors documentation shall cite intervals.icu's API terms §1.1 and Garmin's API Brand Guidelines (by title and version) as the reason for the attribution, and shall give no web address of any online service other than intervals.icu.
 3. The changelog's unreleased section shall record the intervals.icu connector, the Garmin product names, and the attribution line together with the action a user must take (regenerating existing documents).
 4. The `fit-ingest` and `workout-docs` specs shall each carry an amendment record for the product-name and attribution changes, and the exemption table of the connectors service-neutral scan shall carry one entry admitting intervals.icu's address in exactly this connector's module, its tests and its section of the connectors documentation, so that every other part of the connector framework stays service-neutral.
+
+## Amendment 1 (2026-10-15): wellness listing and packaging by wellness-pull
+
+Landed by wellness-pull.
+
+Requirement 1 criterion 1 now declares pull-activities and pull-wellness.
+The Boundary Context's out-of-scope wellness exclusion is lifted for listing
+and packaging (wellness-pull Requirements 7–9). Requirement 9's live check
+gains the wellness items, recorded in wellness-pull's `research.md`
+(wellness-pull Requirement 11). Requirement 10 criterion 1 gains the wellness
+documentation (wellness-pull Requirement 12.2).

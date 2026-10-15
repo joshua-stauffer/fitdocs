@@ -113,7 +113,9 @@ def test_attribution_is_in_wellness_daily_section() -> None:
     [
         (
             "Get files into the inbox",
-            "wellness-pull is planned; it does not yet provide a command here.",
+            "The intervals.icu pull delivers wellness files into the inbox: set "
+            "`wellness = true` on your connector instance and run "
+            "`fitdocs pull --sync`.",
         ),
         (
             "Get files into the inbox",

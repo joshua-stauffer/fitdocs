@@ -503,7 +503,7 @@ requirements' amendment list.
     green.
   - _Requirements: 12.5_
 
-- [ ] 5. Documentation and records
+- [x] 5. Documentation and records
 
 - [x] 5.1 Document the wellness pull in the connectors guide
   - Per design § ConnectorsDocs: the intro, the `wellness` row, the
@@ -572,7 +572,7 @@ requirements' amendment list.
   - _Requirements: 12.4, 12.7_
   - _Depends: 5.1_
 
-- [ ] 5.3 Update the wellness guide and the changelog, and record the connectors and intervals.icu amendments
+- [x] 5.3 Update the wellness guide and the changelog, and record the connectors and intervals.icu amendments
   - Per design § WellnessDocs, ChangelogEntry, SpecRecords:
     `docs/wellness.md`'s getting-files-in passage linking
     `connectors.md#wellness` (the anchor 5.1 creates); the CHANGELOG entries,
@@ -585,6 +585,12 @@ requirements' amendment list.
     both amendment headings exist and name wellness-pull; the CHANGELOG
     Unreleased section names the `wellness` key, the ledger format and the
     contract version change.
+  - **Existing literal re-pin (canonical finding, 2026-10-15):** replace only
+    the obsolete wellness-pull-planned topic value in
+    `tests/wellness/test_docs_wellness.py::test_guide_topics` with the
+    published intervals.icu pull sentence. Preserve every other parameter,
+    helper and assertion; this is the existing guard for the guide passage
+    this task changes, not a new wellness-store behavior or contract.
   - **Mutations:** delete an amendment heading; drop the guide's link (the
     records test reds; `tests/test_docs_guarantees.py:951-993` still resolves
     every remaining anchor).
@@ -704,3 +710,5 @@ requirements' amendment list.
 - **5.1 (2026-10-15).** READY_FOR_REVIEW → independently APPROVED round 3 → VERIFIED. Guide covers optional wellness, configuration and rechecks/backfill, all eight report rows with correct day/file units, yearly delivery/cleanup/ledger versioning, and intervals.icu provenance, freshness, Garmin/export and retention limits. Existing activity text and address/NeutralScan controls remain preserved; guide link uses the already-admitted own-project URL. Two bounded test-only repairs replaced raw scanners with existing MarkdownIt tokens for visible heading ancestry, prose/table cells, configuration roles and actual --since list-item ownership. All required 12.1/12.2 contributions PINNED; 49 unchanged focused regressions PRESERVED-ONLY; seven extra explanatory clauses honestly UNPINNED, each removed/restored with all 82 focused cases GREEN. Fresh reviewer reproduced all 474 current-byte pairs: 419 own AssertionError executions (414 distinct byte/owner operations) and 55 valid controls, plus eight fresh faults RED and two fresh controls GREEN; all restorations GREEN. Parent raw XML confirmed 427 intended failures / 57 controls, all 33 changed nodes/eight sites plus one unchanged regression separately. Nineteen former syntax faults are actual GFM required-table equivalents, independently verified, not missing semantic coverage. Final canonical 18,452 passed / 44 skipped; mypy 559 and Ruff lint/format 744 clean; fresh parent 82 with exact eight reviewed hashes. Annotation-only provenance (22 identical compiled code objects), expectation AST/26 IDs, duplicate mapping and separate 97-pair subset independently verified; all claims nevertheless freshly replayed on current bytes. All 986 reviewer processes exited. TBC-W5 remains explicitly owned by 6.3 numbered repair. No new follow-ups.
 
 - **5.2 (2026-10-15).** READY_FOR_REVIEW → independently APPROVED → VERIFIED. Contract 11→12 with literal appended history and current ownership guarantees for inbox wellness delivery, identical-byte archive cleanup and never-written archive/series. All seven declaration goldens change only their version line; prior activity/credential/connect/chained-operation guarantees and history preserved. Reviewer replayed all 61 claimed operators plus five fresh faults and one valid control: 134 pytest executions, 340 selected cases, 116 intended owning AssertionErrors, eight GREEN applied controls, every restore GREEN; parent raw XML/hash audit confirmed ten assertion sites and all fifteen hashes. Final canonical 18,460 passed / 44 skipped; mypy 560, Ruff lint/format 745 and whitespace clean; fresh parent focused 507 passed. New 12.4 wording/version/head/history guards PINNED, prior guarantees PRESERVED-ONLY. Wiki-contract Amendment 7, criterion 2.15 extension and timestamp manually verified and explicitly UNPINNED automatically by three surviving record controls; all approvals and 17/17 upstream task state preserved. Connectors/intervals amendments remain 5.3; landing-time version/amendment re-derivation remains 6.2. All owned processes exited. No new follow-ups.
+
+- **5.3 (2026-10-15).** READY_FOR_REVIEW → independently APPROVED round 3 → VERIFIED. Wellness intake links the actual connector guide and enabled pull command; Unreleased records pull/key/attribution/report, conditional ledger format 2, older-reader refusal, user action and contract 11→12. Connectors Amendment 4 and intervals-connector Amendment 1 preserve prior records; metadata changes only updated_at. Two bounded repairs close escaped literal-link false positives (actual href required in the matched visible paragraph) and migrate exactly one obsolete planned-pull topic literal in the existing wellness guide guard; all other parameter/helper/assertion AST and the 5.2 prefix preserved. Fresh reviewer replayed all 126 current claims plus seven new faults and two valid controls: 135 pairs/270 pytest runs, 233 intended owning AssertionErrors, sixteen valid GREEN controls and four declared manual-governance GREEN controls, every restoration GREEN. Parent raw XML/hash audit confirmed all twelve changed nodes/four sites and eight hashes. Finite audit: 23 PINNED, three PRESERVED-ONLY, four automatic UNPINNED mapping/timestamp units manually verified. Canonical 18,471 passed / 44 skipped; configured mypy 560, Ruff lint/format 745 and whitespace clean; fresh parent focused 245 passed. All 278 review processes exited. Landing-number re-derivation remains 6.2; TBC-W5 remains 6.3 numbered repair. No new follow-ups.

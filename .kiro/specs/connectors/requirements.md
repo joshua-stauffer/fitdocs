@@ -335,3 +335,21 @@ the bare and the wired data root, an index built per root, and the chart's
 region asserted written, so the command really opens the index and renders
 under the socket guard), and pins the tech.md phrase "`load`, `dashboard`,
 `check`" in `tests/connectors/test_network_statements.py`.
+
+## Amendment 4 (2026-10-15): pull-wellness driven by wellness-pull
+
+Landed by wellness-pull.
+
+Requirement 1 criterion 4 now drives pull-activities and pull-wellness and
+keeps seven capabilities reserved. Criterion 5 gains the wellness counterpart:
+two operations, as specified by wellness-pull Requirements 1.2–1.3 and 1.5.
+Criterion 9's outputs include wellness listings and packaged bytes
+(wellness-pull Requirement 1.6). Requirement 2 criterion 3's validation of a
+driven capability covers both wellness operations. Requirement 3 criterion 3
+gains the `wellness` framework key (wellness-pull Requirement 2).
+
+Requirements 6.4–6.8, 7.1–7.3, 7.6, 8.1–8.7 and 11.1–11.5 gain their wellness
+counterparts (wellness-pull Requirements 3–6 and 10). Requirement 6 criterion
+7's FIT check is unchanged for activities. Requirement 15 criterion 7's
+packaged skill binding gains the wellness report table. Requirement 14
+criterion 1 is untouched.
