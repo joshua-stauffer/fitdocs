@@ -53,9 +53,10 @@ from fitdocs.cli import (
     _EXIT_FILE_FAILURES,
     _EXIT_SUCCESS,
     _PULL_REPORT_ROWS,
+    _WELLNESS_REPORT_ROWS,
 )
 from fitdocs.cli import app as cli_app
-from fitdocs.connectors.pull import InstancePullReport
+from fitdocs.connectors.pull import InstancePullReport, WellnessPullReport
 from fitdocs.contract import MANAGED_KEYS, PRESERVED_REGIONS
 from fitdocs.declaration import CONTRACT_DOCUMENTATION_URL
 from fitdocs.layout import OWNED_PATHS
@@ -152,10 +153,9 @@ _INBOX_CHANNELS_LITERAL: frozenset[str] = frozenset(
 )
 
 
-#: The three :class:`InstancePullReport` fields that are not pull channels
-#: at all: ``name``/``connector_id`` identify the instance (they head the
-#: table rather than appearing in it) and ``listed`` is a cross-cutting
-#: count, not its own outcome bucket.
+#: The four :class:`InstancePullReport` fields that are not pull channels:
+#: ``name``/``connector_id`` identify the instance, ``listed`` is a
+#: cross-cutting count, and ``wellness`` is the nested wellness report.
 _PULL_EXCLUSIONS = frozenset({"name", "connector_id", "listed", "wellness"})
 
 #: Hardcoded literal (design.md SkillPins) -- the field names the inbox
@@ -176,6 +176,18 @@ _PULL_CHANNELS_LITERAL: frozenset[str] = frozenset(
 )
 
 
+_WELLNESS_EXCLUSIONS = frozenset({"listed"})
+_WELLNESS_CHANNELS_LITERAL: frozenset[str] = frozenset(
+    {"unchanged", "delivered", "would_deliver", "held", "failed", "notices", "error"}
+)
+
+
+def test_literal_wellness_channel_set_matches_the_report_fields() -> None:
+    all_fields = {field.name for field in dataclasses.fields(WellnessPullReport)}
+    assert all_fields >= _WELLNESS_EXCLUSIONS
+    assert all_fields - _WELLNESS_EXCLUSIONS == _WELLNESS_CHANNELS_LITERAL
+
+
 def test_pull_exclusion_set_is_non_vacuous() -> None:
     """``name``, ``connector_id`` and ``listed`` are real
     :class:`InstancePullReport` field names -- the exclusion set actually
@@ -191,7 +203,7 @@ def test_pull_exclusion_set_is_non_vacuous() -> None:
 def test_literal_pull_channel_set_matches_the_derived_dataclass_fields() -> None:
     """The hardcoded literal the inbox profile's pull table is built from
     agrees with the independently-derived set of
-    :class:`InstancePullReport` fields minus the three exclusions. A
+    :class:`InstancePullReport` fields minus the four exclusions. A
     rename/add/drop on the dataclass moves the derived set without moving
     ``_PULL_CHANNELS_LITERAL``, so the two go out of sync and this test is
     what catches it."""
@@ -218,6 +230,7 @@ class _SkillProfile:
     headings: tuple[str, ...]
     channels: frozenset[str] | None = None
     pull_channels: frozenset[str] | None = None
+    wellness_channels: frozenset[str] | None = None
 
 
 _SKILL_PROFILES: dict[str, _SkillProfile] = {
@@ -226,6 +239,7 @@ _SKILL_PROFILES: dict[str, _SkillProfile] = {
         headings=_INBOX_HEADINGS,
         channels=_INBOX_CHANNELS_LITERAL,
         pull_channels=_PULL_CHANNELS_LITERAL,
+        wellness_channels=_WELLNESS_CHANNELS_LITERAL,
     ),
     ANALYTICS_SKILL_NAME: _SkillProfile(headings=_ANALYTICS_HEADINGS),
     DASHBOARDS_SKILL_NAME: _SkillProfile(headings=_DASHBOARDS_HEADINGS),
@@ -875,6 +889,75 @@ def test_pull_channel_labels_match_the_cli_report_row_labels() -> None:
             f"{field_name!r} row label {row[0].strip()!r} does not match "
             f"the CLI's own label {cli_labels_by_field[field_name]!r}"
         )
+
+
+_WELLNESS_CHANNEL_SKILLS = tuple(
+    name
+    for name, profile in _SKILL_PROFILES.items()
+    if profile.wellness_channels is not None
+)
+
+
+def test_wellness_channel_profile_participates() -> None:
+    assert _WELLNESS_CHANNEL_SKILLS == (INBOX_SKILL_NAME,)
+
+
+def _wellness_channel_rows(name: str) -> list[list[str]]:
+    _frontmatter, body = _split_frontmatter(_skill_text(name))
+    return _table_rows(_sections(body)["Reading the report"], "Wellness channel")
+
+
+@pytest.mark.parametrize("name", _WELLNESS_CHANNEL_SKILLS)
+def test_wellness_channel_binding_matches_report_fields(name: str) -> None:
+    rows = _wellness_channel_rows(name)
+    assert rows, "no wellness-channel rows found in Reading the report"
+    fields = {_cell_token(row[1]) for row in rows}
+    assert len(fields) == len(rows), "duplicate wellness-channel field"
+    assert fields == frozenset(_SKILL_PROFILES[name].wellness_channels or ())
+    for row in rows:
+        assert row[2].strip(), f"empty wellness Meaning cell: {row!r}"
+        assert row[3].strip(), f"empty wellness Do cell: {row!r}"
+
+
+def test_wellness_channel_labels_match_cli_report_labels() -> None:
+    rows = _wellness_channel_rows(INBOX_SKILL_NAME)
+    actual = sorted((_cell_token(row[1]), row[0].strip()) for row in rows)
+    expected = sorted(
+        (field, label)
+        for label, field in _WELLNESS_REPORT_ROWS
+        if field not in _WELLNESS_EXCLUSIONS
+    )
+    assert actual == expected
+
+
+def test_wellness_table_follows_pull_table_and_explanation() -> None:
+    _frontmatter, body = _split_frontmatter(_skill_text(INBOX_SKILL_NAME))
+    section = _sections(body)["Reading the report"]
+    assert re.search(
+        r"\| Pull channel \| Field \| Meaning \| Do \|\n"
+        r"(?:\|[^\n]*\n)+\n"
+        r"An instance with wellness enabled also prints a wellness table[^|]+"
+        r"\| Wellness channel \| Field \| Meaning \| Do \|\n",
+        section,
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "instruction"),
+    (
+        ("notices", "Tell the athlete that a platform's attribution vanished"),
+        ("notices", "that platform's own export can fill the gap"),
+        ("error", "Report the printed next step to the athlete"),
+        ("error", "never edit `fitdocs.toml`"),
+        ("error", "never set `wellness = false` yourself"),
+    ),
+)
+def test_wellness_channel_athlete_instructions(field: str, instruction: str) -> None:
+    rows = {
+        _cell_token(row[1]): row for row in _wellness_channel_rows(INBOX_SKILL_NAME)
+    }
+    do = rows.get(field, ["", "", "", ""])[3]
+    assert instruction in do
 
 
 def test_pull_error_row_states_never_connect_and_never_retry() -> None:

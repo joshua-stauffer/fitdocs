@@ -75,6 +75,21 @@ in none.
 | Removed | `removed` | An inbox-relative path, delivered by this instance on an earlier pull and now archived (hash-identical), that this pull's sweep removed from the inbox. Only this instance's own archived deliveries are ever removed -- never a hand-dropped file, other than an exact copy of a still-pending delivery placed at that delivery's own path, which is indistinguishable from it. | Nothing needed -- routine cleanup. |
 | Error | `error` | This instance's pull ended early -- either before fetching anything (no credentials, rejected credentials, a rate-limited sign-in, an unreadable ledger, a permissive credentials file, a failed listing, or a missing source) or partway through (an authentication failure on a fetch; anything already delivered stays delivered). Other instances still ran. | Read the printed next step and report it to the user -- never run `fitdocs connect` yourself (it needs an interactive terminal the agent cannot use), and never retry on your own judgment. |
 
+An instance with wellness enabled also prints a wellness table after its
+activity report. Days listed is a cross-cutting count, not a channel. The
+wellness channels describe days and delivered files separately; notices
+annotate attribution changes rather than replacing a day's outcome.
+
+| Wellness channel | Field | Meaning | Do |
+|------------------|-------|---------|----|
+| Days unchanged | `unchanged` | Listed days whose revision is already recorded in this instance's ledger. | Nothing needed. |
+| Delivered | `delivered` | A wellness file holding new or changed days was written into the inbox. | Nothing needed -- the chained `--sync` drain admits it; on a plain pull, the next `fitdocs sync` will. |
+| Would deliver | `would_deliver` | Under `--dry-run`, dates that would be packaged and delivered. | Nothing needed in the routine above. |
+| Already held | `held` | A wellness package's identical bytes are already archived or still pending in this instance's inbox delivery. | Nothing needed. |
+| Failed | `failed` | A listed day was malformed, or packaging, package validation or delivery failed for the reason printed; other years can still be delivered. | Read the reason and tell the athlete if it recurs; the next pull retries it. |
+| Notices | `notices` | A platform previously attributed to this instance's wellness is no longer attributed. | Tell the athlete that a platform's attribution vanished; that platform's own export can fill the gap. |
+| Error | `error` | This instance's wellness pull ended early; work already delivered stays delivered. | Report the printed next step to the athlete; never edit `fitdocs.toml` and never set `wellness = false` yourself. |
+
 `fitdocs sync`'s own drain (chained here by `--sync`, or run directly by
 `fitdocs sync`) prints an inbox path followed by twelve report rows. Workout
 FIT outcomes use written / skipped / failed; warnings annotate those
