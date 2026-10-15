@@ -636,6 +636,14 @@ def _raise_for_wellness_status(
 
 
 def _wellness_origins(athlete: dict[str, object]) -> dict[str, str]:
+    switches = {
+        "garmin": "icu_garmin_download_wellness",
+        "polar": "polar_download_wellness",
+        "suunto": "suunto_download_wellness",
+        "coros": "coros_download_wellness",
+        "zepp": "zepp_download_wellness",
+        "huawei": "huawei_download_wellness",
+    }
     claims: dict[str, set[str]] = {}
     for key, fields in athlete.items():
         match = re.fullmatch(WELLNESS_KEYS_PATTERN, key)
@@ -643,9 +651,12 @@ def _wellness_origins(athlete: dict[str, object]) -> dict[str, str]:
             continue
         platform = match.group(1).replace("_", "-")
         if (
-            platform == "icu"
+            platform in {"icu", "private"}
             or re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", platform) is None
         ):
+            continue
+        switch = switches.get(platform)
+        if switch is not None and switch in athlete and athlete[switch] is not True:
             continue
         if not isinstance(fields, list):
             continue

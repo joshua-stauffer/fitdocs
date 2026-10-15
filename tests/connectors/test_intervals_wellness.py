@@ -1027,7 +1027,7 @@ def _origins_outcome(
             {"weight": "google-fit", "hrv": "google-fit"},
         ),
         ({"123_wellness_keys": ["steps"]}, {"steps": "123"}),
-        ({"private_wellness_keys": ["weight"]}, {"weight": "private"}),
+        ({"private_wellness_keys": ["weight"]}, {}),
     ],
 )
 def test_settings_claim_cardinality_and_platform_names(

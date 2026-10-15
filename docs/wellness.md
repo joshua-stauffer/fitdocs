@@ -170,6 +170,12 @@ A later record replaces all mapped fields, including values that became null.
 `origins` is optional: intervals.icu field name → lowercase platform token
 matching `[a-z0-9]+(-[a-z0-9]+)*`, such as `garmin` or `apple`. The pull
 obtains these from the athlete's `*_wellness_keys`; unnamed fields have no origin.
+The private and ICU namespaces do not name source platforms.
+A known platform's wellness-download switch must be boolean true when present;
+an absent switch keeps list-based compatibility.
+The Garmin health switch does not enable wellness imports.
+Only enabled platform lists count toward ambiguity; a field claimed by multiple
+enabled platforms has no platform attribution.
 No other envelope key and no pull timestamp are emitted. A newer unsupported
 envelope version is unrecognized with a reason naming the newer version.
 

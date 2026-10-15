@@ -200,6 +200,13 @@ values can be misattributed. A field claimed by multiple platforms has no
 platform attribution. Review your import settings when attribution changes;
 use an original export when you need reliable historical provenance.
 
+The private and ICU namespaces do not name source platforms.
+A known platform's wellness-download switch must be boolean true when present;
+an absent switch keeps list-based compatibility.
+The Garmin health switch does not enable wellness imports.
+Only enabled platform lists count toward ambiguity; a field claimed by multiple
+enabled platforms has no platform attribution.
+
 A 403 message may mean intervals.icu is withholding wellness received from
 Garmin. Set `wellness = false` to stop wellness requests while keeping activity
 pulls. Use Garmin's own data export through the [wellness guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/wellness.md)

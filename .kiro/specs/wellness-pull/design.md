@@ -902,14 +902,38 @@ def package_wellness(self, session: ConnectorSession, days: tuple[WellnessDay, .
 - One `GET {API_BASE}/athlete/0` per call; non-200 →
   `_raise_for_wellness_status(request="athlete settings request")`; the body
   must be a JSON object, else `ConnectorError(ATHLETE_FORM_MESSAGE)`.
-- `origins = _wellness_origins(athlete)` (8.1-8.4): for each key matching
+- `origins = _wellness_origins(athlete)` (8.1-8.4, TBC-W5 reconciliation,
+  2026-10-15; numbered repair 7.1): for each key matching
   `WELLNESS_KEYS_PATTERN`, `platform = group(1).replace("_", "-")`; a
-  platform that is not a slug, or is `icu`, is skipped (8.3); the value must
-  be a list; its non-empty string elements are the fields it imports; an
-  empty list imports nothing (TBC-W5 decides whether a separate switch must
-  also be on). A field claimed by exactly one platform maps to it; a field
-  claimed by several maps to none (8.2). Record values are never read
-  (8.4).
+  platform that is not a slug, or is `icu` or `private`, is skipped (8.3).
+  These are non-platform namespaces, including their `icu_`-prefixed aliases;
+  their lists never create claims or make a real platform ambiguous.
+  The value must be a list; its non-empty string elements are candidate
+  fields; an empty list imports nothing. For the six known platform tokens,
+  the exact wellness-download switch below gates all of that platform's
+  key-list aliases: when present, only the boolean `True` admits claims;
+  `False`, `None` and every non-boolean JSON value admit none. When absent,
+  retain the list-based behavior for older/partial athlete responses. Other
+  valid platform tokens retain list-based behavior: do not infer switches
+  from arbitrary key suffixes. `icu_garmin_health` is independent and never
+  substitutes for the Garmin wellness-download switch.
+
+  | Platform token | Known wellness-download switch |
+  |---|---|
+  | `garmin` | `icu_garmin_download_wellness` |
+  | `polar` | `polar_download_wellness` |
+  | `suunto` | `suunto_download_wellness` |
+  | `coros` | `coros_download_wellness` |
+  | `zepp` | `zepp_download_wellness` |
+  | `huawei` | `huawei_download_wellness` |
+
+  Only admitted platform lists participate in claim cardinality: a field
+  claimed by exactly one platform maps to it; a field claimed by several
+  maps to none (8.2). Record values are never read (8.4). The public API
+  schema documents these property names/types; absent-switch compatibility
+  and strict-boolean gating are the explicit fitdocs policy, not a claimed
+  causal result of the read-only live check. No format-consumer or revision
+  change follows from this settings-only repair.
 - Each `WellnessDay.record` must be a `dict` this connector listed (else
   `ConnectorError`). The envelope is `{"format": WELLNESS_DELIVERY_FORMAT,
   "version": WELLNESS_DELIVERY_VERSION, "records": [records sorted by id]}`
@@ -1285,8 +1309,16 @@ types, booleans and counts.
   matching `*_wellness_keys`: name, element type, length, count of elements
   that are wellness record key names; every boolean key whose name shares
   such a key's platform part and contains `wellness`, `health` or
-  `download`: name and value. Decides whether `_wellness_origins` must also
-  require a switch.
+  `download`: name and value. **Reconciled 2026-10-15:** research.md records
+  TBC-W5 contradicted because `private_wellness_keys` is not a platform
+  import list; `icu_wellness_keys` is also non-platform. Numbered repair 7.1
+  excludes both and implements the exact known-switch/absent-switch policy
+  in IntervalsWellness Packaging above. The observed Garmin wellness switch
+  was false while its independent health switch was true; neither that
+  snapshot nor the public schema establishes toggle causality. The public
+  schema at <https://intervals.icu/api/v1/docs> was rechecked for the six
+  exact boolean switch names; the repair retains all live-check observation
+  limits. Other TBC outcomes and the shapes-only findings remain unchanged.
 - **TBC-W6** — among records whose `id` is more than 60 days old, the count
   whose `updated` date is more than 7 days after the `id` date, and the
   total. A large share means `updated` moves on recomputation.
@@ -1305,7 +1337,8 @@ parser (`date(id)`) read the same form; TBC-W3 or TBC-W4 contradicted → a
 `wellness-store` intervals-format amendment (its `FIELD_METRICS`, its
 revision normalization, `rules_version` + 1, `docs/wellness.md`'s table)
 carried by the repair task;
-TBC-W5 → `_wellness_origins` gains the switch; TBC-W6 → the connector's
+TBC-W5 → numbered repair 7.1 applies the reconciled namespace and exact
+known-switch policy above; TBC-W6 → the connector's
 revision becomes the content digest of the record without `updated` and the
 computed fields; TBC-W2 or TBC-W7 → `_wellness_windows`.
 
@@ -1374,9 +1407,12 @@ decisions; each is revisable at review.
 8. The framework checks packages by extension (`.json`: well-formed JSON,
    ≤ 64 MiB); envelope correctness is the connector's, pinned by a contract
    test through `wellness-store`'s real parser.
-9. Attribution: a field maps to a platform only when exactly one platform's
-   `*_wellness_keys` list names it; the platform token is derived from the
-   key name; no attribution setting.
+9. Attribution: a field maps to a platform only when exactly one admitted
+   platform's `*_wellness_keys` list names it; the token is derived from the
+   key name. TBC-W5 repair 7.1 excludes `icu`/`private` namespaces and requires
+   a present known wellness-download switch to be strictly true; an absent
+   known switch and other valid platform tokens retain list-based behavior.
+   No user attribution setting or record-value inference is introduced.
 10. An attribution-change notice from the ledger's recorded origins.
 11. A wellness 403 is a wellness-specific error naming the Garmin restriction
     and the remedies, not the generic blocked-client step.

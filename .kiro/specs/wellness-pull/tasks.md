@@ -668,6 +668,56 @@ requirements' amendment list.
     ticked repair task; the roadmap lines ticked or annotated; `spec.json`
     records completion.
   - _Requirements: 11.6, 11.7_
+  - _Depends: 1.1, 6.2, 7.1_
+
+- [x] 7. Live-check repairs required by 6.3
+
+- [x] 7.1 Reconcile TBC-W5 platform namespaces and known wellness-download switches
+  - Implements the 2026-10-15 TBC-W5 marker amendment and IntervalsWellness
+    Packaging policy in design.md. `_wellness_origins` excludes both `icu`
+    and `private` platform tokens, including prefixed aliases. Known switch
+    mapping: garmin → `icu_garmin_download_wellness`, polar →
+    `polar_download_wellness`, suunto → `suunto_download_wellness`, coros →
+    `coros_download_wellness`, zepp → `zepp_download_wellness`, huawei →
+    `huawei_download_wellness`. If present, only boolean True admits that
+    platform's key lists; absent retains list-based compatibility. Unknown
+    valid platform tokens stay list-based; do not invent suffix-based gates.
+    `icu_garmin_health` never substitutes for the wellness switch. Filtering
+    happens before claim cardinality; records remain opaque and byte-value
+    preserving, and package metadata uses the resulting origins.
+  - **Boundary:** production edits only `_wellness_origins` and local
+    internal declarations in `src/fitdocs/connectors/intervals.py`. New tests
+    in `tests/connectors/test_wellness_attribution.py`; existing
+    `tests/connectors/test_intervals_wellness.py` changes only the old
+    private-namespace expected-origin value to `{}`. Preserve all other
+    parameters, helpers, assertions, protocol, activity operations, listing,
+    packaging serialization, ledger and shared fixtures. Update the
+    attribution passages of `docs/connectors.md` and `docs/wellness.md` to
+    state the repaired policy, with visible passage pins in the new module.
+    Parent owns the design/tasks amendments and all task-state changes.
+  - **Tests:** actual public packaging path observes origin map and package
+    origins independently for private/ICU aliases; each known switch and
+    both key-list aliases; present True/False/None and non-boolean JSON
+    families; absent-switch compatibility; independent Garmin health flag;
+    non-platform and disabled-platform lists creating no ambiguity for an
+    admitted real platform; enabled-platform collisions; unknown valid
+    platform and invented switch ignored; original record values preserved.
+    Test the changed old parameter at its own assertion and preserve the
+    rest of its file. Keep synthetic records/dates and API_BASE addresses.
+  - **Mutations:** admit private or ICU; ignore a known switch; swap two
+    platform-switch bindings; accept truthy/non-boolean values; require an
+    absent switch; use the health flag; filter only after cardinality; infer
+    an unknown switch; alter records or leave stale package-origin metadata;
+    remove a required visible policy passage. Every new/changed assertion
+    incidence must fail its intended assertion under an applied fault and
+    pass after exact restoration, with controls/equivalences explicit.
+  - **Observable:** focused new attribution + unchanged intervals/listing/
+    engine/integration/docs tests green; configured mypy/Ruff/diff checks
+    green; fresh independent review and parent verification. Then rerun
+    6.2's complete gate and update the 8.1/11.6/11.7 coverage record before
+    6.3 is ticked. No wellness-store format amendment is needed because
+    TBC-W1/W3/W4 were confirmed, not contradicted.
+  - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 11.6, 11.7, 12.1, 12.2, 12.3_
   - _Depends: 1.1, 6.2_
 
 ## Implementation Notes
@@ -840,3 +890,7 @@ Receipt aliases below name actual applied-fault execution records; complete muta
 All owned uv/pytest/audit subprocesses joined or independently observed absent; final process inspection showed only its own ps/rg commands. No task/spec metadata/log/commit changed by implementer. Final current tracked-feature hashes and evidence checksums: `final-manifest.json`. Fresh reviewer must run exactly one canonical full suite on the unchanged source/test bytes, then parent appends its result and owns final task state/push.
 
 - **6.2 review gate (2026-10-15).** Independently APPROVED → VERIFIED. Fresh canonical 18,483 passed / 44 skipped (18,527 collected); Ruff lint/format 746, configured mypy 561 and whitespace clean. All 137 cited symbols passed. Independent audit matched all 91 source criteria, 58 current feature hashes, 27 evidence hashes, 80 historical test ASTs and 50 whole-file matches; reparsed 116 historical records, 61 XML, 40 logs and 34 declared-control XML artifacts. Parent rechecked the final hash manifest and raw canonical XML and ran fresh focused 144 passed. All five validation PIDs joined and gone; exact-head CI 38781910921 SUCCESS. The preceding readiness record remains historical context; this gate is complete. Task 6.3 still owns TBC-W5 design amendment, numbered repair and another full 6.2 gate before completion; this is not feature GO. No new follow-ups.
+
+- **6.3 repair planning (2026-10-15).** Controller reconciled TBC-W5 at its design marker and Packaging/Decision 9, retained the contradictory shapes-only findings and observation limits, and appended numbered repair 7.1 before completion. Public unauthenticated API schema rechecked exact six boolean download-switch names; private/ICU exclusion and strict-present-True/absent-list compatibility are explicit fitdocs policy, not live toggle causality. Temporary public-schema settings evidence: /private/tmp/wellness-pull-completion/public-schema-settings.json. Task 6.3 now depends on 7.1 and its rerun of 6.2.
+
+- **7.1 (2026-10-15).** READY_FOR_REVIEW → independently APPROVED round 2 → VERIFIED. Reconciled TBC-W5: private/ICU namespaces never create claims; six exact known wellness-download switches admit claims only for present boolean True, while missing switches and other valid platform tokens retain list compatibility. Garmin health never substitutes; filtering precedes cardinality; records and resulting package-origin metadata preserved. Only `_wellness_origins` changed in production; old private expected value alone migrated, all other 89 definitions/parameters preserved; existing docs retained with policy insertions. Behavioral OFF 183 owning failures/768 passes, ON and removed-flag 951 passes. Fresh reviewer replayed all 59 current applications and four new faults: 63 applications/126 pytest commands, 793 owning AssertionErrors, 538 GREEN applied cases, all 1,331 restored cases GREEN. Parent raw XML/exact applied-source/full Assert-AST/function-ordinal audit confirmed all 447 new assertion incidences across 224 new cases plus the changed old private case (23 sites/225 nodes), exact five hashes. Initial wrong synthetic credential literal was corrected to the hard-rule key with exact one-Constant proof; its interrupted canonical receives no credit. Current complete canonical 18,707 passed / 44 skipped (18,751 collected); mypy 562, Ruff lint/format 747 and whitespace clean; fresh parent focused 1,313 passed. All 1,932 initial hashes and 481 historical artifacts preserved, all 132 recorded review uv PIDs exited. No new follow-ups. Postrepair 6.2 numeric/coverage/status and exact-commit CI remain required before 6.3.
