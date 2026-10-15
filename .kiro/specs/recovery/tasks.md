@@ -1117,3 +1117,32 @@ introspection artifact also names its MetricInfo value type at line 48).
   post-rebase or feature GO claim. Commit/push this reviewed leaf, then
   rebase before the next leaf, preserve both histories, re-derive the
   recovery landing numbers and validate the combined tree.
+
+
+### Post-rebase compatibility verified (2026-10-15)
+
+- Rebased the accepted recovery work onto wellness-pull main `693fd445`;
+  clean rewritten head `c23e2fc` was pushed with force-with-lease. Recovery
+  now advances CONTRACT_VERSION 12→13, retaining wellness-pull's 11→12
+  history and permanent pull guarantees. DOC_VERSION remains 9; runtime
+  dependency declarations are unchanged. Recovery wiki amendment is 8;
+  wellness-pull Amendment 7/Requirement 2.15 remain intact.
+- Resolved only task 1.6's shared contract/current-head/history companion
+  surfaces. Migrated the five current-head parameters from wellness-pull
+  to recovery without changing the existing Markdown parser or other
+  guards; updated literal index/version pins and regenerated eight
+  declaration goldens through the sanctioned writer, version lines only.
+  Accepted chart/View bytes and the exact automatic confinement merge are
+  preserved. Original acceptance commit IDs above are historical pre-rebase
+  records; current chart commit is `c23e2fc`, View `8d33f85`, location
+  `0b03a49`.
+- Fresh independent compatibility APPROVED and controller VERIFIED:
+  full combined tree 21446 passed / 44 expected skips; final focused 71
+  passed; Ruff check/format (761 files), mypy (576 files) and diff clean.
+  Five targeted/own faults produced nineteen direct intended failures and
+  restored GREEN. All 1958 tracked byte/size/mtime snapshots restored;
+  both histories, metadata, goldens and peer implementation files preserved.
+- Evidence: `/private/tmp/recovery-rebase-review.md` and its raw package,
+  plus `/private/tmp/recovery-post-rebase-verification.md`. This verifies
+  compatibility, not feature GO or task 6.2 completion. Eight mandatory
+  leaves are accepted; continue with 2.2, then the remaining approved plan.
