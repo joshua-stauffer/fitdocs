@@ -69,7 +69,17 @@ from fitdocs.cli import app
 from fitdocs.connectors.connect import Connected, run_connect
 from fitdocs.connectors.credentials import CredentialStore
 from fitdocs.connectors.http import HttpResponse
-from fitdocs.connectors.protocol import Granted, SettingsContext
+from fitdocs.connectors.protocol import (
+    AuthStyle,
+    Capability,
+    ConnectorSession,
+    CredentialField,
+    Granted,
+    SettingsContext,
+    WellnessDay,
+    WellnessListing,
+    WellnessPackage,
+)
 from fitdocs.connectors.pull import PullOptions, run_pull
 from fitdocs.connectors.secrets import Redactor
 from fitdocs.connectors.settings import ConnectorInstance, load_connectors_settings
@@ -1441,6 +1451,89 @@ def _wrote_wellness_year(touched: Sequence[str]) -> bool:
     return "data/wellness/2028.csv" in touched
 
 
+_WELLNESS_PULL_INSTANCE = "wellness-src"
+
+
+class _ConfinementWellnessPuller:
+    connector_id = "confinement-wellness"
+    display_name = "Confinement Wellness"
+    auth_style = AuthStyle.NONE
+    credential_fields: tuple[CredentialField, ...] = ()
+    capabilities = frozenset({Capability.PULL_WELLNESS})
+
+    def parse_settings(self, table: object, context: SettingsContext) -> object:
+        return None
+
+    def list_wellness(
+        self, session: ConnectorSession, oldest: date | None
+    ) -> WellnessListing:
+        day = (
+            datetime(1989, 12, 31, tzinfo=UTC)
+            + timedelta(seconds=builder.FIT_TIMESTAMP_BASE)
+        ).date()
+        return WellnessListing(day, day, (WellnessDay(day, "revision-c", {}),))
+
+    def package_wellness(
+        self, session: ConnectorSession, days: tuple[WellnessDay, ...]
+    ) -> WellnessPackage:
+        return WellnessPackage(b'{"invented":431}\n', ".json", "synthetic", frozenset())
+
+
+def _prepare_wellness_pull(data_root: Path, source_dir: Path) -> None:
+    settings_path(data_root).write_text('[inbox]\npath = "inbox"\nsettle_seconds = 0\n')
+
+
+def _run_wellness_pull(data_root: Path, source_dir: Path) -> None:
+    calls: list[object] = []
+
+    def transport(request: object, timeout: float) -> NoReturn:
+        calls.append(request)
+        raise AssertionError("the local wellness puller reached transport")
+
+    with (
+        pytest.MonkeyPatch.context() as monkeypatch,
+        tempfile.TemporaryDirectory() as base_dir,
+    ):
+        isolate_connector_environment(monkeypatch, Path(base_dir))
+        monkeypatch.setattr(socket, "socket", _socket_raises)
+        document = load_settings_document(data_root)
+        settings = load_inbox_settings(document, data_root=data_root)
+        paths = create_inbox_paths(validate_inbox_paths(data_root, settings))
+        run_pull(
+            data_root,
+            [
+                ConnectorInstance(
+                    _WELLNESS_PULL_INSTANCE,
+                    _ConfinementWellnessPuller(),
+                    30,
+                    None,
+                    wellness=True,
+                )
+            ],
+            inbox=paths.inbox,
+            store=None,
+            transport=transport,
+            options=PullOptions(since=None, dry_run=False),
+            environ={},
+            now=lambda: _PULL_NOW,
+            sleep=lambda _: None,
+            redactor=Redactor(),
+        )
+    assert calls == [], calls
+
+
+def _wrote_wellness_ledger_and_delivery(touched: Sequence[str]) -> bool:
+    return (
+        f"data/{CONNECTOR_STATE_DIR}/{_WELLNESS_PULL_INSTANCE}.toml" in touched
+        and any(
+            Path(key).parent.as_posix() == f"data/inbox/{_WELLNESS_PULL_INSTANCE}"
+            and Path(key).name.startswith("wellness-")
+            and key.endswith(".json")
+            for key in touched
+        )
+    )
+
+
 #: Every fitdocs entry point that writes into the data root (Req 7.6).
 WRITING_ENTRY_POINTS: Final[tuple[EntryPoint, ...]] = (
     EntryPoint(id="sync", prepare=_nothing, run=_run_sync),
@@ -1563,6 +1656,12 @@ WRITING_ENTRY_POINTS: Final[tuple[EntryPoint, ...]] = (
         prepare=_prepare_wellness_regen,
         run=_run_wellness_regen,
         non_vacuous=_wrote_wellness_year,
+    ),
+    EntryPoint(
+        id="pull-wellness",
+        prepare=_prepare_wellness_pull,
+        run=_run_wellness_pull,
+        non_vacuous=_wrote_wellness_ledger_and_delivery,
     ),
 )
 
@@ -3241,3 +3340,80 @@ def test_query_writes_nothing_outside_its_spill_directory(
     )
     assert snapshot() == before
     assert tuple(home.iterdir()) == ()
+
+
+def test_wellness_pull_is_registered_with_its_writing_functions() -> None:
+    assert next(
+        (entry for entry in WRITING_ENTRY_POINTS if entry.id == "pull-wellness"),
+        None,
+    ) == EntryPoint(
+        "pull-wellness",
+        _prepare_wellness_pull,
+        _run_wellness_pull,
+        _wrote_wellness_ledger_and_delivery,
+    )
+
+
+@pytest.mark.parametrize(
+    "paths,expected",
+    [
+        (("data/.fitdocs/connectors/wellness-src.toml",), False),
+        (("data/inbox/wellness-src/wellness-day.json",), False),
+        (
+            (
+                "data/.fitdocs/connectors/wellness-src.toml",
+                "data/inbox/wellness-src/wellness-day.json",
+            ),
+            True,
+        ),
+        (
+            (
+                "data/.fitdocs/connectors/other.toml",
+                "data/inbox/wellness-src/wellness-day.json",
+            ),
+            False,
+        ),
+        (
+            (
+                "data/.fitdocs/connectors/wellness-src.toml",
+                "data/inbox/other/wellness-day.json",
+            ),
+            False,
+        ),
+        (
+            (
+                "data/.fitdocs/connectors/wellness-src.toml",
+                "data/inbox/wellness-src/wellness-day.fit",
+            ),
+            False,
+        ),
+        (
+            (
+                "data/.fitdocs/connectors/wellness-src.toml",
+                "data/inbox/wellness-src/activity.json",
+            ),
+            False,
+        ),
+        (
+            (
+                "data/.fitdocs/connectors/wellness-src.toml",
+                "data/inbox/wellness-src/nested/wellness-day.json",
+            ),
+            False,
+        ),
+    ],
+    ids=(
+        "ledger-only",
+        "delivery-only",
+        "both",
+        "wrong-ledger",
+        "wrong-instance",
+        "wrong-extension",
+        "wrong-prefix",
+        "nested",
+    ),
+)
+def test_wellness_pull_non_vacuity_needs_own_ledger_and_wellness_json(
+    paths: tuple[str, ...], expected: bool
+) -> None:
+    assert _wrote_wellness_ledger_and_delivery(paths) is expected

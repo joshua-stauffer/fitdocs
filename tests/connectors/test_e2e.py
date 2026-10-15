@@ -294,8 +294,8 @@ def _fresh_synced_root(
     tiles_disabled: bool = False,
 ) -> Path:
     """A freshly synced data root with one workout document, optionally
-    carrying a `[connectors]` table naming the built-in folder connector
-    and the scripted personal-key connector."""
+    carrying a `[connectors]` table naming the built-in folder connector,
+    the scripted personal-key connector, and wellness-enabled intervals."""
     source = tmp_path / f"{name}-src"
     source.mkdir()
     (source / "run.fit").write_bytes(builder.run_fit_bytes())
@@ -306,7 +306,8 @@ def _fresh_synced_root(
         settings += (
             '[connectors.folder-src]\nconnector = "folder"\n'
             'path = "unused-folder"\n\n'
-            '[connectors.key-src]\nconnector = "personal-key"\n'
+            '[connectors.key-src]\nconnector = "personal-key"\n\n'
+            '[connectors.wellness-src]\nconnector = "intervals"\nwellness = true\n'
         )
     if tiles_disabled:
         settings += "\n[tiles]\nenabled = false\n"
@@ -370,6 +371,7 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
     )
     connector_registry.register(key_connector)
     monkeypatch.setenv(env_var_name("key-src", "api_key"), "s3cr3t-api-key")
+    monkeypatch.setenv(env_var_name("wellness-src", "api_key"), "ik-synthetic-7Q2x9")
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "fallback-xdg-cache"))
     is_query = command == "query"
     is_dashboard = command == "dashboard"
