@@ -121,6 +121,27 @@ sync` to rebuild; if the remedy names invalid settings, tell the user to fix
 and remedy. Never delete archive entries, inbox files or occupied paths to
 resolve these findings yourself. The user decides which data to keep.
 
+**Heart-rate benchmarks in `fitdocs check`.** These findings concern the
+athlete's recorded benchmark timeline:
+
+- `hr_benchmark_takeover`: derived resting or maximum heart rate has taken
+  over from a hand-recorded value. Relay the takeover's values, dates,
+  evidence and remedy to the athlete; the athlete decides whether to record
+  a new hand value or leave the derived value. Never answer the takeover
+  yourself. A new hand entry wins from its date; leaving the derived entry
+  accepts it. The listing ends when a later entry of that kind exists.
+- `hr_benchmark_inconsistent`: the selected heart-rate benchmarks are
+  inconsistent, so heart-rate load is not computed in the printed period.
+  Tell the athlete the inconsistent period and recorded values, and suggest
+  recording the correct value by hand for the one that is wrong.
+- `athlete_profile_unreadable`: the profile could not be read or validated.
+  Tell the athlete to fix `athlete.toml`; load and derive-benchmarks refuse
+  to run until it is valid.
+
+A changed benchmark timeline affects existing computed load only after an
+explicit recomputation. Never run `fitdocs load --recompute` unless the
+athlete asks.
+
 ## Ownership boundary
 
 The fitdocs-owned tree -- the directories fitdocs writes generated content

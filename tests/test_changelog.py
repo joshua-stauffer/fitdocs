@@ -674,3 +674,14 @@ def test_real_changelog_newest_released_heading_is_the_manifest_version() -> Non
     assert headings.index(released_headings[0]) == (
         headings.index(_UNRELEASED_HEADING) + 1
     )
+
+
+def test_unreleased_explains_first_derivation_historic_heart_rate_load() -> None:
+    unreleased = (
+        _real_changelog_text().split("## [Unreleased]", 1)[1].split("\n## ", 1)[0]
+    )
+    assert (
+        "On the first derivation, historic heart-rate load before a hand-recorded "
+        "entry's measurement date moves to derived values where derived evidence "
+        "exists, only after you explicitly run `fitdocs load --recompute`."
+    ) in " ".join(unreleased.split())

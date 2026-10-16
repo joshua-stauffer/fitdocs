@@ -17,6 +17,22 @@ recorded as one.
 
 ### Added
 
+- `fitdocs derive-benchmarks` gains a heart-rate stage after tagged efforts:
+  resting heart rate comes from per-source wellness baselines, and maximum
+  heart rate from sustained workout peaks. Hand-recorded entries stay
+  unchanged and win from their measurement date until later evidence passes
+  the disagreement and confirmation rules; dated benchmark selection is
+  unchanged. Run `fitdocs derive-benchmarks` to build the timeline; see
+  [derived heart-rate benchmarks](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/configuration.md#derived-heart-rate-benchmarks).
+- The athlete-benchmarks provenance contract gains the optional `series`
+  key for a wellness-series reference. The load-channels contract adds
+  `resting_hr_measured_on` and `max_hr_measured_on` to the heart-rate
+  channel's `inputs_used`, identifying the dated resting and maximum
+  entries used; existing documents need no migration. `fitdocs check` adds
+  `hr_benchmark_takeover`, `hr_benchmark_inconsistent` and
+  `athlete_profile_unreadable`: relay a takeover to the athlete to decide,
+  correct the wrong recorded value for an inconsistency, or fix the profile
+  before loading or deriving again.
 - The intervals.icu wellness pull: `fitdocs pull` delivers wellness files
   into the inbox, with field attribution from intervals.icu's per-platform
   wellness import settings and a separate wellness report table.
@@ -118,6 +134,17 @@ recorded as one.
 
 ### Changed
 
+- The ownership contract (wiki-contract) advances from version `12` to
+  `13`: `derive-benchmarks` reads composed workout archives and normalized
+  wellness series and writes `athlete.toml` at most once per stage, without
+  changing hand-recorded entries. Run `fitdocs sync` or `fitdocs regen` once
+  to refresh the in-tree ownership declarations; see
+  [the ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md).
+- Derivation narrows a later hand-recorded entry's applies-from back-reach;
+  deriving alone does not rescore existing load. On the first derivation,
+  historic heart-rate load before a hand-recorded entry's measurement date
+  moves to derived values where derived evidence exists, only after you
+  explicitly run `fitdocs load --recompute`.
 - Connector ledger format: a connector's ledger uses ledger format 2 when it
   holds wellness records. An older fitdocs refuses such a ledger. To enable
   wellness, set `wellness = true` on the instance and run `fitdocs pull --sync`.

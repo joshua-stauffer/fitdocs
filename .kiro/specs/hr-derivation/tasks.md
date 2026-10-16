@@ -647,7 +647,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 1.1, 1.3, 1.4, 1.5, 1.8, 1.11, 5.7, 6.1, 10.4_
   - _Depends: 3.3_
 
-- [ ] 4. Guards, the contract version, documentation and the skill
+- [x] 4. Guards, the contract version, documentation and the skill
 
 - [x] 4.1 Pin the package's reach: module list, single writer, reachability, public surface and confinement
   - Add the literal module list to the boundary guard; assert the stage's
@@ -741,7 +741,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 11.1, 11.2, 11.3, 11.6_
   - _Depends: 4.2_
 
-- [ ] 4.4 Teach the workouts skill the new findings and record the release notes
+- [x] 4.4 Teach the workouts skill the new findings and record the release notes
   - The workouts skill: how to read `hr_benchmark_takeover`,
     `hr_benchmark_inconsistent` and `athlete_profile_unreadable`; relay a
     takeover to the athlete and never answer it; never run
@@ -817,6 +817,8 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 4.1, 4.7_
 
 ## Implementation Notes
+
+- 4.4: The workouts skill names the three HR findings, their remedies and the athlete-owned takeover decision; Unreleased records contract 13, wiki-contract Amendment 8, one declaration refresh and explicit historical recomputation. Independent review reproduced eight claimed faults, four association controls, two own faults and nine declared unpinned narrative probes. Controller fresh 186 scoped tests, Ruff (771 files), configured mypy (586 files), exact four-file hashes and diff checks passed. All previous bytes remain; surrounding narrative is manually source-checked rather than claimed fully pinned.
 
 - 4.3: README/configuration/ownership/dependency prose now explains the HR evidence, strict steps and confirmation, write-time hand rule, unchanged dated selection, back-reach and current takeover behavior, explicit historical load recomputation and runtime. Only the source_page description changes in index code; canonical analytics regeneration changes one row, with schema/version unchanged. Four numeric doc instances use semantic :g formatting, and one full paragraph pins the current-listing/back-reach rule; the producer literal is re-pinned. Independent review reproduced 16 claimed/three own faults, four equivalent-value controls and five declared narrative coverage probes. Controller fresh 1,665 tests, Ruff (771 files), configured mypy (586 files), eight hashes and diff passed. Remaining narrative is manually source-checked and explicitly unpinned by these focused doc tests; no promise that five pins constrain every sentence.
 

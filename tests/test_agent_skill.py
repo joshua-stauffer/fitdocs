@@ -1913,3 +1913,55 @@ def test_wellness_problem_row_prohibits_deletion(field: str) -> None:
     do = _channel_rows_by_field(INBOX_SKILL_NAME)[field][3]
     assert "Never delete the file." in do
     assert do.lower().count("delet") == 1
+
+
+@pytest.mark.parametrize(
+    "finding",
+    (
+        "hr_benchmark_takeover",
+        "hr_benchmark_inconsistent",
+        "athlete_profile_unreadable",
+    ),
+)
+def test_workouts_skill_names_heart_rate_findings(finding: str) -> None:
+    _frontmatter, body = _split_frontmatter(_skill_text(INBOX_SKILL_NAME))
+    report = _sections(body)["Reading the report"]
+    assert f"`{finding}`" in report
+
+
+@pytest.mark.parametrize(
+    ("finding", "instruction"),
+    (
+        (
+            "hr_benchmark_takeover",
+            "Relay the takeover's values, dates, evidence and remedy to the athlete; "
+            "the athlete decides whether to record a new hand value or leave the "
+            "derived value. Never answer the takeover yourself.",
+        ),
+        (
+            "hr_benchmark_inconsistent",
+            "Tell the athlete the inconsistent period and recorded values, and "
+            "suggest recording the correct value by hand for the one that is wrong.",
+        ),
+        (
+            "athlete_profile_unreadable",
+            "Tell the athlete to fix `athlete.toml`; load and derive-benchmarks "
+            "refuse to run until it is valid.",
+        ),
+    ),
+    ids=("takeover-athlete-decision", "inconsistency-remedy", "unreadable-remedy"),
+)
+def test_workouts_skill_heart_rate_athlete_instructions(
+    finding: str, instruction: str
+) -> None:
+    _frontmatter, body = _split_frontmatter(_skill_text(INBOX_SKILL_NAME))
+    report = _sections(body)["Reading the report"]
+    _before, marker, after = report.partition(f"- `{finding}`:")
+    paragraph = after.split("\n- ", 1)[0].split("\n\n", 1)[0] if marker else ""
+    assert instruction in _flat(paragraph)
+
+
+def test_workouts_skill_prohibits_unasked_load_recompute() -> None:
+    _frontmatter, body = _split_frontmatter(_skill_text(INBOX_SKILL_NAME))
+    report = _flat(_sections(body)["Reading the report"])
+    assert "Never run `fitdocs load --recompute` unless the athlete asks." in report
