@@ -21,6 +21,16 @@ recorded as one.
   `export.xml`, archives a compact extract, and uses the latest export date to
   supersede earlier exports entirely. See the [Apple Health
   guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/wellness.md#apple-health).
+- `fitdocs recovery` writes the recovery page and chart images from
+  the normalized wellness series and workout documents. Run it after
+  a drain that archived wellness or changed the series, or when you
+  want the page; see
+  [the recovery guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/recovery.md).
+- The chart kit adds `reference-band` for points against a reference
+  band. When a chart has genuine marks, `line`, `small-multiples`
+  and `reference-band` preserve the extent of present x positions
+  even where endpoint values are absent, without fabricating values
+  or marks.
 
 - `fitdocs derive-benchmarks` gains a heart-rate stage after tagged efforts:
   resting heart rate comes from per-source wellness baselines, and maximum
@@ -145,6 +155,11 @@ recorded as one.
 - The default wellness source order gains `apple-health` between `garmin-export` and
   `intervals-icu`. The first `fitdocs sync` or `fitdocs regen` after upgrading
   rebuilds the series once.
+- The ownership contract (wiki-contract) advances from version `13`
+  to `14`: `recovery/` holds the generated page `recovery/recovery.md`
+  and its chart images under `recovery/assets/`. Run `fitdocs recovery`
+  to create or refresh the page and place `recovery/AGENTS.md`; see
+  [the ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md).
 
 - The ownership contract (wiki-contract) advances from version `12` to
   `13`: `derive-benchmarks` reads composed workout archives and normalized

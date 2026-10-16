@@ -55,6 +55,16 @@ part of the routine pair above, and never run it speculatively.
 fitdocs regen
 ```
 
+Run `fitdocs recovery` after the routine pair when the drain report's
+`Wellness archived` count is above zero or it printed a wellness series
+summary, or when the athlete asks for the recovery page. Never run it
+as part of the routine pair. See
+[the recovery guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/recovery.md).
+
+```bash
+fitdocs recovery
+```
+
 ## Reading the report
 
 `fitdocs pull` prints, per configured instance, a counts table headed by

@@ -1965,3 +1965,90 @@ def test_workouts_skill_prohibits_unasked_load_recompute() -> None:
     _frontmatter, body = _split_frontmatter(_skill_text(INBOX_SKILL_NAME))
     report = _flat(_sections(body)["Reading the report"])
     assert "Never run `fitdocs load --recompute` unless the athlete asks." in report
+
+
+# --- recovery guidance and release metadata (recovery Req 18.3, 18.4) --------
+
+
+def test_workouts_recovery_has_its_own_fence_after_regen() -> None:
+    _frontmatter, body = _split_frontmatter(_skill_text(INBOX_SKILL_NAME))
+    _prose, fences = _strip_fences(_sections(body)["Commands to run"])
+    assert [content for lang, content in fences if lang in ("bash", "sh")] == [
+        "fitdocs pull --sync --no-prompt\nfitdocs check\n",
+        "fitdocs regen\n",
+        "fitdocs recovery\n",
+    ]
+
+
+def test_workouts_recovery_guidance_is_between_regen_and_its_fence() -> None:
+    _frontmatter, body = _split_frontmatter(_skill_text(INBOX_SKILL_NAME))
+    commands = _sections(body)["Commands to run"]
+    after_regen = commands.partition("```bash\nfitdocs regen\n```")[2]
+    guidance = re.split(
+        r"```(?:bash|sh)\nfitdocs recovery\n```", after_regen, maxsplit=1
+    )[0]
+    assert _flat(guidance) == (
+        "Run `fitdocs recovery` after the routine pair when the drain report's "
+        "`Wellness archived` count is above zero or it printed a wellness series "
+        "summary, or when the athlete asks for the recovery page. Never run it "
+        "as part of the routine pair. See "
+        "[the recovery guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/recovery.md)."
+    )
+
+
+def test_structure_records_recovery_dependency_boundary() -> None:
+    structure = (_PROJECT_ROOT / ".kiro/steering/structure.md").read_text(
+        encoding="utf-8"
+    )
+    principles = structure.split("## Code Organization Principles\n", 1)[1]
+    bullet = next(
+        (part for part in principles.split("\n- ") if part.startswith("`recovery` ")),
+        "",
+    )
+    assert _flat(bullet) == (
+        "`recovery` imports `wellness`, `history`, `citation`, `contract`, "
+        "`layout`, `declaration`, `units`, the chart kit facade and the render "
+        "layer's attribution helpers; only `cli` imports `recovery.engine`. "
+        "Outside its own package, its pure facade depends only on `wellness` "
+        "and `citation`."
+    )
+
+
+@pytest.mark.parametrize(
+    ("heading", "entry"),
+    (
+        (
+            "Added",
+            "`fitdocs recovery` writes the recovery page and chart images from "
+            "the normalized wellness series and workout documents. Run it after "
+            "a drain that archived wellness or changed the series, or when you "
+            "want the page; see "
+            "[the recovery guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/recovery.md).",
+        ),
+        (
+            "Added",
+            "The chart kit adds `reference-band` for points against a reference "
+            "band. When a chart has genuine marks, `line`, `small-multiples` "
+            "and `reference-band` preserve the extent of present x positions "
+            "even where endpoint values are absent, without fabricating values "
+            "or marks.",
+        ),
+        (
+            "Changed",
+            "The ownership contract (wiki-contract) advances from version `13` "
+            "to `14`: `recovery/` holds the generated page `recovery/recovery.md` "
+            "and its chart images under `recovery/assets/`. Run `fitdocs recovery` "
+            "to create or refresh the page and place `recovery/AGENTS.md`; see "
+            "[the ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md).",
+        ),
+    ),
+    ids=("command-and-page", "chart-kind-and-present-x", "ownership-and-action"),
+)
+def test_recovery_release_entries_are_in_unreleased_sections(
+    heading: str, entry: str
+) -> None:
+    changelog = (_PROJECT_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    unreleased = changelog.split("## [Unreleased]\n", 1)[1].split("\n## [", 1)[0]
+    section = unreleased.split(f"### {heading}\n", 1)[1].split("\n### ", 1)[0]
+    entries = [_flat(part) for part in section.split("\n- ")[1:]]
+    assert entry in entries

@@ -115,6 +115,11 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   imports them) and `yaml` (in `dashboards.directive` only); only
   `cli` imports it, and only lazily; it never imports `duckdb`, `index` or a
   clock.
+- `recovery` imports `wellness`, `history`, `citation`, `contract`,
+  `layout`, `declaration`, `units`, the chart kit facade and the render
+  layer's attribution helpers; only `cli` imports `recovery.engine`.
+  Outside its own package, its pure facade depends only on `wellness`
+  and `citation`.
 - `LoadCalculator` implementations declare their required inputs so the CLI
   can prompt for missing data generically — no calculator-specific prompting
   code in the CLI.
