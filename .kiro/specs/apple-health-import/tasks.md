@@ -382,7 +382,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
 
 - [ ] 4. Integration: the format, its registration and imports through the drain
 
-- [ ] 4.1 Declare and register the Apple Health format
+- [x] 4.1 Declare and register the Apple Health format
   - Fill `formats/apple/__init__.py` per design § AppleFormat: `FORMAT_ID`,
     `ARCHIVED_SUFFIX`, `RULES_VERSION`, `METRICS`, `SOURCE`, `FORMAT`,
     `recognize`, `extract`, `parse`, `entry_order`.
@@ -396,6 +396,15 @@ All paths below are under `tests/wellness/apple/` unless written in full;
     and `tests/wellness/test_e2e.py` (the effective order per metric gains
     `apple-health`, so existing series go stale once); pins a grep misses
     surface in the full suite.
+  - **Peer registry consumers:** where confirmed by full-suite failures,
+    append Apple to source-order expectation tuples in
+    `tests/hr_benchmarks/test_engine.py` and the matching source-order
+    observation in `tests/test_cli_derive.py`; preserve every existing HR entry,
+    fixture and behavior. These are source-registry consequence pins only.
+  - **Integration compatibility:** correct only the codec module import in
+    `tests/wellness/apple/test_extract.py` so the public callable
+    `apple.extract` does not shadow the codec module used by its tests.
+    Preserve all existing codec assertions and fixtures.
   - **Tests** (`test_format.py`): `validate_registry()` passes;
     `FORMAT.metrics` equals the union of `POLICIES` metrics; `recognize`
     through real `CandidateProbe`s claims the English zip, the translated
@@ -423,7 +432,6 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - **Observable:** full `uv run pytest` green (integration point).
   - _Requirements: 1.3, 1.4, 3.6, 5.8, 6.1, 6.2, 6.3, 6.5, 7.2_
   - _Depends: 2.3, 3.1, 3.2_
-  - _Deferred: prerequisites 2.3, 3.1 and 3.2 are complete. Current authorization ends after Reader acceptance; regroup before starting format integration._
 
 - [ ] 4.2 Import exports through the drain end to end
   - No production change expected; a failing test here is a stop-and-report
@@ -478,7 +486,6 @@ All paths below are under `tests/wellness/apple/` unless written in full;
     green.
   - _Requirements: 1.4, 2.4, 2.6, 4.1, 4.2, 4.3, 4.4, 5.10, 6.1, 6.2, 6.3, 6.4, 6.5, 14.3_
   - _Depends: 4.1_
-  - _Blocked: waiting on blocked prerequisite 4.1; end-to-end drain import has not started._
 
 - [ ] 5. Documentation and release notes
 
@@ -527,7 +534,6 @@ All paths below are under `tests/wellness/apple/` unless written in full;
     tests/test_agent_skill.py` green; the stale-text grep finds no hit.
   - _Requirements: 1.6, 2.5, 6.6, 8.7, 9.8, 10.8, 13.1, 13.2, 13.3, 13.4_
   - _Depends: 4.1_
-  - _Blocked: waiting on blocked prerequisite 4.1; feature documentation and release notes have not started._
 
 - [ ] 6. Validation
 
@@ -549,7 +555,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - **Observable:** the full suite, lint and types green after the final
     rebase; the merge and follow-ups are in the shared log and the queue.
   - _Requirements: 5.3, 11.5, 14.1, 14.2_
-  - _Blocked: integrated format and drain prerequisites 4.1/4.2 have not started. Task-level full-suite verification passed for 3.1; final determinism, offline, rebase and release validation remain pending._
+  - _Pending: format 4.1 is accepted; drain integration 4.2, determinism, offline behaviour and final rebase/CI validation remain pending._
 
 - [ ]* 6.2 Maintainer-run smoke on the maintainer's own export (no data enters the repository)
   - In a scratch data root outside the repository, drop the real
@@ -752,3 +758,31 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   `/private/tmp/apple-reader-contract-verification.md`. Historical rejected
   rounds above remain provenance, not current blockers. Mandatory progress
   is 8/12; regroup before 4.1 under this pass's authorization.
+
+- **Feature completion authorization:** The maintainer requested all remaining
+  implementation, merge and push, with the full suite green in CI on merged
+  main. This supersedes prior regroup holds and the remote-export hold.
+  Rebased cleanly onto `origin/main` at `700b32e…`, preserving wellness-pull
+  and HR derivation; accepted Apple components remain unchanged. Remaining
+  tasks run one at a time with independent review and fresh verification.
+
+- **4.1 codec import seam:** The facade requires callable `apple.extract`,
+  which shadows the codec submodule name used by the accepted codec tests.
+  Parent authorized an import-only correction in `test_extract.py` under
+  the full-feature completion instruction, with all assertions/fixtures and
+  production codec preserved. This is integration compatibility, not a new
+  codec API or callable-module compatibility mechanism.
+
+- **4.1 peer registry pins:** Full integration exposed HR engine expectation tuples for the old source registry. Parent licensed only confirmed source-order literal additions in tests/hr_benchmarks/test_engine.py, preserving existing entries and all HR behavior/source/fixtures. Apple registration extends effective partial and default precedence.
+
+- **4.1 CLI consumer pin:** First full integration run reported six failures: four HR source-order pins plus two parameterizations of the same expected-order tuple in tests/test_cli_derive.py. Parent licensed only the Apple addition in that tuple; fixture configuration, other observations, results and all HR/CLI runtime remain unchanged.
+
+- **4.1:** Independently APPROVED and completion VERIFIED before marking complete.
+  Public EXTRACT/LATEST_ENTRY facade, real bounded recognition, readonly extraction,
+  extract-only parsing and UTC header ordering are registered. The reviewer confirmed
+  53 claimed observations (51 unique edits) and two independently designed faults,
+  all intended-red and exactly restored-green. Final canonical suite: 22,381 passed,
+  44 skipped; parent fresh focused/static/hash checks passed. Codec changes are
+  import-only with remaining AST preserved; wellness/HR/CLI differences are narrow
+  registry-consequence source-order pins. Declared observed-read controls remain
+  infrastructure controls. Remaining feature work and merged-main CI are pending.

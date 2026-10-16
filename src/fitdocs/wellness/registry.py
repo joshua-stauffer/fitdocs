@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from typing import Final
 
-from fitdocs.wellness.formats import garmin, intervals
+from fitdocs.wellness.formats import apple, garmin, intervals
 from fitdocs.wellness.probe import CandidateProbe
 from fitdocs.wellness.spec import (
     ArchiveForm,
@@ -16,13 +16,14 @@ from fitdocs.wellness.spec import (
     Supersession,
 )
 
-SOURCES: Final[tuple[SourceSpec, ...]] = (intervals.SOURCE, garmin.SOURCE)
+SOURCES: Final[tuple[SourceSpec, ...]] = (intervals.SOURCE, garmin.SOURCE, apple.SOURCE)
 FORMATS: Final[tuple[FormatSpec, ...]] = (
     intervals.FORMAT,
     garmin.UDS_FORMAT,
     garmin.SLEEP_FORMAT,
     garmin.MAXMET_FORMAT,
     garmin.BIOMETRICS_FORMAT,
+    apple.FORMAT,
 )
 
 

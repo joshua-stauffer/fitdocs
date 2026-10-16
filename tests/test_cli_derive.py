@@ -2088,7 +2088,7 @@ def test_hr_cli_forwards_preflight_and_accepted_to_real_stages(
             dry_run,
             True,
             3,
-            ("intervals-icu", "garmin-export"),
+            ("intervals-icu", "garmin-export", "apple-health"),
             7.0,
             True,
         ],

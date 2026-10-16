@@ -6,7 +6,7 @@ from typing import Literal
 import pytest
 
 from fitdocs.wellness import probe, registry
-from fitdocs.wellness.formats import garmin, intervals
+from fitdocs.wellness.formats import apple, garmin, intervals
 from fitdocs.wellness.probe import HEAD_BYTES, CandidateProbe
 from fitdocs.wellness.spec import FormatSpec
 from tests.wellness._helpers import CountingOpener
@@ -33,11 +33,12 @@ SHIPPED = (
     garmin.SLEEP_FORMAT,
     garmin.MAXMET_FORMAT,
     garmin.BIOMETRICS_FORMAT,
+    apple.FORMAT,
 )
 
 
 def test_shipped_sources() -> None:
-    assert registry.SOURCES == (intervals.SOURCE, garmin.SOURCE)
+    assert registry.SOURCES == (intervals.SOURCE, garmin.SOURCE, apple.SOURCE)
 
 
 def test_shipped_formats() -> None:
@@ -49,11 +50,15 @@ def test_shipped_registry_validates() -> None:
 
 
 def test_shipped_suffixes() -> None:
-    assert registry.candidate_suffixes() == frozenset({".json"})
+    assert registry.candidate_suffixes() == frozenset({".json", ".xml", ".zip"})
 
 
 def test_shipped_source_order() -> None:
-    assert registry.default_source_order() == ("garmin-export", "intervals-icu")
+    assert registry.default_source_order() == (
+        "garmin-export",
+        "apple-health",
+        "intervals-icu",
+    )
 
 
 GARMIN_KINDS: tuple[

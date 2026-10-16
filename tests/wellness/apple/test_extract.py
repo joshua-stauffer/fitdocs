@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gzip
+import importlib
 import json
 from collections.abc import Callable, Iterator
 from dataclasses import FrozenInstanceError, asdict, replace
@@ -12,7 +13,6 @@ from typing import BinaryIO, cast
 
 import pytest
 
-from fitdocs.wellness.formats.apple import extract
 from fitdocs.wellness.formats.apple.records import (
     AppleType,
     Corrections,
@@ -21,6 +21,8 @@ from fitdocs.wellness.formats.apple.records import (
     RawRecord,
 )
 from fitdocs.wellness.spec import WellnessFormatError
+
+extract = importlib.import_module("fitdocs.wellness.formats.apple.extract")
 
 DATE = "2024-02-06 14:30:00 -0800"
 UTC = "2024-02-06T22:30:00Z"
