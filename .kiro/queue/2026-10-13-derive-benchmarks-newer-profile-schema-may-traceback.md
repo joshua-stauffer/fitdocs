@@ -113,3 +113,24 @@ by `AthleteProfile.__post_init__`; the command catches only the subclass.
    command wiring) so the second stage's wiring does not reintroduce the
    narrow handler. If step 1 shows exit 2, close this item with the
    reproduction as evidence and leave hr-derivation's wording alone.
+
+## Verified branch repair (2026-10-16)
+
+The issue is repaired on `impl/hr-derivation` following task 3.5's reopened
+review. The command catches the already-imported base `AthleteFileError`
+(which includes `ProfileError`), and the DeriveCommand error-mapping clause
+matches it. The append-only test covers 12 invalid schema-class/bound
+representatives in preview and write modes. The original controller
+`profile_version = 99` and `true` probes now pass with exit 2,
+`athlete.toml`/`profile_version` diagnostics and unchanged profile bytes.
+
+Independent review: `/private/tmp/hr-task3.5-schema-review.md`, SHA-256
+`171202aab41c4b099463b44d6ab06edc959de8f7549fb96b1a460aa67ab7922a`.
+All 281 bounded observations replayed; both independent faults were caught
+and restored. Controller fresh verification: 2,107 scoped tests passed;
+Ruff, formatting (770 files), configured mypy (585 files), diff check and
+frozen source hashes passed. CLI SHA-256:
+`a8899f3b0fba3410ea90fbac77e5d3d3f7193e12bb95f0e8aba7d966a7cbe02d`.
+The accepted repair is in the commit adding this section. Earlier evidence
+above describes the pre-repair state. This item remains open for maintainer
+closure after the feature lands on main; it is not an active HR task blocker.

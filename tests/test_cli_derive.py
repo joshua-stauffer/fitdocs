@@ -2582,3 +2582,87 @@ def test_hr_cli_unrelated_runtime_errors_propagate(
         + (["--dry-run"] if dry_run else []),
     )
     assert (result.exit_code, result.exception, result.output) == (1, problem, "")
+
+
+@pytest.mark.parametrize("dry_run", [True, False])
+@pytest.mark.parametrize(
+    ("declaration", "problem"),
+    [
+        pytest.param(
+            "99",
+            "declares profile_version = 99, which is newer than the schema version "
+            "this fitdocs supports (2); install a newer fitdocs to read it",
+            id="newer",
+        ),
+        pytest.param("0", "got 0 (int)", id="zero"),
+        pytest.param("-1", "got -1 (int)", id="negative"),
+        pytest.param("true", "got True (bool)", id="true"),
+        pytest.param("false", "got False (bool)", id="false"),
+        pytest.param('"2"', "got '2' (str)", id="string"),
+        pytest.param("2.0", "got 2.0 (float)", id="float"),
+        pytest.param("[2]", "got [2] (list)", id="array"),
+        pytest.param("{ value = 2 }", "got {'value': 2} (dict)", id="table"),
+        pytest.param("2026-10-16", "got datetime.date(2026, 10, 16) (date)", id="date"),
+        pytest.param(
+            "2026-10-16T12:00:00",
+            "got datetime.datetime(2026, 10, 16, 12, 0) (datetime)",
+            id="datetime",
+        ),
+        pytest.param("12:00:00", "got datetime.time(12, 0) (time)", id="time"),
+    ],
+)
+def test_hr_cli_invalid_profile_schema_is_configuration_error_before_writes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    declaration: str,
+    problem: str,
+    dry_run: bool,
+) -> None:
+    import fitdocs.performance.engine as tagged_engine
+
+    _write_two_document_root(tmp_path)
+    profile = tmp_path / PROFILE_FILENAME
+    profile.write_text("max_hr_bpm = 198\n", encoding="utf-8")
+    proposal = derive_benchmarks(tmp_path, dry_run=True)
+    profile.write_text(
+        f"profile_version = {declaration}\nmax_hr_bpm = 198\n", encoding="utf-8"
+    )
+    before = _hr_configuration_tree(tmp_path)
+    entered: list[str] = []
+    real_profile = load_profile
+
+    def profile_reader(root: Path) -> Any:
+        entered.append("profile-reader")
+        return real_profile(root)
+
+    def tagged(*args: Any, **kwargs: Any) -> DeriveReport:
+        entered.append("tagged")
+        return derive_benchmarks(*args, **kwargs)
+
+    def hr(*args: Any, **kwargs: Any) -> HrStageReport:
+        entered.append("hr")
+        return derive_hr_benchmarks(*args, **kwargs)
+
+    monkeypatch.setattr(tagged_engine, "load_profile", profile_reader)
+    monkeypatch.setattr(cli, "derive_benchmarks", tagged)
+    monkeypatch.setattr(cli, "derive_hr_benchmarks", hr)
+    result = runner.invoke(
+        app,
+        ["derive-benchmarks", "--out", str(tmp_path)]
+        + (["--dry-run"] if dry_run else []),
+    )
+    expected_problem = (
+        problem
+        if declaration == "99"
+        else "profile_version must be an integer between 1 and 2 "
+        "(the version this fitdocs supports), " + problem
+    )
+    assert (
+        bool(proposal.accepted),
+        proposal.written,
+        result.exit_code,
+        f"athlete.toml{' ' if declaration == '99' else ': '}{expected_problem}"
+        in result.output,
+        entered,
+        _hr_configuration_tree(tmp_path),
+    ) == (True, False, 2, True, ["tagged", "profile-reader"], before)

@@ -1838,7 +1838,7 @@ def derive_benchmarks_command(
         )
     except UnicodeDecodeError as exc:
         _config_error(f"{configuration_path} is not valid UTF-8: {exc}")
-    except (ProfileError, SettingsError) as exc:
+    except (AthleteFileError, SettingsError) as exc:
         _config_error(str(exc))
     _report_derive(report, dry_run=dry_run)
     # A decline is a successful outcome (Req 7.8); only a failure exits 1.

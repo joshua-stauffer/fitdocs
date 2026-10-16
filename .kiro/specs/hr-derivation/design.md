@@ -1087,7 +1087,8 @@ def with_derived_benchmarks(
 - Order: resolve the data root; `load_settings_document` +
   `load_hr_stage_settings`; `derive_benchmarks(data_root, dry_run,
   load_settings=settings.load)`; `derive_hr_benchmarks(data_root, settings,
-  dry_run, other_derived=report.accepted, progress=...)`. `ProfileError` and
+  dry_run, other_derived=report.accepted, progress=...)`. `AthleteFileError`
+  (including `ProfileError`) and
   `SettingsError` (including `WellnessSettingsError`) → exit 2.
 - `_report_hr_stage(report, dry_run)`: a table titled
   `fitdocs derive-benchmarks: heart rate` (documents considered, sessions

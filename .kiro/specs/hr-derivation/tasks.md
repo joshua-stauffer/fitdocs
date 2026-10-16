@@ -500,7 +500,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
     green; Implementation Notes list each work and the status reached.
   - _Requirements: 7.6_
 
-- [ ] 3. The stage, `check` and the command
+- [x] 3. The stage, `check` and the command
 
 - [x] 3.1 Load the stage's settings and its resting-heart-rate evidence from the wellness series
   - Verify the upstream names listed under Upstream Prerequisites first.
@@ -610,7 +610,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Boundary: AuditHeartRate_
   - _Depends: 2.7_
 
-- [ ] 3.5 Run both stages from `derive-benchmarks` and print the heart-rate report
+- [x] 3.5 Run both stages from `derive-benchmarks` and print the heart-rate report
   - Implement design § DeriveCommand: the settings preflight before either
     stage (`[wellness]` and `[load]` read once); the tagged-effort stage
     with the preflight's load settings; the heart-rate stage with the
@@ -818,7 +818,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
 
 ## Implementation Notes
 
-- 3.5 schema repair in progress (2026-10-16): After accepted commit 8e8a5b2, queue deduplication surfaced the existing newer-profile-schema concern. Controller canonical probes confirmed that `profile_version = 99` and `profile_version = true` escape as the base `AthleteFileError`, exit 1 and empty diagnostics; profile bytes remain unchanged. The command catches its subclass `ProfileError`, which cannot catch the base. Task 3.5 and major 3 are reopened for a narrow CLI catch and matching DeriveCommand clarification; HrStageEngine already says the CLI maps `AthleteFileError` to exit 2. Preserve all accepted reporting, decoding and read-count proofs. A fresh implementer, independent review and controller verification are required before rechecking the task. The existing queue item will be closed with the accepted repair evidence.
+- 3.5 schema repair (2026-10-16): The command now catches the base `AthleteFileError`, including `ProfileError`, so invalid or unsupported profile schema versions produce the required exit-2 filename/problem diagnostic before writes. The matching DeriveCommand clause is clarified; no shared reader or engine changes. Independent review reproduced all 281 bounded observations (280 assertion-red/restored-green pairs and the retained honest highlighting control), the original 99/true probes and two own faults. Controller fresh 2,107 scoped tests, Ruff (770 formatted files), configured mypy (585 files), diff and frozen hashes passed. All previous fixtures remain intact. The existing schema queue item records verified branch repair evidence for maintainer closure; broader shared-reader UTF-8 normalization remains separate.
 
 - 3.5: The command preflights shared settings, runs TAGGED then HR with the accepted tagged entries, prints both reports and combines failure status. HR notices preserve complete collections, origin/date associations, actual before/after half-open covers and a changed-only recompute hint; progress uses terminal stderr. Real invalid-UTF8 settings/profile files now become file-specific configuration errors before writes, using simple phase context without another profile read. Generic runtime errors and save failures remain unchanged; broader typed-reader decoding normalization is a queued follow-up. The tagged renderer, exact one-load-settings-read test and all earlier assertions remain intact except the two licensed discovery/archive-snapshot changes. Independent round-2 review reproduced 200 assertion-red/restored-green observations plus one honest colorless-highlight green control, caught three additional faults across four observations and verified real configuration/save controls. Controller fresh 2,083 scoped tests, Ruff (770), configured mypy (585), exact hashes and diff checks passed. Colored-terminal highlighting remains outside the colorless fixture's finite proof; production disables highlighting.
 
