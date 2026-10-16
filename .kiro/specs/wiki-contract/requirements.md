@@ -294,6 +294,22 @@ The connector protocol, transport and credential rules remain connectors'
 own; the wellness archive and series writers remain wellness-store's own.
 No existing criterion or amendment is renumbered.
 
+## Amendment 8 (2026-10-16): heart-rate derivation guarantee, landed by hr-derivation
+
+`hr-derivation` changes the published `derive-benchmarks` guarantee: the
+command now also reads every workout's listed files and the normalized
+wellness series, may write `athlete.toml` at most once per stage, and never
+modifies a hand-recorded entry. Requirement 2 criterion 2.8's version and
+change-note rule applies: `CONTRACT_VERSION` advances from `"12"` to `"13"`,
+with the history, published change note and every in-tree declaration
+updated together. Recompute load to apply a changed heart-rate timeline;
+`fitdocs sync` or `fitdocs regen` refreshes ownership declarations.
+hr-derivation task 4.2 owns the version and change-note update, task 4.3
+owns the operation description, and task 5.2 re-derives main + 1 at landing
+(hr-derivation 11.2). The derivation rules and profile writer remain owned
+by hr-derivation; no document, athlete-profile or index schema changes.
+No existing criterion or amendment is renumbered.
+
 ## Requirements
 
 ### Requirement 1: Consistent Document Interpretation Across Operations

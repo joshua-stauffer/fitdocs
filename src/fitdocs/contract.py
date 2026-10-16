@@ -325,7 +325,7 @@ highest-ranked extra that records it. A page without extras renders as before
 and changes only this line (Req 8.2).
 """
 
-CONTRACT_VERSION: Final[str] = "12"
+CONTRACT_VERSION: Final[str] = "13"
 """The published ownership contract's version identifier (Req 2.8).
 
 A *string*, and deliberately not comparable with :data:`DOC_VERSION`: it
@@ -431,6 +431,10 @@ holds identical bytes; it never writes ``wellness-archive/`` or ``wellness/``.
 A connector's ledger that holds wellness records is ledger format 2.
 Nothing is needed for existing documents; set ``wellness = true`` on an
 instance to pull wellness.
+
+Raised from ``12`` to ``13`` by hr-derivation because ``derive-benchmarks``
+now also reads every workout's listed files and the normalized wellness
+series and may write ``athlete.toml`` at most once per stage.
 """
 
 # --- document vocabulary -----------------------------------------------------

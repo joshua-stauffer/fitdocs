@@ -668,7 +668,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
     tests/test_public_api.py tests/test_confinement.py` green.
   - _Requirements: 1.6, 1.9, 1.10, 3.8, 5.9, 10.1, 10.5, 10.6_
 
-- [ ] 4.2 Raise `CONTRACT_VERSION` for the changed `derive-benchmarks` guarantee (wiki-contract amendment)
+- [x] 4.2 Raise `CONTRACT_VERSION` for the changed `derive-benchmarks` guarantee (wiki-contract amendment)
   - `CONTRACT_VERSION` = main + 1 with a history paragraph beginning
     "Raised from ``N`` to ``N+1`` by hr-derivation" and stating, in one
     sentence, that `derive-benchmarks` now also reads every workout's listed
@@ -817,6 +817,8 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 4.1, 4.7_
 
 ## Implementation Notes
+
+- 4.2: Ownership contract 12 → 13 and wiki-contract Amendment 8 record the changed reads and once-per-stage profile write. The adjacent history has a literal full-sentence pin; current-head pins move coherently while all prior history and permanent wellness-pull guarantees remain intact. Canonical regeneration changes only the version line in seven declaration goldens; real scratch sync emits all seven at version 13. Independent review reproduced 21 claimed/two own faults and passed the full suite (20,754 passed / 44 existing skips); controller fresh 456 scoped tests, Ruff (770 files), configured mypy (585 files), exact 14-path hashes/full-run exit and diff passed. Task 4.3 still owns the operation body. Re-derive main + 1 and next-free amendment at final landing if a peer lands first.
 
 - 4.1: Added the literal nine-module inventory, non-vacuous complete source/settings walks, bounded external-import rules, four-name facade identity/direct-import/root pins and a genuine HR confinement entry whose exact changed set is athlete.toml. All 175 prior functions and 19 registry entries are preserved except the licensed TAGGED helper prose correction. Independent review reproduced all 78 claimed faults and caught seven own faults; controller fresh 2,296 tests, Ruff (770 files), configured mypy (585 files), diff and frozen hashes passed. Computed imports, arbitrary future setting spellings and transient/metadata-only writes remain explicit proof limits; the stronger exact-singleton check implies the original general-location assertion.
 

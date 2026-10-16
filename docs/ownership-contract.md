@@ -1,16 +1,13 @@
 # fitdocs Ownership Contract
 
-**Contract version:** `12`
+**Contract version:** `13`
 
-**What changed at this version:** wellness-pull changes the stated guarantees
-about what `fitdocs pull` writes and removes. For an instance with
-`wellness = true` the pull also writes wellness files,
-`wellness-<first>_<last>.json` holding the records the service returned,
-under `<inbox>/<name>/`, and removes each one once `wellness-archive/`
-holds identical bytes; it never writes `wellness-archive/` or `wellness/`.
-A connector's ledger that holds wellness records is ledger format 2.
-Nothing is needed for existing documents; set `wellness = true` on an
-instance to pull wellness.
+**What changed at this version:** hr-derivation changes the stated guarantees
+for `derive-benchmarks`. The command now also reads every workout's listed
+files and the normalized wellness series and may write `athlete.toml` at
+most once per stage. Run `fitdocs load --recompute` to apply a changed
+heart-rate timeline. Run `fitdocs sync` or `fitdocs regen` to refresh the
+ownership declarations.
 
 This document is the authoritative, published statement of what fitdocs owns
 in your data root, what you own, and the exact limits of every operation that

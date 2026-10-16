@@ -105,20 +105,16 @@ def test_pull_bullet_states_wellness_guarantees(passage: str) -> None:
 @pytest.mark.parametrize(
     "passage",
     [
-        "wellness-pull changes the stated guarantees about what `fitdocs pull` "
-        "writes and removes.",
-        "For an instance with `wellness = true` the pull also writes wellness "
-        "files, `wellness-<first>_<last>.json` holding the records the service "
-        "returned, under `<inbox>/<name>/`",
-        "removes each one once `wellness-archive/` holds identical bytes; "
-        "it never writes `wellness-archive/` or `wellness/`.",
-        "A connector's ledger that holds wellness records is ledger format 2.",
-        "Nothing is needed for existing documents; set `wellness = true` "
-        "on an instance to pull wellness.",
+        "hr-derivation changes the stated guarantees for `derive-benchmarks`.",
+        "The command now also reads every workout's listed files and the "
+        "normalized wellness series",
+        "may write `athlete.toml` at most once per stage.",
+        "Run `fitdocs load --recompute` to apply a changed heart-rate timeline.",
+        "Run `fitdocs sync` or `fitdocs regen` to refresh the ownership declarations.",
     ],
-    ids=["reason", "inbox", "removal-and-limits", "ledger", "action"],
+    ids=["reason", "reads", "write-limit", "recompute", "action"],
 )
-def test_current_change_paragraph_states_wellness_pull(passage: str) -> None:
+def test_current_change_paragraph_states_current_guarantees(passage: str) -> None:
     assert passage in _head()
 
 

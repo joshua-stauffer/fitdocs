@@ -178,11 +178,12 @@ def test_the_changed_at_this_version_paragraph_names_the_amendment() -> None:
     head = _flat(_DOC.read_text(encoding="utf-8").split("\n\nThis document", 1)[0])
     assert f"**Contract version:** `{contract.CONTRACT_VERSION}`" in head
     for phrase in (
-        "wellness-pull changes the stated guarantees about what `fitdocs pull` "
-        "writes and removes",
-        "A connector's ledger that holds wellness records is ledger format 2.",
-        "Nothing is needed for existing documents; set `wellness = true` "
-        "on an instance to pull wellness.",
+        "hr-derivation changes the stated guarantees for `derive-benchmarks`.",
+        "The command now also reads every workout's listed files and the "
+        "normalized wellness series and may write `athlete.toml` at most once "
+        "per stage.",
+        "Run `fitdocs load --recompute` to apply a changed heart-rate timeline.",
+        "Run `fitdocs sync` or `fitdocs regen` to refresh the ownership declarations.",
     ):
         assert phrase in head, phrase
 
@@ -225,6 +226,11 @@ def test_the_version_history_records_the_amendment() -> None:
         "A connector's ledger that holds wellness records is ledger format 2."
         in history
     )
+    assert (
+        "Raised from ``12`` to ``13`` by hr-derivation because ``derive-benchmarks`` "
+        "now also reads every workout's listed files and the normalized wellness "
+        "series and may write ``athlete.toml`` at most once per stage."
+    ) in history
 
 
 def test_the_unreleased_entry_states_the_rule_and_the_actions() -> None:
