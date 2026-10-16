@@ -536,7 +536,7 @@ literal pins, one per lander) and every head-paragraph pin of
     policies. This keeps every module on disk checked by exact equality.
   - _Requirements: 2.1, 2.2, 4.2, 4.3, 5.5, 5.6, 6.1, 6.3, 7.2, 7.3, 8.1, 8.2, 8.3, 8.4, 9.1, 9.5, 9.6, 12.5, 12.7, 12.8_
 
-- [ ] 3.2 Draw every section's chart through the kit
+- [x] 3.2 Draw every section's chart through the kit
   - `charts.py` per design § Charts: `CHART_NAMES`, one request and one row
     per window day per chart, `render_charts(view)` in `CHART_NAMES` order;
     column labels from `METRICS[metric].label`.
@@ -1309,3 +1309,35 @@ introspection artifact also names its MetricInfo value type at line 48).
   `/private/tmp/recovery-task-2.3-verification.md`/`.json`. No new unowned
   follow-up; 3.2 owns its existing collision and actual six-chart window
   assertions/remaining discrimination. Continue directly with fresh 3.2.
+
+
+### Task 3.2 accepted (2026-10-16)
+
+- Fresh retry READY_FOR_REVIEW → independent APPROVED → controller VERIFIED.
+  The adapter constructs all six optional sections through the public kit in
+  CHART_NAMES order, with exact typed requests, catalog labels/units, every
+  window day and genuine missing values. Outside flags remain true for an
+  above/below carried baseline day even when its daily measurement is absent.
+- Owned adapter correction keys the load chart by the existing request.ref;
+  the unchanged load-settings guard now passes. Only the charts import row
+  changed in the companion boundary metadata; no guard policy changed.
+- Independent replay: 453 named observations (299 unique transformations),
+  all exact native RED/restored GREEN; six additional reviewer faults caught,
+  zero survivors. All 21 assertion sites, 276 assertion-parameter roles and
+  184 chart nodes covered. Full-window description, ticks and mark geometry
+  independently distinguish all six charts' first/last/both endpoint loss.
+  The original 159 cases remain, with 25 appended cases and all old function
+  ASTs preserved. No new implementation history is claimed for already
+  correct forwarding; original feature-flag and native guard RED remain.
+- Full restored original canonical pytest: 21828 passed / 44 expected skips,
+  exit 0 in 576.22 s. Scoped recovery/charts/load-settings: 5428 passed;
+  Ruff check/format (763 files), mypy (578 files) and diff clean. All 1958
+  tracked byte/mtime entries, seven accepted 2.3 hashes and 1930 prior sealed
+  artifacts preserved. Parent also verified 953 sealed review artifacts.
+- Evidence: `/private/tmp/recovery-task-3.2-retry1-report.md`, sealed
+  `recovery-task-3.2-retry1-evidence/`, independent
+  `/private/tmp/recovery-review-3.2-retry1.md` and its raw package, and
+  `/private/tmp/recovery-task-3.2-verification.md`/`.json`. No follow-up.
+  Eleven of twenty-one mandatory leaves are accepted. Page/Engine and
+  feature GO remain pending; the approved all-markless no-data exception
+  remains. Commit/push, synchronize current main, then continue with 3.3.

@@ -68,7 +68,8 @@ _ALLOWED_IMPORTS = {
     },
     "charts": {
         "__future__",
-        "datetime",
+        "typing",
+        "fitdocs.recovery.baselines",
         "fitdocs.wellness",
         "fitdocs.recovery.view",
         "fitdocs.render.charts.kit",
