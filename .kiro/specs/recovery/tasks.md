@@ -488,7 +488,7 @@ literal pins, one per lander) and every head-paragraph pin of
   - _Depends: 2.1, 2.2_
   - _Requirements: 2.2_
 
-- [ ] 3. The page model and its rendering
+- [x] 3. The page model and its rendering
 
 - [x] 3.1 Build the page model from the series, the baselines and the history computation
   - `view.py` per design § View: `WINDOW_DAYS`, `OTHER_SIGNALS`, the view
@@ -605,7 +605,7 @@ literal pins, one per lander) and every head-paragraph pin of
     policies. This keeps every module on disk checked by exact equality.
   - _Requirements: 2.3, 4.2, 4.3, 5.5, 5.6, 6.1, 6.3, 7.2, 8.3, 8.4, 9.5, 9.6, 9.7, 12.1, 12.2, 12.3, 12.4, 12.7, 12.8_
 
-- [ ] 3.4 Write the coverage, method and references sections and keep the page descriptive
+- [x] 3.4 Write the coverage, method and references sections and keep the page descriptive
   - `page.py`: the coverage table and the "No value in this window" line;
     the method section generated from `CONSTANTS` and `RULES` (citation,
     choice, corroborator and departure wording); the references list;
@@ -1373,3 +1373,30 @@ introspection artifact also names its MetricInfo value type at line 48).
   `recovery-task-3.3-round3-evidence/final/`, independent
   `/private/tmp/recovery-review-3.3-round3.md` and raw package, and
   `/private/tmp/recovery-task-3.3-verification.md`/`.json`.
+
+### 3.4 — Coverage, method, references and descriptive guard
+
+Accepted after one bounded test-only remediation; no debug cycle used. Page
+appends Coverage, Method and References and exports the prescribed private
+`_FORBIDDEN_PHRASE_PATTERN` for its consumer. Method preserves each occurrence's
+Citation locator; References deduplicates by citation key, in key order. A
+legitimate first or last representative for a duplicate key is an ordinary
+choice; the golden preserves this implementation's first representative.
+Coverage identity is `(metric, source)`, and distinct citation keys remain
+separate even when their displayed metadata is identical. Two appended literal
+fixtures close the independently demonstrated metric-only and author-only
+identity gaps without changing existing tests or correct production behavior.
+
+Fresh review `/private/tmp/recovery-review-3.4-round2.md` APPROVED and parent
+`/private/tmp/recovery-task-3.4-verification.md` VERIFIED: 317 normative native
+RED/restored-GREEN observations plus two independent controls, 72 failed nodes /
+21 frames, all sixteen added assertions observed, nine requirement families
+PINNED, fourteen permitted-variant observations GREEN. Page254, scope1853 and
+full original22095 passed/44 expected skips (exit0); Ruff765/mypy580 and diff
+checks clean. All four submitted and seven protected hashes/mtimes match; four
+immutable packages total2510 artifacts and their reports verified unchanged.
+The only companion boundary change adds `fitdocs.citation` to Page's measured
+import row; the existing guarded golden main() regenerated its appended output.
+The six original section headings and every other accepted3.3 function, fixture,
+helper, decorator and numeric/date/zero/range assertion remain intact. No
+follow-ups were identified. Feature GO and remaining mandatory tasks remain open.

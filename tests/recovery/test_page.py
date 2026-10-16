@@ -1,8 +1,9 @@
-"""Synthetic recovery markdown, part 1."""
+"""Synthetic recovery markdown, parts 1 and 2."""
 
 from __future__ import annotations
 
 import math
+import re
 import statistics
 from dataclasses import replace
 from datetime import date, timedelta
@@ -12,9 +13,19 @@ from pathlib import Path
 import pytest
 
 from fitdocs import contract
+from fitdocs.citation import (
+    Agreement,
+    Citation,
+    CitedConstant,
+    Corroboration,
+    Departure,
+    FitdocsChoice,
+    VerificationStatus,
+)
 from fitdocs.history import HISTORY_TYPE, compute_history, read_history_inputs
 from fitdocs.recovery import Baselines, page
-from fitdocs.recovery.view import RecoveryView, build_view
+from fitdocs.recovery.constants import MethodRule
+from fitdocs.recovery.view import CoverageRow, RecoveryView, build_view
 from fitdocs.render.attribution import wellness_attribution, wellness_attribution_line
 from fitdocs.render.charts.kit import Column, Value, ValueKind
 from fitdocs.render.charts.kit.format import format_value
@@ -215,6 +226,9 @@ def test_section_order() -> None:
         "## Resting HR",
         "## Sleep",
         "## Other Signals",
+        "## Coverage",
+        "## Method",
+        "## References",
     ]
 
 
@@ -1000,3 +1014,578 @@ def test_zero_stage_mean_formation(metric: Metric, formed: str) -> None:
     assert section(text(result), "Sleep")[4] == (
         f"| {METRICS[metric].label} | 0:00 | {rolling} | {baseline} |"
     )
+
+
+# Part 2: coverage, method, references and descriptive wording.
+ACTUAL_METHOD_LINES = [
+    (
+        "- ROLLING\\_DAYS: 7 — Plews DJ, Laursen PB, Stanley J, Kilding "
+        "AE, Buchheit M (2013), Training adaptation and heart rate "
+        "variability in elite endurance athletes: opening the door to "
+        "effective monitoring. Sports Med. 43(9):773–781. "
+        "doi:10.1007/s40279-013-0071-8, §3, pp.774–775; §5, pp.779–780; "
+        "see also Plews DJ, Laursen PB, Kilding AE, Buchheit M (2013), "
+        "Evaluating training adaptation with heart-rate measures: a "
+        "methodological comparison. Int J Sports Physiol Perform. "
+        "8(6):688–691. doi:10.1123/ijspp.8.6.688, Experimental Protocol "
+        "and Statistical Analysis, p.689; Discussion, p.690, Statistical "
+        "Analysis, p.689 (agrees; primary_text)"
+    ),
+    (
+        "- MIN\\_ROLLING\\_VALUES: 3 — Plews DJ, Laursen PB, Le Meur Y, "
+        "Hausswirth C, Kilding AE, Buchheit M (2014), Monitoring training "
+        "with heart-rate variability: how much compliance is needed for "
+        "valid assessment? Int J Sports Physiol Perform. 9(5):783–790. "
+        "doi:10.1123/IJSPP.2013-0455, abstract, p.783; Practical "
+        "Applications and Conclusions, p.789; Departure: Plews 2014, "
+        "Practical Applications and Conclusions p.789: three in trained "
+        "triathletes, approximately five in recreational athletes; "
+        "fitdocs Require three present days for each of nine methods (One "
+        "explicit missingness rule across metrics; no claim that three "
+        "establishes validity for every population/signal)"
+    ),
+    (
+        "- BASELINE\\_DAYS: 60 — fitdocs's choice: maintainer's 2026-10-12 "
+        "decision for a longer personal baseline; Departure: Vesterinen "
+        "2016, Methods “HRV guided training”, paragraphs 2–3: four-week "
+        "reference periodically updated; fitdocs Use D−60 through D−1 "
+        "(Approved personal as-of baseline excludes the judged day and "
+        "implements the maintainer's longer-window decision)"
+    ),
+    (
+        "- MIN\\_BASELINE\\_VALUES: 30 — fitdocs's choice: at least half "
+        "the 60-day window before estimating variation"
+    ),
+    (
+        "- RANGE\\_SD\\_MULTIPLE: 0.5 — Vesterinen V, Nummela A, Heikura I, "
+        "Laine T, Hynynen E, Botella J, Häkkinen K (2016), Individual "
+        "endurance training prescription with heart rate variability. Med "
+        "Sci Sports Exerc. 48(7):1347–1354. "
+        "doi:10.1249/MSS.0000000000000910, Methods, “HRV guided "
+        "training”, paragraph 2; Discussion, “Methodological issues to "
+        "use HRV in training prescription”; Departure: Vesterinen 2016, "
+        "Methods “HRV guided training”, paragraphs 1–3: raw RMSSD, four "
+        "weeks, training prescription; fitdocs Use 0.5 SD for log HRV and "
+        "linear resting HR over preceding 60 days; descriptive marking "
+        "only (Preserve approved transparent windows and separate metrics "
+        "while keeping the display descriptive)"
+    ),
+    (
+        "- HRV is averaged as the natural log of its values and shown "
+        "back in ms. — Plews DJ, Laursen PB, Stanley J, Kilding AE, "
+        "Buchheit M (2013), Training adaptation and heart rate "
+        "variability in elite endurance athletes: opening the door to "
+        "effective monitoring. Sports Med. 43(9):773–781. "
+        "doi:10.1007/s40279-013-0071-8, §3, pp.774–775; §5, pp.779–780; "
+        "see also Plews DJ, Laursen PB, Kilding AE, Buchheit M (2013), "
+        "Evaluating training adaptation with heart-rate measures: a "
+        "methodological comparison. Int J Sports Physiol Perform. "
+        "8(6):688–691. doi:10.1123/ijspp.8.6.688, Experimental Protocol "
+        "and Statistical Analysis, p.689; Discussion, p.690, Experimental "
+        "Protocol, p.689 (agrees; primary_text)"
+    ),
+    (
+        "- The same method is applied to SDNN, never mixed with rMSSD. — "
+        "fitdocs's choice: display each HRV definition separately with "
+        "one transparent method; Departure: Plews 2013 Sports Med, §3 "
+        "pp.774–775: preferred index is ln rMSSD; fitdocs Apply log "
+        "averaging/range independently to SDNN (Show each platform's HRV "
+        "definition separately without unsupported SDNN/rMSSD conversion)"
+    ),
+    (
+        "- Resting HR uses the same windows and range on its own values "
+        "(no log). — fitdocs's choice: one descriptive rolling/baseline "
+        "comparison on resting HR's own linear values; see also Plews DJ, "
+        "Laursen PB, Kilding AE, Buchheit M (2013), Evaluating training "
+        "adaptation with heart-rate measures: a methodological "
+        "comparison. Int J Sports Physiol Perform. 8(6):688–691. "
+        "doi:10.1123/ijspp.8.6.688, Experimental Protocol and Statistical "
+        "Analysis, p.689; Discussion, p.690, Discussion, p.690 (omits; "
+        "primary_text): supports weekly HR averaging but not fitdocs's "
+        "full range method; Departure: Vesterinen 2016, Methods “HRV "
+        "guided training”: range applied to RMSSD; Plews 2013 IJSPP "
+        "Discussion p.690 supports weekly HR averaging; fitdocs Apply the "
+        "approved windows/range to linear resting HR values (A single "
+        "explicit descriptive comparison rule; no published claim of this "
+        "exact resting-HR range)"
+    ),
+    (
+        "- A day is marked when its seven-day mean lies outside the "
+        "normal range. — Plews DJ, Laursen PB, Stanley J, Kilding AE, "
+        "Buchheit M (2013), Training adaptation and heart rate "
+        "variability in elite endurance athletes: opening the door to "
+        "effective monitoring. Sports Med. 43(9):773–781. "
+        "doi:10.1007/s40279-013-0071-8, Fig.4, p.779; §5, pp.779–780; see "
+        "also Vesterinen V, Nummela A, Heikura I, Laine T, Hynynen E, "
+        "Botella J, Häkkinen K (2016), Individual endurance training "
+        "prescription with heart rate variability. Med Sci Sports Exerc. "
+        "48(7):1347–1354. doi:10.1249/MSS.0000000000000910, Methods, “HRV "
+        "guided training”, paragraph 2; Discussion, “Methodological "
+        "issues to use HRV in training prescription”, Methods, “HRV "
+        "guided training”, paragraphs 1–3 (agrees; primary_text): "
+        "supports comparison of seven-day averages, not fitdocs's "
+        "log/60-day descriptive method; Departure: Plews 2013 Sports Med, "
+        "Fig.4 p.779: weekly ln rMSSD comparison with individual SWC and "
+        "confidence intervals; fitdocs Mark a seven-day mean outside "
+        "either bound, without confidence intervals or training "
+        "instructions (Describe the athlete's own figures rather than "
+        "infer performance, health or training decisions)"
+    ),
+    (
+        "- The SD is the sample SD (n − 1) of the baseline days. — "
+        "fitdocs's choice: n−1 sample estimate of baseline-day variation"
+    ),
+    (
+        "- Sleep signals get a seven-day mean and a 60-day mean, no "
+        "range. — fitdocs's choice: descriptive recent and longer sleep "
+        "averages, no unsupported normal range"
+    ),
+    (
+        "- Every computation uses one source and one metric. — fitdocs's "
+        "choice: maintainer's 2026-10-12 decision because platform "
+        "definitions differ"
+    ),
+    (
+        "- The shown source is the day's canonical source, carried for at "
+        "most six days; only the source identifier is carried, never the "
+        "value. — fitdocs's choice: use canonical source and bridge only "
+        "gaps within the seven-day rolling window, carrying the source "
+        "identifier, never the value"
+    ),
+]
+
+ACTUAL_REFERENCE_LINES = [
+    (
+        "- Plews DJ, Laursen PB, Kilding AE, Buchheit M (2013), "
+        "Evaluating training adaptation with heart-rate measures: a "
+        "methodological comparison. Int J Sports Physiol Perform. "
+        "8(6):688–691. doi:10.1123/ijspp.8.6.688, Experimental Protocol "
+        "and Statistical Analysis, p.689; Discussion, p.690"
+    ),
+    (
+        "- Plews DJ, Laursen PB, Stanley J, Kilding AE, Buchheit M "
+        "(2013), Training adaptation and heart rate variability in elite "
+        "endurance athletes: opening the door to effective monitoring. "
+        "Sports Med. 43(9):773–781. doi:10.1007/s40279-013-0071-8, §3, "
+        "pp.774–775; §5, pp.779–780"
+    ),
+    (
+        "- Plews DJ, Laursen PB, Le Meur Y, Hausswirth C, Kilding AE, "
+        "Buchheit M (2014), Monitoring training with heart-rate "
+        "variability: how much compliance is needed for valid assessment? "
+        "Int J Sports Physiol Perform. 9(5):783–790. "
+        "doi:10.1123/IJSPP.2013-0455, abstract, p.783; Practical "
+        "Applications and Conclusions, p.789"
+    ),
+    (
+        "- Vesterinen V, Nummela A, Heikura I, Laine T, Hynynen E, "
+        "Botella J, Häkkinen K (2016), Individual endurance training "
+        "prescription with heart rate variability. Med Sci Sports Exerc. "
+        "48(7):1347–1354. doi:10.1249/MSS.0000000000000910, Methods, “HRV "
+        "guided training”, paragraph 2; Discussion, “Methodological "
+        "issues to use HRV in training prescription”"
+    ),
+]
+
+
+def test_actual_method_table() -> None:
+    assert section(text(full_view()), "Method") == ACTUAL_METHOD_LINES
+
+
+def test_actual_reference_table() -> None:
+    alternate = [
+        line.replace("§3, pp.774–775; §5, pp.779–780", "Fig.4, p.779; §5, pp.779–780")
+        for line in ACTUAL_REFERENCE_LINES
+    ]
+    assert section(text(full_view()), "References") in (
+        ACTUAL_REFERENCE_LINES,
+        alternate,
+    )
+
+
+def synthetic_method(monkeypatch: pytest.MonkeyPatch) -> None:
+    z = Citation(
+        "z",
+        "Zed | author",
+        2007,
+        "Zed *work*",
+        "Zed locator",
+        VerificationStatus.PRIMARY_TEXT,
+    )
+    a = Citation(
+        "a",
+        "Alpha author",
+        2011,
+        "Alpha work",
+        "Alpha locator",
+        VerificationStatus.PRIMARY_TEXT,
+    )
+    b = Citation(
+        "b",
+        "Beta author",
+        2013,
+        "Beta work",
+        "Beta book locator",
+        VerificationStatus.SECONDARY_ATTESTATION,
+    )
+    c = Citation(
+        "c",
+        "Gamma author",
+        2017,
+        "Gamma work",
+        "Gamma book locator",
+        VerificationStatus.PRIMARY_TEXT,
+    )
+    d = Citation(
+        "d",
+        "Delta author",
+        2021,
+        "Delta work",
+        "Delta book locator",
+        VerificationStatus.PRIMARY_TEXT,
+    )
+    monkeypatch.setattr(
+        page,
+        "CONSTANTS",
+        (
+            CitedConstant(
+                "ALPHA_NAME",
+                17,
+                z,
+                (
+                    Corroboration(
+                        b, "Beta occurrence", Agreement.OMITS, "Beta attested note"
+                    ),
+                    Corroboration(c, "Gamma occurrence", Agreement.AGREES),
+                    Corroboration(
+                        d,
+                        "Delta occurrence",
+                        Agreement.DIFFERS,
+                        "Delta difference note",
+                    ),
+                ),
+                Departure(
+                    "unused-constant-subject",
+                    "Source constant specification",
+                    "Constant application",
+                    "Constant reason",
+                ),
+            ),
+            CitedConstant(
+                "BETA_NAME",
+                2.75,
+                FitdocsChoice(
+                    "choice-c", "Constant choice justification", "not required in prose"
+                ),
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        page,
+        "RULES",
+        (
+            MethodRule(
+                "rule-z",
+                "First *rule* statement.",
+                replace(z, locator="Zed rule locator"),
+                (
+                    Corroboration(
+                        a,
+                        "Alpha occurrence",
+                        Agreement.AGREES,
+                        "Alpha corroboration note",
+                    ),
+                ),
+                Departure(
+                    "unused-rule-subject",
+                    "Source rule specification",
+                    "Rule application",
+                    "Rule reason",
+                ),
+            ),
+            MethodRule(
+                "rule-choice",
+                "Second rule statement.",
+                FitdocsChoice(
+                    "choice-r", "Rule choice justification", "also not required"
+                ),
+            ),
+        ),
+    )
+
+
+def test_synthetic_method_table(monkeypatch: pytest.MonkeyPatch) -> None:
+    synthetic_method(monkeypatch)
+    assert section(text(full_view()), "Method") == [
+        (
+            "- ALPHA\\_NAME: 17 — Zed \\| author (2007), Zed \\*work\\*, Zed "
+            "locator; see also Beta author (2013), Beta work, Beta book "
+            "locator, Beta occurrence (omits; secondary_attestation): Beta "
+            "attested note; see also Gamma author (2017), Gamma work, Gamma "
+            "book locator, Gamma occurrence (agrees; primary_text); see also "
+            "Delta author (2021), Delta work, Delta book locator, Delta "
+            "occurrence (differs; primary_text): Delta difference note; "
+            "Departure: Source constant specification; fitdocs Constant "
+            "application (Constant reason)"
+        ),
+        r"- BETA\_NAME: 2.75 — fitdocs's choice: Constant choice justification",
+        (
+            "- First \\*rule\\* statement. — Zed \\| author (2007), Zed "
+            "\\*work\\*, Zed rule locator; see also Alpha author (2011), Alpha "
+            "work, Alpha locator, Alpha occurrence (agrees; primary_text): "
+            "Alpha corroboration note; Departure: Source rule specification; "
+            "fitdocs Rule application (Rule reason)"
+        ),
+        "- Second rule statement. — fitdocs's choice: Rule choice justification",
+    ]
+
+
+def test_synthetic_reference_table(monkeypatch: pytest.MonkeyPatch) -> None:
+    synthetic_method(monkeypatch)
+    expected = [
+        "- Alpha author (2011), Alpha work, Alpha locator",
+        "- Beta author (2013), Beta work, Beta book locator",
+        "- Gamma author (2017), Gamma work, Gamma book locator",
+        "- Delta author (2021), Delta work, Delta book locator",
+        r"- Zed \| author (2007), Zed \*work\*, Zed locator",
+    ]
+
+    alternate = [line.replace("Zed locator", "Zed rule locator") for line in expected]
+    assert section(text(full_view()), "References") in (expected, alternate)
+
+
+@pytest.mark.parametrize("absent", (False, True))
+def test_coverage_table(monkeypatch: pytest.MonkeyPatch, absent: bool) -> None:
+    view = replace(
+        full_view(),
+        coverage=(
+            CoverageRow(Metric.RESTING_HR_BPM, "watch|one", 19),
+            CoverageRow(Metric.HRV_RMSSD_MS, "watch*two", 37),
+            CoverageRow(Metric.SLEEP_S, "watch_three", 53),
+        ),
+        absent=(Metric.STEPS, Metric.MOOD_RATING) if absent else (),
+    )
+    labels = dict(METRICS)
+    labels[Metric.RESTING_HR_BPM] = replace(
+        labels[Metric.RESTING_HR_BPM], label="Heart|label"
+    )
+    labels[Metric.STEPS] = replace(labels[Metric.STEPS], label="Steps*label")
+    monkeypatch.setattr(page, "METRICS", labels)
+    expected = [
+        "| Signal | Source | Days with a value (of 90) |",
+        "| --- | --- | --- |",
+        r"| Heart\|label | watch\|one | 19 |",
+        r"| HRV (rMSSD) | watch\*two | 37 |",
+        r"| Sleep | watch\_three | 53 |",
+    ]
+    if absent:
+        expected.append(r"No value in this window: Steps\*label, Mood (rating).")
+    assert section(text(view), "Coverage") == expected
+
+
+@pytest.mark.parametrize(
+    "family",
+    (
+        "readiness",
+        "ready",
+        "verdict",
+        "verdicts",
+        "overload",
+        "overloaded",
+        "overload_2é",
+        "recommend",
+        "recommended",
+        "recommend_2é",
+        "forecast",
+        "forecasting",
+        "forecast_2é",
+        "score",
+        "scores",
+        "status",
+        "advice",
+        "advise",
+        "advisory",
+        "advis_2é",
+        "should",
+        "warn",
+        "warning",
+        "warn_2é",
+    ),
+)
+@pytest.mark.parametrize("upper", (False, True))
+def test_forbidden_families(family: str, upper: bool) -> None:
+    word = family.upper() if upper else family
+    assert (
+        re.search(page._FORBIDDEN_PHRASE_PATTERN, f"prefix ({word}) suffix") is not None
+    )
+
+
+def test_forbidden_boundaries() -> None:
+    assert (
+        re.search(
+            page._FORBIDDEN_PHRASE_PATTERN,
+            (
+                "already unready unreadiness xverdict verdictsx xscores scoresx "
+                "xstatus statusx xadvice advicex xshould shouldx xwarning"
+            ),
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize("scenario", ("with-load", "without-load", "source-change"))
+def test_descriptive_page(tmp_path: Path, scenario: str) -> None:
+    if scenario == "with-load":
+        view = load_view(tmp_path, suppressed=True, outside=True)
+    elif scenario == "source-change":
+        view = changes_view()
+    else:
+        view = full_view()
+    assert re.search(page._FORBIDDEN_PHRASE_PATTERN, text(view)) is None
+
+
+def test_identifiers_are_preserved() -> None:
+    assert "(ready|recommended)" not in text(
+        model([value(0, 63, source="ready|recommended")])
+    )
+    assert r"(ready\|recommended)" in text(
+        model([value(0, 63, source="ready|recommended")])
+    )
+
+
+def test_part2_numeric_routing(monkeypatch: pytest.MonkeyPatch) -> None:
+    synthetic_method(monkeypatch)
+    subjects: list[object] = []
+
+    def sentinel(number: Value, column: Column, *, with_unit: bool) -> str:
+        subjects.append(number)
+        if (
+            isinstance(number, int | float | Decimal)
+            and not isinstance(number, bool)
+            and column.kind is ValueKind.NUMBER
+            and column.unit is None
+            and type(with_unit) is bool
+            and with_unit
+        ):
+            return "N" + format_value(number, column, with_unit=with_unit)
+        return format_value(number, column, with_unit=with_unit)
+
+    monkeypatch.setattr(page, "format_value", sentinel)
+    view = replace(
+        full_view(), coverage=(CoverageRow(Metric.STEPS, "counter", 43),), absent=()
+    )
+    markdown = text(view)
+    assert section(markdown, "Coverage") == [
+        "| Signal | Source | Days with a value (of N90) |",
+        "| --- | --- | --- |",
+        "| Steps | counter | N43 |",
+    ]
+    assert [line.split(" — ")[0] for line in section(markdown, "Method")] == [
+        r"- ALPHA\_NAME: N17",
+        r"- BETA\_NAME: N2.75",
+        r"- First \*rule\* statement.",
+        "- Second rule statement.",
+    ]
+    reference_expected = [
+        "- Alpha author (N2011), Alpha work, Alpha locator",
+        "- Beta author (N2013), Beta work, Beta book locator",
+        "- Gamma author (N2017), Gamma work, Gamma book locator",
+        "- Delta author (N2021), Delta work, Delta book locator",
+        r"- Zed \| author (N2007), Zed \*work\*, Zed locator",
+    ]
+    alternate = [
+        line.replace("Zed locator", "Zed rule locator") for line in reference_expected
+    ]
+    assert section(markdown, "References") in (reference_expected, alternate)
+    numeric = [
+        Decimal.from_float(n) if isinstance(n, float) else Decimal(n)
+        for n in subjects
+        if isinstance(n, int | float | Decimal) and not isinstance(n, bool)
+    ]
+    assert [
+        n
+        for n in numeric
+        if n
+        in (
+            Decimal(90),
+            Decimal(43),
+            Decimal(17),
+            Decimal("2.75"),
+            Decimal(2007),
+            Decimal(2011),
+            Decimal(2013),
+            Decimal(2017),
+            Decimal(2021),
+        )
+    ] == [
+        Decimal(90),
+        Decimal(43),
+        Decimal(17),
+        Decimal(2007),
+        Decimal(2013),
+        Decimal(2017),
+        Decimal(2021),
+        Decimal("2.75"),
+        Decimal(2007),
+        Decimal(2011),
+        Decimal(2011),
+        Decimal(2013),
+        Decimal(2017),
+        Decimal(2021),
+        Decimal(2007),
+    ]
+
+
+def test_coverage_preserves_metric_source_identity() -> None:
+    view = replace(
+        full_view(),
+        coverage=(
+            CoverageRow(Metric.RESTING_HR_BPM, "zulu*watch", 29),
+            CoverageRow(Metric.HRV_RMSSD_MS, "zulu*watch", 41),
+            CoverageRow(Metric.RESTING_HR_BPM, "alpha|watch", 13),
+        ),
+        absent=(),
+    )
+    assert section(text(view), "Coverage") == [
+        "| Signal | Source | Days with a value (of 90) |",
+        "| --- | --- | --- |",
+        r"| Resting HR | zulu\*watch | 29 |",
+        r"| HRV (rMSSD) | zulu\*watch | 41 |",
+        r"| Resting HR | alpha\|watch | 13 |",
+    ]
+
+
+def test_references_preserve_citation_key_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    zulu = Citation(
+        "z",
+        "Shared authors",
+        2017,
+        "Shared work",
+        "Shared locator",
+        VerificationStatus.PRIMARY_TEXT,
+    )
+    alpha = replace(zulu, key="a")
+    middle = replace(zulu, key="m", work="Distinct work", locator="Distinct locator")
+    monkeypatch.setattr(page, "CONSTANTS", (CitedConstant("FIRST", 11, zulu),))
+    monkeypatch.setattr(
+        page,
+        "RULES",
+        (
+            MethodRule(
+                "identity-rule",
+                "A separate rule.",
+                alpha,
+                (
+                    Corroboration(middle, "Middle occurrence", Agreement.AGREES),
+                    Corroboration(zulu, "Repeated occurrence", Agreement.AGREES),
+                ),
+            ),
+        ),
+    )
+    assert section(text(full_view()), "References") == [
+        "- Shared authors (2017), Shared work, Shared locator",
+        "- Shared authors (2017), Distinct work, Distinct locator",
+        "- Shared authors (2017), Shared work, Shared locator",
+    ]

@@ -84,6 +84,7 @@ _ALLOWED_IMPORTS = {
         "datetime",
         "typing",
         "fitdocs.wellness",
+        "fitdocs.citation",
         "fitdocs.recovery.baselines",
         "fitdocs.recovery.constants",
         "fitdocs.recovery.view",

@@ -10,13 +10,26 @@ from datetime import date
 from typing import Final
 
 from fitdocs import contract, layout
+from fitdocs.citation import Citation, CitedConstant, FitdocsChoice
 from fitdocs.recovery.baselines import BaselineDay
-from fitdocs.recovery.constants import BASELINES_VERSION, METHODS
+from fitdocs.recovery.constants import (
+    BASELINES_VERSION,
+    CONSTANTS,
+    METHODS,
+    RULES,
+    MethodRule,
+)
 from fitdocs.recovery.view import RecoveryView, SignalView
 from fitdocs.render.attribution import wellness_attribution, wellness_attribution_line
 from fitdocs.render.charts.kit import Column, ValueKind
 from fitdocs.render.charts.kit.format import escape_markdown, format_value
 from fitdocs.wellness import METRICS, Metric
+
+_FORBIDDEN_PHRASE_PATTERN = re.compile(
+    r"\b(readiness|ready|verdicts?|overload\w*|recommend\w*|forecast\w*|"
+    r"scores?|status|advice|advis\w*|should|warn\w*)\b",
+    re.IGNORECASE,
+)
 
 RECOVERY_TYPE: Final = "recovery"
 RECOVERY_TITLE: Final = "Recovery"
@@ -145,6 +158,81 @@ def _signal(signal: SignalView, name: str) -> list[str]:
     return lines
 
 
+def _citation(citation: Citation) -> str:
+    return (
+        f"{escape_markdown(citation.authors)} ({_count(citation.year)}), "
+        f"{escape_markdown(citation.work)}, "
+        f"{escape_markdown(citation.locator or '')}"
+    )
+
+
+def _method_source(
+    record: CitedConstant[int] | CitedConstant[float] | MethodRule,
+) -> str:
+    source = record.source
+    if isinstance(source, FitdocsChoice):
+        result = f"fitdocs's choice: {escape_markdown(source.justification)}"
+    else:
+        result = _citation(source)
+    for corroborator in record.corroborators:
+        result += (
+            f"; see also {_citation(corroborator.citation)}, "
+            f"{escape_markdown(corroborator.locator)} "
+            f"({corroborator.agreement.value}; "
+            f"{corroborator.citation.verification.value})"
+        )
+        if corroborator.note is not None:
+            result += f": {escape_markdown(corroborator.note)}"
+    if record.departure is not None:
+        departure = record.departure
+        result += (
+            f"; Departure: {escape_markdown(departure.source_specifies)}; "
+            f"fitdocs {escape_markdown(departure.fitdocs_does)} "
+            f"({escape_markdown(departure.reason)})"
+        )
+    return result
+
+
+def _page_part2(view: RecoveryView) -> list[str]:
+    lines = [
+        "",
+        "## Coverage",
+        "",
+        "| Signal | Source | Days with a value "
+        f"(of {_count(len(view.window.days()))}) |",
+        "| --- | --- | --- |",
+    ]
+    for row in view.coverage:
+        lines.append(
+            f"| {escape_markdown(METRICS[row.metric].label)} | "
+            f"{escape_markdown(row.source)} | {_count(row.days_with_value)} |"
+        )
+    if view.absent:
+        labels = ", ".join(
+            escape_markdown(METRICS[metric].label) for metric in view.absent
+        )
+        lines.extend(("", f"No value in this window: {labels}."))
+    lines.extend(("", "## Method", ""))
+    for constant in CONSTANTS:
+        value = format_value(
+            constant.value, Column("constant", ValueKind.NUMBER), with_unit=True
+        )
+        lines.append(
+            f"- {escape_markdown(constant.name)}: {value} — {_method_source(constant)}"
+        )
+    for rule in RULES:
+        lines.append(f"- {escape_markdown(rule.statement)} — {_method_source(rule)}")
+    references: dict[str, Citation] = {}
+    for record in (*CONSTANTS, *RULES):
+        if isinstance(record.source, Citation):
+            references.setdefault(record.source.key, record.source)
+        for corroborator in record.corroborators:
+            references.setdefault(corroborator.citation.key, corroborator.citation)
+    lines.extend(("", "## References", ""))
+    lines.extend(f"- {_citation(references[key])}" for key in sorted(references))
+    return lines
+
+
 def render_page(
     view: RecoveryView, charts: Sequence[tuple[str, str]]
 ) -> RenderedRecovery:
@@ -257,4 +345,5 @@ def render_page(
             lines.extend(
                 ("", f"Also recorded in this window but not charted: {pairs}.")
             )
+    lines.extend(_page_part2(view))
     return RenderedRecovery("\n".join(lines) + "\n", tuple(charts))
