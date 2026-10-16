@@ -119,7 +119,10 @@ def test_attribution_is_in_wellness_daily_section() -> None:
         ),
         (
             "Get files into the inbox",
-            "Apple Health import is planned and is not a supported format yet.",
+            (
+                "Apple Health exports are supported as `.zip` or bare `.xml`; see "
+                "[Apple Health](#apple-health)."
+            ),
         ),
         ("Supported files and source definitions", "`UDSFile_*.json`"),
         ("Supported files and source definitions", "`*_sleepData.json`"),

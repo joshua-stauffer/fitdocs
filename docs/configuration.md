@@ -251,19 +251,20 @@ other sources or change their definitions.
 
 | Key | Meaning | Default |
 |-----|---------|---------|
-| `precedence` | Source identifiers, best first. Omitted sources follow in the built-in order. | `[]` (built-in order: `garmin-export`, then `intervals-icu`) |
+| `precedence` | Source identifiers, best first. Omitted sources follow in the built-in order. | `[]` (built-in order: `garmin-export`, then `apple-health`, then `intervals-icu`) |
 | `metric_precedence` | A table mapping metric identifiers to source lists. An entry replaces the general list for that metric; omitted sources still follow in built-in order. | `{}` (use the general list) |
 
 ```toml
 [wellness]
-precedence = ["garmin-export", "intervals-icu"]
+precedence = ["garmin-export", "apple-health", "intervals-icu"]
 
 [wellness.metric_precedence]
 hrv_rmssd_ms = ["intervals-icu", "garmin-export"]
 ```
 
-Only registered source identifiers (`intervals-icu` and `garmin-export`
-today) and the [wellness metric identifiers](wellness.md#metrics) are accepted.
+Only registered source identifiers (`intervals-icu`, `apple-health` and
+`garmin-export`) and the [wellness metric identifiers](wellness.md#metrics) are
+accepted.
 A list must contain strings without duplicates. A non-table `[wellness]`, a
 non-table `metric_precedence`, an unknown metric, an unknown source or a
 malformed list is a settings error. Unknown top-level wellness keys are

@@ -2,12 +2,13 @@
 
 fitdocs keeps daily wellness as a local, source-attributed series alongside
 workouts. It imports files offline, archives the handled bytes, and rebuilds
-plain CSV files you can read without fitdocs. Recovery pages, workout morning
-blocks and Apple Health import are future work.
+plain CSV files you can read without fitdocs. Recovery pages and workout morning
+blocks are future work.
 
 ## Get files into the inbox
 
-Drop individual supported JSON files into the configured [inbox](inbox.md),
+Drop supported JSON files or an Apple Health `.zip` / `.xml` export into the
+configured [inbox](inbox.md),
 then run the inbox drain from your usual data root:
 
 ```bash
@@ -20,7 +21,8 @@ An explicit `fitdocs sync SOURCE` processes workout FIT files; use bare
 Use `[inbox] path` in `<data-root>/fitdocs.toml` to choose another location.
 The default disposition leaves files in place. Opt-in `disposition = "move"`
 moves successfully archived files to `processed_dir`; the drain never deletes
-an inbox file. Unrecognized JSON is reported and left in place; `[inbox] ignore`
+an inbox file. Unrecognized JSON, ZIP and XML is reported and left in place; `[inbox]
+ignore`
 can silence a known unrelated file. A failed wellness file is quarantined by
 its content hash; correct its bytes or use `fitdocs sync --retry-quarantined`
 after fixing the cause. Deferred files are considered again on the next drain.
@@ -32,19 +34,21 @@ The intervals.icu pull delivers wellness files into the inbox: set
 `wellness = true` on your connector instance and run `fitdocs pull --sync`.
 See [wellness pulling](connectors.md#wellness) for setup and limits.
 
-Apple Health import is planned and is not a supported format yet.
+Apple Health exports are supported as `.zip` or bare `.xml`; see [Apple
+Health](#apple-health).
 
 A Garmin monitoring, sleep or settings `.fit` file is not one of these JSON
 exports. A FIT header declaring a non-activity type is skipped with a warning,
 creates no workout page and stays in the inbox under every disposition.
-Garmin wellness FIT message parsing and whole export ZIP import are not supported.
+Garmin wellness FIT message parsing and whole Garmin export ZIP import are not supported.
 
 ## Supported files and source definitions
 
 Extract Garmin's data-export ZIP yourself and drop only the individual JSON
 files below, including all date chunks you need. Names here are patterns;
 recognition uses record structure (and the matching name for an empty list),
-not a particular account identifier. Each format archives its original bytes.
+not a particular account identifier. These JSON formats archive their original bytes;
+Apple Health archives the extract described below.
 All four Garmin formats use source `garmin-export` and origin `garmin`.
 
 | File pattern | What is imported and how |
@@ -59,9 +63,10 @@ Garmin's daily resting HR is its lowest 30-minute average over a 24-hour period;
 fitdocs imports the daily `currentDayRestingHeartRate`, not the separate rolling
 average. See [Garmin's definition](https://support.garmin.com/en-AU/?faq=F8YKCB4CJd5PG0DR9ICV3A).
 Apple's resting HR is a sedentary estimate from background readings, using motion
-data to identify inactive periods; it can be revised during the day. Apple is
-relevant when a relay supplies Apple measurements, while direct Apple Health
-import remains future work. See [Apple's measurement description](https://support.apple.com/en-mide/120277)
+data to identify inactive periods; it can be revised during the day. The [Apple
+Health import](#apple-health) applies this definition directly; a relay can also
+supply Apple measurements. See [Apple's measurement
+description](https://support.apple.com/en-mide/120277)
 and [HealthKit's resting HR definition](https://developer.apple.com/documentation/healthkit/hkquantitytypeidentifier/restingheartrate).
 intervals.icu passes on its upstream platform's definition: an Apple-origin
 resting HR and a Garmin-origin resting HR need not measure the same thing.
@@ -97,13 +102,177 @@ the other. Other fields, including `ctl`, `atl`, `rampRate`, `ctlLoad`, `atlLoad
 such as fitness, fatigue or estimated FTP is imported. The subjective
 `fatigue` rating is distinct from computed training fatigue.
 
+## Apple Health
+
+### How to export
+
+On your iPhone, open Health, tap your profile picture, then Export All Health Data →
+Export. Put `export.zip` into the configured inbox and run `fitdocs sync`.
+See [Apple’s export
+instructions](https://support.apple.com/guide/iphone/share-your-health-data-iph5ede58c3d/ios).
+A bare main `export.xml` is also accepted; the wellness suffixes are `.zip` and `.xml`.
+Recognition uses export contents, so renaming either file is fine. The ZIP must
+contain exactly one main export document; its clinical-document companion is not an
+import.
+
+### Types and definitions
+
+| Apple type | Metrics | Writers | Day rule | Daily rule |
+| --- | --- | --- | --- | --- |
+| `HKCategoryTypeIdentifierSleepAnalysis` | `sleep_s`, `sleep_deep_s`, `sleep_light_s`, `sleep_rem_s`, `sleep_awake_s` | Apple Watch, iPhone | wake date of each segment’s end ([wellness day](#wellness-day)) | total asleep; stages only for a staged night |
+| `HKQuantityTypeIdentifierHeartRateVariabilitySDNN` | `hrv_sdnn_ms` | Apple Watch | night of the reading ([wellness day](#wellness-day)) | mean of readings asleep, rounded to 0.1 |
+| `HKQuantityTypeIdentifierRespiratoryRate` | `respiration_brpm` | Apple Watch | night of the reading ([wellness day](#wellness-day)) | mean of readings asleep, rounded to 0.1 |
+| `HKQuantityTypeIdentifierOxygenSaturation` | `spo2_pct` | Apple Watch | night of the reading ([wellness day](#wellness-day)) | mean of readings asleep, rounded to 0.1 |
+| `HKQuantityTypeIdentifierRestingHeartRate` | `resting_hr_bpm` | Apple Watch | local start date ([wellness day](#wellness-day)) | latest end, then latest creation |
+| `HKQuantityTypeIdentifierVO2Max` | `vo2max_ml_per_kg_min` | Apple Watch | local start date ([wellness day](#wellness-day)) | latest end, then latest creation |
+| `HKQuantityTypeIdentifierStepCount` | `steps` | Apple Watch, iPhone | local start date ([wellness day](#wellness-day)) | largest single-source day total |
+| `HKQuantityTypeIdentifierBodyMass` | `weight_kg` | Apple Watch, iPhone, other | local start date ([wellness day](#wellness-day)) | latest start, then latest creation; rounded to 0.01 kg |
+
+The writers and daily rules below explain the table; the day links use the page’s
+shared rule.
+
+| Metric | Apple definition |
+| --- | --- |
+| `resting_hr_bpm` | Apple’s sedentary estimate from background heart-rate readings, in bpm |
+| `hrv_sdnn_ms` | SDNN: standard deviation of normal-to-normal heartbeat intervals, in ms; not rMSSD |
+| `respiration_brpm` | Breathing rate, in breaths per minute |
+| `spo2_pct` | Blood-oxygen saturation; the exported fraction is converted to percent |
+| `vo2max_ml_per_kg_min` | Estimated maximum oxygen consumption, in millilitres per kilogram per minute |
+| `steps` | Number of steps |
+| `weight_kg` | Body mass, converted to kilograms |
+| `sleep_s` | Total asleep time: core, deep, REM and unspecified asleep; excludes awake and in-bed time |
+| `sleep_deep_s` | Time in Apple’s deep sleep stage |
+| `sleep_light_s` | Time in Apple’s core sleep stage, mapped to light sleep |
+| `sleep_rem_s` | Time in Apple’s REM sleep stage |
+| `sleep_awake_s` | Time awake within the staged night |
+
+These definitions follow Apple’s HealthKit references for [resting heart
+rate](https://developer.apple.com/documentation/healthkit/hkquantitytypeidentifier/restingheartrate),
+[SDNN](https://developer.apple.com/documentation/healthkit/hkquantitytypeidentifier/heartratevariabilitysdnn),
+[respiratory
+rate](https://developer.apple.com/documentation/healthkit/hkquantitytypeidentifier/respiratoryrate),
+[oxygen
+saturation](https://developer.apple.com/documentation/healthkit/hkquantitytypeidentifier/oxygensaturation),
+[VO2max](https://developer.apple.com/documentation/healthkit/hkquantitytypeidentifier/vo2max),
+[steps](https://developer.apple.com/documentation/healthkit/hkquantitytypeidentifier/stepcount),
+[body
+mass](https://developer.apple.com/documentation/healthkit/hkquantitytypeidentifier/bodymass)
+and
+[sleep
+states](https://developer.apple.com/documentation/healthkit/hkcategoryvaluesleepanalysis).
+
+### Writers and daily rules
+
+A writing source is classified from all its device evidence: manufacturer Apple Inc.
+and model Watch wins over model iPhone; otherwise it is other. Records without a
+device inherit their writing source’s class.
+
+A third-party watch app that names an Apple Watch as its device can therefore be
+misclassified as Apple Watch.
+
+Other apps’ values, except body weight, are excluded; import those platforms’ own
+sources instead. Writers are selected from export content, independently of record
+order, and different writers’ values are never added together.
+
+Resting HR and VO2max use the final estimate because Apple can revise its estimate
+during the day. Equal end times use latest creation; remaining ties use record
+content.
+
+HRV, respiration and SpO2 average only readings whose end lies in Apple Watch asleep
+time, start inclusive and end exclusive, rounded to one decimal place. This keeps
+each day’s measure tied to sleep rather than daytime activity. No watch sleep, or no
+qualifying reading, means no value; a night without the watch supplies no HRV.
+
+Steps take the largest single-writer daily sum to avoid counting the phone and watch
+together. Weight takes the latest measurement across every writer, including manual
+entries and scales, because the last measurement is the daily observation; creation
+time and then content break ties. Weight is converted to kilograms and rounded to two
+decimal places.
+
+Every imported value has source `apple-health` and origin `apple`, except weight,
+whose origin is unknown. SDNN is never converted to rMSSD.
+
+### Sleep and naps
+
+Sleep uses Apple Watch records if that night contains any watch asleep time,
+otherwise iPhone records; they are never combined within a night.
+
+Overlapping segments count once, with priority deep, REM, core, awake, then
+unspecified asleep. Core maps to light; deprecated asleep maps to unspecified asleep.
+In-bed time contributes nothing.
+
+Total sleep includes core, deep, REM and unspecified asleep, excluding awake. Only a
+night with core, deep or REM time supplies stage and awake values; an older unstaged
+night supplies total sleep only. A zero total supplies no sleep values.
+
+Naps count toward the same night under the linked wellness day rule; this is not
+restricted to one main sleep session.
+
+### Extract and corrections
+
+The archive keeps a deterministic gzip-compressed UTF-8 JSON Lines extract at
+`wellness-archive/apple-health/<sha256>.jsonl.gz`, named by the original export’s
+SHA-256.
+
+Its header records the original SHA-256, byte size and stated export date. Each
+supported raw record retains type, writing source, source version, device, unit,
+creation/start/end times, value and metadata; the device description’s memory address
+is removed. A trailer records record counts and correction counts.
+
+It contains no personal profile (date of birth, biological sex, blood type or skin
+type), workouts, routes, clinical records, ECGs, audiograms or unsupported record
+types. It contains no run date, original filename/path or machine-specific value.
+
+Read it without fitdocs using `gzip -dc
+wellness-archive/apple-health/<sha256>.jsonl.gz`; there is one JSON record per line.
+
+Corrections remove a malformed document-type declaration, remove illegal XML control
+characters, and keep the first occurrence of a duplicate WorkoutStatistics attribute.
+Removing a control character changes the text it was in. Each correction kind is
+counted in the extract; the original export is never modified. Other malformed XML
+fails the whole import with a line number and leaves the series unchanged.
+
+### Later exports and the original
+
+The latest export date replaces the earlier export entirely, including any day the
+later export no longer holds. Every Apple Health export in the archive is assumed to
+belong to the same athlete.
+
+Superseded extracts remain unchanged in the archive and are listed as superseded in
+the manifest. An older export is archived but does not replace a newer one. Zip and
+bare XML copies use a deterministic archive-reference tie-break.
+
+The series is rebuilt from the extract alone; the original is never needed again. The
+original follows inbox disposition: left in place by default, or moved to
+processed_dir, never deleted by fitdocs. Move it out of an iCloud inbox yourself to
+avoid re-hashing it on every drain.
+
+### Time, memory and exclusions
+
+Allow about 10–20 seconds per GB of main export.xml on a recent computer, plus about
+one second per GB for each of two framework hashes. Large imports can take minutes. A
+terminal reports the percentage of the main XML document read, at most once per whole
+percent.
+
+XML is streamed without unpacking to disk; import memory stays flat with XML size,
+under 100 MiB. Daily reduction additionally retains sleep segments and spot readings:
+tens of MB for a decade, depending on history.
+
+Import and rebuild are offline. No real export or extract belongs in the fitdocs
+repository.
+
+Workouts continue to arrive as `.fit` files through HealthFit. Heart rate, walking
+heart rate, wrist temperature, nutrition, clinical records, ECGs, audiograms, Sleep
+Score, Apple’s rMSSD type and third-party file exporters are not imported.
+
 ## Metrics
 
 Ranges are inclusive acceptance limits for recorded values, not clinical
 reference ranges. Unit tokens: `bpm` = beats/minute; `ms` = milliseconds;
 `s` = seconds; `brpm` = breaths/minute; `pct` = percent; `kg` = kilograms;
 `ml_per_kg_min` = millilitres per kilogram per minute; `—` = unitless.
-The supported-file definitions above specify which source provides each metric.
+The supported-file definitions and [Apple Health definitions](#apple-health) specify
+which source provides each metric.
 
 | Metric | Label | Unit | Minimum | Maximum | Meaning |
 | --- | --- | --- | --- | --- | --- |
@@ -200,7 +369,8 @@ sleep is positive. A new revision can withdraw an earlier measurement.
 All sources' values are retained. Exactly one available source is canonical for
 each day and metric; consumers can instead follow a single source consistently.
 The default source ranking is device, then hub, then relay, then source id
-within each kind. Today that puts `garmin-export` before `intervals-icu`.
+within each kind. Today that puts `garmin-export` before `apple-health` before
+`intervals-icu`.
 Future source registrations can extend the ranking.
 
 Set the order in `<data-root>/fitdocs.toml`:
@@ -217,8 +387,9 @@ The general list applies to all metrics; a metric-specific list replaces it for
 that metric. Every partial list is completed with remaining registered sources
 in default order. An empty list uses the default. Unknown sources, duplicate
 sources, unknown metrics and malformed lists are configuration errors before
-writes. Only registered source ids are accepted; `apple-health` is not registered
-yet. Changed precedence rebuilds the series on the next drain or `fitdocs regen`.
+writes. Only registered source ids are accepted: `garmin-export`, `apple-health` and
+`intervals-icu`. Changed precedence rebuilds the series on the next drain or `fitdocs
+regen`.
 Precedence does not mix or average sources, and does not alter their definitions.
 
 ## Read the series
@@ -284,7 +455,7 @@ The reader also provides `days`, `for_day`, `sources`, `value` and
 
 ## Archive and withdrawal
 
-Handled inputs live at `wellness-archive/<format>/<original-sha256>.json`:
+Handled JSON inputs live at `wellness-archive/<format>/<original-sha256>.json`:
 `intervals-icu`, `garmin-uds`, `garmin-sleep`, `garmin-maxmet` or
 `garmin-biometrics`. Entries are immutable. Byte-identical inputs of one format
 share an entry; a failed parse writes no archive entry. The next drain rebuilds

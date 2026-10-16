@@ -50,11 +50,14 @@ files alone do not. An inbox with no eligible files reports no workout
 writes; series and later refresh passes can still run. `--out`, `--force`,
 and `--no-prompt` all keep their explicit-source meanings on a drain.
 
+An Apple Health import can take minutes; on a terminal, progress shows the percentage
+of its main XML document read.
+
 ## Safeguards
 
 **Ignore rules.** Regular `.fit` files are workout candidates. Wellness
-candidates use the supported formats' extensions, currently `.json`, with
-case-insensitive matching. Both selectors exclude symlinks and share the
+candidates use the supported formats' extensions, currently `.json`, `.zip` and
+`.xml`, with case-insensitive matching. Both selectors exclude symlinks and share the
 same ignore rules. Any candidate whose inbox-relative path has a path
 component starting with a dot is ignored — this covers hidden files,
 AppleDouble `._*` companions, and everything inside a hidden sync-tool staging
@@ -66,7 +69,7 @@ the user-owned settings, for example:
 
 ```toml
 [inbox]
-ignore = ["unrelated.json", "old-exports/*"]
+ignore = ["unrelated.json", "garmin-export.zip", "unrelated.xml", "old-exports/*"]
 ```
 
 **Wellness intake.** A supported extension makes a file a candidate, not a
@@ -80,8 +83,9 @@ content hash; a successful parse is Wellness archived, and content already
 present is Wellness skipped. Corrected bytes are new content and need no
 retry flag. See the [wellness guide](wellness.md) for the supported exports,
 source definitions, [wellness-day rule](wellness.md#wellness-day), precedence
-and series readers. Pulling wellness, direct Apple Health import, recovery
-pages and morning-of workout blocks remain future work.
+and series readers. Recovery pages and morning-of workout blocks remain future work.
+Other ZIP files (including Garmin export ZIPs) and unrelated XML are reported as
+unrecognized and left in place; silence them with `[inbox] ignore`.
 
 **Non-activity FIT files.** A FIT header declaring a type other than
 `activity` is skipped with a warning: fitdocs creates no workout page and

@@ -487,9 +487,9 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - _Requirements: 1.4, 2.4, 2.6, 4.1, 4.2, 4.3, 4.4, 5.10, 6.1, 6.2, 6.3, 6.4, 6.5, 14.3_
   - _Depends: 4.1_
 
-- [ ] 5. Documentation and release notes
+- [x] 5. Documentation and release notes
 
-- [ ] 5.1 Document the Apple Health import and record the inbox change
+- [x] 5.1 Document the Apple Health import and record the inbox change
   - `docs/wellness.md` § "Apple Health" per design § Docs: exporting from the
     Health app; the type table (Apple type, metrics, writers, daily rule, day
     rule); the reasons; the writer classification and its known
@@ -517,6 +517,10 @@ All paths below are under `tests/wellness/apple/` unless written in full;
     the Meaning cell only: the row's Do cell is pinned row-scoped by
     `wellness-store` 5.2 in `tests/test_agent_skill.py` and is never
     touched, and the set of packaged skills does not change.
+  - **Documentation compatibility:** replace only the obsolete Apple-planned
+    statement parameter in `tests/wellness/test_docs_wellness.py::test_guide_topics`
+    with truthful supported-format wording; preserve all other parameters and
+    the existing assertion/helper behavior.
   - The day rules in the Apple section refer to the page's one statement of
     the day-boundary rule and never restate it.
   - **Tests** (`test_docs_apple.py`): the doc's type table equals `POLICIES`
@@ -797,3 +801,28 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   verification pass. No production or accepted helper/test changes were needed.
   Earlier-hash implementer proofs retain honest mechanical-fix provenance; independent
   final-hash replay is the acceptance evidence. Documentation and final validation remain.
+
+- **5.1 existing guide pin:** Parent licensed only the obsolete Apple-planned statement parameter in tests/wellness/test_docs_wellness.py::test_guide_topics to follow the now-supported format. All peer statements and existing assertion/helper behavior stay unchanged. No inbox docstring edit is required where the current text already accurately generalizes registered wellness suffixes.
+
+- **5.1:** Independently APPROVED and completion VERIFIED before completion
+  metadata. Apple export/import policy, eight type rows and twelve definitions,
+  writer/sleep/extract/correction/privacy/supersession guidance, inbox changes and
+  release notes are documented. Rendered guards reject extra candidate suffixes
+  and extra precedence entries. All39 current fault edits and three independent
+  edits were replayed at final hashes, each exactly restored; 342 canonical
+  documentation tests, statics and fresh parent verification pass. Runtime and
+  skill Do cell are unchanged; only the obsolete Apple-planned guide parameter
+  changed in the existing guide tests. Final validation remains pending.
+
+- **5.1 stale-text sweep:** The following exact multiline grep had five baseline
+  matches and zero final matches (exit1). The baseline hits were
+  docs/configuration.md:254 (whole default order), docs/inbox.md:56 (JSON-only
+  candidates), docs/wellness.md:35 (planned import), :203 (whole default order),
+  and :220 (Apple unregistered); all were updated. Broader analytics source-order
+  examples describe intentional configurations, so remain unchanged. The inbox
+  DEFAULT_IGNORE_PATTERNS docstring already described registered suffixes
+  generically and stayed unchanged; packaged skill Meaning changed, Do did not.
+
+  ```sh
+  rg -n -i -U 'currently\s+`\.json`,\s+with|garmin-export`(?:,\s+then\s+|\s+before\s+)`intervals-icu|Apple Health import is planned|apple-health` is not registered' docs src/fitdocs --glob '*.md' --glob '*.py'
+  ```

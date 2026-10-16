@@ -17,6 +17,11 @@ recorded as one.
 
 ### Added
 
+- Apple Health import reads supported wellness types from `export.zip` or bare
+  `export.xml`, archives a compact extract, and uses the latest export date to
+  supersede earlier exports entirely. See the [Apple Health
+  guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/wellness.md#apple-health).
+
 - `fitdocs derive-benchmarks` gains a heart-rate stage after tagged efforts:
   resting heart rate comes from per-source wellness baselines, and maximum
   heart rate from sustained workout peaks. Hand-recorded entries stay
@@ -133,6 +138,13 @@ recorded as one.
   live there, move them and set `[plans] path` to the new directory.
 
 ### Changed
+
+- Inbox interface: `.zip` and `.xml` files are wellness candidates. Unrelated ZIP or
+  XML stays in place and is reported as unrecognized; add it to `[inbox] ignore` to
+  silence it.
+- The default wellness source order gains `apple-health` between `garmin-export` and
+  `intervals-icu`. The first `fitdocs sync` or `fitdocs regen` after upgrading
+  rebuilds the series once.
 
 - The ownership contract (wiki-contract) advances from version `12` to
   `13`: `derive-benchmarks` reads composed workout archives and normalized
