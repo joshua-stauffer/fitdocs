@@ -115,6 +115,7 @@ from fitdocs.quarantine import load_quarantine
 from fitdocs.settings import load_settings_document
 from fitdocs.sync import drain, regen, sync
 from fitdocs.tiles import DEFAULT_TILE_SETTINGS, TileSource, TileStore
+from fitdocs.wellness import Metric
 from tests.connectors.conftest import (
     FakeTransport,
     ScriptedPersonalKeyConnector,
@@ -124,6 +125,8 @@ from tests.dashboards._helpers import directive_block, page_text, write_page
 from tests.fixtures import builder
 from tests.fixtures import identity as identity_fixtures
 from tests.load.conftest import ComputingCalculator
+from tests.recovery.builders import series_value, workout_page
+from tests.wellness.builders_series import write_series
 
 # PINNED timezone: a FIXED -06:00 offset (never the system zone) so document
 # stems are stable wherever the suite runs.
@@ -1549,8 +1552,44 @@ def _wrote_wellness_ledger_and_delivery(touched: Sequence[str]) -> bool:
     )
 
 
+def _stage_recovery_pages(data_root: Path, source_dir: Path) -> None:
+    workout_page(data_root, "recovery-older", date(2024, 8, 13), 37)
+    workout_page(data_root, "recovery-latest", date(2024, 8, 19), 83)
+
+
+def _prepare_recovery(data_root: Path, source_dir: Path) -> None:
+    _stage_recovery_pages(data_root, source_dir)
+    write_series(
+        data_root,
+        [
+            series_value(
+                date(2024, 8, 19),
+                57,
+                metric=Metric.RESTING_HR_BPM,
+                source="synthetic",
+                canonical=True,
+            )
+        ],
+    )
+
+
+def _run_cli_recovery(data_root: Path, source_dir: Path) -> None:
+    result = _CLI_RUNNER.invoke(app, ["recovery", "--out", str(data_root)])
+    assert result.exit_code == 0, result.output
+
+
+def _wrote_the_recovery_document(touched: Sequence[str]) -> bool:
+    return "data/recovery/recovery.md" in touched
+
+
 #: Every fitdocs entry point that writes into the data root (Req 7.6).
 WRITING_ENTRY_POINTS: Final[tuple[EntryPoint, ...]] = (
+    EntryPoint(
+        id="recovery",
+        prepare=_prepare_recovery,
+        run=_run_cli_recovery,
+        non_vacuous=_wrote_the_recovery_document,
+    ),
     EntryPoint(id="sync", prepare=_nothing, run=_run_sync),
     EntryPoint(
         id="index",
@@ -3466,3 +3505,38 @@ def test_hr_confinement_predicate_controls(
     touched: tuple[str, ...], expected: bool
 ) -> None:
     assert _wrote_only_the_athlete_profile(touched) is expected
+
+
+def test_recovery_is_a_registered_writing_entry_point() -> None:
+    assert [entry.id for entry in WRITING_ENTRY_POINTS].count("recovery") == 1
+
+    entry = next(entry for entry in WRITING_ENTRY_POINTS if entry.id == "recovery")
+    assert (entry.prepare, entry.run, entry.non_vacuous) == (
+        _prepare_recovery,
+        _run_cli_recovery,
+        _wrote_the_recovery_document,
+    )
+
+
+@pytest.mark.parametrize("populated", [True, False], ids=["real-write", "empty-run"])
+def test_recovery_non_vacuous_distinguishes_real_write_from_empty_run(
+    tmp_path: Path,
+    populated: bool,
+) -> None:
+    data_root, source_dir = tmp_path / "data", tmp_path / "src"
+    data_root.mkdir()
+    source_dir.mkdir()
+    entry = next(entry for entry in WRITING_ENTRY_POINTS if entry.id == "recovery")
+    if populated:
+        entry.prepare(data_root, source_dir)
+    else:
+        _stage_recovery_pages(data_root, source_dir)
+    page = data_root / "recovery/recovery.md"
+    assert not page.exists()
+    before = _snapshot(tmp_path)
+    entry.run(data_root, source_dir)
+    after = _snapshot(tmp_path)
+    assert (page.is_file(), entry.non_vacuous(_touched(before, after))) == (
+        populated,
+        populated,
+    )
