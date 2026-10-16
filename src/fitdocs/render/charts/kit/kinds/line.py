@@ -161,7 +161,8 @@ def _draw(bound: BoundChart) -> str:
     counts = undrawn(bound, ("x", "y"))
     note = frame.not_drawn_note(counts)
     lines = [] if note is None else [note]
-    x_present = [x for i in rows if (x := xs[i]) is not None]
+    x_rows = [i for i, x in enumerate(xs) if x is not None]
+    x_present = [x for i in x_rows if (x := xs[i]) is not None]
     y_present = [y for i in rows if (y := ys[i]) is not None]
 
     def plan(y_label_width: float, x_label_overhang: float) -> FramePlan:
@@ -207,6 +208,16 @@ def _draw(bound: BoundChart) -> str:
     left, right = _overhangs(x_axis(provisional.plot), provisional.plot)
     final = plan(label_width + left, right)
     x_scale = x_axis(final.plot)
+    if any(
+        x_scale.position(t.value) + text_width(t.label, FONT_TEXT) / 2 > bound.width - 4
+        for t in x_scale.ticks
+    ):
+        # Replanning can choose different ticks. Reserve room for a full half-label.
+        right = max(
+            right, max(text_width(t.label, FONT_TEXT) / 2 for t in x_scale.ticks)
+        )
+        final = plan(label_width + left, right)
+        x_scale = x_axis(final.plot)
 
     marks: list[str] = []
     for group in groups:
@@ -229,7 +240,7 @@ def _draw(bound: BoundChart) -> str:
         frame.title_text(final, bound.request.title),
         frame.notes(final, lines),
     ]
-    x_low, x_high = _extremes(bound, "x", rows, x_scale)
+    x_low, x_high = _extremes(bound, "x", x_rows, x_scale)
     y_low, y_high = _extremes(bound, "y", rows, y_scale)
     drawn_titles = {"x": _axis_title(x_scale), "y": _axis_title(y_scale)}
     channels = [

@@ -12,7 +12,7 @@ from decimal import Decimal
 
 import pytest
 
-from fitdocs.render.charts.kit import registry, validate
+from fitdocs.render.charts.kit import registry, render_chart, validate
 from fitdocs.render.charts.kit.data import Column, Value, ValueKind
 from fitdocs.render.charts.kit.format import display_label
 from fitdocs.render.charts.kit.kinds import reference_band as module
@@ -834,7 +834,7 @@ def test_flag_only() -> None:
             " low: Lower (m); high: Upper (m); mid: Baseline (m); segment: Source;"
             " flag: Outside. 5 rows, 2 series. Not drawn: 1 row without x,"
             " 4 rows without y, 4 rows without low, 4 rows without high,"
-            " 4 rows without mid. Day from 2 to 4."
+            " 4 rows without mid. Day from 1 to 4."
             " Observed (m) range: no numeric values to draw."
         ),
     )
@@ -979,8 +979,8 @@ def test_flag_only_geometry(monkeypatch: pytest.MonkeyPatch) -> None:
         )
     )
     assert captured == [
-        ([2.0, 4.0], "time", "linear", False, False, True),
-        ([2.0, 4.0], "time", "linear", False, False, True),
+        ([1.0, 2.0, 3.0, 4.0], "time", "linear", False, False, True),
+        ([1.0, 2.0, 3.0, 4.0], "time", "linear", False, False, True),
         ("triangle-up", [(2.0, 257.0), (4.0, 257.0)], "#7f7f7f"),
     ]
 
@@ -2194,7 +2194,7 @@ def test_real_flag_only_planning(
     )
     legend = _literal_legend(columns, band, mid, segment, True, (("A", 0),))
     plans, scales, _, x_scale, final = _real_contract(
-        width, height, legend, xs[:2], [], columns[0], columns[1], False, 1
+        width, height, legend, xs, [], columns[0], columns[1], False, 1
     )
     observed = _observe_real_contract(monkeypatch, plans, scales)
     text = render(
@@ -2694,7 +2694,7 @@ def test_real_zero_x(
                 values.append(centre)
             if band:
                 values.extend((low, high))
-    xs = [0.0] if flags_only else [0.0, 4.89]
+    xs = [0.0, 4.89]
     legend = _literal_legend(columns, band, mid, segment, flag, (("A", 0),))
     plans, scales, y_scale, x_scale, final = _real_contract(
         720, 320, legend, xs, values, columns[0], columns[1], False, 1
@@ -3366,3 +3366,190 @@ def test_received_segments_check(
     assert [problem.as_dict() for problem in problems] == _received_limit_problems(
         limit, count
     )
+
+
+_EXTENT_CASES = (
+    (
+        ValueKind.DATE,
+        (
+            date(2025, 2, 1),
+            date(2025, 2, 3),
+            date(2025, 2, 5),
+            date(2025, 2, 7),
+            date(2025, 2, 9),
+        ),
+        ("2025-02-01", "2025-02-09"),
+    ),
+    (
+        ValueKind.DATETIME,
+        (
+            datetime(2025, 2, 1, 6),
+            datetime(2025, 2, 3, 6),
+            datetime(2025, 2, 5, 6),
+            datetime(2025, 2, 7, 6),
+            datetime(2025, 2, 9, 6),
+        ),
+        ("2025-02-01 06:00", "2025-02-09 06:00"),
+    ),
+    (ValueKind.NUMBER, (0.0, 2.0, 4.0, 6.0, 8.0), ("0", "8")),
+    (ValueKind.NUMBER, (-4.0, -2.0, 0.0, 2.0, 4.0), ("-4", "4")),
+    (
+        ValueKind.DURATION,
+        (
+            timedelta(0),
+            timedelta(seconds=120),
+            timedelta(seconds=240),
+            timedelta(seconds=360),
+            timedelta(seconds=480),
+        ),
+        ("0:00", "8:00"),
+    ),
+)
+
+
+def _extent_axis(element: ET.Element) -> tuple[float, float]:
+    axis = next(g for g in element.iter(f"{SVG}g") if g.get("class") == "ck-axis")
+    line = next(iter(axis))
+    return float(line.attrib["x1"]), float(line.attrib["x2"])
+
+
+def _extent_positions(element: ET.Element) -> list[float]:
+    left, right = _extent_axis(element)
+    values: list[float] = []
+    for g in element.iter(f"{SVG}g"):
+        if g.get("class") != "ck-marks":
+            continue
+        for mark in g:
+            if mark.tag == f"{SVG}polyline":
+                values.extend(
+                    float(p.split(",")[0]) for p in mark.attrib["points"].split()
+                )
+            elif mark.tag == f"{SVG}line":
+                values.append(float(mark.attrib["x1"]))
+            else:
+                values.extend(
+                    float(x) for x in re.findall(r"M([-\d.]+) ", mark.attrib["d"])
+                )
+    return sorted((v - left) / (right - left) for v in values)
+
+
+@pytest.mark.parametrize(
+    "kind,xs,labels",
+    _EXTENT_CASES,
+    ids=["date", "datetime", "zero", "negative", "duration"],
+)
+@pytest.mark.parametrize("missing", ["first", "last", "both"])
+@pytest.mark.parametrize("observation", ["geometry", "y_geometry", "description"])
+def test_present_x_extent(
+    kind: ValueKind,
+    xs: tuple[Value, ...],
+    labels: tuple[str, str],
+    missing: str,
+    observation: str,
+) -> None:
+    first = None if missing in ("first", "both") else 4.0
+    last = None if missing in ("last", "both") else 12.0
+    rows = [(xs[3], 8.0), (xs[0], first), (None, 999.0), (xs[4], last), (xs[1], 0.0)]
+    text = render_chart(
+        chart_request(
+            "reference-band", title="Extent", channels={"x": "position", "y": "value"}
+        ),
+        chart_data((column("position", kind), column("value")), rows),
+    ).text
+    if observation == "geometry":
+        expected = (
+            ([0.0] if first is not None else [])
+            + [0.25, 0.75]
+            + ([1.0] if last is not None else [])
+        )
+        assert _extent_positions(root(text)) == pytest.approx(expected, abs=0.001)
+    elif observation == "y_geometry":
+        high = 8.0 if last is None else 15.0
+        expected = sorted(
+            ([4.0 / high] if first is not None else [])
+            + [0.0, 8.0 / high]
+            + ([12.0 / high] if last is not None else [])
+        )
+        assert _extent_heights(root(text)) == pytest.approx(expected, abs=0.001)
+    else:
+        x_title = "position (m:ss)" if kind is ValueKind.DURATION else "position"
+        absent = 2 if missing == "both" else 1
+        y_high = "8" if last is None else "12"
+        assert desc(text) == (
+            f"Reference-band chart: Extent. "
+            f"x: {x_title}; y: value. "
+            f"5 rows. "
+            f"Not drawn: 1 row without x, "
+            f"{absent} row{'s' if absent > 1 else ''} without y. "
+            f"{x_title} from {labels[0]} to {labels[1]}; value from 0 to {y_high}."
+        )
+
+
+@pytest.mark.parametrize("mode", ["band", "mid", "flags", "numeric-flags"])
+@pytest.mark.parametrize("observation", ["geometry", "description", "legend"])
+def test_present_x_optional_extent(mode: str, observation: str) -> None:
+    channels = {"x": "time", "y": "value", "segment": "source"}
+    if mode == "band":
+        channels.update(low="floor", high="ceiling")
+    if mode == "mid":
+        channels.update(mid="centre")
+    if "flags" in mode:
+        channels.update(flag="outside")
+    rows = [
+        (8.0, None, None, None, None, "DomainLast", None),
+        (
+            2.0,
+            0.0 if mode == "numeric-flags" else None,
+            2.0 if mode == "band" else None,
+            8.0 if mode == "band" else None,
+            4.0 if mode == "mid" else None,
+            "Drawn",
+            True,
+        ),
+        (0.0, None, None, None, None, "DomainFirst", False),
+        (None, 999.0, 998.0, 1000.0, 999.0, "Unplaced", True),
+    ]
+    text = render_chart(request(channels), chart_data(COLUMNS, rows)).text
+    if observation == "geometry":
+        expected = [0.25, 0.25] if mode == "numeric-flags" else [0.25]
+        assert _extent_positions(root(text)) == pytest.approx(expected, abs=0.001)
+    elif observation == "description":
+        y_range = {
+            "band": "Observed (m) from 2 m to 8 m.",
+            "mid": "Observed (m) from 4 m to 4 m.",
+            "flags": "Observed (m) range: no numeric values to draw.",
+            "numeric-flags": "Observed (m) from 0 m to 0 m.",
+        }[mode]
+        assert (
+            "Day from 0 to 8" in (desc(text) or ""),
+            (desc(text) or "").endswith(y_range),
+        ) == (True, True)
+    else:
+        expected_labels = {
+            "band": ["Drawn", "Observed", "Lower to Upper"],
+            "mid": ["Drawn", "Observed", "Baseline"],
+            "flags": ["Drawn", "Observed", "Outside"],
+            "numeric-flags": ["Drawn", "Observed", "Outside"],
+        }[mode]
+        assert legends(text) == expected_labels
+
+
+def _extent_heights(element: ET.Element) -> list[float]:
+    axes = [g for g in element.iter(f"{SVG}g") if g.get("class") == "ck-axis"]
+    boundary = next(iter(axes[1]))
+    top, bottom = sorted((float(boundary.attrib["y1"]), float(boundary.attrib["y2"])))
+    values: list[float] = []
+    for g in element.iter(f"{SVG}g"):
+        if g.get("class") != "ck-marks":
+            continue
+        for mark in g:
+            if mark.tag == f"{SVG}polyline":
+                values.extend(
+                    float(p.split(",")[1]) for p in mark.attrib["points"].split()
+                )
+            else:
+                values.extend(
+                    float(y)
+                    for y in re.findall(r"M[-\d.]+ ([-\d.]+)", mark.attrib["d"])
+                )
+    return sorted((bottom - v) / (bottom - top) for v in values)

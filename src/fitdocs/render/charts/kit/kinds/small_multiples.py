@@ -306,7 +306,8 @@ def _draw(bound: BoundChart) -> str:
         (text_width(t.label, FONT_TEXT) for s in drawn_y for t in s.ticks),
         default=0.0,
     )
-    x_present = [x for i in drawable if (x := xs[i]) is not None]
+    x_rows = [i for i, x in enumerate(xs) if x is not None]
+    x_present = [x for i in x_rows if (x := xs[i]) is not None]
 
     def x_axis(plot: Rect) -> NumericScale:
         return numeric_scale(
@@ -416,7 +417,7 @@ def _draw(bound: BoundChart) -> str:
         frame.title_text(outer, bound.request.title),
         frame.notes(outer, lines),
     ]
-    x_low, x_high = _extremes(bound, "x", drawable, x_scale)
+    x_low, x_high = _extremes(bound, "x", x_rows, x_scale)
     y_low, y_high = _extremes(bound, "y", drawable, title_scale)
     drawn_titles = {"x": x_title, "y": y_title}
     channels = [

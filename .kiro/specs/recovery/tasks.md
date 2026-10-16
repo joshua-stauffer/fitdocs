@@ -397,7 +397,7 @@ literal pins, one per lander) and every head-paragraph pin of
   - _Requirements: 12.1, 12.3, 13.1, 13.2, 13.3, 18.2_
   - _Boundary: OwnedLocation_
 
-- [ ] 2. The `reference-band` chart kind and chart-axis compatibility (chart-catalog Amendment 1)
+- [x] 2. The `reference-band` chart kind and chart-axis compatibility (chart-catalog Amendment 1)
 
 - [x] 2.1 (P) Draw values as points against a segmented reference band, with flagged rows marked, and register the kind
   - `src/fitdocs/render/charts/kit/kinds/reference_band.py` per design §
@@ -454,7 +454,7 @@ literal pins, one per lander) and every head-paragraph pin of
   - _Depends: 2.1_
   - _Requirements: 16.3, 16.4_
 
-- [ ] 2.3 Preserve the present-x extent when endpoint values are absent (user-approved prerequisite)
+- [x] 2.3 Preserve the present-x extent when endpoint values are absent (user-approved prerequisite)
   - User approved the fresh-debug proposal on 2026-10-16: "yes, please fix
     it and continue". This prerequisite resolves the task 3.2 scope conflict.
   - For line, small-multiples and reference-band, when a genuine mark is
@@ -1265,3 +1265,47 @@ introspection artifact also names its MetricInfo value type at line 48).
 - The correction changes only kind-local domain/description populations;
   original values/missingness, drawable-only y/marks, true flags and
   no-data behavior remain. Parent controls metadata and selective commits.
+
+- During 2.3, the approved wider line/typical extent moves tick positions
+  when the frame replans; the same seven weekly tick values remain. The
+  changed residual overhang makes its existing label-fit check fail by
+  about 0.48 px at the right bound. A minimal conditional line-local
+  overhang correction is part of this same approved axis fix; no shared
+  layout change or other-kind expansion is needed. Independently review
+  its geometry and direct mutation evidence. Only the line/typical golden
+  is observed changed so far; old flags-only extent expectations may be
+  updated where the wider x domain intentionally makes them obsolete.
+
+
+### Task 2.3 accepted (2026-10-16)
+
+- User-approved prerequisite READY_FOR_REVIEW → fresh independent APPROVED
+  → current-evidence VERIFIED. Three kind-local x-domain/description fixes,
+  separate genuine flags-only entries and a minimal conditional line-local
+  overhang correction; three test modules and only line/typical.svg changed.
+  No API, schema, option, registry, budget or shared-layer changes. Group 2
+  is complete; ten of twenty-one mandatory leaves are accepted.
+- Independent 45/45 valid source probes reproduced exact native failed
+  nodes, then restored GREEN; six additional faults caught/restored. All
+  194 new parameter nodes and changed assertions directly covered. Scoped
+  chart-kit/recovery 5150 passed; targeted 1809; Ruff check/format 763 and
+  mypy 578 clean. All 287 sealed artifacts and original 1960-path
+  byte/mtime snapshot preserved. The three unaccepted 3.2 drafts remain
+  unchanged. Tick-note wording above is corrected: same tick values,
+  changed positions/residual overhang; the source correction is unchanged.
+- Full combined draft tree: 21802 passed, 44 expected skips, one failure
+  in load's existing settings guard, which mistakes frozen charts.py's
+  `charts["load"]` Store for a settings read. This is not hidden or fixed
+  by 2.3. Resumed 3.2 must remove the collision within its owned adapter
+  (for example using the existing request.ref), without changing the guard.
+- Fresh accepted-task validation used a detached a38dd24 checkout plus
+  exactly the seven sealed submitted files, with independent import
+  provenance and no unaccepted 3.2 source/test/import-row diff. Unmodified
+  full pytest: 21644 passed / 44 expected skips, exit 0, 571.98 s. No test
+  skip, patched fixture or guard change; both checkout preservation audits
+  passed. This accepts 2.3 only, not the combined draft or feature GO.
+- Evidence: `/private/tmp/recovery-review-2.3.md`, its raw package and
+  isolated-scope manifest, sealed `recovery-task-2.3-evidence/`, and parent
+  `/private/tmp/recovery-task-2.3-verification.md`/`.json`. No new unowned
+  follow-up; 3.2 owns its existing collision and actual six-chart window
+  assertions/remaining discrimination. Continue directly with fresh 3.2.

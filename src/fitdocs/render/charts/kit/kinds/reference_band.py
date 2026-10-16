@@ -240,7 +240,7 @@ def _axis_title(scale: NumericScale) -> str:
 def _extremes(
     entries: list[tuple[float, Value]], column: Column, scale: NumericScale
 ) -> tuple[str, str]:
-    """The smallest and largest drawn value, in the axis's own form."""
+    """The smallest and largest axis value, in the axis's own form."""
 
     def shown(entry: tuple[float, Value]) -> str:
         if _is_duration(column):
@@ -273,6 +273,7 @@ def _draw_flags(
     height: int,
     legend: list[LegendEntry],
     x_entries: list[tuple[float, Value]],
+    flag_entries: list[tuple[float, Value]],
     counts: tuple[tuple[str, int], ...],
     notes: list[str],
     series: int | None,
@@ -307,7 +308,7 @@ def _draw_flags(
     left, right = _overhangs(scale(first.plot), first.plot)
     final = plan(left, right)
     x_scale = scale(final.plot)
-    flagged = [(x_scale.position(x), final.plot.bottom - 5) for x, _ in x_entries]
+    flagged = [(x_scale.position(x), final.plot.bottom - 5) for x, _ in flag_entries]
     body = [
         el(
             "g",
@@ -420,7 +421,7 @@ def _draw(bound: BoundChart) -> str:
             )
         )
     x_col, y_col = bound.columns["x"], bound.columns["y"]
-    x_entries = [(x, bound.values("x")[i]) for i in drawn if (x := xs[i]) is not None]
+    x_entries = [(x, bound.values("x")[i]) for i in placed if (x := xs[i]) is not None]
     y_entries: list[tuple[float, Value]] = []
     for i in drawn:
         if (y := ys[i]) is not None:
@@ -439,6 +440,7 @@ def _draw(bound: BoundChart) -> str:
             height,
             legend,
             x_entries,
+            [(x, bound.values("x")[i]) for i in drawn if (x := xs[i]) is not None],
             counts,
             notes,
             len(order) if segmented else None,

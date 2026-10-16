@@ -14,10 +14,11 @@ from __future__ import annotations
 import re
 import xml.etree.ElementTree as ET
 from collections.abc import Mapping, Sequence
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 
+from fitdocs.render.charts.kit import render_chart
 from fitdocs.render.charts.kit.data import Column, Value, ValueKind
 from fitdocs.render.charts.kit.kinds.small_multiples import KIND
 from fitdocs.render.charts.kit.layout import plan_frame, text_width
@@ -1165,3 +1166,174 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+_EXTENT_CASES = (
+    (
+        ValueKind.DATE,
+        (
+            date(2025, 2, 1),
+            date(2025, 2, 3),
+            date(2025, 2, 5),
+            date(2025, 2, 7),
+            date(2025, 2, 9),
+        ),
+        ("2025-02-01", "2025-02-09"),
+    ),
+    (
+        ValueKind.DATETIME,
+        (
+            datetime(2025, 2, 1, 6),
+            datetime(2025, 2, 3, 6),
+            datetime(2025, 2, 5, 6),
+            datetime(2025, 2, 7, 6),
+            datetime(2025, 2, 9, 6),
+        ),
+        ("2025-02-01 06:00", "2025-02-09 06:00"),
+    ),
+    (ValueKind.NUMBER, (0.0, 2.0, 4.0, 6.0, 8.0), ("0", "8")),
+    (ValueKind.NUMBER, (-4.0, -2.0, 0.0, 2.0, 4.0), ("-4", "4")),
+    (
+        ValueKind.DURATION,
+        (
+            timedelta(0),
+            timedelta(seconds=120),
+            timedelta(seconds=240),
+            timedelta(seconds=360),
+            timedelta(seconds=480),
+        ),
+        ("0:00", "8:00"),
+    ),
+)
+
+
+def _extent_axis(element: ET.Element) -> tuple[float, float]:
+    axis = next(g for g in element.iter(f"{SVG}g") if g.get("class") == "ck-axis")
+    line = next(iter(axis))
+    return float(line.attrib["x1"]), float(line.attrib["x2"])
+
+
+def _extent_positions(element: ET.Element) -> list[float]:
+    left, right = _extent_axis(element)
+    values: list[float] = []
+    for g in element.iter(f"{SVG}g"):
+        if g.get("class") != "ck-marks":
+            continue
+        for mark in g:
+            if mark.tag == f"{SVG}polyline":
+                values.extend(
+                    float(p.split(",")[0]) for p in mark.attrib["points"].split()
+                )
+            elif mark.tag == f"{SVG}line":
+                values.append(float(mark.attrib["x1"]))
+            else:
+                values.extend(
+                    float(x) for x in re.findall(r"M([-\d.]+) ", mark.attrib["d"])
+                )
+    return sorted((v - left) / (right - left) for v in values)
+
+
+@pytest.mark.parametrize(
+    "kind,xs,labels",
+    _EXTENT_CASES,
+    ids=["date", "datetime", "zero", "negative", "duration"],
+)
+@pytest.mark.parametrize("missing", ["first", "last", "both"])
+@pytest.mark.parametrize("y_axes", ["shared", "independent"])
+@pytest.mark.parametrize("observation", ["geometry", "y_geometry", "description"])
+def test_present_x_extent(
+    kind: ValueKind,
+    xs: tuple[Value, ...],
+    labels: tuple[str, str],
+    missing: str,
+    y_axes: str,
+    observation: str,
+) -> None:
+    first = None if missing in ("first", "both") else 4.0
+    last = None if missing in ("last", "both") else 12.0
+    rows = [
+        (xs[3], 8.0, "A"),
+        (xs[0], first, "Empty"),
+        (xs[2], 5.0, "B"),
+        (None, 999.0, "A"),
+        (xs[4], last, "Empty"),
+        (xs[1], 0.0, "A"),
+    ]
+    text = render_chart(
+        chart_request(
+            "small-multiples",
+            title="Extent",
+            channels={"x": "position", "y": "value", "facet": "panel"},
+            options={"y_axes": y_axes, "columns": 3},
+        ),
+        chart_data(
+            (
+                column("position", kind),
+                column("value"),
+                column("panel", ValueKind.CATEGORY),
+            ),
+            rows,
+        ),
+    ).text
+    if observation == "geometry":
+        panels = _panels(text)
+        expected_empty = ([0.0] if first is not None else []) + (
+            [1.0] if last is not None else []
+        )
+        assert [_extent_positions(p) for p in panels] == [
+            pytest.approx([0.25, 0.75], abs=0.001),
+            pytest.approx(expected_empty, abs=0.001),
+            pytest.approx([0.5], abs=0.001),
+        ]
+    elif observation == "y_geometry":
+        panels = _panels(text)
+        high = 10.0 if last is None else 20.0
+        a = [0.0, 0.8 if y_axes == "independent" else 8.0 / high]
+        empty = (
+            []
+            if missing == "both"
+            else [
+                (0.8 if first is not None else 0.4)
+                if y_axes == "independent"
+                else (4.0 if first is not None else 12.0) / high
+            ]
+        )
+        b = [0.5 if y_axes == "independent" else 5.0 / high]
+        assert [_extent_heights(p) for p in panels] == [
+            pytest.approx(a, abs=0.001),
+            pytest.approx(empty, abs=0.001),
+            pytest.approx(b, abs=0.001),
+        ]
+    else:
+        x_title = "position (m:ss)" if kind is ValueKind.DURATION else "position"
+        absent = 2 if missing == "both" else 1
+        y_high = "8" if last is None else "12"
+        assert _desc(text) == (
+            f"Small-multiples chart: Extent. "
+            f"x: {x_title}; y: value; facet: panel. "
+            f"6 rows. "
+            f"Not drawn: 1 row without x, "
+            f"{absent} row{'s' if absent > 1 else ''} without y. "
+            f"{x_title} from {labels[0]} to {labels[1]}; value from 0 to {y_high}."
+        )
+
+
+def _extent_heights(element: ET.Element) -> list[float]:
+    axes = [g for g in element.iter(f"{SVG}g") if g.get("class") == "ck-axis"]
+    boundary = next(iter(axes[1]))
+    top, bottom = sorted((float(boundary.attrib["y1"]), float(boundary.attrib["y2"])))
+    values: list[float] = []
+    for g in element.iter(f"{SVG}g"):
+        if g.get("class") != "ck-marks":
+            continue
+        for mark in g:
+            if mark.tag == f"{SVG}polyline":
+                values.extend(
+                    float(p.split(",")[1]) for p in mark.attrib["points"].split()
+                )
+            else:
+                values.extend(
+                    float(y)
+                    for y in re.findall(r"M[-\d.]+ ([-\d.]+)", mark.attrib["d"])
+                )
+    return sorted((bottom - v) / (bottom - top) for v in values)
