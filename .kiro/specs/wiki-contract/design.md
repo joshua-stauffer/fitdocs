@@ -770,7 +770,7 @@ flowchart LR
 
 ### Recovery location amendment (2026-10-15; recovery task 1.6)
 
-Wiki-contract Amendment 8 names `recovery/` and `recovery/assets/` as owned,
+Wiki-contract Amendment 9 names `recovery/` and `recovery/assets/` as owned,
 with a generated declaration at `recovery/AGENTS.md`. `layout` defines
 `RECOVERY_DIR`, `RECOVERY_ASSETS_SUBDIR = ASSETS_SUBDIR`, `RECOVERY_DOC_STEM`
 and the three `recovery_*` helpers; the owned and declared tuples append the
@@ -778,7 +778,7 @@ new entries after every predecessor. `declaration` selects the recovery
 content and rerunnable fragments after the written-and-owned fragment and
 before the owner block, under “Generated Recovery Page”; both fragments
 carry anchors to `recovery/engine.py` and `layout.recovery_*`. The contract
-advances from 12 to 13 and preserves its previous history. The published
+advances from 13 to 14 and preserves its previous history. The published
 contract states the location, changed-content rewrites, chart removal,
 foreign-file preservation and files recovery never writes. Recovery owns
 the page schema and runtime writer; this amendment adds no schema to the

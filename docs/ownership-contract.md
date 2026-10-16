@@ -1,6 +1,6 @@
 # fitdocs Ownership Contract
 
-**Contract version:** `13`
+**Contract version:** `14`
 
 **What changed at this version:** fitdocs adds an owned location.
 `recovery/` holds the recovery page `recovery/recovery.md` and its

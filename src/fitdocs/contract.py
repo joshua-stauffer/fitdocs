@@ -325,7 +325,7 @@ highest-ranked extra that records it. A page without extras renders as before
 and changes only this line (Req 8.2).
 """
 
-CONTRACT_VERSION: Final[str] = "13"
+CONTRACT_VERSION: Final[str] = "14"
 """The published ownership contract's version identifier (Req 2.8).
 
 A *string*, and deliberately not comparable with :data:`DOC_VERSION`: it
@@ -436,7 +436,7 @@ Raised from ``12`` to ``13`` by hr-derivation because ``derive-benchmarks``
 now also reads every workout's listed files and the normalized wellness
 series and may write ``athlete.toml`` at most once per stage.
 
-Raised from ``12`` to ``13`` by recovery because the data root gains an owned location.
+Raised from ``13`` to ``14`` by recovery because the data root gains an owned location.
 ``recovery/`` holds the recovery page ``recovery/recovery.md`` and its
 charts under ``recovery/assets/``, written by ``fitdocs recovery`` from the
 wellness series and the workout documents and rewritten only when their

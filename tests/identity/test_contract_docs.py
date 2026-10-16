@@ -193,7 +193,7 @@ def test_the_changed_at_this_version_paragraph_names_the_amendment() -> None:
 
 def test_the_version_history_records_the_amendment() -> None:
     history = _contract_version_history()
-    assert "Raised from ``12`` to ``13`` by recovery" in history
+    assert "Raised from ``13`` to ``14`` by recovery" in history
     assert "Raised from ``9`` to ``10`` by dashboards" in history
     assert "Dashboard chart regions and assets are the only document content" in history
     assert "Raised from ``10`` to ``11`` by wellness-store" in history

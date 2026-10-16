@@ -76,9 +76,9 @@
     },
     {
       "date": "2026-10-15",
-      "requirement": "Amendment 8 \u2014 recovery 12.1, 12.3, 13.1, 13.2, 13.3, 18.2; implemented by recovery task 1.6",
-      "reason": "Recovery adds owned recovery/ and recovery/assets/ locations, one generated recovery page and its chart images, and a recovery/AGENTS.md declaration. The published contract describes its write and preservation rules and advances from 12 to 13. The recovery writer and page schema remain recovery-owned.",
-      "also": "requirements.md gains Amendment 8 and design.md a dated location paragraph. Prior criteria, amendment entries and schema versions remain unchanged; predecessor metadata reconciliation remains separate."
+      "requirement": "Amendment 9 \u2014 recovery 12.1, 12.3, 13.1, 13.2, 13.3, 18.2; implemented by recovery task 1.6",
+      "reason": "Recovery adds owned recovery/ and recovery/assets/ locations, one generated recovery page and its chart images, and a recovery/AGENTS.md declaration. The published contract describes its write and preservation rules and advances from 13 to 14. The recovery writer and page schema remain recovery-owned.",
+      "also": "requirements.md gains Amendment 9 and design.md a dated location paragraph. Prior criteria, amendment entries and schema versions remain unchanged; predecessor metadata reconciliation remains separate."
     }
   ]
 }
