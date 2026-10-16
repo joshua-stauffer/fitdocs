@@ -665,7 +665,9 @@ def test_analytics_index_is_published_in_steering_without_changing_network_scope
         "## Development Standards", 1
     )[0]
     flat_network = " ".join(network.split())
-    assert ("`load`, `dashboard`, `check`, `query`, `history`") in flat_network
+    assert (
+        "`load`, `dashboard`, `recovery`, `check`, `query`, `history`"
+    ) in flat_network
     assert (
         "`history`, `plan`, `derive-benchmarks`, `index`, and rendering — makes "
         "no connector request"
@@ -686,3 +688,16 @@ def test_analytics_index_is_published_in_steering_without_changing_network_scope
         "`settings`, `version`, `units` and the load payload readers; only `cli` and "
         "`query` import it; only `index.store` imports `duckdb`."
     ) in " ".join(organization.split())
+
+
+def test_recovery_is_named_in_the_no_connector_request_list() -> None:
+    tech = (_REPO_ROOT / ".kiro" / "steering" / "tech.md").read_text(encoding="utf-8")
+    network = tech.split("## Network and Credentials", 1)[1].split(
+        "## Development Standards", 1
+    )[0]
+    assert (
+        "every other command — `sync`, `regen`, `load`, `dashboard`, `recovery`, "
+        "`check`, `query`, `history`, `plan`, `derive-benchmarks`, `index`, and "
+        "rendering — makes no connector request, whether or not connectors are "
+        "configured"
+    ) in " ".join(network.split())

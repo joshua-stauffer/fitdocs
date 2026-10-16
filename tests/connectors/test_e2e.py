@@ -17,8 +17,8 @@ guard, registry snapshot/restore, credentials/environment isolation):
 2. With ``[connectors]`` configured, every command Req 14.1 names that is
    not ``connect``/``pull`` itself -- ``sync``, ``regen``, ``load``,
    ``check``, ``history``, ``plan``, ``derive-benchmarks``, ``index``,
-   ``query`` and ``dashboard refresh`` -- completing exactly as it would
-   with no ``[connectors]`` table at all: same exit code and output, the
+   ``query``, ``dashboard refresh`` and ``recovery`` -- completing exactly as
+   it would with no ``[connectors]`` table at all: same exit code and output, the
    same number of socket attempts as the bare run (an in-test recorder that
    also raises), and no call on a scripted connector.
 """
@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import inspect
 import os
 import socket
 from collections.abc import Iterator
@@ -43,7 +44,7 @@ from fitdocs.connectors.credentials import env_var_name
 from fitdocs.connectors.protocol import Capability, Fetched, Listing, RemoteActivity
 from fitdocs.index.location import resolve_index_location
 from fitdocs.index.store import open_index, read_bookkeeping
-from fitdocs.layout import archive_path
+from fitdocs.layout import archive_path, recovery_doc_path
 from fitdocs.load import registry as load_registry
 from fitdocs.load.docedit import apply_frontmatter_load, replace_load_region
 from fitdocs.load.types import (
@@ -57,9 +58,11 @@ from fitdocs.load.types import (
 )
 from fitdocs.metrics.types import DerivedMetrics
 from fitdocs.model import Activity
+from fitdocs.wellness import Metric, read_series
 from tests.connectors.conftest import ScriptedPersonalKeyConnector
 from tests.dashboards._helpers import write_page
 from tests.fixtures import builder
+from tests.wellness.builders_intervals import intervals_delivery_bytes, intervals_record
 
 runner = CliRunner()
 
@@ -292,10 +295,12 @@ def _fresh_synced_root(
     *,
     with_connectors: bool,
     tiles_disabled: bool = False,
+    stage_wellness: bool = False,
 ) -> Path:
     """A freshly synced data root with one workout document, optionally
     carrying a `[connectors]` table naming the built-in folder connector,
-    the scripted personal-key connector, and wellness-enabled intervals."""
+    the scripted personal-key connector, and wellness-enabled intervals.
+    Recovery can additionally stage an intervals delivery through the inbox drain."""
     source = tmp_path / f"{name}-src"
     source.mkdir()
     (source / "run.fit").write_bytes(builder.run_fit_bytes())
@@ -315,6 +320,14 @@ def _fresh_synced_root(
         _write_settings(data_root, connectors=settings)
     result = runner.invoke(app, ["sync", str(source), "--out", str(data_root)])
     assert result.exit_code == 0, result.output
+    if stage_wellness:
+        inbox = data_root / "inbox"
+        inbox.mkdir(exist_ok=True)
+        (inbox / "wellness.json").write_bytes(
+            intervals_delivery_bytes([intervals_record("2024-08-19", restingHR=47)])
+        )
+        drained = runner.invoke(app, ["sync", "--out", str(data_root)])
+        assert drained.exit_code == 0, drained.output
     return data_root
 
 
@@ -352,6 +365,7 @@ def _page_bytes(root: Path) -> str:
         ("index", []),
         ("query", ["SELECT count(*) AS n FROM pages"]),
         ("dashboard", ["refresh"]),
+        ("recovery", []),
     ],
 )
 def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
@@ -362,10 +376,11 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
 ) -> None:
     """Every command Req 14.1 names, other than `connect`/`pull`, completes
     exactly as it would with no `[connectors]` table -- compared directly
-    (both roots are built from the identical single-file source). A
-    connector call is visible even when a command swallows the error: the
-    socket-attempt counts of the two runs must be equal and the scripted
-    connector's call lists must stay empty."""
+    (both roots use the identical single-file workout source and, for
+    recovery, the same synthetic wellness delivery). A connector call is
+    visible even when a command swallows the error: the socket-attempt counts
+    of the two runs must be equal and the scripted connector's call lists
+    must stay empty."""
     key_connector = ScriptedPersonalKeyConnector(
         capabilities=frozenset({Capability.PULL_ACTIVITIES})
     )
@@ -376,18 +391,32 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
     is_query = command == "query"
     is_dashboard = command == "dashboard"
     needs_index = is_query or is_dashboard
+    is_recovery = command == "recovery"
+    wellness_options = {"stage_wellness": True} if is_recovery else {}
     bare_root = _fresh_synced_root(
         tmp_path,
         f"bare-{command}",
         with_connectors=False,
         tiles_disabled=needs_index,
+        **wellness_options,
     )
     wired_root = _fresh_synced_root(
         tmp_path,
         f"wired-{command}",
         with_connectors=True,
         tiles_disabled=needs_index,
+        **wellness_options,
     )
+    for root in (bare_root, wired_root):
+        series = read_series(root)
+        if is_recovery:
+            assert series.values
+            assert [(value.metric, value.value) for value in series.values] == [
+                (Metric.RESTING_HR_BPM, 47)
+            ]
+            assert not recovery_doc_path(root).exists()
+        else:
+            assert not series.values
     if is_dashboard:
         for root in (bare_root, wired_root):
             write_page(root, "e2e", _DASHBOARD_PAGE)
@@ -453,6 +482,11 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
             assert _DASHBOARD_REGION_BEGIN in written
             assert "![" in written.split(_DASHBOARD_REGION_BEGIN, 1)[1]
             assert (root / "dashboards" / "assets" / "e2e" / "runs.svg").is_file()
+        assert bare_attempts == 0
+        assert len(attempts) == 0
+    if is_recovery:
+        for root in (bare_root, wired_root):
+            assert recovery_doc_path(root).is_file()
         assert bare_attempts == 0
         assert len(attempts) == 0
     if command == "index":
@@ -625,3 +659,22 @@ def test_sync_and_load_parity_with_and_without_prebuilt_index(
         for calculator_id, load_value in indexed_loads
     )
     assert after_load[bare_root] == after_load[indexed_root]
+
+
+def test_recovery_no_network_case_contract() -> None:
+    offline_test = (
+        test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded
+    )
+    cases = vars(offline_test)["pytestmark"][0].args[1]
+    assert cases[-3:] == [
+        ("query", ["SELECT count(*) AS n FROM pages"]),
+        ("dashboard", ["refresh"]),
+        ("recovery", []),
+    ]
+    assert [
+        index for index, (command, _) in enumerate(cases) if command == "recovery"
+    ] == [len(cases) - 1]
+    parameter = inspect.signature(_fresh_synced_root).parameters["stage_wellness"]
+    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameter.default is False
+    assert "``recovery``" in (__doc__ or "")

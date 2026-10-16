@@ -32,6 +32,12 @@
       "requirement": "14.1 amended",
       "reason": "dashboards task 6.5 adds dashboard to the no-connector-request command list.",
       "also": "requirements.md gains Amendment 3 (2026-10-13), adding dashboard to Requirement 14 criterion 1. Pinned by the dashboard refresh case in tests/connectors/test_e2e.py::test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded and by the tech.md phrase pin in tests/connectors/test_network_statements.py."
+    },
+    {
+      "date": "2026-10-16",
+      "requirement": "14.1 amended",
+      "reason": "recovery task 5.3 adds recovery to the no-connector-request command list, whether or not connectors are configured, preserving existing map-tile behavior.",
+      "also": "requirements.md gains Amendment 5 (2026-10-16). The technology steering lists recovery before check; tests/connectors/test_network_statements.py pins the list. The final recovery case in tests/connectors/test_e2e.py stages a synthetic intervals.icu delivery through the inbox and source-free sync in both roots, checks normalized values, and writes the recovery page under the socket guard."
     }
   ]
 }

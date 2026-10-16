@@ -353,3 +353,18 @@ counterparts (wellness-pull Requirements 3–6 and 10). Requirement 6 criterion
 7's FIT check is unchanged for activities. Requirement 15 criterion 7's
 packaged skill binding gains the wellness report table. Requirement 14
 criterion 1 is untouched.
+
+
+## Amendment 5 (2026-10-16): recovery joins Req 14.1, landed by recovery
+
+Requirement 14 criterion 1 adds `recovery` to the commands that make no
+connector request, whether or not connectors are configured, preserving
+all existing commands and their map-tile behavior. The technology steering
+names `recovery` between `dashboard` and `check`. Recovery task 5.3 adds the
+last case to the socket-guarded no-network parametrization in
+`tests/connectors/test_e2e.py`: both roots receive the same synthetic
+intervals.icu delivery through the inbox and a source-free sync, and the
+case checks non-empty normalized values before running the command and a
+newly written recovery page afterwards. The new recovery list pin and the
+adjacent dashboard phrase pin are in
+`tests/connectors/test_network_statements.py`.

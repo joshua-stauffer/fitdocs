@@ -710,7 +710,7 @@ literal pins, one per lander) and every head-paragraph pin of
   - _Depends: 4.2_
   - _Requirements: 1.3, 1.8, 15.1_
 
-- [ ] 5. Documentation, the skill, and the network statements
+- [x] 5. Documentation, the skill, and the network statements
 
 - [x] 5.1 (P) Write the recovery guide and link it
   - `docs/recovery.md` per design § Docs; `docs/index.md` row and
@@ -754,7 +754,7 @@ literal pins, one per lander) and every head-paragraph pin of
   - _Depends: 4.2, 5.1_
   - _Requirements: 18.3, 18.4_
 
-- [ ] 5.3 (P) Name `recovery` among the commands that make no connector request (connectors amendment)
+- [x] 5.3 (P) Name `recovery` among the commands that make no connector request (connectors amendment)
   - `.kiro/steering/tech.md`: `recovery` before `check`, giving the final
     order with dashboards "`sync`, `regen`, `load`, `dashboard`, `recovery`,
     `check`, `query`, `history`, `plan`, `derive-benchmarks`, `index`" (the
@@ -1423,3 +1423,8 @@ follow-ups were identified. Feature GO and remaining mandatory tasks remain open
 
 - 5.2 accepted without remediation/debug: conditional standalone Recovery guidance and executable fence after regen, approved package dependency documentation and Unreleased command/chart-kind/ownership entries. The routine pull/check fence, all old skill tests and HR instructions remain exact; all four retained changes are insertion-only. The reference-band description follows its live points-against-band semantics, and the present-x statement applies to the approved three kinds when genuine marks exist.
 - Fresh independent review and parent completion gate verified70claimed+5own=75distinct applied faults, each native assertion RED/restoredGREEN; four new assertion sites/six nodes plus preserved routine-isolation and actual CLI-option-binding roles. The new Recovery fence also accepts the existing supported sh label (117GREEN/restored117). Full original24,354passed/44expectedskips exit0 in617.73s; canonical scope133,Ruff796/mypy611/diffclean. Current4hash/size/mtime,284protected and228golden-related files preserved; immutable report/raw-evidence seals checked. Evidence /private/tmp/recovery-task-5.2-verification.json and /private/tmp/recovery-review-5.2.md. No follow-ups;18/21mandatoryaccepted. Continue5.3, then6.1/6.2/featureGO/mainlanding.
+
+
+- 5.3 accepted without remediation/debug: Recovery joins the offline list before check, runs last after query/dashboard refresh in the socket-guarded native case, and receives identical synthetic intervals deliveries through the real inbox drain in both configured/unconfigured roots. The optional staging keyword remains off by default; all old command rows/arguments, assertions, query tail, approval fields and amendment history are preserved. Connectors Amendment5 is appended without backfilling unrelated historical metadata. Group5 is complete;19/21mandatoryleavesaccepted.
+- Fresh independent review and parent completion VERIFIED:48uniquelyclaimedtransformations+6own=54distinctstates,83intendednativefailed-nodeobservations/allrestoredGREEN,25currentassertionsites/34node-site roles includingall15new/changedsites. Expanded default-True/always-stage and wired-only controls cover all10oldcommandnodes and both roots. Actual swallowed socket/scriptedconnector calls, forwarding/drain, supportedmetric/value, absent-before/written-after pages and output/exit/exception parity discriminate; fixture reachability remains separate from production credit. The old socket-parity expression is logically subsumed on Recovery by the new strict-zero assertions, with no independent new claim for it.
+- Full original24,357passed/44expectedskipsexit0 in683.05s;scope73/13.52s,nativecase1/4.35s,Ruff796/mypy611/diffclean. Final2019trackedentries,5current/288protected/228golden-related files and209+187outsideproofartifacts preserved. Both roots contain matching17/18files exceptsettings,oneworkout,same delivery/archive,normalized47bpm and identical8944-byteRecoverypages/SVGs. Evidence /private/tmp/recovery-task-5.3-verification.json and /private/tmp/recovery-review-5.3.md. No findings/follow-ups; continue6.1, then6.2/featureGO/mainlanding. Historicalsetup/static/audit-classifier issues are excluded from feature failure claims.
