@@ -3156,7 +3156,8 @@ numbers are the next free number at landing.
   - wellness-store: `wellness-archive/` and `wellness/` (complete 2026-10-14);
   - recovery: `recovery/` and `recovery/assets/`;
   - wellness-pull: the `pull` guarantees (implemented 2026-10-15, Amendment 7);
-  - hr-derivation: what `derive-benchmarks` reads and writes;
+  - hr-derivation: what `derive-benchmarks` reads and writes
+    (implemented 2026-10-16, Amendment 8);
   - workout-wellness: the refreshed-region class.
 
   Dependencies: wellness-store, wellness-pull, hr-derivation, recovery,
@@ -3185,18 +3186,19 @@ numbers are the next free number at landing.
   enable setting, and the Garmin attribution derived from
   `*_wellness_keys` (implemented 2026-10-15, Amendment 1).
   Dependencies: wellness-pull
-- [ ] athlete-benchmarks — provenance for a series-derived entry (`document`
+- [x] athlete-benchmarks — provenance for a series-derived entry (`document`
   relaxed or a series reference) and the precise hand-wins rule. At spec
   time, the hand-wins rule became write-time in hr-derivation, so
   selection is not amended. The amendment is provenance only: a `series`
-  reference. Dependencies: hr-derivation
-- [ ] performance-benchmarks — Req 10.4 ("shall derive no maximum heart rate
-  and no resting heart rate") lifted, and the derived write partitioned.
+  reference (implemented 2026-10-16, Amendment 3). Dependencies: hr-derivation
+- [x] performance-benchmarks — Req 10.4 scoped to the TAGGED stage,
+  and the derived write partitioned (implemented 2026-10-16, Amendment 3).
   Dependencies: hr-derivation
 - [ ] workout-docs — the morning-of section and any frontmatter key, plus
   the `DOC_VERSION` bump. Dependencies: workout-wellness
-- [ ] load-channels _(found at spec time, 2026-10-13)_ — the heart-rate
-  channel reports which dated resting and max entries it used.
+- [x] load-channels _(found at spec time, 2026-10-13)_ — the heart-rate
+  channel reports which dated resting and max entries it used
+  (implemented 2026-10-16, Amendment 1, criterion 5.12).
   Dependencies: hr-derivation
 - [ ] chart-catalog _(found at spec time)_ — Amendment 1, the
   `reference-band` kind. Dependencies: recovery
@@ -3319,12 +3321,13 @@ numbers are the next free number at landing.
   - source de-duplication, and supersession by a later export.
 
   Dependencies: wellness-store
-- [ ] hr-derivation — **brief written 2026-10-12; spec written 2026-10-13**
-  (Phase 12 batch, wave 2, `tasks-generated`, all approvals set; 11
-  requirements / 87 criteria, 5 majors / 21 executable tasks plus the
+- [x] hr-derivation — **brief written 2026-10-12; spec written 2026-10-13**
+  (Phase 12 batch, wave 2, `implementation-complete`, all approvals set; 11
+  requirements / 87 criteria, 5 majors / 21 accepted mandatory tasks plus the
   optional 2.8* (citations) and 5.3* (maintainer dry run); three maintainer
   decisions recorded; independent Step 3.5 review, two rounds; cross-spec
-  reviewed, two rounds, PASS; bumps `CONTRACT_VERSION`):
+  reviewed, two rounds, PASS; implemented 2026-10-16, feature validation GO,
+  `CONTRACT_VERSION` 13):
   - derived resting HR from the series (per-source baselines, hysteresis);
   - derived max HR from workout HR (sustained maxima, artifact and
     cadence-lock rejection, recency window);

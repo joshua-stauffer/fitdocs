@@ -1,9 +1,9 @@
 {
   "feature_name": "hr-derivation",
   "created_at": "2026-10-12T20:40:00Z",
-  "updated_at": "2026-10-16T09:06:11Z",
+  "updated_at": "2026-10-16T16:28:54Z",
   "language": "en",
-  "phase": "tasks-generated",
+  "phase": "implementation-complete",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -19,5 +19,5 @@
     }
   },
   "ready_for_implementation": true,
-  "phase_note": "Generated 2026-10-12 by the Phase 12 spec batch (wave 2) in auto-approve mode from base cd77157. 11 requirements / 87 acceptance criteria; maintainer decisions of 2026-10-12 (evidence must disagree; precedence picks the resting-HR source; selection unchanged with the hand rule in the write) plus controller rulings R2 (CONTRACT_VERSION main+1), R3 ([load] read once), R4 (back-reach takeovers announced by run and timeline only). Discovery read the maintainer's athlete.toml (keys/dates aggregates), Garmin daily RHR and every workout's HR via scratchpad probes printing aggregate counts only. Step 3.5 independent review: round 1 NEEDS_FIXES (8 findings + R1-R3), round 2 final with R4 and five minors applied. 5 major / 21 leaf tasks plus optional 2.8* (citations, controller/maintainer-run) and 5.3* (maintainer-only dry run). Depends on wellness-store landing first. Cross-spec review (two rounds, PASS) applied fixes to this spec on 2026-10-13. Maintainer clarification 2026-10-16: requirement 9.2 applies only when maximum exceeds resting; report the underlying maximum/resting inconsistency once. Existing approved design and implementation remain valid; task 3.4 blocker resolved."
+  "phase_note": "Generated 2026-10-12 by the Phase 12 spec batch (wave 2) in auto-approve mode from base cd77157. 11 requirements / 87 acceptance criteria; maintainer decisions of 2026-10-12 (evidence must disagree; precedence picks the resting-HR source; selection unchanged with the hand rule in the write) plus controller rulings R2 (CONTRACT_VERSION main+1), R3 ([load] read once), R4 (back-reach takeovers announced by run and timeline only). Discovery read the maintainer's athlete.toml (keys/dates aggregates), Garmin daily RHR and every workout's HR via scratchpad probes printing aggregate counts only. Step 3.5 independent review: round 1 NEEDS_FIXES (8 findings + R1-R3), round 2 final with R4 and five minors applied. 5 major / 21 leaf tasks plus optional 2.8* (citations, controller/maintainer-run) and 5.3* (maintainer-only dry run). Depends on wellness-store landing first. Cross-spec review (two rounds, PASS) applied fixes to this spec on 2026-10-13. Maintainer clarification 2026-10-16: requirement 9.2 applies only when maximum exceeds resting; report the underlying maximum/resting inconsistency once. Existing approved design and implementation remain valid; task 3.4 blocker resolved. Implementation completed 2026-10-16: all 21 mandatory leaves and five groups accepted with independent native reviews and controller verification; feature integration GO maps all 11 requirements / 87 criteria. Fresh final full suite 20,783 passed / 44 environment skips; build, isolated installed-wheel workflow and liveness passed. CONTRACT_VERSION 13, athlete-benchmarks Amendment 3, performance-benchmarks Amendment 3, load-channels Amendment 1 (criterion 5.12), wiki-contract Amendment 8. Optional 2.8 citations and 5.3 maintainer data run remain unrun. Exact final-HEAD CI including real artifact content scanning is required before landing."
 }
