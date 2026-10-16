@@ -380,7 +380,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - _Boundary: Reduce_
   - _Depends: 2.2, 2.4_
 
-- [ ] 4. Integration: the format, its registration and imports through the drain
+- [x] 4. Integration: the format, its registration and imports through the drain
 
 - [x] 4.1 Declare and register the Apple Health format
   - Fill `formats/apple/__init__.py` per design § AppleFormat: `FORMAT_ID`,
@@ -433,7 +433,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - _Requirements: 1.3, 1.4, 3.6, 5.8, 6.1, 6.2, 6.3, 6.5, 7.2_
   - _Depends: 2.3, 3.1, 3.2_
 
-- [ ] 4.2 Import exports through the drain end to end
+- [x] 4.2 Import exports through the drain end to end
   - No production change expected; a failing test here is a stop-and-report
     unless the fix lies inside this spec's package. First confirm the
     verify-before-building items (`commit_extract`'s edge behaviour, the
@@ -555,7 +555,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - **Observable:** the full suite, lint and types green after the final
     rebase; the merge and follow-ups are in the shared log and the queue.
   - _Requirements: 5.3, 11.5, 14.1, 14.2_
-  - _Pending: format 4.1 is accepted; drain integration 4.2, determinism, offline behaviour and final rebase/CI validation remain pending._
+  - _Pending: format 4.1 and drain integration 4.2 are accepted; determinism, offline behaviour and final rebase/CI validation remain pending._
 
 - [ ]* 6.2 Maintainer-run smoke on the maintainer's own export (no data enters the repository)
   - In a scratch data root outside the repository, drop the real
@@ -786,3 +786,14 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   import-only with remaining AST preserved; wellness/HR/CLI differences are narrow
   registry-consequence source-order pins. Declared observed-read controls remain
   infrastructure controls. Remaining feature work and merged-main CI are pending.
+
+- **4.2:** Independently APPROVED and completion VERIFIED before completion metadata.
+  Real drain/CLI lifecycle, original provenance, progress, duplicate/later/older
+  supersession, header-only regeneration, corrections, quarantine, changed files,
+  interrupts, disposition and confinement are covered by 17 new cases. All 66
+  distinct faults / 110 selected observations were independently replayed at final
+  hashes, plus four own faults; every edit exactly restored and focused-green.
+  Final canonical wellness/confinement: 2,727 passed; statics and fresh parent
+  verification pass. No production or accepted helper/test changes were needed.
+  Earlier-hash implementer proofs retain honest mechanical-fix provenance; independent
+  final-hash replay is the acceptance evidence. Documentation and final validation remain.
