@@ -2,7 +2,7 @@
 
 A thin typer shell (design: CliApp, ``src/fitdocs/cli.py``): it parses flags,
 resolves configuration, calls the engine, and reports -- it contains no
-rendering or file-pipeline logic of its own. Fourteen commands are registered
+rendering or file-pipeline logic of its own. Fifteen commands are registered
 on top of the baseline ``--version`` / ``--help`` shell. The tree-processing
 commands documented here are:
 
@@ -17,6 +17,11 @@ commands documented here are:
 * ``fitdocs load [--out PATH] [--recompute] [--calculator ID] [--no-prompt]`` --
   run the load pass standalone over the data root's workout documents, filling
   those that lack results (Req 8.2).
+* ``fitdocs recovery [--out PATH] [--methodology ID]`` -- regenerate the
+  recovery page and charts from the wellness series and workout documents,
+  reporting the as-of day, window, methodology and each file outcome. This
+  pass runs only when explicitly requested; it is not chained onto other
+  commands (recovery Req 1.6, 1.8).
 * ``fitdocs check [--out PATH]`` -- read-only: report every place the data
   root diverges from the installed contract (an out-of-date or damaged
   document, an unmanaged frontmatter key, a malformed effort tag, a
@@ -108,7 +113,8 @@ Exit codes (Req 1.5, 2.2, 8.5, 8.7):
   ``plan`` run with no plan sources present, or a ``pull`` run with no
   connector configured or whose only exceptional entries are deferrals and
   skips (connectors Req 6.3, 11.4); ``query`` also exits 0 for a result or
-  schema description, including a result cut at its row limit;
+  schema description, including a result cut at its row limit; ``recovery``
+  also succeeds on an empty series or foreign files left alone;
 * ``1`` -- one or more per-file *or* per-document (load) failures occurred,
   ``check`` reports one or more findings, ``plan`` finds an invalid, blocked,
   or failed block, the plan reconciling pass -- chained after ``sync``'s
@@ -119,6 +125,7 @@ Exit codes (Req 1.5, 2.2, 8.5, 8.7):
   failed (connectors Req 12.5);
   ``query`` exits 1 when its statement is refused, fails or times out, the
   sandbox cannot be verified, or the index is unavailable or incompatible;
+  ``recovery`` exits 1 for an unreadable wellness series or a write failure;
 * ``2`` -- a configuration error: an unresolvable data root (its message lists
   the three configuration options), a malformed ``athlete.toml`` / profile, a
   malformed ``fitdocs.toml`` ``[tiles]``, ``[load]``, ``[history]`` or
@@ -137,7 +144,9 @@ Exit codes (Req 1.5, 2.2, 8.5, 8.7):
   ``[load]`` table is read inside the load pass itself (task 4.1); this
   module reads none of it directly. A configuration error writes nothing,
   and for ``check`` means nothing was
-  scanned either. ``fitdocs index`` exits 0 when it is current, 1 when it
+  scanned either. ``recovery`` also exits 2 when its methodology cannot be
+  resolved or its history/load settings are malformed, before any write.
+  ``fitdocs index`` exits 0 when it is current, 1 when it
   cannot be brought current, and 2 for invalid configuration. The index
   post-pass never changes another command's exit code.
 
@@ -285,6 +294,7 @@ from fitdocs.query.statement import (
     Restriction,
     statement_kind_refusal,
 )
+from fitdocs.recovery.engine import RecoveryReport, run_recovery
 from fitdocs.settings import SettingsError, load_settings_document
 from fitdocs.sync import DrainReport, SyncReport, drain, regen, sync
 from fitdocs.tiles import TileStore, load_tile_settings, tile_settings_from_document
@@ -1133,6 +1143,23 @@ def history_command(
     # Suppressed weeks, excluded pages and skipped documents never fail the
     # run on their own; only a write failure does (Req 8.8).
     _finish(failed=bool(history_report.failures))
+
+
+@app.command("recovery")
+def recovery_command(
+    out: Path | None = _OUT_OPTION,
+    methodology: str | None = _METHODOLOGY_OPTION,
+) -> None:
+    """Regenerate the recovery page from the wellness series and the workout
+    documents.
+    """
+    data_root = _resolved_data_root(out)
+    try:
+        report = run_recovery(data_root, methodology=methodology)
+    except SettingsError as exc:
+        _config_error(str(exc))
+    _report_recovery(report)
+    _finish(failed=report.failed)
 
 
 @app.command("plan")
@@ -2975,6 +3002,25 @@ def _report_audit(report: AuditReport) -> None:
         console.print(
             f"    {finding.remedy}", markup=False, highlight=False, soft_wrap=True
         )
+
+
+def _report_recovery(report: RecoveryReport) -> None:
+    """Print the recovery window, methodology and each file outcome."""
+    console = Console()
+    lines = [
+        f"As of: {report.as_of or '(none)'}",
+        f"Window: {report.window_start or '(none)'} to {report.as_of or '(none)'}",
+        f"Methodology: {report.methodology or '(none)'}",
+    ]
+    for item in report.files:
+        detail = f" — {item.detail}" if item.detail is not None else ""
+        lines.append(f"{item.path}: {item.outcome.value}{detail}")
+    if report.note is not None:
+        lines.append(report.note)
+    if report.failure is not None:
+        lines.append(report.failure)
+    for line in lines:
+        console.print(line, markup=False, highlight=False, emoji=False, soft_wrap=True)
 
 
 def _report_history(report: HistoryReport) -> None:
