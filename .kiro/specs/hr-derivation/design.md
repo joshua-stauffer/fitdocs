@@ -1309,7 +1309,7 @@ landing.
   Req 6.3 scoped to its quantities; design § ProfileDerivedWrite gains the
   `kinds` partition; `DeriveReport.accepted`; `derive_benchmarks` accepts the
   already-read `[load]` settings.
-- **load-channels** (expected Amendment 1): Req 5.10 (new) — the
+- **load-channels** (expected Amendment 1): Req 5.12 (new) — the
   heart-rate channel reports the measurement dates of the resting and
   maximum entries it used.
 - **wiki-contract** (Amendment N): `CONTRACT_VERSION` main + 1 because the

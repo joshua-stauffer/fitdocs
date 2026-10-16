@@ -764,7 +764,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 11.4, 11.5, 11.6_
   - _Depends: 3.4_
 
-- [ ] 5. Validation
+- [x] 5. Validation
 
 - [x] 5.1 Prove the whole flow end to end, deterministic and non-erasing
   - A CLI end-to-end run over a staged data root: first create the workout
@@ -789,7 +789,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
     tests/hr_benchmarks/test_determinism.py` green.
   - _Requirements: 1.4, 4.7, 4.9, 5.5, 5.6, 5.7, 6.1, 6.3, 6.4, 6.5, 8.1, 8.2, 8.3, 10.1, 10.2_
 
-- [ ] 5.2 Land: rebase, contract version, full validation, follow-ups
+- [x] 5.2 Land: rebase, contract version, full validation, follow-ups
   - Rebase onto `main`; keep both sides of every append-only list;
     re-derive `CONTRACT_VERSION` as main + 1 and every amendment number;
     write the landed numbers as literals into the history-paragraph content
@@ -817,6 +817,8 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 4.1, 4.7_
 
 ## Implementation Notes
+
+- 5.2: Fresh main 693fd445 was already an ancestor; contract 13 and amendments athlete 3 / performance 3 / load 1 (criterion 5.12) / wiki 8 are the free landing numbers. Corrected the stale design reference and filed the deduplicated per-session peak-cache follow-up with attributed prior research. Native final full suite passed 20,771 / 44 skips; Ruff (773 files), configured mypy (588 files), build and both-archive source identity passed. Isolated installed-wheel synthetic flow passed. Independent review passed 241 scoped tests and installed liveness, verified every full-log/exit/hash and current source entry, and approved. Controller independently verified 1,959 file hashes plus 19 directory symlink targets, both artifacts and the actual full log/exit, and ran five installed-liveness commands. Local unset content gate correctly fails closed; final exact-HEAD CI must supply the real positive scan before merge. No runtime/test changes; two corrected external diagnostic expectations are retained. Feature GO, final completion metadata and landing follow this task-local acceptance.
 
 - 5.1: Real synthetic CLI flow proves earlier back-reach and later measurement takeovers, one changed cover, current-check suppression by a later hand entry, and explicit historical walk recomputation with independent dated inputs and scalar expectations. Reversed actual discovery, German numeric locale and pinned time zones produce identical profiles. Both real engine orders preserve nonempty protected partitions, hand entries and unknown metadata; repeated runs preserve full bytes and mtime. Independent review reproduced 39 observations (38 assertion-red/restored-green pairs and one honest outer-sort green control), caught three own faults and passed 3,861 scoped tests. Controller fresh four tests, Ruff (773 files), configured mypy (588 files), exact hashes and diff checks passed. Locale/tzset availability skips and canonical raw partition comparisons versus actual whole-file bytes are explicit limits; preview and atomic-write tests remain preserved.
 
