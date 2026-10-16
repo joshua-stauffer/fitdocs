@@ -118,6 +118,9 @@
   other than 3.3's append of the four settled wellness names; a write
   outside `recovery/` from a recovery path;
   changing a constant's value (1.1 changes records, never values).
+- **User-approved exception (2026-10-16).** Task 2.3 may change only the
+  three named chart kinds and their direct tests/affected goldens to repair
+  present-x extent. All other shared-layer/kind boundaries remain in force.
 
 ## Shared source files
 
@@ -394,7 +397,7 @@ literal pins, one per lander) and every head-paragraph pin of
   - _Requirements: 12.1, 12.3, 13.1, 13.2, 13.3, 18.2_
   - _Boundary: OwnedLocation_
 
-- [x] 2. The `reference-band` chart kind (chart-catalog Amendment 1)
+- [ ] 2. The `reference-band` chart kind and chart-axis compatibility (chart-catalog Amendment 1)
 
 - [x] 2.1 (P) Draw values as points against a segmented reference band, with flagged rows marked, and register the kind
   - `src/fitdocs/render/charts/kit/kinds/reference_band.py` per design §
@@ -450,6 +453,40 @@ literal pins, one per lander) and every head-paragraph pin of
     pins.
   - _Depends: 2.1_
   - _Requirements: 16.3, 16.4_
+
+- [ ] 2.3 Preserve the present-x extent when endpoint values are absent (user-approved prerequisite)
+  - User approved the fresh-debug proposal on 2026-10-16: "yes, please fix
+    it and continue". This prerequisite resolves the task 3.2 scope conflict.
+  - For line, small-multiples and reference-band, when a genuine mark is
+    drawable, use every received present x position for the x domain and
+    accessible x extrema, including rows with no drawable value. Keep
+    drawable-only y inputs, all original values/None, marks, source legends,
+    gaps, counts, bounds, validation and all-markless no-data behavior.
+    Small-multiples keeps one global x scale across all panels.
+  - Reference-band's flags-only path separates true flag entries from
+    domain-only positions; expanding the domain must not fabricate flags.
+  - Public-render tests check independently specified x extrema AND mark
+    geometry for missing first/last/both endpoints, unsorted rows, all four
+    allowed x kinds (including zero/negative linear x), x-absent decoys,
+    separate y ranges/notes/marks, both small-multiples y modes and an empty
+    panel anchoring the global domain, reference-band value/band/mid/flag
+    modes, and original no-data/gap/validation behavior. Apply independent
+    domain-only, description-only, truthiness, per-panel-domain, false-flag
+    and no-data mutations; every new/changed assertion needs direct evidence.
+  - _Boundary:_ only `src/fitdocs/render/charts/kit/kinds/line.py`,
+    `small_multiples.py`, `reference_band.py`; their corresponding existing
+    three `tests/render/charts/kit/test_*.py` modules; directly affected
+    goldens regenerated solely by sanctioned writers (line typical expected).
+    No shared kit layer/schema/options/registry/budget/other kind edits.
+    Preserve all prior test cases; change only assertions genuinely made
+    obsolete by the approved wider x extent. The three task 3.2 draft paths
+    are frozen during this prerequisite; actual recovery-axis tests belong
+    to the resumed 3.2. Parent owns this plan/design/spec metadata.
+  - **Observable:** targeted kind tests and full chart/recovery scope pass;
+    original draft values remain unchanged; fresh independent review and
+    completion gate precede acceptance.
+  - _Depends: 2.1, 2.2_
+  - _Requirements: 2.2_
 
 - [ ] 3. The page model and its rendering
 
@@ -514,13 +551,12 @@ literal pins, one per lander) and every head-paragraph pin of
     switch draws one joined band); omit absent-value rows (the x extent
     shrinks).
   - **Observable:** `uv run pytest tests/recovery/test_charts.py` green.
-  - _Depends: 2.1_
+  - _Depends: 2.1, 2.3_
   - Companion boundary pin: re-pin only `charts`'s measured import row in
     `tests/recovery/test_boundary.py` if its imports differ from the
     anticipated row, preserving design § Allowed Dependencies and all guard
     policies. This keeps every module on disk checked by exact equality.
   - _Requirements: 2.2, 4.1, 5.4, 6.2, 6.4, 7.1, 8.1, 9.1, 12.6, 16.1_
-  - _Blocked: fresh debug round 1 found a plan/scope conflict: all three required chart kinds discard missing-value endpoint dates from their x extent; approval is needed for the narrow prerequisite described in the 2026-10-16 Implementation Notes._
 
 - [ ] 3.3 Write the page's frontmatter, its attribution line and its signal, sleep, other-signal and load sections
   - `src/fitdocs/render/attribution.py` (append-only, after the existing
@@ -1213,3 +1249,19 @@ introspection artifact also names its MetricInfo value type at line 48).
   for this draft. Existing 977 frozen source/test hashes remain unchanged.
   Evidence: `/private/tmp/recovery-task-3.2-report.md` and its raw
   `recovery-task-3.2-evidence/` package.
+
+
+### Chart-axis prerequisite approved (2026-10-16)
+
+- User response: "yes, please fix it and continue" approves the concrete
+  three-kind proposal following debug 3.2 round 1. The STOP_FOR_HUMAN entry
+  above is historical; scope approval is no longer pending. Added mandatory
+  prerequisite 2.3, restored group 2 to pending and made 3.2 depend on 2.3.
+  The plan now has 21 mandatory leaves plus optional maintainer-only 6.3.
+- Execute 2.3 with a fresh implementer/reviewer and independent acceptance
+  before a fresh 3.2 retry. The existing three-file 3.2 draft and its 149
+  completed/194 pending replays are preserved. Actual recovery-axis
+  assertions and remaining discrimination are completed in resumed 3.2.
+- The correction changes only kind-local domain/description populations;
+  original values/missingness, drawable-only y/marks, true flags and
+  no-data behavior remain. Parent controls metadata and selective commits.

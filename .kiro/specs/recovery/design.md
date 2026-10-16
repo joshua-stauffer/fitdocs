@@ -795,6 +795,15 @@ def build_view(series: WellnessSeries, baselines: Baselines,
 - Every chart has one row per window day (so each spans exactly the window,
   2.2; days without a value are counted by the kit's "Not drawn" note) and
   the kit's default width.
+- User-approved prerequisite 2.3 (2026-10-16) corrects the existing line,
+  small-multiples and reference-band kinds: when at least one genuine mark
+  is drawable, every received present x position sets the x domain and
+  accessible x extrema, including date-only missing-value endpoint rows.
+  Small-multiples uses the global union across panels; y domains and marks
+  still use only drawable values. Reference-band's flags-only path uses
+  separate true flag entries, so domain-only dates add no marks. Existing
+  all-markless no-data output remains; it has no time axis. No public API,
+  option, schema, shared layer or chart-table change is introduced.
 
 | Chart | Kind | Columns (unit) | Channels / options |
 |-------|------|----------------|--------------------|
