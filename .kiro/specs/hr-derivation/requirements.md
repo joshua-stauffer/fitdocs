@@ -172,6 +172,15 @@ settled a third in a second round the same day; all three are binding here.
    construction (controller ruling R4, reported to the maintainer as a
    refinement of decision 1; Requirement 6.4).
 
+## Maintainer Decision (2026-10-16): Report the underlying inconsistency once
+
+When maximum heart rate is not above resting heart rate, report only the
+maximum/resting inconsistency. A recorded threshold cannot satisfy the
+reserve relationship in that period, so additional threshold findings would
+repeat the underlying problem. Requirement 9.2 therefore applies only when
+maximum heart rate is above resting heart rate. This confirms Inspect's
+existing design, decision 14 and task 2.7.
+
 ## Requirements
 
 ### Requirement 1: The Heart-Rate Stage of `derive-benchmarks`
@@ -312,7 +321,7 @@ cannot see.
 
 #### Acceptance Criteria
 1. `fitdocs check` shall report each period in which the maximum heart rate in force is not above the resting heart rate in force and at least one of the two is derived, naming the period, both values, their dates and which is derived.
-2. `fitdocs check` shall report each period in which, for a discipline with a threshold heart rate in force, the resting heart rate in force is not below that threshold or the threshold is above the maximum heart rate in force, and at least one of the resting and maximum heart rates in force is derived, naming the period, the discipline and the three values with their dates.
+2. When the maximum heart rate in force is above the resting heart rate in force, `fitdocs check` shall report each period in which, for a discipline with a threshold heart rate in force, the resting heart rate in force is not below that threshold or the threshold is above the maximum heart rate in force, and at least one of the resting and maximum heart rates in force is derived, naming the period, the discipline and the three values with their dates. When maximum heart rate is not above resting heart rate, criterion 1 reports the underlying inconsistency once and no threshold inconsistency is reported for that period.
 3. When the heart-rate stage writes, or in preview mode would write, entries that produce a period criterion 1 or 2 describes, the fitdocs CLI shall report that period too.
 4. If `athlete.toml` cannot be read, `fitdocs check` shall report one finding naming the file and the reason and shall still complete its other checks.
 5. `fitdocs check` shall remain read-only and offline: it shall read `athlete.toml` and shall open no archived source and no wellness file for these findings.

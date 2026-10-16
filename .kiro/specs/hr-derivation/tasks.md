@@ -588,7 +588,6 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Depends: 1.2, 2.6, 2.7, 3.1, 3.2_
 
 - [ ] 3.4 (P) Report heart-rate benchmark findings in `fitdocs check`
-  - _Blocked: SPEC_CONFLICT — requirement 9.2 requires a threshold finding even when maximum <= resting, while approved Inspect design, final decision 14 and task 2.7 suppress it. Fresh kiro-debug returned STOP_FOR_HUMAN on 2026-10-15; choose the diagnostic set and reconcile the spec before implementation._
   - Implement design § AuditHeartRate: `check` reads `athlete.toml`; an
     unreadable profile is one finding and the other checks still run;
     current takeovers and inconsistency periods become findings with the
@@ -818,6 +817,8 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 4.1, 4.7_
 
 ## Implementation Notes
+
+- 3.4 resumed (2026-10-16): The maintainer chose to report the underlying maximum/resting inconsistency once and update requirement 9.2. Its explicit maximum > resting condition now matches Inspect's existing otherwise branch, final decision 14 and task 2.7; no Inspect source or arithmetic change is needed. The historical blocker below is resolved. Audit coverage must include equal and lower maximum cases with recorded thresholds and assert only the underlying finding, while threshold findings remain required per discipline when maximum > resting.
 
 - 3.4 blocker (2026-10-15): No implementation changes were made. A real parsed synthetic profile with derived maximum 50, hand resting 60 and Run threshold 55, all measured 2026-01-01, satisfies both requirements 9.1 and 9.2 as written; Inspect returns only MAX_NOT_ABOVE_REST, following its approved otherwise branch. Task 2.7 and design final decision 14 explicitly require this suppression. Fresh root-cause investigation found no recorded ruling that reconciles the diagnostic sets and returned SPEC_CONFLICT / STOP_FOR_HUMAN. Preserve existing behavior until the maintainer chooses: qualify requirement 9.2 with maximum > resting, or broaden Inspect and reconcile its design/task/tests plus stage-report integration. Independent parsed-profile requirement probe fails at its sole literal AssertionError, identical design control passes, and 180 Inspect/audit/CLI regressions pass. Controller independently reproduced both diagnostic expectations and confirmed the worktree clean before this bookkeeping edit. Task 3.3 remains accepted; feature integration/GO/merge is pending.
 
