@@ -630,7 +630,7 @@ literal pins, one per lander) and every head-paragraph pin of
     policies. This keeps every module on disk checked by exact equality.
   - _Requirements: 10.1, 10.2, 10.3, 11.1, 11.2, 11.3, 11.4, 11.5, 12.5_
 
-- [ ] 4. The run, the command and the closed boundary
+- [x] 4. The run, the command and the closed boundary
 
 - [x] 4.1 Read, compute, write and report a recovery run
   - `engine.py` per design § Engine: `FileOutcome`, `FileResult`,
@@ -696,7 +696,7 @@ literal pins, one per lander) and every head-paragraph pin of
     report and exits 0 on a staged root.
   - _Requirements: 1.2, 1.6, 1.7, 1.8, 9.3, 9.4_
 
-- [ ] 4.3 Close the boundary guard now that every module exists
+- [x] 4.3 Close the boundary guard now that every module exists
   - `tests/recovery/test_boundary.py`: a literal pin of the package's module
     set (every design module present, nothing else), and the reverse check
     switched to equality: the importers of `fitdocs.recovery.engine` outside
@@ -1411,3 +1411,7 @@ follow-ups were identified. Feature GO and remaining mandatory tasks remain open
 - 4.2 accepted after one bounded append-only test repair: standalone `fitdocs recovery --out/--methodology`, direct public engine call, standard SettingsError exit2, report fields/outcomes/reasons and report.failed finish; actual command registry15/Fifteen. All66 predecessor CLI functions remain exact source/AST, and only five owned paths changed before this plan note. No sibling command chains recovery; each archive-backed runtime test proves direct recovery on the same post-command root creates its page.
 - CLI fixture lesson: a date emitted twice can pre-satisfy a global token assertion. Six appended cases separately pin the as-of record and both window endpoints, and preserve literal bracket/emoji root data in real engine errors. Chosen labels, spacing, punctuation, class prefixes and record ordering remain unspecified; three permitted variants each138 distinct nodes GREEN. Preserve existing fixtures and exact old test prefix.
 - Fresh independent4.2 review APPROVED and parent completion VERIFIED:107 applied control invocations/102 distinct source-path states/171 intended native observations (145 normative,26 support), all40 native sites+five companion count assertions, six requirement families PINNED. Full original24,299 passed/44expected skips, exit0 in620.94s; scope128, runtime2, Ruff795/mypy610 clean. Current5 hash/mtime,277protected artifacts,66oldCLI functions and four sealed packages totaling2218 artifacts verified. Evidence /private/tmp/recovery-task-4.2-verification.json and /private/tmp/recovery-review-4.2-round2.md. No follow-ups;15/21 mandatory leaves accepted. Continue4.3; whole6.2/featureGO/mainlanding remain.
+
+
+- 4.3 accepted with no remediation/debug: independent literal seven-module set from a nonempty recursive qualified-name scan and exact reverse engine-importer equality `{fitdocs.cli}`. The obsolete math-only CLI acceptance now expects rejection, preserving its existing empty-walk and CLI-import controls. Only boundarytest.py changed; all other definitions, module assignments, resolver limits, import rows/ranks and clock/network/facade policies remain unchanged. Group4 is complete;16/21 mandatory leaves accepted.
+- Fresh independent review replayed21claimed states (18nativeRED/3permitted) plusfive own production faults: same-cardinality relocated module, nested package marker, same-cardinality importer replacement, package-relative import and nested keyword-relative dynamic import. All23 intended native failures and26restoredGREEN observations cover four new/changed sites; the two guard-support controls receive no production credit. Full original24,300 passed/44expectedskips exit0 in613.16s; boundary382/Recovery1802/Ruff795/mypy610/diffclean. Parent completion VERIFIEDcurrentboundary/278protected/229golden-relatedfiles/226sealedtask-reviewartifacts/prior2218CLIartifacts/exactASTscope. Evidence /private/tmp/recovery-task-4.3-verification.json and /private/tmp/recovery-review-4.3.md. No findings/followups; continue5.1Docs. Static access pins do not claim whole-program runtime call-graph or arbitrary computed-target evaluation.

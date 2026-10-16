@@ -584,7 +584,7 @@ def _check_reverse(root: Path) -> None:
     }
     assert scanned, "empty reverse walk"
     assert scanned == expected, "incomplete reverse walk"
-    assert importers <= {"fitdocs.cli"}, (
+    assert importers == {"fitdocs.cli"}, (
         f"outside engine importers: {sorted(importers)}"
     )
 
@@ -831,7 +831,8 @@ def test_reverse_walk_rejects_empty_and_accepts_only_cli(tmp_path: Path) -> None
     _plant(tmp_path, "cli", "from fitdocs.recovery import engine\n")
     _check_reverse(tmp_path)
     _plant(tmp_path, "cli", "import math\n")
-    _check_reverse(tmp_path)
+    with pytest.raises(AssertionError, match="outside"):
+        _check_reverse(tmp_path)
 
 
 @pytest.mark.parametrize(
@@ -846,6 +847,20 @@ def test_facade_closure_positive_control(unexpected: str) -> None:
 def test_design_rows_cover_every_planned_module() -> None:
     assert set(_RANKS) == set(_PLANNED_MODULES)
     assert set(_ALLOWED_IMPORTS) == set(_PLANNED_MODULES)
+
+
+def test_recovery_module_set_matches_design() -> None:
+    modules = {_module(_RECOVERY, path) for path in _paths(_RECOVERY)}
+    assert modules, "empty recovery module walk: wrong directory"
+    assert modules == {
+        "__init__",
+        "constants",
+        "baselines",
+        "view",
+        "charts",
+        "page",
+        "engine",
+    }, f"recovery modules: {sorted(modules)}"
 
 
 def test_recovery_import_rows() -> None:
