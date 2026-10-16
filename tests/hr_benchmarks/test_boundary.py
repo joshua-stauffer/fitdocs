@@ -231,3 +231,430 @@ def test_forbidden_import(source: str, module: str) -> None:
 )
 def test_sanctioned_import(source: str, module: str) -> None:
     assert _import_violations(source, module) == []
+
+
+_MODULE_FILES = {
+    "__init__.py",
+    "types.py",
+    "sources.py",
+    "peaks.py",
+    "maximum.py",
+    "resting.py",
+    "timeline.py",
+    "inspect.py",
+    "engine.py",
+}
+
+
+def test_literal_module_inventory() -> None:
+    assert {
+        path.relative_to(_ROOT).as_posix() for path in _module_paths(_ROOT)
+    } == _MODULE_FILES
+
+
+def _fitdocs_paths(root: Path) -> list[Path]:
+    return sorted(root.rglob("*.py"))
+
+
+def _references(source: str, module: str) -> set[str]:
+    """Resolve static imports, attribute chains and literal dynamic imports.
+
+    Simple name assignments are aliases. Computed strings, getattr and exec are
+    outside this syntax inventory.
+    """
+    tree = ast.parse(source)
+    aliases: dict[str, str] = {"__import__": "__import__"}
+    targets: set[str] = set()
+    package = module.rpartition(".")[0]
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for item in node.names:
+                aliases[item.asname or item.name.split(".")[0]] = (
+                    item.name if item.asname else item.name.split(".")[0]
+                )
+                targets.add(item.name)
+        elif isinstance(node, ast.ImportFrom):
+            base = node.module or ""
+            if node.level:
+                base = resolve_name("." * node.level + base, package)
+            for item in node.names:
+                target = base + "." + item.name
+                aliases[item.asname or item.name] = target
+                targets.add(target)
+
+    def qualified(node: ast.AST) -> str | None:
+        if isinstance(node, ast.Name):
+            return aliases.get(node.id)
+        if isinstance(node, ast.Attribute):
+            base = qualified(node.value)
+            return None if base is None else base + "." + node.attr
+        if isinstance(node, ast.Call):
+            function = qualified(node.func)
+            if function in {"__import__", "importlib.import_module"} and node.args:
+                argument = node.args[0]
+                if isinstance(argument, ast.Constant) and isinstance(
+                    argument.value, str
+                ):
+                    target = argument.value
+                    if function == "__import__":
+                        level = next(
+                            (kw.value for kw in node.keywords if kw.arg == "level"),
+                            node.args[4] if len(node.args) > 4 else None,
+                        )
+                        if (
+                            isinstance(level, ast.Constant)
+                            and isinstance(level.value, int)
+                            and level.value > 0
+                        ):
+                            target = resolve_name("." * level.value + target, package)
+                    if target.startswith("."):
+                        literal_package = next(
+                            (kw.value for kw in node.keywords if kw.arg == "package"),
+                            node.args[1] if len(node.args) > 1 else None,
+                        )
+                        if not isinstance(
+                            literal_package, ast.Constant
+                        ) or not isinstance(literal_package.value, str):
+                            return None
+                        target = resolve_name(target, literal_package.value)
+                    return target
+        return None
+
+    assignments = [node for node in ast.walk(tree) if isinstance(node, ast.Assign)]
+    for _ in range(len(assignments) + 1):
+        for node in assignments:
+            value = qualified(node.value)
+            if value is not None:
+                for binding in node.targets:
+                    if isinstance(binding, ast.Name):
+                        aliases[binding.id] = value
+    for node in ast.walk(tree):
+        value = qualified(node)
+        if value is not None:
+            targets.add(value)
+            if isinstance(node, ast.Call) and qualified(node.func) == "__import__":
+                fromlist = next(
+                    (kw.value for kw in node.keywords if kw.arg == "fromlist"), None
+                )
+                if fromlist is None and len(node.args) > 3:
+                    fromlist = node.args[3]
+                if isinstance(fromlist, (ast.List, ast.Tuple)):
+                    targets.update(
+                        value + "." + item.value
+                        for item in fromlist.elts
+                        if isinstance(item, ast.Constant)
+                        and isinstance(item.value, str)
+                    )
+    return targets
+
+
+def _external_violations(source: str, module: str) -> list[str]:
+    if module == _PACKAGE or module.startswith(_PACKAGE + "."):
+        return []
+    targets = {
+        target
+        for target in _references(source, module)
+        if target == _PACKAGE or target.startswith(_PACKAGE + ".")
+    }
+    if module == "fitdocs.cli":
+        allowed = {
+            _PACKAGE,
+            *(
+                _PACKAGE + "." + name
+                for name in (
+                    "HrStageReport",
+                    "HrStageSettings",
+                    "derive_hr_benchmarks",
+                    "load_hr_stage_settings",
+                    "engine",
+                )
+            ),
+            *(
+                _PACKAGE + ".engine." + name
+                for name in (
+                    "HrStageSettings",
+                    "derive_hr_benchmarks",
+                    "load_hr_stage_settings",
+                )
+            ),
+        }
+        targets -= allowed
+    elif module == "fitdocs.audit":
+        targets = {
+            target
+            for target in targets
+            if target != _PACKAGE + ".inspect"
+            and not target.startswith(_PACKAGE + ".inspect.")
+        }
+    return sorted(targets)
+
+
+def test_external_walk_includes_callers_and_downstream_packages() -> None:
+    root = _ROOT.parent
+    assert {
+        "cli.py",
+        "audit.py",
+        "sync.py",
+        "load/__init__.py",
+        "load/threshold/__init__.py",
+        "load/channels/__init__.py",
+        "load/qa/__init__.py",
+        "performance/__init__.py",
+        "wellness/__init__.py",
+        "index/__init__.py",
+    } <= {path.relative_to(root).as_posix() for path in _fitdocs_paths(root)}
+
+
+def test_external_walk_matches_disk() -> None:
+    root = _ROOT.parent
+    assert set(_fitdocs_paths(root)) == set(root.rglob("*.py"))
+
+
+def test_only_cli_and_audit_import_the_hr_stage() -> None:
+    root = _ROOT.parent
+    assert [
+        (path.relative_to(root).as_posix(), violation)
+        for path in _fitdocs_paths(root)
+        for violation in _external_violations(
+            path.read_text(),
+            "fitdocs." + _module_key(path, root),
+        )
+    ] == []
+
+
+@pytest.mark.parametrize(
+    "module,source,forbidden",
+    [
+        (
+            "fitdocs.cli",
+            "from fitdocs.hr_benchmarks import derive_hr_benchmarks as run",
+            False,
+        ),
+        (
+            "fitdocs.cli",
+            "from .hr_benchmarks.engine import derive_hr_benchmarks",
+            False,
+        ),
+        (
+            "fitdocs.cli",
+            "from fitdocs.hr_benchmarks import "
+            "HrStageReport, HrStageSettings, load_hr_stage_settings",
+            False,
+        ),
+        (
+            "fitdocs.audit",
+            "from .hr_benchmarks.inspect import inconsistencies as inspect",
+            False,
+        ),
+        ("fitdocs.hr_benchmarks.engine", "from .inspect import takeovers", False),
+        (
+            "fitdocs.sync",
+            "from fitdocs.hr_benchmarks import derive_hr_benchmarks as run",
+            True,
+        ),
+        (
+            "fitdocs.sync",
+            "from .hr_benchmarks.engine import derive_hr_benchmarks",
+            True,
+        ),
+        (
+            "fitdocs.audit",
+            "from fitdocs.hr_benchmarks import derive_hr_benchmarks",
+            True,
+        ),
+        ("fitdocs.cli", "from .hr_benchmarks.inspect import takeovers", True),
+        (
+            "fitdocs.load.channels.heart_rate",
+            "import fitdocs.hr_benchmarks as hr",
+            True,
+        ),
+        (
+            "fitdocs.load.threshold.calculator",
+            "from ...hr_benchmarks import derive_hr_benchmarks",
+            True,
+        ),
+        ("fitdocs.load.qa.cadence", "from fitdocs import hr_benchmarks as hr", True),
+        (
+            "fitdocs.performance.engine",
+            "from ..hr_benchmarks.inspect import takeovers",
+            True,
+        ),
+        ("fitdocs.wellness.engine", "import fitdocs as f\nhr = f.hr_benchmarks", True),
+        ("fitdocs.index.store", "import fitdocs.hr_benchmarks.engine", True),
+        ("fitdocs.sync", "__import__('fitdocs.hr_benchmarks.engine')", True),
+        ("fitdocs.sync", "loader = __import__\nloader('fitdocs.hr_benchmarks')", True),
+        (
+            "fitdocs.sync",
+            "import importlib as il\nil.import_module('fitdocs.hr_benchmarks')",
+            True,
+        ),
+        (
+            "fitdocs.sync",
+            "from importlib import import_module as load\nagain = load\n"
+            "again('.hr_benchmarks', package='fitdocs')",
+            True,
+        ),
+        (
+            "fitdocs.sync",
+            "import fitdocs as f\nparent = f\nhr = parent.hr_benchmarks\n"
+            "run = hr.derive_hr_benchmarks",
+            True,
+        ),
+        ("fitdocs.sync", "__import__('fitdocs', fromlist=['hr_benchmarks'])", True),
+        ("fitdocs.sync", "__import__('fitdocs', {}, {}, ('hr_benchmarks',))", True),
+        (
+            "fitdocs.cli",
+            "import importlib as il\nhr = "
+            "il.import_module('.hr_benchmarks', 'fitdocs')\n"
+            "run = hr.derive_hr_benchmarks",
+            False,
+        ),
+        (
+            "fitdocs.audit",
+            "import fitdocs.hr_benchmarks.inspect as inspect\nscan = inspect.takeovers",
+            False,
+        ),
+        (
+            "fitdocs.load.__init__",
+            "from ..hr_benchmarks import derive_hr_benchmarks",
+            True,
+        ),
+        (
+            "fitdocs.sync",
+            "__import__('hr_benchmarks', globals(), "
+            "fromlist=['derive_hr_benchmarks'], level=1)",
+            True,
+        ),
+        ("fitdocs.sync", "from fitdocs.benchmarks import Benchmark", False),
+    ],
+    ids=[
+        "cli-facade",
+        "cli-engine-relative",
+        "cli-settings-report",
+        "audit-inspect",
+        "internal",
+        "sync-facade",
+        "sync-engine",
+        "audit-writer",
+        "cli-inspect",
+        "channels-package",
+        "threshold-relative",
+        "qa-parent-import",
+        "performance-inspect",
+        "wellness-qualified",
+        "index-engine",
+        "builtin-literal",
+        "builtin-alias",
+        "importlib-qualified",
+        "importlib-alias-relative",
+        "assigned-attribute",
+        "builtin-fromlist-keyword",
+        "builtin-fromlist-positional",
+        "cli-dynamic-relative",
+        "audit-qualified",
+        "package-init-relative",
+        "builtin-relative-level",
+        "ordinary-leaf",
+    ],
+)
+def test_external_import_controls(module: str, source: str, forbidden: bool) -> None:
+    assert bool(_external_violations(source, module)) is forbidden
+
+
+@pytest.mark.parametrize("forbidden", [False, True], ids=["legal", "violator"])
+def test_external_tree_controls(tmp_path: Path, forbidden: bool) -> None:
+    (tmp_path / "sync.py").write_text(
+        "from fitdocs.hr_benchmarks import derive_hr_benchmarks"
+        if forbidden
+        else "from fitdocs.benchmarks import Benchmark"
+    )
+    assert (
+        bool(
+            [
+                issue
+                for path in _fitdocs_paths(tmp_path)
+                for issue in _external_violations(
+                    path.read_text(), "fitdocs." + path.stem
+                )
+            ]
+        )
+        is forbidden
+    )
+
+
+_CONSTANT_KEYS = {
+    "resting_window_days",
+    "resting_min_values",
+    "resting_step_bpm",
+    "resting_confirm_days",
+    "max_plausible_low_bpm",
+    "max_plausible_high_bpm",
+    "max_rate_bpm_per_s",
+    "max_gap_s",
+    "max_peak_window_s",
+    "max_window_days",
+    "max_top_sessions",
+    "max_step_bpm",
+    "rounding_half_offset",
+}
+_FORBIDDEN_SETTINGS = _CONSTANT_KEYS | {
+    "hr_derivation_enabled",
+    "max_hr_floor",
+    "hand_expiry_days",
+}
+
+
+def _settings_violations(source: str) -> list[str]:
+    return sorted(
+        {
+            node.value.lower()
+            for node in ast.walk(ast.parse(source))
+            if isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and node.value.lower() in _FORBIDDEN_SETTINGS
+        }
+    )
+
+
+def test_settings_walk_has_no_hr_constant_keys() -> None:
+    root = _ROOT.parent
+    paths = sorted(root.rglob("settings.py")) + [_ROOT / "engine.py"]
+    assert {
+        "settings.py",
+        "load/settings.py",
+        "wellness/settings.py",
+        "hr_benchmarks/engine.py",
+    } <= {path.relative_to(root).as_posix() for path in paths}
+    assert [
+        (str(path), issue)
+        for path in paths
+        for issue in _settings_violations(path.read_text())
+    ] == []
+
+
+@pytest.mark.parametrize("key", sorted(_FORBIDDEN_SETTINGS))
+def test_settings_key_violator_controls(key: str) -> None:
+    assert _settings_violations(f'value = document.get("{key}")') == [key]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        'value = document["wellness"]["precedence"]',
+        'value = document.get("load", {}).get("flags")',
+    ],
+    ids=["wellness-precedence", "load-flags"],
+)
+def test_settings_key_positive_controls(source: str) -> None:
+    assert _settings_violations(source) == []
+
+
+def test_hr_settings_have_only_existing_settings_projections() -> None:
+    from dataclasses import fields
+
+    from fitdocs.hr_benchmarks.engine import HrStageSettings
+
+    assert tuple(field.name for field in fields(HrStageSettings)) == (
+        "load",
+        "resting_order",
+    )

@@ -649,7 +649,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
 
 - [ ] 4. Guards, the contract version, documentation and the skill
 
-- [ ] 4.1 Pin the package's reach: module list, single writer, reachability, public surface and confinement
+- [x] 4.1 Pin the package's reach: module list, single writer, reachability, public surface and confinement
   - Add the literal module list to the boundary guard; assert the stage's
     entry point is imported only by `cli.py` and `inspect` only by `audit.py`
     and the package; assert no module of `fitdocs.load`, `fitdocs.performance`,
@@ -817,6 +817,8 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 4.1, 4.7_
 
 ## Implementation Notes
+
+- 4.1: Added the literal nine-module inventory, non-vacuous complete source/settings walks, bounded external-import rules, four-name facade identity/direct-import/root pins and a genuine HR confinement entry whose exact changed set is athlete.toml. All 175 prior functions and 19 registry entries are preserved except the licensed TAGGED helper prose correction. Independent review reproduced all 78 claimed faults and caught seven own faults; controller fresh 2,296 tests, Ruff (770 files), configured mypy (585 files), diff and frozen hashes passed. Computed imports, arbitrary future setting spellings and transient/metadata-only writes remain explicit proof limits; the stronger exact-singleton check implies the original general-location assertion.
 
 - 3.5 schema repair (2026-10-16): The command now catches the base `AthleteFileError`, including `ProfileError`, so invalid or unsupported profile schema versions produce the required exit-2 filename/problem diagnostic before writes. The matching DeriveCommand clause is clarified; no shared reader or engine changes. Independent review reproduced all 281 bounded observations (280 assertion-red/restored-green pairs and the retained honest highlighting control), the original 99/true probes and two own faults. Controller fresh 2,107 scoped tests, Ruff (770 formatted files), configured mypy (585 files), diff and frozen hashes passed. All previous fixtures remain intact. The existing schema queue item records verified branch repair evidence for maintainer closure; broader shared-reader UTF-8 normalization remains separate.
 

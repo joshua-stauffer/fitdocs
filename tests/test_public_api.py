@@ -58,6 +58,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 import fitdocs
 import fitdocs.audit
 import fitdocs.benchmarks
@@ -1463,3 +1465,47 @@ def test_identity_names_are_not_re_exported_from_the_package_root() -> None:
                 f"fitdocs.{name} is fitdocs.identity.{submodule}.{name}"
             )
     assert checked > 20, "the identity submodules' __all__ walk saw too few names"
+
+
+_HR_PUBLIC = (
+    "HrStageReport",
+    "HrStageSettings",
+    "derive_hr_benchmarks",
+    "load_hr_stage_settings",
+)
+
+
+def test_hr_facade_exports_exactly_the_operational_surface() -> None:
+    import fitdocs.hr_benchmarks as hr
+
+    assert set(hr.__all__) == set(_HR_PUBLIC)
+
+
+def test_hr_facade_exports_have_no_duplicates() -> None:
+    import fitdocs.hr_benchmarks as hr
+
+    assert len(hr.__all__) == len(set(hr.__all__))
+
+
+@pytest.mark.parametrize("name", _HR_PUBLIC)
+def test_hr_facade_runtime_identity(name: str) -> None:
+    import fitdocs.hr_benchmarks as hr
+    from fitdocs.hr_benchmarks import engine, types
+
+    defining = types if name == "HrStageReport" else engine
+    assert getattr(hr, name, None) is getattr(defining, name)
+
+
+@pytest.mark.parametrize("name", _HR_PUBLIC)
+def test_hr_direct_import_identity(name: str) -> None:
+    from fitdocs.hr_benchmarks import engine, types
+
+    namespace: dict[str, object] = {}
+    exec(f"from fitdocs.hr_benchmarks import {name}", namespace)
+    defining = types if name == "HrStageReport" else engine
+    assert namespace[name] is getattr(defining, name)
+
+
+@pytest.mark.parametrize("name", _HR_PUBLIC)
+def test_hr_surface_is_not_reexported_at_package_root(name: str) -> None:
+    assert name not in vars(fitdocs)

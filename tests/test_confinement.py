@@ -677,18 +677,33 @@ def _stage_tagged_race(data_root: Path, source_dir: Path) -> None:
 
 
 def _run_derive_benchmarks(data_root: Path, source_dir: Path) -> None:
-    """The ``derive-benchmarks`` entry point, driven exactly as the CLI
-    drives it: one call over the data root, no dry run (Req 1.10).
+    """Run the TAGGED stage of ``derive-benchmarks`` as the CLI does.
 
-    Writes only ``athlete.toml`` (via
-    :func:`fitdocs.load.profile.save_profile`'s reconciling write) -- never a
-    workout document (``tasks.md``'s hard rule for every task: "no document
-    is written by anything in this plan") -- which is exactly why this entry
-    point
-    reuses :data:`PERMITTED_SHARED_FILES` rather than adding a location of
-    its own.
+    The heart-rate stage has its own registration below.
     """
     derive_benchmarks(data_root)
+
+
+def _stage_hr_series(data_root: Path, source_dir: Path) -> None:
+    from tests.hr_benchmarks.builders import make_data_root, source_days
+    from tests.wellness.builders_series import write_series
+
+    make_data_root(data_root)
+    write_series(
+        data_root,
+        source_days(
+            "garmin-export",
+            ((date(2026, 1, 1) + timedelta(days=index), 57.0) for index in range(14)),
+        ),
+    )
+
+
+def _run_derive_hr_benchmarks(data_root: Path, source_dir: Path) -> None:
+    from fitdocs.hr_benchmarks import derive_hr_benchmarks, load_hr_stage_settings
+
+    derive_hr_benchmarks(
+        data_root, settings=load_hr_stage_settings({}, data_root=data_root)
+    )
 
 
 def _wrote_only_the_athlete_profile(touched: Sequence[str]) -> bool:
@@ -1571,6 +1586,12 @@ WRITING_ENTRY_POINTS: Final[tuple[EntryPoint, ...]] = (
         id="derive-benchmarks",
         prepare=_stage_tagged_race,
         run=_run_derive_benchmarks,
+        non_vacuous=_wrote_only_the_athlete_profile,
+    ),
+    EntryPoint(
+        id="derive-benchmarks-heart-rate",
+        prepare=_stage_hr_series,
+        run=_run_derive_hr_benchmarks,
         non_vacuous=_wrote_only_the_athlete_profile,
     ),
     # training-blocks task 4.4: the plan pass, registered against the engine
@@ -3417,3 +3438,30 @@ def test_wellness_pull_non_vacuity_needs_own_ledger_and_wellness_json(
     paths: tuple[str, ...], expected: bool
 ) -> None:
     assert _wrote_wellness_ledger_and_delivery(paths) is expected
+
+
+def test_hr_derivation_entry_point_is_registered() -> None:
+    registered = {entry.id: entry for entry in WRITING_ENTRY_POINTS}
+    entry = registered.get("derive-benchmarks-heart-rate")
+    assert entry == EntryPoint(
+        id="derive-benchmarks-heart-rate",
+        prepare=_stage_hr_series,
+        run=_run_derive_hr_benchmarks,
+        non_vacuous=_wrote_only_the_athlete_profile,
+    )
+
+
+@pytest.mark.parametrize(
+    "touched,expected",
+    [
+        (("data/athlete.toml",), True),
+        ((), False),
+        (("data/athlete.toml", "data/stray.txt"), False),
+        (("data/stray.txt",), False),
+    ],
+    ids=["profile-only", "empty", "profile-and-stray", "stray-only"],
+)
+def test_hr_confinement_predicate_controls(
+    touched: tuple[str, ...], expected: bool
+) -> None:
+    assert _wrote_only_the_athlete_profile(touched) is expected
