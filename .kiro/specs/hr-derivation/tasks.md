@@ -766,7 +766,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
 
 - [ ] 5. Validation
 
-- [ ] 5.1 Prove the whole flow end to end, deterministic and non-erasing
+- [x] 5.1 Prove the whole flow end to end, deterministic and non-erasing
   - A CLI end-to-end run over a staged data root: first create the workout
     pages (heart rate, a tagged race) with `fitdocs sync`, then write the
     hand-recorded maximum (with an `applies_from` before every workout) and
@@ -817,6 +817,8 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 4.1, 4.7_
 
 ## Implementation Notes
+
+- 5.1: Real synthetic CLI flow proves earlier back-reach and later measurement takeovers, one changed cover, current-check suppression by a later hand entry, and explicit historical walk recomputation with independent dated inputs and scalar expectations. Reversed actual discovery, German numeric locale and pinned time zones produce identical profiles. Both real engine orders preserve nonempty protected partitions, hand entries and unknown metadata; repeated runs preserve full bytes and mtime. Independent review reproduced 39 observations (38 assertion-red/restored-green pairs and one honest outer-sort green control), caught three own faults and passed 3,861 scoped tests. Controller fresh four tests, Ruff (773 files), configured mypy (588 files), exact hashes and diff checks passed. Locale/tzset availability skips and canonical raw partition comparisons versus actual whole-file bytes are explicit limits; preview and atomic-write tests remain preserved.
 
 - 4.4: The workouts skill names the three HR findings, their remedies and the athlete-owned takeover decision; Unreleased records contract 13, wiki-contract Amendment 8, one declaration refresh and explicit historical recomputation. Independent review reproduced eight claimed faults, four association controls, two own faults and nine declared unpinned narrative probes. Controller fresh 186 scoped tests, Ruff (771 files), configured mypy (586 files), exact four-file hashes and diff checks passed. All previous bytes remain; surrounding narrative is manually source-checked rather than claimed fully pinned.
 
