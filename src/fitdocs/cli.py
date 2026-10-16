@@ -195,7 +195,7 @@ from fitdocs import AthleteInputs
 from fitdocs.agentskill import PACKAGED_SKILLS, skill_root
 from fitdocs.athlete import AthleteFileError, load_athlete_inputs
 from fitdocs.audit import AuditReport, audit
-from fitdocs.benchmarks import BenchmarkKind
+from fitdocs.benchmarks import Benchmark, BenchmarkKind
 from fitdocs.config import DataRootError, resolve_data_root
 from fitdocs.connectors.connect import Connected, ConnectFailed, run_connect
 from fitdocs.connectors.credentials import (
@@ -222,6 +222,11 @@ from fitdocs.connectors.pull import (
 from fitdocs.connectors.secrets import Redactor
 from fitdocs.connectors.settings import load_connectors_settings
 from fitdocs.history.engine import HistoryReport, run_history
+from fitdocs.hr_benchmarks import (
+    HrStageReport,
+    derive_hr_benchmarks,
+    load_hr_stage_settings,
+)
 from fitdocs.identity.holds import HoldRecordError, load_holds
 from fitdocs.identity.settings import IdentitySettings, load_identity_settings
 from fitdocs.inbox import (
@@ -235,7 +240,7 @@ from fitdocs.inbox import (
 from fitdocs.index.location import IndexLocationError
 from fitdocs.layout import block_doc_path, settings_path
 from fitdocs.load.engine import DocLoadEntry, LoadReport, apply_load
-from fitdocs.load.profile import ProfileError
+from fitdocs.load.profile import PROFILE_FILENAME, ProfileError
 from fitdocs.load.prompts import NonInteractiveSession, RichInteractionSession
 from fitdocs.load.registry import UnknownCalculatorError
 from fitdocs.load.types import InteractionSession
@@ -1078,8 +1083,8 @@ def check_command(
     """Report every place the data root diverges from the installed contract.
 
     Read-only (Req 8.1): ``check`` creates, modifies, and deletes nothing. It
-    never builds a tile store, never loads the athlete profile, and never runs
-    the load pass -- unlike sync/regen/load it describes what is already on
+    reads athlete.toml for heart-rate findings, builds no tile store, and runs
+    no load pass -- unlike sync/regen/load it describes what is already on
     disk instead of writing to it.
 
     Data-root posture: *a command that describes a tree requires a data root;
@@ -1808,29 +1813,37 @@ def derive_benchmarks_command(
     out: Path | None = _OUT_OPTION,
     dry_run: bool = _DRY_RUN_OPTION,
 ) -> None:
-    """Turn tagged efforts into dated athlete-profile benchmarks.
+    """Derive dated benchmarks from tagged efforts and heart-rate evidence.
 
-    Resolves the data root by the usual precedence (Req 9.6), runs the
-    benchmark-derivation pass (:func:`fitdocs.performance.engine.
-    derive_benchmarks`) over every generated workout document, and prints the
-    report: a summary line, the derived entries, the declines grouped by
-    document, the failures, and the per-quantity summaries (Req 7.1-7.3,
-    7.8). ``--dry-run`` produces the identical report but writes nothing (Req
-    1.1, 1.9). Exits ``2`` on a configuration fault (an unresolvable data
-    root, a malformed profile, or a malformed ``[load]`` table -- the pass
-    reads the same stream-sufficiency settings the load pass does), ``1``
-    when any document failed, and ``0`` otherwise -- a decline is an outcome,
-    never a failure, so a run that only derived and declined still exits
-    ``0`` (Req 1.9, 1.10).
+    Validate shared wellness and load settings before running either stage.
+    Preview reports the proposed changes without writing. Configuration faults
+    exit 2; failures in either stage exit 1; other outcomes exit 0.
     """
     data_root = _resolved_data_root(out)
+    configuration_path = settings_path(data_root)
     try:
-        report = derive_benchmarks(data_root, dry_run=dry_run)
+        settings = load_hr_stage_settings(
+            load_settings_document(data_root), data_root=data_root
+        )
+        configuration_path = data_root / PROFILE_FILENAME
+        report = derive_benchmarks(
+            data_root, dry_run=dry_run, load_settings=settings.load
+        )
+        hr_report = derive_hr_benchmarks(
+            data_root,
+            settings=settings,
+            dry_run=dry_run,
+            other_derived=report.accepted,
+            progress=_hr_progress,
+        )
+    except UnicodeDecodeError as exc:
+        _config_error(f"{configuration_path} is not valid UTF-8: {exc}")
     except (ProfileError, SettingsError) as exc:
         _config_error(str(exc))
     _report_derive(report, dry_run=dry_run)
     # A decline is a successful outcome (Req 7.8); only a failure exits 1.
-    _finish(failed=bool(report.failures))
+    _report_hr_stage(hr_report, dry_run=dry_run)
+    _finish(failed=bool(report.failures or hr_report.failures))
 
 
 @app.command("skill")
@@ -2720,6 +2733,110 @@ _QUANTITY_UNITS: dict[BenchmarkKind, str] = {
     BenchmarkKind.LTHR_BPM: "bpm",
     BenchmarkKind.THRESHOLD_PACE_S_PER_KM: "s/km",
 }
+
+
+def _hr_progress(done: int, total: int) -> None:
+    """Show heart-rate progress only on an interactive stderr stream."""
+    if sys.stderr.isatty():
+        sys.stderr.write(f"\rheart rate: {done}/{total}")
+        sys.stderr.flush()
+
+
+def _hr_entry_text(entry: Benchmark) -> str:
+    """Keep a reported value associated with its measurement and origin."""
+    origin = entry.source.kind.value if entry.source is not None else "hand-recorded"
+    applies = (
+        f"; applies from {entry.applies_from}" if entry.applies_from is not None else ""
+    )
+    return f"{entry.value:g} bpm measured {entry.measured_on} ({origin}{applies})"
+
+
+def _hr_cover_text(cover: tuple[date, date]) -> str:
+    empty = " (empty)" if cover[0] == cover[1] else ""
+    return f"[{cover[0]}, {cover[1]}){empty}"
+
+
+def _report_hr_stage(report: HrStageReport, *, dry_run: bool) -> None:
+    """Print the complete heart-rate report, including preview changes."""
+    console = Console()
+    table = Table(title="fitdocs derive-benchmarks: heart rate")
+    table.add_column("Result")
+    table.add_column("Count", justify="right")
+    table.add_row("Considered", str(report.considered))
+    table.add_row("With evidence", str(report.with_evidence))
+    for reason, count in report.no_evidence:
+        table.add_row(f"No evidence: {reason.value}", str(count))
+    table.add_row("Resting sources", str(len(report.resting_sources)))
+    for outcome in report.kinds:
+        table.add_row(f"{outcome.kind.value} entries", str(len(outcome.entries)))
+        table.add_row(f"{outcome.kind.value} added", str(len(outcome.added)))
+        table.add_row(f"{outcome.kind.value} removed", str(len(outcome.removed)))
+        table.add_row(f"{outcome.kind.value} kept", "yes" if outcome.kept else "no")
+    table.add_row("Failures", str(len(report.failures)))
+    console.print(table)
+
+    def detail(text: str) -> None:
+        console.print(text, markup=False, highlight=False, soft_wrap=True)
+
+    detail(f"Heart-rate benchmarks written: {'yes' if report.written else 'no'}")
+    for resting_source in report.resting_sources:
+        detail(f"Resting source: {resting_source}")
+    for takeover in report.takeovers:
+        hand = takeover.superseded
+        applies = (
+            f"applies-from date {hand.applies_from}"
+            if hand.measured_on > takeover.derived.measured_on
+            else "measurement"
+        )
+        source = takeover.derived.source
+        evidence = (
+            f"method={source.method}; document={source.document}; "
+            f"inputs={source.inputs}; citation={source.citation}; "
+            f"series={source.series or 'none'}"
+            if source is not None
+            else "provenance unavailable"
+        )
+        detail(
+            f"Takeover {takeover.kind.value}: {_hr_entry_text(takeover.derived)} "
+            f"supersedes your {_hr_entry_text(hand)}; applied by {applies}; {evidence}"
+        )
+    for change in report.back_reach_changes:
+        detail(
+            f"Back-reach {change.kind.value}: your {_hr_entry_text(change.entry)}; "
+            f"before {_hr_cover_text(change.before)}; "
+            f"after {_hr_cover_text(change.after)}; "
+            "recompute load to score days outside the hand-recorded cover "
+            "with the derived values."
+        )
+    for finding in report.inconsistencies:
+        discipline = (
+            finding.discipline.value if finding.discipline is not None else "athlete"
+        )
+        threshold = (
+            f"; threshold={_hr_entry_text(finding.lthr)}"
+            if finding.lthr is not None
+            else ""
+        )
+        detail(
+            f"Inconsistency {finding.violation.value}: "
+            f"[{finding.starts_on}, {finding.ends_before or 'open'}); "
+            f"discipline={discipline}; "
+            f"maximum={_hr_entry_text(finding.max_hr)}; "
+            f"resting={_hr_entry_text(finding.resting_hr)}{threshold}"
+        )
+    for skipped in report.skipped:
+        detail(
+            f"Skipped {skipped.document}: {skipped.reason.value} -- {skipped.detail}"
+        )
+    for failure in report.failures:
+        detail(f"Failure {failure.kind.value} [{failure.subject}]: {failure.reason}")
+    for note in report.notes:
+        detail(f"Note: {note}")
+    if report.changed:
+        detail(
+            "The heart-rate timeline changed: run `fitdocs load --recompute` to "
+            "rescore documents whose load was already computed."
+        )
 
 
 def _report_derive(report: DeriveReport, *, dry_run: bool) -> None:

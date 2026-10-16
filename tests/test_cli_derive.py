@@ -21,26 +21,53 @@ import hashlib
 import locale
 import re
 import socket
+import sys
 import time
-from collections.abc import Sequence
-from datetime import date
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import replace
+from datetime import date, timedelta
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
 import pytest
+from rich.console import Console
 from typer.testing import CliRunner
 
-from fitdocs import contract, docio
-from fitdocs.benchmarks import BenchmarkKind
+from fitdocs import cli, contract, docio
+from fitdocs.benchmarks import (
+    Benchmark,
+    BenchmarkKind,
+    BenchmarkSource,
+    BenchmarkSourceKind,
+)
 from fitdocs.cli import _report_derive, app
+from fitdocs.hr_benchmarks import (
+    HrStageSettings,
+    derive_hr_benchmarks,
+    load_hr_stage_settings,
+)
+from fitdocs.hr_benchmarks.types import (
+    BackReachChange,
+    HrFailure,
+    HrStageReport,
+    Inconsistency,
+    KindOutcome,
+    NoEvidenceReason,
+    SkippedDocument,
+    Takeover,
+    Violation,
+)
 from fitdocs.layout import ARCHIVE_DIR
 from fitdocs.load.profile import PROFILE_FILENAME, load_profile
+from fitdocs.load.settings import LoadSettings
 from fitdocs.model import Sport
 from fitdocs.performance.engine import (
     DeriveEntry,
     DeriveFailure,
     DeriveReport,
     QuantitySummary,
+    derive_benchmarks,
 )
 from fitdocs.performance.types import (
     DeclineReason,
@@ -48,7 +75,10 @@ from fitdocs.performance.types import (
     DerivationMethod,
     DerivedBenchmark,
 )
+from fitdocs.settings import load_settings_document
+from fitdocs.wellness import Metric, SeriesValue
 from tests.fixtures import builder
+from tests.wellness.builders_series import write_series
 
 runner = CliRunner()
 
@@ -1020,8 +1050,9 @@ def test_mixed_run_derives_declines_fails_and_never_opens_the_untagged_archive(
     the 20-minute test declines ``method_unverified``,
     the powerless ride declines ``stream_absent``, the malformed page fails
     carrying the contract's own ``describe()`` text, the untagged page's
-    archive is never opened through any of the six access paths this test
-    patches, no network connection is opened, and every derived entry is
+    archive is never opened by the tagged-effort stage through any of the six
+    access paths this test patches, no network connection is opened, and every
+    tagged-effort derived entry is
     dated from its own page rather than from today.
 
     Falsity in the starting state: before the run nothing under
@@ -1094,13 +1125,22 @@ def test_mixed_run_derives_declines_fails_and_never_opens_the_untagged_archive(
 
     monkeypatch.setattr(socket, "socket", _raise_on_socket)
 
+    real_hr_stage = derive_hr_benchmarks
+    tagged_accessed: set[Path] = set()
+
+    def snapshot_then_hr(*args: Any, **kwargs: Any) -> HrStageReport:
+        tagged_accessed.update(accessed)
+        return real_hr_stage(*args, **kwargs)
+
+    monkeypatch.setattr(cli, "derive_hr_benchmarks", snapshot_then_hr)
+
     result = runner.invoke(app, ["derive-benchmarks", "--out", str(tmp_path)])
 
     assert result.exit_code == 1, result.output
     assert socket_calls == [], "the pass opened a network connection"
 
     untagged_archive = tmp_path / refs["untagged"]
-    assert untagged_archive not in accessed
+    assert untagged_archive not in tagged_accessed
     for key in ("race", "tt", "twenty", "powerless"):
         assert tmp_path / refs[key] in accessed
 
@@ -1317,7 +1357,7 @@ def test_discovery_order_perturbed_by_reversing_the_raw_glob_leaves_bytes_identi
     construction, for exactly the two documents this fixture has. The
     positive control this test asserts before trusting the byte comparison:
     ``perturbed_calls`` records that the reversing branch of the patched
-    ``glob`` actually ran exactly once against the perturbed invocation, and
+    ``glob`` actually ran once per stage against the perturbed invocation, and
     the baseline profile is confirmed (before it is deleted) to hold one
     entry from each document -- a run-discipline entry and a ride-discipline
     entry -- so the two documents genuinely land in different scope tables
@@ -1382,11 +1422,11 @@ def test_discovery_order_perturbed_by_reversing_the_raw_glob_leaves_bytes_identi
 
     perturbed_result = runner.invoke(app, ["derive-benchmarks", "--out", str(root)])
 
-    # The reversing branch actually ran, exactly once, against the
+    # The reversing branch actually ran once per stage against the
     # perturbed invocation -- without this, an engine that never calls
     # `Path.glob("*.md")` against `workouts/` at all (e.g. an unsorted
     # `os.listdir` walk) would pass the byte comparison below vacuously.
-    assert perturbed_calls == [1]
+    assert perturbed_calls == [1, 1], "TAGGED and HR each discover workout pages"
 
     assert perturbed_result.exit_code == 0, perturbed_result.output
     perturbed_bytes = (root / PROFILE_FILENAME).read_bytes()
@@ -1505,3 +1545,1040 @@ def test_determinism_under_a_perturbed_numeric_locale(tmp_path: Path) -> None:
     locale_bytes = (locale_root / PROFILE_FILENAME).read_bytes()
     assert baseline_bytes != b""
     assert baseline_bytes == locale_bytes
+
+
+@pytest.mark.parametrize("dry_run", [True, False])
+def test_hr_cli_prints_second_stage_on_real_inputs(
+    tmp_path: Path, dry_run: bool
+) -> None:
+    _write_two_document_root(tmp_path)
+    write_series(
+        tmp_path,
+        (
+            SeriesValue(
+                date(2020, 1, 1) + timedelta(days=i),
+                Metric.RESTING_HR_BPM,
+                "garmin-export",
+                None,
+                57,
+                True,
+            )
+            for i in range(14)
+        ),
+    )
+    args = ["derive-benchmarks", "--out", str(tmp_path)]
+    if dry_run:
+        args.append("--dry-run")
+    result = runner.invoke(app, args)
+    assert (
+        result.exit_code,
+        "fitdocs derive-benchmarks: heart rate" in result.stdout,
+        f"Heart-rate benchmarks written: {'no' if dry_run else 'yes'}" in result.stdout,
+        "heart rate:" in result.stdout,
+    ) == (0, True, True, False)
+
+
+# Heart-rate CLI integration and rendering (hr-derivation task 3.5).
+
+_REST = BenchmarkKind.RESTING_HR_BPM
+_MAX = BenchmarkKind.MAX_HR_BPM
+_LONG_PAGE = "workouts/[session]-" + "long-path-" * 20 + ".md"
+
+
+def _hr_entry(
+    kind: BenchmarkKind,
+    value: int,
+    day: str,
+    *,
+    origin: BenchmarkSourceKind | None = None,
+    applies: str | None = None,
+    discipline: Sport | None = None,
+) -> Benchmark:
+    source = (
+        None
+        if origin is None
+        else BenchmarkSource(
+            origin,
+            method="resting_hr_series_median"
+            if kind is _REST
+            else "max_hr_sustained_peak",
+            document="wellness/[2020].csv" if kind is _REST else _LONG_PAGE,
+            inputs="source intervals-icu; window [28 days]; confirmation [14 days]"
+            if kind is _REST
+            else "session [30 seconds]; window [180 days]",
+            citation="resting-rule" if kind is _REST else "maximum-rule",
+            series="intervals-icu:resting_hr_bpm" if kind is _REST else None,
+        )
+    )
+    return Benchmark(
+        kind,
+        discipline,
+        value,
+        date.fromisoformat(day),
+        applies_from=None if applies is None else date.fromisoformat(applies),
+        source=source,
+    )
+
+
+def _distinct_hr_report() -> HrStageReport:
+    r1 = _hr_entry(_REST, 57, "2020-01-14", origin=BenchmarkSourceKind.DERIVED)
+    r2 = replace(
+        _hr_entry(_REST, 61, "2020-02-14", origin=BenchmarkSourceKind.DERIVED),
+        source=BenchmarkSource(
+            BenchmarkSourceKind.DERIVED,
+            "resting_hr_series_median",
+            "wellness/[2021].csv",
+            "source garmin-export; window [21 days]; confirmation [15 days]",
+            "resting-rule",
+            "garmin-export:resting_hr_bpm",
+        ),
+    )
+    m1 = _hr_entry(_MAX, 193, "2021-03-16", origin=BenchmarkSourceKind.DERIVED)
+    m2 = replace(
+        _hr_entry(_MAX, 187, "2021-04-17", origin=BenchmarkSourceKind.DERIVED),
+        source=BenchmarkSource(
+            BenchmarkSourceKind.DERIVED,
+            "max_hr_sustained_peak",
+            "workouts/[other-session].md",
+            "session [31 seconds]; window [179 days]",
+            "maximum-rule",
+        ),
+    )
+    m3 = _hr_entry(_MAX, 181, "2021-05-18", origin=BenchmarkSourceKind.DERIVED)
+    rh = _hr_entry(
+        _REST,
+        49,
+        "2020-06-20",
+        origin=BenchmarkSourceKind.MEASURED,
+        applies="2019-12-01",
+    )
+    rh2 = _hr_entry(_REST, 53, "2020-07-24", applies="2019-11-02")
+    mh = _hr_entry(_MAX, 199, "2018-07-21")
+    future = _hr_entry(_MAX, 201, "2022-08-22", applies="2021-01-02")
+    lthr = _hr_entry(
+        BenchmarkKind.LTHR_BPM,
+        211,
+        "2021-09-23",
+        origin=BenchmarkSourceKind.DERIVED,
+        discipline=Sport.RUN,
+    )
+    resting_entries = (r1, r2) + tuple(
+        _hr_entry(
+            _REST,
+            70 + i,
+            (date(2024, 1, 1) + timedelta(days=i)).isoformat(),
+            origin=BenchmarkSourceKind.DERIVED,
+        )
+        for i in range(29)
+    )
+    maximum_entries = (m1, m2, m3) + tuple(
+        _hr_entry(
+            _MAX,
+            170 + i,
+            (date(2025, 1, 1) + timedelta(days=i)).isoformat(),
+            origin=BenchmarkSourceKind.DERIVED,
+        )
+        for i in range(40)
+    )
+    return HrStageReport(
+        121,
+        47,
+        tuple(zip(NoEvidenceReason, (5, 7, 11, 13, 17, 19), strict=True)),
+        (
+            SkippedDocument(
+                "workouts/[missing].md",
+                NoEvidenceReason.ARCHIVE_MISSING,
+                "missing [archive]",
+            ),
+            SkippedDocument(
+                _LONG_PAGE, NoEvidenceReason.ARCHIVE_UNDECODABLE, "decode [problem]"
+            ),
+        ),
+        ("intervals-icu", "garmin-export"),
+        (
+            KindOutcome(
+                _REST,
+                resting_entries,
+                resting_entries[:23],
+                tuple(
+                    _hr_entry(
+                        _REST,
+                        40 + i,
+                        (date(2010, 1, 1) + timedelta(days=i)).isoformat(),
+                        origin=BenchmarkSourceKind.DERIVED,
+                    )
+                    for i in range(29)
+                ),
+                False,
+            ),
+            KindOutcome(
+                _MAX,
+                maximum_entries,
+                maximum_entries[:37],
+                tuple(
+                    _hr_entry(
+                        _MAX,
+                        150 + i,
+                        (date(2011, 1, 1) + timedelta(days=i)).isoformat(),
+                        origin=BenchmarkSourceKind.DERIVED,
+                    )
+                    for i in range(41)
+                ),
+                False,
+            ),
+        ),
+        (
+            Takeover(_REST, r1, rh),
+            Takeover(_REST, r2, rh2),
+            Takeover(_MAX, m1, mh),
+            Takeover(_MAX, m2, future),
+        ),
+        (
+            BackReachChange(
+                _REST,
+                rh,
+                (date(2019, 12, 1), date(2020, 6, 20)),
+                (date(2019, 12, 1), date(2020, 1, 14)),
+            ),
+            BackReachChange(
+                _REST,
+                rh,
+                (date(2019, 12, 1), date(2019, 12, 1)),
+                (date(2019, 12, 1), date(2020, 2, 14)),
+            ),
+            BackReachChange(
+                _MAX,
+                future,
+                (date(2021, 1, 2), date(2021, 4, 17)),
+                (date(2021, 1, 2), date(2021, 1, 2)),
+            ),
+        ),
+        (
+            Inconsistency(
+                Violation.THRESHOLD_OUTSIDE_RESERVE,
+                date(2021, 10, 3),
+                None,
+                Sport.RUN,
+                mh,
+                r2,
+                lthr,
+            ),
+            Inconsistency(
+                Violation.MAX_NOT_ABOVE_REST,
+                date(2022, 10, 1),
+                date(2022, 11, 2),
+                None,
+                m1,
+                rh,
+                None,
+            ),
+        ),
+        (
+            HrFailure(_REST, "wellness/[manifest].toml", "read [failed]"),
+            HrFailure(_MAX, _LONG_PAGE, "access [denied]"),
+            HrFailure(_MAX, "workouts/[third-failure].md", "read [blocked]"),
+        ),
+        ("first [note]", "second [note]"),
+        False,
+        True,
+    )
+
+
+def _render_hr(
+    monkeypatch: pytest.MonkeyPatch, report: HrStageReport, dry_run: bool = False
+) -> str:
+    stream = StringIO()
+    monkeypatch.setattr(
+        cli, "Console", lambda: Console(file=stream, width=200, color_system=None)
+    )
+    cli._report_hr_stage(report, dry_run=dry_run)
+    return stream.getvalue()
+
+
+@pytest.mark.parametrize(
+    "expected",
+    [
+        pytest.param("fitdocs derive-benchmarks: heart rate", id="field-00"),
+        pytest.param("Considered | 121", id="field-01"),
+        pytest.param("With evidence | 47", id="field-02"),
+        pytest.param("No evidence: undated | 5", id="field-03"),
+        pytest.param("No evidence: archive_missing | 7", id="field-04"),
+        pytest.param("No evidence: archive_undecodable | 11", id="field-05"),
+        pytest.param("No evidence: no_heart_rate | 13", id="field-06"),
+        pytest.param("No evidence: cadence_locked | 17", id="field-07"),
+        pytest.param("No evidence: no_sustained_stretch | 19", id="field-08"),
+        pytest.param("Resting sources | 2", id="field-09"),
+        pytest.param("resting_hr_bpm entries | 31", id="field-10"),
+        pytest.param("resting_hr_bpm added | 23", id="field-11"),
+        pytest.param("resting_hr_bpm removed | 29", id="field-12"),
+        pytest.param("resting_hr_bpm kept | no", id="field-13"),
+        pytest.param("max_hr_bpm entries | 43", id="field-14"),
+        pytest.param("max_hr_bpm added | 37", id="field-15"),
+        pytest.param("max_hr_bpm removed | 41", id="field-16"),
+        pytest.param("max_hr_bpm kept | no", id="field-17"),
+        pytest.param("Failures | 3", id="field-18"),
+        pytest.param("Heart-rate benchmarks written: no", id="field-19"),
+        pytest.param("Resting source: intervals-icu", id="field-20"),
+        pytest.param("Resting source: garmin-export", id="field-21"),
+        pytest.param(
+            "Takeover resting_hr_bpm: 57 bpm measured 2020-01-14 "
+            "(derived) supersedes your 49 bpm measured 2020-06-20 "
+            "(measured; applies from 2019-12-01); applied by "
+            "applies-from date 2019-12-01; "
+            "method=resting_hr_series_median; "
+            "document=wellness/[2020].csv; inputs=source intervals-icu; "
+            "window [28 days]; confirmation [14 days]; "
+            "citation=resting-rule; series=intervals-icu:resting_hr_bpm",
+            id="field-22",
+        ),
+        pytest.param(
+            "Takeover resting_hr_bpm: 61 bpm measured 2020-02-14 "
+            "(derived) supersedes your 53 bpm measured 2020-07-24 "
+            "(hand-recorded; applies from 2019-11-02); applied by "
+            "applies-from date 2019-11-02; "
+            "method=resting_hr_series_median; "
+            "document=wellness/[2021].csv; inputs=source garmin-export; "
+            "window [21 days]; confirmation [15 days]; "
+            "citation=resting-rule; series=garmin-export:resting_hr_bpm",
+            id="field-23",
+        ),
+        pytest.param(
+            "Takeover max_hr_bpm: 193 bpm measured 2021-03-16 (derived) "
+            "supersedes your 199 bpm measured 2018-07-21 "
+            "(hand-recorded); applied by measurement; "
+            "method=max_hr_sustained_peak; "
+            "document=workouts/[session]-long-path-long-path-long-path-lo"
+            "ng-path-long-path-long-path-long-path-long-path-long-path-lo"
+            "ng-path-long-path-long-path-long-path-long-path-long-path-lo"
+            "ng-path-long-path-long-path-long-path-long-path-.md; "
+            "inputs=session [30 seconds]; window [180 days]; "
+            "citation=maximum-rule; series=none",
+            id="field-24",
+        ),
+        pytest.param(
+            "Takeover max_hr_bpm: 187 bpm measured 2021-04-17 (derived) "
+            "supersedes your 201 bpm measured 2022-08-22 (hand-recorded; "
+            "applies from 2021-01-02); applied by applies-from date "
+            "2021-01-02; method=max_hr_sustained_peak; "
+            "document=workouts/[other-session].md; inputs=session [31 "
+            "seconds]; window [179 days]; citation=maximum-rule; "
+            "series=none",
+            id="field-25",
+        ),
+        pytest.param(
+            "Back-reach resting_hr_bpm: your 49 bpm measured 2020-06-20 "
+            "(measured; applies from 2019-12-01); before [2019-12-01, "
+            "2020-06-20); after [2019-12-01, 2020-01-14); recompute load "
+            "to score days outside the hand-recorded cover with the "
+            "derived values.",
+            id="field-26",
+        ),
+        pytest.param(
+            "Back-reach resting_hr_bpm: your 49 bpm measured 2020-06-20 "
+            "(measured; applies from 2019-12-01); before [2019-12-01, "
+            "2019-12-01) (empty); after [2019-12-01, 2020-02-14); "
+            "recompute load to score days outside the hand-recorded "
+            "cover with the derived values.",
+            id="field-27",
+        ),
+        pytest.param(
+            "Back-reach max_hr_bpm: your 201 bpm measured 2022-08-22 "
+            "(hand-recorded; applies from 2021-01-02); before "
+            "[2021-01-02, 2021-04-17); after [2021-01-02, 2021-01-02) "
+            "(empty); recompute load to score days outside the "
+            "hand-recorded cover with the derived values.",
+            id="field-28",
+        ),
+        pytest.param(
+            "Inconsistency max_not_above_rest: [2022-10-01, 2022-11-02); "
+            "discipline=athlete; maximum=193 bpm measured 2021-03-16 "
+            "(derived); resting=49 bpm measured 2020-06-20 (measured; "
+            "applies from 2019-12-01)",
+            id="field-29",
+        ),
+        pytest.param(
+            "Inconsistency threshold_outside_reserve: [2021-10-03, "
+            "open); discipline=Run; maximum=199 bpm measured 2018-07-21 "
+            "(hand-recorded); resting=61 bpm measured 2020-02-14 "
+            "(derived); threshold=211 bpm measured 2021-09-23 (derived)",
+            id="field-30",
+        ),
+        pytest.param(
+            "Skipped workouts/[missing].md: archive_missing -- missing [archive]",
+            id="field-31",
+        ),
+        pytest.param(
+            "Skipped "
+            "workouts/[session]-long-path-long-path-long-path-long-path-l"
+            "ong-path-long-path-long-path-long-path-long-path-long-path-l"
+            "ong-path-long-path-long-path-long-path-long-path-long-path-l"
+            "ong-path-long-path-long-path-long-path-.md: "
+            "archive_undecodable -- decode [problem]",
+            id="field-32",
+        ),
+        pytest.param(
+            "Failure resting_hr_bpm [wellness/[manifest].toml]: read [failed]",
+            id="field-33",
+        ),
+        pytest.param(
+            "Failure max_hr_bpm "
+            "[workouts/[session]-long-path-long-path-long-path-long-path-"
+            "long-path-long-path-long-path-long-path-long-path-long-path-"
+            "long-path-long-path-long-path-long-path-long-path-long-path-"
+            "long-path-long-path-long-path-long-path-.md]: access "
+            "[denied]",
+            id="field-34",
+        ),
+        pytest.param("Note: first [note]", id="field-35"),
+        pytest.param("Note: second [note]", id="field-36"),
+        pytest.param(
+            "The heart-rate timeline changed: run `fitdocs load "
+            "--recompute` to rescore documents whose load was already "
+            "computed.",
+            id="field-37",
+        ),
+        pytest.param(
+            "Failure max_hr_bpm [workouts/[third-failure].md]: read [blocked]",
+            id="field-38",
+        ),
+    ],
+)
+def test_hr_report_distinct_fields_and_complete_collections(
+    monkeypatch: pytest.MonkeyPatch, expected: str
+) -> None:
+    output = _render_hr(monkeypatch, _distinct_hr_report(), dry_run=True)
+    lines = [
+        " | ".join(part.strip() for part in line.strip("│ ").split("│"))
+        for line in output.splitlines()
+    ]
+    assert lines.count(expected) == 1
+
+
+@pytest.mark.parametrize(
+    "written,changed", [(False, False), (False, True), (True, True), (True, False)]
+)
+def test_hr_report_written_and_changed_are_independent(
+    monkeypatch: pytest.MonkeyPatch, written: bool, changed: bool
+) -> None:
+    report = replace(_distinct_hr_report(), written=written, changed=changed)
+    output = _render_hr(monkeypatch, report)
+    assert (
+        f"Heart-rate benchmarks written: {'yes' if written else 'no'}" in output,
+        output.count("The heart-rate timeline changed:"),
+    ) == (True, int(changed))
+
+
+def test_hr_report_prints_all_zero_reason_rows(monkeypatch: pytest.MonkeyPatch) -> None:
+    report = replace(
+        _distinct_hr_report(),
+        no_evidence=tuple((reason, 0) for reason in NoEvidenceReason),
+    )
+    output = _render_hr(monkeypatch, report)
+    rows = [
+        " | ".join(part.strip() for part in line.strip("│ ").split("│"))
+        for line in output.splitlines()
+        if "No evidence:" in line
+    ]
+    assert rows == [
+        "No evidence: undated | 0",
+        "No evidence: archive_missing | 0",
+        "No evidence: archive_undecodable | 0",
+        "No evidence: no_heart_rate | 0",
+        "No evidence: cadence_locked | 0",
+        "No evidence: no_sustained_stretch | 0",
+    ]
+
+
+@pytest.mark.parametrize("dry_run", [True, False])
+def test_hr_cli_forwards_preflight_and_accepted_to_real_stages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, dry_run: bool
+) -> None:
+    _write_two_document_root(tmp_path)
+    (tmp_path / "fitdocs.toml").write_text(
+        '[wellness]\nprecedence = ["intervals-icu", "garmin-export"]\n'
+        "[load.flags]\ncadence_lock_max_delta_bpm = 7.0\n"
+    )
+    events: list[str] = []
+    observations: list[object] = []
+    real_document = load_settings_document
+    document_reads: list[Path] = []
+    real_settings = load_hr_stage_settings
+    real_tagged = derive_benchmarks
+    real_hr = derive_hr_benchmarks
+    shared: list[HrStageSettings] = []
+    accepted: list[tuple[Benchmark, ...]] = []
+
+    def document(data_root: Path) -> Mapping[str, object]:
+        document_reads.append(data_root)
+        return real_document(data_root)
+
+    def settings(document: Mapping[str, object], *, data_root: Path) -> HrStageSettings:
+        events.append("settings")
+        result = real_settings(document, data_root=data_root)
+        shared.append(result)
+        return result
+
+    def tagged(
+        data_root: Path,
+        *,
+        dry_run: bool = False,
+        load_settings: LoadSettings | None = None,
+    ) -> DeriveReport:
+        events.append("tagged")
+        observations.extend(
+            (data_root == tmp_path.resolve(), dry_run, load_settings is shared[0].load)
+        )
+        result = real_tagged(data_root, dry_run=dry_run, load_settings=load_settings)
+        accepted.append(result.accepted)
+        return result
+
+    def hr(
+        data_root: Path,
+        *,
+        settings: HrStageSettings,
+        dry_run: bool = False,
+        other_derived: Sequence[Benchmark] | None = None,
+        progress: Callable[[int, int], None] | None = None,
+    ) -> HrStageReport:
+        events.append("hr")
+        observations.extend(
+            (
+                data_root == tmp_path.resolve(),
+                settings is shared[0],
+                dry_run,
+                other_derived is accepted[0],
+                len(accepted[0]),
+                settings.resting_order,
+                settings.load.flags.cadence_lock_max_delta_bpm,
+                progress is cli._hr_progress,
+            )
+        )
+        return real_hr(
+            data_root,
+            settings=settings,
+            dry_run=dry_run,
+            other_derived=other_derived,
+            progress=progress,
+        )
+
+    monkeypatch.setattr(cli, "load_settings_document", document)
+    monkeypatch.setattr(cli, "load_hr_stage_settings", settings)
+    monkeypatch.setattr(cli, "derive_benchmarks", tagged)
+    monkeypatch.setattr(cli, "derive_hr_benchmarks", hr)
+    args = ["derive-benchmarks", "--out", str(tmp_path)] + (
+        ["--dry-run"] if dry_run else []
+    )
+    result = runner.invoke(app, args)
+    assert (
+        events,
+        document_reads,
+        observations,
+        result.exit_code,
+        "Profile written:" in result.stdout,
+        "Heart-rate benchmarks written:" in result.stdout,
+    ) == (
+        ["settings", "tagged", "hr"],
+        [tmp_path.resolve()],
+        [
+            True,
+            dry_run,
+            True,
+            True,
+            True,
+            dry_run,
+            True,
+            3,
+            ("intervals-icu", "garmin-export"),
+            7.0,
+            True,
+        ],
+        0,
+        True,
+        True,
+    )
+
+
+@pytest.mark.parametrize("fault", ["wellness", "load", "toml", "profile"])
+def test_hr_cli_configuration_faults_precede_stage_writes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    _write_two_document_root(tmp_path)
+    profile = tmp_path / PROFILE_FILENAME
+    profile.write_text("max_hr_bpm = 198\n" if fault != "profile" else "[broken")
+    before = profile.read_bytes()
+    settings_text = {
+        "wellness": "wellness = false\n",
+        "load": "load = false\n",
+        "toml": "[broken",
+        "profile": "",
+    }[fault]
+    (tmp_path / "fitdocs.toml").write_text(settings_text)
+    entered: list[str] = []
+    real_tagged, real_hr = derive_benchmarks, derive_hr_benchmarks
+
+    def tagged(*args: Any, **kwargs: Any) -> DeriveReport:
+        entered.append("tagged")
+        return real_tagged(*args, **kwargs)
+
+    def hr(*args: Any, **kwargs: Any) -> HrStageReport:
+        entered.append("hr")
+        return real_hr(*args, **kwargs)
+
+    monkeypatch.setattr(cli, "derive_benchmarks", tagged)
+    monkeypatch.setattr(cli, "derive_hr_benchmarks", hr)
+    result = runner.invoke(app, ["derive-benchmarks", "--out", str(tmp_path)])
+    expected_entered = ["tagged"] if fault == "profile" else []
+    problem = {
+        "wellness": "[wellness] must be a table",
+        "load": "[load] must be a table",
+        "toml": "is not valid TOML",
+        "profile": "is not valid TOML",
+    }[fault]
+    assert (
+        result.exit_code,
+        entered,
+        profile.read_bytes(),
+        ("athlete.toml" if fault == "profile" else "fitdocs.toml") in result.output,
+        problem in result.output,
+    ) == (2, expected_entered, before, True, True)
+
+
+@pytest.mark.parametrize("failure", ["hr", "tagged", "neither"])
+def test_hr_cli_either_stage_failures_control_exit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    _write_two_document_root(tmp_path)
+    if failure == "hr":
+        (tmp_path / "wellness").mkdir()
+        (tmp_path / "wellness/manifest.toml").write_text("[broken")
+    if failure == "tagged":
+        _write_workout(tmp_path, "malformed.md", kind="bad-tag")
+    result = runner.invoke(app, ["derive-benchmarks", "--out", str(tmp_path)])
+    assert (result.exit_code, "Heart-rate benchmarks written:" in result.stdout) == (
+        0 if failure == "neither" else 1,
+        True,
+    )
+
+
+@pytest.mark.parametrize("tty,pages", [(True, 2), (False, 2), (True, 0)])
+def test_hr_cli_progress_from_actual_engine_stays_on_terminal_stderr(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tty: bool, pages: int
+) -> None:
+    if pages:
+        _write_two_document_root(tmp_path)
+    observed = StringIO()
+
+    class Terminal(StringIO):
+        def isatty(self) -> bool:
+            return tty
+
+    stream = Terminal()
+    real_hr = derive_hr_benchmarks
+
+    def hr(
+        data_root: Path,
+        *,
+        settings: HrStageSettings,
+        dry_run: bool = False,
+        other_derived: Sequence[Benchmark] | None = None,
+        progress: Callable[[int, int], None] | None = None,
+    ) -> HrStageReport:
+        with monkeypatch.context() as patch:
+            patch.setattr(sys, "stderr", stream)
+            report = real_hr(
+                data_root,
+                settings=settings,
+                dry_run=dry_run,
+                other_derived=other_derived,
+                progress=progress,
+            )
+        observed.write(stream.getvalue())
+        return report
+
+    monkeypatch.setattr(cli, "derive_hr_benchmarks", hr)
+    result = runner.invoke(app, ["derive-benchmarks", "--out", str(tmp_path)])
+    assert (
+        result.exit_code,
+        observed.getvalue(),
+        "heart rate:" in result.stdout,
+        "heart rate:" in result.stderr,
+    ) == (
+        0,
+        "\rheart rate: 1/2\rheart rate: 2/2" if tty and pages else "",
+        False,
+        False,
+    )
+
+
+@pytest.mark.parametrize("dry_run", [True, False])
+def test_hr_cli_backreach_preview_write_then_noop(
+    tmp_path: Path, dry_run: bool
+) -> None:
+    _write_workout(tmp_path, "no-archive.md")
+    (tmp_path / PROFILE_FILENAME).write_text(
+        "[[benchmarks.athlete.resting_hr_bpm]]\nvalue = 49\n"
+        "measured_on = 2021-03-01\napplies_from = 2021-01-01\n"
+    )
+    write_series(
+        tmp_path,
+        (
+            SeriesValue(
+                date(2021, 1, 1) + timedelta(days=i),
+                Metric.RESTING_HR_BPM,
+                "garmin-export",
+                None,
+                57,
+                True,
+            )
+            for i in range(27)
+        ),
+    )
+    before = {
+        p.relative_to(tmp_path): p.read_bytes()
+        for p in tmp_path.rglob("*")
+        if p.is_file()
+    }
+    args = ["derive-benchmarks", "--out", str(tmp_path)] + (
+        ["--dry-run"] if dry_run else []
+    )
+    first = runner.invoke(app, args)
+    after = {
+        p.relative_to(tmp_path): p.read_bytes()
+        for p in tmp_path.rglob("*")
+        if p.is_file()
+    }
+    second = runner.invoke(app, args)
+    assert (
+        first.exit_code,
+        first.stdout.count("Back-reach resting_hr_bpm:"),
+        first.stdout.count("Takeover resting_hr_bpm:"),
+        first.stdout.count("The heart-rate timeline changed:"),
+        "before [2021-01-01, 2021-03-01); after [2021-01-01, 2021-01-14)"
+        in first.stdout,
+        first.stdout.count("Heart-rate benchmarks written: yes"),
+        before == after,
+        tuple(
+            sorted(
+                str(p)
+                for p in before.keys() | after.keys()
+                if before.get(p) != after.get(p)
+            )
+        ),
+        second.exit_code,
+        second.stdout.count("Back-reach resting_hr_bpm:"),
+        second.stdout.count("Takeover resting_hr_bpm:"),
+        second.stdout.count("The heart-rate timeline changed:"),
+    ) == (
+        0,
+        1,
+        1,
+        1,
+        True,
+        int(not dry_run),
+        dry_run,
+        () if dry_run else (PROFILE_FILENAME,),
+        0,
+        int(dry_run),
+        int(dry_run),
+        int(dry_run),
+    )
+
+
+@pytest.mark.parametrize("role", ["maximum", "resting", "threshold"])
+@pytest.mark.parametrize(
+    "origin", [None, BenchmarkSourceKind.MEASURED, BenchmarkSourceKind.DERIVED]
+)
+def test_hr_report_associates_each_inconsistency_origin(
+    monkeypatch: pytest.MonkeyPatch, role: str, origin: BenchmarkSourceKind | None
+) -> None:
+    origin_order = (None, BenchmarkSourceKind.MEASURED, BenchmarkSourceKind.DERIVED)
+    roles = ("maximum", "resting", "threshold")
+    origin_by_role = {
+        name: origin_order[(origin_order.index(origin) + index - roles.index(role)) % 3]
+        for index, name in enumerate(roles)
+    }
+    entries = {
+        "maximum": _hr_entry(_MAX, 197, "2017-04-03", origin=origin_by_role["maximum"]),
+        "resting": _hr_entry(_REST, 63, "2018-05-04", origin=origin_by_role["resting"]),
+        "threshold": _hr_entry(
+            BenchmarkKind.LTHR_BPM,
+            209,
+            "2019-06-05",
+            origin=origin_by_role["threshold"],
+            discipline=Sport.RIDE,
+        ),
+    }
+    finding = replace(
+        _distinct_hr_report().inconsistencies[0],
+        max_hr=entries["maximum"],
+        resting_hr=entries["resting"],
+        lthr=entries["threshold"],
+        discipline=Sport.RIDE,
+    )
+    output = _render_hr(
+        monkeypatch, replace(_distinct_hr_report(), inconsistencies=(finding,))
+    )
+    origin_text = {
+        None: "hand-recorded",
+        BenchmarkSourceKind.MEASURED: "measured",
+        BenchmarkSourceKind.DERIVED: "derived",
+    }[origin]
+    facts = {
+        "maximum": "197 bpm measured 2017-04-03",
+        "resting": "63 bpm measured 2018-05-04",
+        "threshold": "209 bpm measured 2019-06-05",
+    }
+    assert (
+        f"{role}={facts[role]} ({origin_text})" in output,
+        "discipline=Ride" in output,
+    ) == (True, True)
+
+
+def test_hr_report_keeps_collection_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    output = _render_hr(monkeypatch, _distinct_hr_report())
+    lines = [
+        line
+        for line in output.splitlines()
+        if line.startswith(
+            (
+                "Resting source:",
+                "Takeover ",
+                "Back-reach ",
+                "Inconsistency ",
+                "Skipped ",
+                "Failure ",
+                "Note:",
+            )
+        )
+    ]
+    assert [
+        line.split("; before ", 1)[1]
+        if line.startswith("Back-reach ")
+        else line.split(";", 1)[0]
+        for line in lines
+    ] == [
+        "Resting source: intervals-icu",
+        "Resting source: garmin-export",
+        "Takeover resting_hr_bpm: 57 bpm measured 2020-01-14 "
+        "(derived) supersedes your 49 bpm measured 2020-06-20 "
+        "(measured",
+        "Takeover resting_hr_bpm: 61 bpm measured 2020-02-14 "
+        "(derived) supersedes your 53 bpm measured 2020-07-24 "
+        "(hand-recorded",
+        "Takeover max_hr_bpm: 193 bpm measured 2021-03-16 (derived) "
+        "supersedes your 199 bpm measured 2018-07-21 (hand-recorded)",
+        "Takeover max_hr_bpm: 187 bpm measured 2021-04-17 (derived) "
+        "supersedes your 201 bpm measured 2022-08-22 (hand-recorded",
+        "[2019-12-01, 2020-06-20); after [2019-12-01, 2020-01-14); "
+        "recompute load to score days outside the hand-recorded "
+        "cover with the derived values.",
+        "[2019-12-01, 2019-12-01) (empty); after [2019-12-01, "
+        "2020-02-14); recompute load to score days outside the "
+        "hand-recorded cover with the derived values.",
+        "[2021-01-02, 2021-04-17); after [2021-01-02, 2021-01-02) "
+        "(empty); recompute load to score days outside the "
+        "hand-recorded cover with the derived values.",
+        "Inconsistency threshold_outside_reserve: [2021-10-03, open)",
+        "Inconsistency max_not_above_rest: [2022-10-01, 2022-11-02)",
+        "Skipped workouts/[missing].md: archive_missing -- missing [archive]",
+        "Skipped " + _LONG_PAGE + ": archive_undecodable -- decode [problem]",
+        "Failure resting_hr_bpm [wellness/[manifest].toml]: read [failed]",
+        "Failure max_hr_bpm [" + _LONG_PAGE + "]: access [denied]",
+        "Failure max_hr_bpm [workouts/[third-failure].md]: read [blocked]",
+        "Note: first [note]",
+        "Note: second [note]",
+    ]
+
+
+def test_hr_report_empty_collections_add_no_notices(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    report = HrStageReport(
+        0,
+        0,
+        tuple((r, 0) for r in NoEvidenceReason),
+        (),
+        (),
+        (),
+        (),
+        (),
+        (),
+        (),
+        (),
+        False,
+        False,
+    )
+    output = _render_hr(monkeypatch, report)
+    assert (
+        tuple(
+            line
+            for line in output.splitlines()
+            if line.startswith(
+                (
+                    "Resting source:",
+                    "Takeover ",
+                    "Back-reach ",
+                    "Inconsistency ",
+                    "Skipped ",
+                    "Failure ",
+                    "Note:",
+                    "The heart-rate timeline changed:",
+                )
+            )
+        )
+        == ()
+    )
+
+
+def test_hr_cli_prints_both_tables_with_separate_counts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_two_document_root(tmp_path)
+    real_tagged, real_hr = derive_benchmarks, derive_hr_benchmarks
+
+    def tagged(*args: Any, **kwargs: Any) -> DeriveReport:
+        return replace(real_tagged(*args, **kwargs), considered=89, tagged=43)
+
+    def hr(*args: Any, **kwargs: Any) -> HrStageReport:
+        return replace(real_hr(*args, **kwargs), considered=101, with_evidence=37)
+
+    monkeypatch.setattr(cli, "derive_benchmarks", tagged)
+    monkeypatch.setattr(cli, "derive_hr_benchmarks", hr)
+    result = runner.invoke(app, ["derive-benchmarks", "--out", str(tmp_path)])
+    tagged_text, hr_text = result.stdout.split("fitdocs derive-benchmarks: heart rate")
+    assert (
+        result.exit_code,
+        re.findall(r"│ Considered\s+│\s+(\d+)", tagged_text),
+        re.findall(r"│ Tagged\s+│\s+(\d+)", tagged_text),
+        re.findall(r"│ Considered\s+│\s+(\d+)", hr_text),
+        re.findall(r"│ With evidence\s+│\s+(\d+)", hr_text),
+    ) == (0, ["89"], ["43"], ["101"], ["37"])
+
+
+def test_hr_report_retained_partition_has_no_changes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    report = _distinct_hr_report()
+    kept = replace(report.kinds[0], added=(), removed=(), kept=True)
+    output = _render_hr(monkeypatch, replace(report, kinds=(kept, report.kinds[1])))
+    rows = [
+        " | ".join(part.strip() for part in line.strip("│ ").split("│"))
+        for line in output.splitlines()
+        if line.startswith("│") and "resting_hr_bpm " in line
+    ]
+    assert rows == [
+        "resting_hr_bpm entries | 31",
+        "resting_hr_bpm added | 0",
+        "resting_hr_bpm removed | 0",
+        "resting_hr_bpm kept | yes",
+    ]
+
+
+@pytest.mark.parametrize("dry_run", [True, False])
+@pytest.mark.parametrize("target", ["settings", "profile"])
+def test_hr_cli_invalid_utf8_configuration_names_file_and_problem(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, target: str, dry_run: bool
+) -> None:
+    import fitdocs.performance.engine as tagged_engine
+
+    _write_two_document_root(tmp_path)
+    profile = tmp_path / PROFILE_FILENAME
+    profile.write_bytes(b"max_hr_bpm = 198\n")
+    settings_file = tmp_path / "fitdocs.toml"
+    settings_file.write_bytes(b"")
+    proposal = derive_benchmarks(tmp_path, dry_run=True)
+    target_path = profile if target == "profile" else settings_file
+    target_path.write_bytes(
+        b"max_hr_bpm = \xff\n"
+        if target == "profile"
+        else b'[wellness]\nprecedence = ["garmin-\xff"]\n'
+    )
+    before = _hr_configuration_tree(tmp_path)
+    entered: list[str] = []
+    real_settings = load_settings_document
+    real_profile = load_profile
+
+    def settings_reader(root: Path) -> Mapping[str, object]:
+        entered.append("settings-reader")
+        return real_settings(root)
+
+    def profile_reader(root: Path) -> Any:
+        entered.append("profile-reader")
+        return real_profile(root)
+
+    def tagged(*args: Any, **kwargs: Any) -> DeriveReport:
+        entered.append("tagged")
+        return derive_benchmarks(*args, **kwargs)
+
+    def hr(*args: Any, **kwargs: Any) -> HrStageReport:
+        entered.append("hr")
+        return derive_hr_benchmarks(*args, **kwargs)
+
+    monkeypatch.setattr(cli, "load_settings_document", settings_reader)
+    monkeypatch.setattr(tagged_engine, "load_profile", profile_reader)
+    monkeypatch.setattr(cli, "derive_benchmarks", tagged)
+    monkeypatch.setattr(cli, "derive_hr_benchmarks", hr)
+    result = runner.invoke(
+        app,
+        ["derive-benchmarks", "--out", str(tmp_path)]
+        + (["--dry-run"] if dry_run else []),
+    )
+    expected_entered = ["settings-reader"]
+    if target == "profile":
+        expected_entered += ["tagged", "profile-reader"]
+    assert (
+        bool(proposal.accepted),
+        proposal.written,
+        result.exit_code,
+        str(target_path) in result.output,
+        "'utf-8' codec can't decode byte 0xff" in result.output,
+        "invalid start byte" in result.output,
+        entered,
+        _hr_configuration_tree(tmp_path),
+    ) == (True, False, 2, True, True, True, expected_entered, before)
+
+
+def _hr_configuration_tree(root: Path) -> tuple[tuple[object, ...], ...]:
+    entries: list[tuple[object, ...]] = []
+    for path in [root, *sorted(root.rglob("*"))]:
+        status = path.stat()
+        entries.append(
+            (
+                str(path.relative_to(root)),
+                status.st_mode,
+                status.st_mtime_ns,
+                status.st_ctime_ns,
+                path.read_bytes() if path.is_file() else None,
+            )
+        )
+    return tuple(entries)
+
+
+@pytest.mark.parametrize("dry_run", [True, False])
+@pytest.mark.parametrize("phase", ["settings", "tagged", "hr"])
+@pytest.mark.parametrize("error_type", [ValueError, RuntimeError])
+def test_hr_cli_unrelated_runtime_errors_propagate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    dry_run: bool,
+    phase: str,
+    error_type: type[Exception],
+) -> None:
+    _write_two_document_root(tmp_path)
+    problem = error_type("unrelated runtime failure")
+
+    def fail(*args: Any, **kwargs: Any) -> Any:
+        raise problem
+
+    name = {
+        "settings": "load_settings_document",
+        "tagged": "derive_benchmarks",
+        "hr": "derive_hr_benchmarks",
+    }[phase]
+    monkeypatch.setattr(cli, name, fail)
+    result = runner.invoke(
+        app,
+        ["derive-benchmarks", "--out", str(tmp_path)]
+        + (["--dry-run"] if dry_run else []),
+    )
+    assert (result.exit_code, result.exception, result.output) == (1, problem, "")

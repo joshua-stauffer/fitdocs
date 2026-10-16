@@ -500,7 +500,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
     green; Implementation Notes list each work and the status reached.
   - _Requirements: 7.6_
 
-- [ ] 3. The stage, `check` and the command
+- [x] 3. The stage, `check` and the command
 
 - [x] 3.1 Load the stage's settings and its resting-heart-rate evidence from the wellness series
   - Verify the upstream names listed under Upstream Prerequisites first.
@@ -610,7 +610,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Boundary: AuditHeartRate_
   - _Depends: 2.7_
 
-- [ ] 3.5 Run both stages from `derive-benchmarks` and print the heart-rate report
+- [x] 3.5 Run both stages from `derive-benchmarks` and print the heart-rate report
   - Implement design § DeriveCommand: the settings preflight before either
     stage (`[wellness]` and `[load]` read once); the tagged-effort stage
     with the preflight's load settings; the heart-rate stage with the
@@ -817,6 +817,8 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 4.1, 4.7_
 
 ## Implementation Notes
+
+- 3.5: The command preflights shared settings, runs TAGGED then HR with the accepted tagged entries, prints both reports and combines failure status. HR notices preserve complete collections, origin/date associations, actual before/after half-open covers and a changed-only recompute hint; progress uses terminal stderr. Real invalid-UTF8 settings/profile files now become file-specific configuration errors before writes, using simple phase context without another profile read. Generic runtime errors and save failures remain unchanged; broader typed-reader decoding normalization is a queued follow-up. The tagged renderer, exact one-load-settings-read test and all earlier assertions remain intact except the two licensed discovery/archive-snapshot changes. Independent round-2 review reproduced 200 assertion-red/restored-green observations plus one honest colorless-highlight green control, caught three additional faults across four observations and verified real configuration/save controls. Controller fresh 2,083 scoped tests, Ruff (770), configured mypy (585), exact hashes and diff checks passed. Colored-terminal highlighting remains outside the colorless fixture's finite proof; production disables highlighting.
 
 - 3.4: `check` reads the profile once for current takeover and complete inconsistency findings, including the chosen root-only maximum/resting policy. A malformed, newer or non-UTF8 profile becomes one unreadable finding while other checks continue; unrelated implementation errors propagate. Existing outer wellness reads remain active, while the HR helper opens only the profile. Independent round-3 review reproduced all 346 claimed fault observations and caught five additional faults across 65 state observations; all prior fixtures remain intact. Stable input-tree snapshots cover existing file/directory bytes, types, permissions and write-related timestamps, excluding access time. Controller fresh verification passed 1,844 audit/CLI/HR tests, Ruff (770 files), configured mypy (585 files) and diff checks. CLI derivation wiring remains task 3.5.
 
