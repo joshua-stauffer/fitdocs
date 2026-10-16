@@ -1,15 +1,15 @@
 ---
 id: 2026-10-13-derive-benchmarks-newer-profile-schema-may-traceback
-title: "fitdocs derive-benchmarks likely ends in a Python traceback, not exit 2, when athlete.toml declares a profile_version newer than this fitdocs supports (verify first)"
+title: "derive-benchmarks does not report profile schema-version faults as configuration errors"
 status: open
 importance: medium
-importance_why: An athlete who shares one data root between two fitdocs versions (an install and a checkout, or a roll-back) gets a traceback from a command whose contract is exit 2 with a message; the same call path is about to grow a second stage in hr-derivation.
+importance_why: A newer or invalid profile version bypasses the command's exit-2 diagnostic, including after the HR stage was added.
 effort: S
 kind: bug
 area: src/fitdocs/cli.py, src/fitdocs/load/profile.py, src/fitdocs/athlete.py, hr-derivation
 created: 2026-10-13
 surfaced_by: /kiro-spec-batch phase 12 (hr-derivation spec, controller queue triage)
-pinned_at: 86cdf14
+pinned_at: 8e8a5b2
 resume_command: "do: first reproduce (fitdocs derive-benchmarks --out <scratch root> over an athlete.toml with profile_version = 99 and no other content; expect exit 2 and a one-line message, suspect a traceback), then add AthleteFileError to the except clause of derive_benchmarks_command in src/fitdocs/cli.py, add the test to tests/test_cli_derive.py, and fix hr-derivation design.md:1078-1079 the same way [queue: .kiro/queue/2026-10-13-derive-benchmarks-newer-profile-schema-may-traceback.md]"
 context:
   - src/fitdocs/cli.py
@@ -24,8 +24,10 @@ blocked_by: []
 
 ## What
 
-Static reading says `fitdocs derive-benchmarks` does not map a newer-schema
-`athlete.toml` to a configuration error. **Not run: verify first.**
+Controller verification on 2026-10-16 confirms that `fitdocs
+derive-benchmarks` does not map a newer or invalid profile schema version
+to a configuration error. The original static concern below is now
+reproduced, and hr-derivation task 3.5 is reopened for its local repair.
 
 - The command catches only `ProfileError` and `SettingsError`.
 - `AthleteProfile.__post_init__` calls `check_schema_version` before it parses
@@ -50,7 +52,8 @@ second stage, and that spec's CLI section repeats the narrow handler.
 
 ## Evidence
 
-Read at `86cdf14`; nothing run.
+Original static evidence read at `86cdf14`; those original observations
+were not executed at that time:
 
 - `src/fitdocs/cli.py:1611-1614` -- `try: report = derive_benchmarks(...)`
   `except (ProfileError, SettingsError) as exc: _config_error(str(exc))`.
@@ -74,6 +77,26 @@ Read at `86cdf14`; nothing run.
 - Related, not the same: `.kiro/queue/2026-07-26-profileerror-redundant-in-config-errors.md`
   (the `load` handler's tuple) and
   `.kiro/queue/2026-10-05-index-refresh-fails-whole-on-unloadable-athlete-toml.md`.
+
+Controller runtime verification at `8e8a5b2` on 2026-10-16 used a temporary
+canonical pytest probe under `tests/`, loading the root bytecode-purge
+conftest:
+
+```text
+UV_CACHE_DIR=/private/tmp/fitdocs-hr-uv-cache UV_OFFLINE=true uv run --no-sync pytest tests/test_hr_schema_queue_probe.py -q --tb=long
+2 failed in 0.30s
+profile_version = 99: expected exit 2 and file/problem diagnostic; observed exit 1, AthleteFileError, empty stdout/stderr
+profile_version = true: expected exit 2 and file/problem diagnostic; observed exit 1, AthleteFileError, empty stdout/stderr
+```
+
+Each case wrote only the named `profile_version` to a scratch
+`athlete.toml` and invoked the real command through `CliRunner`. Both
+failed at the intended configuration-contract assertion, and both kept
+profile bytes unchanged. Temporary test removed. Local source and log:
+`/private/tmp/hr-schema-queue-probe.py` and
+`/private/tmp/hr-schema-queue-probe.log`. Current live source still raises
+the base class at `athlete.py:77`/`:84`, called before benchmark parsing
+by `AthleteProfile.__post_init__`; the command catches only the subclass.
 
 ## How to pick it up
 
