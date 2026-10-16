@@ -1123,6 +1123,7 @@ _REQUIRED_ENTRY_POINT_LINKS = [
     "dashboards.md",
     "../CONTRIBUTING.md",
     "wellness.md",
+    "recovery.md",
 ]
 
 

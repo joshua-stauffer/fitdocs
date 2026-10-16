@@ -45,6 +45,9 @@ inside an existing markdown wiki.
    page — a fitness/fatigue/form model and chart built from the training
    load already recorded on your workout documents — with no new data to
    enter and no `.fit` file read.
+   `fitdocs recovery` puts wellness signals against their own per-source
+   baselines beside the load history; see
+   [Recovery](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/recovery.md).
 5. **Render training blocks.** `fitdocs plan` renders one block page per
    source in your plan directory, with one planned-workout page per row
    underneath it — rebuilt from your plan sources and reconciled against
@@ -209,7 +212,8 @@ see the
 [fitdocs Ownership Contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md).
 
 In short: fitdocs owns `workouts/`, `workouts/assets/`, `history/`,
-`history/assets/`, `blocks/`, `fit-archive/`, `.cache/`, and `.fitdocs/`
+`history/assets/`, `recovery/`, `recovery/assets/`, `blocks/`, `fit-archive/`,
+`.cache/`, and `.fitdocs/`
 under your data root (plus any location your `fitdocs.toml` settings
 configure it to write into — the [Inbox](#inbox)'s `path` and
 `processed_dir` are the first example), and writes nowhere else. `history/`

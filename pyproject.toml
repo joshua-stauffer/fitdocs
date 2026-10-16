@@ -49,6 +49,7 @@ Analytics = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/analytics
 Dashboards = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/dashboards.md"
 
 Wellness = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/wellness.md"
+Recovery = "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/recovery.md"
 
 [project.scripts]
 fitdocs = "fitdocs.cli:app"
