@@ -7,7 +7,7 @@ over real temporary data roots (built with the workout-docs pipeline via
 * ``fitdocs check [--out PATH]`` resolves the data root through the existing
   resolver, runs the read-only :func:`fitdocs.audit.audit` pass, and prints a
   summary table plus a per-finding detail listing (subject, detail, remedy)
-  -- never a tile store, an athlete profile, or the load pass.
+  -- reads athlete.toml for benchmark findings; runs no load pass.
 * Exit codes map onto the existing contract (Req 8.7): ``0`` when nothing is
   found, ``1`` when the audit reports one or more findings, ``2`` when the
   data root cannot be resolved -- and in that last case, nothing is scanned:
@@ -159,7 +159,7 @@ def test_check_clean_tree_exits_zero_with_no_findings_line(tmp_path: Path) -> No
     assert "Documents inspected" in result.output
 
 
-# --- never a tile store, athlete profile, or load pass (design constraint) --
+# --- no load pass (design constraint) ---------------------------------------
 
 
 def test_check_never_runs_the_load_pass(
@@ -331,3 +331,105 @@ def test_check_wellness_output(tmp_path: Path, case: str, field: str) -> None:
     expected = _stage_wellness(tmp_path, case)
     result = runner.invoke(app, ["check", "--out", str(tmp_path)])
     assert result.output.count("  " + expected[field] + "\n") == 1
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "dual",
+        "later-hand",
+        "later-derived",
+        "back-reach",
+        "absent",
+        "inconsistent",
+        "unreadable",
+    ],
+)
+def test_check_hr_exit(tmp_path: Path, case: str) -> None:
+    from fitdocs.declaration import ensure_declarations
+    from tests.test_audit import _stage_hr_inconsistent, _stage_hr_takeover
+
+    if case == "inconsistent":
+        _stage_hr_inconsistent(tmp_path, "equal")
+    elif case == "unreadable":
+        ensure_declarations(tmp_path)
+        (tmp_path / "athlete.toml").write_text("profile_version=999\n")
+    elif case == "absent":
+        ensure_declarations(tmp_path)
+    else:
+        _stage_hr_takeover(tmp_path, case)
+    result = runner.invoke(app, ["check", "--out", str(tmp_path)])
+    assert result.exit_code == (
+        1 if case in ("dual", "inconsistent", "unreadable") else 0
+    )
+
+
+@pytest.mark.parametrize("case", ["dual", "inconsistent"])
+@pytest.mark.parametrize("field", [1, 2, 3])
+def test_check_hr_output(tmp_path: Path, case: str, field: int) -> None:
+    from tests.test_audit import _stage_hr_inconsistent, _stage_hr_takeover
+
+    expected = (
+        _stage_hr_takeover(tmp_path, "dual")
+        if case == "dual"
+        else _stage_hr_inconsistent(tmp_path, "equal")
+    )
+    result = runner.invoke(app, ["check", "--out", str(tmp_path)])
+    assert [
+        result.output.count("  " + record[field] + "\n") for record in expected
+    ] == ([2, 2] if case == "dual" and field == 1 else [1] * len(expected))
+
+
+@pytest.mark.parametrize("field", [1, 2, 3])
+def test_check_hr_period_output(tmp_path: Path, field: int) -> None:
+    from tests.test_audit import _stage_hr_periods
+
+    expected = _stage_hr_periods(tmp_path)
+    result = runner.invoke(app, ["check", "--out", str(tmp_path)])
+    assert [
+        result.output.count("  " + record[field] + "\n") for record in expected
+    ] == ([4] * 4 if field in (1, 3) else [1] * 4)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "athlete.toml",
+        (
+            "athlete.toml declares profile_version = 999, which is newer "
+            "than the schema version this fitdocs supports (2); install "
+            "a newer fitdocs to read it"
+        ),
+        (
+            "fix `athlete.toml`; load and derive-benchmarks refuse to "
+            "run until it is valid"
+        ),
+    ],
+)
+def test_check_hr_unreadable_output(tmp_path: Path, field: str) -> None:
+    from fitdocs.declaration import ensure_declarations
+
+    ensure_declarations(tmp_path)
+    (tmp_path / "athlete.toml").write_text("profile_version=999\n")
+    result = runner.invoke(app, ["check", "--out", str(tmp_path)])
+    assert result.output.count("  " + field + "\n") == 1
+
+
+def test_check_hr_decode_failure_continues(tmp_path: Path) -> None:
+    from tests.test_audit import _HR_UNREADABLE_REMEDY, _hr_decode_fixture
+
+    reason = _hr_decode_fixture(tmp_path)
+    result = runner.invoke(app, ["check", "--out", str(tmp_path)])
+    assert (
+        result.exit_code,
+        [
+            result.output.count("  " + field + "\n")
+            for field in (
+                "athlete.toml",
+                reason,
+                _HR_UNREADABLE_REMEDY,
+                "workouts/old.md",
+            )
+        ],
+        type(result.exception).__name__,
+    ) == (1, [1, 1, 1, 1], "SystemExit")

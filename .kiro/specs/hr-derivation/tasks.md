@@ -587,7 +587,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 1.2, 1.3, 1.4, 1.10, 2.8, 4.6, 4.7, 4.9, 5.7, 5.8, 6.1, 8.2, 8.3, 9.3, 10.4, 10.6_
   - _Depends: 1.2, 2.6, 2.7, 3.1, 3.2_
 
-- [ ] 3.4 (P) Report heart-rate benchmark findings in `fitdocs check`
+- [x] 3.4 (P) Report heart-rate benchmark findings in `fitdocs check`
   - Implement design § AuditHeartRate: `check` reads `athlete.toml`; an
     unreadable profile is one finding and the other checks still run;
     current takeovers and inconsistency periods become findings with the
@@ -817,6 +817,8 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 4.1, 4.7_
 
 ## Implementation Notes
+
+- 3.4: `check` reads the profile once for current takeover and complete inconsistency findings, including the chosen root-only maximum/resting policy. A malformed, newer or non-UTF8 profile becomes one unreadable finding while other checks continue; unrelated implementation errors propagate. Existing outer wellness reads remain active, while the HR helper opens only the profile. Independent round-3 review reproduced all 346 claimed fault observations and caught five additional faults across 65 state observations; all prior fixtures remain intact. Stable input-tree snapshots cover existing file/directory bytes, types, permissions and write-related timestamps, excluding access time. Controller fresh verification passed 1,844 audit/CLI/HR tests, Ruff (770 files), configured mypy (585 files) and diff checks. CLI derivation wiring remains task 3.5.
 
 - 3.4 resumed (2026-10-16): The maintainer chose to report the underlying maximum/resting inconsistency once and update requirement 9.2. Its explicit maximum > resting condition now matches Inspect's existing otherwise branch, final decision 14 and task 2.7; no Inspect source or arithmetic change is needed. The historical blocker below is resolved. Audit coverage must include equal and lower maximum cases with recorded thresholds and assert only the underlying finding, while threshold findings remain required per discipline when maximum > resting.
 

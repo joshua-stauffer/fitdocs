@@ -15,8 +15,8 @@ no readable page lists and no hold names) and
 Read-only, and offline
 -----------------------
 This module opens files only to read them (workout documents, declarations and
-the hold record, wellness settings and series files) and lists the activity
-and wellness archive directories. It never writes a byte,
+the hold record, athlete.toml, wellness settings and series files) and lists
+the activity and wellness archive directories. It never writes a byte,
 never creates a directory (including ``workouts/`` itself when absent), never
 opens a ``.fit`` source, and never touches the network (Req 8.1, 8.8). Every
 reader it composes -- :mod:`fitdocs.contract`'s pure frontmatter/version/key
@@ -75,6 +75,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from fitdocs.athlete import ATHLETE_FILE, AthleteFileError
+from fitdocs.benchmarks import Benchmark
 from fitdocs.contract import (
     DOC_VERSION,
     InvalidEffortTag,
@@ -93,10 +95,12 @@ from fitdocs.declaration import (
 from fitdocs.docio import REMEDY_REPLACE_SYMLINK as _REMEDY_REPLACE_SYMLINK
 from fitdocs.docio import SYMLINK_DETAIL as _SYMLINK_DETAIL
 from fitdocs.docmerge import RegionError, extract_regions
+from fitdocs.hr_benchmarks.inspect import current_takeovers, inconsistencies
 from fitdocs.identity.holds import HeldSource, HoldRecordError, load_holds
 from fitdocs.identity.pages import page_record
 from fitdocs.identity.planning import PageIndex, PageRecord, duplicate_sets
 from fitdocs.layout import ARCHIVE_DIR, WORKOUTS_DIR, held_path, source_ref
+from fitdocs.load.profile import load_profile
 from fitdocs.wellness.inspect import WellnessProblemKind, inspect_wellness
 
 __all__ = [
@@ -167,6 +171,10 @@ class FindingKind(StrEnum):
 
     WELLNESS_CONFLICT = "wellness_conflict"
     """A conflicting duplicate recorded by the last wellness rebuild (14.3)."""
+
+    HR_BENCHMARK_TAKEOVER = "hr_benchmark_takeover"
+    HR_BENCHMARK_INCONSISTENT = "hr_benchmark_inconsistent"
+    ATHLETE_PROFILE_UNREADABLE = "athlete_profile_unreadable"
 
 
 @dataclass(frozen=True)
@@ -600,6 +608,92 @@ def _wellness_findings(data_root: Path) -> tuple[Finding, ...]:
     return tuple(findings)
 
 
+def _benchmark_entry_detail(entry: Benchmark) -> str:
+    origin = (
+        "derived"
+        if entry.source is not None and entry.source.is_derived
+        else "hand-recorded"
+    )
+    return f"{entry.kind.value} {entry.value:g} bpm of {entry.measured_on} ({origin})"
+
+
+def _benchmark_findings(data_root: Path) -> tuple[Finding, ...]:
+    """Read profile findings without opening their cited evidence files."""
+    try:
+        benchmarks = load_profile(data_root).benchmarks
+    except (AthleteFileError, OSError, UnicodeDecodeError) as exc:
+        return (
+            Finding(
+                kind=FindingKind.ATHLETE_PROFILE_UNREADABLE,
+                subject=ATHLETE_FILE,
+                detail=str(exc),
+                remedy=(
+                    "fix `athlete.toml`; load and derive-benchmarks refuse to "
+                    "run until it is valid"
+                ),
+            ),
+        )
+
+    findings: list[Finding] = []
+    for takeover in current_takeovers(benchmarks):
+        derived, hand = takeover.derived, takeover.superseded
+        source = derived.source
+        evidence = source.inputs if source is not None else None
+        if source is not None and source.document is not None:
+            evidence = f"{evidence}; document: {source.document}"
+        if source is not None and source.series is not None:
+            evidence = f"{evidence}; series: {source.series}"
+        applied = (
+            "applied by measurement date"
+            if hand.measured_on <= derived.measured_on
+            else f"applied from {hand.applies_from}"
+        )
+        kind = takeover.kind.value
+        findings.append(
+            Finding(
+                kind=FindingKind.HR_BENCHMARK_TAKEOVER,
+                subject=ATHLETE_FILE,
+                detail=(
+                    f"{kind}: derived {derived.value:g} bpm from {derived.measured_on} "
+                    f"takes over from your hand-recorded {hand.value:g} bpm "
+                    f"of {hand.measured_on} ({applied}); evidence: {evidence}"
+                ),
+                remedy=(
+                    f"to keep your own value, record a new {kind} entry by hand "
+                    "(it wins from its date); to accept the derived value, leave it "
+                    f"— this listing ends when a later {kind} entry exists"
+                ),
+            )
+        )
+    for period in inconsistencies(benchmarks):
+        end = str(period.ends_before) if period.ends_before is not None else "open"
+        discipline = (
+            f" {period.discipline.value}" if period.discipline is not None else ""
+        )
+        entries = [
+            _benchmark_entry_detail(period.max_hr),
+            _benchmark_entry_detail(period.resting_hr),
+        ]
+        if period.lthr is not None:
+            entries.append(_benchmark_entry_detail(period.lthr))
+        findings.append(
+            Finding(
+                kind=FindingKind.HR_BENCHMARK_INCONSISTENT,
+                subject=ATHLETE_FILE,
+                detail=(
+                    f"{period.violation.value} [{period.starts_on}, "
+                    f"{end}){discipline}: "
+                )
+                + "; ".join(entries),
+                remedy=(
+                    "heart-rate load is not computed in this period; record the "
+                    "correct value by hand for the one that is wrong"
+                ),
+            )
+        )
+    return tuple(findings)
+
+
 def audit(data_root: Path) -> AuditReport:
     """Scan ``data_root`` against the current contract without writing anything.
 
@@ -628,9 +722,9 @@ def audit(data_root: Path) -> AuditReport:
     Findings are sorted by :attr:`Finding.subject` then :attr:`Finding.kind`
     for a deterministic report; a clean tree yields ``findings == ()``. Opens
     no ``.fit`` file and performs no network access (Req 8.8): only the
-    documents' own text, declarations, the hold record, wellness settings and
-    series files are read, and ``fit-archive/`` is listed, never opened. After
-    the document scan it
+    documents' own text, declarations, the hold record, athlete.toml, wellness
+    settings and series files are read, and ``fit-archive/`` is listed, never
+    opened. After the document scan it
     adds the identity findings: one per hold-record entry (or one naming an
     unreadable record, after which the scan continues), one per archived source
     no readable page lists and no hold names, and one per page of each
@@ -681,6 +775,7 @@ def audit(data_root: Path) -> AuditReport:
     findings.extend(_orphan_findings(data_root, records, held))
     findings.extend(_duplicate_findings(records))
     findings.extend(_wellness_findings(data_root))
+    findings.extend(_benchmark_findings(data_root))
 
     findings.sort(key=lambda finding: (finding.subject, finding.kind))
     return AuditReport(findings=tuple(findings), documents=documents)
