@@ -632,7 +632,7 @@ literal pins, one per lander) and every head-paragraph pin of
 
 - [ ] 4. The run, the command and the closed boundary
 
-- [ ] 4.1 Read, compute, write and report a recovery run
+- [x] 4.1 Read, compute, write and report a recovery run
   - `engine.py` per design § Engine: `FileOutcome`, `FileResult`,
     `RecoveryReport`, `run_recovery`; the series read first; history settings
     and methodology errors raised before any write; the panel limit read
@@ -1400,3 +1400,6 @@ import row; the existing guarded golden main() regenerated its appended output.
 The six original section headings and every other accepted3.3 function, fixture,
 helper, decorator and numeric/date/zero/range assertion remain intact. No
 follow-ups were identified. Feature GO and remaining mandatory tasks remain open.
+
+- 4.1 accepted after independent review and fresh parent completion gate: public series/history pipeline, live panel limit, report records, recovery-only atomic writes, foreign regular/nonregular occupants and symlink referents, known-only stale cleanup and byte idempotency. Guard regular files before any read so FIFOs remain foreign without blocking. Final full original: 22,188 passed / 44 expected skips; engine93, assigned scope2329, Ruff767/mypy582 clean.
+- 4.1 fixture lesson: inspect metadata on every report return branch and the runtime files tuple; single-chart failures and one stale chart cannot pin multi-chart continuation or multiple-removal order. Seven appended cases closed all four independent review findings while preserving every old test byte. Fresh review replayed192 valid faults and three allowed variants; all316 normative assertion roles pinned. Exception-only regression/guard/fixture/reference credit stays separate. Parent gate: /private/tmp/recovery-task-4.1-verification.json; reports and all6,341 task/review artifacts sealed. CLI remains the sole intended production engine caller and is added by4.2.

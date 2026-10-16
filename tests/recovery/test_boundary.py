@@ -96,6 +96,7 @@ _ALLOWED_IMPORTS = {
     },
     "engine": {
         "__future__",
+        "datetime",
         "dataclasses",
         "enum",
         "os",
