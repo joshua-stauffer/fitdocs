@@ -295,9 +295,9 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - _Requirements: 7.1, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 9.1, 9.4, 9.5, 9.6, 9.7, 11.4, 12.1, 12.2_
   - _Boundary: Reduce_
 
-- [ ] 3. Core: the streaming reader and the night-based rules
+- [x] 3. Core: the streaming reader and the night-based rules
 
-- [ ] 3.1 (P) Recognize exports and stream the main export document's items
+- [x] 3.1 (P) Recognize exports and stream the main export document's items
   - `reader.py` per design § Reader: `MAIN_DOCUMENT`, `CDA_SUFFIX`,
     `main_member`, `looks_like_export_document`, `MainDocument`,
     `open_main_document`, `iter_items` (counting reader with the progress
@@ -340,7 +340,6 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - _Requirements: 1.1, 1.2, 1.5, 2.1, 2.2, 2.3, 2.4, 3.5, 5.6_
   - _Boundary: Reader_
   - _Depends: 2.1_
-  - _Blocked: both additional authorized debug rounds exhausted (four total); final review rejects missing STEP_COUNT metadata, SleepAnalysis source-version and lowercase DOCTYPE-only recognition discrimination. Source and 191-case draft preserved; both tasks have finished their authorized additional rounds and are parked for regrouping._
 
 - [x] 3.2 (P) Assign sleep to nights and take HRV, respiration and SpO2 from the readings taken asleep
   - Complete `reduce.py` with the `SLEEP_NIGHT` and `ASLEEP_MEAN` rules
@@ -424,7 +423,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - **Observable:** full `uv run pytest` green (integration point).
   - _Requirements: 1.3, 1.4, 3.6, 5.8, 6.1, 6.2, 6.3, 6.5, 7.2_
   - _Depends: 2.3, 3.1, 3.2_
-  - _Blocked: waiting on Reader prerequisite 3.1; 3.2 is approved and verified. Format registration has not started; maintainer requested regroup before integration._
+  - _Deferred: prerequisites 2.3, 3.1 and 3.2 are complete. Current authorization ends after Reader acceptance; regroup before starting format integration._
 
 - [ ] 4.2 Import exports through the drain end to end
   - No production change expected; a failing test here is a stop-and-report
@@ -550,7 +549,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - **Observable:** the full suite, lint and types green after the final
     rebase; the merge and follow-ups are in the shared log and the queue.
   - _Requirements: 5.3, 11.5, 14.1, 14.2_
-  - _Blocked: integrated format and drain prerequisites 4.1/4.2 are unavailable while 3.1 is blocked; final determinism, offline, rebase, full-suite and release validation have not run._
+  - _Blocked: integrated format and drain prerequisites 4.1/4.2 have not started. Task-level full-suite verification passed for 3.1; final determinism, offline, rebase and release validation remain pending._
 
 - [ ]* 6.2 Maintainer-run smoke on the maintainer's own export (no data enters the repository)
   - In a scratch data root outside the repository, drop the real
@@ -569,7 +568,8 @@ All paths below are under `tests/wellness/apple/` unless written in full;
 
 ## Implementation Notes
 
-- **3.1 (blocked):** Final review after both allowed debug cycles is REJECTED.
+- **3.1 (historical blocker, resolved below):** Final review after the original
+  two allowed debug cycles was REJECTED.
   Correct Reader source and 175-case/57-site test work remain preserved in the
   worktree; no task completion or independent replay acceptance is claimed.
   Two reviewer-designed faults survive all 1122 component tests: suppressing
@@ -725,3 +725,30 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   Source `6c8bd089…`, night tests `03757c2c…`; the Reader draft remains
   separately blocked. Evidence: `/private/tmp/apple-review3.2-debug4-report.md`
   and `/private/tmp/apple-task3.2-extra-verification.md`. Regroup before 4.1.
+
+- **Reader contract-matrix authorization (2026-10-16):** The maintainer
+  approved Astra's finite verification approach: one test-only repair and
+  one independent review. Add the eight-type raw-projection matrix and
+  isolated recognition table; preserve the current 191-case test baseline,
+  production source and accepted Reduce. Replace historical alias/ancestor
+  packaging with one deduplicated current evidence table without dropping
+  required target observations or independent replay. Stop and regroup on
+  rejection; do not start integration automatically. Strategy:
+  `/private/tmp/apple-health-astra-reader-strategy.md`.
+
+- **3.1, contract matrix accepted (2026-10-16):** The authorized test-only
+  repair added eight type cases, each with 25 independent raw-projection
+  records, and thirteen isolated DOCTYPE cases. All original 191 cases
+  remain; final Reader has 212 cases/63 assertion-or-raises sites.
+  Independent review APPROVED all 538 distinct edits/624 selected target
+  observations at final test SHA, plus three own faults caught; all nine
+  Reader facets and raw/API foundations are pinned. The exact three prior
+  regressions are caught. Current deduplicated evidence replaced repeated
+  historical alias/ancestor packaging without dropping target observations.
+  Correct production Reader remains unchanged at `e0ed732f…`; final tests
+  `c0a4284f…`. Fresh controller full suite: 16287 passed, 44 skipped; mypy, Ruff,
+  formatting and diff checks pass; completion VERIFIED. Evidence:
+  `/private/tmp/apple-reader-contract-review-report.md` and
+  `/private/tmp/apple-reader-contract-verification.md`. Historical rejected
+  rounds above remain provenance, not current blockers. Mandatory progress
+  is 8/12; regroup before 4.1 under this pass's authorization.
