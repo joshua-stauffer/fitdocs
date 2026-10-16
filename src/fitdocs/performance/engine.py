@@ -61,8 +61,8 @@ empty: the profile is still untouched only when nothing was previously
 derived in this partition either, never merely because the fresh accepted set is
 empty, so a run that empties a previously non-empty tagged-effort partition still
 writes (Req 6.4).
-`dry_run=True` computes the identical reconciliation and report but never
-calls `with_derived_benchmarks` or `save_profile` at all, so `written` is
+`dry_run=True` computes the identical reconciliation and parsed proposed
+entries through the pure profile merge, but never calls `save_profile`, so `written` is
 always `False` and nothing under the data root is touched (Req 1.8, 9.4,
 9.5). The per-quantity summary (Req 7.7) covers every `BenchmarkKind` the
 routing table in :func:`fitdocs.performance.derive.derive` can attempt
@@ -208,7 +208,8 @@ class DeriveReport:
     7.1).
 
     ``accepted`` is the trailing, defaulted set of store entries accepted
-    after collision filtering, identical for writing and preview runs.
+    after collision filtering and the central profile overlay, identical for
+    writing and preview runs. They are the entries written or proposed.
     Existing constructions may omit it."""
 
     considered: int
@@ -318,12 +319,12 @@ def derive_benchmarks(
     conversely, is read exactly once *after* the document loop -- see the
     module docstring's ordering ruling.
 
-    `dry_run=True` runs the identical document loop and reconciliation and
-    returns the identical report, but never calls
-    :meth:`~fitdocs.load.profile.AthleteProfile.with_derived_benchmarks` or
-    :func:`~fitdocs.load.profile.save_profile`, so `written` is always
-    `False` and nothing under `data_root` is created, modified or deleted
-    (Req 1.8, 9.4, 9.5).
+    `dry_run=True` runs the identical document loop and reconciliation,
+    computing parsed proposed entries through the pure
+    :meth:`~fitdocs.load.profile.AthleteProfile.with_derived_benchmarks` merge.
+    It returns the equivalent report except that `written` is `False` and
+    never calls :func:`~fitdocs.load.profile.save_profile`, so nothing under
+    `data_root` is created, modified or deleted (Req 1.8, 9.4, 9.5).
     """
     if load_settings is None:
         settings_document = load_settings_document(data_root)
@@ -446,12 +447,22 @@ def derive_benchmarks(
         and candidate.kind in TAGGED_EFFORT_KINDS
     )
     written = False
-    if frozenset(accepted) != previous_derived and not dry_run:
-        save_profile(
-            data_root,
-            profile.with_derived_benchmarks(accepted, kinds=TAGGED_EFFORT_KINDS),
-        )
-        written = True
+    if frozenset(accepted) != previous_derived:
+        proposed = profile.with_derived_benchmarks(accepted, kinds=TAGGED_EFFORT_KINDS)
+        normalized = {
+            (entry.discipline, entry.kind, entry.measured_on): entry
+            for entry in proposed.benchmarks.entries
+            if entry.source is not None
+            and entry.source.is_derived
+            and entry.kind in TAGGED_EFFORT_KINDS
+        }
+        accepted = [
+            normalized[(entry.discipline, entry.kind, entry.measured_on)]
+            for entry in accepted
+        ]
+        if frozenset(normalized.values()) != previous_derived and not dry_run:
+            save_profile(data_root, proposed)
+            written = True
 
     return DeriveReport(
         considered=considered,

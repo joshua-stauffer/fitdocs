@@ -2515,3 +2515,160 @@ def test_supplied_load_settings_skip_readers_and_change_real_decline(
     ftp = next(item for item in result.declined if item.kind is BenchmarkKind.FTP_WATTS)
     assert default_ftp.reason is DeclineReason.TOO_SHORT
     assert ftp.reason is DeclineReason.OUTSIDE_VALIDITY_WINDOW
+
+
+# --- hr-derivation 1.2: accepted entries after central profile overlay ---
+def _overlay_root(
+    root: Path, monkeypatch: pytest.MonkeyPatch, *, changed: bool
+) -> tuple[list[object], list[object]]:
+    from dataclasses import replace
+    from typing import Any, cast
+
+    import tomli_w
+
+    import fitdocs.performance.engine as engine
+    from fitdocs.load.profile import AthleteProfile, load_profile
+
+    ref = _write_archive(root, builder.run_fit_bytes())
+    for name, day, elapsed in (
+        ("a.md", "2024-09-04", 2700),
+        ("z.md", "2024-02-03", 2100),
+    ):
+        _write_workout(
+            root,
+            name,
+            on=day,
+            kind="race",
+            distance=10000,
+            time=elapsed,
+            sources=[ref],
+        )
+    derive_benchmarks(root)
+    path = root / "athlete.toml"
+    raw = cast(dict[str, Any], dict(load_profile(root).data))
+    group = raw["benchmarks"]["run"]["threshold_pace_s_per_km"]
+    for entry in group:
+        late = entry["measured_on"] == date(2024, 9, 4)
+        entry["applies_from"] = date(2023, 7, 8) if late else date(2023, 11, 12)
+        entry["note"] = "late annotation" if late else "early annotation"
+        entry["future_entry"] = "retain entry"
+        entry["source"]["future_source"] = "retain source"
+        if changed:
+            entry["value"] += 31
+    raw["benchmarks"]["run"]["lthr_bpm"] = [
+        {"value": 163, "measured_on": date(2022, 3, 4), "source": {"kind": "measured"}}
+    ]
+    raw["benchmarks"]["athlete"] = {
+        "max_hr_bpm": [
+            {
+                "value": 191,
+                "measured_on": date(2022, 5, 6),
+                "source": {
+                    "kind": "derived",
+                    "method": "sustained_peak",
+                    "document": "workouts/max.md",
+                    "inputs": "synthetic",
+                    "citation": "synthetic-choice",
+                },
+            }
+        ]
+    }
+    raw["future_table"] = {"keep": "outside partition"}
+    path.write_text(tomli_w.dumps(raw))
+    candidates: list[object] = []
+    merges: list[object] = []
+    real_convert = engine._to_benchmark
+    real_merge = AthleteProfile.with_derived_benchmarks
+
+    def without_note(candidate: object) -> object:
+        result = replace(real_convert(candidate), note=None)  # type: ignore[arg-type]
+        candidates.append(result)
+        return result
+
+    def capture_merge(
+        self: AthleteProfile, entries: object, **kwargs: object
+    ) -> AthleteProfile:
+        merges.append((kwargs["kinds"], kwargs.get("replace_applies_from", False)))
+        return real_merge(self, entries, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(engine, "_to_benchmark", without_note)
+    monkeypatch.setattr(AthleteProfile, "with_derived_benchmarks", capture_merge)
+    return candidates, merges
+
+
+@pytest.mark.parametrize("dry_run", [False, True], ids=["write", "preview"])
+@pytest.mark.parametrize("changed", [False, True], ids=["overlay-noop", "real-change"])
+def test_overlay_accepted_order_and_inherited_fields(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, dry_run: bool, changed: bool
+) -> None:
+    candidates, _ = _overlay_root(tmp_path, monkeypatch, changed=changed)
+    report = derive_benchmarks(tmp_path, dry_run=dry_run)
+    assert [(entry.applies_from, entry.note) for entry in candidates] == [  # type: ignore[attr-defined]
+        (None, None),
+        (None, None),
+    ]
+    assert [
+        (entry.measured_on, round(entry.value, 6), entry.applies_from, entry.note)
+        for entry in report.accepted
+    ] == [
+        (
+            date(2024, 9, 4),
+            274.432643,
+            date(2023, 7, 8),
+            "late annotation",
+        ),
+        (
+            date(2024, 2, 3),
+            216.505677,
+            date(2023, 11, 12),
+            "early annotation",
+        ),
+    ]
+
+
+@pytest.mark.parametrize("dry_run", [False, True], ids=["write", "preview"])
+@pytest.mark.parametrize("changed", [False, True], ids=["overlay-noop", "real-change"])
+def test_overlay_actual_change_controls_persistence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, dry_run: bool, changed: bool
+) -> None:
+    import tomllib
+
+    from fitdocs.load.profile import load_profile
+    from fitdocs.performance.types import TAGGED_EFFORT_KINDS
+
+    _, merges = _overlay_root(tmp_path, monkeypatch, changed=changed)
+    path = tmp_path / "athlete.toml"
+    before = path.read_bytes(), path.stat().st_mtime_ns
+    original = tomllib.loads(path.read_text())
+    report = derive_benchmarks(tmp_path, dry_run=dry_run)
+    after = path.read_bytes(), path.stat().st_mtime_ns
+    current = tomllib.loads(path.read_text())
+    stored = frozenset(
+        entry
+        for entry in load_profile(tmp_path).benchmarks.entries
+        if entry.kind in TAGGED_EFFORT_KINDS
+        and entry.source is not None
+        and entry.source.is_derived
+    )
+    assert (
+        report.written,
+        after != before,
+        stored == frozenset(report.accepted),
+        merges,
+        current["future_table"],
+        current["benchmarks"]["athlete"],
+        current["benchmarks"]["run"]["lthr_bpm"],
+        [
+            (entry["future_entry"], entry["source"]["future_source"])
+            for entry in current["benchmarks"]["run"]["threshold_pace_s_per_km"]
+        ],
+    ) == (
+        changed and not dry_run,
+        changed and not dry_run,
+        not (changed and dry_run),
+        [(TAGGED_EFFORT_KINDS, False)],
+        original["future_table"],
+        original["benchmarks"]["athlete"],
+        original["benchmarks"]["run"]["lthr_bpm"],
+        [("retain entry", "retain source"), ("retain entry", "retain source")],
+    )
