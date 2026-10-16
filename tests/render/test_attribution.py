@@ -315,3 +315,42 @@ def test_module_imports_nothing_from_fitdocs_but_the_model() -> None:
     fitdocs_targets = {t for t in targets if t.split(".")[0] == "fitdocs"}
     assert targets, "the walk found no imports; it is looking at the wrong module"
     assert fitdocs_targets == {"fitdocs.model"}
+
+
+@pytest.mark.parametrize(
+    "origins,expected",
+    [
+        ((), "none"),
+        ((None,), "none"),
+        (("apple",), "none"),
+        (("garmin",), "sole"),
+        (("garmin", "garmin"), "sole"),
+        (("garmin", None), "contributing"),
+        ((None, "garmin"), "contributing"),
+        (("garmin", "apple"), "contributing"),
+        (("apple", "garmin"), "contributing"),
+    ],
+)
+def test_wellness_origins(origins: tuple[str | None, ...], expected: str) -> None:
+    assert attribution.wellness_attribution(
+        origin for origin in origins
+    ) is attribution.WellnessAttribution(expected)
+
+
+@pytest.mark.parametrize(
+    "decision,expected",
+    [
+        ("sole", "Data source: Garmin"),
+        ("contributing", "Data sources: Garmin and other sources"),
+        ("none", None),
+    ],
+)
+def test_wellness_line(decision: str, expected: str | None) -> None:
+    assert (
+        attribution.wellness_attribution_line(attribution.WellnessAttribution(decision))
+        == expected
+    )
+
+
+def test_wellness_token() -> None:
+    assert attribution.GARMIN_ORIGIN == "garmin"

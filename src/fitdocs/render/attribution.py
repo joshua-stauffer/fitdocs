@@ -9,7 +9,9 @@ at least one contributing file's recording device is made by Garmin.
 
 from __future__ import annotations
 
+import collections.abc
 from collections.abc import Sequence
+from enum import StrEnum
 from typing import Final
 
 from fitdocs.model import Activity, DeviceInfo
@@ -64,3 +66,31 @@ def attribution_line(
         return f"{SOLE_SOURCE_PREFIX}{labels[0]}"
     names = [*labels, OTHER_DEVICES] if has_other else labels
     return f"{SOURCES_PREFIX}{', '.join(names[:-1])} and {names[-1]}"
+
+
+GARMIN_ORIGIN: Final[str] = "garmin"
+
+
+class WellnessAttribution(StrEnum):
+    NONE = "none"
+    SOLE = "sole"
+    CONTRIBUTING = "contributing"
+
+
+def wellness_attribution(
+    origins: collections.abc.Iterable[str | None],
+) -> WellnessAttribution:
+    recorded = set(origins)
+    if GARMIN_ORIGIN not in recorded:
+        return WellnessAttribution.NONE
+    if recorded == {GARMIN_ORIGIN}:
+        return WellnessAttribution.SOLE
+    return WellnessAttribution.CONTRIBUTING
+
+
+def wellness_attribution_line(attribution: WellnessAttribution) -> str | None:
+    if attribution is WellnessAttribution.SOLE:
+        return SOLE_SOURCE_PREFIX + "Garmin"
+    if attribution is WellnessAttribution.CONTRIBUTING:
+        return SOURCES_PREFIX + "Garmin and other sources"
+    return None

@@ -558,7 +558,7 @@ literal pins, one per lander) and every head-paragraph pin of
     policies. This keeps every module on disk checked by exact equality.
   - _Requirements: 2.2, 4.1, 5.4, 6.2, 6.4, 7.1, 8.1, 9.1, 12.6, 16.1_
 
-- [ ] 3.3 Write the page's frontmatter, its attribution line and its signal, sleep, other-signal and load sections
+- [x] 3.3 Write the page's frontmatter, its attribution line and its signal, sleep, other-signal and load sections
   - `src/fitdocs/render/attribution.py` (append-only, after the existing
     workout-page names; nothing existing changes): `GARMIN_ORIGIN`,
     `WellnessAttribution`, `wellness_attribution`,
@@ -1341,3 +1341,35 @@ introspection artifact also names its MetricInfo value type at line 48).
   Eleven of twenty-one mandatory leaves are accepted. Page/Engine and
   feature GO remain pending; the approved all-markless no-data exception
   remains. Commit/push, synchronize current main, then continue with 3.3.
+
+
+### Task 3.3 accepted (2026-10-16)
+
+- READY_FOR_REVIEW → independent APPROVED after two bounded test-only
+  remediations → fresh controller VERIFIED. Pure Page part 1 renders the
+  ordered frontmatter, banner/title, exact signal/sleep/other/load prose,
+  relative assets and title-adjacent Garmin attribution. Four settled
+  wellness-attribution names append without changing prior workout code.
+- Numeric call checks bind each semantic occurrence and returned result;
+  equal int/float/Decimal quantities are permitted. Discrete count/version
+  subjects remain integral even when display precision masks a fractional
+  change. Negative valid RHR bounds and all sixteen formed-zero sleep
+  cases are pinned. Dates require ISO output; uncharted/generic Column
+  names/labels stay unspecified. All earlier positive fixtures/scenarios
+  and forty-nine workout-attribution nodes remain intact.
+- Independent final 615 observations all sole intended native RED/restored
+  GREEN: 599 normative plus 16 fixture preconditions, 217 IDs / 202 source
+  states / 58 sites / 224 roles / 206 nodes. Eight additional reviewer faults
+  caught/restored; 17 allowed families GREEN. Thirty-five unsupported old
+  observations remain excluded history, with no sensitivity credit.
+- Full original 22,033 passed / 44 expected skips, exit0 in 545.94 s; scope 5,682,
+  fresh trace 255 and support 196 passed. Ruff check/format 765, mypy 580 and
+  diff clean. Current 2,548-file implementer and 1,332-file review seals plus
+  32,849 prior artifacts verified; 1,962 other repository snapshots preserved.
+- Nineteen task contributions: 18 PINNED and one PRESERVED-ONLY (8.4 actual source-scale) through accepted View/charts, zero UNPINNED. Coverage/Method/
+  References remain 3.4; writing remains 4.1; no feature GO. Twelve of 21
+  mandatory leaves accepted. No follow-up.
+- Evidence: `/private/tmp/recovery-task-3.3-round3-report.md`, its sealed
+  `recovery-task-3.3-round3-evidence/final/`, independent
+  `/private/tmp/recovery-review-3.3-round3.md` and raw package, and
+  `/private/tmp/recovery-task-3.3-verification.md`/`.json`.
