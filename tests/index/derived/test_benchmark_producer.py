@@ -120,8 +120,8 @@ def test_public_contract_and_exact_ordered_table_specs() -> None:
             ColumnSpec(
                 "source_page",
                 ColumnType.VARCHAR,
-                "Data-root-relative page used to derive the entry; "
-                "NULL when not recorded.",
+                "Data-root-relative page or wellness series file used "
+                "to derive the entry; NULL when not recorded.",
             ),
             ColumnSpec(
                 "source_citation",

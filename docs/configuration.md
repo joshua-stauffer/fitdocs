@@ -346,14 +346,92 @@ live, pulling, delivery and removal, and what leaves your machine.
 
 Alongside the settings file, an optional `<data-root>/athlete.toml` carries
 the athlete inputs (thresholds, max heart rate, and similar) a calculator may
-need. Unlike `fitdocs.toml`, this file is not read-only: fitdocs **writes**
-it — atomically, and only user-provided, validated values — whenever the
-load pass prompts you for a missing input and you answer, and whenever
-`fitdocs derive-benchmarks` derives a new dated benchmark from a tagged
-effort. It never overwrites a benchmark you already recorded yourself, and
-every hand-added key or table it does not manage survives a rewrite
-verbatim. An absent file is not an error — it degrades to no configured
-inputs — and a malformed one is a configuration error (exit code 2).
+need. Unlike `fitdocs.toml`, this file is not read-only: fitdocs writes it
+atomically when you answer a load prompt with a validated value, and when
+`fitdocs derive-benchmarks` updates dated benchmarks. The command first
+derives threshold pace, lactate-threshold heart rate and functional
+threshold power from tagged efforts, then resting and maximum heart rate
+from wellness and workout evidence. Each stage writes at most once, only
+when its derived entries change; `--dry-run` previews without writing.
+Hand-recorded benchmarks and unknown keys, tables and values survive a
+rewrite. Comments and formatting do not: the file is parsed and
+re-serialized. An absent file means no configured inputs; a malformed one
+is a configuration error (exit code 2).
+
+### Derived heart-rate benchmarks
+
+Run `fitdocs derive-benchmarks --dry-run` to review both stages, then
+`fitdocs derive-benchmarks` to write their entries. Heart-rate entries are
+athlete-wide dated `resting_hr_bpm` and `max_hr_bpm` benchmarks. This stage
+does not write the undated profile keys used by zones and the page's own
+TRIMP figure, and requires no new configuration.
+
+Resting evidence is the median of at least 14 daily values from one source
+within the 28 days ending on the evidence date. Sources are kept separate:
+`[wellness]` precedence chooses the first source whose baseline is formed,
+rather than mixing the per-day canonical values. A higher-ranked source
+without enough values does not displace a formed lower-ranked baseline.
+
+Maximum evidence comes from each workout's composed activity, using all
+archive files listed by its page, across sports. A session peak is its
+highest 30-second sustained, time-weighted heart rate. The stage rejects
+implausible samples and rapid changes, breaks stretches at gaps over 10
+seconds, and excludes cadence-locked runs and cadence-locked spans in runs.
+It takes the median of the three highest session peaks within the 365 days
+ending on each evidence date; fewer than three sessions gives no maximum
+evidence. Both kinds round to whole bpm, with halfway values rounded up.
+
+The write-time rules compare rounded evidence with the value in force on
+that date, whether hand-recorded or derived:
+
+- Resting disagreement step: more than 3 bpm.
+- Resting confirmation: 14 consecutive days.
+- Maximum disagreement step: more than 2 bpm.
+- Maximum confirmation: 1 day (no waiting period).
+
+Where no value is in force, the first evidence starts an entry immediately.
+Otherwise, agreement within the step starts no entry. Resting confirmation
+requires the same source throughout; a missing evidence day, an agreeing
+day or a source change restarts it. A confirmed entry is dated on the first day of
+the run and uses that day's value. Evidence on a hand entry's measurement
+date is ignored; later evidence must pass these rules before it takes
+over. Hand entries are never modified or deleted.
+
+These are rules for writing entries, not changes to dated benchmark
+selection. The most recent entry measured on or before a workout's date
+wins; `applies_from` fills earlier dates only where no such entry exists.
+Derived entries carry no `applies_from`. In particular, derived evidence
+dated before a later hand entry narrows that hand entry's back-reach:
+the hand value can still cover days before the first derived entry, but
+the derived values apply from their own dates until the hand measurement.
+The hand entry still wins from its measurement date until a later entry
+supersedes it. Historic heart-rate load before that hand date can therefore
+change, but existing load is rescored only when you explicitly run
+`fitdocs load --recompute` after derivation. Derivation itself writes no
+workout page and recomputes no load.
+
+A new takeover is announced by the derivation run (including `--dry-run`)
+with the kind, values, dates and evidence. The timeline entry's note also
+names the superseded hand value and its date. A change to a hand entry's
+back-reach is reported once by the run that changes it.
+
+`fitdocs check` lists a takeover only while that derived entry is the
+latest entry of its kind; a later hand-recorded or derived entry ends
+the listing. A takeover of a hand entry's back-reach is announced by
+the derivation run and recorded in the timeline, but is never listed
+by `check`, because the later hand entry is already the latest of
+that kind.
+
+To keep your own value, record a new hand entry dated after the takeover;
+it wins from its date, and later derivation treats it by the same
+write-time rules. To accept the derived value, leave it. The takeover
+remains visible in the timeline after the `check` listing ends. Inspect
+the derived entry's provenance for the wellness source and series file,
+or the workout page, window and peaks used.
+
+The heart-rate stage re-parses and composes archived workout files each
+run, so a large archive can take several minutes. A terminal shows
+progress. There is no per-session peak cache.
 
 ## Related pages
 

@@ -174,14 +174,32 @@ workout page or a plan source.
 
 ## Benchmarks
 
-`fitdocs derive-benchmarks [--out PATH] [--dry-run]` turns your tagged
-efforts (races, tests, and hard efforts you marked with the `effort`
-frontmatter key) into dated benchmarks — threshold pace, lactate-threshold
-heart rate, and functional threshold power — written to `athlete.toml`
-alongside anything you typed in by hand. It never touches a benchmark you
-recorded yourself, reports exactly why any tagged page was declined or
-failed, and `--dry-run` prints the identical report without writing
-anything.
+`fitdocs derive-benchmarks [--out PATH] [--dry-run]` runs two stages,
+writing dated benchmarks to `athlete.toml` alongside your hand-recorded
+entries. The tagged-effort stage turns races, tests and hard efforts marked
+with the `effort` frontmatter key into threshold pace, lactate-threshold
+heart rate and functional threshold power. It reports why a tagged page
+was declined or failed.
+
+The heart-rate stage derives resting heart rate from a single wellness
+source's 28-day median (at least 14 daily values), and maximum heart rate
+from the median of the three highest session peaks in the last 365 days;
+each peak is sustained over 30 seconds. Resting evidence must disagree
+with the value in force by more than 3 bpm for 14 consecutive days;
+maximum evidence must disagree by more than 2 bpm, with no waiting period.
+A hand-recorded value stays in force until this write-time rule permits a
+derived entry; it is never modified. The ordinary dated selection rule is
+unchanged: evidence before a later hand entry can narrow its `applies_from`
+back-reach. The run announces takeovers; `fitdocs check` lists one while
+its derived entry is the latest of that kind. To keep your own value,
+record a later hand entry; leave the derived entry to accept it.
+
+Preview with `--dry-run`, then run without it to write. After a changed
+timeline, run `fitdocs load --recompute` to apply it to already computed
+load, including affected dates before a hand entry. Large archives can
+take several minutes because workout files are parsed again. See
+[Derived heart-rate benchmarks](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/configuration.md#derived-heart-rate-benchmarks)
+for the evidence, precedence, takeover and back-reach rules.
 
 ## Ownership
 

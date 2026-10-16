@@ -94,6 +94,16 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   facade (and `wellness.engine` for `SeriesReport`). `inbox` stays independent
   of `wellness`; the drain supplies its candidate suffixes. `connectors` reaches
   the archive only through `layout.wellness_archive_path`.
+- `hr_benchmarks` derives resting and maximum heart rate only through the
+  `derive-benchmarks` stage. Its pure evidence, timeline and inspection modules
+  do no I/O; its engine reads composed archives through `compose.archive`
+  and normalized wellness through the public `wellness` facade, and writes
+  only through `load.profile`. It also uses `benchmarks`, `citation`, `model`,
+  `contract`, `docio`, `layout`, `settings`, ingestion and load settings/QA
+  types; it
+  imports no index, query or performance package. Only `cli` and `audit`
+  import it from outside the package; load calculators and channels never
+  import it.
 - `query` (the read side) imports `index` (location, store, schema, bookkeeping,
   corpus, fingerprint, producer types, registry) and `athlete`; only `cli`
   and `dashboards` import it; it never imports `duckdb` or an index writer.

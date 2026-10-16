@@ -704,7 +704,7 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 11.2_
   - _Depends: 3.5_
 
-- [ ] 4.3 Document the heart-rate stage, the write-time hand rule, the back-reach consequence and the takeover
+- [x] 4.3 Document the heart-rate stage, the write-time hand rule, the back-reach consequence and the takeover
   - README benchmarks section; `docs/configuration.md` athlete-profile
     section with a "Derived heart-rate benchmarks" subsection (evidence,
     windows, steps, the write-time hand rule, selection unchanged, how
@@ -817,6 +817,8 @@ pins (`tests/test_public_api.py`), the workouts skill and
   - _Requirements: 4.1, 4.7_
 
 ## Implementation Notes
+
+- 4.3: README/configuration/ownership/dependency prose now explains the HR evidence, strict steps and confirmation, write-time hand rule, unchanged dated selection, back-reach and current takeover behavior, explicit historical load recomputation and runtime. Only the source_page description changes in index code; canonical analytics regeneration changes one row, with schema/version unchanged. Four numeric doc instances use semantic :g formatting, and one full paragraph pins the current-listing/back-reach rule; the producer literal is re-pinned. Independent review reproduced 16 claimed/three own faults, four equivalent-value controls and five declared narrative coverage probes. Controller fresh 1,665 tests, Ruff (771 files), configured mypy (586 files), eight hashes and diff passed. Remaining narrative is manually source-checked and explicitly unpinned by these focused doc tests; no promise that five pins constrain every sentence.
 
 - 4.2: Ownership contract 12 → 13 and wiki-contract Amendment 8 record the changed reads and once-per-stage profile write. The adjacent history has a literal full-sentence pin; current-head pins move coherently while all prior history and permanent wellness-pull guarantees remain intact. Canonical regeneration changes only the version line in seven declaration goldens; real scratch sync emits all seven at version 13. Independent review reproduced 21 claimed/two own faults and passed the full suite (20,754 passed / 44 existing skips); controller fresh 456 scoped tests, Ruff (770 files), configured mypy (585 files), exact 14-path hashes/full-run exit and diff passed. Task 4.3 still owns the operation body. Re-derive main + 1 and next-free amendment at final landing if a peer lands first.
 

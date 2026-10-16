@@ -194,7 +194,7 @@ One row per benchmark entry in athlete.toml. Equals the athlete profile's own re
 | applies_from | DATE |  | Calendar day the entry applies from; NULL when not recorded. |
 | source_kind | VARCHAR |  | Whether the source is derived or measured; NULL when absent. |
 | source_method | VARCHAR |  | Derivation method; NULL when not recorded. |
-| source_page | VARCHAR |  | Data-root-relative page used to derive the entry; NULL when not recorded. |
+| source_page | VARCHAR |  | Data-root-relative page or wellness series file used to derive the entry; NULL when not recorded. |
 | source_citation | VARCHAR |  | Citation key for a derived entry; NULL when not recorded. |
 
 ### `blocks`

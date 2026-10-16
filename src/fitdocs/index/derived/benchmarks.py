@@ -66,7 +66,8 @@ BENCHMARKS_TABLE: Final[TableSpec] = TableSpec(
         ColumnSpec(
             "source_page",
             ColumnType.VARCHAR,
-            "Data-root-relative page used to derive the entry; NULL when not recorded.",
+            "Data-root-relative page or wellness series file used to derive the entry; "
+            "NULL when not recorded.",
         ),
         ColumnSpec(
             "source_citation",

@@ -807,7 +807,10 @@ and each has a distinct contract:
   declare they need). fitdocs writes to this
   file in two cases: when you answer a training-load prompt, which writes
   **one field at a time**, and when `fitdocs derive-benchmarks` derives
-  benchmarks (see that operation below). For a prompt answer, the value you
+  benchmarks from tagged efforts and from wellness and workout heart rate
+  (see that operation below). Derivation writes this file at most once per
+  stage and never modifies a hand-recorded entry; unknown keys, tables and
+  values are preserved. For a prompt answer, the value you
   supplied is validated and stored, then
   the whole document is rewritten with every other key and table it does
   not manage preserved. That preservation covers keys, tables, and values;
@@ -984,14 +987,19 @@ and each has a distinct contract:
   `sync`, `regen`, `history` and `plan` refresh that declaration with the
   others.
 
-- **`derive-benchmarks`** — reads every workout document and, for each one
-  carrying an effort tag, derives from the activity composed of the files the
-  page lists, by the same rule as the `load` pass. It never writes a workout
-  document. Its only write is the athlete profile, written at most once per run,
-  only when the set of benchmarks it derived changes, and never under
-  `--dry-run`. It replaces the benchmarks it derived earlier with those
-  derived now, so a derived benchmark whose effort tag is gone is removed. It
-  never overwrites a benchmark you recorded yourself.
+- **`derive-benchmarks`** — reads every workout document and the activity
+  composed from all archive files its page lists, by the same composition
+  rule as the `load` pass, and reads the normalized wellness series. Its
+  first stage derives threshold pace, lactate-threshold heart rate and
+  functional threshold power from tagged efforts; its second derives
+  resting and maximum heart rate from wellness and workout evidence.
+  Its only write is `athlete.toml`, written at most once per stage, only
+  when that stage's derived benchmarks change, and never under `--dry-run`.
+  Each stage replaces only the derived entries of the kinds it manages;
+  a tagged benchmark whose effort tag is gone is removed. Hand-recorded
+  entries are never modified or deleted, and unknown keys, tables and
+  values are preserved. It never writes a workout document or any other
+  path, and does not recompute training load.
 
 - **`history`** — its outputs are `history/training-load-history.md` and
   its chart `history/assets/training-load-history-fitness.svg`, each
