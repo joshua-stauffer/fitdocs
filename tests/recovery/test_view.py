@@ -193,12 +193,12 @@ def test_change_across_gap_and_return() -> None:
         v(-40, source="a"),
         v(-20, source="b"),
         v(-10, source="b"),
-        v(-1, source="b"),
-        v(0, source="b"),
+        v(0, source="a"),
     ]
     result = view(values).signals[0]
     assert [(c.day, c.before, c.after) for c in result.changes] == [
-        (D - timedelta(days=20), "a", "b")
+        (D - timedelta(days=20), "a", "b"),
+        (D, "b", "a"),
     ]
     returned = view([v(-40, source="a"), v(-20, source="a"), v(0, source="a")])
     assert returned.signals[0].changes == ()

@@ -138,7 +138,8 @@ def _signal(signal: SignalView, name: str) -> list[str]:
 
 def _source_text(source: str, origins: Sequence[str], days: int) -> str:
     named = ", ".join(escape_markdown(origin) for origin in origins) or "not recorded"
-    return f"{escape_markdown(source)} (origins {named}) on {_count(days)} days"
+    unit = "day" if days == 1 else "days"
+    return f"{escape_markdown(source)} (origins {named}) on {_count(days)} {unit}"
 
 
 def _source_lines(
