@@ -278,8 +278,9 @@ recorded as one.
   row in the derive-benchmarks table), is never dated after the newest such
   session, and never falls; record a lower maximum by hand. A hand-recorded
   entry is challenged only by evidence dated after it and formed from
-  sessions or wellness days after it, so evidence inside its applies-from
-  back-reach no longer takes over. Run `fitdocs derive-benchmarks` once to
+  sessions or wellness days after it, so historic heart-rate load before a
+  hand entry's date keeps the hand value wherever its applies-from date
+  reaches. Run `fitdocs derive-benchmarks` once to
   replace earlier derived heart-rate entries; rescore history afterwards with
   `fitdocs load --recompute` if you want it. See
   [derived heart-rate benchmarks](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/configuration.md#derived-heart-rate-benchmarks).
