@@ -1,17 +1,18 @@
 ---
 id: 2026-10-17-site-copy-lags-main
-title: fitdocs.ai site copy still describes 0.1.0 on skills, commands, contract version, owned paths and connectors
+title: fitdocs.ai site copy still describes 0.1.0 on skills, commands, contract version and owned paths
 status: open
 importance: medium
 importance_why: The rewritten Working-with-an-LLM page now names four skills, the index and eight AGENTS.md folders; its sibling pages contradict it until they are updated.
 effort: M
 kind: docs
-area: docs-site, website content (iCloud: ~/Library/Mobile Documents/com~apple~CloudDocs/fitdocs.ai)
+area: docs-site, website content (website/content/)
 created: 2026-10-17
 surfaced_by: maintainer-requested rewrite of the site's llm/index.md against the repository
-pinned_at: 7b0837f
-resume_command: "do: Update the fitdocs.ai site pages listed under Evidence to match main (four packaged skills, fifteen commands, the current contract version and owned paths, connectors shipped); keep each page's iA Writer Annotations block current (pkm skill ia-writer-annotations) and validate with: uv run --group docs python -m scripts.build_site build --content \"<content dir>\" --build-dir <scratch>"
+pinned_at: dad68bb
+resume_command: "do: Update the fitdocs.ai site pages listed under Evidence in website/content/ to match main (four packaged skills, fifteen commands, the current contract version and owned paths); keep each page's iA Writer Annotations block current (pkm skill ia-writer-annotations) and validate with: uv run --group docs python -m scripts.build_site build"
 context:
+  - website/content/
   - docs/website.md
   - docs/wiki-integration.md
   - docs/ownership-contract.md
@@ -22,10 +23,11 @@ blocked_by: []
 ---
 
 ## What
-The site content directory (outside the repo; `website/content/` holds only
-`.gitkeep`) was drafted on 2026-09-28 against the published 0.1.0. The home
-page and `llm/index.md` were rewritten on 2026-10-17 for current `main`,
-so several sibling pages now contradict them.
+The site copy was drafted on 2026-09-28 against the published 0.1.0, in an
+iCloud directory outside the repo. The home page and `llm/index.md` were
+rewritten on 2026-10-17 for current `main`, so several sibling pages now
+contradict them. On 2026-10-17 the copy (minus `philosophy.md`) moved into
+`website/content/` at dad68bb, which is now the only copy that publishes.
 
 ## Why it matters
 A reader who follows the LLM page's links lands on pages that say there are
@@ -48,10 +50,12 @@ Checked 2026-10-17 at main 7b0837f against the content directory:
 - `reference/cli.md` (site): nine command headings. Repo:
   `uv run fitdocs --help` lists 15 commands (adds index, recovery, connect,
   pull, query, dashboard).
-- `faq.md` (site): "Does it download my activities from Garmin or Strava?
-  Not yet … Connectors, starting with intervals.icu, are next on the
-  roadmap." Repo: `docs/connectors.md`, `fitdocs connect` / `fitdocs pull`
-  shipped (connectors spec complete 2026-10-02).
+- Resolved since: `faq.md` no longer says connectors are "next on the
+  roadmap"; at dad68bb `website/content/faq.md:14` recommends the
+  intervals.icu connector. The other bullets were re-checked at dad68bb
+  and still hold (`website/content/reference/ownership.md:10` "currently
+  version 4"; `website/content/reference/cli.md` nine command headings;
+  `website/content/getting-started/quickstart.md:85` unlinked).
 - `getting-started/quickstart.md` (site): the last "Where to go next"
   bullet, "Let an LLM run it: Working with an LLM.", has no link while the
   other three do.
@@ -63,7 +67,7 @@ Checked 2026-10-17 at main 7b0837f against the content directory:
 Read `docs/website.md` (content contract, link rules, annotation block),
 then open each page above beside its repo source. Update facts only; keep
 the maintainer's `@Josh` spans verbatim and regenerate each page's
-`Annotations:` block. Done when the standalone build exits 0 and the pages
+`Annotations:` block. Done when `build_site build` exits 0 and the pages
 agree with the LLM page and the repo docs.
 
 ## Open questions
