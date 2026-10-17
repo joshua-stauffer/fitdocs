@@ -154,25 +154,25 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
         "Advance left pointer by one interval",
     ),
     LiteralExemption(
-        "peaks", 69, 17, 0, ExemptionCategory.INDEX, "First locked-span index"
+        "peaks", 71, 17, 0, ExemptionCategory.INDEX, "First locked-span index"
     ),
     LiteralExemption(
-        "peaks", 77, 26, 1, ExemptionCategory.INDEX, "Advance to the next locked span"
+        "peaks", 79, 26, 1, ExemptionCategory.INDEX, "Advance to the next locked span"
     ),
     LiteralExemption(
         "peaks",
-        92,
+        94,
         44,
         0,
         ExemptionCategory.INDEX,
         "Time is the first previous-sample tuple member",
     ),
     LiteralExemption(
-        "peaks", 94, 19, 1, ExemptionCategory.INDEX, "Append to the last kept stretch"
+        "peaks", 96, 19, 1, ExemptionCategory.INDEX, "Append to the last kept stretch"
     ),
     LiteralExemption(
         "maximum",
-        24,
+        17,
         69,
         1,
         ExemptionCategory.INDEX,
@@ -180,7 +180,15 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
     ),
     LiteralExemption(
         "maximum",
-        32,
+        20,
+        58,
+        1,
+        ExemptionCategory.INDEX,
+        "First day after the hand-recorded measurement date",
+    ),
+    LiteralExemption(
+        "maximum",
+        28,
         21,
         1,
         ExemptionCategory.INDEX,
@@ -188,7 +196,7 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
     ),
     LiteralExemption(
         "resting",
-        28,
+        29,
         73,
         1,
         ExemptionCategory.INDEX,
@@ -196,7 +204,15 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
     ),
     LiteralExemption(
         "resting",
-        56,
+        32,
+        58,
+        1,
+        ExemptionCategory.INDEX,
+        "First day after the hand-recorded measurement date",
+    ),
+    LiteralExemption(
+        "resting",
+        60,
         30,
         1,
         ExemptionCategory.INDEX,
@@ -204,7 +220,7 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
     ),
     LiteralExemption(
         "timeline",
-        91,
+        93,
         34,
         1,
         ExemptionCategory.INDEX,
@@ -212,7 +228,7 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
     ),
     LiteralExemption(
         "timeline",
-        91,
+        93,
         58,
         1,
         ExemptionCategory.INDEX,
@@ -220,7 +236,7 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
     ),
     LiteralExemption(
         "timeline",
-        92,
+        94,
         37,
         1,
         ExemptionCategory.INDEX,

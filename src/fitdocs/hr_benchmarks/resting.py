@@ -1,6 +1,6 @@
 """Daily resting-heart-rate evidence from separate source baselines."""
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from datetime import date, timedelta
 from math import floor
 from statistics import median
@@ -15,6 +15,7 @@ def resting_evidence(
     order: Sequence[str],
     series_metric: str,
     document_for_year: Callable[[int], str],
+    hand_dates: Collection[date] = (),
 ) -> tuple[Evidence, ...]:
     days = {day for source_values in values.values() for day in source_values}
     if not days:
@@ -26,6 +27,9 @@ def resting_evidence(
     evidence: list[Evidence] = []
     while day <= last_day:
         start = day - timedelta(days=sources.RESTING_WINDOW_DAYS.value - 1)
+        floor_day = max((hand for hand in hand_dates if hand < day), default=None)
+        if floor_day is not None:
+            start = max(start, floor_day + timedelta(days=1))
         for source in ranked:
             window = [
                 value

@@ -1683,7 +1683,7 @@ def _distinct_hr_report() -> HrStageReport:
     return HrStageReport(
         121,
         47,
-        tuple(zip(NoEvidenceReason, (5, 7, 11, 13, 17, 19), strict=True)),
+        tuple(zip(NoEvidenceReason, (5, 7, 11, 13, 17, 19, 23), strict=True)),
         (
             SkippedDocument(
                 "workouts/[missing].md",
@@ -1807,19 +1807,20 @@ def _render_hr(
         pytest.param("No evidence: no_heart_rate | 13", id="field-06"),
         pytest.param("No evidence: cadence_locked | 17", id="field-07"),
         pytest.param("No evidence: no_sustained_stretch | 19", id="field-08"),
-        pytest.param("Resting sources | 2", id="field-09"),
-        pytest.param("resting_hr_bpm entries | 31", id="field-10"),
-        pytest.param("resting_hr_bpm added | 23", id="field-11"),
-        pytest.param("resting_hr_bpm removed | 29", id="field-12"),
-        pytest.param("resting_hr_bpm kept | no", id="field-13"),
-        pytest.param("max_hr_bpm entries | 43", id="field-14"),
-        pytest.param("max_hr_bpm added | 37", id="field-15"),
-        pytest.param("max_hr_bpm removed | 41", id="field-16"),
-        pytest.param("max_hr_bpm kept | no", id="field-17"),
-        pytest.param("Failures | 3", id="field-18"),
-        pytest.param("Heart-rate benchmarks written: no", id="field-19"),
-        pytest.param("Resting source: intervals-icu", id="field-20"),
-        pytest.param("Resting source: garmin-export", id="field-21"),
+        pytest.param("No evidence: not_run_or_bike | 23", id="field-09"),
+        pytest.param("Resting sources | 2", id="field-10"),
+        pytest.param("resting_hr_bpm entries | 31", id="field-11"),
+        pytest.param("resting_hr_bpm added | 23", id="field-12"),
+        pytest.param("resting_hr_bpm removed | 29", id="field-13"),
+        pytest.param("resting_hr_bpm kept | no", id="field-14"),
+        pytest.param("max_hr_bpm entries | 43", id="field-15"),
+        pytest.param("max_hr_bpm added | 37", id="field-16"),
+        pytest.param("max_hr_bpm removed | 41", id="field-17"),
+        pytest.param("max_hr_bpm kept | no", id="field-18"),
+        pytest.param("Failures | 3", id="field-19"),
+        pytest.param("Heart-rate benchmarks written: no", id="field-20"),
+        pytest.param("Resting source: intervals-icu", id="field-21"),
+        pytest.param("Resting source: garmin-export", id="field-22"),
         pytest.param(
             "Takeover resting_hr_bpm: 57 bpm measured 2020-01-14 "
             "(derived) supersedes your 49 bpm measured 2020-06-20 "
@@ -1829,7 +1830,7 @@ def _render_hr(
             "document=wellness/[2020].csv; inputs=source intervals-icu; "
             "window [28 days]; confirmation [14 days]; "
             "citation=resting-rule; series=intervals-icu:resting_hr_bpm",
-            id="field-22",
+            id="field-23",
         ),
         pytest.param(
             "Takeover resting_hr_bpm: 61 bpm measured 2020-02-14 "
@@ -1840,7 +1841,7 @@ def _render_hr(
             "document=wellness/[2021].csv; inputs=source garmin-export; "
             "window [21 days]; confirmation [15 days]; "
             "citation=resting-rule; series=garmin-export:resting_hr_bpm",
-            id="field-23",
+            id="field-24",
         ),
         pytest.param(
             "Takeover max_hr_bpm: 193 bpm measured 2021-03-16 (derived) "
@@ -1853,7 +1854,7 @@ def _render_hr(
             "ng-path-long-path-long-path-long-path-long-path-.md; "
             "inputs=session [30 seconds]; window [180 days]; "
             "citation=maximum-rule; series=none",
-            id="field-24",
+            id="field-25",
         ),
         pytest.param(
             "Takeover max_hr_bpm: 187 bpm measured 2021-04-17 (derived) "
@@ -1863,7 +1864,7 @@ def _render_hr(
             "document=workouts/[other-session].md; inputs=session [31 "
             "seconds]; window [179 days]; citation=maximum-rule; "
             "series=none",
-            id="field-25",
+            id="field-26",
         ),
         pytest.param(
             "Back-reach resting_hr_bpm: your 49 bpm measured 2020-06-20 "
@@ -1871,7 +1872,7 @@ def _render_hr(
             "2020-06-20); after [2019-12-01, 2020-01-14); recompute load "
             "to score days outside the hand-recorded cover with the "
             "derived values.",
-            id="field-26",
+            id="field-27",
         ),
         pytest.param(
             "Back-reach resting_hr_bpm: your 49 bpm measured 2020-06-20 "
@@ -1879,7 +1880,7 @@ def _render_hr(
             "2019-12-01) (empty); after [2019-12-01, 2020-02-14); "
             "recompute load to score days outside the hand-recorded "
             "cover with the derived values.",
-            id="field-27",
+            id="field-28",
         ),
         pytest.param(
             "Back-reach max_hr_bpm: your 201 bpm measured 2022-08-22 "
@@ -1887,25 +1888,25 @@ def _render_hr(
             "[2021-01-02, 2021-04-17); after [2021-01-02, 2021-01-02) "
             "(empty); recompute load to score days outside the "
             "hand-recorded cover with the derived values.",
-            id="field-28",
+            id="field-29",
         ),
         pytest.param(
             "Inconsistency max_not_above_rest: [2022-10-01, 2022-11-02); "
             "discipline=athlete; maximum=193 bpm measured 2021-03-16 "
             "(derived); resting=49 bpm measured 2020-06-20 (measured; "
             "applies from 2019-12-01)",
-            id="field-29",
+            id="field-30",
         ),
         pytest.param(
             "Inconsistency threshold_outside_reserve: [2021-10-03, "
             "open); discipline=Run; maximum=199 bpm measured 2018-07-21 "
             "(hand-recorded); resting=61 bpm measured 2020-02-14 "
             "(derived); threshold=211 bpm measured 2021-09-23 (derived)",
-            id="field-30",
+            id="field-31",
         ),
         pytest.param(
             "Skipped workouts/[missing].md: archive_missing -- missing [archive]",
-            id="field-31",
+            id="field-32",
         ),
         pytest.param(
             "Skipped "
@@ -1914,11 +1915,11 @@ def _render_hr(
             "ong-path-long-path-long-path-long-path-long-path-long-path-l"
             "ong-path-long-path-long-path-long-path-.md: "
             "archive_undecodable -- decode [problem]",
-            id="field-32",
+            id="field-33",
         ),
         pytest.param(
             "Failure resting_hr_bpm [wellness/[manifest].toml]: read [failed]",
-            id="field-33",
+            id="field-34",
         ),
         pytest.param(
             "Failure max_hr_bpm "
@@ -1927,19 +1928,19 @@ def _render_hr(
             "long-path-long-path-long-path-long-path-long-path-long-path-"
             "long-path-long-path-long-path-long-path-.md]: access "
             "[denied]",
-            id="field-34",
+            id="field-35",
         ),
-        pytest.param("Note: first [note]", id="field-35"),
-        pytest.param("Note: second [note]", id="field-36"),
+        pytest.param("Note: first [note]", id="field-36"),
+        pytest.param("Note: second [note]", id="field-37"),
         pytest.param(
             "The heart-rate timeline changed: run `fitdocs load "
             "--recompute` to rescore documents whose load was already "
             "computed.",
-            id="field-37",
+            id="field-38",
         ),
         pytest.param(
             "Failure max_hr_bpm [workouts/[third-failure].md]: read [blocked]",
-            id="field-38",
+            id="field-39",
         ),
     ],
 )
@@ -1986,6 +1987,7 @@ def test_hr_report_prints_all_zero_reason_rows(monkeypatch: pytest.MonkeyPatch) 
         "No evidence: no_heart_rate | 0",
         "No evidence: cadence_locked | 0",
         "No evidence: no_sustained_stretch | 0",
+        "No evidence: not_run_or_bike | 0",
     ]
 
 
@@ -2217,7 +2219,7 @@ def test_hr_cli_backreach_preview_write_then_noop(
     _write_workout(tmp_path, "no-archive.md")
     (tmp_path / PROFILE_FILENAME).write_text(
         "[[benchmarks.athlete.resting_hr_bpm]]\nvalue = 49\n"
-        "measured_on = 2021-03-01\napplies_from = 2021-01-01\n"
+        "measured_on = 2021-03-01\napplies_from = 2021-01-20\n"
     )
     write_series(
         tmp_path,
@@ -2253,7 +2255,7 @@ def test_hr_cli_backreach_preview_write_then_noop(
         first.stdout.count("Back-reach resting_hr_bpm:"),
         first.stdout.count("Takeover resting_hr_bpm:"),
         first.stdout.count("The heart-rate timeline changed:"),
-        "before [2021-01-01, 2021-03-01); after [2021-01-01, 2021-01-14)"
+        "before [2021-01-20, 2021-03-01); after [2021-01-20, 2021-01-20)"
         in first.stdout,
         first.stdout.count("Heart-rate benchmarks written: yes"),
         before == after,
@@ -2271,7 +2273,7 @@ def test_hr_cli_backreach_preview_write_then_noop(
     ) == (
         0,
         1,
-        1,
+        0,
         1,
         True,
         int(not dry_run),
@@ -2279,7 +2281,7 @@ def test_hr_cli_backreach_preview_write_then_noop(
         () if dry_run else (PROFILE_FILENAME,),
         0,
         int(dry_run),
-        int(dry_run),
+        0,
         int(dry_run),
     )
 

@@ -173,8 +173,9 @@ def test_derived_without_any_hand_is_not_takeover() -> None:
 def test_generated_walk_has_two_literal_pairs_and_structural_equality() -> None:
     hands = (_max(20, 188, applies=1), _max(25, 183))
     evidence = (
-        Evidence(_d(2), 196, "device", "session-2", None, "window-2", "peak-2"),
-        Evidence(_d(26), 178, "device", "session-26", None, "window-26", "peak-26"),
+        Evidence(_d(2), 205, "device", "session-2", None, "window-2", "peak-2"),
+        Evidence(_d(21), 196, "device", "session-21", None, "window-21", "peak-21"),
+        Evidence(_d(26), 190, "device", "session-26", None, "window-26", "peak-26"),
     )
     expected = (
         Takeover(
@@ -183,15 +184,14 @@ def test_generated_walk_has_two_literal_pairs_and_structural_equality() -> None:
                 BenchmarkKind.MAX_HR_BPM,
                 None,
                 196,
-                _d(2),
-                "Takes over from your hand-recorded 188 bpm of 2024-01-20 "
-                "(it applied here through its applies-from date): "
+                _d(21),
+                "Takes over from your hand-recorded 188 bpm of 2024-01-20: "
                 "the evidence differed by more than 2 bpm.",
                 source=BenchmarkSource(
                     BenchmarkSourceKind.DERIVED,
                     "max_hr_sustained_peak",
-                    "session-2",
-                    "window-2",
+                    "session-21",
+                    "window-21",
                     "max_hr_timeline_choice",
                 ),
             ),
@@ -202,7 +202,7 @@ def test_generated_walk_has_two_literal_pairs_and_structural_equality() -> None:
             Benchmark(
                 BenchmarkKind.MAX_HR_BPM,
                 None,
-                178,
+                190,
                 _d(26),
                 "Takes over from your hand-recorded 183 bpm of 2024-01-25: "
                 "the evidence differed by more than 2 bpm.",

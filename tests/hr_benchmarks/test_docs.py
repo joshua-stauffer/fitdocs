@@ -20,7 +20,10 @@ _GUIDE = Path(__file__).resolve().parents[2] / "docs" / "configuration.md"
             "Resting confirmation: {value:g} consecutive days.",
             RESTING_CONFIRM_DAYS.value,
         ),
-        ("Maximum disagreement step: more than {value:g} bpm.", MAX_STEP_BPM.value),
+        (
+            "Maximum rise step: more than {value:g} bpm above the value in force.",
+            MAX_STEP_BPM.value,
+        ),
         (
             "Maximum confirmation: {value:g} day (no waiting period).",
             MAX_RULE.confirm_days,
@@ -43,8 +46,21 @@ def test_guide_states_current_takeover_listing_rule() -> None:
     assert (
         "`fitdocs check` lists a takeover only while that derived entry is the "
         "latest entry of its kind; a later hand-recorded or derived entry ends "
-        "the listing. A takeover of a hand entry's back-reach is announced by "
-        "the derivation run and recorded in the timeline, but is never listed "
-        "by `check`, because the later hand entry is already the latest of "
-        "that kind."
+        "the listing."
     ) in guide
+
+
+def test_guide_states_the_amended_maximum_rules() -> None:
+    guide = " ".join(_GUIDE.read_text(encoding="utf-8").split())
+    assert all(
+        phrase in guide
+        for phrase in (
+            "Only run and ride sessions supply it",
+            "no evidence is ever dated after the newest qualifying session",
+            "A derived maximum never falls",
+            "Record a lower maximum by hand.",
+            "challenged only by evidence dated after its measurement date",
+        )
+    )
+    assert "applied by applies-from date" not in guide
+    assert "back-reach takeover" not in guide

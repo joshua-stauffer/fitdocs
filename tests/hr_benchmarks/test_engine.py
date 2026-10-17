@@ -2,7 +2,7 @@
 
 import hashlib
 import os
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from dataclasses import FrozenInstanceError, replace
 from datetime import date, timedelta
 from pathlib import Path
@@ -480,8 +480,8 @@ def _reason_counts(**counts: int) -> tuple[tuple[NoEvidenceReason, int], ...]:
 def _three_peak_pages(root: Path) -> None:
     for name, day, bpm, sport in (
         ("z-early.md", "2021-02-01", 181, "cycling"),
-        ("c-late.md", "2021-02-03", 139, "swimming"),
-        ("m-median.md", "2021-02-02", 163, "rowing"),
+        ("c-late.md", "2021-02-03", 139, "running"),
+        ("m-median.md", "2021-02-02", 163, "cycling"),
     ):
         _workout_page(
             root,
@@ -561,10 +561,29 @@ def test_workouts_complete_reason_partition(
         ]
     elif reason is NoEvidenceReason.NO_SUSTAINED_STRETCH:
         refs = [_workout_archive(tmp_path, _session_fit(duration=20))]
+    elif reason is NoEvidenceReason.NOT_RUN_OR_BIKE:
+        refs = [_workout_archive(tmp_path, _session_fit(sport="walking"))]
     _workout_page(tmp_path, "problem.md", refs, day=day)
     settings = engine.load_hr_stage_settings({}, data_root=tmp_path)
     assert engine._read_workout_sessions(tmp_path, settings) == engine._WorkoutSessions(
         (), 1, 0, _reason_counts(**{reason.value: 1}), skipped, (), False
+    )
+
+
+def test_workouts_other_modalities_supply_no_maximum_evidence(
+    tmp_path: Path,
+) -> None:
+    _three_peak_pages(tmp_path)
+    for name, sport in (("w-walk.md", "walking"), ("x-swim.md", "swimming")):
+        _workout_page(
+            tmp_path,
+            name,
+            [_workout_archive(tmp_path, _session_fit(215, sport=sport))],
+            day="2021-02-03",
+        )
+    settings = engine.load_hr_stage_settings({}, data_root=tmp_path)
+    assert engine._read_workout_sessions(tmp_path, settings) == engine._WorkoutSessions(
+        _three_peak_evidence(), 5, 3, _reason_counts(not_run_or_bike=2), (), (), False
     )
 
 
@@ -912,8 +931,8 @@ def test_workouts_forward_each_sessions_inputs_and_peak(
         SessionPeak(date(2021, 2, 1), "workouts/z-early.md", 181.0),
     )
     expected_calls = (
-        (_forwarding_samples(139), Modality.SWIM, expected_flags),
-        (_forwarding_samples(163), Modality.OTHER, expected_flags),
+        (_forwarding_samples(139), Modality.RUN, expected_flags),
+        (_forwarding_samples(163), Modality.BIKE, expected_flags),
         (_forwarding_samples(181), Modality.BIKE, expected_flags),
     )
     peaks: list[SessionPeak] = []
@@ -921,9 +940,14 @@ def test_workouts_forward_each_sessions_inputs_and_peak(
     real_maximum = max_evidence
     real_peak = session_peak
 
-    def maximum(values: Sequence[SessionPeak]) -> tuple[Evidence, ...]:
+    hands: list[Collection[date]] = []
+
+    def maximum(
+        values: Sequence[SessionPeak], *, hand_dates: Collection[date] = ()
+    ) -> tuple[Evidence, ...]:
         peaks.extend(values)
-        return real_maximum(values)
+        hands.append(hand_dates)
+        return real_maximum(values, hand_dates=hand_dates)
 
     def peak(
         samples: Samples, *, modality: Modality, flags: FlagSettings
@@ -933,8 +957,13 @@ def test_workouts_forward_each_sessions_inputs_and_peak(
 
     monkeypatch.setattr(engine, "max_evidence", maximum)
     monkeypatch.setattr(engine, "session_peak", peak)
-    engine._read_workout_sessions(tmp_path, settings)
-    assert (tuple(peaks), tuple(calls)) == (expected_peaks, expected_calls)
+    hand_dates = frozenset({date(2021, 1, 5), date(2020, 12, 1)})
+    engine._read_workout_sessions(tmp_path, settings, hand_dates)
+    assert (tuple(peaks), tuple(calls), hands) == (
+        expected_peaks,
+        expected_calls,
+        [hand_dates],
+    )
 
 
 @pytest.mark.parametrize(
@@ -977,9 +1006,11 @@ def test_workouts_forward_fractional_peak_without_rounding(
         raw_peaks.append(value)
         return value
 
-    def maximum(values: Sequence[SessionPeak]) -> tuple[Evidence, ...]:
+    def maximum(
+        values: Sequence[SessionPeak], *, hand_dates: Collection[date] = ()
+    ) -> tuple[Evidence, ...]:
         peaks.extend(values)
-        return max_evidence(values)
+        return max_evidence(values, hand_dates=hand_dates)
 
     monkeypatch.setattr(engine, "session_peak", peak)
     monkeypatch.setattr(engine, "max_evidence", maximum)
@@ -1401,7 +1432,7 @@ def test_stage_join_policy_and_forwarding(
     origin = BenchmarkSource(BenchmarkSourceKind.MEASURED) if measured else None
     hands = (
         Benchmark(_REST, None, 50, date(2021, 1, 1), source=origin),
-        Benchmark(_MAX, None, 190, date(2021, 1, 1), source=origin),
+        Benchmark(_MAX, None, 170, date(2021, 1, 1), source=origin),
     )
     old_rest = replace(
         _basic_entries()[0],
@@ -1466,18 +1497,30 @@ def test_stage_join_policy_and_forwarding(
         events.append(("progress", done, total))
 
     def resting(
-        data_root: Path, received: engine.HrStageSettings
+        data_root: Path,
+        received: engine.HrStageSettings,
+        hand_dates: Collection[date],
     ) -> engine._RestingSeries:
-        events.append(("resting", data_root, received is settings))
+        events.append(("resting", data_root, received is settings, hand_dates))
         return engine._RestingSeries(
             rest_evidence, rest_kept, rest_failure, ("series note",)
         )
 
     def workouts(
-        data_root: Path, received: engine.HrStageSettings, *, progress: object = None
+        data_root: Path,
+        received: engine.HrStageSettings,
+        hand_dates: Collection[date],
+        *,
+        progress: object = None,
     ) -> engine._WorkoutSessions:
         events.append(
-            ("workouts", data_root, received is settings, progress is callback)
+            (
+                "workouts",
+                data_root,
+                received is settings,
+                hand_dates,
+                progress is callback,
+            )
         )
         if callable(progress):
             progress(23, 27)
@@ -1513,7 +1556,7 @@ def test_stage_join_policy_and_forwarding(
         175,
         "workouts",
         (
-            "Takes over from your hand-recorded 190 bpm of 2021-01-01: the "
+            "Takes over from your hand-recorded 170 bpm of 2021-01-01: the "
             "evidence differed by more than 2 bpm."
         ),
     )
@@ -1583,10 +1626,10 @@ def test_stage_join_policy_and_forwarding(
             changed,
         ),
         [
-            ("resting", root, True),
-            ("workouts", root, True, True),
-            ("progress", 23, 27),
             ("profile", root),
+            ("resting", root, True, frozenset({date(2021, 1, 1)})),
+            ("workouts", root, True, frozenset({date(2021, 1, 1)}), True),
+            ("progress", 23, 27),
         ],
         expected_calls,
         expected_kept_raw,
@@ -1595,11 +1638,8 @@ def test_stage_join_policy_and_forwarding(
 
 
 @pytest.mark.parametrize("kind", [_REST, _MAX], ids=["resting", "maximum"])
-@pytest.mark.parametrize(
-    "empty_cover", [False, True], ids=["contraction", "normalized-empty"]
-)
 def test_stage_real_backreach_change_and_expansion(
-    kind: BenchmarkKind, empty_cover: bool, tmp_path: Path
+    kind: BenchmarkKind, tmp_path: Path
 ) -> None:
     root = tmp_path / "backreach" / kind.value
     _basic_root(root)
@@ -1618,38 +1658,16 @@ def test_stage_real_backreach_change_and_expansion(
         ),
     )
     af = date(2021, 2, 5) if kind is _MAX else date(2021, 1, 20)
-    if not empty_cover:
-        af = date(2021, 1, 1)
     hand = Benchmark(
-        kind, None, 50 if kind is _REST else 190, date(2021, 3, 1), applies_from=af
+        kind, None, 50 if kind is _REST else 170, date(2021, 3, 1), applies_from=af
     )
     _seed_entries(root, (hand,))
     settings = engine.load_hr_stage_settings({}, data_root=root)
     before = _tree_snapshot(root)
     rest, maximum = _basic_entries()
     target = rest if kind is _REST else maximum
-    if not empty_cover:
-        note = (
-            f"Takes over from your hand-recorded {hand.value:g} bpm of "
-            f"2021-03-01 (it applied here through its applies-from date): "
-            f"the evidence differed by more than {3 if kind is _REST else 2}"
-            f" bpm."
-        )
-        target = replace(target, note=note)
-        if kind is _REST:
-            target = replace(
-                target,
-                source=replace(
-                    cast(BenchmarkSource, target.source),
-                    inputs=(
-                        "median of 14 daily values from garmin-export on the 28 days "
-                        "ending 2021-01-14; differed from the value in force by more "
-                        "than 3 bpm on each day from 2021-01-14 to 2021-01-27"
-                    ),
-                ),
-            )
     rest, maximum = (target, maximum) if kind is _REST else (rest, target)
-    after_cover = (af, af if empty_cover else target.measured_on)
+    after_cover = (af, af)
     expected_change = BackReachChange(kind, hand, (af, hand.measured_on), after_cover)
     preview = engine.derive_hr_benchmarks(root, settings=settings, dry_run=True)
     assert (
@@ -1664,7 +1682,7 @@ def test_stage_real_backreach_change_and_expansion(
             KindOutcome(_REST, (rest,), (rest,), (), False),
             KindOutcome(_MAX, (maximum,), (maximum,), (), False),
         ),
-        () if empty_cover else (Takeover(kind, target, hand),),
+        (),
         (expected_change,),
         True,
         False,
@@ -1721,6 +1739,80 @@ def test_stage_real_backreach_change_and_expansion(
         True,
         True,
         ("athlete.toml",),
+    )
+
+
+@pytest.mark.parametrize("kind", [_REST, _MAX], ids=["resting", "maximum"])
+def test_stage_real_evidence_inside_hand_cover_starts_nothing(
+    kind: BenchmarkKind, tmp_path: Path
+) -> None:
+    root = tmp_path / "held-cover" / kind.value
+    _basic_root(root)
+    hand = Benchmark(
+        kind,
+        None,
+        50 if kind is _REST else 170,
+        date(2021, 3, 1),
+        applies_from=date(2021, 1, 1),
+    )
+    _seed_entries(root, (hand,))
+    rest, maximum = _basic_entries()
+    other = maximum if kind is _REST else rest
+    report = engine.derive_hr_benchmarks(
+        root, settings=engine.load_hr_stage_settings({}, data_root=root)
+    )
+    index = 0 if kind is _REST else 1
+    assert (
+        report.kinds[index],
+        report.takeovers,
+        report.back_reach_changes,
+        frozenset(load_profile(root).benchmarks.entries),
+    ) == (
+        KindOutcome(kind, (), (), (), False),
+        (),
+        (),
+        frozenset((hand, other)),
+    )
+
+
+@pytest.mark.parametrize("kind", [_REST, _MAX], ids=["resting", "maximum"])
+def test_stage_legacy_takeover_inside_cover_is_replaced_and_cover_widens(
+    kind: BenchmarkKind, tmp_path: Path
+) -> None:
+    root = tmp_path / "legacy-cover" / kind.value
+    _basic_root(root)
+    hand = Benchmark(
+        kind,
+        None,
+        50 if kind is _REST else 170,
+        date(2021, 3, 1),
+        applies_from=date(2021, 1, 1),
+    )
+    rest, maximum = _basic_entries()
+    legacy = rest if kind is _REST else maximum
+    other = maximum if kind is _REST else rest
+    _seed_entries(root, (hand, legacy))
+    report = engine.derive_hr_benchmarks(
+        root, settings=engine.load_hr_stage_settings({}, data_root=root)
+    )
+    index = 0 if kind is _REST else 1
+    assert (
+        report.kinds[index],
+        report.takeovers,
+        report.back_reach_changes,
+        frozenset(load_profile(root).benchmarks.entries),
+    ) == (
+        KindOutcome(kind, (), (), (legacy,), False),
+        (),
+        (
+            BackReachChange(
+                kind,
+                hand,
+                (date(2021, 1, 1), legacy.measured_on),
+                (date(2021, 1, 1), hand.measured_on),
+            ),
+        ),
+        frozenset((hand, other)),
     )
 
 
@@ -1851,14 +1943,14 @@ def test_stage_takeovers_use_structural_identity(
 ) -> None:
     root = tmp_path / "takeovers" / old_difference
     root.mkdir(parents=True)
-    hand = Benchmark(_MAX, None, 190, date(2021, 1, 1))
+    hand = Benchmark(_MAX, None, 170, date(2021, 1, 1))
     new = _short_entry(
         _MAX,
         date(2021, 1, 4),
         175,
         "workouts",
         (
-            "Takes over from your hand-recorded 190 bpm of 2021-01-01: the "
+            "Takes over from your hand-recorded 170 bpm of 2021-01-01: the "
             "evidence differed by more than 2 bpm."
         ),
     )
@@ -1925,7 +2017,7 @@ def test_stage_takeovers_use_structural_identity(
 )
 def test_stage_takeover_key_dimensions(dimension: str) -> None:
     derived = _basic_entries()[1]
-    hand = Benchmark(_MAX, None, 190, date(2021, 1, 1))
+    hand = Benchmark(_MAX, None, 170, date(2021, 1, 1))
     reference = (_MAX, date(2021, 2, 3), 163, date(2021, 1, 1))
     if dimension == "kind":
         derived = replace(derived, kind=_REST)
@@ -2283,7 +2375,7 @@ def test_stage_real_evidence_after_backreach_hand_date(
             (
                 "median of the three highest 30-second sustained peaks "
                 "(207.0, 199.0, 185.0 bpm) "
-                "among 6 sessions dated 2020-03-03 to 2021-03-02"
+                "among 3 sessions dated 2021-03-02 to 2021-03-02"
             ),
             "max_hr_timeline_choice",
         ),
@@ -2329,7 +2421,8 @@ def test_stage_reports_each_changed_hand_cover(tmp_path: Path) -> None:
     max_hand = Benchmark(
         _MAX, None, 190, date(2021, 3, 2), applies_from=date(2021, 1, 2)
     )
-    _seed_entries(root, (rest_hand, max_hand))
+    legacy_rest, legacy_max = _basic_entries()
+    _seed_entries(root, (rest_hand, max_hand, legacy_rest, legacy_max))
     before = _tree_snapshot(root)
     report = engine.derive_hr_benchmarks(
         root, settings=engine.load_hr_stage_settings({}, data_root=root)
@@ -2346,20 +2439,17 @@ def test_stage_reports_each_changed_hand_cover(tmp_path: Path) -> None:
             BackReachChange(
                 _MAX,
                 max_hand,
+                (date(2021, 1, 2), legacy_max.measured_on),
                 (date(2021, 1, 2), date(2021, 3, 2)),
-                (date(2021, 1, 2), date(2021, 2, 3)),
             ),
             BackReachChange(
                 _REST,
                 rest_hand,
+                (date(2021, 1, 1), legacy_rest.measured_on),
                 (date(2021, 1, 1), date(2021, 3, 1)),
-                (date(2021, 1, 1), date(2021, 1, 14)),
             ),
         ),
-        (
-            (_MAX, date(2021, 2, 3), 163, max_hand),
-            (_REST, date(2021, 1, 14), 57, rest_hand),
-        ),
+        (),
         ("athlete.toml",),
     )
 
@@ -2529,7 +2619,7 @@ def test_stage_repair_two_same_kind_changed_covers(
     first = Benchmark(
         kind,
         None,
-        50 if kind is _REST else 190,
+        50 if kind is _REST else 170,
         date(2021, 3, 1),
         applies_from=first_start,
         source=origin,
@@ -2539,7 +2629,7 @@ def test_stage_repair_two_same_kind_changed_covers(
         None,
         49 if kind is _REST else 189,
         date(2021, 3, 2),
-        applies_from=date(2021, 1, 1),
+        applies_from=date(2021, 2, 5),
         source=origin,
     )
     _seed_entries(root, (first, second))
@@ -2549,7 +2639,6 @@ def test_stage_repair_two_same_kind_changed_covers(
         settings=engine.load_hr_stage_settings({}, data_root=root),
         dry_run=dry_run,
     )
-    derived_day = date(2021, 1, 21) if kind is _REST else date(2021, 2, 3)
     expected = (
         BackReachChange(
             kind, first, (first_start, first.measured_on), (first_start, first_start)
@@ -2557,8 +2646,8 @@ def test_stage_repair_two_same_kind_changed_covers(
         BackReachChange(
             kind,
             second,
-            (date(2021, 1, 1), first_start),
-            (date(2021, 1, 1), derived_day),
+            (date(2021, 2, 5), first_start),
+            (date(2021, 2, 5), date(2021, 2, 5)),
         ),
     )
     assert (report.back_reach_changes, _tree_changes(before, root)) == (
@@ -2590,7 +2679,7 @@ def test_stage_repair_cross_partition_matrix(
     root.mkdir()
     hands = (
         Benchmark(_REST, None, 50, date(2021, 1, 1), source=origin),
-        Benchmark(_MAX, None, 190, date(2021, 1, 1), source=origin),
+        Benchmark(_MAX, None, 170, date(2021, 1, 1), source=origin),
     )
     old_rest = tuple(
         replace(
@@ -2691,7 +2780,7 @@ def test_stage_repair_cross_partition_matrix(
                 date(2021, 1, 2),
                 175,
                 "workouts",
-                "Takes over from your hand-recorded 190 bpm of 2021-01-01: "
+                "Takes over from your hand-recorded 170 bpm of 2021-01-01: "
                 "the evidence differed by more than 2 bpm.",
             ),
         )
@@ -2765,7 +2854,7 @@ def test_stage_repair_multiple_new_takeovers_same_kind(
     root = tmp_path / "history"
     root.mkdir()
     first = Benchmark(
-        kind, None, 50 if kind is _REST else 190, date(2021, 1, 1), source=origin
+        kind, None, 50 if kind is _REST else 170, date(2021, 1, 1), source=origin
     )
     second = Benchmark(
         kind, None, 55 if kind is _REST else 185, date(2021, 1, 20), source=origin
@@ -2853,7 +2942,7 @@ def test_stage_repair_generated_cardinality(
     root = tmp_path / "generated"
     root.mkdir()
     hand_days = (date(2021, 1, 1), date(2021, 2, 1), date(2021, 3, 1))
-    hand_values = (50, 55, 60) if kind is _REST else (190, 185, 180)
+    hand_values = (50, 55, 60) if kind is _REST else (170, 165, 160)
     values = (61, 79, 70) if kind is _REST else (175, 210, 200)
     hands = tuple(
         Benchmark(kind, None, v, d, source=origin)
@@ -3150,7 +3239,7 @@ def test_stage_repair_later_hand_agreement_suppresses_entry(
     root = tmp_path / "agreement"
     root.mkdir()
     first = Benchmark(
-        kind, None, 50 if kind is _REST else 190, date(2021, 1, 1), source=origin
+        kind, None, 50 if kind is _REST else 170, date(2021, 1, 1), source=origin
     )
     second = Benchmark(
         kind, None, 70 if kind is _REST else 200, date(2021, 1, 20), source=origin
@@ -3289,7 +3378,7 @@ def test_stage_repair_same_kind_cover_expansion_and_noop(
     first = Benchmark(
         kind,
         None,
-        50 if kind is _REST else 190,
+        50 if kind is _REST else 170,
         date(2021, 3, 1),
         applies_from=first_start,
         source=origin,
@@ -3299,13 +3388,12 @@ def test_stage_repair_same_kind_cover_expansion_and_noop(
         None,
         49 if kind is _REST else 189,
         date(2021, 3, 2),
-        applies_from=date(2021, 1, 1),
+        applies_from=date(2021, 2, 5),
         source=origin,
     )
     _seed_entries(root, (first, second))
     settings = engine.load_hr_stage_settings({}, data_root=root)
     engine.derive_hr_benchmarks(root, settings=settings)
-    derived_day = date(2021, 1, 21) if kind is _REST else date(2021, 2, 3)
     if kind is _REST:
         write_series(
             root,
@@ -3332,8 +3420,8 @@ def test_stage_repair_same_kind_cover_expansion_and_noop(
         BackReachChange(
             kind,
             second,
-            (date(2021, 1, 1), derived_day),
-            (date(2021, 1, 1), first_start),
+            (date(2021, 2, 5), date(2021, 2, 5)),
+            (date(2021, 2, 5), first_start),
         ),
     )
     assert (
@@ -3428,9 +3516,9 @@ def test_stage_repair_cover_cardinality(
         for i, bpm in enumerate((173, 161, 151)):
             ref = _workout_archive(root, _session_fit(bpm))
             _workout_page(root, f"useful-{i}.md", [ref], day="2021-01-02")
-    starts = (date(2021, 2, 10), date(2021, 1, 20), date(2021, 1, 1))[:count]
+    starts = (date(2021, 2, 10), date(2021, 1, 20), date(2021, 1, 10))[:count]
     measurement_days = (date(2021, 3, 1), date(2021, 3, 2), date(2021, 3, 3))[:count]
-    values = ((50, 55, 60) if kind is _REST else (190, 185, 180))[:count]
+    values = ((50, 55, 60) if kind is _REST else (170, 165, 160))[:count]
     hands = tuple(
         Benchmark(kind, None, value, measured, applies_from=start, source=origin)
         for value, measured, start in zip(values, measurement_days, starts, strict=True)
@@ -3443,10 +3531,7 @@ def test_stage_repair_cover_cardinality(
         (start, measurement_days[0] if i == 0 else starts[i - 1])
         for i, start in enumerate(starts)
     )
-    after_intervals = tuple(
-        (start, date(2021, 1, 2) if start == date(2021, 1, 1) else start)
-        for start in starts
-    )
+    after_intervals = tuple((start, start) for start in starts)
     notices = tuple(
         BackReachChange(kind, hand, old, new)
         for hand, old, new in zip(hands, before_intervals, after_intervals, strict=True)
@@ -3604,7 +3689,7 @@ def test_stage_repair_third_hand_agreement_suppresses_entry(
     root = tmp_path / "third-hand-agreement"
     root.mkdir()
     hand_dates = (date(2021, 1, 1), date(2021, 1, 20), date(2021, 2, 10))
-    hand_values = (50, 70, 79) if kind is _REST else (190, 200, 210)
+    hand_values = (50, 70, 79) if kind is _REST else (170, 200, 210)
     hands = tuple(
         Benchmark(kind, None, value, day, source=origin)
         for day, value in zip(hand_dates, hand_values, strict=True)
@@ -3834,14 +3919,14 @@ def test_stage_repair_cross_kind_cover_identity(
         None,
         50,
         date(2021, 3, 1),
-        applies_from=date(2021, 1, 1),
+        applies_from=date(2021, 2, 5),
         source=origins[0],
     )
-    max_start = date(2021, 1, 1) if same_start else date(2021, 1, 2)
+    max_start = date(2021, 2, 5) if same_start else date(2021, 2, 6)
     maximum = Benchmark(
         _MAX,
         None,
-        50 if same_value else 190,
+        50 if same_value else 170,
         date(2021, 3, 1) if same_date else date(2021, 3, 2),
         applies_from=max_start,
         source=origins[1],
@@ -3866,13 +3951,13 @@ def test_stage_repair_cross_kind_cover_identity(
             _MAX,
             maximum,
             (max_start, maximum.measured_on),
-            (max_start, date(2021, 2, 3)),
+            (max_start, max_start),
         ),
         BackReachChange(
             _REST,
             rest,
-            (date(2021, 1, 1), date(2021, 3, 1)),
-            (date(2021, 1, 1), date(2021, 1, 14)),
+            (date(2021, 2, 5), date(2021, 3, 1)),
+            (date(2021, 2, 5), date(2021, 2, 5)),
         ),
     )
     assert (
@@ -3921,8 +4006,9 @@ def test_stage_repair_same_kind_cover_identity(
                 for i in range(27)
             ),
         )
-    value = 50 if kind is _REST else 190
-    first_start = date(2021, 1, 1) if equal_start else date(2021, 2, 10)
+    value = 50 if kind is _REST else 170
+    cover_start = date(2021, 2, 5)
+    first_start = cover_start if equal_start else date(2021, 2, 10)
     first = Benchmark(
         kind,
         None,
@@ -3936,7 +4022,7 @@ def test_stage_repair_same_kind_cover_identity(
         None,
         value if equal_values else value - 1,
         date(2021, 3, 2),
-        applies_from=date(2021, 1, 1),
+        applies_from=cover_start,
         source=origins[1],
     )
     hands = (first, second)
@@ -3955,14 +4041,13 @@ def test_stage_repair_same_kind_cover_identity(
         settings=engine.load_hr_stage_settings({}, data_root=root),
         dry_run=dry_run,
     )
-    derived_day = rest_day if kind is _REST else date(2021, 2, 3)
     if equal_start:
         expected: tuple[BackReachChange, ...] = (
             BackReachChange(
                 kind,
                 first,
-                (date(2021, 1, 1), date(2021, 3, 1)),
-                (date(2021, 1, 1), derived_day),
+                (cover_start, date(2021, 3, 1)),
+                (cover_start, cover_start),
             ),
         )
     else:
@@ -3976,8 +4061,8 @@ def test_stage_repair_same_kind_cover_identity(
             BackReachChange(
                 kind,
                 second,
-                (date(2021, 1, 1), first_start),
-                (date(2021, 1, 1), derived_day),
+                (cover_start, first_start),
+                (cover_start, cover_start),
             ),
         )
     assert (

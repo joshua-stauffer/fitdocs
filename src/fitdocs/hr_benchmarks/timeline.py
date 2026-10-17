@@ -41,14 +41,9 @@ def derive_timeline(
             )
         is_takeover = in_force is not None and in_force in recorded
         if is_takeover and in_force is not None:
-            back_reach = (
-                " (it applied here through its applies-from date)"
-                if in_force.measured_on > first.day
-                else ""
-            )
             note = (
                 f"Takes over from your hand-recorded {in_force.value:g} bpm of "
-                f"{in_force.measured_on}{back_reach}: the evidence differed by "
+                f"{in_force.measured_on}: the evidence differed by "
                 f"more than {rule.step_bpm} bpm."
             )
         else:
@@ -84,7 +79,14 @@ def derive_timeline(
             append_entry(candidate, in_force)
             run.clear()
             continue
-        if abs(candidate.value - in_force.value) <= rule.step_bpm:
+        if in_force in recorded and candidate.day <= in_force.measured_on:
+            run.clear()
+            continue
+        if rule.rises_only:
+            quiet = candidate.value <= in_force.value + rule.step_bpm
+        else:
+            quiet = abs(candidate.value - in_force.value) <= rule.step_bpm
+        if quiet:
             run.clear()
             continue
         if run and (

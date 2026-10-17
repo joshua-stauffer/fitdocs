@@ -1,6 +1,6 @@
 """Collect evidence and reconcile the heart-rate benchmark partition."""
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -64,7 +64,11 @@ class _RestingSeries:
     notes: tuple[str, ...]
 
 
-def _read_resting_series(data_root: Path, settings: HrStageSettings) -> _RestingSeries:
+def _read_resting_series(
+    data_root: Path,
+    settings: HrStageSettings,
+    hand_dates: Collection[date] = (),
+) -> _RestingSeries:
     try:
         series = read_series(data_root)
     except SeriesReadError as exc:
@@ -102,6 +106,7 @@ def _read_resting_series(data_root: Path, settings: HrStageSettings) -> _Resting
         document_for_year=lambda year: (
             wellness_series_path(data_root, year).relative_to(data_root).as_posix()
         ),
+        hand_dates=hand_dates,
     )
     return _RestingSeries(evidence, False, (), ())
 
@@ -120,6 +125,7 @@ class _WorkoutSessions:
 def _read_workout_sessions(
     data_root: Path,
     settings: HrStageSettings,
+    hand_dates: Collection[date] = (),
     *,
     progress: Callable[[int, int], None] | None = None,
 ) -> _WorkoutSessions:
@@ -169,7 +175,7 @@ def _read_workout_sessions(
             if progress is not None:
                 progress(done, len(documents))
     return _WorkoutSessions(
-        max_evidence(peaks),
+        max_evidence(peaks, hand_dates=hand_dates),
         len(documents),
         len(peaks),
         tuple(counts.items()),
@@ -200,10 +206,19 @@ def derive_hr_benchmarks(
     other_derived: Sequence[Benchmark] | None = None,
     progress: Callable[[int, int], None] | None = None,
 ) -> HrStageReport:
-    resting = _read_resting_series(data_root, settings)
-    workouts = _read_workout_sessions(data_root, settings, progress=progress)
     profile = load_profile(data_root)
     old = profile.benchmarks
+    resting = _read_resting_series(
+        data_root,
+        settings,
+        _hand_dates(old, BenchmarkKind.RESTING_HR_BPM),
+    )
+    workouts = _read_workout_sessions(
+        data_root,
+        settings,
+        _hand_dates(old, BenchmarkKind.MAX_HR_BPM),
+        progress=progress,
+    )
     hr_entries: list[Benchmark] = []
     for rule, evidence, kept in (
         (RESTING_RULE, resting.evidence, resting.kept),
@@ -291,6 +306,14 @@ def derive_hr_benchmarks(
         resting.notes,
         written,
         changed,
+    )
+
+
+def _hand_dates(benchmarks: BenchmarkSet, kind: BenchmarkKind) -> frozenset[date]:
+    return frozenset(
+        entry.measured_on
+        for entry in benchmarks.entries
+        if entry.kind is kind and not _is_derived(entry)
     )
 
 

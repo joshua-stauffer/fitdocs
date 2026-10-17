@@ -71,7 +71,7 @@ def test_shared_choice_groups() -> None:
 
 
 @pytest.mark.parametrize(
-    ("name", "kind", "method", "key", "step", "days"),
+    ("name", "kind", "method", "key", "step", "days", "rises_only"),
     [
         (
             "RESTING_RULE",
@@ -80,6 +80,7 @@ def test_shared_choice_groups() -> None:
             "resting_hr_timeline_choice",
             3,
             14,
+            False,
         ),
         (
             "MAX_RULE",
@@ -88,11 +89,18 @@ def test_shared_choice_groups() -> None:
             "max_hr_timeline_choice",
             2,
             1,
+            True,
         ),
     ],
 )
 def test_kind_rules(
-    name: str, kind: BenchmarkKind, method: HrMethod, key: str, step: int, days: int
+    name: str,
+    kind: BenchmarkKind,
+    method: HrMethod,
+    key: str,
+    step: int,
+    days: int,
+    rises_only: bool,
 ) -> None:
     assert dataclasses.astuple(getattr(sources, name)) == (
         kind,
@@ -100,6 +108,7 @@ def test_kind_rules(
         key,
         step,
         days,
+        rises_only,
     )
 
 

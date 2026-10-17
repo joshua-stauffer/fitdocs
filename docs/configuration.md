@@ -368,60 +368,68 @@ does not write the undated profile keys used by zones and the page's own
 TRIMP figure, and requires no new configuration.
 
 Resting evidence is the median of at least 14 daily values from one source
-within the 28 days ending on the evidence date. Sources are kept separate:
+within the 28 days ending on the evidence date, counting only days after the
+latest hand-recorded resting entry measured before that date. Sources are kept separate:
 `[wellness]` precedence chooses the first source whose baseline is formed,
 rather than mixing the per-day canonical values. A higher-ranked source
 without enough values does not displace a formed lower-ranked baseline.
 
 Maximum evidence comes from each workout's composed activity, using all
-archive files listed by its page, across sports. A session peak is its
+archive files listed by its page. Only run and ride sessions supply it; the
+report lists every other session under `not_run_or_bike`. A session peak is its
 highest 30-second sustained, time-weighted heart rate. The stage rejects
 implausible samples and rapid changes, breaks stretches at gaps over 10
 seconds, and excludes cadence-locked runs and cadence-locked spans in runs.
-It takes the median of the three highest session peaks within the 365 days
-ending on each evidence date; fewer than three sessions gives no maximum
-evidence. Both kinds round to whole bpm, with halfway values rounded up.
+Evidence is worked out only on the dates of qualifying sessions: it takes the
+median of the three highest session peaks within the 365 days ending on that
+date, counting only sessions after the latest hand-recorded maximum measured
+before it. Fewer than three such sessions gives no maximum evidence, and no
+evidence is ever dated after the newest qualifying session. Both kinds round
+to whole bpm, with halfway values rounded up.
 
 The write-time rules compare rounded evidence with the value in force on
 that date, whether hand-recorded or derived:
 
 - Resting disagreement step: more than 3 bpm.
 - Resting confirmation: 14 consecutive days.
-- Maximum disagreement step: more than 2 bpm.
+- Maximum rise step: more than 2 bpm above the value in force.
 - Maximum confirmation: 1 day (no waiting period).
+
+A derived maximum never falls: evidence at or below the value in force plus
+the step starts no entry, so a year without hard efforts does not lower it.
+Record a lower maximum by hand.
 
 Where no value is in force, the first evidence starts an entry immediately.
 Otherwise, agreement within the step starts no entry. Resting confirmation
 requires the same source throughout; a missing evidence day, an agreeing
 day or a source change restarts it. A confirmed entry is dated on the first day of
-the run and uses that day's value. Evidence on a hand entry's measurement
-date is ignored; later evidence must pass these rules before it takes
-over. Hand entries are never modified or deleted.
+the run and uses that day's value. A hand entry is challenged only by
+evidence dated after its measurement date and formed from sessions or
+wellness days after it. Evidence on or before that date, including days its
+applies-from date covers, never starts an entry. Later evidence must pass
+these rules before it takes over. Hand entries are never modified or deleted.
 
 These are rules for writing entries, not changes to dated benchmark
 selection. The most recent entry measured on or before a workout's date
 wins; `applies_from` fills earlier dates only where no such entry exists.
-Derived entries carry no `applies_from`. In particular, derived evidence
-dated before a later hand entry narrows that hand entry's back-reach:
-the hand value can still cover days before the first derived entry, but
-the derived values apply from their own dates until the hand measurement.
-The hand entry still wins from its measurement date until a later entry
-supersedes it. Historic heart-rate load before that hand date can therefore
-change, but existing load is rescored only when you explicitly run
+Derived entries carry no `applies_from`. A hand entry's back-reach keeps
+covering the days before its measurement date, because evidence dated there
+starts nothing. It narrows only where a derived entry is dated before the
+cover begins, since the most recent entry measured on or before a date wins.
+The hand entry wins from its measurement date until a later entry supersedes
+it. Existing load is rescored only when you explicitly run
 `fitdocs load --recompute` after derivation. Derivation itself writes no
 workout page and recomputes no load.
 
 A new takeover is announced by the derivation run (including `--dry-run`)
 with the kind, values, dates and evidence. The timeline entry's note also
 names the superseded hand value and its date. A change to a hand entry's
-back-reach is reported once by the run that changes it.
+back-reach, such as one widening because an earlier derived entry was
+replaced, is reported once by the run that changes it.
 
 `fitdocs check` lists a takeover only while that derived entry is the
 latest entry of its kind; a later hand-recorded or derived entry ends
-the listing. A takeover of a hand entry's back-reach is announced by
-the derivation run and recorded in the timeline, but is never listed
-by `check`, because the later hand entry is already the latest of
-that kind.
+the listing.
 
 To keep your own value, record a new hand entry dated after the takeover;
 it wins from its date, and later derivation treats it by the same

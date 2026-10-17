@@ -1,27 +1,23 @@
 """Rolling maximum-heart-rate evidence from sustained session peaks."""
 
-from collections.abc import Sequence
-from datetime import timedelta
+from collections.abc import Collection, Sequence
+from datetime import date, timedelta
 from math import floor
 
 from . import sources
 from .types import Evidence, SessionPeak
 
 
-def max_evidence(sessions: Sequence[SessionPeak]) -> tuple[Evidence, ...]:
-    days = sorted(
-        {
-            day
-            for session in sessions
-            for day in (
-                session.day,
-                session.day + timedelta(days=sources.MAX_WINDOW_DAYS.value),
-            )
-        }
-    )
+def max_evidence(
+    sessions: Sequence[SessionPeak], *, hand_dates: Collection[date] = ()
+) -> tuple[Evidence, ...]:
+    days = sorted({session.day for session in sessions})
     evidence: list[Evidence] = []
     for day in days:
         start = day - timedelta(days=sources.MAX_WINDOW_DAYS.value - 1)
+        floor_day = max((hand for hand in hand_dates if hand < day), default=None)
+        if floor_day is not None:
+            start = max(start, floor_day + timedelta(days=1))
         window = [session for session in sessions if start <= session.day <= day]
         if len(window) < sources.MAX_TOP_SESSIONS.value:
             continue
