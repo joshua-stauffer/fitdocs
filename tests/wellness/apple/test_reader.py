@@ -429,6 +429,29 @@ def test_zip_errors(tmp_path: Path, fault: str) -> None:
         list(iter_items(document, progress=None))
 
 
+def test_consumer_runtime_error_is_not_a_format_error(tmp_path: Path) -> None:
+    path = tmp_path / "export.zip"
+    path.write_bytes(zip_members({ENGLISH_MAIN: export_document()}))
+    with pytest.raises(RuntimeError, match="consumer") as caught:
+        with open_main_document(path):
+            raise RuntimeError("consumer")
+    assert not isinstance(caught.value, WellnessFormatError)
+
+
+def test_recursion_error_while_reading_member_propagates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "export.zip"
+    path.write_bytes(zip_members({ENGLISH_MAIN: export_document()}))
+
+    def deep(self: zipfile.ZipExtFile, size: int = -1) -> bytes:
+        raise RecursionError("deep")
+
+    monkeypatch.setattr(zipfile.ZipExtFile, "read", deep)
+    with pytest.raises(RecursionError), open_main_document(path) as document:
+        list(iter_items(document, progress=None))
+
+
 def test_missing_file(tmp_path: Path) -> None:
     with pytest.raises(OSError), open_main_document(tmp_path / "absent"):
         pass

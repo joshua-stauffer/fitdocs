@@ -387,6 +387,62 @@ def test_in_place_already_read_rewrite_defers(
     assert years(root) == {} and load_quarantine(root).entries == ()
 
 
+def test_transient_read_error_at_extraction_defers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    inbox, root = tmp_path / "inbox", tmp_path / "data"
+    payload = export_zip(document())
+    put(inbox, "flaky.zip", payload)
+    faults: list[str] = []
+    armed: list[bool] = []
+
+    class Flaky:
+        def __init__(self, stream: Any) -> None:
+            self._stream = stream
+
+        def __enter__(self) -> "Flaky":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            self._stream.close()
+
+        def read(self, size: int = -1) -> bytes:
+            if not faults:
+                faults.append("read")
+                raise OSError("transient read failure")
+            return self._stream.read(size)  # type: ignore[no-any-return]
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self._stream, name)
+
+    real_open = Path.open
+
+    def flaky_open(self: Path, *args: Any, **kwargs: Any) -> Any:
+        stream = real_open(self, *args, **kwargs)
+        return Flaky(stream) if armed and self.name == "flaky.zip" else stream
+
+    original = apple.open_main_document
+
+    def arm(*args: Any, **kwargs: Any) -> Any:
+        armed.append(True)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(apple, "open_main_document", arm)
+    monkeypatch.setattr(Path, "open", flaky_open)
+    first = run_drain(inbox, root)
+    assert faults == ["read"]
+    assert (first.wellness_failures, first.quarantined, first.wellness_archived) == (
+        (),
+        (),
+        (),
+    )
+    assert [note.subject for note in first.deferred] == ["flaky.zip"]
+    assert load_quarantine(root).entries == ()
+    assert years(root) == {} and not (root / ref(payload)).exists()
+    second = run_drain(inbox, root)
+    assert [note.subject for note in second.wellness_archived] == ["flaky.zip"]
+
+
 def test_progress_interrupt_propagates_and_cleans_temp(tmp_path: Path) -> None:
     inbox, root = tmp_path / "inbox", tmp_path / "data"
     xml = document(extra_elements=["<Ignored>" + "x" * 3_000_000 + "</Ignored>"])

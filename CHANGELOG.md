@@ -275,6 +275,12 @@ recorded as one.
   would otherwise be held because they match both pages; see
   [the ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md#deciding-that-two-files-are-one-workout).
 
+### Fixed
+
+- A one-off read error while archiving an Apple Health `export.zip` (for
+  example while an iCloud file is still materialising) now defers the file for
+  the next drain. Before, it was quarantined as "not an Apple Health export".
+
 ## [0.1.0] - 2026-09-19
 
 ### Added
