@@ -1,7 +1,7 @@
 ---
 id: 2026-10-17-apple-reduce-night-lookup-is-quadratic
 title: Apple Health reducer matches each HRV/respiration/SpO2 reading against every night, so rebuild time grows with nights × readings
-status: open
+status: done
 importance: medium
 importance_why: Paid twice per import and on every series rebuild any later wellness intake triggers, such as a daily intervals pull; cost grows with history.
 effort: S
@@ -48,3 +48,6 @@ time). With a daily `fitdocs pull --sync`, every drain pays it.
    and new means on the existing fixtures.
 3. Confirm the extract bytes and series are unchanged (pure refactor; no
    `RULES_VERSION` bump).
+
+## Resolution (2026-10-17)
+Fixed on chore/apple-import-hardening: `_NightIndex` sweeps all asleep intervals once (earliest covering night wins, as the old first-match loop did) and each reading is one bisect. Reviewer differential: 2.65M probes, 0 mismatches; 3,650 nights x 30 readings/day 15.25 s -> 0.029 s. The maintainer's real export (3.24 GB export.xml) imported in 56 s. APPROVED.

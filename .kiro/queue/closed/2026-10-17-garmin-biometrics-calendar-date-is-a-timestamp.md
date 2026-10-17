@@ -1,7 +1,7 @@
 ---
 id: 2026-10-17-garmin-biometrics-calendar-date-is-a-timestamp
 title: A real Garmin userBioMetrics export fails as a whole because metaData.calendarDate is a local timestamp, not a date
-status: open
+status: done
 importance: medium
 importance_why: No real Garmin export imports any weight; the file is quarantined and reported on every drain.
 effort: S
@@ -65,3 +65,6 @@ which digit-masked each `metaData.calendarDate`.
 - Whether the date part of a biometrics timestamp equals the weigh-in's
   local wake date, or needs the `weight.timestampGMT` cross-check. The
   wellness-day rule in `docs/wellness.md` § Wellness day governs.
+
+## Resolution (2026-10-17)
+Fixed on chore/wellness-garmin-biometrics (landed via chore/p12-followups): biometrics `metaData.calendarDate` accepts a local timestamp (HH:MM:SS with an optional 1-6 digit fraction; date part kept; other shapes rejected, other Garmin kinds unchanged); builder emits the real shape; research.md shape note appended; no rules_version bump (a failed file was never archived). Real-data check: the maintainer's quarantined file, retried with `--retry-quarantined`, imported 23 weigh-ins on 17 days (one genuine same-timestamp conflict, reported). Independently reviewed (two rounds), APPROVED.

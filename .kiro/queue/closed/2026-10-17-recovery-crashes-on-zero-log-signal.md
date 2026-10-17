@@ -1,7 +1,7 @@
 ---
 id: 2026-10-17-recovery-crashes-on-zero-log-signal
 title: read_series does not apply metric ranges, so an HRV of 0 in the series crashes fitdocs recovery with a math domain error
-status: open
+status: done
 importance: low
 importance_why: Needs a hand-edited or corrupted series file, but the failure is an uncaught traceback instead of the documented exit 1 with a remedy.
 effort: S
@@ -45,3 +45,6 @@ file reaches this.
    is the more general fix.
 2. Add a test: a zero HRV row makes `recovery` exit 1 with the remedy, and
    the series reader raises its documented error.
+
+## Resolution (2026-10-17)
+Fixed on chore/wellness-garmin-biometrics: `read_series` faults an out-of-range or non-finite series value as SeriesReadError naming file, line, day, metric and value (kept out of `decode_year`, so the engine's rebuild still repairs a hand-edited series). `fitdocs recovery` exits 1 with the sync/regen remedy, derive-benchmarks records a resting failure, `fitdocs index` reports a derived.wellness producer error; `check` unchanged. APPROVED.

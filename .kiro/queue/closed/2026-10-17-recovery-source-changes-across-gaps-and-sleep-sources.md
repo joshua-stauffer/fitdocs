@@ -1,7 +1,7 @@
 ---
 id: 2026-10-17-recovery-source-changes-across-gaps-and-sleep-sources
 title: Recovery page omits source changes that follow a gap, and its Sleep section never names its source or changes (Req 5.5, 5.6)
-status: open
+status: done
 importance: medium
 importance_why: The page silently continues across two different measurements, which is exactly what Req 5 exists to prevent.
 effort: S
@@ -66,3 +66,6 @@ optional maintainer task 6.3* exists to check exactly the source switches
    heading or caption.
 3. Decide whether the Other Signals panels need an origins sentence for Req
    5.6, or whether the panel title's source suffices.
+
+## Resolution (2026-10-17)
+Fixed on chore/recovery-source-statements (recovery design Amendment 1 note): changes are measured against the latest earlier day with a shown source; Sleep states its changes (means wording, no range), names its sources and origins and captions its table's night and source; Other Signals names each charted panel's source and origins; 'on 1 day' pluralised; RECOVERY_VERSION 2. Real-data check: the Garmin export -> Apple Health switch of 2023-02-20 is stated for resting HR and sleep. APPROVED after one rejection round.

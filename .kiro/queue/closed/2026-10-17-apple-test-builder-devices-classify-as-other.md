@@ -1,7 +1,7 @@
 ---
 id: 2026-10-17-apple-test-builder-devices-classify-as-other
 title: The Apple test builders' WATCH and PHONE presets say manufacturer "Apple", which production classifies as OTHER
-status: open
+status: done
 importance: low
 importance_why: A test trap, not a product defect; a future test using the presets as-is silently exercises the OTHER-writer path.
 effort: S
@@ -43,3 +43,6 @@ maintainer's real-export smoke (task 6.2*).
    relied on OTHER classification. Fix those tests to name an explicit OTHER
    preset.
 2. If 6.2* later shows real exports say something else, revisit both.
+
+## Resolution (2026-10-17)
+Fixed on chore/apple-import-hardening: WATCH/PHONE presets name manufacturer `Apple Inc.`; `test_presets_classify_as_their_names_say` pins it; reviewer confirmed no existing test's reduced output changed. The real export confirmed the Watch writes `Apple Inc.` (older iPhones also `Apple`).

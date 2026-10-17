@@ -1,7 +1,7 @@
 ---
 id: 2026-10-17-apple-extract-transient-oserror-quarantines
 title: A transient read error while extracting an Apple Health zip quarantines it as "not an Apple Health export" instead of deferring it
-status: open
+status: done
 importance: low
 importance_why: Needs a one-off read failure after a successful probe, a plausible iCloud-inbox event; recovery is --retry-quarantined, but the reason misleads.
 effort: S
@@ -51,3 +51,6 @@ at the wrong cause.
    not the `yield`.
 3. Add a fault-injection test: one `OSError` on the extract-time read gives
    deferred, not quarantined.
+
+## Resolution (2026-10-17)
+Fixed on chore/apple-import-hardening: zip detection notes only read errors (a seek EINVAL on a sub-22-byte file is 'not a zip', not a read fault, after a review rejection), so a transient OSError defers end to end; zlib.error and EOFError during member reads are format errors (quarantine); RecursionError propagates at open and read sites. APPROVED after two rejection rounds.
