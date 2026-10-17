@@ -64,8 +64,12 @@ def test_session_leaving_the_window_creates_no_evidence_day() -> None:
         session_peak(date(2023, 1, 1), "workouts/a.md", 180.0),
         session_peak(date(2023, 1, 2), "workouts/b.md", 190.0),
         session_peak(date(2023, 1, 3), "workouts/c.md", 185.0),
+        session_peak(date(2023, 1, 4), "workouts/d.md", 175.0),
     ]
-    assert [item.day for item in max_evidence(sessions)] == [date(2023, 1, 3)]
+    assert [item.day for item in max_evidence(sessions)] == [
+        date(2023, 1, 3),
+        date(2023, 1, 4),
+    ]
 
 
 def test_window_includes_364_day_old_session_but_excludes_365() -> None:

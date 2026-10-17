@@ -23,7 +23,7 @@
   "amendments": [
     {
       "date": "2026-10-17",
-      "requirement": "Amendment 1: 2.2, 3.1, 3.6, 3.7, 4.3, 5.3, 5.4, 5.5, 5.9 revised; nothing renumbered or withdrawn",
+      "requirement": "Amendment 1: 2.2, 3.1, 3.6, 3.7, 4.3, 5.3, 5.4, 5.5, 5.9, 11.5 revised; nothing renumbered or withdrawn",
       "reason": "Maintainer ruling 2026-10-17 after the Phase 12 real-data re-validation: a derived maximum never falls; only run/bike sessions supply maximum evidence; a hand value is challenged only by evidence dated after it and formed from data after it; no departure (future) evidence days. Queue: 2026-10-17-hr-max-evidence-projects-past-last-session, 2026-10-17-hr-max-evidence-sparse-windows-need-ruling.",
       "tests": "tests/hr_benchmarks/test_peaks.py, test_maximum.py, test_resting.py, test_timeline.py, test_engine.py, test_e2e.py, test_docs.py; tests/test_cli_derive.py"
     }

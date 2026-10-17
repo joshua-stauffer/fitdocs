@@ -95,8 +95,9 @@ MAX_RECENCY_CHOICE: Final[FitdocsChoice] = FitdocsChoice(
 MAX_TIMELINE_CHOICE: Final[FitdocsChoice] = FitdocsChoice(
     key="max_hr_timeline_choice",
     justification=(
-        "A 2 bpm step limits timeline churn under the write-time "
-        "disagreement rule, with no confirmation delay."
+        "A 2 bpm step limits timeline churn: a derived maximum starts only "
+        "when evidence exceeds the value in force by more than the step, "
+        "with no confirmation delay."
     ),
     search_basis=(
         "Approved hr-derivation design, HrSources; no external publication "

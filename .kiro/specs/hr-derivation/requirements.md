@@ -422,6 +422,13 @@ the criterion it names.
   period. The withdrawn clause, "keeps a derived maximum from falling", is
   now the rule for every athlete (4.3) rather than a setting.
 
+- **11.5 revised**: The release notes shall state that a hand-recorded entry
+  is challenged only by evidence dated after it, so historic heart-rate load
+  before a hand entry's date keeps the hand value wherever its applies-from
+  date reaches, and that a derived maximum never falls. The 2026-10-12
+  sentence that such load "moves to derived values" is withdrawn with the
+  acceptance it recorded.
+
 Unchanged: the steps (3 bpm resting, 2 bpm maximum), the 14-day resting
 confirmation, the 365-day window and three-session median, sample
 rejection, the sustained peak, selection (5.6), the takeover announcements
