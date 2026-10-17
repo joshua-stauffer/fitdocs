@@ -196,6 +196,11 @@
 - **userBioMetrics** (1 file, 1,795 records): `metaData.calendarDate` on all;
   `weight{weight, timestampGMT, sourceType}` on 23, every weight above 1,000
   (grams).
+  - *Shape correction (2026-10-17, real-export drain):* every
+    `metaData.calendarDate` is a local timestamp, not a date: 1,785 records
+    `YYYY-MM-DDTHH:MM:SS.f`, 8 `...SS.fff`, 2 `...SS.ff`. The parser takes the
+    date part, with no timezone conversion; UDS, sleep and MaxMet
+    `calendarDate` stay bare dates.
 - **Other files that must not be recognized**: `HydrationLogFile_*`
   (has `calendarDate`, none of the signature keys), `*_bioMetrics_latest`,
   `*_userBioMetricProfileData`, `*_fitnessAgeData`, `*_heartRateZones`.

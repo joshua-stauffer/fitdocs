@@ -2666,3 +2666,32 @@ def test_hr_cli_invalid_profile_schema_is_configuration_error_before_writes(
         entered,
         _hr_configuration_tree(tmp_path),
     ) == (True, False, 2, True, ["tagged", "profile-reader"], before)
+
+
+def test_out_of_range_series_value_is_a_resting_hr_read_failure(
+    tmp_path: Path,
+) -> None:
+    """A resting HR of 0 in the series file is an unreadable series: the
+    resting-HR stage reports its read failure and exits 1, as for any other
+    unreadable series."""
+    _write_two_document_root(tmp_path)
+    write_series(
+        tmp_path,
+        (
+            SeriesValue(
+                date(2020, 1, 1) + timedelta(days=i),
+                Metric.RESTING_HR_BPM,
+                "garmin-export",
+                None,
+                0 if i == 3 else 57,
+                True,
+            )
+            for i in range(14)
+        ),
+    )
+    result = runner.invoke(app, ["derive-benchmarks", "--out", str(tmp_path)])
+    assert result.exit_code == 1, result.output
+    assert result.exception is None or isinstance(result.exception, SystemExit)
+    output = " ".join(result.stdout.split())
+    assert "Failure resting_hr_bpm [wellness/manifest.toml]:" in output
+    assert "2020-01-04 resting_hr_bpm 0: outside the accepted range" in output

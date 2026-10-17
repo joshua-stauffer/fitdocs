@@ -433,3 +433,31 @@ def test_check_hr_decode_failure_continues(tmp_path: Path) -> None:
         ],
         type(result.exception).__name__,
     ) == (1, [1, 1, 1, 1], "SystemExit")
+
+
+def test_check_ignores_out_of_range_series_value(tmp_path: Path) -> None:
+    """``check`` judges the series by manifest, headers and digests, never by
+    value, so a zero HRV in an intact series reads exactly like a valid one."""
+    from datetime import date
+
+    from fitdocs.declaration import ensure_declarations
+    from fitdocs.wellness import Metric, SeriesValue
+    from tests.wellness.builders_series import write_series
+
+    outputs = []
+    for value in (0, 50):
+        root = tmp_path / str(value)
+        ensure_declarations(root)
+        write_series(
+            root,
+            [
+                SeriesValue(
+                    date(2024, 8, 19), Metric.HRV_RMSSD_MS, "device", None, value, True
+                )
+            ],
+        )
+        result = runner.invoke(app, ["check", "--out", str(root)])
+        outputs.append((result.exit_code, result.output.replace(str(root), "")))
+    assert outputs[0] == outputs[1]
+    assert outputs[0][0] == 1  # the staged series is stale, whatever its values
+    assert type(result.exception).__name__ == "SystemExit"

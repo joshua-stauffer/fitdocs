@@ -275,6 +275,20 @@ recorded as one.
   would otherwise be held because they match both pages; see
   [the ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md#deciding-that-two-files-are-one-workout).
 
+### Fixed
+
+- Garmin weight now imports from a real export. Its `*_userBioMetrics.json`
+  stamps `metaData.calendarDate` with a local time (for example
+  `2024-05-01T06:30:15.1`), which the importer rejected, so the whole file was
+  reported as failed and no weight reached the series. The importer takes the
+  date part of that stamp, with no timezone conversion; run `fitdocs sync`
+  to import a file that was left in the inbox or quarantined.
+- A value outside its metric's accepted range in a `wellness/*.csv` series file,
+  such as an HRV of 0 from a hand edit, is now reported as an unreadable series.
+  `fitdocs recovery` used to stop with a `math domain error` traceback; it now
+  exits 1 and names the file, day, metric and value, with the `fitdocs sync` or
+  `fitdocs regen` remedy.
+
 ## [0.1.0] - 2026-09-19
 
 ### Added

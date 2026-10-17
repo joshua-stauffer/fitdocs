@@ -55,9 +55,12 @@ def garmin_biometrics_record(
     *,
     weight_g: object,
     measured_at: object,
+    calendar_time: str | None = "06:30:15.1",
 ) -> dict[str, object]:
+    """Real exports stamp ``calendarDate`` with a local time; ``None`` omits it."""
+    stamp = _day(day) if calendar_time is None else f"{_day(day)}T{calendar_time}"
     return {
-        "metaData": {"calendarDate": _day(day)},
+        "metaData": {"calendarDate": stamp},
         "weight": {"weight": weight_g, "timestampGMT": measured_at},
     }
 

@@ -18,7 +18,7 @@ import tomli_w
 from fitdocs.wellness import registry
 from fitdocs.wellness.archive import ArchiveListing
 from fitdocs.wellness.merge import Conflict
-from fitdocs.wellness.model import Metric, SeriesValue, is_origin
+from fitdocs.wellness.model import Metric, SeriesValue, accept_value, is_origin
 from fitdocs.wellness.settings import WellnessSettings, effective_order
 
 SERIES_VERSION: Final = 1
@@ -337,6 +337,25 @@ def _manifest(data_root: Path) -> Manifest | None:
     return manifest
 
 
+def _in_range(path: Path, values: tuple[SeriesValue, ...]) -> tuple[SeriesValue, ...]:
+    """Fault a value outside its metric's accepted range.
+
+    Producers never write one, so it means a hand edit or a foreign file; the
+    readers' unreadable-series path reports it instead of a consumer's own math
+    failing on it. ``decode_year`` stays range-blind so regeneration can still
+    read, and so replace, such a file.
+    """
+    for index, item in enumerate(values):
+        if accept_value(item.metric, item.value) is None:
+            raise SeriesReadError(
+                path,
+                index + 2,
+                f"{item.day.isoformat()} {item.metric.value} "
+                f"{format_value(item.value)}: outside the accepted range",
+            )
+    return values
+
+
 def read_series(data_root: Path) -> WellnessSeries:
     manifest = _manifest(data_root)
     if manifest is None:
@@ -344,7 +363,10 @@ def read_series(data_root: Path) -> WellnessSeries:
     values = tuple(
         value
         for item in manifest.files
-        for value in decode_year(data_root / item.path, _read(data_root / item.path))
+        for value in _in_range(
+            data_root / item.path,
+            decode_year(data_root / item.path, _read(data_root / item.path)),
+        )
     )
     return WellnessSeries(
         tuple(sorted(values, key=lambda value: (value.day, value.metric, value.source)))

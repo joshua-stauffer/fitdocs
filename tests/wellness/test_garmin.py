@@ -341,6 +341,63 @@ def test_bad_date(kind: str, bad_day: object) -> None:
         parsed(kind, [item])
 
 
+BIOMETRICS_STAMPS = [
+    "2000-01-02",
+    "2000-01-02T00:00:00",
+    "2000-01-02T06:30:15.1",
+    "2000-01-02T06:30:15.12",
+    "2000-01-02T06:30:15.123",
+    "2000-01-02T23:59:59.123456",
+]
+
+
+@pytest.mark.parametrize("stamp", BIOMETRICS_STAMPS)
+def test_biometrics_calendar_date_may_carry_a_local_time(stamp: str) -> None:
+    item = record("biometrics")
+    item["metaData"] = {"calendarDate": stamp}
+    # local wall-clock time: the date part is the day, never shifted
+    assert parsed("biometrics", [item])[0].day == date(2000, 1, 2)
+
+
+@pytest.mark.parametrize(
+    "stamp",
+    [
+        "2000-01-02T",
+        "2000-01-02T06:30",
+        "2000-01-02T06:30:15.",
+        "2000-01-02T06:30:15.1234567",
+        "2000-01-02T24:00:00",
+        "2000-01-02T06:60:00",
+        "2000-01-02T06:30:60",
+        "2000-01-02T06:30:15Z",
+        "2000-01-02T06:30:15.1Z",
+        "2000-01-02T06:30:15+02:00",
+        "2000-01-02T06:30:15.1-05:00",
+        "2000-01-02 06:30:15",
+        "2000-01-02t06:30:15",
+        "2000-01-02T06:30:15\n",
+        "2000-01-02\n",
+        "2000-02-30T06:30:15.1",
+        "x2000-01-02T06:30:15.1",
+        "2000-01-02T0६:30:15",
+    ],
+)
+def test_biometrics_calendar_date_rejects_other_shapes(stamp: str) -> None:
+    item = record("biometrics")
+    item["metaData"] = {"calendarDate": stamp}
+    with pytest.raises(WellnessFormatError, match="invalid Garmin calendar date"):
+        parsed("biometrics", [item])
+
+
+@pytest.mark.parametrize("kind", ["uds", "sleep", "maxmet"])
+@pytest.mark.parametrize("stamp", ["2000-01-02T06:30:15.1", "2000-01-02T00:00:00"])
+def test_other_kinds_still_require_a_bare_date(kind: str, stamp: str) -> None:
+    item = record(kind)
+    item["calendarDate"] = stamp
+    with pytest.raises(WellnessFormatError, match="invalid Garmin calendar date"):
+        parsed(kind, [item])
+
+
 @pytest.mark.parametrize("kind", KINDS)
 def test_missing_date(kind: str) -> None:
     item = record(kind)
@@ -516,6 +573,12 @@ def test_builders() -> None:
         "updateTimestamp": None,
     }
     assert garmin_biometrics_record(day, weight_g=81234, measured_at="stamp") == {
+        "metaData": {"calendarDate": f"{DAY}T06:30:15.1"},
+        "weight": {"weight": 81234, "timestampGMT": "stamp"},
+    }
+    assert garmin_biometrics_record(
+        day, weight_g=81234, measured_at="stamp", calendar_time=None
+    ) == {
         "metaData": {"calendarDate": DAY},
         "weight": {"weight": 81234, "timestampGMT": "stamp"},
     }
