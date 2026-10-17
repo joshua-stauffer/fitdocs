@@ -123,6 +123,11 @@ def section(markdown: str, heading: str) -> list[str]:
     return [line for line in start.split("\n## ", 1)[0].splitlines() if line]
 
 
+def sleep_table(markdown: str) -> list[str]:
+    """The Sleep section's chart and table, without the caption and source lines."""
+    return [line for line in section(markdown, "Sleep") if line.startswith(("![", "|"))]
+
+
 def fmt(number: float | None, metric: Metric) -> str:
     return format_value(
         number,
@@ -137,7 +142,7 @@ def fmt(number: float | None, metric: Metric) -> str:
         ("title", 'title: "Recovery"'),
         ("type", 'type: "recovery"'),
         ("generator", 'generator: "fitdocs"'),
-        ("recovery_version", "recovery_version: 1"),
+        ("recovery_version", "recovery_version: 2"),
         ("baselines_version", "baselines_version: 1"),
         ("as_of", 'as_of: "2025-05-01"'),
         ("window_start", 'window_start: "2025-02-01"'),
@@ -193,7 +198,7 @@ def test_recovery_identity() -> None:
         page.RECOVERY_VERSION,
         page.RECOVERY_TYPE == contract.WORKOUT_TYPE,
         page.RECOVERY_TYPE == HISTORY_TYPE,
-    ) == ("recovery", "Recovery", int, 1, False, False)
+    ) == ("recovery", "Recovery", int, 2, False, False)
 
 
 def test_banner() -> None:
@@ -378,7 +383,7 @@ def test_sleep_numbers(metric: Metric, field: str) -> None:
         fmt(statistics.mean(values[-7:]), metric),
         fmt(statistics.mean(values[:-1]), metric),
     )
-    row = section(text(full_view()), "Sleep")[3 + j]
+    row = sleep_table(text(full_view()))[3 + j]
     assert (
         row.split(" | ")[
             {"label": 0, "value": 1, "rolling": 2, "baseline": 3}[field]
@@ -388,7 +393,7 @@ def test_sleep_numbers(metric: Metric, field: str) -> None:
 
 
 def test_sleep_header() -> None:
-    assert section(text(full_view()), "Sleep")[:3] == [
+    assert sleep_table(text(full_view()))[:3] == [
         "![Sleep chart](assets/recovery-sleep.svg)",
         "| Signal | 2025-04-29 | 7-day mean | 60-day mean |",
         "| --- | --- | --- | --- |",
@@ -398,13 +403,13 @@ def test_sleep_header() -> None:
 @pytest.mark.parametrize("metric", SLEEP[1:5])
 def test_zero_stage(metric: Metric) -> None:
     result = model([value(0, 23001, Metric.SLEEP_S), value(0, 0, metric)])
-    assert section(text(result), "Sleep")[4:] == [
+    assert sleep_table(text(result))[4:] == [
         f"| {METRICS[metric].label} | 0:00 | — | — |"
     ]
 
 
 def test_sleep_missing_stages() -> None:
-    assert section(text(model([value(0, 23001, Metric.SLEEP_S)])), "Sleep")[3:] == [
+    assert sleep_table(text(model([value(0, 23001, Metric.SLEEP_S)])))[3:] == [
         "| Sleep | 6:23:21 | — | — |"
     ]
 
@@ -420,7 +425,61 @@ def test_other() -> None:
     assert section(text(full_view()), "Other Signals") == [
         "![Other signals chart](assets/recovery-other.svg)",
         "Shown as recorded, one panel per metric and source, with no baseline.",
+        "Sources shown: Steps: pedometer (origins garmin) on 1 days; "
+        "Mood (rating): rating (origins garmin) on 1 days.",
     ]
+
+
+def test_other_sources_escaped_and_unrecorded() -> None:
+    result = model(
+        [
+            value(0, 123, Metric.STEPS, "a|b", origin=None),
+            value(-1, 124, Metric.STEPS, "a|b", origin="x"),
+            value(0, 70, Metric.WEIGHT_KG, "w", origin="z"),
+        ]
+    )
+    assert section(text(result), "Other Signals")[-1] == (
+        "Sources shown: Steps: a\\|b (origins x) on 2 days; "
+        "Weight: w (origins z) on 1 days."
+    )
+    assert not any(
+        line.startswith("On ") for line in section(text(result), "Other Signals")
+    )
+
+
+def test_other_sources_cover_charted_panels_only() -> None:
+    result = model(
+        [value(0, 123, Metric.STEPS, "a"), value(0, 2.375, Metric.MOOD_RATING, "b")],
+        limit=1,
+    )
+    assert [
+        line
+        for line in section(text(result), "Other Signals")
+        if line.startswith("Sources shown:")
+    ] == ["Sources shown: Steps: a (origins garmin) on 1 days."]
+
+
+def test_sleep_caption_names_the_night_source() -> None:
+    lines = section(text(full_view()), "Sleep")
+    assert lines[1] == "The table shows the night of 2025-04-29 from watch3."
+
+
+def test_sleep_source_lines_match_a_signal_section() -> None:
+    values = [
+        value(-8, 20000, Metric.SLEEP_S, "old", origin="a"),
+        value(-7, 21000, Metric.SLEEP_S, "old", origin="a"),
+        value(0, 23001, Metric.SLEEP_S, "new", origin=None),
+    ]
+    lines = section(text(model(values)), "Sleep")
+    assert lines[-3:] == [
+        "On 2025-05-01 the shown source changed from old to new; "
+        "from that day the 7-day mean and normal range are new's own.",
+        "Sources shown: new (origins not recorded) on 1 days.",
+        "Sources shown: old (origins a) on 8 days.",
+    ]
+    assert lines.index("Sources shown: new (origins not recorded) on 1 days.") > (
+        lines.index("| Sleep | 6:23:21 | — | — |")
+    )
 
 
 def test_overflow() -> None:
@@ -569,7 +628,7 @@ def test_sleep_independent_missingness(formed: str) -> None:
         if formed == "rolling"
         else "| Sleep | 6:23:21 | — | 6:23:21 |"
     )
-    assert section(text(result), "Sleep")[-1] == expected
+    assert sleep_table(text(result))[-1] == expected
 
 
 def test_latest_source_escaping() -> None:
@@ -587,7 +646,7 @@ def test_sleep_nonselected_source_stage() -> None:
     result = model(
         [value(-2, 23001, Metric.SLEEP_S), value(0, 601, Metric.SLEEP_DEEP_S, "other")]
     )
-    assert section(text(result), "Sleep")[3:] == ["| Sleep | 6:23:21 | — | — |"]
+    assert sleep_table(text(result))[3:] == ["| Sleep | 6:23:21 | — | — |"]
 
 
 @pytest.mark.parametrize(
@@ -827,7 +886,7 @@ def test_multiple_source_changes() -> None:
 def test_sleep_row_order() -> None:
     assert [
         line.split("|")[1].strip()
-        for line in section(text(full_view()), "Sleep")
+        for line in sleep_table(text(full_view()))
         if line.startswith("|")
     ][2:] == [
         "Sleep",
@@ -941,7 +1000,7 @@ def test_numeric_formatter_fields(
             for line in text(full_view()).splitlines()
             if line.startswith(key + ":")
         )
-        expected = key + ": N1"
+        expected = key + (": N2" if key == "recovery_version" else ": N1")
     else:
         formed = field.startswith("formed-") or field == "source-days"
         markdown = text(full_view() if formed else model([value(0, 51)]))
@@ -1011,7 +1070,7 @@ def test_zero_stage_mean_formation(metric: Metric, formed: str) -> None:
     }[formed]
     rolling = "0:00" if formed in ("both", "rolling") else "—"
     baseline = "0:00" if formed in ("both", "baseline") else "—"
-    assert section(text(result), "Sleep")[4] == (
+    assert sleep_table(text(result))[4] == (
         f"| {METRICS[metric].label} | 0:00 | {rolling} | {baseline} |"
     )
 

@@ -33,7 +33,7 @@ _FORBIDDEN_PHRASE_PATTERN = re.compile(
 
 RECOVERY_TYPE: Final = "recovery"
 RECOVERY_TITLE: Final = "Recovery"
-RECOVERY_VERSION: Final = 1
+RECOVERY_VERSION: Final = 2
 RECOVERY_FRONTMATTER_KEYS: Final = (
     "title",
     "type",
@@ -132,6 +132,18 @@ def _signal(signal: SignalView, name: str) -> list[str]:
             )
     else:
         lines.append("No day of the window has a 7-day mean outside the normal range.")
+    lines.extend(_source_lines(signal))
+    return lines
+
+
+def _source_text(source: str, origins: Sequence[str], days: int) -> str:
+    named = ", ".join(escape_markdown(origin) for origin in origins) or "not recorded"
+    return f"{escape_markdown(source)} (origins {named}) on {_count(days)} days"
+
+
+def _source_lines(signal: SignalView) -> list[str]:
+    """The change lines and the `Sources shown` lines of a signal's section."""
+    lines: list[str] = []
     for change in signal.changes:
         before = escape_markdown(change.before)
         after = escape_markdown(change.after)
@@ -144,17 +156,8 @@ def _signal(signal: SignalView, name: str) -> list[str]:
             )
         )
     for note in signal.sources:
-        origins = (
-            ", ".join(escape_markdown(origin) for origin in note.origins)
-            or "not recorded"
-        )
-        lines.extend(
-            (
-                "",
-                f"Sources shown: {escape_markdown(note.source)} (origins {origins}) "
-                f"on {_count(note.days_shown)} days.",
-            )
-        )
+        text = _source_text(note.source, note.origins, note.days_shown)
+        lines.extend(("", f"Sources shown: {text}."))
     return lines
 
 
@@ -308,6 +311,7 @@ def render_page(
     if view.sleep is not None:
         sleep = view.sleep
         night = _day(sleep.night) if sleep.night is not None else "—"
+        latest = sleep.total.latest
         lines.extend(
             (
                 "",
@@ -315,6 +319,18 @@ def render_page(
                 "",
                 _chart("sleep", METRICS[Metric.SLEEP_S].label),
                 "",
+            )
+        )
+        if latest is not None and latest.source is not None:
+            lines.extend(
+                (
+                    f"The table shows the night of {night} "
+                    f"from {escape_markdown(latest.source)}.",
+                    "",
+                )
+            )
+        lines.extend(
+            (
                 f"| Signal | {night} | 7-day mean | 60-day mean |",
                 "| --- | --- | --- | --- |",
             )
@@ -326,6 +342,7 @@ def render_page(
                 f"| {_value(bd.rolling_mean, bd.metric, 'mean')} | "
                 f"{_value(bd.baseline_mean, bd.metric)} |"
             )
+        lines.extend(_source_lines(sleep.total))
     if view.other is not None:
         lines.extend(
             (
@@ -337,6 +354,17 @@ def render_page(
                 "Shown as recorded, one panel per metric and source, with no baseline.",
             )
         )
+        named = "; ".join(
+            f"{escape_markdown(METRICS[panel.metric].label)}: "
+            + _source_text(
+                panel.source,
+                panel.origins,
+                sum(item is not None for item in panel.values),
+            )
+            for panel in view.other.panels
+        )
+        if named:
+            lines.extend(("", f"Sources shown: {named}."))
         if view.other.overflow:
             pairs = ", ".join(
                 f"{escape_markdown(METRICS[metric].label)} ({escape_markdown(source)})"

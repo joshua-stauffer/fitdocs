@@ -275,6 +275,16 @@ recorded as one.
   would otherwise be held because they match both pages; see
   [the ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md#deciding-that-two-files-are-one-workout).
 
+### Fixed
+
+- Recovery page: a change of shown source is now stated even when days with no
+  value separate the two sources, the Sleep section now states its source
+  changes and names its sources with their recorded origins (its table caption
+  names the source and night shown), and the Other Signals section names each
+  charted panel's source and origins. The page's `recovery_version` advances
+  from 1 to 2. Action: run `fitdocs recovery` to rewrite the page; see
+  [the recovery guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/recovery.md).
+
 ## [0.1.0] - 2026-09-19
 
 ### Added
