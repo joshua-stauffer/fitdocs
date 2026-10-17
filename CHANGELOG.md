@@ -280,6 +280,11 @@ recorded as one.
 - A one-off read error while archiving an Apple Health `export.zip` (for
   example while an iCloud file is still materialising) now defers the file for
   the next drain. Before, it was quarantined as "not an Apple Health export".
+- Apple Health import no longer slows down quadratically with the number of
+  nights of history. Each overnight HRV, respiration and SpO2 reading is now
+  matched to its night with one lookup instead of a scan of every night; the
+  reduction time now grows in step with the readings, not with nights times
+  readings. The archived extract and the series values are unchanged.
 
 ## [0.1.0] - 2026-09-19
 
