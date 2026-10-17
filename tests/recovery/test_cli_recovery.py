@@ -85,6 +85,31 @@ def test_unreadable_listed_series_is_failure_with_remedy(tmp_path: Path) -> None
     assert _snapshot(tmp_path) == before
 
 
+@pytest.mark.parametrize(
+    "metric", [Metric.HRV_RMSSD_MS, Metric.HRV_SDNN_MS], ids=lambda m: m.value
+)
+def test_zero_hrv_in_series_is_unreadable_series_with_remedy(
+    tmp_path: Path, metric: Metric
+) -> None:
+    write_series(
+        tmp_path,
+        [
+            series_value(
+                date(2024, 8, 19), 0, metric=metric, source="device", canonical=True
+            )
+        ],
+    )
+    workout_page(tmp_path, "latest", date(2024, 8, 19), 83)
+    before = _snapshot(tmp_path)
+    result = runner.invoke(cli.app, ["recovery", "--out", str(tmp_path)])
+    assert result.exit_code == 1
+    assert result.exception is None or isinstance(result.exception, SystemExit)
+    assert "wellness/2024.csv:2" in result.stdout
+    assert f"2024-08-19 {metric.value} 0" in result.stdout
+    assert "fitdocs sync" in result.stdout and "fitdocs regen" in result.stdout
+    assert _snapshot(tmp_path) == before
+
+
 def test_unresolvable_root_uses_standard_guidance_without_writes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

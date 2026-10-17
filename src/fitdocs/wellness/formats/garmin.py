@@ -88,12 +88,20 @@ def _recognize(kind: str, probe: CandidateProbe) -> bool:
     ) and any(_SIGNATURES[kind] in record for record in payload)
 
 
+# The real userBioMetrics export stamps metaData.calendarDate with a local time
+# (YYYY-MM-DDTHH:MM:SS.f); the other kinds carry a bare date.
+_DATE = r"\d{4}-\d{2}-\d{2}"
+_LOCAL_TIME = r"T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]{1,6})?"
+
+
 def _day(record: dict[str, object], kind: str) -> date:
     raw = _date_value(record, kind)
-    if not isinstance(raw, str) or re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw) is None:
+    pattern = _DATE + (f"(?:{_LOCAL_TIME})?" if kind == "biometrics" else "")
+    if not isinstance(raw, str) or re.fullmatch(pattern, raw) is None:
         raise WellnessFormatError("invalid Garmin calendar date")
     try:
-        return date.fromisoformat(raw)
+        # the stamp is local time: take its date, never convert it
+        return date.fromisoformat(raw[:10])
     except ValueError as error:
         raise WellnessFormatError("invalid Garmin calendar date") from error
 

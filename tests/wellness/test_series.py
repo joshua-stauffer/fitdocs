@@ -545,3 +545,55 @@ def test_inputs_digest_canonical(
         )
         != digest
     )
+
+
+@pytest.mark.parametrize(
+    ("metric", "value"),
+    [
+        (Metric.HRV_RMSSD_MS, 0),
+        (Metric.HRV_SDNN_MS, 1001),
+        (Metric.RESTING_HR_BPM, 251),
+        (Metric.STEPS, -1),
+    ],
+)
+def test_reader_rejects_out_of_range_value(
+    tmp_path: Path, metric: Metric, value: float
+) -> None:
+    from tests.wellness.builders_series import write_series
+
+    day = date(2024, 3, 5)
+    write_series(
+        tmp_path,
+        [
+            SeriesValue(date(2024, 3, 4), Metric.STEPS, "device", None, 9, True),
+            SeriesValue(day, metric, "device", None, value, True),
+        ],
+    )
+    with pytest.raises(series.SeriesReadError) as caught:
+        series.read_series(tmp_path)
+    error = caught.value
+    year_file = tmp_path / "wellness/2024.csv"
+    assert error.path == str(year_file)
+    assert error.line == 3
+    assert error.reason == (
+        f"{day.isoformat()} {metric.value} {value}: outside the accepted range"
+    )
+
+
+def test_reader_accepts_range_bounds(tmp_path: Path) -> None:
+    from tests.wellness.builders_series import write_series
+
+    values = [
+        SeriesValue(date(2024, 3, 5), Metric.HRV_RMSSD_MS, "device", None, 1, True),
+        SeriesValue(date(2024, 3, 6), Metric.HRV_RMSSD_MS, "device", None, 1000, True),
+    ]
+    write_series(tmp_path, values)
+    assert series.read_series(tmp_path).values == tuple(values)
+
+
+def test_decode_year_alone_keeps_range_unchecked() -> None:
+    # regen/sync must still be able to read an out-of-range file and rebuild it
+    data = (
+        series.SERIES_HEADER + "\n2024-03-05,hrv_rmssd_ms,device,,0,true\n"
+    ).encode()
+    assert series.decode_year(Path("wellness/2024.csv"), data)[0].value == 0

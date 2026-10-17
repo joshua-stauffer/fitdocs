@@ -56,7 +56,7 @@ All four Garmin formats use source `garmin-export` and origin `garmin`.
 | `UDSFile_*.json` | Daily summaries: `currentDayRestingHeartRate` → resting HR; `minHeartRate` / `maxHeartRate` → lowest / highest HR; `totalSteps` → steps; `averageSpo2Value` → SpO2; `allDayStress.aggregatorList` with type `TOTAL` → stress level; `bodyBattery.bodyBatteryStatList` with types `HIGHEST` / `LOWEST` → body battery extrema. The rolling `restingHeartRate` field is ignored. |
 | `*_sleepData.json` | Deep, light and REM seconds from `deepSleepSeconds`, `lightSleepSeconds`, `remSleepSeconds`; total sleep is their sum, excluding awake time. `awakeSleepSeconds` supplies awake time when total sleep is positive; `averageRespiration` supplies respiration. An unconfirmed night with no stages supplies no sleep duration; it may still supply respiration. |
 | `MetricsMaxMetData_*.json` | `vo2MaxValue` for sport `RUNNING` / `CYCLING` → running / cycling VO2max. Other or missing sports are ignored; `updateTimestamp` selects the latest record. |
-| `*_userBioMetrics.json` | `weight.weight`, converted from grams to kilograms, under `metaData.calendarDate`. Other body measurements are ignored. |
+| `*_userBioMetrics.json` | `weight.weight`, converted from grams to kilograms, under `metaData.calendarDate`, a local timestamp whose date part is the day. Other body measurements are ignored. |
 | intervals.icu wellness `.json` | A bare nonempty list from the [wellness API](https://intervals.icu/api-docs.html), or the delivery envelope below. Source `intervals-icu`; origin is unknown for a bare list and field-specific for an envelope. |
 
 Garmin's daily resting HR is its lowest 30-minute average over a 24-hour period;
