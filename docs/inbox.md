@@ -83,7 +83,8 @@ content hash; a successful parse is Wellness archived, and content already
 present is Wellness skipped. Corrected bytes are new content and need no
 retry flag. See the [wellness guide](wellness.md) for the supported exports,
 source definitions, [wellness-day rule](wellness.md#wellness-day), precedence
-and series readers. Recovery pages and morning-of workout blocks remain future work.
+and series readers. The standalone [`fitdocs recovery`](recovery.md) command
+turns the series into a recovery page; morning-of workout blocks remain future work.
 Other ZIP files (including Garmin export ZIPs) and unrelated XML are reported as
 unrecognized and left in place; silence them with `[inbox] ignore`.
 

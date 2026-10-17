@@ -2,8 +2,9 @@
 
 fitdocs keeps daily wellness as a local, source-attributed series alongside
 workouts. It imports files offline, archives the handled bytes, and rebuilds
-plain CSV files you can read without fitdocs. Recovery pages and workout morning
-blocks are future work.
+plain CSV files you can read without fitdocs. The [recovery page](recovery.md)
+reads the series, and `fitdocs derive-benchmarks` derives resting heart rate from
+it ([configuration](configuration.md)); workout morning blocks are future work.
 
 ## Get files into the inbox
 
@@ -494,8 +495,8 @@ and reflects the last index refresh. It does not re-parse the wellness archive.
 
 The table's `origin` column records the platform that measured each value, and
 any surface that charts or prints values whose `origin` is `garmin` (a dashboard
-over `wellness_daily`, for example) owes Garmin attribution, as the future
-recovery page and morning-of block will give it.
+over `wellness_daily`, for example) owes Garmin attribution, as the
+[recovery page](recovery.md#garmin-attribution) gives it.
 
 Build or refresh the index, inspect the schema, then query canonical values or
 one source explicitly:
@@ -508,5 +509,5 @@ fitdocs query "SELECT day, value FROM wellness_daily WHERE metric = 'hrv_rmssd_m
 ```
 
 Series files stay the source for wellness consumers; deleting the index costs
-only a rebuild. Recovery baselines, scores, benchmark derivation and new pages
-are not provided by this file import feature.
+only a rebuild. The file import itself computes no baselines, scores or
+benchmarks; the [recovery page](recovery.md) and `fitdocs derive-benchmarks` do.

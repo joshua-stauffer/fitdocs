@@ -297,6 +297,8 @@ recorded as one.
   `fitdocs regen` remedy. `fitdocs derive-benchmarks` reports it as a
   resting-heart-rate read failure, and `fitdocs index` reports it as a
   `derived.wellness` refresh error instead of loading the value.
+- `fitdocs pull` prints `1 day`, not `1 days`, for a one-day wellness
+  delivery.
 
 ## [0.1.0] - 2026-09-19
 

@@ -1,7 +1,7 @@
 ---
 id: 2026-10-17-phase12-bookkeeping-after-recovery-merge
 title: Recovery's spec.json and roadmap rows still show pre-implementation state after its 240ed2f merge; peers keep stale landing notes
-status: open
+status: done
 importance: low
 importance_why: Status-only drift; /kiro-spec-status and /kiro-queue would show recovery and its amendments as unstarted.
 effort: S
@@ -62,3 +62,6 @@ lines above at 160b007, agree.
    numbers actually on main.
 3. Trim the two stale landing sentences. Commit on main as a bookkeeping
    change.
+
+## Resolution (2026-10-17)
+Done on chore/phase12-bookkeeping: recovery spec.json phase implementation-complete with a landing note; roadmap recovery row ticked and annotated, wiki-contract recovery half annotated (Amendment 9), connectors row ticked (Amendment 5), chart-catalog row ticked; apple-health-import phase_note and tasks.md landing note brought current. The hr-derivation phase_note sentence is trimmed on chore/hr-max-ruling, which also edits that spec.json.

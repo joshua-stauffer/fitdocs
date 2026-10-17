@@ -845,3 +845,8 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   leaves are accepted; optional maintainer-only 6.2 remains unrun. Final metadata branch
   CI, main merge/push and exact merged-main CI are still required before landing
   completion.
+
+- Landing record (2026-10-17): merged to main at a885031; exact merged-main
+  CI 39030817880 SUCCESS; feature Definition of Done complete. The
+  "still required before landing" sentence in the 6.1 note above is
+  historical.
