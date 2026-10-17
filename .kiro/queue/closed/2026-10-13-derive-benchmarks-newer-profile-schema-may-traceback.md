@@ -1,7 +1,7 @@
 ---
 id: 2026-10-13-derive-benchmarks-newer-profile-schema-may-traceback
 title: "derive-benchmarks does not report profile schema-version faults as configuration errors"
-status: open
+status: done
 importance: medium
 importance_why: A newer or invalid profile version bypasses the command's exit-2 diagnostic, including after the HR stage was added.
 effort: S
@@ -134,3 +134,6 @@ frozen source hashes passed. CLI SHA-256:
 The accepted repair is in the commit adding this section. Earlier evidence
 above describes the pre-repair state. This item remains open for maintainer
 closure after the feature lands on main; it is not an active HR task blocker.
+
+## Resolution (2026-10-17)
+Fixed by f45adfd (hr-derivation task 3.5 repair, merged with hr-derivation at 700b32e): the derive CLI catches the AthleteFileError base, so a newer or invalid profile schema exits 2 naming the file before any write. Verified 2026-10-17: `uv run pytest tests/test_cli_derive.py -k schema` passes, including test_hr_cli_invalid_profile_schema_is_configuration_error_before_writes. The item was left open after the fix landed.

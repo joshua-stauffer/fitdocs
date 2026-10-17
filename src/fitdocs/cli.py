@@ -1747,7 +1747,8 @@ def _report_pull(report: PullReport) -> None:
                 )
                 for item in wellness.delivered:
                     console.print(
-                        f"  {item.path} ({item.span}, {item.days} days)",
+                        f"  {item.path} ({item.span}, {item.days} "
+                        f"{'day' if item.days == 1 else 'days'})",
                         markup=False,
                         highlight=False,
                         soft_wrap=True,

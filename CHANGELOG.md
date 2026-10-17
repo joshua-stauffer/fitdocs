@@ -275,6 +275,11 @@ recorded as one.
   would otherwise be held because they match both pages; see
   [the ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md#deciding-that-two-files-are-one-workout).
 
+### Fixed
+
+- `fitdocs pull` prints `1 day`, not `1 days`, for a one-day wellness
+  delivery.
+
 ## [0.1.0] - 2026-09-19
 
 ### Added

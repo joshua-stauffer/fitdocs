@@ -3154,7 +3154,8 @@ numbers are the next free number at landing.
   guarantees, with `CONTRACT_VERSION` main + 1 per lander. Five specs carry
   a part each (settled at spec time, 2026-10-13):
   - wellness-store: `wellness-archive/` and `wellness/` (complete 2026-10-14);
-  - recovery: `recovery/` and `recovery/assets/`;
+  - recovery: `recovery/` and `recovery/assets/` (implemented 2026-10-17,
+    Amendment 9);
   - wellness-pull: the `pull` guarantees (implemented 2026-10-15, Amendment 7);
   - hr-derivation: what `derive-benchmarks` reads and writes
     (implemented 2026-10-16, Amendment 8);
@@ -3170,16 +3171,15 @@ numbers are the next free number at landing.
   - recovery adds no baselines table.
 
   Dependencies: wellness-store, workout-wellness
-- [ ] connectors — `pull-wellness` becomes driven:
+- [x] connectors — `pull-wellness` becomes driven:
   - a new optional operation and capability dispatch;
   - format-keyed delivery instead of FIT-only;
   - a ledger keyspace and watermark for wellness;
   - Req 1.2-1.4 and 1.9 amended.
 
   Wellness-pull's half is implemented 2026-10-15 (Amendment 4).
-  Recovery's half is not yet on main,
-  so this shared update remains open.
-  The recovery command joins the no-network list. Dependencies:
+  Recovery's half, the recovery command joining the no-network list, is
+  implemented 2026-10-17 (Amendment 5). Dependencies:
   wellness-pull, recovery
 - [x] intervals-connector — the wellness endpoint, the trailing-window
   `updated` diff, the capability declaration and re-pinned mutation, the
@@ -3200,8 +3200,9 @@ numbers are the next free number at landing.
   channel reports which dated resting and max entries it used
   (implemented 2026-10-16, Amendment 1, criterion 5.12).
   Dependencies: hr-derivation
-- [ ] chart-catalog _(found at spec time)_ — Amendment 1, the
-  `reference-band` kind. Dependencies: recovery
+- [x] chart-catalog _(found at spec time)_ — Amendment 1, the
+  `reference-band` kind (implemented 2026-10-17 with recovery).
+  Dependencies: recovery
 - [x] chart-kit _(found at spec time)_ — the units `ml_per_kg_min` and
   `brpm`, appended to `fitdocs.units`. Dependencies: wellness-store
 
@@ -3340,8 +3341,14 @@ numbers are the next free number at landing.
     derived write partitioned.
 
   Dependencies: wellness-store
-- [ ] recovery — **brief written 2026-10-12; spec written 2026-10-13**
-  (Phase 12 batch, wave 2, `tasks-generated`, all approvals set; 18
+- [x] recovery — **implemented 2026-10-17; validation GO** (merged at
+  240ed2f; 21/21 mandatory tasks, including the maintainer-approved
+  chart-axis prerequisite 2.3; contract 14, 15 commands; optional
+  maintainer-only page look 6.3* not run). The 2026-10-17 re-validation
+  found Req 5.5/5.6 source statements narrower than written, fixed by the
+  recovery design's Amendment 1 note.
+  **Brief written 2026-10-12; spec written 2026-10-13**
+  (Phase 12 batch, wave 2, initially `tasks-generated`, all approvals set; 18
   requirements / 90 criteria, 6 majors / 20 executable tasks plus the
   optional maintainer-only page look 6.3*; independent Step 3.5 review, two
   rounds; cross-spec reviewed, two rounds, PASS). It adds the standalone

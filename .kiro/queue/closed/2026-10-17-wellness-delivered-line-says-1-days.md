@@ -1,7 +1,7 @@
 ---
 id: 2026-10-17-wellness-delivered-line-says-1-days
 title: The pull report prints "1 days" for a single-day wellness delivery
-status: open
+status: done
 importance: low
 importance_why: Cosmetic report wording; the design literal "<n> days" is met.
 effort: S
@@ -36,3 +36,6 @@ above (synthetic dates).
 ## How to pick it up
 Pluralize (`day` if `days == 1`), amend the design literal (append-only
 note), and update the test that pins the line.
+
+## Resolution (2026-10-17)
+Done on chore/phase12-bookkeeping: the pull report prints `1 day` for a one-day delivery; wellness-pull design literal amended; pinned by test_renderer_distinct_counts_and_literal_details (a 1-day delivery); mutation (always `days`) fails it.

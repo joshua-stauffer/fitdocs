@@ -984,7 +984,7 @@ _WELLNESS_REPORT_ROWS: Final[tuple[tuple[str, str], ...]] = (
   detail blocks, when `instance.wellness is not None` (10.7): a table titled
   `fitdocs pull: <name> wellness`, one row per entry above, always present
   (an `int` field printed as is, `error` as 0 or 1, a tuple as its length)
-  (10.1); then `Delivered:` lines `  <path> (<span>, <n> days)`, `Would
+  (10.1); then `Delivered:` lines `  <path> (<span>, <n> days)` (`1 day` when n is 1; amended 2026-10-17), `Would
   deliver:` lines `  <date>` (10.3), `Already held:` lines `  <span>`,
   `Failed:` and `Notices:` note blocks and `Error:` (10.2). All printing
   uses `markup=False, highlight=False, soft_wrap=True` like the rest of the

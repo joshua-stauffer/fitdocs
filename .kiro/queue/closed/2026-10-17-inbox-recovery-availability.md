@@ -1,7 +1,7 @@
 ---
 id: 2026-10-17-inbox-recovery-availability
 title: Correct the inbox and wellness guides' Recovery availability statements
-status: open
+status: done
 importance: low
 importance_why: The inbox guide calls an available standalone command future work.
 effort: S
@@ -57,3 +57,6 @@ The same stale characterization is in `docs/wellness.md` at 160b007:
   baselines and HR benchmark derivation (`derive-benchmarks`) have landed.
   Consider linking `docs/recovery.md` and `docs/configuration.md`.
 Morning-of workout blocks remain future work (workout-wellness, open).
+
+## Resolution (2026-10-17)
+Done on chore/phase12-bookkeeping: docs/inbox.md and docs/wellness.md now describe the standalone recovery page (and resting-HR derivation) as available; morning-of workout blocks stay future work for workout-wellness. The pinned attribution sentence in tests/wellness/test_docs_wellness.py moved with it.

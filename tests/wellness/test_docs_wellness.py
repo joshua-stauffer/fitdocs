@@ -39,7 +39,7 @@ ATTRIBUTION = (
     "The table's `origin` column records the platform that measured each value, "
     "and any surface that charts or prints values whose `origin` is `garmin` "
     "(a dashboard over `wellness_daily`, for example) owes Garmin attribution, "
-    "as the future recovery page and morning-of block will give it."
+    "as the [recovery page](recovery.md#garmin-attribution) gives it."
 )
 FENCES = re.compile(r"^```([^\n]*)\n(.*?)^```[ \t]*$", re.MULTILINE | re.DOTALL)
 
