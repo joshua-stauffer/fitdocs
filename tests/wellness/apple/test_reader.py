@@ -503,6 +503,20 @@ def test_recursion_error_while_opening_member_propagates(
         pass
 
 
+def test_recursion_error_while_opening_archive_propagates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "export.zip"
+    path.write_bytes(zip_members({ENGLISH_MAIN: export_document()}))
+
+    def deep(self: zipfile.ZipFile, *args: object, **kwargs: object) -> None:
+        raise RecursionError("deep")
+
+    monkeypatch.setattr(zipfile.ZipFile, "__init__", deep)
+    with pytest.raises(RecursionError), open_main_document(path):
+        pass
+
+
 def test_missing_file(tmp_path: Path) -> None:
     with pytest.raises(OSError), open_main_document(tmp_path / "absent"):
         pass
