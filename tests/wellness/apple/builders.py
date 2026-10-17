@@ -22,12 +22,14 @@ class WriterPreset:
 WATCH = WriterPreset(
     "Example Apple Watch",
     "9.1",
-    "<<HKDevice: 0xabc123>, name:Example Apple Watch, manufacturer:Apple, model:Watch>",
+    "<<HKDevice: 0xabc123>, name:Example Apple Watch, "
+    "manufacturer:Apple Inc., model:Watch>",
 )
 PHONE = WriterPreset(
     "Example iPhone",
     "17.2",
-    "<<HKDevice: 0xdef456>, name:Example iPhone, manufacturer:Apple, model:iPhone>",
+    "<<HKDevice: 0xdef456>, name:Example iPhone, "
+    "manufacturer:Apple Inc., model:iPhone>",
 )
 SLEEP_APP = WriterPreset("Example Sleep App", "2.3", None)
 SCALE = WriterPreset("Example Scale", "3.4", "manufacturer:Example, model:Scale>")

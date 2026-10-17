@@ -11,6 +11,12 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
+from fitdocs.wellness.formats.apple.records import normalize_device
+from fitdocs.wellness.formats.apple.reduce import (
+    Writer,
+    device_maker_model,
+    writer_of,
+)
 from tests.wellness.apple import builders
 
 
@@ -23,6 +29,23 @@ def parse(document: bytes) -> ET.Element:
 
 
 @pytest.mark.parametrize(
+    "preset, expected",
+    [
+        (builders.WATCH, Writer.WATCH),
+        (builders.PHONE, Writer.PHONE),
+        (builders.SLEEP_APP, Writer.OTHER),
+        (builders.SCALE, Writer.OTHER),
+    ],
+)
+def test_presets_classify_as_their_names_say(
+    preset: builders.WriterPreset, expected: Writer
+) -> None:
+    device = None if preset.device is None else normalize_device(preset.device)
+    maker_model = None if device is None else device_maker_model(device)
+    assert writer_of([] if maker_model is None else [maker_model]) == expected
+
+
+@pytest.mark.parametrize(
     "writer, expected",
     [
         (
@@ -31,7 +54,7 @@ def parse(document: bytes) -> ET.Element:
                 "Example Apple Watch",
                 "9.1",
                 "<<HKDevice: 0xabc123>, name:Example Apple Watch, "
-                "manufacturer:Apple, model:Watch>",
+                "manufacturer:Apple Inc., model:Watch>",
             ),
         ),
         (
@@ -40,7 +63,7 @@ def parse(document: bytes) -> ET.Element:
                 "Example iPhone",
                 "17.2",
                 "<<HKDevice: 0xdef456>, name:Example iPhone, "
-                "manufacturer:Apple, model:iPhone>",
+                "manufacturer:Apple Inc., model:iPhone>",
             ),
         ),
         ("SLEEP_APP", ("Example Sleep App", "2.3", None)),
@@ -170,7 +193,7 @@ def test_custom_record_verbatim_attributes_and_children() -> None:
             "sourceName": "Example iPhone",
             "sourceVersion": "17.2",
             "device": "<<HKDevice: 0xdef456>, name:Example iPhone, "
-            "manufacturer:Apple, model:iPhone>",
+            "manufacturer:Apple Inc., model:iPhone>",
             "unit": "custom&unit",
             "creationDate": "2024-03-05 00:11:00 +0900",
             "startDate": "2024-03-04 23:30:00 +0900",
@@ -231,7 +254,7 @@ def test_custom_document_selection() -> None:
                     "sourceName": "Example Apple Watch",
                     "sourceVersion": "9.1",
                     "device": "<<HKDevice: 0xabc123>, name:Example Apple Watch, "
-                    "manufacturer:Apple, model:Watch>",
+                    "manufacturer:Apple Inc., model:Watch>",
                     "creationDate": "2024-02-03 08:01:00 -0800",
                     "startDate": "2024-02-02 22:00:00 -0800",
                     "endDate": "2024-02-03 08:00:00 -0800",
