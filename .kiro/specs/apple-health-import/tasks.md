@@ -560,7 +560,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
     rebase; the merge and follow-ups are in the shared log and the queue.
   - _Requirements: 5.3, 11.5, 14.1, 14.2_
 
-- [ ]* 6.2 Maintainer-run smoke on the maintainer's own export (no data enters the repository)
+- [x]* 6.2 Maintainer-run smoke on the maintainer's own export (no data enters the repository)
   - In a scratch data root outside the repository, drop the real
     `export.zip` and run the drain with `/usr/bin/time -l`; record in
     Implementation Notes only: wall time, peak RSS, export and extract sizes,
@@ -850,3 +850,59 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   CI 39030817880 SUCCESS; feature Definition of Done complete. The
   "still required before landing" sentence in the 6.1 note above is
   historical.
+
+- 6.2 maintainer-export smoke (2026-10-17). Run by the controller session at
+  the maintainer's request, in a scratch data root outside the repository,
+  with chore/apple-import-hardening (the one-bisect night lookup). Counts
+  only.
+  - **Run:** 56 s wall time, 169 MB peak RSS.
+  - **Sizes:** zip 268 MB; main document `export.xml`, the English name,
+    3.24 GB; extract 13.3 MB; 1,031,185 records.
+  - **Per type:**
+
+    | Type | Records |
+    |---|---|
+    | StepCount | 902,053 |
+    | RespiratoryRate | 57,058 |
+    | SleepAnalysis | 44,368 |
+    | OxygenSaturation | 16,303 |
+    | HeartRateVariabilitySDNN | 8,359 |
+    | RestingHeartRate | 1,893 |
+    | VO2Max | 1,045 |
+    | BodyMass | 106 |
+
+  - **Units:** one per type (lb, ms, %, count/min, count, mL/min·kg, none
+    for sleep).
+  - **Sleep states:**
+
+    | State | Records |
+    |---|---|
+    | core | 15,470 |
+    | in bed | 10,391 |
+    | awake | 6,105 |
+    | REM | 5,423 |
+    | deep | 5,180 |
+    | unspecified | 1,799 |
+
+  - **SpO2 records:** 16,303 have a value of at most 1, and 0 have more than
+    1.
+  - **Resting-HR records:** 1,893 have no device and 0 have one.
+  - **Writing sources:** 11, classified watch 2, iphone 4, other 5. The
+    Watch manufacturer string is `Apple Inc.`. Older iPhones also write
+    `Apple`, but always alongside `Apple Inc.`.
+  - **Corrections:** doctype 1, control characters 0, duplicate attributes 0.
+  - **Series days per metric (apple-health):**
+
+    | Metric | Days |
+    |---|---|
+    | steps | 3,792 |
+    | resting HR | 1,300 |
+    | sleep | 1,298 |
+    | respiration | 1,297 |
+    | each stage | 1,291 |
+    | SpO2 | 1,289 |
+    | HRV SDNN | 1,285 |
+    | VO2max | 782 |
+    | weight | 79 |
+
+  - **Outcome:** no [verify] mismatch, so no `RULES_VERSION` bump.
