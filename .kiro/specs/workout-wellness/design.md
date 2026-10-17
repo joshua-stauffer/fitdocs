@@ -979,8 +979,14 @@ sync SOURCE`, which neither archives wellness nor rebuilds the series.
   `value` is `None`).
 - Recovery agreement: for a fixture whose arithmetic and geometric means
   differ, each printed figure equals `format_value` of the matching
-  `Baselines.shown(m, D)` field (mutation: compute the 7-day mean in the
-  block; use `series.canonical(m, D)` for the day value).
+  `Baselines.shown(m, D)` field (mutation: compute the rolling mean locally
+  with `statistics.mean`). Separately, a dependency test wraps the real
+  `WellnessSeries.canonical` method and asserts no calls during
+  `MorningInputs` construction and signal-block computation (mutation: use
+  `series.canonical(m, D)` for the day value). That substitution is
+  output-equivalent for signal day values on valid native series today;
+  this test establishes architectural consumption of the shared baselines,
+  not numerical divergence.
 - Absence: a 2-of-7 rolling window and a 29-of-60 baseline print the en dash
   in those cells (mutation: print `0`; use the kit's em dash).
 - Sleep: two sources, the canonical one with stages and the other with

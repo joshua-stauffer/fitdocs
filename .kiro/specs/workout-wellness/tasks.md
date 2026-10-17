@@ -324,7 +324,7 @@ wiki-contract and analytics-index amendment and criterion numbers.
 
 - [ ] 2. The morning-of block (pure)
 
-- [ ] 2.1 (P) Compute the block's rows and figures from the shared baselines
+- [x] 2.1 (P) Compute the block's rows and figures from the shared baselines
   - `morning/block.py` per design § MorningBlock: `Windows`, `SignalRow`,
     `SleepRow`, `MorningInputs.of` (one `Baselines.of` per series; windows
     read from `METHODS`, `ValueError` when the block's methods do not share
@@ -338,7 +338,15 @@ wiki-contract and analytics-index amendment and criterion numbers.
     a carried source (no value on D, a value two days earlier) gives the
     absent day value and names the carried source; every printed figure
     equals `format_value` of the matching `Baselines.shown(m, D)` field on a
-    fixture whose arithmetic and geometric means differ; a 2-of-7 rolling
+    fixture whose arithmetic and geometric means differ. A separate
+    dependency test wraps the real `WellnessSeries.canonical` method and
+    asserts no calls during `MorningInputs` construction and signal-block
+    computation; real `Baselines.shown` results still supply the expected
+    figures. This guards the prescribed shared-baseline consumption path.
+    On valid series, a correctly None-handled canonical lookup for a
+    signal's day value is output-equivalent today, so the canonical-day-value
+    mutation is killed by this architectural test, not by numerical recovery
+    agreement. A 2-of-7 rolling
     window and a 29-of-60 baseline leave those figures `None`; sleep: two
     sources, the shown one with stages and the other with pairwise-distinct
     stages, only the shown source's stages appear, in `SLEEP_METRICS[1:]`
@@ -769,6 +777,27 @@ wiki-contract and analytics-index amendment and criterion numbers.
   - _Requirements: 9.1, 9.4, 11.3, 12.1, 12.2_
 
 ## Implementation Notes
+
+- 2.1 accepted after independent approval and fresh completion verification:
+  45 focused and 1,334 morning/recovery regression tests passed, with all
+  static checks clean. All 36 claimed and two independent mutations failed
+  at their intended assertions and restored GREEN; all 2,073 snapshot inputs
+  matched the reviewed tree. All seventeen listed criteria are pinned at
+  the pure-row scope; attribution, rendering and page integration remain
+  with their later tasks. The influence-bound fixture changes resting heart
+  rate from 60 to 200 bpm (+140, within native bounds), which changes the
+  printed range at X+60 before comparing nonempty X−1 and X+61 blocks.
+
+- Astra decision 3 (2026-10-17, applied at task 2.1 on 2026-10-18): a
+  correctly None-handled canonical signal day-value lookup is numerically
+  equivalent to `Baselines.shown` on valid native series. Keep genuine
+  numeric agreement tests and separately wrap the real
+  `WellnessSeries.canonical` method, delegating to it while asserting zero
+  calls during input construction and signal-block computation. That
+  mutation must fail the architectural assertion while numeric agreement
+  remains GREEN. Do not fabricate inconsistent series or BaselineDay
+  results. Sleep-stage selection still has a real two-source numeric
+  discriminator. Requirements, science and production APIs are unchanged.
 
 - 1.4 accepted after independent approval and fresh completion verification:
   892 index tests, 49 existing boundary guards and all static checks passed.
