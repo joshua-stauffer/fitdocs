@@ -3306,11 +3306,13 @@ numbers are the next free number at landing.
 
   Parallel with apple-health-import, hr-derivation and recovery.
   Dependencies: wellness-store
-- [ ] apple-health-import — **brief written 2026-10-12; spec written
-  2026-10-13** (Phase 12 batch, wave 2, `tasks-generated`, all approvals
+- [x] apple-health-import — **brief written 2026-10-12; spec written
+  2026-10-13** (Phase 12 batch, wave 2, `implementation-complete`, all approvals
   set; 14 requirements / 84 criteria, 6 majors / 12 executable tasks plus
   the optional maintainer-only smoke 6.2*; independent Step 3.5 review, two
-  rounds; cross-spec reviewed, two rounds, PASS). Registering `apple-health`
+  rounds; cross-spec reviewed, two rounds, PASS; implemented 2026-10-17,
+  12 mandatory leaves accepted, feature validation GO; optional 6.2* unrun).
+  Registering `apple-health`
   changes the default source order to garmin-export, apple-health,
   intervals-icu, so existing series rebuild once:
   - streaming stdlib parsing of `export.zip`/`export.xml`, with the three

@@ -1,9 +1,9 @@
 {
   "feature_name": "apple-health-import",
   "created_at": "2026-10-12T20:53:36Z",
-  "updated_at": "2026-10-12T23:10:00Z",
+  "updated_at": "2026-10-17T00:27:07Z",
   "language": "en",
-  "phase": "tasks-generated",
+  "phase": "implementation-complete",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -19,5 +19,5 @@
     }
   },
   "ready_for_implementation": true,
-  "phase_note": "Generated 2026-10-12 by the Phase 12 spec batch (wave 2) in auto-approve mode from chore/p12-spec-batch cd77157 (wellness-store spec merged in). 14 requirements / 84 acceptance criteria; 6 major / 13 leaf tasks including optional maintainer-only 6.2*. No network; no real Apple export consulted; uncertain HealthKit identifiers and units are marked [verify] in research.md and confirmed by 6.2*. Step 3.5 independent review by the controller: round 1 NEEDS_FIXES (6 important, 5 minor, all applied; Amendment A1 and the extractor edge behaviours folded into wellness-store by the controller), round 2 four final items applied. No CONTRACT_VERSION, DOC_VERSION or SCHEMA_VERSION change; no amendment carried. Cross-spec review (two rounds, PASS) applied fixes to this spec on 2026-10-13."
+  "phase_note": "Generated 2026-10-12 by the Phase 12 spec batch (wave 2) in auto-approve mode from chore/p12-spec-batch cd77157 (wellness-store spec merged in). 14 requirements / 84 acceptance criteria; 6 major / 13 leaf tasks including optional maintainer-only 6.2*. No network; no real Apple export consulted; uncertain HealthKit identifiers and units are marked [verify] in research.md and confirmed by 6.2*. Step 3.5 independent review by the controller: round 1 NEEDS_FIXES (6 important, 5 minor, all applied; Amendment A1 and the extractor edge behaviours folded into wellness-store by the controller), round 2 four final items applied. No CONTRACT_VERSION, DOC_VERSION or SCHEMA_VERSION change; no amendment carried. Cross-spec review (two rounds, PASS) applied fixes to this spec on 2026-10-13. Implementation completed 2026-10-17: all 12 mandatory leaves and six groups independently accepted. Final full suite: 22,413 passed and 44 environment skips; lint, formatting and types passed. Canonical wheel/sdist build and isolated installed-wheel Apple lifecycle passed. Integration GO maps all 14 requirements and 84 criteria. Exact implementation-HEAD CI passed, including artifact scanning and the fail-closed check: https://github.com/joshua-stauffer/fitdocs/actions/runs/38984974303. No Apple contract/document/schema version change; optional maintainer-only 6.2 remains unrun. Final metadata CI and main landing/CI must pass before feature completion."
 }

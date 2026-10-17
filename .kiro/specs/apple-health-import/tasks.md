@@ -539,9 +539,9 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - _Requirements: 1.6, 2.5, 6.6, 8.7, 9.8, 10.8, 13.1, 13.2, 13.3, 13.4_
   - _Depends: 4.1_
 
-- [ ] 6. Validation
+- [x] 6. Validation
 
-- [ ] 6.1 Determinism, offline behaviour and the whole suite after the final rebase
+- [x] 6.1 Determinism, offline behaviour and the whole suite after the final rebase
   - **Determinism** (`tests/wellness/apple/test_determinism.py`): extracting and parsing the same
     export in child processes under `TZ=Pacific/Auckland` and
     `TZ=America/Los_Angeles` gives byte-identical decompressed extracts and
@@ -559,7 +559,6 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - **Observable:** the full suite, lint and types green after the final
     rebase; the merge and follow-ups are in the shared log and the queue.
   - _Requirements: 5.3, 11.5, 14.1, 14.2_
-  - _Pending: determinism/offline test implementation is accepted; parent final rebase, full canonical suite, branch CI, spec status and release validation remain pending._
 
 - [ ]* 6.2 Maintainer-run smoke on the maintainer's own export (no data enters the repository)
   - In a scratch data root outside the repository, drop the real
@@ -835,3 +834,14 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   socket control were independently confirmed, plus three own faults; exact
   restorations and scoped nineteen tests passed. The task stays unchecked until
   the parent finishes its rebase, full-suite, CI and release-validation gates.
+
+- **6.1 final implementation gates:** Final rebase onto main 700b32e is current and
+  clean; no Apple version change. Full suite: 22,413 passed, 44 environment skips; Ruff,
+  formatting, mypy and diff pass. Canonical build and isolated installed-wheel Apple
+  lifecycle pass. Exact implementation-HEAD full CI, including artifact scanning and
+  fail-closed checks, passed:
+  https://github.com/joshua-stauffer/fitdocs/actions/runs/38984974303. The integration
+  audit maps all 14 requirements and 84 criteria with no new blocker. All 12 mandatory
+  leaves are accepted; optional maintainer-only 6.2 remains unrun. Final metadata branch
+  CI, main merge/push and exact merged-main CI are still required before landing
+  completion.
