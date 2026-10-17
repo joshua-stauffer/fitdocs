@@ -46,7 +46,7 @@ Checked 2026-10-17 at main 7b0837f against the content directory:
 - `reference/ownership.md` (site): "currently version 4"; owned-paths table
   stops at `.fitdocs/`. Repo: `CONTRACT_VERSION: Final[str] = "14"` in `src/fitdocs/contract.py`.
 - `reference/cli.md` (site): nine command headings. Repo:
-  `uv run fitdocs --help` lists 17 commands (adds index, recovery, connect,
+  `uv run fitdocs --help` lists 15 commands (adds index, recovery, connect,
   pull, query, dashboard).
 - `faq.md` (site): "Does it download my activities from Garmin or Strava?
   Not yet … Connectors, starting with intervals.icu, are next on the
