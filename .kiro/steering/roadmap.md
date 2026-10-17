@@ -3312,7 +3312,7 @@ numbers are the next free number at landing.
   set; 14 requirements / 84 criteria, 6 majors / 12 executable tasks plus
   the optional maintainer-only smoke 6.2*; independent Step 3.5 review, two
   rounds; cross-spec reviewed, two rounds, PASS; implemented 2026-10-17,
-  12 mandatory leaves accepted, feature validation GO; optional 6.2* unrun).
+  12 mandatory leaves accepted, feature validation GO; optional 6.2* run on the maintainer's export 2026-10-17).
   Registering `apple-health`
   changes the default source order to garmin-export, apple-health,
   intervals-icu, so existing series rebuild once:
