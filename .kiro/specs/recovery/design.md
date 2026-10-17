@@ -1421,3 +1421,32 @@ at discovery" and the brief; each is revisable at review.
     origins and `page` calls `wellness_attribution`, so `view` keeps no
     `fitdocs.render` dependency; the line goes on the page only, not into the
     chart images (an Open Question for the maintainer).
+
+## Amendment 1 (2026-10-17): source statements across gaps and in every section
+
+This note implements Req 5.5 and 5.6 as written. The Phase 12
+re-validation (queue `2026-10-17-recovery-source-changes-across-gaps-and-sleep-sources`)
+found the shipped page narrower than both. No requirement text changes.
+
+- **Changes across gaps (5.5).** A `SourceChange` is recorded on each window
+  day whose shown source differs from that of the *latest earlier window day
+  that has a shown source*. Days with no shown source are skipped; they do
+  not reset the comparison. This settles the ambiguity of "the previous
+  window day's non-None shown source" above. A change from A to B after a
+  gap longer than the six-day carry is stated. A source that returns after a
+  gap with nothing different in between is not a change.
+  `tests/recovery/test_view.py::test_changes_and_notes` is re-pinned
+  (c → b after a gap *is* listed).
+- **Sleep (5.5, 5.6).** The Sleep section renders the same change lines and
+  the same `Sources shown: ...` line as a baselined signal section, from
+  `SleepView.total` (a `SignalView`), placed after the table. The table
+  caption names the source of the night it shows.
+- **Other Signals (5.6).** After the panel sentence, the section prints one
+  `Sources shown: ...` line naming each charted panel's source with the
+  origins its values record, in the baselined sections' format. Panels never
+  baseline, so no change lines are printed.
+- **Version.** The page body gains lines, so `RECOVERY_VERSION` becomes 2.
+  `BASELINES_VERSION` is unchanged, because no number moves. The recovery
+  facade, `Baselines`, `BaselineDay`, `render.attribution` and
+  `_FORBIDDEN_PHRASE_PATTERN` keep their exact surface, because
+  workout-wellness consumes them.
