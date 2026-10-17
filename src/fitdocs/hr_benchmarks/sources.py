@@ -103,9 +103,12 @@ MAX_TIMELINE_CHOICE: Final[FitdocsChoice] = FitdocsChoice(
         "was consulted in task 2.1."
     ),
     measurement=(
-        "The design measured 18 entries over 2017-2026 with the hand entry "
-        "(2 takeovers, 14 dated before its measurement date), and 19 "
-        "without it."
+        "Amendment 1 (2026-10-17) measured, over the maintainer's data root, "
+        "no derived entry with the hand entry, whose applies-from date "
+        "precedes all history and which no later run or bike evidence "
+        "exceeded by more than the step, and 9 rising entries without it; "
+        "the withdrawn falling rule gave 21, 5 dated after the newest "
+        "session."
     ),
 )
 
