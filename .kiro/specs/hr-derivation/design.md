@@ -1379,3 +1379,68 @@ revisable at review.
 20. Derived heart-rate entries never carry `applies_from`.
 21. `[load]` is read once per `derive-benchmarks` run, by the heart-rate
     preflight, and handed to the tagged-effort stage (controller ruling R3).
+
+## Amendment 1 (2026-10-17): design changes
+
+Implements requirements Amendment 1. Every other section of this design
+stands; where one contradicts this note, this note wins.
+
+- **Qualifying sessions (3.1).** `session_peak` (`peaks.py`) returns a new
+  `NoEvidenceReason.NOT_RUN_OR_BIKE` (`"not_run_or_bike"`) for any modality
+  other than `Modality.RUN` and `Modality.BIKE`. It is checked before the
+  heart-rate and cadence checks, so a strength session with no heart rate
+  reports `not_run_or_bike`. The report gains the row
+  `No evidence: not_run_or_bike` in enum order, after `no_sustained_stretch`.
+- **Evidence days and the hand floor (3.6, 3.7, 2.2, 5.5).**
+  - `max_evidence(sessions, *, hand_dates=())` makes evidence days only from
+    `session.day` values; departure days are gone.
+  - For an evidence day `d`, `floor(d)` is the latest hand-recorded date of
+    the kind strictly before `d`, or none. The window holds the sessions
+    with `max(d - (MAX_WINDOW_DAYS - 1), floor(d) + 1 day) <= day <= d`.
+  - `resting_evidence(..., hand_dates=())` applies the same floor to each
+    source's 28-day window, and the 14-value minimum counts only days after
+    the floor.
+  - The engine passes each kind's hand-recorded measurement dates (entries
+    of that kind that are not derived) into these functions. It loads the
+    profile before forming evidence, and session peaks are read once as
+    before.
+- **Rises only (4.3, 5.3, 5.4).** `KindRule` gains `rises_only: bool`
+  (`MAX_RULE` true, `RESTING_RULE` false). In `derive_timeline`, when a
+  value is in force and `rises_only` is set, a candidate whose value is not
+  greater than `in_force.value + step_bpm` starts nothing and clears the
+  run. Resting keeps the symmetric `abs(...) > step` rule.
+- **Hand entries hold their cover (5.5).** In `derive_timeline`, when the
+  value in force is a hand-recorded entry and
+  `candidate.day <= in_force.measured_on`, the candidate starts nothing and
+  clears the run. The takeover note's back-reach clause ("it applied here
+  through its applies-from date") becomes unreachable and is removed.
+  `back_reach_cover` and the cover-change report (5.7) stay: an entry
+  measured before a hand entry's applies-from date still narrows its cover
+  through selection (5.6).
+- **Constants' prose.** `MAX_RECENCY_CHOICE` no longer says the window lets
+  maximum heart rate fall with age. The window now bounds which sessions
+  must corroborate a peak together (the median of three within 365 days),
+  and a lower maximum is recorded by hand. `MAX_TIMELINE_CHOICE`'s
+  measurement is re-stated from the amended rule's run over the maintainer's
+  data root (counts only).
+- **Published text.** In `docs/configuration.md` § heart-rate derivation,
+  replace the falling-maximum and back-reach-takeover wording with the
+  rises-only and after-the-hand-entry rules. Add a CHANGELOG `[Unreleased]`
+  `Changed` entry. Update any packaged-skill sentence that describes a
+  falling derived maximum or a back-reach takeover.
+- **Tests.** Pin each revised criterion:
+  - no evidence day after the newest qualifying session;
+  - departure days create no evidence;
+  - strength, walk and other sessions give `not_run_or_bike`;
+  - a hand floor excludes earlier sessions, and earlier resting days, from
+    later windows;
+  - a lower derived maximum never starts an entry, against a hand or a
+    derived value in force;
+  - evidence on or before a hand entry's date, inside its applies-from
+    cover, starts nothing;
+  - a higher maximum from sessions after the hand entry takes over and is
+    announced and listed by `check` as current.
+
+  Tests that pinned the withdrawn behaviour (departure-day evidence,
+  back-reach takeovers, falling maxima) are rewritten to the amended rule,
+  never deleted without a replacement assertion.
