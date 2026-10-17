@@ -559,7 +559,7 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   - **Observable:** the full suite, lint and types green after the final
     rebase; the merge and follow-ups are in the shared log and the queue.
   - _Requirements: 5.3, 11.5, 14.1, 14.2_
-  - _Pending: format 4.1 and drain integration 4.2 are accepted; determinism, offline behaviour and final rebase/CI validation remain pending._
+  - _Pending: determinism/offline test implementation is accepted; parent final rebase, full canonical suite, branch CI, spec status and release validation remain pending._
 
 - [ ]* 6.2 Maintainer-run smoke on the maintainer's own export (no data enters the repository)
   - In a scratch data root outside the repository, drop the real
@@ -826,3 +826,12 @@ All paths below are under `tests/wellness/apple/` unless written in full;
   ```sh
   rg -n -i -U 'currently\s+`\.json`,\s+with|garmin-export`(?:,\s+then\s+|\s+before\s+)`intervals-icu|Apple Health import is planned|apple-health` is not registered' docs src/fitdocs --glob '*.md' --glob '*.py'
   ```
+
+- **6.1 test implementation:** Independently APPROVED and fresh parent focused/static
+  verification passed. Two tests exercise real Auckland/Los Angeles child-process
+  extraction/parsing/drain with independently expected eleven raw records, twelve
+  metrics and CSV/tree bytes, plus blocked sockets and extract-only rebuilding.
+  All fourteen distinct production faults/fifteen selected observations and the
+  socket control were independently confirmed, plus three own faults; exact
+  restorations and scoped nineteen tests passed. The task stays unchecked until
+  the parent finishes its rebase, full-suite, CI and release-validation gates.
