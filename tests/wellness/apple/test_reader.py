@@ -432,9 +432,11 @@ def test_zip_errors(tmp_path: Path, fault: str) -> None:
 def test_consumer_runtime_error_is_not_a_format_error(tmp_path: Path) -> None:
     path = tmp_path / "export.zip"
     path.write_bytes(zip_members({ENGLISH_MAIN: export_document()}))
-    with pytest.raises(RuntimeError, match="consumer") as caught:
-        with open_main_document(path):
-            raise RuntimeError("consumer")
+    with (
+        pytest.raises(RuntimeError, match="consumer") as caught,
+        open_main_document(path),
+    ):
+        raise RuntimeError("consumer")
     assert not isinstance(caught.value, WellnessFormatError)
 
 
