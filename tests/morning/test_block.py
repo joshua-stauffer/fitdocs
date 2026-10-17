@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable, Iterable
-from dataclasses import replace
+from dataclasses import FrozenInstanceError, replace
 from datetime import date, timedelta
 from typing import cast
 
@@ -13,11 +14,14 @@ from fitdocs.morning import block as block_module
 from fitdocs.morning.block import (
     MorningBlock,
     MorningInputs,
+    RowSource,
     SignalRow,
     SleepRow,
     Windows,
 )
 from fitdocs.recovery import METHODS, BaselineDay, Baselines, RangePosition
+from fitdocs.recovery import baselines as baselines_module
+from fitdocs.render.attribution import WellnessAttribution
 from fitdocs.render.charts.kit import Column, Value, ValueKind
 from fitdocs.render.charts.kit.format import format_value
 from fitdocs.wellness import METRICS, Metric, SeriesValue, WellnessSeries
@@ -33,6 +37,15 @@ SLEEP = (
     Metric.SLEEP_AWAKE_S,
     Metric.SLEEP_HR_BPM,
 )
+
+
+def expected_block(
+    day: date,
+    windows: Windows,
+    signals: tuple[SignalRow, ...],
+    sleep: tuple[SleepRow, ...],
+) -> MorningBlock:
+    return MorningBlock(day, windows, signals, sleep, WellnessAttribution.NONE)
 
 
 def observation(
@@ -75,7 +88,7 @@ def signal_row(bd: BaselineDay) -> SignalRow:
         fmt(bd.metric, bd.rolling_mean),
         normal_range,
         bd.position,
-        bd.source,
+        RowSource(bd.source, (), True),
     )
 
 
@@ -85,7 +98,7 @@ def sleep_row(bd: BaselineDay) -> SleepRow:
         fmt(bd.metric, bd.value),
         fmt(bd.metric, bd.rolling_mean),
         fmt(bd.metric, bd.baseline_mean),
-        bd.source,
+        RowSource(bd.source, (), True),
     )
 
 
@@ -114,7 +127,7 @@ def test_signal_figures_match_shared_baselines_in_fixed_order() -> None:
     expected = tuple(
         signal_row(cast(BaselineDay, baselines.shown(metric, D))) for metric in SIGNALS
     )
-    assert MorningInputs.of(series).block(D) == MorningBlock(
+    assert MorningInputs.of(series).block(D) == expected_block(
         D, Windows(7, 60), expected, ()
     )
 
@@ -136,7 +149,7 @@ def test_signal_range_position_is_passed_through(
         for offset in range(-60, 1)
     )
     bd = Baselines.of(series).on(Metric.RESTING_HR_BPM, "watch-a", D)
-    assert MorningInputs.of(series).block(D) == MorningBlock(
+    assert MorningInputs.of(series).block(D) == expected_block(
         D, Windows(7, 60), (replace(signal_row(bd), position=position),), ()
     )
 
@@ -217,9 +230,9 @@ def test_each_available_figure_can_keep_a_row(metric: Metric, mode: str) -> None
     series = wellness_series(observation(i, base, metric) for i in offsets)
     bd = Baselines.of(series).on(metric, "watch-a", D)
     expected = (
-        MorningBlock(D, Windows(7, 60), (signal_row(bd),), ())
+        expected_block(D, Windows(7, 60), (signal_row(bd),), ())
         if metric == Metric.RESTING_HR_BPM
-        else MorningBlock(D, Windows(7, 60), (), (sleep_row(bd),))
+        else expected_block(D, Windows(7, 60), (), (sleep_row(bd),))
     )
     assert MorningInputs.of(series).block(D) == expected
 
@@ -241,11 +254,11 @@ def test_window_minimums_leave_only_the_insufficient_figure_absent(
             None if missing == "rolling" else "60 bpm",
             "60 to 60 bpm" if missing == "rolling" else None,
             None,
-            "watch-a",
+            RowSource("watch-a", (), True),
         )
-        expected = MorningBlock(D, Windows(7, 60), (row,), ())
+        expected = expected_block(D, Windows(7, 60), (row,), ())
     else:
-        expected = MorningBlock(
+        expected = expected_block(
             D,
             Windows(7, 60),
             (),
@@ -255,7 +268,7 @@ def test_window_minimums_leave_only_the_insufficient_figure_absent(
                     "7:31:01",
                     None if missing == "rolling" else "7:31:01",
                     "7:31:01" if missing == "rolling" else None,
-                    "watch-a",
+                    RowSource("watch-a", (), True),
                 ),
             ),
         )
@@ -284,7 +297,7 @@ def test_sleep_figures_and_stage_order_use_total_sleep_source() -> None:
     series = sleep_series()
     baselines = Baselines.of(series)
     expected = tuple(sleep_row(baselines.on(metric, "watch-a", D)) for metric in SLEEP)
-    assert MorningInputs.of(series).block(D) == MorningBlock(
+    assert MorningInputs.of(series).block(D) == expected_block(
         D, Windows(7, 60), (), expected
     )
 
@@ -297,11 +310,15 @@ def test_total_sleep_without_present_same_source_stages_has_only_total() -> None
             observation(0, 7201.0, Metric.SLEEP_DEEP_S, "watch-b"),
         )
     )
-    assert MorningInputs.of(series).block(D) == MorningBlock(
+    assert MorningInputs.of(series).block(D) == expected_block(
         D,
         Windows(7, 60),
         (),
-        (SleepRow(Metric.SLEEP_S, "7:31:01", None, None, "watch-a"),),
+        (
+            SleepRow(
+                Metric.SLEEP_S, "7:31:01", None, None, RowSource("watch-a", (), True)
+            ),
+        ),
     )
 
 
@@ -312,13 +329,17 @@ def test_zero_duration_sleep_stage_is_present() -> None:
             observation(0, 0.0, Metric.SLEEP_DEEP_S),
         )
     )
-    assert MorningInputs.of(series).block(D) == MorningBlock(
+    assert MorningInputs.of(series).block(D) == expected_block(
         D,
         Windows(7, 60),
         (),
         (
-            SleepRow(Metric.SLEEP_S, "7:31:01", None, None, "watch-a"),
-            SleepRow(Metric.SLEEP_DEEP_S, "0:00", None, None, "watch-a"),
+            SleepRow(
+                Metric.SLEEP_S, "7:31:01", None, None, RowSource("watch-a", (), True)
+            ),
+            SleepRow(
+                Metric.SLEEP_DEEP_S, "0:00", None, None, RowSource("watch-a", (), True)
+            ),
         ),
     )
 
@@ -333,10 +354,19 @@ def test_windows_follow_coherent_methods(monkeypatch: pytest.MonkeyPatch) -> Non
         },
     )
     series = wellness_series((observation(0, 61.0, Metric.RESTING_HR_BPM),))
-    assert MorningInputs.of(series).block(D) == MorningBlock(
+    assert MorningInputs.of(series).block(D) == expected_block(
         D,
         Windows(5, 40),
-        (SignalRow(Metric.RESTING_HR_BPM, "61 bpm", None, None, None, "watch-a"),),
+        (
+            SignalRow(
+                Metric.RESTING_HR_BPM,
+                "61 bpm",
+                None,
+                None,
+                None,
+                RowSource("watch-a", (), True),
+            ),
+        ),
         (),
     )
 
@@ -389,7 +419,7 @@ def test_a_day_change_affects_x_and_x_plus_60_but_neither_neighbor() -> None:
         before.block(D + timedelta(days=60)) != after.block(D + timedelta(days=60)),
     ) == (True, True)
     for day in (D - timedelta(days=1), D + timedelta(days=61)):
-        expected = MorningBlock(
+        expected = expected_block(
             day,
             Windows(7, 60),
             (
@@ -399,9 +429,218 @@ def test_a_day_change_affects_x_and_x_plus_60_but_neither_neighbor() -> None:
                     "60 bpm",
                     "60 to 60 bpm",
                     RangePosition.WITHIN,
-                    "watch-a",
+                    RowSource("watch-a", (), True),
                 ),
             ),
             (),
         )
         assert before.block(day) == after.block(day) == expected
+
+
+@pytest.mark.parametrize("field", ("source", "origins", "unattributed"))
+def test_row_source_is_frozen(field: str) -> None:
+    source = RowSource("watch-a", ("apple",), False)
+    with pytest.raises(FrozenInstanceError):
+        setattr(source, field, None)
+
+
+@pytest.mark.parametrize("metric", (*SIGNALS, *SLEEP))
+def test_row_origins_use_the_selected_metric_and_source(metric: Metric) -> None:
+    values = [
+        replace(observation(i, 65.0, metric, "chosen"), origin=origin)
+        for i, origin in ((-2, "zeta"), (-1, "alpha"), (0, "zeta"))
+    ]
+    values.extend(
+        replace(observation(i, 85.0, metric, "decoy", canonical=False), origin="garmin")
+        for i in (-2, -1, 0)
+    )
+    if metric in SLEEP[1:]:
+        values.append(
+            replace(observation(0, 27000.0, Metric.SLEEP_S, "chosen"), origin="apple")
+        )
+    series = wellness_series(values)
+    bd = Baselines.of(series).on(metric, "chosen", D)
+    assert (
+        bd.value,
+        bd.rolling_count,
+        bd.rolling_mean is not None,
+        bd.baseline_mean,
+    ) == (
+        65.0,
+        3,
+        True,
+        None,
+    )
+    block = cast(MorningBlock, MorningInputs.of(series).block(D))
+    rows: tuple[SignalRow | SleepRow, ...] = (*block.signals, *block.sleep)
+    row = next(row for row in rows if row.metric == metric)
+    assert row.source == RowSource("chosen", ("alpha", "zeta"), False)
+    assert block.attribution is WellnessAttribution.NONE
+
+
+@pytest.mark.parametrize(
+    ("mode", "origins", "unattributed", "attribution"),
+    (
+        ("day", ("garmin",), False, WellnessAttribution.SOLE),
+        ("historical", ("apple", "garmin"), False, WellnessAttribution.CONTRIBUTING),
+        ("all", ("garmin",), False, WellnessAttribution.SOLE),
+        ("unknown", ("garmin",), True, WellnessAttribution.CONTRIBUTING),
+        ("other", ("apple", "zeta"), False, WellnessAttribution.NONE),
+    ),
+    ids=("day-only", "historical-only", "all-garmin", "unknown-origin", "no-garmin"),
+)
+def test_attribution_uses_all_contributing_values(
+    mode: str,
+    origins: tuple[str, ...],
+    unattributed: bool,
+    attribution: WellnessAttribution,
+) -> None:
+    method = METHODS[Metric.RESTING_HR_BPM]
+    offsets = (0,) if mode == "day" else range(-method.baseline_days, 1)
+    series = wellness_series(
+        replace(
+            observation(i, 65.0 + (i % 11), Metric.RESTING_HR_BPM),
+            origin=(
+                "apple"
+                if mode == "historical" and i == 0
+                else None
+                if mode == "unknown" and i == -10
+                else ("apple" if i == -10 else "zeta")
+                if mode == "other"
+                else "garmin"
+            ),
+        )
+        for i in offsets
+    )
+    bd = Baselines.of(series).on(Metric.RESTING_HR_BPM, "watch-a", D)
+    assert (
+        bd.value is not None,
+        bd.rolling_mean is not None,
+        bd.baseline_mean is not None,
+    ) == (True, mode != "day", mode != "day")
+    block = cast(MorningBlock, MorningInputs.of(series).block(D))
+    assert block.signals[0].source == RowSource("watch-a", origins, unattributed)
+    assert block.attribution is attribution
+
+
+def test_absent_baseline_excludes_its_historical_origins() -> None:
+    method = METHODS[Metric.RESTING_HR_BPM]
+    series = wellness_series(
+        replace(
+            observation(i, 65.0, Metric.RESTING_HR_BPM),
+            origin="garmin" if i == -method.baseline_days else "apple",
+        )
+        for i in (-method.baseline_days, -2, -1, 0)
+    )
+    bd = Baselines.of(series).on(Metric.RESTING_HR_BPM, "watch-a", D)
+    assert (
+        bd.value,
+        bd.rolling_count,
+        bd.rolling_mean,
+        bd.baseline_count,
+        bd.baseline_mean,
+    ) == (65.0, 3, 65.0, 3, None)
+    block = cast(MorningBlock, MorningInputs.of(series).block(D))
+    assert block.signals[0].source == RowSource("watch-a", ("apple",), False)
+    assert block.attribution is WellnessAttribution.NONE
+
+
+@pytest.mark.parametrize("nondefault", (False, True), ids=("default", "configured"))
+@pytest.mark.parametrize("window", ("baseline", "rolling"))
+def test_origin_window_boundaries(
+    monkeypatch: pytest.MonkeyPatch, window: str, nondefault: bool
+) -> None:
+    methods = {
+        metric: replace(method, rolling_days=5, baseline_days=40)
+        if nondefault
+        else method
+        for metric, method in METHODS.items()
+    }
+    monkeypatch.setattr(block_module, "METHODS", methods)
+    monkeypatch.setattr(baselines_module, "METHODS", methods)
+    method = methods[Metric.RESTING_HR_BPM]
+    lower = (
+        -method.baseline_days if window == "baseline" else -(method.rolling_days - 1)
+    )
+    series = wellness_series(
+        replace(
+            observation(i, 65.0 + (i % 13), Metric.RESTING_HR_BPM),
+            origin="garmin"
+            if i in (lower - 1, 1)
+            else "inside"
+            if i == lower
+            else "apple",
+        )
+        for i in range(lower - 1, 2)
+    )
+    bd = Baselines.of(series).on(Metric.RESTING_HR_BPM, "watch-a", D)
+    assert (
+        bd.value is not None,
+        bd.rolling_mean is not None,
+        bd.baseline_mean is not None,
+    ) == (True, True, window == "baseline")
+    block = cast(MorningBlock, MorningInputs.of(series).block(D))
+    assert block.signals[0].source == RowSource("watch-a", ("apple", "inside"), False)
+    assert block.attribution is WellnessAttribution.NONE
+
+
+def test_origin_maps_are_cached_once_per_metric_source_per_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    alternate = [
+        (Metric.HRV_SDNN_MS, "watch-b"),
+        (Metric.HRV_RMSSD_MS, "watch-a"),
+        (Metric.RESTING_HR_BPM, "watch-b"),
+        *((metric, "watch-b") for metric in SLEEP),
+    ]
+    series = wellness_series(
+        (
+            *signal_series().values,
+            *sleep_series().values,
+            *(
+                observation(1, 65.0 + i, metric, source)
+                for i, (metric, source) in enumerate(alternate)
+            ),
+        )
+    )
+    original = WellnessSeries.by_source
+    calls: list[tuple[Metric, str]] = []
+
+    def recording_by_source(
+        self: WellnessSeries, metric: Metric, source: str
+    ) -> tuple[SeriesValue, ...]:
+        calls.append((metric, source))
+        return original(self, metric, source)
+
+    monkeypatch.setattr(WellnessSeries, "by_source", recording_by_source)
+    expected = [
+        (Metric.HRV_SDNN_MS, "watch-a"),
+        (Metric.HRV_RMSSD_MS, "watch-b"),
+        (Metric.RESTING_HR_BPM, "watch-a"),
+        *((metric, "watch-a") for metric in SLEEP),
+    ]
+    inputs = MorningInputs.of(series)
+    inputs.block(D)
+    assert Counter(calls) == Counter(expected)
+    inputs.block(D)
+    inputs.block(D + timedelta(days=1))
+    inputs.block(D + timedelta(days=1))
+    assert Counter(calls) == Counter([*expected, *alternate])
+    MorningInputs.of(series).block(D)
+    assert Counter(calls) == Counter([*expected, *alternate, *expected])
+
+
+@pytest.mark.parametrize("metric", (*SIGNALS, *SLEEP))
+def test_each_row_can_supply_the_block_attribution(metric: Metric) -> None:
+    values = [replace(observation(0, 65.0, metric), origin="garmin")]
+    if metric in SLEEP[1:]:
+        values.append(replace(observation(0, 27000.0, Metric.SLEEP_S), origin="apple"))
+    series = wellness_series(values)
+    bd = Baselines.of(series).on(metric, "watch-a", D)
+    assert (bd.value, bd.rolling_mean, bd.baseline_mean) == (65.0, None, None)
+    block = cast(MorningBlock, MorningInputs.of(series).block(D))
+    assert block.attribution is (
+        WellnessAttribution.CONTRIBUTING
+        if metric in SLEEP[1:]
+        else WellnessAttribution.SOLE
+    )

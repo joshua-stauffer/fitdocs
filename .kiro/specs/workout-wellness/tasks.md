@@ -370,7 +370,7 @@ wiki-contract and analytics-index amendment and criterion numbers.
   - _Boundary: MorningBlock_
   - _Depends: 1.1_
 
-- [ ] 2.2 Attribute every row to its source and origins, and credit Garmin
+- [x] 2.2 Attribute every row to its source and origins, and credit Garmin
   - `morning/block.py`: `RowSource` from the row's contributing days (design
     § MorningBlock "Row sources", windows from `Windows`) through a per-run
     `{day: origin}` map built once per `(metric, source)` from
@@ -777,6 +777,18 @@ wiki-contract and analytics-index amendment and criterion numbers.
   - _Requirements: 9.1, 9.4, 11.3, 12.1, 12.2_
 
 ## Implementation Notes
+
+- 2.2 accepted after independent approval and fresh completion verification:
+  77 focused and 1,366 morning/recovery regression tests passed, with all
+  static checks clean. All 43 claimed and two independent mutations failed
+  at their intended assertions and restored GREEN; all 27 changed/new
+  assertion sites have observed RED evidence. Native validation accepted
+  all 5,175 fixture values; 2,073 regular inputs and nineteen skill symlinks
+  matched the reviewed live tree and isolated snapshots. All six listed
+  criteria are pinned at source/enum scope; rendering remains with 2.3.
+  Cache controls change every metric's canonical source on the next day and
+  use separate input instances, pinning both parts of the cache key and its
+  per-run lifetime without prescribing lookup order or eager/lazy timing.
 
 - 2.1 accepted after independent approval and fresh completion verification:
   45 focused and 1,334 morning/recovery regression tests passed, with all

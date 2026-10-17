@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import date
+from dataclasses import dataclass, field
+from datetime import date, timedelta
 
 from fitdocs.recovery import (
     BASELINED_METRICS,
@@ -13,6 +13,7 @@ from fitdocs.recovery import (
     Baselines,
     RangePosition,
 )
+from fitdocs.render.attribution import WellnessAttribution, wellness_attribution
 from fitdocs.render.charts.kit import Column, ValueKind
 from fitdocs.render.charts.kit.format import format_value
 from fitdocs.wellness import METRICS, Metric, WellnessSeries
@@ -25,13 +26,20 @@ class Windows:
 
 
 @dataclass(frozen=True)
+class RowSource:
+    source: str
+    origins: tuple[str, ...]
+    unattributed: bool
+
+
+@dataclass(frozen=True)
 class SignalRow:
     metric: Metric
     day_value: str | None
     rolling_mean: str | None
     normal_range: str | None
     position: RangePosition | None
-    source: str
+    source: RowSource
 
 
 @dataclass(frozen=True)
@@ -40,7 +48,7 @@ class SleepRow:
     night_value: str | None
     rolling_mean: str | None
     baseline_mean: str | None
-    source: str
+    source: RowSource
 
 
 @dataclass(frozen=True)
@@ -49,6 +57,7 @@ class MorningBlock:
     windows: Windows
     signals: tuple[SignalRow, ...]
     sleep: tuple[SleepRow, ...]
+    attribution: WellnessAttribution
 
 
 @dataclass
@@ -56,6 +65,9 @@ class MorningInputs:
     series: WellnessSeries
     baselines: Baselines
     windows: Windows
+    _origins: dict[tuple[Metric, str], dict[date, str | None]] = field(
+        default_factory=dict, init=False, repr=False
+    )
 
     @classmethod
     def of(cls, series: WellnessSeries) -> MorningInputs:
@@ -89,22 +101,63 @@ class MorningInputs:
                     _fmt(metric, bd.rolling_mean),
                     normal_range,
                     bd.position,
-                    bd.source,
+                    self._row_source(bd),
                 )
             )
 
         sleep: list[SleepRow] = []
         bd = self.baselines.shown(Metric.SLEEP_S, day)
         if bd is not None and _has_figure(bd):
-            sleep.append(_sleep_row(bd))
+            sleep.append(_sleep_row(bd, self._row_source(bd)))
             for metric in SLEEP_METRICS[1:]:
                 stage = self.baselines.on(metric, bd.source, day)
                 if stage.value is not None:
-                    sleep.append(_sleep_row(stage))
+                    sleep.append(_sleep_row(stage, self._row_source(stage)))
 
         if not signals and not sleep:
             return None
-        return MorningBlock(day, self.windows, tuple(signals), tuple(sleep))
+        rows: tuple[SignalRow | SleepRow, ...] = (*signals, *sleep)
+        sources = [row.source for row in rows]
+        origins: set[str | None] = {
+            origin for source in sources for origin in source.origins
+        }
+        if any(source.unattributed for source in sources):
+            origins.add(None)
+        return MorningBlock(
+            day,
+            self.windows,
+            tuple(signals),
+            tuple(sleep),
+            wellness_attribution(origins),
+        )
+
+    def _row_source(self, bd: BaselineDay) -> RowSource:
+        key = (bd.metric, bd.source)
+        if key not in self._origins:
+            self._origins[key] = {
+                value.day: value.origin
+                for value in self.series.by_source(bd.metric, bd.source)
+            }
+        by_day = self._origins[key]
+        days: set[date] = set()
+        if bd.value is not None:
+            days.add(bd.day)
+        if bd.rolling_mean is not None:
+            days.update(
+                bd.day - timedelta(days=offset)
+                for offset in range(self.windows.rolling_days)
+            )
+        if bd.baseline_mean is not None:
+            days.update(
+                bd.day - timedelta(days=offset)
+                for offset in range(1, self.windows.baseline_days + 1)
+            )
+        origins = [by_day[day] for day in sorted(days) if day in by_day]
+        return RowSource(
+            bd.source,
+            tuple(sorted({origin for origin in origins if origin is not None})),
+            None in origins,
+        )
 
 
 def _has_figure(bd: BaselineDay) -> bool:
@@ -122,11 +175,11 @@ def _fmt(metric: Metric, value: float | None, *, with_unit: bool = True) -> str 
     )
 
 
-def _sleep_row(bd: BaselineDay) -> SleepRow:
+def _sleep_row(bd: BaselineDay, source: RowSource) -> SleepRow:
     return SleepRow(
         bd.metric,
         _fmt(bd.metric, bd.value),
         _fmt(bd.metric, bd.rolling_mean),
         _fmt(bd.metric, bd.baseline_mean),
-        bd.source,
+        source,
     )
