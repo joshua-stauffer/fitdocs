@@ -6,7 +6,7 @@ from math import inf, nextafter
 import pytest
 
 from fitdocs.hr_benchmarks.maximum import max_evidence
-from fitdocs.hr_benchmarks.types import Evidence
+from fitdocs.hr_benchmarks.types import Evidence, SessionPeak
 from tests.hr_benchmarks.builders import session_peak
 
 
@@ -19,7 +19,7 @@ def test_fewer_than_three_sessions_gives_no_default(count: int) -> None:
     assert max_evidence(sessions) == ()
 
 
-def test_unsorted_ranked_peaks_and_leave_day_lowering() -> None:
+def test_unsorted_ranked_peaks_and_no_departure_day_evidence() -> None:
     sessions = [
         session_peak(date(2024, 1, 3), "workouts/fourth.md", 186.0),
         session_peak(date(2024, 1, 1), "workouts/median.md", 187.2),
@@ -42,19 +42,30 @@ def test_unsorted_ranked_peaks_and_leave_day_lowering() -> None:
                 " among 4 sessions dated 2023-01-04 to 2024-01-03",
                 "workout heart rate, 365 days ending 2024-01-03",
             ),
-            Evidence(
-                date(2024, 12, 31),
-                186,
-                "workouts",
-                "workouts/fourth.md",
-                None,
-                "median of the three highest 30-second "
-                "sustained peaks (189.4, 186.0, 181.1 bpm)"
-                " among 3 sessions dated 2024-01-02 to 2024-12-31",
-                "workout heart rate, 365 days ending 2024-12-31",
-            ),
         )
     )
+
+
+def test_no_evidence_day_after_the_newest_session() -> None:
+    sessions = [
+        session_peak(date(2024, 1, 1), "workouts/a.md", 180.0),
+        session_peak(date(2024, 1, 2), "workouts/b.md", 190.0),
+        session_peak(date(2024, 1, 3), "workouts/c.md", 185.0),
+        session_peak(date(2024, 6, 1), "workouts/d.md", 150.0),
+    ]
+    days = [item.day for item in max_evidence(sessions)]
+    assert days == [date(2024, 1, 3), date(2024, 6, 1)] and max(days) == max(
+        s.day for s in sessions
+    )
+
+
+def test_session_leaving_the_window_creates_no_evidence_day() -> None:
+    sessions = [
+        session_peak(date(2023, 1, 1), "workouts/a.md", 180.0),
+        session_peak(date(2023, 1, 2), "workouts/b.md", 190.0),
+        session_peak(date(2023, 1, 3), "workouts/c.md", 185.0),
+    ]
+    assert [item.day for item in max_evidence(sessions)] == [date(2023, 1, 3)]
 
 
 def test_window_includes_364_day_old_session_but_excludes_365() -> None:
@@ -63,6 +74,7 @@ def test_window_includes_364_day_old_session_but_excludes_365() -> None:
         session_peak(date(2023, 1, 1), "workouts/old.md", 219.1),
         session_peak(date(2023, 12, 31), "workouts/current.md", 209.1),
         session_peak(date(2023, 12, 31), "workouts/next.md", 199.1),
+        session_peak(date(2024, 1, 1), "workouts/later.md", 150.0),
     ]
     assert max_evidence(sessions) == (
         Evidence(
@@ -84,7 +96,7 @@ def test_window_includes_364_day_old_session_but_excludes_365() -> None:
             None,
             "median of the three highest 30-second "
             "sustained peaks (209.1, 199.1, 189.1 bpm)"
-            " among 3 sessions dated 2023-01-02 to 2024-01-01",
+            " among 4 sessions dated 2023-01-02 to 2024-01-01",
             "workout heart rate, 365 days ending 2024-01-01",
         ),
     )
@@ -254,3 +266,51 @@ def test_adjacent_raw_peaks_keep_the_later_median_page(reverse: bool) -> None:
             "workout heart rate, 365 days ending 2024-04-03",
         ),
     )
+
+
+def _hand_sessions() -> list[SessionPeak]:
+    return [
+        session_peak(date(2024, 2, 28), "workouts/before.md", 200.0),
+        session_peak(date(2024, 3, 1), "workouts/on.md", 201.0),
+        session_peak(date(2024, 3, 2), "workouts/c.md", 170.0),
+        session_peak(date(2024, 3, 3), "workouts/d.md", 171.0),
+        session_peak(date(2024, 3, 4), "workouts/e.md", 172.0),
+    ]
+
+
+def test_hand_floor_excludes_sessions_on_or_before_the_hand_date() -> None:
+    hand = date(2024, 3, 1)
+    without = max_evidence(_hand_sessions())
+    with_hand = max_evidence(_hand_sessions(), hand_dates=(hand,))
+    assert [(e.day, e.value) for e in without] == [
+        (date(2024, 3, 2), 200),
+        (date(2024, 3, 3), 200),
+        (date(2024, 3, 4), 200),
+    ] and with_hand == (
+        Evidence(
+            date(2024, 3, 4),
+            171,
+            "workouts",
+            "workouts/d.md",
+            None,
+            "median of the three highest 30-second "
+            "sustained peaks (172.0, 171.0, 170.0 bpm)"
+            " among 3 sessions dated 2024-03-02 to 2024-03-04",
+            "workout heart rate, 365 days ending 2024-03-04",
+        ),
+    )
+
+
+def test_hand_floor_uses_only_hand_dates_strictly_before_the_day() -> None:
+    sessions = _hand_sessions()[:3]
+    assert max_evidence(sessions, hand_dates=(date(2024, 3, 2),)) == max_evidence(
+        sessions
+    ) and max_evidence(sessions, hand_dates=(date(2024, 3, 9),)) == max_evidence(
+        sessions
+    )
+
+
+def test_hand_floor_uses_the_latest_hand_date_before_each_day() -> None:
+    sessions = _hand_sessions()
+    assert max_evidence(sessions, hand_dates=(date(2024, 3, 1),)) != ()
+    assert max_evidence(sessions, hand_dates=(date(2024, 3, 3), date(2024, 3, 1))) == ()

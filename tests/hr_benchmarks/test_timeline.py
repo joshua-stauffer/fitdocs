@@ -84,7 +84,8 @@ def test_no_evidence_supplies_no_entry(rule: KindRule, has_hand: bool) -> None:
         (MAX_RULE, 192, 1, []),
         (MAX_RULE, 188, 1, []),
         (MAX_RULE, 193, 1, [(date(2024, 1, 1), 193)]),
-        (MAX_RULE, 187, 1, [(date(2024, 1, 1), 187)]),
+        (MAX_RULE, 187, 1, []),
+        (MAX_RULE, 100, 1, []),
     ],
     ids=[
         "rest-plus-step",
@@ -94,7 +95,8 @@ def test_no_evidence_supplies_no_entry(rule: KindRule, has_hand: bool) -> None:
         "max-plus-step",
         "max-minus-step",
         "max-rise",
-        "max-fall",
+        "max-fall-never-starts",
+        "max-far-below",
     ],
 )
 def test_strict_step_in_both_directions(
@@ -151,7 +153,18 @@ def test_hand_takeover_records_full_note_source_and_pair() -> None:
     )
 
 
-def test_future_hand_back_reach_then_derived_value_in_force() -> None:
+def test_hand_cover_holds_against_evidence_dated_on_or_before_it() -> None:
+    hand = hand_benchmark(
+        BenchmarkKind.MAX_HR_BPM,
+        date(2024, 1, 10),
+        190,
+        applies_from=date(2024, 1, 1),
+    )
+    covered = [_e(day, 205) for day in range(1, 11)]
+    assert derive_timeline(MAX_RULE, covered, [hand]) == TimelineResult((), ())
+
+
+def test_evidence_after_a_covering_hand_takes_over_without_back_reach_note() -> None:
     hand = hand_benchmark(
         BenchmarkKind.MAX_HR_BPM,
         date(2024, 1, 10),
@@ -162,41 +175,53 @@ def test_future_hand_back_reach_then_derived_value_in_force() -> None:
         BenchmarkKind.MAX_HR_BPM,
         None,
         195,
-        date(2024, 1, 2),
-        "Takes over from your hand-recorded 190 bpm of 2024-01-10 "
-        "(it applied here through its applies-from date): "
+        date(2024, 1, 11),
+        "Takes over from your hand-recorded 190 bpm of 2024-01-10: "
         "the evidence differed by more than 2 bpm.",
         None,
         BenchmarkSource(
             kind=BenchmarkSourceKind.DERIVED,
             method="max_hr_sustained_peak",
-            document="document-2",
-            inputs="inputs-2",
+            document="document-11",
+            inputs="inputs-11",
             citation="max_hr_timeline_choice",
-            series="watch:metric-2",
+            series="watch:metric-11",
         ),
     )
-    second = Benchmark(
-        BenchmarkKind.MAX_HR_BPM,
-        None,
-        192,
-        date(2024, 1, 3),
-        "Derived by fitdocs from summary-3.",
-        None,
-        BenchmarkSource(
-            kind=BenchmarkSourceKind.DERIVED,
-            method="max_hr_sustained_peak",
-            document="document-3",
-            inputs="inputs-3",
-            citation="max_hr_timeline_choice",
-            series="watch:metric-3",
-        ),
+    assert derive_timeline(
+        MAX_RULE, [_e(2, 205), _e(11, 195), _e(12, 192)], [hand]
+    ) == TimelineResult((first,), (Takeover(BenchmarkKind.MAX_HR_BPM, first, hand),))
+
+
+def test_resting_hand_cover_holds_and_the_run_restarts_after_it() -> None:
+    hand = hand_benchmark(
+        BenchmarkKind.RESTING_HR_BPM,
+        date(2024, 1, 20),
+        60,
+        applies_from=date(2024, 1, 1),
     )
-    assert derive_timeline(MAX_RULE, [_e(1, 191), _e(2, 195), _e(3, 192)], [hand]) == (
-        TimelineResult(
-            (first, second), (Takeover(BenchmarkKind.MAX_HR_BPM, first, hand),)
-        )
-    )
+    values = [_e(day, 67) for day in range(1, 35)]
+    assert _points(derive_timeline(RESTING_RULE, values, [hand])) == [
+        (date(2024, 1, 21), 67)
+    ]
+
+
+def test_derived_maximum_never_falls_against_a_derived_value() -> None:
+    result = derive_timeline(MAX_RULE, [_e(1, 200), _e(2, 190), _e(3, 150)], [])
+    assert _points(result) == [(date(2024, 1, 1), 200)]
+
+
+def test_derived_maximum_needs_more_than_the_step_to_rise() -> None:
+    result = derive_timeline(MAX_RULE, [_e(1, 200), _e(2, 202), _e(3, 203)], [])
+    assert _points(result) == [(date(2024, 1, 1), 200), (date(2024, 1, 3), 203)]
+
+
+def test_resting_still_falls_symmetrically() -> None:
+    values = [_e(1, 60), *[_e(day, 50) for day in range(2, 16)]]
+    assert _points(derive_timeline(RESTING_RULE, values, [])) == [
+        (date(2024, 1, 1), 60),
+        (date(2024, 1, 2), 50),
+    ]
 
 
 def test_future_hand_without_back_reach_does_not_mask_initial_entry() -> None:
@@ -285,19 +310,19 @@ def test_hand_measurement_interrupts_resting_run(tail_count: int) -> None:
 
 
 def test_new_hand_recomputes_later_entries_against_new_value() -> None:
-    values = [_e(1, 195), _e(3, 190), _e(4, 199), _e(5, 194)]
+    values = [_e(1, 195), _e(3, 194), _e(4, 199), _e(5, 202)]
     old = hand_benchmark(BenchmarkKind.MAX_HR_BPM, date(2023, 12, 31), 188)
     new = hand_benchmark(BenchmarkKind.MAX_HR_BPM, date(2024, 1, 2), 191)
     before = derive_timeline(MAX_RULE, values, [old])
     after = derive_timeline(MAX_RULE, values, [new, old])
     assert (_points(before), _points(after)) == (
+        [(date(2024, 1, 1), 195), (date(2024, 1, 4), 199), (date(2024, 1, 5), 202)],
         [
             (date(2024, 1, 1), 195),
-            (date(2024, 1, 3), 190),
+            (date(2024, 1, 3), 194),
             (date(2024, 1, 4), 199),
-            (date(2024, 1, 5), 194),
+            (date(2024, 1, 5), 202),
         ],
-        [(date(2024, 1, 1), 195), (date(2024, 1, 4), 199), (date(2024, 1, 5), 194)],
     )
 
 
@@ -320,6 +345,7 @@ def test_custom_rule_is_forwarded_to_selection_confirmation_and_provenance() -> 
         "custom-citation",
         7,
         2,
+        False,
     )
     hand = hand_benchmark(BenchmarkKind.RESTING_HR_BPM, date(2023, 12, 31), 60)
     expected = Benchmark(
@@ -498,7 +524,7 @@ def test_multiple_hand_takeovers_return_complete_ordered_pairs() -> None:
     third = Benchmark(
         kind=BenchmarkKind.MAX_HR_BPM,
         discipline=None,
-        value=194,
+        value=202,
         measured_on=date(2024, 1, 5),
         note="Derived by fitdocs from summary-5.",
         applies_from=None,
@@ -544,7 +570,7 @@ def test_multiple_hand_takeovers_return_complete_ordered_pairs() -> None:
     )
     assert (
         derive_timeline(
-            MAX_RULE, [_e(1, 195), _e(3, 190), _e(4, 199), _e(5, 194)], [new, old]
+            MAX_RULE, [_e(1, 195), _e(3, 190), _e(4, 199), _e(5, 202)], [new, old]
         )
         == expected
     )

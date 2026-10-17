@@ -170,16 +170,6 @@ EXPECTED_DERIVED = (
     (
         "max_hr_bpm",
         None,
-        187,
-        "2021-09-03",
-        None,
-        "derived",
-        "workouts/2021-09-03-run-0146.md",
-        None,
-    ),
-    (
-        "max_hr_bpm",
-        None,
         195,
         "2022-10-03",
         None,
@@ -274,18 +264,12 @@ def test_cli_history_takeover_and_recompute(
         if line.startswith("Takeover max_hr_bpm:")
     )
     assert max_lines == (
-        "Takeover max_hr_bpm: 187 bpm measured 2021-09-03 (derived) supersedes your "
-        "179 bpm measured 2022-09-10 (hand-recorded; applies from 2021-08-01); "
-        "applied by applies-from date 2021-08-01; method=max_hr_sustained_peak; "
-        "document=workouts/2021-09-03-run-0146.md; inputs=median of the three highest "
-        "30-second sustained peaks (193.0, 187.0, 181.0 bpm) among 3 sessions dated "
-        "2020-09-04 to 2021-09-03; citation=max_hr_timeline_choice; series=none",
         "Takeover max_hr_bpm: 195 bpm measured 2022-10-03 (derived) supersedes your "
         "179 bpm measured 2022-09-10 (hand-recorded; applies from 2021-08-01); "
         "applied by measurement; method=max_hr_sustained_peak; "
         "document=workouts/2022-10-03-run-0146.md; inputs=median of the three highest "
         "30-second sustained peaks (199.0, 195.0, 191.0 bpm) among 3 sessions dated "
-        "2021-10-04 to 2022-10-03; citation=max_hr_timeline_choice; series=none",
+        "2022-09-11 to 2022-10-03; citation=max_hr_timeline_choice; series=none",
     )
     assert (
         first.stdout.count("Profile written: yes"),
@@ -296,7 +280,7 @@ def test_cli_history_takeover_and_recompute(
         ),
         first.stdout.count("The heart-rate timeline changed:"),
         race.name in first.stdout,
-    ) == (1, 1, 1, 1, 1, True)
+    ) == (1, 1, 0, 0, 1, True)
     profile_path = root / "athlete.toml"
     os.utime(profile_path, ns=(1_600_000_000_000_000_000, 1_600_000_000_000_000_000))
     stable = profile_path.read_bytes(), profile_path.stat().st_mtime_ns
@@ -326,7 +310,7 @@ def test_cli_history_takeover_and_recompute(
             "max_hr_bpm: derived 195 bpm from 2022-10-03 takes over from your "
             "hand-recorded 179 bpm of 2022-09-10 (applied by measurement date); "
             "evidence: median of the three highest 30-second sustained peaks "
-            "(199.0, 195.0, 191.0 bpm) among 3 sessions dated 2021-10-04 to "
+            "(199.0, 195.0, 191.0 bpm) among 3 sessions dated 2022-09-11 to "
             "2022-10-03; document: workouts/2022-10-03-run-0146.md",
         ),
         True,
@@ -369,11 +353,11 @@ def test_cli_history_takeover_and_recompute(
         (
             ("lthr_bpm", "171"),
             ("resting_hr_bpm", "53"),
-            ("max_hr_bpm", "187"),
+            ("max_hr_bpm", "179"),
             ("lthr_measured_on", "2021-08-30"),
             ("resting_hr_measured_on", "2021-09-01"),
-            ("max_hr_measured_on", "2021-09-03"),
+            ("max_hr_measured_on", "2022-09-10"),
         ),
-        (5.028908812, 4.970200296),
+        (5.028908812, 4.757835143),
         before_load,
     )

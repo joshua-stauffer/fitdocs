@@ -78,9 +78,10 @@ MAX_SUSTAINED_PEAK_CHOICE: Final[FitdocsChoice] = FitdocsChoice(
 MAX_RECENCY_CHOICE: Final[FitdocsChoice] = FitdocsChoice(
     key="max_hr_recency_choice",
     justification=(
-        "A 365-day window permits maximum heart rate to fall with age; the "
-        "median of the three highest sustained peaks prevents one artefact "
-        "session setting the value."
+        "A 365-day window bounds which sessions must corroborate a peak "
+        "together, and the median of the three highest sustained peaks "
+        "prevents one artefact session setting the value. A derived maximum "
+        "never falls: the athlete records a lower maximum by hand."
     ),
     search_basis=(
         "Approved hr-derivation design, HrSources; no external publication "
@@ -224,6 +225,7 @@ RESTING_RULE: Final[KindRule] = KindRule(
     citation_key=RESTING_TIMELINE_CHOICE.key,
     step_bpm=RESTING_STEP_BPM.value,
     confirm_days=RESTING_CONFIRM_DAYS.value,
+    rises_only=False,
 )
 
 MAX_RULE: Final[KindRule] = KindRule(
@@ -232,6 +234,7 @@ MAX_RULE: Final[KindRule] = KindRule(
     citation_key=MAX_TIMELINE_CHOICE.key,
     step_bpm=MAX_STEP_BPM.value,
     confirm_days=1,
+    rises_only=True,
 )
 
 BLOCKED_CITATIONS: Final[frozenset[str]] = frozenset()

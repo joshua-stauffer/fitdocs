@@ -34,6 +34,7 @@ class NoEvidenceReason(StrEnum):
     NO_HEART_RATE = "no_heart_rate"
     CADENCE_LOCKED = "cadence_locked"
     NO_SUSTAINED_STRETCH = "no_sustained_stretch"
+    NOT_RUN_OR_BIKE = "not_run_or_bike"
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,7 @@ class KindRule:
     citation_key: str
     step_bpm: int
     confirm_days: int
+    rises_only: bool
 
 
 @dataclass(frozen=True)

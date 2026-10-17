@@ -47,6 +47,8 @@ def _stretch_peak(stretch: list[tuple[float, float]]) -> float | None:
 def session_peak(
     samples: Samples, *, modality: Modality, flags: FlagSettings
 ) -> float | NoEvidenceReason:
+    if modality not in (Modality.RUN, Modality.BIKE):
+        return NoEvidenceReason.NOT_RUN_OR_BIKE
     if all(hr is None for hr in samples.heart_rate_bpm):
         return NoEvidenceReason.NO_HEART_RATE
     if (

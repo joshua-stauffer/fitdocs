@@ -258,3 +258,32 @@ def test_recorded_summary_maximum_is_a_decoy(
     )
     result = session_peak(stream, modality=Modality.BIKE, flags=FlagSettings())
     assert result == expected
+
+
+@pytest.mark.parametrize(
+    "modality", [Modality.SWIM, Modality.STRENGTH, Modality.OTHER], ids=str
+)
+@pytest.mark.parametrize("with_heart_rate", [True, False], ids=["hr", "no-hr"])
+def test_modality_other_than_run_or_bike_precedes_every_other_check(
+    monkeypatch: pytest.MonkeyPatch, modality: Modality, with_heart_rate: bool
+) -> None:
+    events: list[str] = []
+
+    def detect(*args: object, **kwargs: object) -> cadence.CadenceLockReading:
+        events.append("detect")
+        return _reading(cadence.CadenceLockOutcome.LOCKED)
+
+    monkeypatch.setattr(cadence, "detect", detect)
+    hrs: list[int | None] = [170] * 65 if with_heart_rate else [None] * 65
+    result = session_peak(
+        samples(list(range(65)), hrs), modality=modality, flags=FlagSettings()
+    )
+    assert (result, events) == (NoEvidenceReason.NOT_RUN_OR_BIKE, [])
+
+
+@pytest.mark.parametrize("modality", [Modality.RUN, Modality.BIKE], ids=str)
+def test_run_and_bike_still_supply_evidence(modality: Modality) -> None:
+    result = session_peak(
+        samples(list(range(65)), [170] * 65), modality=modality, flags=FlagSettings()
+    )
+    assert result == 170.0

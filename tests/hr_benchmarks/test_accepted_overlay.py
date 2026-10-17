@@ -60,10 +60,7 @@ def test_real_accepted_overlay_matches_complete_hr_timeline(
     assert [
         (period.starts_on, period.lthr.applies_from if period.lthr else None)
         for period in actual
-    ] == [
-        (date(2021, 2, 3), date(2021, 1, 1)),
-        (date(2022, 2, 1), date(2021, 1, 1)),
-    ]
+    ] == [(date(2021, 2, 3), date(2021, 1, 1))]
     assert report.inconsistencies == actual
 
 
@@ -82,6 +79,6 @@ def test_cli_accepted_overlay_reports_actual_period(
             *(["--dry-run"] if dry_run else []),
         ],
     )
-    assert (result.exit_code, result.output.count("[2021-02-03, 2022-02-01)")) == (0, 1)
+    assert (result.exit_code, result.output.count("[2021-02-03, open)")) == (0, 1)
     if dry_run:
         assert _tree_snapshot(tmp_path) == before

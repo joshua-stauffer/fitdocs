@@ -167,11 +167,10 @@ recorded as one.
   changing hand-recorded entries. Run `fitdocs sync` or `fitdocs regen` once
   to refresh the in-tree ownership declarations; see
   [the ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md).
-- Derivation narrows a later hand-recorded entry's applies-from back-reach;
-  deriving alone does not rescore existing load. On the first derivation,
-  historic heart-rate load before a hand-recorded entry's measurement date
-  moves to derived values where derived evidence exists, only after you
-  explicitly run `fitdocs load --recompute`.
+- Derivation can narrow a hand-recorded entry's applies-from back-reach only
+  where a derived entry is dated before the cover begins; deriving alone does
+  not rescore existing load, and a rescore happens only after you explicitly
+  run `fitdocs load --recompute`.
 - Connector ledger format: a connector's ledger uses ledger format 2 when it
   holds wellness records. An older fitdocs refuses such a ledger. To enable
   wellness, set `wellness = true` on the instance and run `fitdocs pull --sync`.
@@ -274,6 +273,16 @@ recorded as one.
   before adding more files of that workout, which
   would otherwise be held because they match both pages; see
   [the ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md#deciding-that-two-files-are-one-workout).
+- Derived heart-rate benchmarks: maximum heart rate now comes only from run
+  and ride sessions (other sessions are reported as `not_run_or_bike`, a new
+  row in the derive-benchmarks table), is never dated after the newest such
+  session, and never falls; record a lower maximum by hand. A hand-recorded
+  entry is challenged only by evidence dated after it and formed from
+  sessions or wellness days after it, so evidence inside its applies-from
+  back-reach no longer takes over. Run `fitdocs derive-benchmarks` once to
+  replace earlier derived heart-rate entries; rescore history afterwards with
+  `fitdocs load --recompute` if you want it. See
+  [derived heart-rate benchmarks](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/configuration.md#derived-heart-rate-benchmarks).
 
 ## [0.1.0] - 2026-09-19
 

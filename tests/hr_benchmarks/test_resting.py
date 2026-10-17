@@ -14,13 +14,16 @@ def _days(start: date, readings: Sequence[float]) -> dict[date, float]:
 
 
 def _run(
-    values: Mapping[str, Mapping[date, float]], order: Sequence[str] = ()
+    values: Mapping[str, Mapping[date, float]],
+    order: Sequence[str] = (),
+    hand_dates: Sequence[date] = (),
 ) -> tuple[Evidence, ...]:
     return resting_evidence(
         values,
         order=order,
         series_metric="supplied_metric",
         document_for_year=lambda year: f"injected-pages/{year}.csv",
+        hand_dates=hand_dates,
     )
 
 
@@ -332,3 +335,39 @@ def test_document_year_follows_evidence_day_across_year_boundary() -> None:
             "a resting heart rate, 28-day median",
         ),
     )
+
+
+def test_hand_floor_excludes_earlier_days_and_counts_only_later_ones() -> None:
+    values = {"watch": _days(date(2024, 1, 1), [90.0] * 7 + [60.0] * 21)}
+    without = _run(values)
+    with_hand = _run(values, hand_dates=(date(2024, 1, 7),))
+    assert (
+        without[0].day,
+        without[0].value,
+        with_hand[0].day,
+        with_hand[0].value,
+        with_hand[0].inputs,
+    ) == (
+        date(2024, 1, 14),
+        75,
+        date(2024, 1, 21),
+        60,
+        "median of 14 daily values from watch on the 28 days ending 2024-01-21",
+    )
+
+
+def test_hand_floor_ignores_hand_dates_not_before_the_day() -> None:
+    values = {"watch": _days(date(2024, 1, 1), [61.0] * 14)}
+    assert _run(values, hand_dates=(date(2024, 1, 14), date(2024, 2, 1))) == _run(
+        values
+    )
+
+
+def test_hand_floor_uses_the_latest_hand_date_before_each_day() -> None:
+    values = {"watch": _days(date(2024, 1, 1), [61.0] * 40)}
+    days = [
+        e.day for e in _run(values, hand_dates=(date(2024, 1, 2), date(2024, 1, 20)))
+    ]
+    assert days == [date(2024, 1, 16) + timedelta(days=n) for n in range(5)] + [
+        date(2024, 2, 3) + timedelta(days=n) for n in range(7)
+    ]
