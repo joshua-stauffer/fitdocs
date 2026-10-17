@@ -1048,7 +1048,7 @@ preflight and keeps every call dashboards placed).
     follow-ups are in the shared log and the queue.
   - _Requirements: 19.1, 18.4_
 
-- [ ]* 6.3 Maintainer-run smoke on the maintainer's own exports (no data enters the repository)
+- [x]* 6.3 Maintainer-run smoke on the maintainer's own exports (no data enters the repository)
   - In a scratch data root outside the repository, drop the Garmin export's
     `UDSFile_*`, `*_sleepData`, `MetricsMaxMetData_*` and `*_userBioMetrics`
     files and one intervals.icu delivery; run the drain; record in
@@ -1127,3 +1127,23 @@ preflight and keeps every call dashboards placed).
 - 4.2: independently APPROVED round2; full14,441 passed/44 skipped, focused1089, ruff/mypy544 clean.113 active claimed plus3 fresh mutations killed with sole failures and green restorations (one obsolete retry-only mutant explicitly replaced). Drain uses one combined settle, wellness intake/quarantine/disposition then force=False rebuild before FIT planning; five defaulted report fields and12 skill channel bindings published. Inbox Amendment3 appended. Quiet quarantine needs no-attempt counters; new-SHA admission must be tested retry=False; archive MOVE gates need post-real-commit missing/directory/symlink states for both successful outcomes. All4.1 behavior and explicit sync AST preserved. CLI rows/exit/preflight remain4.5, final skill Do wording5.2.
 
 - 4.3: independently APPROVED; full14,507 passed/44 skipped, audit+check116/wellness848, ruff/mypy544 clean.77 claimed plus3 fresh mutations killed with sole failures and green restorations. Audit appends four wellness FindingKind members and composes the inspector, retaining day/metric/source detail when projecting conflicts to yearly CSV subjects. Distinct 2028/2031 source/metric conflicts pin projection; isolated occupied and stale fixtures prevent old findings from masking exit codes. Normal stale/settings remedies, both declarations, sort keys and read-only byte/mtime/no-directory guards independently pinned.
+
+- 6.3 maintainer-data smoke (2026-10-17). Run by the controller session at
+  the maintainer's request, in a scratch data root outside the repository.
+  Counts only.
+  - **Inputs:** the Garmin export's files (30 `UDSFile`, 16 `sleepData`, 19
+    `MetricsMaxMetData`, 1 `userBioMetrics`) and one live intervals.icu
+    wellness pull (2 deliveries, 489 days listed).
+  - **Recognized:** garmin-uds 30, garmin-sleep 16, garmin-maxmet 19,
+    intervals-icu 2; unrecognized 0.
+  - **The one defect:** `userBioMetrics` failed at 160b007 because every
+    `metaData.calendarDate` is a local timestamp. That is fixed on
+    chore/wellness-garmin-biometrics. After the fix, 23 weight records
+    imported on 17 days, with 1 genuine within-source conflict (the same
+    timestamp carrying two values).
+  - **Garmin-export days per metric:** resting HR 937 (research.md predicted
+    937), lowest/highest HR 1,052, steps 1,002, stress 967, body battery
+    365 + 365, sleep 481, deep/light/awake 481, REM 462, respiration 160,
+    SpO2 131, running VO2max 587, cycling VO2max 44.
+  - **Before the bio-metrics fix:** 9,048 Garmin values and 2,737
+    intervals.icu values, 0 conflicts. The series spans 2018-2026.

@@ -836,7 +836,7 @@ literal pins, one per lander) and every head-paragraph pin of
     Notes record the final version numbers and which records are citations.
   - _Requirements: 11.2, 11.3, 13.3_
 
-- [ ]* 6.3 Maintainer-run look at the page on the maintainer's own data (no data enters the repository)
+- [x]* 6.3 Maintainer-run look at the page on the maintainer's own data (no data enters the repository)
   - Run `fitdocs recovery` on the maintainer's data root; read the page in
     light and dark viewers; confirm the source switches (Garmin export →
     Apple Health → intervals.icu) are drawn and stated; report anything odd
@@ -1440,3 +1440,20 @@ follow-ups were identified. Feature GO and remaining mandatory tasks remain open
 - Citations were transcribed by1.2 before implementation: four retained works remain PRIMARY_TEXT, Altini stays secondary-attestation-only and absent from governing records, baseline60 remains FitdocsChoice, Buchheit verified but unused. All nine live METHODS retain approved values and scopes; no late transcription, source upgrade or scientific change.
 - Fresh independent6.2 APPROVED and parent TASK VERIFIED: fulloriginal24391passed/44expectedskips exit0 in751.38s, focused1154 plus Recovery confinement4; Ruff798/mypy613/diff clean. Forty-five audit checks plus nine reviewer checks passed, frozen1036runtime/verification paths unchanged;78+149outside artifacts exact. Exact reviewedHEAD7f733b7CI success run38985418391. Initial isolated fixture selection errors retained/excluded, corrected selection green; no fixture workaround. Evidence /private/tmp/recovery-task-6.2-verification.json and /private/tmp/recovery-review-6.2.md.
 - All21mandatory leaves are accepted; optional6.3maintainer-data visual check remains unrun. Feature-level coverage/design/integration, canonical build, isolated installed-wheel first-usable smoke, final-head CI and main merge/push/cleanup remain the final run gates; no FEATURE_GO is claimed by this task note.
+
+- 6.3 maintainer-data page look (2026-10-17). Run by the controller session
+  at the maintainer's request, in scratch data roots outside the repository.
+  - **Inputs:** a 146-page sample with the Garmin export, a live intervals.icu
+    pull and the real Apple Health export. Light and dark renderings were
+    inspected.
+  - **Source switch:** an as-of view at 2023-04-30 shows the real
+    Garmin export → Apple Health switch (2023-02-20). It is drawn as
+    separate segments and stated for resting HR and sleep, under "Data
+    sources: Garmin and other sources".
+  - **Fixed on chore/recovery-source-statements (design Amendment 1):** the
+    Sleep and Other Signals source statements and changes after a gap, and
+    "on 1 days".
+  - **Queued:** truncated panel titles and legend labels
+    (`2026-10-17-chart-labels-truncated-without-full-text`).
+  - **For maintainer triage:** one-day source flips when a relay
+    (intervals.icu) holds a value the device source lacks.
