@@ -211,7 +211,7 @@ def derive_hr_benchmarks(
     resting = _read_resting_series(
         data_root,
         settings,
-        (),
+        _hand_dates(old, BenchmarkKind.RESTING_HR_BPM),
     )
     workouts = _read_workout_sessions(
         data_root,
