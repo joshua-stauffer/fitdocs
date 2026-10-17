@@ -285,6 +285,9 @@ recorded as one.
   matched to its night with one lookup instead of a scan of every night; the
   reduction time now grows in step with the readings, not with nights times
   readings. The archived extract and the series values are unchanged.
+- An Apple Health `export.zip` whose compressed data is corrupt or cut short
+  is now reported as an unreadable export and quarantined, like other bad zips.
+  Before, the decompression error escaped as an unhandled failure.
 
 ## [0.1.0] - 2026-09-19
 

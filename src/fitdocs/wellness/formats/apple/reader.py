@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import zipfile
+import zlib
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -86,13 +87,6 @@ class _ErrorNoting(_SizedReads):
             self.read_error = error
             raise
 
-    def seek(self, offset: int, whence: int = 0) -> int:
-        try:
-            return super().seek(offset, whence)
-        except OSError as error:
-            self.read_error = error
-            raise
-
 
 def _unreadable(error: Exception) -> WellnessFormatError:
     return WellnessFormatError(f"the export could not be read: {error}")
@@ -109,6 +103,8 @@ def open_main_document(candidate: Path) -> Iterator[MainDocument]:
         if is_zip:
             try:
                 archive = zipfile.ZipFile(cast(BinaryIO, bounded))
+            except RecursionError:
+                raise
             except (zipfile.BadZipFile, NotImplementedError, RuntimeError) as error:
                 raise _unreadable(error) from error
             with archive:
@@ -120,6 +116,8 @@ def open_main_document(candidate: Path) -> Iterator[MainDocument]:
                         )
                     info = archive.getinfo(name)
                     member = archive.open(info)
+                except RecursionError:
+                    raise
                 except (zipfile.BadZipFile, NotImplementedError, RuntimeError) as error:
                     raise _unreadable(error) from error
                 with member:
@@ -147,7 +145,13 @@ class _CountingReader:
             )
         except RecursionError:
             raise
-        except (zipfile.BadZipFile, NotImplementedError, RuntimeError) as error:
+        except (
+            zipfile.BadZipFile,
+            NotImplementedError,
+            RuntimeError,
+            zlib.error,
+            EOFError,
+        ) as error:
             # Read-time zip faults (CRC, compression) belong to the export, not the run.
             raise _unreadable(error) from error
         self._read += len(data)

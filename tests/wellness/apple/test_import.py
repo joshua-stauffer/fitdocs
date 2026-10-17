@@ -443,6 +443,20 @@ def test_transient_read_error_at_extraction_defers(
     assert [note.subject for note in second.wellness_archived] == ["flaky.zip"]
 
 
+def test_tiny_recognized_export_is_failed_then_quarantined_never_deferred(
+    tmp_path: Path,
+) -> None:
+    inbox, root = tmp_path / "inbox", tmp_path / "data"
+    put(inbox, "tiny.xml", b"<HealthData/>")
+    first = run_drain(inbox, root)
+    assert first.deferred == () and [f.subject for f in first.wellness_failures] == [
+        "tiny.xml"
+    ]
+    second = run_drain(inbox, root)
+    assert second.deferred == () and second.wellness_failures == ()
+    assert [e.name for e in load_quarantine(root).entries] == ["tiny.xml"]
+
+
 def test_progress_interrupt_propagates_and_cleans_temp(tmp_path: Path) -> None:
     inbox, root = tmp_path / "inbox", tmp_path / "data"
     xml = document(extra_elements=["<Ignored>" + "x" * 3_000_000 + "</Ignored>"])
