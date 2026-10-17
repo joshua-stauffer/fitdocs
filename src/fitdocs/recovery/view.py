@@ -93,6 +93,7 @@ class Panel:
     metric: Metric
     source: str
     values: tuple[float | None, ...]
+    origins: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -145,9 +146,12 @@ def _signal(metric: Metric, baselines: Baselines, days: tuple[date, ...]) -> Sig
     changes: list[SourceChange] = []
     previous: str | None = None
     for item in shown:
-        if item.source is not None and previous is not None and previous != item.source:
-            changes.append(SourceChange(item.day, previous, item.source))
-        previous = item.source
+        if item.source is not None:
+            # Days with no shown source do not reset the comparison
+            # (recovery design Amendment 1).
+            if previous is not None and previous != item.source:
+                changes.append(SourceChange(item.day, previous, item.source))
+            previous = item.source
         bd = item.baseline
         if bd is None or bd.position not in (RangePosition.ABOVE, RangePosition.BELOW):
             continue
@@ -259,6 +263,16 @@ def build_view(
                 if (record := values[(metric, source)].get(day)) is not None
                 else None
                 for day in days
+            ),
+            tuple(
+                sorted(
+                    {
+                        record[1]
+                        for day in days
+                        if (record := values[(metric, source)].get(day)) is not None
+                        and record[1] is not None
+                    }
+                )
             ),
         )
         for metric, source in pairs[:panel_limit]

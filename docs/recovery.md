@@ -42,12 +42,17 @@ Each available signal has its own section: a chart, latest value and source,
 Shows total sleep and its 7-day mean in the chart, with no normal range.
 The table uses the latest shown total-sleep night and that source: total,
 deep, light, REM, awake and sleep HR appear only when present on that night,
-with 7-day and 60-day means where formed.
+with 7-day and 60-day means where formed. A caption names the source and the
+night the table shows, and after the table the section states each source
+change and each source shown with its recorded origins, as the signal
+sections do.
 
 ### Other Signals
 
 Shows recorded values in independent panels per metric and source, without
-a baseline; pairs beyond the panel limit are named as not charted.
+a baseline; pairs beyond the panel limit are named as not charted. One
+`Sources shown` line names each charted panel's source with its recorded
+origins; panels have no baseline, so no source changes are stated.
 
 ### Coverage
 
@@ -97,7 +102,10 @@ sources are not pooled and SDNN is not converted to or mixed with rMSSD.
 The shown source is that metric's canonical source on D; if absent, use its
 most recent canonical source from D−1 through D−6, otherwise show no source.
 Only the source identifier is carried, never yesterday's value; a source
-change immediately selects the new source's own means and range.
+change immediately selects the new source's own means and range. A change is
+measured against the latest earlier day of the window that had a shown source,
+so a change after a gap is stated and a source that returns after a gap is not
+a change.
 
 ## Missing values
 

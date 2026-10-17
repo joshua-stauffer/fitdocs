@@ -2,7 +2,7 @@
 title: "Recovery"
 type: "recovery"
 generator: "fitdocs"
-recovery_version: 1
+recovery_version: 2
 baselines_version: 1
 as_of: "2025-05-01"
 window_start: "2025-02-01"
@@ -66,6 +66,8 @@ Sources shown: watch2 (origins garmin) on 63 days.
 
 ![Sleep chart](assets/recovery-sleep.svg)
 
+The table shows the night of 2025-04-29 from watch3.
+
 | Signal | 2025-04-29 | 7-day mean | 60-day mean |
 | --- | --- | --- | --- |
 | Sleep | 12:50:46 | 12:45:35 | 7:45:03 |
@@ -75,11 +77,15 @@ Sources shown: watch2 (origins garmin) on 63 days.
 | Awake in sleep | 5:06 | 4:35 | 3:19 |
 | Sleeping HR | 178 bpm | 161 bpm | 115 bpm |
 
+Sources shown: watch3 (origins garmin) on 63 days.
+
 ## Other Signals
 
 ![Other signals chart](assets/recovery-other.svg)
 
 Shown as recorded, one panel per metric and source, with no baseline.
+
+Sources shown: Steps: pedometer (origins garmin) on 1 days; Mood (rating): rating (origins garmin) on 1 days.
 
 ## Coverage
 

@@ -179,9 +179,40 @@ def test_changes_and_notes() -> None:
         [(c.day, c.before, c.after) for c in result.changes],
         [(n.source, n.origins, n.days_shown) for n in result.sources],
     ) == (
-        [(D - timedelta(days=11), "a", "c")],
+        [(D - timedelta(days=11), "a", "c"), (D - timedelta(days=2), "c", "b")],
         [("a", ("alpha", "zeta"), 4), ("b", ("beta",), 3), ("c", ("alpha", "zeta"), 8)],
     )
+
+
+def test_change_across_gap_and_return() -> None:
+    # Days with no shown source (gap longer than the six-day carry) do not
+    # reset the comparison: a -> b after the gap is listed, b -> a after a
+    # second gap is listed, and a source that returns with nothing different
+    # in between is not a change.
+    values = [
+        v(-40, source="a"),
+        v(-20, source="b"),
+        v(-10, source="b"),
+        v(-1, source="b"),
+        v(0, source="b"),
+    ]
+    result = view(values).signals[0]
+    assert [(c.day, c.before, c.after) for c in result.changes] == [
+        (D - timedelta(days=20), "a", "b")
+    ]
+    returned = view([v(-40, source="a"), v(-20, source="a"), v(0, source="a")])
+    assert returned.signals[0].changes == ()
+
+
+def test_panel_origins() -> None:
+    result = view(
+        [
+            v(0, metric=OTHER[0], source="p", origin="x"),
+            v(-1, metric=OTHER[0], source="p", origin=None),
+            v(-2, metric=OTHER[0], source="p", origin="b"),
+        ]
+    )
+    assert result.other.panels[0].origins == ("b", "x")
 
 
 def test_runs() -> None:
