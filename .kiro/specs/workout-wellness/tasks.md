@@ -126,9 +126,10 @@ Each file below has more than one writer; its writers are sequential.
   when its grep lists it).
 - `tests/morning/test_e2e.py`: 3.3 creates it; 4.1 appends the aged-page
   section.
-- `tests/morning/test_boundary.py`: 1.1 creates it (allowed-import table over
-  the modules on disk, `assert scanned`); 3.2 adds the literal module-set
-  pin and switches the reverse check to equality.
+- `tests/morning/test_boundary.py`: 1.1 creates it (allowed-import upper
+  bounds over the modules on disk, `assert scanned`); 3.2 adds the literal
+  module-set pin and switches both forward import sets and reverse importers
+  to equality.
 - `tests/render/golden_docs/*.md`: 1.3 (the empty region), 4.1 (the
   `doc_version` line).
 - `tests/declaration_golden/*.AGENTS.md`: 4.2 only.
@@ -193,7 +194,7 @@ wiki-contract and analytics-index amendment and criterion numbers.
 
 - [ ] 1. Foundation: package, contract constants, region placement, index blanking
 
-- [ ] 1.1 Verify the upstream seams and create the morning package skeleton with its boundary guard
+- [x] 1.1 Verify the upstream seams and create the morning package skeleton with its boundary guard
   - Verify the Upstream Prerequisites list and record each outcome with file
     and line in Implementation Notes (stop and report on drift).
   - `src/fitdocs/morning/__init__.py`: a docstring-only module stating the
@@ -204,9 +205,12 @@ wiki-contract and analytics-index amendment and criterion numbers.
     metric, `WellnessSeries(values=tuple(sorted(values)))`) and a
     `stage_series` wrapper over `write_series`. The page builder is 1.3's.
   - `tests/morning/test_boundary.py`: an allowed-import table per design
-    module, applied to the modules present on disk (`assert scanned`); a
-    forbidden-name scan, a clock scan and a network scan, each with a
-    positive control on a synthetic module.
+    module, applied as a subset check to the modules present on disk
+    (`assert scanned`); a forbidden-name scan, a clock scan and a network
+    scan, each with a positive control on a synthetic module. Missing
+    allowed imports are permitted during staging; unlisted modules and
+    imports outside the table are always rejected. Task 3.2 closes forward
+    import sets to equality.
   - `pyproject.toml`: append `tests/morning` to `[tool.mypy].files`.
   - **Mutations:** a synthetic `from fitdocs import sync` module, a
     `date.today()` call and an `urllib` import each red their scan
@@ -512,10 +516,13 @@ wiki-contract and analytics-index amendment and criterion numbers.
     and before the load pass, the exit rule in each, the module docstring.
     Keep wellness-store's and dashboards' lines on rebase; the command count
     is unchanged.
-  - Close the boundary guard: the literal set of morning modules, and the
-    reverse half by equality (only `fitdocs.cli` imports
-    `fitdocs.morning.engine`; no `fitdocs/render` module imports
-    `fitdocs.morning`).
+  - Close the boundary guard: pin the literal set of morning modules,
+    switch each module's non-standard-library import set from subset to
+    equality against the unchanged allowed table, and close the reverse
+    half by equality (only `fitdocs.cli` imports `fitdocs.morning.engine`;
+    no `fitdocs/render` module imports `fitdocs.morning`). Add controls
+    showing a missing allowed dependency fails forward equality and an
+    extra dependency still fails.
   - Re-pin any pre-existing exact-output or page-byte assertion the new
     line or a filled block now moves (grep the drain and regen output pins,
     for example `tests/test_cli_drain_report.py` and wellness-store's
@@ -744,6 +751,16 @@ wiki-contract and analytics-index amendment and criterion numbers.
 
 ## Implementation Notes
 
+- Astra decision (2026-10-17, user-delegated ambiguity resolution): the
+  allowed dependency lists are upper bounds through task 3.1; task 3.2
+  closes forward import sets to equality along with the finished module
+  set and reverse importers. This lets task 2.1 implement rows without
+  unused rendering/attribution imports or later-task behavior. Requirements
+  and the final allowed sets are unchanged. Task 1.1 proves a legitimate
+  partial block passes and a partial block plus `fitdocs.sync` fails;
+  task 3.2 must prove a missing final dependency fails. Decision recorded
+  in the shared log and the design/task text above.
+
 - Planning record (2026-10-12/13): Step 3.5 task-graph review ran twice, as
   an independent reviewer the batch controller dispatched. Round 1 returned
   NEEDS_FIXES with 14 findings (4 important, 10 minor) and four controller
@@ -760,3 +777,41 @@ wiki-contract and analytics-index amendment and criterion numbers.
   review as the controller directed.
 - Outcomes of 1.1's upstream checks, 1.3's re-pinned test list, 3.1's R4
   measurement and 5.1's sweep are recorded below when those tasks run.
+
+- 1.1 upstream checks (verified against `399fe7f`, no drift):
+  - Wellness facade: `src/fitdocs/wellness/__init__.py:3,11,26` exports the
+    required reader, errors, series, values and metric vocabulary;
+    `model.py:48-51` supplies labels/units and `series.py:267,270,304,340`
+    supplies `values`, `is_empty`, `by_source` and `read_series`.
+  - Sanctioned fixtures: `tests/wellness/builders_series.py:12`,
+    `builders_intervals.py:18` and `builders_garmin.py:16,65,69` provide
+    the series writer, delivery envelope and sleep-stage file. Drain
+    rebuilds at `src/fitdocs/sync.py:1001` before page writes at `:1035`;
+    regen rebuilds at `cli.py:1025`, writes at `:1027`, reports the table
+    at `:1035` and then the wellness summary at `:1036`.
+  - Recovery facade: `src/fitdocs/recovery/__init__.py:3-4` exports the
+    required types/methods. `baselines.py:23` has all thirteen fields;
+    `:49,63,114,121` provide `of`, `on`, `shown_source`, `shown`;
+    `constants.py:31,36,38,379,384,392` supplies the windows and metric
+    selections; `page.py:28` supplies the forbidden-phrase pattern.
+  - Formatting/attribution: `src/fitdocs/render/charts/kit/format.py:116,202`
+    has the required formatter/escaping functions; `render/format.py:33`
+    is the en dash; `render/attribution.py:71,74,80,91` supplies the Garmin
+    origin, attribution enum and both shared functions.
+  - CLI flow: explicit sync reports at `cli.py:838`, then load/plan/index/
+    dashboard at `:840,845,846,847`; drain reports at `:929`, then those
+    passes at `:932,935,936,937`; regen reports at `:1035-1036`, then those
+    passes at `:1039,1042,1043,1044`. Dashboard helper is at `:595`.
+- 1.1 accepted after independent review and fresh completion verification:
+  57 task tests; full suite 26,078 passed, 44 optional checks skipped;
+  Ruff/format/mypy passed (825 formatted files, 640 typed sources).
+  Independent replay covered 58 claimed mutations plus two reviewer
+  mutations. All three assigned clauses (12.1, 12.2, 12.4) are PINNED at
+  this task's scope. Later runtime coverage remains with its owning tasks.
+- Guard lesson from 1.1: each member of a finite forbidden/network/clock
+  policy needs an independent literal control, and a permitted exception
+  needs an acceptance control. Deleting an entire guard does not pin its
+  individual members. The first review found eighteen such survivors;
+  deleting each entry now fails its own control in
+  `test_scans_reject_synthetic_modules`, and denying the CLI exception
+  fails `test_reverse_scan_accepts_the_cli`. None remain unpinned.

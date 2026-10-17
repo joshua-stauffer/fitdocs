@@ -86,6 +86,12 @@ setting, frontmatter key, owned location or index table.
   origins feed it.
 
 ### Allowed Dependencies
+These lists are the final non-standard-library import sets. During staged
+implementation through task 3.1, imports of each present module must be a
+subset of its listed set. Task 3.2 closes the guard to exact equality,
+together with the literal module-set and reverse-importer pins. No stage
+permits an import outside these lists.
+
 - `fitdocs.morning.block` imports only the standard library, the
   `fitdocs.wellness` facade, the `fitdocs.recovery` facade,
   `fitdocs.render.format` (`ABSENT`), `fitdocs.render.attribution`
@@ -1090,7 +1096,8 @@ sync SOURCE`, which neither archives wellness nor rebuilds the series.
   `STAMP_PATTERN` (`:84-87`, `:142-145`).
 
 ### Boundary (`tests/morning/test_boundary.py`)
-- Per-module import sets by equality (allowed lists above), the forbidden
+- Per-module import sets by equality in the completed feature (allowed lists
+  above; subset checks during tasks 1.1–3.1, closed to equality in 3.2), the forbidden
   names, a clock scan, a network scan, the reverse half (only `fitdocs.cli`
   imports `fitdocs.morning.engine`; no `fitdocs/render` module imports
   `fitdocs.morning`), each with a positive control and a non-empty walk.
