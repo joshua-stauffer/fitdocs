@@ -632,32 +632,53 @@ def test_the_session_uuid_format_has_exactly_one_implementation() -> None:
     )
 
 
-def test_the_render_layer_spells_no_region_id() -> None:
-    """No module under ``fitdocs/render`` carries a region id as a bare literal.
+def _spelled_region_ids(tree: ast.Module) -> list[str]:
+    """Region tokens written as string constants in a module's source."""
+    region_ids = fitdocs.contract.PRESERVED_REGIONS + fitdocs.contract.REFRESHED_REGIONS
+    return sorted(
+        {
+            node.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and node.value in region_ids
+        }
+    )
 
-    One region-ownership policy means one *spelling* of each region id (Req 1.4):
-    the renderer that emits a region, the merge that preserves it, and the load
-    pass that fills it must all name the same constant. A literal ``"load"`` or
-    ``"notes"`` in a ``region_block`` call is how a renamed region silently stops
-    being preserved -- the document still renders, and only the merge quietly
-    drops the user's content.
-    """
-    offenders = {
-        rel: sorted(
-            {
-                node.value
-                for node in ast.walk(tree)
-                if isinstance(node, ast.Constant)
-                and isinstance(node.value, str)
-                and node.value in fitdocs.contract.PRESERVED_REGIONS
-            }
-        )
-        for rel, tree in _package_sources("render").items()
+
+@pytest.mark.parametrize(
+    ("token", "constant"),
+    [
+        ("notes", "NOTES_REGION"),
+        ("workout", "WORKOUT_REGION"),
+        ("load", "LOAD_REGION"),
+        ("morning", "MORNING_REGION"),
+    ],
+)
+def test_region_scan_distinguishes_literals_from_contract_names(
+    token: str, constant: str
+) -> None:
+    literal = ast.parse(f'region_block("{token}", "content")')
+    assert _spelled_region_ids(literal) == [token]
+    imported = ast.parse(
+        f'from fitdocs.contract import {constant}\nregion_block({constant}, "content")'
+    )
+    assert _spelled_region_ids(imported) == []
+
+
+@pytest.mark.parametrize("subdir", ["render", "morning"])
+def test_render_and_morning_layers_spell_no_region_id(subdir: str) -> None:
+    """Renderers and the morning pass take region vocabulary from the contract."""
+    sources = _package_sources(subdir)
+    assert sources, f"no Python files scanned under fitdocs/{subdir}"
+    spelled = {
+        rel: found
+        for rel, tree in sources.items()
+        if (found := _spelled_region_ids(tree))
     }
-    spelled = {rel: found for rel, found in offenders.items() if found}
     assert not spelled, (
-        f"the render layer spells region ids itself ({spelled}); "
-        "import NOTES_REGION / WORKOUT_REGION / LOAD_REGION from fitdocs.contract"
+        f"fitdocs/{subdir} spells region ids itself ({spelled}); "
+        "import the region constants from fitdocs.contract"
     )
 
 

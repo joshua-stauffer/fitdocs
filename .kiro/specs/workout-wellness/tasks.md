@@ -221,7 +221,7 @@ wiki-contract and analytics-index amendment and criterion numbers.
     Notes list every verified seam with file and line.
   - _Requirements: 12.1, 12.2, 12.4_
 
-- [ ] 1.2 Add the morning region to the contract's region policy
+- [x] 1.2 Add the morning region to the contract's region policy
   - `contract.py`: `MORNING_REGION = "morning"`, `REFRESHED_REGIONS =
     (MORNING_REGION,)`, `MORNING_PLACEHOLDER = ""` with design § ContractRegion
     docstrings; `__all__`. Rewrite every docstring sentence the third class
@@ -750,6 +750,13 @@ wiki-contract and analytics-index amendment and criterion numbers.
   - _Requirements: 9.1, 9.4, 11.3, 12.1, 12.2_
 
 ## Implementation Notes
+
+- 1.2 accepted after independent approval and fresh completion verification:
+  401 focused tests, Ruff/format/mypy clean; all 32 implementer mutations
+  independently replayed, plus five new or nested module controls, each
+  RED at its intended assertion and restored GREEN. The three constants
+  are public; both render and morning literal scans have nonempty walks.
+  Existing region tuples, banner and both versions remain unchanged.
 
 - Astra decision (2026-10-17, user-delegated ambiguity resolution): the
   allowed dependency lists are upper bounds through task 3.1; task 3.2
