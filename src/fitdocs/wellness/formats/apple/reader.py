@@ -72,28 +72,63 @@ class _SizedReads:
         return self._stream.seekable()
 
 
+class _ErrorNoting(_SizedReads):
+    """Remember an OSError that `zipfile.is_zipfile` would swallow as "not a zip"."""
+
+    def __init__(self, stream: BinaryIO) -> None:
+        super().__init__(stream)
+        self.read_error: OSError | None = None
+
+    def read(self, size: int = -1) -> bytes:
+        try:
+            return super().read(size)
+        except OSError as error:
+            self.read_error = error
+            raise
+
+    def seek(self, offset: int, whence: int = 0) -> int:
+        try:
+            return super().seek(offset, whence)
+        except OSError as error:
+            self.read_error = error
+            raise
+
+
+def _unreadable(error: Exception) -> WellnessFormatError:
+    return WellnessFormatError(f"the export could not be read: {error}")
+
+
 @contextmanager
 def open_main_document(candidate: Path) -> Iterator[MainDocument]:
-    try:
-        with candidate.open("rb") as source:
-            bounded = cast(BinaryIO, _SizedReads(cast(BinaryIO, source)))
-            if zipfile.is_zipfile(bounded):
-                with zipfile.ZipFile(bounded) as archive:
+    with candidate.open("rb") as source:
+        bounded = _ErrorNoting(cast(BinaryIO, source))
+        is_zip = zipfile.is_zipfile(cast(BinaryIO, bounded))
+        if bounded.read_error is not None:
+            # A read failure is not evidence the file is XML: let the intake defer it.
+            raise bounded.read_error
+        if is_zip:
+            try:
+                archive = zipfile.ZipFile(cast(BinaryIO, bounded))
+            except (zipfile.BadZipFile, NotImplementedError, RuntimeError) as error:
+                raise _unreadable(error) from error
+            with archive:
+                try:
                     name = main_member(archive.namelist())
                     if name is None:
                         raise WellnessFormatError(
                             "no unique Apple Health main document"
                         )
                     info = archive.getinfo(name)
-                    with archive.open(info) as member:
-                        yield MainDocument(cast(BinaryIO, member), info.file_size)
-            else:
-                source.seek(0, 2)
-                size = source.tell()
-                source.seek(0)
-                yield MainDocument(cast(BinaryIO, source), size)
-    except (zipfile.BadZipFile, NotImplementedError, RuntimeError) as error:
-        raise WellnessFormatError(f"the export could not be read: {error}") from error
+                    member = archive.open(info)
+                except (zipfile.BadZipFile, NotImplementedError, RuntimeError) as error:
+                    raise _unreadable(error) from error
+                with member:
+                    yield MainDocument(cast(BinaryIO, member), info.file_size)
+        else:
+            source.seek(0, 2)
+            size = source.tell()
+            source.seek(0)
+            yield MainDocument(cast(BinaryIO, source), size)
 
 
 class _CountingReader:
@@ -106,9 +141,15 @@ class _CountingReader:
         self._percent = -1
 
     def read(self, size: int = -1) -> bytes:
-        data = self._document.stream.read(
-            min(size, CHUNK_BYTES) if size >= 0 else CHUNK_BYTES
-        )
+        try:
+            data = self._document.stream.read(
+                min(size, CHUNK_BYTES) if size >= 0 else CHUNK_BYTES
+            )
+        except RecursionError:
+            raise
+        except (zipfile.BadZipFile, NotImplementedError, RuntimeError) as error:
+            # Read-time zip faults (CRC, compression) belong to the export, not the run.
+            raise _unreadable(error) from error
         self._read += len(data)
         if self._progress is not None and self._document.size > 0:
             percent = self._read * 100 // self._document.size

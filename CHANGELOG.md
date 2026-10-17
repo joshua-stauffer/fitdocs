@@ -299,6 +299,9 @@ recorded as one.
   `derived.wellness` refresh error instead of loading the value.
 - `fitdocs pull` prints `1 day`, not `1 days`, for a one-day wellness
   delivery.
+- A one-off read error while archiving an Apple Health `export.zip` (for
+  example while an iCloud file is still materialising) now defers the file for
+  the next drain. Before, it was quarantined as "not an Apple Health export".
 
 ## [0.1.0] - 2026-09-19
 
