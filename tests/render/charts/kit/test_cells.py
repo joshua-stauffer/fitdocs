@@ -218,8 +218,7 @@ def test_the_scale_classifies_its_own_maximum(values: list[float | None]) -> Non
     top = max(v for v in values if v is not None)
     assert scale.bins > 0
     assert scale.classify(top) == scale.bins
-    # the edge a hair below the maximum is why: the maximum is above the edge
-    assert top > scale.edges[-1]
+    assert top <= scale.edges[-1]
 
 
 # --------------------------------------------------------------- colour/size

@@ -363,3 +363,34 @@ def test_protected_snapshot_excludes_read_atime_and_declared_write_ancestors(
     assert _protected_inputs(tmp_path) == before
     (workouts / "user-AGENTS.md").write_bytes(b"user input")
     assert _protected_inputs(tmp_path) != before
+
+
+def test_constant_hrv_delivery_renders_recovery(tmp_path: Path) -> None:
+    root = tmp_path / "constant"
+    _stage(root)
+    (root / "inbox" / "constant.json").write_bytes(
+        intervals_delivery_bytes(
+            [
+                intervals_record(
+                    D - timedelta(days=offset),
+                    updated="2021-09-11T00:00:00Z",
+                    **FIELDS,
+                )
+                for offset in (2, 1, 0)
+            ]
+        )
+    )
+    drained = _invoke(root, "sync", "--no-prompt")
+    assert drained.exit_code == 0, drained.output
+    assert [
+        (v.day, v.value)
+        for v in read_series(root).values
+        if v.metric.value == "hrv_sdnn_ms"
+    ] == [(D - timedelta(days=offset), 73.0) for offset in (2, 1, 0)]
+    result = _invoke(root, "recovery")
+    assert result.exit_code == 0, (result.output, result.exception)
+    outputs = _outputs(root)
+    assert outputs[PAGE].startswith(b"---\n")
+    for path in OUTPUTS[1:]:
+        svg = ET.fromstring(outputs[path])
+        assert len(list(svg.iter())) > 20, path

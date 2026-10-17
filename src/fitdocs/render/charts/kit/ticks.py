@@ -69,11 +69,6 @@ def _decimal(mantissa: float, exponent: int) -> float:
     return float(f"{int(mantissa)}e{exponent}")
 
 
-def _clean(value: float) -> float:
-    """Round away float noise (0.30000000000000004)."""
-    return float(f"{value:.12g}")
-
-
 def _floor(q: float, slack: float = 0.0) -> int:
     """floor(q), treating a q within ``slack`` above an integer as that integer."""
     nearest = round(q)
@@ -139,6 +134,15 @@ def _steps_from(raw: float, *, duration: bool) -> Iterator[float]:
 # ------------------------------------------------------------- linear_ticks
 
 
+def _linear_multiple(index: int, step: float) -> float:
+    """Round an exact decimal-ladder multiple once, without ambient context."""
+    significand, _, power = str(step).partition("e")
+    whole, _, fraction = significand.partition(".")
+    coefficient = int(whole + fraction)
+    exponent = int(power or "0") - len(fraction)
+    return float(f"{index * coefficient}e{exponent}")
+
+
 def linear_ticks(
     lo: float, hi: float, max_count: int, *, duration: bool, integer: bool = False
 ) -> tuple[float, float, tuple[float, ...]]:
@@ -161,13 +165,27 @@ def linear_ticks(
     raw = (hi - lo) / (allowed - 1)
     if integer:
         raw = max(raw, 1.0)
-    scale = max(abs(lo), abs(hi))
     for step in _steps_from(raw, duration=duration):
-        slack = _TOLERANCE * scale / step
-        first = _floor(lo / step, slack)
-        last = _ceil(hi / step, slack)
-        if last - first + 1 <= allowed:
-            ticks = tuple(_clean(k * step) for k in range(first, last + 1))
+        first, last = math.floor(lo / step), math.ceil(hi / step)
+        # Correct against represented multiples, including quotient rounding and
+        # plateaus where several decimal multiples round to the same float.
+        while _linear_multiple(first, step) > lo:
+            first -= 1
+        while _linear_multiple(first + 1, step) <= lo:
+            first += 1
+        while _linear_multiple(last, step) < hi:
+            last += 1
+        while _linear_multiple(last - 1, step) >= hi:
+            last -= 1
+        ticks = tuple(
+            dict.fromkeys(_linear_multiple(k, step) for k in range(first, last + 1))
+        )
+        if (
+            2 <= len(ticks) <= allowed
+            and all(math.isfinite(t) for t in ticks)
+            and all(a < b for a, b in zip(ticks, ticks[1:], strict=False))
+            and ticks[0] <= lo < hi <= ticks[-1]
+        ):
             return ticks[0], ticks[-1], ticks
     raise AssertionError("unreachable: the step ladder is unbounded")
 
