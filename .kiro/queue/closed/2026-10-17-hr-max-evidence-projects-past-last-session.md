@@ -1,7 +1,7 @@
 ---
 id: 2026-10-17-hr-max-evidence-projects-past-last-session
 title: derive-benchmarks writes future-dated max-HR entries as sessions age out of the window after the newest session
-status: open
+status: done
 importance: high
 importance_why: Fabricated future-dated benchmarks reach athlete.toml on the first real run, put open-ended false findings in fitdocs check, and hide the real current takeover.
 effort: S
@@ -90,3 +90,6 @@ independently reported the related departure-day mechanism (see
 ## Open questions
 - Whether `CONTRACT_VERSION` or a rules version moves. Probably not: no
   owned format changes, only which entries a run writes.
+
+## Resolution (2026-10-17)
+Fixed by hr-derivation Amendment 1 (maintainer ruling 2026-10-17) on chore/hr-max-ruling: max-HR evidence days are session days only (departure days removed), so nothing is dated after the newest qualifying session. Real data (scratch full-corpus copy, clean snapshot of 1ed4ec0): 0 derived maxima with the hand entry, 9 rising entries without it, none future-dated; no future inconsistency periods. Independently reviewed (two rounds), APPROVED.

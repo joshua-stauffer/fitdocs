@@ -1,7 +1,7 @@
 ---
 id: 2026-10-17-hr-max-evidence-sparse-windows-need-ruling
 title: Max-HR derivation takes the median of sparse or non-maximal windows (history start, window departures) and needs a maintainer ruling
-status: open
+status: done
 importance: medium
 importance_why: Writes implausible derived maxima into athlete.toml at the start of history; no load moves today only because those early pages are unscored.
 effort: S
@@ -74,3 +74,6 @@ scoring of early history would use them.
 ## Open questions
 - Which of (a), (b) or (c), or a combination. This is a maintainer
   decision.
+
+## Resolution (2026-10-17)
+Ruled by the maintainer 2026-10-17 and implemented as hr-derivation Amendment 1: only run/bike sessions supply maximum evidence (644 other sessions excluded on the maintainer's data); a derived maximum never falls (rises only, by more than the 2 bpm step); a hand-recorded value is challenged only by evidence dated after it and formed from data after it (hand floor on both kinds; cover held). The early-history 108 bpm entry is gone; without a hand entry the first derived maximum is 163 bpm from three runs. APPROVED.
