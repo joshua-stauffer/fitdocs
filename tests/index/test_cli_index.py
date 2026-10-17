@@ -785,3 +785,28 @@ def test_wellness_errors_are_nonfatal_only_for_successful_index_outcomes(
         else 1
     )
     assert response.exit_code == expected_exit, response.output
+
+
+def test_out_of_range_series_value_is_a_derived_wellness_producer_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import date
+
+    from fitdocs.wellness import Metric, SeriesValue
+    from tests.wellness.builders_series import write_series
+
+    data_root = tmp_path / "data"
+    write_series(
+        data_root,
+        [SeriesValue(date(2024, 8, 19), Metric.HRV_RMSSD_MS, "device", None, 0, True)],
+    )
+    _set_roots(monkeypatch, data_root, tmp_path / "index-cache")
+
+    response = runner.invoke(app, ["index", "--out", str(data_root)])
+
+    # a producer error on a built index is reported, not fatal (existing contract)
+    assert response.exit_code == 0, response.output
+    output = " ".join(response.stdout.split())
+    assert "Errors 1" in output
+    assert "Could not refresh derived.wellness: SeriesReadError:" in output
+    assert "2024-08-19 hrv_rmssd_ms 0: outside the accepted range" in output

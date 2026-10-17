@@ -287,7 +287,9 @@ recorded as one.
   such as an HRV of 0 from a hand edit, is now reported as an unreadable series.
   `fitdocs recovery` used to stop with a `math domain error` traceback; it now
   exits 1 and names the file, day, metric and value, with the `fitdocs sync` or
-  `fitdocs regen` remedy.
+  `fitdocs regen` remedy. `fitdocs derive-benchmarks` reports it as a
+  resting-heart-rate read failure, and `fitdocs index` reports it as a
+  `derived.wellness` refresh error instead of loading the value.
 
 ## [0.1.0] - 2026-09-19
 

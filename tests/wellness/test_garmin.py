@@ -380,6 +380,9 @@ def test_biometrics_calendar_date_may_carry_a_local_time(stamp: str) -> None:
         "2000-02-30T06:30:15.1",
         "x2000-01-02T06:30:15.1",
         "2000-01-02T0६:30:15",
+        "2000-01-02T06:3६:15",
+        "2000-01-02T06:30:15.1६",
+        "2000-01-02T06:30:15,1",
     ],
 )
 def test_biometrics_calendar_date_rejects_other_shapes(stamp: str) -> None:
