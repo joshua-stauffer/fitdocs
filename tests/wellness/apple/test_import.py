@@ -400,7 +400,7 @@ def test_transient_read_error_at_extraction_defers(
         def __init__(self, stream: Any) -> None:
             self._stream = stream
 
-        def __enter__(self) -> "Flaky":
+        def __enter__(self) -> Flaky:
             return self
 
         def __exit__(self, *args: object) -> None:
@@ -421,7 +421,7 @@ def test_transient_read_error_at_extraction_defers(
         stream = real_open(self, *args, **kwargs)
         return Flaky(stream) if armed and self.name == "flaky.zip" else stream
 
-    original = apple.open_main_document
+    original = open_main_document
 
     def arm(*args: Any, **kwargs: Any) -> Any:
         armed.append(True)
