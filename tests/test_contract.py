@@ -57,6 +57,18 @@ def test_region_ids_are_the_exact_marker_tokens() -> None:
     assert contract.LOAD_REGION == "load"
 
 
+def test_morning_region_is_the_exact_marker_token() -> None:
+    assert contract.MORNING_REGION == "morning"
+
+
+def test_refreshed_regions_are_only_morning() -> None:
+    assert contract.REFRESHED_REGIONS == ("morning",)
+
+
+def test_refreshed_regions_are_disjoint_from_preserved_regions() -> None:
+    assert set(contract.REFRESHED_REGIONS).isdisjoint(contract.PRESERVED_REGIONS)
+
+
 def test_user_regions_are_the_two_hand_authored_ones() -> None:
     assert contract.USER_REGIONS == ("notes", "workout")
 
@@ -79,6 +91,10 @@ def test_every_preserved_region_is_owned_exactly_once() -> None:
 # --------------------------------------------------------------------------- #
 # Fresh-region content (Req 1.4)
 # --------------------------------------------------------------------------- #
+
+
+def test_morning_placeholder_is_empty() -> None:
+    assert contract.MORNING_PLACEHOLDER == ""
 
 
 def test_load_not_computed_is_the_exact_placeholder_line() -> None:

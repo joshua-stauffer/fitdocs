@@ -15,13 +15,13 @@ Policy versus mechanism
 -----------------------
 :mod:`fitdocs.docmerge` owns the region *grammar* -- how a marker is spelled,
 how a region is composed, extracted, and merged -- and is deliberately generic
-over region ids: it is one algorithm, not three. This module owns the *policy*
-those functions are pointed at: the three region ids, which of them a human
-owns and which the tool fills, the preserved set, and the exact text a fresh
-region carries. Grammar changes are a merge-module concern; ownership changes
-are a contract concern, and a contract change is user-visible. The three marker
-helpers are re-exported here so a consumer that needs both policy and grammar
-imports one module; no new syntax is added.
+over region ids: one algorithm handles every region. This module owns the
+*policy* those functions are pointed at: the region ids, which a human owns,
+which the tool fills and preserves, which it refreshes from external data, and
+the exact text a fresh region carries. Grammar changes are a merge-module
+concern; ownership changes are a contract concern, and a contract change is
+user-visible. The three marker helpers are re-exported here so a consumer that
+needs both policy and grammar imports one module; no new syntax is added.
 
 Readers degrade, never raise
 ----------------------------
@@ -66,7 +66,7 @@ and ``USER_KEYS`` are disjoint, and held disjoint by test.
 
 Region ownership
 ----------------
-Three regions survive regeneration verbatim:
+Regions have three ownership classes:
 
 - ``notes`` and ``workout`` are **user-owned** (:data:`USER_REGIONS`). Their
   content is hand-authored; fitdocs writes an instructive placeholder into a
@@ -74,11 +74,15 @@ Three regions survive regeneration verbatim:
 - ``load`` is **tool-filled** (:data:`TOOL_REGIONS`). The training-load pass
   writes into it, but regeneration must still carry its content over rather
   than overwrite it, so it is preserved on the same footing.
+- ``morning`` is **refreshed** (:data:`REFRESHED_REGIONS`). fitdocs alone writes
+  its content from data outside the page's files. The merge carries it like
+  every region, and the morning-of pass replaces it after every page-writing
+  run. It is never user-owned or preserved for the user.
 
 :data:`PRESERVED_REGIONS` is the union in document order -- ``("notes",
 "workout", "load")``. The order is part of the contract, not an accident: it is
-the order regions appear in a rendered document and the order every published
-enumeration of them uses.
+the order these preserved regions appear in a rendered document and the order
+every published enumeration of them uses.
 
 Fresh-region content
 --------------------
@@ -89,7 +93,9 @@ contains no number: an unfilled region is an honest "nothing here yet", never a
 fabricated zero. :data:`LOAD_NOT_COMPUTED` is additionally a *classifier* --
 the training-load editor decides a ``load`` region is an untouched placeholder
 by comparing against it, so the constant having exactly one definition is what
-makes that comparison trustworthy.
+makes that comparison trustworthy. :data:`MORNING_PLACEHOLDER` is empty: a fresh
+``morning`` region carries no heading, sentence, table or fabricated value
+before the morning-of pass fills it.
 """
 
 from __future__ import annotations
@@ -132,9 +138,12 @@ __all__ = [
     "LoadReading",
     "MANAGED_KEYS",
     "MODALITY_KEY",
+    "MORNING_PLACEHOLDER",
+    "MORNING_REGION",
     "NOTES_PLACEHOLDER",
     "NOTES_REGION",
     "PRESERVED_REGIONS",
+    "REFRESHED_REGIONS",
     "SESSION_UUID_FIELD",
     "SOURCES_KEY",
     "SOURCE_DEVICE_KEY",
@@ -878,18 +887,31 @@ WORKOUT_REGION: Final[str] = "workout"
 LOAD_REGION: Final[str] = "load"
 """The region the training-load pass fills; preserved across regeneration."""
 
+MORNING_REGION: Final[str] = "morning"
+"""The fitdocs-owned region refreshed from wellness data outside the page's files."""
+
 USER_REGIONS: Final[tuple[str, ...]] = (NOTES_REGION, WORKOUT_REGION)
 """The regions a human authors; fitdocs writes only their initial placeholder."""
 
 TOOL_REGIONS: Final[tuple[str, ...]] = (LOAD_REGION,)
-"""The regions fitdocs itself fills after the document is first written."""
+"""The regions fitdocs fills and regeneration preserves."""
 
 PRESERVED_REGIONS: Final[tuple[str, ...]] = USER_REGIONS + TOOL_REGIONS
-"""Every region carried over verbatim on regeneration, in document order (1.4).
+"""Every region whose content regeneration preserves for its owner, in document order.
+
+The preserved policy is unchanged (1.4).
 
 ``("notes", "workout", "load")`` -- the order is contractual: it is the order
 these regions appear in a rendered document and the order every enumeration of
 them, published or internal, uses.
+"""
+
+REFRESHED_REGIONS: Final[tuple[str, ...]] = (MORNING_REGION,)
+"""Regions whose content fitdocs alone writes from data outside the page's files.
+
+The merge carries each region like every other region; its owning pass replaces
+its content after every page-writing run. These regions are never user-owned
+or preserved for the user and are disjoint from :data:`PRESERVED_REGIONS`.
 """
 
 # --- fresh-region content ----------------------------------------------------
@@ -914,6 +936,9 @@ else is the user's. Having exactly one definition is what makes that comparison
 safe, so both the renderer that emits it and the editor that recognizes it
 import it from here.
 """
+
+MORNING_PLACEHOLDER: Final[str] = ""
+"""The empty content of a fresh morning region, filled by the morning-of pass."""
 
 # --- pure readers ------------------------------------------------------------
 
