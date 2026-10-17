@@ -101,3 +101,30 @@ Read at `86cdf14` (design text; no code yet).
 - (c) is a data-policy choice: is silently narrower coverage worse than the
   complexity of a day-level merge? Only the maintainer can say, and only
   after seeing an export that shrank.
+
+## Update (2026-10-17): the maintainer's real export
+
+The real export was imported in a scratch data root at main 5d04c98, plus
+chore/apple-import-hardening (counts only; nothing personal recorded):
+- 268 MB zip; main document `export.xml`, the English name, 3.24 GB;
+  extract 13.3 MB.
+- 56 s wall time and 169 MB peak RSS; exit 0, with no quarantine.
+- 1,031,185 records kept; corrections: 1 doctype removed, 0 control
+  characters, 0 duplicate attributes.
+- 11 writing sources: 2 classified watch, 4 iphone, 5 other.
+
+What this settles:
+- **(a)** did not bite. Every supported type used exactly one unit (lb, ms,
+  %, count/min, count, mL/min·kg; none for sleep), across all writers.
+- **(b)** did not bite: no character reference or invalid UTF-8 failed it.
+- **(c)** and **(d)** are unchanged design choices. (d) matters here: one
+  excluded third-party writer holds 2018-11 to 2025-10 steps, sleep and
+  resting HR. It is almost certainly a Garmin relay, which the Garmin export
+  imports directly. Another holds 2025-10 to 2026-10 resting HR and VO2max.
+
+Older iPhones write device manufacturer `Apple` as well as `Apple Inc.`.
+Each such writer also carries `Apple Inc.` evidence, so classification held.
+A writer whose only evidence says `Apple` would classify as other.
+
+Suggested disposition: close (a) and (b) as not observed. Keep (c) and (d)
+for a maintainer decision, or close them as accepted design.
