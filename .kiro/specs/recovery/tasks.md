@@ -792,7 +792,7 @@ literal pins, one per lander) and every head-paragraph pin of
   - _Requirements: 17.1, 17.2_
   - _Boundary: NoNetworkLists_
 
-- [ ] 6. Validation
+- [x] 6. Validation
 
 - [x] 6.1 End-to-end, determinism, offline and confinement
   - `tests/recovery/test_e2e_recovery.py`: `fitdocs sync` (drain) on a staged
