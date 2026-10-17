@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from pathlib import Path
 
@@ -807,6 +808,6 @@ def test_out_of_range_series_value_is_a_derived_wellness_producer_error(
     # a producer error on a built index is reported, not fatal (existing contract)
     assert response.exit_code == 0, response.output
     output = " ".join(response.stdout.split())
-    assert "Errors 1" in output
+    assert re.search(r"Errors\s*│\s*1", response.stdout)
     assert "Could not refresh derived.wellness: SeriesReadError:" in output
     assert "2024-08-19 hrv_rmssd_ms 0: outside the accepted range" in output
