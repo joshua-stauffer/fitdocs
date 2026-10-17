@@ -360,7 +360,7 @@ def test_source_notes(source: str, expected: str) -> None:
 def test_unrecorded_origin() -> None:
     assert (
         section(text(model([value(0, 51, origin=None)])), "Resting HR")[-1]
-        == "Sources shown: watch (origins not recorded) on 1 days."
+        == "Sources shown: watch (origins not recorded) on 1 day."
     )
 
 
@@ -425,8 +425,8 @@ def test_other() -> None:
     assert section(text(full_view()), "Other Signals") == [
         "![Other signals chart](assets/recovery-other.svg)",
         "Shown as recorded, one panel per metric and source, with no baseline.",
-        "Sources shown: Steps: pedometer (origins garmin) on 1 days; "
-        "Mood (rating): rating (origins garmin) on 1 days.",
+        "Sources shown: Steps: pedometer (origins garmin) on 1 day; "
+        "Mood (rating): rating (origins garmin) on 1 day.",
     ]
 
 
@@ -440,7 +440,7 @@ def test_other_sources_escaped_and_unrecorded() -> None:
     )
     assert section(text(result), "Other Signals")[-1] == (
         "Sources shown: Steps: a\\|b (origins x) on 2 days; "
-        "Weight: w (origins z) on 1 days."
+        "Weight: w (origins z) on 1 day."
     )
     assert not any(
         line.startswith("On ") for line in section(text(result), "Other Signals")
@@ -456,12 +456,26 @@ def test_other_sources_cover_charted_panels_only() -> None:
         line
         for line in section(text(result), "Other Signals")
         if line.startswith("Sources shown:")
-    ] == ["Sources shown: Steps: a (origins garmin) on 1 days."]
+    ] == ["Sources shown: Steps: a (origins garmin) on 1 day."]
 
 
 def test_sleep_caption_names_the_night_source() -> None:
     lines = section(text(full_view()), "Sleep")
     assert lines[1] == "The table shows the night of 2025-04-29 from watch3."
+
+
+def test_sleep_caption_escapes_the_source() -> None:
+    result = model([value(0, 23001, Metric.SLEEP_S, "a|b")])
+    assert section(text(result), "Sleep")[1] == (
+        "The table shows the night of 2025-05-01 from a\\|b."
+    )
+
+
+def test_source_days_pluralised() -> None:
+    lines = section(text(model([value(0, 51), value(-1, 52)])), "Resting HR")
+    assert "Sources shown: watch (origins garmin) on 2 days." in lines
+    one = section(text(model([value(0, 51)])), "Resting HR")
+    assert "Sources shown: watch (origins garmin) on 1 day." in one
 
 
 def test_sleep_source_lines_match_a_signal_section() -> None:
@@ -474,10 +488,10 @@ def test_sleep_source_lines_match_a_signal_section() -> None:
     assert lines[-3:] == [
         "On 2025-05-01 the shown source changed from old to new; "
         "from that day the 7-day and 60-day means are new's own.",
-        "Sources shown: new (origins not recorded) on 1 days.",
+        "Sources shown: new (origins not recorded) on 1 day.",
         "Sources shown: old (origins a) on 8 days.",
     ]
-    assert lines.index("Sources shown: new (origins not recorded) on 1 days.") > (
+    assert lines.index("Sources shown: new (origins not recorded) on 1 day.") > (
         lines.index("| Sleep | 6:23:21 | — | — |")
     )
 

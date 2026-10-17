@@ -85,7 +85,7 @@ Sources shown: watch3 (origins garmin) on 63 days.
 
 Shown as recorded, one panel per metric and source, with no baseline.
 
-Sources shown: Steps: pedometer (origins garmin) on 1 days; Mood (rating): rating (origins garmin) on 1 days.
+Sources shown: Steps: pedometer (origins garmin) on 1 day; Mood (rating): rating (origins garmin) on 1 day.
 
 ## Coverage
 
