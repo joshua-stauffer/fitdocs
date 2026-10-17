@@ -984,7 +984,7 @@ _WELLNESS_REPORT_ROWS: Final[tuple[tuple[str, str], ...]] = (
   detail blocks, when `instance.wellness is not None` (10.7): a table titled
   `fitdocs pull: <name> wellness`, one row per entry above, always present
   (an `int` field printed as is, `error` as 0 or 1, a tuple as its length)
-  (10.1); then `Delivered:` lines `  <path> (<span>, <n> days)` (`1 day` when n is 1; amended 2026-10-17), `Would
+  (10.1); then `Delivered:` lines `  <path> (<span>, <n> days)`, `Would
   deliver:` lines `  <date>` (10.3), `Already held:` lines `  <span>`,
   `Failed:` and `Notices:` note blocks and `Error:` (10.2). All printing
   uses `markup=False, highlight=False, soft_wrap=True` like the rest of the
@@ -1444,3 +1444,9 @@ decisions; each is revisable at review.
 - `recovery`'s connectors amendment and this one land in either order; both
   re-derive the amendment number and keep both sides of the shared test
   file `tests/connectors/test_e2e.py`.
+
+## Note (2026-10-17): one-day deliveries
+
+The `Delivered:` detail literal `  <path> (<span>, <n> days)` prints `1 day`
+when `n` is 1 (queue `2026-10-17-wellness-delivered-line-says-1-days`); every
+other count keeps `days`.

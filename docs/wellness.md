@@ -509,5 +509,6 @@ fitdocs query "SELECT day, value FROM wellness_daily WHERE metric = 'hrv_rmssd_m
 ```
 
 Series files stay the source for wellness consumers; deleting the index costs
-only a rebuild. The file import itself computes no baselines, scores or
-benchmarks; the [recovery page](recovery.md) and `fitdocs derive-benchmarks` do.
+only a rebuild. The file import itself computes nothing from the series: the
+[recovery page](recovery.md) forms baselines from it, and `fitdocs
+derive-benchmarks` derives resting heart rate from it.

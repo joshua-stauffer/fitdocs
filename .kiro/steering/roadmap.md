@@ -3262,7 +3262,7 @@ numbers are the next free number at landing.
   (27/27 mandatory tasks independently approved; all 20 requirements / 125
   criteria assessed; contract 11, schema 3; full suite 14,733 passed / 44
   skipped, lint/types/build and installed-wheel smoke passed; optional
-  maintainer-only smoke 6.3* not run; see
+  maintainer-only smoke 6.3* run on the maintainer's exports 2026-10-17; see
   `.kiro/specs/wellness-store/implementation-validation.md`).
   **Brief written 2026-10-12; spec written 2026-10-13**
   (Phase 12 batch, wave 1, initially `tasks-generated`, all approvals set; 20
@@ -3344,9 +3344,10 @@ numbers are the next free number at landing.
 - [x] recovery — **implemented 2026-10-17; validation GO** (merged at
   240ed2f; 21/21 mandatory tasks, including the maintainer-approved
   chart-axis prerequisite 2.3; contract 14, 15 commands; optional
-  maintainer-only page look 6.3* not run). The 2026-10-17 re-validation
-  found Req 5.5/5.6 source statements narrower than written, fixed by the
-  recovery design's Amendment 1 note.
+  maintainer-only page look 6.3* run on the maintainer's data 2026-10-17).
+  The 2026-10-17 re-validation found Req 5.5/5.6 source statements
+  narrower than written; the recovery design's Amendment 1 note records
+  the fix.
   **Brief written 2026-10-12; spec written 2026-10-13**
   (Phase 12 batch, wave 2, initially `tasks-generated`, all approvals set; 18
   requirements / 90 criteria, 6 majors / 20 executable tasks plus the
