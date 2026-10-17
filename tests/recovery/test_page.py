@@ -473,7 +473,7 @@ def test_sleep_source_lines_match_a_signal_section() -> None:
     lines = section(text(model(values)), "Sleep")
     assert lines[-3:] == [
         "On 2025-05-01 the shown source changed from old to new; "
-        "from that day the 7-day mean and normal range are new's own.",
+        "from that day the 7-day and 60-day means are new's own.",
         "Sources shown: new (origins not recorded) on 1 days.",
         "Sources shown: old (origins a) on 8 days.",
     ]

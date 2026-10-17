@@ -141,7 +141,9 @@ def _source_text(source: str, origins: Sequence[str], days: int) -> str:
     return f"{escape_markdown(source)} (origins {named}) on {_count(days)} days"
 
 
-def _source_lines(signal: SignalView) -> list[str]:
+def _source_lines(
+    signal: SignalView, statistics: str = "7-day mean and normal range are"
+) -> list[str]:
     """The change lines and the `Sources shown` lines of a signal's section."""
     lines: list[str] = []
     for change in signal.changes:
@@ -152,7 +154,7 @@ def _source_lines(signal: SignalView) -> list[str]:
                 "",
                 f"On {_day(change.day)} the shown source changed from "
                 f"{before} to {after}; "
-                f"from that day the 7-day mean and normal range are {after}'s own.",
+                f"from that day the {statistics} {after}'s own.",
             )
         )
     for note in signal.sources:
@@ -342,7 +344,7 @@ def render_page(
                 f"| {_value(bd.rolling_mean, bd.metric, 'mean')} | "
                 f"{_value(bd.baseline_mean, bd.metric)} |"
             )
-        lines.extend(_source_lines(sleep.total))
+        lines.extend(_source_lines(sleep.total, "7-day and 60-day means are"))
     if view.other is not None:
         lines.extend(
             (
