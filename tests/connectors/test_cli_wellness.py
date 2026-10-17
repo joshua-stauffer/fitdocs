@@ -394,6 +394,7 @@ def test_renderer_distinct_counts_and_literal_details(
         ),
         WellnessDelivered("2022-04-01..2022-04-09", 9, "src/second.json"),
         WellnessDelivered("2022-05-05..2022-05-05", 1, "src/third.json"),
+        WellnessDelivered("2022-06-01..2022-06-02", 2, "src/fourth.json"),
     )
     held = (
         "2023-01-01..2023-01-02",
@@ -470,6 +471,7 @@ def test_renderer_distinct_counts_and_literal_details(
         "long-path-.json (2021-01-01..2021-01-03, 3 days)",
         "  src/second.json (2022-04-01..2022-04-09, 9 days)",
         "  src/third.json (2022-05-05..2022-05-05, 1 day)",
+        "  src/fourth.json (2022-06-01..2022-06-02, 2 days)",
         "Already held:",
         *(f"  {span}" for span in held),
         "Failed:",
@@ -497,7 +499,7 @@ def test_renderer_distinct_counts_and_literal_details(
         section.find("Days listed") < section.find("Error"),
         plain.find("activity error") < plain.find("fitdocs pull: src wellness"),
     ) == (
-        (_counts(34, 7, 3, 0, 3, 4, 5, 1), expected_details),
+        (_counts(34, 7, 4, 0, 3, 4, 5, 1), expected_details),
         (_ZERO, ()),
         True,
         True,
