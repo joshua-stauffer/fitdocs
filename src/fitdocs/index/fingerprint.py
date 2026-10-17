@@ -42,7 +42,9 @@ def _blank_preserved_regions(body: str) -> str:
     blanked = "".join(
         docmerge.region_block(
             region_id,
-            "" if region_id in contract.PRESERVED_REGIONS else content,
+            ""
+            if region_id in contract.PRESERVED_REGIONS + contract.REFRESHED_REGIONS
+            else content,
         )
         for region_id, content in regions.items()
     )

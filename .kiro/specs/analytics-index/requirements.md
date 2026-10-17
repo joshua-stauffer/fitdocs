@@ -367,3 +367,24 @@ The explicit `fitdocs index` exit gate treats errors attributed to
 (BUILT, REFRESHED or UNCHANGED). Page errors, errors from every other
 producer, and unsuccessful outcomes retain their existing failure status.
 The gate uses producer identity, without inspecting exception messages.
+
+
+## Amendment 3 (2026-10-18): a change confined to the morning region is a document-only change, landed by workout-wellness
+
+Workout-wellness task 1.4 appends criterion 5.8 to Requirement 5:
+
+8. fitdocs shall not recompute a page's computed values for a change confined to its `morning` region; the next refresh shall bring its document values level with the changed file.
+
+**Glossary note.** The glossary's **rendering** excludes the `morning`
+region, in addition to the `notes`, `workout` and `load` regions already
+excluded. The render fingerprint blanks `PRESERVED_REGIONS` and
+`REFRESHED_REGIONS`; a region outside both keeps its content in the digest.
+
+`SCHEMA_VERSION` does not change: this amendment changes no table, column or
+producer derivation and does not trigger Requirement 13.6. The morning-of
+block reads nothing from the index.
+
+Pinned by `tests/index/test_fingerprint.py` (the `morning` parameter of
+`test_render_fingerprint_ignores_each_region` and the unknown-region
+regression) and `tests/index/test_refresh.py`
+(`test_morning_edit_updates_document_tier_without_deriving`).

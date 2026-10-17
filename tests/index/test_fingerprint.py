@@ -16,6 +16,7 @@ from fitdocs.contract import (
     DOC_VERSION_KEY,
     LOAD_KEYS,
     PRESERVED_REGIONS,
+    REFRESHED_REGIONS,
     frontmatter_close_index,
     parse_frontmatter,
 )
@@ -57,7 +58,7 @@ def _replace_frontmatter(page: str, key: str, value: object) -> str:
 
 def _replace_region(page: str, region_id: str, content: str) -> str:
     regions = extract_regions(page)
-    assert region_id in PRESERVED_REGIONS
+    assert region_id in PRESERVED_REGIONS + REFRESHED_REGIONS
     assert region_id in regions
     old_block = region_block(region_id, regions[region_id])
     new_block = region_block(region_id, content)
@@ -211,7 +212,7 @@ def test_render_fingerprint_ignores_frontmatter_owned_outside_rendering(
 
 
 @pytest.mark.parametrize(
-    "region_id", ("notes", "workout", "load"), ids=lambda value: value
+    "region_id", ("notes", "workout", "morning", "load"), ids=lambda value: value
 )
 def test_render_fingerprint_ignores_each_region(
     rendered_page: str, region_id: str

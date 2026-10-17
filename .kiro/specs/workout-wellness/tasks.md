@@ -196,7 +196,7 @@ wiki-contract and analytics-index amendment and criterion numbers.
 
 ---
 
-- [ ] 1. Foundation: package, contract constants, region placement, index blanking
+- [x] 1. Foundation: package, contract constants, region placement, index blanking
 
 - [x] 1.1 Verify the upstream seams and create the morning package skeleton with its boundary guard
   - Verify the Upstream Prerequisites list and record each outcome with file
@@ -294,7 +294,7 @@ wiki-contract and analytics-index amendment and criterion numbers.
   - _Requirements: 1.1, 1.6, 1.7_
   - _Depends: 1.2_
 
-- [ ] 1.4 Make a change confined to the morning region a document-only change in the analytics index
+- [x] 1.4 Make a change confined to the morning region a document-only change in the analytics index
   - `index/fingerprint.py`: the render fingerprint blanks every region in
     `contract.PRESERVED_REGIONS + contract.REFRESHED_REGIONS`; a region in
     neither keeps its content in the digest.
@@ -769,6 +769,29 @@ wiki-contract and analytics-index amendment and criterion numbers.
   - _Requirements: 9.1, 9.4, 11.3, 12.1, 12.2_
 
 ## Implementation Notes
+
+- 1.4 accepted after independent approval and fresh completion verification:
+  892 index tests, 49 existing boundary guards and all static checks passed.
+  Fourteen claimed and two independent mutations failed at their intended
+  assertions and restored GREEN. Morning-only edits move document state
+  without deriving or changing the edited page's substantive computed rows;
+  unknown region content still changes the render digest. Analytics-index
+  Amendment 3 appends criterion 5.8 and its glossary note, dated 2026-10-18;
+  the schema and its version pin are unchanged. Requirement 10.2's broader
+  runtime independence remains with the later morning tasks.
+
+- Astra decision 5 (2026-10-18, user-delegated ambiguity resolution):
+  permanent source boundaries also apply to the live verification tree.
+  Minimal outside-boundary faults needed for discrimination may run only
+  in an audited isolated snapshot of HEAD plus the current task edits,
+  with a separate environment and pytest import/interpreter provenance.
+  Never mutate live frozen/upstream files or share an editable install
+  pointing to them. Each changed setup assertion needs its own intended
+  RED, exact byte restoration and restored GREEN; an earlier failure does
+  not pin a later assertion. Unchanged existing setup may be reused. This
+  permits the isolated empty-refreshed-policy control for 1.4's widened
+  helper guard, and adds no shipped behavior or requirement amendment.
+  The shared log records the full decision and experiment evidence.
 
 - 1.3 accepted after independent approval and fresh completion verification:
   full suite 26,151 passed / eight accounted skips; 5,084 focused tests and

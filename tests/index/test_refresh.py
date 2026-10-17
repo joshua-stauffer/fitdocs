@@ -16,6 +16,7 @@ import pytest
 
 from fitdocs import Modality, contract, version
 from fitdocs.docio import read_document, read_frontmatter
+from fitdocs.docmerge import extract_regions, region_block
 from fitdocs.index import corpus, derive, refresh, registry
 from fitdocs.index.bookkeeping import Bookkeeping, ComputedState, IndexMeta, PageState
 from fitdocs.index.core.computed import CORE_COMPUTED
@@ -1929,6 +1930,71 @@ def test_effort_edit_updates_document_tier_without_deriving(
         "SELECT effort FROM pages WHERE path = ?",
         (relative_path.as_posix(),),
     ) == [("race",)]
+
+
+def test_morning_edit_updates_document_tier_without_deriving(
+    built_index: BuiltIndex,
+    synced_corpus: Path,
+    synced_workout_pages: tuple[Path, ...],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    index = built_index
+    shutil.copytree(synced_corpus, index.data_root, dirs_exist_ok=True)
+    _refresh(index.database, index.data_root)
+
+    relative_path = synced_workout_pages[0].relative_to(synced_corpus).as_posix()
+    page = index.data_root / relative_path
+    state_sql = (
+        "SELECT document_fingerprint, render_fingerprint, computed_state "
+        "FROM index_pages WHERE path = ?"
+    )
+    before_state = _query(index.database, state_sql, (relative_path,))[0]
+    assert before_state[2] == ComputedState.COMPUTED
+    computed_tables = tuple(
+        table for table in index.tables if table.scope is TableScope.COMPUTED
+    )
+
+    def computed_rows() -> dict[str, list[tuple[object, ...]]]:
+        return {
+            table.name: _query(
+                index.database,
+                f"SELECT * FROM {table.name} WHERE page_key = "
+                "(SELECT page_key FROM index_pages WHERE path = ?) ORDER BY "
+                + ", ".join(column.name for column in table.columns),
+                (relative_path,),
+            )
+            for table in computed_tables
+        }
+
+    before_computed = computed_rows()
+    assert before_computed["activities"] and before_computed["records"]
+    original = page.read_bytes()
+    regions = extract_regions(original.decode("utf-8"))
+    assert regions["morning"] == ""
+    edited = original.replace(
+        region_block("morning", regions["morning"]).encode("utf-8"),
+        region_block("morning", "Synthetic morning-of wellness backfill.").encode(
+            "utf-8"
+        ),
+        1,
+    )
+    page.write_bytes(edited)
+    assert page.read_bytes() != original
+    edited_fingerprint = document_fingerprint(relative_path, page.read_bytes())
+    assert edited_fingerprint != before_state[0]
+
+    def unexpected_derive(*args: object, **kwargs: object) -> object:
+        raise AssertionError("morning-only changes do not derive computed values")
+
+    monkeypatch.setattr(derive, "derive_page", unexpected_derive)
+    result = _refresh(index.database, index.data_root)
+
+    assert result.page_errors == ()
+    assert result.updated == (relative_path,)
+    assert _query(index.database, state_sql, (relative_path,)) == [
+        (edited_fingerprint, before_state[1], ComputedState.COMPUTED)
+    ]
+    assert computed_rows() == before_computed
 
 
 def test_rename_updates_document_path_without_deriving(
