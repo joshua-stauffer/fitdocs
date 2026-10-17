@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import math
+import random
 import re
+from bisect import bisect_right
 from collections.abc import Callable, Collection, Iterable, Mapping
-from datetime import date
+from datetime import date, timedelta
 from itertools import permutations
 from typing import Any, Final, get_type_hints
 
@@ -1766,3 +1769,64 @@ def test_individual_readings_have_equal_weight_across_asleep_bouts(
     assert values(reversed(records) if reverse else records) == (
         (date(2024, 1, 11), two_first if repeat_first else two_second),
     )
+
+
+def first_containing_night(
+    nights: Mapping[date, tuple[tuple[int, int], ...]], instant: float
+) -> date | None:
+    """The original rule: scan nights in order, first one holding the instant."""
+    for day, intervals in nights.items():
+        index = bisect_right(intervals, (instant, math.inf)) - 1
+        if index >= 0 and instant < intervals[index][1]:
+            return day
+    return None
+
+
+@pytest.mark.parametrize("seed", range(20))
+def test_night_index_matches_first_containing_night(seed: int) -> None:
+    generator = random.Random(seed)
+    nights: dict[date, tuple[tuple[int, int], ...]] = {}
+    for offset in range(generator.randint(0, 12)):
+        cursor = generator.randint(0, 40)
+        spans = []
+        for _ in range(generator.randint(0, 4)):
+            start = cursor + generator.randint(1, 15)
+            cursor = start + generator.randint(1, 25)
+            spans.append((start, cursor))
+        nights[date(2024, 1, 1) + timedelta(days=offset)] = tuple(spans)
+    index = reduction._NightIndex(nights)
+    for instant in range(-5, 400):
+        for probe in (instant, instant + 0.5):
+            assert index.night_of(probe) == first_containing_night(nights, probe)
+
+
+def test_reading_lookup_is_one_bisect_per_reading(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    nights, per_night = 60, 5
+    reducer = DayReducer()
+    for number in range(nights):
+        day = date(2024, 1, 1) + timedelta(days=number)
+        wake = day + timedelta(days=1)
+        reducer.add(sleep(start=f"{day}T22:00:00+00:00", end=f"{wake}T06:00:00+00:00"))
+        for minute in range(per_night):
+            reducer.add(
+                raw(
+                    AppleType.HRV_SDNN,
+                    50 + number,
+                    start=f"{day}T23:{minute:02d}:00+00:00",
+                    end=f"{day}T23:{minute:02d}:30+00:00",
+                    unit="ms",
+                )
+            )
+    calls: list[int] = []
+    real = bisect_right
+
+    def counted(*args: Any) -> int:
+        calls.append(1)
+        return real(*args)
+
+    monkeypatch.setattr(f"{reduction.__name__}.bisect_right", counted)
+    snapshots = reducer.snapshots()
+    assert len(calls) == nights * per_night
+    assert [s.values[Metric.HRV_SDNN_MS] for s in snapshots[:3]] == [50.0, 51.0, 52.0]

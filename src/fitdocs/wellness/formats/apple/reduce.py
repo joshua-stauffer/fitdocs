@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import heapq
 import math
 from bisect import bisect_right
 from collections.abc import Collection, Iterable, Mapping
@@ -218,6 +219,46 @@ def _step_total(integral: int, remainder: list[float]) -> int | float:
             return math.inf if exact > 0 else -math.inf
 
 
+class _NightIndex:
+    """Which night's asleep interval holds an instant, in one bisect.
+
+    Nights may overlap (a nap belongs to the night of its wake date), and a
+    reading goes to the earliest night whose asleep intervals contain it. A
+    sweep over every interval boundary keeps the earliest covering night for
+    each stretch of time, leaving disjoint segments a single bisect can search.
+    """
+
+    def __init__(self, nights: Mapping[date, tuple[tuple[int, int], ...]]) -> None:
+        intervals = sorted(
+            (start, end, day) for day, spans in nights.items() for start, end in spans
+        )
+        points = sorted(
+            {point for start, end, _ in intervals for point in (start, end)}
+        )
+        self._starts: list[int] = []
+        self._ends: list[int] = []
+        self._days: list[date] = []
+        active: list[tuple[date, int]] = []
+        upcoming = 0
+        for point, following in zip(points, points[1:], strict=False):
+            while upcoming < len(intervals) and intervals[upcoming][0] <= point:
+                _, end, day = intervals[upcoming]
+                heapq.heappush(active, (day, end))
+                upcoming += 1
+            while active and active[0][1] <= point:
+                heapq.heappop(active)
+            if active:
+                self._starts.append(point)
+                self._ends.append(following)
+                self._days.append(active[0][0])
+
+    def night_of(self, instant: float) -> date | None:
+        index = bisect_right(self._starts, instant) - 1
+        if index >= 0 and instant < self._ends[index]:
+            return self._days[index]
+        return None
+
+
 class DayReducer:
     def __init__(self) -> None:
         self._evidence: dict[str, set[tuple[str, str]]] = {}
@@ -342,17 +383,16 @@ class DayReducer:
                 raw[day, Metric.SLEEP_REM_S] = totals.rem
                 raw[day, Metric.SLEEP_AWAKE_S] = totals.awake
             watch_intervals[day] = asleep_intervals(watch)
+        night_index = _NightIndex(watch_intervals)
         means: dict[tuple[date, Metric], list[float | int | Fraction]] = {}
         for (kind, source), readings in self._readings.items():
             policy = POLICIES[kind]
             if writers[source] not in policy.writers:
                 continue
             for instant, value in readings:
-                for day, intervals in watch_intervals.items():
-                    index = bisect_right(intervals, (instant, math.inf)) - 1
-                    if index >= 0 and instant < intervals[index][1]:
-                        means.setdefault((day, policy.metrics[0]), []).append(value)
-                        break
+                night = night_index.night_of(instant)
+                if night is not None:
+                    means.setdefault((night, policy.metrics[0]), []).append(value)
         for key, samples in means.items():
             try:
                 raw[key] = round(math.fsum(samples) / len(samples), 1)
