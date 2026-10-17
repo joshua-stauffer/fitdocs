@@ -353,3 +353,79 @@ what a run will do to my timeline.
 4. The packaged workouts skill shall tell an agent how to read a takeover and an inconsistency finding and what to suggest to the athlete.
 5. The release notes shall describe the heart-rate stage, the hand-recorded-wins rule, the new `check` findings, the need to recompute load to apply a changed timeline, and that on the first run historic heart-rate load before a hand-recorded entry's date moves to derived values where derived evidence exists.
 6. The documentation and every test shall use synthetic values only and shall contain no value from the maintainer's own data.
+
+## Amendment 1 (2026-10-17): a derived maximum never falls, and only later evidence challenges a hand value
+
+Maintainer ruling, 2026-10-17. A scratch run over the maintainer's real data
+root found three problems:
+- derived maxima dated after the newest session, decaying towards
+  strength-session peaks;
+- implausible maxima at the start of history, from windows holding a few
+  non-maximal sessions;
+- departure days taking over a hand value with peaks recorded before it.
+
+Queue items `2026-10-17-hr-max-evidence-projects-past-last-session` and
+`2026-10-17-hr-max-evidence-sparse-windows-need-ruling`. The maintainer's
+words: "a year that i don't do any truly hard efforts shouldn't reset my max
+hr. and yes, only sessions dated after a handcopy should be able to replace
+it." The proposal accepted with it was to count only sessions that can reach
+maximum effort (runs and rides). This supersedes the 2026-10-12 acceptance
+that historic heart-rate load before a hand entry's date moves to derived
+values.
+
+Revised criteria. Nothing is renumbered; each revision replaces the text of
+the criterion it names.
+- **3.1 revised**: The heart-rate stage shall consider every generated
+  workout document, of every sport, and shall read each one's heart rate
+  from the activity composed of the files the page lists, by the same rule
+  the training-load pass uses. It shall take maximum-heart-rate evidence
+  only from sessions whose modality is run or bike, and shall report every
+  other session as having no evidence for that reason.
+- **3.6 revised**: On each evidence day, the heart-rate stage shall take as
+  evidence the median of the three highest sustained peaks among the
+  qualifying sessions dated both in the 365 calendar days ending on that day
+  and after the measurement date of the latest hand-recorded
+  maximum-heart-rate entry measured before that day. It shall express the
+  evidence as whole beats per minute with a halfway value rounded up, and
+  shall take none when fewer than three such sessions exist.
+- **3.7 revised**: The heart-rate stage shall work out maximum-heart-rate
+  evidence only on dates of sessions that supply evidence. A session leaving
+  the 365-day window creates no evidence day, so no evidence day falls after
+  the newest such session.
+- **2.2 revised**: For each source and each calendar day, the heart-rate
+  stage shall form that source's baseline as the median of the source's own
+  daily resting-heart-rate values on the 28 days ending that day and after
+  the measurement date of the latest hand-recorded resting-heart-rate entry
+  measured before that day, and only when at least 14 such days carry a
+  value.
+- **4.3 revised**: When maximum-heart-rate evidence exceeds the value in
+  force by more than the step, the heart-rate stage shall start a derived
+  maximum-heart-rate entry on that evidence day carrying that day's
+  evidence. Evidence at or below the value in force never starts one, so a
+  derived maximum never falls; the athlete records a lower maximum by hand.
+- **5.3 revised**: The heart-rate stage shall start a derived entry only from
+  evidence that differs by more than the step from the value in force on the
+  evidence day, whether that value is hand-recorded or derived. For maximum
+  heart rate, the evidence must exceed the value in force (4.3).
+- **5.4 revised**: The heart-rate stage shall never start a derived entry
+  from evidence that agrees with the value in force to within the step, nor
+  a derived maximum from evidence below it, so that a correct hand-recorded
+  value is never replaced.
+- **5.5 revised**: Evidence dated on or before the measurement date of a
+  hand-recorded entry that is the value in force on the evidence day shall
+  never start a derived entry, so that a hand-recorded value, including
+  every day its applies-from date covers that no earlier-measured entry
+  covers, is challenged only by evidence dated after it and formed from
+  sessions or series days dated after it (2.2, 3.6).
+- **5.9 revised**: The fitdocs CLI shall offer no setting that turns
+  heart-rate derivation off or that expires a hand-recorded entry after a
+  period. The withdrawn clause, "keeps a derived maximum from falling", is
+  now the rule for every athlete (4.3) rather than a setting.
+
+Unchanged: the steps (3 bpm resting, 2 bpm maximum), the 14-day resting
+confirmation, the 365-day window and three-session median, sample
+rejection, the sustained peak, selection (5.6), the takeover announcements
+(Requirement 6), the cover-change report (5.7) and the consistency findings
+(Requirement 9). No athlete schema, document, load payload or contract
+version changes: derived entries keep their shape, and the next run
+replaces earlier derived heart-rate entries under Requirement 4.6.
