@@ -57,6 +57,10 @@ _Your notes go here. This section is preserved when the document is regenerated.
 | 0.67 km | 0.67 km | 1:29 | 139 bpm | 149 bpm | 27.0 km/h | 240 w |
 | **Total** | 0.67 km | 1:29 | – | – | 27.0 km/h | – |
 
+<!-- fitdocs:begin:morning -->
+
+<!-- fitdocs:end:morning -->
+
 ## Training Load
 
 <!-- fitdocs:begin:load -->

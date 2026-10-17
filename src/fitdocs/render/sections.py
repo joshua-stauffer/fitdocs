@@ -3,7 +3,7 @@
 This module renders the sections every per-sport view shares -- the hero
 key-stats table, the telemetry chips line, the hero chart and HR-zone strip
 images, the devices/data-quality block, and the training-load placeholder --
-plus the two content regions (``notes``, ``load``) each document reserves. It
+plus the notes, morning and load content regions each document reserves. It
 also owns the *series selection* and *x-axis choice* for the hero chart
 (design: "Series selection lives in ``sections.py``"): the chart modules draw
 plain series, and this module decides which channels become series and what the
@@ -22,10 +22,10 @@ Two rules govern everything here (Req 13.1-13.3, 8.2):
   graceful "not computed" state with no numbers, the stable placeholder the
   training-load feature fills later (Req 11.1, 11.2, 11.4).
 
-Both region ids and the not-computed text come from :mod:`fitdocs.contract`, so
-the regions this module *emits* are by construction the regions the merge
-preserves, the training-load pass fills, and the published ownership contract
-names (wiki-contract Req 1.4).
+Region ids and fresh-region content come from :mod:`fitdocs.contract`. The
+merge carries these regions; the training-load pass fills the load region and
+the morning-of pass replaces the morning region from the wellness series
+(wiki-contract Req 1.4; workout-wellness 1.1).
 
 Rendering is pure: section functions return markdown strings and the two chart
 functions return an ``(image link, Asset)`` pair (the sync engine writes the
@@ -41,6 +41,8 @@ from fitdocs import Activity, DerivedMetrics, Modality, Samples
 from fitdocs.contract import (
     LOAD_NOT_COMPUTED,
     LOAD_REGION,
+    MORNING_PLACEHOLDER,
+    MORNING_REGION,
     NOTES_REGION,
     region_block,
 )
@@ -79,6 +81,7 @@ __all__ = [
     "hero_stats",
     "load_section",
     "map_section",
+    "morning_region",
     "notes_region",
     "telemetry_chips",
     "zone_strip",
@@ -635,6 +638,11 @@ def load_section() -> str:
     feature fills.
     """
     return region_block(LOAD_REGION, LOAD_NOT_COMPUTED)
+
+
+def morning_region() -> str:
+    """Reserve the empty location filled by the morning-of pass (1.1)."""
+    return region_block(MORNING_REGION, MORNING_PLACEHOLDER)
 
 
 def notes_region(placeholder: str) -> str:

@@ -19,6 +19,7 @@ visible in the raw source.
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import re
 from datetime import timedelta, timezone, tzinfo
 from pathlib import Path
@@ -26,7 +27,12 @@ from pathlib import Path
 import pytest
 
 from fitdocs import DerivedMetrics, Modality, compute_metrics, parse_fit
-from fitdocs.contract import DOC_BANNER, GENERATED_PREFIX, LOAD_NOT_COMPUTED
+from fitdocs.contract import (
+    DOC_BANNER,
+    GENERATED_PREFIX,
+    LOAD_NOT_COMPUTED,
+    MORNING_REGION,
+)
 from fitdocs.docmerge import extract_regions, merge_regions
 from fitdocs.metrics.types import AthleteInputs, ZoneSpec
 from fitdocs.model import DeviceInfo, Samples
@@ -683,3 +689,116 @@ def test_resolved_product_names_reach_the_attribution_and_devices_table() -> Non
     rows = [line for line in table.splitlines() if line.startswith("| ")]
     assert any(row.startswith("| edge_1040 ") for row in rows)
     assert any(row.startswith("| hrm_pro ") for row in rows)
+
+
+# --- workout-wellness 1.3: fresh region placement ---------------------------
+
+_MORNING_CASES = (
+    ("run_splits", "## Splits"),
+    ("run_no_splits", "## Telemetry"),
+    ("ride", "## Splits"),
+    ("strength_sets", "## Recorded Sets"),
+    ("strength_no_sets", "## Workout"),
+    ("generic_telemetry", "## Telemetry"),
+    ("generic_no_telemetry", "## Summary"),
+)
+
+
+def _morning_ctx(case: str) -> DocContext:
+    if case.startswith("run"):
+        ctx = _ctx(builder.run_fit_bytes())
+        if case == "run_no_splits":
+            ctx = dataclasses.replace(
+                ctx,
+                activity=dataclasses.replace(
+                    ctx.activity,
+                    laps=(),
+                    samples=dataclasses.replace(
+                        ctx.activity.samples,
+                        distance_m=(None,) * len(ctx.activity.samples.time_s),
+                    ),
+                ),
+            )
+        return ctx
+    if case == "ride":
+        return _ctx(builder.ride_fit_bytes())
+    if case == "strength_sets":
+        return _ctx(builder.strength_fit_bytes())
+    if case == "strength_no_sets":
+        return _ctx(builder.strength_no_sets_fit_bytes())
+    ctx = _ctx(builder.minimal_fit_bytes())
+    if case == "generic_no_telemetry":
+        empty = Samples(
+            time_s=(),
+            heart_rate_bpm=(),
+            power_w=(),
+            cadence_rpm=(),
+            speed_mps=(),
+            distance_m=(),
+            altitude_m=(),
+            latitude_deg=(),
+            longitude_deg=(),
+            temperature_c=(),
+        )
+        return dataclasses.replace(
+            ctx,
+            activity=dataclasses.replace(ctx.activity, samples=empty),
+            metrics=DerivedMetrics(),
+        )
+    return ctx
+
+
+# Captured from HEAD 852e35f before the morning region was implemented.
+_PRE_MORNING_FRONTMATTER_SHA256 = {
+    "run_splits": "9f58b3c72450e05b60d2e79116df4485ae11121d649a347afaa9b070f9399ce2",
+    "run_no_splits": "9f58b3c72450e05b60d2e79116df4485ae11121d649a347afaa9b070f9399ce2",
+    "ride": "d6ef9ae9c1498b2b8bba2fb5197cca8904ae84301d326515fdae15f1cea3321d",
+    "strength_sets": "e6e02e96258815df01419bbd715008f43d4e41b88b0abb4a7bb952d7eaa9cac6",
+    "strength_no_sets": (
+        "9a00ca11dbc18cbd49cad00dbb9a5401a19e99f1eed2a333e255091ab293b273"
+    ),
+    "generic_telemetry": (
+        "c45c643f82050542c73d77f78adde2d1f43c20c41f8a59078b7ece21ecf0ceb1"
+    ),
+    "generic_no_telemetry": (
+        "00973428af3fe357ac9da48dceb90fd69f11af0bf0f8f28edc0f68a424720735"
+    ),
+}
+
+
+@pytest.mark.parametrize(("case", "previous_heading"), _MORNING_CASES)
+def test_morning_region_immediately_precedes_training_load(
+    case: str, previous_heading: str
+) -> None:
+    md = render_document(_morning_ctx(case)).markdown
+    begin = f"<!-- fitdocs:begin:{MORNING_REGION} -->"
+    end = f"<!-- fitdocs:end:{MORNING_REGION} -->"
+    assert md.count(begin) == 1
+    assert md.count(end) == 1
+    before, region_and_after = md.split(begin)
+    assert _h2s(before)[-1] == previous_heading
+    assert region_and_after.split(end)[1].startswith("\n\n## Training Load\n")
+    for user_region in ("notes", "workout"):
+        if f"<!-- fitdocs:begin:{user_region} -->" in md:
+            assert md.index(f"<!-- fitdocs:end:{user_region} -->") < md.index(begin)
+
+
+@pytest.mark.parametrize("case", [case for case, _ in _MORNING_CASES])
+def test_fresh_morning_region_has_empty_content(case: str) -> None:
+    md = render_document(_morning_ctx(case)).markdown
+    assert extract_regions(md).get(MORNING_REGION) == ""
+
+
+@pytest.mark.parametrize("case", [case for case, _ in _MORNING_CASES])
+def test_fresh_morning_region_has_no_heading(case: str) -> None:
+    assert "## Morning Of" not in render_document(_morning_ctx(case)).markdown
+
+
+@pytest.mark.parametrize("case", [case for case, _ in _MORNING_CASES])
+def test_morning_region_keeps_preexisting_frontmatter_bytes(case: str) -> None:
+    md = render_document(_morning_ctx(case)).markdown
+    end = md.index("\n---\n") + len("\n---\n")
+    assert (
+        hashlib.sha256(md[:end].encode()).hexdigest()
+        == (_PRE_MORNING_FRONTMATTER_SHA256[case])
+    )

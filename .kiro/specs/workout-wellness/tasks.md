@@ -134,6 +134,10 @@ Each file below has more than one writer; its writers are sequential.
   `doc_version` line).
 - `tests/declaration_golden/*.AGENTS.md`: 4.2 only.
 - `src/fitdocs/cli.py`: 3.2 only.
+- `tests/render/test_views.py`: 1.3 (morning placement and pre-region
+  frontmatter digest pins), 4.1 (the digest pins' controlled `doc_version`
+  re-pin); 5.1 repeats the re-pin only if the final rebase changes the
+  landing version.
 - `tests/test_confinement.py`: 3.3 only.
 - `pyproject.toml`: 1.1 (`tests/morning` in `[tool.mypy].files`).
 - `CHANGELOG.md`: 4.3 only.
@@ -249,7 +253,7 @@ wiki-contract and analytics-index amendment and criterion numbers.
     tests/test_contract_consumers.py` green.
   - _Requirements: 1.1, 9.5_
 
-- [ ] 1.3 Place the empty morning region immediately before Training Load in every view
+- [x] 1.3 Place the empty morning region immediately before Training Load in every view
   - `render/sections.py`: `morning_region()` returns
     `region_block(MORNING_REGION, MORNING_PLACEHOLDER)`.
   - `render/views.py`: the run/ride, strength and generic views append
@@ -280,8 +284,11 @@ wiki-contract and analytics-index amendment and criterion numbers.
   - **Mutations:** place the region after Training Load (order tests red);
     omit it from the strength view (its test reds); a non-empty placeholder
     (the empty-content test and every golden red); a local
-    `MORNING_REGION = "morning"` in `sections.py` (the identity binding
-    reds).
+    `MORNING_REGION = "morning"` in `sections.py` (the region-literal scan
+    reds); separately rebind `MORNING_REGION = "".join(("morn", "ing"))`
+    in `sections.py` (equal value but distinct object, the identity binding
+    reds). Verify equality and nonidentity for the latter mutant;
+    literal-string interning means the former need not fail identity.
   - **Observable:** full `uv run pytest` green (every page changes); every
     render golden carries the empty region before `## Training Load`.
   - _Requirements: 1.1, 1.6, 1.7_
@@ -613,6 +620,18 @@ wiki-contract and analytics-index amendment and criterion numbers.
     `tests/index/derived/test_preserved.py:245`,
     `tests/metrics/test_sources.py:2270`); regenerate the render goldens
     (each diff its `doc_version` line alone).
+  - Also re-pin `_PRE_MORNING_FRONTMATTER_SHA256` in
+    `tests/render/test_views.py`; these opaque version-sensitive pins are
+    not found by the literal-version grep. For all seven unchanged fixture
+    contexts, first verify the old frontmatter bytes against the existing
+    digest, then require the new frontmatter bytes to equal those old bytes
+    with exactly the single `doc_version: <old>` line changed to
+    `doc_version: <new>`. Only after that comparison update the digest
+    literals. Preserve the original capture provenance (`852e35f`, version
+    9) and add the re-pin's old/new versions and version-line-only basis to
+    the comment and Implementation Notes. Do not recapture hashes from
+    current output without that independent comparison. Task 5.1 repeats
+    this procedure if the landing version changes.
   - Aged page (`tests/morning/test_e2e.py` section, the
     `_PRE_CHANNEL_MERGE_DOC_VERSION` precedent): `_PRE_WORKOUT_WELLNESS_DOC_VERSION`
     with a provenance docstring; drain an inbox holding a FIT file and an
@@ -750,6 +769,37 @@ wiki-contract and analytics-index amendment and criterion numbers.
   - _Requirements: 9.1, 9.4, 11.3, 12.1, 12.2_
 
 ## Implementation Notes
+
+- 1.3 accepted after independent approval and fresh completion verification:
+  full suite 26,151 passed / eight accounted skips; 5,084 focused tests and
+  all static checks passed. Fifteen claimed and three reviewer mutations
+  failed at their intended assertions and restored GREEN; nineteen files
+  matched their reviewed hashes. All twelve render goldens differ solely
+  by the empty region and separator. Separate historical-render probes
+  reproduced all seven frontmatter hashes and every other document and
+  asset byte after removing the insertion. Required pin grep found no
+  pre-existing exact-region assertion needing a re-pin; existing H2-order
+  pins remain unchanged because the empty region has no heading. The
+  reserved index fingerprint test is untouched. Morning page builders are
+  now frozen; task 4.1 owns the controlled version-only digest re-pin.
+
+- Astra decision 4 (2026-10-17), frontmatter pins across tasks 1.3/4.1:
+  retain the seven literal pre-region frontmatter SHA256 baselines captured
+  at `852e35f` (`DOC_VERSION = 9`). Task 1.3 checks all frontmatter bytes
+  unchanged; task 4.1 owns the required version advance and the resulting
+  digest re-pin, which the literal-version grep cannot discover. Re-pin
+  only after every old capture matches its existing digest and every new
+  capture differs solely in the single approved `doc_version` line;
+  preserve that provenance. Task 5.1 repeats the controlled re-pin if
+  rebasing changes the landing version. No task 1.3 implementation or
+  test-strategy change is needed.
+
+- Astra decision 2 (2026-10-17, user-delegated ambiguity resolution): Python
+  may intern a copied region literal, so identity cannot establish import
+  provenance. Task 1.3 uses the literal scan for a local literal copy and
+  a separate runtime-built equal but nonidentical string for the binding
+  assertion. Requirements and the public string constants are unchanged;
+  the shared log records the decision and its separate mutation evidence.
 
 - 1.2 accepted after independent approval and fresh completion verification:
   401 focused tests, Ruff/format/mypy clean; all 32 implementer mutations

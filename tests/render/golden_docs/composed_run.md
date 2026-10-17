@@ -87,6 +87,10 @@ _Your notes go here. This section is preserved when the document is regenerated.
 | 0.20 km | 0.20 km | 1:18 | 169 bpm | 234 bpm | 5:43 /km |
 | **Total** | 0.20 km | 1:18 | – | – | 6:29 /km |
 
+<!-- fitdocs:begin:morning -->
+
+<!-- fitdocs:end:morning -->
+
 ## Training Load
 
 <!-- fitdocs:begin:load -->

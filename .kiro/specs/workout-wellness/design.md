@@ -732,6 +732,10 @@ MORNING_PLACEHOLDER: Final[str] = ""
 
 - `morning_region() -> str` returns `region_block(MORNING_REGION,
   MORNING_PLACEHOLDER)` (no literal region id, the contract-consumer scan).
+  The literal-copy mutation is pinned by the region-literal scan; a separate
+  runtime-constructed equal but nonidentical region string is pinned by the
+  binding assertion. String identity alone does not prove import provenance
+  because literals may be interned.
 - Each view appends `morning_region().rstrip("\n")` as its own block
   immediately before the Training Load block: run/ride after Splits (or the
   last present section before it), strength after Recorded Sets (or

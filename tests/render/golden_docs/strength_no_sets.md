@@ -48,6 +48,10 @@ _Your notes go here. This section is preserved when the document is regenerated.
 _Record the workout you performed here -- exercises, sets, reps, and load. This section is preserved when the document is regenerated._
 <!-- fitdocs:end:workout -->
 
+<!-- fitdocs:begin:morning -->
+
+<!-- fitdocs:end:morning -->
+
 ## Training Load
 
 <!-- fitdocs:begin:load -->

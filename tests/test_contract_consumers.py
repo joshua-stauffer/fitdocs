@@ -231,6 +231,8 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
     "fitdocs.render.sections": (
         "LOAD_NOT_COMPUTED",
         "LOAD_REGION",
+        "MORNING_PLACEHOLDER",
+        "MORNING_REGION",
         "NOTES_REGION",
         "region_block",
     ),

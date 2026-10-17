@@ -2,11 +2,11 @@
 
 This module turns a :class:`~fitdocs.render.DocContext` into a complete workout
 document for one modality: the single H1 title, the reserved content regions
-(``notes`` everywhere, ``workout`` for strength), and the ``##`` sections in the
-exact reference order for run/ride, strength, and the generic fallback (design
-§DocViews; Req 6.1, 9.1, 12.1). Assembly is pure and deterministic -- strings
-and chart :class:`~fitdocs.render.Asset`s out, no file I/O (the sync engine owns
-all writes, Req 4.1).
+(``notes`` and ``morning`` everywhere, ``workout`` for strength), and the
+``##`` sections in the exact reference order for run/ride, strength, and the
+generic fallback (design §DocViews; Req 6.1, 9.1, 12.1). Assembly is pure and
+deterministic -- strings and chart :class:`~fitdocs.render.Asset`s out, no file
+I/O (the sync engine owns all writes, Req 4.1).
 
 Beneath the H1 every view carries, when the base or an extra that donates a
 channel was recorded by a Garmin, one data-source line worded by
@@ -25,14 +25,15 @@ Three rules govern every view:
   only a region's inner content, never its heading (Req 10.5, 11.3). The
   ``notes`` region is emitted bare (no heading) right after the H1; the ``load``
   region lives under ``## Training Load``; the strength ``workout`` region lives
-  under ``## Workout``.
+  under ``## Workout``. The morning region is the one exception: its content
+  holds its own ``## Morning Of`` heading only when there is something to show.
 - **Honest omission.** A ``## Splits`` / ``## Recorded Sets`` / ``## Telemetry``
   / ``## Running Dynamics`` section whose body would be empty is omitted
   entirely -- heading and all (Req 9.6, 13.2; running-dynamics 7.6).
   ``## Channel Sources`` is the last section and exists only on a composed page
   (channel-merge 4.6, 4.7).
   ``## Summary``, ``## Training Load``, ``## Device & Data Quality``, and the
-  ``notes`` region are always present.
+  ``notes`` and empty ``morning`` regions are always present.
 - **Portable, plugin-free markdown.** The only PKM affordances are the YAML
   frontmatter, the HTML-comment region markers, and the HTML-comment provenance
   banner -- all invisible or harmless in a vanilla renderer (Req 5.4). Charts
@@ -72,6 +73,7 @@ from fitdocs.render.sections import (
     hero_stats,
     load_section,
     map_section,
+    morning_region,
     notes_region,
     telemetry_chips,
     zone_strip,
@@ -197,8 +199,9 @@ def render_run_ride(ctx: DocContext) -> RenderedDoc:
     """Assemble a run/ride document (Req 6.1, route-maps 1.1, 1.2).
 
     Order: H1 → ``notes`` region → ``## Summary`` → ``## Map`` → ``## Telemetry``
-    → ``## Running Dynamics`` → ``## Splits`` → ``## Training Load`` →
-    ``## Device & Data Quality`` → ``## Channel Sources`` (composed pages only).
+    → ``## Running Dynamics`` → ``## Splits`` → ``morning`` region
+    → ``## Training Load`` → ``## Device & Data Quality`` → ``## Channel Sources``
+    (composed pages only).
     The Map section sits immediately after Summary
     and before Telemetry, present only when the context carries prepared map
     inputs; its asset leads the assets tuple. ``## Running Dynamics`` is emitted
@@ -236,6 +239,7 @@ def render_run_ride(ctx: DocContext) -> RenderedDoc:
     if splits:
         blocks.append(_section("Splits", splits))
 
+    blocks.append(morning_region().rstrip("\n"))
     blocks.append(_region_section("Training Load", load_section()))
     blocks.append(_section("Device & Data Quality", devices_section(ctx)))
     _append_channel_sources(blocks, ctx)
@@ -247,7 +251,8 @@ def render_strength(ctx: DocContext) -> RenderedDoc:
 
     Order: H1 → ``notes`` region → ``## Summary`` → ``## Telemetry`` (HR chart
     when plottable) → ``## Workout`` (workout region) → ``## Recorded Sets``
-    (only when sets exist) → ``## Training Load`` → ``## Device & Data Quality``
+    (only when sets exist) → ``morning`` region → ``## Training Load``
+    → ``## Device & Data Quality``
     → ``## Channel Sources`` (composed pages only).
     """
     blocks: list[str] = [
@@ -269,6 +274,7 @@ def render_strength(ctx: DocContext) -> RenderedDoc:
     if sets:
         blocks.append(_section("Recorded Sets", sets))
 
+    blocks.append(morning_region().rstrip("\n"))
     blocks.append(_region_section("Training Load", load_section()))
     blocks.append(_section("Device & Data Quality", devices_section(ctx)))
     _append_channel_sources(blocks, ctx)
@@ -279,7 +285,8 @@ def render_generic(ctx: DocContext) -> RenderedDoc:
     """Assemble the generic fallback document (Req 12.1, route-maps 1.1, 1.2).
 
     Order: H1 → ``notes`` region → ``## Summary`` → ``## Map`` → ``## Telemetry``
-    (when plottable) → ``## Training Load`` → ``## Device & Data Quality`` →
+    (when plottable) → ``morning`` region → ``## Training Load``
+    → ``## Device & Data Quality`` →
     ``## Channel Sources`` (composed pages only). The
     Map section sits immediately after Summary and before Telemetry, present only
     when the context carries prepared map inputs (its asset leads the assets
@@ -305,6 +312,7 @@ def render_generic(ctx: DocContext) -> RenderedDoc:
         blocks.append(_section("Telemetry", body))
         assets = assets + tel_assets
 
+    blocks.append(morning_region().rstrip("\n"))
     blocks.append(_region_section("Training Load", load_section()))
     blocks.append(_section("Device & Data Quality", devices_section(ctx)))
     _append_channel_sources(blocks, ctx)

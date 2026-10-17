@@ -40,6 +40,10 @@ _Your notes go here. This section is preserved when the document is regenerated.
 
 ![Heart-rate time-in-zone](assets/2021-09-07-workout-1946-zones.svg)
 
+<!-- fitdocs:begin:morning -->
+
+<!-- fitdocs:end:morning -->
+
 ## Training Load
 
 <!-- fitdocs:begin:load -->
