@@ -180,7 +180,10 @@ def test_device_normalization() -> None:
         records=[record_xml(AppleType.STEP_COUNT)], include_scaffold=False
     )
     record = next(item for item in read_items(data) if isinstance(item, RawRecord))
-    assert record.device == "name:Example Apple Watch, manufacturer:Apple, model:Watch"
+    assert (
+        record.device
+        == "name:Example Apple Watch, manufacturer:Apple Inc., model:Watch"
+    )
 
 
 def test_metadata() -> None:
@@ -1167,7 +1170,7 @@ def test_device_normalized_for_each_read_type(record_type: AppleType) -> None:
     assert [(record.type, record.device) for record in records] == [
         (
             record_type,
-            "name:Example Apple Watch, manufacturer:Apple, model:Watch",
+            "name:Example Apple Watch, manufacturer:Apple Inc., model:Watch",
         )
     ]
 
