@@ -3,6 +3,7 @@
 import gc
 import io
 import os
+import random
 import tracemalloc
 import zipfile
 from collections.abc import Callable
@@ -455,6 +456,51 @@ def test_recursion_error_while_reading_member_propagates(
     monkeypatch.setattr(zipfile.ZipExtFile, "read", deep)
     with pytest.raises(RecursionError), open_main_document(path) as document:
         list(iter_items(document, progress=None))
+
+
+def test_corrupt_deflate_stream_is_a_format_error(tmp_path: Path) -> None:
+    filler = "".join(random.Random(1).choices("abcdefghij", k=20000))
+    document = export_document(extra_elements=[f"<Ignored>{filler}</Ignored>"])
+    data = bytearray(zip_members({ENGLISH_MAIN: document}))
+    data[30 + len(ENGLISH_MAIN) + 200] ^= 0xFF
+    path = tmp_path / "corrupt.zip"
+    path.write_bytes(data)
+    with (
+        pytest.raises(WellnessFormatError, match="could not be read"),
+        open_main_document(path) as opened,
+    ):
+        list(iter_items(opened, progress=None))
+
+
+def test_truncated_member_stream_is_a_format_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "export.zip"
+    path.write_bytes(zip_members({ENGLISH_MAIN: export_document()}))
+
+    def short(self: zipfile.ZipExtFile, size: int = -1) -> bytes:
+        raise EOFError("compressed data ended early")
+
+    monkeypatch.setattr(zipfile.ZipExtFile, "read", short)
+    with (
+        pytest.raises(WellnessFormatError, match="could not be read"),
+        open_main_document(path) as opened,
+    ):
+        list(iter_items(opened, progress=None))
+
+
+def test_recursion_error_while_opening_member_propagates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "export.zip"
+    path.write_bytes(zip_members({ENGLISH_MAIN: export_document()}))
+
+    def deep(self: zipfile.ZipFile, name: object) -> zipfile.ZipInfo:
+        raise RecursionError("deep")
+
+    monkeypatch.setattr(zipfile.ZipFile, "getinfo", deep)
+    with pytest.raises(RecursionError), open_main_document(path):
+        pass
 
 
 def test_missing_file(tmp_path: Path) -> None:
