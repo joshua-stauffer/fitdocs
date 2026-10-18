@@ -64,6 +64,7 @@ from fitdocs.load.types import (
 )
 from fitdocs.sync import sync
 from tests.fixtures import builder
+from tests.fixtures.zone import system_zone
 from tests.load.conftest import (
     COMPUTING_FIELD,
     ComputingCalculator,
@@ -901,7 +902,10 @@ def test_regen_restores_load_frontmatter_without_prompting(
 
     # regen must NOT be interactive; restore this deterministically. If regen
     # prompted, this scripted session (no queued answers) would raise on pop.
-    result = runner.invoke(app, ["regen", "--out", str(data_root)])
+    # The page was written at -06:00; the CLI regen dates it in the same zone,
+    # or it would move to a new filename (activity-identity A2.1).
+    with system_zone("Etc/GMT+6"):
+        result = runner.invoke(app, ["regen", "--out", str(data_root)])
 
     assert result.exit_code == 0
     assert "Restored" in result.output

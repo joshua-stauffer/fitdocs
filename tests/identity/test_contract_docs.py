@@ -185,21 +185,28 @@ def test_the_changed_at_this_version_paragraph_names_the_amendment() -> None:
 @pytest.mark.parametrize(
     "phrase",
     [
-        "Workout documents gain the `morning` region",
+        "Workout documents gain the ``morning`` region",
         "fitdocs alone writes from the wellness series and replaces "
         "whenever it differs",
-        "The morning-of pass that `fitdocs sync`, `fitdocs pull --sync` and "
-        "`fitdocs regen` run rewrites only that region",
+        "the morning-of pass that ``fitdocs sync``, ``fitdocs pull --sync`` and "
+        "``fitdocs regen`` run rewrites only that region",
         "generated content is re-derivable from the wellness series as well as "
         "from the archived sources, the athlete profile, the configured timezone "
         "and the tile source",
-        "Run `fitdocs regen` once to bring existing workout pages current",
+        "Run `fitdocs regen` once to refresh existing pages and their ownership "
+        "declarations.",
     ],
     ids=["region", "ownership", "pass", "rederivability", "action"],
 )
 def test_current_change_paragraph_states_workout_wellness(phrase: str) -> None:
-    head = _flat(_DOC.read_text(encoding="utf-8").split("\n\nThis document", 1)[0])
-    assert phrase in head
+    """Version 15's change paragraph was replaced at version 16 (the local-time
+    fix), so its statements are pinned where they persist: the version history
+    in ``fitdocs.contract`` and, for the action, the release notes."""
+    source = _DOC.parents[1] / "src" / "fitdocs" / "contract.py"
+    history = _flat(source.read_text(encoding="utf-8"))
+    changelog = _flat((_DOC.parents[1] / "CHANGELOG.md").read_text(encoding="utf-8"))
+    assert "Raised from ``14`` to ``15`` by workout-wellness" in history
+    assert phrase in history or phrase in changelog
 
 
 @pytest.mark.parametrize(

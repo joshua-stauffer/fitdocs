@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import re
-import time
 from collections.abc import Iterator
 from dataclasses import replace
 from datetime import UTC, date
@@ -27,6 +26,7 @@ from fitdocs.wellness import DEFAULT_WELLNESS_SETTINGS, Metric, read_series
 from fitdocs.wellness.engine import rebuild_series
 from fitdocs.wellness.intake import Archived, Identified, archive_identified, identify
 from tests.fixtures.builder import run_fit_bytes
+from tests.fixtures.zone import system_zone
 from tests.morning.builders import series_value, stage_series, wellness_series
 from tests.wellness.builders_intervals import intervals_delivery_bytes, intervals_record
 
@@ -42,19 +42,10 @@ def _cli_zone_is_utc() -> Iterator[None]:
     (activity-identity A2.1), so the scenario's page path would depend on
     where the suite runs.
     """
-    saved = os.environ.get("TZ")
-    os.environ["TZ"] = "UTC"
-    if hasattr(time, "tzset"):
-        time.tzset()
-    try:
+    with system_zone("UTC"):
         yield
-    finally:
-        if saved is None:
-            os.environ.pop("TZ", None)
-        else:
-            os.environ["TZ"] = saved
-        if hasattr(time, "tzset"):
-            time.tzset()
+
+
 DAY = date(2021, 9, 8)
 STALE = "stale morning content that the current series replaces"
 

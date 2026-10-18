@@ -281,6 +281,7 @@ files = [
     "tests/test_local_time_docs.py",
     "tests/test_retimed_rename.py",
     "tests/test_retimed_rename_docs.py",
+    "tests/fixtures/zone.py",
 ]
 
 [tool.pytest.ini_options]
