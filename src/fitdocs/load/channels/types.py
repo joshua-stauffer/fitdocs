@@ -134,7 +134,9 @@ class ChannelInsufficient:
     for exactly the two threshold reasons (:data:`InsufficiencyReason.
     STREAM_COVERAGE`, :data:`InsufficiencyReason.TOO_SHORT`) -- the observed
     value and the value that was required. ``observed`` and ``required``
-    default to ``None`` and are left unset for every other reason.
+    default to ``None`` and are left unset for every other reason; ``observed``
+    is also ``None`` for :data:`InsufficiencyReason.TOO_SHORT` when there is no
+    measurable span at all (no duration was observed).
     """
 
     channel: ChannelId

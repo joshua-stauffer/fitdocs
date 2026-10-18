@@ -35,6 +35,8 @@ makes the reported reason deterministic when more than one condition fails
 
 1. No measurable span, or a span below ``settings.min_duration_s`` ->
    :data:`~fitdocs.load.channels.types.InsufficiencyReason.TOO_SHORT`.
+   With no measurable span there is no duration to report, so ``observed``
+   is ``None``; with a measured-but-short span it is that span in seconds.
 2. A stream that carries no recorded value anywhere in the (now-known-long-
    enough) span -> :data:`~fitdocs.load.channels.types.InsufficiencyReason.
    STREAM_ABSENT`.
