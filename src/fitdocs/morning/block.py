@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from typing import Final
 
 from fitdocs.recovery import (
     BASELINED_METRICS,
@@ -13,10 +17,21 @@ from fitdocs.recovery import (
     Baselines,
     RangePosition,
 )
-from fitdocs.render.attribution import WellnessAttribution, wellness_attribution
+from fitdocs.render.attribution import (
+    WellnessAttribution,
+    wellness_attribution,
+    wellness_attribution_line,
+)
 from fitdocs.render.charts.kit import Column, ValueKind
-from fitdocs.render.charts.kit.format import format_value
+from fitdocs.render.charts.kit.format import escape_markdown, format_value
+from fitdocs.render.format import ABSENT
 from fitdocs.wellness import METRICS, Metric, WellnessSeries
+
+MORNING_BLOCK_VERSION: Final[int] = 1
+MORNING_HEADING: Final[str] = "Morning Of"
+STAMP_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^<!-- fitdocs-morning:v([1-9][0-9]*) ([0-9a-f]{64}) -->$"
+)
 
 
 @dataclass(frozen=True)
@@ -58,6 +73,114 @@ class MorningBlock:
     signals: tuple[SignalRow, ...]
     sleep: tuple[SleepRow, ...]
     attribution: WellnessAttribution
+
+    def facts(self) -> str:
+        obj = {
+            "day": self.day.isoformat(),
+            "windows": [self.windows.rolling_days, self.windows.baseline_days],
+            "signals": [
+                [
+                    row.metric.value,
+                    row.source.source,
+                    row.source.origins,
+                    row.day_value,
+                    row.rolling_mean,
+                    row.normal_range,
+                    row.position.value if row.position is not None else None,
+                ]
+                for row in self.signals
+            ],
+            "sleep": [
+                [
+                    row.metric.value,
+                    row.source.source,
+                    row.source.origins,
+                    row.night_value,
+                    row.rolling_mean,
+                    row.baseline_mean,
+                ]
+                for row in self.sleep
+            ],
+            "attribution": self.attribution.value,
+        }
+        return json.dumps(
+            obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        )
+
+    def fingerprint(self) -> str:
+        return hashlib.sha256(self.facts().encode("utf-8")).hexdigest()
+
+
+def render_region(block: MorningBlock | None) -> str:
+    if block is None:
+        return ""
+    day = block.day
+    rolling = block.windows.rolling_days
+    baseline = block.windows.baseline_days
+    parts = [
+        f"<!-- fitdocs-morning:v{MORNING_BLOCK_VERSION} {block.fingerprint()} -->",
+        f"## {MORNING_HEADING}",
+    ]
+    attribution = wellness_attribution_line(block.attribution)
+    if attribution is not None:
+        parts.append(attribution)
+    parts.append(
+        f"Wellness for {day.isoformat()}, the day of this workout, against the "
+        f"athlete's own baseline for each source: {rolling}-day means cover "
+        f"{(day - timedelta(days=rolling - 1)).isoformat()} to {day.isoformat()}, "
+        f"and normal ranges and {baseline}-day means cover "
+        f"{(day - timedelta(days=baseline)).isoformat()} to "
+        f"{(day - timedelta(days=1)).isoformat()}."
+    )
+    if block.signals:
+        lines = [
+            f"| Signal | {day.isoformat()} | {rolling}-day mean | Normal range | "
+            f"{rolling}-day mean vs range | Source |",
+            "| --- | --- | --- | --- | --- | --- |",
+        ]
+        for signal in block.signals:
+            position = signal.position.value if signal.position is not None else None
+            lines.append(
+                f"| {escape_markdown(METRICS[signal.metric].label)} | "
+                f"{_cell(signal.day_value)} | {_cell(signal.rolling_mean)} | "
+                f"{_cell(signal.normal_range)} | "
+                f"{_cell(position)} | "
+                f"{_source_cell(signal.source)} |"
+            )
+        parts.append("\n".join(lines))
+    if block.sleep:
+        lines = [
+            f"| Signal | Night ending {day.isoformat()} | {rolling}-day mean | "
+            f"{baseline}-day mean | Source |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+        for sleep in block.sleep:
+            lines.append(
+                f"| {escape_markdown(METRICS[sleep.metric].label)} | "
+                f"{_cell(sleep.night_value)} | {_cell(sleep.rolling_mean)} | "
+                f"{_cell(sleep.baseline_mean)} | {_source_cell(sleep.source)} |"
+            )
+        parts.append("\n".join(lines))
+    return "\n\n".join(parts) + "\n"
+
+
+def parse_stamp(content: str) -> tuple[int, str] | None:
+    first_line = content.partition("\n")[0]
+    match = STAMP_PATTERN.fullmatch(first_line)
+    if match is None:
+        return None
+    return int(match.group(1)), match.group(2)
+
+
+def _cell(value: str | None) -> str:
+    return ABSENT if value is None else value
+
+
+def _source_cell(source: RowSource) -> str:
+    cell = escape_markdown(source.source)
+    if source.origins:
+        cell += " (" + ", ".join(escape_markdown(o) for o in source.origins) + ")"
+    return cell
 
 
 @dataclass

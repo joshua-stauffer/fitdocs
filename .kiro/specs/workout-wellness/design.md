@@ -513,7 +513,10 @@ flowchart TD
   with no change to the attribution line, leaves the region byte-identical
   (6.4).
 - **Region text (normative)**: see [The Region Content](#the-region-content).
-  `render_region(None)` is `""` (`MORNING_PLACEHOLDER`).
+  `render_region(None)` returns the literal empty string `""`, with no
+  final newline. This equals the contract's fresh-region placeholder value,
+  but `block.py` does not import `fitdocs.contract`; region placement
+  consumes `MORNING_PLACEHOLDER` in `render.sections`.
 - Nothing in the module computes a mean, SD, range or position, or chooses a
   source; `shown`, `shown_source` (through `shown`) and `on` are `recovery`'s.
 
@@ -1009,10 +1012,18 @@ sync SOURCE`, which neither archives wellness nor rebuilds the series.
   windows raise `ValueError`.
 - Empty: a day far from any value → `block` is `None` and `render_region`
   returns `""` (mutation: return a heading-only block).
-- Fingerprint: equal facts → equal fingerprints across two `MorningInputs`
-  built from differently ordered value tuples; a resting-HR change below the
-  printed precision gives byte-identical region text (mutation: fingerprint
-  `repr` of the raw `BaselineDay`s instead of the printed facts); a change in a printed figure, a
+- Fingerprint: two `MorningInputs` built from differently ordered value
+  tuples give equal facts and equal fingerprints; the same case
+  independently pins `facts()` to a hand-authored exact canonical JSON
+  string, with keys ordered `attribution`, `day`, `signals`, `sleep`,
+  `windows` (mutation: `sort_keys=False` reds this canonical-encoding
+  assertion while the reordered-input facts/fingerprint equivalence
+  companion stays green); a resting-HR change below the printed precision
+  gives equal fingerprints and byte-identical full region text
+  (independently runnable assertions; mutation: an isolated three-site
+  mutant temporarily carries genuine displayed-row `BaselineDay`s from
+  `MorningInputs` into `MorningBlock` and hashes their `repr`; no raw state
+  ships); a change in a printed figure, a
   steps value on D (no change: the block shows no steps), a different origin
   each move or keep the fingerprint as stated; an origin turning from
   unrecorded to one already listed, with no Garmin anywhere, leaves the
