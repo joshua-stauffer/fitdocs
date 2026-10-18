@@ -322,7 +322,8 @@ computed over the whole day D.
 ## Wellness on workout pages
 
 The `Morning Of` block before Training Load shows resting heart rate,
-HRV, other wellness signals and sleep from the normalized wellness series.
+HRV and sleep from the normalized wellness series, and no other wellness
+signal.
 It shows the wellness day equal to the workout page's date; see
 [Wellness day](#wellness-day).
 

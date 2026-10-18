@@ -27,7 +27,8 @@ def _section(path: str, heading: str, level: int = 2) -> str:
     "statement",
     (
         "The `Morning Of` block before Training Load shows resting heart rate, "
-        "HRV, other wellness signals and sleep from the normalized wellness series.",
+        "HRV and sleep from the normalized wellness series, and no other "
+        "wellness signal.",
         "It shows the wellness day equal to the workout page's date; see "
         "[Wellness day](#wellness-day).",
         "The 7-day means include that day and the preceding six days; normal "
