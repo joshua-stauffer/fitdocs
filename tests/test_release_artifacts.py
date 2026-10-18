@@ -2194,7 +2194,8 @@ def test_needle_in_binary_member_name_is_caught_by_name_only(
     assert violation.kind == ViolationKind.ENCUMBERED_CONTENT
     assert violation.subject == wheel_path.name
     assert _NEEDLE not in violation.detail  # the matched name is redacted
-    assert "<redacted member #" in violation.detail
+    # Wheel members number in archive order: the clean members, then this one.
+    assert f"<redacted member #{len(_CLEAN_WHEEL_MEMBERS) + 1}>" in violation.detail
 
 
 def test_needle_in_binary_member_content_only_is_not_caught(

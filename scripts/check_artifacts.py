@@ -220,6 +220,10 @@ class _Member:
     is_regular: bool
     link_target: str = ""
     content: bytes = b""
+    ordinal: int = 0
+    """1-based position in the checker's member list, assigned once at load
+    ; the number a redacted name carries everywhere it is
+    reported."""
 
 
 def _find_artifacts(dist_dir: Path) -> tuple[Path, Path]:
@@ -254,12 +258,13 @@ def _wheel_link_target(mode: int, zf: zipfile.ZipFile, info: zipfile.ZipInfo) ->
     return ""
 
 
-#: What reading a damaged or unsupported archive raises. Their messages can
-#: name the member being read -- `zipfile`'s "Bad CRC-32 for file '<name>'",
+#: What reading a damaged or unsupported archive raises. Most messages can
+#: name the member being read -- `zipfile`'s "Bad CRC-32 for file '<name>'" and
 #: the `RuntimeError` for an encrypted-flag member ("File <ZipInfo
-#: filename='<name>' ...> is encrypted") and the `NotImplementedError` for an
-#: unsupported compression -- so the loaders turn them into a `CheckerError`
-#: that names no member.
+#: filename='<name>' ...> is encrypted") -- so the loaders turn them into a
+#: `CheckerError` that names no member. `NotImplementedError` ("That
+#: compression method is not supported") names no member; it is listed only so
+#: an unsupported compression exits 2 instead of raising a traceback.
 _CORRUPT_ARCHIVE_ERRORS = (
     zipfile.BadZipFile,
     tarfile.TarError,
@@ -340,6 +345,7 @@ def _read_wheel(path: Path) -> tuple[tuple[_Member, ...], email.message.Message]
                     is_regular=is_regular,
                     link_target=link_target,
                     content=content,
+                    ordinal=len(members) + 1,
                 )
             )
             if is_regular and name.endswith(".dist-info/METADATA"):
@@ -417,6 +423,7 @@ def _read_sdist(
                     is_regular=is_regular,
                     link_target=link_target,
                     content=content,
+                    ordinal=len(members) + 1,
                 )
             )
             if is_regular and stripped == "PKG-INFO":
@@ -446,6 +453,14 @@ def _shown_name(text: str, ordinal: int, forbidden: ForbiddenStrings | None) -> 
     return repr(text)
 
 
+def _label(
+    member: _Member, forbidden: ForbiddenStrings | None, *, target: bool = False
+) -> str:
+    """The member's name (or link target) as a finding may show it."""
+    text = member.link_target if target else member.name
+    return _shown_name(text, member.ordinal, forbidden)
+
+
 def _check_missing_required(
     subject: str, members: tuple[_Member, ...], required: tuple[str, ...]
 ) -> list[Violation]:
@@ -469,7 +484,7 @@ def _check_forbidden(
     forbidden: ForbiddenStrings | None,
 ) -> list[Violation]:
     violations: list[Violation] = []
-    for ordinal, member in enumerate(members, start=1):
+    for member in members:
         # `fnmatchcase`, not `fnmatch`: the latter case-folds on Windows
         # only, which would let a differently-cased forbidden path through
         # there alone -- this checker must give the same answer everywhere.
@@ -482,7 +497,7 @@ def _check_forbidden(
                     subject=subject,
                     kind=ViolationKind.FORBIDDEN_MEMBER,
                     detail=(
-                        f"member {_shown_name(member.name, ordinal, forbidden)} "
+                        f"member {_label(member, forbidden)} "
                         f"matches forbidden pattern {matched!r}"
                     ),
                     remedy=(
@@ -502,15 +517,15 @@ def _check_links(
             subject=subject,
             kind=ViolationKind.LINK_MEMBER,
             detail=(
-                f"member {_shown_name(member.name, ordinal, forbidden)} is a link "
-                f"to {_shown_name(member.link_target, ordinal, forbidden)}"
+                f"member {_label(member, forbidden)} is a link "
+                f"to {_label(member, forbidden, target=True)}"
             ),
             remedy=(
                 "exclude it; a link's bytes are its target path and no content "
                 "scan can see through it"
             ),
         )
-        for ordinal, member in enumerate(members, start=1)
+        for member in members
         if member.is_link
     ]
 
@@ -594,10 +609,10 @@ def _check_encumbered_content(
     alike.
     """
     violations: list[Violation] = []
-    for ordinal, member in enumerate(members, start=1):
+    for member in members:
         if not member.is_regular:
             continue
-        shown = _shown_name(member.name, ordinal, forbidden)
+        shown = _label(member, forbidden)
         if _is_text_like(member.name):
             text = member.content.decode("utf-8", errors="replace")
             for _value in forbidden_matches(text, forbidden):
