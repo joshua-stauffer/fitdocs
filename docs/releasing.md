@@ -126,10 +126,12 @@ half-done step 2 is recognizable:
   `tests/test_release_workflow.py::test_check_body_exits_zero_with_no_violation_of_any_kind`
   (execute the workflow's `version` and `check` bodies against the real
   files);
-- `tests/test_version_identity.py`'s [`docs/plugins.md`](../docs/plugins.md)
-  allowlist pins the released-version literal's example-snippet occurrence
-  to the manifest version and needs updating the moment the manifest
-  version diverges from that snippet.
+
+`tests/test_version_identity.py` also scans the tree for stray copies of the
+released-version literal. The example plugin in
+[`docs/plugins.md`](../docs/plugins.md) deliberately declares its own
+placeholder version (`0.0.1`, below every release), so a version bump never
+touches that snippet and no allowlist entry exists.
 
 (Before the first release, on 2026-09-19, the same six tests pinned
 the opposite state -- no released entry -- and were rewritten in the first

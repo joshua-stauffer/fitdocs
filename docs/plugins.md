@@ -121,7 +121,7 @@ athlete-field prompting).
 ```toml
 [project]
 name = "fitdocs-mycalc"
-version = "0.1.0"
+version = "0.0.1"
 description = "A training-load calculator for fitdocs."
 requires-python = ">=3.11"
 dependencies = ["fitdocs"]

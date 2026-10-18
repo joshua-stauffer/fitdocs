@@ -320,6 +320,22 @@ def test_boundary_pattern_rejects_longer_embedding_versions() -> None:
     assert not pattern.search('version = "7.7.75"')
 
 
+def test_plugins_doc_example_version_is_a_placeholder_below_every_release() -> None:
+    """``docs/plugins.md``'s example third-party ``pyproject.toml`` carries its
+    own plugin's version. It must sit below the released version, so it can
+    never collide with the release literal -- a collision would force every
+    version bump to also edit this documentation snippet.
+    """
+    text = (_REPO_ROOT / "docs" / "plugins.md").read_text(encoding="utf-8")
+    declared = re.findall(r'^version = "(\d+)\.(\d+)\.(\d+)"$', text, re.MULTILINE)
+    assert len(declared) == 1, "expected exactly one example `version = ` line"
+    example = tuple(int(part) for part in declared[0])
+    released = tuple(
+        int(part) for part in _released_version(_REPO_ROOT).split(".")[:3]
+    )
+    assert example < released, (example, released)
+
+
 def test_repository_scan_finds_release_literal_only_in_permitted_locations() -> None:
     """Requirement 2.1: the released version literal is declared in exactly
     one place, and appears nowhere else in tracked text under the scanned
@@ -332,9 +348,12 @@ def test_repository_scan_finds_release_literal_only_in_permitted_locations() -> 
     by file, line text, and exact occurrence count rather than silently
     ignored:
 
-    * ``docs/plugins.md`` -- an example third-party plugin's own
-      ``pyproject.toml`` snippet (package name ``fitdocs-mycalc``), unrelated
-      to this project's own version.
+    (``docs/plugins.md``'s example third-party plugin ``pyproject.toml``
+    snippet used to carry a version equal to the then-released one, plus
+    an allowlist entry; its version is now a placeholder below every release
+    -- pinned by ``test_plugins_doc_example_version_is_a_placeholder_below_
+    every_release`` -- so no entry is needed and a version bump never touches
+    it.)
 
     (``tests/load/test_packaging.py`` previously carried a second, in-boundary
     non-declaration -- a comment illustrating the sdist's member-name prefix
@@ -374,9 +393,7 @@ def test_repository_scan_finds_release_literal_only_in_permitted_locations() -> 
     # allowlisted text appearing in the file (an out-of-boundary duplicate
     # that would otherwise slip through unnoticed since its text is already
     # known) is caught too, not just text absent from the allowlist.
-    known_non_declaration_line_counts: dict[Path, dict[str, int]] = {
-        _REPO_ROOT / "docs" / "plugins.md": {f'version = "{released_version}"': 1},
-    }
+    known_non_declaration_line_counts: dict[Path, dict[str, int]] = {}
 
     unexpected: list[tuple[Path, int]] = []
     observed_counts: dict[Path, dict[str, int]] = {}
