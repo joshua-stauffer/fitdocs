@@ -402,7 +402,7 @@ recorded as one.
   facets) that print alike (for example `a<TAB>b` and `a b`, or a literal `—`
   and an absent value) apart. Before, bar and box drew them in one band so the
   later mark hid the earlier one, stacked-100 merged them into one bar, and
-  small-multiples merged their rows into one panel.
+  small-multiples drew both facets' rows, merged, in each of their panels.
 - Bar, stacked-100, box and heatmap charts over weeks (or any band axis) no
   longer cut the first x label at the left edge, unless the label is wider
   than a quarter of the chart: `2026-01-05` now reads in full where it used to
