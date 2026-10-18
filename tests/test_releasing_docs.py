@@ -41,9 +41,9 @@ pins:
     bumped in (the manifest and all four packaged skills' `SKILL.md`), runs all
     three keeping tests (`test_changelog.py`, `test_version_identity.py`,
     `test_agent_skill.py`), states the change is committed and step 1 is
-    re-run against it, and names the six tests that pin manifest/changelog
-    agreement (they need no edit on an ordinary release) and the
-    `docs/plugins.md` placeholder version (no allowlist entry).
+    re-run against it, tells the operator to run `uv lock` and commit
+    `uv.lock`, names the six tests that pin manifest/changelog agreement, and
+    states that `docs/plugins.md` carries a placeholder version.
 (m) step 6 and step 10 invoke the installed console script by its
     `$UV_TOOL_BIN_DIR` path in every fenced `--version` command, never
     bareword, and export `UV_TOOL_DIR`/`UV_TOOL_BIN_DIR` before the install
@@ -601,7 +601,7 @@ def test_step2_states_the_change_is_committed_and_step1_is_rerun() -> None:
     assert "re-run" in section.lower()
 
 
-def test_step2_names_the_real_state_pinned_tests_and_allowlist() -> None:
+def test_step2_names_the_real_state_pinned_tests_and_the_plugins_placeholder() -> None:
     section = _step2_section()
     # Every test that pins the real repository's release state -- an
     # under-count here sent a maintainer to a red `gates` job with three of
@@ -616,6 +616,14 @@ def test_step2_names_the_real_state_pinned_tests_and_allowlist() -> None:
     ):
         assert section.count(pinned) == 1, pinned
     assert "docs/plugins.md" in section
+    assert "placeholder" in section and "`0.0.1`" in section
+
+
+def test_step2_tells_the_operator_to_relock_and_commit_uv_lock() -> None:
+    section = _step2_section()
+    assert "`uv lock`" in section
+    assert "`uv.lock`" in section
+    assert "same commit" in section
 
 
 # --- (m) step 6/10 invoke by $UV_TOOL_BIN_DIR path, and export the tool ----

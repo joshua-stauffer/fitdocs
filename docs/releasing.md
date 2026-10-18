@@ -80,6 +80,9 @@ packaged skills' frontmatter —
 [`src/fitdocs/skills/fitdocs-analytics/SKILL.md`](../src/fitdocs/skills/fitdocs-analytics/SKILL.md),
 and
 [`src/fitdocs/skills/fitdocs-dashboards/SKILL.md`](../src/fitdocs/skills/fitdocs-dashboards/SKILL.md).
+The lockfile records the project's own version too (the `fitdocs` entry in
+[`uv.lock`](../uv.lock)): run `uv lock` after the bump and include `uv.lock`
+in the same commit, or every `uv sync --locked` fails on the tagged revision.
 Follow [`CHANGELOG.md`](../CHANGELOG.md)'s own convention note for the entry
 itself. `tests/test_changelog.py`, `tests/test_version_identity.py`, and
 `tests/test_agent_skill.py` keep this honest — run them before moving on:
@@ -135,9 +138,12 @@ touches that snippet and no allowlist entry exists.
 
 No test needs editing in the release commit. The release-note pins that
 assert an entry sits under `## [Unreleased]` read the changelog through
-`tests/_changelog_view.py`, which lets the newest released section stand in
-for an `[Unreleased]` that holds no entry of its own, so they hold both
-before and after the cut.
+`tests/_changelog_view.py`. Each pin is anchored to the last release its
+entry postdates (`0.1.0` for everything shipped before the next cut): the
+view treats `[Unreleased]` plus every release newer than that anchor as the
+unreleased section, so the pins hold before the cut, at it, and after later
+work lands. An entry misplaced into the anchor release or an older one is
+outside the view and still fails its pin.
 
 (Before the first release, on 2026-09-19, the six tests above pinned
 the opposite state -- no released entry -- and were rewritten in that
