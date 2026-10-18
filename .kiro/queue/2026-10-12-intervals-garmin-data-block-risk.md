@@ -108,3 +108,12 @@ not implemented) takes the wellness half that the Why section hands to it.
   the possible Garmin restriction and the export route).
 - Not covered by that spec, so still this item's: detecting a blocked
   activity listing or download, and the fallback route for Garmin rides.
+
+## Update (2026-10-18)
+
+Docs half done at f3f901c: docs/connectors.md (intervals section, after the `sources` default) now carries a
+dated, evidence-bounded caveat -- what the developer said, what a user sees status by status (silently
+absent from `listed`; 404/422 -> skipped; 403 ends the instance with the refused-client message; 401
+the refused-key message; rate limit/5xx end the instance; others -> failed and retried), and the
+existing alternative route (folder connector or inbox; unzip Garmin Connect's download first). The
+fallback-route decision this item exists for remains open and is the maintainer's.

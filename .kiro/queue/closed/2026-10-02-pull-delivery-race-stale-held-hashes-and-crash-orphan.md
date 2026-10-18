@@ -1,7 +1,7 @@
 ---
 id: 2026-10-02-pull-delivery-race-stale-held-hashes-and-crash-orphan
 title: Three pull delivery edges -- deliver can overwrite a file created between its exists() check and os.replace, held_hashes keeps a hash after a revision releases it, and a hard kill between delivery and ledger save leaves an undocumented untracked copy
-status: open
+status: done
 importance: medium
 importance_why: The first edge can overwrite a user's inbox file, against Req 8.3's "never overwrite"; the window is tiny but the inbox is a folder other tools write into concurrently by design.
 effort: S
@@ -81,3 +81,16 @@ neither loses data.
 5. Pin (1) with a test that creates the target inside a patched
    `os.replace`/`os.link` window and asserts the user's bytes survive; pin
    (2) with a listing of three activities that exercises the release.
+
+## Resolution (2026-10-18)
+
+Fixed on main at f3f901c (chore/q-pull-delivery; three Opus review rounds, final APPROVED; full suite green;
+branch CI green). (1) Race: deliveries are placed by `_atomic.write_atomic_new` (temp file fsynced, then
+`os.link` to the target, which refuses an existing name; FileExistsError moves deliver to the next
+candidate name). On filesystems without hard links (ENOTSUP/EOPNOTSUPP/EPERM/ENOSYS, verified on real
+exFAT and FAT images) it falls back to a lexists re-check plus os.replace, where the narrow window
+remains (documented). (2) A replaced pending entry's sha is released from held_hashes in both the
+delivered and the already-held branches, and its old path is released from owned_paths (otherwise a
+released file was silently "reused" for another activity); all pinned. (3) Crash orphan: documented in
+docs/connectors.md (the docs option this item offered), including the hidden temp file a crash between
+link and unlink can leave.
