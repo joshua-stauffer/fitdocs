@@ -1,7 +1,7 @@
 ---
 id: 2026-10-01-regen-writes-over-or-beside-an-unreadable-page
 title: regen plans the archive file of a page whose frontmatter is unreadable, writing a duplicate page beside it or a fresh page over it and dropping the user's notes
-status: open
+status: done
 importance: high
 importance_why: Silent loss of user-written notes (regen exits 0 with zero warnings) and a duplicate page for one activity; the pre-existing collision rule has only one suffix level and never checks the path it is about to write.
 effort: M
@@ -87,3 +87,19 @@ Read and reproduced at `fc5c06d`.
   naming the unreadable page and asking the user to repair or delete it), or
   accept the duplicate and only warn? Needs a maintainer ruling; the file
   cannot be tied to the unreadable page with certainty.
+
+## Resolution (2026-10-18)
+
+Fixed on main at 972aa0e (chore/q-regen-pages; full suite 26760 passed after rebase, branch CI green,
+independent Opus review APPROVED). `sync._page_task` now refuses to write a page to any path that is
+not its matched page's path when that path exists or is a symlink (FileExistsError, reported as a
+per-file failure naming the path; nothing is written, the user's notes survive; this also stops a
+write through a dangling symlink to outside the data root). When a new page is seeded and the
+computed stem is held by a file whose frontmatter the scan cannot read, the run emits a DocWarning
+naming that page and the new one written beside it. Tests: tests/test_identity_e2e.py "unreadable
+pages" section (5 tests, each pinned by a mutation).
+
+**Decision taken, pending maintainer confirmation:** outcome 1 resolves as "write the duplicate and
+warn", not "refuse to seed" (refusing would leave the activity with no page, since the unreadable
+file cannot be tied to it with certainty). An unreadable page renamed away from the computed stem is
+still not reported: queued as .kiro/queue/2026-10-18-unreadable-workout-page-renamed-away-goes-unreported.md.
