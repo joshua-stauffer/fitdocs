@@ -133,8 +133,14 @@ released-version literal. The example plugin in
 placeholder version (`0.0.1`, below every release), so a version bump never
 touches that snippet and no allowlist entry exists.
 
-(Before the first release, on 2026-09-19, the same six tests pinned
-the opposite state -- no released entry -- and were rewritten in the first
+No test needs editing in the release commit. The release-note pins that
+assert an entry sits under `## [Unreleased]` read the changelog through
+`tests/_changelog_view.py`, which lets the newest released section stand in
+for an `[Unreleased]` that holds no entry of its own, so they hold both
+before and after the cut.
+
+(Before the first release, on 2026-09-19, the six tests above pinned
+the opposite state -- no released entry -- and were rewritten in that
 release commit.)
 
 ## 3. Version consistency

@@ -41,8 +41,9 @@ pins:
     bumped in (the manifest and all four packaged skills' `SKILL.md`), runs all
     three keeping tests (`test_changelog.py`, `test_version_identity.py`,
     `test_agent_skill.py`), states the change is committed and step 1 is
-    re-run against it, and names the two pre-release test pins plus the
-    `docs/plugins.md` allowlist that need updating at the first real cut.
+    re-run against it, and names the six tests that pin manifest/changelog
+    agreement (they need no edit on an ordinary release) and the
+    `docs/plugins.md` placeholder version (no allowlist entry).
 (m) step 6 and step 10 invoke the installed console script by its
     `$UV_TOOL_BIN_DIR` path in every fenced `--version` command, never
     bareword, and export `UV_TOOL_DIR`/`UV_TOOL_BIN_DIR` before the install
