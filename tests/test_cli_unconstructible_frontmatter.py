@@ -55,6 +55,8 @@ def test_out_commands_do_not_raise_on_an_unconstructible_page(
     assert result.exit_code == 0, result.output
     if command == "check":
         assert re.search(r"Documents inspected\D*1\b", result.output)
+    if command == "regen":
+        assert (root / WORKOUTS_DIR / "bad.md").read_text(encoding="utf-8") == _BAD
 
 
 def test_load_does_not_raise_on_an_unconstructible_page(tmp_path: Path) -> None:

@@ -2988,6 +2988,19 @@ def _garble(page: Path) -> str:
     return broken
 
 
+def _garble_date(page: Path) -> str:
+    """Like :func:`_garble`, but the frontmatter is well-formed YAML that PyYAML
+    cannot construct (``date: 2026-02-30``): the reader must say "unreadable",
+    not raise."""
+    _write_note(page, "MY IMPORTANT NOTE")
+    text = page.read_text(encoding="utf-8")
+    broken = text.replace("\n---\n", "\ndate: 2026-02-30\n---\n", 1)
+    assert broken != text
+    page.write_text(broken, encoding="utf-8")
+    assert read_frontmatter(page) is None
+    return broken
+
+
 def _stage_unreadable(tmp_path: Path) -> tuple[Path, Path, fx.Species]:
     data_root = tmp_path / "data"
     original = fx.garmin_original()
@@ -3048,6 +3061,51 @@ def test_regen_warns_about_an_unreadable_page_it_seeds_a_duplicate_beside(
     (warning,) = [w for w in report.warnings if w.doc == f"{WORKOUTS_DIR}/{page.name}"]
     assert "could not be read" in warning.detail
     assert suffixed in warning.detail
+
+
+def test_regen_does_not_write_over_an_unconstructible_page_at_the_suffixed_name(
+    tmp_path: Path,
+) -> None:
+    """Case 2 with a page whose frontmatter PyYAML cannot construct: one failure
+    naming the page, its bytes (note included) unchanged, nothing raised.
+
+    Mutation: ``_YAML_LOAD_ERRORS`` back to ``yaml.YAMLError`` only (regen
+    raises ``ValueError``).
+    """
+    data_root, page, original = _stage_unreadable(tmp_path)
+    garbled = page.with_name(f"{page.stem}-{_sha(original.data)[:8]}.md")
+    page.rename(garbled)
+    broken = _garble_date(garbled)
+    page.write_text("not a workout document\n", encoding="utf-8")
+
+    report = _regen(data_root)
+
+    assert report.written == ()
+    (failure,) = report.failures
+    assert f"{WORKOUTS_DIR}/{garbled.name}" in failure.reason
+    assert garbled.read_text(encoding="utf-8") == broken
+    assert "MY IMPORTANT NOTE" in broken
+
+
+def test_regen_warns_about_an_unconstructible_page_it_seeds_a_duplicate_beside(
+    tmp_path: Path,
+) -> None:
+    """Case 1 with a page whose frontmatter PyYAML cannot construct: the new page
+    is written beside it, the run warns, and the note survives.
+
+    Mutation: ``_YAML_LOAD_ERRORS`` back to ``yaml.YAMLError`` only.
+    """
+    data_root, page, original = _stage_unreadable(tmp_path)
+    broken = _garble_date(page)
+
+    report = _regen(data_root)
+
+    assert report.failures == ()
+    suffixed = f"{WORKOUTS_DIR}/{page.stem}-{_sha(original.data)[:8]}.md"
+    assert report.written == (suffixed,)
+    assert page.read_text(encoding="utf-8") == broken
+    (warning,) = [w for w in report.warnings if w.doc == f"{WORKOUTS_DIR}/{page.name}"]
+    assert "could not be read" in warning.detail
 
 
 def test_regen_does_not_warn_when_the_stem_holder_is_another_readable_page(
