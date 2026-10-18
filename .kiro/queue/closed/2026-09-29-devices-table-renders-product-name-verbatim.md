@@ -1,7 +1,7 @@
 ---
 id: 2026-09-29-devices-table-renders-product-name-verbatim
 title: The devices table writes the file's own product_name text into the page verbatim, so a newline can forge a region-marker line and a pipe breaks the row
-status: open
+status: done
 importance: medium
 importance_why: Device strings are untrusted file content and connectors widens where files come from; a forged marker line leaves a page that every later regen refuses with a RegionError until someone hand-edits it.
 effort: S
@@ -63,3 +63,14 @@ human looked at before they reached the inbox, so the input surface grows.
    table or line unescaped; list any you find in this item rather than
    widening the fix silently. Done when the test is green and no rendered
    page can contain a marker line that fitdocs did not write.
+
+## Resolution (2026-10-18)
+
+Fixed on main at ed3b232 (chore/q-devices-table; two Opus review rounds, final APPROVED; full suite
+green; branch CI green). New `render/format.one_line` (collapse whitespace runs, strip) and
+`table_text` (one_line + `|` -> `\|`). Applied to the devices table's name, manufacturer and battery
+cells, to decode-error bullets, and to the strength section's exercise label (file free text from
+`wkt_step_name`, a sibling site the review found). Tests assert one table row of four cells and that
+`docmerge.extract_regions` finds only the page's own regions; every application is mutation-pinned.
+The reviewer swept render/ for other file-text interpolation: none remain. Goldens unchanged.
+Low-priority display-only follow-up (Obsidian `%%` in file text) not queued separately; noted here.
