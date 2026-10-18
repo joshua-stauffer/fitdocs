@@ -1,7 +1,7 @@
 ---
 id: 2026-09-12-sufficiency-zero-samples-and-fabricated-observed
 title: sufficiency.evaluate treats present zero as covered and fabricates observed=0.0 for unmeasurable spans
-status: open
+status: done
 importance: low
 importance_why: A zero-HR activity scores a zero impulse rather than declining, and an unmeasurable span reports a fabricated 0.0 instead of an absent value, contrary to tech.md's absent-data rule.
 effort: S
@@ -52,3 +52,17 @@ exactly that fabrication, and it currently ships in the load pass's output.
    established absent-value convention) for an unmeasurable span, and
    confirm the load pass's consumers handle that `None` correctly.
 </content>
+
+## Resolution (2026-10-18)
+
+Fabricated-observed half fixed on main at aaf0a1a (chore/q-sufficiency; full suite 26760 passed,
+branch CI green, independent Opus review APPROVED): a TOO_SHORT decline for a stream with no
+measurable recorded span now carries observed=None and the detail "<stream> has no measurable
+recorded span; the minimum duration is Ns" instead of a fabricated 0.0 / "span 0s". Test:
+tests/load/channels/test_sufficiency.py::test_no_measurable_span_reports_too_short_with_no_observed_span.
+
+The "present zero counts as covered" half is NOT a defect against the spec: load-channels Req 2.10
+(requirements.md:159) says a recorded zero is recorded data, and
+test_recorded_zero_counts_as_covered_distinctly_from_none pins it; step 2 of "How to pick it up"
+contradicts that requirement. Whether heart rate 0 should instead count as a dropout is a maintainer
+decision, moved to .kiro/queue/2026-10-18-heart-rate-zero-as-dropout-decision.md.
