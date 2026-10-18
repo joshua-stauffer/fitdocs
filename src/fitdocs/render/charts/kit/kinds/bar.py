@@ -1,7 +1,8 @@
 """The ``bar`` kind: vertical bars per category or date, grouped or stacked.
 
 Bands follow :func:`~fitdocs.render.charts.kit.cartesian.category_order`
-(first appearance, dates ascending, the absent category ``—`` last). Grouped
+(first appearance, dates ascending, the absent category ``—`` last); a row's
+band is keyed on its raw value (``category_bands``), not its label. Grouped
 bars sit side by side in legend order across 80 % of the band, each at most
 48 px wide; stacked segments rise in legend order. An absent value draws
 nothing and is counted in a note; a zero draws the two pixel stub.
@@ -15,6 +16,7 @@ from fitdocs.render.charts.kit import frame, marks
 from fitdocs.render.charts.kit.cartesian import (
     SeriesGroup,
     bound_problem,
+    category_bands,
     category_order,
     duplicate_problem,
     numbers,
@@ -23,9 +25,8 @@ from fitdocs.render.charts.kit.cartesian import (
     stack_problems,
     undrawn,
 )
-from fitdocs.render.charts.kit.data import Value, ValueKind
+from fitdocs.render.charts.kit.data import ValueKind
 from fitdocs.render.charts.kit.format import (
-    ABSENT,
     axis_title,
     format_duration,
     format_value,
@@ -78,19 +79,6 @@ def _check(bound: BoundChart) -> tuple[ChartProblem, ...]:
             *stack_problems(bound, x="x", y="y", complete=False),
         )
     return problems
-
-
-def _label(bound: BoundChart, value: Value) -> str:
-    return format_value(value, bound.columns["x"], with_unit=False)
-
-
-def _bands(bound: BoundChart, labels: tuple[str, ...]) -> list[int]:
-    """The band index of each row (an absent x belongs to the ``—`` band)."""
-    index = {label: i for i, label in enumerate(labels)}
-    return [
-        index[ABSENT if value is None else _label(bound, value)]
-        for value in bound.values("x")
-    ]
 
 
 def _y_scale(bound: BoundChart, values: list[float], plan: FramePlan) -> NumericScale:
@@ -204,7 +192,7 @@ def _draw(bound: BoundChart) -> str:
 
     stacked = bound.flag("stack")
     labels = category_order(bound, "x")
-    bands = _bands(bound, labels)
+    bands = category_bands(bound, "x")
     groups = series_groups(bound)
     coloured = bound.column("color") is not None
     not_drawn = undrawn(bound, ("y",))

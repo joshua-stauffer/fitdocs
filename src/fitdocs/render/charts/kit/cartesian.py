@@ -59,17 +59,41 @@ def series_groups(bound: BoundChart, channel: str = "color") -> tuple[SeriesGrou
     )
 
 
-def category_order(bound: BoundChart, channel: str) -> tuple[str, ...]:
-    """Labels in first appearance; dates and date-times ascending; absent last."""
+def _category_keys(bound: BoundChart, channel: str) -> list[Value]:
+    """The distinct present values of ``channel`` in band order (absent excluded)."""
     column = bound.columns[channel]
-    values = bound.values(channel)
-    distinct = list(dict.fromkeys(v for v in values if v is not None))
+    distinct: list[Value] = list(
+        dict.fromkeys(v for v in bound.values(channel) if v is not None)
+    )
     if column.kind in (ValueKind.DATE, ValueKind.DATETIME):
         distinct.sort(key=lambda v: to_number(v, column.kind) or 0.0)
-    order = [format_value(v, column, with_unit=False) for v in distinct]
-    if any(v is None for v in values):
+    return distinct
+
+
+def category_order(bound: BoundChart, channel: str) -> tuple[str, ...]:
+    """Labels in first appearance; dates and date-times ascending; absent last.
+
+    One label per distinct raw value, so two values that format alike give two
+    equal labels: bands are keyed on :func:`category_bands`, never on a label.
+    """
+    column = bound.columns[channel]
+    order = [
+        format_value(v, column, with_unit=False) for v in _category_keys(bound, channel)
+    ]
+    if any(v is None for v in bound.values(channel)):
         order.append(ABSENT)
     return tuple(order)
+
+
+def category_bands(bound: BoundChart, channel: str) -> list[int]:
+    """The index into :func:`category_order` of each row's value.
+
+    Keyed on the raw value, so categories that format alike keep their own
+    band; an absent value belongs to the last (``—``) band.
+    """
+    position = {v: i for i, v in enumerate(_category_keys(bound, channel))}
+    absent = len(position)
+    return [absent if v is None else position[v] for v in bound.values(channel)]
 
 
 def numbers(bound: BoundChart, channel: str) -> tuple[float | None, ...]:

@@ -18,6 +18,7 @@ from fitdocs.render.charts.kit import frame, marks, theme
 from fitdocs.render.charts.kit.cartesian import (
     SeriesGroup,
     bound_problem,
+    category_bands,
     category_order,
     duplicate_problem,
     numbers,
@@ -26,7 +27,7 @@ from fitdocs.render.charts.kit.cartesian import (
     stack_problems,
 )
 from fitdocs.render.charts.kit.data import Column, ValueKind
-from fitdocs.render.charts.kit.format import ABSENT, axis_title, format_value
+from fitdocs.render.charts.kit.format import axis_title
 from fitdocs.render.charts.kit.layout import (
     FONT_TEXT,
     FramePlan,
@@ -69,16 +70,6 @@ def _check(bound: BoundChart) -> tuple[ChartProblem, ...]:
         *duplicate_problem(bound, ("x", "color")),
         *stack_problems(bound, x="x", y="y", complete=False),
     )
-
-
-def _bands(bound: BoundChart, labels: tuple[str, ...]) -> list[int]:
-    """The band index of each row (an absent x belongs to the ``—`` band)."""
-    index = {label: i for i, label in enumerate(labels)}
-    column = bound.columns["x"]
-    return [
-        index[ABSENT if value is None else format_value(value, column, with_unit=False)]
-        for value in bound.values("x")
-    ]
 
 
 def _y_hours(bound: BoundChart) -> bool:
@@ -127,7 +118,7 @@ def _draw(bound: BoundChart) -> str:
         return frame.no_data(bound, height=height)
 
     labels = category_order(bound, "x")
-    bands = _bands(bound, labels)
+    bands = category_bands(bound, "x")
     groups = series_groups(bound)
     parts = _parts(bound, groups, bands, len(labels))
 

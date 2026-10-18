@@ -15,13 +15,13 @@ from typing import Final
 from fitdocs.render.charts.kit import frame
 from fitdocs.render.charts.kit.cartesian import (
     bound_problem,
+    category_bands,
     category_order,
     duplicate_problem,
     numbers,
 )
 from fitdocs.render.charts.kit.data import Column, Value, ValueKind
 from fitdocs.render.charts.kit.format import (
-    ABSENT,
     axis_title,
     format_duration,
     format_value,
@@ -173,19 +173,6 @@ def _check(bound: BoundChart) -> tuple[ChartProblem, ...]:
     )
 
 
-def _label(bound: BoundChart, value: Value) -> str:
-    return format_value(value, bound.columns["x"], with_unit=False)
-
-
-def _bands(bound: BoundChart, labels: tuple[str, ...]) -> list[int]:
-    """The band index of each row (an absent x belongs to the ``—`` band)."""
-    index = {label: i for i, label in enumerate(labels)}
-    return [
-        index[ABSENT if value is None else _label(bound, value)]
-        for value in bound.values("x")
-    ]
-
-
 def _y_scale(
     bound: BoundChart, values: list[float], plan: FramePlan, *, y_zero: bool
 ) -> NumericScale:
@@ -323,7 +310,7 @@ def _draw(bound: BoundChart) -> str:
         return frame.no_data(bound, height=height)
 
     labels = category_order(bound, "x")
-    bands = _bands(bound, labels)
+    bands = category_bands(bound, "x")
     # An absent x is the ``—`` band, so every row is positioned; each box
     # channel counts its own absent values (a row absent on two counts under both).
     not_drawn = tuple(
