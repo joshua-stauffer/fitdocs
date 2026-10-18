@@ -18,13 +18,13 @@ from typing import Final
 
 from fitdocs.render.charts.kit import frame
 from fitdocs.render.charts.kit.cartesian import (
+    category_bands,
     category_order,
     duplicate_problem,
     numbers,
 )
 from fitdocs.render.charts.kit.data import ValueKind
 from fitdocs.render.charts.kit.format import (
-    ABSENT,
     axis_title,
     clean_text,
     format_duration,
@@ -70,15 +70,6 @@ PANEL_MIN_WIDTH: Final = 180.0
 _MAX_COLUMNS: Final = 6
 _PROBE_HEIGHT: Final = 1000
 _NO_VALUES: Final = "No values"
-
-
-def _panel_labels(bound: BoundChart) -> list[str]:
-    """Each row's panel label: its formatted facet value, or the absent label."""
-    column = bound.columns["facet"]
-    return [
-        ABSENT if v is None else format_value(v, column, with_unit=False)
-        for v in bound.values("facet")
-    ]
 
 
 def _check(bound: BoundChart) -> tuple[ChartProblem, ...]:
@@ -189,7 +180,7 @@ def _draw(bound: BoundChart) -> str:
     x_col, y_col = bound.columns["x"], bound.columns["y"]
     shared = bound.choice("y_axes") == "shared"
     order = category_order(bound, "facet")
-    row_labels = _panel_labels(bound)
+    row_panels = category_bands(bound, "facet")
 
     drawable = [
         i for i in range(len(bound.rows)) if xs[i] is not None and ys[i] is not None
@@ -270,13 +261,14 @@ def _draw(bound: BoundChart) -> str:
         )
 
     first = panel_plan(0.0, 0.0)
-    members: dict[str, list[int]] = {label: [] for label in order}
-    for index, label in enumerate(row_labels):
-        members[label].append(index)
-    present: dict[str, list[int]] = {
-        label: [i for i in rows if xs[i] is not None and ys[i] is not None]
-        for label, rows in members.items()
-    }
+    # Panels are keyed by band index, never by label: facets that format alike
+    # (``a<TAB>b`` and ``a b``) are still two panels with their own rows.
+    members: list[list[int]] = [[] for _ in order]
+    for index, panel in enumerate(row_panels):
+        members[panel].append(index)
+    present: list[list[int]] = [
+        [i for i in rows if xs[i] is not None and ys[i] is not None] for rows in members
+    ]
 
     def y_scale_over(rows: list[int]) -> NumericScale:
         return numeric_scale(
@@ -290,15 +282,15 @@ def _draw(bound: BoundChart) -> str:
             horizontal=False,
         )
 
-    y_scales: dict[str, NumericScale | None]
+    y_scales: dict[int, NumericScale | None]
     if shared:
         one = y_scale_over(drawable)
-        y_scales = dict.fromkeys(order, one)
+        y_scales = dict.fromkeys(range(panels), one)
         title_scale = one
     else:
-        with_values = [label for label in order if present[label]]
-        built = _in_one_form([y_scale_over(present[label]) for label in with_values])
-        y_scales = dict.fromkeys(order)
+        with_values = [panel for panel in range(panels) if present[panel]]
+        built = _in_one_form([y_scale_over(present[panel]) for panel in with_values])
+        y_scales = dict.fromkeys(range(panels))
         y_scales.update(zip(with_values, built, strict=True))
         title_scale = built[0]
     drawn_y = [s for s in y_scales.values() if s is not None]
@@ -336,14 +328,14 @@ def _draw(bound: BoundChart) -> str:
     for index, label in enumerate(order):
         col, grid_row = index % columns, index // columns
         has_below = index + columns < panels
-        y_scale = y_scales[label]
-        has_values = bool(present[label])
+        y_scale = y_scales[index]
+        has_values = bool(present[index])
         inside: list[str] = []
         if y_scale is not None:
             inside.append(frame.grid(y_scale, plot, horizontal_lines=True))
         if y_scale is not None and has_values:
             points = sorted(
-                ((x, ys[i]) for i in members[label] if (x := xs[i]) is not None),
+                ((x, ys[i]) for i in members[index] if (x := xs[i]) is not None),
                 key=lambda p: p[0],
             )
             pixels = [

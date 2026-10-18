@@ -491,6 +491,23 @@ def test_panels_are_in_first_appearance_not_alphabetical() -> None:
     ]
 
 
+def test_facets_that_format_alike_keep_their_own_panels_and_rows() -> None:
+    rows = [
+        (D(2026, 1, 1), 1.0, "a\tb"),
+        (D(2026, 1, 2), 2.0, "a\tb"),
+        (D(2026, 1, 1), 30.0, "a b"),
+        (D(2026, 1, 2), 40.0, "a b"),
+    ]
+    svg = _render([DAY, KM, SHOE], rows)
+    panels = _panels(svg)
+    assert len(panels) == 2
+    # each panel draws its own two points, not all four merged into one
+    assert [len(_mark_children(p)) for p in panels] == [1, 1]
+    for panel in panels:
+        (line,) = _mark_children(panel)
+        assert len((line.get("points") or "").split()) == 2
+
+
 def test_date_facets_ascend_and_the_absent_facet_is_last() -> None:
     rows: list[tuple[Value, ...]] = [
         (1.0, 1.0, D(2026, 3, 9)),
