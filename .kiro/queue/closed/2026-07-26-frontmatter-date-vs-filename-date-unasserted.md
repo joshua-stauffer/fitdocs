@@ -1,7 +1,7 @@
 ---
 id: 2026-07-26-frontmatter-date-vs-filename-date-unasserted
 title: Nothing asserts a document's frontmatter `date` equals the date its filename is built from
-status: open
+status: done
 importance: medium
 importance_why: Req 3.6 states the equivalence as a premise and date-scoped benchmark selection depends on it; a drift between the two independent formatting sites would break selection silently with every unit test green.
 effort: S
@@ -69,3 +69,10 @@ guard). What no test covers is the *cross-site* equality.
 Related: [[2026-07-26-date-key-has-no-constant]] — the same `"date"` key is
 hardcoded at three sites with no `Final[str]` constant, which is the other half
 of how these two sites could drift apart.
+
+## Resolution (2026-10-18)
+Done on chore/q-local-tz.
+- The two sites no longer format independently. `layout.local_start` is the single source of a page's local start for the stem, frontmatter `date`/`start_time`/`title`, and the H1 (workout-docs 5.13).
+- `tests/render/test_local_time.py::test_every_local_time_on_the_page_follows_one_rule` asserts all five agree across six cases (recorded offsets east, west and zero, recorded-over-zone, and zone winter/summer).
+- Mutating either site alone turns it red: the frontmatter date, the title, the H1, or `doc_stem` ignoring the offset (mutations M9-M11, and the reviewer's M12).
+- `tests/test_cli_local_tz.py::test_sync_dates_each_page_at_its_own_offset` checks the on-disk filename against `start_time` for pages written by `fitdocs sync`.

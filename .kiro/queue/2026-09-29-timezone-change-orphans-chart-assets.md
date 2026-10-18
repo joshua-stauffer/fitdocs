@@ -2,8 +2,8 @@
 id: 2026-09-29-timezone-change-orphans-chart-assets
 title: A re-render under a different timezone keeps the page's filename but writes its charts under a new stem, leaving the old chart assets orphaned
 status: open
-importance: medium
-importance_why: Every page whose local stem moves (a travel re-sync, or the DST fix the local-tz item asks for) leaves its old SVGs behind with nothing that ever removes them; activity-identity's cleanup runs only on a rename.
+importance: low
+importance_why: Since activity-identity Amendment 2 only a page whose filename the user chose still orphans its old charts when its local stem moves; fitdocs-named pages are renamed with cleanup.
 effort: S
 kind: bug
 area: activity-identity, workout-docs, src/fitdocs/sync.py, src/fitdocs/layout.py
@@ -16,7 +16,7 @@ context:
   - src/fitdocs/layout.py
   - .kiro/specs/activity-identity/design.md
   - .kiro/specs/activity-identity/tasks.md
-  - .kiro/queue/2026-09-12-local-tz-is-fixed-offset-of-run-time.md
+  - .kiro/queue/closed/2026-09-12-local-tz-is-fixed-offset-of-run-time.md
 blocked_by: [activity-identity]
 ---
 
@@ -77,3 +77,10 @@ unless this lands first or with it.
   it from the assets the page already links) instead of cleaning up after a
   stem change. That avoids churn but makes asset names diverge from the
   current local time; choose before implementing.
+
+## Narrowed (2026-10-18, chore/q-local-tz)
+activity-identity Amendment 2 (A2.1) now renames a page whose filename fitdocs computed from its recorded `start_time` whenever the computed local start moves. The rename runs the 6.4 stale-asset cleanup, so a fitdocs-named page no longer leaves charts behind; `tests/test_retimed_rename.py` pins this.
+
+What remains is a page whose filename the **user** chose. It keeps its name (6.3), its charts move to the new computed stem, and the old chart set is still orphaned. The maintainer's real wiki has no such page: all 2,567 dated pages carry fitdocs-computed names.
+
+Extending cleanup to the keep-filename path is still the fix. It must not delete an asset another page links, which is the deletion half of `2026-10-01-chart-assets-named-by-computed-stem-collide-across-pages`, so decide the two together.

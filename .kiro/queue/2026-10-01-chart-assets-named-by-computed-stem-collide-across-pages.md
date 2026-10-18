@@ -76,3 +76,8 @@ Collision reproduced at `fc5c06d`; the deletion half is by reading only.
   time, and a user rename would then move every asset), or from the assets the
   page already links, or add a collision check for asset paths only? Decide
   together with the timezone item.
+
+## Update (2026-10-18, chore/q-local-tz)
+- A local-time correction can no longer cross-wire fitdocs-named pages. activity-identity Amendment 2 renames each page fitdocs named to its new computed stem, under the collision suffix and settle pass. `tests/test_retimed_rename.py::test_two_pages_of_one_minute_move_without_sharing_a_chart` pins that the two pages of one minute end with disjoint chart sets and no orphans.
+- On that path the suffix can change hands: the page processed first takes the unsuffixed name. Their old names are reported in rename warnings.
+- The collision this item describes, a page the **user** renamed whose computed stem another activity then takes, is unchanged. Its naming-rule question is still open for the maintainer.

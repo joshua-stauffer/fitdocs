@@ -1,7 +1,7 @@
 ---
 id: 2026-09-12-local-tz-is-fixed-offset-of-run-time
 title: Documents are stamped with the UTC offset in force when the command ran, not the activity's DST-aware local zone
-status: open
+status: done
 importance: high
 importance_why: Wrong local time reaches every document rendered in the opposite DST half-year -- start_time, the -HHMM filename stem, and near-midnight the date -- across a real 2,600-doc wiki today.
 effort: S
@@ -118,3 +118,15 @@ follow the configured timezone". No timezone setting exists; it is the
 machine's offset at run time, which is this item. When this item is fixed,
 expect a `regen` to move both these pages' dates and their morning blocks;
 re-run the morning pass afterwards (regen already does).
+
+## Resolution (2026-10-18)
+Done on chore/q-local-tz, with the maintainer's ruling on both open questions (zone source; existing filenames).
+- **Zone source: the activity's own recorded offset.** fit-ingest Amendment 8 adds `Activity.local_offset`, read from the first `activity` message's `local_timestamp - timestamp`; only whole 15-minute steps from -12 h to +14 h count. Measured on the maintainer's 3,335-file archive: every HealthFit and Garmin file records it, and only 4 Stryd files do not.
+- **One rule for every place a page states its local time.** workout-docs Amendment 6 adds `layout.local_start`, used by the stem, the frontmatter `date`/`start_time`/`title`, and the H1. A file with no recorded offset falls back to the system zone as a real zone: `cli._system_zone` reads `TZ` or `/etc/localtime`, and uses today's fixed offset only when neither names a readable zone.
+- **Versions.** DOC_VERSION 10 -> 11, CONTRACT_VERSION 15 -> 16.
+- **Existing filenames: renamed, at the maintainer's choice.** activity-identity Amendment 2 (A2.1): a page whose filename fitdocs computed from its recorded `start_time` follows the new name. Stale charts are removed and a rename warning is printed; a filename the user chose is kept. This replaces "Done means: regen renames them" in the pickup steps above. Links in the maintainer's own notes are repointed by a one-off relink tool outside the repo, run only with his approval.
+- **Real-corpus scratch rebuild, before the rename rule.**
+  - Of 2,567 dated pages, 1,912 got a corrected start time, all at the same UTC instant.
+  - 467 dates moved, including 226 of the 248 early-morning 2018-22 pages, and 452 Morning Of blocks now show the right day.
+  - `check` still reports the same 15 findings; a second regen is byte-identical.
+- Tests: tests/ingest/test_local_time.py, tests/render/test_local_time.py, tests/test_cli_local_tz.py, tests/test_retimed_rename.py and the *_docs.py pins. A mutation gate of 25 named production mutations all went red.
