@@ -2395,6 +2395,104 @@ def test_unmatched_stray_sdist_member_stays_readable_in_the_loader_error(
         )
 
 
+def test_corrupt_needle_named_wheel_member_error_names_no_member(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`zipfile` words its CRC error as "Bad CRC-32 for file '<name>'"; the
+    checker must not let that (or a traceback carrying it) reach the log."""
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    payload = b"payload-bytes-to-corrupt"
+    wheel_path = _make_wheel(
+        dist_dir,
+        {**_CLEAN_WHEEL_MEMBERS, f"fitdocs/{_NEEDLE}.dat": payload},
+        metadata=_CLEAN_METADATA,
+    )
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+    raw = wheel_path.read_bytes()
+    assert raw.count(payload) == 1
+    wheel_path.write_bytes(raw.replace(payload, payload[:-1] + b"!"))
+
+    exit_code = check_artifacts_main(
+        [
+            "--no-version-check",
+            "--dist-dir",
+            str(dist_dir),
+            "--policy",
+            str(REAL_POLICY_PATH),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "archive is corrupt or unreadable (BadZipFile)" in captured.err
+    assert _NEEDLE not in captured.out
+    assert _NEEDLE not in captured.err
+
+
+def test_corrupt_needle_named_sdist_error_names_no_member(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    _make_wheel(dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=_CLEAN_METADATA)
+    members = {**_CLEAN_SDIST_MEMBERS, f"src/{_NEEDLE}.dat": bytes(range(256)) * 8}
+    sdist_path = _make_sdist(dist_dir, members, pkg_info=_CLEAN_METADATA)
+    raw = bytearray(sdist_path.read_bytes())
+    for index in range(len(raw) // 2, len(raw) // 2 + 16):
+        raw[index] ^= 0xFF
+    sdist_path.write_bytes(bytes(raw))
+
+    exit_code = check_artifacts_main(
+        [
+            "--no-version-check",
+            "--dist-dir",
+            str(dist_dir),
+            "--policy",
+            str(REAL_POLICY_PATH),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "archive is corrupt or unreadable" in captured.err
+    assert _NEEDLE not in captured.out
+    assert _NEEDLE not in captured.err
+
+
+def test_one_member_gets_one_number_in_findings_and_loader_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An sdist's top-level directory entry is not a member: the stray member's
+    number in the loader error is its position in the member list the findings
+    use. Here the stray sorts after one real member, so it is #2."""
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    _make_wheel(dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=_CLEAN_METADATA)
+    path = dist_dir / "fitdocs-9.9.9.tar.gz"
+    with tarfile.open(path, "w:gz") as tf:
+        top = tarfile.TarInfo(name="fitdocs-9.9.9")
+        top.type = tarfile.DIRTYPE
+        tf.addfile(top)
+        for name in ("fitdocs-9.9.9/PKG-INFO", f"elsewhere/{_NEEDLE}.py"):
+            data = _CLEAN_METADATA.encode() if name.endswith("PKG-INFO") else b""
+            info = tarfile.TarInfo(name=name)
+            info.size = len(data)
+            tf.addfile(info, io.BytesIO(data))
+
+    with pytest.raises(CheckerError, match=r"found <redacted member #2>"):
+        check_artifacts(
+            dist_dir, policy=load_policy(REAL_POLICY_PATH), repo_root=REPO_ROOT
+        )
+
+
 # --- sdist-side twins: the same checks, exercised on the sdist -------------
 
 

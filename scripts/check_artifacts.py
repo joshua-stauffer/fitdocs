@@ -78,11 +78,13 @@ import argparse
 import email
 import email.message
 import fnmatch
+import gzip
 import re
 import sys
 import tarfile
 import tomllib
 import zipfile
+import zlib
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -252,7 +254,43 @@ def _wheel_link_target(mode: int, zf: zipfile.ZipFile, info: zipfile.ZipInfo) ->
     return ""
 
 
+#: What reading a damaged archive raises. Their messages can name the member
+#: being read (`zipfile`'s "Bad CRC-32 for file '<name>'"), so the loaders turn
+#: them into a `CheckerError` that names no member.
+_CORRUPT_ARCHIVE_ERRORS = (
+    zipfile.BadZipFile,
+    tarfile.TarError,
+    gzip.BadGzipFile,
+    zlib.error,
+    EOFError,
+    UnicodeDecodeError,
+)
+
+
+def _corrupt(path: Path, exc: Exception) -> CheckerError:
+    return CheckerError(
+        f"{path.name}: archive is corrupt or unreadable ({type(exc).__name__}); "
+        "no member is named here because the archive cannot be trusted"
+    )
+
+
 def _load_wheel(path: Path) -> tuple[tuple[_Member, ...], email.message.Message]:
+    try:
+        return _read_wheel(path)
+    except _CORRUPT_ARCHIVE_ERRORS as exc:
+        raise _corrupt(path, exc) from None
+
+
+def _load_sdist(
+    path: Path, forbidden: ForbiddenStrings | None = None
+) -> tuple[tuple[_Member, ...], email.message.Message]:
+    try:
+        return _read_sdist(path, forbidden)
+    except _CORRUPT_ARCHIVE_ERRORS as exc:
+        raise _corrupt(path, exc) from None
+
+
+def _read_wheel(path: Path) -> tuple[tuple[_Member, ...], email.message.Message]:
     """Enumerate a wheel's members and parse its `*.dist-info/METADATA`."""
     members: list[_Member] = []
     metadata_bytes: bytes | None = None
@@ -311,18 +349,27 @@ def _sdist_top_dir(
     if not infos:
         raise CheckerError(f"{subject}: sdist has no members")
     top = infos[0].name.split("/", 1)[0]
-    for ordinal, info in enumerate(infos, start=1):
-        if info.name != top and not info.name.startswith(top + "/"):
+    ordinal = 0  # as `_read_sdist` numbers members: the top entry has none
+    for info in infos:
+        if info.name == top or info.name == top + "/":
+            continue
+        ordinal += 1
+        if not info.name.startswith(top + "/"):
+            shown_top = (
+                "<redacted top-level name>"
+                if forbidden is not None and forbidden_matches(top, forbidden)
+                else repr(top)
+            )
             raise CheckerError(
                 f"{subject}: sdist members disagree on the top-level directory "
-                f"(expected everything under {_shown_name(top, 1, forbidden)}, "
+                f"(expected everything under {shown_top}, "
                 f"found {_shown_name(info.name, ordinal, forbidden)})"
             )
     return top
 
 
-def _load_sdist(
-    path: Path, forbidden: ForbiddenStrings | None = None
+def _read_sdist(
+    path: Path, forbidden: ForbiddenStrings | None
 ) -> tuple[tuple[_Member, ...], email.message.Message]:
     """Enumerate an sdist's members, with the `fitdocs-<version>/` top
     directory stripped, and parse its `PKG-INFO`.
@@ -332,13 +379,15 @@ def _load_sdist(
     with tarfile.open(path, "r:gz") as tf:
         infos = tf.getmembers()
         top = _sdist_top_dir(infos, path.name, forbidden)
-        for ordinal, info in enumerate(infos, start=1):
+        ordinal = 0
+        for info in infos:
             stripped = info.name[len(top) :].lstrip("/")
             if stripped == "":
                 # The top-level directory entry itself; not a member of
                 # the package tree the policy or forbidden patterns speak
                 # about.
                 continue
+            ordinal += 1
             is_dir = info.isdir()
             if is_dir and not stripped.endswith("/"):
                 stripped += "/"
@@ -379,9 +428,12 @@ def _shown_name(text: str, ordinal: int, forbidden: ForbiddenStrings | None) -> 
 
     The release run's Actions log is public, so a name that itself matches a
     forbidden-string token is never echoed -- it is replaced by an ordinal
-    placeholder (`ordinal` is the member's 1-based position in archive
-    order), as `scripts/check_site.py` does for a matched path. A name that
-    does not match stays readable: the maintainer's fix needs it.
+    placeholder (`ordinal` is the member's 1-based position in the
+    checker's member list -- the same number in a finding and in a loader
+    error: a wheel's entries in archive order, an sdist's without its
+    top-level directory entry), as `scripts/check_site.py` does for a
+    matched path. A name that does not match stays readable: the
+    maintainer's fix needs it.
     """
     if forbidden is not None and forbidden_matches(text, forbidden):
         return f"<redacted member #{ordinal}>"
