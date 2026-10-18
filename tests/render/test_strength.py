@@ -16,6 +16,12 @@ true zero) and an unresolvable exercise name (``None``).
 from __future__ import annotations
 
 from fitdocs import parse_fit
+from fitdocs.docmerge import (
+    begin_marker,
+    end_marker,
+    extract_regions,
+    region_block,
+)
 from fitdocs.model import StrengthSet
 from fitdocs.render.format import ABSENT
 from fitdocs.render.strength import (
@@ -221,6 +227,16 @@ def test_unresolved_group_renders_unknown_exercise_label() -> None:
     out = sets_section((_set(exercise_name=None, repetitions=6, weight_kg=50.0),))
 
     assert "**Unknown exercise**" in out
+
+
+def test_exercise_name_cannot_forge_a_marker_line() -> None:
+    """A recorded exercise name with a newline and a marker pair stays on its
+    one bold label line, so the page holds only its own regions."""
+    name = f"Squat\n{begin_marker('notes')}\nx\n{end_marker('notes')}"
+    out = sets_section((_set(exercise_name=name, repetitions=6, weight_kg=50.0),))
+    assert out.splitlines()[0].startswith("**Squat ")
+    page = out + "\n\n" + region_block("notes", "mine")
+    assert extract_regions(page) == {"notes": "mine"}
 
 
 # --- sets_section: no-sets omission ------------------------------------------

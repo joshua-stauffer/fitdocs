@@ -43,7 +43,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from fitdocs.model import StrengthSet
-from fitdocs.render.format import cell, fmt_duration, fmt_int
+from fitdocs.render.format import cell, fmt_duration, fmt_int, one_line
 
 _REST_SET_TYPE = "rest"
 _UNKNOWN_LABEL = "Unknown exercise"
@@ -157,7 +157,7 @@ def sets_section(sets: tuple[StrengthSet, ...]) -> str:
 
 def _group_block(group: ExerciseGroup) -> str:
     """A bold exercise label followed by its ``set | reps | load | rest`` table."""
-    label = _UNKNOWN_LABEL if group.name is None else group.name
+    label = _UNKNOWN_LABEL if group.name is None else one_line(group.name)
     lines = [_row(_COLUMNS), _row(("---",) * len(_COLUMNS))]
     lines.extend(_set_row(row) for row in group.rows)
     return f"**{label}**\n\n" + "\n".join(lines)

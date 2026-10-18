@@ -362,9 +362,9 @@ recorded as one.
   the Unicode range, absurd nesting) is likewise reported as a syntax problem.
 - A device name, manufacturer or battery status recorded in a `.fit` file
   can no longer break the devices table or forge a region marker line on the
-  page. Each is now shown on one line with any `|` escaped, and so is each
-  decode error. Before, a newline or pipe in the recorded text was written
-  into the page verbatim.
+  page. Each is now shown on one line with any `|` escaped. Exercise names
+  and decode errors are likewise kept on one line. Before, a newline or pipe
+  in the recorded text was written into the page verbatim.
 
 ## [0.1.0] - 2026-09-19
 

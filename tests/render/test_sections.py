@@ -335,6 +335,16 @@ def test_devices_display_name_prefers_product_name(run_fit_bytes: bytes) -> None
     assert "**low**" in out  # low battery flagged
 
 
+def _devices_table_lines(section: str) -> list[str]:
+    """The devices table's lines: from its header to the first non-table line."""
+    lines = section.splitlines()
+    start = lines.index("| Device | Manufacturer | Software | Battery |")
+    end = start
+    while end < len(lines) and lines[end].startswith("|"):
+        end += 1
+    return lines[start:end]
+
+
 _FORGED = f"Evil\n{begin_marker('notes')}\nx | y\n{end_marker('notes')}"
 
 
@@ -353,12 +363,29 @@ def test_devices_table_row_stays_one_line_and_four_cells(
         battery_status="low\n" + begin_marker("load"),
     )
     out = devices_section(_ctx(run_fit_bytes, activity_replace={"devices": (dev,)}))
-    table = [ln for ln in out.splitlines() if ln.startswith("|")]
-    _header, _rule, *rows = table[:3]
-    assert len(rows) == 1
+    table = _devices_table_lines(out)
+    assert len(table) == 3  # header + rule + exactly one device row
+    rows = table[2:]
     # four cells: five unescaped pipes
     assert rows[0].replace("\\|", "").count("|") == 5
     assert "\\|" in rows[0]  # the pipe is escaped, not dropped
+    page = out + "\n\n" + notes_region("mine")
+    assert extract_regions(page) == {"notes": "mine"}
+
+
+def test_devices_table_manufacturer_cell_is_one_line_and_escaped(
+    run_fit_bytes: bytes,
+) -> None:
+    """A real (non-placeholder) manufacturer string gets the same treatment."""
+    activity = parse_fit(run_fit_bytes)
+    dev = dataclasses.replace(
+        activity.devices[0], manufacturer=_FORGED, product_name="Watch"
+    )
+    out = devices_section(_ctx(run_fit_bytes, activity_replace={"devices": (dev,)}))
+    table = _devices_table_lines(out)
+    assert len(table) == 3
+    assert table[2].replace("\\|", "").count("|") == 5
+    assert "\\|" in table[2]
     page = out + "\n\n" + notes_region("mine")
     assert extract_regions(page) == {"notes": "mine"}
 
