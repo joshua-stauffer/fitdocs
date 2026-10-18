@@ -305,20 +305,25 @@ def _load_wheel(path: Path) -> tuple[tuple[_Member, ...], email.message.Message]
     return tuple(members), metadata
 
 
-def _sdist_top_dir(infos: list[tarfile.TarInfo], subject: str) -> str:
+def _sdist_top_dir(
+    infos: list[tarfile.TarInfo], subject: str, forbidden: ForbiddenStrings | None
+) -> str:
     if not infos:
         raise CheckerError(f"{subject}: sdist has no members")
     top = infos[0].name.split("/", 1)[0]
-    for info in infos:
+    for ordinal, info in enumerate(infos, start=1):
         if info.name != top and not info.name.startswith(top + "/"):
             raise CheckerError(
                 f"{subject}: sdist members disagree on the top-level directory "
-                f"(expected everything under {top!r}, found {info.name!r})"
+                f"(expected everything under {_shown_name(top, 1, forbidden)}, "
+                f"found {_shown_name(info.name, ordinal, forbidden)})"
             )
     return top
 
 
-def _load_sdist(path: Path) -> tuple[tuple[_Member, ...], email.message.Message]:
+def _load_sdist(
+    path: Path, forbidden: ForbiddenStrings | None = None
+) -> tuple[tuple[_Member, ...], email.message.Message]:
     """Enumerate an sdist's members, with the `fitdocs-<version>/` top
     directory stripped, and parse its `PKG-INFO`.
     """
@@ -326,8 +331,8 @@ def _load_sdist(path: Path) -> tuple[tuple[_Member, ...], email.message.Message]
     pkg_info_bytes: bytes | None = None
     with tarfile.open(path, "r:gz") as tf:
         infos = tf.getmembers()
-        top = _sdist_top_dir(infos, path.name)
-        for info in infos:
+        top = _sdist_top_dir(infos, path.name, forbidden)
+        for ordinal, info in enumerate(infos, start=1):
             stripped = info.name[len(top) :].lstrip("/")
             if stripped == "":
                 # The top-level directory entry itself; not a member of
@@ -345,7 +350,8 @@ def _load_sdist(path: Path) -> tuple[tuple[_Member, ...], email.message.Message]
                 extracted = tf.extractfile(info)
                 if extracted is None:
                     raise CheckerError(
-                        f"{path.name}: {stripped!r} member is unreadable"
+                        f"{path.name}: {_shown_name(stripped, ordinal, forbidden)} "
+                        "member is unreadable"
                     )
                 content = extracted.read()
             members.append(
@@ -770,11 +776,12 @@ def check_artifacts(
     wheel_subject = wheel_path.name
     sdist_subject = sdist_path.name
 
-    wheel_members, wheel_metadata = _load_wheel(wheel_path)
-    sdist_members, sdist_metadata = _load_sdist(sdist_path)
-
-    # Loaded first: the member-name checks below redact a name that matches.
+    # Loaded before any member name is read: every finding or error that
+    # names a member redacts a name that matches.
     forbidden = load_forbidden_strings(repo_root)
+
+    wheel_members, wheel_metadata = _load_wheel(wheel_path)
+    sdist_members, sdist_metadata = _load_sdist(sdist_path, forbidden)
 
     violations: list[Violation] = []
     violations += _check_missing_required(

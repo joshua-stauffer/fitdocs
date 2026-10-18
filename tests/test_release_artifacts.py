@@ -2337,6 +2337,64 @@ def test_redaction_is_ordinal_and_leaves_unmatched_names_readable(
     assert len({v.detail for v in encumbered}) == 2
 
 
+def _sdist_with_disagreeing_top_dir(dist_dir: Path, stray: str) -> None:
+    """A valid sdist plus one extra member outside the `fitdocs-9.9.9/` top
+    directory -- the loader refuses it with a `CheckerError` naming `stray`."""
+    path = dist_dir / "fitdocs-9.9.9.tar.gz"
+    with tarfile.open(path, "w:gz") as tf:
+        for name, data in (("fitdocs-9.9.9/PKG-INFO", _CLEAN_METADATA.encode()),):
+            info = tarfile.TarInfo(name=name)
+            info.size = len(data)
+            tf.addfile(info, io.BytesIO(data))
+        stray_info = tarfile.TarInfo(name=stray)
+        stray_info.size = 0
+        tf.addfile(stray_info, io.BytesIO(b""))
+
+
+def test_needle_named_stray_sdist_member_is_redacted_in_the_loader_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    _make_wheel(dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=_CLEAN_METADATA)
+    _sdist_with_disagreeing_top_dir(dist_dir, f"elsewhere/{_NEEDLE}.py")
+
+    exit_code = check_artifacts_main(
+        [
+            "--no-version-check",
+            "--dist-dir",
+            str(dist_dir),
+            "--policy",
+            str(REAL_POLICY_PATH),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "disagree on the top-level directory" in captured.err
+    assert "<redacted member #" in captured.err
+    assert _NEEDLE not in captured.out
+    assert _NEEDLE not in captured.err
+
+
+def test_unmatched_stray_sdist_member_stays_readable_in_the_loader_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    _make_wheel(dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=_CLEAN_METADATA)
+    _sdist_with_disagreeing_top_dir(dist_dir, "elsewhere/plain.py")
+
+    with pytest.raises(CheckerError, match=r"elsewhere/plain\.py"):
+        check_artifacts(
+            dist_dir, policy=load_policy(REAL_POLICY_PATH), repo_root=REPO_ROOT
+        )
+
+
 # --- sdist-side twins: the same checks, exercised on the sdist -------------
 
 
