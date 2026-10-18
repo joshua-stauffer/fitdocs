@@ -769,3 +769,24 @@ def test_borrowing_note_differs_between_absent_and_future_dated_walk_lthr() -> N
         "no Walk threshold on file applies to this activity's date.",
     )
     assert "is on file" not in future[0]
+
+
+def test_power_selected_ride_carries_the_anchor_triple_with_watts_and_ride() -> None:
+    """Power-selected Ride: the unit follows the benchmark kind (W, not bpm)
+    and the discipline is read from the benchmark, not hard-coded (Req 3.7)."""
+    profile = _HistoryProfile(
+        (_bm(BenchmarkKind.FTP_WATTS, Sport.RIDE, 260.0, date(2025, 1, 1)),)
+    )
+    outcome = ThresholdCalculator().compute(
+        _ride_activity(),
+        _metrics(),
+        profile,
+        _RaisingSession(),
+        _context(activity_date=_WALK_DATE),
+    )
+    assert isinstance(outcome, Computed)
+    assert outcome.result.basis == ChannelId.POWER.value
+    rows = outcome.result.inputs_used
+    assert ("Anchor value", "260 W") in rows
+    assert ("Anchor measured on", "2025-01-01") in rows
+    assert ("Anchor discipline", "Ride") in rows

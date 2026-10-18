@@ -433,14 +433,13 @@ def test_inputs_used_opens_with_five_fixed_rows_in_order() -> None:
 
 
 def test_inputs_used_appends_the_selected_channels_own_inputs_verbatim() -> None:
-    """Req 3.7, 8.9: the selected channel's own inputs are appended
+    """Req 8.9: the selected channel's own inputs are appended
     verbatim, in the channel's own order -- not reversed, not resorted.
-    ``_PACE_LOAD`` deliberately carries three distinct rows (Req 3.7's
-    anchor value, discipline and measurement date) so a reordering is
-    observable.
+    ``_PACE_LOAD`` deliberately carries two distinct rows so a
+    reordering is observable.
 
     Mutation probe: ``*reversed(selected.inputs_used)`` in ``build_result``
-    reds this assertion -- the three rows would appear in the opposite
+    reds this assertion -- the two rows would appear in the opposite
     order."""
     result = _happy_result()
     assert result.inputs_used[8:] == (

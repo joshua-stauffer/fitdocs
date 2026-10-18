@@ -831,6 +831,7 @@ class Borrowing:
     kind: BenchmarkKind
     activity_discipline: Sport
     anchor_discipline: Sport
+    reason: Literal["not_on_file", "not_applicable"]
 
 @dataclass(frozen=True)
 class ResolvedAnchors:
