@@ -329,7 +329,7 @@ wiki-contract and analytics-index amendment and criterion numbers.
   - _Requirements: 10.1, 10.2_
   - _Depends: 1.3_
 
-- [ ] 2. The morning-of block (pure)
+- [x] 2. The morning-of block (pure)
 
 - [x] 2.1 (P) Compute the block's rows and figures from the shared baselines
   - `morning/block.py` per design § MorningBlock: `Windows`, `SignalRow`,
@@ -450,7 +450,7 @@ wiki-contract and analytics-index amendment and criterion numbers.
     goldens committed.
   - _Requirements: 1.5, 1.6, 5.1, 5.2, 6.1, 6.2, 6.3, 9.4_
 
-- [ ] 2.4 (P) Read and splice the morning region byte-locally
+- [x] 2.4 (P) Read and splice the morning region byte-locally
   - `morning/docedit.py` per design § MorningRegionEdit: `read_morning`,
     `replace_morning`, `MorningRegionMissing`.
   - **Tests** (`tests/morning/test_docedit.py`): round trip for empty,
@@ -459,10 +459,14 @@ wiki-contract and analytics-index amendment and criterion numbers.
     notes and load content; a page without the region (`None`, and
     `MorningRegionMissing` on replace); damaged markers raise `RegionError`
     from both.
-  - **Mutations:** a string-template replacement (the `$1` case reds); match
-    the first `fitdocs:end:` line of any region (a page with the load region
-    after it reds); skip the `extract_regions` validation (the damaged case
-    reds).
+  - **Mutations:** a string-template replacement (literal `\g<0>` in the
+    backslash-and-`$1` fixture is expanded and the exact-output assertion
+    reds; `$1` itself stays literal); replace the exact END token with
+    `<!-- fitdocs:end:.* -->` under DOTALL (the greedy endpoint consumes
+    through the later load END and the outside-byte assertion reds); skip
+    the `extract_regions` validation (the damaged case reds). Broadening
+    only the endpoint ID to `[A-Za-z0-9_-]+` remains GREEN on validated
+    pages and is not claimed as a discriminator.
   - **Observable:** `uv run pytest tests/morning/test_docedit.py` green.
   - _Requirements: 7.3, 7.8_
   - _Boundary: MorningRegionEdit_
@@ -797,6 +801,29 @@ wiki-contract and analytics-index amendment and criterion numbers.
   - _Requirements: 9.1, 9.4, 11.3, 12.1, 12.2_
 
 ## Implementation Notes
+
+- 2.4 accepted after independent approval and fresh completion verification:
+  19 focused tests, 340 morning/contract/load-editor regressions and all
+  static checks passed. All 19 claimed and two independent production
+  faults failed intended assertions and restored GREEN; all fifteen
+  assertion sites and thirty expanded assertions are covered. The narrow
+  generic-ID endpoint experiment remained GREEN across nineteen cases,
+  as decision 9 predicts; the greedy DOTALL endpoint and literal group-zero
+  template faults failed exact byte assertions. All 2,082 regular inputs
+  and nineteen skill symlinks matched the reviewed tree and independent
+  snapshot. The pure block/editor group is complete; file writes and
+  contract-consumer registration remain with 3.1.
+
+- Astra decision 9 (2026-10-18, applied at task 2.4): validation, an exact
+  morning begin marker and a non-greedy body make a generic valid-ID end
+  marker output-equivalent on valid pages. Record that narrower control
+  GREEN; use the plausible DOTALL greedy endpoint wildcard consuming
+  through the later load end marker to pin confinement. The replacement
+  template control is discriminated by literal `\g<0>` expansion; Python
+  leaves `$1` literal. Exact output/outside-byte assertions run before
+  re-extraction, so exceptions cannot substitute for the intended failure.
+  No production guard, API, dependency or requirement changes are needed;
+  the shared log records the decision and report.
 
 - 2.3 accepted after independent approval and fresh completion verification:
   51 renderer tests and 1,417 morning/recovery regressions passed, with all

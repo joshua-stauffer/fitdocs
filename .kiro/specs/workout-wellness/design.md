@@ -1034,8 +1034,13 @@ sync SOURCE`, which neither archives wellness nor rebuilds the series.
   `parse_stamp` returns the version and fingerprint; the content ends with
   `"\n"`; no rendered block matches recovery's `_FORBIDDEN_PHRASE_PATTERN`
   (positive control: the pattern matches a synthetic forbidden word).
-- docedit: round trip, empty content, content with backslashes and `$1`,
+- docedit: round trip, empty content, content with literal `\g<0>` and `$1`,
   bytes outside the region unchanged, missing region, damaged markers.
+  A string-template replacement is discriminated by `\g<0>` expansion, not
+  `$1`. Confinement is discriminated by a generic END token with greedy
+  `.*` under DOTALL consuming through a later load END; a generic valid-ID
+  endpoint alone is equivalent after validation. Assert exact
+  output/outside bytes before re-extracting the mutated output.
 
 ### Integration Tests (`tests/morning/test_engine.py`)
 - Staged data root (synthetic pages rendered through `render_document` with
