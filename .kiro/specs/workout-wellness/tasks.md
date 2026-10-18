@@ -641,7 +641,7 @@ wiki-contract and analytics-index amendment and criterion numbers.
 
 - [ ] 4. Versions, the contract and the published text
 
-- [ ] 4.1 Advance the page-format version and record the workout-docs amendment
+- [x] 4.1 Advance the page-format version and record the workout-docs amendment
   - Read `DOC_VERSION` on the branch rebased onto `main`, advance it by one
     and append design § ContractRegion's paragraph; record the old and new
     values in Implementation Notes.
@@ -1169,3 +1169,35 @@ wiki-contract and analytics-index amendment and criterion numbers.
   and nonempty-content condition. _SYNC_MORNING_DATA_ROOT follows the
   approved clear/publish/consume lifecycle. Neither EntryPoint nor the
   shared driver changed. Full-suite proof is due again in 4.1.
+
+- 4.1 accepted after independent review and fresh completion verification:
+  main 51d0e09 has DOC_VERSION 9, advanced once to 10; the ownership
+  contract stays 14 until 4.2. The complete append-only history records
+  both the empty morning region and the regeneration remedy. The native
+  aged-page cases begin with a populated page from drained synthetic FIT
+  and Intervals inputs; check is read-only, a second drain preserves the
+  aged page and warns, and regen restores the populated current format
+  after normalized wellness is deleted, using the archived inputs.
+  Current-format literal pins moved to 10; deliberately historic,
+  arbitrary-payload and missing-source fixtures retain their old values.
+  All twelve render golden changes are their version line alone.
+  The seven frontmatter digest pins were controlled re-pins from 9 to 10:
+  each original native capture matched its recorded digest, and each new
+  capture equaled the old bytes with exactly the single version line
+  changed before its digest was updated. Capture provenance remains
+  852e35f / DOC_VERSION 9; independent review reproduced both sets.
+  Workout-docs Amendment 5 (2026-10-18) appends criteria 4.5, 6.13, 9.7,
+  10.6, 12.3 and 13.5, preserving Amendment 4 from analytics-index.
+  All 26 new/changed assertion sites (43 observable instances) and two
+  history helper error paths have reached fault evidence: twenty source
+  faults yielded 46 intended failures, independently replayed, plus two
+  reviewer source faults; every restoration passed. No test SUT exception
+  or new unpinned limitation applies. All three assigned criteria are
+  pinned, with amended-spec retained subclauses named as preserved.
+  Two independent full suites passed 26,730 tests with the same eight
+  known optional skips (987.03 s and 757.13 s); both exited successfully.
+  Fresh completion checks passed 5,177 focused tests, metadata node
+  collection and all static checks. All current inputs matched both
+  isolated snapshots. Ownership publication and release text follow in
+  4.2 and 4.3; final integration and landing remain with 5.1 and the
+  controller feature gates.

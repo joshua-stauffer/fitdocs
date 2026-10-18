@@ -180,6 +180,7 @@ golden-file verification is possible.
 2. When a sync run discovers no new files, the fitdocs CLI shall leave the data root unchanged.
 3. Where the user explicitly requests regeneration, the fitdocs CLI shall re-render documents from the archived source files, preserving user-authored regions per Requirement 10.
 4. The fitdocs CLI shall be able to regenerate every document from the archived `.fit` sources and optional athlete inputs alone, without the original source directory.
+5. _(added by Amendment 5)_ The fitdocs CLI shall be able to re-derive every workout document's `morning` region from the normalized wellness series, which `fitdocs regen` rebuilds first from the data root's archived wellness files and `[wellness]` settings.
 
 ### Requirement 5: PKM Frontmatter and Portability
 **Objective:** As a PKM user, I want workout documents to slot into my wiki as
@@ -218,6 +219,7 @@ workout's story and details are one scroll away.
 10. _(added by Amendment 1)_ The Running Dynamics section shall display ground contact time in milliseconds, vertical oscillation in centimetres, step length in metres, leg spring stiffness in kilonewtons per metre, form and air power in watts, impact in body weights, and vertical ratio and every balance in percent, and shall present each balance channel as its recorded percentage without attributing it to a left or right side.
 11. _(added by Amendment 2)_ The devices table shall show each device's product name as the fit-ingest library resolves it.
 12. _(added by Amendment 3)_ When a document is rendered from a composition of several archived source files, the splits section's device laps (criterion 3) and the devices/data-quality section's recording devices and decode errors (criterion 6) shall be the base file's alone.
+13. _(added by Amendment 5)_ When an activity's modality is run or bike, the fitdocs CLI shall include a `morning` region immediately before its Training Load section.
 
 ### Requirement 7: Hero Chart Generation
 **Objective:** As an athlete, I want the power-vs-heart-rate hero chart
@@ -258,6 +260,7 @@ once I fill it in.
 4. When a set field was not recorded by the watch, the fitdocs CLI shall leave that cell blank rather than rendering a zero or default, while preserving recorded zeros (for example bodyweight sets) as genuine values.
 5. The fitdocs CLI shall include in every weight-training document a clearly marked user-editable section for the actual workout performed as free-form markdown, pre-filled with brief instructive placeholder text when newly generated.
 6. When an activity contains no set data at all, the fitdocs CLI shall still render the weight-training document with its summary, telemetry (when available), and user-editable sections, and shall omit the sets table entirely rather than scaffolding empty or fabricated set rows.
+7. _(added by Amendment 5)_ When an activity's modality is strength, the fitdocs CLI shall include a `morning` region immediately before its Training Load section.
 
 ### Requirement 10: User-Content Preservation on Regeneration
 **Objective:** As a user who writes into my workout documents, I want
@@ -270,6 +273,7 @@ artifacts without my notes being at risk.
 3. If an existing document's user-region markers are missing or damaged, the fitdocs CLI shall leave that document untouched and report a per-document conflict error instead of overwriting it.
 4. When regenerating a document, the fitdocs CLI shall fully replace generated (non-editable) regions with freshly rendered content.
 5. The fitdocs CLI shall include a user-notes editable region in every workout document, and additionally the workout-details editable region in weight-training documents per Requirement 9.
+6. _(added by Amendment 5)_ The fitdocs CLI shall delimit the `morning` region with the same machine-recognizable markers as other regions, leave it empty in a freshly rendered document, and fill it only with fitdocs-written morning-of block content; the region shall not be user-editable.
 
 ### Requirement 11: Training-Load Placeholder Section
 **Objective:** As the training-load feature (downstream), I want every workout
@@ -290,6 +294,7 @@ being the "wrong" sport.
 #### Acceptance Criteria
 1. When an activity's modality is neither run, bike, nor strength, the fitdocs CLI shall render a generic document containing frontmatter, a summary of the available metrics, the telemetry chart when plottable series exist, the devices/data-quality section, the user-notes region, and the training-load placeholder section.
 2. The fitdocs CLI shall render a document for every successfully parsed activity regardless of sport, and shall never fail solely because a sport is unrecognized.
+3. _(added by Amendment 5)_ When rendering a generic document, the fitdocs CLI shall include a `morning` region immediately before its Training Load section.
 
 ### Requirement 13: Missing-Data Honesty in Rendering
 **Objective:** As a fitdocs user, I want absent data represented honestly in
@@ -301,6 +306,7 @@ or the pipeline did not compute.
 2. When a telemetry channel is entirely absent, the fitdocs CLI shall omit the sections and chart elements that depend on it while rendering all independent content normally.
 3. When a device records a true zero (for example zero power while coasting), the fitdocs CLI shall present it as a genuine recorded value.
 4. _(added by Amendment 3)_ When a channel is taken from another of a document's source files than the base, the fitdocs CLI shall leave every sample of the document at which no value of that channel was placed from that file absent, render it as absent under criteria 1 and 2, and never fill it from any other file or invent a value there.
+5. _(added by Amendment 5)_ If a figure in the morning-of block is absent, the fitdocs CLI shall render the in-table absence marker and shall never substitute a zero.
 
 ### Requirement 14: Packaging and Installation
 **Objective:** As a user, I want fitdocs installable as a standalone
@@ -321,4 +327,16 @@ provenance and athlete inputs to the analytics-index post-pass; it does not
 change rendered pages or assets. The handoff is pinned by
 `tests/test_sync_handoff.py::test_handoff_preserves_complete_provenance_from_actual_renderer`
 and `tests/test_sync_handoff.py::test_populated_athlete_reaches_renderer_and_handoff`.
+No existing criterion is renumbered, reworded or withdrawn.
+
+
+## Amendment 5 (2026-10-18): the morning region, landed by workout-wellness
+
+Requirements 4, 6, 9, 10, 12 and 13 gain criteria 4.5, 6.13, 9.7, 10.6,
+12.3 and 13.5. Every view reserves an empty, machine-delimited `morning`
+region immediately before Training Load. Its content is fitdocs's alone,
+refreshed from the wellness series and re-derivable from the archived wellness
+files and settings; absent figures use the in-table absence marker. The
+page-format advance from 9 to 10 is owned by workout-wellness Requirement 9.1.
+The criterion-to-test mapping is recorded in this spec's `spec.json`.
 No existing criterion is renumbered, reworded or withdrawn.

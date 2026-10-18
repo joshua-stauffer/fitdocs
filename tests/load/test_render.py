@@ -184,8 +184,12 @@ def test_payload_version_paired_with_doc_version() -> None:
     takes the channels its base lacks and gains a Channel Sources section, a
     page-format change; the load result's own shape is untouched, so
     ``DOC_VERSION`` advances alone a sixth time.
+
+    **The pair became ``(2, 10)`` (workout-wellness task 4.1):** every page
+    gains the morning region; the load result's shape is unchanged, so
+    ``DOC_VERSION`` advances alone a seventh time.
     """
-    assert (LOAD_PAYLOAD_VERSION, contract.DOC_VERSION) == (2, 9), (
+    assert (LOAD_PAYLOAD_VERSION, contract.DOC_VERSION) == (2, 10), (
         f"LOAD_PAYLOAD_VERSION={LOAD_PAYLOAD_VERSION} and "
         f"contract.DOC_VERSION={contract.DOC_VERSION} drifted apart. "
         "Req 11.5 requires that a result-format change also change the "

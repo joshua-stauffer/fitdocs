@@ -189,7 +189,7 @@ __all__ = [
 
 # --- versions ----------------------------------------------------------------
 
-DOC_VERSION: Final[int] = 9
+DOC_VERSION: Final[int] = 10
 """The document-format version stamped on every generated workout document.
 
 Compared arithmetically against the version a document records (Req 5.1-5.3,
@@ -332,6 +332,12 @@ files and the channels each supplies (an extra that supplies none shows the
 absence marker), and takes each channel its base does not record from the
 highest-ranked extra that records it. A page without extras renders as before
 and changes only this line (Req 8.2).
+
+Raised from ``9`` to ``10`` by workout-wellness. Every page gains an empty
+``morning`` region, immediately before its Training Load section, which the
+morning-of pass fills from the wellness series. A page stamped with a lower
+version has no such region, so the pass leaves it alone until ``fitdocs regen``
+brings it current.
 """
 
 CONTRACT_VERSION: Final[str] = "14"

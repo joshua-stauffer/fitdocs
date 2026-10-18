@@ -1,7 +1,7 @@
 {
   "feature_name": "workout-docs",
   "created_at": "2026-07-14T22:41:40Z",
-  "updated_at": "2026-10-02T00:00:00Z",
+  "updated_at": "2026-10-18T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -118,6 +118,41 @@
         "6.12": "channel-merge 1.5, 5.4",
         "13.4": "channel-merge 2.6"
       }
+    },
+    {
+      "date": "2026-10-18",
+      "requirement": "4.5, 6.13, 9.7, 10.6, 12.3, 13.5 added (appended; no criterion renumbered or reworded) -- Amendment 5, landed by workout-wellness",
+      "reason": "Workout-wellness adds a refreshed morning region immediately before Training Load in every workout view, populated from the wellness series and re-derivable from archived wellness inputs and settings.",
+      "implementation": "The morning region and pass are owned by workout-wellness; task 4.1 advances DOC_VERSION from 9 to 10. CONTRACT_VERSION remains 14 until workout-wellness task 4.2.",
+      "also": "Existing Amendment 4 (analytics-index) is retained; this entry records Amendment 5 and the next free criteria without renumbering peers.",
+      "tests": {
+        "4.5": [
+          "tests/morning/test_e2e.py::test_regen_restores_the_morning_page_from_both_archives"
+        ],
+        "6.13": [
+          "tests/render/test_views.py::test_morning_region_immediately_precedes_training_load[run_splits-## Splits]",
+          "tests/render/test_views.py::test_morning_region_immediately_precedes_training_load[run_no_splits-## Telemetry]",
+          "tests/render/test_views.py::test_morning_region_immediately_precedes_training_load[ride-## Splits]"
+        ],
+        "9.7": [
+          "tests/render/test_views.py::test_morning_region_immediately_precedes_training_load[strength_sets-## Recorded Sets]",
+          "tests/render/test_views.py::test_morning_region_immediately_precedes_training_load[strength_no_sets-## Workout]"
+        ],
+        "10.6": [
+          "tests/render/test_views.py::test_morning_region_immediately_precedes_training_load",
+          "tests/render/test_views.py::test_fresh_morning_region_has_empty_content",
+          "tests/test_contract.py::test_refreshed_regions_are_disjoint_from_preserved_regions",
+          "tests/morning/test_e2e.py::test_regen_restores_the_morning_page_from_both_archives"
+        ],
+        "12.3": [
+          "tests/render/test_views.py::test_morning_region_immediately_precedes_training_load[generic_telemetry-## Telemetry]",
+          "tests/render/test_views.py::test_morning_region_immediately_precedes_training_load[generic_no_telemetry-## Summary]"
+        ],
+        "13.5": [
+          "tests/morning/test_render.py::test_sparse_native_signal_prints_each_absent_cell"
+        ]
+      },
+      "cross_spec": "Workout-wellness Requirements 9.1-9.3 own the page-format advance and archived-input regeneration; the ownership-contract version and published text are owned by its task 4.2."
     }
   ]
 }

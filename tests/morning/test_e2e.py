@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import ast
 import os
+import re
 import shutil
 import time
 from collections.abc import Iterator
@@ -14,8 +16,9 @@ from zoneinfo import ZoneInfo
 import pytest
 from typer.testing import CliRunner, Result
 
+from fitdocs import contract
 from fitdocs.cli import app
-from fitdocs.contract import document_date, document_start_time
+from fitdocs.contract import document_date, document_start_time, document_version
 from fitdocs.docio import read_document
 from fitdocs.index.fingerprint import document_fingerprint
 from fitdocs.index.location import resolve_index_location
@@ -334,3 +337,127 @@ def test_damaged_markers_fail_sync_and_name_the_page(
         assert result.exit_code == 1
     else:
         assert f"Morning of: could not update workouts/{page.name}:" in result.output
+
+
+# --- Page-format migration (9.1-9.3) -----------------------------------------
+
+_PRE_WORKOUT_WELLNESS_DOC_VERSION: int = 9
+"""DOC_VERSION on main 51d0e09 before workout-wellness task 4.1 advanced it
+from 9 to 10. Keep this historical value when later features advance the format.
+"""
+
+
+def _doc_version_history() -> str:
+    tree = ast.parse(Path(contract.__file__).read_text(encoding="utf-8"))
+    for index, node in enumerate(tree.body[:-1]):
+        if (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == "DOC_VERSION"
+        ):
+            following = tree.body[index + 1]
+            if (
+                isinstance(following, ast.Expr)
+                and isinstance(following.value, ast.Constant)
+                and isinstance(following.value.value, str)
+            ):
+                return " ".join(following.value.value.split())
+            raise AssertionError("DOC_VERSION has no adjacent history string")
+    raise AssertionError("DOC_VERSION declaration was not found")
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Raised from ``9`` to ``10`` by workout-wellness.",
+        "Every page gains an empty ``morning`` region, immediately before its "
+        "Training Load section, which the morning-of pass fills from the wellness "
+        "series.",
+        "A page stamped with a lower version has no such region, so the pass leaves "
+        "it alone until ``fitdocs regen`` brings it current.",
+    ],
+    ids=["advance", "region", "remedy"],
+)
+def test_doc_version_history_records_the_morning_region(sentence: str) -> None:
+    assert sentence in _doc_version_history()
+
+
+def _aged_morning_page(tmp_path: Path) -> tuple[Path, Path, bytes]:
+    assert contract.DOC_VERSION > _PRE_WORKOUT_WELLNESS_DOC_VERSION
+    root, _source = _root(tmp_path)
+    _delivery(root, "morning.json", first_value=47)
+    (root / "inbox/workout.fit").write_bytes(_fit(0, 7501))
+    _invoke(root, "sync", "--no-prompt")
+    page = _pages(root)[DAY]
+    original = page.read_text()
+    assert "| Resting HR | 47 bpm |" in _block(page)
+    assert "\ndoc_version: 10\n" in original
+    aged = re.sub(
+        r"<!-- fitdocs:begin:morning -->.*?<!-- fitdocs:end:morning -->\n?",
+        "",
+        original,
+        flags=re.DOTALL,
+    ).replace("\ndoc_version: 10\n", "\ndoc_version: 9\n", 1)
+    page.write_text(aged)
+    frontmatter = read_document(page).frontmatter  # type: ignore[union-attr]
+    assert document_version(frontmatter or {}) == 9
+    assert read_morning(page.read_text()) is None
+    return root, page, page.read_bytes()
+
+
+@pytest.mark.parametrize("observable", ["status", "finding", "read-only"])
+def test_pre_morning_page_check_is_outdated_and_read_only(
+    tmp_path: Path, observable: str
+) -> None:
+    root, page, aged = _aged_morning_page(tmp_path)
+    result = RUNNER.invoke(app, ["check", "--out", str(root)])
+    if observable == "status":
+        assert result.exit_code == 1, result.output
+    elif observable == "finding":
+        assert (
+            f"workouts/{page.name}\n"
+            "    doc_version is 9, below the current 10\n"
+            "    run `fitdocs regen` to bring it to the current format"
+        ) in result.output
+    else:
+        assert page.read_bytes() == aged
+
+
+@pytest.mark.parametrize("observable", ["bytes", "warning"])
+def test_second_drain_keeps_the_pre_morning_page(
+    tmp_path: Path, observable: str
+) -> None:
+    root, page, aged = _aged_morning_page(tmp_path)
+    result = _invoke(root, "sync", "--no-prompt")
+    if observable == "bytes":
+        assert page.read_bytes() == aged
+    else:
+        assert (
+            "Morning of: 1 page has no morning-of region (written by an older fitdocs, "
+            "or the region markers were removed); run 'fitdocs regen' to add it."
+        ) in result.output
+
+
+@pytest.mark.parametrize(
+    "observable", ["block", "version", "check-status", "check-clean"]
+)
+def test_regen_restores_the_morning_page_from_both_archives(
+    tmp_path: Path, observable: str
+) -> None:
+    root, page, _aged = _aged_morning_page(tmp_path)
+    _invoke(root, "sync", "--no-prompt")
+    shutil.rmtree(root / "wellness")
+    _invoke(root, "regen")
+    if observable == "block":
+        assert "| Resting HR | 47 bpm |" in _block(page)
+    elif observable == "version":
+        assert "\ndoc_version: 10\n" in page.read_text()
+    else:
+        result = RUNNER.invoke(app, ["check", "--out", str(root)])
+        if observable == "check-status":
+            assert result.exit_code == 0, result.output
+        else:
+            assert (
+                "No findings: every inspected document and declaration matches "
+                "the installed contract."
+            ) in " ".join(result.output.split())

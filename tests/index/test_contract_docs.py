@@ -178,4 +178,4 @@ def test_install_note_covers_duckdb_footprint_without_changing_format_version() 
         "build toolchain."
     ) in section
     assert "Installing or upgrading never creates a directory" in section
-    assert contract.DOC_VERSION == 9
+    assert contract.DOC_VERSION == 10

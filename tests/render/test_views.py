@@ -748,20 +748,22 @@ def _morning_ctx(case: str) -> DocContext:
     return ctx
 
 
-# Captured from HEAD 852e35f before the morning region was implemented.
+# Captured from HEAD 852e35f (DOC_VERSION 9) before the morning region.
+# Re-pinned 9 -> 10 after each old capture matched its digest and each new
+# capture equaled the old bytes with only the literal doc_version line changed.
 _PRE_MORNING_FRONTMATTER_SHA256 = {
-    "run_splits": "9f58b3c72450e05b60d2e79116df4485ae11121d649a347afaa9b070f9399ce2",
-    "run_no_splits": "9f58b3c72450e05b60d2e79116df4485ae11121d649a347afaa9b070f9399ce2",
-    "ride": "d6ef9ae9c1498b2b8bba2fb5197cca8904ae84301d326515fdae15f1cea3321d",
-    "strength_sets": "e6e02e96258815df01419bbd715008f43d4e41b88b0abb4a7bb952d7eaa9cac6",
+    "run_splits": "7e39c57438155020a29ce263f3825796194e8ac213ba7d2d7a0559bda10a2a5e",
+    "run_no_splits": "7e39c57438155020a29ce263f3825796194e8ac213ba7d2d7a0559bda10a2a5e",
+    "ride": "06eae9fcba4bab049741c0fe007ee45b9aba62bdb0ecbdf7791d1c2e80ae567e",
+    "strength_sets": "010bff80ae8574bb7cbff85eee1f5c0c6eddfb11fbbd23baf0d98c1308dda68c",
     "strength_no_sets": (
-        "9a00ca11dbc18cbd49cad00dbb9a5401a19e99f1eed2a333e255091ab293b273"
+        "6b2f25115c5fa57976708b0d73edb362b7bf636172594ee02badf78b9d2ea401"
     ),
     "generic_telemetry": (
-        "c45c643f82050542c73d77f78adde2d1f43c20c41f8a59078b7ece21ecf0ceb1"
+        "bc57608b255ea8a9d34304f0c7e8dd9e9db584944f6b80f80665d47eeeabcec9"
     ),
     "generic_no_telemetry": (
-        "00973428af3fe357ac9da48dceb90fd69f11af0bf0f8f28edc0f68a424720735"
+        "21d26b36b97b5275021924871d12a2c6b7d8d8397c274a69aabcccd2a752b3ee"
     ),
 }
 
