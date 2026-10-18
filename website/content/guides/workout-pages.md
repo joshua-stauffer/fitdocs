@@ -74,7 +74,7 @@ Your device laps (manual button presses or workout steps) and automatic per-kilo
 
 ## Morning Of
 
-If you bring in [wellness](wellness.md) data, this block shows that morning’s resting heart rate, HRV, and sleep, each against your own recent normal and labelled with its source. Fitdocs refreshes it on every sync and regen, so it’s not a place for your own writing. A day without wellness has no block.
+If you bring in [wellness](wellness.md) data, this block shows that morning’s resting heart rate, HRV, and sleep, each against your own recent normal and labelled with its source. Fitdocs refreshes it on every sync and regen, so it’s not a place for your own writing. When there’s no wellness that day, in the week up to it, or in the 60 days before, the page has no block.
 
 ## Training load (filled in by fitdocs)
 
@@ -124,6 +124,10 @@ When a file could belong to more than one page, fitdocs archives it but doesn’
 
 ## When a page is renamed
 
-Fitdocs may rename a page it named itself: when a better-ranked file of the workout arrives, when you change the ranking, or when the page’s local start time changes. Upgrading to fitdocs 0.2 changes it for many older pages, because pages are now dated by the time zone the device recorded. Each rename prints a warning with the old and new names, and the page’s charts move with it.
+A page can be renamed in a few situations:
 
-**Links to the old name aren’t updated**, in your notes or in a training plan’s overrides. Search for the old names the warnings print. A filename you chose yourself isn’t renamed when its start time changes.
+- **Its main file changes.** When a better-ranked file of the workout arrives, or you change the ranking, the page is rebuilt from the new main file, and renamed if that file gives a different name. This happens even if you chose the old name yourself.
+- **Its local start time changes**, for a page whose name fitdocs chose. Upgrading to fitdocs 0.2 does this for many older pages, because pages are now dated by the time zone the device recorded. A page whose file records no time zone is dated in your computer’s time zone, so running `regen` after changing that zone, on a trip for example, renames it too.
+- **A name frees up.** A page fitdocs had to write as `<name>-<8 characters>.md`, because `<name>.md` was taken, moves to `<name>.md` once that name is free.
+
+Each rename prints a warning with the old and new names, and the page’s charts move with it. **Links to the old name aren’t updated**, in your notes or in a training plan’s overrides. Search for the old names the warnings print.

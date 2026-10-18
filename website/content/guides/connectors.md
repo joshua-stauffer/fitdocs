@@ -77,7 +77,7 @@ intervals.icu also keeps your daily wellness: resting heart rate, HRV, sleep, we
 wellness = true
 ```
 
-The first wellness pull reads back to 2010, or to `--since` if you give one. Each later pull re-checks the last 30 days for changes. [Wellness and recovery](wellness.md) covers what fitdocs does with it.
+The first wellness pull reads back to 2010, or to `--since` if you give one. Each later pull re-checks the 30 days before the newest day it has already delivered. [Wellness and recovery](wellness.md) covers what fitdocs does with it.
 
 ## Garmin data may stop arriving
 
@@ -105,13 +105,13 @@ The name in brackets is yours to choose (lowercase letters, digits, and hyphens)
 
 Keys are never stored in your data root. They live in your user’s config folder, `~/.config/fitdocs/credentials/` by default (or under `$XDG_CONFIG_HOME`, or wherever `FITDOCS_CREDENTIALS_DIR` points). Fitdocs refuses a credentials folder inside the data root, so a key can’t end up in your wiki’s git history or a shared folder. Each key file is readable only by you.
 
-A key never goes in `fitdocs.toml` either: fitdocs refuses a setting there that’s named like a credential. To use a key without storing it, set an environment variable instead. For an instance named `intervals`, that’s `FITDOCS_CONNECTOR_INTERVALS_API_KEY`. A variable that’s set always wins over a stored key.
+A key never goes in `fitdocs.toml` either: fitdocs refuses a setting there with the same name as a connector’s key, like `api_key`. To use a key without storing it, set an environment variable instead. For an instance named `intervals`, that’s `FITDOCS_CONNECTOR_INTERVALS_API_KEY`. A variable that’s set always wins over a stored key.
 
 ## What lands in your inbox
 
 Each instance delivers into its own subfolder of the inbox, like `inbox/intervals/`. Those files are fitdocs’s own copies: once the archive holds identical bytes, the next pull removes them. **Nothing you or your own tools put in the inbox is ever touched by a connector.**
 
-Each instance keeps a record of what it has delivered in `.fitdocs/connectors/<name>.toml`. That record, not the service’s listing, decides what’s new. Don’t edit it. Deleting it makes the next pull fetch everything again.
+Each instance keeps a record of what it has delivered in `.fitdocs/connectors/<name>.toml`. That record, not the service’s listing, decides what’s new. Don’t edit it. Deleting it makes the next pull start over like a first pull, and fitdocs no longer cleans up the deliveries still waiting in the inbox.
 
 ## Running it on a schedule
 

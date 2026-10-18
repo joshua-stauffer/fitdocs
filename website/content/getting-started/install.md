@@ -64,7 +64,7 @@ That first `regen` does a few things worth knowing about:
 - **It lets fitdocs recognize a workout you already have when another file of it arrives.** Run it before you sync, say, a Garmin original of a run you have as a HealthFit copy, and before your first `fitdocs pull`.
 - **It sets up the new folders**, `dashboards/`, `wellness/`, `wellness-archive/`, and `recovery/`, each with its `AGENTS.md`.
 
-Then `fitdocs check` reports anything left to sort out. If it finds one workout recorded on two pages, keep one, move anything worth keeping out of the other's notes, delete the other page, and run `fitdocs regen`. A page whose files changed keeps its old load until you run `fitdocs load --recompute`.
+Then `fitdocs check` reports anything left to sort out. If it finds one workout recorded on two pages, keep one, move anything worth keeping out of the other's notes, delete the other page, and run `fitdocs regen`. A page whose files changed keeps its old load until you run `fitdocs load --recompute`. And if you keep your plan files in `dashboards/`, move them and update `[plans] path`: fitdocs now refuses a plan folder there.
 
 If you installed the agent skills by copying, copy them again, and add the two new ones, `fitdocs-analytics` and `fitdocs-dashboards` (see [Agent skills](../guides/wiki-integration.md#agent-skills)).
 

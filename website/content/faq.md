@@ -20,7 +20,7 @@ No. fitdocs makes network requests in only two cases: map tiles, which only reve
 No. fitdocs is a normal command-line tool, and the pages are readable on their own. It's designed to work *well* with an LLM, with any provider or a local model. See [Working with an LLM](llm/index.md).
 
 **I record the same run on my watch and with HealthFit or Stryd. Will I get two pages?**
-No. Files of the same workout share one page, built from the best file, with anything it lacks, like Stryd's running dynamics, filled in from the others. See [Several files, one workout](guides/workout-pages.md#several-files-one-workout).
+Usually not. Files of the same workout share one page, built from the best file, with anything it lacks, like Stryd's running dynamics, filled in from the others. If you had pages before fitdocs 0.2, run `fitdocs regen` first so they're recognized. See [Several files, one workout](guides/workout-pages.md#several-files-one-workout).
 
 **Can I ask questions across all my workouts?**
 Yes. `fitdocs index` builds a local DuckDB database of your whole training log, and `fitdocs query` runs SQL against it. Your LLM can write the SQL for you, and [dashboards](guides/dashboards.md) turn a query into a chart that stays up to date. See [The analytics index](guides/analytics.md).

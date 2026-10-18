@@ -1,7 +1,7 @@
 ---
 id: 2026-10-17-site-copy-lags-main
 title: fitdocs.ai site copy still describes 0.1.0 on skills, commands, contract version and owned paths
-status: open
+status: done
 importance: medium
 importance_why: The rewritten Working-with-an-LLM page now names four skills, the index and eight AGENTS.md folders; its sibling pages contradict it until they are updated.
 effort: M
@@ -74,3 +74,20 @@ agree with the LLM page and the repo docs.
 Whether the site should describe current `main` or the latest PyPI release
 (0.1.0 is still the only tag). The home and LLM pages already describe
 `main`.
+
+## Resolution (2026-10-19)
+Done on chore/site-copy-0-2 (held as a PR until 0.2 is published, because a push to `main` that touches `website/**` deploys the site). The open question is settled by the maintainer's instruction: the site describes the 0.2 release, which is current `main`.
+
+- Every page listed under Evidence now matches main: four skills, fifteen commands, contract version 16, the owned paths and the eight `AGENTS.md` files.
+- The quickstart's unlinked "Working with an LLM" bullet is linked, and so is the same unlinked reference in the benchmarks guide.
+- Four new guides cover connectors, wellness and recovery, the analytics index and dashboards.
+
+Not done, as instructed by the 2026-10-17 decision: no `Annotations:` blocks. The repo copy carries none.
+
+Validated by:
+- `uv run --group docs python -m scripts.build_site build`: 23 pages, every link and anchor resolved;
+- four fact-gathering subagents over docs/, src/ and `--help`;
+- an independent reviewer subagent; every defect it found is fixed on the branch.
+
+The maintainer-authored prose left untouched is queued as `2026-10-19-site-maintainer-prose-nits`.
+

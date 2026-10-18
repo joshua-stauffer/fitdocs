@@ -33,7 +33,7 @@ Reads new files, archives them, and writes workout pages. Then it runs the passe
 
 Rebuilds every workout page from the archive in `fit-archive/`, using your current athlete profile and settings, and rebuilds the wellness series from `wellness-archive/` first. You don't need the original files or the inbox. Your Notes, Workout sections, race tags, and computed load are kept. Then it runs the same passes as `sync`. Run it when `check` asks you to, after a release that changes the document format, or after you change `[identity]` or `[wellness]` settings.
 
-`regen` may rename a page whose name fitdocs chose, when its best file or its local start time has changed. Each rename prints a warning with the old name. Links to the old name aren't updated. See [When a page is renamed](../guides/workout-pages.md#when-a-page-is-renamed).
+`regen` may rename a page: any page whose best file has changed, and a page whose name fitdocs chose when its local start time has changed. Each rename prints a warning with the old name. Links to the old name aren't updated. See [When a page is renamed](../guides/workout-pages.md#when-a-page-is-renamed).
 
 ### `fitdocs load`
 

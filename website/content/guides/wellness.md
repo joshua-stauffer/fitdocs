@@ -71,7 +71,7 @@ Fitdocs never mixes or averages sources. A change takes effect on your next sync
 
 Every workout page gets a **Morning Of** block, just before Training Load. It shows resting heart rate, HRV, and sleep for the day of the workout, each next to its 7-day mean and the source it came from. Heart rate and HRV are also set against your normal range from the 60 days before, and sleep against its 60-day mean.
 
-The block is refreshed on every `sync`, `pull --sync`, and `regen`. When none of those were recorded for that day, the page has no block. Fitdocs owns it and replaces any edits, so write your own thoughts in Notes.
+The block is refreshed on every `sync`, `pull --sync`, and `regen`. When there’s none of those that day, in the week up to it, or in the 60 days before, the page has no block. Fitdocs owns it and replaces any edits, so write your own thoughts in Notes.
 
 ## The recovery page
 
@@ -97,6 +97,6 @@ Each mean and normal range comes from a single source. Fitdocs never pools two s
 
 ## Taking an import back out
 
-To withdraw a file you imported, delete its entry from `wellness-archive/`, remove its copy from the inbox, and run `fitdocs regen`.
+To withdraw a file you imported, delete its entry from `wellness-archive/`, remove its copy from the inbox, and run `fitdocs regen`. If it came from intervals.icu, you may need to correct it there as well.
 
 The full details are in the repository: the [wellness guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/wellness.md) (every supported field, the day rules, and the CSV format) and the [recovery guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/recovery.md) (the method and its sources).

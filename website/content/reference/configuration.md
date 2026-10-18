@@ -160,7 +160,7 @@ One table per connector instance. `<name>` is yours to choose: lowercase letters
 | `wellness` | `false` | Also pull wellness. Only for a connector that has it (`intervals`). |
 | `sources` | `["GARMIN_CONNECT"]` | (`intervals`) Which of intervals.icu's upload sources to keep |
 | `path` | required | (`folder`) The folder to read. Relative paths resolve from the data root. It can't be, contain, or sit inside the inbox. |
-| `settle_seconds` | the inbox's | (`folder`) How long a file must sit unchanged before it's read |
+| `settle_seconds` | `2` (the inbox's default) | (`folder`) How long a file must sit unchanged before it's read |
 
 ```toml
 [connectors.intervals]
@@ -171,7 +171,7 @@ connector = "folder"
 path = "/Users/you/Documents/WatchExports"
 ```
 
-A key never goes in this file: a setting named like a credential is refused. See [Pulling from intervals.icu](../guides/connectors.md).
+A key never goes in this file: a setting with the same name as a connector's key, like `api_key`, is refused. See [Pulling from intervals.icu](../guides/connectors.md).
 
 ## `athlete.toml`
 

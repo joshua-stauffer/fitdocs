@@ -11,7 +11,7 @@ fitdocs works well on its own, but it was designed to live inside a larger markd
 
 ## How it stays out of your way
 
-- **It only writes to its own folders:** `workouts/`, `fit-archive/`, `history/`, `blocks/`, `recovery/`, `wellness/`, `wellness-archive/`, and its hidden `.cache/` and `.fitdocs/`. In `dashboards/` it writes only the charts on the pages you create there. Nothing else in your wiki is touched.
+- **It only writes to its own folders:** `workouts/`, `fit-archive/`, `history/`, `blocks/`, `recovery/`, `wellness/`, `wellness-archive/`, and its hidden `.cache/` and `.fitdocs/`. In `dashboards/` it writes only `AGENTS.md`, the chart images and snapshots in `dashboards/assets/`, and the charts on the pages you create there. It also writes to the inbox and processed folder your settings name. Nothing else in your wiki is touched.
 - **Some things live outside your wiki on purpose.** The [analytics index](analytics.md) is a disposable cache in your user’s cache folder, and connector keys are kept in your user’s config folder, so neither ends up in your notes or their git history.
 - **Your notes can point at fitdocs; fitdocs never points back.** Link from your daily note to `[[2026-09-16-run-1132]]` as much as you like. fitdocs never reads or links to your other pages, apart from the dashboard pages you write for it. If fitdocs renames a page, links to its old name aren’t updated (see [When a page is renamed](workout-pages.md#when-a-page-is-renamed)).
 
@@ -122,7 +122,7 @@ wellness/* linguist-generated
 wellness-archive/** linguist-generated -diff
 ```
 
-The heavy folders (`fit-archive/`, `wellness-archive/`, chart assets, `.cache/`) can also be left out of git entirely, since `fitdocs regen` can rebuild every page from the archives. Just make sure both archives are backed up somewhere. Keep your dashboard pages and their snapshot files (`dashboards/assets/**/*.snapshot-*.json`) in git, though: a snapshot is the only copy of the rows a frozen chart was drawn from.
+The heavy folders (`fit-archive/`, `wellness-archive/`, chart assets, `.cache/`) can also be left out of git entirely, since `fitdocs regen` can rebuild every workout page from the archives. Then `fitdocs index`, `fitdocs recovery`, and `fitdocs dashboard refresh` redraw the rest. Just make sure both archives are backed up somewhere. Keep your dashboard pages and their snapshot files (`dashboards/assets/**/*.snapshot-*.json`) in git, though: a snapshot is the only copy of the rows a frozen chart was drawn from.
 
 ## Obsidian
 
