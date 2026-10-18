@@ -211,7 +211,7 @@ class InboxSettingsError(SettingsError):
     """The ``fitdocs.toml`` ``[inbox]`` table exists but is not valid configuration.
 
     Raised for a non-table ``inbox`` value, a non-string or empty ``path``, a
-    ``settle_seconds`` that is not a non-negative real number (a ``bool`` is
+    ``settle_seconds`` that is not a finite non-negative real number (a ``bool`` is
     rejected explicitly, since Python's ``bool`` subclasses ``int``), a
     non-list-of-non-empty-strings ``ignore``, a non-string or empty
     ``processed_dir``, an unrecognized ``disposition``, ``disposition =
