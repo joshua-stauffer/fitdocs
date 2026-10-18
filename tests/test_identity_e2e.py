@@ -29,6 +29,7 @@ from fitdocs.cli import app
 from fitdocs.compose.types import Composition
 from fitdocs.contract import DOC_VERSION, format_session_uuid
 from fitdocs.declaration import DECLARATION_FILENAME
+from fitdocs.docio import read_frontmatter
 from fitdocs.docmerge import begin_marker, end_marker
 from fitdocs.identity import planning
 from fitdocs.identity.holds import (
@@ -2970,6 +2971,118 @@ def test_regeneration_writes_no_archive_file(
     # no-op write); the unreferenced files are the ones planned.
     assert planned.isdisjoint(calls)
     assert all(archive.exists() for archive in planned)
+
+
+# --- unreadable pages (queue: regen-writes-over-or-beside-an-unreadable-page) ---
+
+
+def _garble(page: Path) -> str:
+    """Break the page's frontmatter (an unclosed flow sequence) and leave a
+    note in its notes region. Returns the page's text afterwards."""
+    _write_note(page, "MY IMPORTANT NOTE")
+    text = page.read_text(encoding="utf-8")
+    broken = text.replace("\n---\n", "\ntags: [unclosed\n---\n", 1)
+    assert broken != text
+    page.write_text(broken, encoding="utf-8")
+    assert read_frontmatter(page) is None  # the scan cannot read it
+    return broken
+
+
+def _stage_unreadable(tmp_path: Path) -> tuple[Path, Path, fx.Species]:
+    data_root = tmp_path / "data"
+    original = fx.garmin_original()
+    _sync_one(data_root, tmp_path, original)
+    return data_root, _only_page(data_root), original
+
+
+def test_regen_does_not_write_over_an_unreadable_page_at_the_suffixed_name(
+    tmp_path: Path,
+) -> None:
+    """The garbled page sits at ``<stem>-<uid8>.md`` and ``<stem>.md`` is held by
+    another file, so the new page's target is the garbled page itself. Regen
+    reports a failure naming it and leaves both files and the directory as they
+    were; the note survives.
+
+    Mutation: drop the existing-target guard in ``_page_task`` (the garbled
+    page is overwritten by a page with the placeholder notes).
+    """
+    data_root, page, original = _stage_unreadable(tmp_path)
+    stem = page.stem
+    garbled = page.with_name(f"{stem}-{_sha(original.data)[:8]}.md")
+    page.rename(garbled)
+    broken = _garble(garbled)
+    occupant = page  # <stem>.md
+    occupant.write_text("not a workout document\n", encoding="utf-8")
+    before = sorted(p.name for p in _pages(data_root))
+
+    report = _regen(data_root)
+
+    assert report.written == ()
+    (failure,) = report.failures
+    assert failure.source == source_ref(_sha(original.data))
+    assert f"{WORKOUTS_DIR}/{garbled.name}" in failure.reason
+    assert garbled.read_text(encoding="utf-8") == broken
+    assert "MY IMPORTANT NOTE" in garbled.read_text(encoding="utf-8")
+    assert occupant.read_text(encoding="utf-8") == "not a workout document\n"
+    assert sorted(p.name for p in _pages(data_root)) == before
+
+
+def test_regen_warns_about_an_unreadable_page_it_seeds_a_duplicate_beside(
+    tmp_path: Path,
+) -> None:
+    """The garbled page sits at the computed stem. Its archive file is listed by
+    no readable page, so regen seeds a page at the suffixed name; the garbled
+    page is untouched and the run names it in a warning.
+
+    Mutation: drop the unreadable-occupant warning in ``_page_task``.
+    """
+    data_root, page, original = _stage_unreadable(tmp_path)
+    broken = _garble(page)
+
+    report = _regen(data_root)
+
+    assert report.failures == ()
+    suffixed = f"{WORKOUTS_DIR}/{page.stem}-{_sha(original.data)[:8]}.md"
+    assert report.written == (suffixed,)
+    assert page.read_text(encoding="utf-8") == broken
+    (warning,) = [w for w in report.warnings if w.doc == f"{WORKOUTS_DIR}/{page.name}"]
+    assert "could not be read" in warning.detail
+    assert suffixed in warning.detail
+
+
+def test_regen_does_not_warn_when_the_stem_holder_is_another_readable_page(
+    tmp_path: Path,
+) -> None:
+    """A readable page of another activity at the computed stem is the ordinary
+    collision: the new page takes the suffix and nothing is warned.
+
+    Mutation: warn for every occupant, not only an unreadable one.
+    """
+    data_root, page, original = _stage_unreadable(tmp_path)
+    other = fx.session_fit_bytes(
+        sport="running",
+        start=original.start + 20,
+        elapsed_s=original.elapsed_s,
+        timer_s=original.timer_s,
+        distance_m=original.distance_m * 3,
+        manufacturer="garmin",
+        product=3843,
+        serial=original.serial,
+        time_created=original.start + 20,
+    )
+    _sync_files(tmp_path, data_root, [("other", other)])
+    # Precondition: two readable pages for two activities, one under the suffix.
+    names = {p.name for p in _pages(data_root)}
+    assert page.name in names and len(names) == 2, names
+    assert read_frontmatter(page) is not None
+    (suffixed,) = [p for p in _pages(data_root) if p != page]
+    suffixed.unlink()  # its archive file is now listed by no page
+
+    report = _regen(data_root)
+
+    assert report.failures == ()
+    assert f"{WORKOUTS_DIR}/{suffixed.name}" in report.written  # re-seeded
+    assert report.warnings == ()
 
 
 # --- CLI scenarios (7.2) ---

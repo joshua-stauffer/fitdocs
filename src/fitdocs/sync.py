@@ -214,6 +214,7 @@ from fitdocs.declaration import (
 )
 from fitdocs.docio import REMEDY_REPLACE_SYMLINK as _REMEDY_REPLACE_SYMLINK
 from fitdocs.docio import SYMLINK_DETAIL as _SYMLINK_DETAIL
+from fitdocs.docio import read_frontmatter
 from fitdocs.docmerge import (
     RegionError,
     begin_marker,
@@ -416,7 +417,7 @@ class SyncReport:
     docstring's version-gate section.
 
     ``warnings`` is a **separate, additive channel** for non-fatal, subject-scoped
-    conditions. Nine causes emit one today: a map that could not be rendered
+    conditions. Ten causes emit one today: a map that could not be rendered
     (Req 4.3, 4.4), a foreign ownership declaration that could not be placed
     (Req 3.6), a document left untouched because it records a newer
     document-format version (Req 5.5), a rewritten document that carried
@@ -428,7 +429,8 @@ class SyncReport:
     collision suffix was settled (activity-identity Req 6.5, 6.6), and a file
     held because the page it belongs to is ambiguous, naming the archived file,
     every page it could belong to and the evidence (activity-identity Req 4.7),
-    and a non-activity FIT skip naming its declared type (wellness-store Req 4.2).
+    a non-activity FIT skip naming its declared type (wellness-store Req 4.2),
+    and a new page written beside a ``workouts/*.md`` the scan could not read.
     This is the canonical enumeration every other module points at
     instead of repeating (:class:`DocWarning`, :func:`fitdocs.cli._report`) --
     keep it, and only it, current when a cause is added. A
@@ -2179,6 +2181,35 @@ def _page_task(
             target = match.path
     renaming = match is not None and target != match.path
     doc_ref = target.relative_to(data_root).as_posix()
+
+    # A page task never writes over a file it did not match. ``taken`` suffixes a
+    # stem once and does not look at the suffixed path, and a page the scan cannot
+    # read (damaged frontmatter) is matched by nothing, so the target can be a
+    # user's page: refuse, and let the caller report this file and carry on.
+    if (match is None or target != match.path) and (
+        target.exists() or target.is_symlink()
+    ):
+        raise FileExistsError(
+            f"{doc_ref} already exists and is not this activity's page (a page "
+            "whose frontmatter could not be read matches nothing); left "
+            "unchanged -- repair or remove it, then run again"
+        )
+    # A new page seeded beside a page at its computed stem that the scan could
+    # not read: the two cannot be tied with certainty, so the new page is
+    # written and the unreadable one is named (a symlink has its own warning).
+    if match is None and not settling and stem != unsuffixed:
+        occupant = doc_path(data_root, unsuffixed)
+        if not occupant.is_symlink() and read_frontmatter(occupant) is None:
+            pending_warnings.append(
+                DocWarning(
+                    doc=occupant.relative_to(data_root).as_posix(),
+                    detail=(
+                        "could not be read as a fitdocs page (its frontmatter is "
+                        f"missing or malformed), so {doc_ref} was written beside "
+                        "it as a new page; repair or delete one of them"
+                    ),
+                )
+            )
 
     # The activity the page renders (the channel-merge seam) and everything
     # computed from it: metrics and the map plan.

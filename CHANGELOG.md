@@ -334,6 +334,12 @@ recorded as one.
 - An Apple Health `export.zip` whose compressed data is corrupt or cut short
   is now reported as an unreadable export and quarantined, like other bad zips.
   Before, the decompression error escaped as an unhandled failure.
+- `fitdocs regen` and `fitdocs sync` no longer write a new page over an existing
+  `workouts/` file they did not match. A page whose frontmatter is damaged
+  matches nothing, and a new page for its activity could land on its path and
+  replace your notes; the file is now reported as a failure and left unchanged.
+  When the damaged page sits at the new page's usual name, the new page is still
+  written beside it and the run warns, naming the damaged page.
 
 ## [0.1.0] - 2026-09-19
 
