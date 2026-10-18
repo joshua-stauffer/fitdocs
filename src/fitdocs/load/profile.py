@@ -1026,8 +1026,9 @@ def _validate(field: AthleteField, value: float) -> int | float:
     """Validate ``value`` against ``field`` and return the value to store.
 
     Rejects a ``bool`` (never a number), a non-finite value, enforces the
-    inclusive range bounds, and for an ``int``-kind field requires an integral value and returns a
-    Python ``int`` so it serializes as a bare TOML integer. Any violation raises
+    inclusive range bounds, and for an ``int``-kind field requires an integral
+    value and returns a Python ``int`` so it serializes as a bare TOML integer.
+    Any violation raises
     :class:`ValueError` and nothing is stored (Req 2.6).
     """
     if isinstance(value, bool):
