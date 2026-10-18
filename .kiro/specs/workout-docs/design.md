@@ -430,6 +430,7 @@ ARCHIVE_DIR: Final[str] = "fit-archive"
 
 def sport_slug(activity: Activity) -> str
 def activity_uid(activity: Activity, sha256: str) -> str      # SESSION UUID (canonical form) when present, else sha256
+def local_start(activity: Activity, tz: tzinfo) -> datetime | None  # Amendment 6
 def doc_stem(activity: Activity, uid: str, tz: tzinfo, taken: Callable[[str], bool]) -> str
 def doc_path(data_root: Path, stem: str) -> Path              # workouts/<stem>.md
 def asset_rel_path(stem: str, chart: str) -> str              # assets/<stem>-<chart>.svg (POSIX, doc-relative)
@@ -444,6 +445,13 @@ def source_ref(sha256: str) -> str                            # data-root-relati
   normalized sport label lowercased. With a start time:
   `{local %Y-%m-%d}-{slug}-{local %H%M}` (e.g. `2026-07-12-run-0730`);
   without one: `undated-{slug}-{uid[:12]}` — no fabricated date (2.5).
+- Local time (Amendment 6, 2.9, 2.10, 5.13): `local` is `local_start`, the
+  start in `Activity.local_offset` when the file records it, else
+  `start.astimezone(tz)`. The CLI's `tz` is the system zone as a zone
+  (`ZoneInfo` from `TZ` or `/etc/localtime`), so its offset is the one in
+  force at the activity's start; only a platform that names no zone falls back
+  to today's fixed offset. The frontmatter `date`, `start_time` and `title`
+  and the H1 call the same helper.
 - Collision policy (2.6): if `taken(stem)` reports an existing document for
   a *different* activity, append `-{uid[:8]}`; deterministic because it
   depends only on recorded identity.

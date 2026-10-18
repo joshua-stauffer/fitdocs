@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from fitdocs.contract import CONTRACT_VERSION, DOC_VERSION
+from fitdocs.contract import CONTRACT_VERSION
 from tests._changelog_view import V0_1_0, unreleased_since
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -182,7 +182,8 @@ def test_release_versions_match_contract(kind: str) -> None:
             r"\(`doc_version` (\d+) to (\d+)\) to add the morning-of region", changed
         )
         actual = tuple(map(int, match.groups())) if match else ()
-        expected = (DOC_VERSION - 1, DOC_VERSION)
+        # The morning region's own advance; later releases move DOC_VERSION on.
+        expected = (9, 10)
     else:
         match = re.search(
             r"advances from version `(\d+)` to `(\d+)`: "

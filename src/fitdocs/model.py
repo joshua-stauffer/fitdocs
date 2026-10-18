@@ -356,3 +356,9 @@ class Activity:
     """The identity the file's first ``file_id`` message declares; every value
     ``None`` when the file records none. The default keeps this field additive;
     the ingest orchestrator populates it explicitly."""
+    local_offset: timedelta | None = None
+    """The offset from UTC of the local time the recording device kept: the
+    first ``activity`` message's ``local_timestamp`` minus its ``timestamp``.
+    ``None`` when the file records no such pair, or a difference no time zone
+    could have. The default keeps this field additive; the ingest orchestrator
+    populates it explicitly."""

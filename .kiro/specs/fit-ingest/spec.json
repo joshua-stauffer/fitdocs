@@ -1,7 +1,7 @@
 {
   "feature_name": "fit-ingest",
   "created_at": "2026-07-14T21:58:27Z",
-  "updated_at": "2026-10-02T12:00:00Z",
+  "updated_at": "2026-10-18T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -191,6 +191,27 @@
           "tests/metrics/test_mean_max_sources.py"
         ]
       }
+    },
+    {
+      "date": "2026-10-18",
+      "requirement": "4.13, 4.14 added (appended; no criterion renumbered or reworded) -- Amendment 8, landed by the local-time fix (queue item 2026-09-12-local-tz-is-fixed-offset-of-run-time)",
+      "reason": "Workout documents were dated in the system's offset at run time. The FIT activity message's local_timestamp records the recording device's own clock; exposing its difference from timestamp lets the document layer state the local time the athlete saw (workout-docs Amendment 6). Measured before deciding: in a real 3,335-file archive every HealthFit and Garmin file records the pair, all differences are whole 15-minute steps within -8 h..+13 h, and multi-activity files never disagree.",
+      "implementation": "Activity.local_offset: timedelta | None = None (additive last field, schema version unchanged); fitdocs.ingest.local_time.extract_local_offset reads the first activity message; parse_fit stores it. The committed JSON snapshots gain only \"local_offset\": null.",
+      "tests": {
+        "4.13": [
+          "tests/ingest/test_local_time.py::test_offset_is_local_timestamp_minus_timestamp",
+          "tests/ingest/test_local_time.py::test_first_activity_message_wins"
+        ],
+        "4.14": [
+          "tests/ingest/test_local_time.py::test_implausible_difference_is_none",
+          "tests/ingest/test_local_time.py::test_activity_without_local_timestamp_is_none",
+          "tests/ingest/test_local_time.py::test_file_without_activity_message_is_none",
+          "tests/ingest/test_local_time.py::test_values_that_are_not_genuine_integers_are_none",
+          "tests/ingest/test_local_time.py::test_no_messages_is_none",
+          "tests/ingest/test_local_time.py::test_field_defaults_to_absent_and_the_schema_version_holds"
+        ]
+      },
+      "cross_spec": "workout-docs Amendment 6 consumes the field and advances DOC_VERSION from 10 to 11; this library still writes nothing."
     }
   ]
 }

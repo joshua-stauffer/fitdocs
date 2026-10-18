@@ -1104,7 +1104,8 @@ sync SOURCE`, which neither archives wellness nor rebuilds the series.
   emptied in a copy of the root; a second `fitdocs sync SOURCE` (nothing new
   to archive, so only the pass writes) under `TZ=Pacific/Kiritimati` and a
   faked system date refills byte-identical blocks. Page dates themselves
-  follow the configured timezone, as they always have; the pass reads none.
+  follow the activity's recorded local time, else the system zone on the
+  activity's date (workout-docs Amendment 6); the pass reads none.
 - Confinement: `tests/test_confinement.py` entry point `sync-morning`
   (`prepare`: a staged series and a source directory; `run`: `fitdocs sync
   SOURCE`; `non_vacuous`: a page's `morning` region is non-empty).

@@ -188,8 +188,13 @@ def test_payload_version_paired_with_doc_version() -> None:
     **The pair became ``(2, 10)`` (workout-wellness task 4.1):** every page
     gains the morning region; the load result's shape is unchanged, so
     ``DOC_VERSION`` advances alone a seventh time.
+
+    **The pair became ``(2, 11)`` (the local-time fix, workout-docs Amendment
+    6):** a page's local date and time follow the offset its file records; the
+    load result's shape is unchanged, so ``DOC_VERSION`` advances alone an
+    eighth time.
     """
-    assert (LOAD_PAYLOAD_VERSION, contract.DOC_VERSION) == (2, 10), (
+    assert (LOAD_PAYLOAD_VERSION, contract.DOC_VERSION) == (2, 11), (
         f"LOAD_PAYLOAD_VERSION={LOAD_PAYLOAD_VERSION} and "
         f"contract.DOC_VERSION={contract.DOC_VERSION} drifted apart. "
         "Req 11.5 requires that a result-format change also change the "

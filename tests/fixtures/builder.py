@@ -379,6 +379,7 @@ def small_sport_fit_bytes(
     record_count: int = _SMALL_SPORT_RECORD_COUNT,
     speed_mps: float = _SMALL_SPORT_SPEED_MPS,
     hr_base: int = _SMALL_SPORT_HR_BASE,
+    local_offset_s: int | None = None,
 ) -> bytes:
     """Encoded ``.fit`` bytes for a small, parameterized sport fixture.
 
@@ -386,6 +387,9 @@ def small_sport_fit_bytes(
     (``speed_mps * i``) -- no GPS, power, or laps. ``timestamp_offset`` (in FIT
     seconds, i.e. from :data:`FIT_TIMESTAMP_BASE`) lets callers render several
     documents of the same sport into one data root without filename collisions.
+    ``local_offset_s``, when given, makes the ``activity`` message end at the
+    session's end and record a ``local_timestamp`` that many seconds from it --
+    the device's local clock; without it the bytes are exactly as before.
     Deterministic: fixed constants only, no wall-clock time.
     """
     base = FIT_TIMESTAMP_BASE + timestamp_offset
@@ -417,7 +421,11 @@ def small_sport_fit_bytes(
             "max_heart_rate": hr_base + (record_count - 1),
         }
     )
-    mesgs.append(_activity(record_count - 1, float(record_count - 1)))
+    activity = _activity(record_count - 1, float(record_count - 1))
+    if local_offset_s is not None:
+        activity["timestamp"] = base + (record_count - 1)
+        activity["local_timestamp"] = base + (record_count - 1) + local_offset_s
+    mesgs.append(activity)
     return encode(mesgs)
 
 

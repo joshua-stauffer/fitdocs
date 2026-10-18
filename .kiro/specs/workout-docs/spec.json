@@ -153,6 +153,40 @@
         ]
       },
       "cross_spec": "Workout-wellness Requirements 9.1-9.3 own the page-format advance and archived-input regeneration; the ownership-contract version and published text are owned by its task 4.2."
+    },
+    {
+      "date": "2026-10-18",
+      "requirement": "2.9, 2.10, 5.13 added (appended; no criterion renumbered or reworded) -- Amendment 6, landed by the local-time fix (queue item 2026-09-12-local-tz-is-fixed-offset-of-run-time)",
+      "reason": "cli._local_tz returned datetime.now().astimezone().tzinfo, a fixed offset for the moment the command ran, so pages from the other half of the DST year were an hour off and activities recorded in another zone were stated in this computer's zone (US-era runs dated the next day; their Morning Of blocks showed the morning after).",
+      "implementation": "fitdocs.layout.local_start(activity, tz) returns the start in Activity.local_offset (fit-ingest Amendment 8) when recorded, else start.astimezone(tz); doc_stem, the frontmatter date/start_time/title and the H1 all call it. cli._local_tz now returns a zone: ZoneInfo from TZ (key or zone-file path) or ZoneInfo.from_file(/etc/localtime), falling back to today's fixed offset only when neither names one. DOC_VERSION advances from 10 to 11; CONTRACT_VERSION is unchanged (the contract's narrative already lists 'the configured timezone' among the re-derivation inputs, which stays true for files with no recorded offset).",
+      "also": "Existing pages keep their filenames through regen (activity-identity Req 6.3), so after regen an old page's name can disagree with its corrected date; 5.13 binds the name a new document is computed from. Whether to rename existing fitdocs-named pages is left to the maintainer.",
+      "tests": {
+        "2.9": [
+          "tests/render/test_local_time.py::test_every_local_time_on_the_page_follows_one_rule[recorded-west-previous-day]",
+          "tests/render/test_local_time.py::test_every_local_time_on_the_page_follows_one_rule[recorded-wins-over-zone]",
+          "tests/render/test_local_time.py::test_every_local_time_on_the_page_follows_one_rule[recorded-east-next-day]",
+          "tests/render/test_local_time.py::test_every_local_time_on_the_page_follows_one_rule[recorded-zero]",
+          "tests/test_cli_local_tz.py::test_sync_dates_each_page_at_its_own_offset"
+        ],
+        "2.10": [
+          "tests/render/test_local_time.py::test_every_local_time_on_the_page_follows_one_rule[zone-winter]",
+          "tests/render/test_local_time.py::test_every_local_time_on_the_page_follows_one_rule[zone-summer]",
+          "tests/test_cli_local_tz.py::test_tz_key_names_a_zone_with_both_offsets",
+          "tests/test_cli_local_tz.py::test_tz_path_reads_that_zone_file",
+          "tests/test_cli_local_tz.py::test_without_tz_the_localtime_file_names_the_zone",
+          "tests/test_cli_local_tz.py::test_tz_wins_over_the_localtime_file",
+          "tests/test_cli_local_tz.py::test_an_unnamed_zone_keeps_the_current_offset",
+          "tests/test_cli_local_tz.py::test_sync_dates_each_page_at_its_own_offset"
+        ],
+        "5.13": [
+          "tests/render/test_local_time.py::test_every_local_time_on_the_page_follows_one_rule"
+        ],
+        "doc-version": [
+          "tests/test_local_time_docs.py::test_release_note_names_the_advance_to_the_current_version",
+          "tests/test_local_time_docs.py::test_version_history_records_the_local_time_advance"
+        ]
+      },
+      "cross_spec": "fit-ingest Amendment 8 supplies Activity.local_offset. Every reader of a page's date (morning, load, history, hr_benchmarks, performance, plans, index) reads frontmatter, so it follows after regen with no change of its own."
     }
   ]
 }

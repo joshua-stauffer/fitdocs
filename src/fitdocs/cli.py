@@ -198,6 +198,7 @@ from datetime import UTC, date, datetime, tzinfo
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, NoReturn
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import typer
 from rich.console import Console
@@ -2164,12 +2165,38 @@ def _run_plan_pass(data_root: Path, *, today: date, chained: bool) -> ReconcileR
 
 
 def _local_tz() -> tzinfo:
-    """The system local timezone, threaded explicitly into the engine (Req 5.x).
+    """The system's time zone, threaded explicitly into the engine (Req 5.x).
 
+    A zone, not today's offset: a page whose file records no local time of its
+    own is dated at the offset this zone had on the activity's date
+    (workout-docs Req 2.10), so a January run synced in July is not an hour off.
+    """
+    return _system_zone(os.environ.get("TZ"), Path("/etc/localtime"))
+
+
+def _system_zone(tz: str | None, localtime: Path) -> tzinfo:
+    """The zone ``tz`` (the ``TZ`` variable) or the ``localtime`` file names.
+
+    ``TZ``, when set, decides, as it does for the C library: an IANA key, or a
+    zone file's absolute path, either optionally ``:``-prefixed. Unset, the
+    zone file at ``localtime`` (``/etc/localtime``) is read directly, so a
+    copied file needs no link to a named zone. When neither names a readable
+    zone (a POSIX rule string, Windows), the fallback is today's fixed offset:
     ``datetime.now().astimezone()`` attaches the local zone to a naive now, so
     its ``tzinfo`` is always populated; the assertion documents that invariant
     for the type checker rather than guarding a reachable branch.
     """
+    try:
+        if tz is None:
+            with localtime.open("rb") as handle:
+                return ZoneInfo.from_file(handle)
+        key = tz.removeprefix(":")
+        if key.startswith("/"):
+            with Path(key).open("rb") as handle:
+                return ZoneInfo.from_file(handle)
+        return ZoneInfo(key)
+    except (OSError, ValueError, ZoneInfoNotFoundError):
+        pass
     local = datetime.now().astimezone().tzinfo
     assert local is not None  # astimezone() always attaches the local tzinfo
     return local

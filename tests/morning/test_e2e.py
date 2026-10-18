@@ -391,13 +391,13 @@ def _aged_morning_page(tmp_path: Path) -> tuple[Path, Path, bytes]:
     page = _pages(root)[DAY]
     original = page.read_text()
     assert "| Resting HR | 47 bpm |" in _block(page)
-    assert "\ndoc_version: 10\n" in original
+    assert "\ndoc_version: 11\n" in original
     aged = re.sub(
         r"<!-- fitdocs:begin:morning -->.*?<!-- fitdocs:end:morning -->\n?",
         "",
         original,
         flags=re.DOTALL,
-    ).replace("\ndoc_version: 10\n", "\ndoc_version: 9\n", 1)
+    ).replace("\ndoc_version: 11\n", "\ndoc_version: 9\n", 1)
     page.write_text(aged)
     frontmatter = read_document(page).frontmatter  # type: ignore[union-attr]
     assert document_version(frontmatter or {}) == 9
@@ -416,7 +416,7 @@ def test_pre_morning_page_check_is_outdated_and_read_only(
     elif observable == "finding":
         assert (
             f"workouts/{page.name}\n"
-            "    doc_version is 9, below the current 10\n"
+            "    doc_version is 9, below the current 11\n"
             "    run `fitdocs regen` to bring it to the current format"
         ) in result.output
     else:
@@ -451,7 +451,7 @@ def test_regen_restores_the_morning_page_from_both_archives(
     if observable == "block":
         assert "| Resting HR | 47 bpm |" in _block(page)
     elif observable == "version":
-        assert "\ndoc_version: 10\n" in page.read_text()
+        assert "\ndoc_version: 11\n" in page.read_text()
     else:
         result = RUNNER.invoke(app, ["check", "--out", str(root)])
         if observable == "check-status":

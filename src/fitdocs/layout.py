@@ -17,9 +17,12 @@ write-confinement guard both read (wiki-contract Req 7.5, 7.6), and
 (Req 3.1). Two ideas govern every helper here:
 
 * **Honest naming.** A document is named from the activity's *local* start time
-  (``YYYY-MM-DD-<slug>-HHMM``). When the activity recorded no start time, the
-  stem carries an identity prefix (``undated-<slug>-<uid[:12]>``) rather than a
-  fabricated date -- the hard no-fabrication rule (Req 2.5).
+  (``YYYY-MM-DD-<slug>-HHMM``), as :func:`local_start` gives it: the clock the
+  recording device kept when the file records its offset, otherwise the passed
+  zone at its offset on that date (workout-docs Req 2.9, 2.10). When the activity
+  recorded no start time, the stem carries an identity prefix
+  (``undated-<slug>-<uid[:12]>``) rather than a fabricated date -- the hard
+  no-fabrication rule (Req 2.5).
 * **Stable identity.** ``activity_uid`` prefers the recorded ``SESSION UUID``
   developer field (a 16-byte value, formatted as a canonical UUID string) so
   re-exports of one activity converge onto one document; absent or malformed, it
@@ -42,7 +45,7 @@ plan-resolution Req 7.5).
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import tzinfo
+from datetime import datetime, timezone, tzinfo
 from pathlib import Path
 from typing import Final
 
@@ -258,6 +261,24 @@ def activity_uid(activity: Activity, sha256: str) -> str:
     return formatted if formatted is not None else sha256
 
 
+def local_start(activity: Activity, tz: tzinfo) -> datetime | None:
+    """The activity's start in the local time its document is named and dated by.
+
+    The offset the recording device kept (:attr:`Activity.local_offset`) when the
+    file records one, so the page shows the clock the athlete saw wherever they
+    were; otherwise ``tz``, at the offset it had at that instant (the CLI passes
+    the system's zone). ``None`` when the activity records no start time. The
+    filename stem, frontmatter ``date``/``start_time``/``title`` and the H1 all
+    take their local time from here (workout-docs Req 2.9, 2.10, 5.13).
+    """
+    start = activity.start_time
+    if start is None:
+        return None
+    if activity.local_offset is not None:
+        return start.astimezone(timezone(activity.local_offset))
+    return start.astimezone(tz)
+
+
 def doc_stem(
     activity: Activity,
     uid: str,
@@ -266,8 +287,8 @@ def doc_stem(
 ) -> str:
     """The document's filename stem (without the ``.md`` extension) (Req 2.5, 2.6).
 
-    With a recorded start time, the activity's UTC ``start_time`` is converted to
-    local time in ``tz`` and formatted ``f"{local:%Y-%m-%d}-{slug}-{local:%H%M}"``
+    With a recorded start time, the activity's :func:`local_start` is formatted
+    ``f"{local:%Y-%m-%d}-{slug}-{local:%H%M}"``
     (e.g. ``2026-07-12-run-0730``) -- the *local* date and time name the document.
     Without a start time the stem is ``f"undated-{slug}-{uid[:12]}"``: an identity
     prefix, never a fabricated date.
@@ -279,11 +300,10 @@ def doc_stem(
     activity's name.
     """
     slug = sport_slug(activity)
-    start = activity.start_time
-    if start is None:
+    local = local_start(activity, tz)
+    if local is None:
         base = f"undated-{slug}-{uid[:12]}"
     else:
-        local = start.astimezone(tz)
         base = f"{local:%Y-%m-%d}-{slug}-{local:%H%M}"
     if taken(base):
         return f"{base}-{uid[:8]}"

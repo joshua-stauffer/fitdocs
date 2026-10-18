@@ -423,6 +423,8 @@ tables come straight from the model.
 10. _(added by Amendment 5)_ Where a device entry records a product name as text, the fit-ingest library shall keep exposing that recorded text in preference to any name resolved from a code.
 11. _(added by Amendment 5)_ The fit-ingest library shall resolve product names from a file's own content alone, so that the same device is named alike whether its file arrived as a device original, a Garmin Connect export, an intervals.icu download or a hand drop.
 12. _(added by Amendment 5)_ The fit-ingest library shall take every resolved name from the FIT SDK's profile, and shall keep no product-name table of its own.
+13. _(added by Amendment 8)_ When a file's first `activity` message records both its timestamp and its local timestamp, and their difference is a whole number of 15-minute steps from −12 h to +14 h inclusive, the fit-ingest library shall expose that difference as the activity's recorded local UTC offset, positive east of UTC.
+14. _(added by Amendment 8)_ If a file has no `activity` message, or its first one lacks either value or records either as anything but an integer, or their difference is outside that range or not a whole number of 15-minute steps, then the fit-ingest library shall expose the recorded local UTC offset as absent (`None`), never as zero, a rounded value or the offset of any other zone.
 
 ### Requirement 5: Sport and Modality Detection
 **Objective:** As a downstream consumer, I want a normalized sport label and
@@ -651,3 +653,24 @@ unnamed integer is recorded as text, and an absent or wrong-typed value
 absent type or `"activity"`, and `False` for other declared types. This is the
 ingest support for wellness-store 4.1 and 4.4; the sync, drain and regeneration
 guard belongs to wellness-store and is implemented separately.
+
+## Amendment 8 (2026-10-18): the recorded local-time offset, landed by the local-time fix
+
+A FIT file's `activity` message records `local_timestamp` beside `timestamp`:
+the recording device's local clock at the same instant. Their difference is
+the offset from UTC the device was keeping, which is the local time the athlete
+saw. Workout documents need it (workout-docs Amendment 6): without it a page can
+only be dated in the system's zone, which is wrong for every activity recorded
+in another zone. In a real 3,335-file archive, every HealthFit and Garmin file
+records the pair; only files from a power meter's own export do not.
+
+`Activity` gains `local_offset: timedelta | None = None` as its last field,
+keeping existing constructions valid and the schema version unchanged. It is
+read from the first `activity` message by `fitdocs.ingest.local_time.
+extract_local_offset` (4.13). A difference no time zone could have is absent,
+not corrected (4.14).
+
+Requirement 4 gains criteria 4.13-4.14. **No existing criterion is renumbered,
+reworded or withdrawn, and every value the activity exposed before is unchanged
+for the same input bytes.** The tests pinning each new criterion are listed in
+this spec's `spec.json` `amendments` array.

@@ -61,6 +61,7 @@ from fitdocs.contract import (
     WORKOUT_REGION,
     region_block,
 )
+from fitdocs.layout import local_start
 from fitdocs.model import Modality
 from fitdocs.render import Asset, DocContext, RenderedDoc
 from fitdocs.render.attribution import attribution_line
@@ -93,10 +94,9 @@ def _title(ctx: DocContext) -> str:
     date.
     """
     sport = ctx.activity.sport.value
-    start = ctx.activity.start_time
-    if start is None:
+    local = local_start(ctx.activity, ctx.tz)
+    if local is None:
         return f"{sport} {ctx.doc_stem}"
-    local = start.astimezone(ctx.tz)
     return f"{sport} {local:%Y-%m-%d} {local:%H:%M}"
 
 

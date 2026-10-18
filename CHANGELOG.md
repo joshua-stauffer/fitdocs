@@ -153,6 +153,18 @@ recorded as one.
 
 ### Changed
 
+- Workout pages state the local time the recording device kept. A page's
+  `date`, `start_time`, title and heading come from the time-zone offset its
+  `.fit` file records, so a run recorded while traveling keeps that trip's
+  time of day and date. A file that records no offset is dated in this
+  computer's time zone at the offset it had on the activity's own date.
+  Before, every page used the offset in force when the command ran, so pages
+  from the other half of the daylight-saving year were an hour off, and runs
+  recorded in another time zone could land on the wrong day; the Morning Of
+  block then showed the wrong morning. The generated document format advances
+  (`doc_version` 10 to 11): run `fitdocs regen` once after upgrading to correct
+  existing pages. Existing pages keep their filenames; a page created after
+  the upgrade is named by the corrected time.
 - The generated document format advances (`doc_version` 9 to 10)
   to add the morning-of region. Run `fitdocs regen` once after
   upgrading to bring existing workout pages to the current format.

@@ -663,6 +663,8 @@ class Activity:
     devices: tuple[DeviceInfo, ...]
     developer_fields: Mapping[str, object]  # session-scoped, by described field name; empty when none (14.1, 14.3)
     developer_fields_declared_scale: frozenset[str]  # keys ingest decoded via a declared scale/offset (14.2, A2 revision)
+    file_identity: FileIdentity      # first file_id message (Amendment 4, 7)
+    local_offset: timedelta | None   # first activity message's local_timestamp - timestamp (4.13, 4.14, Amendment 8)
 ```
 - Invariants: all `Samples` arrays share one length; `time_s` is
   non-decreasing; `laps` preserve message order; `sets` preserve recorded
@@ -1890,3 +1892,18 @@ by the maintainer and read directly, and the Coggan manuscript was fetched and
 verified end to end rather than summarized. Nothing in this amendment rests on a
 search result. `research.md`'s D4 is updated to say so rather than deleted, so a
 later reader can see the distinction that was being protected.
+
+## Amendment 8: Recorded Local-Time Offset
+
+`fitdocs.ingest.local_time.extract_local_offset(activity_mesgs)` is a pure
+function over the decoded `activity` messages, imported only by the
+orchestrator. It reads the first message's `timestamp` and `local_timestamp`
+as raw FIT-epoch integers (the decode wrapper keeps
+`convert_datetimes_to_dates` off) and returns their difference as a
+`timedelta` when it is a whole number of 15-minute steps from −12 h to
++14 h; otherwise, or when either value is missing or not a genuine integer
+(a `bool` is not), it returns `None` (4.13, 4.14). `parse_fit` stores the
+result on `Activity.local_offset`, an additive last field with a `None`
+default, so the schema version does not move and the committed JSON
+snapshots gain only `"local_offset": null`. The document layer decides what a
+page does with it (workout-docs Amendment 6).

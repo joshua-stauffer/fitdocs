@@ -26,6 +26,7 @@ from fitdocs.ingest.decode import decode_fit
 from fitdocs.ingest.developer import extract_record_developer_fields
 from fitdocs.ingest.file_id import count_undocumented_messages, extract_file_identity
 from fitdocs.ingest.laps import extract_laps
+from fitdocs.ingest.local_time import extract_local_offset
 from fitdocs.ingest.records import extract_samples, retained_records
 from fitdocs.ingest.sets import extract_sets
 from fitdocs.ingest.sport import detect_sport
@@ -139,6 +140,7 @@ def parse_fit(source: str | Path | bytes) -> Activity:
         developer_fields_declared_scale=developer_fields_declared_scale,
         record_developer_fields=record_developer_fields,
         file_identity=extract_file_identity(file_id_mesgs),
+        local_offset=extract_local_offset(activity_mesgs),
     )
 
 

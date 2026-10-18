@@ -66,6 +66,7 @@ from fitdocs.contract import (
     WORKOUT_TYPE,
 )
 from fitdocs.identity.kinds import source_identity
+from fitdocs.layout import local_start
 from fitdocs.render import DocContext
 from fitdocs.render.format import fmt_duration
 
@@ -80,10 +81,9 @@ def _title(ctx: DocContext) -> str:
     with a stable identity suffix, never a fabricated date.
     """
     sport = ctx.activity.sport.value
-    start = ctx.activity.start_time
-    if start is None:
+    local = local_start(ctx.activity, ctx.tz)
+    if local is None:
         return f"{sport} {ctx.doc_stem}"
-    local = start.astimezone(ctx.tz)
     return f"{sport} {local:%Y-%m-%d} {local:%H:%M}"
 
 
@@ -122,8 +122,8 @@ def build_frontmatter(ctx: DocContext) -> str:
     if identity.session_uuid is not None:
         data[UUID_KEY] = identity.session_uuid
 
-    if activity.start_time is not None:
-        local = activity.start_time.astimezone(ctx.tz)
+    local = local_start(activity, ctx.tz)
+    if local is not None:
         data[DATE_KEY] = f"{local:%Y-%m-%d}"
         data[START_TIME_KEY] = local.isoformat()
 

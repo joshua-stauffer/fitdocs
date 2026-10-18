@@ -189,7 +189,7 @@ __all__ = [
 
 # --- versions ----------------------------------------------------------------
 
-DOC_VERSION: Final[int] = 10
+DOC_VERSION: Final[int] = 11
 """The document-format version stamped on every generated workout document.
 
 Compared arithmetically against the version a document records (Req 5.1-5.3,
@@ -338,6 +338,18 @@ Raised from ``9`` to ``10`` by workout-wellness. Every page gains an empty
 morning-of pass fills from the wellness series. A page stamped with a lower
 version has no such region, so the pass leaves it alone until ``fitdocs regen``
 brings it current.
+
+Raised from ``10`` to ``11`` by the local-time fix (workout-docs Amendment 6,
+Req 2.9, 2.10, 5.13; fit-ingest Amendment 8). A page's ``date``, ``start_time``,
+``title`` and heading now state the clock the recording device kept, from the
+offset its file records, and otherwise the system zone at its offset on the
+activity's own date; before, every page used the system's offset at the moment
+the command ran. The page's shape is unchanged, but those values move on every
+page recorded away from the system's zone or in the other half of the DST
+year, so a lower version marks a page whose local date and time may be wrong
+until ``fitdocs regen`` rewrites it. ``regen`` keeps each existing page's
+filename, as it does through any time-zone change (activity-identity Req 6.2,
+6.3); a page created after the fix is named by the same rule as its content.
 """
 
 CONTRACT_VERSION: Final[str] = "15"
