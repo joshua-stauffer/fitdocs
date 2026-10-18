@@ -300,3 +300,34 @@ no counter-evidence.
   from, in place of the superseded 8–9 s sample (3.11). The published
   contract version shall advance by one, because a guarantee the ownership
   contract states has changed.
+
+## Amendment 2 (2026-10-18): a page fitdocs named follows a changed local start, landed by the local-time fix
+
+**Why.** workout-docs Amendment 6 corrects how a page's local start date and
+time are read, so on the first `regen` after upgrading most pages compute a
+different name. Criterion 6.3 kept each such page's filename, but a page's
+chart assets are named from the computed name, so its charts moved while the
+page did not: the old chart set stayed on disk with nothing linking it, and
+two pages that started in the same local minute could link one chart
+(`.kiro/queue/2026-09-29-timezone-change-orphans-chart-assets.md`,
+`.kiro/queue/2026-10-01-chart-assets-named-by-computed-stem-collide-across-pages.md`).
+The maintainer chose, on 2026-10-18, to rename the pages fitdocs named rather
+than keep their filenames.
+
+- A2.1 When a page's base does not change but its filename is the name
+  computed from the local start date and time its own frontmatter records,
+  with or without its collision suffix, and the name computed now differs, the
+  fitdocs CLI shall rename the page to the computed name as 6.2 does, remove
+  the chart assets 6.4 names, and report the rename as 6.5 does, giving the
+  changed local start time as the reason. Criterion 6.3 keeps every other
+  filename, a filename the user chose included.
+- A2.2 The ownership contract shall state the rename of A2.1 beside the
+  base-change rename (9.3), including that links to the previous filename are
+  not updated.
+- A2.3 The published contract version shall advance by one, because a
+  guarantee the ownership contract states has changed.
+
+A filename the user chose never equals the name computed from the page's own
+recorded start (a hand-edited `start_time` makes it differ too), so it cannot
+qualify. Two pages of one local minute keep distinct names, under the
+collision suffix and settle pass of 6.6.

@@ -1,7 +1,7 @@
 {
   "feature_name": "wiki-contract",
   "created_at": "2026-07-21T07:56:54Z",
-  "updated_at": "2026-10-15T20:53:01Z",
+  "updated_at": "2026-10-18T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -76,13 +76,13 @@
     },
     {
       "date": "2026-10-15",
-      "requirement": "Amendment 9 \u2014 recovery 12.1, 12.3, 13.1, 13.2, 13.3, 18.2; implemented by recovery task 1.6",
+      "requirement": "Amendment 9 — recovery 12.1, 12.3, 13.1, 13.2, 13.3, 18.2; implemented by recovery task 1.6",
       "reason": "Recovery adds owned recovery/ and recovery/assets/ locations, one generated recovery page and its chart images, and a recovery/AGENTS.md declaration. The published contract describes its write and preservation rules and advances from 13 to 14. The recovery writer and page schema remain recovery-owned.",
       "also": "requirements.md gains Amendment 9 and design.md a dated location paragraph. Prior criteria, amendment entries and schema versions remain unchanged; predecessor metadata reconciliation remains separate."
     },
     {
       "date": "2026-10-18",
-      "requirement": "1.7, 2.20, 2.21 (new) \u2014 implemented by workout-wellness task 4.2",
+      "requirement": "1.7, 2.20, 2.21 (new) — implemented by workout-wellness task 4.2",
       "reason": "Amendment 10 publishes the refreshed morning region, its whole-root morning-of pass, widened re-derivability, and ownership contract version 14 to 15. Actual next-free criteria preserve dashboards 2.17, wellness-store 2.18 and recovery 2.19. The runtime pass and workout page schema remain workout-wellness-owned.",
       "also": "Append-only requirements amendment and contract history; revised ownership guide and workouts declaration. Other declaration goldens change by the version alone. Prior amendment metadata and approvals retained.",
       "tests": {
@@ -103,6 +103,18 @@
           "tests/test_ownership_contract.py::test_morning_contract_clause",
           "tests/test_declaration.py::test_workouts_declaration_states_morning_ownership",
           "tests/morning/test_e2e.py::test_regen_restores_the_morning_page_from_both_archives"
+        ]
+      }
+    },
+    {
+      "date": "2026-10-18",
+      "requirement": "Amendment 11 -- contract text and CONTRACT_VERSION 15 -> 16, landed by the local-time fix (activity-identity Amendment 2)",
+      "reason": "A third rename trigger: a page whose filename fitdocs chose from its recorded start_time follows a changed local start. The contract's 'a page whose base does not change keeps its filename' sentence and the workouts declaration's rename sentence would otherwise be false.",
+      "tests": {
+        "contract": [
+          "tests/test_retimed_rename_docs.py::test_contract_states_the_local_start_rename",
+          "tests/test_retimed_rename_docs.py::test_contract_version_history_records_the_rename",
+          "tests/test_declaration_goldens.py"
         ]
       }
     }

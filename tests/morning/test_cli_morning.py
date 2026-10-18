@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 import re
+import time
+from collections.abc import Iterator
 from dataclasses import replace
 from datetime import UTC, date
 from pathlib import Path
@@ -29,6 +31,30 @@ from tests.morning.builders import series_value, stage_series, wellness_series
 from tests.wellness.builders_intervals import intervals_delivery_bytes, intervals_record
 
 runner = CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def _cli_zone_is_utc() -> Iterator[None]:
+    """Pin the CLI's system zone to the UTC the scenarios write pages in.
+
+    Otherwise ``fitdocs regen`` dates each page in the host's zone, and a page
+    fitdocs named follows its changed local start to a new filename
+    (activity-identity A2.1), so the scenario's page path would depend on
+    where the suite runs.
+    """
+    saved = os.environ.get("TZ")
+    os.environ["TZ"] = "UTC"
+    if hasattr(time, "tzset"):
+        time.tzset()
+    try:
+        yield
+    finally:
+        if saved is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = saved
+        if hasattr(time, "tzset"):
+            time.tzset()
 DAY = date(2021, 9, 8)
 STALE = "stale morning content that the current series replaces"
 

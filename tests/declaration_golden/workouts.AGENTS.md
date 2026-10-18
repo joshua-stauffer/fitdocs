@@ -7,7 +7,7 @@ This directory holds generated workout documents; the user-owned regions are `no
 
 The frontmatter keys `effort`, `effort_distance_m`, `effort_time_s`, and `effort_event` are user-owned: fitdocs never writes them and carries them unchanged through regeneration. The rest of the frontmatter block is tool-owned and rebuilt on regeneration.
 
-A document may be renamed when the file it is rendered from changes (for example, a file that outranks it arrives, or the precedence changes at regeneration) or when the unsuffixed name it was written in place of becomes free; links to its previous filename are not updated.
+A document may be renamed when the file it is rendered from changes (for example, a file that outranks it arrives, or the precedence changes at regeneration), when the unsuffixed name it was written in place of becomes free, or, when fitdocs chose its filename from its local start time, when that local start time changes; links to its previous filename are not updated.
 
 The *generated* content of the documents in this directory is re-derivable: fitdocs rebuilds it by regeneration from the archived sources under `fit-archive/`, the wellness series under `wellness/`, the athlete profile, the configured timezone, and the tile source. The `morning` region is generated content too: fitdocs refills it from the wellness series. Content inside a document's other region markers is not re-derived by regeneration -- it is carried over from the document itself, so regenerating a deleted document brings back only the generated content, not what those regions held.
 
@@ -16,5 +16,5 @@ Never add a region marker to a document that does not already have one: a marker
 ## Ownership
 
 Owner: `fitdocs`.
-Ownership contract version: `15`.
+Ownership contract version: `16`.
 Published ownership contract: https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md

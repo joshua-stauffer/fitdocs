@@ -347,12 +347,13 @@ activity's own date; before, every page used the system's offset at the moment
 the command ran. The page's shape is unchanged, but those values move on every
 page recorded away from the system's zone or in the other half of the DST
 year, so a lower version marks a page whose local date and time may be wrong
-until ``fitdocs regen`` rewrites it. ``regen`` keeps each existing page's
-filename, as it does through any time-zone change (activity-identity Req 6.2,
-6.3); a page created after the fix is named by the same rule as its content.
+until ``fitdocs regen`` rewrites it. ``regen`` also renames each page whose
+filename fitdocs chose, with its charts, when its corrected local start gives a
+different name (activity-identity Amendment 2, A2.1); a filename the user chose
+is kept.
 """
 
-CONTRACT_VERSION: Final[str] = "15"
+CONTRACT_VERSION: Final[str] = "16"
 """The published ownership contract's version identifier (Req 2.8).
 
 A *string*, and deliberately not comparable with :data:`DOC_VERSION`: it
@@ -478,6 +479,13 @@ pass that ``fitdocs sync``, ``fitdocs pull --sync`` and ``fitdocs regen`` run
 rewrites only that region; and a workout document's generated content is
 re-derivable from the wellness series as well as from the archived sources,
 the athlete profile, the configured timezone and the tile source.
+
+Raised from ``15`` to ``16`` by the local-time fix (activity-identity Amendment
+2, A2.2, A2.3). A page whose filename fitdocs chose from its local start time
+is renamed, with its chart assets and a rename warning, when that local start
+changes, beside the base-change and settle renames the contract already
+states; a filename the user chose is still kept and links to a previous
+filename are still not updated.
 """
 
 # --- document vocabulary -----------------------------------------------------

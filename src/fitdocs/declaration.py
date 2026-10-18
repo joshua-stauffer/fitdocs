@@ -230,9 +230,10 @@ _REDERIVABILITY_DOCS: Final[str] = (
 _RENAMES: Final[str] = (
     "A document may be renamed when the file it is rendered from changes "
     "(for example, a file that outranks it arrives, or the precedence "
-    "changes at regeneration) or when the unsuffixed name it was written "
-    "in place of becomes free; links to its previous filename are not "
-    "updated."
+    "changes at regeneration), when the unsuffixed name it was written "
+    "in place of becomes free, or, when fitdocs chose its filename from its "
+    "local start time, when that local start time changes; links to its "
+    "previous filename are not updated."
 )
 # CLAIM ANCHOR: activity-identity Req 6.2-6.4, 6.6 -- a page whose base changes is
 # re-rendered from the new base and, when the filename computed from that base
@@ -244,7 +245,11 @@ _RENAMES: Final[str] = (
 # only: no other directory's declaration selects this fragment. The second
 # trigger is the settle pass (`sync._settle_pass`, Req 6.6): a page fitdocs
 # wrote under a collision-suffixed name `<name>-<8 characters>.md` is moved to
-# `<name>.md` once that name is free.
+# `<name>.md` once that name is free. The third (activity-identity Amendment 2,
+# A2.1): a page whose filename is the stem computed from the `start_time` its
+# own frontmatter records follows the newly computed stem when the local start
+# moves (`sync._named_from_recorded_start`); a filename the user chose never
+# matches that stem, so it is kept.
 
 _IMMUTABILITY: Final[str] = (
     "These files are immutable inputs: they must not be edited, renamed, or "

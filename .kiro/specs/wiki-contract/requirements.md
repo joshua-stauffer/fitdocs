@@ -488,3 +488,15 @@ regenerated document does not carry. Other declarations change only their
 contract version. The runtime pass remains workout-wellness's own. Existing
 criteria, including 2.18 (wellness-store) and 2.19 (recovery), and prior
 amendments and approvals are preserved.
+
+## Amendment 11 (2026-10-18): a page fitdocs named follows a changed local start, landed by the local-time fix
+
+activity-identity Amendment 2 adds a third rename trigger beside the
+base-change rename and the settle rename: a page whose filename fitdocs chose
+from the start time its own frontmatter records is renamed, with its chart
+assets and a rename warning, when that local start changes. The published
+contract states it in its `sync` overwrite entry and in the workouts
+declaration's rename sentence, and `CONTRACT_VERSION` advances from `"15"` to
+`"16"` with append-only history and a new current-change paragraph. Other
+declarations change only their contract version. Existing criteria and prior
+amendments and approvals are preserved.

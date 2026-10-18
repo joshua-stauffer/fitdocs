@@ -88,6 +88,21 @@ def test_an_unnamed_zone_keeps_the_current_offset(tz: str | None) -> None:
     assert zone.utcoffset(now) == now.utcoffset()
 
 
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="needs time.tzset")
+def test_a_posix_rule_falls_back_to_its_own_offset_on_any_host() -> None:
+    # A rule string is no zone key, so the fallback is the C library's current
+    # offset, +05:00 here whatever zone the host itself is in.
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("TZ", "XXX-5")
+        time.tzset()
+        try:
+            zone = _system_zone("XXX-5", _MISSING)
+        finally:
+            patch.delenv("TZ", raising=False)
+    time.tzset()
+    assert zone.utcoffset(_JULY) == timedelta(hours=5)
+
+
 # --- end to end: one sync run, three files ------------------------------------
 
 

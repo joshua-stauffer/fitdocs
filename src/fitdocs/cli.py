@@ -1466,8 +1466,8 @@ def _parse_since(value: str) -> datetime:
     except ValueError:
         _config_error(f"--since {value!r} is not a valid date; use YYYY-MM-DD.")
     # A naive local midnight's ``astimezone()`` applies the local zone's
-    # offset *on that date*; ``_local_tz()`` is today's fixed offset, which
-    # is an hour off for a date on the other side of a DST change.
+    # offset *on that date* (as ``_local_tz()``'s zone does), never today's
+    # fixed offset, which is an hour off across a DST change.
     return (
         datetime.combine(since_date, datetime.min.time()).astimezone().astimezone(UTC)
     )

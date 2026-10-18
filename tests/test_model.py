@@ -352,9 +352,11 @@ def test_activity_without_record_developer_fields_has_empty_read_only_mapping() 
         activity.record_developer_fields["x"] = None  # type: ignore[index]
     names = [f.name for f in dataclasses.fields(Activity)]
     # Appended after ``developer_fields_declared_scale``; activity-identity's
-    # ``file_identity`` (fit-ingest Amendment 4) was appended after it in turn.
-    assert names[-3:] == [
+    # ``file_identity`` (fit-ingest Amendment 4) was appended after it in turn,
+    # then ``local_offset`` (fit-ingest Amendment 8).
+    assert names[-4:] == [
         "developer_fields_declared_scale",
         "record_developer_fields",
         "file_identity",
+        "local_offset",
     ]

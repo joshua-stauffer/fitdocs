@@ -68,7 +68,8 @@ def test_fit_ingest_amendment_six_heading_attributes_derived() -> None:
 def test_fit_ingest_amendment_records_the_library_rule_and_test_paths() -> None:
     spec = json.loads((ROOT / ".kiro/specs/fit-ingest/spec.json").read_text())
     amendments = spec["amendments"]
-    amendment = amendments[-1]
+    # Found by name: later amendments append after it.
+    amendment = next(a for a in amendments if "Amendment 6" in a["requirement"])
     assert "Amendment 6" in amendment["requirement"]
     assert "landed by analytics-derived" in amendment["requirement"]
     assert "tests/metrics/test_mean_max.py" in json.dumps(amendment["tests"])

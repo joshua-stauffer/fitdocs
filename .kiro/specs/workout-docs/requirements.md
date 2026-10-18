@@ -144,7 +144,7 @@ I choose) and never silently inside a code repository.
 7. When writing chart assets, the fitdocs CLI shall place them in a predictable location relative to the document and reference them with relative links, so that moving the data root as a whole never breaks a document.
 8. When output directories do not yet exist inside the data root, the fitdocs CLI shall create them.
 9. _(added by Amendment 6)_ When the file a document is rendered from records the local-time offset its recording device kept, the fitdocs CLI shall take the activity's local start date and time — for the document's name (2.4), its frontmatter date and start time, its title and its heading — from the activity's start in that offset.
-10. _(added by Amendment 6)_ If that file records no such offset, the fitdocs CLI shall take the activity's local start date and time from the system's time zone, at the offset that zone had at the activity's start, never at the offset in force when the command runs.
+10. _(added by Amendment 6)_ If that file records no such offset, the fitdocs CLI shall take the activity's local start date and time from the system's time zone, at the offset that zone had at the activity's start rather than the offset in force when the command runs; only where the system names no readable zone (neither the `TZ` variable nor `/etc/localtime` names one) shall it fall back to the current offset.
 
 ### Requirement 3: Source Archival and Deduplication
 **Objective:** As an athlete, I want every source `.fit` file archived with my
@@ -202,7 +202,7 @@ anywhere, so that my training log is never locked to one tool.
 10. _(added by Amendment 2)_ Where a document combines channels from files recorded by different devices and at least one of them is a Garmin device, the fitdocs CLI shall name each contributing Garmin device and state that other devices also contributed, and shall never present Garmin as the source of the whole document.
 11. _(added by Amendment 2)_ The fitdocs CLI shall decide the attribution from the files' own content alone, so that the same files yield the same attribution however they arrived.
 12. _(added by Amendment 2)_ The fitdocs CLI shall render the attribution as generated content outside every preserved region, refreshed on every regeneration and byte-identical for identical inputs, and shall record it in no frontmatter key.
-13. _(added by Amendment 6)_ The fitdocs CLI shall state one local start date and time per document, so that the date and time a new document's name is computed from, its frontmatter `date`, its `start_time`, its title and its heading always agree.
+13. _(added by Amendment 6)_ The fitdocs CLI shall state one local start date and time per document, so that the date and time its name is computed from, its frontmatter `date`, its `start_time`, its title and its heading always agree.
 
 ### Requirement 6: Run and Ride Document View
 **Objective:** As a runner or cyclist, I want one strong document per
@@ -358,8 +358,9 @@ exposes, and otherwise from the system's zone at the activity's own date. One
 helper, `fitdocs.layout.local_start`, supplies it to the name, the frontmatter,
 the title and the heading. The page-format version advances from 10 to 11 so
 `fitdocs check` reports pages written under the old rule and `fitdocs regen`
-corrects them. `regen` keeps each existing page's filename, as
-activity-identity Requirement 6.3 already requires through any time-zone
-change; only documents named after this amendment are named by the corrected
-time. The criterion-to-test mapping is recorded in this spec's `spec.json`.
+corrects them. A page whose filename fitdocs chose follows its corrected name,
+with its charts (activity-identity Amendment 2, maintainer decision
+2026-10-18); a filename the user chose is kept, as activity-identity
+Requirement 6.3 requires. The criterion-to-test mapping is recorded in this
+spec's `spec.json`.
 No existing criterion is renumbered, reworded or withdrawn.

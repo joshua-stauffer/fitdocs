@@ -12,5 +12,5 @@ Check a page with `fitdocs dashboard check`; the packaged `fitdocs-dashboards` s
 ## Ownership
 
 Owner: the athlete (pages); fitdocs (chart regions and dashboards/assets/).
-Ownership contract version: `15`.
+Ownership contract version: `16`.
 Published ownership contract: https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md

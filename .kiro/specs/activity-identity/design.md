@@ -1985,3 +1985,17 @@ precedence = ["original:garmin", "phone_copy", "original", "unknown"]   # the de
   2026-09-12 (`sources` `[copy, original]`) keeps its base; a re-export pair is
   re-ranked by creation time; unreferenced archives are planned, joined or held.
 - The first pull from a connector should follow that regeneration (Req 9.8).
+
+## Amendment 2: Following a Changed Local Start
+
+`sync._named_from_recorded_start(path, frontmatter, slug, uid)` rebuilds the
+unsuffixed stem from the page's own recorded `start_time` (its wall clock, in
+the offset it records) and returns it when the page's path is that stem or
+that stem under the page's collision suffix. In the page task, `retimed` is
+true when that stem exists and differs from the stem computed now. It joins
+`base_changed`, `settling` and `stranded` as a reason to move a matched page
+to `doc_path(stem)`. The existing rename path then applies unchanged: the
+stale-asset set of 6.4, the crash-healing write of 6.7, and a 6.5 warning whose
+reason is "its local start time changed". A page that lands under a collision
+suffix is settled at the end of the run (6.6), so the first run after a
+local-time correction ends with every fitdocs-named page at its computed name.

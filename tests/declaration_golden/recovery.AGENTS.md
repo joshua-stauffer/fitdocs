@@ -10,5 +10,5 @@ The page is re-derivable from `wellness/` and the workout documents alone: delet
 ## Ownership
 
 Owner: `fitdocs`.
-Ownership contract version: `15`.
+Ownership contract version: `16`.
 Published ownership contract: https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md

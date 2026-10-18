@@ -159,7 +159,7 @@
       "requirement": "2.9, 2.10, 5.13 added (appended; no criterion renumbered or reworded) -- Amendment 6, landed by the local-time fix (queue item 2026-09-12-local-tz-is-fixed-offset-of-run-time)",
       "reason": "cli._local_tz returned datetime.now().astimezone().tzinfo, a fixed offset for the moment the command ran, so pages from the other half of the DST year were an hour off and activities recorded in another zone were stated in this computer's zone (US-era runs dated the next day; their Morning Of blocks showed the morning after).",
       "implementation": "fitdocs.layout.local_start(activity, tz) returns the start in Activity.local_offset (fit-ingest Amendment 8) when recorded, else start.astimezone(tz); doc_stem, the frontmatter date/start_time/title and the H1 all call it. cli._local_tz now returns a zone: ZoneInfo from TZ (key or zone-file path) or ZoneInfo.from_file(/etc/localtime), falling back to today's fixed offset only when neither names one. DOC_VERSION advances from 10 to 11; CONTRACT_VERSION is unchanged (the contract's narrative already lists 'the configured timezone' among the re-derivation inputs, which stays true for files with no recorded offset).",
-      "also": "Existing pages keep their filenames through regen (activity-identity Req 6.3), so after regen an old page's name can disagree with its corrected date; 5.13 binds the name a new document is computed from. Whether to rename existing fitdocs-named pages is left to the maintainer.",
+      "also": "activity-identity Amendment 2 (maintainer decision 2026-10-18, chosen over keeping filenames) renames a page whose filename fitdocs chose from its recorded start_time when the corrected local start gives a different name, with stale-chart removal and a rename warning, so the first regen moves charts with their pages instead of orphaning them; a filename the user chose is kept (activity-identity 6.3). Links in the athlete's own notes are not updated by fitdocs.",
       "tests": {
         "2.9": [
           "tests/render/test_local_time.py::test_every_local_time_on_the_page_follows_one_rule[recorded-west-previous-day]",
@@ -179,7 +179,8 @@
           "tests/test_cli_local_tz.py::test_sync_dates_each_page_at_its_own_offset"
         ],
         "5.13": [
-          "tests/render/test_local_time.py::test_every_local_time_on_the_page_follows_one_rule"
+          "tests/render/test_local_time.py::test_every_local_time_on_the_page_follows_one_rule",
+          "tests/test_retimed_rename.py::test_regen_moves_a_fitdocs_named_page_and_its_charts"
         ],
         "doc-version": [
           "tests/test_local_time_docs.py::test_release_note_names_the_advance_to_the_current_version",

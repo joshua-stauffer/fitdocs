@@ -110,7 +110,8 @@ Each activity becomes one markdown document under
 `undated-<slug>-<uid>` stem instead of a fabricated date). The local time is
 the clock your device kept, so a run recorded on a trip keeps that trip's time
 of day and date; when the file does not record its time zone, it is this
-computer's time zone at the offset it had on the activity's date. Every `sync` and
+computer's time zone at the offset it had on the activity's date (where the
+system names no time zone fitdocs can read, as on Windows, today's offset). Every `sync` and
 `regen` run also writes or refreshes an `AGENTS.md` in each of the five
 declared directories — `workouts/`, `fit-archive/`, `history/`,
 `blocks/`, and `dashboards/` — unconditionally, not only the one this run's own output lands

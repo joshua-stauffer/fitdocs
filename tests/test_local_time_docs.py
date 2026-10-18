@@ -45,7 +45,7 @@ def test_release_note_names_the_advance_to_the_current_version() -> None:
     assert tuple(map(int, match.groups())) == (DOC_VERSION - 1, DOC_VERSION)
 
 
-def test_release_note_states_the_rule_the_action_and_the_filenames() -> None:
+def test_release_note_states_the_rule_the_action_and_the_renames() -> None:
     entry = _local_time_entry()
     assert (
         "A page's `date`, `start_time`, title and heading come from the "
@@ -57,8 +57,13 @@ def test_release_note_states_the_rule_the_action_and_the_filenames() -> None:
     ) in entry
     assert "run `fitdocs regen` once after upgrading to correct existing pages" in entry
     assert (
-        "Existing pages keep their filenames; a page created after the upgrade "
-        "is named by the corrected time."
+        "That `regen` also renames every page whose filename fitdocs chose and "
+        "whose local start moved, together with its charts, and warns for each; "
+        "a filename you chose is kept."
+    ) in entry
+    assert (
+        "Links to a renamed page's previous filename, in your own notes or "
+        "elsewhere, are not updated."
     ) in entry
 
 
@@ -68,7 +73,8 @@ def test_install_guide_says_which_clock_names_a_page() -> None:
         "The local time is the clock your device kept, so a run recorded on a "
         "trip keeps that trip's time of day and date; when the file does not "
         "record its time zone, it is this computer's time zone at the offset it "
-        "had on the activity's date."
+        "had on the activity's date (where the system names no time zone fitdocs "
+        "can read, as on Windows, today's offset)."
     ) in text
 
 
@@ -76,6 +82,6 @@ def test_version_history_records_the_local_time_advance() -> None:
     history = _flat(inspect.getsource(contract))
     assert "Raised from ``10`` to ``11`` by the local-time fix" in history
     assert (
-        "``regen`` keeps each existing page's filename, as it does through any "
-        "time-zone change"
+        "``regen`` also renames each page whose filename fitdocs chose, with its "
+        "charts, when its corrected local start gives a different name"
     ) in history

@@ -1,15 +1,15 @@
 # fitdocs Ownership Contract
 
-**Contract version:** `15`
+**Contract version:** `16`
 
-**What changed at this version:** Workout documents gain the `morning` region,
-a third region class whose content fitdocs alone writes from the wellness
-series and replaces whenever it differs. The morning-of pass that `fitdocs
-sync`, `fitdocs pull --sync` and `fitdocs regen` run rewrites only that region;
-a workout document's generated content is re-derivable from the wellness series
-as well as from the archived sources, the athlete profile, the configured
-timezone and the tile source. Run `fitdocs regen` once to bring existing
-workout pages current.
+**What changed at this version:** A workout page whose filename fitdocs chose
+from its local start time now follows that start time when it changes: `fitdocs
+regen` and `fitdocs sync` move it to the newly computed name, with its chart
+assets, and warn, as they already did when a page's base file changed. This
+release corrects how a page's local date and time are read (the offset the
+recording device kept), so the first `fitdocs regen` after upgrading renames
+every page whose local start moved. A filename you chose is still kept, and
+links to the previous filename are still not updated by fitdocs.
 
 This document is the authoritative, published statement of what fitdocs owns
 in your data root, what you own, and the exact limits of every operation that
@@ -916,9 +916,14 @@ and each has a distinct contract:
   user-owned region links is kept), and the run warns with the previous and
   new paths. Links to the previous filename, in other pages or in your own
   notes, are **not** updated by fitdocs. A page whose base does not change
-  keeps its filename, including one you chose, except that a page fitdocs
+  keeps its filename, including one you chose, with two exceptions, each
+  renamed with the same chart-asset cleanup and rename warning: a page fitdocs
   wrote under a collision-suffixed name `<name>-<8 characters>.md` is moved to
-  `<name>.md` once that name is free (with a rename warning). A file that
+  `<name>.md` once that name is free; and a page whose filename is the one
+  fitdocs computed from the local start time its own `start_time` records is
+  moved to the newly computed name when that local start changes (as it does
+  for many pages on the first `regen` after an upgrade that corrects how local
+  time is read). A file that
   cannot be placed on one page is archived and held rather than added to a
   page. Once its analytics index refresh has succeeded, `sync` (with or
   without a source) then runs the dashboard pass, described under the

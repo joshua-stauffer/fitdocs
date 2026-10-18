@@ -163,8 +163,13 @@ recorded as one.
   recorded in another time zone could land on the wrong day; the Morning Of
   block then showed the wrong morning. The generated document format advances
   (`doc_version` 10 to 11): run `fitdocs regen` once after upgrading to correct
-  existing pages. Existing pages keep their filenames; a page created after
-  the upgrade is named by the corrected time.
+  existing pages. That `regen` also renames every page whose filename fitdocs
+  chose and whose local start moved, together with its charts, and warns for
+  each; a filename you chose is kept. Links to a renamed page's previous
+  filename, in your own notes or elsewhere, are not updated.
+- The ownership contract (wiki-contract) advances from version `15` to `16`:
+  a page whose filename fitdocs chose from its local start time is renamed,
+  with its chart assets, when that local start time changes.
 - The generated document format advances (`doc_version` 9 to 10)
   to add the morning-of region. Run `fitdocs regen` once after
   upgrading to bring existing workout pages to the current format.
