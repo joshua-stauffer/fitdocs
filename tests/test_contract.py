@@ -1237,7 +1237,7 @@ def test_document_load_absence_matches_history_private_reader(
         assert contract_reading.methodology == history_methodology
 
 
-def test_document_load_negative_value_is_the_one_documented_history_divergence() -> None:
+def test_document_load_negative_value_is_the_documented_history_divergence() -> None:
     """The history reader treats a negative `load_value` as an unreadable load
     (it skips and names the page; the model rejects negative daily loads),
     while this shared contract reader still reports the recorded number. The
