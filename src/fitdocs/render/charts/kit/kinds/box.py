@@ -14,6 +14,7 @@ from typing import Final
 
 from fitdocs.render.charts.kit import frame
 from fitdocs.render.charts.kit.cartesian import (
+    band_x_axis,
     bound_problem,
     category_bands,
     category_order,
@@ -38,7 +39,6 @@ from fitdocs.render.charts.kit.scales import (
     NumericScale,
     ScaleType,
     Side,
-    band_scale,
     numeric_scale,
 )
 from fitdocs.render.charts.kit.schema import (
@@ -347,9 +347,9 @@ def _draw(bound: BoundChart) -> str:
         )
 
     first = _y_scale(bound, domain, plan_with(0.0), y_zero=y_zero)
-    plan = plan_with(max(text_width(t.label, FONT_TEXT) for t in first.ticks))
+    label_width = max(text_width(t.label, FONT_TEXT) for t in first.ticks)
+    plan, x_axis = band_x_axis(labels, plan_with, label_width)
     y_axis = _y_scale(bound, domain, plan, y_zero=y_zero)
-    x_axis = band_scale(labels, plan.plot.left, plan.plot.right, font_px=FONT_TEXT)
 
     color = series_style(0).color
     shapes: list[str] = []

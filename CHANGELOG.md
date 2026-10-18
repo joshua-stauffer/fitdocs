@@ -398,6 +398,10 @@ recorded as one.
   example `a<TAB>b` and `a b`, or a literal `—` and an absent value) in
   separate bands. Before, they shared one band and the later mark hid the
   earlier one.
+- Bar, stacked-100, box and heatmap charts over weeks (or any band axis) no
+  longer cut the first x label at the left edge: `2026-01-05` now reads in
+  full where it used to read `2026-0…`. The left margin grows by the missing
+  few pixels, so the plot is slightly narrower and its marks shift right.
 
 ## [0.1.0] - 2026-09-19
 

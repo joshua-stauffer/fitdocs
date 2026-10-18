@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Sequence
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -111,6 +111,27 @@ def _svg(name: str, xs: Sequence[Value], **options: OptionValue) -> str:
     spec, build = KINDS[name]
     request, data = build(xs, dict(options))
     return render_case(spec, request, data).text
+
+
+def _weeks(count: int) -> list[Value]:
+    return [date(2026, 1, 5) + timedelta(days=7 * i) for i in range(count)]
+
+
+def _x_axis_texts(svg: str) -> list[str]:
+    axis = re.search(r'<g class="ck-axis">(.*?)</g>', svg, re.S)
+    assert axis
+    return re.findall(r"<text [^>]*>(.*?)</text>", axis.group(1))
+
+
+@BAND_KINDS
+@pytest.mark.parametrize(("weeks", "width"), [(26, 720), (52, 720), (8, 320)])
+def test_the_first_band_label_is_never_cut_at_the_left_edge(
+    name: str, weeks: int, width: int
+) -> None:
+    svg = _svg(name, _weeks(weeks), width=width)
+    labels = _x_axis_texts(svg)[:-1]  # the last text is the axis title
+    assert labels[0] == "2026-01-05"
+    assert not any(label.endswith("…") for label in labels)
 
 
 @pytest.mark.parametrize("name", ["bar", "stacked-100", "box"])

@@ -7,12 +7,20 @@ number stays ``None``.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from fitdocs.render.charts.kit import frame
 from fitdocs.render.charts.kit.data import Value, ValueKind, to_number
-from fitdocs.render.charts.kit.format import ABSENT, display_label, format_value
+from fitdocs.render.charts.kit.format import (
+    ABSENT,
+    clean_text,
+    display_label,
+    format_value,
+)
+from fitdocs.render.charts.kit.layout import FONT_TEXT, PAD, FramePlan, text_width
 from fitdocs.render.charts.kit.problems import ChartProblem, ProblemCode
+from fitdocs.render.charts.kit.scales import BandScale, band_scale
 from fitdocs.render.charts.kit.schema import BoundChart
 from fitdocs.render.charts.kit.theme import MAX_SERIES, SeriesStyle, series_style
 
@@ -291,3 +299,40 @@ def stack_problems(
             )
             break
     return tuple(found)
+
+
+_EDGE_SLACK = 0.5  # px kept beyond the first label's half width
+_EDGE_PASSES = 6
+_EDGE_SHARE = 0.25  # most of the canvas width a first label may claim
+
+
+def band_x_axis(
+    labels: Sequence[str], plan_with: Callable[[float], FramePlan], label_width: float
+) -> tuple[FramePlan, BandScale]:
+    """The plan and band scale of a bottom band axis whose first label is whole.
+
+    ``plan_with`` builds the frame plan from the width reserved for the y tick
+    labels. The first band's label is centred half a band in from the plot's
+    left edge, so it is cut at the canvas edge unless the left margin holds its
+    half width: this widens the margin by exactly the shortfall (the way the
+    numeric kinds reserve their first tick's overhang), re-planning because the
+    narrower plot can thin the labels differently. A label longer than the room
+    its band pitch allows is fitted to that room, which the shortfall honours;
+    a label wider than a quarter of the canvas reserves only that quarter (the
+    rest is cut at the canvas edge as before), so one long category cannot
+    squeeze the plot.
+    """
+    extra = 0.0
+    for _ in range(_EDGE_PASSES):
+        plan = plan_with(label_width + extra)
+        scale = band_scale(labels, plan.plot.left, plan.plot.right, font_px=FONT_TEXT)
+        shown = min(
+            text_width(clean_text(labels[0]), FONT_TEXT),
+            frame.band_label_room(scale),
+            _EDGE_SHARE * plan.width,
+        )
+        short = shown / 2 - (scale.centre(0) - PAD)
+        if short <= 0:
+            break
+        extra += short + _EDGE_SLACK
+    return plan, scale

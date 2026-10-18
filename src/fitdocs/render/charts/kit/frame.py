@@ -209,6 +209,18 @@ def _capped(room: float, cap: float | None) -> float:
     return room if cap is None else min(room, cap)
 
 
+def band_label_room(scale: BandScale) -> float:
+    """The width a bottom band label may take: the labelled bands' pitch less a
+    margin (the room before the canvas edge also clamps it, in :func:`axis`)."""
+    gap = (
+        scale.labelled[1] - scale.labelled[0]
+        if len(scale.labelled) > 1
+        else len(scale.categories)
+    )
+    lo, hi = scale.band(0)
+    return gap * (hi - lo) - _BAND_MARGIN
+
+
 def axis(
     scale: NumericScale | BandScale,
     plot: Rect,
@@ -245,15 +257,7 @@ def axis(
     if side is Side.BOTTOM:
         baseline = _line(plot.left, plot.bottom, plot.right, plot.bottom)
         centre = plot.left + plot.width / 2
-        room = 0.0
-        if isinstance(scale, BandScale):
-            gap = (
-                scale.labelled[1] - scale.labelled[0]
-                if len(scale.labelled) > 1
-                else len(scale.categories)
-            )
-            lo, hi = scale.band(0)
-            room = gap * (hi - lo) - _BAND_MARGIN
+        room = band_label_room(scale) if isinstance(scale, BandScale) else 0.0
         for at, label in marks:
             ticks.append(_line(at, plot.bottom, at, plot.bottom + TICK_LEN))
             shown_label = (

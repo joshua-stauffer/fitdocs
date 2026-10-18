@@ -35,7 +35,7 @@ from fitdocs.render.charts.kit.layout import (
     text_width,
 )
 from fitdocs.render.charts.kit.problems import ChartProblem, ProblemCode
-from fitdocs.render.charts.kit.scales import BandScale, Side, band_scale
+from fitdocs.render.charts.kit.scales import BandScale, Side
 from fitdocs.render.charts.kit.schema import (
     BoundChart,
     ChannelSpec,
@@ -191,12 +191,12 @@ def _draw(bound: BoundChart) -> str:
     label_room = _LABEL_SHARE * width - PAD - TICK_GAP - TICK_LEN
     y_label_width = min(widest + _FIT_SLACK, label_room)
 
-    def plan(height: int) -> FramePlan:
+    def plan(height: int, label_width: float = y_label_width) -> FramePlan:
         return plan_frame(
             width,
             height,
             legend=entries,
-            y_label_width=y_label_width,
+            y_label_width=label_width,
             x_label_overhang=0.0,
             has_x_title=True,
             has_y_title=True,
@@ -214,9 +214,10 @@ def _draw(bound: BoundChart) -> str:
             _MAX_HEIGHT,
             max(_MIN_HEIGHT, math.ceil(len(y_bands.labels) * pitch + frame_px)),
         )
-    final = plan(height)
+    final, x_axis = cartesian.band_x_axis(
+        x_bands.labels, lambda label_width: plan(height, label_width), y_label_width
+    )
     plot = final.plot
-    x_axis = band_scale(x_bands.labels, plot.left, plot.right, font_px=FONT_TEXT)
     y_axis = _y_scale(y_bands.labels, plot)
 
     placed: list[tuple[Rect, int | None]] = []

@@ -1399,8 +1399,13 @@ def parse_option(spec: OptionSpec, raw: OptionValue) -> OptionValue | None: ... 
 text stays inside `[PAD, width − 4]`. Kinds with a numeric x axis (line, area,
 scatter, histogram) and hbar's bottom value axis reserve the first x tick
 label's left overhang (widening the left margin) and the last one's right
-overhang, measured on a provisional plot. Bar's band x axis instead relies on
-`frame.axis`'s band-label clamp (`x_label_overhang=0`). The every-text-inside-
+overhang, measured on a provisional plot. Band x axes (bar, stacked-100, box,
+heatmap) call `cartesian.band_x_axis` (amended 2026-10-18): it widens the left
+margin until the first band label, fitted to its band-pitch room and at most a
+quarter of the canvas, is centred at least half its width from the pad, so the
+first label is not cut at the canvas edge; `frame.axis`'s clamp still cuts a
+label wider than that quarter. `x_label_overhang` stays 0 (the right side is
+the fixed minimum margin). The every-text-inside-
 the-canvas test over `CASES` exists for line, area, bar, hbar and histogram;
 scatter pins it with `test_wide_end_tick_labels_stay_inside_the_canvas` plus
 the theme-coverage walk over every golden. Kinds call `frame.axis`, `frame.describe`, `frame.not_drawn_note` and
