@@ -1037,3 +1037,16 @@ def test_get_folder_returns_the_folder_connector_after_import() -> None:
     connector = connectors_package.get("folder")
     assert isinstance(connector, FolderConnector)
     assert "FolderConnector" not in connectors_package.__all__
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_settle_seconds_non_finite_is_rejected(tmp_path: Path, value: float) -> None:
+    source = tmp_path / "src"
+    source.mkdir()
+
+    with pytest.raises(ConnectorSettingsError, match="finite") as excinfo:
+        FolderConnector().parse_settings(
+            {"path": str(source), "settle_seconds": value},
+            _context(tmp_path, tmp_path / "inbox"),
+        )
+    assert excinfo.value.key == "settle_seconds"

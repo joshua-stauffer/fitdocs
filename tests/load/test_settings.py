@@ -2484,3 +2484,19 @@ def test_load_load_settings_is_called_the_documented_number_of_times_per_command
         f"fitdocs derive-benchmarks called load_load_settings {len(calls)} "
         "times, expected 1"
     )
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "cadence_lock_max_delta_bpm",
+        "divergence_max_intensity_delta",
+        "aerobic_drift_max_pct",
+    ],
+)
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_positive_flag_value_is_rejected(key: str, value: float) -> None:
+    """A TOML ``nan``/``inf`` is neither a threshold nor absent: refused by key."""
+    document = {"load": {"flags": {key: value}}}
+    with pytest.raises(LoadSettingsError, match=f"{key} must be a finite number"):
+        load_load_settings(document, _SETTINGS_FILE)

@@ -304,8 +304,12 @@ recorded as one.
 - `athlete.toml` now refuses a non-finite number (`nan`, `inf`, `-inf`) in a
   threshold such as `ftp_watts`, in a zone divider, or in any profile value a
   calculator reads, as a configuration error naming the key, instead of letting
-  it produce `nan` intensity and load values. Answering a load prompt with a
-  non-finite value is refused too.
+  it produce `nan` intensity and load values. `fitdocs.toml` likewise refuses
+  one in the `[load.flags]` thresholds `cadence_lock_max_delta_bpm`,
+  `divergence_max_intensity_delta` and `aerobic_drift_max_pct`, in
+  `[inbox] settle_seconds`, and in `[connectors.<folder>] settle_seconds`.
+  A load prompt that is answered with a non-finite value asks again, as it
+  does for any other non-number.
 - Recovery page: a change of shown source is now stated even when days with no
   value separate the two sources, the Sleep section now states its source
   changes and names its sources with their recorded origins (its table caption

@@ -22,7 +22,7 @@ table entirely to accept every default below.
 | Key | Meaning | Default |
 |-----|---------|---------|
 | `path` | The inbox location. An absolute path is used as given; a relative path resolves against the data root. Created automatically if it lies inside the data root and is missing; an absent path outside the data root is a configuration error (guarding against typos and unmounted cloud storage). | `"inbox"` (i.e. `<data-root>/inbox/`) |
-| `settle_seconds` | The stability-check settle interval, in seconds. `0` disables the wait entirely. | `2` |
+| `settle_seconds` | The stability-check settle interval, in seconds. `0` disables the wait entirely. Must be a finite number, at least `0`. | `2` |
 | `ignore` | Additional glob patterns to ignore, matched against a candidate's basename or inbox-relative path (case-normalized). Applied *in addition to* the built-in ignore rules described under Safeguards below, never in place of them. | `[]` (no additional patterns) |
 | `disposition` | What happens to a file once it has been successfully processed: `"leave"` (never touch it) or `"move"` (relocate it to `processed_dir`). Deletion is not a disposition fitdocs offers under any configuration. | `"leave"` |
 | `processed_dir` | The processed-files destination; required when `disposition = "move"`, and must not equal or be nested inside the inbox. Same resolution and auto-creation rule as `path`. | `null` (unset) |

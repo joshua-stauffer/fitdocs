@@ -298,10 +298,21 @@ def test_non_finite_number_threshold_raises_naming_the_key(
 def test_non_finite_zone_divider_raises_naming_the_key(
     tmp_path: Path, key: str, literal: str
 ) -> None:
-    """A non-finite zone divider is refused, naming the zone key."""
-    _write_athlete(tmp_path, f"{key} = [100, {literal}]\n")
+    """A lone non-finite divider reaches the finiteness guard, not the order check."""
+    _write_athlete(tmp_path, f"{key} = [{literal}]\n")
 
-    with pytest.raises(AthleteFileError, match=key):
+    with pytest.raises(AthleteFileError, match=f"{key}.*finite"):
+        load_athlete_inputs(tmp_path)
+
+
+@pytest.mark.parametrize("key", ["hr_zones", "power_zones", "pace_zones"])
+def test_leading_negative_infinity_divider_raises_naming_the_key(
+    tmp_path: Path, key: str
+) -> None:
+    """``[-inf, 100]`` is ascending, so only the finiteness guard can refuse it."""
+    _write_athlete(tmp_path, f"{key} = [-inf, 100]\n")
+
+    with pytest.raises(AthleteFileError, match=f"{key}.*finite"):
         load_athlete_inputs(tmp_path)
 
 

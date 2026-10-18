@@ -186,9 +186,10 @@ class AthleteProfile:
         never an error, never a fabricated default (Req 2.4, 2.7).
 
         If the addressed value *is* present but is not a real number -- a
-        ``bool`` (rejected even though ``bool`` subclasses ``int``) or any
-        non-``int``/``float`` -- a :class:`ProfileError` naming the key is
-        raised. This is the loud config-error path of Req 2.4.
+        ``bool`` (rejected even though ``bool`` subclasses ``int``), any
+        non-``int``/``float``, or a non-finite number (``nan``/``inf``) -- a
+        :class:`ProfileError` naming the key is raised. This is the loud
+        config-error path of Req 2.4.
         """
         node: object = self.data
         for part in key.split("."):

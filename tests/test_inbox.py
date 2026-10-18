@@ -1608,3 +1608,12 @@ def test_move_success_returns_destination_as_string(tmp_path: Path) -> None:
 
     assert isinstance(result, str)
     assert not isinstance(result, InboxNote)
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_settle_seconds_raises_naming_the_key(
+    tmp_path: Path, value: float
+) -> None:
+    """A TOML ``nan``/``inf`` settle interval is refused, not slept on."""
+    with pytest.raises(InboxSettingsError, match="settle_seconds.*finite"):
+        load_inbox_settings({"inbox": {"settle_seconds": value}}, data_root=tmp_path)

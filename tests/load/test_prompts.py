@@ -395,6 +395,27 @@ def test_rich_ask_float_reasks_then_valid_and_skips() -> None:
     assert skip_session.ask_float("FTP", minimum=50.0, maximum=600.0) is None
 
 
+def test_rich_ask_float_reasks_on_non_finite_answer() -> None:
+    for bad in ("nan", "inf", "-inf"):
+        for bounds in ({}, {"minimum": 50.0, "maximum": 600.0}):
+            console = Console(file=StringIO(), width=200)
+            session = RichInteractionSession(
+                console=console, input_fn=_queued_input([bad, "250.5"])
+            )
+            assert session.ask_float("FTP", **bounds) == 250.5, (bad, bounds)
+            out = console.file.getvalue()  # type: ignore[union-attr]
+            assert "not a finite number" in out, (bad, bounds)
+
+
+def test_within_rejects_non_finite_even_when_unbounded() -> None:
+    from fitdocs.load.prompts import _within
+
+    for value in (float("nan"), float("inf"), float("-inf")):
+        assert not _within(value, None, None)
+        assert not _within(value, 0.0, 1e9)
+    assert _within(5.0, None, None)
+
+
 def test_rich_confirm_yes_no_default_and_skip() -> None:
     yes = RichInteractionSession(
         console=Console(file=StringIO(), width=200),

@@ -20,6 +20,7 @@ request (Req 13.9).
 
 from __future__ import annotations
 
+import math
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -123,10 +124,15 @@ class FolderConnector:
         if "settle_seconds" not in table:
             return inbox_module.DEFAULT_INBOX_SETTINGS.settle_seconds
         value = table["settle_seconds"]
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or value < 0
+        ):
             raise ConnectorSettingsError(
                 "settle_seconds",
-                f"settle_seconds must be a non-negative number, got {value!r} "
+                f"settle_seconds must be a finite non-negative number, got {value!r} "
                 f"({type(value).__name__})",
             )
         return float(value)

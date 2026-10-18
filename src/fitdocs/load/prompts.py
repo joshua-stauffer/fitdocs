@@ -33,6 +33,7 @@ non-interactive pass never blocks and never fabricates consent (Req 3.5, 9.1).
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
@@ -353,6 +354,9 @@ class RichInteractionSession:
             except ValueError:
                 self._reask(f"{answer!r} is not a number.", question)
                 continue
+            if not math.isfinite(value):
+                self._reask(f"{answer!r} is not a finite number.", question)
+                continue
             if not _within(value, minimum, maximum):
                 self._reask(_range_message(minimum, maximum), question)
                 continue
@@ -437,7 +441,9 @@ class NonInteractiveSession:
 
 
 def _within(value: float, minimum: float | None, maximum: float | None) -> bool:
-    """Return whether ``value`` is inside the inclusive ``[minimum, maximum]``."""
+    """Return whether ``value`` is finite and inside ``[minimum, maximum]``."""
+    if not math.isfinite(value):
+        return False
     if minimum is not None and value < minimum:
         return False
     return not (maximum is not None and value > maximum)

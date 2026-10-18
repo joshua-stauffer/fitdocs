@@ -139,6 +139,7 @@ outstanding here.
 from __future__ import annotations
 
 import fnmatch
+import math
 import os
 import shutil
 import time
@@ -306,7 +307,7 @@ def _setting_processed_dir(table: dict[str, Any], path: Path) -> str | None:
 
 
 def _setting_settle_seconds(table: dict[str, Any], path: Path) -> float:
-    """Map the optional ``settle_seconds`` key: a non-negative real number.
+    """Map the optional ``settle_seconds`` key: a finite, non-negative real number.
 
     A ``bool`` is rejected explicitly -- Python's ``bool`` subclasses ``int``,
     so a naive numeric check would wrongly accept ``true``/``false``.
@@ -314,9 +315,14 @@ def _setting_settle_seconds(table: dict[str, Any], path: Path) -> float:
     if "settle_seconds" not in table:
         return DEFAULT_INBOX_SETTINGS.settle_seconds
     value = table["settle_seconds"]
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value < 0
+    ):
         raise InboxSettingsError(
-            f"{path}: [inbox] settle_seconds must be a non-negative number, "
+            f"{path}: [inbox] settle_seconds must be a finite non-negative number, "
             f"got {value!r} ({type(value).__name__})"
         )
     return float(value)

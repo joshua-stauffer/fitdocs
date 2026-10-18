@@ -11,9 +11,10 @@ Two invariants shape the contract:
 * **Optional.** An absent file yields ``None`` -- not an error. The whole
   feature set that depends on athlete inputs simply degrades to omission.
 * **Loud, never lossy.** A file that exists but is malformed -- invalid TOML, a
-  wrong value type, a boolean where a number is expected, or non-ascending /
-  empty zone dividers -- raises :class:`AthleteFileError`. Silently dropping a
-  bad zone would change the rendered document invisibly, so nothing is swallowed.
+  wrong value type, a boolean where a number is expected, a non-finite number
+  (``nan``/``inf``), or non-ascending / empty zone dividers -- raises
+  :class:`AthleteFileError`. Silently dropping a bad zone would change the
+  rendered document invisibly, so nothing is swallowed.
 
 The reader is read-only *by construction* (Req 8.3): it never creates the file,
 never prompts, and writes nothing on any path. Profile creation, prompting, and
@@ -53,10 +54,11 @@ class AthleteFileError(Exception):
     """The ``athlete.toml`` file exists but cannot be read as valid inputs.
 
     Raised for malformed TOML, a wrong value type (including a boolean where a
-    number is required), non-ascending / empty zone dividers, or a declared
-    schema version this fitdocs does not recognize. An *absent* file is never
-    an error -- it yields ``None`` instead. The message names the file and the
-    offending key so a user can correct the configuration.
+    number is required), a non-finite number (``nan``/``inf``), non-ascending /
+    empty zone dividers, or a declared schema version this fitdocs does not
+    recognize. An *absent* file is never an error -- it yields ``None``
+    instead. The message names the file and the offending key so a user can
+    correct the configuration.
     """
 
 
@@ -101,10 +103,11 @@ def load_athlete_inputs(data_root: Path) -> AthleteInputs | None:
     unknown keys are ignored for forward compatibility with training-load.
 
     Raises :class:`AthleteFileError` when the file exists but is malformed:
-    invalid TOML, a wrong value type, a boolean where a number is expected, or
-    zone dividers that are empty or not strictly ascending (the last surfaced by
-    :class:`~fitdocs.ZoneSpec` and re-raised here). The function only ever reads;
-    it never writes, creates, or prompts.
+    invalid TOML, a wrong value type, a boolean where a number is expected, a
+    non-finite number (``nan``/``inf``), or zone dividers that are empty or not
+    strictly ascending (the last surfaced by :class:`~fitdocs.ZoneSpec` and
+    re-raised here). The function only ever reads; it never writes, creates, or
+    prompts.
     """
     path = data_root / ATHLETE_FILE
     if not path.is_file():
@@ -157,10 +160,11 @@ def _optional_int(data: dict[str, Any], key: str, path: Path) -> int | None:
 def _optional_zone(data: dict[str, Any], key: str, path: Path) -> ZoneSpec | None:
     """Map an optional list of ascending dividers to a :class:`ZoneSpec`.
 
-    Every element must be a number (a boolean is rejected, never coerced to
-    ``0``/``1``); the ascending / non-empty guarantee is delegated to
-    :class:`ZoneSpec`, whose :class:`ValueError` is re-raised as
-    :class:`AthleteFileError` so a bad list fails loudly instead of vanishing.
+    Every element must be a finite number (a boolean is rejected, never coerced
+    to ``0``/``1``, and ``nan``/``inf`` are refused); the ascending / non-empty
+    guarantee is delegated to :class:`ZoneSpec`, whose :class:`ValueError` is
+    re-raised as :class:`AthleteFileError` so a bad list fails loudly instead of
+    vanishing.
     """
     if key not in data:
         return None

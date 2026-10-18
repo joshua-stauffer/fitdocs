@@ -55,7 +55,7 @@ settle_seconds = 2                              # optional
   inside, or contain your configured inbox.
 - `settle_seconds`: how long a candidate file must sit unchanged before it is
   considered stable, exactly as the inbox's own settle check works. Defaults
-  to the inbox's own default.
+  to the inbox's own default. Must be a finite number, at least `0`.
 
 `folder` only ever reads from its source directory — it never writes, moves,
 renames, or deletes anything there.

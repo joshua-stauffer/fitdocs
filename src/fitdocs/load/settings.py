@@ -56,6 +56,7 @@ nothing from ``fitdocs.load.types`` itself.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -503,9 +504,14 @@ def _setting_flag_positive_float(
     if key not in sub_table:
         return default
     value = sub_table[key]
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value <= 0
+    ):
         raise LoadSettingsError(
-            f"{settings_file}: [load.flags] {key} must be a number "
+            f"{settings_file}: [load.flags] {key} must be a finite number "
             f"above zero, got {value!r} ({type(value).__name__})"
         )
     return float(value)
