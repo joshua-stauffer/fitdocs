@@ -99,6 +99,13 @@ DOCS. The rebased head passed on an unchanged rerun of the failed job
 (attempt 2). Step 3's atomic fixture publication, if confirmed, should remove
 both symptoms. Re-check this one too.
 
+Recurred the same day: DOCS run
+[39164284573, attempt 1](https://github.com/joshua-stauffer/fitdocs/actions/runs/39164284573/attempts/1)
+on `chore/q-local-tz` head `0aa5fac` failed at the same assertion. The output
+showed the identical duplicated `section: 'Nowhere'` line, and attempt 2
+passed. That makes two occurrences on unrelated branches within about eight
+hours.
+
 ## How to pick it up
 
 1. Read the writer, polling preview loop, source reader and failing test above.
