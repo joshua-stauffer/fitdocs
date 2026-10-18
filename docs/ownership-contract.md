@@ -445,13 +445,16 @@ with its own placement rule for the carried lines:
   fence; any key that is neither managed nor user-owned is dropped, not
   rewritten (see [Managed Frontmatter Keys](#managed-frontmatter-keys)
   below). `load_value`, `load_methodology`, and `load_basis` are not part of
-  what this step writes, so the rebuilt block never contains them: any
-  existing occurrences of those three lines are dropped along with the rest
-  of the old block, the same as any other key this step does not manage.
-  Whether they come back afterward is a question for the training-load
-  pass that runs next (see the next bullet), and for which documents
-  that pass can and cannot restore them on, see the `load` and
-  `regen` entries under
+  what this step writes, so the rebuilt block does not emit them. Existing
+  occurrences of those three lines are dropped along with the rest of the
+  old block, the same as any other key this step does not manage, except on
+  a page whose `load` region is hand-authored or was written by an earlier
+  format: the training-load pass skips such a region and would never restore
+  the keys, so the rebuild carries their lines over verbatim, after the
+  user-owned lines. On every other page whether they come back is a question
+  for the training-load pass that runs next (see the next bullet), and for
+  which documents that pass can and cannot restore them on, see the `load`
+  and `regen` entries under
   [Overwrite Semantics](#overwrite-semantics-of-every-writing-operation).
 - **The training-load pass** (`fitdocs load`, and the pass `sync` and `regen`
   each run automatically once their own rebuild finishes) never re-serializes
@@ -949,8 +952,11 @@ and each has a distinct contract:
   re-derives the `load_value` / `load_methodology` / `load_basis` frontmatter
   keys from the region. For a document whose `load` region is still a
   placeholder, or holds a previously-written "unsupported" block, it runs the
-  full computation and may rewrite the region. A hand-authored `load` region
-  is left untouched. `regen` also rebuilds a page's roles from the archived
+  full computation and may rewrite the region. A hand-authored `load` region,
+  or one holding a result written by an earlier format of fitdocs, is left
+  untouched, and so are its three frontmatter keys: `regen` carries their
+  lines over verbatim, since the training-load pass that follows skips that
+  region and would not restore them. `regen` also rebuilds a page's roles from the archived
   bytes of the files the page lists and the current `[identity]` precedence,
   so a change to the precedence takes effect there; a page whose base changes
   is re-rendered, renamed and cleaned up as under `sync` above. Every page is
@@ -985,7 +991,9 @@ and each has a distinct contract:
   block wholesale. By default this pass
   never overwrites a hand-authored (non-fitdocs) `load` region: it leaves
   that region and its frontmatter keys untouched and reports the document as
-  skipped. `load --recompute` is the only thing in fitdocs that
+  skipped; the same holds for a region written by an earlier format. `sync`
+  and `regen` keep those keys across their page rewrite, so this holds of the
+  commands as run, not only of the pass. `load --recompute` is the only thing in fitdocs that
   overwrites **hand-authored** `load`-region content: it discards whatever
   the region holds and recomputes it from scratch. Nothing is written if
   the recompute is declined or fails, so the existing content survives a

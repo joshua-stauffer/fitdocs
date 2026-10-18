@@ -180,6 +180,7 @@ __all__ = [
     "frontmatter_close_index",
     "is_generated",
     "is_workout_document",
+    "load_key_lines",
     "parse_frontmatter",
     "region_block",
     "sha_of_ref",
@@ -1084,9 +1085,10 @@ def frontmatter_block_error(text: str) -> str | None:
     return None
 
 
-def user_owned_lines(lines: list[str]) -> tuple[str, ...]:
-    """Every frontmatter line belonging to a user-owned entry, verbatim (Req
-    2.6, 3.2, 4.4, 4.5, 5.5).
+def _entry_lines(lines: list[str], keys: tuple[str, ...]) -> tuple[str, ...]:
+    """Every frontmatter line belonging to a top-level entry whose key is in
+    ``keys``, verbatim -- the scan :func:`user_owned_lines` and
+    :func:`load_key_lines` share.
 
     ``lines`` must be ``markdown.split("\\n")`` -- the same lossless
     precondition as :func:`frontmatter_close_index`, which this function uses
@@ -1097,12 +1099,11 @@ def user_owned_lines(lines: list[str]) -> tuple[str, ...]:
     following line up to the next entry start or the closing fence --
     indented lines, column-zero ``- `` list items, blank lines, comment lines
     -- belongs to that entry and is carried with it when the key is in
-    :data:`USER_KEYS`.
+    ``keys``.
 
     Returns ``()`` when there is no leading fence, the block is unterminated,
-    or no user-owned entry exists. Never raises, parses no YAML, and
-    validates nothing: a malformed tag's lines are carried exactly like a
-    valid one's (Req 3.2, 4.4).
+    or no such entry exists. Never raises, parses no YAML, and validates
+    nothing.
     """
     close_index = frontmatter_close_index(lines)
     if close_index is None:
@@ -1114,10 +1115,32 @@ def user_owned_lines(lines: list[str]) -> tuple[str, ...]:
             key = line.split(":", 1)[0].strip()
             if len(key) >= 2 and key[0] == key[-1] and key[0] in "'\"":
                 key = key[1:-1]
-            carrying = key in USER_KEYS
+            carrying = key in keys
         if carrying:
             carried.append(line)
     return tuple(carried)
+
+
+def user_owned_lines(lines: list[str]) -> tuple[str, ...]:
+    """Every frontmatter line belonging to a user-owned entry, verbatim (Req
+    2.6, 3.2, 4.4, 4.5, 5.5).
+
+    The entry grammar and the ``lines`` precondition are those of
+    :func:`_entry_lines`, over :data:`USER_KEYS`. A malformed tag's lines are
+    carried exactly like a valid one's (Req 3.2, 4.4).
+    """
+    return _entry_lines(lines, USER_KEYS)
+
+
+def load_key_lines(lines: list[str]) -> tuple[str, ...]:
+    """Every frontmatter line belonging to a :data:`LOAD_KEYS` entry, verbatim.
+
+    Same grammar and ``lines`` precondition as :func:`user_owned_lines`. The
+    load keys are tool-owned and the rebuild never emits them; this exists so
+    regeneration can carry them over a ``load`` region the training-load pass
+    will not touch, where nothing else would put them back.
+    """
+    return _entry_lines(lines, LOAD_KEYS)
 
 
 def is_workout_document(frontmatter: Mapping[str, object] | None) -> bool:

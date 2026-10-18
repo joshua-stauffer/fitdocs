@@ -202,6 +202,7 @@ from fitdocs.contract import (
     document_uuid,
     document_version,
     effort_tag,
+    load_key_lines,
     parse_frontmatter,
     sha_of_ref,
     source_refs,
@@ -266,6 +267,7 @@ from fitdocs.layout import (
     source_ref,
     sport_slug,
 )
+from fitdocs.load.docedit import LoadDocError, RegionState, classify_load_region
 from fitdocs.metrics.types import DerivedMetrics
 from fitdocs.quarantine import QuarantineEntry, QuarantineRecord, save_quarantine
 from fitdocs.render import Asset, DocContext, MapData, plan_map, render_document
@@ -2120,6 +2122,22 @@ def _page_task(
         # different concern). Computed from ``existing_text``, already read
         # above for the version gate: no second read, no second parse.
         carried = user_owned_lines(existing_text.split("\n"))
+
+        # Load-key carry: the three ``load_*`` keys are tool-owned and the
+        # rebuild never emits them; the training-load pass that follows
+        # re-derives them from a COMPUTED region and recomputes the rest. It
+        # skips a FOREIGN (hand-authored) or SUPERSEDED (prior-format) region
+        # and so would never put them back -- carry their lines over verbatim
+        # so the pass's "left untouched" holds end to end. A COMPUTED region's
+        # keys are deliberately not carried: the pass restores them from the
+        # payload. A missing or damaged region carries nothing (the merge
+        # below rejects a damaged one before any write).
+        try:
+            load_state = classify_load_region(existing_text).state
+        except (RegionError, LoadDocError):
+            load_state = None
+        if load_state in (RegionState.FOREIGN, RegionState.SUPERSEDED):
+            carried = (*carried, *load_key_lines(existing_text.split("\n")))
 
     # Roles (activity-identity Req 5.1, 5.2, 7.1): the page's listed files plus
     # the incoming one, each resolved through the archive and parsed once, then

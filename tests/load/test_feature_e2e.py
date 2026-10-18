@@ -69,6 +69,7 @@ from fitdocs.load.types import AthleteField, InteractionSession
 from fitdocs.sync import regen, sync
 from tests.fixtures import builder
 from tests.load.conftest import COMPUTING_FIELD, SCOPED_FIELD, ComputingCalculator
+from tests.load.test_render import _V1_WITHDRAWN_COMPUTED_LINE
 
 runner = CliRunner()
 
@@ -452,6 +453,49 @@ def test_real_regen_resets_frontmatter_then_restore_readds_it(
     # Restore touches only frontmatter: the region content is byte-identical.
     assert _load_region(restored_text) == computed_region
     assert classify_load_region(restored_text).payload == computed_payload
+
+
+# --- Scenario 6b: regen over a region the load pass will not touch ----------
+
+
+@pytest.mark.parametrize(
+    ("replacement", "expected_state"),
+    [
+        ("My own hand-written training notes.", RegionState.FOREIGN),
+        (_V1_WITHDRAWN_COMPUTED_LINE, RegionState.SUPERSEDED),
+    ],
+    ids=["foreign", "superseded"],
+)
+def test_real_regen_keeps_load_keys_over_a_region_the_pass_skips(
+    isolated_registry: None,
+    computing_calculator: ComputingCalculator,
+    tmp_path: Path,
+    replacement: str,
+    expected_state: RegionState,
+) -> None:
+    """The ownership contract promises the load pass leaves a hand-authored or
+    prior-format ``load`` region and its frontmatter keys untouched. Driving the
+    real ``regen`` followed by the real pass keeps all three keys: the rebuild
+    does not emit them and the pass skips the region, so only the rebuild's
+    carry can keep them."""
+    data_root = _build_data_root(tmp_path, {"run.fit": builder.run_fit_bytes()})
+    run = _doc(data_root, "run")
+    apply_load(data_root, session=_compute_run_session(level=7))
+    computed = run.read_text(encoding="utf-8")
+    keys_before = read_frontmatter_load(computed)
+    assert set(keys_before) == {"load_value", "load_methodology", "load_basis"}
+    skipped_region = replace_load_region(computed, replacement)
+    run.write_text(skipped_region, encoding="utf-8")
+    assert classify_load_region(skipped_region).state is expected_state
+
+    regen(data_root, athlete=load_athlete_inputs(data_root), tz=_TZ, tiles=_TILES)
+    report = apply_load(data_root, session=NonInteractiveSession())
+
+    run = _doc(data_root, "run")
+    after = run.read_text(encoding="utf-8")
+    assert _rel(data_root, run) in _docs_of(report.skipped)
+    assert read_frontmatter_load(after) == keys_before
+    assert _load_region(after) == replacement
 
 
 # --- Scenario 7: recompute replaces the result with fresh confirmation (8.3) -

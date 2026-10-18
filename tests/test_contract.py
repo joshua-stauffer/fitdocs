@@ -1583,3 +1583,28 @@ def test_document_source_identity_accepts_zero() -> None:
     )
     assert reading.elapsed_s == 0.0
     assert reading.distance_m == 0.0
+
+
+def test_load_key_lines_carries_only_the_load_entries_verbatim() -> None:
+    lines = [
+        "---",
+        "title: T",
+        "load_value: 42",
+        "effort: race",
+        "load_methodology: 'threshold'",
+        "load_basis: |",
+        "  indented continuation",
+        "sources:",
+        "- a.fit",
+        "---",
+        "body: load_value: 1",
+    ]
+
+    assert contract.load_key_lines(lines) == (
+        "load_value: 42",
+        "load_methodology: 'threshold'",
+        "load_basis: |",
+        "  indented continuation",
+    )
+    assert contract.load_key_lines(["no fence", "load_value: 1"]) == ()
+    assert contract.load_key_lines(["---", "load_value: 1"]) == ()

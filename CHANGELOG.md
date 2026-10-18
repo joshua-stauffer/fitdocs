@@ -431,6 +431,13 @@ recorded as one.
   longer crashes with a traceback when a workout page records a negative
   `load_value`. The page is counted with no load, exactly like one with a
   non-finite load; the other pages' history is computed as usual.
+- `fitdocs regen` and `fitdocs sync` no longer drop `load_value`,
+  `load_methodology` and `load_basis` from a page whose `load` region you
+  hand-authored or that holds a result written by an earlier format of
+  fitdocs. The training-load pass leaves such a region alone and so never
+  restored the keys; the page rewrite now carries them over verbatim, which
+  is what the ownership contract already promised. A page with a computed
+  result is unchanged: the pass still restores its keys from the region.
 
 ## [0.1.0] - 2026-09-19
 
