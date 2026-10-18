@@ -405,10 +405,9 @@ def _read_sdist(
             if is_regular:
                 extracted = tf.extractfile(info)
                 if extracted is None:
-                    raise CheckerError(
-                        f"{path.name}: {_shown_name(stripped, len(members) + 1, forbidden)} "
-                        "member is unreadable"
-                    )
+                    # Numbered as the member list will number it.
+                    shown = _shown_name(stripped, len(members) + 1, forbidden)
+                    raise CheckerError(f"{path.name}: {shown} member is unreadable")
                 content = extracted.read()
             members.append(
                 _Member(
