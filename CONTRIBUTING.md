@@ -126,6 +126,12 @@ data and fails closed — an unrun gate is treated as a failed gate, never as
 a pass. If you are unsure whether something you want to add is encumbered,
 ask before adding it rather than after.
 
+Continuous integration supplies that match data, from a repository secret, to
+both the test suite and the release gate. A pull request from a fork cannot
+read the secret, so its run stops at the "Write the match data" step with
+`gate_not_run` rather than skipping the check; a maintainer re-runs the change
+from a branch of this repository.
+
 ## How changes land
 
 This repository lands every non-trivial change through one ritual —

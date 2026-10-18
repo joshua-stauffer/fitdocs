@@ -51,7 +51,11 @@ Groups:
     parses as a valid major tag
     (verified once by hand against the live GitHub API -- see the task's
     status report -- not by a live network call in this offline suite).
-(h) step ordering: gates precede build precedes check precedes fail-closed.
+(h) step ordering: the match-data write precedes the test suite precedes
+    the other gates precede build precedes check precedes fail-closed. The
+    test suite's own forbidden-strings guard skips unless
+    `FITDOCS_FORBIDDEN_STRINGS` names that file, so both jobs' test steps
+    carry it in their `env:`, and one test actually runs the guard with it.
 (i) every `run:` command invoking `scripts.<module>` uses only flags that
     module's own argparse parser accepts (the 5.6 technique).
 (j) **Executes the YAML's own `run:` bodies**, not a hand-copied
@@ -77,6 +81,7 @@ from __future__ import annotations
 
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import tomllib
@@ -393,23 +398,128 @@ def test_setup_uv_is_pinned_to_a_specific_release_not_a_bare_major() -> None:
     )
 
 
-# --- (h) step ordering: gates < build < check < fail-closed ----------------
+# --- (h) step ordering: write < gates < build < check < fail-closed --------
 
 
-def test_step_ordering_gates_then_build_then_check_then_fail_closed() -> None:
+def test_step_ordering_write_then_gates_then_build_then_check_then_fail_closed() -> (
+    None
+):
     doc = _workflow()
     steps = _steps(_gates_job(doc))
     names = [s.get("name") for s in steps]
     indices = {name: names.index(name) for name in names if name is not None}
+    write_idx = indices["Write the match data outside the checkout"]
+    first_gate_idx = min(indices[name] for name in _GATE_STEP_NAMES)
     last_gate_idx = max(indices[name] for name in _GATE_STEP_NAMES)
     build_idx = indices["Build the artifacts"]
     check_idx = indices["Check the artifacts"]
     fail_closed_idx = indices["Prove the gate fails closed"]
-    assert last_gate_idx < build_idx < check_idx < fail_closed_idx, (
-        f"expected gates < build < check < fail-closed, got indices "
+    assert (
+        write_idx
+        < indices["Run the test suite"]
+        <= first_gate_idx
+        <= last_gate_idx
+        < build_idx
+        < check_idx
+        < fail_closed_idx
+    ), (
+        f"expected write < tests < gates < build < check < fail-closed, got "
+        f"write={write_idx}, tests={indices['Run the test suite']}, "
         f"gates={last_gate_idx}, build={build_idx}, check={check_idx}, "
         f"fail_closed={fail_closed_idx}"
     )
+
+
+# --- (h2) the test suite runs with the match data, in both jobs -------------
+
+_TEST_ENV_VALUE = "${{ runner.temp }}/forbidden-strings.txt"
+
+
+def _test_step_jobs() -> list[tuple[str, list[dict[str, Any]]]]:
+    doc = _workflow()
+    return [
+        ("gates", _steps(_gates_job(doc))),
+        ("supported-pythons", _steps(_supported_job(doc))),
+    ]
+
+
+def test_every_jobs_test_step_names_the_match_file_and_follows_the_write_step() -> None:
+    for job_name, steps in _test_step_jobs():
+        names = [s.get("name") for s in steps]
+        write_idx = names.index("Write the match data outside the checkout")
+        test_step = _step_by_name(steps, "Run the test suite")
+        assert test_step["run"].strip() == "uv run pytest", job_name
+        assert test_step.get("env") == {"FITDOCS_FORBIDDEN_STRINGS": _TEST_ENV_VALUE}, (
+            f"{job_name}: the test step does not arm the forbidden-strings guard"
+        )
+        assert write_idx < names.index("Run the test suite"), (
+            f"{job_name}: the match data is written after the test suite runs"
+        )
+
+
+def test_test_step_env_names_the_file_the_write_step_writes() -> None:
+    """The env value and the write step's target are two spellings of one
+    path (`${{ runner.temp }}` / `$RUNNER_TEMP`); a rename of one reds this."""
+    for job_name, steps in _test_step_jobs():
+        write = _step_by_name(steps, "Write the match data outside the checkout")
+        target = re.search(r'> "(\$RUNNER_TEMP/[^"]+)"', write["run"])
+        assert target is not None, f"{job_name}: write step target not found"
+        env_value = _step_by_name(steps, "Run the test suite")["env"][
+            "FITDOCS_FORBIDDEN_STRINGS"
+        ]
+        assert env_value.replace("${{ runner.temp }}", "$RUNNER_TEMP") == (
+            target.group(1)
+        ), job_name
+
+
+def test_the_test_step_env_really_arms_the_forbidden_strings_guard(
+    tmp_path: Path,
+) -> None:
+    """Runs the real write step and then the real test step's `env:` against
+    the guard's own test module. Without the variable that module skips its
+    scans (the defect: CI ran pytest with it unset); with it, it must run
+    them and skip nothing. The needle is built at run time so no tracked file
+    contains it."""
+    needle = "ci-armed-guard-needle-" + secrets.token_hex(8)
+    steps = dict(_test_step_jobs())["gates"]
+    write_body = _run_body(steps, "Write the match data outside the checkout")
+    test_env = _step_by_name(steps, "Run the test suite")["env"]
+
+    runner_temp = tmp_path / "runner_temp"
+    runner_temp.mkdir()
+    write_env = os.environ.copy()
+    write_env["RUNNER_TEMP"] = str(runner_temp)
+    write_env["FITDOCS_FORBIDDEN_STRINGS_CONTENT"] = needle + "\n"
+    assert _run_bash_body(write_body, cwd=tmp_path, env=write_env).returncode == 0
+
+    command = [
+        "uv",
+        "run",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "tests/test_forbidden_strings.py",
+    ]
+    base_env = os.environ.copy()
+    base_env.pop("FITDOCS_FORBIDDEN_STRINGS", None)
+    unarmed = subprocess.run(
+        command, cwd=str(_REPO_ROOT), capture_output=True, text=True, env=base_env
+    )
+    assert "skipped" in unarmed.stdout, (
+        "positive control failed -- the guard does not skip when unarmed: "
+        f"{unarmed.stdout[-400:]!r}"
+    )
+
+    armed_env = base_env | {
+        key: value.replace("${{ runner.temp }}", str(runner_temp))
+        for key, value in test_env.items()
+    }
+    armed = subprocess.run(
+        command, cwd=str(_REPO_ROOT), capture_output=True, text=True, env=armed_env
+    )
+    assert armed.returncode == 0, armed.stdout[-1500:] + armed.stderr[-500:]
+    assert "skipped" not in armed.stdout, armed.stdout[-400:]
 
 
 # --- (i) every scripts.<module> command uses only real flags --------------
