@@ -375,7 +375,6 @@ recorded as one.
   such threshold on file applies to the activity's date. Before, it said none
   was on file, which was untrue.
 
-
 ## [0.1.0] - 2026-09-19
 
 ### Added
