@@ -2,7 +2,8 @@
 
 History's ``scan_documents`` (``src/fitdocs/history/documents.py:197-200``)
 and the plan corpus's ``scan_corpus`` (``src/fitdocs/plans/corpus.py:184-187``)
-scan ``sorted(workouts/*.md)`` through ``docio.read_frontmatter`` and retain
+scan ``sorted(workouts/*.md)`` through ``docio.read_frontmatter`` (history
+through its ``read_frontmatter_diagnosed`` sibling) and retain
 workout documents, as defined by ``is_workout_document``
 (``src/fitdocs/contract.py:976-986``). The index's
 ``scan_workout_pages`` reads the same glob, applies the same predicate, and

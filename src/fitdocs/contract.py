@@ -176,6 +176,7 @@ __all__ = [
     "effort_tag",
     "end_marker",
     "format_session_uuid",
+    "frontmatter_block_error",
     "frontmatter_close_index",
     "is_generated",
     "is_workout_document",
@@ -1057,6 +1058,29 @@ def frontmatter_close_index(lines: list[str]) -> int | None:
     for index in range(1, len(lines)):
         if lines[index].strip() == FRONTMATTER_FENCE:
             return index
+    return None
+
+
+def frontmatter_block_error(text: str) -> str | None:
+    """Why a *closed* leading ``---`` block cannot be read as YAML, or ``None``.
+
+    The diagnostic counterpart to :func:`parse_frontmatter`, which answers
+    ``None`` alike for "not a document" and "a document whose YAML is broken":
+    this returns a one-line description only when ``text`` opens with the fence,
+    a later line closes it, and PyYAML cannot parse or construct the block
+    between them (a syntax error, or a value it refuses to build such as
+    ``date: 2026-02-30``). No fence, no closing fence, an empty block, or a
+    block that parses to a non-mapping all answer ``None`` -- those are files
+    that were never fitdocs documents. Never raises.
+    """
+    lines = text.split("\n")
+    close = frontmatter_close_index(lines)
+    if close is None:
+        return None
+    try:
+        yaml.safe_load("\n".join(lines[1:close]))
+    except (yaml.YAMLError, ValueError, OverflowError) as exc:
+        return (str(exc).strip().splitlines() or [type(exc).__name__])[0]
     return None
 
 

@@ -10,8 +10,10 @@ exactly the discovery rule `fitdocs.load.engine._discover_workout_docs` and
 imports another's). It reads nothing under `history/`, nothing under
 `fit-archive/`, and no `.fit` file at all (Req 1.1).
 
-Every document read goes through `fitdocs.docio.read_frontmatter` -- the one
-shared filesystem-plus-frontmatter read every scanner in the package uses --
+Every document read goes through `fitdocs.docio.read_frontmatter_diagnosed` --
+the sibling of `docio.read_frontmatter`, the shared filesystem-plus-frontmatter
+read every scanner in the package uses, that also says *why* a file is
+unreadable --
 and every interpretation of the parsed mapping goes through names bound
 directly from `fitdocs.contract` by identity: `is_workout_document`,
 `document_date`, `LOAD_KEYS` and `effort_tag`. This module is the `history`
@@ -23,20 +25,21 @@ duplicate of a contract reader.
 
 What counts as a document this module has an opinion about
 -------------------------------------------------------------
-A file `docio.read_frontmatter` declines to read (a symlink, an OS or
-decode error, no leading frontmatter fence, unparseable YAML, or a block
-that is not a mapping) is not distinguishable, from here, from a file that
-was simply never meant to be a fitdocs workout document at all -- the
-in-tree ownership declaration (`workouts/AGENTS.md`) is the standing
-example: it carries no YAML frontmatter *by design* (wiki-contract Req 3.7)
-precisely so no frontmatter-based scan ever catches it up. Reporting every
-such file as a "skipped" document would misreport that file on every run.
-So, matching `fitdocs.load.engine._discover_workout_docs` and the
-non-workout branch of `fitdocs.audit.audit`, a file whose frontmatter cannot
-be read, or whose parsed frontmatter is not a workout document
-(`is_workout_document` is `False`), is excluded from both this
-scan's pages and its skipped files -- silently, because it was never this
-module's document to report on.
+A file that is evidently a document but cannot be read -- an OS or decode
+error, or a closed leading frontmatter block whose YAML will not parse or
+construct (`date: 2026-02-30`) -- is reported, named, with the reason
+`docio.read_frontmatter_diagnosed` gives (Req 1.9). A file it declines
+*without* a reason -- a symlink, a directory, no leading frontmatter fence,
+or a block that is not a mapping -- is not distinguishable from a file that
+was never meant to be a fitdocs workout document at all: the in-tree
+ownership declaration (`workouts/AGENTS.md`) is the standing example, carrying
+no YAML frontmatter *by design* (wiki-contract Req 3.7) precisely so no
+frontmatter-based scan ever catches it up. Reporting it would misreport that
+file on every run. So, matching `fitdocs.load.engine._discover_workout_docs`
+and the non-workout branch of `fitdocs.audit.audit`, such a file, and a file
+whose parsed frontmatter is not a workout document (`is_workout_document` is
+`False`), is excluded from both this scan's pages and its skipped files --
+silently, because it was never this module's document to report on.
 
 A file that *is* a recognized workout document but whose own recorded date
 cannot be read (`document_date` returns `None`) is a different
@@ -184,10 +187,10 @@ def scan_documents(data_root: Path) -> DocumentScan:
     `fitdocs.audit` each do for their own pass; a missing `workouts/`
     directory yields an empty scan rather than an error, and a subdirectory
     under it is never descended into (`Path.glob("*.md")` is not recursive).
-    Never raises for a bad document: a file `docio.read_frontmatter` declines
-    or that is not a recognized workout document is silently excluded (see
-    the module docstring for why); a recognized document whose date cannot
-    be read is reported as a `SkippedPage`.
+    Never raises for a bad document: a file that is not a recognized workout
+    document is silently excluded (see the module docstring for why); an
+    unreadable document and a recognized document whose date cannot be read
+    are each reported as a `SkippedPage`.
     """
     workouts_dir = data_root / WORKOUTS_DIR
     pages: list[PageRecord] = []
@@ -195,11 +198,14 @@ def scan_documents(data_root: Path) -> DocumentScan:
 
     if workouts_dir.is_dir():
         for path in sorted(workouts_dir.glob("*.md")):
-            frontmatter = docio.read_frontmatter(path)
+            frontmatter, unreadable = docio.read_frontmatter_diagnosed(path)
+            relpath = _relative_posix(data_root, path)
+            if unreadable is not None:
+                skipped.append(SkippedPage(relpath, unreadable))
+                continue
             if frontmatter is None or not is_workout_document(frontmatter):
                 continue
 
-            relpath = _relative_posix(data_root, path)
             day = document_date(frontmatter)
             if day is None:
                 skipped.append(SkippedPage(relpath, _UNDATED_REASON))

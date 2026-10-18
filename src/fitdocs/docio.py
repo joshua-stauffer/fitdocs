@@ -48,12 +48,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from fitdocs.contract import parse_frontmatter
+from fitdocs.contract import frontmatter_block_error, parse_frontmatter
 
 __all__ = [
     "REMEDY_REPLACE_SYMLINK",
     "SYMLINK_DETAIL",
     "read_frontmatter",
+    "read_frontmatter_diagnosed",
 ]
 
 SYMLINK_DETAIL: Final[str] = "this path is a symlink and is not followed"
@@ -89,6 +90,46 @@ def read_frontmatter(path: Path) -> dict[str, object] | None:
     """
     document = read_document(path)
     return None if document is None else document.frontmatter
+
+
+def read_frontmatter_diagnosed(
+    path: Path,
+) -> tuple[dict[str, object] | None, str | None]:
+    """:func:`read_frontmatter`, plus *why* when the file is unreadable.
+
+    Returns ``(frontmatter, reason)``. ``reason`` is a one-line description
+    exactly when ``path`` is something the athlete evidently meant as a
+    document but that cannot be read as one: an OS or decode failure, or a
+    closed leading ``---`` block whose YAML cannot be parsed or constructed
+    (for example ``date: 2026-02-30``). It is ``None`` for a file that is
+    simply not a fitdocs document -- a symlink (refused unread, as in
+    :func:`read_frontmatter`), a directory, no leading fence, or a block that
+    parses to something other than a mapping -- so a caller can report the
+    first kind without also reporting ``workouts/AGENTS.md``. A readable
+    mapping returns ``(frontmatter, None)``. Never raises;
+    :func:`read_frontmatter`'s contract is untouched.
+    """
+    if path.is_symlink() or path.is_dir():
+        return None, None
+    try:
+        text = path.read_bytes().decode("utf-8")
+    except UnicodeDecodeError:
+        return None, "the file is not valid UTF-8 text"
+    except OSError as exc:
+        return None, f"the file could not be read: {exc.strerror or exc}"
+    try:
+        frontmatter = parse_frontmatter(text)
+    except (ValueError, OverflowError) as exc:
+        return None, _block_reason(str(exc))
+    if frontmatter is not None:
+        return frontmatter, None
+    error = frontmatter_block_error(text)
+    return None, None if error is None else _block_reason(error)
+
+
+def _block_reason(detail: str) -> str:
+    first_line = (detail.strip().splitlines() or ["unparseable YAML"])[0]
+    return f"the frontmatter block could not be parsed: {first_line}"
 
 
 @dataclass(frozen=True)

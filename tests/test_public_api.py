@@ -396,6 +396,7 @@ _CONTRACT_SURFACE = {
     "document_version",
     "effort_tag",
     "format_session_uuid",
+    "frontmatter_block_error",
     "frontmatter_close_index",
     "is_workout_document",
     "parse_frontmatter",
@@ -513,6 +514,7 @@ _DOCIO_SURFACE = {
     "REMEDY_REPLACE_SYMLINK",
     "SYMLINK_DETAIL",
     "read_frontmatter",
+    "read_frontmatter_diagnosed",
 }
 
 

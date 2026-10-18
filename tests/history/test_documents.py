@@ -282,6 +282,82 @@ def test_skipped_pages_are_sorted_by_path_not_by_filesystem_order(
     ]
 
 
+# --- unreadable workout documents (Req 1.9, 3.5) -------------------------------
+
+_LOAD = "load_value: 10.0\nload_methodology: banister"
+
+
+def test_a_permission_denied_workout_document_is_skipped_and_named(
+    tmp_path: Path,
+) -> None:
+    denied = _write(tmp_path, f"{WORKOUTS_DIR}/denied.md", _page(load_lines=_LOAD))
+    denied.chmod(0)
+    try:
+        if os.access(denied, os.R_OK):  # pragma: no cover - running as root
+            pytest.skip("file permissions are not enforced for this user")
+        scan = scan_documents(tmp_path)
+    finally:
+        denied.chmod(0o644)
+
+    assert scan.pages == ()
+    assert [s.path for s in scan.skipped] == [f"{WORKOUTS_DIR}/denied.md"]
+    assert "could not be read" in scan.skipped[0].reason
+
+
+def test_a_workout_document_that_is_not_utf8_is_skipped_and_named(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / WORKOUTS_DIR / "corrupt.md"
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"---\ntype: workout\n---\n\xff\xfe\n")
+
+    scan = scan_documents(tmp_path)
+
+    assert scan.pages == ()
+    assert [s.path for s in scan.skipped] == [f"{WORKOUTS_DIR}/corrupt.md"]
+    assert "UTF-8" in scan.skipped[0].reason
+
+
+@pytest.mark.parametrize(
+    "block",
+    [
+        pytest.param("type: workout\ndate: 2026-02-30", id="unconstructible-date"),
+        pytest.param("type: workout\ntitle: [unclosed", id="invalid-yaml"),
+    ],
+)
+def test_a_fenced_block_that_will_not_parse_is_skipped_and_named(
+    tmp_path: Path, block: str
+) -> None:
+    """A page with a closed frontmatter fence whose YAML cannot be turned into
+    a mapping (here `date: 2026-02-30`, which PyYAML refuses to construct) is
+    a workout the athlete meant to write, not a foreign file."""
+    _write(tmp_path, f"{WORKOUTS_DIR}/broken.md", f"---\n{block}\n---\n\nBody\n")
+    _write(tmp_path, f"{WORKOUTS_DIR}/fine.md", _page(load_lines=_LOAD))
+
+    scan = scan_documents(tmp_path)
+
+    assert [p.path for p in scan.pages] == [f"{WORKOUTS_DIR}/fine.md"]
+    assert [s.path for s in scan.skipped] == [f"{WORKOUTS_DIR}/broken.md"]
+    assert "frontmatter" in scan.skipped[0].reason
+
+
+def test_files_that_were_never_workout_documents_stay_silent(
+    tmp_path: Path,
+) -> None:
+    """The counterpart of the unreadable cases: the ownership declaration, a
+    fence-less note, a leading horizontal rule (a scalar block), an empty
+    block, and a directory named `*.md` are not skips."""
+    _write(tmp_path, f"{WORKOUTS_DIR}/AGENTS.md", "# Ownership\n\nNo frontmatter.\n")
+    _write(tmp_path, f"{WORKOUTS_DIR}/plain.md", "Just a note.\n")
+    _write(tmp_path, f"{WORKOUTS_DIR}/rule.md", "---\nsome prose\n---\nBody\n")
+    _write(tmp_path, f"{WORKOUTS_DIR}/empty.md", "---\n---\nBody\n")
+    (tmp_path / WORKOUTS_DIR / "folder.md").mkdir()
+
+    scan = scan_documents(tmp_path)
+
+    assert scan == DocumentScan(pages=(), skipped=())
+
+
 # --- non-workout / foreign files (silently excluded) --------------------------
 
 

@@ -421,6 +421,11 @@ recorded as one.
   than a quarter of the chart: `2026-01-05` now reads in full where it used to
   read `2026-0…`. The left margin grows by the missing few pixels, so the plot
   is slightly narrower and its marks shift right.
+- `fitdocs history` now names a workout page it cannot read (permission
+  denied, not valid UTF-8, or a frontmatter block whose YAML will not parse,
+  such as `date: 2026-02-30`) in its report and on the history page, and counts
+  it in the archive-wide skipped figure. Before, such a page vanished silently.
+  The page's skipped list is now headed "Skipped (unreadable or undated)".
 
 ## [0.1.0] - 2026-09-19
 

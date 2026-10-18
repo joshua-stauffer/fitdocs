@@ -74,7 +74,7 @@ fitdocs draws no conclusion from this count.
 
 ## Skipped and Excluded
 
-Skipped (date could not be read):
+Skipped (unreadable or undated):
 - `workouts/mystery-date.md` — document date could not be read
 
 Excluded (recording another methodology):

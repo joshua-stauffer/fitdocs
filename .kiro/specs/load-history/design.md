@@ -897,7 +897,12 @@ def unscaled_accumulators(
 - Scans `workouts/*.md` at the top level, sorted, exactly as the load engine and
   the audit do. It reads nothing under `history/`, nothing under `fit-archive/`,
   and no `.fit` file.
-- For each path: `docio.read_frontmatter` → skip when `None`;
+- For each path: `docio.read_frontmatter_diagnosed` (the sibling of
+  `read_frontmatter` that also says *why*) → skip **and name** with its reason
+  when the file is unreadable (OS or decode error, or a closed `---` block whose
+  YAML will not parse or construct, via `contract.frontmatter_block_error`);
+  skip silently when it is simply not a document (symlink, directory, no fence,
+  non-mapping block -- `workouts/AGENTS.md` is the standing example);
   `contract.is_workout_document` → skip when false;
   `contract.document_date` → skip with a reason when `None`;
   the three `contract.LOAD_KEYS` → `load` and `methodology`, both `None` when
@@ -1585,10 +1590,11 @@ view. Write faults fail the run, because the deliverable did not appear.
   table; malformed `[load]` table (raised by its own reader); ambiguous
   methodology; a configured methodology no page records. Each message names the
   file or the offending value and the action that resolves it. Nothing is written.
-- **Per-document (exit unchanged)** — unreadable file, symlink, undated page,
-  non-workout `.md`, unparsable `load_value`, malformed effort tag. Each becomes
-  a `SkippedPage` or a `tag_problem`, is named in the report and (for malformed
-  tags) on the page, and the run continues.
+- **Per-document (exit unchanged)** — an unreadable file (OS or decode error,
+  or an unparseable frontmatter block), an undated page, a malformed effort tag. Each becomes a `SkippedPage` or a
+  `tag_problem`, is named in the report and (for malformed tags) on the page,
+  and the run continues. A symlink and a non-workout `.md` are *not* skips: they were never this
+  scan's documents.
 - **Empty archive (exit 0)** — no page records a load. Reported with a note;
   nothing is written; an existing page is left untouched and named as unchanged.
 - **Foreign file (exit 0)** — a file at an output path that fitdocs did not

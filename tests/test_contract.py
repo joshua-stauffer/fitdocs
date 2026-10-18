@@ -652,6 +652,34 @@ def test_frontmatter_close_index_keeps_the_lossless_split_contract() -> None:
     assert rebuilt == _DOC
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "---\ntype: workout\ndate: 2026-02-30\n---\nbody\n",
+        "---\ntitle: [unclosed\n---\nbody\n",
+    ],
+)
+def test_frontmatter_block_error_names_a_closed_block_yaml_cannot_read(
+    text: str,
+) -> None:
+    assert contract.frontmatter_block_error(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "# Heading\nbody\n",
+        "---\ntype: workout\n",
+        "---\n---\nbody\n",
+        "---\nsome prose\n---\nbody\n",
+        "---\ntype: workout\n---\nbody\n",
+    ],
+    ids=["no-fence", "unterminated", "empty-block", "scalar-block", "good-mapping"],
+)
+def test_frontmatter_block_error_is_none_for_everything_else(text: str) -> None:
+    assert contract.frontmatter_block_error(text) is None
+
+
 def test_frontmatter_close_index_yields_none_without_a_leading_fence() -> None:
     assert contract.frontmatter_close_index(["# Heading", "body"]) is None
 
