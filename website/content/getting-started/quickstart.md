@@ -49,7 +49,7 @@ This searches the folder (and its subfolders) for `.fit` files and then:
 3. **computes training load**, asking for anything it's missing, like your max heart rate or threshold pace (see [Training load](../guides/training-load.md))
 4. ends with a summary of pages written, skipped, and failed
 
-The source folder is only read. Running the same sync again is safe: files that are already archived are skipped.
+The source folder is only read. Running the same sync again is safe: files that are already archived are skipped. If the folder holds two files of the same workout, say from your watch and from HealthFit, they share one page.
 
 Don't have your thresholds handy? Add `--no-prompt`. The pages still get written, just without a load number, and you can fill it in later with `fitdocs load`.
 
@@ -63,13 +63,24 @@ Don't have your thresholds handy? Add `--no-prompt`. The pages still get written
 │   └── AGENTS.md              the ownership rules, for people and LLMs
 ├── fit-archive/               your original .fit files, never modified
 ├── history/  blocks/          ready for the history page and training blocks
+├── wellness/  wellness-archive/  recovery/
+│                              ready for sleep, HRV, and resting heart rate
+├── dashboards/                ready for the dashboard pages you write
 ├── .cache/                    map tiles (safe to delete)
 └── athlete.toml               thresholds you entered (created on your first answer)
 ```
 
 Open `workouts/` in anything that reads markdown. Obsidian, VS Code, iA Writer, or a GitHub repo will all show the charts, because they're ordinary image links. [Tour a workout page →](../guides/workout-pages.md)
 
-## 5. Check that everything is healthy
+## 5. Build the analytics index
+
+```sh
+fitdocs index
+```
+
+This builds a local database of everything in your training log, so you, or your LLM, can ask questions across all your workouts in SQL. You only build it once. Every later sync keeps it current. See [The analytics index](../guides/analytics.md).
+
+## 6. Check that everything is healthy
 
 ```sh
 fitdocs check
@@ -79,7 +90,9 @@ fitdocs check
 
 ## Where to go next
 
-- **Stop pointing at folders by hand:** set up the [inbox](../guides/inbox.md) so a plain `fitdocs sync` picks up new files.
+- **Stop pointing at folders by hand:** set up the [inbox](../guides/inbox.md) so a plain `fitdocs sync` picks up new files, or [pull from intervals.icu](../guides/connectors.md) automatically.
 - **Get load numbers you trust:** [Training load](../guides/training-load.md) and [Benchmarks and race tags](../guides/benchmarks.md).
+- **Add sleep, HRV, and resting heart rate:** [Wellness and recovery](../guides/wellness.md).
+- **Ask questions across years of training:** [The analytics index](../guides/analytics.md) and [Dashboards](../guides/dashboards.md).
 - **Put it in your notes:** [Use fitdocs inside your wiki or vault](../guides/wiki-integration.md).
-- **Let an LLM run it:** Working with an LLM.
+- **Let an LLM run it:** [Working with an LLM](../llm/index.md).

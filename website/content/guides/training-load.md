@@ -2,7 +2,7 @@
 title: Training load
 description: How the built-in threshold calculator scores each workout, what it needs from you, and how it tells you when not to trust a number.
 section: Guides
-order: 3
+order: 4
 ---
 
 # Training load
@@ -23,7 +23,7 @@ For each activity, the `threshold` calculator computes a load from every channel
 | **Heart rate** | TRIMP → HRSS (Banister) | lactate-threshold heart rate, plus resting and max HR |
 | **Pace** | Grade-adjusted pace → intensity | threshold pace |
 
-Then it **picks one** using a per-sport priority order, and uses only that number for totals, history, and training blocks. If load is computed from multiple channels, only the first is used., but the others are visible on the workout page. Default orders:
+Then it **picks one** using a per-sport priority order, and uses only that number for totals, history, and training blocks. If load is computed from multiple channels, only the first is used, but the others are visible on the workout page. Default orders:
 
 | Sport | Priority |
 |---|---|
@@ -53,7 +53,7 @@ Load is measured against *your* thresholds, which fitdocs stores in `athlete.tom
 There are three ways to fill them in:
 
 1. **Answer the prompts.** When `fitdocs sync` or `fitdocs load` needs a value it doesn't have, it asks, checks your answer, and saves it. If the activity is older than your answer, it also asks whether that answer should apply to earlier activities too.
-2. **Let fitdocs work them out from your races.** Tag your races and hard efforts, and `fitdocs derive-benchmarks` turns them into dated thresholds. See [Benchmarks and race tags](benchmarks.md).
+2. **Let fitdocs work them out from your races and your own data.** Tag your races and hard efforts, and `fitdocs derive-benchmarks` turns them into dated thresholds. It also works out your resting heart rate from your [wellness](wellness.md) data and your max heart rate from your hardest runs and rides. See [Benchmarks and race tags](benchmarks.md).
 3. **Write them by hand:**
 
 ```toml
@@ -89,7 +89,7 @@ fitdocs evaluates the data quality of each channel, and adds a warning to the pa
 
 ## Running the load pass yourself
 
-Load runs automatically at the end of every `sync` and `regen`. You can also run it on its own:
+Load runs automatically at the end of every `sync`, `pull --sync`, and `regen`. You can also run it on its own:
 
 ```sh
 fitdocs load                    # fill in pages that don't have a load yet
@@ -98,7 +98,9 @@ fitdocs load --no-prompt        # never ask; skip pages that would need an answe
 fitdocs load --calculator ID    # use one specific calculator
 ```
 
-Run `fitdocs load` after adding new benchmarks to fill in pages that were missing a number.
+Run `fitdocs load` after adding new benchmarks to fill in pages that were missing a number. A page that already has a load keeps it until you run `fitdocs load --recompute`.
+
+A page built from [several files](workout-pages.md#several-files-one-workout) is scored from all of them together, so power from a Stryd pod counts even when the watch’s file is the main one. If more files of a workout arrive after its load was computed, the old number is kept until you recompute it.
 
 ## Tuning
 
