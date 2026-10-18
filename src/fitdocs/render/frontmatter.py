@@ -110,7 +110,8 @@ def build_frontmatter(ctx: DocContext) -> str:
     ``split("\\n")`` lines, cannot yield one (nor can
     :func:`fitdocs.contract.load_key_lines`), and the sync engine supplies
     this field from those producers on every rewrite. An empty tuple (the default,
-    and every render of a document that has never carried a user-owned key)
+    and every render of a document that has never carried a user-owned key
+    and carries no ``load_*`` lines)
     reproduces the exact block this function produced before the carry
     existed.
     """

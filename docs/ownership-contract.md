@@ -441,8 +441,8 @@ with its own placement rule for the carried lines:
 - **A full rebuild** — every `regen`, and the rewrite path inside `sync` —
   rewrites every managed key *except* the three the training-load pass owns
   (below) from a single `yaml.safe_dump`, then places the carried
-  user-owned lines immediately after that block and before the closing
-  fence; any key that is neither managed nor user-owned is dropped, not
+  user-owned lines after that block (and after any carried `load_*` lines,
+  below) and before the closing fence; any key that is neither managed nor user-owned is dropped, not
   rewritten (see [Managed Frontmatter Keys](#managed-frontmatter-keys)
   below). `load_value`, `load_methodology`, and `load_basis` are not part of
   what this step writes, so the rebuilt block does not emit them. Existing

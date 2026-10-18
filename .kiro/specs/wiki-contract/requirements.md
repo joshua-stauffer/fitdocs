@@ -502,7 +502,7 @@ declaration's rename sentence, and `CONTRACT_VERSION` advances from `"15"` to
 declarations change only their contract version. Existing criteria and prior
 amendments and approvals are preserved.
 
-## Amendment 12 (2026-10-18): load keys carried over a region the pass skips
+## Amendment 12 (2026-10-18): load keys carried over a region the pass skips, landed by chore/q-regen-load-keys
 
 Requirement 6 gains criterion 6.10, an exception to 6.1's full rewrite. A
 rebuild of a page whose `load` region is hand-authored or prior-format carries
