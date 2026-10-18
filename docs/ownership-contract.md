@@ -450,8 +450,8 @@ with its own placement rule for the carried lines:
   old block, the same as any other key this step does not manage, except on
   a page whose `load` region is hand-authored or was written by an earlier
   format: the training-load pass skips such a region and would never restore
-  the keys, so the rebuild carries their lines over verbatim, after the
-  user-owned lines. On every other page whether they come back is a question
+  the keys, so the rebuild carries their lines over verbatim, immediately
+  after the managed block and before the user-owned lines. On every other page whether they come back is a question
   for the training-load pass that runs next (see the next bullet), and for
   which documents that pass can and cannot restore them on, see the `load`
   and `regen` entries under
@@ -542,11 +542,14 @@ only reported.
 When a document's frontmatter block is *rebuilt in full* (`regen`, and the
 rewrite path inside `sync`), the carried user-owned lines are placed after
 every key that rebuild writes and before the closing fence, in the order
-they appeared in the document being regenerated. That rebuild never writes
-`load_value` / `load_methodology` / `load_basis`, so this does not describe
-where those three end up: the training-load pass listed above writes them
-separately, by a different rule, and places them *after* the carried
-user-owned lines instead — see
+they appeared in the document being regenerated. That rebuild does not
+generate `load_value` / `load_methodology` / `load_basis`, so this does not
+describe where those three end up. When the existing `load` region is
+hand-authored or was written by an earlier format, the rebuild writes the
+three keys' existing lines back verbatim, immediately after the managed
+block and before the carried user-owned lines. Otherwise the training-load
+pass listed above writes them separately, by a different rule, and places
+them *after* the carried user-owned lines instead — see
 [Frontmatter Ownership](#frontmatter-ownership) above for the full picture.
 
 To edit a user-owned key, edit its line directly, the same as any other

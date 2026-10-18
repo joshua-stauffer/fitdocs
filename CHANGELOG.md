@@ -436,7 +436,7 @@ recorded as one.
   hand-authored or that holds a result written by an earlier format of
   fitdocs. The training-load pass leaves such a region alone and so never
   restored the keys; the page rewrite now carries them over verbatim, which
-  is what the ownership contract already promised. A page with a computed
+  is what the `load` entry of the ownership contract promised. A page with a computed
   result is unchanged: the pass still restores its keys from the region.
 
 ## [0.1.0] - 2026-09-19
