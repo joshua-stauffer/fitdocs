@@ -138,9 +138,10 @@ def _read_load(
     `load is None` if and only if `methodology is None` (design.md's stated
     postcondition): `load` is `None` -- never a fabricated zero -- whenever
     `load_value` is absent, not an `int`/`float`, a `bool` (an `int`
-    subclass, rejected explicitly), not finite, negative (the model rejects a negative daily load; it is treated
-    exactly like a non-finite one), or too large to convert to a
-    Python `float`; and whenever the load is otherwise usable but
+    subclass, rejected explicitly), not finite, negative (the model rejects a
+    negative daily load; treated exactly like a non-finite one), or too large
+    to convert to a Python
+    `float`; and whenever the load is otherwise usable but
     `load_methodology` is absent or not a `str`, both `load` and
     `methodology` are dropped together, because Req 1.3 takes a load "only
     together with the methodology recorded alongside it" -- a load reported
@@ -212,11 +213,7 @@ def scan_documents(data_root: Path) -> DocumentScan:
                 skipped.append(SkippedPage(relpath, _UNDATED_REASON))
                 continue
 
-            try:
-                load, methodology = _read_load(frontmatter)
-            except _NegativeLoad:
-                skipped.append(SkippedPage(relpath, _NEGATIVE_LOAD_REASON))
-                continue
+            load, methodology = _read_load(frontmatter)
             effort, tag_problem = _read_effort(frontmatter)
             pages.append(
                 PageRecord(
