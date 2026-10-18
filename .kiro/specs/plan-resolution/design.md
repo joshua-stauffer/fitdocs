@@ -1683,3 +1683,19 @@ on `document_load` validity or inspect the load region. Analytics-index task
 2.5 owns this additive change and its contract tests; task 3.1 consumes it for
 `pages.load_basis`. The existing two-field `LoadReading`, `document_load`
 parity rule, plan corpus and history behavior are preserved.
+
+## Amendment 3 (2026-10-18): history treats a negative load_value as absent; document_load does not
+
+The statements above that `document_load` applies "exactly
+`history/documents._read_load`'s rule" and that `document_load(fm) is None`
+iff history's `_read_load(fm) == (None, None)` hold for every shape except one
+deliberate exception: a *negative* `load_value`. History's `_read_load` returns
+`(None, None)` for it (the page stays counted with no load, exactly like a
+non-finite value), because `history.model` raises on a negative daily load and
+that crashed `fitdocs history`; `document_load` still returns the recorded
+`LoadReading`. `document_load`'s behaviour is unchanged (the plan corpus and
+the analytics index read it, so changing it would change stored data). The
+parity table in `tests/test_contract.py` excludes negative loads, and
+`test_document_load_negative_value_is_the_documented_history_divergence` pins
+the exception. Landed by the load-history fix
+`chore/q-history-unreadable`.

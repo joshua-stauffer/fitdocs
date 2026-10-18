@@ -424,7 +424,8 @@ recorded as one.
 - `fitdocs history` now names a workout page it cannot read (permission
   denied, not valid UTF-8, or a frontmatter block whose YAML will not parse,
   such as `date: 2026-02-30`) in its report and on the history page, and counts
-  it in the archive-wide skipped figure. Before, such a page vanished silently.
+  it in the archive-wide skipped figure. Before, such a page vanished silently
+  or, for an unconstructible value such as `date: 2026-02-30`, crashed the run.
   The page's skipped list is now headed "Skipped (unreadable or undated)".
 - `fitdocs history` (and the analytics refresh that reuses its computation) no
   longer crashes with a traceback when a workout page records a negative
