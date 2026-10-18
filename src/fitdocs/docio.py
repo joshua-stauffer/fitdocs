@@ -117,10 +117,7 @@ def read_frontmatter_diagnosed(
         return None, "the file is not valid UTF-8 text"
     except OSError as exc:
         return None, f"the file could not be read: {exc.strerror or exc}"
-    try:
-        frontmatter = parse_frontmatter(text)
-    except (ValueError, OverflowError) as exc:
-        return None, _block_reason(str(exc))
+    frontmatter = parse_frontmatter(text)
     if frontmatter is not None:
         return frontmatter, None
     error = frontmatter_block_error(text)

@@ -7,7 +7,7 @@ Every fixture here is a synthetically written page tree under `tmp_path`,
 built from real frontmatter fences and real `fitdocs.contract` vocabulary --
 none of it is a hand-rolled format that only a private parser in this test
 module would recognize; every fixture is read by the actual
-`fitdocs.docio.read_frontmatter` / `fitdocs.contract` readers `scan_documents`
+`fitdocs.docio.read_frontmatter_diagnosed` / `fitdocs.contract` readers `scan_documents`
 itself calls. No `.fit` file is read and no real wiki page is ever used.
 """
 
@@ -323,6 +323,9 @@ def test_a_workout_document_that_is_not_utf8_is_skipped_and_named(
     [
         pytest.param("type: workout\ndate: 2026-02-30", id="unconstructible-date"),
         pytest.param("type: workout\ntitle: [unclosed", id="invalid-yaml"),
+        pytest.param("type: workout\na: !!bool maybe", id="bad-bool-tag"),
+        pytest.param("type: workout\na: !!timestamp foo", id="bad-timestamp-tag"),
+        pytest.param("type: workout\na: !!int ''", id="empty-int-tag"),
     ],
 )
 def test_a_fenced_block_that_will_not_parse_is_skipped_and_named(
@@ -434,7 +437,7 @@ def test_a_symlink_is_neither_a_page_nor_a_skip(tmp_path: Path) -> None:
     """The target is a genuine, scoreable workout page so this fixture only
     discriminates a real bypass: if `scan_documents` ever read the file
     directly (`path.read_text()` + `contract.parse_frontmatter`) instead of
-    going through `docio.read_frontmatter`, the symlink's refusal would
+    going through `docio.read_frontmatter_diagnosed`, the symlink's refusal would
     never fire and this page would show up."""
     target = _write(
         tmp_path,

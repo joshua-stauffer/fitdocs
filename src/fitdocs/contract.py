@@ -1079,7 +1079,7 @@ def frontmatter_block_error(text: str) -> str | None:
         return None
     try:
         yaml.safe_load("\n".join(lines[1:close]))
-    except (yaml.YAMLError, ValueError, OverflowError) as exc:
+    except _YAML_LOAD_ERRORS as exc:
         return (str(exc).strip().splitlines() or [type(exc).__name__])[0]
     return None
 
@@ -1321,10 +1321,11 @@ class LoadReading:
 def document_load(frontmatter: Mapping[str, object] | None) -> LoadReading | None:
     """The document's own recorded load reading, or ``None`` (Req 1.2, 1.5).
 
-    Applies the rule :func:`fitdocs.history.documents._read_load` applies,
-    with one deliberate exception -- the two are pinned by a parity table in
-    ``tests/test_contract.py`` -- so the block page and the history page agree
-    on which documents carry a usable load: ``load_value`` (under :data:`LOAD_KEYS`'
+    Applies the rule :func:`fitdocs.history.documents._read_load` applies; the
+    two agree on every shape except a negative ``load_value``, which the parity
+    table in ``tests/test_contract.py`` excludes and a separate test pins (see
+    the last paragraph). So the block page and the history page agree on which
+    documents carry a usable load: ``load_value`` (under :data:`LOAD_KEYS`'
     first entry) is rejected as absent when it is missing, a ``bool`` (an
     ``int`` subclass, rejected explicitly), not an ``int``/``float``,
     non-finite, or too large to convert to a Python ``float``

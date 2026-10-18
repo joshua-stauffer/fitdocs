@@ -657,6 +657,9 @@ def test_frontmatter_close_index_keeps_the_lossless_split_contract() -> None:
     [
         "---\ntype: workout\ndate: 2026-02-30\n---\nbody\n",
         "---\ntitle: [unclosed\n---\nbody\n",
+        "---\na: !!bool maybe\n---\nbody\n",
+        "---\na: !!timestamp foo\n---\nbody\n",
+        "---\na: !!int ''\n---\nbody\n",
     ],
 )
 def test_frontmatter_block_error_names_a_closed_block_yaml_cannot_read(
