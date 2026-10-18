@@ -1217,7 +1217,6 @@ _LOAD_PARITY_CASES: tuple[dict[str, object], ...] = (
     {"load_value": 150, "load_methodology": 7},
     {"load_methodology": "tss"},
     {"load_value": 0, "load_methodology": "tss"},
-    {"load_value": -5.5, "load_methodology": "tss"},
     {"load_value": 150, "load_methodology": ""},
 )
 
@@ -1236,6 +1235,22 @@ def test_document_load_absence_matches_history_private_reader(
     if contract_reading is not None:
         assert contract_reading.value == history_load
         assert contract_reading.methodology == history_methodology
+
+
+def test_document_load_negative_value_is_the_one_documented_history_divergence() -> None:
+    """The history reader treats a negative `load_value` as an unreadable load
+    (it skips and names the page; the model rejects negative daily loads),
+    while this shared contract reader still reports the recorded number. The
+    one deliberate exception to the parity table above."""
+    from fitdocs.history import documents as history_documents
+
+    frontmatter: dict[str, object] = {"load_value": -5.5, "load_methodology": "tss"}
+
+    reading = contract.document_load(frontmatter)
+    assert reading is not None
+    assert reading.value == -5.5
+    with pytest.raises(history_documents._NegativeLoad):
+        history_documents._read_load(frontmatter)
 
 
 # --------------------------------------------------------------------------- #

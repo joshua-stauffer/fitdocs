@@ -358,6 +358,37 @@ def test_files_that_were_never_workout_documents_stay_silent(
     assert scan == DocumentScan(pages=(), skipped=())
 
 
+# --- a negative load is an unreadable load (Req 1.9, 4.x) ---------------------
+
+
+def test_a_negative_load_skips_and_names_the_page(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        f"{WORKOUTS_DIR}/negative.md",
+        _page(load_lines="load_value: -5.0\nload_methodology: banister"),
+    )
+    _write(tmp_path, f"{WORKOUTS_DIR}/fine.md", _page(load_lines=_LOAD))
+
+    scan = scan_documents(tmp_path)
+
+    assert [p.path for p in scan.pages] == [f"{WORKOUTS_DIR}/fine.md"]
+    assert [s.path for s in scan.skipped] == [f"{WORKOUTS_DIR}/negative.md"]
+    assert "negative" in scan.skipped[0].reason
+
+
+def test_a_zero_load_is_still_a_load(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        f"{WORKOUTS_DIR}/zero.md",
+        _page(load_lines="load_value: 0\nload_methodology: banister"),
+    )
+
+    scan = scan_documents(tmp_path)
+
+    assert [p.load for p in scan.pages] == [0.0]
+    assert scan.skipped == ()
+
+
 # --- non-workout / foreign files (silently excluded) --------------------------
 
 

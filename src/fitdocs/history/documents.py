@@ -44,7 +44,9 @@ silently, because it was never this module's document to report on.
 A file that *is* a recognized workout document but whose own recorded date
 cannot be read (`document_date` returns `None`) is a different
 case: it is unambiguously a fitdocs document this scan failed to place in
-the series, so it is reported, named, with a reason (Req 1.9).
+the series, so it is reported, named, with a reason (Req 1.9). So is a
+document recording a negative `load_value`: the load is unreadable (the model
+rejects a negative daily load), treated exactly like a non-finite one.
 """
 
 from __future__ import annotations
@@ -79,6 +81,13 @@ _LOAD_VALUE_KEY, _LOAD_METHODOLOGY_KEY, _LOAD_BASIS_KEY = LOAD_KEYS
 #: The one reason a page is reported skipped by this module (Req 1.9). A
 #: single constant so the reason text cannot drift between call sites.
 _UNDATED_REASON = "the document's recorded date could not be read"
+_NEGATIVE_LOAD_REASON = "the document's recorded load is negative"
+
+
+class _NegativeLoad(Exception):
+    """`_read_load` found a negative `load_value`: the page's load is
+    unreadable (the model rejects a negative daily load), so the whole page
+    is skipped and named rather than reaching `run_model`."""
 
 
 @dataclass(frozen=True)
@@ -139,7 +148,8 @@ def _read_load(
     postcondition): `load` is `None` -- never a fabricated zero -- whenever
     `load_value` is absent, not an `int`/`float`, a `bool` (an `int`
     subclass, rejected explicitly), not finite, or too large to convert to a
-    Python `float`; and whenever the load is otherwise usable but
+    Python `float`; a negative `load_value` raises `_NegativeLoad` (the caller
+    skips and names the page); and whenever the load is otherwise usable but
     `load_methodology` is absent or not a `str`, both `load` and
     `methodology` are dropped together, because Req 1.3 takes a load "only
     together with the methodology recorded alongside it" -- a load reported
@@ -156,6 +166,8 @@ def _read_load(
         return None, None
     if not math.isfinite(load):
         return None, None
+    if load < 0:
+        raise _NegativeLoad
     methodology_value = frontmatter.get(_LOAD_METHODOLOGY_KEY)
     if not isinstance(methodology_value, str):
         return None, None
@@ -189,8 +201,8 @@ def scan_documents(data_root: Path) -> DocumentScan:
     under it is never descended into (`Path.glob("*.md")` is not recursive).
     Never raises for a bad document: a file that is not a recognized workout
     document is silently excluded (see the module docstring for why); an
-    unreadable document and a recognized document whose date cannot be read
-    are each reported as a `SkippedPage`.
+    unreadable document, a recognized document whose date cannot be read, and
+    one recording a negative load are each reported as a `SkippedPage`.
     """
     workouts_dir = data_root / WORKOUTS_DIR
     pages: list[PageRecord] = []
@@ -211,7 +223,11 @@ def scan_documents(data_root: Path) -> DocumentScan:
                 skipped.append(SkippedPage(relpath, _UNDATED_REASON))
                 continue
 
-            load, methodology = _read_load(frontmatter)
+            try:
+                load, methodology = _read_load(frontmatter)
+            except _NegativeLoad:
+                skipped.append(SkippedPage(relpath, _NEGATIVE_LOAD_REASON))
+                continue
             effort, tag_problem = _read_effort(frontmatter)
             pages.append(
                 PageRecord(

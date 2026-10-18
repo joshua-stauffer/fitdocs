@@ -425,7 +425,12 @@ recorded as one.
   denied, not valid UTF-8, or a frontmatter block whose YAML will not parse,
   such as `date: 2026-02-30`) in its report and on the history page, and counts
   it in the archive-wide skipped figure. Before, such a page vanished silently.
-  The page's skipped list is now headed "Skipped (unreadable or undated)".
+  The page's skipped list is now headed "Skipped (unreadable, undated, or
+  negative load)".
+- `fitdocs history` (and the analytics refresh that reuses its computation) no
+  longer crashes with a traceback when a workout page records a negative
+  `load_value`. The page is skipped and named in the skipped list, like an
+  unreadable one; the other pages' history is computed as usual.
 
 ## [0.1.0] - 2026-09-19
 

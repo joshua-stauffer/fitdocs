@@ -124,6 +124,31 @@ def test_empty_archive_writes_nothing_reports_no_failure_and_sets_the_note(
     assert report.methodology is None
 
 
+def test_a_negative_load_page_is_skipped_not_a_crash(tmp_path: Path) -> None:
+    """A hand-edited negative `load_value` once reached `run_model`, which
+    raises; the reader now treats it as unreadable, so the run completes and
+    names the page."""
+    _write_page(
+        tmp_path,
+        "good",
+        day="2024-01-01",
+        load_value=50.0,
+        load_methodology="banister_1991",
+    )
+    _write_page(
+        tmp_path,
+        "negative",
+        day="2024-01-02",
+        load_value=-5.0,
+        load_methodology="banister_1991",
+    )
+
+    report = run_history(tmp_path)
+
+    assert report.failures == ()
+    assert [s.path for s in report.skipped] == [f"{WORKOUTS_DIR}/negative.md"]
+
+
 def test_empty_archive_refreshes_no_declarations_and_creates_no_directory(
     tmp_path: Path,
 ) -> None:

@@ -263,6 +263,16 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
         "to (`0.0 == 0`) but a distinct site from the two bounds above.",
     ),
     LiteralExemption(
+        "documents.py",
+        None,
+        None,
+        0,
+        ExemptionCategory.VALIDATION_BOUND,
+        "_read_load's `load < 0` bound -- a negative load is unreadable "
+        "(the model rejects it); a generic sign check, not a methodologically "
+        "significant model value.",
+    ),
+    LiteralExemption(
         "settings.py",
         None,
         None,
