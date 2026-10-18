@@ -3085,6 +3085,53 @@ def test_regen_does_not_warn_when_the_stem_holder_is_another_readable_page(
     assert report.warnings == ()
 
 
+def test_regen_does_not_write_through_a_dangling_symlink_at_the_stem(
+    tmp_path: Path,
+) -> None:
+    """A dangling symlink at the computed stem looks free to ``exists()``; the
+    new page's target is the link itself, and writing it would create the link's
+    target outside the data root. Regen fails the file and creates nothing.
+
+    Mutation: drop ``or target.is_symlink()`` from the guard.
+    """
+    data_root, page, original = _stage_unreadable(tmp_path)
+    page.unlink()
+    outside = tmp_path / "outside" / "created.md"
+    outside.parent.mkdir()
+    page.symlink_to(outside)
+    assert page.is_symlink() and not page.exists()  # dangling
+
+    report = _regen(data_root)
+
+    assert report.written == ()
+    (failure,) = report.failures
+    assert f"{WORKOUTS_DIR}/{page.name}" in failure.reason
+    assert not outside.exists()
+    assert page.is_symlink()
+
+
+def test_regen_leaves_a_symlinked_stem_holder_to_its_own_warning(
+    tmp_path: Path,
+) -> None:
+    """A live symlink to a garbled file at the computed stem is reported once, by
+    the symlink warning, not a second time as an unreadable page.
+
+    Mutation: drop ``not occupant.is_symlink() and`` from the warning branch.
+    """
+    data_root, page, original = _stage_unreadable(tmp_path)
+    broken = _garble(page)
+    elsewhere = tmp_path / "elsewhere.md"
+    elsewhere.write_text(broken, encoding="utf-8")
+    page.unlink()
+    page.symlink_to(elsewhere)
+    assert page.exists() and page.is_symlink()
+
+    report = _regen(data_root)
+
+    assert report.failures == ()
+    assert [w.doc for w in report.warnings].count(f"{WORKOUTS_DIR}/{page.name}") == 1
+
+
 # --- CLI scenarios (7.2) ---
 #
 # These drive the real ``fitdocs`` command (typer's runner) over a temp data

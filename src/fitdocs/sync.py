@@ -2206,7 +2206,8 @@ def _page_task(
                     detail=(
                         "could not be read as a fitdocs page (its frontmatter is "
                         f"missing or malformed), so {doc_ref} was written beside "
-                        "it as a new page; repair or delete one of them"
+                        "it as a new page; if they are the same workout, repair or "
+                        "delete one of them"
                     ),
                 )
             )
