@@ -70,3 +70,29 @@ quarantine record and the hold record without an exhaustive claim"
 connectors 8.1 names its ledgers "beside the quarantine record"
 (`.kiro/specs/connectors/design.md` ~:1615-1617). Check after either lands
 and drop this bullet from the item's scope if the word "future" is gone.
+
+## Update 2026-10-19 (0.2 site-copy update)
+
+The `.gitattributes` example under "Marking Generated Files in a
+Version-Controlled Wiki" (`docs/ownership-contract.md`, at 90cd00b) still
+lists only `workouts/`, `fit-archive/`, `history/` and `blocks/`. It has no
+lines for the owned locations added since:
+
+- `recovery/recovery.md` and `recovery/assets/*`
+- `wellness/*` (the rebuilt yearly CSVs)
+- `wellness-archive/**` (nested per-format folders)
+- `dashboards/assets/**`
+
+For `dashboards/assets/**`, note that `*.snapshot-<n>.json` must stay
+committed (`docs/dashboards.md`, "Version control"). The site's wiki guide
+(branch `chore/site-copy-0-2`, `website/content/guides/wiki-integration.md`)
+now suggests:
+
+- `recovery/*.md linguist-generated`
+- `recovery/assets/* linguist-generated -diff`
+- `wellness/* linguist-generated`
+- `wellness-archive/** linguist-generated -diff`
+
+When this item is picked up, make the contract's example agree with those
+lines, and add `workouts/assets/*`.
+
