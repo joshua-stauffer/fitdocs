@@ -117,6 +117,12 @@
           "tests/test_declaration_goldens.py"
         ]
       }
+    },
+    {
+      "date": "2026-10-18",
+      "requirement": "6.10 (new) -- implemented by the regen load-key fix",
+      "reason": "fitdocs regen and the sync rewrite dropped load_value/load_methodology/load_basis from a page whose load region is hand-authored or prior-format, because the training-load pass skips such a region. The rebuild now carries those lines verbatim, ahead of the user-owned lines; the published contract states the exception to 6.1.",
+      "also": "requirements.md gains Amendment 12 and criterion 6.10; design.md a dated note for load_key_lines. CONTRACT_VERSION is not advanced here."
     }
   ]
 }

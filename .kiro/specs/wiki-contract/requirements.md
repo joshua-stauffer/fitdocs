@@ -425,6 +425,7 @@ data silently.
 7. _(added by Amendment 1)_ A user-owned key shall be excluded from the unmanaged-key warning (6.3) and from the unmanaged-key finding (8.4); a user-owned key carrying a malformed value shall instead be reported as a finding of its own kind, distinct from the unmanaged-key finding, naming the affected document and the offending key.
 8. _(added by Amendment 1)_ The ownership declaration placed in the generated-documents directory shall name the user-owned frontmatter keys and shall state that fitdocs never writes them and carries them through regeneration.
 9. _(added by Amendment 4)_ The published managed key set (6.2) shall include the four keys recording a document's base source file -- `source_kind`, `source_elapsed_s`, `source_distance_m` and `source_device` -- and the document's `sources` list, so that regeneration rewrites them and none is reported as an unmanaged key.
+10. _(added by Amendment 11)_ When the fitdocs CLI rebuilds a document's frontmatter block in full and the existing `load` region is hand-authored or was written by an earlier format, so that the training-load pass leaves it untouched, it shall carry the document's `load_value`, `load_methodology` and `load_basis` lines byte-for-byte, placed after every generated managed key and before the carried user-owned lines (6.6), and this exception to 6.1 shall be stated as part of the published contract. For any other `load` region the rebuild carries none of the three and the training-load pass restores or computes them.
 
 ### Requirement 7: Regeneration and Overwrite Guarantees
 **Objective:** As a user whose documents fitdocs rewrites, I want the destructive
@@ -500,3 +501,13 @@ declaration's rename sentence, and `CONTRACT_VERSION` advances from `"15"` to
 `"16"` with append-only history and a new current-change paragraph. Other
 declarations change only their contract version. Existing criteria and prior
 amendments and approvals are preserved.
+
+## Amendment 12 (2026-10-18): load keys carried over a region the pass skips
+
+Requirement 6 gains criterion 6.10, an exception to 6.1's full rewrite. A
+rebuild of a page whose `load` region is hand-authored or prior-format carries
+the three `load_*` keys' lines over verbatim, because the training-load pass
+skips such a region and would never restore them; the published contract's
+`load`, `regen` and frontmatter-ownership statements say so. No managed key is
+added, no key class changes, and `CONTRACT_VERSION` is not advanced by this
+amendment. No existing criterion or amendment is renumbered.
