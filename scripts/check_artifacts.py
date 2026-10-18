@@ -368,6 +368,20 @@ def _load_sdist(path: Path) -> tuple[tuple[_Member, ...], email.message.Message]
     return tuple(members), metadata
 
 
+def _shown_name(text: str, ordinal: int, forbidden: ForbiddenStrings | None) -> str:
+    """`text` (a member name or link target) as it may appear in a finding.
+
+    The release run's Actions log is public, so a name that itself matches a
+    forbidden-string token is never echoed -- it is replaced by an ordinal
+    placeholder (`ordinal` is the member's 1-based position in archive
+    order), as `scripts/check_site.py` does for a matched path. A name that
+    does not match stays readable: the maintainer's fix needs it.
+    """
+    if forbidden is not None and forbidden_matches(text, forbidden):
+        return f"<redacted member #{ordinal}>"
+    return repr(text)
+
+
 def _check_missing_required(
     subject: str, members: tuple[_Member, ...], required: tuple[str, ...]
 ) -> list[Violation]:
@@ -385,10 +399,13 @@ def _check_missing_required(
 
 
 def _check_forbidden(
-    subject: str, members: tuple[_Member, ...], patterns: tuple[str, ...]
+    subject: str,
+    members: tuple[_Member, ...],
+    patterns: tuple[str, ...],
+    forbidden: ForbiddenStrings | None,
 ) -> list[Violation]:
     violations: list[Violation] = []
-    for member in members:
+    for ordinal, member in enumerate(members, start=1):
         # `fnmatchcase`, not `fnmatch`: the latter case-folds on Windows
         # only, which would let a differently-cased forbidden path through
         # there alone -- this checker must give the same answer everywhere.
@@ -401,7 +418,8 @@ def _check_forbidden(
                     subject=subject,
                     kind=ViolationKind.FORBIDDEN_MEMBER,
                     detail=(
-                        f"member {member.name!r} matches forbidden pattern {matched!r}"
+                        f"member {_shown_name(member.name, ordinal, forbidden)} "
+                        f"matches forbidden pattern {matched!r}"
                     ),
                     remedy=(
                         "exclude it via the sdist allowlist or the wheel's packaged "
@@ -412,18 +430,23 @@ def _check_forbidden(
     return violations
 
 
-def _check_links(subject: str, members: tuple[_Member, ...]) -> list[Violation]:
+def _check_links(
+    subject: str, members: tuple[_Member, ...], forbidden: ForbiddenStrings | None
+) -> list[Violation]:
     return [
         Violation(
             subject=subject,
             kind=ViolationKind.LINK_MEMBER,
-            detail=f"member {member.name!r} is a link to {member.link_target!r}",
+            detail=(
+                f"member {_shown_name(member.name, ordinal, forbidden)} is a link "
+                f"to {_shown_name(member.link_target, ordinal, forbidden)}"
+            ),
             remedy=(
                 "exclude it; a link's bytes are its target path and no content "
                 "scan can see through it"
             ),
         )
-        for member in members
+        for ordinal, member in enumerate(members, start=1)
         if member.is_link
     ]
 
@@ -507,9 +530,10 @@ def _check_encumbered_content(
     alike.
     """
     violations: list[Violation] = []
-    for member in members:
+    for ordinal, member in enumerate(members, start=1):
         if not member.is_regular:
             continue
+        shown = _shown_name(member.name, ordinal, forbidden)
         if _is_text_like(member.name):
             text = member.content.decode("utf-8", errors="replace")
             for _value in forbidden_matches(text, forbidden):
@@ -518,7 +542,7 @@ def _check_encumbered_content(
                         subject=subject,
                         kind=ViolationKind.ENCUMBERED_CONTENT,
                         detail=(
-                            f"member {member.name!r} contains a forbidden-string "
+                            f"member {shown} contains a forbidden-string "
                             "token match -- see the FITDOCS_FORBIDDEN_STRINGS "
                             "source for which value(s)"
                         ),
@@ -530,9 +554,7 @@ def _check_encumbered_content(
                     Violation(
                         subject=subject,
                         kind=ViolationKind.ENCUMBERED_CONTENT,
-                        detail=(
-                            f"member {member.name!r} contains a fingerprinted value"
-                        ),
+                        detail=f"member {shown} contains a fingerprinted value",
                         remedy="remove or replace the matched numeric content",
                     )
                 )
@@ -543,7 +565,7 @@ def _check_encumbered_content(
                         subject=subject,
                         kind=ViolationKind.ENCUMBERED_CONTENT,
                         detail=(
-                            f"binary member {member.name!r} name matches a "
+                            f"binary member {shown} name matches a "
                             "forbidden-string token match"
                         ),
                         remedy="rename or remove the matched member",
@@ -751,6 +773,9 @@ def check_artifacts(
     wheel_members, wheel_metadata = _load_wheel(wheel_path)
     sdist_members, sdist_metadata = _load_sdist(sdist_path)
 
+    # Loaded first: the member-name checks below redact a name that matches.
+    forbidden = load_forbidden_strings(repo_root)
+
     violations: list[Violation] = []
     violations += _check_missing_required(
         wheel_subject, wheel_members, policy.wheel_required
@@ -759,13 +784,13 @@ def check_artifacts(
         sdist_subject, sdist_members, policy.sdist_required
     )
     violations += _check_forbidden(
-        wheel_subject, wheel_members, policy.forbidden_members
+        wheel_subject, wheel_members, policy.forbidden_members, forbidden
     )
     violations += _check_forbidden(
-        sdist_subject, sdist_members, policy.forbidden_members
+        sdist_subject, sdist_members, policy.forbidden_members, forbidden
     )
-    violations += _check_links(wheel_subject, wheel_members)
-    violations += _check_links(sdist_subject, sdist_members)
+    violations += _check_links(wheel_subject, wheel_members, forbidden)
+    violations += _check_links(sdist_subject, sdist_members, forbidden)
     violations += _check_metadata(
         wheel_subject, wheel_metadata, policy.required_metadata_fields
     )
@@ -773,7 +798,6 @@ def check_artifacts(
         sdist_subject, sdist_metadata, policy.required_metadata_fields
     )
 
-    forbidden = load_forbidden_strings(repo_root)
     if forbidden is None:
         violations.append(
             Violation(

@@ -2191,7 +2191,8 @@ def test_needle_in_binary_member_name_is_caught_by_name_only(
     violation = violations[0]
     assert violation.kind == ViolationKind.ENCUMBERED_CONTENT
     assert violation.subject == wheel_path.name
-    assert _NEEDLE in violation.detail  # the member NAME, not the needle-as-value
+    assert _NEEDLE not in violation.detail  # the matched name is redacted
+    assert "<redacted member #" in violation.detail
 
 
 def test_needle_in_binary_member_content_only_is_not_caught(
@@ -2236,7 +2237,104 @@ def test_needle_in_binary_member_directory_component_is_caught(
     violation = violations[0]
     assert violation.kind == ViolationKind.ENCUMBERED_CONTENT
     assert violation.subject == wheel_path.name
-    assert _NEEDLE in violation.detail
+    assert _NEEDLE not in violation.detail
+    assert "<redacted member #" in violation.detail
+
+
+# --- a matched member NAME never reaches the (public) release log ---------
+
+
+def _needle_named_dist(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A dist whose wheel carries FOUR needle-named members, one per way a
+    member name reaches a finding: a text member (name and content match), a
+    binary member, a member matching a forbidden-path pattern (`tests/*`),
+    and a link member whose name and target both carry the needle."""
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    members = dict(_CLEAN_WHEEL_MEMBERS)
+    members[f"fitdocs/{_NEEDLE}_text.py"] = f"# {_NEEDLE}\n".encode()
+    members[f"fitdocs/{_NEEDLE}.bin"] = bytes(range(256))
+    members[f"tests/{_NEEDLE}.py"] = b"# clean\n"
+    _make_wheel(
+        dist_dir,
+        members,
+        metadata=_CLEAN_METADATA,
+        links={f"fitdocs/{_NEEDLE}_link.md": f"{_NEEDLE}_target"},
+    )
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+    return dist_dir
+
+
+def test_needle_named_members_do_not_echo_into_findings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dist_dir = _needle_named_dist(tmp_path, monkeypatch)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    kinds = {v.kind for v in violations}
+    assert {
+        ViolationKind.ENCUMBERED_CONTENT,
+        ViolationKind.FORBIDDEN_MEMBER,
+        ViolationKind.LINK_MEMBER,
+    } <= kinds
+    for violation in violations:
+        assert _NEEDLE not in violation.detail, violation
+        assert _NEEDLE not in violation.remedy, violation
+        assert _NEEDLE not in violation.subject, violation
+
+
+def test_needle_named_members_do_not_reach_stdout_or_stderr(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    dist_dir = _needle_named_dist(tmp_path, monkeypatch)
+
+    exit_code = check_artifacts_main(
+        [
+            "--no-version-check",
+            "--dist-dir",
+            str(dist_dir),
+            "--policy",
+            str(REAL_POLICY_PATH),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "violation(s)" in captured.err
+    assert "<redacted member #" in captured.err
+    assert _NEEDLE not in captured.out
+    assert _NEEDLE not in captured.err
+
+
+def test_redaction_is_ordinal_and_leaves_unmatched_names_readable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only a name that matches is replaced: an unmatched forbidden-path
+    member keeps its real name (the maintainer's fix needs it), and two
+    redacted members stay distinguishable by ordinal."""
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    members = dict(_CLEAN_WHEEL_MEMBERS)
+    members["tests/plain.py"] = b"# clean\n"
+    members[f"fitdocs/{_NEEDLE}_a.bin"] = b"\x00\x01"
+    members[f"fitdocs/{_NEEDLE}_b.bin"] = b"\x00\x02"
+    _make_wheel(dist_dir, members, metadata=_CLEAN_METADATA)
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    forbidden = [v for v in violations if v.kind == ViolationKind.FORBIDDEN_MEMBER]
+    assert len(forbidden) == 1 and "tests/plain.py" in forbidden[0].detail
+    encumbered = [v for v in violations if v.kind == ViolationKind.ENCUMBERED_CONTENT]
+    assert len(encumbered) == 2
+    assert len({v.detail for v in encumbered}) == 2
 
 
 # --- sdist-side twins: the same checks, exercised on the sdist -------------
@@ -2282,7 +2380,8 @@ def test_needle_in_an_sdist_binary_member_name_is_caught_by_name_only(
     violation = violations[0]
     assert violation.kind == ViolationKind.ENCUMBERED_CONTENT
     assert violation.subject == sdist_path.name
-    assert _NEEDLE in violation.detail
+    assert _NEEDLE not in violation.detail
+    assert "<redacted member #" in violation.detail
 
 
 # --- fingerprinted control value ------------------------------------------
