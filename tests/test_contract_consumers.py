@@ -60,6 +60,8 @@ import fitdocs.identity.pages
 import fitdocs.layout
 import fitdocs.load.docedit
 import fitdocs.load.engine
+import fitdocs.morning.docedit
+import fitdocs.morning.engine
 import fitdocs.performance.derive
 import fitdocs.performance.engine
 import fitdocs.plans.corpus
@@ -91,6 +93,8 @@ CONVERTED_MODULES: Final[tuple[ModuleType, ...]] = (
     fitdocs.sync,
     fitdocs.load.engine,
     fitdocs.load.docedit,
+    fitdocs.morning.docedit,
+    fitdocs.morning.engine,
     fitdocs.render.frontmatter,
     fitdocs.render.views,
     fitdocs.render.sections,
@@ -181,6 +185,13 @@ FORBIDDEN_LOCAL_NAMES: Final[tuple[str, ...]] = (
 #: re-implementation satisfies every behavioral test and every import-shaped
 #: check, and only object identity rules it out.
 CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
+    "fitdocs.morning.docedit": ("MORNING_REGION",),
+    "fitdocs.morning.engine": (
+        "DOC_VERSION",
+        "document_date",
+        "document_version",
+        "is_workout_document",
+    ),
     "fitdocs.sync": (
         "document_uuid",
         "effort_tag",

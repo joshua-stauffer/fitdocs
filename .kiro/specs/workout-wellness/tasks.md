@@ -474,7 +474,7 @@ wiki-contract and analytics-index amendment and criterion numbers.
 
 - [ ] 3. The morning-of pass and its wiring
 
-- [ ] 3.1 Run the pass over every workout page and rewrite only the regions that changed
+- [x] 3.1 Run the pass over every workout page and rewrite only the regions that changed
   - `morning/engine.py` per design § MorningPass: `PageOutcome`,
     `MorningPage`, `MorningReport`, `run_morning_pass` (one
     `docio.read_document` per page, the version gate
@@ -801,6 +801,49 @@ wiki-contract and analytics-index amendment and criterion numbers.
   - _Requirements: 9.1, 9.4, 11.3, 12.1, 12.2_
 
 ## Implementation Notes
+
+- 3.1 accepted after independent approval and fresh completion verification:
+  250 focused, 1,200 broader and seven shared-reader cases passed, with
+  Ruff, formatting and mypy clean. All 78 claimed and three independent
+  production faults failed their intended intact assertions and restored
+  GREEN. The audit covers 100 assertion sites, 144 engine cases, sixteen
+  registry observations and both exception-expectation sites (seven
+  expanded observations). All 2,084 regular inputs and nineteen symlinks
+  match the reviewed tree and isolated snapshots. All seventeen listed
+  criteria and task-text 7.4 are pinned at engine scope, subject to the
+  single auxiliary OS-preserved assertion exception below. CLI wiring and
+  exact dependency closure remain with 3.2; whole-flow confinement with 3.3.
+- R4 measurement for 3.1: Darwin 25.5.0 arm64, Python 3.11.15; 2,500
+  populated pages over 1,095 distinct 2021–2023 days, two sources and three
+  supported metrics per source (resting HR, HRV SDNN, sleep total), 6,570
+  native-valid values / 357,168 series bytes. Input pages were 1,353 bytes
+  each / 3,382,500 total. First pass 1.068884792 s, second 0.535227292 s;
+  independent reviewer repeat 0.969967375 s / 0.499513792 s. Each produced
+  2,500 UPDATED then 2,500 unchanged, with equal second-pass hashes/mtimes
+  and no temporary leftovers. Both passes are below the 10 s threshold.
+  Engine SHA256: bb235be2d3a2e3d73d1a96f456f6407ce3ce534eb105b20852bc36a88985ad8b.
+- Astra decision 11 (2026-10-18, task 3.1): the read-only-directory
+  no-temp assertion remains required but is UNPINNED — OS-PRESERVED,
+  with an explicit acceptance exception confined to that assertion.
+  Non-root directory denial prevents temporary creation before cleanup
+  can run; deleting cleanup cannot discriminate this case. No chmod-and-
+  orphan fault or cleanup credit is permitted. The intact non-root case
+  ran GREEN; its other observables have ordinary discrimination evidence.
+  BOTH actual-temp os.replace OSError and KeyboardInterrupt no-temp
+  assertions independently failed cleanup deletion and restored GREEN.
+  Decision 10 remains in force elsewhere. Carry this exception into the
+  final sweep; requirement-level cleanup is pinned by the actual-temp cases.
+
+- Astra decision 10 (2026-10-18, applied at task 3.1): acceptance
+  discrimination runs keep the reviewed tests, fixtures and configuration
+  intact. Every claimed assertion must itself fail under its permitted
+  production fault; preceding failures do not count. Use narrow faults or
+  permanently separate/parameterized observable cases to avoid masking.
+  An experiment disabling assertions is diagnostic only and earns no
+  acceptance credit. Preserve meaningful preconditions and refresh affected
+  evidence after restructuring tests. This interprets the existing
+  verification protocol, with no requirement or production-boundary change;
+  the shared log records the decision and full report.
 
 - 2.4 accepted after independent approval and fresh completion verification:
   19 focused tests, 340 morning/contract/load-editor regressions and all
