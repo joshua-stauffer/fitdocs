@@ -330,9 +330,7 @@ def test_plugins_doc_example_version_is_a_placeholder_below_every_release() -> N
     declared = re.findall(r'^version = "(\d+)\.(\d+)\.(\d+)"$', text, re.MULTILINE)
     assert len(declared) == 1, "expected exactly one example `version = ` line"
     example = tuple(int(part) for part in declared[0])
-    released = tuple(
-        int(part) for part in _released_version(_REPO_ROOT).split(".")[:3]
-    )
+    released = tuple(int(part) for part in _released_version(_REPO_ROOT).split(".")[:3])
     assert example < released, (example, released)
 
 
