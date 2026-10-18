@@ -112,6 +112,19 @@ def test_boxcar_k_controls_window_width() -> None:
     assert k2[5] < k1[5]
 
 
+def test_boxcar_mean_is_the_plain_left_to_right_sum_on_every_python() -> None:
+    """`sum([0.1] * 10)` is 0.9999999999999999 up to Python 3.11 and exactly
+    1.0 from 3.12 (compensated summation); the smoothed value, and a
+    near-flat series' drawn shape with it, must not depend on the
+    interpreter."""
+    values = [0.1] * 10
+    total = 0.0
+    for v in values:
+        total += v
+    assert total != 1.0, "positive control: plain accumulation drifts here"
+    assert boxcar_smooth(values, k=9)[0] == total / 10
+
+
 def test_boxcar_all_none_stays_none() -> None:
     _assert_series_equal(boxcar_smooth([None, None, None]), (None, None, None))
 

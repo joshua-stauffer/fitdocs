@@ -58,7 +58,15 @@ def boxcar_smooth(
         lo = max(0, i - k)
         hi = min(n, i + k + 1)
         window = [v for v in values[lo:hi] if v is not None]
-        out.append(sum(window) / len(window))
+        # An explicit left-to-right sum, not the builtin `sum()`: Python 3.12
+        # made `sum()` of floats compensated (Neumaier), so the builtin's last
+        # bit -- and, through `normalize_band`, a near-flat series' whole
+        # drawn shape -- differs by interpreter. The plain accumulation is
+        # what 3.11 computed and what the committed goldens hold.
+        total = 0.0
+        for v in window:
+            total += v
+        out.append(total / len(window))
     return tuple(out)
 
 

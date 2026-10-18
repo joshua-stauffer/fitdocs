@@ -376,6 +376,11 @@ recorded as one.
   such threshold on file applies to the activity's date. Before, it said none
   was on file, which was untrue. Existing pages keep their stored note until
   you explicitly run `fitdocs load --recompute`.
+- The hero chart's smoothing no longer depends on the Python version. Python
+  3.12 changed how the built-in `sum()` rounds floats, so a series that is
+  nearly flat (a constant speed, say) drew a different line on 3.12 and 3.13
+  than on 3.11. It now adds the samples in plain order, which is what 3.11
+  computed, so the chart is the same on every supported interpreter.
 
 ## [0.1.0] - 2026-09-19
 
