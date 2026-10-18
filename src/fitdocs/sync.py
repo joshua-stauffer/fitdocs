@@ -198,6 +198,7 @@ from fitdocs.compose.types import Composition
 from fitdocs.contract import (
     DOC_VERSION,
     InvalidEffortTag,
+    document_start_time,
     document_uuid,
     document_version,
     effort_tag,
@@ -263,6 +264,7 @@ from fitdocs.layout import (
     doc_stem,
     held_path,
     source_ref,
+    sport_slug,
 )
 from fitdocs.metrics.types import DerivedMetrics
 from fitdocs.quarantine import QuarantineEntry, QuarantineRecord, save_quarantine
@@ -1978,6 +1980,30 @@ def _stale_assets(existing_text: str, new_assets: tuple[Asset, ...]) -> tuple[st
     return tuple(sorted(_asset_names(outside) - written - protected))
 
 
+def _named_from_recorded_start(
+    path: Path,
+    frontmatter: Mapping[str, object] | None,
+    slug: str,
+    uid: str,
+) -> str | None:
+    """The name a page was given from the local start its frontmatter records.
+
+    The unsuffixed stem ``<date>-<slug>-<HHMM>`` built from the page's own
+    recorded ``start_time`` (its wall clock, in the offset it records), when
+    ``path`` is exactly that stem or that stem under this page's collision
+    suffix; otherwise ``None``. A filename the user chose never qualifies, so
+    only a name fitdocs gave can follow a changed local start
+    (activity-identity Req 6.9).
+    """
+    recorded = document_start_time(frontmatter)
+    if recorded is None:
+        return None
+    name = f"{recorded:%Y-%m-%d}-{slug}-{recorded:%H%M}"
+    if path.stem in (name, f"{name}-{uid[:8]}"):
+        return name
+    return None
+
+
 def _rename_detail(old: str, new: str, reason: str) -> str:
     return (
         f"page renamed from {old} to {new} because {reason}; wiki links to the "
@@ -2158,11 +2184,14 @@ def _page_task(
 
     # The write target -- and thus the data-root-relative doc ref used for both the
     # report entry and any map warning -- is known once the stem/match are resolved.
-    # An existing page keeps its path (a user's rename, a timezone change) unless
-    # its base changed and the base's computed name differs (Req 6.2, 6.3); a
-    # settle task moves it to its unsuffixed name (Req 6.6).
+    # An existing page keeps its path (a user's rename) unless its base changed
+    # and the base's computed name differs (Req 6.2, 6.3), or fitdocs named it
+    # from the local start its frontmatter records and the computed local start
+    # has moved (a recorded offset now read, a zone or DST correction, Req 6.9);
+    # a settle task moves it to its unsuffixed name (Req 6.6).
     stranded = False
     base_changed = False
+    retimed = False
     if match is None:
         target = doc_path(data_root, stem)
     else:
@@ -2173,7 +2202,11 @@ def _page_task(
         # left behind; any rewrite finishes it (its own uid names the suffix,
         # so a user's filename never qualifies).
         stranded = stem == unsuffixed and match.path.stem == f"{unsuffixed}-{uid[:8]}"
-        if (base_changed or settling or stranded) and doc_path(
+        recorded_name = _named_from_recorded_start(
+            match.path, existing_frontmatter, sport_slug(base_activity), uid
+        )
+        retimed = recorded_name is not None and recorded_name != unsuffixed
+        if (base_changed or settling or stranded or retimed) and doc_path(
             data_root, stem
         ) != match.path:
             target = doc_path(data_root, stem)
@@ -2296,11 +2329,12 @@ def _page_task(
             raise _RenderedCallbackError(exc) from exc
     if moved_from is not None:
         old_ref = moved_from.relative_to(data_root).as_posix()
-        reason = (
-            f"the unsuffixed name {doc_ref} became free"
-            if settling or (stranded and not base_changed)
-            else "its base file changed"
-        )
+        if settling or (stranded and not base_changed):
+            reason = f"the unsuffixed name {doc_ref} became free"
+        elif base_changed:
+            reason = "its base file changed"
+        else:
+            reason = "its local start time changed"
         warnings.append(
             DocWarning(doc=doc_ref, detail=_rename_detail(old_ref, doc_ref, reason))
         )
