@@ -70,6 +70,8 @@ from fitdocs.render.format import (
     fmt_int,
     fmt_pace,
     fmt_speed_kmh,
+    one_line,
+    table_text,
 )
 
 __all__ = [
@@ -562,7 +564,9 @@ def _devices_table(activity: Activity) -> str:
         "| --- | --- | --- | --- |",
     ]
     for device in activity.devices:
-        name = device.product_name or device.manufacturer or "Unknown device"
+        name = table_text(
+            device.product_name or device.manufacturer or "Unknown device"
+        )
         manufacturer = _manufacturer_cell(device.manufacturer)
         software = cell(_fmt_software(device.software_version))
         battery = _battery_cell(device.battery_status)
@@ -576,7 +580,7 @@ def _manufacturer_cell(manufacturer: str | None) -> str:
         return ABSENT
     if manufacturer.strip().lower() == _MANUFACTURER_PLACEHOLDER:
         return ABSENT
-    return manufacturer
+    return table_text(manufacturer)
 
 
 def _fmt_software(version: float | None) -> str | None:
@@ -590,7 +594,8 @@ def _battery_cell(status: str | None) -> str:
     """The battery cell: ``ABSENT`` when unrecorded, bold-flagged when low/critical."""
     if status is None:
         return ABSENT
-    if status.strip().lower() in _BATTERY_FLAGS:
+    status = table_text(status)
+    if status.lower() in _BATTERY_FLAGS:
         return f"**{status}**"
     return status
 
@@ -621,7 +626,7 @@ def _decode_errors(activity: Activity) -> str:
     errors = activity.provenance.decode_errors
     if not errors:
         return "**Decode errors:** none"
-    bullets = "\n".join(f"- {error}" for error in errors)
+    bullets = "\n".join(f"- {one_line(error)}" for error in errors)
     return f"**Decode errors:**\n\n{bullets}"
 
 

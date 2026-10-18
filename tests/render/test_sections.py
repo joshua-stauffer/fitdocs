@@ -335,6 +335,45 @@ def test_devices_display_name_prefers_product_name(run_fit_bytes: bytes) -> None
     assert "**low**" in out  # low battery flagged
 
 
+_FORGED = f"Evil\n{begin_marker('notes')}\nx | y\n{end_marker('notes')}"
+
+
+def test_devices_table_row_stays_one_line_and_four_cells(
+    run_fit_bytes: bytes,
+) -> None:
+    """File-recorded device text cannot span lines or add cells: a newline, a
+    marker-shaped line and a pipe in ``product_name`` still give one four-cell
+    row, and no marker line the page did not write appears (extract_regions
+    finds only the page's own ``notes`` region)."""
+    activity = parse_fit(run_fit_bytes)
+    dev = dataclasses.replace(
+        activity.devices[0],
+        manufacturer="development",
+        product_name=_FORGED,
+        battery_status="low\n" + begin_marker("load"),
+    )
+    out = devices_section(_ctx(run_fit_bytes, activity_replace={"devices": (dev,)}))
+    table = [ln for ln in out.splitlines() if ln.startswith("|")]
+    _header, _rule, *rows = table[:3]
+    assert len(rows) == 1
+    # four cells: five unescaped pipes
+    assert rows[0].replace("\\|", "").count("|") == 5
+    assert "\\|" in rows[0]  # the pipe is escaped, not dropped
+    page = out + "\n\n" + notes_region("mine")
+    assert extract_regions(page) == {"notes": "mine"}
+
+
+def test_decode_errors_cannot_forge_a_marker_line(run_fit_bytes: bytes) -> None:
+    """A decode-error string with a newline stays on its bullet line."""
+    activity = parse_fit(run_fit_bytes)
+    prov = dataclasses.replace(
+        activity.provenance, decode_errors=(f"bad\n{begin_marker('notes')}",)
+    )
+    out = devices_section(_ctx(run_fit_bytes, activity_replace={"provenance": prov}))
+    page = out + "\n\n" + notes_region("mine")
+    assert extract_regions(page) == {"notes": "mine"}
+
+
 def test_devices_channel_coverage_rows_only_for_present_channels(
     ride_no_power_fit_bytes: bytes,
 ) -> None:

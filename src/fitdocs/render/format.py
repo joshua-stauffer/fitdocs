@@ -104,3 +104,18 @@ def cell(value: str | None) -> str:
     zero string is passed through unchanged (13.1, 13.3).
     """
     return ABSENT if value is None else value
+
+
+def one_line(text: str) -> str:
+    """Collapse every whitespace run in file-recorded ``text`` to one space.
+
+    File-supplied strings are untrusted: a newline would let them start a line
+    of their own (a heading, a region marker). Same rule as the Garmin
+    attribution label.
+    """
+    return " ".join(text.split())
+
+
+def table_text(text: str) -> str:
+    """:func:`one_line` plus an escaped pipe, for a file string in a table cell."""
+    return one_line(text).replace("|", "\\|")
