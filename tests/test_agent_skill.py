@@ -66,6 +66,7 @@ from fitdocs.plans.matching import Confidence, RowState
 from fitdocs.plans.model import RowAdded, RowChanged, RowRemoved, TargetChanged
 from fitdocs.plans.source import parse_block
 from fitdocs.sync import DrainReport, SyncReport
+from tests._changelog_view import read_current_changelog
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _URL_PREFIX = "https://github.com/joshua-stauffer/fitdocs/"
@@ -2047,7 +2048,7 @@ def test_structure_records_recovery_dependency_boundary() -> None:
 def test_recovery_release_entries_are_in_unreleased_sections(
     heading: str, entry: str
 ) -> None:
-    changelog = (_PROJECT_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    changelog = read_current_changelog(_PROJECT_ROOT / "CHANGELOG.md")
     unreleased = changelog.split("## [Unreleased]\n", 1)[1].split("\n## [", 1)[0]
     section = unreleased.split(f"### {heading}\n", 1)[1].split("\n### ", 1)[0]
     entries = [_flat(part) for part in section.split("\n- ")[1:]]

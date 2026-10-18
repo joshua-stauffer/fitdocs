@@ -11,6 +11,7 @@ from markdown_it.token import Token
 from fitdocs.wellness.formats.apple import ARCHIVED_SUFFIX, FORMAT, FORMAT_ID
 from fitdocs.wellness.formats.apple.reduce import POLICIES, DailyRule, DayRule, Writer
 from fitdocs.wellness.registry import candidate_suffixes, default_source_order
+from tests._changelog_view import current_changelog
 from tests.wellness.test_docs_wellness import (
     DAY_RULE,
     DAY_STATEMENT,
@@ -61,7 +62,10 @@ DEFINITIONS = {
 
 
 def _tokens(path: str) -> list[Token]:
-    return MARKDOWN.parse((ROOT / path).read_text(encoding="utf-8"))
+    text = (ROOT / path).read_text(encoding="utf-8")
+    if path == "CHANGELOG.md":
+        text = current_changelog(text)
+    return MARKDOWN.parse(text)
 
 
 def _visible(tokens: list[Token]) -> str:

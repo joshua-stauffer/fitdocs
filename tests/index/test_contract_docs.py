@@ -7,13 +7,14 @@ from pathlib import Path
 
 from fitdocs import contract
 from fitdocs.index.store import WRITER_SPILL_DIRNAME
+from tests._changelog_view import read_current_changelog
 
 ROOT = Path(__file__).resolve().parents[2]
 OWNERSHIP = (ROOT / "docs/ownership-contract.md").read_text(encoding="utf-8")
 
 
 def _unreleased_subsection(name: str) -> str:
-    unreleased = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    unreleased = read_current_changelog(ROOT / "CHANGELOG.md")
     unreleased = unreleased.split("## [Unreleased]", 1)[1].split("\n## [", 1)[0]
     heading = re.search(rf"(?m)^### {re.escape(name)}[ \t]*\n", unreleased)
     assert heading is not None, f"Unreleased has no ### {name} subsection"

@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from tests._changelog_view import read_current_changelog
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CHANGELOG = _REPO_ROOT / "CHANGELOG.md"
 _STEERING = _REPO_ROOT / ".kiro" / "steering"
@@ -67,7 +69,7 @@ def _steering_bullet(text: str, opener: str) -> str:
 
 
 def test_unreleased_added_has_exactly_one_dashboard_entry_naming_everything() -> None:
-    text = _CHANGELOG.read_text(encoding="utf-8")
+    text = read_current_changelog(_CHANGELOG)
     entry = _flat(_unreleased_dashboard_entry(text))
 
     for form in ("`check`", "`refresh`", "`freeze`", "`kinds`"):
@@ -91,7 +93,7 @@ def test_unreleased_added_has_exactly_one_dashboard_entry_naming_everything() ->
 
 
 def test_the_dashboard_entry_is_absent_from_every_released_section() -> None:
-    released = _released_text(_CHANGELOG.read_text(encoding="utf-8"))
+    released = _released_text(read_current_changelog(_CHANGELOG))
     assert released.strip(), "the released sections were not found"
     assert "`fitdocs dashboard`" not in released
     assert "`fitdocs-dashboards`" not in released

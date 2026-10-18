@@ -11,6 +11,7 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+from tests._changelog_view import read_current_changelog
 from tests.sitebuild.conftest import SKIP_REASON, copy_fixture_tree
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -514,7 +515,7 @@ def test_changelog_unreleased_added_declares_the_homepage_url() -> None:
     Dies on: deleting the Homepage bullet from the Unreleased `### Added`
     section of `CHANGELOG.md`, or moving it under a released heading.
     """
-    text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    text = read_current_changelog(ROOT / "CHANGELOG.md")
     unreleased = text.split("## [Unreleased]", 1)[1].split("\n## [", 1)[0]
     added = unreleased.split("### Added", 1)[1].split("\n### ", 1)[0]
     bullets = [b for b in re.split(r"\n(?=- )", added) if "Homepage" in b]

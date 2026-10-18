@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from tests._changelog_view import read_current_changelog
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CHANGELOG_PATH = _REPO_ROOT / "CHANGELOG.md"
 _TECH_PATH = _REPO_ROOT / ".kiro/steering/tech.md"
@@ -23,14 +25,6 @@ def _project_version() -> str:
     if not isinstance(version, str) or not version:
         raise ValueError("project version must be non-empty text")
     return version
-
-
-def _current_release_heading(text: str) -> str:
-    prefix = f"## [{_project_version()}]"
-    headings = [line for line in text.splitlines() if line.startswith(prefix)]
-    if len(headings) != 1:
-        raise ValueError(f"expected one released heading for {prefix!r}")
-    return headings[0]
 
 
 def _assert_default_format_claim(entry: str) -> None:
@@ -105,7 +99,7 @@ _VALID_SYNTHETIC_CHANGELOG = f"""# Changelog
 
 
 def test_unreleased_entry_names_all_query_publication_details() -> None:
-    text = _CHANGELOG_PATH.read_text(encoding="utf-8")
+    text = read_current_changelog(_CHANGELOG_PATH)
     entry = _unreleased_query_entry(text)
     assert _project_version() != _SYNTHETIC_RELEASE_VERSION
 
@@ -122,7 +116,9 @@ def test_unreleased_entry_names_all_query_publication_details() -> None:
     assert "packaged `fitdocs-analytics` skill" in entry
     assert f"]({_ANALYTICS_URL})" in entry
 
-    released = _heading_body(text, _current_release_heading(text))
+    # Every released section older than the entry's own (see
+    # `tests/_changelog_view.py`): the entry must not have been written there.
+    released = text.split("## [Unreleased]", 1)[1].split("\n## [", 1)[1]
     assert "`fitdocs query`" not in released
     assert "`fitdocs-analytics`" not in released
     assert _ANALYTICS_URL not in released

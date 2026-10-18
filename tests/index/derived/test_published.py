@@ -4,11 +4,13 @@ import json
 import re
 from pathlib import Path
 
+from tests._changelog_view import read_current_changelog
+
 ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_changelog_publishes_derived_tables_under_unreleased() -> None:
-    changelog = (ROOT / "CHANGELOG.md").read_text()
+    changelog = read_current_changelog(ROOT / "CHANGELOG.md")
     unreleased = " ".join(
         changelog.split("## [Unreleased]", 1)[1].split("\n## ", 1)[0].split()
     ).lower()

@@ -24,6 +24,7 @@ from fitdocs import contract, layout
 from fitdocs.declaration import declaration_text
 from fitdocs.identity import matching
 from fitdocs.identity.kinds import SourceKind
+from tests._changelog_view import read_current_changelog
 
 _DOC = Path(__file__).resolve().parents[2] / "docs" / "ownership-contract.md"
 _HEADING = "## Source Files and Their Roles"
@@ -288,7 +289,7 @@ def test_the_version_history_records_the_amendment() -> None:
 
 
 def test_the_unreleased_entry_states_the_rule_and_the_actions() -> None:
-    changelog = (_DOC.parents[1] / "CHANGELOG.md").read_text(encoding="utf-8")
+    changelog = read_current_changelog(_DOC.parents[1] / "CHANGELOG.md")
     unreleased = changelog.split("## [Unreleased]", 1)[1].split("\n## [", 1)[0]
     entries = [
         _flat(e) for e in unreleased.split("\n- ") if "DISTANCE" in e or "20 %" in e
