@@ -983,7 +983,7 @@ _SESSION_UUID_BYTE_COUNT: Final[int] = 16
 # and ``RecursionError`` (pathological nesting). Enumerated, not ``Exception``,
 # so a real bug elsewhere in the call still surfaces. Mirrored (the dashboards
 # boundary forbids importing this module) by ``dashboards.directive``.
-YAML_LOAD_ERRORS = (
+_YAML_LOAD_ERRORS = (
     yaml.YAMLError,
     ValueError,
     AttributeError,
@@ -1015,7 +1015,7 @@ def parse_frontmatter(text: str) -> dict[str, object] | None:
             block = "\n".join(lines[1:index])
             try:
                 parsed = yaml.safe_load(block)
-            except YAML_LOAD_ERRORS:
+            except _YAML_LOAD_ERRORS:
                 return None
             return parsed if isinstance(parsed, dict) else None
     return None

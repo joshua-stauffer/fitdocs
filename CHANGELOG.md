@@ -349,8 +349,8 @@ recorded as one.
   PyYAML can build (an unquoted `date: 2026-02-30`, a UTC offset past 24 hours)
   no longer crashes `check`, `regen`, `load` or `sync` with a traceback. The
   page is treated as not a fitdocs document and the run continues instead of
-  crashing. A dashboard directive body PyYAML cannot load (an out-of-range
-  `\U` escape, absurd nesting) is likewise reported as a syntax problem.
+  crashing. A dashboard directive body PyYAML cannot load (a `\U` escape past
+  the Unicode range, absurd nesting) is likewise reported as a syntax problem.
 
 ## [0.1.0] - 2026-09-19
 

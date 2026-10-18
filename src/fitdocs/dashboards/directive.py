@@ -41,11 +41,12 @@ _PLAIN_TAGS: Final = frozenset(
 
 
 #: What ``yaml.parse`` / ``yaml.compose`` raise: ``YAMLError`` plus the builtin
-#: errors PyYAML lets escape (an ``OverflowError`` from a ``\U`` escape past
-#: 0x7FFFFFFF, a ``RecursionError`` from absurd nesting). The subset of
-#: ``fitdocs.contract.YAML_LOAD_ERRORS`` that parse/compose (no construction)
+#: errors PyYAML lets escape (an ``OverflowError`` from a ``\U`` escape above
+#: 0x7FFFFFFF, a ``ValueError`` from one in 0x110000..0x7FFFFFFF, a
+#: ``RecursionError`` from absurd nesting). The subset of
+#: ``fitdocs.contract._YAML_LOAD_ERRORS`` that parse/compose (no construction)
 #: can raise; this package may not import that module.
-_YAML_ERRORS: Final = (yaml.YAMLError, OverflowError, RecursionError)
+_YAML_ERRORS: Final = (yaml.YAMLError, ValueError, OverflowError, RecursionError)
 
 
 class _StrictLoader(yaml.SafeLoader):
@@ -132,37 +133,38 @@ def parse_directive(
     # Event walk: anchors, aliases and explicit tags are refused.
     shape: list[Problem] = []
     try:
-        for event in yaml.parse(body, Loader=_StrictLoader):
-            line = at(event.start_mark)
-            if isinstance(event, yaml.AliasEvent):
-                shape.append(
-                    problem(
-                        DashboardCode.YAML_SHAPE,
-                        "The directive uses a YAML alias, which is not allowed.",
-                        "Write the value out instead of using an alias.",
-                        line=line,
-                    )
-                )
-            elif getattr(event, "anchor", None) is not None:
-                shape.append(
-                    problem(
-                        DashboardCode.YAML_SHAPE,
-                        "The directive uses a YAML anchor, which is not allowed.",
-                        "Remove the anchor and write the value out.",
-                        line=line,
-                    )
-                )
-            elif getattr(event, "tag", None) is not None:
-                shape.append(
-                    problem(
-                        DashboardCode.YAML_SHAPE,
-                        "The directive uses an explicit YAML tag, which is refused.",
-                        "Remove the tag; every value is read as the text written.",
-                        line=line,
-                    )
-                )
+        events = list(yaml.parse(body, Loader=_StrictLoader))
     except _YAML_ERRORS as error:
         return syntax(error)
+    for event in events:
+        line = at(event.start_mark)
+        if isinstance(event, yaml.AliasEvent):
+            shape.append(
+                problem(
+                    DashboardCode.YAML_SHAPE,
+                    "The directive uses a YAML alias, which is not allowed.",
+                    "Write the value out instead of using an alias.",
+                    line=line,
+                )
+            )
+        elif getattr(event, "anchor", None) is not None:
+            shape.append(
+                problem(
+                    DashboardCode.YAML_SHAPE,
+                    "The directive uses a YAML anchor, which is not allowed.",
+                    "Remove the anchor and write the value out.",
+                    line=line,
+                )
+            )
+        elif getattr(event, "tag", None) is not None:
+            shape.append(
+                problem(
+                    DashboardCode.YAML_SHAPE,
+                    "The directive uses an explicit YAML tag, which is refused.",
+                    "Remove the tag; every value is read as the text written.",
+                    line=line,
+                )
+            )
     if shape:
         return tuple(shape)
 
