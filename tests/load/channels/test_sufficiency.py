@@ -164,7 +164,7 @@ def test_stream_name_is_carried_onto_the_result() -> None:
 _SETTINGS = SufficiencySettings()  # defaults: min_duration_s=60, min_coverage=0.80
 
 
-def test_no_measurable_span_reports_too_short_naming_zero_and_the_minimum() -> None:
+def test_no_measurable_span_reports_too_short_with_no_observed_span() -> None:
     time_s = (0.0,)
     result = evaluate(
         _samples(time_s),
@@ -176,13 +176,17 @@ def test_no_measurable_span_reports_too_short_naming_zero_and_the_minimum() -> N
     assert isinstance(result, ChannelInsufficient)
     assert result.channel is ChannelId.POWER
     assert result.reason is InsufficiencyReason.TOO_SHORT
-    assert result.observed == pytest.approx(0.0)
+    # An unmeasurable span has no duration: absent is None, not a fabricated 0.
+    assert result.observed is None
     assert result.required == pytest.approx(60.0)
+    assert "no measurable recorded span" in result.detail
+    assert "span 0s" not in result.detail
+    assert "minimum duration is 60s" in result.detail
 
 
 def test_span_below_minimum_duration_reports_too_short() -> None:
-    """Paired with ``test_no_measurable_span_reports_too_short_naming_zero_
-    and_the_minimum`` above, which asserts ``channel is ChannelId.POWER`` at
+    """Paired with ``test_no_measurable_span_reports_too_short_with_no_
+    observed_span`` above, which asserts ``channel is ChannelId.POWER`` at
     this same TOO_SHORT construction site: together the two pin that the site
     propagates *whichever* channel the caller passed, on two distinct
     members, rather than merely differing from one hardcoded guess (Req

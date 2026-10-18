@@ -1295,7 +1295,7 @@ Three tiers, and the boundaries between them are the whole point of the feature.
 | Heart-rate benchmarks mutually inconsistent | `ChannelInsufficient(BENCHMARKS_INCONSISTENT)` | Caller reports not computed |
 | Required stream entirely unrecorded | `ChannelInsufficient(STREAM_ABSENT)` | Caller reports not computed |
 | Coverage below the configured minimum | `ChannelInsufficient(STREAM_COVERAGE, observed, required)` | Caller reports the two numbers |
-| Fewer than two samples, zero span, or span below the minimum | `ChannelInsufficient(TOO_SHORT, observed, required)` | Caller reports the two numbers |
+| Fewer than two samples, zero span, or span below the minimum | `ChannelInsufficient(TOO_SHORT, observed, required)` | Caller reports the two numbers (`observed` is absent when there is no measurable span) |
 | Pace channel on a non-running modality | `ChannelInsufficient(MODEL_NOT_DEFINED)` | Caller reports not computed |
 | Normalized power, moving time or an impulse underivable | `ChannelInsufficient(NOT_COMPUTABLE)` | Caller reports not computed |
 | Altitude absent or thinly covered | `ChannelLoad` with `applied = False` and a note | Load still computed, honestly labelled |

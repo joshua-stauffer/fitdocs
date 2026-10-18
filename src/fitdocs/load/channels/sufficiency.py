@@ -114,16 +114,29 @@ def evaluate(
     min_duration_s = settings.min_duration_s
     coverage = stream_coverage(samples, values, stream=stream)
 
-    if coverage is None or coverage.total_s < min_duration_s:
-        observed = 0.0 if coverage is None else coverage.total_s
+    if coverage is None:
+        # No measurable span: there is no duration to report, so ``observed``
+        # stays absent rather than a fabricated 0.0.
         return ChannelInsufficient(
             channel=channel,
             reason=InsufficiencyReason.TOO_SHORT,
             detail=(
-                f"{stream} recorded span {observed:g}s is below the minimum "
-                f"duration {min_duration_s:g}s"
+                f"{stream} has no measurable recorded span; the minimum "
+                f"duration is {min_duration_s:g}s"
             ),
-            observed=observed,
+            observed=None,
+            required=float(min_duration_s),
+        )
+
+    if coverage.total_s < min_duration_s:
+        return ChannelInsufficient(
+            channel=channel,
+            reason=InsufficiencyReason.TOO_SHORT,
+            detail=(
+                f"{stream} recorded span {coverage.total_s:g}s is below the "
+                f"minimum duration {min_duration_s:g}s"
+            ),
+            observed=coverage.total_s,
             required=float(min_duration_s),
         )
 

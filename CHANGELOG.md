@@ -340,6 +340,11 @@ recorded as one.
   replace your notes; the file is now reported as a failure and left unchanged.
   When the damaged page sits at the new page's usual name, the new page is still
   written beside it and the run warns, naming the damaged page.
+- A load channel that declines an activity as too short because the stream has
+  no measurable recorded span (fewer than two samples, or no time between
+  them) now reports its observed duration as absent. Before, it reported
+  `0`, a duration that was never measured. Load values already computed are
+  not changed by this; they persist until `fitdocs load --recompute`.
 
 ## [0.1.0] - 2026-09-19
 
