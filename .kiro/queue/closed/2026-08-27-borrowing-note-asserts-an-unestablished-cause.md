@@ -1,7 +1,7 @@
 ---
 id: 2026-08-27-borrowing-note-asserts-an-unestablished-cause
 title: The borrowing note says "no X threshold is on file" for a threshold that IS on file, just future-dated
-status: open
+status: done
 importance: high
 importance_why: A false factual sentence lands in the athlete's workout document, and the two materially different profiles produce byte-identical output.
 effort: S
@@ -68,3 +68,11 @@ two fixtures differing **only** in the borrowed-from discipline's benchmark
 date, asserting the notes differ. Related: this is the same `not_applicable`
 information the calculator currently never reads — see
 `2026-08-27-not-applicable-has-no-readers`.
+
+## Resolution (2026-10-18)
+
+Fixed on main at 055bd213 (chore/q-threshold-notes; review APPROVED). `Borrowing` records
+`reason: Literal["not_on_file", "not_applicable"]`; a walk/hike whose own threshold is on file but dated
+after the activity now renders "...; no Walk threshold on file applies to this activity's date." instead
+of the false "no Walk threshold is on file". design.md postcondition and Borrowing block amended.
+Existing pages keep their stored note until `fitdocs load --recompute`.

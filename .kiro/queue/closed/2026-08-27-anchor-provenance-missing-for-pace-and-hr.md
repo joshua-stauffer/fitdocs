@@ -1,7 +1,7 @@
 ---
 id: 2026-08-27-anchor-provenance-missing-for-pace-and-hr
 title: Reqs 3.7/8.6 unmet — build_result never reads selected.anchor, so only a power-selected result carries the benchmark's date and discipline
-status: open
+status: done
 importance: high
 importance_why: Running's default channel is pace; a pace-selected document shows no measurement date and no anchoring discipline, which is the provenance Req 3.7 exists for. User-visible in shipped markdown.
 effort: S
@@ -91,3 +91,14 @@ Done looks like: a pace-selected result carrying the benchmark's own value,
 its `measured_on` and its discipline, pinned by a test that drives the **real**
 `pace_compute` rather than a hand-authored fixture, and `design.md:1174`
 corrected.
+
+## Resolution (2026-10-18)
+
+Fixed on main at 055bd213 (chore/q-threshold-notes; two Opus review rounds, final APPROVED; full suite green;
+branch CI green). `build_result` now emits `Anchor value` (unit by kind: W / bpm / s/km), `Anchor measured
+on` and `Anchor discipline` from `selected.anchor` for every selected channel, after the Coverage row; tests
+drive the real ThresholdCalculator for pace, heart-rate and power (Ride) selections. design.md corrected.
+Existing pages keep their stored region until `fitdocs load --recompute` (CHANGELOG says so).
+
+Not done (maintainer decision): Req 3.7's "every computed channel" half for computed-but-not-selected
+channels -- queued as .kiro/queue/2026-10-18-threshold-anchor-for-non-selected-channels.md.
