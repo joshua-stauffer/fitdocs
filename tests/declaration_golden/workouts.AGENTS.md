@@ -9,12 +9,12 @@ The frontmatter keys `effort`, `effort_distance_m`, `effort_time_s`, and `effort
 
 A document may be renamed when the file it is rendered from changes (for example, a file that outranks it arrives, or the precedence changes at regeneration) or when the unsuffixed name it was written in place of becomes free; links to its previous filename are not updated.
 
-The *generated* content of the documents in this directory is re-derivable: fitdocs rebuilds it by regeneration from the archived sources under `fit-archive/`, the athlete profile, the configured timezone, and the tile source. Content inside a document's region markers is not re-derived by regeneration -- it is carried over from the document itself, so regenerating a deleted document brings back only the generated content, not what its regions held.
+The *generated* content of the documents in this directory is re-derivable: fitdocs rebuilds it by regeneration from the archived sources under `fit-archive/`, the wellness series under `wellness/`, the athlete profile, the configured timezone, and the tile source. The `morning` region is generated content too: fitdocs refills it from the wellness series. Content inside a document's other region markers is not re-derived by regeneration -- it is carried over from the document itself, so regenerating a deleted document brings back only the generated content, not what those regions held.
 
-Never add a region marker to a document that does not already have one: doing so makes the next regeneration refuse to write that document until the added marker is removed by hand.
+Never add a region marker to a document that does not already have one: a marker naming a region the regenerated document does not carry makes the next regeneration refuse to write that document until the added marker is removed by hand.
 
 ## Ownership
 
 Owner: `fitdocs`.
-Ownership contract version: `14`.
+Ownership contract version: `15`.
 Published ownership contract: https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md

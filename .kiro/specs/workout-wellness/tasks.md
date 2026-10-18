@@ -691,7 +691,7 @@ wiki-contract and analytics-index amendment and criterion numbers.
     pre-existing diff is one line.
   - _Requirements: 9.1, 9.2, 9.3_
 
-- [ ] 4.2 Advance the ownership contract and publish the region and the pass
+- [x] 4.2 Advance the ownership contract and publish the region and the pass
   - Advance `CONTRACT_VERSION` by one from the branch's value with design §
     ContractRegion's paragraph ("Raised from ``N`` to ``N+1`` by
     workout-wellness" plus its sentences); record the values.
@@ -1201,3 +1201,56 @@ wiki-contract and analytics-index amendment and criterion numbers.
   isolated snapshots. Ownership publication and release text follow in
   4.2 and 4.3; final integration and landing remain with 5.1 and the
   controller feature gates.
+
+- Astra decision 15 (2026-10-18, task 4.2) resolves two ambiguities
+  in the new ownership bullet. The pass creates, renames or deletes no
+  workout document; its approved atomic temporary-file mechanism remains
+  permitted. The shared skip guarantee is that pages remain untouched:
+  newer pages are counted but not printed, and missing-region warnings
+  depend on a nonempty series. The guide drops the universal reporting
+  claim; detailed report actions remain with CliMorning and 4.3.
+  Only the existing confinement/skips literals and their existing fault
+  preimages change; retain the same 37 cases and intact consumers.
+  Refresh all bounded evidence, census, prose and input hashes after the
+  complete literal history sentence and actual anchors are checked, then
+  freeze and run the full suite in the real Git feature worktree. Two
+  interrupted superseded attempts have no full-pass credit. This grants
+  no runtime/spec behavior change, mutation category or acceptance waiver.
+  The finite checklist covers every explicit 4.2 task/design obligation;
+  after it closes, reopen only concrete defects or actual check failures.
+  Decision artifact:
+  /private/tmp/workout-wellness-astra-ownership-prose-closure.md.
+
+- 4.2 accepted after independent review and fresh completion verification:
+  CONTRACT_VERSION advances from string 14 on main 51d0e09 to 15;
+  DOC_VERSION stays 10. The complete append-only history and its literal
+  test include the 14-to-15 advance and the entire prescribed second
+  sentence, including the pass and re-derivability clauses. The ownership
+  guide publishes the separate refreshed-region class, preserved-region
+  pointer, morning ownership and overwrite boundary, newer-version
+  preservation, ordering and wellness-backed re-derivability. The
+  declaration's two fragments use layout directory constants, retain the
+  quantifier guard and supported-marker qualifier, and name the actual
+  morning engine function and all three CLI call sites. Seven declaration
+  goldens change only their version; the workouts golden also changes its
+  two prescribed fragments. All thirteen outgoing Recovery head claims
+  move to literal history; older history obligations remain.
+  Wiki-contract Amendment 10 (2026-10-18) appends actual free criteria
+  1.7, 2.20 and 2.21, preserving dashboards 2.17, wellness-store 2.18,
+  Recovery 2.19 and all earlier criteria, amendments and approvals.
+  The final finite sweep covers ten changed assertion sites (42
+  instances) and eight retained sites (18 instances). Independent replay
+  confirmed all 37 source/doc faults and 66 intended failures, plus three
+  reviewer source faults with five further observations; every intended
+  failure restored GREEN. Publication obligations are pinned; existing
+  runtime evidence for 9.3/9.5 remains explicitly preserved. No new
+  mutation category, test exception or unpinned limitation applies.
+  Two interrupted superseded runs earn no full-pass credit. The final
+  source includes the corrected actual anchor, complete history literal
+  and Astra15 wording, with its durable note captured before final freeze.
+  Two final independent full suites passed 26,763 tests and the same
+  eight known optional skips, both exit 0 (898.06 s and 794.43 s).
+  Fresh completion passed 2,128 focused tests, all statics and 41 expanded
+  amendment-node cases. It independently confirmed all current inputs,
+  fault records and the bounded checklist. The guide, packaged skill,
+  release notes and final integration follow in 4.3 and 5.1.

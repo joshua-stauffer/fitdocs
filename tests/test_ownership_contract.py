@@ -27,6 +27,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 from fitdocs import contract, layout
 
 _DOC_PATH = Path(__file__).resolve().parent.parent / "docs" / "ownership-contract.md"
@@ -126,6 +128,130 @@ def test_preserved_regions_equal_contract_exactly() -> None:
     section = _section(_read_doc(), "User-Owned and Tool-Filled Regions")
     documented = _backticked_list_items(section)
     assert documented == set(contract.PRESERVED_REGIONS)
+
+
+def test_refreshed_regions_equal_contract_exactly() -> None:
+    section = _section(_read_doc(), "The Morning-Of Region")
+    assert _backticked_list_items(section) == set(contract.REFRESHED_REGIONS)
+
+
+@pytest.mark.parametrize(
+    "heading, phrase",
+    [
+        (
+            "The Morning-Of Region",
+            "fitdocs fills it from the wellness series and "
+            "replaces its content whenever it differs",
+        ),
+        (
+            "The Morning-Of Region",
+            "It is never user-owned and carries no user content; "
+            "hand edits there are replaced",
+        ),
+        (
+            "The Morning-Of Region",
+            "While the wellness series cannot be read, the "
+            "morning-of pass leaves the region as it was",
+        ),
+        (
+            "User-Owned and Tool-Filled Regions",
+            "The `morning` region is refreshed "
+            "rather than preserved; see "
+            "[The Morning-Of Region](#the-morning-of-region)",
+        ),
+        (
+            "What Regeneration Replaces and Preserves",
+            "The `morning` region is generated "
+            "content: the merge carries it into the rewritten page, "
+            "then the morning-of "
+            "pass replaces it from the wellness series",
+        ),
+        (
+            "Overwrite Semantics of Every Writing Operation",
+            "`sync` then runs the morning-of pass, followed by a training-load pass",
+        ),
+        (
+            "Overwrite Semantics of Every Writing Operation",
+            "Forced re-processing "
+            "runs the same sequence: page writes, then the morning-of pass, then the "
+            "training-load pass",
+        ),
+        (
+            "Overwrite Semantics of Every Writing Operation",
+            "`regen` first rebuilds "
+            "the wellness series from `wellness-archive/` "
+            "and the `[wellness]` settings",
+        ),
+        (
+            "Overwrite Semantics of Every Writing Operation",
+            "`regen` then runs the "
+            "morning-of pass, followed by a training-load pass too, always "
+            "non-interactively -- it never prompts",
+        ),
+        (
+            "Overwrite Semantics of Every Writing Operation",
+            "**morning-of pass** — "
+            "runs after the page writes of `sync` "
+            "(with a source or as the inbox drain), "
+            "`pull --sync` and `regen`, before their training-load and index passes",
+        ),
+        (
+            "Overwrite Semantics of Every Writing Operation",
+            "It replaces only the "
+            "`morning` region's inner content in existing workout pages at the current "
+            "or an older-but-region-bearing format",
+        ),
+        (
+            "Overwrite Semantics of Every Writing Operation",
+            "It never changes "
+            "frontmatter, other regions, the generated body outside that region, "
+            "assets or archived files, and never creates, renames or deletes a "
+            "workout document.",
+        ),
+        (
+            "Overwrite Semantics of Every Writing Operation",
+            "Pages without that "
+            "region, with damaged markers, or written by a newer fitdocs are left "
+            "untouched.",
+        ),
+        (
+            "Commit Ordering and Re-Derivability",
+            "the wellness series in `wellness/` "
+            "(itself rebuilt from `wellness-archive/` and the `[wellness]` settings)",
+        ),
+        (
+            "Commit Ordering and Re-Derivability",
+            "The `morning` region is generated "
+            "content too and is refilled from that series after the page writes",
+        ),
+        (
+            "Document-Format Versions and Migration",
+            "The morning-of pass also "
+            "leaves a newer-version document completely untouched, including its "
+            "`morning` region",
+        ),
+    ],
+    ids=[
+        "fills",
+        "hand-edits",
+        "unreadable",
+        "pointer",
+        "regeneration",
+        "sync",
+        "force",
+        "rebuild",
+        "regen",
+        "pass-order",
+        "pass-scope",
+        "confinement",
+        "skips",
+        "inputs",
+        "generated",
+        "newer",
+    ],
+)
+def test_morning_contract_clause(heading: str, phrase: str) -> None:
+    assert phrase in _flat_section(heading)
 
 
 def test_managed_keys_equal_contract_exactly() -> None:

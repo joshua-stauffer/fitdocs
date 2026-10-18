@@ -79,6 +79,32 @@
       "requirement": "Amendment 9 \u2014 recovery 12.1, 12.3, 13.1, 13.2, 13.3, 18.2; implemented by recovery task 1.6",
       "reason": "Recovery adds owned recovery/ and recovery/assets/ locations, one generated recovery page and its chart images, and a recovery/AGENTS.md declaration. The published contract describes its write and preservation rules and advances from 13 to 14. The recovery writer and page schema remain recovery-owned.",
       "also": "requirements.md gains Amendment 9 and design.md a dated location paragraph. Prior criteria, amendment entries and schema versions remain unchanged; predecessor metadata reconciliation remains separate."
+    },
+    {
+      "date": "2026-10-18",
+      "requirement": "1.7, 2.20, 2.21 (new) \u2014 implemented by workout-wellness task 4.2",
+      "reason": "Amendment 10 publishes the refreshed morning region, its whole-root morning-of pass, widened re-derivability, and ownership contract version 14 to 15. Actual next-free criteria preserve dashboards 2.17, wellness-store 2.18 and recovery 2.19. The runtime pass and workout page schema remain workout-wellness-owned.",
+      "also": "Append-only requirements amendment and contract history; revised ownership guide and workouts declaration. Other declaration goldens change by the version alone. Prior amendment metadata and approvals retained.",
+      "tests": {
+        "1.7": [
+          "tests/test_contract.py::test_refreshed_regions_are_disjoint_from_preserved_regions",
+          "tests/test_ownership_contract.py::test_refreshed_regions_equal_contract_exactly",
+          "tests/test_ownership_contract.py::test_preserved_regions_equal_contract_exactly"
+        ],
+        "2.20": [
+          "tests/test_ownership_contract.py::test_morning_contract_clause",
+          "tests/identity/test_contract_docs.py::test_current_change_paragraph_states_workout_wellness",
+          "tests/identity/test_contract_docs.py::test_the_version_history_records_the_amendment",
+          "tests/index/test_contract_docs.py::test_contract_bump_and_release_notes_are_current",
+          "tests/test_declaration.py::test_workouts_declaration_states_morning_ownership",
+          "tests/test_declaration_goldens.py::test_declaration_text_matches_committed_golden"
+        ],
+        "2.21": [
+          "tests/test_ownership_contract.py::test_morning_contract_clause",
+          "tests/test_declaration.py::test_workouts_declaration_states_morning_ownership",
+          "tests/morning/test_e2e.py::test_regen_restores_the_morning_page_from_both_archives"
+        ]
+      }
     }
   ]
 }

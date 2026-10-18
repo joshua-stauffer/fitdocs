@@ -1,14 +1,15 @@
 # fitdocs Ownership Contract
 
-**Contract version:** `14`
+**Contract version:** `15`
 
-**What changed at this version:** fitdocs adds an owned location.
-`recovery/` holds the recovery page `recovery/recovery.md` and its
-charts under `recovery/assets/`, written by `fitdocs recovery` from the
-wellness series and the workout documents and rewritten only when their
-content changes; a chart the page no longer shows is removed. Run
-`fitdocs sync`, `fitdocs regen`, `fitdocs history` or `fitdocs recovery`
-once to place `recovery/AGENTS.md`.
+**What changed at this version:** Workout documents gain the `morning` region,
+a third region class whose content fitdocs alone writes from the wellness
+series and replaces whenever it differs. The morning-of pass that `fitdocs
+sync`, `fitdocs pull --sync` and `fitdocs regen` run rewrites only that region;
+a workout document's generated content is re-derivable from the wellness series
+as well as from the archived sources, the athlete profile, the configured
+timezone and the tile source. Run `fitdocs regen` once to bring existing
+workout pages current.
 
 This document is the authoritative, published statement of what fitdocs owns
 in your data root, what you own, and the exact limits of every operation that
@@ -24,7 +25,7 @@ directory's file when it writes, not only the one its own output lands in)
 and stamped onto every generated document as a provenance banner —
 the `AGENTS.md` texts and the provenance banner are generated from the same
 code-level constants. This document's own enumerated lists (owned paths,
-preserved regions, managed keys, and the contract version above) are held
+preserved regions, refreshed regions, managed keys, and the contract version above) are held
 equal to those same constants by a conformance test; its narrative
 paragraphs are reviewed by hand at each contract-version bump.
 
@@ -378,6 +379,9 @@ verbatim rather than replacing:
   regeneration still carries its existing content over rather than
   overwriting it, on the same footing as the user-owned regions.
 
+The `morning` region is refreshed rather than preserved; see
+[The Morning-Of Region](#the-morning-of-region).
+
 A chart region in a dashboard page is the inverse case: it is tool-owned inside
 a page that is yours. fitdocs rewrites the bytes between a chart region's
 markers in full, and everything outside the markers of that page is yours (see
@@ -397,6 +401,18 @@ to rewrite a document whose existing markers name a region the fresh render
 does not, so an added marker blocks that document's regeneration until it is
 removed by hand.
 
+## The Morning-Of Region
+
+Refreshed regions are disjoint from the preserved regions listed above:
+
+- `morning` — fitdocs fills it from the wellness series and replaces its
+  content whenever it differs. It is never user-owned and carries no user
+  content; hand edits there are replaced. While the wellness series cannot
+  be read, the morning-of pass leaves the region as it was.
+
+The region sits immediately before Training Load. A fresh render leaves it
+empty; the morning-of pass fills it after the page writes.
+
 ## What Regeneration Replaces and Preserves
 
 Regeneration (`fitdocs regen`, and the rewrite path inside `fitdocs sync`)
@@ -410,7 +426,9 @@ over verbatim alongside them, including while forced re-processing
 region or frontmatter-key content; see
 [Overwrite Semantics](#overwrite-semantics-of-every-writing-operation) below
 for the one honest exception to this guarantee (a *deleted* document has no
-content to preserve).
+content to preserve). The `morning` region is generated content: the merge
+carries it into the rewritten page, then the morning-of pass replaces it
+from the wellness series.
 
 ## Frontmatter Ownership
 
@@ -883,7 +901,7 @@ and each has a distinct contract:
   merges it against any existing matching document: every preserved region
   and every user-owned frontmatter key is carried over verbatim, and the
   archived source for a file that is already archived is left untouched
-  (never re-archived, never rewritten). `sync` then runs a training-load
+  (never re-archived, never rewritten). `sync` then runs the morning-of pass, followed by a training-load
   pass over **every** workout document in the data root, not only the ones
   this run wrote (interactively prompting for missing inputs, unless run
   with `--no-prompt` or when stdin is not a terminal); see the `load` bullet
@@ -910,13 +928,17 @@ and each has a distinct contract:
   the preserved-region or user-owned-key guarantee: `notes`, `workout`, and
   `load`, and every user-owned frontmatter key, are still carried over
   verbatim. Forcing widens which sources get *rendered again*, never which
-  content is discarded.
+  content is discarded. Forced re-processing runs the same sequence: page
+  writes, then the morning-of pass, then the training-load pass.
 - **`regen`** — rebuilds every workout document from the data root alone (the
   archive, the athlete profile, the configured timezone, and the tile
-  source — see re-derivability below), re-rendering each from its currently
+  source, plus the wellness series — see re-derivability below), re-rendering
+  each from its currently
   recorded archived source. Every preserved region, and every user-owned
   frontmatter key, is again carried over verbatim from the existing
-  document. `regen` then runs a training-load pass too, always
+  document. `regen` first rebuilds the wellness series from `wellness-archive/`
+  and the `[wellness]` settings. After its page writes, `regen` then runs the
+  morning-of pass, followed by a training-load pass too, always
   non-interactively -- it never prompts. For a document
   whose `load` region already holds a fitdocs-computed result, that pass only
   re-derives the `load_value` / `load_methodology` / `load_basis` frontmatter
@@ -936,6 +958,19 @@ and each has a distinct contract:
   regenerated pages and keeps `.fitdocs/held.toml` equal to the files that
   remain held. Once its analytics index refresh has succeeded, `regen` then
   runs the dashboard pass, described under the `dashboard` entry below.
+- **morning-of pass** — runs after the page writes of `sync` (with a source
+  or as the inbox drain), `pull --sync` and `regen`, before their training-load
+  and index passes. It replaces only the `morning` region's inner content in
+  existing workout pages at the current or an older-but-region-bearing format.
+  It never changes frontmatter, other regions, the generated body outside that
+  region, assets or archived files, and never creates, renames or deletes a
+  workout document.
+  Pages without that region, with damaged markers, or written by a newer
+  fitdocs are left untouched. If the wellness series cannot be
+  read, the pass reports that pages were not refreshed and leaves them as
+  they were; the next writing run retries. The pass compares the desired
+  content with the existing bytes, including hand edits, and replaces it
+  whenever it differs; an unchanged region is not written.
 - **`load`** — the training-load pass touches only two things in an
   existing document: the `load` region's inner content, and the three
   `load_value` / `load_methodology` / `load_basis` frontmatter keys. Every
@@ -1168,8 +1203,11 @@ next run over the same inputs finishes the work.
 
 Every workout document's **generated** content — everything outside its
 preserved regions — is re-derivable: fitdocs can rebuild it from the
-archived source in `fit-archive/`, the athlete profile (`athlete.toml`), the
-configured timezone, and the configured tile source. This is what makes
+archived sources in `fit-archive/`, the wellness series in `wellness/`
+(itself rebuilt from `wellness-archive/` and the `[wellness]` settings), the
+athlete profile (`athlete.toml`), the configured timezone, and the configured
+tile source. The `morning` region is generated content too and is refilled
+from that series after the page writes. This is what makes
 `regen` possible without the original `.fit` source directory. Content
 *inside* a document's preserved regions is not re-derived by regeneration —
 it is carried over from the document itself, so regenerating a document you
@@ -1228,7 +1266,9 @@ training-load pass that follows `sync` and `regen` also consults
 `doc_version`: it leaves that same document completely untouched — including
 its `load` region and its three load keys — and reports it skipped for the
 same reason, so the newer-version refusal holds for the whole document, not
-only the part `sync`/`regen` rewrite directly.
+only the part `sync`/`regen` rewrite directly. The morning-of pass also
+leaves a newer-version document completely untouched, including its
+`morning` region.
 
 A page written before the four `source_*` keys existed records an older
 `doc_version` and lacks them, so it is recognized only by exact content or

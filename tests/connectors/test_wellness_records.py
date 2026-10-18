@@ -8,6 +8,8 @@ import pytest
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
 
+from tests.identity.test_contract_docs import _contract_version_history
+
 _ROOT = Path(__file__).resolve().parents[2]
 _DOC = _ROOT / "docs" / "ownership-contract.md"
 _MD = MarkdownIt("commonmark")
@@ -55,17 +57,6 @@ def _section(title: str | None) -> list[Token]:
     return matches[0] if len(matches) == 1 else []
 
 
-def _head() -> str:
-    paragraphs = [
-        _inline(token)
-        for token in _section(None)
-        if token.type == "inline"
-        and token.level == 1
-        and _inline(token).startswith("What changed at this version:")
-    ]
-    return paragraphs[0] if len(paragraphs) == 1 else ""
-
-
 def _pull() -> str:
     items = []
     tokens = _section("Overwrite Semantics of Every Writing Operation")
@@ -105,7 +96,7 @@ def test_pull_bullet_states_wellness_guarantees(passage: str) -> None:
 @pytest.mark.parametrize(
     "passage",
     [
-        "fitdocs adds an owned location.",
+        "the data root gains an owned location.",
         "`recovery/` holds the recovery page `recovery/recovery.md` and its "
         "charts under `recovery/assets/`",
         "written by `fitdocs recovery` from the wellness series and the "
@@ -116,8 +107,8 @@ def test_pull_bullet_states_wellness_guarantees(passage: str) -> None:
     ],
     ids=["reason", "owned-content", "source-and-rewrites", "removal", "action"],
 )
-def test_current_change_paragraph_states_recovery(passage: str) -> None:
-    assert passage in _head()
+def test_version_history_states_recovery(passage: str) -> None:
+    assert passage in _contract_version_history().replace("``", "`")
 
 
 def _record_text(token: Token) -> str:

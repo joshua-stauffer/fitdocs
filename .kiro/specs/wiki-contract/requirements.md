@@ -325,6 +325,8 @@ another.
 4. The fitdocs CLI shall apply one region-ownership policy — the same region identifiers, the same owner for each region, and the same preserved set — in every command that reads or rewrites documents.
 5. The fitdocs CLI shall produce, for unchanged inputs, document and asset output that differs from the previous release only by the provenance stamp required in Requirement 4 and the document-format version required in Requirement 5.
 6. When the same inputs are rendered repeatedly, the fitdocs CLI shall continue to produce byte-identical output on every invocation.
+7. _(added by Amendment 10)_ The region-ownership policy shall name refreshed regions (`REFRESHED_REGIONS`) as a third class, disjoint from the preserved set, whose content is fitdocs's alone and is replaced, never preserved.
+
 
 ### Requirement 2: Published Ownership Contract
 **Objective:** As a person or agent maintaining a wiki that fitdocs writes into,
@@ -353,6 +355,9 @@ that I can rely on the boundary instead of inferring it from behavior.
 18. _(added by Amendment 6)_ The ownership contract shall name `wellness-archive/` and `wellness/` as fitdocs-owned locations, state that handled wellness files are kept as original bytes or their format's canonical extract, grouped by format and named by the original SHA-256 and never modified, and that the daily series and its manifest are rebuilt from the archive and `[wellness]` settings, overwriting hand edits. Its version shall advance by one and record what changed.
 
 19. _(added by Amendment 9)_ The ownership contract shall name `recovery/` and `recovery/assets/` as fitdocs-owned, holding one recovery page and its charts, shall describe what recovery writes and never writes and its foreign-file preservation, and shall advance its version by one with a statement of what changed. Recovery owns the page type, format and write path.
+20. _(added by Amendment 10)_ The ownership contract shall name the `morning` region, state that fitdocs fills it from the wellness series and replaces its content whenever it differs, that it is never user-owned and hand edits there are replaced, and describe the morning-of pass among the operations that overwrite existing content.
+21. _(added by Amendment 10)_ The ownership contract shall state that a workout document's generated content, its `morning` region included, is re-derivable from the wellness series (rebuilt from the archived wellness files and the `[wellness]` settings) as well as from the archived sources, the athlete profile, the configured timezone and the tile source.
+
 
 ### Requirement 3: In-Tree Ownership Declaration
 **Objective:** As an LLM agent maintaining a markdown wiki, I want the ownership
@@ -466,3 +471,20 @@ stale and foreign declarations are reported as for existing locations.
 These additions fulfill recovery 12.1, 12.3, 13.1, 13.2, 13.3 and 18.2;
 the write path and recovery page schema remain recovery's own. Existing
 criteria and amendment metadata are preserved.
+
+
+## Amendment 10 (2026-10-18): a refreshed region and the morning-of pass, landed by workout-wellness
+
+Workout-wellness adds Requirement 1 criterion 1.7 and Requirement 2 criteria
+2.20 and 2.21. The region-ownership policy names refreshed regions as a third
+class disjoint from the preserved set. The published contract describes the
+`morning` region, replacement of hand edits, the morning-of pass's overwrite
+scope and ordering, and re-derivability through the wellness series rebuilt
+from `wellness-archive/` and `[wellness]`, alongside the existing page inputs.
+`CONTRACT_VERSION` advances from `"14"` to `"15"`, with append-only history and
+a new current-change paragraph. The workouts declaration names the series
+and the morning region; its added-marker warning qualifies regions that the
+regenerated document does not carry. Other declarations change only their
+contract version. The runtime pass remains workout-wellness's own. Existing
+criteria, including 2.18 (wellness-store) and 2.19 (recovery), and prior
+amendments and approvals are preserved.

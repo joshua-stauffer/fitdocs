@@ -18,6 +18,8 @@ import ast
 import re
 from pathlib import Path
 
+import pytest
+
 from fitdocs import contract, layout
 from fitdocs.declaration import declaration_text
 from fitdocs.identity import matching
@@ -177,18 +179,55 @@ def test_the_absent_value_sentence_states_the_device_only_case() -> None:
 def test_the_changed_at_this_version_paragraph_names_the_amendment() -> None:
     head = _flat(_DOC.read_text(encoding="utf-8").split("\n\nThis document", 1)[0])
     assert f"**Contract version:** `{contract.CONTRACT_VERSION}`" in head
-    for phrase in (
-        "fitdocs adds an owned location",
-        "`recovery/` holds the recovery page `recovery/recovery.md`",
-        "charts under `recovery/assets/`",
-        "written by `fitdocs recovery` from the wellness series and the "
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "Workout documents gain the `morning` region",
+        "fitdocs alone writes from the wellness series and replaces "
+        "whenever it differs",
+        "The morning-of pass that `fitdocs sync`, `fitdocs pull --sync` and "
+        "`fitdocs regen` run rewrites only that region",
+        "generated content is re-derivable from the wellness series as well as "
+        "from the archived sources, the athlete profile, the configured timezone "
+        "and the tile source",
+        "Run `fitdocs regen` once to bring existing workout pages current",
+    ],
+    ids=["region", "ownership", "pass", "rederivability", "action"],
+)
+def test_current_change_paragraph_states_workout_wellness(phrase: str) -> None:
+    head = _flat(_DOC.read_text(encoding="utf-8").split("\n\nThis document", 1)[0])
+    assert phrase in head
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "the data root gains an owned location",
+        "``recovery/`` holds the recovery page ``recovery/recovery.md``",
+        "charts under ``recovery/assets/``",
+        "written by ``fitdocs recovery`` from the wellness series and the "
         "workout documents",
         "rewritten only when their content changes",
         "a chart the page no longer shows is removed",
-        "Run `fitdocs sync`, `fitdocs regen`, `fitdocs history` or `fitdocs recovery`",
-        "once to place `recovery/AGENTS.md`",
-    ):
-        assert phrase in head, phrase
+        "Run ``fitdocs sync``, ``fitdocs regen``, ``fitdocs history`` or "
+        "``fitdocs recovery``",
+        "once to place ``recovery/AGENTS.md``",
+    ],
+    ids=[
+        "location",
+        "page",
+        "charts",
+        "inputs",
+        "rewrites",
+        "removal",
+        "commands",
+        "declaration",
+    ],
+)
+def test_version_history_retains_recovery_change_paragraph(phrase: str) -> None:
+    assert phrase in _contract_version_history()
 
 
 def test_the_version_history_records_the_amendment() -> None:
@@ -234,6 +273,17 @@ def test_the_version_history_records_the_amendment() -> None:
         "Raised from ``12`` to ``13`` by hr-derivation because ``derive-benchmarks`` "
         "now also reads every workout's listed files and the normalized wellness "
         "series and may write ``athlete.toml`` at most once per stage."
+    ) in history
+
+    assert "Raised from ``14`` to ``15`` by workout-wellness." in history
+    assert (
+        "Workout documents gain the ``morning`` region, a third region class "
+        "whose content fitdocs alone writes from the wellness series and "
+        "replaces whenever it differs; the morning-of pass that ``fitdocs "
+        "sync``, ``fitdocs pull --sync`` and ``fitdocs regen`` run rewrites only "
+        "that region; and a workout document's generated content is re-derivable "
+        "from the wellness series as well as from the archived sources, the "
+        "athlete profile, the configured timezone and the tile source."
     ) in history
 
 

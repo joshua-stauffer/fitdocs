@@ -140,7 +140,7 @@ def test_index_is_counted_as_an_external_location_not_an_owned_data_root_path() 
 
 
 def test_contract_bump_and_release_notes_are_current() -> None:
-    assert contract.CONTRACT_VERSION == "14"
+    assert contract.CONTRACT_VERSION == "15"
     added = _unreleased_subsection("Added")
     changed = _unreleased_subsection("Changed")
     for phrase in (

@@ -5,13 +5,12 @@ functions -- ``ensure_declarations`` (write-when-different) and
 ``inspect_declarations`` (read-only). Task 4.2 owns wiring the refresh into
 ``sync``/``regen``; this module tests the standalone unit only.
 
-Prose-content assertions live in ``tests/test_declaration_goldens.py`` as
-committed byte-goldens, not here. Three review rounds proved substring
-assertions are not a viable verification strategy for generated prose: a text
-asserting the opposite of the truth on every load-bearing claim passed 40/40
-of them. This module keeps only *structural* assertions -- the generated-file
-marker, frontmatter absence, URL form, region-id presence, determinism, the
-no-quantify-over-documents guard, and every placement/state behavior.
+Complete declaration prose is pinned by the committed byte-goldens in
+``tests/test_declaration_goldens.py``. This module also pins the morning
+region's re-derivability sentence and the unsupported-marker qualifier.
+Structural checks cover the generated-file marker, frontmatter absence,
+URL form, region-id presence, determinism, the no-quantify-over-documents
+guard, and placement/state behavior.
 """
 
 from __future__ import annotations
@@ -108,6 +107,21 @@ def test_workouts_declaration_names_every_user_owned_key() -> None:
     text = declaration_text(_WORKOUTS)
     for key in contract.EFFORT_KEYS:
         assert f"`{key}`" in text
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "the wellness series under `wellness/`",
+        "The `morning` region is generated content too: fitdocs refills it "
+        "from the wellness series.",
+        "a marker naming a region the regenerated document does not carry "
+        "makes the next regeneration refuse to write that document",
+    ],
+    ids=["wellness", "morning", "marker-qualifier"],
+)
+def test_workouts_declaration_states_morning_ownership(phrase: str) -> None:
+    assert phrase in declaration_text(_WORKOUTS)
 
 
 def test_archive_declaration_names_no_user_owned_key() -> None:

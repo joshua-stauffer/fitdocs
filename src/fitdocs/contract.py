@@ -340,7 +340,7 @@ version has no such region, so the pass leaves it alone until ``fitdocs regen``
 brings it current.
 """
 
-CONTRACT_VERSION: Final[str] = "14"
+CONTRACT_VERSION: Final[str] = "15"
 """The published ownership contract's version identifier (Req 2.8).
 
 A *string*, and deliberately not comparable with :data:`DOC_VERSION`: it
@@ -458,6 +458,14 @@ wellness series and the workout documents and rewritten only when their
 content changes; a chart the page no longer shows is removed. Run
 ``fitdocs sync``, ``fitdocs regen``, ``fitdocs history`` or ``fitdocs recovery``
 once to place ``recovery/AGENTS.md``.
+
+Raised from ``14`` to ``15`` by workout-wellness. Workout documents gain the
+``morning`` region, a third region class whose content fitdocs alone writes
+from the wellness series and replaces whenever it differs; the morning-of
+pass that ``fitdocs sync``, ``fitdocs pull --sync`` and ``fitdocs regen`` run
+rewrites only that region; and a workout document's generated content is
+re-derivable from the wellness series as well as from the archived sources,
+the athlete profile, the configured timezone and the tile source.
 """
 
 # --- document vocabulary -----------------------------------------------------

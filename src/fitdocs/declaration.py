@@ -207,31 +207,25 @@ _USER_KEYS: Final[str] = (
 _REDERIVABILITY_DOCS: Final[str] = (
     "The *generated* content of the documents in this directory is "
     "re-derivable: fitdocs rebuilds it by regeneration from the archived "
-    "sources under `{archive_dir}/`, the athlete profile, the configured "
-    "timezone, and the tile source. Content inside a document's region "
-    "markers is not re-derived by regeneration -- it is carried over from "
-    "the document itself, so regenerating a deleted document brings back "
-    "only the generated content, not what its regions held."
+    "sources under `{archive_dir}/`, the wellness series under `{wellness_dir}/`, "
+    "the athlete profile, the configured timezone, and the tile source. "
+    "The `morning` region is generated content too: fitdocs refills it from "
+    "the wellness series. Content inside a document's other region markers "
+    "is not re-derived by regeneration -- it is carried over from the "
+    "document itself, so regenerating a deleted document brings back only "
+    "the generated content, not what those regions held."
 )
-# CLAIM ANCHOR: `sync.regen(data_root, *, athlete, tz, tiles)` (sync.py:281-287)
-# -- regeneration depends on all four inputs, not the archive and athlete
-# profile alone; `tz` and `tiles` are required parameters, not optional ones.
-# The second clause is anchored on `sync._page_task`:
-# `merge_regions(rendered.markdown, existing_text)` runs ONLY when
-# `find_document` matches, so region content is COPIED from the existing
-# document and is never derived from the four inputs above. Delete the
-# document and regen silently rebuilds it with the placeholder -- no failure,
-# no warning; `tests/test_sync.py::test_regen_cannot_recover_region_content_
-# once_the_document_is_deleted` pins that behavior. Scoping this claim is
-# mandatory under Req 3.2a ("no claim that is false of the directory it is
-# placed in"); an unscoped "the documents are re-derivable" is the sentence
-# that licenses an agent to delete and regenerate, and it destroys the user's
-# writing. The clause quantifies over *region markers*, which covers the
-# tool-filled `load` region without naming it -- hence "not re-derived **by
-# regeneration**" rather than "not re-derived": `fitdocs load` DOES rebuild
-# the `load` region from the archived source and the athlete profile
-# (`load/engine.py:339` via `docedit.replace_load_region`), so the unqualified
-# form would be false of `load` (Req 3.2).
+# CLAIM ANCHOR: `sync.regen(data_root, *, athlete, tz, tiles)` rebuilds the
+# page from its archived sources, athlete, timezone and tile source.
+# `cli.regen_command` rebuilds the normalized series from wellness-archive
+# and the [wellness] settings before its page writes. `morning.engine.run_morning_pass`
+# refills only the morning region from that series. The three CLI sites,
+# `sync_command`'s source path, `_run_drain_passes` (also pull --sync), and
+# `regen_command`, call `_run_morning_pass` after the page writes and before
+# the load and index passes. `sync._page_task` carries the other region
+# contents through `merge_regions`; without an existing document those
+# contents cannot be recovered by regeneration. The load pass may itself
+# recompute load, so the limitation is specifically regeneration's carry.
 
 _RENAMES: Final[str] = (
     "A document may be renamed when the file it is rendered from changes "
@@ -267,17 +261,15 @@ _IMMUTABILITY: Final[str] = (
 
 _NEVER_ADD_MARKER: Final[str] = (
     "Never add a region marker to a document that does not already have "
-    "one: doing so makes the next regeneration refuse to write that "
-    "document until the added marker is removed by hand."
+    "one: a marker naming a region the regenerated document does not carry "
+    "makes the next regeneration refuse to write that document until the "
+    "added marker is removed by hand."
 )
-# CLAIM ANCHOR: `docmerge.merge_regions` (docmerge.py:130-149) raises
-# `RegionError` when `existing` holds a region id `fresh` lacks; that call
-# happens in `sync._page_task` BEFORE
-# `_write_outputs` -- so nothing is written for that document, and removing
-# the stray marker (leaving nothing for `merge_regions` to object to) fully
-# restores regeneration on the next run. "Permanently break" would be false;
-# this fragment claims no such thing (the one actionable rule Req 3.2a's
-# amendment retains).
+# CLAIM ANCHOR: `docmerge.merge_regions` raises `RegionError` when existing
+# markers name a region the fresh render lacks, before `sync._page_task`
+# writes the document. The qualifier matters: a morning marker added to an
+# older page is accepted because the fresh render carries morning. Removing
+# an unsupported marker lets the next regeneration write the page again.
 
 _HISTORY_CONTENT: Final[str] = (
     "This directory holds one generated longitudinal page and its chart "
@@ -544,12 +536,15 @@ def declaration_text(directory: str) -> str:
 
     if directory == WORKOUTS_DIR + "/":
         heading = "Generated Workout Documents"
+        rederivability = _REDERIVABILITY_DOCS.format(
+            archive_dir=ARCHIVE_DIR, wellness_dir=WELLNESS_DIR
+        )
         body = (
             f"{_WRITTEN_AND_OWNED.format(directory=directory)}\n\n"
             f"{_REGIONS.format(user_regions_list=user_regions_list)}\n\n"
             f"{_USER_KEYS.format(user_keys_list=user_keys_list)}\n\n"
             f"{_RENAMES}\n\n"
-            f"{_REDERIVABILITY_DOCS.format(archive_dir=ARCHIVE_DIR)}\n\n"
+            f"{rederivability}\n\n"
             f"{_NEVER_ADD_MARKER}\n\n"
         )
     elif directory == HISTORY_DIR + "/":
