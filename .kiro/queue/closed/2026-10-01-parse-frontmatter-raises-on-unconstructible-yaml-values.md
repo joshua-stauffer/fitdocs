@@ -1,7 +1,7 @@
 ---
 id: 2026-10-01-parse-frontmatter-raises-on-unconstructible-yaml-values
 title: "contract.parse_frontmatter catches only yaml.YAMLError, so a hand-edited `date: 2026-02-30` raises ValueError out of every full-scan command"
-status: open
+status: done
 importance: high
 importance_why: One hand-edited page with an impossible date or timezone offset turns sync, regen, load and check into tracebacks until the user finds the file, and breaks the documented "never raises" contract that wiki-contract Req 1.2 makes every command rely on.
 effort: S
@@ -82,3 +82,18 @@ Read at `fc5c06d`.
 - Should `fitdocs check` also report an unparseable `workouts/*.md` as a finding
   so the user learns which file is being ignored? Req 1.2 only requires that the
   run continue; the finding is a new surface and is the maintainer's call.
+
+## Resolution (2026-10-18)
+
+Fixed on main at 758d40c (chore/q-frontmatter-unconstructible; four Opus review rounds, final
+APPROVED; full suite 26784 passed; branch CI green). `contract.parse_frontmatter` now returns None
+for every exception class PyYAML's safe_load was observed to raise on well-formed-but-unconstructible
+YAML (private `_YAML_LOAD_ERRORS`: YAMLError, ValueError, AttributeError, LookupError, OverflowError,
+RecursionError; each member pinned by a leaf case). The same gap in `dashboards.directive.parse_directive`
+is closed (its own tuple: YAMLError, ValueError, OverflowError, RecursionError -> `yaml_syntax`).
+check/regen/load/sync no longer crash on a hand-edited `date: 2026-02-30` page; with 972aa0e's
+guard, regen neither overwrites such a page nor stays silent (tests/test_identity_e2e.py).
+
+Open question left to the maintainer, unchanged: whether `fitdocs check` should report such a page
+(today it is silently "not a document"). Tracked with the broader reporting question in
+.kiro/queue/2026-10-18-unreadable-workout-page-renamed-away-goes-unreported.md.
