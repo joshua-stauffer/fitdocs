@@ -399,6 +399,7 @@ _CONTRACT_SURFACE = {
     "frontmatter_block_error",
     "frontmatter_close_index",
     "is_workout_document",
+    "load_key_lines",
     "parse_frontmatter",
     "sha_of_ref",
     "source_refs",

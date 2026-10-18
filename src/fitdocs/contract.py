@@ -102,7 +102,7 @@ from __future__ import annotations
 
 import math
 import uuid
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 from enum import StrEnum
@@ -1085,7 +1085,7 @@ def frontmatter_block_error(text: str) -> str | None:
     return None
 
 
-def _entry_lines(lines: list[str], keys: tuple[str, ...]) -> tuple[str, ...]:
+def _entry_lines(lines: list[str], keys: Collection[str]) -> tuple[str, ...]:
     """Every frontmatter line belonging to a top-level entry whose key is in
     ``keys``, verbatim -- the scan :func:`user_owned_lines` and
     :func:`load_key_lines` share.
