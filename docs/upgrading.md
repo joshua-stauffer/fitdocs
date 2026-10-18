@@ -79,7 +79,10 @@ resolve your data root:
 fitdocs regen
 ```
 
-No other action is required. `regen` needs nothing beyond your data root —
+No other action is required to bring your documents current, but read the
+release's changelog entry first: a format change can also rename pages (see
+the renames below), and fitdocs does not update links to the old names.
+`regen` needs nothing beyond your data root —
 the original `.fit` exports and the inbox are not needed. It reads the
 archived `.fit` bytes under `fit-archive/`, your athlete profile, and your
 settings file, and re-derives every workout document from them, the same
@@ -114,8 +117,18 @@ later release is another such source.
 The first `fitdocs sync` or `fitdocs regen` after upgrading may also rename
 pages, each with a rename warning: an older collision leftover at
 `<name>-<8 characters>.md` whose `<name>.md` is free is moved to
-`<name>.md`, and a page whose re-ranked base computes a different filename is
-moved to it. Links to the old names are not updated.
+`<name>.md`; a page whose re-ranked base computes a different filename is
+moved to it; and a page whose filename fitdocs chose from its local start
+time is moved to its new name when that local start changes. The release
+that reads each file's own recorded time zone (`doc_version` 11) does this for
+every page recorded away from your computer's zone or in the other half of
+the daylight-saving year, so expect many renames on that `regen`. Links to the
+old names are not updated, in fitdocs pages or in your own notes; find them by
+the old names the warnings print.
+
+A page whose file records no time zone of its own is dated in your
+computer's time zone, so running `fitdocs regen` after changing that zone (on
+a trip, for example) renames such pages too.
 
 The first `fitdocs check` after upgrading also reports as "orphaned" any
 archived source that no page lists — for example, the archive of a page you

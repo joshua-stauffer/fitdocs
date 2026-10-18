@@ -248,8 +248,8 @@ _RENAMES: Final[str] = (
 # `<name>.md` once that name is free. The third (activity-identity Amendment 2,
 # A2.1): a page whose filename is the stem computed from the `start_time` its
 # own frontmatter records follows the newly computed stem when the local start
-# moves (`sync._named_from_recorded_start`); a filename the user chose never
-# matches that stem, so it is kept.
+# moves (`sync._named_from_recorded_start`); any other filename, a user's choice
+# included, does not match that stem and is kept.
 
 _IMMUTABILITY: Final[str] = (
     "These files are immutable inputs: they must not be edited, renamed, or "

@@ -198,7 +198,7 @@ so that correcting a page never needs a hand edit.
 #### Acceptance Criteria
 1. When a file added to a page outranks the page's current base, the fitdocs CLI shall re-render the page from the new base, carrying every user-owned region and every user-owned frontmatter key verbatim.
 2. When a page's base changes and the filename computed from the new base differs from the page's current filename, the fitdocs CLI shall rename the page to the computed filename.
-3. When a page's base does not change, the fitdocs CLI shall keep the page's current filename, including a filename the user chose.
+3. When a page's base does not change, the fitdocs CLI shall keep the page's current filename, including a filename the user chose. _(Qualified by Amendment 2, A2.1: a page whose filename is the name computed from its own recorded local start follows a changed local start.)_
 4. When the fitdocs CLI renames a page, it shall remove every chart asset the page's previous generated content linked that the new render does not write and no user-owned region of the page links, and shall remove no other file.
 5. The fitdocs CLI shall report every rename as a warning naming the page's previous and new paths.
 6. If the filename computed for a page is held by a different page, the fitdocs CLI shall apply the existing collision suffix; and after every file of a run has been processed, the fitdocs CLI shall rename each page the run wrote under a collision-suffixed filename to its unsuffixed filename when that filename is free, repeating until no such rename remains.
@@ -239,7 +239,7 @@ are, so that I can rely on them instead of inferring them.
 #### Acceptance Criteria
 1. The ownership contract shall state that a page's source list names every archived file of the page, ranked with the base last, and shall define base and extra.
 2. The ownership contract shall name the base-identity frontmatter keys among the managed keys, and the published managed-key set shall include them.
-3. The ownership contract shall state that a base change may rename a page and remove the chart assets its previous render linked, that links to the previous filename are not updated by fitdocs, and that a page whose base does not change keeps its filename.
+3. The ownership contract shall state that a base change may rename a page and remove the chart assets its previous render linked, that links to the previous filename are not updated by fitdocs, and that a page whose base does not change keeps its filename. _(Qualified by Amendment 2, A2.2: the contract also states the local-start rename of A2.1.)_
 4. The ownership contract shall state that a page keeps a phone-side copy's session UUID when a file without one becomes its base.
 5. The ownership contract shall state that an ambiguous file is archived and held rather than added to a page, where the hold is recorded, and how the athlete resolves it.
 6. The published contract version and the document-format version shall each advance by one from the values current when this feature lands.
@@ -327,7 +327,8 @@ than keep their filenames.
 - A2.3 The published contract version shall advance by one, because a
   guarantee the ownership contract states has changed.
 
-A filename the user chose never equals the name computed from the page's own
-recorded start (a hand-edited `start_time` makes it differ too), so it cannot
-qualify. Two pages of one local minute keep distinct names, under the
+Only that exact stem qualifies. A filename the user chose is kept unless it
+happens to be that stem (for example, a user who renamed `<stem>-<8
+characters>.md` back to `<stem>.md` chose fitdocs's own name), and a
+hand-edited `start_time` makes the stems differ, so such a page is kept. Two pages of one local minute keep distinct names, under the
 collision suffix and settle pass of 6.6.

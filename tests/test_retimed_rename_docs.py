@@ -59,3 +59,19 @@ def test_contract_version_history_records_the_rename() -> None:
         "renamed, with its chart assets and a rename warning, when that local "
         "start changes"
     ) in history
+
+
+def test_upgrade_guide_warns_of_the_local_start_renames() -> None:
+    text = _flat((ROOT / "docs/upgrading.md").read_text(encoding="utf-8"))
+    assert (
+        "and a page whose filename fitdocs chose from its local start time is "
+        "moved to its new name when that local start changes"
+    ) in text
+    assert "so expect many renames on that `regen`" in text
+    assert (
+        "Links to the old names are not updated, in fitdocs pages or in your own notes"
+    ) in text
+    assert (
+        "running `fitdocs regen` after changing that zone (on a trip, for "
+        "example) renames such pages too"
+    ) in text

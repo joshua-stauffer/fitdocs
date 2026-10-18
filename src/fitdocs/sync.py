@@ -1991,9 +1991,10 @@ def _named_from_recorded_start(
     The unsuffixed stem ``<date>-<slug>-<HHMM>`` built from the page's own
     recorded ``start_time`` (its wall clock, in the offset it records), when
     ``path`` is exactly that stem or that stem under this page's collision
-    suffix; otherwise ``None``. A filename the user chose never qualifies, so
-    only a name fitdocs gave can follow a changed local start
-    (activity-identity Req 6.9).
+    suffix; otherwise ``None``. Any other filename -- one the user chose, or a
+    page whose ``start_time`` was hand-edited -- does not qualify, so only the
+    name fitdocs would have given follows a changed local start
+    (activity-identity A2.1).
     """
     recorded = document_start_time(frontmatter)
     if recorded is None:
@@ -2187,7 +2188,7 @@ def _page_task(
     # An existing page keeps its path (a user's rename) unless its base changed
     # and the base's computed name differs (Req 6.2, 6.3), or fitdocs named it
     # from the local start its frontmatter records and the computed local start
-    # has moved (a recorded offset now read, a zone or DST correction, Req 6.9);
+    # has moved (a recorded offset now read, a zone or DST correction, A2.1);
     # a settle task moves it to its unsuffixed name (Req 6.6).
     stranded = False
     base_changed = False
@@ -2293,8 +2294,9 @@ def _page_task(
     # strip, leaving ``merge_regions`` to be handed ``None``).
     stale: tuple[str, ...] = ()
     if existing_text is not None:
-        # An existing document (a rename, timezone change, or re-export) is updated
-        # in place: preserved regions carry over verbatim (Req 3.6, 4.3, 10.2). A
+        # An existing document (a re-export, a base change, a local-start change)
+        # is rewritten -- in place, or at its new name when it moves -- with its
+        # preserved regions carried over verbatim (Req 3.6, 4.3, 10.2). A
         # damaged region raises RegionError here -- before any write (Req 10.3).
         # It was already read once above for the version gate; reusing it here
         # avoids a second disk read and a second parse.

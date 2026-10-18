@@ -1,4 +1,4 @@
-"""A page fitdocs named follows a changed local start (activity-identity Req 6.9).
+"""A page fitdocs named follows a changed local start (activity-identity A2.1).
 
 Pages are written by the sync engine under one zone and regenerated under
 another, which moves every page's computed local start the way the local-time
