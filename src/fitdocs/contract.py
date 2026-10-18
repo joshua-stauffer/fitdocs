@@ -1321,11 +1321,10 @@ class LoadReading:
 def document_load(frontmatter: Mapping[str, object] | None) -> LoadReading | None:
     """The document's own recorded load reading, or ``None`` (Req 1.2, 1.5).
 
-    Applies exactly the rule
-    :func:`fitdocs.history.documents._read_load` applies today -- the two
-    are pinned to agree by a parity table in ``tests/test_contract.py`` --
-    so the block page and the history page never disagree on which
-    documents carry a usable load: ``load_value`` (under :data:`LOAD_KEYS`'
+    Applies the rule :func:`fitdocs.history.documents._read_load` applies,
+    with one deliberate exception -- the two are pinned by a parity table in
+    ``tests/test_contract.py`` -- so the block page and the history page agree
+    on which documents carry a usable load: ``load_value`` (under :data:`LOAD_KEYS`'
     first entry) is rejected as absent when it is missing, a ``bool`` (an
     ``int`` subclass, rejected explicitly), not an ``int``/``float``,
     non-finite, or too large to convert to a Python ``float``
@@ -1334,6 +1333,10 @@ def document_load(frontmatter: Mapping[str, object] | None) -> LoadReading | Non
     methodology is dropped together with it -- never reported on its own --
     because a load with no methodology would be summed under whatever
     methodology a caller later chose, which Req 1.5 forbids.
+
+    The exception: a *negative* ``load_value`` is returned as recorded here,
+    while the history reader treats it as no load (its model rejects a
+    negative daily load).
     """
     if frontmatter is None:
         return None

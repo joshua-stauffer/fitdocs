@@ -1194,7 +1194,8 @@ def test_document_load_yields_none_for_absent_frontmatter_or_wrong_type() -> Non
     assert contract.document_load({}) is None
 
 
-# The parity table: `document_load(fm) is None` iff
+# The parity table (every shape except a negative `load_value`, the one
+# deliberate divergence, pinned separately below): `document_load(fm) is None` iff
 # `fitdocs.history.documents._read_load(fm) == (None, None)` -- built from
 # the union of shapes each side's own test module already covers, plus the
 # boundary shapes this task adds, never by importing the private reader into
@@ -1238,10 +1239,10 @@ def test_document_load_absence_matches_history_private_reader(
 
 
 def test_document_load_negative_value_is_the_documented_history_divergence() -> None:
-    """The history reader treats a negative `load_value` as an unreadable load
-    (it skips and names the page; the model rejects negative daily loads),
-    while this shared contract reader still reports the recorded number. The
-    one deliberate exception to the parity table above."""
+    """The history reader treats a negative `load_value` as no load (the model
+    rejects negative daily loads), while this shared contract reader still
+    reports the recorded number. The one deliberate exception to the parity
+    table above."""
     from fitdocs.history import documents as history_documents
 
     frontmatter: dict[str, object] = {"load_value": -5.5, "load_methodology": "tss"}
@@ -1249,8 +1250,7 @@ def test_document_load_negative_value_is_the_documented_history_divergence() -> 
     reading = contract.document_load(frontmatter)
     assert reading is not None
     assert reading.value == -5.5
-    with pytest.raises(history_documents._NegativeLoad):
-        history_documents._read_load(frontmatter)
+    assert history_documents._read_load(frontmatter) == (None, None)
 
 
 # --------------------------------------------------------------------------- #

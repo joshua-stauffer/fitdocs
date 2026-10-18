@@ -358,22 +358,26 @@ def test_files_that_were_never_workout_documents_stay_silent(
     assert scan == DocumentScan(pages=(), skipped=())
 
 
-# --- a negative load is an unreadable load (Req 1.9, 4.x) ---------------------
+# --- a negative load is no load (Req 1.4) ------------------------------------
 
 
-def test_a_negative_load_skips_and_names_the_page(tmp_path: Path) -> None:
-    _write(
-        tmp_path,
-        f"{WORKOUTS_DIR}/negative.md",
-        _page(load_lines="load_value: -5.0\nload_methodology: banister"),
-    )
-    _write(tmp_path, f"{WORKOUTS_DIR}/fine.md", _page(load_lines=_LOAD))
+def test_a_negative_load_is_no_load_exactly_like_a_non_finite_one(
+    tmp_path: Path,
+) -> None:
+    for name, value in (("negative", "-5.0"), ("infinite", ".inf")):
+        _write(
+            tmp_path,
+            f"{WORKOUTS_DIR}/{name}.md",
+            _page(load_lines=f"load_value: {value}\nload_methodology: banister"),
+        )
 
     scan = scan_documents(tmp_path)
 
-    assert [p.path for p in scan.pages] == [f"{WORKOUTS_DIR}/fine.md"]
-    assert [s.path for s in scan.skipped] == [f"{WORKOUTS_DIR}/negative.md"]
-    assert "negative" in scan.skipped[0].reason
+    assert [(p.path, p.load, p.methodology) for p in scan.pages] == [
+        (f"{WORKOUTS_DIR}/infinite.md", None, None),
+        (f"{WORKOUTS_DIR}/negative.md", None, None),
+    ]
+    assert scan.skipped == ()
 
 
 def test_a_zero_load_is_still_a_load(tmp_path: Path) -> None:

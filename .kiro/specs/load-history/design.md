@@ -906,10 +906,8 @@ def unscaled_accumulators(
   `contract.is_workout_document` → skip when false;
   `contract.document_date` → skip with a reason when `None`;
   the three `contract.LOAD_KEYS` → `load` and `methodology`, both `None` when
-  `load_value` is absent, not numeric, not finite, or a `bool`; a negative
-  `load_value` is an unreadable load (the model rejects it) and the page is
-  skipped and named (a controller ruling the maintainer may revisit; a
-  non-finite value instead leaves the page counted with no load);
+  `load_value` is absent, not numeric, not finite, or a `bool`; or negative (the model rejects a negative daily load; the page stays counted
+  with no load, silently, exactly like a non-finite one);
   `contract.effort_tag` → `EffortTag`, `InvalidEffortTag` (recorded as
   `tag_problem = describe()`, no marker), or `None`.
 - **This module is the package's only importer of `docio` and `contract`**, and
@@ -1594,10 +1592,9 @@ view. Write faults fail the run, because the deliverable did not appear.
   methodology; a configured methodology no page records. Each message names the
   file or the offending value and the action that resolves it. Nothing is written.
 - **Per-document (exit unchanged)** — an unreadable file (OS or decode error,
-  or an unparseable frontmatter block), an undated page, a negative
-  `load_value`, a malformed effort tag. Each becomes a `SkippedPage` or a
+  or an unparseable frontmatter block), an undated page, a malformed effort tag. Each becomes a `SkippedPage` or a
   `tag_problem`, is named in the report and (for malformed tags) on the page,
-  and the run continues. A symlink, a non-workout `.md` and a non-finite or
+  and the run continues. A symlink, a non-workout `.md` and a non-finite, negative or
   non-numeric `load_value` are *not* skips: the first two were never this
   scan's documents, and the last leaves the page counted without a load.
 - **Empty archive (exit 0)** — no page records a load. Reported with a note;
@@ -1662,7 +1659,7 @@ and no telemetry.
 
 ### Performance
 - The full pass over a synthetic 2,500-page tree completes in one pass with one
-  `read_frontmatter` per document and no second read. Asserted structurally (a
+  `read_frontmatter_diagnosed` per document and no second read. Asserted structurally (a
   counting stub around the reader), not by wall-clock timing, so the check is
   stable in CI.
 

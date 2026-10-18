@@ -613,7 +613,7 @@ def _render_skipped_excluded_section(
     skipped: Sequence[SkippedPage], choice: MethodologyChoice
 ) -> str:
     lines = ["## Skipped and Excluded", ""]
-    lines.append("Skipped (unreadable, undated, or negative load):")
+    lines.append("Skipped (unreadable or undated):")
     if skipped:
         for page in skipped:
             lines.append(f"- `{page.path}` — {page.reason}")
