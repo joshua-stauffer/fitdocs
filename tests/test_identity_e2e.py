@@ -3069,8 +3069,8 @@ def test_regen_does_not_write_over_an_unconstructible_page_at_the_suffixed_name(
     """Case 2 with a page whose frontmatter PyYAML cannot construct: one failure
     naming the page, its bytes (note included) unchanged, nothing raised.
 
-    Mutation: ``_YAML_LOAD_ERRORS`` back to ``yaml.YAMLError`` only (regen
-    raises ``ValueError``).
+    Mutation: ``_YAML_LOAD_ERRORS`` back to ``yaml.YAMLError`` only (the
+    setup's ``read_frontmatter`` raises ``ValueError``).
     """
     data_root, page, original = _stage_unreadable(tmp_path)
     garbled = page.with_name(f"{page.stem}-{_sha(original.data)[:8]}.md")
