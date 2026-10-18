@@ -275,6 +275,10 @@ files = [
     "tests/hr_benchmarks",
     "tests/recovery",
     "tests/morning",
+    "tests/ingest/test_local_time.py",
+    "tests/render/test_local_time.py",
+    "tests/test_cli_local_tz.py",
+    "tests/test_local_time_docs.py",
 ]
 
 [tool.pytest.ini_options]
