@@ -136,12 +136,13 @@ fitdocs does not detect this. A pull that no longer finds any activity with
 source `GARMIN_CONNECT` reports nothing unusual: such activities are never
 counted in `listed`, so the report looks like a week with no rides. If the
 listing still shows them but a file download answers 404 or 422, each shows
-in the `skipped` row as having no original file; any other failing status is
-reported in `failed` and retried on the next pull; a download that succeeds
+in the `skipped` row as having no original file, and a download that succeeds
 with something that is not a FIT file is `skipped` as not a FIT file. A 403
-is treated as a refused client: the pull ends with a message saying the
-service refused this client, and it ends this instance's run on every pull. The evidence does not
-establish which of these a block would use. Pages and archived files from
+ends this instance's run, on every pull, with a message saying the service
+refused this client; a 401 ends it with the refused-key message; a rate limit
+or a server error ends it as described below; any other failing status is
+reported in `failed` and retried on the next pull. intervals.icu has not said
+which of these a block would produce. Pages and archived files from
 earlier pulls are not affected. To get Garmin files by another route, copy or
 export them from the device or from Garmin Connect (unzip Garmin Connect's
 download first) into a directory and read it with
