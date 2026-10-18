@@ -1,7 +1,7 @@
 ---
 id: 2026-07-30-no-release-gate-on-the-publish-path
 title: A distribution can be built and published without the test suite ever running, so the withdrawn-methodology content guard is not on the publish path
-status: open
+status: done
 importance: high
 importance_why: The only mechanism preventing two CSVs carrying the third party's copyright notice from reaching PyPI is a pytest test, and nothing forces that test to run before `uv build && uv publish`. A licensing guard the release path can skip is not a guard.
 effort: M
@@ -126,3 +126,13 @@ is not refused, publication is. Still true at this update: no `.github/`,
 no workflow files, no sdist section in `pyproject.toml`, and
 `tests/load/test_packaging.py` remains a pytest test nothing forces onto a
 publish path. Stays open until tasks 2.3 and 6.3 land.
+
+## Resolution (2026-10-18)
+
+Done. The encumbered-content gate is on the publish path: `.github/workflows/release.yml`
+job `check` (needs `build`) writes the `FITDOCS_FORBIDDEN_STRINGS_CONTENT` secret and runs
+`python -m scripts.check_artifacts --tag ... --dist-dir dist` (release.yml:117-157), failing
+closed with `gate_not_run` when the secret is absent (:146-147); `verify-artifact`,
+`publish-testpypi` and `publish-pypi` all chain `needs:` after it (:159-241). Distribution
+tasks 2.3 and 6.3 are `[x]` (`.kiro/specs/distribution/tasks.md:108,248`; 49dce2c), and the
+0.1.0 release ran through this chain. Closed by /kiro-queue close after the 2026-10-13 triage.

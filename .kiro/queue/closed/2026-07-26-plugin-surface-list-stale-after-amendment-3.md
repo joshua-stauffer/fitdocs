@@ -1,7 +1,7 @@
 ---
 id: 2026-07-26-plugin-surface-list-stale-after-amendment-3
 title: The published plugin surface list omits six exported names, and plugin-api has no open task to fix its copy
-status: open
+status: done
 importance: medium
 importance_why: A plugin author reading docs/plugins.md cannot discover LoadContext — the parameter `compute` now requires — so the documented surface is not sufficient to write a working calculator against.
 effort: S
@@ -201,3 +201,11 @@ replaced with a RESOLVED note. All 12 leaf tasks in
 `.kiro/specs/plugin-api/tasks.md` are now `[x]`; no approval flag changed
 (not a re-spec). Once `impl/plugin-api-surface` merges, this item is fully
 closed and should move to `.kiro/queue/closed/`.
+
+## Resolution (2026-10-18)
+
+Done. The remaining `design.md` half landed on main: `.kiro/specs/plugin-api/design.md:807`
+enumerates `NotComputed`, `LoadContext`, `LoadSettings` and the other added names, and :835
+carries the "RESOLVED 2026-07-27 (plugin-api task 4.4)" note; plugin-api task 4.4 is `[x]`.
+(The branch commit 6de9b13 cited above predates the 2026-09-16 repository restore and no
+longer resolves; the content is on main.) Closed by /kiro-queue close after the 2026-10-13 triage.
