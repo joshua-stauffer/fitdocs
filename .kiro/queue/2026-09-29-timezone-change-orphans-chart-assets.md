@@ -83,4 +83,6 @@ activity-identity Amendment 2 (A2.1) now renames a page whose filename fitdocs c
 
 What remains is a page whose filename the **user** chose. It keeps its name (6.3), its charts move to the new computed stem, and the old chart set is still orphaned. The maintainer's real wiki has no such page: all 2,567 dated pages carry fitdocs-computed names.
 
+The same keep-filename path also leaves behind a chart that a re-render stops writing. One map SVG in the maintainer's real wiki is linked by no page; it was found in the 2026-10-18 rehearsal and predates this branch.
+
 Extending cleanup to the keep-filename path is still the fix. It must not delete an asset another page links, which is the deletion half of `2026-10-01-chart-assets-named-by-computed-stem-collide-across-pages`, so decide the two together.
