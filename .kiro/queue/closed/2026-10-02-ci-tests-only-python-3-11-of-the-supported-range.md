@@ -1,7 +1,7 @@
 ---
 id: 2026-10-02-ci-tests-only-python-3-11-of-the-supported-range
 title: CI runs the suite on Python 3.11 only while the package declares >=3.11 and classifies 3.11-3.13, so interpreter-dependent behaviour is never tested where users run it
-status: open
+status: done
 importance: medium
 importance_why: Version-dependent stdlib behaviour has already bitten this repo's tests twice (Path.stat call counts, pathlib's attribute set); a published package that claims 3.12 and 3.13 has never had its suite run on them in CI.
 effort: S
@@ -56,3 +56,15 @@ has exercised; a failure there reaches a published release.
    reason.
 4. Done when CI is green on all three; then revisit the identity-guard item
    in `context` (its option 2 is this change).
+
+## Resolution (2026-10-18)
+
+Fixed on main at accccba (chore/q-ci-matrix; three Opus review rounds, final APPROVED; branch CI green on
+3.11, 3.12 and 3.13). ci.yml keeps `gates` on 3.11 (lint, mypy, build, check-artifacts, armed suite)
+and adds `supported-pythons` (3.12, 3.13; tests only; UV_PYTHON set because .python-version pins
+3.11; interpreter asserted). Reds it surfaced and fixed: hero-chart boxcar_smooth depended on 3.12's
+compensated float sum() (now explicit left-to-right, goldens unchanged); identity/plans/sitebuild guard
+fixtures depended on interpreter-incidental stdlib attributes and PEP 695 AST nodes.
+release.yml's gates job is still 3.11-only and unarmed: queued as
+.kiro/queue/2026-10-18-release-gates-job-3-11-only-and-unarmed.md. Other builtin float sum() sites:
+.kiro/queue/2026-10-18-float-sum-interpreter-dependence.md.

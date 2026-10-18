@@ -1,7 +1,7 @@
 ---
 id: 2026-10-01-ci-forbidden-strings-tracked-file-guard-always-skips
 title: "CI's `uv run pytest` never sets FITDOCS_FORBIDDEN_STRINGS, so the forbidden-strings scan over every tracked file always skips in CI"
-status: open
+status: done
 importance: medium
 importance_why: "The encumbered-content guard over tracked files runs only when a maintainer remembers to run it locally; new docs/fixtures merge unscanned."
 effort: S
@@ -34,3 +34,14 @@ Every new tracked file (docs pages, fixtures, website assets, scripts) relies on
 1. Read `.github/workflows/ci.yml` and `tests/_forbidden_strings.py`.
 2. Move the secret-writing step before pytest and run pytest with `FITDOCS_FORBIDDEN_STRINGS="$RUNNER_TEMP/forbidden-strings.txt"` (fork PRs without the secret must still fail closed or be handled as `ci.yml` already does for check_artifacts).
 3. Update `tests/test_ci_workflow.py` pins for the new step order; check `docs.yml`'s byte-identical secret-step test still holds.
+
+## Resolution (2026-10-18)
+
+Fixed on main at accccba (chore/q-ci-matrix; review APPROVED). In ci.yml `gates`, the existing "Write the
+match data" step now runs before pytest and the test step gets FITDOCS_FORBIDDEN_STRINGS, so the
+tracked-file guard runs in CI (verified in the run logs: no forbidden-strings skip in gates). Because
+public CI now runs it armed, every guard test that reads the source reports only counts, surfaces and
+non-value-bearing paths (pytest.fail(..., pytrace=False)); a self-test proves a synthetic needle never
+reaches output, and an ::add-mask:: step masks each value as defense in depth. Fork PRs fail closed at
+the write step (gate_not_run); the 3.12/3.13 jobs stay unarmed so forks keep test feedback
+(CONTRIBUTING.md says so). (The stored resume_command above is truncated mid-sentence; superseded.)

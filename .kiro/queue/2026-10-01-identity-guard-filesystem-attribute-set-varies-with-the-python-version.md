@@ -68,3 +68,11 @@ because it is not specific to this guard (connectors hit a Path.stat
 call-count assumption of the same kind, `tests/connectors/test_folder.py:799-805`).
 If that item lands a 3.11-3.13 matrix, this item's option 2 is done and only
 the freeze-or-not decision for `_FS_ATTRIBUTES` remains.
+
+## Update (2026-10-18)
+
+Option 2 is done: since accccba CI runs the suite (this guard included) on 3.11, 3.12 and 3.13, all green.
+The guard's 3.12/3.13 failures then were fixture reds (tests/identity/test_boundary.py now uses an
+autouse carrier module), not _FS_ATTRIBUTES drift. What remains is option 1 only: freeze
+_FS_ATTRIBUTES with "at least these" semantics against pathlib, given the 3.14 drift this item measured
+and that CI does not cover 3.14.
