@@ -40,9 +40,10 @@ uv run mypy
 
 The first runs the full test suite. The second lints and checks formatting.
 The third runs the strict type check. These are the same three commands the
-project's continuous integration runs on every push and pull request, and
-the same three a release cannot skip — see the fixture-discrimination
-discipline in [`.kiro/steering/change-protocol.md`](.kiro/steering/change-protocol.md)
+project's continuous integration runs on every push and on pull requests from
+branches of this repository (a fork's pull request is covered below), and the
+same three a release cannot skip — see the fixture-discrimination discipline
+in [`.kiro/steering/change-protocol.md`](.kiro/steering/change-protocol.md)
 for what a passing test is expected to prove.
 
 ## Changelog duty
@@ -127,10 +128,11 @@ a pass. If you are unsure whether something you want to add is encumbered,
 ask before adding it rather than after.
 
 Continuous integration supplies that match data, from a repository secret, to
-both the test suite and the release gate. A pull request from a fork cannot
-read the secret, so its run stops at the "Write the match data" step with
-`gate_not_run` rather than skipping the check; a maintainer re-runs the change
-from a branch of this repository.
+the main job's test suite and to the release gate. A pull request from a fork
+cannot read the secret, so that job (the quality gates) stops at its "Write the
+match data" step with `gate_not_run` rather than skipping the check; the
+separate Python 3.12 and 3.13 test jobs hold no secret and still run, and a
+maintainer re-runs the change from a branch of this repository.
 
 ## How changes land
 
