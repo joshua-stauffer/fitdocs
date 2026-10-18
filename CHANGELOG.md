@@ -394,10 +394,6 @@ recorded as one.
 - The connectors guide now notes that intervals.icu has said it may block
   Garmin-origin data from its API, what a pull then shows, and the folder and
   inbox routes for Garmin files.
-- Bar, stacked-100 and box charts keep two categories that print alike (for
-  example `a<TAB>b` and `a b`, or a literal `—` and an absent value) in
-  separate bands. Before, they shared one band and the later mark hid the
-  earlier one.
 - Bar, stacked-100, box and small-multiples charts keep two categories (or
   facets) that print alike (for example `a<TAB>b` and `a b`, or a literal `—`
   and an absent value) apart. Before, bar and box drew them in one band so the
