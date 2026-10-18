@@ -126,6 +126,23 @@ The framework's `lookback_days` key applies as described under
 [Configuring an instance](#configuring-an-instance), as does `wellness`; no
 other key is read.
 
+**Garmin data may stop arriving.** In October 2026 the intervals.icu
+developer said that Garmin's updated terms will likely force intervals.icu
+to block Garmin-origin data in its API, probably including historical data
+that came in through Garmin's own API. Data you uploaded by hand was said
+not to be affected. As of that statement nothing was final and no date was
+given; whether and how it applies to personal API keys was not answered.
+fitdocs does not detect this. A pull that no longer finds any activity with
+source `GARMIN_CONNECT` reports nothing unusual: such activities are never
+counted in `listed`, so the report looks like a week with no rides. If the
+listing still shows them but their files can no longer be downloaded, each
+shows in the `skipped` row as having no original file; if intervals.icu
+refuses the key, the pull ends with the refused-key message below. Pages and
+archived files from earlier pulls are not affected. To get Garmin files by
+another route, copy or export them from the device or from Garmin Connect
+into a directory and read it with [the folder connector](#the-folder-connector),
+or drop them into the inbox directly.
+
 ### What a pull fetches
 
 The first pull lists the last 30 days. To go further back, run `fitdocs pull
