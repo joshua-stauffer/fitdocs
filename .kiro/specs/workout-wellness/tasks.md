@@ -542,7 +542,7 @@ wiki-contract and analytics-index amendment and criterion numbers.
   - _Requirements: 1.3, 1.4, 6.4, 7.2, 7.3, 7.5, 7.6, 7.7, 7.8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 9.5, 12.3_
   - _Depends: 2.3, 2.4_
 
-- [ ] 3.2 Chain the pass into sync, the drain, pull --sync and regen, and print its report
+- [x] 3.2 Chain the pass into sync, the drain, pull --sync and regen, and print its report
   - `cli.py` per design § CliMorning: `_run_morning_pass` (returns whether
     the pass failed; catches `Exception`, prints `Morning of: not refreshed;
     <ExceptionType>: <message>.`, fails the run and lets the load, plan,
@@ -801,6 +801,54 @@ wiki-contract and analytics-index amendment and criterion numbers.
   - _Requirements: 9.1, 9.4, 11.3, 12.1, 12.2_
 
 ## Implementation Notes
+
+- 3.2 accepted after independent review and fresh completion verification:
+  all three CLI flows run morning after their page report (regen after its
+  wellness summary), before load, and fold morning failures into their exit
+  status while continuing later passes. Full suites passed independently
+  twice: 26,692 tests and eight documented optional local skips. Fresh
+  completion checks passed 870 regressions and 176 isolated CLI/boundary
+  cases, with Ruff, formatting and mypy clean. Independent replay confirmed
+  58 source faults (154 observations), nine separately labeled guard-control
+  faults (30 observations), and three reviewer source faults (six more);
+  every intended failure restored GREEN. All nine assigned criteria and all
+  41 changed assertion/setup sites are covered. Import boundaries are now
+  closed to exact sets; native help is byte-identical with 15 commands.
+  No pre-existing output or page-byte pin required changing. End-to-end
+  timezone, portability and confinement work remains with 3.3.
+
+- Astra decision 14 (2026-10-18, task 3.2): report composition is covered
+  by two valid mixed cases: nonempty series with updates, removals,
+  multiple failures and missing regions; empty series with removals and
+  failures while the missing-region warning is suppressed. Retain exact
+  hand-authored ordered output lists and all prior cases. The bounded
+  sweep adds three production faults and extends existing selections,
+  for 67 declared faults. Complete that sweep, the requirement mapping
+  and preservation checks before freezing candidate bytes and running
+  the full suite. Stop speculative expansion after these partitions are
+  covered; reopen for concrete normative defects or verification/review
+  failures. The decision is not execution evidence. Decision artifact:
+  `/private/tmp/workout-wellness-astra-report-matrix-closure.md`.
+
+- Astra decision 12 (2026-10-18, task 3.2): actual-source boundary pins
+  retain decision 10's unchanged-test production-fault protocol. Synthetic
+  closure-guard controls may use isolated minimal faults only in the
+  forward/module/reverse closure implementation or a relevant independent
+  literal policy member inside test_boundary.py. Clarification 12a permits
+  the permanent same-file _guard_module_imports extraction; only those
+  comparison/operand spans follow it, with delegation/control calls
+  frozen during faults and native full-guard coverage checked separately.
+  This is a bounded
+  exception to production-source-only and whole-test-file identity, with
+  no changes to control tests, fixtures, expected outputs or configuration.
+  Record PINNED — GUARD-CONTROL separately from PINNED — SOURCE-BOUNDARY;
+  preserve every byte outside declared implementation edits, show the
+  intended unchanged control RED, restore the full original file/hash and
+  show GREEN. Purge derived test assertion-rewrite caches before each
+  uv pytest process. No assertion masking, entire-guard deletion,
+  fixture-dependent fault, new helper module or broader boundary change
+  is authorized. Review and final verification audit the partition and
+  both evidence categories; decisions 10 and 11 otherwise remain in force.
 
 - 3.1 accepted after independent approval and fresh completion verification:
   250 focused, 1,200 broader and seven shared-reader cases passed, with

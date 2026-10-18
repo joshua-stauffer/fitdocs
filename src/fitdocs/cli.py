@@ -8,10 +8,12 @@ commands documented here are:
 
 * ``fitdocs sync SOURCE [--out PATH] [--force] [--no-prompt]`` -- turn every
   ``.fit`` file under SOURCE into a workout document under the data root,
-  then run the training-load pass over those documents, then the plan
+  then refresh morning-of blocks from the wellness series before the
+  training-load pass over those documents, then the plan
   reconciling pass (Req 8.1, plan-resolution Req 8.1).
 * ``fitdocs regen [--out PATH]`` -- rebuild every document from the data root's
-  archived sources alone, then run the load pass prompt-free so previously
+  archived sources alone, then refresh morning-of blocks from the rebuilt
+  wellness series before the load pass, which runs prompt-free so previously
   computed load is restored without user interaction, then the plan
   reconciling pass (Req 7.4, plan-resolution Req 8.1).
 * ``fitdocs load [--out PATH] [--recompute] [--calculator ID] [--no-prompt]`` --
@@ -82,7 +84,8 @@ data root or in the inbox -- except a token renewal the listing needed,
 which is still persisted to the credentials store (Req 6.9). ``--sync`` is
 declared, validated, and refused together with ``--dry-run`` here (Req
 12.4); after the pull report it chains the same drain ``fitdocs sync``'s
-own no-SOURCE branch runs -- the inbox drain, then the load pass, then the
+own no-SOURCE branch runs -- the inbox drain, then the morning-of pass,
+then the load pass, then the
 plan reconciling pass, labeled ``pull`` -- via the shared
 ``_run_drain_passes`` helper (connectors Req 12.1-12.3), regardless of
 whether the pull itself reported a failure or no connector was configured
@@ -305,6 +308,7 @@ from fitdocs.wellness.engine import SeriesReport, SeriesStatus, rebuild_series
 if TYPE_CHECKING:
     from fitdocs.index.handoff import HandoffCollector
     from fitdocs.index.refresh import IndexReport, ProgressCallback
+    from fitdocs.morning.engine import MorningReport
 
 _EXIT_SUCCESS: int = 0
 """Everything written and/or skipped; no failures (an all-skipped run, too)."""
@@ -760,6 +764,48 @@ def _report_index_command(report: IndexReport) -> None:
         console.print(f"Could not refresh {producer}: {error}")
 
 
+def _run_morning_pass(data_root: Path) -> bool:
+    try:
+        from fitdocs.morning.engine import run_morning_pass
+
+        report = run_morning_pass(data_root)
+        _report_morning(report)
+        return report.failed
+    except Exception as exc:
+        Console(markup=False, highlight=False, soft_wrap=True).print(
+            f"Morning of: not refreshed; {type(exc).__name__}: {exc}."
+        )
+        return True
+
+
+def _report_morning(report: MorningReport) -> None:
+    console = Console(markup=False, highlight=False, soft_wrap=True)
+    if report.unavailable:
+        console.print(
+            "Morning of: not refreshed; the wellness series could not be read: "
+            f"{report.unavailable}."
+        )
+    updated = sum(page.outcome == "updated" for page in report.pages)
+    removed = sum(page.outcome == "removed" for page in report.pages)
+    clauses = []
+    if updated:
+        clauses.append(f"{updated} {'page' if updated == 1 else 'pages'} updated")
+    if removed:
+        clauses.append(f"{removed} {'block' if removed == 1 else 'blocks'} removed")
+    if clauses:
+        console.print(f"Morning of: {', '.join(clauses)}.")
+    for page in report.pages:
+        if page.outcome == "failed":
+            console.print(f"Morning of: could not update {page.doc}: {page.detail}")
+    if report.without_region > 0 and report.series_has_values:
+        count = report.without_region
+        console.print(
+            f"Morning of: {count} {'page has' if count == 1 else 'pages have'} "
+            "no morning-of region (written by an older fitdocs, or the region "
+            "markers were removed); run 'fitdocs regen' to add it."
+        )
+
+
 @app.command("sync")
 def sync_command(
     source: Path | None = _SOURCE_ARGUMENT,
@@ -836,6 +882,7 @@ def sync_command(
         except HoldRecordError as exc:
             _hold_record_error(exc)
         _report(report, command="sync")
+        morning_failed = _run_morning_pass(data_root)
         # The load pass runs after writing documents (Req 8.1), honoring --no-prompt.
         load_report = _run_load_pass(
             data_root, session=_build_session(no_prompt=no_prompt)
@@ -852,6 +899,7 @@ def sync_command(
             failed=bool(report.failures)
             or bool(load_report.failures)
             or plan_report.failed
+            or morning_failed
         )
         return
 
@@ -927,6 +975,7 @@ def _run_drain_passes(
     except HoldRecordError as exc:
         _hold_record_error(exc)
     _report_drain(drain_report, command=command)
+    morning_failed = _run_morning_pass(data_root)
     # The load pass runs after the drain (Req 2.1), honoring --no-prompt exactly
     # as the explicit-source path does (Req 2.5).
     load_report = _run_load_pass(data_root, session=_build_session(no_prompt=no_prompt))
@@ -948,6 +997,7 @@ def _run_drain_passes(
         )
         or bool(load_report.failures)
         or plan_report.failed
+        or morning_failed
     )
 
 
@@ -1034,6 +1084,7 @@ def regen_command(
     )
     _report(report, command="regen")
     _report_wellness_series(series_report)
+    morning_failed = _run_morning_pass(data_root)
     # regen is always non-interactive, which makes its load pass restore-only:
     # computed load is re-derived from the preserved payload, no prompting (7.4).
     load_report = _run_load_pass(data_root, session=NonInteractiveSession())
@@ -1048,6 +1099,7 @@ def regen_command(
         or bool(load_report.failures)
         or plan_report.failed
         or series_report.status == SeriesStatus.FAILED
+        or morning_failed
     )
 
 

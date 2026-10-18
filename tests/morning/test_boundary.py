@@ -127,17 +127,31 @@ def _modules(source: str, module: str) -> set[str]:
     return modules
 
 
+def _guard_module_set(sources: dict[str, str]) -> None:
+    assert {module.removesuffix(".__init__") for module in sources} == {
+        "fitdocs.morning",
+        "fitdocs.morning.block",
+        "fitdocs.morning.docedit",
+        "fitdocs.morning.engine",
+    }, "imports: module set"
+
+
+def _guard_module_imports(module: str, source: str) -> None:
+    key = module.removesuffix(".__init__")
+    assert key in _ALLOWED_IMPORTS, f"imports: unlisted module {module}"
+    external = {
+        target
+        for target in _modules(source, module)
+        if target.split(".")[0] not in sys.stdlib_module_names
+    }
+    assert external == _ALLOWED_IMPORTS[key], f"imports: {module}: {external}"
+
+
 def _guard_imports(root: Path) -> None:
-    for module, source in _sources(root, _PACKAGE).items():
-        key = module.removesuffix(".__init__")
-        assert key in _ALLOWED_IMPORTS, f"imports: unlisted module {module}"
-        external = {
-            target
-            for target in _modules(source, module)
-            if target.split(".")[0] not in sys.stdlib_module_names
-        }
-        # Task 3.2 closes this staged upper bound to exact equality.
-        assert external <= _ALLOWED_IMPORTS[key], f"imports: {module}: {external}"
+    sources = _sources(root, _PACKAGE)
+    _guard_module_set(sources)
+    for module, source in sources.items():
+        _guard_module_imports(module, source)
 
 
 def _guard_forbidden(root: Path) -> None:
@@ -170,12 +184,14 @@ def _guard_network(root: Path) -> None:
 
 
 def _guard_reverse(root: Path) -> None:
+    engine_importers = set()
     for module, source in _sources(root, "fitdocs").items():
         for target in _import_targets(source, module):
             if _under(target, "fitdocs.morning.engine"):
-                assert module == "fitdocs.cli", f"reverse: {module}: {target}"
+                engine_importers.add(module)
             if _under(module, "fitdocs.render"):
                 assert not _under(target, _PACKAGE), f"reverse: {module}: {target}"
+    assert engine_importers == {"fitdocs.cli"}, f"reverse: {engine_importers}"
 
 
 _GUARDS: dict[str, Callable[[Path], None]] = {
@@ -212,6 +228,34 @@ def test_allowed_imports() -> None:
     _guard_imports(_MORNING_ROOT)
 
 
+_SANCTIONED = {
+    "__init__": '"""Synthetic morning package."""\n',
+    "block": (
+        "import fitdocs.wellness\n"
+        "import fitdocs.recovery\n"
+        "import fitdocs.render.format\n"
+        "import fitdocs.render.attribution\n"
+        "import fitdocs.render.charts.kit\n"
+        "import fitdocs.render.charts.kit.format\n"
+    ),
+    "docedit": "import fitdocs.contract\nimport fitdocs.docmerge\n",
+    "engine": (
+        "import fitdocs.contract\n"
+        "import fitdocs.docio\n"
+        "import fitdocs.docmerge\n"
+        "import fitdocs.layout\n"
+        "import fitdocs.wellness\n"
+        "import fitdocs.morning.block\n"
+        "import fitdocs.morning.docedit\n"
+    ),
+}
+
+
+def _sanctioned(root: Path) -> None:
+    for name, source in _SANCTIONED.items():
+        (root / f"{name}.py").write_text(source, encoding="utf-8")
+
+
 def test_allowed_imports_accepts_sanctioned_dependencies(tmp_path: Path) -> None:
     sources = {
         "__init__": '"""Synthetic morning package."""\n',
@@ -236,20 +280,79 @@ def test_allowed_imports_accepts_sanctioned_dependencies(tmp_path: Path) -> None
     _guard_forbidden(tmp_path)
 
 
-def test_staged_allowed_imports_accepts_partial_block(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("module", "dependency"),
+    [
+        ("block", "fitdocs.wellness"),
+        ("block", "fitdocs.recovery"),
+        ("block", "fitdocs.render.format"),
+        ("block", "fitdocs.render.attribution"),
+        ("block", "fitdocs.render.charts.kit"),
+        ("block", "fitdocs.render.charts.kit.format"),
+        ("docedit", "fitdocs.contract"),
+        ("docedit", "fitdocs.docmerge"),
+        ("engine", "fitdocs.contract"),
+        ("engine", "fitdocs.docio"),
+        ("engine", "fitdocs.docmerge"),
+        ("engine", "fitdocs.layout"),
+        ("engine", "fitdocs.wellness"),
+        ("engine", "fitdocs.morning.block"),
+        ("engine", "fitdocs.morning.docedit"),
+    ],
+)
+def test_final_allowed_imports_rejects_each_missing_dependency(
+    tmp_path: Path, module: str, dependency: str
+) -> None:
+    _sanctioned(tmp_path)
+    (tmp_path / f"{module}.py").write_text(
+        _SANCTIONED[module].replace(f"import {dependency}\n", ""), encoding="utf-8"
+    )
+    with pytest.raises(AssertionError, match=f"imports: fitdocs.morning.{module}"):
+        _guard_module_imports(
+            f"fitdocs.morning.{module}", (tmp_path / f"{module}.py").read_text()
+        )
+
+
+def test_final_allowed_imports_rejects_partial_block(tmp_path: Path) -> None:
+    _sanctioned(tmp_path)
     (tmp_path / "block.py").write_text(
         "from fitdocs.wellness import Metric\n", encoding="utf-8"
     )
-    _guard_imports(tmp_path)
+    with pytest.raises(AssertionError, match="imports: fitdocs.morning.block"):
+        _guard_module_imports(
+            "fitdocs.morning.block", (tmp_path / "block.py").read_text()
+        )
 
 
-def test_staged_allowed_imports_rejects_extra_dependency(tmp_path: Path) -> None:
+@pytest.mark.parametrize("partial", [False, True])
+def test_allowed_imports_rejects_extra_dependency(
+    tmp_path: Path, partial: bool
+) -> None:
+    _sanctioned(tmp_path)
     (tmp_path / "block.py").write_text(
-        "from fitdocs.wellness import Metric\nfrom fitdocs import sync\n",
+        ("from fitdocs.wellness import Metric\n" if partial else _SANCTIONED["block"])
+        + "from fitdocs import sync\n",
         encoding="utf-8",
     )
-    with pytest.raises(AssertionError, match="imports"):
-        _guard_imports(tmp_path)
+    with pytest.raises(AssertionError, match="imports: fitdocs.morning.block"):
+        _guard_module_imports(
+            "fitdocs.morning.block", (tmp_path / "block.py").read_text()
+        )
+
+
+@pytest.mark.parametrize("module", ["__init__", "block", "docedit", "engine"])
+def test_final_module_set_rejects_missing_module(tmp_path: Path, module: str) -> None:
+    _sanctioned(tmp_path)
+    (tmp_path / f"{module}.py").unlink()
+    with pytest.raises(AssertionError, match="imports: module set"):
+        _guard_module_set(_sources(tmp_path, _PACKAGE))
+
+
+def test_final_module_set_rejects_extra_module(tmp_path: Path) -> None:
+    _sanctioned(tmp_path)
+    (tmp_path / "extra.py").write_text("", encoding="utf-8")
+    with pytest.raises(AssertionError, match="imports: module set"):
+        _guard_module_set(_sources(tmp_path, _PACKAGE))
 
 
 def test_forbidden_names() -> None:
@@ -307,6 +410,9 @@ def test_reverse_imports() -> None:
 def test_scans_reject_synthetic_modules(
     tmp_path: Path, guard: str, source: str
 ) -> None:
+    if guard == "imports":
+        _sanctioned(tmp_path)
+        source = _SANCTIONED["block"] + source
     (tmp_path / "block.py").write_text(source, encoding="utf-8")
     with pytest.raises(AssertionError, match=guard):
         _GUARDS[guard](tmp_path)
@@ -335,6 +441,9 @@ def test_reverse_scan_accepts_the_cli(tmp_path: Path) -> None:
 def test_reverse_scan_rejects_synthetic_importers(
     tmp_path: Path, module: str, source: str
 ) -> None:
+    (tmp_path / "cli.py").write_text(
+        "from fitdocs.morning import engine\n", encoding="utf-8"
+    )
     path = tmp_path / module
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(source, encoding="utf-8")
@@ -344,4 +453,10 @@ def test_reverse_scan_rejects_synthetic_importers(
 
 def test_reverse_scan_rejects_an_empty_walk(tmp_path: Path) -> None:
     with pytest.raises(AssertionError, match="no Python files"):
+        _guard_reverse(tmp_path)
+
+
+def test_reverse_scan_rejects_missing_cli_importer(tmp_path: Path) -> None:
+    (tmp_path / "cli.py").write_text("", encoding="utf-8")
+    with pytest.raises(AssertionError, match="reverse"):
         _guard_reverse(tmp_path)
