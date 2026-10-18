@@ -70,6 +70,35 @@ All 473 root queue frontmatters and related preview bodies plus the roadmap
 were checked. The related October 6 item covers HTTP readiness and unresolved
 propagation timeouts; it does not own this source-validation/write mechanism.
 
+### Second symptom: the invalid-section diagnostic printed twice (2026-10-18)
+
+DOCS workflow
+[39127165921, attempt 1](https://github.com/joshua-stauffer/fitdocs/actions/runs/39127165921/attempts/1),
+on a branch whose only change was one sentence in `docs/wellness.md` and its
+literal in `tests/morning/test_docs_morning.py` (head `a67ab0a`), ended
+`1 failed, 753 passed, 3 skipped in 27.26s`. The failing test was
+`test_live_preview_post_delete_wait_requires_last_good_readiness`, at the
+assertion after the deliberate `section: Nowhere` break
+(`tests/sitebuild/test_preview.py:1189`,
+`assert out.text().splitlines() == reference_lines`):
+
+```text
+Left contains one more item: "why.md: section: 'Nowhere' is not a section; use one of: Home, Why, Get started, Guides, Working with LLMs, Reference, Extend, Project"
+```
+
+The `unchanged_across("break", …)` wait had already seen exactly one copy,
+which was stable. A second identical copy appeared during the following
+`time.sleep(1.0)`. Both copies are the complete-source message, not the
+`no frontmatter` message above. So the preview validated the same finished
+broken source twice.
+
+A non-atomic `write_text` that the polling watcher sees as two changes
+(truncate, then write) would explain this. That is unverified: no
+watcher-event or read trace was captured. The pre-rebase head `ed7d489` passed
+DOCS. The rebased head passed on an unchanged rerun of the failed job
+(attempt 2). Step 3's atomic fixture publication, if confirmed, should remove
+both symptoms. Re-check this one too.
+
 ## How to pick it up
 
 1. Read the writer, polling preview loop, source reader and failing test above.
