@@ -123,15 +123,36 @@ def _x_axis_texts(svg: str) -> list[str]:
     return re.findall(r"<text [^>]*>(.*?)</text>", axis.group(1))
 
 
-@BAND_KINDS
-@pytest.mark.parametrize(("weeks", "width"), [(26, 720), (52, 720), (8, 320)])
-def test_the_first_band_label_is_never_cut_at_the_left_edge(
+# Each pair below fails without the reservation. Left out on purpose: stacked-100
+# over dates (its wide ``100%`` y labels already leave the room, so dates cannot
+# tell) and heatmap at 8 weeks / 320 px (its band is wide enough as it is).
+_DATE_CASES = [
+    (name, weeks, width)
+    for name in ("bar", "box", "heatmap")
+    for weeks, width in ((26, 720), (52, 720), (8, 320))
+    if (name, weeks, width) != ("heatmap", 8, 320)
+]
+
+
+@pytest.mark.parametrize(("name", "weeks", "width"), _DATE_CASES)
+def test_the_first_date_label_reads_in_full_at_the_left_edge(
     name: str, weeks: int, width: int
 ) -> None:
     svg = _svg(name, _weeks(weeks), width=width)
     labels = _x_axis_texts(svg)[:-1]  # the last text is the axis title
     assert labels[0] == "2026-01-05"
     assert not any(label.endswith("…") for label in labels)
+
+
+@BAND_KINDS
+def test_the_first_long_category_label_reads_in_full_at_the_left_edge(
+    name: str,
+) -> None:
+    # Twelve 17-character categories at 480 px: the label fits its band pitch
+    # but not the space left of its centre, for stacked-100 as for the rest.
+    xs: list[Value] = [f"Zone{'x' * 11}{i:02d}" for i in range(12)]
+    labels = _x_axis_texts(_svg(name, xs, width=480))[:-1]
+    assert labels[0] == xs[0]
 
 
 @pytest.mark.parametrize("name", ["bar", "stacked-100", "box"])

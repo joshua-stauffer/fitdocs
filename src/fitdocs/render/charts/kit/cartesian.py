@@ -10,7 +10,6 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from fitdocs.render.charts.kit import frame
 from fitdocs.render.charts.kit.data import Value, ValueKind, to_number
 from fitdocs.render.charts.kit.format import (
     ABSENT,
@@ -316,23 +315,27 @@ def band_x_axis(
     left edge, so it is cut at the canvas edge unless the left margin holds its
     half width: this widens the margin by exactly the shortfall (the way the
     numeric kinds reserve their first tick's overhang), re-planning because the
-    narrower plot can thin the labels differently. A label longer than the room
-    its band pitch allows is fitted to that room, which the shortfall honours;
-    a label wider than a quarter of the canvas reserves only that quarter (the
-    rest is cut at the canvas edge as before), so one long category cannot
-    squeeze the plot.
+    narrower plot can thin the labels differently. A label wider than a quarter
+    of the canvas reserves only that quarter (the rest is cut at the canvas
+    edge by :func:`~fitdocs.render.charts.kit.frame.axis`, as before), so one
+    long category cannot squeeze the plot.
+
+    At most ``_EDGE_PASSES`` plans are built. Each pass adds the shortfall plus
+    a slack, so it normally settles in two; if it does not, the last pass's plan
+    is returned as it is and the label falls back to the edge clamp (cut, never
+    outside the canvas). There is no error and no note.
     """
     extra = 0.0
     for _ in range(_EDGE_PASSES):
         plan = plan_with(label_width + extra)
         scale = band_scale(labels, plan.plot.left, plan.plot.right, font_px=FONT_TEXT)
         shown = min(
-            text_width(clean_text(labels[0]), FONT_TEXT),
-            frame.band_label_room(scale),
-            _EDGE_SHARE * plan.width,
+            text_width(clean_text(labels[0]), FONT_TEXT), _EDGE_SHARE * plan.width
         )
         short = shown / 2 - (scale.centre(0) - PAD)
         if short <= 0:
             break
+        # Out of passes without settling: the loop ends and returns this pass's
+        # plan (see the docstring); the clamp in frame.axis keeps the label inside.
         extra += short + _EDGE_SLACK
     return plan, scale

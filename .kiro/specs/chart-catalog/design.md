@@ -690,14 +690,19 @@ budget; its at-bound chart retains the 80,000-byte ceiling.
   columns; for number columns the distinct present values ascending; an
   absent x or y value is a last band labelled `—`.
 - Draw:
-  - x bands: `scales.band_scale(labels, plot.left, plot.right,
-    font_px=FONT_TEXT)` (chart-kit's width-based labelling);
+  - x bands: `cartesian.band_x_axis` over `scales.band_scale(labels,
+    plot.left, plot.right, font_px=FONT_TEXT)` (chart-kit's width-based
+    labelling; amended 2026-10-18: the left margin is widened so the first
+    label is whole, after the height is planned);
   - y bands: a `BandScale` built directly (top to bottom) whose `labelled`
     is every row when the row pitch ≥ `FONT_TEXT + 2`, else every k-th row
     from the first with the smallest k for which `k × pitch ≥ FONT_TEXT + 2`;
     y labels fitted to 40% of the width (`fit_text`);
-  - auto height: row pitch `clamp(plot.width / nx, 16, 32)`, height planned
-    so `plot.height == ny × pitch` (clamped to 160–1200); with `height`
+  - auto height: row pitch `clamp(plot.width / nx, 16, 32)` where `plot.width`
+    is the probe plan's (before the first-label margin, amended 2026-10-18, so
+    the drawn plot is a few px narrower and the pitch is a hair above the
+    drawn column pitch), height planned so `plot.height == ny × pitch`
+    (clamped to 160–1200); with `height`
     set, rows share the plot height;
   - axes through `frame.axis` (x `BOTTOM`, y `LEFT`) with `axis_title` of x
     and y; legend through `cells`; no gridlines; no undrawn notes (absent
