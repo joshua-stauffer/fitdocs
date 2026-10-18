@@ -115,7 +115,9 @@ class DocContext:
     prepared route-map inputs when the sync engine could plan and resolve them
     (Req 1.1); it defaults to ``None`` so every existing constructor call stays
     valid. :attr:`user_frontmatter` carries an existing document's user-owned
-    frontmatter lines verbatim (effort-tags Req 1.2, 1.3, 4.5, 4.6); it
+    frontmatter lines verbatim (effort-tags Req 1.2, 1.3, 4.5, 4.6), preceded
+    by its ``load_*`` lines when the sync engine carries those (a hand-authored
+    or prior-format ``load`` region); it
     defaults to ``()`` so a first-time render, and every existing constructor
     call, carries nothing forward. :attr:`identity` carries the page base's
     identity values (activity-identity Req 5.4, 5.5); it defaults to ``None``,
@@ -135,7 +137,9 @@ class DocContext:
     tz: tzinfo
     map_data: MapData | None = None  # None: no positions, tiles unavailable,
     #   or strength modality
-    user_frontmatter: tuple[str, ...] = ()  # verbatim user-owned lines, or ()
+    user_frontmatter: tuple[
+        str, ...
+    ] = ()  # verbatim user-owned (and carried load_*) lines, or ()
     identity: SourceIdentity | None = None  # the page base's identity values; None
     #   derives them from ``activity`` (every render-only caller)
     channel_provenance: ChannelProvenance | None = None  # which file supplied

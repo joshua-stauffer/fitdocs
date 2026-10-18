@@ -2128,7 +2128,8 @@ def _page_task(
         # re-derives them from a COMPUTED region and recomputes the rest. It
         # skips a FOREIGN (hand-authored) or SUPERSEDED (prior-format) region
         # and so would never put them back -- carry their lines over verbatim
-        # so the pass's "left untouched" holds end to end. A COMPUTED region's
+        # (placed right after the managed block) so the pass's "left
+        # untouched" holds end to end. A COMPUTED region's
         # keys are deliberately not carried: the pass restores them from the
         # payload. A missing or damaged region carries nothing (the merge
         # below rejects a damaged one before any write).
@@ -2137,7 +2138,9 @@ def _page_task(
         except (RegionError, LoadDocError):
             load_state = None
         if load_state in (RegionState.FOREIGN, RegionState.SUPERSEDED):
-            carried = (*carried, *load_key_lines(existing_text.split("\n")))
+            # Ahead of the user-owned lines, so the carried user-owned lines
+            # stay last before the closing fence (wiki-contract Req 6.6).
+            carried = (*load_key_lines(existing_text.split("\n")), *carried)
 
     # Roles (activity-identity Req 5.1, 5.2, 7.1): the page's listed files plus
     # the incoming one, each resolved through the archive and parsed once, then

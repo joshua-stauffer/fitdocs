@@ -98,13 +98,18 @@ def build_frontmatter(ctx: DocContext) -> str:
     managed part above, produced by the single ``yaml.safe_dump`` call, and
     ``ctx.user_frontmatter`` -- an existing document's user-owned frontmatter
     lines, carried verbatim, one per line, after the managed part and before
-    the closing fence. That text is copied, never re-parsed or re-serialized,
+    the closing fence. When the existing ``load`` region is hand-authored or
+    prior-format, the sync engine also puts the document's ``load_*`` lines
+    first in this field, so they sit right after the managed part and before
+    the user-owned lines; this function does not tell them apart and never
+    generates those keys itself. That text is copied, never re-parsed or re-serialized,
     so this function names ``yaml`` only for ``safe_dump``. Precondition
     (documented, not checked): no element of ``ctx.user_frontmatter``
     may contain ``"\\n"``. Its producer,
     :func:`fitdocs.contract.user_owned_lines` over a document's
-    ``split("\\n")`` lines, cannot yield one, and the sync engine supplies
-    this field from that producer on every rewrite. An empty tuple (the default,
+    ``split("\\n")`` lines, cannot yield one (nor can
+    :func:`fitdocs.contract.load_key_lines`), and the sync engine supplies
+    this field from those producers on every rewrite. An empty tuple (the default,
     and every render of a document that has never carried a user-owned key)
     reproduces the exact block this function produced before the carry
     existed.

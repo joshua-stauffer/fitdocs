@@ -434,7 +434,7 @@ def test_real_regen_resets_frontmatter_then_restore_readds_it(
 
     # The REAL regeneration: re-render from the archive, preserving regions but
     # resetting frontmatter to generated values (the load keys are owned by this
-    # feature and re-derived, so regen drops them).
+    # feature and re-derived, so regen drops them for a computed region).
     regen(data_root, athlete=load_athlete_inputs(data_root), tz=_TZ, tiles=_TILES)
     run = _doc(data_root, "run")  # same identity -> same document
     regen_text = run.read_text(encoding="utf-8")
@@ -484,6 +484,10 @@ def test_real_regen_keeps_load_keys_over_a_region_the_pass_skips(
     computed = run.read_text(encoding="utf-8")
     keys_before = read_frontmatter_load(computed)
     assert set(keys_before) == {"load_value", "load_methodology", "load_basis"}
+    # Add a user-owned key; the regenerated page must still end with the
+    # carried load lines and then this one.
+    head, _, rest = computed.partition("\n---\n")
+    computed = f"{head}\neffort: race\n---\n{rest}"
     skipped_region = replace_load_region(computed, replacement)
     run.write_text(skipped_region, encoding="utf-8")
     assert classify_load_region(skipped_region).state is expected_state
@@ -495,6 +499,12 @@ def test_real_regen_keeps_load_keys_over_a_region_the_pass_skips(
     after = run.read_text(encoding="utf-8")
     assert _rel(data_root, run) in _docs_of(report.skipped)
     assert read_frontmatter_load(after) == keys_before
+    block = after.split("\n---\n")[0].split("\n")
+    load_lines = [ln for ln in block if ln.startswith("load_")]
+    assert len(load_lines) == 3
+    # Managed block, then the carried load lines, then the user-owned line,
+    # then the fence (wiki-contract Req 6.6).
+    assert block[-4:] == [*load_lines, "effort: race"]
     assert _load_region(after) == replacement
 
 
