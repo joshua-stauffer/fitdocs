@@ -139,7 +139,7 @@ touches that snippet and no allowlist entry exists.
 No test needs editing in the release commit. The release-note pins that
 assert an entry sits under `## [Unreleased]` read the changelog through
 `tests/_changelog_view.py`. Each pin is anchored to the last release its
-entry postdates (`0.1.0` for everything shipped before the next cut): the
+entry postdates (the version constant in that helper; the first release for everything shipped before the next cut): the
 view treats `[Unreleased]` plus every release newer than that anchor as the
 unreleased section, so the pins hold before the cut, at it, and after later
 work lands. An entry misplaced into the anchor release or an older one is
