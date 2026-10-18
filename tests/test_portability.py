@@ -20,8 +20,9 @@ The invariants (design sec. "Document Format Contract"; Req 5.3, 5.4, 5.5, 2.7):
   document's directory. Moving the data root as a whole never breaks a link.
 * **No plugin-dependent syntax** -- beyond the YAML frontmatter, the fitdocs
   region-marker HTML comments (``<!-- fitdocs:(begin|end):<id> -->``), and the
-  one generated-document provenance banner (``<!-- fitdocs:generated...-->``,
-  wiki-contract Req 4.2-4.4), the body carries no ``[[wikilinks]]``, no other
+  generated-document provenance banner (``<!-- fitdocs:generated...-->``,
+  wiki-contract Req 4.2-4.4), and the morning block's fingerprint stamp,
+  the body carries no ``[[wikilinks]]``, no other
   HTML comments or raw HTML tags, no plugin code fences
   (``dataview``/``mermaid``/...), and no ``{{ template }}`` directives -- it
   renders in any plain markdown viewer with zero plugins.
@@ -49,8 +50,12 @@ from fitdocs.athlete import ATHLETE_FILE, load_athlete_inputs
 from fitdocs.contract import GENERATED_PREFIX
 from fitdocs.declaration import DECLARATION_FILENAME
 from fitdocs.layout import WORKOUTS_DIR
+from fitdocs.morning.block import STAMP_PATTERN
+from fitdocs.morning.engine import run_morning_pass
 from fitdocs.sync import sync
+from fitdocs.wellness import Metric
 from tests.fixtures import builder
+from tests.morning.builders import series_value, stage_series, wellness_series
 
 # PINNED timezone: a FIXED -06:00 offset (never the system zone) so document
 # stems are byte-stable wherever the suite runs, exactly as the golden and
@@ -84,7 +89,8 @@ _PLUGIN_FENCE_LANGS = frozenset(
 
 # The only HTML comments a portable fitdocs document may contain: the region
 # markers ``<!-- fitdocs:begin:<id> -->`` / ``<!-- fitdocs:end:<id> -->`` and the
-# one generated-document provenance banner (wiki-contract Req 4.2-4.4).
+# generated-document provenance banner (wiki-contract Req 4.2-4.4), and a
+# morning fingerprint comment matching the shared STAMP_PATTERN.
 _REGION_COMMENT = re.compile(r"<!-- fitdocs:(?:begin|end):[a-z]+ -->")
 
 _IMAGE_LINK = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
@@ -141,8 +147,10 @@ def _assert_document_invariants(
     assert "[[" not in body, "wikilinks are not portable"
     assert "{{" not in body, "template directives are not portable"
     for comment in _HTML_COMMENT.findall(body):
-        assert _REGION_COMMENT.fullmatch(comment) or comment.startswith(
-            GENERATED_PREFIX
+        assert (
+            _REGION_COMMENT.fullmatch(comment)
+            or comment.startswith(GENERATED_PREFIX)
+            or STAMP_PATTERN.fullmatch(comment)
         ), f"foreign HTML comment: {comment!r}"
     assert not _RAW_HTML_TAG.findall(body), "raw HTML tags are not portable"
     plugin_fences = [
@@ -270,6 +278,32 @@ def test_committed_goldens_satisfy_portability_form() -> None:
     for doc in goldens:
         text = doc.read_text(encoding="utf-8")
         _assert_document_invariants(text, doc.parent, check_resolution=False)
+
+
+def test_filled_morning_page_satisfies_portability_invariants(tmp_path: Path) -> None:
+    """Apply the existing invariant checker to a native filled workout page."""
+    from datetime import date
+
+    doc = _synced_documents(tmp_path, with_athlete=True)[0]
+    root = doc.parent.parent
+    stage_series(
+        root,
+        wellness_series(
+            [
+                series_value(
+                    date(2021, 9, 7),
+                    47,
+                    metric=Metric.RESTING_HR_BPM,
+                    source="intervals-icu",
+                    canonical=True,
+                )
+            ]
+        ),
+    )
+    run_morning_pass(root)
+    text = doc.read_text(encoding="utf-8")
+    assert "## Morning Of\n" in text
+    _assert_document_invariants(text, doc.parent, check_resolution=True)
 
 
 # --- negative controls: the invariant checks actually bite (RED evidence) -----

@@ -472,7 +472,7 @@ wiki-contract and analytics-index amendment and criterion numbers.
   - _Boundary: MorningRegionEdit_
   - _Depends: 1.3_
 
-- [ ] 3. The morning-of pass and its wiring
+- [x] 3. The morning-of pass and its wiring
 
 - [x] 3.1 Run the pass over every workout page and rewrite only the regions that changed
   - `morning/engine.py` per design § MorningPass: `PageOutcome`,
@@ -605,7 +605,7 @@ wiki-contract and analytics-index amendment and criterion numbers.
     same commands as before.
   - _Requirements: 7.1, 7.9, 8.1, 8.3, 8.4, 8.5, 8.7, 8.8, 9.2_
 
-- [ ] 3.3 Prove the block end to end and register the confinement entry point
+- [x] 3.3 Prove the block end to end and register the confinement entry point
   - **Tests** (`tests/morning/test_e2e.py`, CliRunner, `TZ` pinned):
     `fitdocs sync SOURCE` over `small_sport_fit_bytes` files on two dates
     with a staged series: both pages carry their block in the same run, a
@@ -801,6 +801,34 @@ wiki-contract and analytics-index amendment and criterion numbers.
   - _Requirements: 9.1, 9.4, 11.3, 12.1, 12.2_
 
 ## Implementation Notes
+
+- Astra decision 13 (2026-10-18, task 3.3): native CLI/confinement
+  evidence retains decision 10. A separate bounded exception permits
+  minimal faults only in the new STAMP_PATTERN portability allowlist
+  alternative, the sync-morning EntryPoint record (omission/id, one wrong
+  callable, duplicate for exactly-once), and declared boolean conditions
+  of a new directly tested morning predicate. These are checker/registry/
+  predicate faults, not production kills. Preserve consumer assertions,
+  fixtures, expectations, other implementation and configuration bytes;
+  disclose differing mutant whole-file hashes and audit unchanged byte
+  segments. Observe the intended failure, restore the whole file/hash and
+  GREEN, purging test assertion-rewrite caches before each uv pytest
+  process. Native pass-disabled confinement non-vacuity is independently
+  required. No new unpinned acceptance waiver or broader boundary applies.
+- Astra 13a: sync-morning may keep one private transient data-root slot
+  in test_confinement.py. Prepare and run clear it; run publishes only
+  after real CLI success. The predicate consumes/clears it before reading
+  and requires the same measured touched workout page to have a nonempty
+  actual morning region. Run does not assert that region outcome. A
+  private explicit-root helper may separate direct content/touched
+  controls; only declared N boolean spans are fault-eligible. Lifecycle,
+  root capture and I/O remain outside that exception. No cwd, EntryPoint,
+  shared harness, module or runtime interface changes. Review reset and
+  isolation, and replay disabled production pass reaching the native
+  non-vacuity assertion. The full decision defines lifecycle and read bounds.
+
+  Decision artifact for 13 and 13a:
+  `/private/tmp/workout-wellness-astra-portability-registry-faults.md`.
 
 - 3.2 accepted after independent review and fresh completion verification:
   all three CLI flows run morning after their page report (regen after its
@@ -1116,3 +1144,28 @@ wiki-contract and analytics-index amendment and criterion numbers.
   deleting each entry now fails its own control in
   `test_scans_reject_synthetic_modules`, and denying the CLI exception
   fails `test_reverse_scan_accepts_the_cli`. None remain unpinned.
+
+- 3.3 accepted after independent review and fresh completion verification:
+  native two-date source sync and archived drain populate morning blocks
+  in the same run; repeated page bytes/mtimes and report silence,
+  copied-root UTC/Kiritimati determinism, selective revision with a
+  populated out-of-window page, Garmin stages/attribution, current index
+  fingerprints and damaged-marker reporting all discriminate. Fresh
+  required tests passed 583 cases and native regressions passed 72,
+  with Ruff, formatting and mypy clean. All 26 new/changed assertion
+  sites and both retained native driver observables reached intended
+  failures. Independent replay confirmed 26 native-source faults
+  (38 observations), one portability-checker fault, six registry faults
+  and two predicate faults (ten observations across those nine bounded
+  Astra13 faults), plus two reviewer native-source faults; every intended
+  failure restored GREEN. The disclosed morning-fold-only mutation stays
+  GREEN because load independently rejects the same damaged markers;
+  it earns no kill credit. Existing 3.2 fold tests remain preserved.
+  Eight assigned criteria have new native pins; the stricter pass-only
+  filesystem guarantee in 12.3 and explicitly named subclauses retain
+  freshly executed existing coverage. No new unpinned exception applies.
+  Final P is the STAMP_PATTERN fullmatch alternative, R the sync-morning
+  EntryPoint, and N only _morning_write_observed's workout-parent equality
+  and nonempty-content condition. _SYNC_MORNING_DATA_ROOT follows the
+  approved clear/publish/consume lifecycle. Neither EntryPoint nor the
+  shared driver changed. Full-suite proof is due again in 4.1.

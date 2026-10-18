@@ -83,7 +83,9 @@ from fitdocs.connectors.protocol import (
 from fitdocs.connectors.pull import PullOptions, run_pull
 from fitdocs.connectors.secrets import Redactor
 from fitdocs.connectors.settings import ConnectorInstance, load_connectors_settings
+from fitdocs.contract import MORNING_REGION
 from fitdocs.declaration import DECLARATION_FILENAME
+from fitdocs.docmerge import extract_regions
 from fitdocs.history import run_history
 from fitdocs.inbox import (
     create_inbox_paths,
@@ -1582,8 +1584,71 @@ def _wrote_the_recovery_document(touched: Sequence[str]) -> bool:
     return "data/recovery/recovery.md" in touched
 
 
+_SYNC_MORNING_DATA_ROOT: Path | None = None
+
+
+def _prepare_sync_morning(data_root: Path, source_dir: Path) -> None:
+    global _SYNC_MORNING_DATA_ROOT
+    _SYNC_MORNING_DATA_ROOT = None
+    _stage_sources(source_dir)
+    (data_root / SETTINGS_FILE).write_text("[tiles]\nenabled = false\n")
+    write_series(
+        data_root,
+        [
+            series_value(
+                day,
+                47,
+                metric=Metric.RESTING_HR_BPM,
+                source="synthetic",
+                canonical=True,
+            )
+            for day in (date(2021, 9, 7), date(2021, 9, 8), date(2021, 9, 9))
+        ],
+    )
+
+
+def _run_cli_sync_morning(data_root: Path, source_dir: Path) -> None:
+    global _SYNC_MORNING_DATA_ROOT
+    _SYNC_MORNING_DATA_ROOT = None
+    result = _CLI_RUNNER.invoke(
+        app, ["sync", str(source_dir), "--out", str(data_root), "--no-prompt"]
+    )
+    assert result.exit_code == 0, result.output
+    _SYNC_MORNING_DATA_ROOT = data_root
+
+
+def _morning_write_observed(data_root: Path, touched: Sequence[str]) -> bool:
+    for relative in touched:
+        page = data_root.parent / relative
+        if (
+            page.parent == data_root / WORKOUTS_DIR
+            and page.suffix == ".md"
+            and page.name != DECLARATION_FILENAME
+            and page.is_file()
+        ):
+            content = extract_regions(page.read_text()).get(MORNING_REGION, "")
+            if content.strip():
+                return True
+    return False
+
+
+def _wrote_a_morning_block(touched: Sequence[str]) -> bool:
+    global _SYNC_MORNING_DATA_ROOT
+    data_root = _SYNC_MORNING_DATA_ROOT
+    _SYNC_MORNING_DATA_ROOT = None
+    if data_root is None:
+        return False
+    return _morning_write_observed(data_root, touched)
+
+
 #: Every fitdocs entry point that writes into the data root (Req 7.6).
 WRITING_ENTRY_POINTS: Final[tuple[EntryPoint, ...]] = (
+    EntryPoint(
+        id="sync-morning",
+        prepare=_prepare_sync_morning,
+        run=_run_cli_sync_morning,
+        non_vacuous=_wrote_a_morning_block,
+    ),
     EntryPoint(
         id="recovery",
         prepare=_prepare_recovery,
@@ -3516,6 +3581,38 @@ def test_recovery_is_a_registered_writing_entry_point() -> None:
         _run_cli_recovery,
         _wrote_the_recovery_document,
     )
+
+
+def test_sync_morning_is_a_registered_writing_entry_point() -> None:
+    assert [entry.id for entry in WRITING_ENTRY_POINTS].count("sync-morning") == 1
+    entry = next(entry for entry in WRITING_ENTRY_POINTS if entry.id == "sync-morning")
+    assert (entry.prepare, entry.run, entry.non_vacuous) == (
+        _prepare_sync_morning,
+        _run_cli_sync_morning,
+        _wrote_a_morning_block,
+    )
+
+
+@pytest.mark.parametrize("observation", ["filled", "empty", "unrelated"])
+def test_morning_predicate_reads_the_touched_workout_region(
+    tmp_path: Path, observation: str
+) -> None:
+    from tests.morning.builders import workout_page as morning_workout_page
+
+    root = tmp_path / "data"
+    workouts = root / "workouts"
+    workouts.mkdir(parents=True)
+    content = (
+        "   \n" if observation == "empty" else "## Morning Of\n\nSynthetic wellness"
+    )
+    (workouts / "workout.md").write_text(morning_workout_page(morning=content))
+    (root / "unrelated.md").write_text(morning_workout_page(morning="Filled decoy"))
+    touched = (
+        ("data/unrelated.md",)
+        if observation == "unrelated"
+        else ("data/workouts/workout.md",)
+    )
+    assert _morning_write_observed(root, touched) is (observation == "filled")
 
 
 @pytest.mark.parametrize("populated", [True, False], ids=["real-write", "empty-run"])
