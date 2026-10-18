@@ -1,7 +1,7 @@
 ---
 id: 2026-10-12-chart-kit-first-band-label-truncated-at-left-edge
 title: Band x axes cut the first tick label short at the left canvas edge
-status: open
+status: done
 importance: medium
 importance_why: Hits the canonical weekly heatmap and every bar/stacked-100 chart over weeks: the first date label reads `2026-0…`.
 effort: S
@@ -29,3 +29,12 @@ Reported and reproduced by the 2.2 reviewer subagent: heatmap 26 weeks at 720 px
 
 ## How to pick it up
 Open frame.py's BOTTOM band-label branch and layout.plan_frame's `x_label_overhang`. Measure the first band label's left overhang in band kinds (bar, stacked-100, heatmap) like line/area do, or have plan_frame reserve it. Done when the first label of a 26-week band axis at 720 px is untruncated and bar/heatmap/stacked-100 goldens regenerate with the change only at the left margin.
+
+## Resolution (2026-10-18)
+
+Fixed on main at 227729d (review APPROVED). New `cartesian.band_x_axis` widens the left margin by the first
+band label's shortfall (re-planning up to 6 passes; measured max 3; silent fallback to frame.axis's
+edge clamp), capped at 25% of the canvas so a very long first category does not squeeze the plot --
+labels wider than the cap are still cut (recorded in chart-kit design.md, said in the CHANGELOG). Wired
+into bar, stacked-100, box and heatmap; only kit golden heatmap/at_bound.svg moved. The right-edge
+counterpart is queued: .kiro/queue/2026-10-18-band-axis-last-label-cut-at-right-edge.md.
