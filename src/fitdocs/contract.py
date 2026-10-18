@@ -974,13 +974,30 @@ _SESSION_UUID_BYTE_COUNT: Final[int] = 16
 """A canonical UUID is exactly 16 bytes; any other length is malformed."""
 
 
+# What ``yaml.safe_load`` raises. Beyond ``YAMLError`` (syntax and tag errors),
+# SafeLoader's constructors let the builtin's own error escape for a value that
+# is well-formed YAML but not constructible: ``ValueError`` (``2026-02-30``, an
+# out-of-range UTC offset, ``!!int 0b2``), ``AttributeError`` (``!!timestamp
+# foo``), ``LookupError`` (``!!bool maybe``, ``!!int ''``) and ``RecursionError``
+# (pathological nesting). Enumerated, not ``Exception``, so a real bug elsewhere
+# in the call still surfaces.
+_UNCONSTRUCTIBLE_YAML = (
+    yaml.YAMLError,
+    ValueError,
+    AttributeError,
+    LookupError,
+    RecursionError,
+)
+
+
 def parse_frontmatter(text: str) -> dict[str, object] | None:
     """Parse a document's leading ``---``-fenced YAML frontmatter, or ``None``.
 
     Returns the parsed mapping only when ``text``'s *first* line is the fence
     (ignoring surrounding whitespace), a later line closes it, and the block
     between them parses to a YAML mapping. Everything else -- no leading fence,
-    an unterminated block, YAML that fails to parse, or a block that parses to a
+    an unterminated block, YAML that fails to parse or that PyYAML cannot
+    construct (``date: 2026-02-30``), or a block that parses to a
     sequence, a scalar, or nothing -- yields ``None``, which is every command's
     signal that this file is not a fitdocs document (Req 1.2). Never raises.
 
@@ -995,7 +1012,7 @@ def parse_frontmatter(text: str) -> dict[str, object] | None:
             block = "\n".join(lines[1:index])
             try:
                 parsed = yaml.safe_load(block)
-            except yaml.YAMLError:
+            except _UNCONSTRUCTIBLE_YAML:
                 return None
             return parsed if isinstance(parsed, dict) else None
     return None

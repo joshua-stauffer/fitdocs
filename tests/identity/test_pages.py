@@ -146,6 +146,13 @@ def test_garbled_neighbour_is_skipped(tmp_path: Path) -> None:
     assert [r.path for r in records] == [str(page)]
 
 
+def test_unconstructible_yaml_neighbour_is_skipped(tmp_path: Path) -> None:
+    _write(tmp_path, "aaa.md", "---\ntype: workout\ndate: 2026-02-30\n---\nbody\n")
+    page = _write(tmp_path, "bbb.md", _md(session=_SESSION))
+    records = scan_pages(tmp_path).records
+    assert [r.path for r in records] == [str(page)]
+
+
 def test_non_workout_files_are_skipped(tmp_path: Path) -> None:
     _write(tmp_path, "aaa.md", _md(session=_SESSION, workout=False))
     _write(tmp_path, "bbb.txt", _md(session=_SESSION))

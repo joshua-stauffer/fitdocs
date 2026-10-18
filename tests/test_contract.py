@@ -561,6 +561,30 @@ def test_parse_frontmatter_returns_the_fenced_mapping() -> None:
     assert parsed["sources"] == ["fit-archive/aaaa.fit", "fit-archive/bbbb.fit"]
 
 
+# Values that parse as YAML but that PyYAML's SafeLoader cannot *construct*: each
+# raises something other than ``yaml.YAMLError`` out of ``yaml.safe_load``.
+UNCONSTRUCTIBLE_YAML = {
+    "impossible-day": "date: 2026-02-30",
+    "impossible-month": "date: 2026-13-01",
+    "year-zero": "d: 0000-01-01",
+    "offset-out-of-range": "ts: 2026-01-01 10:00:00+24:30",
+    "impossible-hour": "ts: 2026-01-01T25:00:00",
+    "bad-explicit-int": "n: !!int 0b2",
+    "bad-explicit-float": "n: !!float x",
+    "bad-explicit-timestamp": "ts: !!timestamp foo",
+    "empty-explicit-int": "n: !!int ''",
+    "bad-explicit-bool": "b: !!bool maybe",
+    "nested-too-deep": "d: " + "[" * 5000 + "]" * 5000,
+}
+
+
+@pytest.mark.parametrize(
+    "line", list(UNCONSTRUCTIBLE_YAML.values()), ids=list(UNCONSTRUCTIBLE_YAML)
+)
+def test_parse_frontmatter_yields_none_for_unconstructible_yaml(line: str) -> None:
+    assert contract.parse_frontmatter(f"---\n{line}\n---\nbody\n") is None
+
+
 def test_parse_frontmatter_stops_at_the_first_closing_fence() -> None:
     """A later ``---`` in the body is a horizontal rule, not a second fence."""
     text = "---\ntype: workout\n---\n\nbody\n\n---\n\nmore body\n"

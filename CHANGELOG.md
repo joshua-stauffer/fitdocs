@@ -345,6 +345,11 @@ recorded as one.
   them) now reports its observed duration as absent. Before, it reported
   `0`, a duration that was never measured. No stored page carries the old
   wording; the next `fitdocs load` reports the new one.
+- A hand-edited page whose frontmatter is well-formed YAML but not a value
+  PyYAML can build (an unquoted `date: 2026-02-30`, a UTC offset past 24 hours)
+  no longer crashes `check`, `regen`, `load` or `sync` with a traceback. The
+  page is treated like any other file that is not a fitdocs document: skipped,
+  left untouched, and the run continues.
 
 ## [0.1.0] - 2026-09-19
 

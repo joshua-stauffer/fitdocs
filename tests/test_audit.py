@@ -139,6 +139,24 @@ def test_documents_counts_only_real_workout_documents(tmp_path: Path) -> None:
     assert report.documents == 1
 
 
+def test_unconstructible_yaml_page_is_not_a_document_and_does_not_raise(
+    tmp_path: Path,
+) -> None:
+    # `date: 2026-02-30` is valid YAML syntax that PyYAML cannot construct; it
+    # must read as "not a fitdocs document" (wiki-contract Req 1.2), not raise.
+    _write(
+        tmp_path,
+        f"{WORKOUTS_DIR}/bad.md",
+        "---\ntype: workout\ndate: 2026-02-30\n---\nhand-edited\n",
+    )
+    _write(tmp_path, f"{WORKOUTS_DIR}/real.md", _clean_doc_text())
+
+    report = audit(tmp_path)
+
+    assert report.documents == 1
+    assert not any(finding.subject.endswith("bad.md") for finding in report.findings)
+
+
 def test_ordinary_frontmatter_without_a_workout_type_is_not_a_document(
     tmp_path: Path,
 ) -> None:
