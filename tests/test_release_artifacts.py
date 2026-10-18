@@ -3278,13 +3278,23 @@ def test_checkpoint_real_gate_pass_with_match_data_via_require(
         monkeypatch.setenv(ENV_VAR, _REAL_ENV_FORBIDDEN_STRINGS)
 
     forbidden = require(REPO_ROOT)
-    assert forbidden.values, "require() returned match data with no values"
+    # Armed in public CI: no failure below may print a matched value, so these
+    # use `pytest.fail(pytrace=False)` with fixed text, never an `assert` whose
+    # introspection would repr `forbidden.values` or the violations.
+    if not forbidden.values:
+        pytest.fail("require() returned match data with no values", pytrace=False)
 
     dist_dir = build_a[0].parent
     policy = load_policy(REAL_POLICY_PATH)
 
     violations_1 = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
-    assert violations_1 == (), f"real build failed the real gate: {violations_1!r}"
+    if violations_1 != ():
+        pytest.fail(
+            f"real build failed the real gate: {len(violations_1)} violation(s) "
+            f"of kind(s) {sorted({v.kind.name for v in violations_1})}; run "
+            "scripts.check_artifacts locally for the detail",
+            pytrace=False,
+        )
 
     exit_code = check_artifacts_main(
         [
@@ -3299,7 +3309,8 @@ def test_checkpoint_real_gate_pass_with_match_data_via_require(
 
     # --- 6: determinism over the real artifacts, real match data ----------
     violations_2 = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
-    assert violations_2 == violations_1
+    if violations_2 != violations_1:
+        pytest.fail("the real gate is not deterministic", pytrace=False)
 
 
 def test_checkpoint_requires_own_skip_names_the_env_var(

@@ -29,6 +29,7 @@ import time
 import zipfile
 from collections.abc import Sequence
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
 
@@ -803,6 +804,38 @@ def _scan_members(
     return tuple(hits)
 
 
+def _fail_redacted(message: str) -> NoReturn:
+    """Fail without a traceback. These tests run ARMED in public CI against the
+    real match data, so a failure must never print a matched value: not in a
+    message, and not through pytest's assertion introspection, which reprs the
+    operands (a `Hit`'s `found`, a path built from a value). Callers pass a
+    fixed message with surfaces, repo-relative paths of content hits, and
+    counts only."""
+    pytest.fail(message, pytrace=False)
+
+
+def _describe_hits(hits: Sequence[Hit]) -> str:
+    """Counts per surface, plus the path of each CONTENT hit. A path-surface
+    hit's path IS the matched text, so it is counted and never named. Which
+    value matched is in the `FITDOCS_FORBIDDEN_STRINGS` source."""
+    named_by_path = {h.path for h in hits if h.surface == "path"}
+    # A file hit on both surfaces has a path that IS a matched value: counted,
+    # never named.
+    content = sorted(
+        str(h.path)
+        for h in hits
+        if h.surface == "content" and h.path not in named_by_path
+    )
+    path_count = sum(1 for h in hits if h.surface == "path")
+    return (
+        f"{sum(1 for h in hits if h.surface == 'content')} content hit(s), "
+        f"of which these are in files not also hit by name: {content}; "
+        f"{path_count} path-name "
+        "hit(s) (not named: the path is the matched text). See the "
+        "FITDOCS_FORBIDDEN_STRINGS source for which value(s)"
+    )
+
+
 def test_scan_members_flags_content_and_name_but_not_a_clean_member() -> None:
     """The archive-member positive control the sdist/wheel absence scans
     below depend on: `_scan_members` flags a member whose content carries a
@@ -823,20 +856,20 @@ def test_scan_members_flags_content_and_name_but_not_a_clean_member() -> None:
     hits = _scan_members(members, forbidden_strings)
 
     by_path_surface = {(hit.path, hit.surface) for hit in hits}
-    assert (Path("clean-name.txt"), "content") in by_path_surface, (
-        "the content-surface positive control was not flagged"
-    )
-    assert (Path(f"{supplied}-in-the-name.txt"), "path") in by_path_surface, (
-        "the name-surface positive control was not flagged"
-    )
-    assert not any(hit.path == Path("entirely-clean.txt") for hit in hits), (
-        "the clean sibling member was flagged -- the control passes by "
-        "matching everything, which pins nothing"
-    )
-    assert len(hits) == 2, (
-        f"expected exactly the two planted hits, got {len(hits)}: "
-        f"{[(h.surface, str(h.path)) for h in hits]}"
-    )
+    if (Path("clean-name.txt"), "content") not in by_path_surface:
+        _fail_redacted("the content-surface positive control was not flagged")
+    if (Path(f"{supplied}-in-the-name.txt"), "path") not in by_path_surface:
+        _fail_redacted("the name-surface positive control was not flagged")
+    if any(hit.path == Path("entirely-clean.txt") for hit in hits):
+        _fail_redacted(
+            "the clean sibling member was flagged -- the control passes by "
+            "matching everything, which pins nothing"
+        )
+    if len(hits) != 2:
+        _fail_redacted(
+            f"expected exactly the two planted hits, got {len(hits)} "
+            f"({_describe_hits(hits)})"
+        )
 
 
 # --- Req 11.8: the guard's own skip is a skip, never a pass ---------------
@@ -901,24 +934,25 @@ def test_standing_guard_positive_controls_flag_content_and_path_but_not_clean_fi
         _synthetic_files(root), root, forbidden_strings
     )
 
-    assert not unreadable, (
-        f"the control's own planted files were unreadable: {unreadable}"
-    )
+    if unreadable:
+        _fail_redacted(
+            f"the control's own planted files were unreadable ({len(unreadable)})"
+        )
     by_path_surface = {(hit.path, hit.surface) for hit in hits}
-    assert (Path("clean-name.txt"), "content") in by_path_surface, (
-        "the content-surface positive control was not flagged"
-    )
-    assert (Path(f"{supplied}-in-the-name.txt"), "path") in by_path_surface, (
-        "the path-name-surface positive control was not flagged"
-    )
-    assert not any(hit.path == Path("entirely-clean.txt") for hit in hits), (
-        "the clean sibling file was flagged -- the control passes by "
-        "matching everything, which pins nothing"
-    )
-    assert len(hits) == 2, (
-        f"expected exactly the two planted hits, got {len(hits)}: "
-        f"{[(h.surface, str(h.path)) for h in hits]}"
-    )
+    if (Path("clean-name.txt"), "content") not in by_path_surface:
+        _fail_redacted("the content-surface positive control was not flagged")
+    if (Path(f"{supplied}-in-the-name.txt"), "path") not in by_path_surface:
+        _fail_redacted("the path-name-surface positive control was not flagged")
+    if any(hit.path == Path("entirely-clean.txt") for hit in hits):
+        _fail_redacted(
+            "the clean sibling file was flagged -- the control passes by "
+            "matching everything, which pins nothing"
+        )
+    if len(hits) != 2:
+        _fail_redacted(
+            f"expected exactly the two planted hits, got {len(hits)} "
+            f"({_describe_hits(hits)})"
+        )
 
 
 def test_standing_guard_flags_a_multi_word_value_wrapped_across_a_line_break(
@@ -1143,13 +1177,10 @@ def test_standing_guard_scans_tracked_content_and_path_names() -> None:
     in README.md, or docs/plugins.md, left `uv run pytest` green before this
     guard existed).
 
-    Reports counts and locations to stdout. For a CONTENT-surface hit the
-    matched string appears only in the assertion message below, never in a
-    print -- but for a PATH-surface hit the "location" printed here IS the
-    matched string, since the match is the path itself; that overlap is
-    inherent to what a path-name scan reports, not an omission (a false
-    claim of a blanket property here was corrected at review -- reviewer
-    finding F6).
+    Reports counts to stdout and, on failure, only surfaces, counts and the
+    paths of CONTENT hits (never a matched value, never the name of a
+    path-surface hit, whose path is the matched text): this test runs armed in
+    public CI, where a log line is published.
     """
     repo_root = _repo_root()
     forbidden_strings = require(repo_root)
@@ -1196,25 +1227,24 @@ def test_standing_guard_scans_tracked_content_and_path_names() -> None:
         f"scanned, {len(hits)} total hit(s), {len(unreadable)} unreadable "
         f"file(s)"
     )
-    for hit in hits:
-        print(f"  {hit.surface}: {hit.path}")
     for path in unreadable:
         print(f"  unreadable: {path}")
 
-    assert not unreadable, (
-        f"{len(unreadable)} tracked file(s) could not even be opened, so "
-        f"this scan cannot vouch for their content -- absence of a hit for "
-        f"these files is not absence of a forbidden string: "
-        f"{[str(p) for p in unreadable]}"
-    )
+    if unreadable:
+        _fail_redacted(
+            f"{len(unreadable)} tracked file(s) could not even be opened, so "
+            f"this scan cannot vouch for their content -- absence of a hit for "
+            f"these files is not absence of a forbidden string: "
+            f"{[str(p) for p in unreadable]}"
+        )
     # Task 6.3: the tracked tree carries zero forbidden values -- every
     # former reviewed-exemption entry pointed at content that has since been
     # redacted or sourced from FITDOCS_FORBIDDEN_STRINGS itself, so there is
     # no exemption table to consult here any more. A hit is a hit.
-    assert not hits, (
-        f"tracked tree contains a forbidden string: "
-        f"{[(h.surface, str(h.path), h.found) for h in hits]}"
-    )
+    if hits:
+        _fail_redacted(
+            f"tracked tree contains a forbidden string: {_describe_hits(hits)}"
+        )
 
 
 # --- Req 11.7: absence scan, surface 3 of 4 -- built sdist members ---------
@@ -1287,14 +1317,12 @@ def test_standing_guard_scans_sdist_members_content_and_names(
         f"forbidden-string sdist scan: {len(members)} member(s) scanned, "
         f"{len(hits)} total hit(s)"
     )
-    for hit in hits:
-        print(f"  {hit.surface}: {hit.path}")
 
     # Task 6.3: no exemption table exists any more -- a hit is a hit.
-    assert not hits, (
-        f"built sdist contains a forbidden string: "
-        f"{[(h.surface, str(h.path), h.found) for h in hits]}"
-    )
+    if hits:
+        _fail_redacted(
+            f"built sdist contains a forbidden string: {_describe_hits(hits)}"
+        )
 
 
 # --- Req 11.7: absence scan, surface 4 of 4 -- built wheel members ---------
@@ -1357,14 +1385,12 @@ def test_standing_guard_scans_wheel_members_content_and_names(
         f"forbidden-string wheel scan: {len(members)} member(s) scanned, "
         f"{len(hits)} total hit(s)"
     )
-    for hit in hits:
-        print(f"  {hit.surface}: {hit.path}")
 
     # Task 6.3: no exemption table exists any more -- a hit is a hit.
-    assert not hits, (
-        f"built wheel contains a forbidden string: "
-        f"{[(h.surface, str(h.path), h.found) for h in hits]}"
-    )
+    if hits:
+        _fail_redacted(
+            f"built wheel contains a forbidden string: {_describe_hits(hits)}"
+        )
 
 
 # ============================================================================
@@ -1480,3 +1506,58 @@ def test_the_notice_phrase_and_mark_are_absent_from_every_tracked_file() -> None
         "it at any commit, and the one-shot rewrite's rules would rewrite "
         "the tip."
     )
+
+
+# ============================================================================
+# Armed failures are redacted (public CI publishes the log).
+# ============================================================================
+
+
+def test_armed_guard_failures_never_print_a_matched_value(tmp_path: Path) -> None:
+    """Arms the standing guard with a synthetic match file whose values really
+    occur in tracked files (one as file CONTENT, one as a file NAME), runs the
+    guard's own tests in a subprocess, and asserts they fail -- and that
+    neither value appears anywhere in the captured output. The real match data
+    is secret and CI's log is public, so a failing guard may report surfaces,
+    counts and content-hit paths only.
+
+    Dies on: a failure message, `print`, or assertion introspection that
+    carries `Hit.found`, a value, or the name of a path-surface hit.
+    The values are assembled at run time so this file does not contain them.
+    """
+    content_value = "boxcar" + "_smooth"  # occurs in src/.../charts/series.py
+    name_value = "test_ser" + "ies.py"  # a tracked file's name
+    match_file = tmp_path / "armed.txt"
+    match_file.write_text(f"# synthetic\ncat\t{content_value}\ncat\t{name_value}\n")
+
+    env = os.environ.copy()
+    env[ENV_VAR] = str(match_file)
+    result = subprocess.run(
+        [
+            "uv",
+            "run",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "tests/test_forbidden_strings.py",
+            "-k",
+            "standing_guard_scans or scan_members_flags or positive_controls",
+        ],
+        cwd=str(_repo_root()),
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    output = result.stdout + result.stderr
+    # Positive control: the guard really failed on the planted values, so the
+    # absence below is the redaction working, not the scan not running.
+    if result.returncode == 0 or "contains a forbidden string" not in output:
+        _fail_redacted(
+            "positive control failed -- the armed guard did not report the "
+            f"planted values (exit {result.returncode})"
+        )
+    for label, value in (("content", content_value), ("name", name_value)):
+        if value in output:
+            _fail_redacted(f"the armed guard's output printed the {label} value")
