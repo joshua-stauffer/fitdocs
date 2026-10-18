@@ -32,3 +32,17 @@ A stale `zensical serve` keeps the port; the next `build_site serve` exits 2 wit
 1. Read `scripts/sitebuild/preview.py` `serve` and its `_terminate`.
 2. Install a SIGTERM handler for the loop's lifetime that raises (e.g. `KeyboardInterrupt` or a private exception) so `finally` runs; restore the previous handler on exit.
 3. Test: spawn the preview as a subprocess against the fixture site, SIGTERM it, assert the serve pid is gone (`tests/sitebuild/test_preview.py` already has pid-liveness helpers). Needs a Dies-on line.
+
+## 2026-10-18 independent reproduction
+
+Reproduced first-hand at `51d0e09` on a fresh machine (uv-managed CPython
+3.11.15, `zensical==0.0.65`), with no `uv run` wrapper in between:
+`.venv/bin/python -m scripts.build_site serve --addr 127.0.0.1:8011 &`, wait
+for HTTP 200, `kill -TERM <wrapper pid>`, then 3 s later the wrapper was gone
+and `pgrep -f 'zensical serve.*8011'` still printed a live pid (the orphan,
+reparented to PID 1). The `preview.py` module docstring promises the serve
+process "is terminated when the loop exits, however it exits", so this is the
+code falling short of its own stated contract. A same-script SIGINT probe was
+inconclusive, not evidence: background jobs of a non-interactive shell inherit
+SIGINT as ignored. An interactive Ctrl-C reaches the whole foreground process
+group, which is why it does not show the bug.

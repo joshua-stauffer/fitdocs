@@ -86,3 +86,24 @@ with main's pyenv interpreter and the locked docs group. The task's production
 code and this upstream fixture were not changed. A separate cold-cache failure
 in the initial full run was repaired by warming an isolated UV cache with the
 locked dependency set, rather than modifying tests or dependencies.
+
+## 2026-10-18 root cause and a CI-matching workaround
+
+Fresh-machine setup at `51d0e09`: `uv sync --group docs` picked Homebrew's
+framework build (`/opt/homebrew/Cellar/python@3.11/3.11.11/Frameworks/Python.framework/...`)
+and `FITDOCS_REQUIRE_SITE_TOOLING=1 uv run --group docs pytest tests/sitebuild`
+gave `1 failed, 736 passed`, with this item's test the only failure. Mechanism,
+verified directly: symlink `fakevenv/bin/python` to that `sys._base_executable`,
+run it, and `sys.executable` prints `/opt/homebrew/opt/python@3.11/bin/python3.11`,
+not the symlink's path. The macOS framework launcher re-resolves the
+executable, so `Path(sys.executable).parent` never sees the fake venv's `bin/`.
+So any macOS *framework* Python breaks the test, not only Homebrew's.
+
+Workaround that matches CI (`.github/workflows/ci.yml` runs
+`uv python install 3.11`, a python-build-standalone build):
+`uv python install 3.11 && rm -rf .venv && uv sync --group docs --managed-python`.
+The same suite then gave `737 passed`. A fix to the helper could compare
+against the inner run's own `sys.executable` (as captured by a probe) instead
+of assuming the symlink path survives, or skip the positive control with a
+stated reason when `sys._framework` is set; either way, keep all four
+`requires_zensical` assertions discriminating.
