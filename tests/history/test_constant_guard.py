@@ -268,7 +268,7 @@ _EXEMPTIONS: tuple[LiteralExemption, ...] = (
         None,
         0,
         ExemptionCategory.VALIDATION_BOUND,
-        "_read_load's `load < 0` bound -- a negative load is unreadable "
+        "_read_load's `load < 0` bound -- a negative load is no load "
         "(the model rejects it); a generic sign check, not a methodologically "
         "significant model value.",
     ),
