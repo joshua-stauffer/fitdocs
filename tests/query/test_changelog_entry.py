@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from tests._changelog_view import read_current_changelog
+from tests._changelog_view import V0_1_0, read_unreleased_since
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CHANGELOG_PATH = _REPO_ROOT / "CHANGELOG.md"
@@ -99,7 +99,7 @@ _VALID_SYNTHETIC_CHANGELOG = f"""# Changelog
 
 
 def test_unreleased_entry_names_all_query_publication_details() -> None:
-    text = read_current_changelog(_CHANGELOG_PATH)
+    text = read_unreleased_since(_CHANGELOG_PATH, V0_1_0)
     entry = _unreleased_query_entry(text)
     assert _project_version() != _SYNTHETIC_RELEASE_VERSION
 

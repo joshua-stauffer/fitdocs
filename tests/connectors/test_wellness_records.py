@@ -8,7 +8,7 @@ import pytest
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
 
-from tests._changelog_view import current_changelog
+from tests._changelog_view import V0_1_0, unreleased_since
 from tests.identity.test_contract_docs import _contract_version_history
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -135,7 +135,7 @@ def _record_text(token: Token) -> str:
 def _record_section(file: str, headings: tuple[str, ...]) -> list[Token]:
     text = (_ROOT / file).read_text(encoding="utf-8")
     if file == "CHANGELOG.md":
-        text = current_changelog(text)
+        text = unreleased_since(text, V0_1_0)
     tokens = _MD.parse(text)
     expected = list(enumerate(headings, start=1))
     ancestry: list[tuple[int, str]] = []

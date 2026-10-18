@@ -19,7 +19,7 @@ from pathlib import Path
 
 from fitdocs.compose import alignment, stretches
 from fitdocs.identity import matching
-from tests._changelog_view import read_current_changelog
+from tests._changelog_view import V0_1_0, read_unreleased_since
 
 _DOC = Path(__file__).resolve().parents[2] / "docs" / "ownership-contract.md"
 _HEADING = "### Channels a Page Takes from Its Extras"
@@ -162,7 +162,7 @@ def test_the_version_history_records_what_the_feature_changed() -> None:
 def test_the_unreleased_entry_names_the_actions() -> None:
     """Req 8.6: the unreleased changelog entry for composed pages names both
     actions."""
-    changelog = read_current_changelog(_DOC.parents[1] / "CHANGELOG.md")
+    changelog = read_unreleased_since(_DOC.parents[1] / "CHANGELOG.md", V0_1_0)
     unreleased = changelog.split("## [Unreleased]", 1)[1].split("\n## [", 1)[0]
     entries = [e for e in unreleased.split("\n- ") if "Channel Sources" in e]
     assert len(entries) == 1, len(entries)

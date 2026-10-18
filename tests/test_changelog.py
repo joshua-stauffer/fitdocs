@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from tests._changelog_view import current_changelog
+from tests._changelog_view import V0_1_0, unreleased_since
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _CHANGELOG_PATH = _PROJECT_ROOT / "CHANGELOG.md"
@@ -680,7 +680,7 @@ def test_real_changelog_newest_released_heading_is_the_manifest_version() -> Non
 
 def test_unreleased_says_derivation_does_not_rescore_heart_rate_load() -> None:
     unreleased = " ".join(
-        current_changelog(_real_changelog_text())
+        unreleased_since(_real_changelog_text(), V0_1_0)
         .split("## [Unreleased]", 1)[1]
         .split("\n## ", 1)[0]
         .split()

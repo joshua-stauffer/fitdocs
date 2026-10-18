@@ -381,6 +381,9 @@ def test_repository_scan_finds_release_literal_only_in_permitted_locations() -> 
         skill_file = _REPO_ROOT / "src" / "fitdocs" / "skills" / skill_name / "SKILL.md"
         assert skill_file.is_file(), f"packaged skill file missing: {skill_file}"
         permitted_whole_files.add(skill_file)
+    # The release-note pins' anchor (the last release their entries postdate)
+    # is one literal in one helper; see tests/_changelog_view.py.
+    permitted_whole_files.add(_REPO_ROOT / "tests" / "_changelog_view.py")
 
     # Matched by the *matched line's own text*, not its line number: a line
     # number would silently stop discriminating the moment an unrelated edit

@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from fitdocs.contract import CONTRACT_VERSION, DOC_VERSION
-from tests._changelog_view import current_changelog
+from tests._changelog_view import V0_1_0, unreleased_since
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -20,7 +20,7 @@ def _flat(text: str) -> str:
 def _section(path: str, heading: str, level: int = 2) -> str:
     text = (ROOT / path).read_text(encoding="utf-8")
     if path == "CHANGELOG.md":
-        text = current_changelog(text)
+        text = unreleased_since(text, V0_1_0)
     return text.partition(f"{'#' * level} {heading}\n")[2].split(
         f"\n{'#' * level} ", 1
     )[0]

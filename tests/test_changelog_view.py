@@ -1,8 +1,10 @@
-"""`tests/_changelog_view.py`: release-note pins hold before and after a cut."""
+"""`tests/_changelog_view.py`: release-note pins hold across release cuts."""
 
 from __future__ import annotations
 
-from tests._changelog_view import current_changelog
+from tests._changelog_view import unreleased_since
+
+_BASE = "7.1.0"
 
 _BEFORE = """# Changelog
 
@@ -12,6 +14,10 @@ _BEFORE = """# Changelog
 
 - new thing
 
+### Changed
+
+- changed thing
+
 ## [7.1.0] - 2026-01-01
 
 ### Added
@@ -19,7 +25,7 @@ _BEFORE = """# Changelog
 - old thing
 """
 
-_AFTER_CUT = """# Changelog
+_CUT = """# Changelog
 
 ## [Unreleased]
 
@@ -29,6 +35,10 @@ _AFTER_CUT = """# Changelog
 
 - new thing
 
+### Changed
+
+- changed thing
+
 ## [7.1.0] - 2026-01-01
 
 ### Added
@@ -36,36 +46,57 @@ _AFTER_CUT = """# Changelog
 - old thing
 """
 
+_CUT_PLUS_NEW = _CUT.replace(
+    "## [Unreleased]\n", "## [Unreleased]\n\n### Added\n\n- later thing\n", 1
+)
 
-def test_a_populated_unreleased_section_is_returned_unchanged() -> None:
-    assert current_changelog(_BEFORE) == _BEFORE
+
+def _unreleased(view: str) -> str:
+    return view.split("## [Unreleased]", 1)[1].split("\n## [", 1)[0]
 
 
-def test_an_empty_unreleased_section_takes_the_newest_release_body() -> None:
-    view = current_changelog(_AFTER_CUT)
-    unreleased = view.split("## [Unreleased]", 1)[1].split("\n## [", 1)[0]
-    assert "- new thing" in unreleased
+def _added(view: str) -> str:
+    return _unreleased(view).split("### Added", 1)[1].split("\n### ", 1)[0]
+
+
+def test_before_a_cut_the_text_is_unchanged() -> None:
+    assert unreleased_since(_BEFORE, _BASE) == _BEFORE
+
+
+def test_after_a_cut_the_newer_release_stands_in_for_unreleased() -> None:
+    view = unreleased_since(_CUT, _BASE)
+    assert "- new thing" in _added(view)
+    assert "- changed thing" in _unreleased(view)
     assert "## [7.2.0]" not in view
-    older = view.split("\n## [", 2)[2]
-    assert older.startswith("7.1.0] - 2026-01-01") and "- old thing" in older
+    assert "- old thing" not in _unreleased(view)
 
 
-def test_the_view_of_a_cut_matches_the_view_before_it() -> None:
-    before = current_changelog(_BEFORE).split("## [7.1.0]")[0]
-    after = current_changelog(_AFTER_CUT).split("## [7.1.0]")[0]
-    assert " ".join(after.split()) == " ".join(before.split())
+def test_after_a_cut_and_new_work_both_stay_in_one_added_section() -> None:
+    view = unreleased_since(_CUT_PLUS_NEW, _BASE)
+    assert _unreleased(view).count("### Added") == 1
+    assert "- new thing" in _added(view) and "- later thing" in _added(view)
 
 
-def test_an_entry_in_an_older_release_is_not_pulled_in() -> None:
-    two_cuts = _AFTER_CUT.replace(
-        "## [Unreleased]\n", "## [Unreleased]\n\n- newest\n", 1
+def test_an_entry_misplaced_into_the_anchor_release_is_outside_the_view() -> None:
+    misplaced = _BEFORE.replace("- old thing", "- old thing\n- new thing", 1).replace(
+        "- new thing\n\n### Changed", "- other\n\n### Changed", 1
     )
-    view = current_changelog(two_cuts)
-    unreleased = view.split("## [Unreleased]", 1)[1].split("\n## [", 1)[0]
-    assert "newest" in unreleased and "new thing" not in unreleased
+    view = unreleased_since(misplaced, _BASE)
+    assert "- new thing" not in _unreleased(view)
 
 
-def test_no_unreleased_heading_or_no_release_is_returned_unchanged() -> None:
-    assert current_changelog("# Changelog\n") == "# Changelog\n"
-    only = "# Changelog\n\n## [Unreleased]\n"
-    assert current_changelog(only) == only
+def test_two_releases_newer_than_the_anchor_are_both_merged() -> None:
+    two = _CUT.replace(
+        "## [7.2.0]", "## [7.3.0] - 2026-03-01\n\n### Added\n\n- third\n\n## [7.2.0]", 1
+    )
+    view = unreleased_since(two, _BASE)
+    assert "- third" in _added(view) and "- new thing" in _added(view)
+
+
+def test_the_anchor_and_older_sections_are_kept_verbatim() -> None:
+    view = unreleased_since(_CUT, _BASE)
+    assert view.endswith("## [7.1.0] - 2026-01-01\n\n### Added\n\n- old thing\n")
+
+
+def test_no_unreleased_heading_is_returned_unchanged() -> None:
+    assert unreleased_since("# Changelog\n", _BASE) == "# Changelog\n"
