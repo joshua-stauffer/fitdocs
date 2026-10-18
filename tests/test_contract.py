@@ -574,6 +574,8 @@ UNCONSTRUCTIBLE_YAML = {
     "bad-explicit-timestamp": "ts: !!timestamp foo",
     "empty-explicit-int": "n: !!int ''",
     "bad-explicit-bool": "b: !!bool maybe",
+    "escape-past-int32": 'a: "\\UFFFFFFFF"',
+    "base60-float-overflow": "f: 1" + ":59" * 200 + ".0",
     "nested-too-deep": "d: " + "[" * 5000 + "]" * 5000,
 }
 

@@ -154,6 +154,8 @@ def test_unconstructible_yaml_page_is_not_a_document_and_does_not_raise(
     report = audit(tmp_path)
 
     assert report.documents == 1
+    # No finding for the ignored page reflects the queue item's open question
+    # (should `check` name it?); this flips if the maintainer decides it should.
     assert not any(finding.subject.endswith("bad.md") for finding in report.findings)
 
 

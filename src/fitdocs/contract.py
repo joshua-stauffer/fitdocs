@@ -978,14 +978,17 @@ _SESSION_UUID_BYTE_COUNT: Final[int] = 16
 # SafeLoader's constructors let the builtin's own error escape for a value that
 # is well-formed YAML but not constructible: ``ValueError`` (``2026-02-30``, an
 # out-of-range UTC offset, ``!!int 0b2``), ``AttributeError`` (``!!timestamp
-# foo``), ``LookupError`` (``!!bool maybe``, ``!!int ''``) and ``RecursionError``
-# (pathological nesting). Enumerated, not ``Exception``, so a real bug elsewhere
-# in the call still surfaces.
-_UNCONSTRUCTIBLE_YAML = (
+# foo``), ``LookupError`` (``!!bool maybe``, ``!!int ''``), ``OverflowError`` (a ``\U``
+# escape past 0x7FFFFFFF, an untagged base-60 float with hundreds of groups)
+# and ``RecursionError`` (pathological nesting). Enumerated, not ``Exception``,
+# so a real bug elsewhere in the call still surfaces. Mirrored (the dashboards
+# boundary forbids importing this module) by ``dashboards.directive``.
+YAML_LOAD_ERRORS = (
     yaml.YAMLError,
     ValueError,
     AttributeError,
     LookupError,
+    OverflowError,
     RecursionError,
 )
 
@@ -1012,7 +1015,7 @@ def parse_frontmatter(text: str) -> dict[str, object] | None:
             block = "\n".join(lines[1:index])
             try:
                 parsed = yaml.safe_load(block)
-            except _UNCONSTRUCTIBLE_YAML:
+            except YAML_LOAD_ERRORS:
                 return None
             return parsed if isinstance(parsed, dict) else None
     return None

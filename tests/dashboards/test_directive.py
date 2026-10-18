@@ -227,6 +227,19 @@ def test_yaml_syntax_error_on_body_line_three() -> None:
     assert problem.page == PAGE
 
 
+@pytest.mark.parametrize(
+    "body",
+    ['id: "\\UFFFFFFFF"\n', "id: " + "[" * 5000 + "]" * 5000 + "\n"],
+    ids=["overflow", "recursion"],
+)
+def test_a_body_pyyaml_cannot_load_is_a_syntax_problem_not_a_raise(body: str) -> None:
+    result = parse_directive(body, open_line=OPEN_LINE, page=PAGE)
+    assert isinstance(result, tuple)
+    problem = only(result)
+    assert problem.code == DashboardCode.YAML_SYNTAX.value
+    assert problem.line == OPEN_LINE  # no mark to report: the opening fence
+
+
 @pytest.mark.parametrize("body", ["- a\n- b\n", "just text\n", "", "[a, b]\n"])
 def test_a_body_that_is_not_a_mapping_is_refused(body: str) -> None:
     result = parse_directive(body, open_line=OPEN_LINE, page=PAGE)

@@ -40,6 +40,14 @@ _PLAIN_TAGS: Final = frozenset(
 )
 
 
+#: What ``yaml.parse`` / ``yaml.compose`` raise: ``YAMLError`` plus the builtin
+#: errors PyYAML lets escape (an ``OverflowError`` from a ``\U`` escape past
+#: 0x7FFFFFFF, a ``RecursionError`` from absurd nesting). The subset of
+#: ``fitdocs.contract.YAML_LOAD_ERRORS`` that parse/compose (no construction)
+#: can raise; this package may not import that module.
+_YAML_ERRORS: Final = (yaml.YAMLError, OverflowError, RecursionError)
+
+
 class _StrictLoader(yaml.SafeLoader):
     """Composes every plain scalar as ``str``: no implicit resolvers."""
 
@@ -100,7 +108,7 @@ def parse_directive(
             code, message, fix, page=page, chart=chart, line=line, **fields
         )
 
-    def syntax(error: yaml.YAMLError) -> tuple[Problem, ...]:
+    def syntax(error: Exception) -> tuple[Problem, ...]:
         mark = getattr(error, "problem_mark", None) or getattr(
             error, "context_mark", None
         )
@@ -153,14 +161,14 @@ def parse_directive(
                         line=line,
                     )
                 )
-    except yaml.YAMLError as error:
+    except _YAML_ERRORS as error:
         return syntax(error)
     if shape:
         return tuple(shape)
 
     try:
         root = yaml.compose(body, Loader=_StrictLoader)
-    except yaml.YAMLError as error:
+    except _YAML_ERRORS as error:
         return syntax(error)
     if not isinstance(root, yaml.MappingNode):
         return (
