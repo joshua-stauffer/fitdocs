@@ -66,8 +66,11 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import sys
 from pathlib import Path
 from typing import Final
+
+import pytest
 
 import fitdocs
 import fitdocs.contract
@@ -1070,6 +1073,13 @@ _IDENTIFIER_OR_SIMPLE_FIELDS: Final[dict[type[ast.stmt], frozenset[str]]] = {
     ast.ImportFrom: frozenset({"module", "level"}),
 }
 
+#: PEP 695 (Python 3.12) gave `FunctionDef`, `AsyncFunctionDef` and `ClassDef`
+#: a `type_params` field (`def f[T: Bound](): ...`); it does not exist on 3.11,
+#: the project's floor, so the partition below names it only where it does.
+_TYPE_PARAMS_FIELD: Final[frozenset[str]] = (
+    frozenset({"type_params"}) if sys.version_info >= (3, 12) else frozenset()
+)
+
 #: Per explicitly modelled kind, the field names carrying a node (or a
 #: list of nodes) that `_walk_stmt`'s own branch does *not* consume
 #: directly and so are picked up by `_delegate_remaining_fields`'s generic
@@ -1080,9 +1090,12 @@ _IDENTIFIER_OR_SIMPLE_FIELDS: Final[dict[type[ast.stmt], frozenset[str]]] = {
 #: reds that test, rather than silently falling through unaudited (round-4
 #: review fix, item 1).
 _DELEGATED_NODE_FIELDS: Final[dict[type[ast.stmt], frozenset[str]]] = {
-    ast.FunctionDef: frozenset({"decorator_list", "args", "returns"}),
-    ast.AsyncFunctionDef: frozenset({"decorator_list", "args", "returns"}),
-    ast.ClassDef: frozenset({"bases", "keywords", "decorator_list"}),
+    ast.FunctionDef: frozenset({"decorator_list", "args", "returns"})
+    | _TYPE_PARAMS_FIELD,
+    ast.AsyncFunctionDef: frozenset({"decorator_list", "args", "returns"})
+    | _TYPE_PARAMS_FIELD,
+    ast.ClassDef: frozenset({"bases", "keywords", "decorator_list"})
+    | _TYPE_PARAMS_FIELD,
     ast.If: frozenset(),
     ast.For: frozenset(),
     ast.AsyncFor: frozenset(),
@@ -1670,6 +1683,14 @@ class _EngineWriteTargetAudit:
         elif isinstance(value, list):
             for item in value:
                 self._walk_field_value(item, derived, containers)
+        elif isinstance(value, ast.AST):
+            # Any other node kind (a PEP 695 `type_param` -- its `bound` and,
+            # from 3.13, `default_value` are expressions evaluated lazily but
+            # still source the audit must read): recurse into its own fields
+            # rather than drop it. Fail-closed for node kinds a later Python
+            # adds; an operator or context node has no fields to walk.
+            for _, child in ast.iter_fields(value):
+                self._walk_field_value(child, derived, containers)
         # else: an identifier (`str`), a constant, an operator enum, or
         # some other non-node value -- nothing to walk.
 
@@ -2238,8 +2259,19 @@ _EXPLICIT_NO_BODY_STMT_KINDS: Final[frozenset[type[ast.stmt]]] = frozenset(
 #: Statement kinds with no nested body and no binding effect of their own
 #: -- covered structurally by `_delegate_remaining_fields`'s generic
 #: expression scan alone (no dedicated branch, nothing pre-consumed).
+_generic_no_body: set[type[ast.stmt]] = {
+    ast.Assert,
+    ast.Break,
+    ast.Continue,
+    ast.Pass,
+    ast.Raise,
+    ast.Return,
+}
+if sys.version_info >= (3, 12):
+    # `type X = ...` (PEP 695) exists from Python 3.12.
+    _generic_no_body.add(ast.TypeAlias)
 _GENERIC_NO_BODY_STMT_KINDS: Final[frozenset[type[ast.stmt]]] = frozenset(
-    {ast.Assert, ast.Break, ast.Continue, ast.Pass, ast.Raise, ast.Return}
+    _generic_no_body
 )
 
 #: One synthetic module per body-bearing statement kind, each embedding an
@@ -2495,6 +2527,35 @@ class TestFieldCoverageSweep:
         )
         audit = _EngineWriteTargetAudit(ast.parse(source))
         assert audit.offenders() != [], "a parameter-default write was not caught"
+
+    @pytest.mark.skipif(
+        sys.version_info < (3, 12), reason="PEP 695 syntax needs Python 3.12"
+    )
+    def test_a_type_parameter_bound_write_is_caught(self) -> None:
+        """A write buried in a PEP 695 type parameter's bound
+        (`def leak[T: <expr>]()`) lives in `type_params`, a field Python 3.12
+        added; the walker used to drop every non-expression node there."""
+        source = (
+            "from pathlib import Path\n"
+            "\n"
+            'def leak[T: Path("/x/leak.md").write_text("leak", encoding="utf-8")]() '
+            "-> None:\n"
+            "    pass\n"
+        )
+        audit = _EngineWriteTargetAudit(ast.parse(source))
+        assert audit.offenders() != [], "a type-parameter-bound write was not caught"
+
+    @pytest.mark.skipif(
+        sys.version_info < (3, 12), reason="PEP 695 syntax needs Python 3.12"
+    )
+    def test_a_type_alias_value_write_is_caught(self) -> None:
+        source = (
+            "from pathlib import Path\n"
+            "\n"
+            'type Leak = Path("/x/leak.md").write_text("leak", encoding="utf-8")\n'
+        )
+        audit = _EngineWriteTargetAudit(ast.parse(source))
+        assert audit.offenders() != [], "a type-alias value write was not caught"
 
     def test_a_class_base_write_is_caught(self) -> None:
         """Round-4 review fix, item 1: `ClassDef.bases`/`keywords` were

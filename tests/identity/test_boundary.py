@@ -84,6 +84,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import pathlib
+import sys
 import types
 from pathlib import Path
 from typing import Final
@@ -581,6 +582,30 @@ def _local(code: str) -> str:
     return "def _f(p):\n" + "".join(f"    {line}\n" for line in code.split("\n"))
 
 
+#: A stand-in for "an allowed module that happens to expose `os` and `io` as
+#: attributes". The real stdlib cannot play that part across the supported
+#: interpreters: `pathlib.os` and `pathlib.io` exist on 3.11 and 3.12 and are
+#: gone on 3.13 (pathlib became a package), `datetime.sys` is gone from 3.12.
+#: The scanner resolves real objects, so a fixture that leans on an incidental
+#: import of a stdlib module is a fixture about one Python version. The
+#: `_carrier` fixture below registers this module and allows it for the test.
+_CARRIER: Final[str] = "identity_boundary_test_carrier"
+
+
+@pytest.fixture(autouse=True)
+def _carrier(monkeypatch: pytest.MonkeyPatch) -> None:
+    import io
+    import os
+
+    carrier = types.ModuleType(_CARRIER)
+    carrier.os = os  # type: ignore[attr-defined]
+    carrier.io = io  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, _CARRIER, carrier)
+    monkeypatch.setattr(
+        sys.modules[__name__], "_STDLIB_BASE", _STDLIB_BASE | {_CARRIER}
+    )
+
+
 _CLOSURE_CASES: Final[list[tuple[str, str, str, str]]] = [
     ("plain", _LEAF, "import fitdocs.sync\n", "fitdocs.sync: forbidden"),
     ("aliased", _LEAF, "import fitdocs.render as r\n", "fitdocs.render: forbidden"),
@@ -747,19 +772,19 @@ _CLOSURE_CASES: Final[list[tuple[str, str, str, str]]] = [
     (
         "from-pathlib-import-os",
         _LEAF,
-        "from pathlib import os\n",
+        f"from {_CARRIER} import os\n",
         "os: not an allowed import (reached as an object)",
     ),
     (
         "pathlib-dot-os",
         _LEAF,
-        "import pathlib\ndef f(p):\n    return pathlib.os.listdir(p)\n",
+        f"import {_CARRIER}\ndef f(p):\n    return {_CARRIER}.os.listdir(p)\n",
         "os: not an allowed import (reached as an object)",
     ),
     (
         "from-datetime-import-sys",
         _LEAF,
-        "from datetime import sys\n",
+        "from enum import sys\n",
         "sys: not an allowed import (reached as an object)",
     ),
     (
@@ -771,7 +796,7 @@ _CLOSURE_CASES: Final[list[tuple[str, str, str, str]]] = [
     (
         "from-pathlib-import-io",
         _LEAF,
-        "from pathlib import io\n",
+        f"from {_CARRIER} import io\n",
         "io: not an allowed import (reached as an object)",
     ),
     (
@@ -966,8 +991,12 @@ _FS_CASES: Final[list[tuple[str, str, str]]] = [
     ("owner", _local("return p.owner()"), "names .owner"),
     ("group-call", _local("return p.group()"), "names .group"),
     ("group-bound", _local("g = p.group\nreturn g()"), "names .group"),
-    ("from-pathlib-import-os", "from pathlib import os\n", "imports os"),
-    ("pathlib-dot-os", "import pathlib\nx = pathlib.os.listdir\n", "imports os"),
+    ("from-pathlib-import-os", f"from {_CARRIER} import os\n", "imports os"),
+    (
+        "pathlib-dot-os",
+        f"import {_CARRIER}\nx = {_CARRIER}.os.listdir\n",
+        "imports os",
+    ),
     ("is_socket", _local("return p.is_socket()"), "names .is_socket"),
     ("absolute", _local("return p.absolute()"), "names .absolute"),
     ("path-replace", _local("p.replace(p)"), "names .replace"),

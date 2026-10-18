@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import os
 import stat
+import sys
 from collections.abc import Iterator
 from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
@@ -1460,7 +1461,13 @@ def test_an_out_of_range_timezone_offset_is_a_problem(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("escape", "error", "message"),
     [
-        ("UFFFFFFFF", OverflowError, "Python int too large to convert to C int"),
+        # `chr(0xFFFFFFFF)` raises `OverflowError` up to Python 3.12 and the
+        # same `ValueError` as any other out-of-range code point from 3.13.
+        (
+            ("UFFFFFFFF", OverflowError, "Python int too large to convert to C int")
+            if sys.version_info < (3, 13)
+            else ("UFFFFFFFF", ValueError, "chr() arg not in range(0x110000)")
+        ),
         ("U00110000", ValueError, "chr() arg not in range(0x110000)"),
     ],
 )
@@ -1473,8 +1480,8 @@ def test_a_scanner_escape_past_the_code_space_is_a_problem(
     outside its constructor, so neither carries a mark.
 
     Dies on: catching `ValueError` and `yaml.YAMLError` but not `OverflowError`
-    (the first case), or `OverflowError` and `yaml.YAMLError` but not
-    `ValueError` (the second).
+    (the first case, which only raises `OverflowError` before Python 3.13), or
+    `OverflowError` and `yaml.YAMLError` but not `ValueError` (the second).
     """
     text = f'---\ntitle: "\\{escape}"\n---\n'
     root = _site(tmp_path / "c", {"o.md": text})
