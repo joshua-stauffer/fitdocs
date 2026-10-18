@@ -92,3 +92,29 @@ the activity's own local clock and would resolve both this and the DST
 facet without any machine-zone lookup; whether it is present on the
 HealthFit/Apple Watch exports needs measuring before relying on it.
 
+
+## Further evidence (2026-10-18, workout-wellness landed)
+
+The Morning Of block (workout-wellness, DOC_VERSION 10) shows the wellness day
+equal to the page's `date` frontmatter (Req 1.4), and states it as fact:
+"Wellness for D, the day of this workout". A page dated a day late by this
+defect now also prints the **morning after** the workout, including the sleep
+of the night after it. Wellness days themselves use each source's own recorded
+offset (wellness-store Req 7.5), so a block can be internally correct and still
+attached to the wrong day.
+
+Measured in a scratch rebuild of the maintainer's real data root at a0e4b92,
+regenerated on 2026-10-18 (machine at CEST, +02:00):
+- One example: a December 2018 run page has a `start_time` of 00:16 with a
+  `+02:00` offset. That is a winter date carrying the October offset, and the
+  run was the previous evening in the US. Its block reads "Wellness for" the
+  page's (next-day) date.
+- 248 of 851 pages from 2018-2022 start between 00:00 and 05:59 in the
+  machine zone, and 241 of those carry a Morning Of block. This is a heuristic
+  upper bound on affected pages; some may be genuine pre-dawn sessions.
+
+`.kiro/specs/workout-wellness/design.md:1107` says "Page dates themselves
+follow the configured timezone". No timezone setting exists; it is the
+machine's offset at run time, which is this item. When this item is fixed,
+expect a `regen` to move both these pages' dates and their morning blocks;
+re-run the morning pass afterwards (regen already does).
