@@ -392,3 +392,7 @@ with no automatic retry loop. This bounded gate reassessment supersedes the
 prior blanket requirement to consume a causal repair before query acceptance;
 it does not change the owning investigation's requirement for evidence before
 any guessed product patch.
+
+## Recurrence 2026-10-19 (site-copy-0-2)
+
+`tests/sitebuild/test_preview.py::test_live_preview_post_delete_wait_requires_last_good_readiness` failed 3 of 4 runs in a row on branch `chore/site-copy-0-2`: once in a full run of `tests/sitebuild`, then twice when run alone, about 21 s each, against about 6 s for a pass. It then passed 4 of 4 runs on the same branch, and 3 of 3 on unmodified `main` in between. The test builds `tests/sitebuild/fixtures/site` in `tmp_path` (`FIXTURE`, test_preview.py:44), so the branch change (only `website/content/`) cannot reach it. Machine load at the time: background `uv run fitdocs` scratch runs had just finished.
