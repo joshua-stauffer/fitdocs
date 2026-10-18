@@ -97,3 +97,25 @@ paths defeat.
 - Does this want to extend to the reverse direction — a closed item whose
   `context:` paths no longer exist? `/kiro-queue` already checks context paths
   at ranking time, but only for items it ranks, and only when it runs.
+
+## 2026-10-18: the same citation breakage in test prose
+
+The workout-wellness final review at `cc1f6b4` also found inherited test
+comments pointing to moved queue records:
+
+- `tests/load/test_render.py:163` and `tests/metrics/test_sources.py:2758`
+  cite `.kiro/queue/2026-07-30-absent-power-sample-filled-with-zero.md`.
+- `tests/metrics/test_sources.py:1656` cites
+  `.kiro/queue/2026-07-27-trimp-weighting-default-is-sex-named.md`.
+
+The controller independently read these exact lines, confirmed each is
+unchanged from main `f94c503`, and checked that both root paths are absent
+while both corresponding files exist under `.kiro/queue/closed/`. These are
+additional instances of this item's move-and-dangle mechanism, not new
+workout-wellness assertions or a change to the historical metric rulings.
+No test comment or behavior was repaired in that feature.
+
+When choosing the future citation policy/guard scope, account for test prose
+as well as spec and steering prose. The specific TRIMP decision-pointer
+item, `2026-07-29-task-8-3-points-at-a-closed-queue-item`, remains its separate
+existing owner; no duplicate item was created.

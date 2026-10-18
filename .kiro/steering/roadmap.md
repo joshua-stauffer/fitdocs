@@ -3194,8 +3194,9 @@ numbers are the next free number at landing.
 - [x] performance-benchmarks — Req 10.4 scoped to the TAGGED stage,
   and the derived write partitioned (implemented 2026-10-16, Amendment 3).
   Dependencies: hr-derivation
-- [ ] workout-docs — the morning-of section and any frontmatter key, plus
-  the `DOC_VERSION` bump. Dependencies: workout-wellness
+- [x] workout-docs — the morning-of region without a new frontmatter key,
+  plus `DOC_VERSION` 9 to 10 (implemented 2026-10-18, Amendment 5).
+  Dependencies: workout-wellness
 - [x] load-channels _(found at spec time, 2026-10-13)_ — the heart-rate
   channel reports which dated resting and max entries it used
   (implemented 2026-10-16, Amendment 1, criterion 5.12).
@@ -3366,13 +3367,14 @@ numbers are the next free number at landing.
   - wiki-contract and connectors amendments.
 
   Dependencies: wellness-store, chart-catalog
-- [ ] workout-wellness — **brief written 2026-10-12; spec written
-  2026-10-13** (Phase 12 batch, wave 3, `tasks-generated`, all approvals
+- [x] workout-wellness — **brief written 2026-10-12; spec written
+  2026-10-13; implemented 2026-10-18** (Phase 12 batch, wave 3, all approvals
   set; 12 requirements / 66 criteria, 5 majors / 15 executable tasks;
   independent Step 3.5 review, two rounds; cross-spec reviewed, two rounds,
   PASS). It adds the refreshed-region class `REFRESHED_REGIONS`, the
   `morning` region and a morning-of pass that visits every page and
-  compares bytes. It bumps `DOC_VERSION` and `CONTRACT_VERSION`:
+  compares bytes. It advances `DOC_VERSION` 9 to 10 and `CONTRACT_VERSION`
+  14 to 15:
   - the morning-of block on workout pages (that morning's resting HR and HRV
     against baseline, and the previous night's sleep);
   - a fingerprint of the printed facts, and a pass that visits every page
@@ -3380,4 +3382,4 @@ numbers are the next free number at landing.
     targeted re-render at spec time;
   - the `DOC_VERSION` bump and the workout-docs amendment.
 
-  Implement last. Dependencies: recovery
+  Implemented after its Recovery dependency. Dependencies: recovery

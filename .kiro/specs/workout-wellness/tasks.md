@@ -777,9 +777,9 @@ wiki-contract and analytics-index amendment and criterion numbers.
   - **Observable:** full `uv run pytest` green.
   - _Requirements: 11.4, 11.5, 11.6_
 
-- [ ] 5. Final validation
+- [x] 5. Final validation
 
-- [ ] 5.1 Rebase, re-derive every number, and run the exhaustive sweep
+- [x] 5.1 Rebase, re-derive every number, and run the exhaustive sweep
   - Rebase onto `main`; re-derive `DOC_VERSION` and `CONTRACT_VERSION` as
     `main` + 1 (with every pin, golden and paragraph that names them,
     including the two history-content pins, whose numbers are written as
@@ -1281,3 +1281,206 @@ wiki-contract and analytics-index amendment and criterion numbers.
   import/copy-environment provenance. All 2,106 inputs matched the live tree
   and both snapshots. Its fresh focused run passed 845 tests with one known
   actionlint skip in 15.59 s; Ruff, formatting, mypy and diff checks passed.
+
+- Task 5.1 landing reconciliation and exhaustive sweep (2026-10-18):
+  parent fetched/rebased onto main f94c5039add0ba4db1f5c8d8639ac19708bf9f83;
+  its only change since 51d0e09 is two existing queue notes. Independent
+  range-diff confirms all fourteen accepted feature patches unchanged.
+  Main DOC_VERSION 9 and CONTRACT_VERSION string 14 still yield 10 and 15.
+  Analytics-index Amendment 3 / criterion 5.8, workout-docs Amendment 5 /
+  criteria 4.5, 6.13, 9.7, 10.6, 12.3, 13.5 and wiki-contract Amendment 10 /
+  criteria 1.7, 2.20, 2.21 remain the next free append-only additions.
+  Existing requirement text/criteria, amendment entries, approvals and
+  shared CLI passes survive. Index schema 3 and model schema 1.0 remain
+  unchanged; runtime dependency list equals main. No landing number moved,
+  so no new pin/golden/history re-pin or test assertion change is needed.
+  The seven frontmatter pins retain the original 852e35f/DOC9 capture and
+  the independently reproduced sole-version-line DOC10 re-pin provenance.
+
+  The following table enumerates every one of the 66 current source
+  criteria exactly once. Fault identifiers refer to the accepted task's
+  executed RED/restoration-GREEN records, independently replayed in its
+  accepted review, not hypothetical mutants or the assignment-only table.
+  Earlier source/evidence heads precede the final doc-only rebase; equal
+  range-diff patches and final content hashes establish preservation, not
+  false identity of rewritten Git commit IDs. Task 1.1's accepted review is
+  review-r2; its original review was rejected and remediated. Later rows
+  explicitly retain subclauses covered by previously accepted tests.
+  Production/source/doc faults, builder/checker SUT controls and the
+  bounded Astra12/13 test-implementation categories are distinct.
+
+| Criterion | Classification | Actual test(s) | Executed fault(s) | Scope / preserved subclauses |
+|---|---|---|---|---|
+| 1.1 | PINNED | tests/render/test_views.py::test_morning_region_immediately_precedes_training_load | 1.3 move morning after Training Load; omit strength insertion; duplicate morning region | Seven native view contexts, exactly once, adjacency, outside notes/workout; contract disjointness retained. |
+| 1.2 | PINNED | tests/morning/test_render.py::test_nonempty_region_has_heading; tests/morning/test_e2e.py::test_explicit_source_fills_both_dates_in_the_same_run | 2.3 heading; 3.3 explicit-source-same-run | Real supported figures produce the heading and populated blocks; all row-presence alternatives pinned by 2.1 omit-day-only-row/day-only-row-filter. |
+| 1.3 | PINNED | tests/morning/test_block.py::test_no_supported_figure_returns_none; tests/morning/test_engine.py::test_absent_day_clears_stale_content_and_keeps_empty_region_unchanged | 2.1 empty-block-instead-none; 3.1 skip-empty-regions | Empty/unsupported series, missing page date and figureless date clear stale content; 2.3 empty-newline pins literal empty rendering. |
+| 1.4 | PINNED | tests/morning/test_engine.py::test_frontmatter_date_overrides_filename; tests/morning/test_block.py::test_sleep_figures_and_stage_order_use_total_sleep_source | 3.1 filename-date; 2.1 signal-day-minus-one/sleep-day-minus-one | Conflicting filename cannot substitute for recorded local date; exact same wellness date supplies signals and previous-night sleep. |
+| 1.5 | PINNED | tests/morning/test_render.py::test_windows_and_iso_sentence_follow_methods | 2.3 literal-rolling-window/literal-baseline-window/rolling-inclusive-off-by-one/baseline-end-off-by-one | Exact day/window sentence, D-inclusive rolling and D-exclusive prior baseline, using nondefault coherent METHODS windows. |
+| 1.6 | PINNED; PRESERVED-ONLY for generic page portability | tests/morning/test_render.py::test_region_bytes_match_golden; tests/morning/test_render.py::test_markdown_escaping; tests/test_portability.py::test_filled_morning_page_satisfies_portability_invariants | 2.3 golden-newline/label-no-escaping/source-no-escaping/origin-no-escaping | Exact six markdown goldens and escaping pin block bytes; existing portability checker retained, new stamp alternative separately Astra13 test SUT. |
+| 1.7 | PINNED | tests/render/test_views.py::test_morning_region_keeps_preexisting_frontmatter_bytes | 1.3 add morning: true frontmatter key | Seven literal native frontmatter SHA oracles; 4.1 controlled DOC9-to10 sole-line re-pin independently reproduced, original852e35f provenance retained. |
+| 2.1 | PINNED | tests/morning/test_block.py::test_signal_figures_match_shared_baselines_in_fixed_order; tests/morning/test_block.py::test_each_available_figure_can_keep_a_row | 2.1 signal-metrics-sleep/signal-order-reversed/day-only-row-filter/omit-day-only-row | Presence by any of day/rolling/range; fixed baseline metric order; rendered recovery labels covered by 2.3 goldens. |
+| 2.2 | PINNED | tests/morning/test_block.py::test_signal_figures_match_shared_baselines_in_fixed_order; tests/morning/test_block.py::test_signal_range_position_is_passed_through | 2.1 normal-range-dropped/position-constant-within/position-constant-above/position-constant-within-when-absent | Distinct real shared day/rolling/range figures and BELOW/WITHIN/ABOVE/absent positions. |
+| 2.3 | PINNED | tests/morning/test_block.py::test_signal_figures_use_shared_baselines_without_canonical_lookup; tests/morning/test_block.py::test_baselines_are_constructed_once_across_repeated_blocks | 2.1 canonical-day/local-arithmetic-mean/construct-per-block | Genuine shared numerical output and separate delegating real canonical spy; equivalent canonical numeric control earns architectural assertion credit only, per Astra3. |
+| 2.4 | PINNED | tests/morning/test_block.py::test_signal_figures_match_shared_baselines_in_fixed_order | 2.1 rmssd-to-sdnn | Pairwise-distinct SDNN/rMSSD figures and separate rows; no conversion or combination path. |
+| 2.5 | PINNED | tests/morning/test_block.py::test_only_present_figures_reach_the_shared_formatter; tests/morning/test_render.py::test_native_facts_exact_canonical_json | 2.1 unit-dropped/formatter-receives-absent; 2.3 native-formatter-unit-omitted | Shared signal units/precision; formatting receives present values including zero, never None. |
+| 2.6 | PINNED | tests/morning/test_block.py::test_window_minimums_leave_only_the_insufficient_figure_absent; tests/morning/test_render.py::test_sparse_native_signal_prints_each_absent_cell | 2.1 none-to-zero/relax-rolling-minimum/relax-baseline-minimum; 2.3 position-missing-within/range-missing-empty/absent-emdash | Independently insufficient rolling/range and absent day; every missing printed cell is an en dash. |
+| 2.7 | PINNED | tests/morning/test_block.py::test_signal_figures_match_shared_baselines_in_fixed_order; tests/morning/test_render.py::test_region_bytes_match_golden | 2.1 skip-absent-signal-day; 2.3 empty-origins-suffix | Carried shown source with absent day retains its rolling/range/source; carried_source golden pins printed absence and source text. |
+| 3.1 | PINNED | tests/morning/test_block.py::test_each_available_figure_can_keep_a_row; tests/morning/test_render.py::test_region_bytes_match_golden | 2.1 day-only-row-filter/omit-day-only-row/sleep-day-minus-one; 2.3 golden-newline | Total sleep appears for any available day/rolling/baseline figure; exact sleep_only/both table has three figures and no normal-range column. |
+| 3.2 | PINNED | tests/morning/test_block.py::test_sleep_figures_and_stage_order_use_total_sleep_source; tests/morning/test_e2e.py::test_native_garmin_sleep_export_fills_stages_and_attribution | 2.1 stage-shown/stage-order-reversed; 3.3 garmin-deep/garmin-light/garmin-rem/garmin-awake | All six sleep metrics including sleeping HR use total-sleep source and fixed order; native Garmin subset reinforces stages. |
+| 3.3 | PINNED | tests/morning/test_block.py::test_sleep_figures_and_stage_order_use_total_sleep_source | 2.1 stage-shown | A different source has distinct canonical stages, defeating independent stage-source selection. |
+| 3.4 | PINNED | tests/morning/test_block.py::test_total_sleep_without_present_same_source_stages_has_only_total; tests/morning/test_block.py::test_zero_duration_sleep_stage_is_present | 2.1 emit-absent-stage/zero-stage-dropped | Absent stages omitted; genuine zero stage retained independently. |
+| 3.5 | PINNED | tests/morning/test_block.py::test_sleep_figures_and_stage_order_use_total_sleep_source; tests/morning/test_render.py::test_native_facts_exact_canonical_json | 2.1 sleep-day-minus-one/stage-shown; 2.3 native-duration-precision | Shared duration formatter retains hours/minutes/seconds, with independently fixed expected strings. |
+| 4.1 | PINNED | tests/morning/test_block.py::test_row_origins_use_the_selected_metric_and_source; tests/morning/test_block.py::test_origin_window_boundaries | 2.2 day-origin-only/wrong-origin-source/wrong-origin-metric/origins-not-sorted/origins-not-distinct/recorded-origins-dropped | All nine metrics; shown source and every contributing day/rolling/baseline origin; absent baseline origins excluded. |
+| 4.2 | PINNED | tests/morning/test_block.py::test_each_row_can_supply_the_block_attribution; tests/morning/test_e2e.py::test_native_garmin_sleep_export_fills_stages_and_attribution | 2.2 omit-contributor-<each of nine metrics>/block-attribution-none; 2.3 attribution-omitted; 3.3 garmin-attribution | Every contributing row can trigger Garmin; rendered shared line immediately under heading. |
+| 4.3 | PINNED | tests/morning/test_block.py::test_attribution_uses_all_contributing_values; tests/morning/test_render.py::test_region_bytes_match_golden | 2.2 block-attribution-none/block-attribution-contributing; 2.3 local-attribution-wording | All-Garmin/day-only sole attribution and exact garmin_sole line. |
+| 4.4 | PINNED | tests/morning/test_block.py::test_attribution_uses_all_contributing_values; tests/morning/test_render.py::test_region_bytes_match_golden | 2.2 drop-none-from-block-union/block-attribution-sole/drop-unattributed-row-flag; 2.3 local-attribution-wording | Historical-only Garmin plus other/unknown origin must be contributing, with exact garmin_contributing wording. |
+| 4.5 | PINNED | tests/morning/test_block.py::test_absent_baseline_excludes_its_historical_origins; tests/morning/test_block.py::test_origin_window_boundaries; tests/morning/test_render.py::test_region_bytes_match_golden | 2.2 count-absent-baseline/baseline-widened/rolling-widened/future-origin-included/wrong-origin-source/block-attribution-sole | No-Garmin block and irrelevant Garmin decoys cannot emit attribution; non-Garmin rendered goldens omit it. |
+| 4.6 | PINNED | tests/morning/test_block.py::test_origin_maps_are_cached_once_per_metric_source_per_run; tests/morning/test_block.py::test_row_origins_use_the_selected_metric_and_source | 2.2 bypass-origin-api/metric-only-origin-cache/reuse-previous-input-instance | Only native recorded series values; metric/source/run cache lifetime discriminates. Native archived deliveries additionally exercised by 3.3. |
+| 5.1 | PINNED | tests/morning/test_render.py::test_rendered_regions_are_descriptive; tests/morning/test_render.py::test_forbidden_phrase_positive_control | 2.3 advice-in-rendering/forbidden-pattern-weakened | All rendered goldens plus live forbidden-phrase control; no readiness/verdict/advice wording. |
+| 5.2 | PINNED | tests/morning/test_render.py::test_region_bytes_match_golden; tests/morning/test_render.py::test_sparse_native_signal_prints_each_absent_cell | 2.3 position-verdict/position-missing-within/range-missing-empty | Exact below/within/above normal-range wording and absence, without an added verdict. |
+| 5.3 | PINNED | tests/morning/test_block.py::test_no_supported_figure_returns_none | 2.1 unsupported-raw-day-fallback/signal-metrics-sleep | Unsupported steps/weight and isolated stage values cannot produce a block; fixed supported metric rows separately pinned. |
+| 6.1 | PINNED | tests/morning/test_render.py::test_generated_stamp_grammar; tests/morning/test_render.py::test_generated_stamp_records_version_and_fingerprint; tests/morning/test_render.py::test_full_row_fact_encoding | 2.3 stamp-grammar/parse-version/version/omit-signal-day-fact/omit-sleep-baseline-fact | Invisible first-line format/version/SHA and each row/day/source/origin/printed figure fact; Unicode canonical encoding independently literal. |
+| 6.2 | PINNED | tests/morning/test_render.py::test_reordered_inputs_give_equal_fingerprints; tests/morning/test_render.py::test_changed_printed_fact_changes_fingerprint; tests/morning/test_render.py::test_subprecision_native_resting_hr_change | 2.3 input-order-signal-rows/drop-printed-figure-fact/drop-printed-origin-fact/raw-baseline-three-site | Equal facts hash equally; changed printed figures/origins change it; raw subprecision differences do not. Astra6 exact canonical oracle and disclosed Astra7 three-site raw-data fault are retained. |
+| 6.3 | PINNED; PRESERVED-ONLY for previously accepted no-clock controls | tests/morning/test_render.py::test_native_facts_exact_canonical_json; tests/morning/test_render.py::test_fingerprint_is_sha256_of_utf8_printed_facts; tests/morning/test_boundary.py::test_clock | 2.3 canonical-key-order/ascii-json/sha1; 1.1 M04-actual-clock | Exact allowed fact encoding contains no release/machine/run field; source clock boundary and 3.3 machine-clock-fingerprint reinforce no current-time influence. |
+| 6.4 | PINNED | tests/morning/test_render.py::test_subprecision_native_resting_hr_change; tests/morning/test_render.py::test_ignored_steps_leave_facts_and_region_unchanged; tests/morning/test_engine.py::test_fills_synthetic_and_real_pages_then_second_pass_writes_nothing | 2.3 raw-baseline-three-site/unsupported-steps-window; 3.1 rewrite-equal-content | Printed precision and excluded signals leave complete block equal; engine equality causes no replacement/mtime change. |
+| 7.1 | PINNED | tests/morning/test_cli_morning.py::test_native_flow; tests/morning/test_cli_morning.py::test_pull_sync_uses_native_drain_helper | 3.2 source-call/drain-call/regen-call/source-before-report/drain-before-report/regen-before-report/source-after-index/drain-after-index/regen-after-index/pull-sharing | Exactly once after page report/regen series summary, before load/index in all flows; pull uses native shared drain; later dashboard remains after index. |
+| 7.2 | PINNED | tests/morning/test_engine.py::test_hand_edited_body_retaining_stamp_is_repaired; tests/morning/test_e2e.py::test_second_source_sync_is_unchanged | 3.1 compare-stamps-only/rewrite-equal-content; 3.3 repeated-bytes/repeated-mtimes/revised-day-refresh | Compare whole content, repair edited body even with unchanged stamp, preserve bytes/mtime when current. |
+| 7.3 | PINNED | tests/morning/test_docedit.py::test_replace_preserves_rendered_page_bytes; tests/morning/test_engine.py::test_fills_synthetic_and_real_pages_then_second_pass_writes_nothing | 2.4 greedy-generic-endpoint/template-replacement; 3.1 outside-byte-leak | Exact bytes on both sides, CRLF/Unicode/user regions and multiple occurrences; narrower valid-ID endpoint equivalent GREEN earns no kill credit (Astra9). |
+| 7.4 | PINNED | tests/morning/test_block.py::test_a_day_change_affects_x_and_x_plus_60_but_neither_neighbor; tests/morning/test_engine.py::test_origin_change_updates_endpoints_and_preserves_nonempty_outside_days | 2.1 bound-shortened/perturbation-clipped/bound-widened/future-value-leak; 3.1 drop-origin-facts/shift-date-forward/shift-date-back | Changed X/X+60; already populated X-1/X+61 keep bytes/mtime. Native revised delivery at X+90 remains unchanged in 3.3. |
+| 7.5 | PINNED | tests/morning/test_engine.py::test_reads_series_first_once_and_documents_once_in_sorted_order; tests/morning/test_engine.py::test_pass_uses_only_native_series_and_existing_workout_pages | 3.1 extra-discovery-read/read-series-twice/forbidden-read/extra-inputs-construction | One sorted shared-document read per page, one native-series read and one input construction; no FIT/archive/profile/index/recovery read. R4 2500-page benchmark accepted separately. |
+| 7.6 | PINNED | tests/morning/test_engine.py::test_fills_synthetic_and_real_pages_then_second_pass_writes_nothing; tests/morning/test_e2e.py::test_second_source_sync_is_unchanged | 3.1 rewrite-equal-content; 3.3 repeated-bytes/repeated-mtimes/repeated-report-silence | Second populated pass has no writes, equal nanosecond mtimes and no morning report. |
+| 7.7 | PINNED; auxiliary UNPINNED—OS-PRESERVED exception below | tests/morning/test_engine.py::test_atomic_replacement_protocol; tests/morning/test_engine.py::test_one_page_failure_leaves_it_whole_and_continues; tests/morning/test_engine.py::test_interrupt_removes_temp_and_propagates | 3.1 direct-write-bypasses-replace/non-atomic-early-write/drop-temp-cleanup/temp-incomplete-bytes/temp-wrong-destination | Existing-page atomic replace, old/new whole bytes and independently pinned actual-temp OSError and KeyboardInterrupt cleanup. Readonly no-temp assertion has no cleanup kill credit (Astra11). |
+| 7.8 | PINNED | tests/morning/test_engine.py::test_pass_uses_only_native_series_and_existing_workout_pages; tests/morning/test_engine.py::test_fills_synthetic_and_real_pages_then_second_pass_writes_nothing | 3.1 other-file-write/outside-byte-leak/extra-created-page | Exact outside-region bytes plus unchanged unrelated files, paths and nanosecond mtimes; frontmatter/charts/load/user/archive sentinels retained. |
+| 7.9 | PINNED | tests/morning/test_cli_morning.py::test_standalone_commands_leave_stale_block | 3.2 standalone-trigger/standalone-status/standalone-result-<seven commands>/stale-precondition/fresh-precondition | All seven successful standalone native paths call no morning pass and keep genuinely stale bytes; actual help remains 15 commands. |
+| 8.1 | PINNED | tests/morning/test_engine.py::test_unreadable_native_series_prevents_all_document_reads; tests/morning/test_cli_morning.py::test_unreadable_series_is_nonfatal_and_leaves_page | 3.1 unavailable-late-read/unavailable-write/wrong-unavailable-reason; 3.2 unavailable-clears/unavailable-fails/report-call | Actual corrupt/missing native series produces exact reason before page I/O, unchanged bytes and CLI success. |
+| 8.2 | PINNED | tests/morning/test_engine.py::test_newer_version_with_stale_block_is_untouched; tests/morning/test_engine.py::test_unusable_and_old_versions_process_or_count_missing_region | 3.1 skip-version-gate/none-version-is-newer/old-version-is-newer | Newer stale page untouched; missing/bool/old versions refreshed or counted missing rather than treated newer. |
+| 8.3 | PINNED | tests/morning/test_engine.py::test_unusable_and_old_versions_process_or_count_missing_region; tests/morning/test_cli_morning.py::test_report_lines | 3.1 wrong-missing-count/rewrite-missing-region; 3.2 singular-have/without-empty/failures-hide-without-region | Both missing-region causes preserved; exact singular/plural regen remedy only for a nonempty series, including mixed reports. |
+| 8.4 | PINNED | tests/morning/test_engine.py::test_damaged_other_region_fails_then_next_page_updates; tests/morning/test_cli_morning.py::test_native_flow | 3.1 damaged-as-missing/wrong-region-outcome/drop-region-error-detail/error-handler-writes-page; 3.2 source-fold/drain-fold/regen-fold | Native damaged page left whole, failed path/reason, other pages continue, morning-only failure folds independently in all flows. |
+| 8.5 | PINNED | tests/morning/test_engine.py::test_one_page_failure_leaves_it_whole_and_continues; tests/morning/test_engine.py::test_readonly_workouts_directory_fails_every_page_without_temps; tests/morning/test_cli_morning.py::test_native_flow | 3.1 readonly-write-skipped/drop-unexpected-type/drop-region-error-detail/non-atomic-early-write; 3.2 source-fold/drain-fold/regen-fold | Non-root mode0555 scenario executes; real morning-only OSError does not mask fold with other failures; details, failed state and continuation pinned. Auxiliary no-temp exception below. |
+| 8.6 | PINNED; PRESERVED-ONLY for shared-reader refusal details | tests/morning/test_engine.py::test_unusable_documents_are_silently_skipped; tests/index/test_corpus.py | 3.1 follow-symlink/ignore-workout-classifier/recursive-scan | Symlink and target, foreign/binary/nested pages untouched/unreported; seven shared-reader OSError/UTF8/permission cases retained. |
+| 8.7 | PINNED | tests/morning/test_cli_morning.py::test_report_lines | 3.2 report-call/unchanged-silence/literal-markup/soft-wrap/summary-stops-report/failures-hide-without-region/empty-hides-report/without-empty | All14 final report partitions: exact ordered summary/zero omission/plurals/failure details/silence, valid mixed populated and empty series cases (Astra14). |
+| 8.8 | PINNED | tests/morning/test_cli_morning.py::test_unexpected_error_still_runs_later_passes; tests/morning/test_cli_morning.py::test_direct_keyboard_interrupt; tests/morning/test_cli_morning.py::test_cli_keyboard_interrupt | 3.2 unexpected-escape/unexpected-nonfatal/source-fold/drain-fold/regen-fold/catch-baseexception/replace-interrupt | Unexpected runtime reason, exit1 and actual later load/pass output in all flows; interrupts retain propagation/CLI130 rather than swallowed error reports. |
+| 9.1 | PINNED | tests/morning/test_e2e.py::test_pre_morning_page_check_is_outdated_and_read_only; tests/test_contract.py::test_doc_version_equals_the_version_stamped_on_the_committed_goldens | 4.1 advance-by-two/reverted-advance/stale-check-status/stale-check-finding | Re-derived main9→10; old populated native page check is readonly and names regen. Current pins/goldens and full literal history retained; no new re-pin after final rebase. |
+| 9.2 | PINNED | tests/morning/test_e2e.py::test_regen_restores_the_morning_page_from_both_archives; tests/morning/test_cli_morning.py::test_current_block_after_native_flow | 4.1 regen-current-block/regen-current-version/regen-check-status/regen-check-clean; 3.2 regen-call | Native archived FIT and wellness reconstruct current populated page and clean check; all-page behavior separately engine coverage. |
+| 9.3 | PINNED | tests/morning/test_e2e.py::test_regen_restores_the_morning_page_from_both_archives; tests/test_ownership_contract.py::test_morning_contract_clause | 4.1 regen-archived-series; 4.2 guide-inputs/head-rederivability/declaration-no-wellness | Normalized wellness deleted before regen; genuine archived FIT/delivery plus settings regenerate. Publication and declaration name every existing input. |
+| 9.4 | PINNED for serialization and simulated environment variation | tests/morning/test_e2e.py::test_copied_root_refills_identical_blocks_in_another_zone_and_date; tests/morning/test_render.py::test_native_facts_exact_canonical_json | 3.3 native-calendar-precondition/empty-copy-precondition/machine-zone-day/machine-clock-fingerprint; 2.3 canonical-key-order | Independent copied roots, UTC/Pacific-Kiritimati and2001/2040 with fixed genuine page dates; exact serialization and no-clock guards. Executed on this machine; no claim of a second physical machine trial. |
+| 9.5 | PINNED | tests/morning/test_engine.py::test_hand_edited_body_retaining_stamp_is_repaired; tests/test_contract.py::test_refreshed_regions_are_disjoint_from_preserved_regions; tests/test_ownership_contract.py::test_morning_contract_clause | 3.1 compare-stamps-only; 1.2 named-tool-regions-contains-morning; 4.2 guide-hand-edits/guide-fills/morning-improperly-preserved | Same stamp cannot preserve a hand-edited body; refreshed policy excludes all user-preserved content and public ownership says replacement. |
+| 10.1 | PINNED | tests/index/test_refresh.py::test_morning_edit_updates_document_tier_without_deriving; tests/index/test_fingerprint.py::test_render_fingerprint_ignores_each_region | 1.4 omit_refreshed/document_hash_ignores_bytes/stale_document_hash/lost_render_hash/lost_computed_state/deleted_computed_rows | Real synthetic indexed page has nonempty activities and records; derive trap stays uncalled; exact computed rows/state retained while document fingerprint moves. Native same-run index freshness additionally3.3. |
+| 10.2 | PINNED for no-index boundary; PRESERVED-ONLY for schema | tests/morning/test_boundary.py::test_forbidden_names; tests/morning/test_boundary.py::test_allowed_imports; tests/index/test_schema_version.py::test_schema_version_is_known_and_matches_registered_schema_digest | 1.1 M03-actual-sync-import and finite forbidden-index control; 3.2 source-extra-dependency-block/source-extra-dependency-engine | No index dependency/read in morning; exact final imports. Schema/version files byte-identical main, existing schema3 digest regression retained, model1.0 unchanged. |
+| 11.1 | PINNED | tests/test_ownership_contract.py::test_morning_contract_clause; tests/identity/test_contract_docs.py::test_current_change_paragraph_states_workout_wellness; tests/test_declaration.py::test_workouts_declaration_states_morning_ownership | 4.2 guide-fills/guide-hand-edits/guide-unreadable/head-region/head-ownership/declaration-no-morning | Location, exclusive ownership, normalized input, replace-different/hand edits and no user content are literal full-clause pins. |
+| 11.2 | PINNED | tests/test_ownership_contract.py::test_morning_contract_clause; tests/identity/test_contract_docs.py::test_current_change_paragraph_states_workout_wellness | 4.2 guide-pass-order/guide-pass-scope/guide-confinement/guide-skips/guide-inputs/guide-generated/head-pass/head-rederivability | Pass among overwrites, exact schedule/scopes/skips/series archive/settings and all prior re-derivation inputs. Astra15 logical workout-document boundary permits designed atomic temp; no new waiver. |
+| 11.3 | PINNED | tests/identity/test_contract_docs.py::test_the_version_history_records_the_amendment; tests/identity/test_contract_docs.py::test_current_change_paragraph_states_workout_wellness; tests/index/test_contract_docs.py::test_contract_bump_and_release_notes_are_current | 4.2 advance-by-two/history-advance/history-region/head-region/head-ownership/head-pass/head-rederivability/head-action | Re-derived main string14→15 exactly; literal complete history sentence, current paragraph and all predecessor histories retained. |
+| 11.4 | PINNED; PRESERVED-ONLY for existing day-rule consumer | tests/morning/test_docs_morning.py::test_wellness_block_guidance; tests/morning/test_docs_morning.py::test_wellness_day_link_resolves_to_a_heading; tests/wellness/test_docs_wellness.py::test_day_rule_has_one_published_statement | 4.3 guide-figures/guide-delete-day-link/guide-rolling-window/guide-baseline-window/guide-sources/guide-origins/guide-garmin-sole/guide-garmin-contributing/guide-absence/guide-sync/guide-pull/guide-regen/guide-no-verdict/guide-broken-anchor/guide-duplicate-day-rule | Complete figures/day/windows/source/origin/attribution/absence/refresh/no-verdict/shared-Recovery text; link resolves and day rule remains single published statement. |
+| 11.5 | PINNED | tests/morning/test_docs_morning.py::test_workouts_skill_morning_report | 4.3 skill-updated-line/skill-removed-line/skill-failed-line/skill-missing-line/skill-unavailable-line/skill-error-line/skill-regen-check/skill-regen-release/skill-regen-routine/skill-retry-action | All report text, count grammar/order and athlete/no-action/conditional-regen/human-marker actions pinned; earlier skill fences and Recovery prose retained. |
+| 11.6 | PINNED | tests/morning/test_docs_morning.py::test_morning_release_entries; tests/morning/test_docs_morning.py::test_release_versions_match_contract | 4.3 release-added/release-doc-version/release-doc-action/release-contract-version/release-contract-action/release-index/runtime-doc-version/runtime-contract-version | Complete literal block/refresh entry,9→10 regen action,14→15 ownership/regen action and document-only index entry; all predecessor releases preserved. |
+| 12.1 | PINNED for actual-source network/import boundaries; PRESERVED-ONLY for dependency baseline | tests/morning/test_boundary.py::test_network; tests/morning/test_boundary.py::test_allowed_imports; tests/index/derived/test_preserved.py::test_document_contract_and_runtime_dependencies_match_main_baseline | 1.1 M05-actual-network; 3.2 source-extra-dependency-block/source-extra-dependency-docedit/source-extra-dependency-engine | Exact final import/module/reverse closure and no network; pyproject runtime dependencies equal main byte-for-value. Astra12 guard-control faults are separate test SUT, never production kills. |
+| 12.2 | PINNED | tests/morning/test_boundary.py::test_clock; tests/morning/test_e2e.py::test_copied_root_refills_identical_blocks_in_another_zone_and_date | 1.1 M04-actual-clock; 3.3 machine-clock-fingerprint/machine-zone-day | No date.today/datetime.now/utcnow/time/implicit astimezone path; direct source fault plus executed TZ/date determinism. Finite guard member controls retained as checker evidence. |
+| 12.3 | PINNED for morning-only restriction; PRESERVED-ONLY for broader common CLI allowed set | tests/morning/test_engine.py::test_pass_uses_only_native_series_and_existing_workout_pages; tests/morning/test_engine.py::test_atomic_replacement_protocol; tests/test_confinement.py::test_entry_point_writes_only_inside_the_permitted_locations | 3.1 extra-created-page/other-file-write/temp-wrong-directory/temp-wrong-destination; 3.3 native-disabled-pass-nonvacuity/native-outside-owned-write | Only existing top-level workout documents change, permanent file set retained, approved atomic temp/replace confined; whole CLI confinement is broader and not a substitute. Astra13 registry/predicate categories separate below. |
+| 12.4 | PINNED for synthetic fixture integrity; PRESERVED-ONLY for repository artifact safeguards | tests/morning/test_builders.py::test_series_value_keeps_each_field; tests/morning/test_builders.py::test_series_sorts_distinct_source_day_metric_patterns; tests/morning/test_builders.py::test_staged_series_round_trips | 1.1 M17-value-mapping/M18-sort-removed/M20-canonical-validation-removed/M22-writer-values-dropped | Builder SUT faults pin explicit fictional fields/native synthetic validity, not production behavior. Reviewed tracked feature inputs contain synthetic fixtures only; private recent sample/API artifacts remain outside repository. Secret-dependent artifact checks are6known local skips, CI-owned, never falsely claimed executed. |
+
+- Final sweep exception/categories: the only auxiliary assertion accepted
+  without a discriminating application fault is task 3.1
+  test_readonly_workouts_directory_fails_every_page_without_temps[no-temps],
+  UNPINNED — OS-PRESERVED under Astra11. Mode0555 denies creation before
+  cleanup is reachable; deleting cleanup leaves that case GREEN. It is
+  excluded from mutation-kill credit. Both actual-temp OSError and
+  KeyboardInterrupt no-temp assertions independently failed cleanup deletion
+  and restored GREEN, so requirement-level atomic cleanup remains pinned.
+  Task 2.4's narrow generic-valid-ID endpoint and task 3.3's morning-fold-
+  only damaged-marker controls are equivalent GREEN, explicitly uncredited;
+  the greedy endpoint fault and isolated task3.2 per-flow fold faults supply
+  their respective actual pins. No requirement-level survivor is hidden.
+  Astra12/12a's nine guard-control faults (30 observations) test closure
+  comparisons/policy inside the boundary test SUT, separately from 58
+  task3.2 production/source faults (154 observations). Astra13/13a's one
+  portability-checker, six confinement-registry and two predicate faults
+  (ten observations) remain separate from26 task3.3 native-source faults
+  (38 observations). Native pass-disabled execution reaches the common
+  driver's actual non-vacuity assertion; the registry and predicate controls
+  do not replace it. Original/mutant test hashes differ truthfully only in
+  approved SUT spans, unchanged consumer/fixture/config byte partitions
+  were audited, and each restoration/cache-proof pytest result passed.
+  Astra15 states the logical existing-workout-document boundary while
+  permitting the already-designed atomic temporary; it grants no runtime
+  boundary change, new mutation category or verification waiver.
+
+- Task 5.1 evidence provenance: all fourteen accepted reviews and completion reports, plus their
+  implementer reports and mutation records/census were reconciled; all explicitly
+  named table test symbols resolve in the final tree. No new or changed
+  assertions are introduced by5.1, so a fresh mutation matrix is N/A;
+  prior observed faults are preserved evidence, not newly rerun claims.
+  Every changed Python test since origin/main is included in the final
+  prose-claim scan and direct factual-prose reconciliation. Fresh post-
+  rebase full/static/help/flow evidence is recorded by the controller after
+  this frozen table. Exact-head CI, final feature GO/fresh completion,
+  canonical artifact install, private recent-data/API behavior and main
+  merge/push/cleanup remain explicit controller gates until executed.
+
+
+- Astra decision 16 (2026-10-18, task 5.1 CI): exact rebased head
+  cc1f6b4 DOCS workflow 39107794553 attempt 1 failed an unchanged upstream
+  site-preview test: 1 failed, 753 passed, 3 Linux/environment skips,
+  26.68 s, exit 1. At tests/sitebuild/test_preview.py:1178 the expected
+  empty output contained "why.md: no frontmatter: the file must begin with
+  a line ---", although the valid post-delete generation was served.
+  The test's non-atomic Path.write_text and independent source reader expose
+  a truncation interval; HIGH confidence in upstream ownership/exposed
+  race, MEDIUM in the unrecorded historical interleaving. This is distinct
+  from prior HTTP-readiness failures. No source/test patch or waiver was
+  authorized. Exactly one unchanged failed-job reassessment was requested;
+  keep attempt 1 as failure and require the whole DOCS workflow plus main
+  CI to pass. A second failure blocks acceptance pending causal ownership
+  investigation or a materially new evidenced decision, not automatic
+  retry. Final committed SHA still requires fresh prescribed local gates
+  and passing branch CI. Full ruling:
+  /private/tmp/workout-wellness-astra-docs-ci-failure.md. The separate
+  upstream follow-up is .kiro/queue/2026-10-18-preview-source-write-truncation-race.md;
+  no controlled overlap reproduction or repair is claimed. This note and
+  queue record precede task 5.1's final input freeze. Outcome is recorded
+  separately after execution; the decision is not test evidence.
+
+
+- Astra16 reassessment outcome (2026-10-18, before 5.1 freeze): DOCS
+  workflow 39107794553 attempt 2 completed SUCCESS on unchanged cc1f6b4.
+  The site tests, actual site build and staged/built content gate all
+  passed; deploy/upload are intentionally skipped on this feature branch.
+  Attempt 1 remains a failed run. This is current gate evidence, not a
+  repair or closure of the queued upstream source-write race. Main CI and
+  final committed-SHA CI remain separate required gates.
+- Additional adjacent follow-up from task 5.1's complete roadmap read:
+  .kiro/queue/2026-10-18-roadmap-morning-churn-window-wording.md records the
+  pre-existing own-day-only discovery sentence versus shared 7/60-day
+  influence. Approved requirements/runtime coverage are unchanged; the
+  task's two authorized roadmap completion ticks remain its only roadmap
+  edits. No new ambiguity, verification exception or feature defect.
+
+- Task 5.1 acceptance outcome (2026-10-18): final reconciliation onto main
+  f94c503 retained all fourteen accepted feature patches unchanged. Landing
+  DOC_VERSION is 10 from main 9, CONTRACT_VERSION is string 15 from main 14;
+  index/model schemas, runtime dependencies and every peer pass remain
+  unchanged. All three append-only amendments and literal history/golden
+  pins reconcile without further churn. The complete 66-row sweep is above;
+  all criteria have scoped PINNED facets, eight retain explicit preserved
+  subclauses, and the sole auxiliary Astra11 OS-preserved observable and
+  Astra12/13 test-SUT categories remain distinct. No new assertions or
+  mutation executions are claimed for this bookkeeping leaf.
+  Implementer and independent reviewer canonical post-rebase full suites
+  each passed 26,791 tests with eight known local optional skips and one
+  existing JUnit warning (708.44 s and 753.25 s, both actual exit 0).
+  All 2,108 frozen inputs remained exact; the reviewer independently
+  audited 576 preserved earlier RED/restored-GREEN log pairs, all 140 table
+  test references and all 28 feature-changed Python tests. Fresh completion
+  verification passed 730 focused regressions and all statics, and audited
+  the actual full-suite artifacts, source-numbered mapping and current
+  hashes. Parent then accepted all 15 leaves and five major groups and
+  applied the native completed phase with actual UTC metadata.
+  Two new adjacent records cover the upstream preview fixture write race
+  and older roadmap churn wording. Inherited stale queue citations were
+  added as evidence to the existing generic closed-path owner; the specific
+  TRIMP pointer already has its own owner. No upstream source/test repair
+  or duplicate item was introduced. Historical rebased-head main CI and
+  the one permitted DOCS reassessment passed; the first DOCS failure is
+  retained. Final committed-SHA CI, feature GO/fresh verification,
+  canonical installed-artifact/private API behavior and main landing are
+  separate controller gates, with their actual outcomes recorded after
+  execution.
