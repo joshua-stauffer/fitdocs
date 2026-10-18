@@ -11,6 +11,12 @@
 # procedure, run with `--no-version-check` because the real CHANGELOG.md
 # has no released entry until the first release (task 2.4's note).
 #
+# A second job, `supported-pythons`, runs the test suite alone on every other
+# interpreter pyproject.toml classifies (3.12, 3.13): interpreter-dependent
+# behaviour (pathlib's attribute set, Path.stat call counts) otherwise
+# reaches a release untested. The quality gates, build and artifact checks
+# stay on the floor interpreter, once, in `gates`.
+#
 # Publishes nothing: no publishing credential, no OIDC identity-token
 # permission grant, no publish job. The encumbered-content gate's match
 # data is supplied from the `FITDOCS_FORBIDDEN_STRINGS_CONTENT` repository
@@ -104,3 +110,34 @@ jobs:
         with:
           name: dist
           path: dist/
+
+  # The test suite on the supported interpreters above the floor. `UV_PYTHON`
+  # makes every uv command in the job use the matrix interpreter: without it
+  # the repository's `.python-version` (3.11) would silently win and this
+  # job would test the floor three times.
+  supported-pythons:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    env:
+      UV_PYTHON: ${{ matrix.python }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.1.0
+
+      - name: Install the matrix Python
+        run: uv python install ${{ matrix.python }}
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Confirm the interpreter under test
+        run: uv run python -c "import sys; assert '%d.%d' % sys.version_info[:2] == '${{ matrix.python }}', sys.version"
+
+      - name: Run the test suite
+        run: uv run pytest

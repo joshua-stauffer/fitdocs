@@ -15,8 +15,10 @@ Groups:
 
 (a) YAML shape: `on` (parsed as the boolean key `True` by `yaml.safe_load`)
     includes `push` and `pull_request`; top-level `permissions` is exactly
-    `{contents: read}` (no `id-token` -- CI publishes nothing); exactly one
-    job, named `gates`.
+    `{contents: read}` (no `id-token` -- CI publishes nothing); exactly two
+    jobs: `gates` (floor interpreter: gates, build, checks) and
+    `supported-pythons` (the test suite alone on every other classified
+    interpreter).
 (b) exactly one step's `run:` body, stripped, equals the literal
     `uv python install <floor>` where `<floor>` is parsed from
     `pyproject.toml`'s `requires-python` (derived, not hardcoded) -- found
@@ -112,8 +114,8 @@ def _workflow() -> dict[Any, Any]:
 
 def _gates_job(doc: dict[Any, Any]) -> dict[str, Any]:
     jobs = doc["jobs"]
-    assert list(jobs.keys()) == ["gates"], (
-        f"expected exactly one job named gates, got {jobs.keys()!r}"
+    assert list(jobs.keys()) == ["gates", "supported-pythons"], (
+        f"expected exactly the jobs gates and supported-pythons, got {jobs.keys()!r}"
     )
     job = jobs["gates"]
     assert isinstance(job, dict)
@@ -188,10 +190,10 @@ def test_top_level_permissions_are_exactly_contents_read() -> None:
     assert doc["permissions"] == {"contents": "read"}
 
 
-def test_exactly_one_job_named_gates() -> None:
+def test_exactly_the_gates_and_supported_pythons_jobs() -> None:
     doc = _workflow()
     jobs = doc["jobs"]
-    assert list(jobs.keys()) == ["gates"]
+    assert list(jobs.keys()) == ["gates", "supported-pythons"]
 
 
 # --- (b) python floor derived from pyproject.toml ---------------------------
@@ -209,6 +211,62 @@ def test_job_installs_the_exact_python_floor_version() -> None:
     assert step["run"].strip() == f"uv python install {floor}", (
         f"expected the run: body to install exactly {floor!r}, got {step['run']!r}"
     )
+
+
+# --- (b2) the other supported interpreters run the suite --------------------
+
+
+def _classified_pythons() -> set[str]:
+    pyproject = tomllib.loads((_REPO_ROOT / "pyproject.toml").read_text())
+    versions = {
+        c.rsplit("::", 1)[1].strip()
+        for c in pyproject["project"]["classifiers"]
+        if re.fullmatch(r"Programming Language :: Python :: 3\.\d+", c)
+    }
+    assert versions, "no `Python :: 3.x` classifiers parsed from pyproject.toml"
+    return versions
+
+
+def _supported_job(doc: dict[Any, Any]) -> dict[str, Any]:
+    job = doc["jobs"]["supported-pythons"]
+    assert isinstance(job, dict)
+    return job
+
+
+def test_matrix_plus_floor_is_exactly_the_classified_pythons() -> None:
+    """Derived from pyproject.toml, so adding a classifier without adding it
+    to the matrix (or the reverse) reds this."""
+    job = _supported_job(_workflow())
+    matrix = job["strategy"]["matrix"]["python"]
+    assert [str(v) for v in matrix] == sorted(
+        _classified_pythons() - {_required_python_floor()}
+    )
+    assert job["strategy"].get("fail-fast") is False, (
+        "a red interpreter must not hide the others' results"
+    )
+
+
+def test_matrix_interpreter_is_what_uv_actually_uses() -> None:
+    """`.python-version` pins 3.11, so without `UV_PYTHON` every matrix leg
+    would test the floor; the job env, the install step and a confirming
+    step must all name `matrix.python`."""
+    job = _supported_job(_workflow())
+    assert job["env"] == {"UV_PYTHON": "${{ matrix.python }}"}
+    steps = _steps(job)
+    install = _step_by_run_prefix(steps, "uv python install")
+    assert install["run"].strip() == "uv python install ${{ matrix.python }}"
+    confirm = _step_by_run_prefix(steps, "uv run python -c")
+    assert "${{ matrix.python }}" in confirm["run"]
+    assert "assert" in confirm["run"]
+
+
+def test_matrix_job_runs_only_the_test_suite_not_build_or_publish() -> None:
+    steps = _steps(_supported_job(_workflow()))
+    runs = [s["run"].strip() for s in steps if "run" in s]
+    assert "uv run pytest" in runs
+    for run in runs:
+        assert "scripts." not in run, f"matrix job runs a release script: {run!r}"
+    assert not any("upload-artifact" in str(s.get("uses", "")) for s in steps)
 
 
 # --- (c) the three gate steps equal CONTRIBUTING.md's commands exactly -----
