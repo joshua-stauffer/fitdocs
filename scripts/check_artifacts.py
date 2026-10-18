@@ -254,9 +254,12 @@ def _wheel_link_target(mode: int, zf: zipfile.ZipFile, info: zipfile.ZipInfo) ->
     return ""
 
 
-#: What reading a damaged archive raises. Their messages can name the member
-#: being read (`zipfile`'s "Bad CRC-32 for file '<name>'"), so the loaders turn
-#: them into a `CheckerError` that names no member.
+#: What reading a damaged or unsupported archive raises. Their messages can
+#: name the member being read -- `zipfile`'s "Bad CRC-32 for file '<name>'",
+#: the `RuntimeError` for an encrypted-flag member ("File <ZipInfo
+#: filename='<name>' ...> is encrypted") and the `NotImplementedError` for an
+#: unsupported compression -- so the loaders turn them into a `CheckerError`
+#: that names no member.
 _CORRUPT_ARCHIVE_ERRORS = (
     zipfile.BadZipFile,
     tarfile.TarError,
@@ -264,6 +267,8 @@ _CORRUPT_ARCHIVE_ERRORS = (
     zlib.error,
     EOFError,
     UnicodeDecodeError,
+    RuntimeError,
+    NotImplementedError,
 )
 
 
@@ -277,6 +282,8 @@ def _corrupt(path: Path, exc: Exception) -> CheckerError:
 def _load_wheel(path: Path) -> tuple[tuple[_Member, ...], email.message.Message]:
     try:
         return _read_wheel(path)
+    except CheckerError:
+        raise  # our own errors are already redacted (and a RuntimeError)
     except _CORRUPT_ARCHIVE_ERRORS as exc:
         raise _corrupt(path, exc) from None
 
@@ -286,6 +293,8 @@ def _load_sdist(
 ) -> tuple[tuple[_Member, ...], email.message.Message]:
     try:
         return _read_sdist(path, forbidden)
+    except CheckerError:
+        raise  # our own errors are already redacted (and a RuntimeError)
     except _CORRUPT_ARCHIVE_ERRORS as exc:
         raise _corrupt(path, exc) from None
 
@@ -379,7 +388,6 @@ def _read_sdist(
     with tarfile.open(path, "r:gz") as tf:
         infos = tf.getmembers()
         top = _sdist_top_dir(infos, path.name, forbidden)
-        ordinal = 0
         for info in infos:
             stripped = info.name[len(top) :].lstrip("/")
             if stripped == "":
@@ -387,7 +395,6 @@ def _read_sdist(
                 # the package tree the policy or forbidden patterns speak
                 # about.
                 continue
-            ordinal += 1
             is_dir = info.isdir()
             if is_dir and not stripped.endswith("/"):
                 stripped += "/"
@@ -399,7 +406,7 @@ def _read_sdist(
                 extracted = tf.extractfile(info)
                 if extracted is None:
                     raise CheckerError(
-                        f"{path.name}: {_shown_name(stripped, ordinal, forbidden)} "
+                        f"{path.name}: {_shown_name(stripped, len(members) + 1, forbidden)} "
                         "member is unreadable"
                     )
                 content = extracted.read()

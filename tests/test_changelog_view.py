@@ -63,10 +63,16 @@ def test_before_a_cut_the_text_is_unchanged() -> None:
     assert unreleased_since(_BEFORE, _BASE) == _BEFORE
 
 
+def _changed(view: str) -> str:
+    return _unreleased(view).split("### Changed", 1)[1].split("\n### ", 1)[0]
+
+
 def test_after_a_cut_the_newer_release_stands_in_for_unreleased() -> None:
     view = unreleased_since(_CUT, _BASE)
     assert "- new thing" in _added(view)
-    assert "- changed thing" in _unreleased(view)
+    assert "- changed thing" in _changed(view)
+    assert "- changed thing" not in _added(view)
+    assert "- new thing" not in _changed(view)
     assert "## [7.2.0]" not in view
     assert "- old thing" not in _unreleased(view)
 
@@ -100,3 +106,12 @@ def test_the_anchor_and_older_sections_are_kept_verbatim() -> None:
 
 def test_no_unreleased_heading_is_returned_unchanged() -> None:
     assert unreleased_since("# Changelog\n", _BASE) == "# Changelog\n"
+
+
+def test_a_category_only_a_newer_release_has_keeps_its_own_subsection() -> None:
+    text = _CUT_PLUS_NEW  # [Unreleased] has Added only; 7.2.0 has Changed too
+    view = unreleased_since(text, _BASE)
+    assert "### Changed" in _unreleased(view)
+    assert "- changed thing" in _changed(view)
+    assert "- later thing" not in _changed(view)
+    assert "- changed thing" not in _added(view)

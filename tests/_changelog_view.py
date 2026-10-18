@@ -11,6 +11,9 @@ a single ``### Added``, and so on), followed by the sections at or below that
 version untouched. An entry misplaced into the anchor release, or any older
 one, is therefore still outside the view and the pin fails.
 
+Entries that postdate a later release (say 0.2.0) anchor to a new
+``V0_2_0`` constant here, not to ``V0_1_0``.
+
 The one literal release version the pins are anchored to lives here, in one
 file, which ``tests/test_version_identity.py`` permits to carry it.
 """

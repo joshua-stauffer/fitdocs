@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import ast
 import dataclasses
+import gzip
 import hashlib
 import io
 import os
@@ -50,6 +51,7 @@ import sys
 import tarfile
 import tomllib
 import zipfile
+import zlib
 from collections import Counter
 from collections.abc import Iterator, Mapping
 from datetime import date
@@ -2466,7 +2468,7 @@ def test_corrupt_needle_named_sdist_error_names_no_member(
     assert _NEEDLE not in captured.err
 
 
-def test_one_member_gets_one_number_in_findings_and_loader_errors(
+def test_loader_error_numbers_a_stray_sdist_member_without_the_top_entry(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An sdist's top-level directory entry is not a member: the stray member's
@@ -2491,6 +2493,145 @@ def test_one_member_gets_one_number_in_findings_and_loader_errors(
         check_artifacts(
             dist_dir, policy=load_policy(REAL_POLICY_PATH), repo_root=REPO_ROOT
         )
+
+
+def _run_checker(dist_dir: Path) -> int:
+    return check_artifacts_main(
+        [
+            "--no-version-check",
+            "--dist-dir",
+            str(dist_dir),
+            "--policy",
+            str(REAL_POLICY_PATH),
+        ]
+    )
+
+
+def _tar_with(dist_dir: Path, entries: list[tuple[str, bytes | None]]) -> None:
+    """An sdist of exactly `entries` in order; `None` data makes a directory."""
+    with tarfile.open(dist_dir / "fitdocs-9.9.9.tar.gz", "w:gz") as tf:
+        for name, data in entries:
+            info = tarfile.TarInfo(name=name)
+            if data is None:
+                info.type = tarfile.DIRTYPE
+                tf.addfile(info)
+            else:
+                info.size = len(data)
+                tf.addfile(info, io.BytesIO(data))
+
+
+def test_needle_in_the_sdist_top_level_name_is_redacted_in_the_loader_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    _make_wheel(dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=_CLEAN_METADATA)
+    _tar_with(
+        dist_dir,
+        [
+            (f"{_NEEDLE}-top/PKG-INFO", _CLEAN_METADATA.encode()),
+            ("elsewhere/plain.py", b""),
+        ],
+    )
+
+    assert _run_checker(dist_dir) == 2
+
+    captured = capsys.readouterr()
+    assert "<redacted top-level name>" in captured.err
+    assert _NEEDLE not in captured.out
+    assert _NEEDLE not in captured.err
+
+
+def test_finding_numbers_an_sdist_member_without_counting_the_top_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Top-level directory entry, PKG-INFO (#1), then the needle-named binary
+    (#2): the finding carries the same number the loader error would."""
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    _make_wheel(dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=_CLEAN_METADATA)
+    _tar_with(
+        dist_dir,
+        [
+            ("fitdocs-9.9.9", None),
+            ("fitdocs-9.9.9/PKG-INFO", _CLEAN_METADATA.encode()),
+            (f"fitdocs-9.9.9/{_NEEDLE}.bin", bytes(range(256))),
+        ],
+    )
+
+    violations = check_artifacts(
+        dist_dir, policy=load_policy(REAL_POLICY_PATH), repo_root=REPO_ROOT
+    )
+
+    details = [
+        v.detail for v in violations if v.kind == ViolationKind.ENCUMBERED_CONTENT
+    ]
+    assert details == [
+        "binary member <redacted member #2> name matches a forbidden-string token match"
+    ]
+
+
+def test_encrypted_flag_wheel_member_error_names_no_member(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`zipfile` raises `RuntimeError("File <ZipInfo filename='<name>' ...> is
+    encrypted ...")` for a member whose flag bit 0 is set."""
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    wheel_path = _make_wheel(
+        dist_dir,
+        {**_CLEAN_WHEEL_MEMBERS, f"fitdocs/{_NEEDLE}.dat": b"x"},
+        metadata=_CLEAN_METADATA,
+    )
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+    raw = bytearray(wheel_path.read_bytes())
+    # The central-directory copy is the last occurrence of the member name.
+    central = raw.rindex(b"PK\x01\x02", 0, raw.rindex(f"{_NEEDLE}.dat".encode()))
+    raw[central + 8] |= 0x01  # general-purpose flag bit 0: encrypted
+    wheel_path.write_bytes(bytes(raw))
+
+    assert _run_checker(dist_dir) == 2
+
+    captured = capsys.readouterr()
+    assert "archive is corrupt or unreadable (RuntimeError)" in captured.err
+    assert _NEEDLE not in captured.out
+    assert _NEEDLE not in captured.err
+
+
+@pytest.mark.parametrize(
+    "exc_type",
+    [gzip.BadGzipFile, zlib.error, EOFError, NotImplementedError, tarfile.ReadError],
+)
+def test_every_damaged_archive_exception_is_stripped_of_member_names(
+    exc_type: type[Exception],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv(ENV_VAR, str(_write_match_file(tmp_path, _NEEDLE)))
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    _make_wheel(dist_dir, _CLEAN_WHEEL_MEMBERS, metadata=_CLEAN_METADATA)
+    _make_sdist(dist_dir, _CLEAN_SDIST_MEMBERS, pkg_info=_CLEAN_METADATA)
+
+    def _raise(path: Path, forbidden: object) -> None:
+        raise exc_type(f"damaged near {_NEEDLE}.dat")
+
+    monkeypatch.setattr(check_artifacts_module, "_read_sdist", _raise)
+
+    assert _run_checker(dist_dir) == 2
+
+    captured = capsys.readouterr()
+    assert f"({exc_type.__name__})" in captured.err
+    assert _NEEDLE not in captured.out
+    assert _NEEDLE not in captured.err
 
 
 # --- sdist-side twins: the same checks, exercised on the sdist -------------
