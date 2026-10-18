@@ -200,6 +200,10 @@ class AthleteProfile:
                 f"{PROFILE_FILENAME}: {key!r} must be a number, "
                 f"got {node!r} ({type(node).__name__})"
             )
+        if not math.isfinite(node):
+            raise ProfileError(
+                f"{PROFILE_FILENAME}: {key!r} must be a finite number, got {node!r}"
+            )
         return float(node)
 
     def with_value(self, field: AthleteField, value: float) -> AthleteProfile:
@@ -1021,14 +1025,18 @@ def _validate_benchmark_value(kind: BenchmarkKind, value: float) -> int | float:
 def _validate(field: AthleteField, value: float) -> int | float:
     """Validate ``value`` against ``field`` and return the value to store.
 
-    Rejects a ``bool`` (never a number), enforces the inclusive range bounds,
-    and for an ``int``-kind field requires an integral value and returns a
+    Rejects a ``bool`` (never a number), a non-finite value, enforces the
+    inclusive range bounds, and for an ``int``-kind field requires an integral value and returns a
     Python ``int`` so it serializes as a bare TOML integer. Any violation raises
     :class:`ValueError` and nothing is stored (Req 2.6).
     """
     if isinstance(value, bool):
         raise ValueError(
             f"{field.label} ({field.key}): a boolean is not a valid number"
+        )
+    if not math.isfinite(value):
+        raise ValueError(
+            f"{field.label} ({field.key}) must be a finite number, got {value}"
         )
     if field.minimum is not None and value < field.minimum:
         raise ValueError(

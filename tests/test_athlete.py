@@ -279,6 +279,32 @@ def test_bool_inside_zone_list_raises(tmp_path: Path) -> None:
         load_athlete_inputs(tmp_path)
 
 
+# --- non-finite guard: TOML `nan`/`inf` are neither a value nor absent -------
+
+
+@pytest.mark.parametrize("literal", ["nan", "+nan", "-nan", "inf", "+inf", "-inf"])
+def test_non_finite_number_threshold_raises_naming_the_key(
+    tmp_path: Path, literal: str
+) -> None:
+    """A non-finite float threshold is refused, never turned into NaN load."""
+    _write_athlete(tmp_path, f"ftp_watts = {literal}\n")
+
+    with pytest.raises(AthleteFileError, match="ftp_watts"):
+        load_athlete_inputs(tmp_path)
+
+
+@pytest.mark.parametrize("key", ["hr_zones", "power_zones", "pace_zones"])
+@pytest.mark.parametrize("literal", ["nan", "inf", "-inf"])
+def test_non_finite_zone_divider_raises_naming_the_key(
+    tmp_path: Path, key: str, literal: str
+) -> None:
+    """A non-finite zone divider is refused, naming the zone key."""
+    _write_athlete(tmp_path, f"{key} = [100, {literal}]\n")
+
+    with pytest.raises(AthleteFileError, match=key):
+        load_athlete_inputs(tmp_path)
+
+
 # --- Loud failures still write nothing (read-only by construction) ----------
 
 

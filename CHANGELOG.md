@@ -301,6 +301,11 @@ recorded as one.
 
 ### Fixed
 
+- `athlete.toml` now refuses a non-finite number (`nan`, `inf`, `-inf`) in a
+  threshold such as `ftp_watts`, in a zone divider, or in any profile value a
+  calculator reads, as a configuration error naming the key, instead of letting
+  it produce `nan` intensity and load values. Answering a load prompt with a
+  non-finite value is refused too.
 - Recovery page: a change of shown source is now stated even when days with no
   value separate the two sources, the Sleep section now states its source
   changes and names its sources with their recorded origins (its table caption

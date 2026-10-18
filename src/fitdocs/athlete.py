@@ -29,6 +29,7 @@ float and is normalized to ``float``.
 
 from __future__ import annotations
 
+import math
 import tomllib
 from collections.abc import Mapping
 from pathlib import Path
@@ -128,7 +129,7 @@ def load_athlete_inputs(data_root: Path) -> AthleteInputs | None:
 
 
 def _optional_number(data: dict[str, Any], key: str, path: Path) -> float | None:
-    """Map an optional numeric threshold to ``float``; reject non-numbers/bools."""
+    """Map an optional numeric threshold to ``float``; reject non-finite."""
     if key not in data:
         return None
     value = data[key]
@@ -136,6 +137,8 @@ def _optional_number(data: dict[str, Any], key: str, path: Path) -> float | None
         raise AthleteFileError(
             f"{path}: {key} must be a number, got {value!r} ({type(value).__name__})"
         )
+    if not math.isfinite(value):
+        raise AthleteFileError(f"{path}: {key} must be a finite number, got {value!r}")
     return float(value)
 
 
@@ -173,6 +176,10 @@ def _optional_zone(data: dict[str, Any], key: str, path: Path) -> ZoneSpec | Non
             raise AthleteFileError(
                 f"{path}: every {key} divider must be a number, "
                 f"got {element!r} ({type(element).__name__})"
+            )
+        if not math.isfinite(element):
+            raise AthleteFileError(
+                f"{path}: every {key} divider must be a finite number, got {element!r}"
             )
         dividers.append(float(element))
     try:

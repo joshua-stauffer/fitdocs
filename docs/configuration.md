@@ -357,7 +357,9 @@ when its derived entries change; `--dry-run` previews without writing.
 Hand-recorded benchmarks and unknown keys, tables and values survive a
 rewrite. Comments and formatting do not: the file is parsed and
 re-serialized. An absent file means no configured inputs; a malformed one
-is a configuration error (exit code 2).
+is a configuration error (exit code 2). Numeric values must be finite: a
+TOML `nan`, `inf` or `-inf` (for example `ftp_watts = nan`) is rejected the
+same way, naming the key, rather than producing `nan` load values.
 
 ### Derived heart-rate benchmarks
 

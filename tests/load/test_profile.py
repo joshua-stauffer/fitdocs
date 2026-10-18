@@ -73,6 +73,13 @@ FTP = AthleteField(
     minimum=50,
     maximum=600,
 )
+UNBOUNDED_FLOAT = AthleteField(
+    key="probe.level",
+    label="Probe level",
+    kind="float",
+    minimum=None,
+    maximum=None,
+)
 UNBOUNDED_INT = AthleteField(
     key="probe.count",
     label="Probe count",
@@ -240,6 +247,26 @@ def test_get_number_on_non_numeric_value_raises_naming_the_key(tmp_path: Path) -
     with pytest.raises(ProfileError) as exc_str:
         profile.get_number("name")
     assert "name" in str(exc_str.value)
+
+
+@pytest.mark.parametrize("literal", ["nan", "inf", "-inf"])
+def test_get_number_on_non_finite_value_raises_naming_the_key(
+    tmp_path: Path, literal: str
+) -> None:
+    (tmp_path / PROFILE_FILENAME).write_text(f"ftp_watts = {literal}\n")
+
+    with pytest.raises(ProfileError, match="ftp_watts"):
+        load_profile(tmp_path).get_number("ftp_watts")
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_value_rejected_and_nothing_persisted(
+    tmp_path: Path, value: float
+) -> None:
+    # An unbounded float field so only a finiteness check (not a range) can fire.
+    with pytest.raises(ValueError, match="finite"):
+        load_profile(tmp_path).with_value(UNBOUNDED_FLOAT, value)
+    assert not (tmp_path / PROFILE_FILENAME).exists()
 
 
 # --- atomic write (Req 2.1, 2.5) -------------------------------------------
