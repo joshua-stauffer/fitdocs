@@ -21,6 +21,7 @@ file is the meta-test the design's Implementation Notes describe for
 from __future__ import annotations
 
 import os
+import secrets
 import shutil
 import stat
 import subprocess
@@ -814,25 +815,37 @@ def _fail_redacted(message: str) -> NoReturn:
     pytest.fail(message, pytrace=False)
 
 
-def _describe_hits(hits: Sequence[Hit]) -> str:
-    """Counts per surface, plus the path of each CONTENT hit. A path-surface
-    hit's path IS the matched text, so it is counted and never named. Which
-    value matched is in the `FITDOCS_FORBIDDEN_STRINGS` source."""
-    named_by_path = {h.path for h in hits if h.surface == "path"}
-    # A file hit on both surfaces has a path that IS a matched value: counted,
-    # never named.
-    content = sorted(
-        str(h.path)
-        for h in hits
-        if h.surface == "content" and h.path not in named_by_path
-    )
+def _nameable(
+    paths: Sequence[Path], forbidden_strings: ForbiddenStrings
+) -> tuple[list[str], int]:
+    """Split `paths` into those safe to print and a count of those withheld.
+    A path is withheld when the matcher finds a forbidden value in it, judged
+    here and now rather than by whether the scan happened to report a
+    path-surface hit: a regressed path matcher must not turn a failure message
+    into a leak."""
+    safe: list[str] = []
+    withheld = 0
+    for path in paths:
+        if matches(str(path), forbidden_strings):
+            withheld += 1
+        else:
+            safe.append(str(path))
+    return sorted(safe), withheld
+
+
+def _describe_hits(hits: Sequence[Hit], forbidden_strings: ForbiddenStrings) -> str:
+    """Counts per surface, plus the path of each CONTENT hit whose path
+    carries no forbidden value (see `_nameable`); the rest are counted, never
+    named. Which value matched is in the `FITDOCS_FORBIDDEN_STRINGS` source."""
+    content_paths = [h.path for h in hits if h.surface == "content"]
+    safe, withheld = _nameable(content_paths, forbidden_strings)
     path_count = sum(1 for h in hits if h.surface == "path")
     return (
-        f"{sum(1 for h in hits if h.surface == 'content')} content hit(s), "
-        f"of which these are in files not also hit by name: {content}; "
-        f"{path_count} path-name "
-        "hit(s) (not named: the path is the matched text). See the "
-        "FITDOCS_FORBIDDEN_STRINGS source for which value(s)"
+        f"{len(content_paths)} content hit(s), of which these are in files "
+        f"whose names are clean: {safe} ({withheld} more not named: the path "
+        f"is a matched value); {path_count} path-name hit(s) (not named: the "
+        "path is the matched text). See the FITDOCS_FORBIDDEN_STRINGS source "
+        "for which value(s)"
     )
 
 
@@ -868,7 +881,7 @@ def test_scan_members_flags_content_and_name_but_not_a_clean_member() -> None:
     if len(hits) != 2:
         _fail_redacted(
             f"expected exactly the two planted hits, got {len(hits)} "
-            f"({_describe_hits(hits)})"
+            f"({_describe_hits(hits, forbidden_strings)})"
         )
 
 
@@ -951,7 +964,7 @@ def test_standing_guard_positive_controls_flag_content_and_path_but_not_clean_fi
     if len(hits) != 2:
         _fail_redacted(
             f"expected exactly the two planted hits, got {len(hits)} "
-            f"({_describe_hits(hits)})"
+            f"({_describe_hits(hits, forbidden_strings)})"
         )
 
 
@@ -993,9 +1006,10 @@ def test_standing_guard_flags_a_multi_word_value_wrapped_across_a_line_break(
         _synthetic_files(root), root, forbidden_strings
     )
 
-    assert not unreadable, (
-        f"the control's own planted files were unreadable: {unreadable}"
-    )
+    if unreadable:
+        _fail_redacted(
+            f"the control's own planted files were unreadable ({len(unreadable)})"
+        )
     assert {(hit.path, hit.surface) for hit in hits} == {
         (Path("wrapped.md"), "content")
     }
@@ -1177,10 +1191,10 @@ def test_standing_guard_scans_tracked_content_and_path_names() -> None:
     in README.md, or docs/plugins.md, left `uv run pytest` green before this
     guard existed).
 
-    Reports counts to stdout and, on failure, only surfaces, counts and the
-    paths of CONTENT hits (never a matched value, never the name of a
-    path-surface hit, whose path is the matched text): this test runs armed in
-    public CI, where a log line is published.
+    Reports counts to stdout and, on failure, only surfaces, counts and paths
+    that the matcher itself finds clean (content-hit and unreadable paths; a
+    path carrying a forbidden value is counted, never named): this test runs
+    armed in public CI, where a log line is published.
     """
     repo_root = _repo_root()
     forbidden_strings = require(repo_root)
@@ -1227,15 +1241,18 @@ def test_standing_guard_scans_tracked_content_and_path_names() -> None:
         f"scanned, {len(hits)} total hit(s), {len(unreadable)} unreadable "
         f"file(s)"
     )
-    for path in unreadable:
-        print(f"  unreadable: {path}")
+    unreadable_safe, unreadable_withheld = _nameable(unreadable, forbidden_strings)
+    for name in unreadable_safe:
+        print(f"  unreadable: {name}")
+    if unreadable_withheld:
+        print(f"  unreadable: {unreadable_withheld} more (name withheld)")
 
     if unreadable:
         _fail_redacted(
             f"{len(unreadable)} tracked file(s) could not even be opened, so "
             f"this scan cannot vouch for their content -- absence of a hit for "
             f"these files is not absence of a forbidden string: "
-            f"{[str(p) for p in unreadable]}"
+            f"{unreadable_safe} ({unreadable_withheld} more not named)"
         )
     # Task 6.3: the tracked tree carries zero forbidden values -- every
     # former reviewed-exemption entry pointed at content that has since been
@@ -1243,7 +1260,8 @@ def test_standing_guard_scans_tracked_content_and_path_names() -> None:
     # no exemption table to consult here any more. A hit is a hit.
     if hits:
         _fail_redacted(
-            f"tracked tree contains a forbidden string: {_describe_hits(hits)}"
+            "tracked tree contains a forbidden string: "
+            + _describe_hits(hits, forbidden_strings)
         )
 
 
@@ -1321,7 +1339,8 @@ def test_standing_guard_scans_sdist_members_content_and_names(
     # Task 6.3: no exemption table exists any more -- a hit is a hit.
     if hits:
         _fail_redacted(
-            f"built sdist contains a forbidden string: {_describe_hits(hits)}"
+            "built sdist contains a forbidden string: "
+            + _describe_hits(hits, forbidden_strings)
         )
 
 
@@ -1389,7 +1408,8 @@ def test_standing_guard_scans_wheel_members_content_and_names(
     # Task 6.3: no exemption table exists any more -- a hit is a hit.
     if hits:
         _fail_redacted(
-            f"built wheel contains a forbidden string: {_describe_hits(hits)}"
+            "built wheel contains a forbidden string: "
+            + _describe_hits(hits, forbidden_strings)
         )
 
 
@@ -1561,3 +1581,32 @@ def test_armed_guard_failures_never_print_a_matched_value(tmp_path: Path) -> Non
     for label, value in (("content", content_value), ("name", name_value)):
         if value in output:
             _fail_redacted(f"the armed guard's output printed the {label} value")
+
+
+def test_failure_text_withholds_a_value_bearing_path_even_if_no_path_hit_exists(
+    tmp_path: Path,
+) -> None:
+    """Redaction must not depend on the scan having reported a path-surface
+    hit for the file: if the path matcher regressed, a content hit's path
+    that carries a forbidden value (and an unreadable one) must still be
+    counted, not named. Values are built at run time."""
+    name_value = "needle-" + "name-" + secrets.token_hex(4)
+    match_file = tmp_path / "m.txt"
+    match_file.write_text(f"cat\t{name_value}\n")
+    fs = ForbiddenStrings(values=(name_value,), source=match_file)
+    bad = Path(f"dir/{name_value}.py")
+    ok = Path("dir/clean.py")
+
+    text = _describe_hits(
+        (
+            Hit(path=bad, surface="content", found=("x",)),
+            Hit(path=ok, surface="content", found=("x",)),
+        ),
+        fs,
+    )
+    safe, withheld = _nameable((bad, ok), fs)
+
+    if name_value in text or name_value in "".join(safe):
+        _fail_redacted("a value-bearing path was named")
+    if "dir/clean.py" not in text or withheld != 1:
+        _fail_redacted("positive control failed: the clean path was not named")

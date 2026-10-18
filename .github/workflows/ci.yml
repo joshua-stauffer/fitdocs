@@ -83,8 +83,8 @@ jobs:
       # Defense in depth: this repository's Actions log is public and the
       # suite below runs armed. The guard tests report no matched value, but
       # if anything ever printed one the runner would replace it with ***.
-      # Same parse as tests/_forbidden_strings.py: skip blank and `#` lines,
-      # take the text after the first tab. Kept a separate step so the write
+      # The same parse as tests/_forbidden_strings.py for ordinary text lines:
+      # skip blank and `#` lines, take the text after the first tab. Kept a separate step so the write
       # step stays byte-identical to docs.yml's.
       - name: Mask the match data in the log
         run: |
