@@ -143,9 +143,8 @@ _PACE_LOAD = _load(
     coverage=StreamCoverage(stream="distance", covered_s=3592.9, total_s=3600.0),
     scored_duration_s=3800.0,
     inputs_used=(
-        ("Threshold pace", "300.0 s/km"),
-        ("Anchor discipline", "Run"),
-        ("Measured on", "2026-01-01"),
+        ("grade_adjusted_speed_mps", "3.5"),
+        ("threshold_speed_mps", "3.33333"),
     ),
     notes=("gap-adjusted for elevation",),
 )
@@ -444,10 +443,21 @@ def test_inputs_used_appends_the_selected_channels_own_inputs_verbatim() -> None
     reds this assertion -- the three rows would appear in the opposite
     order."""
     result = _happy_result()
-    assert result.inputs_used[5:] == (
-        ("Threshold pace", "300.0 s/km"),
+    assert result.inputs_used[8:] == (
+        ("grade_adjusted_speed_mps", "3.5"),
+        ("threshold_speed_mps", "3.33333"),
+    )
+
+
+def test_anchor_rows_come_from_selected_anchor_not_the_channels_own_rows() -> None:
+    """Req 3.7, 8.6: value, measurement date and discipline are emitted from
+    ``selected.anchor`` between the fixed rows and the channel's own rows --
+    the fixture channel's own rows carry none of them."""
+    result = _happy_result()
+    assert result.inputs_used[5:8] == (
+        ("Anchor value", "250 s/km"),
+        ("Anchor measured on", "2026-01-01"),
         ("Anchor discipline", "Run"),
-        ("Measured on", "2026-01-01"),
     )
 
 

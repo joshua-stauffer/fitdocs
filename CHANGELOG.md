@@ -365,6 +365,11 @@ recorded as one.
   page. Each is now shown on one line with any `|` escaped. Exercise names
   and decode errors are likewise kept on one line. Before, a newline or pipe
   in the recorded text was written into the page verbatim.
+- Threshold load: the inputs table now always states the anchoring benchmark's
+  value, measurement date and discipline (`Anchor value`, `Anchor measured on`,
+  `Anchor discipline`). Before, only a power-selected result carried all three,
+  so a pace-selected run (the default for running) showed no measurement date.
+  The rows appear in a page's load region the next time it is regenerated.
 
 ## [0.1.0] - 2026-09-19
 

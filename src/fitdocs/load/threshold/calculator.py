@@ -98,7 +98,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Final, cast
 
-from fitdocs.benchmarks import BenchmarkKind
+from fitdocs.benchmarks import Benchmark, BenchmarkKind
 from fitdocs.load.channels import (
     heart_rate_compute,
     pace_compute,
@@ -512,6 +512,15 @@ land adjacent in the same ``notes`` tuple -- but the hyphenated form here
 exists because design.md's postcondition spells the borrowing note this
 way."""
 
+_BENCHMARK_UNIT: Final[Mapping[BenchmarkKind, str]] = {
+    BenchmarkKind.FTP_WATTS: "W",
+    BenchmarkKind.LTHR_BPM: "bpm",
+    BenchmarkKind.MAX_HR_BPM: "bpm",
+    BenchmarkKind.RESTING_HR_BPM: "bpm",
+    BenchmarkKind.THRESHOLD_PACE_S_PER_KM: "s/km",
+}
+"""Unit suffix for the anchor-value row (Req 3.7)."""
+
 _BORROWING_QUANTITY_NAME: Final[Mapping[BenchmarkKind, str]] = {
     BenchmarkKind.FTP_WATTS: "threshold power",
     BenchmarkKind.LTHR_BPM: "lactate threshold heart rate",
@@ -557,6 +566,18 @@ def _format_borrowing(borrowing: Borrowing) -> str:
     )
 
 
+def _anchor_rows(anchor: Benchmark) -> tuple[tuple[str, str], ...]:
+    """The anchoring benchmark's value, measurement date and discipline, read
+    from the benchmark itself so the triple is uniform across channels (Req
+    3.7, 8.6)."""
+    discipline = "athlete" if anchor.discipline is None else anchor.discipline.value
+    return (
+        ("Anchor value", f"{anchor.value:g} {_BENCHMARK_UNIT[anchor.kind]}"),
+        ("Anchor measured on", anchor.measured_on.isoformat()),
+        ("Anchor discipline", discipline),
+    )
+
+
 def build_result(
     *,
     selected: ChannelLoad,
@@ -592,6 +613,7 @@ def build_result(
         ("Intensity", format_ratio(selected.intensity)),
         ("Scored duration", format_duration(selected.scored_duration_s)),
         ("Coverage", format_coverage(selected.coverage)),
+        *_anchor_rows(selected.anchor),
         *selected.inputs_used,
     )
 

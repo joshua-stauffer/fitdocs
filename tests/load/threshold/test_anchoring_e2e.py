@@ -685,3 +685,52 @@ def test_run_selected_on_pace_still_records_a_real_heart_rate_number() -> None:
     )
     assert isinstance(expected_hr, ChannelLoad)
     assert hr_record.value == expected_hr.load
+
+
+# ---------------------------------------------------------------------------
+# 6. Anchor provenance on every channel (Req 3.7, 8.6)
+# ---------------------------------------------------------------------------
+
+_RUN_PACE = _bm(
+    BenchmarkKind.THRESHOLD_PACE_S_PER_KM, Sport.RUN, 300.0, date(2025, 11, 3)
+)
+
+
+def test_pace_selected_result_carries_the_anchor_triple() -> None:
+    """A run selected on pace (the default first channel for running) reports
+    the benchmark's own value, measurement date and discipline -- driven
+    through the real ``pace_compute``, whose own ``inputs_used`` carries none
+    of the three (Req 3.7, 8.6)."""
+    profile = _HistoryProfile((_RUN_PACE,))
+    outcome = ThresholdCalculator().compute(
+        _run_activity(),
+        _metrics(),
+        profile,
+        _RaisingSession(),
+        _context(activity_date=_WALK_DATE),
+    )
+    assert isinstance(outcome, Computed)
+    assert outcome.result.basis == ChannelId.PACE.value
+    rows = outcome.result.inputs_used
+    assert ("Anchor value", "300 s/km") in rows
+    assert ("Anchor measured on", "2025-11-03") in rows
+    assert ("Anchor discipline", "Run") in rows
+
+
+def test_heart_rate_selected_result_carries_the_anchor_discipline() -> None:
+    """Heart rate's own rows carry the LTHR and its date but never the
+    discipline; the uniform triple supplies it (Req 3.7, 8.6). The Run LTHR
+    anchoring a walk makes the discipline differ from the activity's."""
+    profile = _HistoryProfile((_RUN_LTHR, _ATHLETE_RESTING_HR, _ATHLETE_MAX_HR))
+    outcome = ThresholdCalculator().compute(
+        _walk_activity(),
+        _metrics(),
+        profile,
+        _RaisingSession(),
+        _context(activity_date=_WALK_DATE),
+    )
+    assert isinstance(outcome, Computed)
+    rows = outcome.result.inputs_used
+    assert ("Anchor value", "165 bpm") in rows
+    assert ("Anchor measured on", "2026-01-01") in rows
+    assert ("Anchor discipline", "Run") in rows

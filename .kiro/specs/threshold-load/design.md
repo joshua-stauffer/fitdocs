@@ -1171,7 +1171,7 @@ def build_result(
 | `basis` | the selected `ChannelId` value — `"power"`, `"heart_rate"` or `"pace"` (8.2) |
 | `non_selected` | `non_selected_values(...)` (8.3–8.5) |
 | `flags` | `()` (8.8) |
-| `inputs_used` | `("Channel", label)`, `("Selection order", "pace > power > heart_rate")`, `("Intensity", "0.912")`, `("Scored duration", "1:03:20")`, `("Coverage", "distance 99.8% of recorded time")`, then the selected channel's own `inputs_used` verbatim — which already carries the anchor value, its discipline and its measurement date (3.7, 6.6, 8.6, 8.11, 8.12) |
+| `inputs_used` | `("Channel", label)`, `("Selection order", "pace > power > heart_rate")`, `("Intensity", "0.912")`, `("Scored duration", "1:03:20")`, `("Coverage", "distance 99.8% of recorded time")`, then `("Anchor value", "300 s/km")`, `("Anchor measured on", "2025-11-03")`, `("Anchor discipline", "Run")` read from `selected.anchor` (uniform across channels: only the power channel's own rows carry all three), then the selected channel's own `inputs_used` verbatim (3.7, 6.6, 8.6, 8.11, 8.12) |
 | `notes` | one per `Borrowing`, then the selected channel's own `notes`, each prefixed with the channel label (3.4, 8.7) |
 
 - Postconditions: `basis` is non-empty; every `NonSelectedValue.reason` is
