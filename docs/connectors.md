@@ -135,13 +135,18 @@ given; whether and how it applies to personal API keys was not answered.
 fitdocs does not detect this. A pull that no longer finds any activity with
 source `GARMIN_CONNECT` reports nothing unusual: such activities are never
 counted in `listed`, so the report looks like a week with no rides. If the
-listing still shows them but their files can no longer be downloaded, each
-shows in the `skipped` row as having no original file; if intervals.icu
-refuses the key, the pull ends with the refused-key message below. Pages and
-archived files from earlier pulls are not affected. To get Garmin files by
-another route, copy or export them from the device or from Garmin Connect
-into a directory and read it with [the folder connector](#the-folder-connector),
-or drop them into the inbox directly.
+listing still shows them but a file download answers 404 or 422, each shows
+in the `skipped` row as having no original file; any other failing status is
+reported in `failed` and retried on the next pull; a download that succeeds
+with something that is not a FIT file is `skipped` as not a FIT file. A 403
+is treated as a refused client: the pull ends with a message saying the
+service refused this client, and it ends this instance's run on every pull. The evidence does not
+establish which of these a block would use. Pages and archived files from
+earlier pulls are not affected. To get Garmin files by another route, copy or
+export them from the device or from Garmin Connect (unzip Garmin Connect's
+download first) into a directory and read it with
+[the folder connector](#the-folder-connector), or drop them into the inbox
+directly.
 
 ### What a pull fetches
 
@@ -416,8 +421,10 @@ A pull that is killed outright (power loss or `kill -9`, not Ctrl-C or an
 error, which still save the ledger) between writing a file and saving the
 ledger leaves that file in the inbox with no ledger entry. The drain then
 treats it as any other file you dropped in, and a pull never removes it; the
-next pull fetches the same activity again and delivers a second copy, which
-the archive deduplicates by its bytes.
+next pull fetches the same activity again and delivers a second copy —
+unless the drain has archived the first copy by then, in which case it is
+recorded as already held. A hidden `.<name>-….tmp` file can also remain
+beside it; the drain ignores it and it can be deleted.
 
 Once the drain has archived a pull's delivery, the archive holds a copy of
 those exact bytes, and the *next* pull removes fitdocs's own now-redundant

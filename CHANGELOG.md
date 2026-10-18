@@ -384,7 +384,8 @@ recorded as one.
 - A pull can no longer overwrite a file another program creates in the inbox
   at the same moment it delivers one (activities and wellness packages
   alike): the delivery takes the next free name instead. Before, a file
-  created in that instant could be replaced.
+  created in that instant could be replaced. (On an inbox filesystem without
+  hard links the narrow check-then-write window remains.)
 - When a new revision of an activity replaces a still-pending delivery with
   different bytes, a later activity in the same pull carrying the old bytes is
   now delivered rather than reported as `held` against a copy the ledger no
