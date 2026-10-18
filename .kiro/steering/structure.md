@@ -120,6 +120,11 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   layer's attribution helpers; only `cli` imports `recovery.engine`.
   Outside its own package, its pure facade depends only on `wellness`
   and `citation`.
+- `morning` (the morning-of block and its pass) imports the `wellness` and
+  `recovery` facades, `contract`, `docmerge`, `docio`, `layout`, the render
+  layer's absence marker and wellness attribution helpers and the chart
+  kit's value formatter; only `cli` imports `morning.engine`; `render`
+  never imports `morning`.
 - `LoadCalculator` implementations declare their required inputs so the CLI
   can prompt for missing data generically — no calculator-specific prompting
   code in the CLI.

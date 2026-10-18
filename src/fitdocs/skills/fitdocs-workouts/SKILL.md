@@ -124,6 +124,24 @@ status and value-count summary after the table.
 | Wellness skipped | `wellness_skipped` | The wellness file's content is already archived. | Nothing needed; the archive already holds this content. |
 | Wellness failed | `wellness_failures` | A wellness file could not be parsed and its content was quarantined. | Tell the user the reason and ask them to correct the export; retry the same quarantined content only with their direction. Never delete the file. |
 
+`Morning of:` lines follow the drain report.
+`Morning of: 1 page updated, 1 block removed.` means blocks were
+refreshed, or cleared when their wellness figures disappeared;
+no athlete action is needed. Counts use singular or plural, and a
+zero-count clause is omitted.
+`Morning of: could not update <doc>: <detail>` means that page could
+not be refreshed: read the reason and tell the athlete; damaged
+markers need a human.
+`Morning of: 1 page has no morning-of region (written by an older fitdocs, or the region markers were removed); run 'fitdocs regen' to add it.`
+(or `2 pages have` for two) means a region is missing.
+Run `fitdocs regen` only when `fitdocs check` or the release notes
+call for it; never run it as part of the routine pair.
+`Morning of: not refreshed; the wellness series could not be read: <reason>.`
+means the series was unavailable.
+`Morning of: not refreshed; <ExceptionType>: <message>.` means the
+pass raised an error. Neither `not refreshed` line needs athlete
+action; the next run retries.
+
 **Wellness in `fitdocs check`.** For `wellness_series_stale`, run `fitdocs
 sync` to rebuild; if the remedy names invalid settings, tell the user to fix
 `fitdocs.toml` first. For `wellness_orphaned_entry`,

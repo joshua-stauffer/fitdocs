@@ -639,7 +639,7 @@ wiki-contract and analytics-index amendment and criterion numbers.
     tests/test_portability.py` green.
   - _Requirements: 1.2, 3.2, 4.2, 7.1, 7.2, 7.4, 9.4, 10.1, 12.3_
 
-- [ ] 4. Versions, the contract and the published text
+- [x] 4. Versions, the contract and the published text
 
 - [x] 4.1 Advance the page-format version and record the workout-docs amendment
   - Read `DOC_VERSION` on the branch rebased onto `main`, advance it by one
@@ -742,7 +742,7 @@ wiki-contract and analytics-index amendment and criterion numbers.
     sync reports no declaration finding.
   - _Requirements: 9.3, 9.5, 11.1, 11.2, 11.3_
 
-- [ ] 4.3 Document the block in the wellness guide, the workouts skill, the release notes and steering
+- [x] 4.3 Document the block in the wellness guide, the workouts skill, the release notes and steering
   - `docs/wellness.md`: the section "Wellness on workout pages" per design §
     Docs.
   - `src/fitdocs/skills/fitdocs-workouts/SKILL.md`: the `Morning of:`
@@ -1254,3 +1254,30 @@ wiki-contract and analytics-index amendment and criterion numbers.
   amendment-node cases. It independently confirmed all current inputs,
   fault records and the bounded checklist. The guide, packaged skill,
   release notes and final integration follow in 4.3 and 5.1.
+
+- Task 4.3 publication outcome (2026-10-18): the wellness guide links to its
+  existing day-boundary section and explains both windows, origins,
+  attribution, absence, refreshes and shared Recovery figures. The shipped
+  workouts skill explains every Morning of report and action; the upgrading
+  guide names archived wellness through the rebuilt-first series. Release
+  notes publish page format 9 to 10, ownership contract 14 to 15, regeneration
+  and the analytics document-only change. Structure steering names the
+  approved morning dependency boundary. All predecessor publication bytes,
+  peer Recovery wording and the single Fixed subsection after Changed are
+  preserved; existing skill pins required no adjustment.
+  Seven new assertion sites expand to 28 cases, with the retained
+  wellness-store exactly-once consumer also observed RED. All 47 ordinary
+  source/document faults were independently replayed, plus two reviewer
+  faults: 51 intended failures and exact restoration/GREEN in review.
+  Source criteria 11.4, 11.5 and 11.6 are PINNED; no new exception applies.
+  Implementer and fresh reviewer canonical full suites each passed 26,791
+  tests with eight known local optional skips and one existing JUnit warning
+  (716.67 s and 713.68 s, both exit 0); all 2,106 frozen inputs remained
+  unchanged. Focused review passed 845 tests with one known actionlint skip;
+  Ruff, formatting and mypy passed. No findings or follow-ups surfaced.
+  Fresh completion verification independently audited both full-suite
+  XML/log/exit records, all 47 implementer and 49 reviewer fault records,
+  every intended assertion and restoration, the census and actual pytest
+  import/copy-environment provenance. All 2,106 inputs matched the live tree
+  and both snapshots. Its fresh focused run passed 845 tests with one known
+  actionlint skip in 15.59 s; Ruff, formatting, mypy and diff checks passed.

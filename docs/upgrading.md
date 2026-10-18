@@ -83,7 +83,9 @@ No other action is required. `regen` needs nothing beyond your data root —
 the original `.fit` exports and the inbox are not needed. It reads the
 archived `.fit` bytes under `fit-archive/`, your athlete profile, and your
 settings file, and re-derives every workout document from them, the same
-way `sync` does for a newly ingested file. It does not require you to
+way `sync` does for a newly ingested file. For the morning-of block it also
+reads the archived wellness files through the wellness series, which it
+rebuilds first. It does not require you to
 re-import anything, re-answer any prompt, or edit any file by hand.
 
 You learn you need it two ways: `fitdocs check` reports any document whose

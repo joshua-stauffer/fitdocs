@@ -17,6 +17,10 @@ recorded as one.
 
 ### Added
 
+- Workout pages gain a `Morning Of` block with the day's wellness
+  signals and sleep against the athlete's own per-source baselines.
+  Every `fitdocs sync`, `fitdocs pull --sync` and `fitdocs regen`
+  refreshes it from the wellness series; it states no readiness verdict.
 - Apple Health import reads supported wellness types from `export.zip` or bare
   `export.xml`, archives a compact extract, and uses the latest export date to
   supersede earlier exports entirely. See the [Apple Health
@@ -149,6 +153,16 @@ recorded as one.
 
 ### Changed
 
+- The generated document format advances (`doc_version` 9 to 10)
+  to add the morning-of region. Run `fitdocs regen` once after
+  upgrading to bring existing workout pages to the current format.
+- The ownership contract (wiki-contract) advances from version `14`
+  to `15`: fitdocs owns the refreshed morning-of region and its
+  pass. Run `fitdocs regen` once to refresh existing pages and
+  their ownership declarations.
+- A change confined to the morning-of block is a document-only
+  change in the analytics index: it updates the document without
+  recomputing the page's computed values.
 - Inbox interface: `.zip` and `.xml` files are wellness candidates. Unrelated ZIP or
   XML stays in place and is reported as unrecognized; add it to `[inbox] ignore` to
   silence it.

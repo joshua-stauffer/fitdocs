@@ -4,7 +4,8 @@ fitdocs keeps daily wellness as a local, source-attributed series alongside
 workouts. It imports files offline, archives the handled bytes, and rebuilds
 plain CSV files you can read without fitdocs. The [recovery page](recovery.md)
 reads the series, and `fitdocs derive-benchmarks` derives resting heart rate from
-it ([configuration](configuration.md)); workout morning blocks are future work.
+it ([configuration](configuration.md)). The [morning-of block](#wellness-on-workout-pages)
+puts wellness figures on each workout page.
 
 ## Get files into the inbox
 
@@ -317,6 +318,26 @@ are wake dates for nights. The machine's timezone is never used. The night
 before a workout on local date D is the sleep of wellness day D. That morning's
 resting HR and HRV are the values of day D; a day-summary resting HR may be
 computed over the whole day D.
+
+## Wellness on workout pages
+
+The `Morning Of` block before Training Load shows resting heart rate,
+HRV, other wellness signals and sleep from the normalized wellness series.
+It shows the wellness day equal to the workout page's date; see
+[Wellness day](#wellness-day).
+
+The 7-day means include that day and the preceding six days; normal
+ranges and 60-day means use the preceding 60 days, excluding that day.
+Each row names its source and the origins of the values contributing
+to its displayed figures. Garmin values add `Data source: Garmin` when they
+are the sole origin, or `Data sources: Garmin and other sources` when other
+or unknown origins also contribute. An absent figure is `–`, not zero.
+It shares `fitdocs recovery`'s numbers for the same day and source.
+
+Pages refresh on every `fitdocs sync` (with or without a source),
+`fitdocs pull --sync` and `fitdocs regen`. The block is fitdocs-owned: hand
+edits are replaced when the pass refreshes it from the series.
+It states no readiness verdict or score and makes no training recommendation.
 
 ## Delivery envelope
 
