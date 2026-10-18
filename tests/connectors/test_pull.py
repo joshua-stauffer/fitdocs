@@ -51,6 +51,7 @@ from fitdocs.connectors.errors import (
 )
 from fitdocs.connectors.folder import FolderConnector, FolderSettings
 from fitdocs.connectors.http import HttpRequest, HttpResponse, Transport, TransportError
+from fitdocs.connectors.ledger import Ledger, LedgerEntry, Outcome, save_ledger
 from fitdocs.connectors.protocol import (
     AuthStyle,
     Capability,
@@ -2161,6 +2162,136 @@ def test_a_released_revisions_hash_no_longer_counts_as_held(tmp_path: Path) -> N
     entries = {e["remote_id"]: e for e in _ledger_document(data_root, "src")["entries"]}
     assert entries["y"]["outcome"] == "delivered"
     assert (inbox / entries["y"]["pending"]).read_bytes() == bytes_a
+
+
+def _listing(*activities: RemoteActivity) -> Listing:
+    return Listing(activities=activities)
+
+
+def _x_then_y(rev_x: str, *, y_name: str | None = None) -> tuple[RemoteActivity, ...]:
+    return (
+        RemoteActivity(
+            remote_id="x",
+            original_available=True,
+            start=_NOW,
+            revision=rev_x,
+            suggested_name=y_name,
+        ),
+        RemoteActivity(
+            remote_id="y",
+            original_available=True,
+            start=_NOW + timedelta(seconds=1),
+            revision="1",
+            suggested_name=y_name,
+        ),
+    )
+
+
+def test_a_hash_released_by_an_already_held_replacement_is_not_held(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+    bytes_s = _fit_bytes(b"pending-bytes-S")
+    bytes_t = _fit_bytes(b"archived-bytes-T")
+
+    first = ScriptedPuller()
+    first.listing_script.append(_listing(_x_then_y("1")[0]))
+    first.fetch_script.append(Fetched(data=bytes_s))
+    _run(data_root, inbox, [_instance(first)])
+
+    # x's next revision carries bytes already in the archive, so x becomes
+    # already-held and its pending S copy is released from the ledger.
+    archive_path = layout.archive_path(data_root, hashlib.sha256(bytes_t).hexdigest())
+    archive_path.parent.mkdir(parents=True)
+    archive_path.write_bytes(bytes_t)
+
+    second = ScriptedPuller()
+    second.listing_script.append(_listing(*_x_then_y("2")))
+    second.fetch_script.append(Fetched(data=bytes_t))
+    second.fetch_script.append(Fetched(data=bytes_s))
+    report = _run(data_root, inbox, [_instance(second)])
+
+    inst = report.instances[0]
+    assert inst.held == ("x",)
+    assert [d.remote_id for d in inst.delivered] == ["y"]
+    assert (inbox / inst.delivered[0].path).read_bytes() == bytes_s
+
+
+def test_a_released_path_is_not_reused_for_another_activity(tmp_path: Path) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+    bytes_s = _fit_bytes(b"first-revision-S")
+    bytes_t = _fit_bytes(b"second-revision-T")
+    sha_s = hashlib.sha256(bytes_s).hexdigest()
+
+    first = ScriptedPuller()
+    first.listing_script.append(_listing(_x_then_y("1", y_name="run.fit")[0]))
+    first.fetch_script.append(Fetched(data=bytes_s))
+    one = _run(data_root, inbox, [_instance(first)])
+    assert one.instances[0].delivered[0].path == "src/run.fit"
+
+    # x moves to bytes T (releasing src/run.fit); y, with the same delivery
+    # name, has bytes S -- it must get its own file, not "reuse" the released
+    # one while writing nothing.
+    second = ScriptedPuller()
+    second.listing_script.append(_listing(*_x_then_y("2", y_name="run.fit")))
+    second.fetch_script.append(Fetched(data=bytes_t))
+    second.fetch_script.append(Fetched(data=bytes_s))
+    report = _run(data_root, inbox, [_instance(second)])
+
+    paths = {d.remote_id: d.path for d in report.instances[0].delivered}
+    assert paths["y"] == f"src/run-{sha_s[:8]}.fit"
+    assert (inbox / paths["y"]).read_bytes() == bytes_s
+    assert paths["x"] != paths["y"]
+    entries = {e["remote_id"]: e for e in _ledger_document(data_root, "src")["entries"]}
+    assert entries["y"]["pending"] == paths["y"]
+
+
+def test_a_hash_still_pending_under_another_id_stays_held_after_a_release(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+    bytes_s = _fit_bytes(b"shared-pending-S")
+    bytes_t = _fit_bytes(b"replacement-T")
+    sha_s = hashlib.sha256(bytes_s).hexdigest()
+
+    # Two pending entries (x and z) share bytes S, seeded directly.
+    (inbox / "src").mkdir(parents=True)
+    for name in ("x.fit", "z.fit"):
+        (inbox / "src" / name).write_bytes(bytes_s)
+    save_ledger(
+        data_root,
+        "src",
+        Ledger(
+            connector_id="scripted-puller",
+            watermark=None,
+            entries=tuple(
+                LedgerEntry(
+                    remote_id=remote_id,
+                    outcome=Outcome.DELIVERED,
+                    revision="1",
+                    sha256=sha_s,
+                    pending=f"src/{remote_id}.fit",
+                )
+                for remote_id in ("x", "z")
+            ),
+        ),
+    )
+
+    connector = ScriptedPuller()
+    connector.listing_script.append(_listing(*_x_then_y("2")))
+    connector.fetch_script.append(Fetched(data=bytes_t))
+    connector.fetch_script.append(Fetched(data=bytes_s))
+    report = _run(data_root, inbox, [_instance(connector)])
+
+    inst = report.instances[0]
+    assert [d.remote_id for d in inst.delivered] == ["x"]
+    assert inst.held == ("y",)
 
 
 # ---------------------------------------------------------------------------

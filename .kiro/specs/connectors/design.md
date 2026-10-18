@@ -263,7 +263,7 @@ import the sync engine, and the sync engine never imports connectors.
 ```
 src/fitdocs/connectors/
 ├── __init__.py      # Published surface (__all__); registers the built-in folder connector at import
-├── _atomic.py       # write_atomic(): dot-prefixed temp in target dir, fsync, os.replace, owner-only mode
+├── _atomic.py       # write_atomic(): dot-prefixed temp in target dir, fsync, os.replace, owner-only mode; write_atomic_new(): same but os.link (no clobber)
 ├── secrets.py       # Secret (redacting str/repr), Redactor (per-invocation value scrubber), REDACTED
 ├── errors.py        # AuthFailure + AuthFailureKind, ConnectorError, ConnectorSettingsError, NotConnectedError,
 │                    #   NEXT_STEPS + next_step() (shared by connect and pull)
@@ -1137,6 +1137,13 @@ def save_ledger(data_root: Path, instance: str, ledger: Ledger) -> bool: ...
   `tempfile.mkstemp(dir=path.parent, prefix=f".{prefix}-", suffix=".tmp")`
   (dot-prefixed, mode `0o600`), write, `flush` + `os.fsync`, `os.replace`;
   the temp file is removed on any failure.
+- `def write_atomic_new(path: Path, data: bytes, *, prefix: str) -> None`:
+  the same temp file, then `os.link(tmp, path)` and removal of the temp name,
+  so an existing `path` is never replaced: `FileExistsError` is raised
+  instead (inbox delivery, Req 8.3). Where hard links are unsupported
+  (`OSError` with `ENOTSUP`, `EOPNOTSUPP`, `EPERM` or `ENOSYS`) it falls back
+  to `os.path.lexists` (taken: `FileExistsError`) then `os.replace`; the
+  check-then-replace window reopens only on such filesystems.
 - A private copy of the idiom, deliberately: the package may not import
   `fitdocs.docio` or any engine. Task 1.2 appends this site to queue item
   `2026-09-15-atomic-write-helper-copied-per-engine` (beside
@@ -1200,7 +1207,9 @@ def sweep(inbox: Path, data_root: Path, ledger: Ledger) -> SweepResult: ...
   underneath it is no longer that delivery either, so adopting either on
   hash or path alone would let a later sweep delete it once a different
   file ends up archived under the same hash, violating Req 15.4 and 8.6).
-  Write with `write_atomic(target, data, prefix=name)` — the temporary name
+  Write with `write_atomic_new(target, data, prefix=name)`; a
+  `FileExistsError` (a file created since the free check) moves on to the
+  next candidate, never overwriting (8.3) — the temporary name
   starts with `.`, so `select_candidates` never admits it (8.1); bytes are
   written exactly as received (8.2).
 - `sweep` over `ledger.pending_entries()`:

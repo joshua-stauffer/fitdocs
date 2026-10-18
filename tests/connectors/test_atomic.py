@@ -11,6 +11,7 @@ the temporary file is removed and the failure propagates.
 
 from __future__ import annotations
 
+import errno
 import os
 import stat
 from pathlib import Path
@@ -266,3 +267,47 @@ def test_write_atomic_new_refuses_an_existing_file_and_leaves_no_temp(
         write_atomic_new(target, b"mine", prefix="widget")
     assert target.read_bytes() == b"theirs"
     assert sorted(p.name for p in tmp_path.iterdir()) == ["run.fit"]
+
+
+@pytest.mark.parametrize(
+    "code", [errno.ENOTSUP, errno.EOPNOTSUPP, errno.EPERM, errno.ENOSYS]
+)
+def test_write_atomic_new_without_hard_links_still_places_a_free_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, code: int
+) -> None:
+    def _no_links(src: Any, dst: Any, *args: Any, **kwargs: Any) -> None:
+        raise OSError(code, os.strerror(code))
+
+    monkeypatch.setattr(os, "link", _no_links)
+    target = tmp_path / "run.fit"
+    write_atomic_new(target, b"mine", prefix="widget")
+    assert target.read_bytes() == b"mine"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["run.fit"]
+
+
+def test_write_atomic_new_without_hard_links_refuses_a_taken_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _no_links(src: Any, dst: Any, *args: Any, **kwargs: Any) -> None:
+        raise OSError(errno.ENOTSUP, os.strerror(errno.ENOTSUP))
+
+    monkeypatch.setattr(os, "link", _no_links)
+    target = tmp_path / "run.fit"
+    target.write_bytes(b"theirs")
+    with pytest.raises(FileExistsError):
+        write_atomic_new(target, b"mine", prefix="widget")
+    assert target.read_bytes() == b"theirs"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["run.fit"]
+
+
+def test_write_atomic_new_propagates_other_link_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _broken(src: Any, dst: Any, *args: Any, **kwargs: Any) -> None:
+        raise OSError(errno.ENOSPC, os.strerror(errno.ENOSPC))
+
+    monkeypatch.setattr(os, "link", _broken)
+    with pytest.raises(OSError) as info:
+        write_atomic_new(tmp_path / "run.fit", b"mine", prefix="widget")
+    assert info.value.errno == errno.ENOSPC
+    assert list(tmp_path.iterdir()) == []

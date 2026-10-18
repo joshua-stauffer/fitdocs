@@ -9,6 +9,10 @@ shared helper. Its site is recorded in queue item
 ``2026-09-15-atomic-write-helper-copied-per-engine`` for eventual
 consolidation.
 
+:func:`write_atomic_new` is the no-clobber variant (``os.link`` instead of
+``os.replace``) used for inbox deliveries, which must never overwrite a file
+another tool created.
+
 Unlike the other copies, this one ``flush``es and ``fsync``s the temporary
 file before ``os.replace`` -- design.md's AtomicWriter component calls for
 both.
@@ -16,9 +20,12 @@ both.
 
 from __future__ import annotations
 
+import errno
 import os
 import tempfile
 from pathlib import Path
+
+_NO_HARD_LINKS = frozenset({errno.ENOTSUP, errno.EOPNOTSUPP, errno.EPERM, errno.ENOSYS})
 
 
 def write_atomic(path: Path, data: bytes, *, prefix: str) -> None:
@@ -52,7 +59,14 @@ def write_atomic_new(path: Path, data: bytes, *, prefix: str) -> None:
     name: ``link`` fails with :class:`FileExistsError` if anything -- a file
     another tool created a moment ago included -- already sits at ``path``,
     where ``os.replace`` would silently overwrite it. On any failure the
-    temporary file is removed and ``path`` is left exactly as it was.
+    temporary file is removed and ``path`` is left exactly as it was (a hard
+    kill can still leave the hidden temporary file behind).
+
+    On a filesystem that cannot make hard links (``link`` raises ``OSError``
+    with ``ENOTSUP``, ``EOPNOTSUPP``, ``EPERM`` or ``ENOSYS``), placement
+    falls back to checking ``os.path.lexists`` -- :class:`FileExistsError`
+    if taken -- and then ``os.replace``. The check-then-replace race window
+    reopens only on such filesystems.
     """
     directory = path.parent
     fd, tmp_name = tempfile.mkstemp(dir=directory, prefix=f".{prefix}-", suffix=".tmp")
@@ -62,6 +76,15 @@ def write_atomic_new(path: Path, data: bytes, *, prefix: str) -> None:
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
-        os.link(tmp_path, path)
+        try:
+            os.link(tmp_path, path)
+        except OSError as exc:
+            if exc.errno not in _NO_HARD_LINKS:
+                raise
+            if os.path.lexists(path):
+                raise FileExistsError(
+                    errno.EEXIST, os.strerror(errno.EEXIST), str(path)
+                ) from None
+            os.replace(tmp_path, path)
     finally:
         tmp_path.unlink(missing_ok=True)
