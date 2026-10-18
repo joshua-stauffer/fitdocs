@@ -1,7 +1,7 @@
 ---
 id: 2026-09-30-check-artifacts-echoes-matched-member-names
 title: scripts/check_artifacts.py writes a matched member name into the public release log
-status: open
+status: done
 importance: medium
 importance_why: The repo is public, so a release run's Actions log is public; echoing an encumbered file name defeats the no-echo rule the docs-site gate follows.
 effort: S
@@ -30,3 +30,13 @@ Found by the docs-site 2.6 reviewer (2026-09-30) comparing the two gates.
 ## How to pick it up
 1. Mirror check_site.py's redaction: when a member's name matches, report an ordinal placeholder instead of the name.
 2. Add a test in tests/test_release_artifacts.py (or check_artifacts' tests) with a needle-named member asserting the needle is absent from stdout and stderr.
+
+## Resolution (2026-10-18)
+
+Fixed on main at 65aac2c (chore/q-release-hygiene; four Opus review rounds, final APPROVED; full suite
+green; branch CI green). scripts/check_artifacts.py redacts every member name, link target and sdist
+top-level name that matches a forbidden token (`<redacted member #N>`, one ordinal per member computed
+once at load; `<redacted top-level name>`); unmatched names stay readable. Forbidden strings load before
+any archive is opened so loader errors redact too; corrupt, truncated, encrypted or unsupported-method
+archives exit 2 with a message that names no member. Each redaction site is mutation-pinned with a
+needle-named fixture asserting the needle never reaches stdout/stderr.
