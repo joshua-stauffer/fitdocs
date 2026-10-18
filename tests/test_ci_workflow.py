@@ -416,6 +416,7 @@ def test_step_ordering_write_then_gates_then_build_then_check_then_fail_closed()
     fail_closed_idx = indices["Prove the gate fails closed"]
     assert (
         write_idx
+        < indices["Mask the match data in the log"]
         < indices["Run the test suite"]
         <= first_gate_idx
         <= last_gate_idx
@@ -430,17 +431,26 @@ def test_step_ordering_write_then_gates_then_build_then_check_then_fail_closed()
     )
 
 
-# --- (h2) the test suite runs with the match data, in both jobs -------------
+# --- (h2) the floor job's test suite runs with the match data ---------------
 
 _TEST_ENV_VALUE = "${{ runner.temp }}/forbidden-strings.txt"
 
 
 def _test_step_jobs() -> list[tuple[str, list[dict[str, Any]]]]:
-    doc = _workflow()
-    return [
-        ("gates", _steps(_gates_job(doc))),
-        ("supported-pythons", _steps(_supported_job(doc))),
-    ]
+    """Only `gates` is armed. `supported-pythons` holds no secret on purpose
+    (see `test_the_matrix_job_is_unarmed_so_fork_prs_keep_its_results`)."""
+    return [("gates", _steps(_gates_job(_workflow())))]
+
+
+def test_the_matrix_job_is_unarmed_so_fork_prs_keep_its_results() -> None:
+    """A fork PR has no secrets: any step of this job that required one would
+    fail it and cost the fork its 3.12/3.13 feedback. The forbidden-strings
+    scan does not vary by interpreter, so `gates` (3.11) alone runs it."""
+    job = _supported_job(_workflow())
+    text = yaml.safe_dump(job)
+    assert "secrets." not in text
+    assert "FORBIDDEN_STRINGS" not in text
+    assert "gate_not_run" not in text
 
 
 def test_every_jobs_test_step_names_the_match_file_and_follows_the_write_step() -> None:
@@ -455,6 +465,60 @@ def test_every_jobs_test_step_names_the_match_file_and_follows_the_write_step() 
         assert write_idx < names.index("Run the test suite"), (
             f"{job_name}: the match data is written after the test suite runs"
         )
+
+
+_MASK_STEP = "Mask the match data in the log"
+
+
+def test_mask_step_sits_between_the_write_step_and_the_test_suite() -> None:
+    steps = _steps(_gates_job(_workflow()))
+    names = [s.get("name") for s in steps]
+    assert (
+        names.index("Write the match data outside the checkout")
+        < names.index(_MASK_STEP)
+        < names.index("Run the test suite")
+    )
+    assert set(_step_by_name(steps, _MASK_STEP)) == {"name", "run"}, (
+        "the mask step must hold no secret reference and no env of its own"
+    )
+
+
+def test_mask_step_body_emits_one_add_mask_per_value(tmp_path: Path) -> None:
+    """Runs the real body on a two-entry file (one category-tagged) plus a
+    comment, a blank and a whitespace-only line: exactly the two values are
+    masked, the tag and the skipped lines are not."""
+    body = _run_body(_steps(_gates_job(_workflow())), _MASK_STEP)
+    runner_temp = tmp_path / "runner_temp"
+    runner_temp.mkdir()
+    (runner_temp / "forbidden-strings.txt").write_text(
+        "# a comment\n\ncategory-tag\tTaggedValueOne\n   \nBareValueTwo\n"
+    )
+    env = os.environ.copy()
+    env["RUNNER_TEMP"] = str(runner_temp)
+    result = _run_bash_body(body, cwd=tmp_path, env=env)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "::add-mask::TaggedValueOne",
+        "::add-mask::BareValueTwo",
+    ]
+
+
+def test_mask_step_body_agrees_with_the_guards_own_parse(tmp_path: Path) -> None:
+    """The step must mask exactly what `tests/_forbidden_strings._parse`
+    treats as values, including a value with an inner space and a final line
+    without a newline."""
+    from tests._forbidden_strings import _parse
+
+    text = "cat\tSpaced Value Three\n# skip\nBare\tTab Tail"
+    body = _run_body(_steps(_gates_job(_workflow())), _MASK_STEP)
+    runner_temp = tmp_path / "rt"
+    runner_temp.mkdir()
+    (runner_temp / "forbidden-strings.txt").write_text(text)
+    env = os.environ.copy()
+    env["RUNNER_TEMP"] = str(runner_temp)
+    result = _run_bash_body(body, cwd=tmp_path, env=env)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [f"::add-mask::{v}" for v in _parse(text)]
 
 
 def test_test_step_env_names_the_file_the_write_step_writes() -> None:

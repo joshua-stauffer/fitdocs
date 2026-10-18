@@ -18,8 +18,10 @@
 # stay on the floor interpreter, once, in `gates`.
 #
 # The match data is written before the test suite so the suite's own
-# forbidden-strings scan of every tracked file runs here too (it skips when
-# `FITDOCS_FORBIDDEN_STRINGS` is unset).
+# forbidden-strings scan of every tracked file runs in `gates` too (it skips
+# when `FITDOCS_FORBIDDEN_STRINGS` is unset). `supported-pythons` holds no
+# secret and skips that scan, which does not vary by interpreter; a fork PR
+# stops `gates` at the write step but still gets its 3.12 and 3.13 results.
 #
 # Publishes nothing: no publishing credential, no OIDC identity-token
 # permission grant, no publish job. The encumbered-content gate's match
@@ -77,6 +79,26 @@ jobs:
             exit 1
           fi
           printf '%s' "$FITDOCS_FORBIDDEN_STRINGS_CONTENT" > "$RUNNER_TEMP/forbidden-strings.txt"
+
+      # Defense in depth: this repository's Actions log is public and the
+      # suite below runs armed. The guard tests report no matched value, but
+      # if anything ever printed one the runner would replace it with ***.
+      # Same parse as tests/_forbidden_strings.py: skip blank and `#` lines,
+      # take the text after the first tab. Kept a separate step so the write
+      # step stays byte-identical to docs.yml's.
+      - name: Mask the match data in the log
+        run: |
+          while IFS= read -r line || [ -n "$line" ]; do
+            line="${line#"${line%%[![:space:]]*}"}"
+            line="${line%"${line##*[![:space:]]}"}"
+            case "$line" in "" | "#"*) continue ;; esac
+            case "$line" in
+              *$'\t'*) value="${line#*$'\t'}" ;;
+              *) value="$line" ;;
+            esac
+            [ -n "$value" ] || continue
+            echo "::add-mask::$value"
+          done < "$RUNNER_TEMP/forbidden-strings.txt"
 
       # The match data written above also arms the suite's own
       # forbidden-strings guard (tests/_forbidden_strings.py): unset, it skips
@@ -149,18 +171,8 @@ jobs:
       - name: Confirm the interpreter under test
         run: uv run python -c "import sys; assert '%d.%d' % sys.version_info[:2] == '${{ matrix.python }}', sys.version"
 
-      # Same step, same fail-closed rule for forks, as in `gates`.
-      - name: Write the match data outside the checkout
-        env:
-          FITDOCS_FORBIDDEN_STRINGS_CONTENT: ${{ secrets.FITDOCS_FORBIDDEN_STRINGS_CONTENT }}
-        run: |
-          if [ -z "$FITDOCS_FORBIDDEN_STRINGS_CONTENT" ]; then
-            echo "::error::gate_not_run: FITDOCS_FORBIDDEN_STRINGS_CONTENT secret is not set; the encumbered-content gate cannot run"
-            exit 1
-          fi
-          printf '%s' "$FITDOCS_FORBIDDEN_STRINGS_CONTENT" > "$RUNNER_TEMP/forbidden-strings.txt"
-
+      # Deliberately unarmed: no secret, so fork PRs keep their 3.12/3.13
+      # results. The forbidden-strings scan does not depend on the
+      # interpreter; `gates` (3.11) runs it, and these runs skip its tests.
       - name: Run the test suite
-        env:
-          FITDOCS_FORBIDDEN_STRINGS: ${{ runner.temp }}/forbidden-strings.txt
         run: uv run pytest
