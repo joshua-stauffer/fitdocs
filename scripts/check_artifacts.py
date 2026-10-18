@@ -221,8 +221,8 @@ class _Member:
     link_target: str = ""
     content: bytes = b""
     ordinal: int = 0
-    """1-based position in the checker's member list, assigned once at load
-    ; the number a redacted name carries everywhere it is
+    """1-based position in the checker's member list, assigned once at load;
+    the number a redacted name carries everywhere it is
     reported."""
 
 
