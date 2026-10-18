@@ -187,6 +187,7 @@ class TestBorrowing:
                 kind=BenchmarkKind.LTHR_BPM,
                 activity_discipline=Sport.WALK,
                 anchor_discipline=Sport.RUN,
+                reason="not_on_file",
             ),
         )
 
@@ -199,6 +200,22 @@ class TestBorrowing:
         assert borrowing.activity_discipline == Sport.WALK
         assert borrowing.anchor_discipline == Sport.RUN
         assert borrowing.activity_discipline != borrowing.anchor_discipline
+
+    def test_borrowing_records_a_future_dated_own_entry_as_not_applicable(
+        self,
+    ) -> None:
+        profile = RecordingProfile(
+            {
+                (BenchmarkKind.LTHR_BPM, Sport.RUN): [
+                    _bm(BenchmarkKind.LTHR_BPM, Sport.RUN, 150.0, date(2020, 1, 1))
+                ],
+                (BenchmarkKind.LTHR_BPM, Sport.WALK): [
+                    _bm(BenchmarkKind.LTHR_BPM, Sport.WALK, 140.0, date(2030, 1, 1))
+                ],
+            }
+        )
+        result = resolve(profile, sport=Sport.WALK, on=date(2021, 1, 1))
+        assert result.borrowed[0].reason == "not_applicable"
 
     def test_hike_borrows_the_same_way(self) -> None:
         profile = RecordingProfile(
@@ -214,6 +231,7 @@ class TestBorrowing:
                 kind=BenchmarkKind.LTHR_BPM,
                 activity_discipline=Sport.HIKE,
                 anchor_discipline=Sport.RUN,
+                reason="not_on_file",
             ),
         )
 
@@ -522,6 +540,7 @@ class TestImmutability:
             kind=BenchmarkKind.LTHR_BPM,
             activity_discipline=Sport.WALK,
             anchor_discipline=Sport.RUN,
+            reason="not_on_file",
         )
         with pytest.raises(dataclasses.FrozenInstanceError):
             borrowing.kind = BenchmarkKind.FTP_WATTS  # type: ignore[misc]

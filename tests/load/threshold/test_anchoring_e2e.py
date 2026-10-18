@@ -734,3 +734,38 @@ def test_heart_rate_selected_result_carries_the_anchor_discipline() -> None:
     assert ("Anchor value", "165 bpm") in rows
     assert ("Anchor measured on", "2026-01-01") in rows
     assert ("Anchor discipline", "Run") in rows
+
+
+# ---------------------------------------------------------------------------
+# 7. The borrowing note states the cause it established (Req 3.4)
+# ---------------------------------------------------------------------------
+
+_FUTURE_WALK_LTHR = _bm(BenchmarkKind.LTHR_BPM, Sport.WALK, 130.0, date(2030, 1, 1))
+
+
+def _walk_notes(profile: _HistoryProfile) -> tuple[str, ...]:
+    outcome = ThresholdCalculator().compute(
+        _walk_activity(),
+        _metrics(),
+        profile,
+        _RaisingSession(),
+        _context(activity_date=_WALK_DATE),
+    )
+    assert isinstance(outcome, Computed)
+    return outcome.result.notes
+
+
+def test_borrowing_note_differs_between_absent_and_future_dated_walk_lthr() -> None:
+    """Two profiles differing only in whether a Walk LTHR exists (dated after
+    the activity) must not produce the same sentence: the second has a
+    threshold on file, so "is on file" would be false."""
+    base = (_RUN_LTHR, _ATHLETE_RESTING_HR, _ATHLETE_MAX_HR)
+    absent = _walk_notes(_HistoryProfile(base))
+    future = _walk_notes(_HistoryProfile((*base, _FUTURE_WALK_LTHR)))
+
+    assert absent == (_BORROWED_NOTE,)
+    assert future == (
+        "Heart-rate channel anchored on the Run lactate threshold heart rate; "
+        "no Walk threshold on file applies to this activity's date.",
+    )
+    assert "is on file" not in future[0]

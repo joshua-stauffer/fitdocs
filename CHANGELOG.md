@@ -370,6 +370,11 @@ recorded as one.
   `Anchor discipline`). Before, only a power-selected result carried all three,
   so a pace-selected run (the default for running) showed no measurement date.
   The rows appear in a page's load region the next time it is regenerated.
+- Threshold load: when a walk or hike borrows the running heart-rate anchor
+  because its own threshold is dated after the activity, the note now says no
+  such threshold on file applies to the activity's date. Before, it said none
+  was on file, which was untrue.
+
 
 ## [0.1.0] - 2026-09-19
 

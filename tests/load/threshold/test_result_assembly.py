@@ -461,6 +461,35 @@ def test_anchor_rows_come_from_selected_anchor_not_the_channels_own_rows() -> No
     )
 
 
+def test_a_not_applicable_borrowing_renders_the_date_applicability_note() -> None:
+    """A Borrowing whose own discipline has entries on file, none applicable
+    on the date, must not say nothing is on file (Req 3.4)."""
+    hr_hike = _load(
+        ChannelId.HEART_RATE, 61.5, intensity=0.4, anchor_discipline=Sport.RUN
+    )
+    borrowing = Borrowing(
+        kind=BenchmarkKind.LTHR_BPM,
+        activity_discipline=Sport.HIKE,
+        anchor_discipline=Sport.RUN,
+        reason="not_applicable",
+    )
+    result = build_result(
+        selected=hr_hike,
+        outcomes={
+            ChannelId.HEART_RATE: hr_hike,
+            ChannelId.POWER: _insufficient(ChannelId.POWER),
+            ChannelId.PACE: _insufficient(ChannelId.PACE),
+        },
+        order=(ChannelId.HEART_RATE,),
+        anchors=_anchors(borrowed=(borrowing,)),
+        discipline=Sport.HIKE,
+    )
+    assert result.notes[0] == (
+        "Heart-rate channel anchored on the Run lactate threshold heart "
+        "rate; no Hike threshold on file applies to this activity's date."
+    )
+
+
 def test_inputs_used_row_order_is_pinned_not_just_membership() -> None:
     """A set/dict comparison of the five fixed rows would not notice a
     reordering; this asserts the full tuple, in order, in one call (Req
@@ -535,6 +564,7 @@ def test_a_borrowed_anchor_produces_a_note_naming_both_disciplines() -> None:
         kind=BenchmarkKind.LTHR_BPM,
         activity_discipline=Sport.HIKE,
         anchor_discipline=Sport.RUN,
+        reason="not_on_file",
     )
     result = build_result(
         selected=hr_hike,
@@ -579,6 +609,7 @@ def test_notes_order_borrowings_first_then_channel_notes_prefixed() -> None:
         kind=BenchmarkKind.LTHR_BPM,
         activity_discipline=Sport.HIKE,
         anchor_discipline=Sport.RUN,
+        reason="not_on_file",
     )
     result = build_result(
         selected=hr_hike,

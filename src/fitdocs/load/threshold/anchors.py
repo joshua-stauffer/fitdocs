@@ -50,6 +50,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from typing import Literal
 
 from fitdocs.benchmarks import Benchmark, BenchmarkKind
 from fitdocs.load.threshold.discipline import anchor_plan
@@ -68,6 +69,12 @@ class Borrowing:
     kind: BenchmarkKind
     activity_discipline: Sport
     anchor_discipline: Sport
+    reason: Literal["not_on_file", "not_applicable"]
+    """Why the activity's own discipline did not anchor the quantity:
+    ``"not_on_file"`` when it has no entry at all, ``"not_applicable"`` when it
+    has entries but none applies on the activity's date (e.g. all dated
+    after it). The two are different facts and the note rendered from this
+    record must not conflate them."""
 
 
 @dataclass(frozen=True)
@@ -121,6 +128,7 @@ def resolve(profile: ProfileView, *, sport: Sport, on: date) -> ResolvedAnchors:
         for discipline in chain:
             if not profile.has_benchmark(kind, discipline=discipline):
                 continue
+            earlier_on_file = any_on_file
             any_on_file = True
             found = profile.benchmark(kind, discipline=discipline, on=on)
             if found is not None:
@@ -130,6 +138,9 @@ def resolve(profile: ProfileView, *, sport: Sport, on: date) -> ResolvedAnchors:
                             kind=kind,
                             activity_discipline=sport,
                             anchor_discipline=discipline,
+                            reason=(
+                                "not_applicable" if earlier_on_file else "not_on_file"
+                            ),
                         )
                     )
                 return found

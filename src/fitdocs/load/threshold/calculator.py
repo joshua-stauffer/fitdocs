@@ -556,13 +556,21 @@ def format_duration(seconds: float) -> str:
 def _format_borrowing(borrowing: Borrowing) -> str:
     """One note naming both disciplines a borrowed anchor spans (Req 3.4),
     e.g. ``"Heart-rate channel anchored on the Run lactate threshold heart
-    rate; no Hike threshold is on file."``."""
+    rate; no Hike threshold is on file."``, or, when the activity's own
+    discipline has a threshold on file but none applicable on the activity's
+    date, ``"...; no Hike threshold on file applies to this activity's
+    date."``."""
     channel_label = _BORROWING_CHANNEL_LABEL[borrowing.kind]
     quantity_name = _BORROWING_QUANTITY_NAME[borrowing.kind]
+    cause = (
+        f"no {borrowing.activity_discipline} threshold is on file."
+        if borrowing.reason == "not_on_file"
+        else f"no {borrowing.activity_discipline} threshold on file applies to "
+        "this activity's date."
+    )
     return (
         f"{channel_label} channel anchored on the {borrowing.anchor_discipline} "
-        f"{quantity_name}; no {borrowing.activity_discipline} threshold is on "
-        "file."
+        f"{quantity_name}; {cause}"
     )
 
 

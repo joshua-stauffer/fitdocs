@@ -1177,7 +1177,11 @@ def build_result(
 - Postconditions: `basis` is non-empty; every `NonSelectedValue.reason` is
   non-empty; `flags` is empty; a borrowed anchor produces a note of the form
   *"Heart-rate channel anchored on the Run lactate threshold heart rate; no Hike
-  threshold is on file."* (3.4).
+  threshold is on file."* (3.4) when the activity's own discipline has no
+  entry at all, and *"... ; no Hike threshold on file applies to this
+  activity's date."* when it has entries but none applicable on that date
+  (`Borrowing.reason` records which; the two must not render the same
+  sentence).
 - Invariants: no field of the result is derived from a non-selected value (8.10);
   no number appears anywhere for a channel that produced none (8.5, 10.4).
 
