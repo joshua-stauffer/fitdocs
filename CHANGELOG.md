@@ -381,6 +381,15 @@ recorded as one.
   nearly flat (a constant speed, say) drew a different line on 3.12 and 3.13
   than on 3.11. It now adds the samples in plain order, which is what 3.11
   computed, so the chart is the same on every supported interpreter.
+- A pull can no longer overwrite a file another program creates in the inbox
+  at the same moment it delivers one (activities and wellness packages
+  alike): the delivery takes the next free name instead. Before, a file
+  created in that instant could be replaced.
+- When a new revision of an activity replaces a still-pending delivery with
+  different bytes, a later activity in the same pull carrying the old bytes is
+  now delivered rather than reported as `held` against a copy the ledger no
+  longer tracks. The connectors guide now also says what a pull killed
+  outright between delivering and saving its ledger leaves behind.
 
 ## [0.1.0] - 2026-09-19
 

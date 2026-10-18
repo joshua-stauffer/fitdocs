@@ -2108,6 +2108,61 @@ def test_a_resolved_already_held_entrys_sha_does_not_suppress_a_later_delivery(
     assert second.instances[0].held == ()
 
 
+def test_a_released_revisions_hash_no_longer_counts_as_held(tmp_path: Path) -> None:
+    data_root = tmp_path / "root"
+    data_root.mkdir()
+    inbox = tmp_path / "inbox"
+
+    bytes_a = _fit_bytes(b"revision-one-bytes")
+    bytes_b = _fit_bytes(b"revision-two-bytes-different")
+
+    first_connector = ScriptedPuller()
+    first_connector.listing_script.append(
+        Listing(
+            activities=(
+                RemoteActivity(
+                    remote_id="x", original_available=True, start=_NOW, revision="1"
+                ),
+            )
+        )
+    )
+    first_connector.fetch_script.append(Fetched(data=bytes_a))
+    first = _run(data_root, inbox, [_instance(first_connector)])
+    assert [d.remote_id for d in first.instances[0].delivered] == ["x"]
+    old_path = inbox / first.instances[0].delivered[0].path
+    assert old_path.read_bytes() == bytes_a  # falsity in the starting state
+
+    # Run two: "x" gets new bytes (releasing the old copy from the ledger),
+    # then "y" arrives with exactly the released bytes. The ledger no longer
+    # tracks that copy, so "y" must be delivered, not recorded already-held.
+    second_connector = ScriptedPuller()
+    second_connector.listing_script.append(
+        Listing(
+            activities=(
+                RemoteActivity(
+                    remote_id="x", original_available=True, start=_NOW, revision="2"
+                ),
+                RemoteActivity(
+                    remote_id="y",
+                    original_available=True,
+                    start=_NOW + timedelta(seconds=1),
+                    revision="1",
+                ),
+            )
+        )
+    )
+    second_connector.fetch_script.append(Fetched(data=bytes_b))
+    second_connector.fetch_script.append(Fetched(data=bytes_a))
+    second = _run(data_root, inbox, [_instance(second_connector)])
+
+    inst = second.instances[0]
+    assert [d.remote_id for d in inst.delivered] == ["x", "y"]
+    assert inst.held == ()
+    entries = {e["remote_id"]: e for e in _ledger_document(data_root, "src")["entries"]}
+    assert entries["y"]["outcome"] == "delivered"
+    assert (inbox / entries["y"]["pending"]).read_bytes() == bytes_a
+
+
 # ---------------------------------------------------------------------------
 # M33-M35: two or more out-of-order entries in would_fetch, held and failed.
 # ---------------------------------------------------------------------------

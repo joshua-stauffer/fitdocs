@@ -338,6 +338,23 @@ def _validate_entry(activity: RemoteActivity) -> str | None:
     return None
 
 
+def _release_held_hash(
+    held_hashes: set[str], replaced: LedgerEntry | None, ledger: Ledger
+) -> None:
+    """Stop counting a pending entry's bytes as held once it is replaced.
+
+    ``replaced`` is the entry this id had before the activity just recorded
+    (``ledger`` already holds the replacement). If it was pending, its copy
+    is no longer tracked, so its hash leaves ``held_hashes`` -- unless some
+    other entry in ``ledger`` still pends with the same bytes.
+    """
+    if replaced is None or replaced.pending is None or replaced.sha256 is None:
+        return
+    if any(entry.sha256 == replaced.sha256 for entry in ledger.pending_entries()):
+        return
+    held_hashes.discard(replaced.sha256)
+
+
 def _compute_watermark(
     entries: Sequence[RemoteActivity], ledger: Ledger
 ) -> datetime | None:
@@ -914,6 +931,9 @@ def _pull_one(
                                             sha256=sha,
                                         )
                                     )
+                                    _release_held_hash(
+                                        held_hashes, existing_entry, ledger
+                                    )
                                     held.append(activity.remote_id)
                                     continue
 
@@ -957,6 +977,7 @@ def _pull_one(
                                         remote_id=activity.remote_id, path=result.rel
                                     )
                                 )
+                                _release_held_hash(held_hashes, existing_entry, ledger)
                                 held_hashes.add(sha)
                                 owned_paths[result.rel] = sha
 

@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from fitdocs.connectors._atomic import write_atomic
+from fitdocs.connectors._atomic import write_atomic, write_atomic_new
 
 
 def test_write_atomic_creates_a_new_file_with_the_given_bytes(tmp_path: Path) -> None:
@@ -246,3 +246,23 @@ def test_write_atomic_a_non_oserror_failure_still_cleans_up_and_propagates(
     assert target.read_bytes() == b"old-and-good"
     leftovers = [p.name for p in tmp_path.iterdir() if p != target]
     assert leftovers == []
+
+
+def test_write_atomic_new_creates_a_new_file_with_the_given_bytes(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "run.fit"
+    write_atomic_new(target, b"hello", prefix="widget")
+    assert target.read_bytes() == b"hello"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["run.fit"]
+
+
+def test_write_atomic_new_refuses_an_existing_file_and_leaves_no_temp(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "run.fit"
+    target.write_bytes(b"theirs")
+    with pytest.raises(FileExistsError):
+        write_atomic_new(target, b"mine", prefix="widget")
+    assert target.read_bytes() == b"theirs"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["run.fit"]

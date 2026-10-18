@@ -42,3 +42,26 @@ def write_atomic(path: Path, data: bytes, *, prefix: str) -> None:
     except BaseException:
         tmp_path.unlink(missing_ok=True)
         raise
+
+
+def write_atomic_new(path: Path, data: bytes, *, prefix: str) -> None:
+    """Write ``data`` to ``path`` atomically, refusing to replace anything.
+
+    Like :func:`write_atomic`, but the final placement is ``os.link`` of the
+    fsynced temporary file to ``path`` followed by removing the temporary
+    name: ``link`` fails with :class:`FileExistsError` if anything -- a file
+    another tool created a moment ago included -- already sits at ``path``,
+    where ``os.replace`` would silently overwrite it. On any failure the
+    temporary file is removed and ``path`` is left exactly as it was.
+    """
+    directory = path.parent
+    fd, tmp_name = tempfile.mkstemp(dir=directory, prefix=f".{prefix}-", suffix=".tmp")
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.link(tmp_path, path)
+    finally:
+        tmp_path.unlink(missing_ok=True)

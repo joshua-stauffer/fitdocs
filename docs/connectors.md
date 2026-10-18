@@ -395,6 +395,13 @@ activity is reported as `held`. Different bytes release the old copy — it
 becomes an ordinary untracked inbox file for the drain to pick up on its own
 — and the new bytes are delivered in its place.
 
+A pull that is killed outright (power loss or `kill -9`, not Ctrl-C or an
+error, which still save the ledger) between writing a file and saving the
+ledger leaves that file in the inbox with no ledger entry. The drain then
+treats it as any other file you dropped in, and a pull never removes it; the
+next pull fetches the same activity again and delivers a second copy, which
+the archive deduplicates by its bytes.
+
 Once the drain has archived a pull's delivery, the archive holds a copy of
 those exact bytes, and the *next* pull removes fitdocs's own now-redundant
 copy from the inbox. A delivery that vanished before being archived is

@@ -46,7 +46,7 @@ from types import MappingProxyType
 from typing import Final
 
 from fitdocs import layout
-from fitdocs.connectors._atomic import write_atomic
+from fitdocs.connectors._atomic import write_atomic_new
 from fitdocs.connectors.ledger import Ledger
 from fitdocs.connectors.protocol import RemoteActivity
 
@@ -204,10 +204,12 @@ def deliver(
     already-delivered-this-run entries to the sha256 recorded for each.
 
     The write itself goes through
-    :func:`fitdocs.connectors._atomic.write_atomic`, so the temporary name
+    :func:`fitdocs.connectors._atomic.write_atomic_new`, so the temporary name
     is dot-prefixed and the target is never partially written (Req 8.1);
     the bytes given are written unmodified (Req 8.2); an existing, unowned
-    file at any candidate name is never overwritten (Req 8.3).
+    file at any candidate name is never overwritten (Req 8.3) -- including
+    one created after the check above, because the final placement is a
+    no-clobber ``link`` that fails rather than replaces.
     """
     directory = inbox / instance
     directory.mkdir(parents=True, exist_ok=True)
@@ -226,7 +228,12 @@ def deliver(
             # A directory (or other non-file) sits at this name -- never a
             # target to reuse or overwrite; move on to the next candidate.
             continue
-        write_atomic(candidate, data, prefix=name)
+        try:
+            write_atomic_new(candidate, data, prefix=name)
+        except FileExistsError:
+            # Something appeared at this name after the check above (a
+            # concurrent writer): never overwritten (Req 8.3); try the next.
+            continue
         return DeliveryResult(rel=rel, written=True)
     raise AssertionError("unreachable: _candidates never stops yielding free names")
 

@@ -404,7 +404,7 @@ def test_json_owned_reuse(tmp_path: Path) -> None:
 
 def test_json_atomic_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     replacements: list[tuple[str, str, bytes, bool]] = []
-    replace = os.replace
+    link = os.link
 
     def observe(src: str | Path, dst: str | Path) -> None:
         source, destination = Path(src), Path(dst)
@@ -416,9 +416,9 @@ def test_json_atomic_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
                 destination.exists(),
             )
         )
-        replace(src, dst)
+        link(src, dst)
 
-    monkeypatch.setattr(os, "replace", observe)
+    monkeypatch.setattr(os, "link", observe)
     sha = hashlib.sha256(_DATA).hexdigest()
     result = delivery.deliver(
         tmp_path, "invented-atomic-5", "span.json", _DATA, sha, suffix=".json"

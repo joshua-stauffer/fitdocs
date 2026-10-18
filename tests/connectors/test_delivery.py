@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import os
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -374,6 +375,51 @@ def test_deliver_escalates_past_a_directory_at_the_primary_name(
     # The directory itself, and its child, are exactly as they were.
     assert blocking_dir.is_dir()
     assert (blocking_dir / "some-child-file").read_text() == "do not touch"
+
+
+def test_deliver_never_overwrites_a_file_created_after_its_free_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Req 8.3: another tool creates the target between deliver's exists()
+    # check and the final placement. The user's bytes must survive and the
+    # delivery must move on to the next candidate name.
+    inbox = tmp_path / "inbox"
+    data = b"delivered-bytes"
+    sha = _sha(data)
+    users_bytes = b"the user's own file"
+    target = inbox / "healthfit" / "run.fit"
+
+    real_link = os.link
+    real_replace = os.replace
+    raced: list[bool] = []
+
+    def _create_target_first(src: Any, dst: Any, *args: Any, **kwargs: Any) -> None:
+        if Path(dst) == target and not raced:
+            raced.append(True)
+            target.write_bytes(users_bytes)
+        return None
+
+    def _racing_link(src: Any, dst: Any, *args: Any, **kwargs: Any) -> None:
+        _create_target_first(src, dst)
+        real_link(src, dst, *args, **kwargs)
+
+    def _racing_replace(src: Any, dst: Any, *args: Any, **kwargs: Any) -> None:
+        _create_target_first(src, dst)
+        real_replace(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(os, "link", _racing_link)
+    monkeypatch.setattr(os, "replace", _racing_replace)
+
+    result = deliver(inbox, "healthfit", "run.fit", data, sha)
+
+    assert raced == [True]  # the race really happened
+    assert target.read_bytes() == users_bytes
+    assert result.rel == f"healthfit/run-{sha[:8]}.fit"
+    assert result.written is True
+    assert (inbox / result.rel).read_bytes() == data
+    assert (
+        sorted(p.name for p in target.parent.iterdir() if p.name.startswith(".")) == []
+    )
 
 
 def test_deliver_temp_file_is_dot_prefixed_and_never_ends_in_fit(
