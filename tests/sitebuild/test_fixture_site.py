@@ -28,7 +28,7 @@ from scripts.sitebuild.model import (
 ROOT = Path(__file__).resolve().parents[2]
 SITE = Path(__file__).resolve().parent / "fixtures" / "site"
 
-HOME, WHY, GET_STARTED, GUIDES, LLMS, REFERENCE = SECTIONS[:6]
+HOME, WHY, GET_STARTED, LLMS, GUIDES, REFERENCE = SECTIONS[:6]
 
 ANNOTATION_SENTINEL = "ANNOTSENTINELAMBER"
 NOTES_SENTINEL = "NOTESSENTINELFERN"
