@@ -48,27 +48,7 @@ fitdocs regen
 
 `regen` rebuilds every page from the archived `.fit` files. You don't need the original exports, and you don't import anything again. Your notes are kept exactly as they are.
 
-### From 0.1 to 0.2
-
-fitdocs 0.2 changes the page format. After upgrading, run `fitdocs regen` once, before you sync anything new, then build the analytics index:
-
-```sh
-fitdocs regen
-fitdocs index
-fitdocs check
-```
-
-That first `regen` does a few things worth knowing about:
-
-- **It renames many pages.** Pages are now named and dated by the time zone your device recorded, so pages recorded while traveling, or in the other half of the daylight-saving year, get new names. Each rename prints a warning with the old name. **Links to the old names aren't updated**, in your notes or in your training plans' overrides, so search for the old names and fix them.
-- **It lets fitdocs recognize a workout you already have when another file of it arrives.** Run it before you sync, say, a Garmin original of a run you have as a HealthFit copy, and before your first `fitdocs pull`.
-- **It sets up the new folders**, `dashboards/`, `wellness/`, `wellness-archive/`, and `recovery/`, each with its `AGENTS.md`.
-
-Then `fitdocs check` reports anything left to sort out. If it finds one workout recorded on two pages, keep one, move anything worth keeping out of the other's notes, delete the other page, and run `fitdocs regen`. A page whose files changed keeps its old load until you run `fitdocs load --recompute`. And if you keep your plan files in `dashboards/`, move them and update `[plans] path`: fitdocs now refuses a plan folder there.
-
-If you installed the agent skills by copying, copy them again, and add the two new ones, `fitdocs-analytics` and `fitdocs-dashboards` (see [Agent skills](../guides/wiki-integration.md#agent-skills)).
-
-The full list of changes is in the [changelog](../changelog.md).
+If a release needs more than that, its entry in the [changelog](../changelog.md) says what to run.
 
 ## Uninstall
 
