@@ -1,7 +1,7 @@
 ---
 id: 2026-10-05-history-negative-load-uncaught-traceback
 title: A negative load_value in a workout page makes `fitdocs history` crash with an uncaught ValueError
-status: open
+status: done
 importance: medium
 importance_why: One hand-edited or plugin-written negative load turns `fitdocs history` into a traceback, and in Phase 10 a refresh failure of derived.load_series.
 effort: S
@@ -54,3 +54,14 @@ The fix is on `origin/chore/q-history-unreadable`, unlanded: `ceeae9c`, then
 page kept)` and `7c3e7ac`, with plan-resolution Amendment 3 in `0336650`. See
 `2026-09-12-history-unreadable-document-skipped-silently` § Update 2026-10-19
 for the branch state and merge-conflict evidence.
+
+## Resolution
+
+Done 2026-10-19: `chore/q-history-unreadable` landed. A negative `load_value`
+is read as no load, exactly like a non-finite one (`history/documents.py`
+`_read_load`), so `fitdocs history` and the derived refresh no longer crash;
+plan-resolution Amendment 3 records the one divergence from
+`contract.document_load`. Pinned by
+`tests/history/test_documents.py::test_a_negative_load_is_no_load_exactly_like_a_non_finite_one`
+and `tests/history/test_engine.py::test_a_negative_load_page_counts_without_a_load_not_a_crash`:
+dropping `or load < 0` from the guard reds both; reverted, both green.

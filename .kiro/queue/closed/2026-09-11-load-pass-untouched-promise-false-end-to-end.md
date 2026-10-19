@@ -1,7 +1,7 @@
 ---
 id: 2026-09-11-load-pass-untouched-promise-false-end-to-end
 title: The contract's "leaves that region and its frontmatter keys untouched" promise is false end-to-end
-status: open
+status: done
 importance: medium
 importance_why: Published prose that is true of one pass in isolation and false of the command a user actually runs.
 effort: S
@@ -62,3 +62,14 @@ documenting a bug that is about to be fixed.
 
 Done looks like: every Overwrite Semantics bullet is true of running that
 command end to end.
+
+## Resolution
+
+Done 2026-10-19 with its sibling
+`2026-09-11-regen-destroys-load-keys-on-foreign-or-superseded-region`: the
+behaviour changed (regen/sync now carry the keys), and `chore/q-regen-load-keys`
+rewrote both bullets in `docs/ownership-contract.md` so each is true of the
+command it names -- the `regen` bullet ("`regen` carries their lines over
+verbatim, since the training-load pass that follows skips that region") and
+the `load` bullet ("`sync` and `regen` keep those keys across their page
+rewrite"). Pinned end to end by the sibling's e2e test.

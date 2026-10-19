@@ -1,7 +1,7 @@
 ---
 id: 2026-09-12-history-unreadable-document-skipped-silently
 title: Req 1.9 says an unreadable workout document is skipped AND named; the history scan drops it silently because docio cannot distinguish unreadable from non-document
-status: open
+status: done
 importance: high
 importance_why: A permission-denied or corrupt workout document vanishes from the history page and its report; the coverage statement's "skipped" figure can only ever count undated pages, so Req 3.5's "skipped as unreadable" is unreachable.
 effort: M
@@ -62,3 +62,17 @@ no record of why it stopped.
 
 `git merge-tree --write-tree origin/main origin/chore/q-history-unreadable` at
 `4f1c1f4`: code merges cleanly; the only conflict is `CHANGELOG.md`.
+
+## Resolution
+
+Done 2026-10-19: `chore/q-history-unreadable` landed (rebased onto main; only
+CHANGELOG.md conflicted). `contract.frontmatter_block_error` distinguishes a
+closed block YAML cannot read from a non-document, and the history scan names
+unreadable workout documents (permission denied, not UTF-8, unparsable or
+unconstructible YAML) in `report.skipped` and the page's skipped list, while
+files that were never documents stay silent. Pinned by
+`tests/history/test_documents.py::test_a_permission_denied_workout_document_is_skipped_and_named`,
+`..._not_utf8_is_skipped_and_named`, `..._will_not_parse_is_skipped_and_named`,
+`test_files_that_were_never_workout_documents_stay_silent`, and
+`tests/test_contract.py::test_frontmatter_block_error_*` (all green at the
+landing tip).

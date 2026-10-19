@@ -1,7 +1,7 @@
 ---
 id: 2026-09-11-regen-destroys-load-keys-on-foreign-or-superseded-region
 title: fitdocs regen permanently destroys the three load keys when the load region is FOREIGN or SUPERSEDED
-status: open
+status: done
 importance: high
 importance_why: Silent, permanent loss of computed data on a documented-as-safe command, and the published contract promises the opposite.
 effort: M
@@ -124,3 +124,15 @@ data roots. FOREIGN still stands but needs a load region the user replaced by
 hand. Not a 0.2 blocker on that reading; landing it before the cut is still
 cheaper than after, because it is a governed-contract change that would
 otherwise need its own changelog entry in 0.3.
+
+## Resolution
+
+Done 2026-10-19: `chore/q-regen-load-keys` landed (rebased onto main, wiki-contract
+amendment renumbered 11 -> 12 after the local-time fix took 11). Shape 1: the
+rebuild carries the three `load_*` lines verbatim over a FOREIGN or SUPERSEDED
+region (`src/fitdocs/sync.py` `load_key_lines` carry; `contract.load_key_lines`),
+wiki-contract criterion 6.10, and the ownership contract's `regen` and `load`
+bullets state it. Pinned by
+`tests/load/test_feature_e2e.py::test_real_regen_keeps_load_keys_over_a_region_the_pass_skips`
+(`[foreign]`, `[superseded]`): replacing the carry at `sync.py:2143` with
+`carried = (*carried,)` reds both cases; reverted, both green.
