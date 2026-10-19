@@ -1,6 +1,6 @@
 ---
 title: The analytics index
-description: Ask SQL questions across your whole training history. One command builds a local DuckDB index from your pages, and `fitdocs query` reads it in a read-only sandbox.
+description: Ask SQL questions across your whole training history with `fitdocs query`, from a local DuckDB index that one command builds from your pages.
 section: Guides
 order: 9
 ---
