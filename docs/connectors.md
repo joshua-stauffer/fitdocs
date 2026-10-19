@@ -182,11 +182,20 @@ instance's run instead, and the other configured instances still run:
   your key, the message quotes the service's reason; report it to the
   fitdocs project.
 - **A rate limit.** If intervals.icu is still limiting requests after
-  fitdocs's own retries, the pull stops and says so; the next pull resumes
-  where it stopped. This page states no request limits: intervals.icu
-  decides them.
-- **An unavailable service.** Handled the same way: the pull stops, and the
-  next one resumes.
+  fitdocs's own retries, the pull stops and says so. This page states no
+  request limits: intervals.icu decides them.
+- **An unavailable service.** Handled the same way: the pull stops.
+
+Picking up after a stop or a failed download. A pull without `--since` lists
+from the watermark less `lookback_days`, and the watermark never moves past
+an activity that is not yet recorded. So the next plain pull resumes where a
+stopped pull left off, and retries a failed download, when that activity falls
+inside its window. A `--since` backfill into an instance that has pulled
+before is the exception: the backfill does not move the watermark back, so
+the next plain pull misses whatever the stopped run left unfinished, or
+failed to download, before that window. Run the same `fitdocs pull intervals
+--since YYYY-MM-DD` again to continue; the ledger means it fetches only what
+earlier runs did not.
 
 What leaves your machine. Requests go to intervals.icu only. Each carries the
 one fitdocs User-Agent and, in the `Authorization` header, your key. The key
@@ -416,7 +425,10 @@ delivery is still sitting in the inbox (not yet archived): identical bytes
 change nothing — the existing delivery stays exactly where it is, and the
 activity is reported as `held`. Different bytes release the old copy — it
 becomes an ordinary untracked inbox file for the drain to pick up on its own
-— and the new bytes are delivered in its place.
+— and the new bytes are delivered in its place, unless the archive, or another
+of this instance's pending deliveries, already holds those exact bytes: then
+nothing new is written, the ledger records the activity as already held, and
+the report lists it as `held`, not `delivered`.
 
 A pull that is killed outright (power loss or `kill -9`, not Ctrl-C or an
 error, which still save the ledger) between writing a file and saving the
@@ -430,7 +442,12 @@ beside it; the drain ignores it and it can be deleted.
 Once the drain has archived a pull's delivery, the archive holds a copy of
 those exact bytes, and the *next* pull removes fitdocs's own now-redundant
 copy from the inbox. A delivery that vanished before being archived is
-simply forgotten, and fetched again on a later pull; one whose bytes changed
+forgotten. This check runs before the pull lists anything, so the same pull
+fetches the activity again when its listing includes it: `folder` always
+lists its whole source, while `intervals` lists from the watermark less
+`lookback_days`. An `intervals` activity older than that window is not listed
+again, so fetch it with `fitdocs pull intervals --since YYYY-MM-DD`, using a
+date on or before the activity's. A delivery whose bytes changed
 underneath fitdocs *after* being archived is released silently, with nothing
 reported — it, too, becomes an ordinary file the drain can pick up. Only a
 removal that actually fails, or a pending file that could not be read while

@@ -323,6 +323,54 @@ def test_regenerate_section_names_the_regen_command() -> None:
     assert "`fitdocs regen`" in _section_text("Regenerating before a first pull")
 
 
+def _flat(text: str) -> str:
+    return " ".join(text.split())
+
+
+def test_delivery_section_states_the_same_pull_refetch_and_its_window() -> None:
+    """The sweep runs before the listing (``connectors/pull.py``), so a
+    forgotten delivery is fetched again by the same pull, and only when that
+    pull lists it. The page once promised "a later pull" with no window."""
+    section = _flat(_section_text("Delivery and removal"))
+    assert "fetched again on a later pull" not in section
+    assert "This check runs before the pull lists anything, so the same pull" in (
+        section
+    )
+    assert "An `intervals` activity older than that window is not listed again" in (
+        section
+    )
+    assert "fitdocs pull intervals --since YYYY-MM-DD" in section
+
+
+def test_delivery_section_reports_changed_bytes_already_held_as_held() -> None:
+    """A changed activity whose new bytes the archive or another pending
+    delivery already holds is recorded ``ALREADY_HELD`` and reported
+    ``held``; nothing is delivered."""
+    section = _flat(_section_text("Delivery and removal"))
+    assert (
+        "the new bytes are delivered in its place, unless the archive, or another "
+        "of this instance's pending deliveries, already holds those exact bytes"
+    ) in section
+    assert "the report lists it as `held`, not `delivered`" in section
+
+
+def test_intervals_section_does_not_promise_a_plain_pull_resumes_a_backfill() -> None:
+    """A plain pull lists from the watermark less ``lookback_days`` and the
+    watermark never moves back, so an interrupted ``--since`` backfill into an
+    instance that has pulled before is continued only by the same ``--since``."""
+    match = re.search(
+        r"^### What a pull fetches\n(.*?)(?=\n### |\n## |\Z)",
+        _connectors_doc_text(),
+        re.S | re.M,
+    )
+    assert match is not None
+    section = _flat(match.group(1))
+    assert "the next pull resumes where it stopped" not in section
+    assert "the next one resumes" not in section
+    assert "the backfill does not move the watermark back" in section
+    assert "Run the same `fitdocs pull intervals --since YYYY-MM-DD` again" in section
+
+
 def _instance_table_rows() -> list[tuple[str, str]]:
     """The ``| Key | Meaning | Default |`` table under "## Configuring an
     instance", parsed from the page's own text: ``(key, default-cell-text)``
