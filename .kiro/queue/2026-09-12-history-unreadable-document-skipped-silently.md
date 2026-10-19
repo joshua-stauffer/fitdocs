@@ -10,7 +10,7 @@ area: load-history, wiki-contract, src/fitdocs/history/documents.py, src/fitdocs
 created: 2026-09-12
 surfaced_by: /kiro-impl load-history 3.1 (reviewer round 1, follow-up 1)
 pinned_at: 8cd0062
-resume_command: "do: decide whether docio.read_frontmatter (or a sibling) should return a distinguishing result for unreadable vs not-a-document (audit._read_document is the precedent), then make history/documents.py name unreadable workout documents in SkippedPage per Req 1.9 and correct design.md's DocumentScan text and Error Handling paragraph to match"
+resume_command: "do: land the finished fix on origin/chore/q-history-unreadable -- rebase onto main, resolve the CHANGELOG.md conflict, re-run the three gates, merge per change-protocol.md, then close this item and 2026-10-05-history-negative-load-uncaught-traceback"
 context:
   - .kiro/specs/load-history/requirements.md
   - .kiro/specs/load-history/design.md
@@ -47,3 +47,18 @@ Read docio's read path and audit's `_read_document`; decide the docio API
 workout files with a reason, excludes the declaration by name, and the two
 design passages are reconciled. Done when a chmod-0 workout document appears
 in `report.skipped` with its reason and the page's archive-wide skipped count.
+
+## Update 2026-10-19 -- a finished fix exists and never landed
+
+Found by the 0.2 release-readiness triage at `4f1c1f4`. Branch
+`origin/chore/q-history-unreadable` (8 commits, 2026-10-18, no PR) carries
+`272d70c fix(history): name unreadable workout documents in the skipped list
+(Req 1.9)` and `75b15e2 fix(contract): frontmatter_block_error catches the
+shared YAML load-error tuple`, plus the fix for the sibling item
+`2026-10-05-history-negative-load-uncaught-traceback` (`ceeae9c`, `a3db1e6`,
+`7c3e7ac`). CI is green at its tip (run 39136120605). `git cherry origin/main
+origin/chore/q-history-unreadable` -> 8 `+`; none landed. The agent log holds
+no record of why it stopped.
+
+`git merge-tree --write-tree origin/main origin/chore/q-history-unreadable` at
+`4f1c1f4`: code merges cleanly; the only conflict is `CHANGELOG.md`.

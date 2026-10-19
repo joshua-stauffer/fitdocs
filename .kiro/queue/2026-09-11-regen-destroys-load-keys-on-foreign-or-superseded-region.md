@@ -10,7 +10,7 @@ area: src/fitdocs/load/engine.py, src/fitdocs/render/frontmatter.py, docs/owners
 created: 2026-09-11
 surfaced_by: review of queue item 2026-09-11-ownership-doc-placement-unconditional
 pinned_at: 1dc8633
-resume_command: "do: stop fitdocs regen from dropping load_value/load_methodology/load_basis when the load pass will not restore them"
+resume_command: "do: land the finished fix on origin/chore/q-regen-load-keys -- rebase onto main, resolve the CHANGELOG.md and wiki-contract spec conflicts (contract version is now 16 on main), re-run the three gates, merge per change-protocol.md, then close this item"
 context:
   - src/fitdocs/load/engine.py
   - src/fitdocs/load/docedit.py
@@ -101,3 +101,26 @@ model rather than a local patch:
 
 Done looks like: `regen` over a document in either state either keeps the keys or
 tells the user it is dropping them, and the published contract says which.
+
+## Update 2026-10-19 -- a finished fix exists and never landed
+
+Found by the 0.2 release-readiness triage at `4f1c1f4`. Branch
+`origin/chore/q-regen-load-keys` (6 commits, 2026-10-18, no PR) takes shape 1
+above: `cf4d342 fix(sync): carry load keys over a FOREIGN or SUPERSEDED load
+region on rewrite`, plus contract/changelog prose and wiki-contract Amendment 11
+(criterion 6.10). CI is green at its tip (run 39126612617). None of its commits
+is patch-equivalent to anything on `main` (`git cherry origin/main
+origin/chore/q-regen-load-keys` -> 6 `+`). The agent log holds no record of why
+it stopped; it was reset to 4 lines before 2026-10-19.
+
+`git merge-tree --write-tree origin/main origin/chore/q-regen-load-keys` at
+`4f1c1f4`: code merges cleanly; conflicts only in `CHANGELOG.md`,
+`.kiro/specs/wiki-contract/requirements.md` and `.kiro/specs/wiki-contract/spec.json`.
+
+Release weight, re-read for 0.2: SUPERSEDED is unreachable from any PyPI
+install -- `LOAD_PAYLOAD_VERSION` is `2` at both `v0.1.0` and HEAD
+(`src/fitdocs/load/render.py:63`), so v1 payloads exist only in pre-release
+data roots. FOREIGN still stands but needs a load region the user replaced by
+hand. Not a 0.2 blocker on that reading; landing it before the cut is still
+cheaper than after, because it is a governed-contract change that would
+otherwise need its own changelog entry in 0.3.

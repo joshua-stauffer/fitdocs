@@ -10,7 +10,7 @@ area: load-history, src/fitdocs/history/documents.py, src/fitdocs/history/model.
 created: 2026-10-05
 surfaced_by: /kiro-spec-batch phase 10 (analytics-derived spec writer)
 pinned_at: 19fc92e
-resume_command: "/kiro-spec-requirements load-history [queue: .kiro/queue/2026-10-05-history-negative-load-uncaught-traceback.md] Decide how a negative load_value is read (skip as unreadable vs report) and stop it reaching run_model"
+resume_command: "do: land the finished fix on origin/chore/q-history-unreadable (shared with 2026-09-12-history-unreadable-document-skipped-silently) -- rebase onto main, resolve the CHANGELOG.md conflict, re-run the three gates, merge per change-protocol.md, then close both items"
 context:
   - src/fitdocs/history/documents.py
   - src/fitdocs/history/model.py
@@ -40,3 +40,17 @@ analytics-derived lands, the `derived.load_series` corpus producer).
 1. Read load-history requirements for how unreadable loads are treated (Req 4.x) -- a negative load is probably "unreadable", returned as `(None, None)` with the page counted as skipped.
 2. Fix at the reader, not the CLI, so every consumer (history page, derived producer) agrees.
 3. Add a page fixture with `load_value: -5` and assert the page is skipped and reported, not raised.
+
+## Update 2026-10-19 -- reproduced at HEAD; a finished fix exists and never landed
+
+The 0.2 release-readiness triage reproduced the crash at `4f1c1f4` on a scratch
+data root (reported by a reviewer subagent): `fitdocs history` ends in a Rich
+traceback, `ValueError: daily_loads[0] must be a finite, non-negative number`,
+while `fitdocs index` handles the same page ("Could not refresh
+derived.load_series"). Present in `v0.1.0` too, so not a 0.2 regression.
+
+The fix is on `origin/chore/q-history-unreadable`, unlanded: `ceeae9c`, then
+`a3db1e6 fix(history): treat a negative load like a non-finite one (no load,
+page kept)` and `7c3e7ac`, with plan-resolution Amendment 3 in `0336650`. See
+`2026-09-12-history-unreadable-document-skipped-silently` § Update 2026-10-19
+for the branch state and merge-conflict evidence.
