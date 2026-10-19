@@ -372,6 +372,29 @@ athlete-wide dated `resting_hr_bpm` and `max_hr_bpm` benchmarks. This stage
 does not write the undated profile keys used by zones and the page's own
 TRIMP figure, and requires no new configuration.
 
+**Undated profile keys never anchor training load.** The flat keys at the top
+of `athlete.toml`, such as `max_hr_bpm = 194`, `resting_hr_bpm` and
+`ftp_watts`, feed a page's zones and its own TRIMP, intensity factor and
+training-stress figures. fitdocs's built-in training-load calculator never
+reads them: it reads only dated `[benchmarks]` entries, choosing for each
+workout the entry in force on its date. So a load line that lists `a maximum
+heart rate (max_hr_bpm)` as missing, next to a profile that visibly has
+`max_hr_bpm`, is expected, and re-typing the flat key changes nothing. The fix
+is a dated entry: run
+`fitdocs derive-benchmarks`, which writes dated `max_hr_bpm` and
+`resting_hr_bpm` entries from your wellness and workout evidence, or add one
+by hand:
+
+```toml
+[[benchmarks.athlete.max_hr_bpm]]
+value = 194
+measured_on = 2026-01-15
+```
+
+An entry covers workouts from its `measured_on` date onward; add
+`applies_from` with an earlier date to cover older workouts too. Then run
+`fitdocs load --recompute` to rescore pages already written.
+
 Resting evidence is the median of at least 14 daily values from one source
 within the 28 days ending on the evidence date, counting only days after the
 latest hand-recorded resting entry measured before that date. Sources are kept separate:
