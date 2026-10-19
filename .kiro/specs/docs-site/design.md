@@ -528,7 +528,7 @@ flowchart LR
 ##### Service Interface
 ```python
 SECTIONS: Final[tuple[str, ...]] = (
-    "Home", "Why", "Get started", "Guides", "Working with LLMs",
+    "Home", "Why", "Get started", "Working with LLMs", "Guides",
     "Reference", "Extend", "Project",
 )
 REQUIRED_KEYS: Final[tuple[str, ...]] = ("title", "description", "section", "order")
