@@ -110,6 +110,21 @@ recorded as one.
   `Provenance.undocumented_messages` counts the messages a file carries that
   the installed FIT profile does not define (`None` when not counted). See
   [the plugin guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/plugins.md).
+- Plugin API (additive; no action needed): `DeveloperChannel`, one
+  record-level developer-defined channel (its described name and units, its
+  developer and field numbers, its application id, whether a declared scale
+  was applied, and its values index-aligned to the samples), is exported from
+  the `fitdocs` package root; `Activity.record_developer_fields` maps each
+  such channel's described name to it and is empty, never `None`, when the
+  file records none. `Samples` gains twelve running-dynamics channels:
+  `stance_time_ms`, `stance_time_balance_pct`, `vertical_oscillation_mm`,
+  `vertical_oscillation_balance_pct`, `vertical_ratio_pct`, `step_length_mm`,
+  `leg_spring_stiffness_kn_m`, `leg_spring_stiffness_balance_pct`,
+  `form_power_w`, `air_power_w`, `impact_bw` and
+  `impact_loading_rate_balance_pct`, each `None` at a sample the device did
+  not record. `Activity.local_offset` is the recording device's offset from
+  UTC, `None` when the file does not record it. All are defaulted and
+  appended, so existing constructors remain compatible.
 - The package metadata gains a `Homepage` project URL, `https://fitdocs.ai`,
   listed first among the project URLs; the other project URLs are unchanged
   and no action is needed.
