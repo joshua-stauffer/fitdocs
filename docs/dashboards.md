@@ -1,3 +1,5 @@
+# Dashboards
+
 ## Before you start
 
 A dashboard is a markdown page that you, or your assistant, write in the

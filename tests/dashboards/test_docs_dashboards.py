@@ -167,6 +167,8 @@ def test_the_module_entry_point_regenerates_the_named_page(tmp_path: Path) -> No
 
 def test_the_page_has_the_documented_sections() -> None:
     page = _page_path().read_text(encoding="utf-8")
+    assert page.startswith("# Dashboards\n\n## Before you start\n")
+    assert re.findall(r"(?m)^# (.+)$", page) == ["Dashboards"]
     assert re.findall(r"(?m)^## (.+)$", page) == [
         "Before you start",
         "A dashboard page",

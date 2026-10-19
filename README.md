@@ -21,8 +21,8 @@ pipx install fitdocs
 ```
 
 See [Install](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/install.md)
-for the full first-run path — installing from a checkout before the package
-is published, choosing a data root, getting `.fit` files where fitdocs finds
+for the full first-run path — installing from a checkout to run unreleased
+changes, choosing a data root, getting `.fit` files where fitdocs finds
 them, the first run, and what differs between a standalone data root and one
 inside an existing markdown wiki.
 

@@ -30,7 +30,7 @@ lookback_days = 30       # optional; whole days, 0-3650; defaults to 30
 | Key | Meaning | Default |
 | --- | --- | --- |
 | `connector` | Which connector implementation this instance uses. | the instance's own name |
-| `lookback_days` | For a connector that supports it, how many days before the *watermark* — the newest activity already recorded — its listing starts. An instance's first pull, with no ledger yet, has no watermark, so this key does not apply: each connector chooses where such a pull starts (`folder` considers everything under its source; `intervals` starts as its [section](#intervalsicu) says). Also the wellness re-check window before its own wellness watermark. The `folder` connector ignores it; it always considers everything under its source. | `30` |
+| `lookback_days` | For a connector that supports it, how many days before the *watermark* — the newest activity already recorded — its listing starts. An instance's first pull, with no ledger yet, has no watermark, so this key does not apply: each connector chooses where such a pull starts (`folder` considers everything under its source; `intervals` starts as its [section](#intervalsicu) says). Also the wellness re-check window before its own wellness watermark. The `folder` connector ignores it; it always considers everything under its source. A pull given `--since` starts from that date instead, for activities and wellness alike, so this key does not apply to it. | `30` |
 | `wellness` | Enable only for a connector that pulls wellness; `true` is refused otherwise. | `false` |
 
 Any other key in the table is passed to the connector itself; each connector
