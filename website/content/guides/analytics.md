@@ -74,12 +74,6 @@ On a terminal, results print as a table. Piped into another program, they come o
 
 A missing value is `NULL`, never zero. Running cadence columns hold strides per minute, the FIT convention, so double them for steps per minute.
 
-## Safe by design
-
-`fitdocs query` runs one read-only statement at a time. It refuses anything that would write, attach another database, read other files, install extensions, or reach the network. The sandbox protects you from a mistaken or malicious query, including one an LLM writes. It isn’t a barrier against someone who can already open the file with another program.
-
-You can open the index with your own DuckDB client, like the DuckDB CLI or Python. That bypasses fitdocs’s sandbox, so open it read-only. A client that keeps the file open blocks fitdocs from refreshing it, so close it when you’re done.
-
 ## With an LLM
 
 Install the packaged **`fitdocs-analytics`** skill (see [Inside your wiki or vault](wiki-integration.md#agent-skills)). It teaches your agent to check the schema first, use the index for counts, totals, averages, and trends instead of reading pages one by one, show you the SQL it ran, and tell an empty result from a measured zero. Then ask in plain words: *“How has my weekly running volume changed since January?”*
