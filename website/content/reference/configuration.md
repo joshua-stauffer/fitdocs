@@ -11,19 +11,19 @@ Fitdocs reads three things: where your data root is, `fitdocs.toml` (your settin
 
 ## The data root
 
-Resolved in this order, and no other way:
+Resolved in this order:
 
 1. `--out PATH` on the command
 2. the `FITDOCS_DATA` environment variable
 3. a `.fitdocs/data-root` pointer file, found by searching up from the current directory. Its first line is the path; a relative path is resolved from the pointer file's own folder.
 
-The first one that's set must point to an existing folder, or fitdocs stops with **exit code 2** and says which source failed. fitdocs never creates the data root and never falls back to the current directory.
+The first one that's set must point to an existing folder, or fitdocs stops with exit code 2 and says which source failed. fitdocs never creates the data root and never falls back to the current directory.
 
 Only `fitdocs plugins`, `fitdocs skill`, and `fitdocs dashboard kinds` work without a data root, because they describe the tool rather than your data.
 
 ## `fitdocs.toml`
 
-Lives at `<data-root>/fitdocs.toml`. **You own this file. fitdocs only reads it** and never creates, rewrites, or asks about it. A missing file, table, or key just means "use the default". A value that's present but invalid is an error (exit 2), never silently ignored.
+Lives at `<data-root>/fitdocs.toml`. You own this file. Fitdocs reads it but never creates, rewrites, or asks about it. A missing file, table, or key means "use the default". A value that's present but invalid is an error (exit 2).
 
 ### `[inbox]`
 

@@ -7,13 +7,13 @@ order: 4
 
 # Training load
 
-Training load is a single number for how much a workout took out of you. fitdocs computes it with a built-in calculator called **`threshold`**, and shows its work on every page.
+Training load is a single number for how much a workout took out of you. Fitdocs computes it with a built-in calculator called **`threshold`**, and each workout page shows the method and inputs behind the number.
 
 ## The scale
 
-All of fitdocs' load numbers use the standard scale: **one hour at your threshold intensity = 100.** An easy 45-minute run might score 40. A hard two-hour ride might score 150. Because every sport uses the same scale, a week of running, cycling, and hiking adds up to one meaningful total.
+All of fitdocs' load numbers use the standard scale: **one hour at your threshold intensity = 100.** An easy 45-minute run might score 40. A hard two-hour ride might score 150. Because every sport uses the same scale, a week of running, cycling, and hiking adds up to one total.
 
-## Three channels, one pick
+## How the channel is chosen
 
 For each activity, the `threshold` calculator computes a load from every channel that has enough data:
 
@@ -79,7 +79,7 @@ Every benchmark has a date, and each activity is scored with the value that appl
 
 ## Data Quality
 
-If you’ve worn a fitness wearable for any amount of time, you’ve likely encountered bad data. Using poor quality training data to plan future workouts leads to confidently wrong decisions.
+If you’ve worn a fitness wearable for any amount of time, you’ve likely encountered bad data. Planning future workouts from poor-quality data leads to wrong decisions.
 fitdocs evaluates the data quality of each channel, and adds a warning to the page of any flagged workout:
 
 - **Cadence lock.** Wrist heart-rate sensors sometimes pick up your running cadence and report it as your heart rate. fitdocs checks whether "heart rate" is following cadence suspiciously closely.

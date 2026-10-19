@@ -7,9 +7,9 @@ order: 1
 
 # Write a load calculator
 
-Coaches, sports scientists, and athletes disagree about how to measure training load, and there's room for more than one answer. fitdocs ships one built-in method (`threshold`) and treats every other method as a **plugin**. A running system, a cycling model, a strength-training load: you can add any of them without touching fitdocs' code.
+Coaches, sports scientists, and athletes disagree about how to measure training load. fitdocs ships one built-in method (`threshold`) and treats every other method as a **plugin**. You can add a running system, a cycling model, a strength-training load, or any other method without changing fitdocs' code.
 
-## The contract, in one screen
+## The contract
 
 A calculator is any object with this shape. There's no base class to inherit from.
 
@@ -48,17 +48,17 @@ class MyCalculator:
 | `Computed(result=LoadResult(...))` | You have a real number. |
 | `Unsupported(reason=...)` | This sport is outside your method. |
 | `MissingInputs(fields=...)` | An athlete input is still missing after fitdocs asked for it. |
-| `NotComputed(reason=...)` | Nothing could be computed, and here's why. |
+| `NotComputed(reason=...)` | Nothing could be computed; `reason` says why. |
 
 When a page is built from [several files of one workout](../guides/workout-pages.md#several-files-one-workout), `compute` receives the combined activity: a channel the main file lacks, like power from a Stryd pod, is already filled in from another file.
 
-## The rules that matter
+## The rules
 
 fitdocs' own calculator follows these, and plugins are expected to as well:
 
 1. **Never make up a value.** Missing data leads to a typed "not computed" outcome. `compute` must never raise because athlete data is missing or bad.
 2. **One number counts.** `LoadResult.value` is *the* load. Other channels you computed go in `non_selected`, each with the reason it wasn't chosen. A candidate you couldn't compute gets `value=None`, never `0`.
-3. **Warnings never change the number.** Quality checks go in `flags`, each saying `detected`, `not-detected`, or `not-assessed`. Only say `not-detected` if the check actually ran.
+3. **Warnings never change the number.** Quality checks go in `flags`, each saying `detected`, `not-detected`, or `not-assessed`. Only say `not-detected` if the check ran.
 4. **Talk to the user only through `session`.** fitdocs handles prompting, including non-interactive runs.
 5. **Test against published numbers.** Pin your tests to the worked examples in your method's own source (a paper, a workbook, a reference implementation), not just to what your code currently outputs.
 6. **Only bundle data you're allowed to share.** If lookup tables aren't yours to share freely, leave them out.
@@ -77,7 +77,7 @@ dependencies = ["fitdocs"]
 mycalc = "fitdocs_mycalc:MyCalculator"
 ```
 
-Installing the package is all it takes. No configuration is needed. (For `uv tool` or `pipx` installs, add it to fitdocs' environment: `uv tool install fitdocs --with fitdocs-mycalc`, or `pipx inject fitdocs fitdocs-mycalc`.)
+No configuration is needed beyond installing the package. (For `uv tool` or `pipx` installs, add it to fitdocs' environment: `uv tool install fitdocs --with fitdocs-mycalc`, or `pipx inject fitdocs fitdocs-mycalc`.)
 
 **As a local file**, for a personal method you won't publish:
 
@@ -104,7 +104,7 @@ Local plugin files run as ordinary Python code with your permissions. There's no
 fitdocs plugins
 ```
 
-Your calculator should be listed with its id, version, where it came from, and its sports. If it failed to load, the error appears below the list. A broken plugin is always a warning, never a failed run. Then:
+Your calculator should be listed with its id, version, where it came from, and its sports. If it failed to load, the error appears below the list. A broken plugin produces a warning; it doesn't fail the run. Then:
 
 ```sh
 fitdocs load --calculator mycalc --recompute
@@ -116,4 +116,4 @@ fitdocs load --calculator mycalc --recompute
 - [Contributing a load calculator](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/contributing-calculators.md): the full contract, `LoadContext`, the interaction session, and registration
 - [Compatibility policy](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/compatibility.md): what the plugin API promises between versions
 
-Built a calculator? Open an issue and it can be listed here.
+If you've built a calculator, open an issue and it can be listed here.

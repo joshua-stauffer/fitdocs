@@ -11,7 +11,7 @@ Every activity becomes one markdown file in `workouts/`, named after its local s
 
 If the same workout reached you as several files, from your watch, your phone, and a Stryd pod, they all go on one page. See [Several files, one workout](#several-files-one-workout).
 
-Here's what's in a run or ride page, top to bottom.
+A run or ride page has these sections, top to bottom.
 
 ## Frontmatter
 
@@ -48,7 +48,7 @@ load_basis: pace
 
 ## Notes 
 
-A section for storing your notes, workout assignment, reactions, or any other free text. Notes is never altered by fitdocs. When you upgrade to a newer fitdocs version and regenerate your workout pages, the notes section is always stable.
+A section for storing your notes, workout assignment, reactions, or any other free text. Notes is never altered by fitdocs, even when you upgrade to a newer version and regenerate your workout pages.
 
 ## Summary
 
@@ -60,7 +60,7 @@ For outdoor activities with GPS: your route drawn over real basemap tiles, with 
 
 ## Telemetry
 
-A line of headline numbers (heart rate, power, cadence, speed, TRIMP, TSS), then the **hero chart**: power and heart rate on one shared timeline. It's the quickest way to see whether your heart rate tracked your effort, drifted, or dropped out. Once your zones are known, a heart-rate time-in-zone chart follows.
+A line of headline numbers (heart rate, power, cadence, speed, TRIMP, TSS), then the **hero chart**: power and heart rate on one shared timeline. It shows whether your heart rate tracked your effort, drifted, or dropped out. Once your zones are known, a heart-rate time-in-zone chart follows.
 
 ## Running Dynamics
 
@@ -78,7 +78,7 @@ If you bring in [wellness](wellness.md) data, this block shows that morning’s 
 
 The load number, the method that produced it, and everything it was based on: which channel (pace, power, or heart rate) was picked and why, the inputs, how much of the activity the data covered, and why each other channel was or wasn't used. Data-quality warnings show up here too. See [Training load](training-load.md).
 
-fitdocs writes this section, but a regen keeps it just like your notes, so a computed load isn't lost when pages are rebuilt.
+Fitdocs writes this section, but a regen keeps it, like your notes.
 
 ## Device and data quality
 
@@ -92,7 +92,7 @@ On a page built from several files, this section names each file, its role, and 
 
 Watches record a strength session's time and heart rate, not what you lifted. Strength pages add a **Workout** section that belongs to you, where you log exercises, sets, reps, and weights in whatever markdown you like. Like Notes, fitdocs never overwrites it.
 
-## Editing rules, in one place
+## Editing rules
 
 | Part of the page | Owner | On regen |
 |---|---|---|
