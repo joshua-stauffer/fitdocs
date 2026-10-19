@@ -84,7 +84,10 @@ present is Wellness skipped. Corrected bytes are new content and need no
 retry flag. See the [wellness guide](wellness.md) for the supported exports,
 source definitions, [wellness-day rule](wellness.md#wellness-day), precedence
 and series readers. The standalone [`fitdocs recovery`](recovery.md) command
-turns the series into a recovery page; morning-of workout blocks remain future work.
+turns the series into a recovery page, and each workout page's
+[Morning Of block](wellness.md#wellness-on-workout-pages) shows that morning's
+resting heart rate, HRV and sleep from the series, refreshed on every
+`fitdocs sync`, `fitdocs pull --sync` and `fitdocs regen`.
 Other ZIP files (including Garmin export ZIPs) and unrelated XML are reported as
 unrecognized and left in place; silence them with `[inbox] ignore`.
 

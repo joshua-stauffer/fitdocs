@@ -58,6 +58,7 @@ from fitdocs.layout import (
     ARCHIVE_DIR,
     BLOCKS_DIR,
     HISTORY_DIR,
+    OWNED_PATHS,
     SETTINGS_FILE,
     WORKOUTS_DIR,
 )
@@ -366,6 +367,26 @@ def test_remains_section_states_where_the_tool_writes_property() -> None:
     )
     assert "data root" in normalized
     assert "pointer file" in normalized
+
+
+def test_remains_section_names_every_top_level_owned_path_and_both_outside_dirs() -> (
+    None
+):
+    """The opening "fitdocs writes only into" sentence lists the data root's
+    owned top-level directories. It stopped at ``dashboards/`` after
+    ``wellness/``, ``wellness-archive/`` and ``recovery/`` joined
+    :data:`fitdocs.layout.OWNED_PATHS`, and named neither per-user directory
+    fitdocs writes outside the data root; both halves are now read here."""
+    section = re.sub(r"\s+", " ", _section(_text(), _REMAINS_SECTION))
+    match = re.search(
+        r"fitdocs writes only into its data root's owned paths \((.*?)\)", section
+    )
+    assert match is not None, "the remains section no longer lists the owned paths"
+    named = set(re.findall(r"`([^`]+/)`", match.group(1)))
+    top_level = {path for path in OWNED_PATHS if path.count("/") == 1}
+    assert named == top_level
+    for phrase in ("analytics index directory", "connector credentials directory"):
+        assert section.count(phrase) >= 2, phrase
 
 
 # --- (f) the compatible-upgrade-guarantee link resolves to a real heading --

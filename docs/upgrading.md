@@ -124,7 +124,9 @@ that reads each file's own recorded time zone (`doc_version` 11) does this for
 every page recorded away from your computer's zone or in the other half of
 the daylight-saving year, so expect many renames on that `regen`. Links to the
 old names are not updated, in fitdocs pages or in your own notes; find them by
-the old names the warnings print.
+the old names the warnings print. A training plan's `[[override]]` that names
+a renamed page by its old stem needs the same update: until it is changed,
+plan reconciliation reports that stem as not found among the logged workouts.
 
 A page whose file records no time zone of its own is dated in your
 computer's time zone, so running `fitdocs regen` after changing that zone (on
@@ -162,20 +164,28 @@ under your data root and nothing in the tree you run fitdocs from.
 ## What remains on disk after uninstalling
 
 fitdocs writes only into its data root's owned paths (`workouts/`,
-`history/`, `blocks/`, `fit-archive/`, `dashboards/`, `.cache/`, and `.fitdocs/`), the
-athlete profile, and whatever write location your settings configure — the
+`history/`, `blocks/`, `fit-archive/`, `dashboards/`, `wellness/`,
+`wellness-archive/`, `recovery/`, `.cache/`, and `.fitdocs/`), the
+athlete profile, whatever write location your settings configure — the
 inbox's `path` and, when `disposition = "move"` is set, its
 `processed_dir`, either of which may be an absolute path outside the data
-root. Two files fitdocs only ever reads, never writes: `fitdocs.toml` and
+root — and two per-user directories outside the data root: the analytics
+index directory (see
+[Where the index lives](analytics.md#where-the-index-lives)) and the connector
+credentials directory (see [Credentials](connectors.md#credentials)). Two
+files fitdocs only ever reads, never writes: `fitdocs.toml` and
 the `.fitdocs/data-root` pointer file it consults to find your data root in
 the first place. Uninstalling removes the tool, not the
 places the tool wrote to or read from — every one of the following is
 untouched, because uninstalling only ever removes the isolated environment
 described above:
 
-- your generated documents: `workouts/`, `history/`, and `blocks/` under
-  your data root;
-- your archived sources: `fit-archive/` under your data root;
+- your generated documents and data: `workouts/`, `history/`, `blocks/`,
+  `recovery/`, the wellness series in `wellness/`, and your dashboard pages
+  with their chart images and snapshots in `dashboards/`, under your data
+  root;
+- your archived sources: `fit-archive/` and `wellness-archive/` under your
+  data root;
 - your settings file: `fitdocs.toml` at the top of your data root;
 - your athlete profile: `athlete.toml` at the top of your data root;
 - the `.fitdocs/data-root` pointer file in the tree you run fitdocs from;
@@ -183,9 +193,13 @@ described above:
   that lies outside the data root.
 
 (Also untouched: the tool-owned `.fitdocs/` state directory inside your
-data root, including `.fitdocs/quarantine.toml`, the tile cache under
-`.cache/`, and any local plugin file or directory you configured, wherever
-it lives.)
+data root, including `.fitdocs/quarantine.toml` and each connector's ledger,
+the tile cache under `.cache/`, any local plugin file or directory you
+configured, wherever it lives, and the two per-user directories outside the
+data root: the analytics index directory, which is only a cache and safe to
+delete, and the connector credentials directory, which holds your stored
+connector keys and tokens. Delete those two yourself if you no longer need
+them.)
 
 ## The compatible-upgrade guarantee
 

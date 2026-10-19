@@ -95,9 +95,10 @@ fitdocs/<version> (+https://github.com/joshua-stauffer/fitdocs)
 No GPS coordinates, credentials, or personal data are ever sent — only the
 tile-URL requests the provider needs to serve the basemap.
 
-This happens **only on a cache miss**, and **only during `sync`/`regen`**
-while a map is being rendered. Each map tile is fetched at most once and
-then cached (see below), so a warm tile cache is fully offline — like every
+This happens **only on a cache miss**, and **only during `sync`, `regen` or
+`pull --sync`** while a map is being rendered. Each map tile is fetched at
+most once and then cached (see below), so a warm tile cache is fully
+offline — like every
 fitdocs operation except the connector commands, `fitdocs connect` and
 `fitdocs pull`, which run only when invoked and are switched off simply by
 not running them, or by removing the instance's `[connectors.<name>]`

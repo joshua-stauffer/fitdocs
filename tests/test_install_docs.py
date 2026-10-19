@@ -61,6 +61,7 @@ from fitdocs.history.sources import COVERAGE_THRESHOLD, SEED_CONSTANTS
 from fitdocs.load.channels.types import SufficiencySettings
 from fitdocs.load.priority import DEFAULT_CHANNEL_PRIORITY
 from fitdocs.load.qa.types import FlagSettings
+from fitdocs.layout import DECLARED_DIRS
 from fitdocs.load.settings import DEFAULT_LOAD_SETTINGS
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -508,3 +509,39 @@ def test_default_channel_priority_lines_match_the_real_constant() -> None:
             f"docs/configuration.md does not render {sport.value.lower()}'s "
             f"real default channel priority as {expected_line!r}"
         )
+
+
+# --- the declared-directory sentence names exactly layout.DECLARED_DIRS -----
+
+_COUNT_WORDS = {
+    5: "five",
+    6: "six",
+    7: "seven",
+    8: "eight",
+    9: "nine",
+    10: "ten",
+    11: "eleven",
+    12: "twelve",
+}
+
+
+def test_install_doc_names_every_declared_directory_and_their_count() -> None:
+    """The ``AGENTS.md`` sentence under "What the resulting document looks
+    like" lists the directories ``sync`` and ``regen`` place a declaration in.
+    It once said "five" and stopped at ``dashboards/`` after three more
+    directories had joined :data:`fitdocs.layout.DECLARED_DIRS`; both the list
+    and the count word are now read against the constant."""
+    text = " ".join(
+        (_REPO_ROOT / "docs" / "install.md").read_text(encoding="utf-8").split()
+    )
+    match = re.search(
+        r"an `AGENTS\.md` in each of the (\w+) declared directories — (.*?) — "
+        r"unconditionally",
+        text,
+    )
+    assert match is not None, (
+        "docs/install.md no longer states the declared directories"
+    )
+    named = re.findall(r"`([^`]+/)`", match.group(2))
+    assert sorted(named) == sorted(DECLARED_DIRS)
+    assert match.group(1) == _COUNT_WORDS[len(DECLARED_DIRS)]

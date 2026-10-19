@@ -155,8 +155,10 @@ fitdocs check
 ```
 
 `fitdocs check` exits `0`. `workouts/` now holds one generated document per
-drained `.fit` file, and `workouts/AGENTS.md` — the ownership declaration
-fitdocs writes into every directory it owns — is present, naming the
+workout the drained `.fit` files recorded (files of the same workout from
+different sources share one page), and `workouts/AGENTS.md` — the ownership
+declaration fitdocs writes into each of its eight declared directories — is
+present, naming the
 published ownership contract as its authority. Nothing outside the
 directories fitdocs owns is touched: the rest of your wiki is exactly as it
 was.

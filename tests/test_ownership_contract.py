@@ -392,7 +392,8 @@ def test_dashboard_section_states_the_asset_snapshot_and_cleanup_rules() -> None
 def test_head_and_definitions_agree_with_the_dashboards_section() -> None:
     text = _flat(_read_doc())
     assert "inside the eight owned directories" in text
-    assert "each of those four commands refreshes every declared directory's" in text
+    assert "each of those five commands refreshes every declared directory's" in text
+    assert "or the first `fitdocs recovery` run that has a page to write" in text
     owned = _flat_section("Owned Paths")
     assert (
         '"owned" in this contract means "fitdocs may create, rewrite, or delete '
@@ -441,7 +442,9 @@ def test_root_instructions_example_names_all_eight_declarations() -> None:
     assert "those eight files are generated" in flat
     assert "those four files" not in text
     assert "each of the five refreshes" not in flat
-    assert "each of those four commands refreshes every declared directory's" in flat
+    assert "each of those four commands" not in text
+    assert "each of those five commands refreshes every declared directory's" in flat
+    assert "on every `fitdocs recovery` run that has a page to write" in flat
 
 
 def test_every_never_read_back_sentence_carries_the_named_exception() -> None:

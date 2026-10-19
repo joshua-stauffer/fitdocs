@@ -19,9 +19,10 @@ directories a human or agent browses (`workouts/AGENTS.md`,
 `dashboards/AGENTS.md`, `wellness/AGENTS.md`, `wellness-archive/AGENTS.md`,
 and `recovery/AGENTS.md` — each
 generated on the first `sync` or `regen` run, the first `fitdocs history` run
-that has a page to write, or the first `fitdocs plan` run that has a block to
-render, because each of those four commands refreshes every declared
-directory's file when it writes, not only the one its own output lands in)
+that has a page to write, the first `fitdocs plan` run that has a block to
+render, or the first `fitdocs recovery` run that has a page to write, because
+each of those five commands refreshes every declared directory's file when it
+writes, not only the one its own output lands in)
 and stamped onto every generated document as a provenance banner —
 the `AGENTS.md` texts and the provenance banner are generated from the same
 code-level constants. This document's own enumerated lists (owned paths,
@@ -139,8 +140,10 @@ either changes, and overwrites hand edits to the series. `fitdocs check`
 reports whether they are current. Both locations carry a generated `AGENTS.md`
 stating their ownership and these rules. See the [wellness guide](wellness.md)
 for formats, source precedence, the [wellness-day rule](wellness.md#wellness-day)
-and series readers. These are daily data files; recovery pages and morning-of
-workout blocks remain future work.
+and series readers. These are daily data files. Two outputs are derived from
+them: the recovery page (see [Recovery Page](#recovery-page) above) and each
+workout page's `morning` region (see
+[The Morning-Of Region](#the-morning-of-region) below).
 
 ## A Second Document Type: Training History
 
@@ -869,7 +872,8 @@ and each has a distinct contract:
   entry's table — no different from any other key here — so a hand edit
   can change either one.
 - **`fitdocs.toml`** — your settings file (`[tiles]`, `[inbox]`, `[plugins]`,
-  `[load]`, `[history]`, `[plans]`, `[identity]`, and `[connectors]` today;
+  `[load]`, `[history]`, `[plans]`, `[identity]`, `[wellness]`, and
+  `[connectors]` today;
   more tables as more features
   land). This file is **read-only to fitdocs**: nothing in fitdocs ever
   creates, writes, or modifies it. An absent file, or an absent table within
@@ -1351,8 +1355,9 @@ for the pages that are yours and the chart regions in them that are fitdocs's,
 
 is sufficient: those eight files are generated and kept current by fitdocs
 on every `sync` and `regen` run, on every `fitdocs history` run that
-writes its page, and on every `fitdocs plan` run that has a block to
-render — each of those four commands refreshes every declared directory's
+writes its page, on every `fitdocs plan` run that has a block to
+render, and on every `fitdocs recovery` run that has a page to write — each of
+those five commands refreshes every declared directory's
 file, not only the one its own output lands in — so a pointer from your own
 root file stays accurate without you
 having to maintain it. Your root instructions file itself is never written
