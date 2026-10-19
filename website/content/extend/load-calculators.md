@@ -50,6 +50,8 @@ class MyCalculator:
 | `MissingInputs(fields=...)` | An athlete input is still missing after fitdocs asked for it. |
 | `NotComputed(reason=...)` | Nothing could be computed, and here's why. |
 
+When a page is built from [several files of one workout](../guides/workout-pages.md#several-files-one-workout), `compute` receives the combined activity: a channel the main file lacks, like power from a Stryd pod, is already filled in from another file.
+
 ## The rules that matter
 
 fitdocs' own calculator follows these, and plugins are expected to as well:

@@ -2,7 +2,7 @@
 title: Training blocks
 description: Write a training plan as a small file you own. fitdocs renders it into pages and matches your logged workouts against it.
 section: Guides
-order: 6
+order: 8
 ---
 
 # Training blocks
@@ -34,7 +34,7 @@ The block page also adds up your actual load for each mesocycle and compares it 
 
 The matching is recalculated from your pages every time and never stored. If a better match is logged later, it simply takes over. Nothing is ever written back into your workout pages or your plan file.
 
-The pass runs automatically at the end of `sync` and `regen`, and whenever you run:
+The pass runs automatically at the end of `sync`, `pull --sync`, and `regen`, and whenever you run:
 
 ```sh
 fitdocs plan
@@ -101,4 +101,6 @@ reason = "the morning run was the intervals"
 ```
 
 Overrides go in the plan file, not on the workout page, because they're a decision about the plan.
+
+An override names workout pages by filename. If fitdocs renames a page (see [When a page is renamed](workout-pages.md#when-a-page-is-renamed)), update the name in your override, or `fitdocs plan` reports it as not found.
 

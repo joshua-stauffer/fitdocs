@@ -15,6 +15,51 @@ This page mirrors [`CHANGELOG.md`](https://github.com/joshua-stauffer/fitdocs/bl
 
 Nothing yet.
 
+## 0.2.0 — 2026-10-19
+
+[PyPI](https://pypi.org/project/fitdocs/0.2.0/) · [tag `v0.2.0`](https://github.com/joshua-stauffer/fitdocs/tree/v0.2.0)
+
+### Upgrading from 0.1
+
+This release changes the page format. After upgrading, run `fitdocs regen` once, before you sync anything new, then build the analytics index:
+
+```sh
+fitdocs regen
+fitdocs index
+fitdocs check
+```
+
+That first `regen` does three things:
+
+- **It renames many pages.** Pages are now named and dated by the time zone your device recorded, so pages recorded while traveling, or in the other half of the daylight-saving year, get new names. Each rename prints a warning with the old name. **Links to the old names aren't updated**, in your notes or in your training plans' overrides, so search for the old names and fix them.
+- **It lets fitdocs recognize a workout you already have when another file of it arrives.** Run it before you sync, say, a Garmin original of a run you have as a HealthFit copy, and before your first `fitdocs pull`.
+- **It sets up the new folders**, `dashboards/`, `wellness/`, `wellness-archive/`, and `recovery/`, each with its `AGENTS.md`.
+
+Then `fitdocs check` reports anything left to sort out. If it finds one workout recorded on two pages, keep one, move anything worth keeping out of the other's notes, delete the other page, and run `fitdocs regen`. A page whose files changed keeps its old load until you run `fitdocs load --recompute`. If you keep your plan files in `dashboards/`, move them and update `[plans] path`, because fitdocs now refuses a plan folder there.
+
+If you installed the agent skills by copying, copy them again, and add the two new ones, `fitdocs-analytics` and `fitdocs-dashboards` (see [Agent skills](guides/wiki-integration.md#agent-skills)).
+
+### Added
+
+- **Connectors.** `fitdocs connect` and `fitdocs pull` fetch new activities, and wellness if you turn it on, from an intervals.icu account into the inbox. A `folder` connector does the same for a local folder. See [Pulling from intervals.icu](guides/connectors.md).
+- **Wellness.** The inbox now takes an Apple Health export, Garmin data-export JSON files, and intervals.icu wellness. fitdocs keeps the source files in `wellness-archive/` and a daily series in `wellness/`. See [Wellness and recovery](guides/wellness.md).
+- **The Morning Of block** on every workout page: that morning's resting heart rate, HRV, and sleep against your own recent normal.
+- **`fitdocs recovery`** writes a recovery page with HRV, resting heart rate, and sleep next to fitness, fatigue, and form.
+- **Heart-rate benchmarks.** `fitdocs derive-benchmarks` also derives resting heart rate from your wellness series and max heart rate from your runs and rides. Values you entered by hand are never changed.
+- **The analytics index.** `fitdocs index` builds a local DuckDB database of your whole training log, and `fitdocs query` runs read-only SQL against it. DuckDB is a new dependency, about 44 MB installed. See [The analytics index](guides/analytics.md).
+- **Dashboards.** Pages you write in `dashboards/` get charts drawn from the index and kept current, in 17 chart kinds. `fitdocs dashboard` checks, refreshes, and freezes them. See [Dashboards](guides/dashboards.md).
+- **One page per workout, from several files.** Files of the same workout from different sources now share one page, and channels the main file lacks are filled in from the others, listed in a new Channel Sources section. The `[identity]` settings table chooses which file ranks first. `fitdocs check` reports files it couldn't place, archived files no page lists, and workouts recorded on two pages.
+- **Running Dynamics** on run pages, from the watch's own fields or a pod like Stryd.
+- **Two new agent skills**, `fitdocs-analytics` and `fitdocs-dashboards`.
+
+### Changed
+
+- **Pages use the local time your device recorded.** A page's date, start time, title, and filename now come from the time zone its `.fit` file records, so runs from the other half of the daylight-saving year, or from a trip, are no longer an hour or a day off. Upgrading renames those pages, and links to the old names aren't updated.
+- **The inbox** treats `.json`, `.zip`, and `.xml` files as possible wellness exports, handles wellness before workouts, and skips `.fit` files that aren't activities (like Garmin monitoring files) with a warning. A connector's own deliveries are removed once they're archived. Nothing else in the inbox is ever deleted.
+- **Governed contracts.** The ownership contract moves from version 4 to 16, and the document format (`doc_version`) from 5 to 11: run `fitdocs regen`. The `fitdocs.toml` settings gain the optional `[identity]`, `[wellness]`, and `[connectors]` tables, and `[plans] path` can no longer be inside `dashboards/`. The plugin API gains `FileIdentity`, an additive change. `athlete.toml` and several settings now refuse `nan` and `inf`.
+
+This release also carries many fixes. The [full changelog](https://github.com/joshua-stauffer/fitdocs/blob/main/CHANGELOG.md) lists every change, with the action each contract change needs.
+
 ## 0.1.0 — 2026-09-19
 
 The first public release. [PyPI](https://pypi.org/project/fitdocs/0.1.0/) · [tag `v0.1.0`](https://github.com/joshua-stauffer/fitdocs/tree/v0.1.0)

@@ -2,7 +2,7 @@
 title: Training history
 description: One page showing fitness, fatigue, and form across your whole archive, built only from the load already on your workout pages.
 section: Guides
-order: 5
+order: 6
 ---
 
 # Training history

@@ -1,6 +1,6 @@
 ---
 title: Prompt library
-description: Copy-and-paste prompts for setting up fitdocs, processing workouts, writing notes, reviewing training, tagging races, and building training blocks with any LLM agent.
+description: Copy-and-paste prompts for setting up fitdocs, processing workouts, writing notes, reviewing training, querying your history, building dashboards, tagging races, and planning training blocks with any LLM agent.
 section: Working with LLMs
 order: 2
 ---
@@ -21,8 +21,8 @@ Replace anything in `<angle brackets>`.
 Install the fitdocs CLI with `uv tool install fitdocs` (fall back to pipx).
 Create a data root at <~/fitdocs-data> and export FITDOCS_DATA to it in my
 shell profile. Then run `fitdocs sync <folder with my .fit files>` and show
-me the summary. Open one generated workout page and walk me through its
-sections.
+me the summary, and run `fitdocs index` to build the analytics index. Open
+one generated workout page and walk me through its sections.
 ```
 
 ### Add fitdocs to my existing wiki
@@ -31,11 +31,23 @@ sections.
 Add fitdocs to this wiki following https://fitdocs.ai/guides/wiki-integration:
 make this directory the data root with a .fitdocs/data-root pointer file,
 create fitdocs.toml with an [inbox] table pointing at <inbox folder>, install
-the packaged fitdocs-workouts skill into your skills directory by symlink
-(use `fitdocs skill fitdocs-workouts` to find it), and add a short pointer to
-the fitdocs AGENTS.md files in this wiki's root instructions. Then run
-`fitdocs sync --no-prompt` and `fitdocs check` and report the results.
-Don't touch anything outside the folders fitdocs owns.
+the four packaged skills (fitdocs-workouts, fitdocs-analytics,
+fitdocs-dashboards, build-training-block) into your skills directory by
+symlink (use `fitdocs skill <name>` to find each one), and add a short
+pointer to the fitdocs AGENTS.md files in this wiki's root instructions.
+Then run `fitdocs sync --no-prompt`, `fitdocs index`, and `fitdocs check`
+and report the results. Don't touch anything outside the folders fitdocs
+owns.
+```
+
+### Connect intervals.icu
+
+```text
+Add a [connectors.intervals] table to fitdocs.toml<, with wellness = true>.
+Then stop and tell me to run `fitdocs connect intervals` myself, so I can
+paste my API key where you can't see it. Don't ask me for the key. Once I
+say it's connected, run `fitdocs pull --sync --no-prompt` and summarize
+what was delivered, skipped, and written.
 ```
 
 ---
@@ -53,9 +65,10 @@ Process my workouts.
 Without the skill:
 
 ```text
-Run `fitdocs sync --no-prompt`, then `fitdocs check`. Summarize what was
-written, and tell me about anything deferred, quarantined, or failed. Don't
-retry quarantined files or run `fitdocs regen` unless I ask.
+Run `fitdocs pull --sync --no-prompt` (or `fitdocs sync --no-prompt` if no
+connector is configured), then `fitdocs check`. Summarize what was written,
+and tell me about anything deferred, quarantined, failed, or unrecognized.
+Don't retry quarantined files or run `fitdocs regen` unless I ask.
 ```
 
 ### Post-workout debrief into my notes
@@ -101,11 +114,20 @@ came from, and any data-quality warnings. Use only numbers from the page.
 ### Weekly review
 
 ```text
-Read the frontmatter of every workout page dated in the last 7 days and in
-the 4 weeks before that. Total load_value by sport and overall for this
-week, and compare it to the 4-week weekly average. Point out any page with no
-load, or with warnings in its Training Load section. Then read my Notes from
-this week and summarize how I seemed to be feeling. Keep it to one screen.
+Use the fitdocs-analytics skill. Query the analytics index for my load by
+sport and overall for the last 7 days, and compare it with the weekly
+average of the 4 weeks before. List any workout from this week with no load
+or with a detected data-quality flag. Then read my Notes on this week's
+workout pages and summarize how I seemed to be feeling. Show the SQL you
+ran, and keep it to one screen.
+```
+
+### Ask a question across years
+
+```text
+Use the fitdocs-analytics skill. <How has my easy-run pace at the same heart
+rate changed over the last two years?> Check the schema first, show me the
+SQL you ran, and tell me where missing data could change the answer.
 ```
 
 ### Can I trust my heart-rate data?
@@ -134,6 +156,39 @@ Run `fitdocs history`, then read history/training-load-history.md. Tell me
 where my fitness, fatigue, and form stand compared with the weeks before my
 last three tagged races. Point out any periods where the curve is blank
 because load is missing.
+```
+
+### Build a dashboard
+
+```text
+Use the fitdocs-dashboards skill to make dashboards/<training-overview>.md
+with <weekly running distance for the last six months, time in each
+heart-rate zone per week, and my resting heart rate over the same period>.
+Run `fitdocs dashboard check` until it's clean, then `fitdocs dashboard
+refresh`, and tell me what each chart shows.
+```
+
+---
+
+## Wellness and recovery
+
+### Bring in my sleep and HRV
+
+```text
+I've put <my Apple Health export.zip / the JSON files from my Garmin data
+export> in the inbox. Run `fitdocs sync --no-prompt` and tell me what was
+archived, skipped, or unrecognized, and which wellness signals I now have
+and from which sources. Then run `fitdocs recovery`.
+```
+
+### How am I recovering?
+
+```text
+Read recovery/recovery.md and the Morning Of blocks on my workout pages from
+the last two weeks. Where have my HRV, resting heart rate, and sleep been
+against my normal range, and how does that line up with my training load
+and what my Notes say? Describe what you see. Don't give me a readiness
+score or tell me what to do; I'll decide.
 ```
 
 ---
@@ -211,10 +266,21 @@ are mine.
 
 ```text
 I just upgraded fitdocs. Run `fitdocs --version` and `fitdocs check`. If
-check says pages need regenerating, run `fitdocs regen` and check again.
-If you installed the skills by copying, refresh them from
-`fitdocs skill <name>`. Summarize what changed using the release's
-changelog entry.
+check says pages need regenerating, run `fitdocs regen`, keep its rename
+warnings, and check again. Run `fitdocs index` if the index needs a
+rebuild. If you installed the skills by copying, refresh them from
+`fitdocs skill <name>`, and install any new ones. Summarize what changed
+using the release's changelog entry.
+```
+
+### Fix links after renamed pages
+
+```text
+`fitdocs regen` printed rename warnings, from <old name> to <new name>.
+Find every link to one of the old names in my own notes, including the
+Notes and Workout sections of workout pages, and every override in my plan
+files that names one. Show me the list, and after I confirm, update each one
+to the new name. Change nothing else.
 ```
 
 ### Health check

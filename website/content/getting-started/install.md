@@ -19,6 +19,8 @@ pipx install fitdocs
 
 Both install fitdocs in its own environment and put the `fitdocs` command on your `PATH`, without touching any other Python project. If you don't have either one, [uv](https://docs.astral.sh/uv/) is a single download, and it will fetch a suitable Python version for you.
 
+fitdocs brings DuckDB with it, about 44 MB installed, to power the [analytics index](../guides/analytics.md). DuckDB has no prebuilt package for musl-based Linux (such as Alpine) or free-threaded Python builds, so on those you'll need a working build toolchain.
+
 Check that it worked:
 
 ```sh
@@ -46,13 +48,15 @@ fitdocs regen
 
 `regen` rebuilds every page from the archived `.fit` files. You don't need the original exports, and you don't import anything again. Your notes are kept exactly as they are.
 
+If a release needs more than that, its entry in the [changelog](../changelog.md) says what to run.
+
 ## Uninstall
 
 ```sh
 uv tool uninstall fitdocs    # or: pipx uninstall fitdocs
 ```
 
-Uninstalling removes the tool, not your data. Your workout pages, archive, settings, and athlete profile stay where they are, still readable as plain files.
+Uninstalling removes the tool, not your data. Your workout pages, archives, settings, and athlete profile stay where they are. So do the two things fitdocs keeps outside your data root: the analytics index in `~/.cache/fitdocs/index/` and any connector keys in `~/.config/fitdocs/credentials/` (or wherever you pointed them). Delete those yourself if you don't need them.
 
 ## Install from source
 
