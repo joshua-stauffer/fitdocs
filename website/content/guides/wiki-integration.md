@@ -111,6 +111,7 @@ The generated pages and archive can make diffs noisy. You can mark them as gener
 
 ```
 workouts/*.md linguist-generated
+workouts/assets/* linguist-generated -diff
 fit-archive/* linguist-generated -diff
 history/*.md linguist-generated
 history/assets/* linguist-generated -diff
@@ -120,6 +121,8 @@ recovery/*.md linguist-generated
 recovery/assets/* linguist-generated -diff
 wellness/* linguist-generated
 wellness-archive/** linguist-generated -diff
+dashboards/AGENTS.md linguist-generated
+dashboards/assets/*/*.svg linguist-generated -diff
 ```
 
 The heavy folders (`fit-archive/`, `wellness-archive/`, chart assets, `.cache/`) can also be left out of git entirely, since `fitdocs regen` can rebuild every workout page from the archives. Then `fitdocs index`, `fitdocs recovery`, and `fitdocs dashboard refresh` redraw the rest. Make sure both archives are backed up. Keep your dashboard pages and their snapshot files (`dashboards/assets/**/*.snapshot-*.json`) in git, though: a snapshot is the only copy of the rows a frozen chart was drawn from.
