@@ -1,13 +1,13 @@
 ---
 title: Configuration
-description: The data root, fitdocs.toml (settings, which fitdocs only reads), athlete.toml (thresholds), and the files fitdocs keeps outside your data root, key by key.
+description: The data root, fitdocs.toml (settings, which fitdocs only reads), athlete.toml (thresholds), and the files fitdocs keeps outside your data root.
 section: Reference
 order: 2
 ---
 
 # Configuration
 
-fitdocs reads three things: **where your data root is**, **`fitdocs.toml`** (your settings), and **`athlete.toml`** (your thresholds). Every setting has a default, so all of them are optional. If you use a connector, its key is kept separately, outside the data root (see [Connector credentials](#connector-credentials)).
+Fitdocs reads three things: where your data root is, `fitdocs.toml` (your settings), and `athlete.toml` (your thresholds). Every setting has a default, so all of them are optional. If you use a connector, its key is kept separately, outside the data root (see [Connector credentials](#connector-credentials)).
 
 ## The data root
 
@@ -171,11 +171,11 @@ connector = "folder"
 path = "/Users/you/Documents/WatchExports"
 ```
 
-A key never goes in this file: a setting with the same name as a connector's key, like `api_key`, is refused. See [Pulling from intervals.icu](../guides/connectors.md).
+Fitdocs refuses a setting here with the same name as a connector's key, like `api_key`. See [Pulling from intervals.icu](../guides/connectors.md).
 
 ## `athlete.toml`
 
-Lives at `<data-root>/athlete.toml` and holds your thresholds. Unlike `fitdocs.toml`, fitdocs **does write to this file**, but only values you gave it at a prompt or that `derive-benchmarks` derived: thresholds from a tagged effort, resting heart rate from your wellness series, and max heart rate from your runs and rides. It saves changes safely, never changes or deletes a benchmark you entered, and keeps every key it doesn't manage. Comments and formatting aren't kept when it writes the file.
+Lives at `<data-root>/athlete.toml` and holds your thresholds. Unlike `fitdocs.toml`, fitdocs writes to this file, but only values you gave it at a prompt or that `derive-benchmarks` derived: thresholds from a tagged effort, resting heart rate from your wellness series, and max heart rate from your runs and rides. It saves changes safely, never changes or deletes a benchmark you entered, and keeps every key it doesn't manage. Comments and formatting aren't kept when it writes the file.
 
 ```toml
 [[benchmarks.athlete.max_hr_bpm]]
@@ -206,11 +206,11 @@ measured_on = 2026-08-15
 | `lthr_bpm` | per sport | bpm |
 | `ftp_watts` | per sport | watts |
 
-You can add several entries per benchmark. Each activity is scored with the one that applied on its date. A missing file just means no thresholds yet. A malformed file is an error (exit 2) whose message tells you what to fix, and so is a value of `nan` or `inf`.
+You can add several entries per benchmark. Each activity is scored with the one that applied on its date. A missing file means no thresholds yet. A malformed file is an error (exit 2) whose message tells you what to fix, and so is a value of `nan` or `inf`.
 
 ## Outside the data root
 
-Two things fitdocs keeps are deliberately outside your data root, so they never travel with your notes.
+Fitdocs keeps two things outside your data root, so they don't travel with your notes.
 
 ### Connector credentials
 

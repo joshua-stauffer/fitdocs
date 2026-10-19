@@ -56,7 +56,7 @@ Distance, moving and elapsed time, pace or speed, elevation, and average and max
 
 ## Map
 
-For outdoor activities with GPS: your route drawn over real basemap tiles, with start and finish markers. (This is the only feature that uses the network. See [Privacy and the network](privacy-and-network.md).)
+For outdoor activities with GPS: your route drawn over real basemap tiles, with start and finish markers. (Drawing a map fetches tiles over the network. See [Privacy and the network](privacy-and-network.md).)
 
 ## Telemetry
 
@@ -114,11 +114,11 @@ Edit your sections between their `<!-- fitdocs:begin:… -->` and `<!-- fitdocs:
 
 ## Several files, one workout
 
-A run can easily reach you three times: the watch’s original file, a phone copy from an app like HealthFit, and a Stryd file. Fitdocs recognizes files of the same sport that started within a second of each other and covered about the same distance as one workout, and puts them on one page.
+A run can reach you three times: the watch’s original file, a phone copy from an app like HealthFit, and a Stryd file. Fitdocs recognizes files of the same sport that started within a second of each other and covered about the same distance as one workout, and puts them on one page.
 
 The page is built from the highest-ranked file, a Garmin original first by default. Any channel that file doesn’t record at all, like power or running dynamics from a Stryd pod, is filled in from the others, and Channel Sources says where each one came from. A channel the main file does record stays its own, gaps included. Change the ranking with `[identity] precedence` in [`fitdocs.toml`](../reference/configuration.md#identity).
 
-When a file could belong to more than one page, fitdocs archives it but doesn’t guess: it holds the file, and `fitdocs check` tells you. Fitdocs never merges two pages. If `check` reports a workout recorded on two pages, keep one, move anything worth keeping out of the other’s notes, delete it, and run `fitdocs regen`.
+When a file could belong to more than one page, fitdocs archives it without adding it to any page, and `fitdocs check` reports it. Fitdocs never merges two pages. If `check` reports a workout recorded on two pages, keep one, move anything worth keeping out of the other’s notes, delete it, and run `fitdocs regen`.
 
 ## When a page is renamed
 

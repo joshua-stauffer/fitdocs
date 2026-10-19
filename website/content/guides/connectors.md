@@ -1,17 +1,17 @@
 ---
 title: Pulling from intervals.icu
-description: Connect an intervals.icu account, or a local folder, so `fitdocs pull` fetches new activities and wellness into the inbox for you.
+description: Connect an intervals.icu account, or a local folder, so `fitdocs pull` fetches new activities and wellness into the inbox.
 section: Guides
 order: 2
 ---
 
 # Pulling from intervals.icu
 
-Dropping files into the [inbox](inbox.md) works, but it’s one more chore. A **connector** does it for you. You configure it once, and `fitdocs pull` fetches whatever is new and delivers it into the inbox, where the next drain turns it into pages exactly as if you’d dropped the files there yourself.
+Instead of dropping files into the [inbox](inbox.md) yourself, you can set up a **connector**. You configure it once, and `fitdocs pull` fetches whatever is new and delivers it into the inbox, where the next drain turns it into pages as if you’d dropped the files there yourself.
 
 Fitdocs ships two connectors:
 
-- **`intervals`** reads an [intervals.icu](https://intervals.icu) account with your own API key. It only reads. It never writes to the account.
+- **`intervals`** reads an [intervals.icu](https://intervals.icu) account with your own API key. It never writes to the account.
 - **`folder`** reads a local directory, such as a folder another app exports to. It needs no account and makes no network request.
 
 Fitdocs doesn’t read Garmin Connect or Strava directly. intervals.icu is free, community-supported, and syncs with most fitness platforms, so connect your devices there and let fitdocs read the original files from it.
@@ -81,7 +81,7 @@ The first wellness pull reads back to 2010, or to `--since` if you give one. Eac
 
 ## The folder connector
 
-Point a `folder` connector at any directory, and each pull copies new `.fit` files from it into the inbox. It only ever reads from that directory. It never moves, renames, or deletes anything there.
+Point a `folder` connector at any directory, and each pull copies new `.fit` files from it into the inbox. It never moves, renames, or deletes anything in that directory.
 
 ```toml
 [connectors.watch-exports]
@@ -95,11 +95,11 @@ The name in brackets is yours to choose (lowercase letters, digits, and hyphens)
 
 Keys are never stored in your data root. They live in your user’s config folder, `~/.config/fitdocs/credentials/` by default (or under `$XDG_CONFIG_HOME`, or wherever `FITDOCS_CREDENTIALS_DIR` points). Fitdocs refuses a credentials folder inside the data root, so a key can’t end up in your wiki’s git history or a shared folder. Each key file is readable only by you.
 
-A key never goes in `fitdocs.toml` either: fitdocs refuses a setting there with the same name as a connector’s key, like `api_key`. To use a key without storing it, set an environment variable instead. For an instance named `intervals`, that’s `FITDOCS_CONNECTOR_INTERVALS_API_KEY`. A variable that’s set always wins over a stored key.
+`fitdocs.toml` can’t hold a key either. Fitdocs refuses a setting there with the same name as a connector’s key, like `api_key`. To use a key without storing it, set an environment variable instead. For an instance named `intervals`, that’s `FITDOCS_CONNECTOR_INTERVALS_API_KEY`. A variable that’s set always wins over a stored key.
 
 ## What lands in your inbox
 
-Each instance delivers into its own subfolder of the inbox, like `inbox/intervals/`. Those files are fitdocs’s own copies: once the archive holds identical bytes, the next pull removes them. **Nothing you or your own tools put in the inbox is ever touched by a connector.**
+Each instance delivers into its own subfolder of the inbox, like `inbox/intervals/`. Those files are fitdocs’s own copies: once the archive holds identical bytes, the next pull removes them. A connector never touches anything you or your own tools put in the inbox.
 
 Each instance keeps a record of what it has delivered in `.fitdocs/connectors/<name>.toml`. That record, not the service’s listing, decides what’s new. Don’t edit it. Deleting it makes the next pull start over like a first pull, and fitdocs no longer cleans up the deliveries still waiting in the inbox.
 

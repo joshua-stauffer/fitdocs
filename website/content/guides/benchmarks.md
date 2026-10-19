@@ -60,7 +60,7 @@ Each activity is scored with the benchmark that applied on its date. Then the [h
 
 ## Heart-rate benchmarks
 
-`derive-benchmarks` also works out two heart-rate values for you, with nothing to tag:
+`derive-benchmarks` also works out two heart-rate values that need no tagging:
 
 - **Resting heart rate** comes from your [wellness](wellness.md) data: the median of at least 14 days of values from one source within the last 28 days. Sources are never mixed.
 - **Max heart rate** comes from your runs and rides: the median of your three highest 30-second peaks within a year, leaving out spikes, gaps, and stretches where the heart rate looks locked to your cadence. Other sports don’t count.

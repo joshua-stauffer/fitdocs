@@ -1,6 +1,6 @@
 ---
 title: Privacy and the network
-description: Exactly what leaves your machine (map tiles, and any connector you set up), when, and how to turn it off.
+description: What leaves your machine (map tiles, and any connector you set up), when, and how to turn it off.
 section: Guides
 order: 12
 ---
@@ -9,7 +9,7 @@ order: 12
 
 After you install fitdocs, it can be run entirely offline, which makes it simple to use in sandboxed environments. 
 
-Only two features use the network, and only when you use them: map tiles, and connectors.
+Only map tiles and connectors use the network, and only when you use them.
 
 ## Map tiles
 
@@ -22,7 +22,7 @@ fitdocs/<version> (+https://github.com/joshua-stauffer/fitdocs)
 **What the provider learns:** roughly where you were active, at map-tile precision.
 **What it never gets:** your GPS track, your times, your heart rate, your name, or any account details.
 
-This only happens when a tile **isn't already cached**, and only while `sync`, `pull --sync`, or `regen` is drawing a map. Every tile is cached in `<data-root>/.cache/tiles/`, so once a route's tiles are cached, re-rendering it is fully offline.
+This happens only when a tile isn't already cached, and only while `sync`, `pull --sync`, or `regen` is drawing a map. Every tile is cached in `<data-root>/.cache/tiles/`, so once a route's tiles are cached, re-rendering it needs no network.
 
 ## Turning tiles off
 
@@ -47,9 +47,9 @@ Each provider's tiles are cached separately. The attribution text you set is pri
 
 ## Connectors
 
-If you set up the [intervals.icu connector](connectors.md), `fitdocs connect` and `fitdocs pull` send requests to intervals.icu, and nowhere else, while you run them. Each request carries the same user agent as a tile request, and your API key in a header. The key is only ever sent to intervals.icu itself, and it never appears in an address. The connector only reads: it never writes anything to your account.
+If you set up the [intervals.icu connector](connectors.md), `fitdocs connect` and `fitdocs pull` send requests to intervals.icu while you run them. Each request carries the same user agent as a tile request, and your API key in a header. The key is sent only to intervals.icu and never appears in an address. The connector never writes to your account.
 
-No other command contacts a connector, and the `folder` connector makes no network request at all. `[tiles] enabled = false` doesn't affect connectors. To stop fitdocs contacting a service, delete that connector's `[connectors.<name>]` table.
+No other command contacts a connector, and the `folder` connector makes no network request. `[tiles] enabled = false` doesn't affect connectors. To stop fitdocs contacting a service, delete that connector's `[connectors.<name>]` table.
 
 Your keys are stored in your user's config folder, never in your data root, so they don't travel with your notes or end up in your wiki's git history. See [Credentials](connectors.md#credentials).
 

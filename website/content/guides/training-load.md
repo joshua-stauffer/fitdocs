@@ -23,7 +23,7 @@ For each activity, the `threshold` calculator computes a load from every channel
 | **Heart rate** | TRIMP → HRSS (Banister) | lactate-threshold heart rate, plus resting and max HR |
 | **Pace** | Grade-adjusted pace → intensity | threshold pace |
 
-Then it **picks one** using a per-sport priority order, and uses only that number for totals, history, and training blocks. If load is computed from multiple channels, only the first is used, but the others are visible on the workout page. Default orders:
+Then it picks one using a per-sport priority order, and uses only that number for totals, history, and training blocks. The other channels' loads still appear on the workout page. Default orders:
 
 | Sport | Priority |
 |---|---|

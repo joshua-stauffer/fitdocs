@@ -52,19 +52,19 @@ Fitdocs puts the chart directly below its directive, between two markers, with a
 
 The image is an ordinary SVG in `dashboards/assets/`, so it shows up in Obsidian, VS Code, GitHub, or any other markdown viewer.
 
-A few rules keep the directive readable to fitdocs. The directive opens with `<!-- fitdocs:chart` and closes with `-->`, each at the very start of its line. `id`, `kind`, `mode`, `title`, and `sql` are required, and `sql` is written as a `sql: |` block. The SQL is one `SELECT` returning at most 10,000 rows, and `$today` is the only value you can put in it. Obsidian’s Live Preview shows the directive as dimmed source text, which is expected.
+A few rules keep the directive readable to fitdocs. The directive opens with `<!-- fitdocs:chart` and closes with `-->`, each at the very start of its line. `id`, `kind`, `mode`, `title`, and `sql` are required, and `sql` is written as a `sql: |` block. The SQL is one `SELECT` returning at most 10,000 rows, and `$today` is the only value you can put in it. In Obsidian’s Live Preview, the directive shows as dimmed source text.
 
 ## Charts that move, and charts that don’t
 
-A **relative** chart (`mode: relative`) is redrawn on every refresh, so “the last 12 weeks” always means the last 12 weeks.
+A **relative** chart (`mode: relative`) is redrawn on every refresh, so a window like “the last 12 weeks” moves forward each time.
 
-A **frozen** chart (`mode: frozen`) is a record. The first time it’s drawn, fitdocs runs its SQL once, with `$today` set to that day, and saves the rows as a snapshot next to the image. From then on its SQL never runs again, so the chart keeps showing exactly what it showed that day. It’s the right choice for “how the block went” at the end of a training block. To take a fresh snapshot, freeze it again by page and chart id:
+A **frozen** chart (`mode: frozen`) is a record. The first time it’s drawn, fitdocs runs its SQL once, with `$today` set to that day, and saves the rows as a snapshot next to the image. From then on its SQL never runs again, so the chart keeps showing what it showed that day. It’s the right choice for “how the block went” at the end of a training block. To take a fresh snapshot, freeze it again by page and chart id:
 
 ```sh
 fitdocs dashboard freeze autumn-block:block-summary
 ```
 
-The new snapshot is saved beside the old ones. Snapshots are the one thing fitdocs never changes or deletes. Only you can remove one.
+The new snapshot is saved beside the old ones. Fitdocs never changes or deletes a snapshot.
 
 ## Keeping charts current
 

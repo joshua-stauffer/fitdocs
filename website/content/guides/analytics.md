@@ -9,7 +9,7 @@ order: 9
 
 Workout pages are good for reading one session at a time. They’re slow for questions across years, like how your weekly volume has trended, how much time you spend in each zone, or how your resting heart rate moved through a training block. Adding those up page by page is also where an LLM is most likely to get a number wrong.
 
-The analytics index answers those questions. It’s a local [DuckDB](https://duckdb.org) database built from your workout pages, archived files, benchmarks, training blocks, and wellness series. You ask it questions in SQL with `fitdocs query`, or have your agent do it for you.
+The analytics index answers those questions. It’s a local [DuckDB](https://duckdb.org) database built from your workout pages, archived files, benchmarks, training blocks, and wellness series. You ask it questions in SQL with `fitdocs query`, or have your agent ask them.
 
 ## Build it once
 
@@ -17,9 +17,9 @@ The analytics index answers those questions. It’s a local [DuckDB](https://duc
 fitdocs index
 ```
 
-That’s the only time you need to build it. After that, `sync`, `pull --sync`, `regen`, and `load` refresh it automatically once they’ve written your pages, updating only the pages that changed. A refresh never makes one of those commands fail.
+After the first build, `sync`, `pull --sync`, `regen`, and `load` refresh it automatically once they’ve written your pages, updating only the pages that changed. A refresh never makes one of those commands fail.
 
-The index is a disposable cache, not part of your data. It lives outside your data root, in your user’s cache folder (`~/.cache/fitdocs/index/` by default, or wherever `FITDOCS_INDEX_DIR` points), with one index for each data root. You can delete it any time: `fitdocs index` builds it again, and it only costs time. `fitdocs index` prints where the file is.
+The index is a disposable cache. It lives outside your data root, in your user’s cache folder (`~/.cache/fitdocs/index/` by default, or wherever `FITDOCS_INDEX_DIR` points), with one index for each data root. You can delete it any time, and `fitdocs index` builds it again. `fitdocs index` prints where the file is.
 
 When an upgrade changes the index’s layout, fitdocs tells you, and `fitdocs index` rebuilds it. `fitdocs index --rebuild` builds a fresh one whenever you want.
 

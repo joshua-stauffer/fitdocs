@@ -7,9 +7,9 @@ order: 7
 
 # Wellness and recovery
 
-Your workouts are only half the story. How you slept, your resting heart rate, and your HRV say a lot about how a session went and how you’re absorbing your training. Fitdocs keeps a local record of those daily signals, shows the morning’s numbers on each workout page, and builds a recovery page that puts them next to your training load.
+How you slept, your resting heart rate, and your HRV say a lot about how a session went and how you’re absorbing your training. Fitdocs keeps a local record of those daily signals, shows the morning’s numbers on each workout page, and builds a recovery page that puts them next to your training load.
 
-Fitdocs reports what was recorded and how it compares with your own recent normal. It never gives a readiness score, a verdict, or a training recommendation. What to make of the numbers is your call.
+Fitdocs reports what was recorded and how it compares with your own recent normal. It never gives a readiness score, a verdict, or a training recommendation.
 
 ## Get your data in
 
@@ -45,7 +45,7 @@ If you use the intervals.icu connector, set `wellness = true` on it and run `fit
 
 Two folders in your data root hold your wellness:
 
-- **`wellness-archive/`** keeps every source file exactly as it arrived (for Apple Health, the extract). It’s never modified, and it’s the record everything else is rebuilt from, so back it up along with `fit-archive/`.
+- **`wellness-archive/`** keeps every source file as it arrived (for Apple Health, the extract) and never modifies it. It’s the record everything else is rebuilt from, so back it up along with `fit-archive/`.
 - **`wellness/`** holds the daily series: one CSV per year, like `wellness/2026.csv`, with every value from every source. Fitdocs rebuilds it from the archive whenever something changes, and overwrites any edits you make to it. Open it in a spreadsheet, or query it with SQL as `wellness_daily` in the [analytics index](analytics.md).
 
 The signals include resting, lowest, and highest heart rate; HRV, both SDNN and rMSSD; sleep, with deep, light, REM, and awake time and sleeping heart rate; respiration, SpO2, weight, VO2max, steps, stress, and Body Battery; and subjective ratings like fatigue, mood, and soreness, when a source records them. SDNN and rMSSD are kept apart and never converted into each other, because they measure different things.
@@ -87,13 +87,13 @@ This writes `recovery/recovery.md`, with its charts in `recovery/assets/`. The p
 - **Other signals**, as small charts with no baseline
 - **Coverage**, and the **method and references** behind every number
 
-Each mean and normal range comes from a single source. Fitdocs never pools two sources into one baseline.
+Each mean and normal range comes from a single source.
 
 `fitdocs recovery` never runs automatically. Run it after a sync that brought in new wellness, or whenever you want a fresh page. It works offline, and it doesn’t change your workout pages or your wellness files. The whole page is generated, so there’s nothing on it for you to edit.
 
 ## Resting and max heart rate from your own data
 
-`fitdocs derive-benchmarks` can now work out your resting heart rate from your wellness series and your max heart rate from your hardest runs and rides. See [Benchmarks and race tags](benchmarks.md#heart-rate-benchmarks).
+`fitdocs derive-benchmarks` can work out your resting heart rate from your wellness series and your max heart rate from your hardest runs and rides. See [Benchmarks and race tags](benchmarks.md#heart-rate-benchmarks).
 
 ## Taking an import back out
 

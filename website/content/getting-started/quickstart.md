@@ -78,7 +78,7 @@ Open `workouts/` in anything that reads markdown. Obsidian, VS Code, iA Writer, 
 fitdocs index
 ```
 
-This builds a local database of everything in your training log, so you, or your LLM, can ask questions across all your workouts in SQL. You only build it once. Every later sync keeps it current. See [The analytics index](../guides/analytics.md).
+This builds a local database of everything in your training log, so you, or your LLM, can ask questions across all your workouts in SQL. You build it once, and every later sync keeps it current. See [The analytics index](../guides/analytics.md).
 
 ## 6. Check that everything is healthy
 
@@ -95,4 +95,4 @@ fitdocs check
 - **Add sleep, HRV, and resting heart rate:** [Wellness and recovery](../guides/wellness.md).
 - **Ask questions across years of training:** [The analytics index](../guides/analytics.md) and [Dashboards](../guides/dashboards.md).
 - **Put it in your notes:** [Use fitdocs inside your wiki or vault](../guides/wiki-integration.md).
-- **Let an LLM run it:** [Working with an LLM](../llm/index.md).
+- **Plan and review your training with an LLM:** [Working with an LLM](../llm/index.md).

@@ -7,7 +7,7 @@ order: 3
 
 # Ownership contract
 
-fitdocs writes into a folder that may also hold your own notes. The rules for who owns what are a **published, versioned contract** (currently version 16), not an informal habit. This page summarizes it. The [full contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md) is the authoritative version.
+fitdocs writes into a folder that may also hold your own notes. The rules for who owns what are a published, versioned contract (currently version 16). This page summarizes it. The [full contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md) is the authoritative version.
 
 ## What fitdocs owns
 
@@ -28,9 +28,9 @@ fitdocs may create, rewrite, or delete these, and writes **nowhere else**:
 
 In `dashboards/`, the pages are yours. fitdocs writes only inside each chart's region, which it adds below the chart's directive if it's missing, plus `dashboards/AGENTS.md`. It never creates, renames, or deletes a dashboard page.
 
-It also writes to the locations **your settings name**: the inbox folder and, if you opt in, `processed_dir`. A connector delivers into its own subfolder of the inbox, and removes those deliveries once they're archived.
+It also writes to the locations your settings name: the inbox folder and, if you opt in, `processed_dir`. A connector delivers into its own subfolder of the inbox, and removes those deliveries once they're archived.
 
-Two things live outside the data root on purpose and are never inside it: connector credentials, in your user's config folder, and the analytics index, a disposable cache in your user's cache folder. See [Configuration](configuration.md#outside-the-data-root).
+Two things live outside the data root: connector credentials, in your user's config folder, and the analytics index, a disposable cache in your user's cache folder. See [Configuration](configuration.md#outside-the-data-root).
 
 ## What you own
 
@@ -57,7 +57,7 @@ Regions are marked with `<!-- fitdocs:begin:NAME -->` / `<!-- fitdocs:end:NAME -
 
 ## Several files, renames, and links
 
-- **One workout, one page.** Files of the same workout from different sources share a page. fitdocs never merges two existing pages: a file that matches more than one is archived and held, and `fitdocs check` reports it.
+- **Each workout has one page.** Files of the same workout from different sources share a page. fitdocs never merges two existing pages: a file that matches more than one is archived and held, and `fitdocs check` reports it.
 - **Pages can be renamed.** When a page's best file changes and gives a different name, fitdocs renames the page, even one you named yourself, and moves its charts, with a warning. A page whose name fitdocs chose is also renamed when its local start time changes.
 - **Links are never rewritten.** fitdocs doesn't update links to a renamed page, in its own pages or in your notes.
 

@@ -59,7 +59,7 @@ Fetches new activities, and wellness where it's turned on, from every configured
 |---|---|
 | `--since YYYY-MM-DD` | List from the start of that day, in local time |
 | `--dry-run` | Report what would be fetched; download and deliver nothing |
-| `--sync` | Then drain the inbox, exactly as `fitdocs sync` does |
+| `--sync` | Then drain the inbox, as `fitdocs sync` does |
 | `--no-prompt` | With `--sync`, never ask during the load pass |
 
 ## Your training over time
@@ -133,7 +133,7 @@ Works on the charts in your [dashboard](../guides/dashboards.md) pages. A target
 
 ### `fitdocs check`
 
-Only reads. Reports every place the data root doesn't match the installed contract and tells you how to fix each one: missing `AGENTS.md` files, out-of-date document formats, damaged regions, archived files that couldn't be placed on one page or that no page lists, one workout recorded on two pages, wellness series problems, and derived heart-rate values that have taken over from ones you entered.
+Reads the data root without changing it and reports every place it doesn't match the installed contract, with how to fix each one: missing `AGENTS.md` files, out-of-date document formats, damaged regions, archived files that couldn't be placed on one page or that no page lists, one workout recorded on two pages, wellness series problems, and derived heart-rate values that have taken over from ones you entered.
 
 ### `fitdocs plugins`
 
