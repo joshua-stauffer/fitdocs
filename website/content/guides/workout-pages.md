@@ -46,8 +46,6 @@ load_basis: pace
 
 `sources` lists every archived `.fit` file of the workout, with the one the page is built from last. The `source_` keys describe that file. `source_device` is a short fingerprint of the recording device, never its serial number.
 
-A page built from a Garmin-recorded file also carries a line under its title, like `Data source: Garmin <model>`. intervals.icu’s API terms and Garmin’s brand guidelines require it.
-
 ## Notes 
 
 A section for storing your notes, workout assignment, reactions, or any other free text. Notes is never altered by fitdocs. When you upgrade to a newer fitdocs version and regenerate your workout pages, the notes section is always stable.

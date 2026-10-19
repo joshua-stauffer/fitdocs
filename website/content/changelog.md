@@ -55,7 +55,6 @@ If you installed the agent skills by copying, copy them again, and add the two n
 ### Changed
 
 - **Pages use the local time your device recorded.** A page's date, start time, title, and filename now come from the time zone its `.fit` file records, so runs from the other half of the daylight-saving year, or from a trip, are no longer an hour or a day off. Upgrading renames those pages, and links to the old names aren't updated.
-- **Garmin attribution.** Garmin devices are named by model, and a page built from a Garmin-recorded file carries a `Data source: Garmin <model>` line under its title.
 - **The inbox** treats `.json`, `.zip`, and `.xml` files as possible wellness exports, handles wellness before workouts, and skips `.fit` files that aren't activities (like Garmin monitoring files) with a warning. A connector's own deliveries are removed once they're archived. Nothing else in the inbox is ever deleted.
 - **Governed contracts.** The ownership contract moves from version 4 to 16, and the document format (`doc_version`) from 5 to 11: run `fitdocs regen`. The `fitdocs.toml` settings gain the optional `[identity]`, `[wellness]`, and `[connectors]` tables, and `[plans] path` can no longer be inside `dashboards/`. The plugin API gains `FileIdentity`, an additive change. `athlete.toml` and several settings now refuse `nan` and `inf`.
 

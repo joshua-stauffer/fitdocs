@@ -79,16 +79,6 @@ wellness = true
 
 The first wellness pull reads back to 2010, or to `--since` if you give one. Each later pull re-checks the 30 days before the newest day it has already delivered. [Wellness and recovery](wellness.md) covers what fitdocs does with it.
 
-## Garmin data may stop arriving
-
-In October 2026, intervals.icu’s developer said that Garmin’s updated terms will likely force intervals.icu to block Garmin-origin data in its API, probably including historical data. Nothing was final at the time, and no date was given.
-
-Fitdocs can’t detect this. A pull that suddenly finds no Garmin activities looks just like a week without workouts. Pages and files you already have aren’t affected. If it happens, export your files from Garmin Connect into a folder and read it with the `folder` connector below, or drop them into the inbox. For wellness, a pull that’s refused may mean Garmin wellness is being withheld: set `wellness = false` and use Garmin’s own data export instead.
-
-## The Garmin data-source line
-
-A page built from a Garmin-recorded file carries the line `Data source: Garmin <model>` beneath its title, naming the device. intervals.icu’s API terms and Garmin’s brand guidelines require it, and fitdocs adds it however the file reached your data root.
-
 ## The folder connector
 
 Point a `folder` connector at any directory, and each pull copies new `.fit` files from it into the inbox. It only ever reads from that directory. It never moves, renames, or deletes anything there.
