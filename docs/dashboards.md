@@ -147,18 +147,23 @@ region marker are all refused, and the region is left unchanged. A region whose
 id matches no directive is left alone and reported as orphaned.
 
 fitdocs writes a mark into every image. It never overwrites or deletes a file
-in `dashboards/assets/` that does not carry the mark. When a `refresh` or `freeze` run, or the pass after an index refresh, has
-finished its pages, it deletes a marked image only when no dashboard page contains that
-image's path relative to `dashboards/`. Links from outside `dashboards/`
-are not protected from this cleanup: a note elsewhere in your wiki that links
-an image directly does not keep it alive, so link the dashboard page instead.
+in `dashboards/assets/` that does not carry the mark. When a `refresh` or
+`freeze` run, or the pass after an index refresh, has finished its pages, it
+deletes a marked image only when no dashboard page contains that image's path
+relative to `dashboards/`. Links from outside `dashboards/` are not protected
+from this cleanup: a note elsewhere in your wiki that links an image directly
+does not keep it alive, so link the dashboard page instead.
 
 ## Relative and frozen charts
 
 A relative chart (`mode: relative`) is redrawn from a fresh run of its SQL every
 time fitdocs refreshes dashboards. It writes its region and image only when the
-bytes differ, and it never writes the run date or the time, so a day with no
-new data changes nothing on disk.
+bytes differ, and it never writes the run date or the time, so a run whose
+rows are unchanged changes nothing on disk. A window written with `$today`,
+like the example above, moves each day, so its rows, and therefore its region
+and image, can change on a day with no new workouts. A chart whose SQL does
+not use `$today` changes only when its rows, its directive or the chart kit
+change.
 
 A frozen chart (`mode: frozen`) is a record. The first time fitdocs renders it
 with no snapshot on hand, it runs the SQL once with `$today` bound to the run
@@ -659,7 +664,10 @@ this per directory.
 Commit the pages and the snapshots. A snapshot is the only copy of the rows a
 frozen chart was drawn from, so do not git-ignore `*.snapshot-<n>.json` files,
 even if you ignore the images. The `.svg` images are re-derivable from the
-pages, snapshots and the index, so ignoring them is safe, but then a fresh checkout has no
-images until `fitdocs dashboard refresh` runs. Relative charts change only when
-their rows, their directive or the chart kit change, so a sync that brings no
-new data leaves the working tree clean.
+pages, snapshots and the index, so ignoring them is safe, but then a fresh
+checkout has no images until `fitdocs dashboard refresh` runs. Relative charts
+change only when their rows, their directive or the chart kit change. A chart
+whose window uses `$today` moves with the date, so its region and image can
+change on the first refresh of a new day even when no new workouts arrived. A
+sync that brings no new data leaves the working tree clean only for charts
+whose SQL does not use `$today`.

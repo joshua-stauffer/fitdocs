@@ -281,6 +281,29 @@ def test_the_regions_section_names_the_failures_that_leave_a_note_and_none() -> 
     assert "keeps its region and image exactly as they were" not in regions
 
 
+def test_no_new_data_keeps_a_chart_unchanged_only_without_today() -> None:
+    """The guide said a day, or a sync, with no new data changes nothing on
+    disk. Its own example window is ``$today - 84``, which moves each day, so
+    both places now say the quiet tree holds only without ``$today``."""
+    page = _page_path().read_text(encoding="utf-8")
+    assert "$today - 84" in _directive_example(page)
+    relative = _section(page, "Relative and frozen charts")
+    assert "a run whose rows are unchanged changes nothing on disk" in relative
+    assert (
+        "A window written with `$today`, like the example above, moves each day"
+    ) in relative
+    assert "can change on a day with no new workouts" in relative
+    assert "a day with no new data changes nothing on disk" not in relative
+    versioning = _section(page, "Version control")
+    assert (
+        "A sync that brings no new data leaves the working tree clean only for "
+        "charts whose SQL does not use `$today`."
+    ) in versioning
+    assert "so a sync that brings no new data leaves the working tree clean" not in (
+        versioning
+    )
+
+
 def test_the_sql_section_calls_a_kinds_bound_a_size_bound_not_a_row_bound() -> None:
     counted = {
         cast("Mapping[str, object]", each["bound"])["counts"]
