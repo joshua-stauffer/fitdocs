@@ -17,19 +17,18 @@ uv tool install fitdocs
 pipx install fitdocs
 ```
 
-Both commands install fitdocs into its own isolated environment and put the
-`fitdocs` command on your `PATH`, without touching any project's dependencies.
+Both commands install the latest release from
+[PyPI](https://pypi.org/project/fitdocs/) into its own isolated environment
+and put the `fitdocs` command on your `PATH`, without touching any project's
+dependencies.
 
-**Until the package is published to PyPI**, install straight from a checkout
+To run unreleased changes, or to contribute, install straight from a checkout
 instead — the command below is proven against a clean, isolated environment
 by `tests/test_packaging.py`:
 
 ```sh
 uv tool install --from /path/to/fitdocs-checkout fitdocs
 ```
-
-Once published, `uv tool install fitdocs` / `pipx install fitdocs` install
-the same way from the public index.
 
 The analytics index adds DuckDB, which occupies about 44 MB installed. Its
 prebuilt package is unavailable on musl-based Linux and free-threaded Python

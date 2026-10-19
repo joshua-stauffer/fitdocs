@@ -105,8 +105,8 @@ already maintains — from nothing installed to a first drained inbox.
 Run each step from the wiki's own working directory.
 
 **1. Install fitdocs.** See [Install](install.md) for the two
-isolated-application installer commands, and installing from a checkout
-before the package is published.
+isolated-application installer commands, and for installing from a checkout
+to run unreleased changes.
 
 **2. Point the data root at the wiki.** The data root *is* the wiki
 directory itself — fitdocs never creates it, and here it already exists,
