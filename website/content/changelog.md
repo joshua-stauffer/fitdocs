@@ -15,7 +15,7 @@ This page mirrors [`CHANGELOG.md`](https://github.com/joshua-stauffer/fitdocs/bl
 
 Nothing yet.
 
-## 0.2.0 — YYYY-MM-DD
+## 0.2.0 — 2026-10-19
 
 [PyPI](https://pypi.org/project/fitdocs/0.2.0/) · [tag `v0.2.0`](https://github.com/joshua-stauffer/fitdocs/tree/v0.2.0)
 
