@@ -58,10 +58,10 @@ import pytest
 from fitdocs.config import DATA_ROOT_ENV, POINTER_RELPATH
 from fitdocs.history.settings import DEFAULT_HISTORY_SETTINGS
 from fitdocs.history.sources import COVERAGE_THRESHOLD, SEED_CONSTANTS
+from fitdocs.layout import DECLARED_DIRS
 from fitdocs.load.channels.types import SufficiencySettings
 from fitdocs.load.priority import DEFAULT_CHANNEL_PRIORITY
 from fitdocs.load.qa.types import FlagSettings
-from fitdocs.layout import DECLARED_DIRS
 from fitdocs.load.settings import DEFAULT_LOAD_SETTINGS
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
