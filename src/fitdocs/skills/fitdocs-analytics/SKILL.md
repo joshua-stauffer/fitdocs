@@ -4,7 +4,7 @@ description: Use when an athlete asks for a count, total, average, distribution,
 license: MIT
 compatibility: Requires the fitdocs command to be installed and a built analytics index.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
 ---
 
 # Query the fitdocs analytics index

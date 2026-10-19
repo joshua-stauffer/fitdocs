@@ -4,7 +4,7 @@ description: Pulls new .fit files from the athlete's configured connectors and d
 license: MIT
 compatibility: Requires the fitdocs command to be installed and on the agent's path.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
 ---
 
 # Process the fitdocs inbox

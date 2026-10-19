@@ -15,6 +15,8 @@ recorded as one.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-19
+
 ### Added
 
 - Workout pages gain a `Morning Of` block with the day's wellness

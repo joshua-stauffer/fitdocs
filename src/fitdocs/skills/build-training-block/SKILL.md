@@ -4,7 +4,7 @@ description: Builds, amends and settles a training-block plan source consumed by
 license: MIT
 compatibility: Requires the fitdocs command to be installed and on the agent's path, and a fitdocs data root already configured.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
 ---
 
 # Build a training block

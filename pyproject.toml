@@ -1,6 +1,6 @@
 [project]
 name = "fitdocs"
-version = "0.1.0"
+version = "0.2.0"
 description = "Turn .fit files into rich per-workout markdown documents, with pluggable training-load calculation."
 readme = "README.md"
 requires-python = ">=3.11"
