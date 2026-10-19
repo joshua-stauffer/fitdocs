@@ -82,7 +82,7 @@ fitdocs writes this section, but a regen keeps it just like your notes, so a com
 
 ## Device and data quality
 
-The recording device and its software (Garmin devices are named by model), battery status, a coverage table showing what share of the activity had heart rate, power, cadence, speed, distance, altitude, and GPS data, and any decode errors. When a number looks wrong, check here first.
+The recording device and its software, battery status, a coverage table showing what share of the activity had heart rate, power, cadence, speed, distance, altitude, and GPS data, and any decode errors. When a number looks wrong, check here first.
 
 ## Channel Sources
 
@@ -122,10 +122,9 @@ When a file could belong to more than one page, fitdocs archives it but doesn’
 
 ## When a page is renamed
 
-A page can be renamed in a few situations:
+A page can be renamed in two situations:
 
 - **Its main file changes.** When a better-ranked file of the workout arrives, or you change the ranking, the page is rebuilt from the new main file, and renamed if that file gives a different name. This happens even if you chose the old name yourself.
-- **Its local start time changes**, for a page whose name fitdocs chose. Upgrading to fitdocs 0.2 does this for many older pages, because pages are now dated by the time zone the device recorded. A page whose file records no time zone is dated in your computer’s time zone, so running `regen` after changing that zone, on a trip for example, renames it too.
 - **A name frees up.** A page fitdocs had to write as `<name>-<8 characters>.md`, because `<name>.md` was taken, moves to `<name>.md` once that name is free.
 
 Each rename prints a warning with the old and new names, and the page’s charts move with it. **Links to the old name aren’t updated**, in your notes or in a training plan’s overrides. Search for the old names the warnings print.
