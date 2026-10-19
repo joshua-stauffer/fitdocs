@@ -7,7 +7,7 @@ order: 5
 
 # Benchmarks and race tags
 
-The best way to know what kind of shape you’re in is to race! Sports science has turned race results into threshold estimates for decades. Tag a workout page as a race, and fitdocs can derive your equivalent threshold pace (run), threshold heart rate (run, ride), and FTP (ride). 
+A race is the best test of the shape you’re in. Sports science has turned race results into threshold estimates for decades. Tag a workout page as a race, and fitdocs can derive your equivalent threshold pace (run), threshold heart rate (run, ride), and FTP (ride). 
 
 ## 1. Tag the effort on its page
 
@@ -35,7 +35,7 @@ fitdocs derive-benchmarks --dry-run   # show what would be derived
 fitdocs derive-benchmarks             # write it to athlete.toml
 ```
 
-Here's what fitdocs derives, from which efforts:
+What fitdocs derives, and from which efforts:
 
 | Sport | Threshold | Derived from |
 |---|---|---|

@@ -28,9 +28,9 @@ fitdocs --version
 fitdocs --help
 ```
 
-**Installing doesn't create anything.** No config file, no profile, no data folder. fitdocs writes nothing until you run a command and point it at a folder.
+Installing doesn't create a config file, profile, or data folder. Fitdocs writes nothing until you run a command and point it at a folder.
 
-> **Hand it to your LLM.** If you work with a coding agent (Claude Code, Codex, or similar), you can let it do the install:
+> **Install with a coding agent.** If you work with one (Claude Code, Codex, or similar), it can run the install from this prompt:
 >
 > *"Install the `fitdocs` command-line tool from PyPI using `uv tool install fitdocs` (or `pipx install fitdocs` if uv isn't available), then run `fitdocs --version` to confirm it's on my PATH."*
 
@@ -46,7 +46,7 @@ An upgrade never touches your data folder, your settings, your athlete profile, 
 fitdocs regen
 ```
 
-`regen` rebuilds every page from the archived `.fit` files. You don't need the original exports, and you don't import anything again. Your notes are kept exactly as they are.
+`regen` rebuilds every page from the archived `.fit` files. You don't need the original exports, and you don't import anything again. Your notes are kept as they are.
 
 If a release needs more than that, its entry in the [changelog](../changelog.md) says what to run.
 

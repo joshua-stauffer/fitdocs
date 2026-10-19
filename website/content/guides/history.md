@@ -32,7 +32,7 @@ tau_fatigue_days = 7
 
 ## Low signal data
 
-A fitness curve is only as accurate as the underlying data points. If fewer than 80% of a period's workouts have a load (configurable with `coverage_threshold`), the curve is **left blank** for that period instead of dipping toward zero. To fill the gaps, give fitdocs more thresholds, usually by [tagging your races](benchmarks.md) and running `fitdocs load`.
+If fewer than 80% of a period's workouts have a load (configurable with `coverage_threshold`), the curve is **left blank** for that period instead of dipping toward zero. To fill the gaps, give fitdocs more thresholds, usually by [tagging your races](benchmarks.md) and running `fitdocs load`.
 
 ## When to rebuild
 
