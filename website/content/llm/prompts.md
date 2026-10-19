@@ -7,7 +7,7 @@ order: 2
 
 # Prompt library
 
-These prompts are written for an agent that can run commands and read files in your data root, such as Claude Code, Codex, or a local agent. Each one works as written. Adapt freely.
+These prompts are written for an agent that can run commands and read files in your data root, such as Claude Code, Codex, or a local agent. You can use each one as written or adapt it.
 
 Replace anything in `<angle brackets>`.
 

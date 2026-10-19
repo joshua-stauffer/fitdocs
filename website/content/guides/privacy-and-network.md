@@ -7,7 +7,7 @@ order: 12
 
 # Privacy and the network
 
-After you install fitdocs, it can be run entirely offline, which makes it simple to use in sandboxed environments. 
+After you install fitdocs, you can run it offline, including in sandboxed environments. 
 
 Only map tiles and connectors use the network, and only when you use them.
 
@@ -32,7 +32,7 @@ This happens only when a tile isn't already cached, and only while `sync`, `pull
 enabled = false
 ```
 
-With tiles turned off, maps are drawn only from tiles already in the cache. If a map needs a tile that isn't cached, that page skips its Map section with a warning, and everything else renders normally. No run fails because a map couldn't be drawn.
+With tiles turned off, maps are drawn only from tiles already in the cache. If a map needs a tile that isn't cached, that page skips its Map section with a warning, everything else renders normally, and the run doesn't fail.
 
 ## Choosing a different provider
 
@@ -55,8 +55,8 @@ Your keys are stored in your user's config folder, never in your data root, so t
 
 ## Everything else
 
-- **No account, no telemetry, no update checks.** fitdocs doesn't phone home.
+- **No account or telemetry.** Fitdocs needs no account, sends no telemetry, and doesn't check for updates.
 - **No background process.** Nothing runs unless you run a command.
 - **Your questions stay local.** `fitdocs query` refuses any SQL that tries to reach the network, and dashboard charts are drawn without one. The analytics index is a file on your own machine.
-- **Your LLM is your choice.** fitdocs doesn't call any model. If you point an LLM at your data, the privacy of that setup depends on the model and provider you choose, which could be a model running on your own machine.
-- **Sharing is your choice.** Nothing is published anywhere. Your data root is a folder of files: back it up, sync it, or put it under git however you like.
+- **Your LLM is your choice.** fitdocs doesn't call any model. If you point an LLM at your data, the privacy of that setup depends on the model and provider you choose, including whether the model runs on your own machine.
+- **Sharing is your choice.** Fitdocs publishes nothing. Your data root is a folder of files: back it up, sync it, or put it under git however you like.

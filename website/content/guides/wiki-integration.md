@@ -7,9 +7,9 @@ order: 11
 
 # Inside your wiki or vault
 
-fitdocs works well on its own, but it was designed to live inside a larger markdown knowledge base, so your training sits next to your journal, your projects, and everything else you think about. Workout pages become ordinary pages in your wiki. You can link to them, search them, and query them together with the rest of your notes.
+fitdocs works well on its own, but it was designed to live inside a larger markdown knowledge base, so your training sits next to your journal, your projects, and the rest of your notes. Workout pages become ordinary pages in your wiki. You can link to, search, and query them like any other page.
 
-## How it stays out of your way
+## What fitdocs reads and writes
 
 - **It only writes to its own folders:** `workouts/`, `fit-archive/`, `history/`, `blocks/`, `recovery/`, `wellness/`, `wellness-archive/`, and its hidden `.cache/` and `.fitdocs/`. In `dashboards/` it writes only `AGENTS.md`, the chart images and snapshots in `dashboards/assets/`, and the charts on the pages you create there. It also writes to the inbox and processed folder your settings name.
 - **Some things live outside your wiki.** The [analytics index](analytics.md) is a disposable cache in your user’s cache folder, and connector keys are kept in your user’s config folder, so neither ends up in your notes or their git history.
@@ -53,7 +53,7 @@ fitdocs check          # exits 0 when everything is in order
 
 ## Agent skills
 
-fitdocs includes agent skills: markdown instruction files in the open [SKILL.md](https://agentskills.io) format that tell an LLM agent how to operate fitdocs correctly. They ship inside the package, so they always match the version you have installed.
+fitdocs includes agent skills: markdown instruction files in the open [SKILL.md](https://agentskills.io) format that tell an LLM agent how to operate fitdocs correctly. They ship inside the package, so they match the version you have installed.
 
 | Skill | What it teaches your agent |
 |---|---|
@@ -91,7 +91,7 @@ done
 
 ## Point your wiki's own instructions at fitdocs
 
-If your wiki has its own root `AGENTS.md` or `CLAUDE.md`, a short pointer is enough. You don't need to copy the rules:
+If your wiki has its own root `AGENTS.md` or `CLAUDE.md`, add a short pointer instead of copying the rules:
 
 ```markdown
 ## Workouts (fitdocs)

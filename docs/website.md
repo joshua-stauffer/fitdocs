@@ -84,8 +84,8 @@ included page is left out.
 1. `Home`
 2. `Why`
 3. `Get started`
-4. `Guides`
-5. `Working with LLMs`
+4. `Working with LLMs`
+5. `Guides`
 6. `Reference`
 7. `Extend`
 8. `Project`

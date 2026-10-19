@@ -58,7 +58,7 @@ The report lists how many files were written, skipped, failed, deferred, quarant
 
 ## Never deletes
 
-By default a processed file stays exactly where it is (`disposition = "leave"`). Later drains skip it because its contents are already archived. This is the right setting when another app owns the folder, like HealthFit's export folder.
+By default a processed file stays where it is (`disposition = "leave"`). Later drains skip it because its contents are already archived. This is the right setting when another app owns the folder, like HealthFit's export folder.
 
 If you'd like the inbox to empty itself, opt in to moving files:
 

@@ -29,7 +29,7 @@ Yes. `fitdocs index` builds a local DuckDB database of your whole training log, 
 No. It shows your HRV, resting heart rate, and sleep next to your own recent normal, but it never gives a readiness score or tells you what to do. See [Wellness and recovery](guides/wellness.md).
 
 **Does it work with Obsidian?**
-Yes. Point it at your vault (or a folder inside it). Pages use standard frontmatter and ordinary image links, so charts show up and Dataview or Bases can query them. No plugin needed.
+Yes. Point it at your vault (or a folder inside it). Pages use standard frontmatter and ordinary image links, so charts show up without a plugin and Dataview or Bases can query them.
 
 **Can I edit the generated pages?**
 You can edit the parts that are yours: the **Notes** section, the **Workout** section on strength pages, and the race-tag frontmatter keys. Those are kept through every rebuild. Everything else is rebuilt from the archived `.fit` files and your wellness data, so edits there won't last. Dashboard pages are yours too, apart from the charts fitdocs draws on them. See [Your workout pages](guides/workout-pages.md).

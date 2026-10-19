@@ -146,7 +146,7 @@ confirmation, together with the brand values (queue
 
 #### Acceptance Criteria
 1. The Site Build shall require every included page to carry frontmatter with `title` (non-empty text), `description` (non-empty text), `section` (one value from the canonical section list) and `order` (an integer).
-2. The Site Build shall use this canonical section list, in this order: Home, Why, Get started, Guides, Working with LLMs, Reference, Extend, Project.
+2. The Site Build shall use this canonical section list, in this order: Home, Why, Get started, Working with LLMs, Guides, Reference, Extend, Project.
 3. The Site Build shall accept `draft` (true or false) as an optional key on any page, and `hero_title`, `hero_tagline` and `hero_actions` as optional keys on the home page only. `hero_actions` is a list of entries, each with `label` and `href` and optionally `primary` (true or false); an `href` is an absolute `https://` URL or the trailing-slash site path of an included page (for example `get-started/install/`).
 4. When a page has `draft: true`, the Site Build shall exclude it from the navigation, the built site, search and both site indexes.
 5. If a page lacks a required key, carries a key the contract does not allow, carries a value of the wrong type, names a section outside the canonical list, or carries a hero key while not being the home page, then the Site Build shall fail.

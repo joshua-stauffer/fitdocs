@@ -10,7 +10,7 @@ order: 8
 Your workout pages record what you *did*. A training block says what you *plan* to do: a goal, a start and end date, a repeating cycle of weeks (called mesocycles), and the sessions on each day. fitdocs renders the plan as pages and checks your logged workouts against it.
 
 ## Create your plan
-LLMs make it easy to learn fast, but they don’t replace your judgement. Think through why you’re training, and what you’d like to achieve, and decide how much time you can sustainably devote to training each week. Then, have your agent use the **`build-training-block`** skill to write a plan file. The agent **asks you** for the goal, dates, mesocycle length, key sessions, weekly shape, cross-training, and load targets, and writes down what you say. See [Wiki integration](wiki-integration.md) to install it, and prompts to use it.
+Think through why you’re training, and what you’d like to achieve, and decide how much time you can sustainably devote to training each week. Then, have your agent use the **`build-training-block`** skill to write a plan file. The agent asks you for the goal, dates, mesocycle length, key sessions, weekly shape, cross-training, and load targets, and writes down what you say. See [Wiki integration](wiki-integration.md) to install it, and prompts to use it.
 
 The block page has a **Notes** section that belongs to you, just like a workout page.
 
@@ -18,8 +18,8 @@ The full plan grammar (every key and rule) is in the skill itself: run `fitdocs 
 
 ## How it works
 
-1. **You own the plan source.** Each block is one TOML file in your plan folder (default `<data-root>/plans/`). fitdocs only reads this folder. It never writes, renames, or deletes anything there. You can write it by hand, or describe what you’d like and have your agent write it.
-2. **fitdocs renders the pages.** `fitdocs plan` writes a **block page** to `blocks/` and a **planned-workout page** for every session, so each planned session has its own page before you've done it.
+1. **You own the plan source.** Each block is one TOML file in your plan folder (default `<data-root>/plans/`). Fitdocs reads this folder but never writes, renames, or deletes anything there. You can write it by hand, or describe what you’d like and have your agent write it.
+2. **fitdocs renders the pages.** `fitdocs plan` writes a **block page** to `blocks/` and a **planned-workout page** for every session, including sessions you haven't done yet.
 3. **It matches as you go.** Each planned session is matched against your logged workout pages and shown as one of:
 
 | Status | Meaning |
@@ -32,7 +32,7 @@ The full plan grammar (every key and rule) is in the skill itself: run `fitdocs 
 
 The block page also adds up your actual load for each mesocycle and compares it to your target.
 
-The matching is recalculated from your pages every time and never stored. If a better match is logged later, it simply takes over. Nothing is ever written back into your workout pages or your plan file.
+The matching is recalculated from your pages every time and never stored. If a better match is logged later, it takes over. Matching writes nothing to your workout pages or your plan file.
 
 The pass runs automatically at the end of `sync`, `pull --sync`, and `regen`, and whenever you run:
 

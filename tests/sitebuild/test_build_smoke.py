@@ -41,15 +41,15 @@ PAGES = (
     ("why.md", "why/", "Why a fixture"),
     ("get-started/install.md", "get-started/install/", "Install"),
     ("get-started/first-run.md", "get-started/first-run/", "First run"),
-    ("guides/nested/deep.md", "guides/nested/deep/", "Deep guide"),
     ("llms/prompts.md", "llms/prompts/", "Prompts"),
+    ("guides/nested/deep.md", "guides/nested/deep/", "Deep guide"),
 )
 NAV = (
     ("Home", ("Fixture home",)),
     ("Why", ("Why a fixture",)),
     ("Get started", ("Install", "First run")),
-    ("Guides", ("Deep guide",)),
     ("Working with LLMs", ("Prompts",)),
+    ("Guides", ("Deep guide",)),
 )
 
 ANNOTATION_SENTINELS = ("ANNOTSENTINELAMBER", "a home-page note")

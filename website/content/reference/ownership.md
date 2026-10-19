@@ -11,7 +11,7 @@ fitdocs writes into a folder that may also hold your own notes. The rules for wh
 
 ## What fitdocs owns
 
-fitdocs may create, rewrite, or delete these, and writes **nowhere else**:
+Fitdocs may create, rewrite, or delete these:
 
 | Path | Contents |
 |---|---|
@@ -37,7 +37,7 @@ Two things live outside the data root: connector credentials, in your user's con
 - **`fitdocs.toml`**: fitdocs only reads it.
 - **Your plan folder** (`plans/` by default): fitdocs only reads it.
 - **Your dashboard pages**: their prose, headings, frontmatter, and chart directives. fitdocs only reads them, apart from the chart regions.
-- **`athlete.toml`**: shared. fitdocs adds values you confirm or that it derives, but never overwrites one you entered, and keeps every key it doesn't manage exactly as it was.
+- **`athlete.toml`**: shared. fitdocs adds values you confirm or that it derives, but never overwrites one you entered, and keeps every key it doesn't manage.
 - **Everything else in the data root**: fitdocs never reads or writes it.
 
 ## Inside a generated page
@@ -51,9 +51,9 @@ Two things live outside the data root: connector credentials, in your user's con
 | `effort`, `effort_distance_m`, `effort_time_s`, `effort_event` frontmatter keys | you | kept word for word |
 | everything else | fitdocs | rebuilt |
 
-Regions are marked with `<!-- fitdocs:begin:NAME -->` / `<!-- fitdocs:end:NAME -->`. Don't add markers of your own. A page with a marker fitdocs doesn't recognize is refused regeneration until the marker is removed. That way fitdocs never guesses about content it doesn't understand.
+Regions are marked with `<!-- fitdocs:begin:NAME -->` / `<!-- fitdocs:end:NAME -->`. Don't add markers of your own. A page with a marker fitdocs doesn't recognize is refused regeneration until the marker is removed.
 
-**No operation throws away your region or race-tag content.** It’s yours to do with as you’d like, and when you upgrade fitdocs versions and regenerate your wiki, it persists.
+Your region and race-tag content is yours to edit as you like. No operation discards it, including regenerating your wiki after a fitdocs upgrade.
 
 ## Several files, renames, and links
 
@@ -74,4 +74,4 @@ All three are generated from the same source code, and a test keeps the publishe
 - The **contract version** changes whenever a guarantee changes: a new owned path, a new page type, or a new class of user-owned key. The changelog calls it out, along with what (if anything) you need to do.
 - Each page's **`doc_version`** tracks its file format. When it changes, `fitdocs check` tells you and `fitdocs regen` updates your pages. If a page was written by a *newer* fitdocs than the one you have installed, fitdocs leaves it alone rather than downgrading it.
 
-See the [compatibility policy](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/compatibility.md) for exactly what each version number promises.
+See the [compatibility policy](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/compatibility.md) for what each version number promises.
