@@ -83,3 +83,11 @@ microcycle), and `index.md`'s unfinished last sentence is already
 ## Open questions
 - Whether to adopt a site-wide rule against stating a guarantee twice in a
   row. That would decide many of these at once.
+
+## Update (2026-10-20)
+
+Rewrites proposed in PR #2 (`chore/site-llm-isms`, stacked on PR #1): 78
+of the 80 phrases. Not changed: `training-blocks.md`'s "The plan file
+becomes a history of how the plan changed" (a fact, not a trope) and the
+wiki guide's "no network access at all", which PR #1 already rewrote. Close
+this item when PR #2 merges.
