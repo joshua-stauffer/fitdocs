@@ -54,7 +54,7 @@ When a page is built from [several files of one workout](../guides/workout-pages
 
 ## The rules
 
-fitdocs' own calculator follows these, and plugins are expected to as well:
+Your calculator should follow these rules, as the built-in `threshold` calculator does:
 
 1. **Never make up a value.** Missing data leads to a typed "not computed" outcome. `compute` must never raise because athlete data is missing or bad.
 2. **One number counts.** `LoadResult.value` is *the* load. Other channels you computed go in `non_selected`, each with the reason it wasn't chosen. A candidate you couldn't compute gets `value=None`, never `0`.
