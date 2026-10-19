@@ -138,6 +138,8 @@ def test_every_cadence_column_says_running_cadence_is_strides(
 def test_documented_query_contract_matches_the_implementation() -> None:
     page = _page_path().read_text(encoding="utf-8")
     outside_reference = page.split(_START, 1)[0] + page.split(_END, 1)[1]
+    assert page.startswith("# Analytics\n\n## Before you start\n")
+    assert re.findall(r"(?m)^# (.+)$", outside_reference) == ["Analytics"]
     headings = re.findall(r"(?m)^## (.+)$", page)
     assert headings == [
         "Before you start",

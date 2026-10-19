@@ -1,3 +1,5 @@
+# Analytics
+
 ## Before you start
 
 `fitdocs query` reads a local analytics index. Build it with `fitdocs index`
