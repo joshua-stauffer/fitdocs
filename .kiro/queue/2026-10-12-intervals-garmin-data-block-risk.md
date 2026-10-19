@@ -117,3 +117,13 @@ absent from `listed`; 404/422 -> skipped; 403 ends the instance with the refused
 the refused-key message; rate limit/5xx end the instance; others -> failed and retried), and the
 existing alternative route (folder connector or inbox; unzip Garmin Connect's download first). The
 fallback-route decision this item exists for remains open and is the maintainer's.
+
+## Update (2026-10-19)
+
+By maintainer decision, the activity-side caveat from f3f901c is gone from
+`docs/connectors.md` (branch `chore/connectors-drop-garmin-sections`), and
+from the fitdocs.ai connectors guide (PR #1). If the block lands, write the
+user-facing docs then. The wellness-side note stays in `docs/connectors.md`'s
+`### Wellness`: the 403 message, `wellness = false`, and the Garmin export
+route. wellness-pull Requirement 12.2 requires it, and it documents a message
+the CLI prints. The fallback-route decision is still open.

@@ -417,9 +417,6 @@ recorded as one.
   now delivered rather than reported as `held` against a copy the ledger no
   longer tracks. The connectors guide now also says what a pull killed
   outright between delivering and saving its ledger leaves behind.
-- The connectors guide now notes that intervals.icu has said it may block
-  Garmin-origin data from its API, what a pull then shows, and the folder and
-  inbox routes for Garmin files.
 - Bar, stacked-100, box and small-multiples charts keep two categories (or
   facets) that print alike (for example `a<TAB>b` and `a b`, or a literal `—`
   and an absent value) apart. Before, bar and box drew them in one band so the

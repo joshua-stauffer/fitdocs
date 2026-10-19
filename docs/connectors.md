@@ -126,29 +126,6 @@ The framework's `lookback_days` key applies as described under
 [Configuring an instance](#configuring-an-instance), as does `wellness`; no
 other key is read.
 
-**Garmin data may stop arriving.** In October 2026 the intervals.icu
-developer said that Garmin's updated terms will likely force intervals.icu
-to block Garmin-origin data in its API, probably including historical data
-that came in through Garmin's own API. Data you uploaded by hand was said
-not to be affected. As of that statement nothing was final and no date was
-given; whether and how it applies to personal API keys was not answered.
-fitdocs does not detect this. A pull that no longer finds any activity with
-source `GARMIN_CONNECT` reports nothing unusual: such activities are never
-counted in `listed`, so the report looks like a week with no rides. If the
-listing still shows them but a file download answers 404 or 422, each shows
-in the `skipped` row as having no original file, and a download that succeeds
-with something that is not a FIT file is `skipped` as not a FIT file. A 403
-ends this instance's run, on every pull, with a message saying the service
-refused this client; a 401 ends it with the refused-key message; a rate limit
-or a server error ends it as described below; any other failing status is
-reported in `failed` and retried on the next pull. intervals.icu has not said
-which of these a block would produce. Pages and archived files from
-earlier pulls are not affected. To get Garmin files by another route, copy or
-export them from the device or from Garmin Connect (unzip Garmin Connect's
-download first) into a directory and read it with
-[the folder connector](#the-folder-connector), or drop them into the inbox
-directly.
-
 ### What a pull fetches
 
 The first pull lists the last 30 days. To go further back, run `fitdocs pull
@@ -248,32 +225,6 @@ Computed fields (`ctl`, `atl`, `rampRate`, `ctlLoad`, `atlLoad` and `sportInfo`)
 are delivered but never imported into the wellness series. The delivered file
 holds every field intervals.icu sent, including wellness comments and null
 values. A day deleted on intervals.icu is not removed from fitdocs.
-
-### Garmin attribution
-
-A page rendered from a file recorded by a Garmin device carries the line
-`Data source: Garmin <model>` directly beneath its title, where `<model>` is
-the device's product name, as recorded in the file or, for a Garmin
-product code, as the FIT SDK's profile names it (just `Garmin` when neither
-gives one).
-The line is rebuilt on every render, so `fitdocs regen` adds it to existing
-pages.
-
-A page that takes channels from other files of the same workout counts every
-file that donates a channel alongside its base (a file that donates nothing is
-not counted). The line names each distinct Garmin recording device among those
-files, the base's first, and ends with `and other devices` when any of them was
-not recorded by a Garmin device: for example
-`Data sources: Garmin <model> and other devices`, or
-`Data sources: Garmin <model> and Garmin <other model>` when two Garmin models
-contribute. A model recorded by two of the files is named once. A page none of
-whose counted files was recorded by a Garmin device carries no line.
-
-The reason is the terms the data comes under: intervals.icu's API terms,
-§1.1 (effective 2025-10-23), and Garmin's API Brand Guidelines, version
-V 6.30.2025. The line applies to every Garmin-recorded file, however it
-reached your data root, whether pulled by this connector or dropped in the
-inbox by hand.
 
 ## Connecting
 

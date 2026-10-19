@@ -1,10 +1,10 @@
 """Pins for the ``## intervals.icu`` section of ``docs/connectors.md``
-(design.md "ConnectorsDocSection", Testing Strategy "Docs"; Req 10.1, 10.2).
+(design.md "ConnectorsDocSection", Testing Strategy "Docs").
 
 The environment variable, the ``sources`` example and the first-pull day
 count are compared with the connector's own constants and the connectors
-naming function. The heading list, the ``§1.1`` and ``V 6.30.2025``
-citations and the regenerate sentence compare against literals written here;
+naming function. The heading list and the regenerate sentence compare
+against literals written here;
 the address rule admits ``intervals.icu`` and the project's own URLs, read from
 ``pyproject.toml``. The section is located by its heading; a missing section
 fails every section pin (the two rule-table tests exercise the rule alone).
@@ -54,7 +54,7 @@ def _toml_blocks(section: str) -> list[dict[str, object]]:
     return [tomllib.loads(block) for block in blocks]
 
 
-def test_the_section_is_not_empty_and_has_its_five_subsections() -> None:
+def test_the_section_is_not_empty_and_has_its_four_subsections() -> None:
     section = _section()
     assert len(section.split()) > 200
     found = re.findall(r"^(### .+)$", section, re.M)
@@ -63,7 +63,6 @@ def test_the_section_is_not_empty_and_has_its_five_subsections() -> None:
         "### Configuring",
         "### What a pull fetches",
         "### Wellness",
-        "### Garmin attribution",
     ]
 
 
@@ -102,12 +101,6 @@ def test_the_sources_example_equals_the_connectors_default() -> None:
 def test_the_first_pull_day_count_equals_the_connectors_constant() -> None:
     counts = re.findall(r"first pull lists the last (\d+) days", _section())
     assert counts == [str(FIRST_PULL_DAYS)]
-
-
-def test_it_cites_the_api_terms_section_and_the_brand_guidelines_version() -> None:
-    section = _section()
-    assert "§1.1" in section
-    assert "V 6.30.2025" in section
 
 
 # Every address token: scheme-ful (an http or https scheme and everything up to a
@@ -210,10 +203,3 @@ def test_it_tells_the_athlete_to_regenerate_before_the_first_pull() -> None:
     section = " ".join(_section().split()).lower()
     assert "run `fitdocs regen`" in section
     assert "before the first pull" in section
-
-
-def test_the_attribution_names_the_sdk_profile_route_for_the_model() -> None:
-    part = _section().split("### Garmin attribution", 1)[1]
-    flat = " ".join(part.split())
-    assert "FIT SDK's profile names it" in flat
-    assert "just `Garmin` when neither gives one" in flat

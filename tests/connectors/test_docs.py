@@ -108,7 +108,6 @@ _EXPECTED_HEADINGS = [
     "### Configuring",
     "### What a pull fetches",
     "### Wellness",
-    "### Garmin attribution",
     "## Connecting",
     "## Credentials",
     "## Pulling",

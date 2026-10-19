@@ -1,7 +1,7 @@
 ---
 id: 2026-10-02-intervals-docs-attribution-wording-unpinned
 title: The Garmin attribution wording in docs/connectors.md is not pinned to render/attribution.py
-status: open
+status: dropped
 importance: low
 importance_why: The text is true today (the multi-source form is now documented); nothing fails if render/attribution.py's wording changes, so it can drift silently.
 effort: S
@@ -83,3 +83,16 @@ All at 5c41759, read or grepped in this run.
    inputs.
 3. Done when changing each constant, one at a time, reds a docs test, and
    the existing tests stay green.
+
+## Resolution
+
+Dropped 2026-10-19 by maintainer decision: nothing is left to pin. The
+maintainer had the Garmin attribution wording removed from user-facing
+documentation. `CHANGELOG.md` lost it at `94ec704`, and `docs/connectors.md`'s
+`### Garmin attribution` section was deleted on
+`chore/connectors-drop-garmin-sections`, along with intervals-connector's
+Requirement 10, which had required that section. The line itself is still
+rendered and stays pinned where the function is tested
+(`tests/render/test_attribution.py`, `tests/render/test_provenance.py`). The
+Morning Of and recovery-page forms in `docs/wellness.md` and
+`docs/recovery.md` are already pinned by their own docs tests.

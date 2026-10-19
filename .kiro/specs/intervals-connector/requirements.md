@@ -196,15 +196,6 @@ real account before the connector is used on a real data root.
 4. If a finding contradicts an assumption the design marks as to be confirmed, the Specification Process shall amend the design and every affected task before the spec is marked complete.
 5. The Specification Process shall treat the live check as the maintainer's own task: no automated agent performs it, records it or marks it done unless the maintainer explicitly asks a session to run it with the maintainer's key, and no other implementation task waits for it except the final completion gate. _(Amended 2026-10-02 by maintainer decision: the maintainer asked the `/kiro-impl` controller session to run it from the maintainer's own `.env`; no subagent is given the key.)_
 
-### Requirement 10: Documentation and Records
-**Objective:** As an athlete setting the connector up, and as a maintainer relying on the project's records, I want the connector documented and every contract it touches restated, so that setup needs no guesswork and no statement contradicts the code.
-
-#### Acceptance Criteria
-1. The connectors documentation shall describe the intervals.icu connector: where the athlete finds the personal key, connecting it, the environment variable that overrides it for an instance named `intervals`, the source filter and its default, the 30-day first pull and backfilling with `--since`, what is skipped and why (Strava stubs, non-FIT originals, activities without a file), how rate limits and a refused key are reported, what leaves the machine, the Garmin attribution on pages, and, while cross-source identity has not shipped, that pulling into a data root holding other copies of the same rides creates duplicate pages — or, once it has shipped, that a data root's existing documents are regenerated before the first pull.
-2. The connectors documentation shall cite intervals.icu's API terms §1.1 and Garmin's API Brand Guidelines (by title and version) as the reason for the attribution, and shall give no web address of any online service other than intervals.icu.
-3. The changelog's unreleased section shall record the intervals.icu connector, the Garmin product names, and the attribution line together with the action a user must take (regenerating existing documents).
-4. The `fit-ingest` and `workout-docs` specs shall each carry an amendment record for the product-name and attribution changes, and the exemption table of the connectors service-neutral scan shall carry one entry admitting intervals.icu's address in exactly this connector's module, its tests and its section of the connectors documentation, so that every other part of the connector framework stays service-neutral.
-
 ## Amendment 1 (2026-10-15): wellness listing and packaging by wellness-pull
 
 Landed by wellness-pull.
@@ -213,5 +204,4 @@ Requirement 1 criterion 1 now declares pull-activities and pull-wellness.
 The Boundary Context's out-of-scope wellness exclusion is lifted for listing
 and packaging (wellness-pull Requirements 7–9). Requirement 9's live check
 gains the wellness items, recorded in wellness-pull's `research.md`
-(wellness-pull Requirement 11). Requirement 10 criterion 1 gains the wellness
-documentation (wellness-pull Requirement 12.2).
+(wellness-pull Requirement 11).
