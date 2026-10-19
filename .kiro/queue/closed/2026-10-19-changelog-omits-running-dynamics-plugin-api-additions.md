@@ -1,7 +1,7 @@
 ---
 id: 2026-10-19-changelog-omits-running-dynamics-plugin-api-additions
 title: CHANGELOG [Unreleased] omits the plugin-API additions running-dynamics and the local-tz fix made (DeveloperChannel, Samples fields, record_developer_fields, local_offset)
-status: open
+status: done
 importance: high
 importance_why: Governed plugin-API additions will ship in 0.2 with no changelog entry unless fixed before the release cut; after the cut the record is wrong for good.
 effort: S
@@ -61,3 +61,21 @@ turns `[Unreleased]` into the permanent 0.2.0 record.
    `FileIdentity` entry.
 3. `tests/test_changelog*.py` may pin entries; run them.
 4. Done when the entry is in `[Unreleased]` before the 0.2 version bump.
+
+## Resolution
+
+Done 2026-10-19 on `chore/changelog-plugin-api-0-2`: one additive Plugin API
+entry under `[Unreleased]` / `### Added`, beside the `FileIdentity` entry,
+naming `DeveloperChannel`, `Activity.record_developer_fields`, the twelve
+`Samples` running-dynamics channels and `Activity.local_offset`.
+
+Completeness was checked by diffing the public surface rather than trusting
+this item's list: `fitdocs.__all__` plus the dataclass fields of each root
+name, and the `fitdocs.load` names `docs/plugins.md` publishes, imported from a
+`git archive v0.1.0` tree and from HEAD. The root diff is exactly the four
+above plus `FileIdentity`, `Activity.file_identity`,
+`Provenance.undocumented_messages` and `FileIdentity.file_type`, which were
+already recorded; `fitdocs.load` is unchanged. v0.1.0's `Activity` and
+`Samples` fields are a prefix of HEAD's, so the entry's "defaulted and
+appended" holds. `tests/test_changelog.py` and `tests/test_version_identity.py`:
+85 passed.
