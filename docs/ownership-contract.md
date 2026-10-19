@@ -1315,19 +1315,34 @@ If you keep your wiki under version control, you may want tools like `git
 diff` and code-review UIs to treat fitdocs' generated files as
 machine-generated rather than hand-authored — GitHub, GitLab, and `git`
 itself recognize a `linguist-generated` attribute in a `.gitattributes` file
-for exactly this purpose. A line such as
+for exactly this purpose. Lines such as
 
 ```
 workouts/*.md linguist-generated
+workouts/assets/* linguist-generated -diff
 fit-archive/* linguist-generated -diff
 history/*.md linguist-generated
 history/assets/* linguist-generated -diff
 blocks/*.md linguist-generated
 blocks/*/*.md linguist-generated
+recovery/*.md linguist-generated
+recovery/assets/* linguist-generated -diff
+wellness/* linguist-generated
+wellness-archive/** linguist-generated -diff
+dashboards/AGENTS.md linguist-generated
+dashboards/assets/*/*.svg linguist-generated -diff
 ```
 
-in a `.gitattributes` at the root of your wiki tells those tools to collapse
-diffs of generated documents and archived sources by default.
+in a `.gitattributes` at the root of your wiki tell those tools to collapse
+diffs of generated documents, chart images, the wellness series and archived
+sources by default. Each line matches only the depth it names, because a
+`.gitattributes` pattern does not reach into subdirectories:
+`wellness-archive/` keeps one folder per format, so it needs `**`, and a
+dashboard's images sit one folder down, under its page's name. Your dashboard
+pages are yours and are not marked, and neither are the snapshot files
+(`*.snapshot-<n>.json`) beside the images: a snapshot is the only copy of the
+rows a frozen chart was drawn from, so keep it committed (see the
+[dashboards guide](dashboards.md#version-control)).
 
 **fitdocs does not write a `.gitattributes` file itself** — this is
 guidance for you to apply if and how you see fit, not a configuration

@@ -25,11 +25,14 @@ moment a real inbox intake path was added to fixtures.
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from fitdocs import contract, layout
+from fitdocs.dashboards import storage as dashboard_storage
 
 _DOC_PATH = Path(__file__).resolve().parent.parent / "docs" / "ownership-contract.md"
 
@@ -312,6 +315,95 @@ def test_no_gitattributes_statement_present() -> None:
     text = _read_doc()
     assert "gitattributes" in text.lower()
     assert "does not write" in text or "never writes" in text
+
+
+_GITATTRIBUTES_HEADING = "Marking Generated Files in a Version-Controlled Wiki"
+_ROOT = Path("/data-root")
+_STEM = "2026-01-02-run-0700"
+
+
+def _rel(path: Path) -> str:
+    return path.relative_to(_ROOT).as_posix()
+
+
+def _generated_samples() -> tuple[str, ...]:
+    """One real path per kind of generated file, built by fitdocs's own path
+    functions so a layout change moves the sample with it."""
+    return (
+        _rel(layout.doc_path(_ROOT, _STEM)),
+        f"{layout.WORKOUTS_DIR}/{layout.asset_rel_path(_STEM, 'map')}",
+        _rel(layout.archive_path(_ROOT, "a" * 64)),
+        _rel(layout.history_doc_path(_ROOT)),
+        _rel(layout.history_asset_path(_ROOT, "fitness")),
+        _rel(layout.block_doc_path(_ROOT, "base-1")),
+        _rel(layout.planned_doc_path(_ROOT, "base-1", "w1-d1")),
+        _rel(layout.recovery_doc_path(_ROOT)),
+        _rel(layout.recovery_asset_path(_ROOT, "hrv")),
+        _rel(layout.wellness_series_path(_ROOT, 2026)),
+        _rel(layout.wellness_manifest_path(_ROOT)),
+        _rel(layout.wellness_archive_path(_ROOT, "garmin-sleep", "b" * 64, ".json")),
+        f"{layout.DASHBOARDS_DIR}/"
+        + dashboard_storage.asset_rel_path("training", "weekly-km"),
+        *(f"{directory}AGENTS.md" for directory in layout.DECLARED_DIRS),
+    )
+
+
+_NOT_GENERATED: tuple[str, ...] = (
+    f"{layout.DASHBOARDS_DIR}/training.md",
+    f"{layout.DASHBOARDS_DIR}/{layout.ASSETS_SUBDIR}/training/"
+    "weekly-km.snapshot-1.json",
+    layout.SETTINGS_FILE,
+    "athlete.toml",
+    "notes/today.md",
+)
+
+
+def _check_generated(tmp_path: Path, paths: tuple[str, ...]) -> dict[str, bool]:
+    """``git check-attr`` over the contract's example, as git itself reads it."""
+    section = _section(_read_doc(), _GITATTRIBUTES_HEADING)
+    blocks = re.findall(r"^```\n(.*?)^```", section, re.S | re.M)
+    assert len(blocks) == 1, "expected one example .gitattributes block"
+    git = shutil.which("git")
+    assert git is not None
+    subprocess.run([git, "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / ".gitattributes").write_text(blocks[0], encoding="utf-8")
+    result = subprocess.run(
+        [git, "check-attr", "linguist-generated", "--", *paths],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    states = {}
+    for line in result.stdout.splitlines():
+        path, _, state = line.rpartition(": linguist-generated: ")
+        states[path] = state == "set"
+    assert set(states) == set(paths)
+    return states
+
+
+def test_gitattributes_example_marks_every_generated_location(tmp_path: Path) -> None:
+    """The example once stopped at ``blocks/`` while ``workouts/assets/``,
+    ``recovery/``, ``wellness/``, ``wellness-archive/`` and
+    ``dashboards/assets/`` were all generated. Every owned location but the
+    machine-state directories must have a sample here (so a new owned path
+    reds this test until the example covers it), and git must mark each
+    sample generated."""
+    samples = _generated_samples()
+    machine_state = {f"{layout.CACHE_DIR}/", f"{layout.TOOL_STATE_DIR}/"}
+    for owned in set(layout.OWNED_PATHS) - machine_state:
+        assert any(sample.startswith(owned) for sample in samples), owned
+    states = _check_generated(tmp_path, samples)
+    unmarked = sorted(path for path, marked in states.items() if not marked)
+    assert not unmarked, unmarked
+
+
+def test_gitattributes_example_leaves_user_files_and_snapshots_unmarked(
+    tmp_path: Path,
+) -> None:
+    states = _check_generated(tmp_path, _NOT_GENERATED)
+    marked = sorted(path for path, is_marked in states.items() if is_marked)
+    assert not marked, marked
 
 
 def test_agents_md_reference_guidance_present() -> None:
