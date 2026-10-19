@@ -14,6 +14,7 @@ from pathlib import Path
 
 from fitdocs import contract
 from fitdocs.contract import DOC_VERSION
+from tests._changelog_view import V0_1_0, read_unreleased_since
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -23,7 +24,7 @@ def _flat(text: str) -> str:
 
 
 def _unreleased_changed() -> list[str]:
-    text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    text = read_unreleased_since(ROOT / "CHANGELOG.md", V0_1_0)
     unreleased = text.partition("## [Unreleased]\n")[2].split("\n## [", 1)[0]
     section = unreleased.partition("### Changed\n")[2].split("\n### ", 1)[0]
     return [_flat(part) for part in section.split("\n- ")[1:]]
