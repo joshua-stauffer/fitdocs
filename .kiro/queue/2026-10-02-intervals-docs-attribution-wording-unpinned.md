@@ -1,19 +1,18 @@
 ---
 id: 2026-10-02-intervals-docs-attribution-wording-unpinned
-title: The Garmin attribution wording in docs/connectors.md and in the CHANGELOG [Unreleased] entry is not pinned to render/attribution.py
+title: The Garmin attribution wording in docs/connectors.md is not pinned to render/attribution.py
 status: open
 importance: low
-importance_why: Both texts are true today (the multi-source form is now documented); nothing fails if render/attribution.py's wording changes, so they can drift silently.
+importance_why: The text is true today (the multi-source form is now documented); nothing fails if render/attribution.py's wording changes, so it can drift silently.
 effort: S
 kind: gap
-area: intervals-connector, channel-merge, docs/connectors.md, CHANGELOG.md, src/fitdocs/render/attribution.py, tests/connectors/test_intervals_docs.py
+area: intervals-connector, channel-merge, docs/connectors.md, src/fitdocs/render/attribution.py, tests/connectors/test_intervals_docs.py
 created: 2026-10-02
 surfaced_by: /kiro-impl intervals-connector (4.2 review, feature validation); updated by /kiro-impl channel-merge
 pinned_at: 5c41759
-resume_command: "/kiro-impl intervals-connector [queue: .kiro/queue/2026-10-02-intervals-docs-attribution-wording-unpinned.md] Pin docs/connectors.md's and the CHANGELOG's attribution wording to render/attribution.py"
+resume_command: "/kiro-impl intervals-connector [queue: .kiro/queue/2026-10-02-intervals-docs-attribution-wording-unpinned.md] Pin docs/connectors.md's attribution wording to render/attribution.py"
 context:
   - docs/connectors.md
-  - CHANGELOG.md
   - src/fitdocs/render/attribution.py
   - src/fitdocs/render/views.py
   - tests/connectors/test_intervals_docs.py
@@ -24,7 +23,7 @@ blocked_by: []
 ---
 
 ## What
-Three places state the Garmin attribution wording, and no test ties any of
+Two places state the Garmin attribution wording, and no test ties either of
 them to `render/attribution.py`'s constants (`SOLE_SOURCE_PREFIX`,
 `SOURCES_PREFIX`, `OTHER_DEVICES`):
 
@@ -37,9 +36,11 @@ them to `render/attribution.py`'s constants (`SOLE_SOURCE_PREFIX`,
    line when no counted file is a Garmin. Examples
    `Data sources: Garmin <model> and other devices` and
    `Data sources: Garmin <model> and Garmin <other model>`.
-3. The `CHANGELOG.md` `[Unreleased]` entry: the single form, and channel-merge's
-   sentence that the data-source line "also counts the files that donate
-   channels: a Garmin-recorded one is named, any other adds "other devices"".
+
+`CHANGELOG.md` no longer states the wording. On 2026-10-19 the maintainer had
+the `[Unreleased]` entry drop the data-source line and its multi-source
+sentence, matching the fitdocs.ai site, which no longer documents it (PR #1).
+The CHANGELOG evidence below is kept as history.
 
 This item was opened by intervals-connector with a second gap, that the
 multi-source form was undocumented. channel-merge fixed that one; what remains
@@ -47,8 +48,7 @@ is the missing pin.
 
 ## Why it matters
 If someone changes the wording in `attribution.py` (a prefix, the conjunction,
-the "other devices" phrase), the docs and the release note go stale and no
-test fails. docs/connectors.md says the attribution line exists because of the
+the "other devices" phrase), the docs go stale and no test fails. docs/connectors.md says the attribution line exists because of the
 terms the data comes under (intervals.icu API terms, Garmin API Brand Guidelines), so a
 doc that misdescribes it is worse than one that is merely out of date.
 
@@ -81,8 +81,5 @@ All at 5c41759, read or grepped in this run.
    the "other devices" phrase built from the module's constants, and that
    each example line is one `attribution_line` actually produces for matching
    inputs.
-3. In `tests/compose/test_contract_docs.py` (where the entry is already
-   located by "Channel Sources"), or `tests/test_changelog.py`, assert the
-   `[Unreleased]` entry quotes the `OTHER_DEVICES` phrase from the constant.
-4. Done when changing each constant, one at a time, reds a docs or changelog
-   test, and the existing tests stay green.
+3. Done when changing each constant, one at a time, reds a docs test, and
+   the existing tests stay green.

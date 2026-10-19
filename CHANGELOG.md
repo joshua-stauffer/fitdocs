@@ -283,15 +283,11 @@ recorded as one.
   tool-state directory `.fitdocs/`, what `fitdocs pull` writes and removes,
   and that `fitdocs connect` writes nothing under the data root — no
   action.
-- Garmin devices are named by model in a workout's devices table, and a page
-  rendered from a Garmin-recorded file carries the line `Data source: Garmin
-  <model>` directly beneath its title, as intervals.icu's API terms and
-  Garmin's API Brand Guidelines require. The generated document format
-  advances, so a page written by an earlier release lacks the line and the
-  model names until regenerated. Action: run `fitdocs regen` to bring existing
-  documents current, and before the first `fitdocs pull` of an `intervals`
-  instance; `fitdocs check` reports them stale until then. See
-  [the connectors reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md).
+- Garmin devices are named by model in a workout's devices table. The
+  generated document format advances, so a page written by an earlier
+  release lacks the model names until regenerated. Action: run `fitdocs
+  regen` to bring existing documents current; `fitdocs check` reports them
+  stale until then.
 - Generated document contract: a page that lists several files of one
   workout takes the channels its base file lacks from the others (a channel
   the base records at all stays the base's) and, in a new Channel Sources
@@ -299,9 +295,7 @@ recorded as one.
   benchmarks are computed from the same combined activity, and the ownership
   contract's version advances. The generated document format advances again
   (`doc_version` 8 to 9); `fitdocs check` reports older pages as out of date
-  until they are regenerated. The Garmin data-source line beneath the title
-  also counts the files that donate channels: a Garmin-recorded one is named,
-  any other adds "other devices". Actions: run `fitdocs regen` to apply this
+  until they are regenerated. Actions: run `fitdocs regen` to apply this
   to existing pages, and `fitdocs load --recompute` to rescore a page whose
   files changed after its load was computed (a computed load is otherwise
   kept); see
