@@ -33,6 +33,14 @@ def _column(name: str, kind: ColumnType, description: str) -> ColumnSpec:
     return ColumnSpec(name, kind, description)
 
 
+#: Typed out here, not imported, so a change to the shipped caveat reds these
+#: column pins instead of moving with them.
+_STRIDES = (
+    " For a run, the value is strides per minute (one foot, the FIT convention),"
+    " not steps per minute: double it for steps per minute."
+)
+
+
 _METRIC_COLUMNS = (
     ("moving_time_s", ColumnType.DOUBLE, "Moving time in seconds."),
     ("elapsed_time_s", ColumnType.DOUBLE, "Elapsed time in seconds."),
@@ -59,12 +67,12 @@ _METRIC_COLUMNS = (
     (
         "avg_cadence_rpm",
         ColumnType.DOUBLE,
-        "Average cadence in revolutions per minute.",
+        "Average cadence in revolutions per minute." + _STRIDES,
     ),
     (
         "max_cadence_rpm",
         ColumnType.DOUBLE,
-        "Maximum cadence in revolutions per minute.",
+        "Maximum cadence in revolutions per minute." + _STRIDES,
     ),
     ("normalized_power_w", ColumnType.DOUBLE, "Normalized power in watts."),
     ("intensity_factor", ColumnType.DOUBLE, "Intensity factor."),
@@ -158,7 +166,9 @@ EXPECTED_TABLES = (
             ),
             _column("power_w", ColumnType.INTEGER, "Power in watts."),
             _column(
-                "cadence_rpm", ColumnType.DOUBLE, "Cadence in revolutions per minute."
+                "cadence_rpm",
+                ColumnType.DOUBLE,
+                "Cadence in revolutions per minute." + _STRIDES,
             ),
             _column("speed_mps", ColumnType.DOUBLE, "Speed in metres per second."),
             _column("distance_m", ColumnType.DOUBLE, "Distance in metres."),
@@ -248,7 +258,7 @@ EXPECTED_TABLES = (
             _column(
                 "avg_cadence_rpm",
                 ColumnType.DOUBLE,
-                "Average cadence in revolutions per minute.",
+                "Average cadence in revolutions per minute." + _STRIDES,
             ),
             _column(
                 "avg_speed_mps",

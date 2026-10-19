@@ -220,6 +220,10 @@ Prefer the index for counts, totals, averages, distributions and trends.
 Reading workout documents one by one is slower and makes aggregation easier to
 get wrong. Show the SQL used to support your answer. State the date range and
 units, and distinguish an empty result from a measured zero. NULL means absent, never zero.
+Running cadence columns, those ending `_cadence_rpm`, hold strides per minute
+(one foot, the FIT convention), not steps per minute: double the value before
+reporting it or comparing it with a steps-per-minute figure, and name the unit
+you report.
 
 ## What the sandbox refuses
 

@@ -1896,6 +1896,20 @@ def test_dashboards_skill_lists_no_kinds_channels_or_options() -> None:
         assert fragment not in body, f"kinds listing fragment {fragment!r} in the skill"
 
 
+def test_analytics_skill_says_running_cadence_is_strides() -> None:
+    """An agent reading only the schema reported running cadence at half the
+    steps-per-minute figure runners expect; the dashboards skill warned about
+    it and this one did not."""
+    _frontmatter, body = _split_frontmatter(_skill_text(ANALYTICS_SKILL_NAME))
+    section = _flat(_sections(body)["Reporting an answer"])
+    assert "`_cadence_rpm`" in section
+    assert "hold strides per minute" in section
+    assert "not steps per minute" in section
+    assert not re.search(r"hold steps", section), "the cadence sentence is inverted"
+    assert "one foot, the FIT convention" in section
+    assert "double the value" in section
+
+
 def test_analytics_skill_points_at_the_dashboards_skill() -> None:
     _frontmatter, body = _split_frontmatter(_skill_text(ANALYTICS_SKILL_NAME))
     further = _flat(_sections(body)["Further reading"])

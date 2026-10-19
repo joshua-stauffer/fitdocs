@@ -111,6 +111,30 @@ def test_published_schema_reference_matches_live_catalog(
     home_dir.assert_untouched()
 
 
+def test_every_cadence_column_says_running_cadence_is_strides(
+    tmp_path: Path, home_dir: HomeDirectory
+) -> None:
+    """``fitdocs query --schema`` and the reference above read these comments.
+    Every ``*cadence_rpm`` column, in every table, must carry the caveat that a
+    run's cadence is strides, not steps, per minute."""
+    database = schema_only_index(tmp_path / "cadence.duckdb")
+    with store.open_index(database, read_only=True) as connection:
+        tables = read_catalog(connection)
+    cadence = [
+        (table.name, column)
+        for table in tables
+        for column in table.columns
+        if column.name.endswith("cadence_rpm")
+    ]
+    assert {name for name, _column in cadence} >= {"activities", "laps", "records"}
+    for name, column in cadence:
+        description = column.description or ""
+        assert "revolutions per minute" in description, (name, column.name)
+        assert "strides per minute" in description, (name, column.name)
+        assert "double it for steps per minute" in description, (name, column.name)
+    home_dir.assert_untouched()
+
+
 def test_documented_query_contract_matches_the_implementation() -> None:
     page = _page_path().read_text(encoding="utf-8")
     outside_reference = page.split(_START, 1)[0] + page.split(_END, 1)[1]

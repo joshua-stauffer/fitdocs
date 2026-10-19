@@ -147,8 +147,8 @@ one row per page whose files compose.
 | max_heart_rate_bpm | DOUBLE | beats per minute | Maximum heart rate in beats per minute. |
 | avg_power_w | DOUBLE | watts | Average power in watts. |
 | max_power_w | DOUBLE | watts | Maximum power in watts. |
-| avg_cadence_rpm | DOUBLE | revolutions per minute | Average cadence in revolutions per minute. |
-| max_cadence_rpm | DOUBLE | revolutions per minute | Maximum cadence in revolutions per minute. |
+| avg_cadence_rpm | DOUBLE | revolutions per minute | Average cadence in revolutions per minute. For a run, the value is strides per minute (one foot, the FIT convention), not steps per minute: double it for steps per minute. |
+| max_cadence_rpm | DOUBLE | revolutions per minute | Maximum cadence in revolutions per minute. For a run, the value is strides per minute (one foot, the FIT convention), not steps per minute: double it for steps per minute. |
 | normalized_power_w | DOUBLE | watts | Normalized power in watts. |
 | intensity_factor | DOUBLE |  | Intensity factor. |
 | variability_index | DOUBLE |  | Variability index. |
@@ -253,7 +253,7 @@ one row per base lap, in recorded order.
 | max_heart_rate_bpm | INTEGER | beats per minute | Maximum heart rate in beats per minute. |
 | avg_power_w | INTEGER | watts | Average power in watts. |
 | max_power_w | INTEGER | watts | Maximum power in watts. |
-| avg_cadence_rpm | DOUBLE | revolutions per minute | Average cadence in revolutions per minute. |
+| avg_cadence_rpm | DOUBLE | revolutions per minute | Average cadence in revolutions per minute. For a run, the value is strides per minute (one foot, the FIT convention), not steps per minute: double it for steps per minute. |
 | avg_speed_mps | DOUBLE | metres per second | Average speed in metres per second. |
 | max_speed_mps | DOUBLE | metres per second | Maximum speed in metres per second. |
 | total_ascent_m | DOUBLE | metres | Total ascent in metres. |
@@ -418,7 +418,7 @@ one row per sample of the composed activity.
 | elapsed_s | DOUBLE | seconds | seconds since the activity's start; may be negative |
 | heart_rate_bpm | INTEGER | beats per minute | Heart rate in beats per minute. |
 | power_w | INTEGER | watts | Power in watts. |
-| cadence_rpm | DOUBLE | revolutions per minute | Cadence in revolutions per minute. |
+| cadence_rpm | DOUBLE | revolutions per minute | Cadence in revolutions per minute. For a run, the value is strides per minute (one foot, the FIT convention), not steps per minute: double it for steps per minute. |
 | speed_mps | DOUBLE | metres per second | Speed in metres per second. |
 | distance_m | DOUBLE | metres | Distance in metres. |
 | altitude_m | DOUBLE | metres | Altitude in metres. |

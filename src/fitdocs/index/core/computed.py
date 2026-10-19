@@ -15,6 +15,14 @@ _ZONE_METRIC_FIELDS: Final[frozenset[str]] = frozenset(
     {"hr_time_in_zone_s", "power_time_in_zone_s", "pace_time_in_zone_s"}
 )
 
+_RUNNING_CADENCE: Final[str] = (
+    " For a run, the value is strides per minute (one foot, the FIT convention),"
+    " not steps per minute: double it for steps per minute."
+)
+"""Appended to every ``*_cadence_rpm`` description: running cadence is stored
+per stride, so a reader who knows only the schema would otherwise report it at
+half the steps-per-minute figure runners expect."""
+
 _METRIC_DESCRIPTIONS: Final[dict[str, str]] = {
     "moving_time_s": "Moving time in seconds.",
     "elapsed_time_s": "Elapsed time in seconds.",
@@ -26,8 +34,8 @@ _METRIC_DESCRIPTIONS: Final[dict[str, str]] = {
     "max_heart_rate_bpm": "Maximum heart rate in beats per minute.",
     "avg_power_w": "Average power in watts.",
     "max_power_w": "Maximum power in watts.",
-    "avg_cadence_rpm": "Average cadence in revolutions per minute.",
-    "max_cadence_rpm": "Maximum cadence in revolutions per minute.",
+    "avg_cadence_rpm": "Average cadence in revolutions per minute." + _RUNNING_CADENCE,
+    "max_cadence_rpm": "Maximum cadence in revolutions per minute." + _RUNNING_CADENCE,
     "normalized_power_w": "Normalized power in watts.",
     "intensity_factor": "Intensity factor.",
     "variability_index": "Variability index.",
@@ -67,7 +75,7 @@ _METRIC_COLUMNS: Final[tuple[ColumnSpec, ...]] = tuple(
 _SAMPLE_DESCRIPTIONS: Final[dict[str, str]] = {
     "heart_rate_bpm": "Heart rate in beats per minute.",
     "power_w": "Power in watts.",
-    "cadence_rpm": "Cadence in revolutions per minute.",
+    "cadence_rpm": "Cadence in revolutions per minute." + _RUNNING_CADENCE,
     "speed_mps": "Speed in metres per second.",
     "distance_m": "Distance in metres.",
     "altitude_m": "Altitude in metres.",
@@ -177,7 +185,7 @@ LAPS: Final[TableSpec] = TableSpec(
         ColumnSpec(
             "avg_cadence_rpm",
             ColumnType.DOUBLE,
-            "Average cadence in revolutions per minute.",
+            "Average cadence in revolutions per minute." + _RUNNING_CADENCE,
         ),
         ColumnSpec(
             "avg_speed_mps", ColumnType.DOUBLE, "Average speed in metres per second."
