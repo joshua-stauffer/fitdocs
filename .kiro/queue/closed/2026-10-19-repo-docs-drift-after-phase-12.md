@@ -1,7 +1,7 @@
 ---
 id: 2026-10-19-repo-docs-drift-after-phase-12
 title: docs/ still says morning-of blocks are future work, and several path lists predate wellness, recovery and the index
-status: open
+status: done
 importance: medium
 importance_why: docs/ is the published contract the site links to; two sentences contradict shipped behavior and the uninstall list understates what stays on disk.
 effort: S
@@ -82,3 +82,50 @@ overrides naming the old stem need updating").
 
 The `.gitattributes` example in the contract is tracked separately, in
 `2026-09-12-ownership-contract-prose-stale-and-unpinned`.
+
+## Resolution (2026-10-19, commit 9e33e08, branch chore/docs-0-2)
+
+All eight points and the rename note fixed in one commit:
+
+1. `docs/inbox.md` (Safeguards): the recovery sentence now names the
+   Morning Of block, linked to `wellness.md#wellness-on-workout-pages`, and
+   says it refreshes on every `fitdocs sync`, `fitdocs pull --sync` and
+   `fitdocs regen`.
+2. `docs/ownership-contract.md` (Wellness Archive and Series): "remain
+   future work" replaced by links to the Recovery Page and Morning-Of Region
+   sections.
+3. `docs/install.md`: eight declared directories, listed from
+   `layout.DECLARED_DIRS`. New pin
+   `tests/test_install_docs.py::test_install_doc_names_every_declared_directory_and_their_count`
+   (list and count word read against the constant; reds on the old text).
+4. `docs/upgrading.md` ("What remains on disk"): owned-path list gains
+   `wellness/`, `wellness-archive/`, `recovery/`; the sentence and the
+   "Also untouched" note name the analytics index directory and the
+   connector credentials directory; bullets fold `recovery/`, `wellness/`,
+   `dashboards/` and `wellness-archive/` into the existing six categories
+   (the six-item test is unchanged). New pin
+   `tests/test_upgrading_docs.py::test_remains_section_names_every_top_level_owned_path_and_both_outside_dirs`
+   (top-level `layout.OWNED_PATHS`; reds on the old text).
+5. Contract settings-table list gains `[wellness]` (every `*_TABLE`
+   constant in `src/fitdocs/` checked: tiles, inbox, plugins, load, history,
+   plans, identity, wellness, connectors).
+6. `docs/wiki-integration.md`: one document per workout, files of one
+   workout share a page; the declaration is written into "each of its eight
+   declared directories", not "every directory it owns".
+7. `docs/configuration.md`: tiles are fetched during `sync`, `regen` or
+   `pull --sync` (`cli.py` `_run_drain_passes` builds the tile store for
+   `pull --sync`).
+8. Contract head and root-instructions section: five commands, adding
+   `fitdocs recovery` "that has a page to write"
+   (`recovery/engine.py:177`). Pins in `tests/test_ownership_contract.py`
+   moved from "four" to "five" and now also assert the recovery clause and
+   the absence of "each of those four commands".
+
+Rename note: `docs/upgrading.md` now says a plan `[[override]]` naming a
+renamed page's old stem needs the same update, and that plan reconciliation
+reports it as "not found among the logged workouts"
+(`plans/matching.py::_override_problems`).
+
+The `.gitattributes` example is the other item's (see
+`2026-09-12-ownership-contract-prose-stale-and-unpinned`, narrowed the same
+day).

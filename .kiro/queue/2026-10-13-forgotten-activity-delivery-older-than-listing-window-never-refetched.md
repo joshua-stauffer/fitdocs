@@ -24,6 +24,9 @@ blocked_by: []
 
 ## What
 
+Narrowed 2026-10-19 to the code half; the docs half is done (see the update
+below).
+
 When an activity delivery vanishes from the inbox before the drain archives it
 (the athlete deleted or moved it), the pull's sweep "forgets" the activity's
 ledger entry so that a later pull fetches it again (connectors Req 8.7). The
@@ -73,7 +76,7 @@ Read at `86cdf14` (static reading; no run).
   unchanged").
 - Related, same root cause (a window anchored only on a never-decreasing
   watermark): `.kiro/queue/2026-10-02-intervals-rate-limit-resume-claim-since-backfill.md`
-  and `.kiro/queue/2026-10-02-connectors-page-delivery-and-lookback-inaccuracies.md`.
+  and `.kiro/queue/closed/2026-10-02-connectors-page-delivery-and-lookback-inaccuracies.md` (closed 2026-10-19).
 
 ## How to pick it up
 
@@ -96,3 +99,15 @@ Read at `86cdf14` (static reading; no run).
 - Does connectors need an amendment (Req 7.2 says the watermark never moves
   backward; a second ledger key would leave it true) or a reword of Req 8.7 to
   say "within the look-back window"? The first keeps the promise.
+
+## Update 2026-10-19 (chore/docs-0-2, docs half)
+
+`docs/connectors.md` "Delivery and removal" no longer promises "fetched again
+on a later pull" (46a6f7a). It now says the same pull re-fetches a forgotten
+delivery when its listing includes it, and that an `intervals` activity older
+than the look-back window needs `fitdocs pull intervals --since YYYY-MM-DD`.
+That sentence describes today's gap, so the docs are true now, but the
+silent loss remains. **When the code fix lands**, rewrite that sentence and
+its pin,
+`tests/connectors/test_docs.py::test_delivery_section_states_the_same_pull_refetch_and_its_window`,
+in the same change.

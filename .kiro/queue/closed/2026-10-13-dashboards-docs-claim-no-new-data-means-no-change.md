@@ -1,7 +1,7 @@
 ---
 id: 2026-10-13-dashboards-docs-claim-no-new-data-means-no-change
 title: docs/dashboards.md says a day or a sync with no new data leaves the working tree clean, which is false for charts with a $today window; the packaged skill says it correctly
-status: open
+status: done
 importance: low
 importance_why: A user who git-commits dashboards and reads the guide expects a quiet working tree after a no-op sync; the shipped example chart itself (`$today - 84`) changes bytes as days pass.
 effort: S
@@ -45,3 +45,17 @@ At 0a98d5c:
 1. Edit the two sentences to add the `$today` caveat (borrow the skill's wording) and keep the true half: a window written as a fixed date range, or a chart over unchanged rows, does not change.
 2. Re-wrap lines 137 and 147 to the page's width.
 3. Run `uv run pytest tests/dashboards/test_docs_dashboards.py -q`; the docs test pins parts of this page (the live kinds block and quoted sentences), so update any pin that quotes the old sentences.
+
+## Resolution (2026-10-19, commit af769c6, branch chore/docs-0-2)
+
+Both sentences in `docs/dashboards.md` corrected. "Relative and frozen
+charts": a run whose rows are unchanged writes nothing; a `$today` window
+(like the page's own example) moves each day and can change on a day with no
+new workouts; a chart whose SQL does not use `$today` changes only with its
+rows, directive or the chart kit. "Version control": the working tree stays
+clean after a no-new-data sync only for charts whose SQL does not use
+`$today`. The over-long image-cleanup paragraph is re-wrapped; the other
+over-long prose lines (`:38`, `:286`) predate the item's evidence and were
+left. Pinned by
+`tests/dashboards/test_docs_dashboards.py::test_no_new_data_keeps_a_chart_unchanged_only_without_today`
+(also asserts the example still uses `$today - 84`; reds on the old page).

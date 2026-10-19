@@ -10,7 +10,7 @@ area: wiki-contract, load-history, docs/ownership-contract.md, tests/test_owners
 created: 2026-09-12
 surfaced_by: /kiro-impl load-history 1.3 (reviewer rounds 2-3, FOLLOW_UPS)
 pinned_at: 8cd0062
-resume_command: "do: in docs/ownership-contract.md narrow the scope sentence ('exact limits of every operation that writes there', ~:16-17), name drain among the declaration refreshers (~:17-27 and the root-instructions section), add workouts/assets/* to the .gitattributes example, then pin the history overwrite bullet in tests/test_ownership_contract.py and reword load-history Req 7.6; the inbox sentence is already fixed"
+resume_command: "do: in docs/ownership-contract.md narrow the scope sentence ('exact limits of every operation that writes there', ~:14-16) and name drain and pull --sync among the declaration refreshers (head ~:16-25 and the root-instructions section), then pin the history overwrite bullet in tests/test_ownership_contract.py and reword load-history Req 7.6; the inbox sentence and the .gitattributes example are already fixed"
 context:
   - docs/ownership-contract.md
   - tests/test_ownership_contract.py
@@ -19,15 +19,19 @@ blocked_by: []
 ---
 
 ## What
-- :105-107 still describes the inbox as "the only directory fitdocs writes
-  outside the workout tree" -- untrue since `training-history/`.
-- :233-237 scope paragraph claims the contract covers "every file fitdocs
-  writes"; the history chart's marker is module-local (see the DOC_BANNER
+Narrowed 2026-10-19; see the last update below for what was resolved. Still
+open:
+- The scope sentence (`docs/ownership-contract.md:14-16`, "the exact limits
+  of every operation that writes there") claims more than the contract
+  describes; the history chart's marker is module-local (see the DOC_BANNER
   item) and is not described there.
-- No test asserts the `CONTRACT_VERSION = "3"` note, the seven-entry path
-  list, or the history overwrite bullet; only the migration section is
-  pinned. Req 7.6's wording ("refreshed on every run") disagrees with the
-  shipped behaviour (refreshed only on a run that reaches its write step).
+- The declaration-refresher sentences (the head, ~:16-25, and the
+  root-instructions section) do not name `drain` (`fitdocs sync` with no
+  argument; `src/fitdocs/sync.py` `drain` calls `refresh_declarations`) or
+  `pull --sync`, which runs the drain.
+- No test pins the history overwrite bullet.
+- load-history Req 7.6 says the declaration is "refreshed on every run";
+  the shipped behaviour refreshes only on a run that reaches its write step.
 
 ## Evidence
 1.3 review rounds 2-3 `FOLLOW_UPS`; `grep -n "only directory" docs/ownership-contract.md`.
@@ -96,3 +100,21 @@ now suggests:
 When this item is picked up, make the contract's example agree with those
 lines, and add `workouts/assets/*`.
 
+## Update 2026-10-19 (chore/docs-0-2, docs gaps before 0.2.0)
+
+Narrowed, not closed.
+- **`.gitattributes` example: done** in 4abf6c7. It now marks
+  `workouts/assets/*`, `recovery/*.md`, `recovery/assets/*`, `wellness/*`,
+  `wellness-archive/**`, `dashboards/AGENTS.md` and
+  `dashboards/assets/*/*.svg`, beside the earlier lines. Dashboard pages and
+  `*.snapshot-<n>.json` stay unmarked, and the prose says to keep snapshots
+  committed. Pinned with `git check-attr` in
+  `tests/test_ownership_contract.py::test_gitattributes_example_marks_every_generated_location`
+  and `::test_gitattributes_example_leaves_user_files_and_snapshots_unmarked`.
+  Every owned path except `.cache/` and `.fitdocs/` needs a sample there, so
+  a new owned path reds the test.
+- **Quarantine "future" bullet: already gone.** `grep -n "future ingestion"
+  docs/ownership-contract.md` prints nothing at 4179f3c.
+- **Refresher sentences: partly addressed** in 9e33e08. Both now name
+  `fitdocs recovery` as the fifth command. `drain` and `pull --sync` are
+  still covered only implicitly, by "`sync`".

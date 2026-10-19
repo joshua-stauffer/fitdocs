@@ -10,7 +10,7 @@ area: athlete-benchmarks, threshold-load, src/fitdocs/load/threshold/calculator.
 created: 2026-09-12
 surfaced_by: hand session tagging 13 historical races on the real data root, then running load --no-prompt
 pinned_at: e8416b5
-resume_command: "do: decide between (a) wording+README only (dated entry is what load reads; flat keys feed zones/TRIMP) and (b) giving the athlete-wide HR benchmarks an entry point that does not require no channel to select -- e.g. collect declared fields whose kind is athlete-scoped and not_on_file even when another channel wins, or seed [[benchmarks.athlete.*]] from the flat keys on first load with an explicit applies_from; keep the read path (flat keys are never a fallback) either way"
+resume_command: "do: reword the load pass missing-input messages (channels/heart_rate.py _MISSING_NAMES, channels/power.py, threshold/calculator.py::_missing_inputs) to name the dated [[benchmarks.athlete.*]] / [[benchmarks.<discipline>.*]] entry load reads and point at fitdocs derive-benchmarks, moving their pins; add the which-keys-feed-what paragraph to README.md athlete.toml section (docs/configuration.md already has it); keep the read path (flat keys are never a fallback)"
 context:
   - src/fitdocs/load/threshold/calculator.py
   - src/fitdocs/load/channels/heart_rate.py
@@ -25,14 +25,23 @@ blocked_by: []
 
 ## What
 
-`athlete-benchmarks` design.md ("two facts drive the whole design") splits
-`athlete.toml` into the flat *athlete-inputs projection* (`athlete.py` →
-zones, TRIMP) and the dated benchmark tree the calculators read through
-`ProfileView`. The flat keys are deliberately not a fallback. Nothing in the
-load pass's output says so: the rendered "Not selected" lines and the skip
-reasons name `max_hr_bpm`, `resting_hr_bpm`, "Running FTP (W)" / "Cycling
-FTP (W)" -- the flat keys' own spellings -- as missing, next to a file whose
-first lines are `max_hr_bpm = 194` and `ftp_watts = 340.0`.
+Narrowed 2026-10-19; see the last update below. The guide half is done
+(`docs/configuration.md`), and the structural half shipped with
+hr-derivation (`fitdocs derive-benchmarks` writes dated heart-rate entries).
+Still open:
+- The load pass's messages: the "Not selected" lines and skip reasons name
+  `max_hr_bpm`, `resting_hr_bpm`, "Running FTP (W)" / "Cycling FTP (W)", the
+  flat keys' own spellings, as missing, next to a file that has them. They
+  do not say a dated `[[benchmarks.athlete.*]]` entry is what load reads.
+  Sites: `src/fitdocs/load/channels/heart_rate.py` (`_MISSING_NAMES`),
+  `channels/power.py`, `threshold/calculator.py::_missing_inputs`.
+- README.md's `athlete.toml` / Benchmarks section still does not say which
+  keys feed what.
+
+Original framing: `athlete-benchmarks` design.md ("two facts drive the whole
+design") splits `athlete.toml` into the flat *athlete-inputs projection*
+(`athlete.py` → zones, TRIMP) and the dated benchmark tree the calculators
+read through `ProfileView`. The flat keys are deliberately not a fallback.
 
 ## Why it matters
 
@@ -143,3 +152,20 @@ structural half of this item and leaves the wording half open.
   smaller after hr-derivation task 4.3 (`tasks.md:697`) documents the stage:
   the paragraph naming which keys feed what can point at `derive-benchmarks`
   as the way to get the dated entries without typing them.
+
+## Update 2026-10-19 (chore/docs-0-2, guide half)
+
+`docs/configuration.md`, "Derived heart-rate benchmarks", gains a paragraph
+(912b886). It says the undated `max_hr_bpm`, `resting_hr_bpm` and
+`ftp_watts` keys feed zones and the page's own TRIMP, intensity factor and
+training-stress figures, and that the built-in training-load calculator never
+reads them. It names the fixes: `fitdocs derive-benchmarks`, or a dated
+`[[benchmarks.athlete.max_hr_bpm]]` entry (TOML example given), with
+`applies_from` for older workouts and `fitdocs load --recompute`. Verified
+against `load/threshold/anchors.py::resolve` (athlete-scoped kinds resolve
+only through `ProfileView.has_benchmark`/`benchmark`, the `[benchmarks]` tree)
+and `load/profile.py`. Pinned in
+`tests/hr_benchmarks/test_docs.py::test_guide_says_undated_keys_never_anchor_load_and_names_the_fix`
+and `::test_guide_example_entry_anchors_load_and_the_flat_key_does_not`. The
+latter runs the guide's TOML example through `AthleteProfile` and `resolve`.
+Messages and README remain (see What).

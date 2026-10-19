@@ -1,7 +1,7 @@
 ---
 id: 2026-10-19-analytics-cadence-columns-say-rpm
 title: The analytics schema calls running cadence "revolutions per minute" with no strides-per-minute caveat
-status: open
+status: done
 importance: medium
 importance_why: An agent answering from the schema alone reports running cadence at half the steps-per-minute figure runners expect, with confidence.
 effort: S
@@ -63,3 +63,28 @@ not quoted here.
 
 The related precision gap (`fractional_cadence` is never read) is
 `2026-09-29-record-fields-still-dropped-at-ingest`.
+
+## Resolution (2026-10-19, commit 874b81f, branch chore/docs-0-2)
+
+- Source: `src/fitdocs/index/core/computed.py` appends `_RUNNING_CADENCE`
+  ("For a run, the value is strides per minute (one foot, the FIT
+  convention), not steps per minute: double it for steps per minute.") to
+  `activities.avg_cadence_rpm`, `activities.max_cadence_rpm`,
+  `laps.avg_cadence_rpm` and `records.cadence_rpm`. The unit phrase stays,
+  so the schema validator is satisfied.
+- No column rename, no `SCHEMA_VERSION` bump, no rebuild:
+  `schema.schema_manifest`/`schema_digest` exclude descriptions, and
+  `index/refresh.py` reapplies descriptions (`apply_descriptions`) on the
+  first refresh under a new fitdocs version.
+- `docs/analytics.md` regenerated with
+  `uv run python -m tests.query.test_docs_analytics` (four rows changed,
+  nothing else).
+- `src/fitdocs/skills/fitdocs-analytics/SKILL.md` "Reporting an answer"
+  gains the strides-per-minute rule (the H2 list is pinned, so no new
+  section).
+- Pins: `tests/query/test_docs_analytics.py::test_every_cadence_column_says_running_cadence_is_strides`
+  (live catalog, i.e. what `fitdocs query --schema` reads),
+  `tests/test_agent_skill.py::test_analytics_skill_says_running_cadence_is_strides`,
+  and the hand-typed descriptions in `tests/index/test_core_computed.py`.
+  Restoring the previous source and skill reds the three pins above and
+  `test_published_schema_reference_matches_live_catalog`.

@@ -10,7 +10,7 @@ area: intervals-connector, src/fitdocs/connectors/intervals.py, src/fitdocs/conn
 created: 2026-10-02
 surfaced_by: /kiro-impl intervals-connector (4.2 review)
 pinned_at: 9d08482
-resume_command: "/kiro-impl intervals-connector [queue: .kiro/queue/2026-10-02-intervals-rate-limit-resume-claim-since-backfill.md] Make the rate-limit/unavailable messages and docs true for an interrupted --since backfill"
+resume_command: "/kiro-impl intervals-connector [queue: .kiro/queue/2026-10-02-intervals-rate-limit-resume-claim-since-backfill.md] Make the rate-limit/unavailable runtime messages true for an interrupted --since backfill (docs/connectors.md already is)"
 context:
   - src/fitdocs/connectors/intervals.py
   - src/fitdocs/connectors/pull.py
@@ -21,15 +21,18 @@ blocked_by: []
 ---
 
 ## What
+Narrowed 2026-10-19 to the runtime messages; `docs/connectors.md` is fixed
+(see the update below).
+
 `RATE_LIMITED_MESSAGE` and `UNAVAILABLE_MESSAGE` in
-`src/fitdocs/connectors/intervals.py` both end "this pull stopped, and the
-next pull resumes where it stopped". `docs/connectors.md` repeats the
-promise. In `connectors/pull.py::_window_start`, a pull without `--since`
-lists from the watermark less `lookback_days`, and the watermark never moves
-backward. So when a `--since 2024-01-01` backfill is cut short by a 429, a
-following plain `fitdocs pull` lists only from the watermark window. The
-older part of the backfill is never resumed unless the user passes the same
-`--since` again.
+`src/fitdocs/connectors/intervals.py` (~:97-105) both end "this pull stopped,
+and the next pull resumes where it stopped". In
+`connectors/pull.py::_window_start`, a pull without `--since` lists from the
+watermark less `lookback_days`, and the watermark never moves backward. So
+when a `--since 2024-01-01` backfill into an instance that has pulled before
+is cut short by a 429, a following plain `fitdocs pull` lists only from the
+watermark window. The older part of the backfill is never resumed unless the
+user passes the same `--since` again.
 
 ## Why it matters
 The message tells the user they need to do nothing. For a backfill, that is
@@ -52,3 +55,18 @@ false, and the history gap is silent.
    watermark records an unfinished backfill (that is a connectors design
    change and an amendment).
 3. Pin the chosen wording and run its mutation.
+
+## Update 2026-10-19 (chore/docs-0-2, docs half)
+
+`docs/connectors.md` "What a pull fetches" no longer says the next pull
+resumes (46a6f7a). The rate-limit and unavailable bullets now say only that
+the pull stops. A new paragraph explains that a plain pull resumes, or
+retries a failed download, only inside its window, and that a `--since`
+backfill into an instance that has pulled before is continued by rerunning
+the same `--since`. Pinned by
+`tests/connectors/test_docs.py::test_intervals_section_does_not_promise_a_plain_pull_resumes_a_backfill`.
+Still open: the two runtime messages, pinned verbatim in
+`tests/connectors/test_intervals.py` (~:973, :986, :1347, :1360) and
+`tests/connectors/test_intervals_wellness.py` (~:506, :1193). The same
+window logic also stops a plain pull from retrying a failed download older
+than the window after such a backfill (`docs/connectors.md` now says so).

@@ -1,7 +1,7 @@
 ---
 id: 2026-10-02-connectors-page-delivery-and-lookback-inaccuracies
 title: docs/connectors.md misstates three pull behaviours -- the first-pull lookback ignores --since, a vanished delivery is re-fetched in the same pull, and a changed activity whose new bytes are already archived is reported held, not delivered
-status: open
+status: done
 importance: low
 importance_why: The page is the user reference for pull; each sentence predicts a different report than the user will see, but no data is at risk.
 effort: S
@@ -57,3 +57,28 @@ re-derived from the code in this session (static reading, no run).
    put in the inbox is ever removed" on the docs pages).
 3. Run the docs tests named in `resume_command`. Done when each sentence
    predicts the report the code produces.
+
+## Resolution (2026-10-19, commit 46a6f7a, branch chore/docs-0-2)
+
+Point 1 was already fixed at 4179f3c: the `lookback_days` row no longer
+claims a first pull lists everything regardless of the key.
+
+Points 2 and 3, in `docs/connectors.md` "Delivery and removal":
+
+2. A vanished delivery is forgotten by the sweep, which runs before the
+   listing, so the same pull fetches it again when its listing includes it;
+   `folder` always lists its whole source, `intervals` lists from the
+   watermark less `lookback_days`, and an older `intervals` activity needs
+   `fitdocs pull intervals --since`. (That last sentence documents the gap
+   in `2026-10-13-forgotten-activity-delivery-older-than-listing-window-never-refetched`;
+   revise it when that item's code fix lands.)
+3. Changed bytes that the archive or another pending delivery already holds
+   are recorded already-held and reported `held`, not `delivered`.
+
+Pinned by `tests/connectors/test_docs.py::test_delivery_section_states_the_same_pull_refetch_and_its_window`
+and `::test_delivery_section_reports_changed_bytes_already_held_as_held`
+(both red on the old page). Both behaviours were also confirmed against
+`run_pull` with the `tests/connectors/test_pull.py` harness (throwaway probe,
+not committed): a deleted pending file is re-delivered by the next run in
+the same call, and a revision whose new bytes are pre-archived is reported
+`held` with nothing delivered.
