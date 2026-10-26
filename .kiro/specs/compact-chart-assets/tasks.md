@@ -50,7 +50,7 @@ suite, ruff, ruff format and mypy green on its own.
     size, and each undecodable kind fails to open as PNG, JPEG or WebP.
   - _Requirements: 10.1, 10.2_
 
-- [ ] 1.3 Add the shared render primitives the streams build on
+- [x] 1.3 Add the shared render primitives the streams build on
   - Give the shared number formatter an optional decimal-places setting
     whose default reproduces today's 2-decimal output exactly.
   - Define the basemap value type in the map module: MIME type, encoded
@@ -417,3 +417,4 @@ suite, ruff, ruff format and mypy green on its own.
 ## Implementation Notes
 
 - 1.1: Pillow is last in the dependency list (after duckdb); the packaging, preserved-guarantees and sitebuild pins are order-sensitive. Amendments taken: docs-site 2, distribution 5, plugin-api 2. Plugin-api Amendment 2 claims discovering plugins does not import Pillow — 3.2 should also pin it at runtime by adding `assert 'PIL' not in sys.modules` beside the duckdb check in `tests/index/test_boundary.py:644`'s subprocess (reviewer follow-up).
+- 1.3: `Basemap(mime: str, data: bytes, x, y, width, height: float)` is frozen in `render/charts/map.py`; `fmt_num(value, places=2)`. Review rounds 2–3 were prose only: a module docstring (in src AND in the test module) still claimed the old 2-decimal contract — after changing a contract, grep both src and test docstrings for the old wording.
