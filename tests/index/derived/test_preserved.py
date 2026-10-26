@@ -237,6 +237,7 @@ def test_document_contract_and_runtime_dependencies_match_main_baseline() -> Non
         "pyyaml>=6.0",
         "tomli-w>=1.0",
         "duckdb>=1.2,<2",
+        "pillow>=13.0.0",
     ]
     manifest = tomllib.loads(
         (Path(__file__).resolve().parents[3] / "pyproject.toml").read_text()

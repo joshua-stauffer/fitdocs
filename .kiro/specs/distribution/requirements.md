@@ -424,3 +424,14 @@ The index adds about 44 MB when installed. No prebuilt DuckDB package is
 available for musl-based Linux or free-threaded Python, so those environments
 need a native build toolchain. The footprint and platform note are pinned by
 `tests/index/test_contract_docs.py::test_install_note_covers_duckdb_footprint_without_changing_format_version`.
+
+
+## Amendment 5 (2026-10-26): Pillow joins the runtime baseline, landed by compact-chart-assets
+
+The runtime dependency list is the pre-feature list plus `duckdb>=1.2,<2`
+(Amendment 4) and `pillow>=13.0.0`. The pre-feature dependency snapshot and
+package declaration are pinned by
+`tests/test_packaging.py::test_dependencies_declaration_is_unchanged` and
+`tests/test_preserved_guarantees.py::test_dependencies_unchanged_from_pre_feature_snapshot_as_set_and_ordered_list`;
+the published baseline is also pinned by
+`tests/sitebuild/test_repo_wiring.py::test_runtime_dependencies_are_the_pre_spec_literals`.

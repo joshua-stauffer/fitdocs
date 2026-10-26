@@ -135,6 +135,10 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   also import `history`, `plans`, `benchmarks`, `load.profile` and `wellness`, and
   `metrics.mean_max` computes best efforts; only `index.registry` imports
   `index.derived`.
+- `basemap` (the map raster) is the only module that imports `PIL`, always
+  inside functions (a type-only import under `TYPE_CHECKING` is allowed);
+  `render.charts.{svg,series,palette}` and `render.charts.map` never import
+  `PIL` or `basemap`.
 - `units` (the one unit vocabulary: token, index phrase, display symbol,
   family) imports only the standard library and is a leaf module any layer may
   import; today `index.schema`, the chart kit

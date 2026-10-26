@@ -214,7 +214,7 @@ confirmation, together with the brand values (queue
 **Objective:** As a fitdocs user and contributor, I want the site tooling kept strictly apart from the tool itself, so that installing fitdocs is unchanged and the site build is reproducible.
 
 #### Acceptance Criteria
-1. The fitdocs package's runtime dependency list shall be the pre-docs-site list plus `duckdb>=1.2,<2`, added by analytics-index; site tooling shall add no runtime dependencies, and optional dependencies shall remain empty.
+1. The fitdocs package's runtime dependency list shall be the pre-docs-site list plus `duckdb>=1.2,<2`, added by analytics-index, and `pillow>=13.0.0`, added by compact-chart-assets; site tooling shall add no runtime dependencies, and optional dependencies shall remain empty.
 2. The repository shall declare the site tooling in its own dependency group, with the site generator pinned to one exact version.
 3. The fitdocs wheel and sdist shall contain exactly the members they contain today.
 4. The site build logic shall depend only on the Python standard library and the YAML library fitdocs already depends on, apart from invoking the pinned site generator.
@@ -263,3 +263,12 @@ Requirement 8.1 now defines the runtime dependency list as the pre-docs-site
 list plus `duckdb>=1.2,<2`, added by analytics-index. The docs-site tooling
 adds no runtime dependency, and optional dependencies remain empty. This is
 pinned by `tests/sitebuild/test_repo_wiring.py::test_runtime_dependencies_are_the_pre_spec_literals`.
+
+## Amendment 2 (2026-10-26): the docs-site dependency baseline includes the image library, landed by compact-chart-assets
+
+Requirement 8.1 now defines the runtime dependency list as the pre-docs-site
+list plus `duckdb>=1.2,<2`, added by analytics-index, and
+`pillow>=13.0.0`, added by compact-chart-assets. The docs-site tooling adds no
+runtime dependency, and optional dependencies remain empty. This is pinned by
+`tests/sitebuild/test_repo_wiring.py::test_runtime_dependencies_are_the_pre_spec_literals`.
+Criterion 8.1 amended in place. No criterion is renumbered.

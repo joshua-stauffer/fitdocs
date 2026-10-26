@@ -40,6 +40,9 @@ add no runtime dependency; the store uses the standard library and existing
 - `garmin-fit-sdk` — `.fit` decode (records, sessions, laps, sets, devices)
 - `duckdb` — the analytics index, imported only by `fitdocs.index.store`; index
   connections use no extensions or external file access.
+- `pillow` (`>=13.0.0`, no upper bound) — the map basemap: decode tiles,
+  composite, encode WebP; imported only by `fitdocs.basemap`, lazily inside
+  functions. The floor carries the CVE fixes (compact-chart-assets design).
 - CLI + prompting: `typer` + `rich` (interactive prompts for missing
   load-calculator inputs)
 - Charts: **hand-generated SVG** (no runtime JS). Embedded in markdown via

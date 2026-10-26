@@ -63,12 +63,16 @@ def _test_names(source: str) -> list[str]:
 
 
 def test_runtime_dependencies_are_the_pre_spec_literals() -> None:
-    """Analytics-index adds DuckDB as the deliberate runtime dependency delta.
+    """Analytics-index adds DuckDB and compact-chart-assets adds Pillow as the
+    deliberate runtime dependency deltas.
 
-    Dies on: adding any runtime dependency besides DuckDB.
+    Dies on: adding any runtime dependency besides DuckDB and Pillow.
     """
     project = _pyproject()["project"]
-    assert project["dependencies"] == PRE_SPEC_DEPENDENCIES + ["duckdb>=1.2,<2"]
+    assert project["dependencies"] == PRE_SPEC_DEPENDENCIES + [
+        "duckdb>=1.2,<2",
+        "pillow>=13.0.0",
+    ]
     assert project.get("optional-dependencies", {}) == {}
 
 

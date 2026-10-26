@@ -10,7 +10,7 @@ suite, ruff, ruff format and mypy green on its own.
 
 - [ ] 1. Foundation: the dependency, test inputs and shared render primitives
 
-- [ ] 1.1 Add the image library as a required dependency
+- [x] 1.1 Add the image library as a required dependency
   - Declare Pillow with a minimum of 13.0.0 and no upper bound, and lock it.
   - Update every pinned copy of the runtime dependency set:
     - the determinism dependency baseline;
@@ -413,3 +413,7 @@ suite, ruff, ruff format and mypy green on its own.
   - Done when: the aggregate numbers and the viewer outcomes are recorded,
     with no route, tile or page content committed.
   - _Requirements: 3.7, 10.3_
+
+## Implementation Notes
+
+- 1.1: Pillow is last in the dependency list (after duckdb); the packaging, preserved-guarantees and sitebuild pins are order-sensitive. Amendments taken: docs-site 2, distribution 5, plugin-api 2. Plugin-api Amendment 2 claims discovering plugins does not import Pillow — 3.2 should also pin it at runtime by adding `assert 'PIL' not in sys.modules` beside the duckdb check in `tests/index/test_boundary.py:644`'s subprocess (reviewer follow-up).

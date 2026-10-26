@@ -97,7 +97,10 @@ def test_dependencies_unchanged_from_pre_feature_snapshot_as_set_and_ordered_lis
     head = _dependencies_on_disk()
 
     assert len(base) > 1  # the snapshot is non-trivial, not a vacuous pass
-    assert head == base + ["duckdb>=1.2,<2"]  # analytics-index's deliberate delta
+    assert head == base + [
+        "duckdb>=1.2,<2",  # analytics-index's deliberate delta
+        "pillow>=13.0.0",  # compact-chart-assets' deliberate delta
+    ]
 
 
 def test_no_new_runtime_optional_dependency_group_vs_pre_feature_snapshot() -> None:

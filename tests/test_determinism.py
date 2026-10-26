@@ -665,7 +665,8 @@ def test_the_repeat_run_comparison_detects_a_single_changed_byte(
 
 _PYPROJECT_PATH = Path(__file__).resolve().parents[1] / "pyproject.toml"
 
-#: The runtime dependency footprint after analytics-index added DuckDB for the
+#: The runtime dependency footprint after compact-chart-assets added Pillow
+#: for the map basemap, on top of analytics-index's DuckDB for the
 #: index. Plugin discovery itself adds no dependency, and discovery never loads
 #: ``duckdb`` (Req 7.2; the lazy-import behavior is pinned by task 4.1).
 _BASELINE_RUNTIME_DEPENDENCIES = frozenset(
@@ -676,6 +677,7 @@ _BASELINE_RUNTIME_DEPENDENCIES = frozenset(
         "pyyaml>=6.0",
         "tomli-w>=1.0",
         "duckdb>=1.2,<2",
+        "pillow>=13.0.0",
     }
 )
 
@@ -699,7 +701,8 @@ def test_plugin_discovery_performs_no_network_access(tmp_path: Path) -> None:
 
 
 def test_no_new_third_party_runtime_dependency_was_added() -> None:
-    """Analytics-index's DuckDB addition is the only delta (Req 7.2, 12.3).
+    """DuckDB (analytics-index) and Pillow (compact-chart-assets) are the
+    only deltas (Req 7.2, 12.3).
 
     Plugin discovery adds no dependency. Its subprocess no-import behavior is
     pinned by analytics-index task 4.1.
