@@ -79,6 +79,7 @@ from fitdocs.sync import (
 from fitdocs.tiles import TileUnavailableError
 from tests.fixtures import builder
 from tests.fixtures import identity as fx
+from tests.support import tiles as tile_factory
 
 # A canonical session UUID (the shape frontmatter records under ``uuid``).
 _UUID = "00010203-0405-0607-0809-0a0b0c0d0e0f"
@@ -350,7 +351,10 @@ class _ServingTiles:
     attribution = "© OpenStreetMap contributors"
 
     def resolve(self, refs: Sequence[object]) -> dict[object, bytes]:
-        return {ref: b"\x89PNG\r\n\x1a\n" for ref in refs}
+        return {
+            ref: tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
+            for ref in refs
+        }
 
 
 #: One shared, stateless serving source for the non-map pipeline/regen tests.
@@ -1173,7 +1177,10 @@ class _RecordingTiles:
     def resolve(self, refs: Sequence[object]) -> dict[object, bytes]:
         refs = tuple(refs)
         self.resolved.append(refs)
-        return {ref: b"\x89PNG\r\n\x1a\n" for ref in refs}
+        return {
+            ref: tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
+            for ref in refs
+        }
 
 
 class _UnavailableTiles:

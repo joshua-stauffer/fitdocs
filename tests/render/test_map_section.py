@@ -7,16 +7,14 @@ modality (Req 2.3), and the standard chart-asset naming and markdown image link
 map asset first; strength untouched) is pinned in
 :mod:`tests.render.test_golden_docs`.
 
-The map tiles are a tiny synthetic, license-clean PNG generated with the standard
-library alone (the task 2.3 approach) -- no basemap-provider tile is ever
-downloaded or committed. The map plan is built from a short chosen route so the
+The map tiles are a tiny synthetic, license-clean PNG from the test tile factory
+(``tests/support/tiles.py``) -- no basemap-provider tile is ever downloaded or
+committed. The map plan is built from a short chosen route so the
 composition is deterministic and independent of any fixture's own GPS channels.
 """
 
 from __future__ import annotations
 
-import struct
-import zlib
 from datetime import timedelta, timezone, tzinfo
 
 from fitdocs import compute_metrics, parse_fit
@@ -29,6 +27,7 @@ from fitdocs.render.charts.palette import (
 )
 from fitdocs.render.sections import map_section
 from tests.fixtures import builder
+from tests.support import tiles as tile_factory
 
 TZ: tzinfo = timezone(timedelta(hours=-6))
 
@@ -39,33 +38,10 @@ _LONS: tuple[float | None, ...] = (10.0, 10.0010, 10.0016)
 _ATTRIBUTION = "© OpenStreetMap contributors"
 
 
-def _png_chunk(tag: bytes, data: bytes) -> bytes:
-    return (
-        struct.pack(">I", len(data))
-        + tag
-        + data
-        + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
-    )
-
-
-def _solid_png(size: int, rgb: tuple[int, int, int]) -> bytes:
-    """A minimal valid solid-color truecolor PNG, stdlib only (license-clean)."""
-    signature = b"\x89PNG\r\n\x1a\n"
-    ihdr = struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0)
-    raw = (b"\x00" + bytes(rgb) * size) * size
-    idat = zlib.compress(raw, 9)
-    return (
-        signature
-        + _png_chunk(b"IHDR", ihdr)
-        + _png_chunk(b"IDAT", idat)
-        + _png_chunk(b"IEND", b"")
-    )
-
-
 def _map_data() -> MapData:
     plan = plan_map(_LATS, _LONS)
     assert plan is not None
-    tile = _solid_png(4, (46, 139, 120))
+    tile = tile_factory.solid((4, 4), (46, 139, 120))
     return MapData(
         plan=plan,
         tiles=tuple((ref, tile) for ref in plan.tiles),

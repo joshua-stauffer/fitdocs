@@ -47,6 +47,7 @@ from fitdocs.load.engine import apply_load
 from fitdocs.load.prompts import NonInteractiveSession
 from fitdocs.sync import DocWarning, SyncReport, refresh_declarations, regen, sync
 from tests.fixtures import builder
+from tests.support import tiles as tile_factory
 
 _TZ = timezone(timedelta(hours=-6))
 _WORKOUTS = f"{WORKOUTS_DIR}/"
@@ -60,7 +61,10 @@ class _Tiles:
     attribution = "© OpenStreetMap contributors"
 
     def resolve(self, refs: object) -> dict[object, bytes]:
-        return {ref: b"\x89PNG\r\n\x1a\n" for ref in refs}
+        return {
+            ref: tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
+            for ref in refs
+        }
 
 
 _TILES = _Tiles()

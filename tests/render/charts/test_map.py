@@ -50,6 +50,7 @@ from fitdocs.render.charts.map import (
 )
 from fitdocs.render.charts.palette import ROUTE_FINISH_COLOR, ROUTE_START_COLOR
 from fitdocs.render.charts.svg import SVG_NAMESPACE, fmt_num
+from tests.support import tiles as tile_factory
 
 # --- viewport constants mirrored from the module contract -------------------
 VIEWPORT_WIDTH = 800
@@ -290,14 +291,14 @@ _ATTRIBUTION = "© OpenStreetMap contributors"
 
 
 def _tile_bytes(ref: TileRef) -> bytes:
-    """Distinct per-tile pseudo-PNG bytes.
+    """Distinct per-tile decodable PNG bytes from the test tile factory.
 
-    ``compose_map`` only base64-encodes whatever bytes it is handed, so these
-    need not be a valid PNG. Making each tile's bytes unique lets a test assert
-    the emitted ``<image>`` order matches ``plan.tiles`` order by locating each
-    tile's (necessarily distinct) base64 payload in the document.
+    Making each tile's bytes unique (seeded from ``z``/``x``/``y``) lets a test
+    assert the emitted ``<image>`` order matches ``plan.tiles`` order by locating
+    each tile's distinct base64 payload in the document.
     """
-    return b"\x89PNG\r\n\x1a\n" + bytes((ref.z & 0xFF, ref.x & 0xFF, ref.y & 0xFF))
+    seed = (ref.z << 40) | (ref.x << 20) | ref.y
+    return tile_factory.map_like(tile_factory.DEFAULT_SIZE, seed)
 
 
 def _tiles_for(plan: MapPlan) -> dict[TileRef, bytes]:

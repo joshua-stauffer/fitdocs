@@ -52,6 +52,7 @@ from fitdocs.cli import app
 from fitdocs.inbox import InboxNote
 from fitdocs.sync import DrainReport, FileFailure, SyncReport
 from tests.fixtures import builder
+from tests.support import tiles as tile_factory
 
 runner = CliRunner()
 
@@ -68,9 +69,7 @@ _ZERO_SETTLE_TOML = "[inbox]\nsettle_seconds = 0\n"
 @pytest.fixture(autouse=True)
 def _offline_tiles(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep this suite network-free, mirroring ``tests/test_cli.py``."""
-    monkeypatch.setattr(
-        "fitdocs.tiles._default_fetch", lambda _url: b"\x89PNG\r\n\x1a\n"
-    )
+    monkeypatch.setattr("fitdocs.tiles._default_fetch", tile_factory.fetch_stub())
 
 
 def _put(directory: Path, name: str, data: bytes) -> Path:

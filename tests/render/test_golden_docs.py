@@ -38,8 +38,6 @@ from __future__ import annotations
 
 import hashlib
 import re
-import struct
-import zlib
 from collections.abc import Callable
 from datetime import timedelta, timezone, tzinfo
 from pathlib import Path
@@ -69,6 +67,7 @@ from fitdocs.render.charts.palette import (
 )
 from fitdocs.render.sections import hero_chart_spec
 from tests.fixtures import builder, merge
+from tests.support import tiles as tile_factory
 
 _GOLDEN_DIR = Path(__file__).parent / "golden_docs"
 
@@ -142,35 +141,6 @@ _MAP_ATTRIBUTION = "© OpenStreetMap contributors"
 COMPOSED_KEY = "composed_run"
 
 
-def _png_chunk(tag: bytes, data: bytes) -> bytes:
-    """One PNG chunk: length + type + data + CRC32(type + data), big-endian."""
-    return (
-        struct.pack(">I", len(data))
-        + tag
-        + data
-        + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
-    )
-
-
-def _solid_png(size: int, rgb: tuple[int, int, int]) -> bytes:
-    """A minimal valid solid-color truecolor PNG, stdlib only (license-clean).
-
-    A hand-built signature / ``IHDR`` / single ``IDAT`` / ``IEND`` raster --
-    never a redistributed basemap-provider tile. Deterministic for identical
-    inputs, so the composed map goldens stay byte-stable (Req 4.1).
-    """
-    signature = b"\x89PNG\r\n\x1a\n"
-    ihdr = struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0)
-    raw = (b"\x00" + bytes(rgb) * size) * size
-    idat = zlib.compress(raw, 9)
-    return (
-        signature
-        + _png_chunk(b"IHDR", ihdr)
-        + _png_chunk(b"IDAT", idat)
-        + _png_chunk(b"IEND", b"")
-    )
-
-
 def _map_data() -> MapData:
     """Prepared, resolved map inputs for a map-bearing DocContext.
 
@@ -179,7 +149,7 @@ def _map_data() -> MapData:
     the ``MapData`` is deterministic and license-clean (Req 4.1)."""
     plan = plan_map(_MAP_LATS, _MAP_LONS)
     assert plan is not None
-    tile = _solid_png(4, (46, 139, 120))
+    tile = tile_factory.solid((4, 4), (46, 139, 120))
     return MapData(
         plan=plan,
         tiles=tuple((ref, tile) for ref in plan.tiles),

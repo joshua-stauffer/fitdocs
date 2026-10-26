@@ -28,6 +28,7 @@ from fitdocs import compute_metrics, parse_fit
 # The re-export surface itself: this import resolving is the contract under test
 # (the engine imports map types from ``fitdocs.render``, not ``charts.map``).
 from fitdocs.render import DocContext, MapData, MapPlan, TileRef, plan_map
+from tests.support import tiles as tile_factory
 
 
 def _tiny_plan() -> MapPlan:
@@ -76,7 +77,8 @@ def test_doc_context_round_trips_map_data(run_fit_bytes: bytes) -> None:
     plan = _tiny_plan()
     # Tiles aligned to ``plan.tiles`` order, the ordering invariant (Req 4.1).
     tiles: tuple[tuple[TileRef, bytes], ...] = tuple(
-        (ref, b"\x89PNG-fake-tile") for ref in plan.tiles
+        (ref, tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120)))
+        for ref in plan.tiles
     )
     map_data = MapData(
         plan=plan,

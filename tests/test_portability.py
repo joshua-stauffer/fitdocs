@@ -56,6 +56,7 @@ from fitdocs.sync import sync
 from fitdocs.wellness import Metric
 from tests.fixtures import builder
 from tests.morning.builders import series_value, stage_series, wellness_series
+from tests.support import tiles as tile_factory
 
 # PINNED timezone: a FIXED -06:00 offset (never the system zone) so document
 # stems are byte-stable wherever the suite runs, exactly as the golden and
@@ -189,7 +190,10 @@ class _ServingTiles:
     attribution = "© OpenStreetMap contributors"
 
     def resolve(self, refs: Sequence[object]) -> dict[object, bytes]:
-        return {ref: b"\x89PNG\r\n\x1a\n" for ref in refs}
+        return {
+            ref: tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
+            for ref in refs
+        }
 
 
 #: One shared, stateless serving source for the portability syncs.

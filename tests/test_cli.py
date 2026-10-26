@@ -60,6 +60,7 @@ from fitdocs.plugins import (
 from fitdocs.render.charts.map import TileRef
 from fitdocs.sync import sync as _engine_sync
 from tests.fixtures import builder
+from tests.support import tiles as tile_factory
 
 runner = CliRunner()
 
@@ -77,9 +78,7 @@ def _offline_tiles(monkeypatch: pytest.MonkeyPatch) -> None:
     tile requests in ``fitdocs.toml`` -- the opt-out gate raises before fetch, so
     this patch is inert for them.
     """
-    monkeypatch.setattr(
-        "fitdocs.tiles._default_fetch", lambda _url: b"\x89PNG\r\n\x1a\n"
-    )
+    monkeypatch.setattr("fitdocs.tiles._default_fetch", tile_factory.fetch_stub())
 
 
 # The CLI threads the *system local* timezone into the engine, so a document's
@@ -687,7 +686,10 @@ class _DummyTiles:
     attribution = "© OpenStreetMap contributors"
 
     def resolve(self, refs: Sequence[TileRef]) -> dict[TileRef, bytes]:
-        return {ref: b"\x89PNG\r\n\x1a\n" for ref in refs}
+        return {
+            ref: tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
+            for ref in refs
+        }
 
 
 def _stage_genuine_workout_document(tmp_path: Path, data_root: Path) -> Path:

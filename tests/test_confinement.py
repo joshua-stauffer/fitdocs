@@ -128,6 +128,7 @@ from tests.fixtures import builder
 from tests.fixtures import identity as identity_fixtures
 from tests.load.conftest import ComputingCalculator
 from tests.recovery.builders import series_value, workout_page
+from tests.support import tiles as tile_factory
 from tests.wellness.builders_series import write_series
 
 # PINNED timezone: a FIXED -06:00 offset (never the system zone) so document
@@ -135,9 +136,9 @@ from tests.wellness.builders_series import write_series
 _TZ = timezone(timedelta(hours=-6))
 _CLI_RUNNER = CliRunner()
 
-#: The bytes the injected tile fetch serves. Any bytes will do -- the guard
-#: cares where tiles land (``.cache/tiles/...``), not what they contain.
-_TILE_PNG: Final[bytes] = b"\x89PNG\r\n\x1a\n"
+#: The bytes the injected tile fetch serves: a decodable tile, so a map composes
+#: from it. The guard cares where tiles land (``.cache/tiles/...``).
+_TILE_PNG: Final[bytes] = tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
 
 #: Snapshot markers. A directory has no content to hash and a path that does not
 #: exist has no state at all; giving both a distinct sentinel keeps the diff a

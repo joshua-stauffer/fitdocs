@@ -9,8 +9,8 @@ changed -- deliberately (regenerate) or by accident (a bug).
 Two things are committed and read from disk, never fabricated at compare time:
 
 * **A synthetic fixture tile PNG** (``golden/tiles/fixture_tile.png``) generated
-  with the standard library alone (``zlib`` + ``struct`` -> a minimal valid
-  ``IHDR``/``IDAT``/``IEND`` PNG). It is a solid-color raster: license-clean, no
+  by the test tile factory (``tests/support/tiles.py``; an uncompressed PNG,
+  byte-identical across platforms). It is a solid-color raster: license-clean, no
   basemap-provider tile is ever downloaded or redistributed. Its committed bytes
   are the stable source every golden embeds as base64 (a tile's real pixels are
   irrelevant -- the SVG ``<image>`` sizes it to 256).
@@ -33,7 +33,7 @@ The invariants under test:
 Regeneration (the "regenerate byte-identically" observable): run this module as
 a script -- ``uv run python -m tests.render.charts.test_map_golden`` -- to
 rewrite the fixture PNG and every golden from the *same* ``compose_case`` /
-``_solid_png`` the tests compare against, so the committed files and the live
+``_fixture_bytes`` the tests compare against, so the committed files and the live
 comparison can never drift. It is byte-deterministic in a fixed environment; no
 personal data or provider tile enters the repo. Pytest does not run ``main``.
 """
@@ -42,10 +42,10 @@ from __future__ import annotations
 
 import base64
 import re
-import struct
-import zlib
 from dataclasses import dataclass
 from pathlib import Path
+
+from PIL import Image
 
 from fitdocs.render.charts.map import compose_map, plan_map
 from fitdocs.render.charts.palette import (
@@ -54,6 +54,7 @@ from fitdocs.render.charts.palette import (
     ROUTE_RUN_TINT,
 )
 from fitdocs.render.charts.svg import SVG_NAMESPACE
+from tests.support import tiles as tile_factory
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 TILES_DIR = GOLDEN_DIR / "tiles"
@@ -67,36 +68,9 @@ _FIXTURE_SIZE = 4  # a 4x4 raster; the SVG <image> sizes every tile to 256
 _OSM_ATTRIBUTION = "© OpenStreetMap contributors"
 
 
-# --- synthetic PNG (stdlib only, deterministic, license-clean) --------------
-def _png_chunk(tag: bytes, data: bytes) -> bytes:
-    """One PNG chunk: length + type + data + CRC32(type + data), all big-endian."""
-    return (
-        struct.pack(">I", len(data))
-        + tag
-        + data
-        + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
-    )
-
-
-def _solid_png(size: int, rgb: tuple[int, int, int]) -> bytes:
-    """A minimal valid solid-color ``size``x``size`` 8-bit truecolor PNG.
-
-    Emitted by hand from ``zlib`` + ``struct`` -- signature, ``IHDR`` (color
-    type 2 / RGB), a single zlib-compressed ``IDAT`` of filter-0 scanlines, and
-    ``IEND``. Deterministic for identical inputs (fixed zlib level), so
-    regeneration reproduces byte-identical committed fixture bytes.
-    """
-    signature = b"\x89PNG\r\n\x1a\n"
-    ihdr = struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0)
-    scanline = b"\x00" + bytes(rgb) * size  # filter byte 0 (None) + RGB pixels
-    raw = scanline * size
-    idat = zlib.compress(raw, 9)
-    return (
-        signature
-        + _png_chunk(b"IHDR", ihdr)
-        + _png_chunk(b"IDAT", idat)
-        + _png_chunk(b"IEND", b"")
-    )
+def _fixture_bytes() -> bytes:
+    """The fixture tile, built by the test tile factory (decodable, byte-stable)."""
+    return tile_factory.solid((_FIXTURE_SIZE, _FIXTURE_SIZE), _FIXTURE_RGB)
 
 
 # --- reference scenarios ----------------------------------------------------
@@ -183,13 +157,13 @@ def compose_case(name: str) -> str:
 def test_fixture_tile_is_committed_and_is_a_valid_png() -> None:
     assert FIXTURE_TILE.exists(), f"missing fixture tile: {FIXTURE_TILE}"
     data = FIXTURE_TILE.read_bytes()
-    # A real PNG signature + the trailing IEND chunk: a minimal valid raster,
-    # not an empty or truncated file.
-    assert data.startswith(b"\x89PNG\r\n\x1a\n")
-    assert data.endswith(b"IEND\xaeB`\x82")
-    # License-clean: regenerating from stdlib reproduces the committed bytes,
-    # so no provider tile was ever substituted.
-    assert data == _solid_png(_FIXTURE_SIZE, _FIXTURE_RGB)
+    # It decodes as a PNG of the fixture size and colour, not a truncated file.
+    with Image.open(FIXTURE_TILE, formats=["PNG"]) as image:
+        assert image.size == (_FIXTURE_SIZE, _FIXTURE_SIZE)
+        assert image.convert("RGB").getpixel((0, 0)) == _FIXTURE_RGB
+    # License-clean: regenerating from the factory reproduces the committed
+    # bytes, so no provider tile was ever substituted.
+    assert data == _fixture_bytes()
 
 
 def test_goldens_embed_the_committed_fixture_bytes() -> None:
@@ -247,13 +221,13 @@ def test_attribution_golden_preserves_xml_escaping() -> None:
 def main() -> None:
     """Rewrite the fixture tile and every golden from the shared code above.
 
-    Writes ``golden/tiles/fixture_tile.png`` (deterministic stdlib PNG) then
+    Writes ``golden/tiles/fixture_tile.png`` (deterministic factory PNG) then
     ``golden/<name>.svg`` for every scenario via :func:`compose_case` -- the same
     function the tests compare against. Byte-deterministic, so re-running leaves
     the working tree unchanged when nothing intentional has changed.
     """
     TILES_DIR.mkdir(parents=True, exist_ok=True)
-    FIXTURE_TILE.write_bytes(_solid_png(_FIXTURE_SIZE, _FIXTURE_RGB))
+    FIXTURE_TILE.write_bytes(_fixture_bytes())
     print(f"wrote {FIXTURE_TILE}")
     for name in GOLDEN_CASES:
         path = GOLDEN_DIR / f"{name}.svg"

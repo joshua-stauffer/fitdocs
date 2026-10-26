@@ -59,6 +59,7 @@ from fitdocs.quarantine import QuarantineRecord, load_quarantine
 from fitdocs.render import TileRef
 from fitdocs.sync import SyncReport, drain, regen, sync
 from tests.fixtures import identity as fx
+from tests.support import tiles as tile_factory
 
 # A fixed -06:00 zone so stems never depend on where the suite runs.
 _TZ = timezone(timedelta(hours=-6))
@@ -3232,9 +3233,7 @@ def _cli_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     cwd = tmp_path / "cwd"
     cwd.mkdir(exist_ok=True)
     monkeypatch.chdir(cwd)
-    monkeypatch.setattr(
-        "fitdocs.tiles._default_fetch", lambda _url: b"\x89PNG\r\n\x1a\n"
-    )
+    monkeypatch.setattr("fitdocs.tiles._default_fetch", tile_factory.fetch_stub())
 
 
 def _cli(data_root: Path, *args: str) -> tuple[int, str]:

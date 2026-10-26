@@ -65,6 +65,7 @@ from fitdocs.sync import (
     sync,
 )
 from tests.fixtures import builder
+from tests.support import tiles as tile_factory
 
 _TZ = timezone(timedelta(hours=-6))
 _EMPTY_QUARANTINE = QuarantineRecord(entries=())
@@ -96,7 +97,10 @@ class _Tiles:
     attribution = "© OpenStreetMap contributors"
 
     def resolve(self, refs: Sequence[object]) -> dict[object, bytes]:
-        return {ref: b"\x89PNG\r\n\x1a\n" for ref in refs}
+        return {
+            ref: tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
+            for ref in refs
+        }
 
 
 _TILES = _Tiles()

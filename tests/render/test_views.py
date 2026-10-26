@@ -38,6 +38,7 @@ from fitdocs.metrics.types import AthleteInputs, ZoneSpec
 from fitdocs.model import DeviceInfo, Samples
 from fitdocs.render import DocContext, MapData, plan_map, render_document
 from tests.fixtures import builder
+from tests.support import tiles as tile_factory
 
 # The run/ride/strength fixtures start 2021-09-08 01:46:40 UTC; at -06:00 that is
 # local 2021-09-07 19:46:40 -- pinned so titles and dates are deterministic.
@@ -322,7 +323,10 @@ def _map_data() -> MapData:
     assert plan is not None
     return MapData(
         plan=plan,
-        tiles=tuple((ref, b"tile") for ref in plan.tiles),
+        tiles=tuple(
+            (ref, tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120)))
+            for ref in plan.tiles
+        ),
         attribution="test attribution",
     )
 

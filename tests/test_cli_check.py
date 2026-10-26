@@ -46,6 +46,7 @@ from fitdocs.declaration import DECLARATION_FILENAME
 from fitdocs.layout import WORKOUTS_DIR
 from fitdocs.sync import sync
 from tests.fixtures import builder
+from tests.support import tiles as tile_factory
 
 runner = CliRunner()
 
@@ -60,7 +61,10 @@ class _ServingTiles:
     attribution = "© OpenStreetMap contributors"
 
     def resolve(self, refs: Sequence[object]) -> dict[object, bytes]:
-        return {ref: b"\x89PNG\r\n\x1a\n" for ref in refs}
+        return {
+            ref: tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
+            for ref in refs
+        }
 
 
 _TILES: _ServingTiles = _ServingTiles()
@@ -95,9 +99,7 @@ def _plain(text: str) -> str:
 @pytest.fixture(autouse=True)
 def _offline_tiles(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep the setup ``sync`` calls network-free (mirrors ``test_cli.py``)."""
-    monkeypatch.setattr(
-        "fitdocs.tiles._default_fetch", lambda _url: b"\x89PNG\r\n\x1a\n"
-    )
+    monkeypatch.setattr("fitdocs.tiles._default_fetch", tile_factory.fetch_stub())
 
 
 def _build_data_root(tmp_path: Path, fixtures: dict[str, bytes]) -> Path:
