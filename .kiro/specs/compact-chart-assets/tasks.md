@@ -222,7 +222,7 @@ suite, ruff, ruff format and mypy green on its own.
   - _Boundary: basemap_
   - _Depends: 3.1_
 
-- [ ] 4. (P) Asset persistence: write only what changed
+- [x] 4. (P) Asset persistence: write only what changed
   - Add the compare-then-atomic-replace helper to the shared document I/O
     module, with this behaviour:
     - identical bytes in a regular file leave content and modification
@@ -418,3 +418,4 @@ suite, ruff, ruff format and mypy green on its own.
 
 - 1.1: Pillow is last in the dependency list (after duckdb); the packaging, preserved-guarantees and sitebuild pins are order-sensitive. Amendments taken: docs-site 2, distribution 5, plugin-api 2. Plugin-api Amendment 2 claims discovering plugins does not import Pillow — 3.2 should also pin it at runtime by adding `assert 'PIL' not in sys.modules` beside the duckdb check in `tests/index/test_boundary.py:644`'s subprocess (reviewer follow-up).
 - 1.3: `Basemap(mime: str, data: bytes, x, y, width, height: float)` is frozen in `render/charts/map.py`; `fmt_num(value, places=2)`. Review rounds 2–3 were prose only: a module docstring (in src AND in the test module) still claimed the old 2-decimal contract — after changing a contract, grep both src and test docstrings for the old wording.
+- 4: `docio.write_bytes_if_changed` is exported (in `docio.__all__` and the `_DOCIO_SURFACE` pin). It compares only when `lstat` says S_ISREG; a symlink or FIFO is replaced, never read. Cleanup is on BaseException. The mode follows the umask (`os.open(..., 0o666)`), so a mkstemp refactor would silently make assets 0600; the umask-0o002 test pins it. Three rounds: failure paths, fsync and mode were unpinned. When pinning a mode, pick a umask where umask-following and the hard-coded default differ.
