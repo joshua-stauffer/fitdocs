@@ -140,7 +140,7 @@ kilobytes rather than a hundred and opens quickly, with no visible change.
 3. fitdocs shall continue to leave a gap wherever a line chart's full-resolution form has one, and shall never draw a line across a gap.
 4. Apart from the number and precision of the points on each line, the line charts shall be drawn as before this feature: the dimensions, axes, ticks, legend, smoothing, band normalization, colours and series precedence all stay the same.
 5. fitdocs shall state a byte budget for a hero chart and for a running-dynamics chart drawn from a typical one-hour activity and from a typical six-hour activity, each recorded at one sample per second. The fitdocs test suite shall fail if any of those charts exceeds its budget.
-6. The work fitdocs does to reduce a line to its drawn points shall grow no faster than in proportion to the number of plotted points times the chart's width in output units, whatever the line's shape. A line of any shape therefore cannot stall rendering.
+6. The work fitdocs does to reduce a line to its drawn points shall grow at most in proportion to the number of plotted points, whatever the line's shape. A long or unusually shaped line therefore cannot stall rendering.
 
 ### Requirement 2: The Route Line at Output Resolution
 **Objective:** As an athlete, I want a map's route to carry only the points
@@ -152,7 +152,7 @@ weight.
 2. When fitdocs draws a map's route line, the first and last points of every gap-free segment shall be points of the drawn route line, and the start and finish markers shall stay at the route's first and last track points.
 3. fitdocs shall never join two of a route's separate segments with a drawn line.
 4. Apart from the number and precision of the route line's points, the route, markers and attribution shall be drawn as before this feature. That covers the stroke widths, colours and opacity, the map's size, its zoom and the framing of the route.
-5. The bound of Requirement 1.6 shall apply to the route line, with the map's width in output units.
+5. The bound of Requirement 1.6 shall apply to the route line.
 
 ### Requirement 3: One Basemap Image per Map
 **Objective:** As an athlete, I want each map to carry one compact image of
@@ -161,9 +161,9 @@ instead of about five hundred and my viewer decodes one image instead of a
 dozen.
 
 #### Acceptance Criteria
-1. When fitdocs renders a map, the map file shall contain exactly one basemap image. The image shall cover the map's whole visible area and contain no imagery from outside it.
+1. When fitdocs renders a map, the map file shall contain exactly one basemap image. The image shall cover the map's whole visible area, and no part of it shall lie more than one image pixel outside that area.
 2. The basemap image shall show the imagery of the tiles fitdocs would have placed under the route before this feature, at the same zoom and position, differing only by the loss of the fixed compression of Requirement 3.4. The route, markers and attribution therefore sit on the same streets as before.
-3. The basemap image's pixel density shall equal the highest pixel density among the tiles it is composed from: one pixel per output unit for 256-pixel tiles, two for 512-pixel tiles.
+3. The basemap image's pixel density shall equal the highest pixel density among the tiles it is composed from, and shall never be less than one pixel per output unit: one pixel per output unit for 256-pixel tiles, two for 512-pixel tiles.
 4. fitdocs shall encode the basemap image in one fixed compressed format at one fixed quality. No setting shall change either.
 5. The map shall remain a single self-contained file that references no external resource, displayed through a standard image link without plugins, scripts or network access (`route-maps` Req 6.1 and 6.2, unchanged).
 6. The route, markers and attribution shall be drawn as vector shapes and text above the basemap image.
