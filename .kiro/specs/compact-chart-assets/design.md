@@ -50,9 +50,6 @@ Safari. The agent maintaining their wiki, which reads the ownership contract.
   dynamics chart too, and by the map route.
 - **One-decimal coordinate formatting** for thinned lines, through a
   `places` parameter on `svg.fmt_num`. The default stays 2.
-- **The `Basemap` value type**, defined in `render.charts.map` ahead of its
-  consumers so that `fitdocs.basemap` and the map composer can be built in
-  parallel.
 - **Basemap composition and encoding**: `fitdocs.basemap`, the only module
   that imports `PIL`. It also owns:
   - the tile-format allow list;
@@ -607,8 +604,9 @@ def compose_basemap(plan: MapPlan, tiles: Sequence[tuple[TileRef, bytes]]) -> Ba
     `[floor(origin_x·d), ceil((origin_x + plan.width)·d))`, and likewise for
     rows with `plan.height`.
   - Each tile is pasted at the integer pixel `t.x·256·d − floor(origin_x·d)`.
-    This is exact because `256·d` is an integer by construction (d is
-    snapped to the nearest multiple of 1/256).
+    This is exact because `256·d` is an integer: `256·d = max(256, tile
+    pixel width)`, and tile widths are whole numbers. No snapping step
+    exists or is needed.
   - The placement is `x = (floor(origin_x·d) − origin_x·d)/d ∈ (−1/d, 0]`,
     likewise `y`, and `width = canvas_px_w/d`.
   - The canvas overhangs the viewport by less than one pixel per edge.

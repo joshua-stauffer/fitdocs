@@ -249,7 +249,8 @@ suite, ruff, ruff format and mypy green on its own.
     is updated: still stdlib-only, no image library.
   - The render inputs' map data carries the basemap instead of tiles, and
     is re-exported. The map section passes it through.
-  - The sync page task composes the basemap after resolving tiles. A
+  - The sync page task composes the basemap after resolving tiles, passing
+    the resolved tiles as (tile, bytes) pairs in the plan's tile order. A
     basemap error becomes a document warning with the map omitted; the
     encoder error is not caught.
   - Update the tile module's "embedded verbatim" docstring. Update the
@@ -348,6 +349,7 @@ suite, ruff, ruff format and mypy green on its own.
     - the website-copy outcome (a queue item, or "not applicable" with the
       reason) is recorded in the implementation notes.
   - _Requirements: 3.7, 8.4, 8.5, 9.3, 9.4, 9.5_
+  - _Depends: 6.1_
 
 - [ ] 6.3 Record the amendments in the affected specifications
   - **route-maps**: the next free requirements amendment covers:

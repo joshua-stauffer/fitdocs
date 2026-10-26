@@ -165,7 +165,7 @@ dozen.
 #### Acceptance Criteria
 1. When fitdocs renders a map, the map file shall contain exactly one basemap image. The image shall cover the map's whole visible area, and no part of it shall lie more than one image pixel outside that area.
 2. The basemap image shall show the imagery of the tiles fitdocs would have placed under the route before this feature, at the same zoom and position, differing only by the loss of the fixed compression of Requirement 3.4. The route, markers and attribution therefore sit on the same streets as before.
-3. The basemap image's pixel density shall equal the highest pixel density among the tiles it is composed from, and shall never be less than one pixel per output unit: one pixel per output unit for 256-pixel tiles, two for 512-pixel tiles.
+3. The basemap image's pixel density shall equal the highest pixel density among the tiles it is composed from, or one pixel per output unit if that is higher: one pixel per output unit for 256-pixel tiles, two for 512-pixel tiles.
 4. fitdocs shall encode the basemap image in one fixed compressed format at one fixed quality. No setting shall change either.
 5. The map shall remain a single self-contained file that references no external resource, displayed through a standard image link without plugins, scripts or network access (`route-maps` Req 6.1 and 6.2, unchanged).
 6. The route, markers and attribution shall be drawn as vector shapes and text above the basemap image.

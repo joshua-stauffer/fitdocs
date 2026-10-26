@@ -3491,6 +3491,12 @@ next free number at landing.
   guarantee, it changes with `CONTRACT_VERSION` main + 1.
   Dependencies: compact-chart-assets
 
+- [ ] docs-site (Req 8.1), distribution and plugin-api _(found at spec
+  time, 2026-10-26)_ — each publishes the runtime-dependency baseline that
+  gains `pillow>=13.0.0`, and each was amended when `analytics-index` added
+  `duckdb`. The amendments land with the dependency pins (task 1.1).
+  Dependencies: compact-chart-assets
+
 running-dynamics is a touchpoint, not an amendment. Its chart reuses
 `render_hero_chart`, so its goldens move, and Req 8.4 (byte-identical,
 script-free) still holds.
@@ -3521,8 +3527,18 @@ script-free) still holds.
 
 #### Specs (dependency order)
 
-- [ ] compact-chart-assets — **brief written 2026-10-26.** It has three
-  seams:
+- [ ] compact-chart-assets — **brief written 2026-10-26; spec written
+  2026-10-26.** The record:
+  - `/kiro-spec-quick --auto`, every phase auto-approved at the maintainer's
+    request;
+  - 10 requirements / 50 criteria;
+  - 7 majors / 20 executable tasks, plus the optional maintainer-only 7.3*
+    (archive measurement and viewer check);
+  - an independent Step 3.5 review, two rounds;
+  - a final sanity review: PASSED;
+  - `phase: tasks-generated`, ready for implementation.
+
+  Next: `/kiro-impl compact-chart-assets`. It has three seams:
   - output-space line thinning: the hero series and backdrop (and so
     dynamics), and the map route;
   - a flattened, viewport-cropped WebP basemap through Pillow, whose import
