@@ -478,3 +478,64 @@ def test_attribution_text_over_backing_rect_is_escaped() -> None:
 
     # The backing rect precedes (sits beneath) the attribution text.
     assert svg.rindex("<rect") < svg.rindex("<text")
+
+
+# --- Basemap value type (compact-chart-assets design: map) -------------------
+
+
+def test_basemap_fields_and_types() -> None:
+    import dataclasses
+
+    from fitdocs.render.charts.map import Basemap
+
+    got = {f.name: f.type for f in dataclasses.fields(Basemap)}
+    assert list(got) == ["mime", "data", "x", "y", "width", "height"]
+    assert [str(t) for t in got.values()] == [
+        "str",
+        "bytes",
+        "float",
+        "float",
+        "float",
+        "float",
+    ]
+
+
+def test_basemap_constructs_and_is_frozen() -> None:
+    import dataclasses
+
+    import pytest
+
+    from fitdocs.render.charts.map import Basemap
+
+    bm = Basemap(
+        mime="image/webp", data=b"abc", x=-0.5, y=0.0, width=801.0, height=501.0
+    )
+    assert (bm.mime, bm.data, bm.x, bm.y, bm.width, bm.height) == (
+        "image/webp",
+        b"abc",
+        -0.5,
+        0.0,
+        801.0,
+        501.0,
+    )
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        bm.x = 1.0  # type: ignore[misc]
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        bm.data = b"z"  # type: ignore[misc]
+
+
+def test_map_module_does_not_import_pil() -> None:
+    import ast
+    import inspect
+
+    import fitdocs.render.charts.map as map_module
+
+    tree = ast.parse(inspect.getsource(map_module))
+    imported = [
+        alias.name
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Import)
+        for alias in n.names
+    ] + [n.module or "" for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)]
+    assert imported, "the walk found no imports; it is looking at the wrong module"
+    assert not [m for m in imported if m == "PIL" or m.startswith("PIL.")]

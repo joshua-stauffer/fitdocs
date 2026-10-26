@@ -9,9 +9,10 @@ so data can never break the markup.
 
 The invariants under test:
 
-* **Fixed numeric precision** -- :func:`fmt_num` rounds to two decimals, strips
-  trailing zeros, and (critically) normalizes negative zero so ``-0.0`` and any
-  value rounding to ``-0.00`` render as ``0``, never ``-0``.
+* **Fixed numeric precision** -- :func:`fmt_num` rounds to ``places`` decimals
+  (default two), strips trailing zeros, and (critically) normalizes negative
+  zero so ``-0.0`` and any value that rounds to negative zero at ``places``
+  decimals render as ``0``, never ``-0``.
 * **No float noise** -- ``0.1 + 0.2`` renders as ``0.3``, not
   ``0.30000000000000004``.
 * **Attribute order preserved** -- :func:`el` emits attributes in the order of
@@ -71,6 +72,47 @@ def test_fmt_num_large_values() -> None:
 
 def test_fmt_num_is_deterministic() -> None:
     assert fmt_num(1.0 / 3.0) == fmt_num(1.0 / 3.0)
+
+
+def test_fmt_num_one_place_rounds_and_trims() -> None:
+    assert fmt_num(3.14159, places=1) == "3.1"
+    assert fmt_num(2.76, places=1) == "2.8"
+    assert fmt_num(3.04, places=1) == "3"
+    assert fmt_num(3.0, places=1) == "3"
+    assert fmt_num(1234.56, places=1) == "1234.6"
+    assert fmt_num(0.1 + 0.2, places=1) == "0.3"
+
+
+def test_fmt_num_one_place_negative_zero_and_negatives() -> None:
+    assert fmt_num(-0.04, places=1) == "0"
+    assert fmt_num(-0.0, places=1) == "0"
+    assert fmt_num(-0.06, places=1) == "-0.1"
+    assert fmt_num(-2.0, places=1) == "-2"
+
+
+def test_fmt_num_four_places_rounds_and_trims() -> None:
+    assert fmt_num(3.14159265, places=4) == "3.1416"
+    assert fmt_num(-0.5, places=4) == "-0.5"
+    assert fmt_num(0.12346, places=4) == "0.1235"
+    assert fmt_num(7.00004, places=4) == "7"
+    assert fmt_num(-0.00123, places=4) == "-0.0012"
+    assert fmt_num(0.1 + 0.2, places=4) == "0.3"
+
+
+def test_fmt_num_four_places_negative_zero() -> None:
+    assert fmt_num(-0.00004, places=4) == "0"
+    assert fmt_num(-0.0, places=4) == "0"
+
+
+def test_fmt_num_explicit_two_places_equals_default() -> None:
+    for value in (3.14159, -0.004, 1234.567, 0.1 + 0.2, -2.5, 100.0):
+        assert fmt_num(value, places=2) == fmt_num(value)
+
+
+def test_fmt_num_default_is_two_places_not_the_other_settings() -> None:
+    assert fmt_num(3.14159) == "3.14"
+    assert fmt_num(3.14159) != fmt_num(3.14159, places=1)
+    assert fmt_num(3.14159) != fmt_num(3.14159, places=4)
 
 
 # --- el ---------------------------------------------------------------------

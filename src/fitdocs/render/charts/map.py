@@ -115,6 +115,25 @@ class TileRef:
 
 
 @dataclass(frozen=True)
+class Basemap:
+    """One composed raster basemap and where it sits in the output.
+
+    ``data`` is the encoded raster (``mime`` names its format, e.g.
+    ``"image/webp"``). ``x`` / ``y`` are its placement in output units, in
+    ``(-1/d, 0]`` for pixel density ``d``; ``width`` / ``height`` are the
+    canvas pixel size divided by ``d``. A plain value: building one does no
+    image work and this module never imports an image library.
+    """
+
+    mime: str
+    data: bytes
+    x: float
+    y: float
+    width: float
+    height: float
+
+
+@dataclass(frozen=True)
 class MapPlan:
     """Everything a map render needs, and the exact tile set sync must resolve.
 

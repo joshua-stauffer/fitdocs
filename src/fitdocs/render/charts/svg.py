@@ -8,15 +8,16 @@ construction*.
 
 Determinism guarantees (identical inputs -> byte-identical output, Req 4.1):
 
-- **Fixed numeric precision.** :func:`fmt_num` formats a float to at most two
-  decimals with no float-representation noise, so ``0.1 + 0.2`` renders as
-  ``"0.3"`` and never ``"0.30000000000000004"``.
+- **Fixed numeric precision.** :func:`fmt_num` formats a float to at most
+  ``places`` decimals (default two) with no float-representation noise, so
+  ``0.1 + 0.2`` renders as ``"0.3"`` and never ``"0.30000000000000004"``.
 - **Negative-zero normalization.** ``-0.0`` -- and any value that rounds to
-  ``-0.00`` -- renders as ``"0"``, never ``"-0"``. This is the one non-obvious
-  determinism trap in float formatting: a downstream coordinate computed as a
-  tiny negative would otherwise flip a byte between runs. The convention here is
-  explicit: **a value whose two-decimal rounding equals zero renders as the
-  single character ``"0"``, sign discarded.**
+  negative zero at ``places`` decimals -- renders as ``"0"``, never ``"-0"``.
+  This is the one non-obvious determinism trap in float formatting: a
+  downstream coordinate computed as a tiny negative would otherwise flip a byte
+  between runs. The convention here is
+  explicit: **a value whose rounding at ``places`` decimals equals zero renders
+  as the single character ``"0"``, sign discarded.**
 - **Stable attribute order.** :func:`el` emits attributes in the exact order of
   the passed mapping; callers pass ordered dicts and thus control order. Nothing
   is sorted, and no attribute is added implicitly.
@@ -41,26 +42,28 @@ from collections.abc import Mapping, Sequence
 SVG_NAMESPACE = "http://www.w3.org/2000/svg"
 
 
-def fmt_num(value: float) -> str:
-    """Format ``value`` to fixed two-decimal precision, compactly and
-    deterministically (Req 4.1).
+def fmt_num(value: float, places: int = 2) -> str:
+    """Format ``value`` to fixed ``places``-decimal precision (default two),
+    compactly and deterministically (Req 4.1).
 
-    The value is rounded to two decimals, then trailing zeros and a trailing
-    decimal point are stripped for compactness: ``3.0 -> "3"``, ``3.5 -> "3.5"``,
-    ``3.14159 -> "3.14"``. Rounding happens on the ``round`` result formatted at
-    a fixed width, so binary-float artifacts never leak through
-    (``fmt_num(0.1 + 0.2) == "0.3"``).
+    The value is rounded to ``places`` decimals, then trailing zeros and a
+    trailing decimal point are stripped for compactness: ``3.0 -> "3"``,
+    ``3.5 -> "3.5"``, ``3.14159 -> "3.14"``. Rounding happens on the ``round``
+    result formatted at a fixed width, so binary-float artifacts never leak
+    through (``fmt_num(0.1 + 0.2) == "0.3"``). ``places`` defaults to ``2``,
+    which reproduces the original output exactly.
 
-    Negative zero is normalized: any value whose two-decimal rounding is zero --
-    ``-0.0``, ``-0.001``, ``0.0`` -- renders as the single character ``"0"``,
-    never ``"-0"``. Genuine negatives keep their sign (``-2.5 -> "-2.5"``).
+    Negative zero is normalized: any value whose rounding at ``places`` is zero
+    -- ``-0.0``, ``0.0``, and ``-0.001`` at the default two places -- renders as
+    the single character ``"0"``, never ``"-0"``. Genuine negatives keep their
+    sign (``-2.5 -> "-2.5"``).
     """
-    rounded = round(float(value), 2)
+    rounded = round(float(value), places)
     if rounded == 0.0:
         # Covers +0.0 and -0.0 (which compare equal): emit canonical "0",
         # discarding a negative sign so -0.0 never renders as "-0".
         return "0"
-    text = f"{rounded:.2f}"
+    text = f"{rounded:.{places}f}"
     if "." in text:
         text = text.rstrip("0").rstrip(".")
     return text
