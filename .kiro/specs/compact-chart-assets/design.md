@@ -50,6 +50,9 @@ Safari. The agent maintaining their wiki, which reads the ownership contract.
   dynamics chart too, and by the map route.
 - **One-decimal coordinate formatting** for thinned lines, through a
   `places` parameter on `svg.fmt_num`. The default stays 2.
+- **The `Basemap` value type**, defined in `render.charts.map` ahead of its
+  consumers so that `fitdocs.basemap` and the map composer can be built in
+  parallel.
 - **Basemap composition and encoding**: `fitdocs.basemap`, the only module
   that imports `PIL`. It also owns:
   - the tile-format allow list;
@@ -313,6 +316,13 @@ tests/
     statement is scoped.
   - `.kiro/specs/wiki-contract/requirements.md`: Amendment 13, the asset
     write guarantee and the version bump.
+  - `.kiro/specs/docs-site/requirements.md` (Req 8.1),
+    `.kiro/specs/distribution/requirements.md` and
+    `.kiro/specs/plugin-api/requirements.md`: one amendment each, stating
+    that the runtime-dependency baseline gains `pillow>=13.0.0`. This
+    follows the precedent of `analytics-index`, which amended all three when
+    it added `duckdb`. These land with the dependency (task 1.1), because
+    the tests that pin those baselines move in the same change.
 
   Amendment numbers are the next free number at landing.
 
@@ -405,7 +415,7 @@ sequenceDiagram
 | 9.3 | route-map docs | README, docs/configuration.md | — | — |
 | 9.4 | reference §3 + Req 7.4 | fitdocs-ai-reference.md, workout-docs amendment | — | — |
 | 9.5 | release notes | CHANGELOG | — | — |
-| 9.6 | spec amendments | route-maps, workout-docs, wiki-contract | — | — |
+| 9.6 | spec amendments | route-maps, workout-docs, wiki-contract; docs-site, distribution, plugin-api (dependency baseline) | — | — |
 | 10.1 | no personal data | tests/support/tiles.py (synthetic) | — | — |
 | 10.2 | tile size, format, undecodable coverage | test_basemap, support/tiles | — | — |
 | 10.3 | aggregate-only measurement | optional maintainer task | — | — |

@@ -100,7 +100,9 @@ Terms used below:
   - the documentation, the published ownership contract and the release
     notes;
   - the published-rule changes this feature makes to `route-maps`,
-    `workout-docs` and `wiki-contract`.
+    `workout-docs` and `wiki-contract`;
+  - the runtime-dependency baselines that `docs-site`, `distribution` and
+    `plugin-api` publish.
 - **Out of scope**:
   - a route-only map setting, and basemap quality or scale settings;
   - per-year asset folders;
@@ -249,7 +251,7 @@ my chart files surprises me.
    - the viewer floor;
    - the ownership-contract version change;
    - the action `fitdocs regen`, run once to convert an existing archive.
-6. The `route-maps` requirements and design, the `workout-docs` requirements and design, and the `wiki-contract` requirements shall record the amendments this feature makes. Each amendment shall take the next free amendment number in its specification at landing.
+6. The `route-maps` requirements and design, the `workout-docs` requirements and design, and the `wiki-contract` requirements shall record the amendments this feature makes. So shall the `docs-site`, `distribution` and `plugin-api` requirements, whose published runtime-dependency baseline gains the image library, as each did when `analytics-index` added its dependency. Each amendment shall take the next free amendment number in its specification at landing.
 
 ### Requirement 10: Personal Data and Test Inputs
 **Objective:** As the maintainer of a public repository, I want this
