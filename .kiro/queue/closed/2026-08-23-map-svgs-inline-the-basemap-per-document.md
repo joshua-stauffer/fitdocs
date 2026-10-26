@@ -1,7 +1,7 @@
 ---
 id: 2026-08-23-map-svgs-inline-the-basemap-per-document
 title: Every map SVG inlines its own copy of the basemap, so a real-sized archive multiplies 20MB of tiles into hundreds of MB of documents
-status: open
+status: promoted
 importance: medium
 importance_why: Output size grows with document count rather than with route coverage; a full personal archive renders a wiki too large to keep in a PKM or a git repo.
 effort: M
@@ -105,3 +105,23 @@ name its former location, `~/code/fitdocs-demo`, which no longer exists.
   unstated preference? That answer decides whether referencing is even legal.
 - If referencing wins, who owns the shared asset directory's lifecycle —
   `regen` must not orphan or delete tiles a surviving document still points at.
+
+## Resolution (2026-10-26) — promoted
+
+Promoted to the `compact-chart-assets` spec by the Phase 13 discovery
+(`.kiro/steering/roadmap.md` § Phase 13,
+`.kiro/specs/compact-chart-assets/brief.md`). This item's preferred option,
+a shared `assets/tiles/` directory referenced by relative `href`, is
+**infeasible rather than deferred**. A map SVG is displayed as an image, and
+an SVG shown as an image loads no external resource. This was verified
+2026-10-26 in headless Chrome, Obsidian desktop's engine, with file access
+allowed: the referenced tile rendered blank, while the same tile as a data
+URI rendered. Every map therefore keeps carrying its own pixels.
+
+The spec instead shrinks those pixels. It composites the tiles into one
+viewport-cropped WebP raster through Pillow (measured: maps 507 → 114 KB
+with the route thinned). That answers the open questions above:
+
+- The self-contained requirement (route-maps Req 6.1) stays, and nothing is
+  referenced.
+- No shared tile directory is created, so there is no lifecycle to own.

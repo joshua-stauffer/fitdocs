@@ -3383,3 +3383,127 @@ numbers are the next free number at landing.
   - the `DOC_VERSION` bump and the workout-docs amendment.
 
   Implemented after its Recovery dependency. Dependencies: recovery
+
+### Phase 13 — compact chart assets (discovery 2026-10-26)
+
+**Goal**: make a long-term archive small enough to sync and quick to view.
+On the maintainer's real archive (2,569 workouts, measured 2026-10-26) the
+markdown is 15 MB and the chart assets are 1,218 MB. Maps make up 910 MB of
+that, hero charts 223 MB and dynamics charts 81 MB. Obsidian Sync's cheaper
+plan holds 1 GB per vault, and the size of the files is what blocks the
+maintainer from adopting Obsidian. iA Writer, the current viewer, lags on
+workout notes. Every `fitdocs regen` rewrites all 1.2 GB, so every regen
+adds that much version history to sync and backup tools. Research and
+experiments: `.kiro/specs/compact-chart-assets/brief.md`. The raw
+experiments live in the maintainer's git-excluded
+`artifacts/2026-10-26-chart-asset-size/`.
+
+**Approach decision — render at output resolution, flatten the basemap into
+one WebP raster, and write assets only when their bytes change.**
+
+- Line geometry is thinned in output space before it is emitted:
+  Ramer–Douglas–Peucker at about 0.3 px, 1-decimal coordinates. This covers
+  the hero series and backdrop (and so dynamics) and the map route. Measured:
+  hero −89%, dynamics −81%, no visible difference.
+- The map basemap is composited from the cached tiles into one raster
+  cropped to the viewport, then encoded as WebP q75 and embedded once under
+  the vector route. Measured: maps 507 → 114 KB with the route thinned.
+  Pillow becomes a core dependency.
+- Workout chart assets are written only when their bytes change, and
+  replaced atomically.
+- Projected archive: ~250 MB of charts. Filenames and links are unchanged,
+  and one `fitdocs regen` migrates an archive.
+
+#### Decisions taken at discovery (2026-10-26)
+
+- **WebP through Pillow, as a core dependency** (maintainer). The
+  stdlib-only alternative was a lossless per-tile crop: measured −53% on
+  maps, about 470 MB for the archive. It was rejected for the further
+  halving and stays the fallback if Pillow ever has to go. This reverses
+  route-maps' "stdlib-only (zero new dependencies)" design statement under
+  `tech.md`'s "unless a spec proves we need it" rule.
+- **Shared tile files are infeasible, not deferred.** The maintainer asked
+  whether tiles could be reused across maps. An SVG shown as an image loads
+  no external resource: verified 2026-10-26 in headless Chrome, Obsidian
+  desktop's engine. So every map must carry its own pixels, and reuse can
+  only happen in the tile cache, which it already does. This closes the
+  shared-`assets/tiles/` option in the promoted queue item.
+- **One new spec carrying the amendments** (maintainer), not separate
+  amendments to route-maps and workout-docs. No spec owns asset weight at
+  archive scale today.
+- **No extras this round** (maintainer). These four are follow-on
+  candidates:
+  - the route-only setting;
+  - basemap quality and scale settings;
+  - per-year asset folders;
+  - chart-kit thinning.
+
+#### Viability (2026-10-26)
+
+_Pending: the Pillow/WebP viability check dispatched at discovery; recorded
+in the brief's Viability section._
+
+#### Existing Spec Updates
+
+All carried out inside `compact-chart-assets`. Amendment numbers are the
+next free number at landing.
+
+- [ ] route-maps:
+  - the basemap is one encoded raster, not verbatim per-tile PNGs;
+  - the stdlib-only design statements are reversed;
+  - the Req 4.1 determinism wording gains an environment qualifier;
+  - an undecodable tile becomes a cause of map omission (Req 4.3).
+
+  Req 6.1 (self-contained, no external resources) still holds.
+  Dependencies: compact-chart-assets
+- [ ] workout-docs:
+  - Req 7.4 names output-resolution thinning as a static adaptation of the
+    fitdocs.ai chart spec, whose "no downsampling" it departs from;
+  - the design's "fixed 2-decimal" coordinate statement is scoped;
+  - workout chart assets are compared before writing and replaced
+    atomically.
+
+  Dependencies: compact-chart-assets
+- [ ] wiki-contract _(settle at requirements)_ — if "regeneration replaces
+  every chart asset" (`docs/ownership-contract.md:424`) is a published
+  guarantee, it changes with `CONTRACT_VERSION` main + 1.
+  Dependencies: compact-chart-assets
+
+running-dynamics is a touchpoint, not an amendment. Its chart reuses
+`render_hero_chart`, so its goldens move, and Req 8.4 (byte-identical,
+script-free) still holds.
+
+#### Direct Implementation Candidates
+
+- [x] Queue: `2026-08-23-map-svgs-inline-the-basemap-per-document` was
+  promoted to `compact-chart-assets` in this discovery change.
+- [ ] `tech.md` Key Libraries gains Pillow, confined to one render module.
+  This lands with the dependency in `compact-chart-assets`, not before, so
+  steering keeps describing the code as it is.
+
+#### Follow-on candidates (not scheduled)
+
+- **A route-only basemap setting** (`[tiles] basemap = "none"`, about 5 KB
+  per map). It amends route-maps Req 1.1 ("route over a basemap") and Req
+  5.4.
+- **Basemap quality and scale settings.** For example, q60 at 0.75× gives
+  about 57 KB maps and visibly softer imagery.
+- **Per-year asset subfolders** (`assets/2026/…`), so that sync tools can
+  select recent years. This changes every chart link.
+- **Thinning the chart-kit kinds** with the same simplifier. Row caps already
+  bound these charts, and kit byte budgets would need re-pinning.
+- **The stdlib lossless per-tile crop**, as the fallback if the Pillow
+  dependency ever has to be removed.
+
+#### Specs (dependency order)
+
+- [ ] compact-chart-assets — **brief written 2026-10-26.** It has three
+  seams:
+  - output-space line thinning: the hero series and backdrop (and so
+    dynamics), and the map route;
+  - a flattened, viewport-cropped WebP basemap through Pillow, whose import
+    is confined to one module;
+  - write-if-changed, atomic workout asset writes.
+
+  It carries the route-maps and workout-docs amendments, and the
+  wiki-contract one if it is needed. Dependencies: none
