@@ -281,6 +281,36 @@ committed. Rejected alternatives:
   one installation, because write-if-changed depends on it. Whether WebP
   bytes also match across platforms and Pillow versions decides how goldens
   pin the raster (see Viability).
+- **Cross-machine output** (maintainer question, 2026-10-26).
+  - `uv tool install` and `pipx` resolve Pillow at install time and ignore
+    `uv.lock`. Two machines installed months apart can hold different
+    Pillow/libwebp builds.
+  - Pillow 9.5–13.0 produced identical bytes in the viability check, but
+    libwebp promises no stability across versions.
+  - If the bytes ever differ, the first `regen` on the other machine
+    rewrites the maps once, and write-if-changed holds them steady after
+    that.
+  - Today the output depends only on fitdocs' own code, so this kind of
+    variation is new.
+  - Decide at requirements whether to cap the range (`pillow>=13,<14`) and
+    how to word it in `docs/compatibility.md`.
+- **Viewer floor.**
+  - PNG tiles display in every viewer. WebP inside an SVG needs WebKit on
+    iOS 14+ / macOS 11+; current Chromium-based viewers, Obsidian included,
+    handle it.
+  - On macOS Catalina or older (Safari 14), or iOS 13, the route draws over
+    a blank basemap.
+  - State this floor in the docs and CHANGELOG.
+- **Install portability.**
+  - Pillow 13 wheels cover:
+    - CPython 3.11–3.15;
+    - macOS arm64 and x86_64;
+    - manylinux 2.27+ and musllinux on x86_64 and aarch64;
+    - Windows.
+  - That is wider than `duckdb`, which has no musl wheels.
+  - The new gaps are glibc 2.26 and CPython 3.13t. There pip builds from
+    source, which can leave out libwebp; hence the runtime WebP check.
+  - Installed size grows by about 12–22 MB.
 - **Degradation.** A map problem is a warning, never a failure (route-maps
   Req 4.3/4.4). A decode or encode error joins "tile missing" as a cause of
   omission.
