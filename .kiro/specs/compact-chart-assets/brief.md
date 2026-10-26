@@ -178,12 +178,16 @@ committed. Rejected alternatives:
   - The flattened-WebP basemap:
     - decode, composite and crop, including 512 px `@2x` tiles and
       fractional offsets;
-    - WebP q75 at 1×, with the attribution kept as vector text.
+    - WebP q75 on a canvas at the tiles' native pixel density, so 512 px
+      `@2x` tiles keep their resolution, with the attribution kept as vector
+      text.
+  - Tile bytes are opened through an explicit `formats=` allow list.
+  - WebP support is checked at runtime with `PIL.features.check("webp")`.
   - A tile that cannot be decoded ends as a warning with the map omitted,
     never a failed document (route-maps Req 4.3/4.4 semantics).
-  - Pillow as a core runtime dependency: `pyproject.toml`, `uv.lock`, the
-    pinned dependency-set tests, `tech.md` Key Libraries, and the route-maps
-    stdlib-only statements.
+  - Pillow as a core runtime dependency, `pillow>=13.0.0`: `pyproject.toml`,
+    `uv.lock`, the pinned dependency-set tests, `tech.md` Key Libraries, and
+    the route-maps stdlib-only statements.
   - The determinism contract re-stated for an encoded raster (see
     Constraints), with a golden strategy to match.
   - Compare-before-write and atomic replace for workout chart assets.
@@ -283,9 +287,17 @@ committed. Rejected alternatives:
 - **Test fixtures.** Fake tiles in seven test sites are not decodable. The
   spec must say what a non-decodable tile does, and re-fixture with
   decodable synthetic tiles, including a 512 px one.
-- **Confinement.** Pillow is imported by one module, lazily, so commands
-  that never render a map do not pay its import. Rendering runs in a process
-  pool.
+- **Confinement.**
+  - Pillow is imported by one module, lazily, so commands that never render
+    a map do not pay its import.
+  - That module must not be `render.charts.{svg,series,palette}`. The chart
+    kit may import only those modules and the standard library
+    (`structure.md`; `tests/render/charts/kit/test_boundary.py:126-131`).
+  - The simplifier, which is stdlib-only, may live in `series.py` or
+    `svg.py`.
+  - `structure.md` gains the matching "only X imports `PIL`" rule when the
+    dependency lands.
+  - Rendering runs in a process pool.
 - **Personal data.** Tests use synthetic tiles only. The real-archive
   measurement stays in the maintainer's git-excluded `artifacts/` and in an
   optional maintainer-only task.
@@ -297,4 +309,80 @@ committed. Rejected alternatives:
 
 ## Viability (2026-10-26)
 
-_Pending: the Pillow/WebP viability check dispatched at discovery._
+**Viable, with no showstoppers.** An independent check was run at discovery.
+Its scripts are in that session's scratchpad and were not kept. It found:
+
+- **Determinism holds (measured).**
+  - For the same Pillow version, the WebP q75 bytes were identical (by
+    SHA-256) on:
+    - macOS arm64, and macOS x86_64 under Rosetta;
+    - Docker linux/arm64 and linux/amd64, glibc and musl.
+  - Tested inputs: a synthetic map, noisy terrain, a 12-palette-tile
+    composite cropped to the viewport, and the same with 512 px tiles
+    LANCZOS-downscaled.
+  - Bytes were identical across spawn and fork process pools, and run to
+    run. Pillow never enables libwebp threading.
+  - Bytes did not change across Pillow 9.5–13.0 (libwebp 1.3.0–1.6.0) either.
+    libwebp promises no cross-version stability, though.
+  - **Consequence:** goldens may pin exact bytes against the `uv.lock`
+    Pillow. The determinism contract becomes "byte-identical given a warm
+    tile cache and the same dependency versions".
+  - Not covered: native x86_64 hardware (only Rosetta, but lossy encoding
+    takes the same SSE2/SSE4.1 paths) and Windows.
+- **Rendering holds (measured).** An 800×500 SVG with a WebP data-URI
+  `<image>` and a vector overlay rendered in:
+  - headless Chrome, Obsidian desktop's engine;
+  - QuickLook;
+  - a WKWebView snapshot (Safari's engine, as used by iA Writer and Obsidian
+    iOS);
+  - librsvg.
+
+  As an `<img>` it renders under GitHub's raw-content headers, and camo
+  passes `image/svg+xml` and `image/webp` through under a 5 MiB cap.
+  Opening the SVG directly on GitHub blocks every `data:` image through CSP.
+  That is true for today's PNG tiles too, so it is not a regression. WebP in
+  WebKit needs iOS 14 / macOS 11.
+- **Pin `pillow>=13.0.0`.**
+  - 13.0.0 was released 2026-10-16 and requires Python ≥3.11, which matches
+    fitdocs' floor.
+  - Advisories on this code path:
+    - CVE-2026-59199, a heap out-of-bounds write in `paste()`/`crop()`, fixed
+      in 12.3.0;
+    - CVE-2026-96643, quadratic PNG eXIf parsing, fixed in 13.0.0;
+    - an APNG decompression-bomb bypass, fixed in 13.0.0.
+  - 13.0 also changed `resize()` behaviour for RGBA.
+- **Harden tile decoding.** Open tile bytes with an explicit `formats=` allow
+  list of raster tile formats (PNG, and JPEG/WebP if providers serving them
+  are supported). Never autodetect, because autodetection would expose
+  TIFF/PSD/EPS decoders to whatever a tile server returns.
+- **Check WebP support at runtime.**
+  - libwebp is optional when Pillow is built from source. Every official
+    wheel tested had it.
+  - Source builds remain possible on:
+    - glibc 2.26, which duckdb's wheels support and Pillow 13's do not;
+    - CPython 3.13t.
+  - Check `PIL.features.check("webp")` and fail clearly. Whether that is a
+    loud error or a run-level warning with maps omitted is a requirements
+    decision.
+- **Canvas resolution should follow tile pixel density.**
+  - Standard 256 px tiles already display at one image pixel per CSS pixel,
+    so an 800×500 canvas loses no resolution against today. On 2× screens it
+    is as soft as today, apart from WebP's 4:2:0 chroma, which softens thin
+    coloured lines and labels slightly.
+  - Providers serving 512 px `@2x` tiles keep double resolution today. An
+    800×500 canvas would halve it, so composite at the tiles' native density
+    (1600×1000 for 512 px tiles).
+- **Cost.**
+  - About 22 ms per map: 3 ms composite and crop, 19.5 ms WebP encode at
+    method 4. Method 6 takes about 42 ms for about 6% fewer bytes.
+  - About 10 ms warm import.
+  - Installed size about 12 MB on macOS arm64 and about 22 MB on Linux
+    x86_64.
+- **No conflicts.**
+  - `pip check` is clean against fitdocs' other dependencies.
+  - The decompression-bomb limit is far above a 512 px tile.
+  - A fresh `Image.new` canvas encodes as bare RIFF/VP8, with no metadata.
+- **License.** Pillow is MIT-CMU, and its bundled libraries are permissive.
+  The wheel's SBOM lists libimagequant (GPL-3.0+) and FriBiDi (LGPL) as
+  `scope: optional`. Neither is shipped, but SBOM-reading license scanners
+  may flag them as false positives.

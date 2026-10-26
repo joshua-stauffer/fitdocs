@@ -3440,8 +3440,30 @@ one WebP raster, and write assets only when their bytes change.**
 
 #### Viability (2026-10-26)
 
-_Pending: the Pillow/WebP viability check dispatched at discovery; recorded
-in the brief's Viability section._
+Viable, with no showstoppers. Details are in the brief's Viability section.
+
+- **WebP q75 bytes were identical** across:
+  - macOS arm64 and x86_64 (Rosetta);
+  - Linux arm64 and amd64, glibc and musl;
+  - spawn and fork process pools;
+  - Pillow 9.5–13.0.
+
+  Goldens can pin exact bytes against the `uv.lock` Pillow. The contract
+  becomes "given a warm tile cache and the same dependency versions".
+- **Rendered** in Chrome (Obsidian desktop's engine), WKWebView (iA Writer,
+  Obsidian iOS), QuickLook, librsvg, and under GitHub's raw-content headers
+  as an `<img>`.
+- **Constraints the spec carries:**
+  - `pillow>=13.0.0`, because of CVEs on the `paste`/`crop` and PNG-decode
+    paths;
+  - tile bytes opened through an explicit `formats=` allow list, never
+    autodetection;
+  - a runtime `features.check("webp")`, since source builds can lack
+    libwebp;
+  - canvas resolution that follows tile pixel density, so 512 px `@2x`
+    tiles keep their resolution;
+
+Cost: about 22 ms per map, plus about 10 ms of import once per process.
 
 #### Existing Spec Updates
 
@@ -3477,9 +3499,11 @@ script-free) still holds.
 
 - [x] Queue: `2026-08-23-map-svgs-inline-the-basemap-per-document` was
   promoted to `compact-chart-assets` in this discovery change.
-- [ ] `tech.md` Key Libraries gains Pillow, confined to one render module.
-  This lands with the dependency in `compact-chart-assets`, not before, so
-  steering keeps describing the code as it is.
+- [ ] `tech.md` Key Libraries gains Pillow. `structure.md` gains an import
+  rule in the style of "only `index.store` imports `duckdb`", naming the one
+  render module that imports `PIL`. Both land with the dependency in
+  `compact-chart-assets`, not before, so steering keeps describing the code
+  as it is.
 
 #### Follow-on candidates (not scheduled)
 
