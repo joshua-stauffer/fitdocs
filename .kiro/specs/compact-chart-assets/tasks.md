@@ -32,7 +32,7 @@ suite, ruff, ruff format and mypy green on its own.
     - the three specifications carry their dated amendment.
   - _Requirements: 8.1, 8.2, 8.3, 9.6_
 
-- [ ] 1.2 Build a synthetic tile factory for tests
+- [x] 1.2 Build a synthetic tile factory for tests
   - Produce deterministic tiles at any pixel size in PNG, JPEG and WebP:
     - solid colours;
     - transparent tiles;
@@ -419,3 +419,4 @@ suite, ruff, ruff format and mypy green on its own.
 - 1.1: Pillow is last in the dependency list (after duckdb); the packaging, preserved-guarantees and sitebuild pins are order-sensitive. Amendments taken: docs-site 2, distribution 5, plugin-api 2. Plugin-api Amendment 2 claims discovering plugins does not import Pillow — 3.2 should also pin it at runtime by adding `assert 'PIL' not in sys.modules` beside the duckdb check in `tests/index/test_boundary.py:644`'s subprocess (reviewer follow-up).
 - 1.3: `Basemap(mime: str, data: bytes, x, y, width, height: float)` is frozen in `render/charts/map.py`; `fmt_num(value, places=2)`. Review rounds 2–3 were prose only: a module docstring (in src AND in the test module) still claimed the old 2-decimal contract — after changing a contract, grep both src and test docstrings for the old wording.
 - 4: `docio.write_bytes_if_changed` is exported (in `docio.__all__` and the `_DOCIO_SURFACE` pin). It compares only when `lstat` says S_ISREG; a symlink or FIFO is replaced, never read. Cleanup is on BaseException. The mode follows the umask (`os.open(..., 0o666)`), so a mkstemp refactor would silently make assets 0600; the umask-0o002 test pins it. Three rounds: failure paths, fsync and mode were unpinned. When pinning a mode, pick a umask where umask-following and the hard-coded default differ.
+- 1.2: The factory is `tests/support/tiles.py`. Import it as `from tests.support import tiles as tile_factory`, because `tiles` clashes with `fitdocs.tiles`. Its API: `solid`, `transparent`, `map_like(seed=...)`, `fetch_stub`/`FetchStub` (records `.urls`, crc32-seeded per URL, matches the `fetch: Callable[[str], bytes]` seam), and `UNDECODABLE` (5 kinds). `DEFAULT_SIZE` is 8x8. PNG is written with `compress_level=0`, because Pillow's compressed PNG differs between macOS (zlib-ng) and Linux CI. Stored PNG, JPEG and lossless WebP were byte-identical on macOS and on linux amd64/arm64. Any golden or fixture embedding Pillow-encoded bytes must keep this property.
