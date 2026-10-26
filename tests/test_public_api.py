@@ -509,13 +509,15 @@ def test_audit_is_not_re_exported_from_the_package_root() -> None:
     assert not set(fitdocs.__all__) & _AUDIT_SURFACE
 
 
-# Every name the shared document-read leaf publishes: the one reader function
-# plus the symlink-refusal detail/remedy strings every caller reuses.
+# Every name the shared document-I/O module publishes: the reader functions,
+# the symlink-refusal detail/remedy strings every caller reuses, and the
+# write-only-if-changed asset writer.
 _DOCIO_SURFACE = {
     "REMEDY_REPLACE_SYMLINK",
     "SYMLINK_DETAIL",
     "read_frontmatter",
     "read_frontmatter_diagnosed",
+    "write_bytes_if_changed",
 }
 
 

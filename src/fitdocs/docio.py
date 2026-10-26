@@ -1,5 +1,8 @@
-"""The one filesystem read shared by every ``workouts/*.md`` scanner (design:
-DocumentContract, wiki-contract task 7.2).
+"""The shared document I/O: the one filesystem read every ``workouts/*.md``
+scanner uses, and :func:`write_bytes_if_changed`, the atomic write-only-if-
+changed for chart assets.
+
+The read (design: DocumentContract, wiki-contract task 7.2).
 
 :func:`fitdocs.contract.parse_frontmatter` is a pure leaf that never touches
 the filesystem (its own module docstring states this as an invariant every
@@ -44,6 +47,9 @@ the contract's"), just no longer duplicated once per engine.
 
 from __future__ import annotations
 
+import os
+import secrets
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -55,6 +61,7 @@ __all__ = [
     "SYMLINK_DETAIL",
     "read_frontmatter",
     "read_frontmatter_diagnosed",
+    "write_bytes_if_changed",
 ]
 
 SYMLINK_DETAIL: Final[str] = "this path is a symlink and is not followed"
@@ -153,3 +160,37 @@ def read_document(path: Path) -> DocumentRead | None:
     except (OSError, UnicodeDecodeError):
         return None
     return DocumentRead(data, text, parse_frontmatter(text))
+
+
+def write_bytes_if_changed(path: Path, data: bytes) -> bool:
+    """Write ``data`` to ``path`` unless a regular file there already holds it.
+
+    Returns ``True`` if written. An identical regular file is left untouched
+    (content and modification time). Otherwise the bytes go to a hidden temp
+    file in ``path.parent`` (``.{name}.<random>.tmp``), are flushed and
+    fsynced, and :func:`os.replace` swaps it onto ``path``, so a reader sees
+    the previous complete bytes or ``data``, never a partial file. The temp
+    file is removed on any failure. A symlink at ``path`` is never read or
+    written through: it is replaced by the new regular file. A read error
+    while comparing counts as "differs".
+    """
+    try:
+        # lstat, so a symlink is never "regular"; only a regular file is read.
+        if stat.S_ISREG(os.lstat(path).st_mode) and path.read_bytes() == data:
+            return False
+    except OSError:
+        pass
+    tmp = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
+    # O_EXCL creation at the default 0o666 & ~umask, like Path.write_bytes
+    # (mkstemp would force 0o600).
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    return True
