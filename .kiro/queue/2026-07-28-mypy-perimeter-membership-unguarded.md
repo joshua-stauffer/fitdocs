@@ -231,3 +231,25 @@ requirement from the test tree (no second list, but needs a rule for which
 modules qualify). The derived form is better if a clean rule exists; the
 enumerated form is acceptable only if removing an entry from `pyproject.toml`
 without updating the guard reds.
+
+## Update 2026-10-27 (compact-chart-assets 1.6 review)
+The 1.6 reviewer subagent found several test modules that hold TileSource-shaped
+`_ServingTiles` stubs but are not listed in `[tool.mypy] files`. This contradicts
+the pyproject comment at pyproject.toml:95 ("Every module holding a
+LoadCalculator- or TileSource-shaped stub is in scope"). The modules named:
+- tests/load/test_absent_store_e2e.py
+- tests/load/test_migration_e2e.py
+- tests/load/test_benchmark_selection_e2e.py
+- tests/load/test_cli_load.py
+- tests/load/test_feature_e2e.py
+- tests/load/threshold/test_feature_e2e.py
+- tests/load/qa/test_feature_e2e.py
+- tests/test_route_maps_e2e.py
+- tests/test_wiki_contract_e2e.py
+- tests/test_determinism.py
+- tests/wellness/test_drain_wellness.py
+
+Running mypy on the first three reported latent `attr-defined` errors and unused
+`# type: ignore[union-attr]` comments. This is reported by the reviewer, not
+re-run by me. A derived rule ("any test module defining a `resolve(self, refs)`
+method") would have caught them.
