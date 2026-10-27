@@ -176,7 +176,7 @@ suite, ruff, ruff format and mypy green on its own.
   - _Boundary: map (route functions only)_
   - _Depends: 2.1, 1.4_
 
-- [ ] 3. Basemap: one composed raster per map
+- [x] 3. Basemap: one composed raster per map
 
 - [x] 3.1 (P) Compose the viewport-cropped basemap canvas
   - Decode each tile only as PNG, JPEG or WebP. Any other content, or a
@@ -200,7 +200,7 @@ suite, ruff, ruff format and mypy green on its own.
   - _Boundary: basemap_
   - _Depends: 1.1, 1.2, 1.3_
 
-- [ ] 3.2 Encode the basemap and check the encoder
+- [x] 3.2 Encode the basemap and check the encoder
   - Encode the canvas once as WebP at quality 75, method 4, from a fresh
     canvas with no metadata. Return the basemap value with its MIME type and
     placement.
@@ -444,3 +444,16 @@ suite, ruff, ruff format and mypy green on its own.
 - 2.3: `_render_route` thins each segment once, and both strokes reuse the result. Markers stay at the raw `plan.segments` endpoints. A segment that thins to a single point is drawn as a duplicated-point dot. `_point()` was removed. The map tests use Req 2.1's 0.5-unit bound; the tighter ≈0.371 postcondition is pinned in test_polyline. Whichever of 2.2/2.3 lands second must re-run `python -m tests.render.test_golden_docs` after rebasing; only map assets changed here. Round 2 was a controller prose fix.
 - 6.3: route-maps Amendment 2, workout-docs Amendment 7 (criteria 2.11 and 7.9) and wiki-contract Amendment 13 (2.22) are in place, with the stale route-maps design statements tagged inline. The 3.1 and 2.1 controller rulings are now in this spec's design.md. wiki-contract 1.5 is deliberately left unamended (controller ruling): it is that feature's own landing guarantee. Some amendment sentences run ahead of the code (places=4 placement, WebP q75, MapData.basemap, CONTRACT_VERSION 17, reference §3); 7.x validation re-checks them. Three review rounds, all prose; the last fix was a controller edit.
 - 2.2: `hero._render_series` and `_render_backdrop` thin each gap segment; the backdrop closure uses the thinned end x. The dynamics chart renders through `render_hero_chart` with `backdrop=None`, so it is covered by the same path. The size-parity and `[samples, samples]` checks are retired, replaced by `0 < count < samples`. The `BASELINE_*` constants stay. `_BASELINES` in test_chart_asset_budgets has no reader now, so 7.1 can reuse it or delete it. The `_points_tokens` helper in test_hero is dead. The `scripts/make_hero_chart.py` docstring ("two-decimal formatting", "only IEEE-754 basic operations") is stale after thinning, so 6.2 should fix it. The regenerated goldens are macOS-only until branch CI runs (Req 5.2).
+- 3.2:
+  - **Added:** `encode_canvas`, `encoder_available`, `require_encoder`, `compose_basemap` and `BasemapEncoderError`, plus the `BASEMAP_FORMAT`/`BASEMAP_MIME`/`BASEMAP_QUALITY`/`BASEMAP_METHOD` constants. `BasemapEncoderError` is NOT a `BasemapError`, so 5.1 must not catch it as a per-map warning; 5.3 turns it into a pre-write failure.
+  - **Departures from the design wording:**
+    - `compose_basemap` calls `require_encoder()` before decoding any tile.
+    - `encode_canvas` builds the fresh image with `Image.frombytes`.
+    - Both are ruled acceptable (queued for the design).
+  - **Golden SHA `fa6c615d…`:** verified with `uv sync --frozen` on macOS arm64 and on linux arm64/amd64 (amd64 emulated) for py3.11–3.13. Real x86-64 is covered only by branch CI.
+  - **Remedy text:** the error message contains "install a Pillow wheel that includes libwebp".
+  - **Guards:**
+    - The AST guard confines PIL to function bodies or `TYPE_CHECKING`; decorators and default arguments count as module scope.
+    - `tests/index/test_boundary.py` asserts `'PIL' not in sys.modules` after plugin discovery.
+    - basemap.py has an import allow list and banned I/O builtins. File access via `io.open` or a PIL path is not pinned (declared).
+  - **Review:** four rounds. Rounds 3–4 were controller test and comment fixes. The round-4 confirmation went to the same reviewer instead of a debug subagent, because the fix was already agreed.
