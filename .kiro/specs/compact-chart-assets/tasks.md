@@ -372,7 +372,7 @@ suite, ruff, ruff format and mypy green on its own.
 
 - [ ] 7. Validation
 
-- [ ] 7.1 Enforce the chart byte budgets
+- [x] 7.1 Enforce the chart byte budgets
   - Activate the budgets for:
     - the 1-hour and 6-hour hero and running-dynamics charts;
     - a map over map-like synthetic tiles.
@@ -460,3 +460,19 @@ suite, ruff, ruff format and mypy green on its own.
 - 5.3: `cli._basemap_preflight()` maps `BasemapEncoderError` to `_config_error` (exit 2) using the design's exact message (controller ruling: the design text governs over the module error's phrase). It is called on four paths: sync SOURCE after `_tile_store`, `_run_drain_passes` before `_inbox_preflight`, regen before `rebuild_series`, and the end of pull's `if sync_after:` block. `load` and plain `pull` do not call it. Tests snapshot the whole data root (paths, bytes, mtime_ns, dirs). Round 2 was a controller docstring fix. Known gap, queued: plugin discovery can write `__pycache__` into a data-root plugins dir before any preflight.
 - 5.1: `compose_map(plan, basemap, *, tint, attribution)` draws one `<image>` (4-place placement) as the first element. `MapData` is now `(plan, basemap, attribution)`, and both `MapData` and `Basemap` are in `fitdocs.render.__all__` (design § Modified Files). `sync._page_task` passes `(ref, bytes)` pairs in `plan.tiles` order. A `BasemapError` becomes a `DocWarning` (unless `quiet`) and the map is omitted. `BasemapEncoderError` propagates: it is a per-file failure in the engine, and the CLI preflight (5.3) stops before any write. The render-level map goldens use `tests/support/basemap.py` `FAKE_BASEMAP`. `fixture_tile.png` and its provenance tests are deleted. A new `test_identity_e2e::test_a_ledger_settle_does_not_repeat_the_pages_map_warning` pins the `quiet` gates on both map-warning branches, and a sync test pins attribution. 2 rounds.
 - 5.2: `sync._write_assets` writes every asset through `docio.write_bytes_if_changed`. The write order, assets → stale removal → move → document → archive, is unchanged. `tests/test_chart_asset_writes.py` covers all four asset kinds (hero, dynamics, map, zones), and needs an athlete with HR zones so zones render. It also checks first-write and replace atomicity, and pins the order. The identity fault-injection test wraps the `_write_assets` step, so it needed no change. Two rounds. Queued follow-up: a SIGKILL during the helper leaves an orphan `.tmp` in `workouts/assets/`.
+- 7.1: `BUDGET_BYTES` vs `MEASURED_BYTES` (macOS arm64), in bytes:
+
+  | Chart | Budget | Measured |
+  |---|---|---|
+  | 1h hero | 30_000 | 24_514 |
+  | 1h dynamics | 32_000 | 26_272 |
+  | 6h hero | 58_000 | 47_218 |
+  | 6h dynamics | 64_000 | 51_951 |
+  | 1h map | 61_000 | 49_571 |
+
+  - Headroom is 22–23%; the 10–40% band is pinned on the constants, plus a live check that the budget is no more than 1.40× the current size.
+  - The 1h hero is 83.6% below its baseline.
+  - The map is measured over 8 z15 map-like tiles at 256 px, with `_TILE_SIZE` monkeypatched inside the fixture context.
+  - The map-like thresholds are ≥5 colours and a dominant colour under 90%; two real tiles are at 76% and 79%.
+  - If the renderer shrinks more than about 18%, the live looseness check fails and the budgets must be lowered.
+  - Two rounds.
