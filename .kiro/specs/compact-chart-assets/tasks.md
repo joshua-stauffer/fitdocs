@@ -351,7 +351,7 @@ suite, ruff, ruff format and mypy green on its own.
   - _Requirements: 3.7, 8.4, 8.5, 9.3, 9.4, 9.5_
   - _Depends: 6.1_
 
-- [ ] 6.3 Record the amendments in the affected specifications
+- [x] 6.3 Record the amendments in the affected specifications
   - **route-maps**: the next free requirements amendment covers:
     - the Req 4.1 determinism wording amended in place, to "same installed
       dependency versions";
@@ -442,3 +442,4 @@ suite, ruff, ruff format and mypy green on its own.
   - Until stream 5 decodes tiles, a reintroduced fake on a composing path still passes the plain suite.
   - Round 2 was a controller prose fix.
 - 2.3: `_render_route` thins each segment once, and both strokes reuse the result. Markers stay at the raw `plan.segments` endpoints. A segment that thins to a single point is drawn as a duplicated-point dot. `_point()` was removed. The map tests use Req 2.1's 0.5-unit bound; the tighter ≈0.371 postcondition is pinned in test_polyline. Whichever of 2.2/2.3 lands second must re-run `python -m tests.render.test_golden_docs` after rebasing; only map assets changed here. Round 2 was a controller prose fix.
+- 6.3: route-maps Amendment 2, workout-docs Amendment 7 (criteria 2.11 and 7.9) and wiki-contract Amendment 13 (2.22) are in place, with the stale route-maps design statements tagged inline. The 3.1 and 2.1 controller rulings are now in this spec's design.md. wiki-contract 1.5 is deliberately left unamended (controller ruling): it is that feature's own landing guarantee. Some amendment sentences run ahead of the code (places=4 placement, WebP q75, MapData.basemap, CONTRACT_VERSION 17, reference §3); 7.x validation re-checks them. Three review rounds, all prose; the last fix was a controller edit.
